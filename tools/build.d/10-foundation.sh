@@ -22,11 +22,12 @@ mkdir -p "$SHARE/color-schemes"
 install -m 0644 "$PKG/color-schemes/PlasmaFusionDark.colors" "$PKG/color-schemes/PlasmaFusionLight.colors" \
   "$SHARE/color-schemes/"
 
-# Fonts (variable TTFs; fontconfig exposes their named instances as weights).
+# Fonts: one static file per weight (generators/fonts/make_static.py). Qt synthesises bold on
+# top of the variable files for weights of 700 and more, and Space Grotesk has no 600 instance.
 fonts=$SHARE/fonts/plasma-fusion
 rm -rf "$fonts"
 mkdir -p "$fonts"
-install -m 0644 "$ROOT/fonts/manrope/Manrope[wght].ttf" "$ROOT/fonts/spacegrotesk/SpaceGrotesk[wght].ttf" "$fonts/"
+install -m 0644 "$ROOT"/fonts/manrope/static/*.ttf "$ROOT"/fonts/spacegrotesk/static/*.ttf "$fonts/"
 install -m 0644 "$ROOT/fonts/manrope/OFL.txt" "$fonts/OFL-Manrope.txt"
 install -m 0644 "$ROOT/fonts/spacegrotesk/OFL.txt" "$fonts/OFL-SpaceGrotesk.txt"
 

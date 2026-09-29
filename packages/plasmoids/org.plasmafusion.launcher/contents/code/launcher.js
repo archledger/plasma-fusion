@@ -74,7 +74,7 @@ const designLabels = {
     "org.kde.dolphin.desktop": "Files", "org.gnome.Nautilus.desktop": "Files",
     "preferred://browser": "Browser",
     "org.kde.konsole.desktop": "Terminal", "org.gnome.Ptyxis.desktop": "Terminal",
-    "org.kde.kmail2.desktop": "Mail", "org.mozilla.Thunderbird.desktop": "Mail", "org.gnome.Evolution.desktop": "Mail",
+    "org.kde.kmail2.desktop": "Mail", "org.kde.kontact.desktop": "Mail", "org.mozilla.Thunderbird.desktop": "Mail", "org.gnome.Evolution.desktop": "Mail",
     "org.kde.kate.desktop": "Code", "org.kde.kdevelop.desktop": "Code", "code.desktop": "Code", "codium.desktop": "Code",
     "org.kde.kwrite.desktop": "Code", "org.gnome.TextEditor.desktop": "Code",
     "org.kde.elisa.desktop": "Music", "org.gnome.Decibels.desktop": "Music",

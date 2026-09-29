@@ -13,8 +13,9 @@ ssh -o BatchMode=yes "$HOST" "mkdir -p /tmp/pfv-$NAME/home" || exit 1
 if [ "$SEED" != - ]; then
   rsync -a --delete "$SEED"/ "$HOST:/tmp/pfv-$NAME/home/" || exit 1
 fi
-scp -q "$HERE/vsession.sh" "$HOST:/tmp/pfv-$NAME.vsession.sh" && scp -q "$SCENARIO" "$HOST:/tmp/pfv-$NAME.scenario.sh" || exit 1
-ssh -o BatchMode=yes "$HOST" "bash /tmp/pfv-$NAME.vsession.sh $NAME /tmp/pfv-$NAME.scenario.sh $SIZE $TMO" || exit 1
+scp -q "$HERE/vsession.sh" "$HOST:/tmp/pfv-$NAME.vsession.sh" && scp -q "$SCENARIO" "$HOST:/tmp/pfv-$NAME.scenario.sh" \
+  && scp -q "$HERE/pfinput.py" "$HOST:/tmp/pfv-$NAME.pfinput.py" || exit 1
+ssh -o BatchMode=yes "$HOST" "PFINPUT=/tmp/pfv-$NAME.pfinput.py bash /tmp/pfv-$NAME.vsession.sh $NAME /tmp/pfv-$NAME.scenario.sh $SIZE $TMO" || exit 1
 mkdir -p "vsession-out/$NAME"
 rsync -a --delete "$HOST:/tmp/pfv-$NAME/out/" "vsession-out/$NAME/"
 echo "results in $(pwd)/vsession-out/$NAME"

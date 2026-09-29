@@ -173,10 +173,14 @@ PlasmoidItem {
             current.push(entry ? String(entry.favoriteId) : "");
         }
         const ids = [];
+        const duplicates = [];
         for (const slot of Launcher.pinnedSlots(Plasmoid.configuration.favorites)) {
             const pick = slot.find(id => id.indexOf("preferred://") === 0 || installed[id] || current.indexOf(id) >= 0);
             if (pick) {
                 ids.push(pick);
+                // Another app for the same slot would show a second tile for the same role
+                // (Fedora pins Kontact next to KMail, GNOME Files next to Dolphin).
+                duplicates.push(...slot.filter(id => id !== pick && current.indexOf(id) >= 0));
             }
         }
         Plasmoid.configuration.favoritesPortedToKAstats = true;
@@ -201,6 +205,11 @@ PlasmoidItem {
                 continue; // pinned under another id form; leave it where it is
             }
             ++place;
+        }
+        for (const id of duplicates) {
+            if (favoritesModel.isFavorite(id)) {
+                favoritesModel.removeFavorite(id);
+            }
         }
     }
 

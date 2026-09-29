@@ -12,7 +12,12 @@
 #   wait_for_name NAME   wait (max 20 s) until a D-Bus name appears on the session bus
 #   qdbus ...            qdbus-qt6 on the session bus
 #   evaljs FILE|-        run a plasmashell desktop scripting snippet (org.kde.PlasmaShell.evaluateScript)
+#   pfinput CMD...       real pointer/keyboard input through KWin EIS, e.g.
+#                        pfinput 'move 100 20' 'click 1300 17' 'key meta' 'key ctrl+alt+t'
+#                        'drag X1 Y1 X2 Y2' 'scroll X Y STEPS' 'sleep 0.5' (see pfinput.py)
 #   $OUT $HOME $PFV      output dir, session HOME, run root
+# The session environment matches startplasma where it matters: XDG_CONFIG_DIRS starts with
+# ~/.config/kdedefaults (where a Global Theme writes its defaults) and Qt logs to stderr.
 # Set NO_PLASMASHELL=1 in the scenario's environment to start only KWin.
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SIZE=${3:-1440x900}; TMO=${4:-240}
@@ -20,10 +25,19 @@ PFV=/tmp/pfv-$NAME
 W=${SIZE%x*}; H=${SIZE#*x}
 mkdir -p "$PFV/home/.config" "$PFV/run" "$PFV/out"
 chmod 700 "$PFV/run"
+# Services that must not run in a test session: KDE Connect would announce a second device on
+# the network. The private bus reads ~/.local/share/dbus-1/services first, so a stub wins.
+mkdir -p "$PFV/home/.local/share/dbus-1/services"
+for svc in org.kde.kdeconnect; do
+  printf '[D-BUS Service]\nName=%s\nExec=/bin/false\n' "$svc" >"$PFV/home/.local/share/dbus-1/services/$svc.service"
+done
 # Plasma Welcome would open on first start; mark this version as seen.
 [ -e "$PFV/home/.config/plasma-welcomerc" ] || printf '[General]\nLastSeenVersion=6.7.5\nShowUpdatePage=false\n' >"$PFV/home/.config/plasma-welcomerc"
 rm -rf "$PFV/run/"* "$PFV/out/"*
 cp "$SCENARIO" "$PFV/scenario.sh"
+HERE=$(cd "$(dirname "$0")" && pwd)
+PFINPUT_SRC=${PFINPUT:-$HERE/pfinput.py}
+[ -f "$PFINPUT_SRC" ] && cp "$PFINPUT_SRC" "$PFV/pfinput.py"
 
 cat > "$PFV/inner.sh" <<'INNER'
 #!/bin/bash
@@ -33,9 +47,15 @@ shot() { spectacle -b -n -f -o "$OUT/$1.png" >>"$OUT/spectacle.log" 2>&1 || echo
 qdbus() { qdbus-qt6 "$@"; }
 wait_for_name() { for _ in $(seq 1 40); do qdbus-qt6 | grep -qx " *$1" && return 0; sleep 0.5; done; echo "timeout waiting for $1" >>"$OUT/errors.log"; return 1; }
 evaljs() { local js; if [ "$1" = - ]; then js=$(cat); else js=$(cat "$1"); fi; qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$js"; }
-export -f shot qdbus wait_for_name evaljs
+pfinput() { python3 "$PFV/pfinput.py" "$@" >>"$OUT/pfinput.log" 2>&1; }
+export -f shot qdbus wait_for_name evaljs pfinput
 cleanup() { kill $(jobs -p) 2>/dev/null; sleep 1; kill -9 $(jobs -p) 2>/dev/null; }
 trap cleanup EXIT
+# The private bus was started before KWin, so services it activates would not know the Wayland
+# socket and abort. Give the bus the session environment, as startplasma does (bus only; never
+# --systemd, which would change the logged-in user's systemd manager).
+dbus-update-activation-environment WAYLAND_DISPLAY QT_QPA_PLATFORM XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
+  KDE_FULL_SESSION KDE_SESSION_VERSION XDG_CONFIG_DIRS QT_FORCE_STDERR_LOGGING XDG_RUNTIME_DIR HOME PATH LANG
 fc-cache -f >/dev/null 2>&1
 /usr/libexec/kactivitymanagerd >"$OUT/kamd.log" 2>&1 &
 kded6 >"$OUT/kded.log" 2>&1 &
@@ -59,6 +79,7 @@ chmod +x "$PFV/inner.sh"
 env -i HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
   PATH=/usr/bin:/bin:/usr/lib64/qt6/bin LANG=en_US.UTF-8 \
   XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
+  XDG_CONFIG_DIRS="$PFV/home/.config/kdedefaults:/etc/xdg" QT_FORCE_STDERR_LOGGING=1 \
   QT_QPA_PLATFORM=wayland \
   timeout "$TMO" dbus-run-session -- kwin_wayland --virtual --width "$W" --height "$H" \
     --socket "pfv-$NAME" --no-lockscreen --exit-with-session "$PFV/inner.sh" >"$PFV/out/kwin.log" 2>&1
