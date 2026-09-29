@@ -16,6 +16,7 @@
 #                        pfinput 'move 100 20' 'click 1300 17' 'key meta' 'key ctrl+alt+t'
 #                        'drag X1 Y1 X2 Y2' 'scroll X Y STEPS' 'sleep 0.5' (see pfinput.py)
 #   $OUT $HOME $PFV      output dir, session HOME, run root
+# Extra variables for the whole session (e.g. QT_PLUGIN_PATH): KEY=VALUE lines in home/.config/pfv-env.
 # The session environment matches startplasma where it matters: XDG_CONFIG_DIRS starts with
 # ~/.config/kdedefaults (where a Global Theme writes its defaults) and Qt logs to stderr.
 # Set NO_PLASMASHELL=1 in the scenario's environment to start only KWin.
@@ -76,7 +77,15 @@ echo "scenario rc=$?" >>"$OUT/scenario.log"
 INNER
 chmod +x "$PFV/inner.sh"
 
-env -i HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
+# Extra environment for KWin and everything in the session (for example QT_PLUGIN_PATH to test a
+# locally built decoration): KEY=VALUE lines in home/.config/pfv-env.
+EXTRA_ENV=()
+if [ -f "$PFV/home/.config/pfv-env" ]; then
+  while IFS= read -r line; do
+    case "$line" in ''|'#'*) ;; *=*) EXTRA_ENV+=("$line") ;; esac
+  done <"$PFV/home/.config/pfv-env"
+fi
+env -i "${EXTRA_ENV[@]}" HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
   PATH=/usr/bin:/bin:/usr/lib64/qt6/bin LANG=en_US.UTF-8 \
   XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
   XDG_CONFIG_DIRS="$PFV/home/.config/kdedefaults:/etc/xdg" QT_FORCE_STDERR_LOGGING=1 \

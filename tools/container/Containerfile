@@ -1,0 +1,17 @@
+# Build environment for the compiled Plasma Fusion parts (window decoration, settings module).
+# Pinned to the Plasma, Frameworks and Qt versions of the test device so the plugins load there.
+#
+#   podman build -t localhost/plasma-fusion-build:f44-6.7.5 tools/container
+FROM registry.fedoraproject.org/fedora:44
+ARG PLASMA=6.7.5-1.fc44
+ARG QT=6.11.2
+RUN dnf -y --setopt=install_weak_deps=False install \
+      gcc-c++ cmake ninja-build extra-cmake-modules gettext rpm-build rpmdevtools \
+      "kdecoration-devel-${PLASMA}" "kwin-devel-${PLASMA}" "libplasma-devel-${PLASMA}" \
+      "plasma-workspace-devel-${PLASMA}" \
+      "qt6-qtbase-devel-${QT}*" "qt6-qtdeclarative-devel-${QT}*" "qt6-qtsvg-devel-${QT}*" \
+      kf6-kcoreaddons-devel kf6-kconfig-devel kf6-kconfigwidgets-devel kf6-kcmutils-devel \
+      kf6-ki18n-devel kf6-kguiaddons-devel kf6-kglobalaccel-devel kf6-kwindowsystem-devel \
+      kf6-kiconthemes-devel kf6-kpackage-devel kf6-kcolorscheme-devel kf6-kirigami-devel \
+      kf6-kdbusaddons-devel kf6-knotifications-devel \
+ && dnf clean all
