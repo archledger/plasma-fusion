@@ -1,0 +1,11 @@
+/* SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * ~/.config/gtk-3.0/gtk.css and ~/.config/gtk-4.0/gtk.css of the Plasma Fusion desktop.
+ * colors.css is written by Plasma (kde-gtk-config) from the active colour scheme and rewritten on
+ * every scheme change; plasma-fusion.css takes all its colours from it, so one file serves both
+ * Plasma Fusion Dark and Light. Plasma keeps this file as it is as long as the colors.css import
+ * below is present. Delete the second import to switch the Plasma Fusion additions off.
+ */
+@import 'colors.css';
+@import 'plasma-fusion.css';

@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Status pill, quick settings and notification list for the Plasma Fusion top bar",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system-network",
+        "Id": "org.plasmafusion.quicksettings",
+        "License": "GPL-2.0-or-later",
+        "Name": "Fusion Quick Settings",
+        "Version": "1.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

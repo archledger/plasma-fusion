@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Stand-in org.kde.kwin module for offscreen renders (test use only).
+module org.kde.kwin
+TabBoxSwitcher 3.0 TabBoxSwitcher.qml
+WindowThumbnail 3.0 WindowThumbnail.qml
+ShortcutHandler 3.0 ShortcutHandler.qml
+DBusCall 3.0 DBusCall.qml
+singleton Workspace 3.0 Workspace.qml
+DesktopBackground 3.0 DesktopBackground.qml

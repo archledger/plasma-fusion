@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="startPadding" type="Int">
+      <label>Space in px before the logo button. With the Plasma Fusion top bar (6 px panel margin) the default puts the button 10 px from the screen edge, as on the board.</label>
+      <default>4</default>
+    </entry>
+    <entry name="endPadding" type="Int">
+      <label>Space in px after the application name, before the next widget (the global menu). The board has 10 px of padding and a 2 px gap; the panel adds its own applet spacing, so 7 gives the board's distance to the first menu title.</label>
+      <default>7</default>
+    </entry>
+    <entry name="maximumNameWidth" type="Int">
+      <label>Longest application name in px; longer names are elided.</label>
+      <default>220</default>
+    </entry>
+  </group>
+</kcfg>

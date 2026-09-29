@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Application Launchers",
+        "Description": "Centred start menu with pinned apps, recent files, categories and search",
+        "EnabledByDefault": true,
+        "Icon": "start-here-kde-symbolic",
+        "Id": "org.plasmafusion.launcher",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Launcher",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": [
+        "org.kde.plasma.launchermenu"
+    ]
+}

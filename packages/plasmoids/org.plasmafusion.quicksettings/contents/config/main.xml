@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="showKeyboardLayout" type="Bool">
+      <label>Show the keyboard layout badge</label>
+      <default>true</default>
+    </entry>
+    <entry name="keyboardLayoutAlways" type="Bool">
+      <label>Show the keyboard layout badge also when only one layout is configured</label>
+      <default>true</default>
+    </entry>
+    <entry name="showKdeConnect" type="Bool">
+      <label>Show a phone button while a KDE Connect device is connected</label>
+      <default>true</default>
+    </entry>
+    <entry name="showClipboard" type="Bool">
+      <label>Show the clipboard button</label>
+      <default>true</default>
+    </entry>
+    <entry name="showBatteryPercent" type="Bool">
+      <label>Show the battery percentage in the status pill</label>
+      <default>true</default>
+    </entry>
+    <entry name="showNotifications" type="Bool">
+      <label>Show the notification bell and the notification list</label>
+      <default>true</default>
+    </entry>
+    <entry name="popupGap" type="Int">
+      <label>Gap between the top bar and the pop-up, in pixels</label>
+      <default>10</default>
+    </entry>
+    <entry name="popupScreenMargin" type="Int">
+      <label>Distance between the pop-up and the right screen edge, in pixels</label>
+      <default>16</default>
+    </entry>
+    <entry name="startPage" type="String">
+      <label>Page shown when the pop-up opens: main, wifi, bluetooth or audio</label>
+      <default>main</default>
+    </entry>
+    <entry name="lightLookAndFeel" type="String">
+      <label>Global Theme used when Dark style is switched off</label>
+      <default>org.plasmafusion.light.desktop</default>
+    </entry>
+    <entry name="darkLookAndFeel" type="String">
+      <label>Global Theme used when Dark style is switched on</label>
+      <default>org.plasmafusion.dark.desktop</default>
+    </entry>
+  </group>
+</kcfg>

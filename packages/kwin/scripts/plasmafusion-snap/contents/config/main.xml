@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="">
+    <entry name="Gap" type="Int">
+      <label>Gap in pixels between snapped windows and at the screen edges</label>
+      <default>6</default>
+      <min>0</min>
+      <max>48</max>
+    </entry>
+    <entry name="QuickTileGaps" type="Bool">
+      <label>Apply the gap to windows snapped to halves and quarters</label>
+      <default>true</default>
+    </entry>
+    <entry name="FillOtherHalf" type="Bool">
+      <label>After snapping a window to one half, offer other windows for the empty half</label>
+      <default>true</default>
+    </entry>
+    <entry name="PairWindows" type="Bool">
+      <label>Windows placed side by side minimize and restore together</label>
+      <default>true</default>
+    </entry>
+  </group>
+</kcfg>

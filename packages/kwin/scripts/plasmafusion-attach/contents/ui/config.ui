@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PlasmaFusionAttachConfig</class>
+ <widget class="QWidget" name="PlasmaFusionAttachConfig">
+  <layout class="QFormLayout" name="formLayout">
+   <item row="0" column="1">
+    <widget class="QCheckBox" name="kcfg_FollowParent">
+     <property name="text">
+      <string>Dialogs move with their window</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QCheckBox" name="kcfg_DetachOnMove">
+     <property name="text">
+      <string>Dragging a dialog detaches it from its window</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="gapLabel">
+     <property name="text">
+      <string>Distance below the title bar:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QSpinBox" name="kcfg_TitleBarGap">
+     <property name="suffix">
+      <string> px</string>
+     </property>
+     <property name="maximum">
+      <number>64</number>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QCheckBox" name="kcfg_HideDialogTitleBar">
+     <property name="text">
+      <string>Hide the title bar of attached dialogs (also removes their shadow)</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

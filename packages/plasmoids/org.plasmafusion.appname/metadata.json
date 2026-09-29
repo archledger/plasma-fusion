@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Windows and Tasks",
+        "Description": "Plasma Fusion logo button that opens the launcher, followed by the name of the active application",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system-windows",
+        "Id": "org.plasmafusion.appname",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion App Name",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

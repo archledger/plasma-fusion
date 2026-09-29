@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="-80 0 1600 900">
+<title>Plasma Fusion Dusk Ridge</title>
+<desc>SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus; SPDX-License-Identifier: CC-BY-SA-4.0</desc>
+<rect x="-82" y="-2" width="1604" height="904" fill="#dde6f4"/>
+<rect x="-82" y="180" width="1604" height="160" fill="#e6ecf7"/>
+<rect x="-82" y="340" width="1604" height="562" fill="#eef2fa"/>
+<circle cx="1010" cy="360" r="212" fill="none" stroke="#f2a65a" stroke-opacity="0.18" stroke-width="2"/>
+<circle cx="1010" cy="360" r="150" fill="#f2a65a"/>
+<path d="M-82 619.22 L0 560 L180 430 L330 505 L520 350 L700 485 L860 405 L1060 520 L1240 385 L1440 470 L1522 504.85 L1522 902 L-82 902 Z" fill="#b9c9e8"/>
+<path d="M-82 689.14 L0 650 L220 545 L420 620 L640 505 L880 612 L1100 540 L1300 622 L1440 580 L1522 555.4 L1522 902 L-82 902 Z" fill="#9bb2e0"/>
+<path d="M-82 790.91 L0 760 L260 662 L520 732 L780 642 L1040 722 L1280 662 L1440 702 L1522 722.5 L1522 902 L-82 902 Z" fill="#7896d4"/>
+<path d="M-82 862.4 L0 846 L300 786 L600 834 L900 774 L1200 824 L1440 792 L1522 781.07 L1522 902 L-82 902 Z" fill="#5a7fd6"/>
+</svg>

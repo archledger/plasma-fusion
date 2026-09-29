@@ -1,0 +1,132 @@
+/*
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+*/
+
+import QtQuick
+import QtQuick.Window
+import org.kde.kirigami as Kirigami
+import org.kde.kwin
+
+// Snap-zone preview for KWin's outline (kwinrc [Outline] QmlPath=
+// kwin/scripts/plasmafusion-snap/contents/outline/outline.qml). TabsSnap board "Drag to snap":
+// a blue zone, fill rgba(91,157,255,.28), 2 px #5b9dff edge, radius 14, shown after the pointer
+// has rested at the edge for 150 ms. KWin itself still snaps on release without the delay.
+//
+// Contract (KWin 6.7 src/outline.cpp): the root is a Window, the context property "outline"
+// has geometry, visualParentGeometry, unifiedGeometry and active.
+Window {
+    id: window
+
+    readonly property int gap: 6
+    readonly property bool dark: {
+        const c = Kirigami.Theme.backgroundColor;
+        return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
+    }
+    readonly property color accent: Kirigami.Theme.highlightColor
+    readonly property bool fusionAccent: Math.abs(accent.r - 47 / 255) < 0.04
+        && Math.abs(accent.g - 111 / 255) < 0.04 && Math.abs(accent.b - 223 / 255) < 0.04
+    readonly property color edgeColor: fusionAccent ? (dark ? "#5b9dff" : "#2f6fdf") : accent
+    readonly property color fillColor: fusionAccent
+        ? (dark ? Qt.rgba(91 / 255, 157 / 255, 1, 0.28) : Qt.rgba(47 / 255, 111 / 255, 223 / 255, 0.20))
+        : Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.28 : 0.20)
+    property bool animated: false
+
+    Kirigami.Theme.colorSet: Kirigami.Theme.Window
+    Kirigami.Theme.inherit: false
+
+    flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint
+    color: "transparent"
+
+    x: outline.unifiedGeometry.x
+    y: outline.unifiedGeometry.y
+    width: Math.max(1, outline.unifiedGeometry.width)
+    height: Math.max(1, outline.unifiedGeometry.height)
+
+    visible: outline.active
+
+    onSceneGraphError: (error, message) => {
+        console.warn("plasmafusion outline: scene graph error:", message);
+    }
+
+    // Zones that touch the work area's edge are drawn inset, like the board's zones.
+    function inset(geometry) {
+        let area = null;
+        try {
+            area = Workspace.clientArea(Workspace.MaximizeArea,
+                                        Workspace.screenAt(Qt.point(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2)),
+                                        Workspace.currentDesktop);
+        } catch (e) {
+            area = null;
+        }
+        if (!area) {
+            return geometry;
+        }
+        const l = Math.abs(geometry.x - area.x) < 1 ? gap : 0;
+        const t = Math.abs(geometry.y - area.y) < 1 ? gap : 0;
+        const r = Math.abs(geometry.x + geometry.width - area.x - area.width) < 1 ? gap : 0;
+        const b = Math.abs(geometry.y + geometry.height - area.y - area.height) < 1 ? gap : 0;
+        return Qt.rect(geometry.x + l, geometry.y + t, geometry.width - l - r, geometry.height - t - b);
+    }
+
+    function place(geometry, animate) {
+        const g = inset(geometry);
+        window.animated = animate;
+        zone.x = g.x - outline.unifiedGeometry.x;
+        zone.y = g.y - outline.unifiedGeometry.y;
+        zone.width = g.width;
+        zone.height = g.height;
+        window.animated = true;
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            appear.stop();
+            zone.opacity = 0;
+            if (outline.visualParentGeometry.width > 0 && outline.visualParentGeometry.height > 0) {
+                place(outline.visualParentGeometry, false);
+                place(outline.geometry, true);
+            } else {
+                place(outline.geometry, false);
+            }
+            appear.start();
+        } else {
+            appear.stop();
+            zone.opacity = 0;
+        }
+    }
+
+    Connections {
+        target: outline
+        function onGeometryChanged() {
+            if (window.visible) {
+                window.place(outline.geometry, true);
+            }
+        }
+        function onUnifiedGeometryChanged() {
+            if (window.visible) {
+                window.place(outline.geometry, false);
+            }
+        }
+    }
+
+    SequentialAnimation {
+        id: appear
+        PauseAnimation { duration: 150 }
+        NumberAnimation { target: zone; property: "opacity"; to: 1; duration: 120; easing.type: Easing.OutCubic }
+    }
+
+    Rectangle {
+        id: zone
+        opacity: 0
+        radius: 14
+        color: window.fillColor
+        border.width: 2
+        border.color: window.edgeColor
+
+        Behavior on x { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on y { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on width { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on height { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+    }
+}

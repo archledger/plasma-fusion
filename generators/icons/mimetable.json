@@ -1,0 +1,6792 @@
+{
+"application-acrobat": {
+"kind": "pdf",
+"label": "PDF",
+"type": "application/pdf"
+},
+"application-andrew-inset": {
+"kind": "doc",
+"label": "EZ",
+"type": "application/andrew-inset"
+},
+"application-annodex": {
+"kind": "video",
+"label": "ANX",
+"type": "application/annodex"
+},
+"application-appinstaller": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/appinstaller"
+},
+"application-appx": {
+"kind": "archive",
+"label": "APPX",
+"type": "application/appx"
+},
+"application-appxbundle": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/appxbundle"
+},
+"application-atom+xml": {
+"kind": "code",
+"label": "ATOM",
+"type": "application/atom+xml"
+},
+"application-bat": {
+"kind": "code",
+"label": "BAT",
+"type": "application/x-bat"
+},
+"application-bzip2": {
+"kind": "archive",
+"label": "BZ2",
+"type": "application/x-bzip2"
+},
+"application-cbor": {
+"kind": "generic",
+"label": "CBOR",
+"type": "application/cbor"
+},
+"application-cdr": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"application-coreldraw": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"application-dbase": {
+"kind": "doc",
+"label": "DBF",
+"type": "application/vnd.dbf"
+},
+"application-dbf": {
+"kind": "doc",
+"label": "DBF",
+"type": "application/vnd.dbf"
+},
+"application-dicom": {
+"kind": "image",
+"label": "DCM",
+"type": "application/dicom"
+},
+"application-docbook+xml": {
+"kind": "doc",
+"label": "DBK",
+"type": "application/x-docbook+xml"
+},
+"application-ecmascript": {
+"kind": "code",
+"label": "ES",
+"type": "application/ecmascript"
+},
+"application-emf": {
+"kind": "image",
+"label": "EMF",
+"type": "image/emf"
+},
+"application-epub+zip": {
+"kind": "doc",
+"label": "EPUB",
+"type": "application/epub+zip"
+},
+"application-fits": {
+"kind": "generic",
+"label": "FITS",
+"type": "application/fits"
+},
+"application-font-tdpfr": {
+"kind": "font",
+"label": "PFR",
+"type": "application/font-tdpfr"
+},
+"application-font-woff": {
+"kind": "font",
+"label": "WOFF",
+"type": "font/woff"
+},
+"application-futuresplash": {
+"kind": "video",
+"label": "SWF",
+"type": "application/vnd.adobe.flash.movie"
+},
+"application-geo+json": {
+"kind": "code",
+"label": "JSON",
+"type": "application/geo+json"
+},
+"application-gml+xml": {
+"kind": "code",
+"label": "GML",
+"type": "application/gml+xml"
+},
+"application-gnunet-directory": {
+"kind": "generic",
+"label": "GND",
+"type": "application/gnunet-directory"
+},
+"application-gpx": {
+"kind": "code",
+"label": "GPX",
+"type": "application/gpx+xml"
+},
+"application-gpx+xml": {
+"kind": "code",
+"label": "GPX",
+"type": "application/gpx+xml"
+},
+"application-gzip": {
+"kind": "archive",
+"label": "GZ",
+"type": "application/gzip"
+},
+"application-ico": {
+"kind": "image",
+"label": "ICO",
+"type": "image/vnd.microsoft.icon"
+},
+"application-ics": {
+"kind": "doc",
+"label": "ICS",
+"type": "text/calendar"
+},
+"application-illustrator": {
+"kind": "image",
+"label": "AI",
+"type": "application/illustrator"
+},
+"application-its+xml": {
+"kind": "text",
+"label": "ITS",
+"type": "application/its+xml"
+},
+"application-java": {
+"kind": "generic",
+"label": "CLASS",
+"type": "application/x-java"
+},
+"application-java-archive": {
+"kind": "archive",
+"label": "JAR",
+"type": "application/java-archive"
+},
+"application-java-byte-code": {
+"kind": "generic",
+"label": "CLASS",
+"type": "application/x-java"
+},
+"application-java-vm": {
+"kind": "generic",
+"label": "CLASS",
+"type": "application/x-java"
+},
+"application-javascript": {
+"kind": "code",
+"label": "JS",
+"type": "text/javascript"
+},
+"application-jrd+json": {
+"kind": "code",
+"label": "JRD",
+"type": "application/jrd+json"
+},
+"application-json": {
+"kind": "code",
+"label": "JSON",
+"type": "application/json"
+},
+"application-json-patch+json": {
+"kind": "code",
+"label": "CODE",
+"type": "application/json-patch+json"
+},
+"application-json5": {
+"kind": "code",
+"label": "JSON5",
+"type": "application/json5"
+},
+"application-ld+json": {
+"kind": "code",
+"label": "CODE",
+"type": "application/ld+json"
+},
+"application-lotus123": {
+"kind": "sheet",
+"label": "WK1",
+"type": "application/vnd.lotus-1-2-3"
+},
+"application-m3u": {
+"kind": "audio",
+"label": "M3U",
+"type": "audio/x-mpegurl"
+},
+"application-mac-binhex40": {
+"kind": "archive",
+"label": "HQX",
+"type": "application/mac-binhex40"
+},
+"application-mathematica": {
+"kind": "doc",
+"label": "NB",
+"type": "application/mathematica"
+},
+"application-mathml+xml": {
+"kind": "code",
+"label": "MML",
+"type": "application/mathml+xml"
+},
+"application-mbox": {
+"kind": "text",
+"label": "MBOX",
+"type": "application/mbox"
+},
+"application-mdb": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/vnd.ms-access"
+},
+"application-metalink+xml": {
+"kind": "code",
+"label": "CODE",
+"type": "application/metalink+xml"
+},
+"application-metalink4+xml": {
+"kind": "code",
+"label": "META4",
+"type": "application/metalink4+xml"
+},
+"application-ms-tnef": {
+"kind": "generic",
+"label": "TNEF",
+"type": "application/vnd.ms-tnef"
+},
+"application-msaccess": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/vnd.ms-access"
+},
+"application-msexcel": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/vnd.ms-excel"
+},
+"application-msix": {
+"kind": "archive",
+"label": "MSIX",
+"type": "application/msix"
+},
+"application-msixbundle": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/msixbundle"
+},
+"application-msonenote": {
+"kind": "doc",
+"label": "ONE",
+"type": null
+},
+"application-msoutlook": {
+"kind": "doc",
+"label": "MSG",
+"type": null
+},
+"application-mspowerpoint": {
+"kind": "slides",
+"label": "PPT",
+"type": "application/vnd.ms-powerpoint"
+},
+"application-msword": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/msword"
+},
+"application-msword-template": {
+"kind": "doc",
+"label": "DOT",
+"type": "application/msword-template"
+},
+"application-mxf": {
+"kind": "video",
+"label": "MXF",
+"type": "application/mxf"
+},
+"application-nappdf": {
+"kind": "pdf",
+"label": "PDF",
+"type": "application/pdf"
+},
+"application-octet-stream": {
+"kind": "blank",
+"label": null,
+"type": "application/octet-stream"
+},
+"application-oda": {
+"kind": "doc",
+"label": "ODA",
+"type": "application/oda"
+},
+"application-ogg": {
+"kind": "video",
+"label": "OGX",
+"type": "application/ogg"
+},
+"application-ovf": {
+"kind": "generic",
+"label": "OVA",
+"type": "application/ovf"
+},
+"application-owl+xml": {
+"kind": "code",
+"label": "OWX",
+"type": "application/owl+xml"
+},
+"application-oxps": {
+"kind": "pdf",
+"label": "OXPS",
+"type": "application/oxps"
+},
+"application-pcap": {
+"kind": "generic",
+"label": "PCAP",
+"type": "application/vnd.tcpdump.pcap"
+},
+"application-pdf": {
+"kind": "pdf",
+"label": "PDF",
+"type": "application/pdf"
+},
+"application-pgp": {
+"kind": "generic",
+"label": "PGP",
+"type": "application/pgp-encrypted"
+},
+"application-pgp-encrypted": {
+"kind": "generic",
+"label": "PGP",
+"type": "application/pgp-encrypted"
+},
+"application-pgp-keys": {
+"kind": "generic",
+"label": "SKR",
+"type": "application/pgp-keys"
+},
+"application-pgp-signature": {
+"kind": "generic",
+"label": "ASC",
+"type": "application/pgp-signature"
+},
+"application-photoshop": {
+"kind": "image",
+"label": "PSD",
+"type": "image/vnd.adobe.photoshop"
+},
+"application-pkcs10": {
+"kind": "text",
+"label": "P10",
+"type": "application/pkcs10"
+},
+"application-pkcs10+pem": {
+"kind": "code",
+"label": "CODE",
+"type": "application/pkcs10+pem"
+},
+"application-pkcs12": {
+"kind": "generic",
+"label": "P12",
+"type": "application/pkcs12"
+},
+"application-pkcs12+pem": {
+"kind": "code",
+"label": "CODE",
+"type": "application/pkcs12+pem"
+},
+"application-pkcs7-mime": {
+"kind": "text",
+"label": "P7C",
+"type": "application/pkcs7-mime"
+},
+"application-pkcs7-mime+pem": {
+"kind": "code",
+"label": "CODE",
+"type": "application/pkcs7-mime+pem"
+},
+"application-pkcs7-signature": {
+"kind": "text",
+"label": "P7S",
+"type": "application/pkcs7-signature"
+},
+"application-pkcs8": {
+"kind": "generic",
+"label": "P8",
+"type": "application/pkcs8"
+},
+"application-pkcs8+pem": {
+"kind": "code",
+"label": "CODE",
+"type": "application/pkcs8+pem"
+},
+"application-pkcs8-encrypted": {
+"kind": "generic",
+"label": "P8E",
+"type": "application/pkcs8-encrypted"
+},
+"application-pkix-cert": {
+"kind": "generic",
+"label": "CER",
+"type": "application/pkix-cert"
+},
+"application-pkix-cert+pem": {
+"kind": "code",
+"label": "CODE",
+"type": "application/pkix-cert+pem"
+},
+"application-pkix-crl": {
+"kind": "generic",
+"label": "CRL",
+"type": "application/pkix-crl"
+},
+"application-pkix-crl+pem": {
+"kind": "code",
+"label": "CODE",
+"type": "application/pkix-crl+pem"
+},
+"application-pkix-pkipath": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/pkix-pkipath"
+},
+"application-pls": {
+"kind": "audio",
+"label": "PLS",
+"type": "audio/x-scpls"
+},
+"application-postscript": {
+"kind": "pdf",
+"label": "PS",
+"type": "application/postscript"
+},
+"application-powerpoint": {
+"kind": "slides",
+"label": "PPT",
+"type": "application/vnd.ms-powerpoint"
+},
+"application-prs.plucker": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/prs.plucker"
+},
+"application-ram": {
+"kind": "generic",
+"label": "RAM",
+"type": "application/ram"
+},
+"application-raml+yaml": {
+"kind": "code",
+"label": "RAML",
+"type": "application/raml+yaml"
+},
+"application-rdf+xml": {
+"kind": "code",
+"label": "RDF",
+"type": "application/rdf+xml"
+},
+"application-relax-ng-compact-syntax": {
+"kind": "text",
+"label": "RNC",
+"type": "application/relax-ng-compact-syntax"
+},
+"application-relaxng": {
+"kind": "code",
+"label": "RNG",
+"type": "application/relaxng"
+},
+"application-rss+xml": {
+"kind": "code",
+"label": "RSS",
+"type": "application/rss+xml"
+},
+"application-rtf": {
+"kind": "doc",
+"label": "RTF",
+"type": "application/rtf"
+},
+"application-schema+json": {
+"kind": "code",
+"label": "JSON",
+"type": "application/schema+json"
+},
+"application-sdp": {
+"kind": "video",
+"label": "SDP",
+"type": "application/sdp"
+},
+"application-sieve": {
+"kind": "code",
+"label": "SIV",
+"type": "application/sieve"
+},
+"application-smil": {
+"kind": "video",
+"label": "SMIL",
+"type": "application/smil+xml"
+},
+"application-smil+xml": {
+"kind": "video",
+"label": "SMIL",
+"type": "application/smil+xml"
+},
+"application-sparql-query": {
+"kind": "generic",
+"label": "QS",
+"type": "application/sparql-query"
+},
+"application-sparql-results+xml": {
+"kind": "code",
+"label": "SRX",
+"type": "application/sparql-results+xml"
+},
+"application-sql": {
+"kind": "code",
+"label": "SQL",
+"type": "application/sql"
+},
+"application-stuffit": {
+"kind": "archive",
+"label": "SIT",
+"type": "application/x-stuffit"
+},
+"application-tga": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"application-toml": {
+"kind": "code",
+"label": "TOML",
+"type": "application/toml"
+},
+"application-trig": {
+"kind": "code",
+"label": "TRIG",
+"type": "application/trig"
+},
+"application-vnd.adobe.flash.movie": {
+"kind": "video",
+"label": "SWF",
+"type": "application/vnd.adobe.flash.movie"
+},
+"application-vnd.adobe.illustrator": {
+"kind": "image",
+"label": "AI",
+"type": "application/illustrator"
+},
+"application-vnd.amazon.mobi8-ebook": {
+"kind": "generic",
+"label": "AZW3",
+"type": "application/vnd.amazon.mobi8-ebook"
+},
+"application-vnd.android.package-archive": {
+"kind": "archive",
+"label": "APK",
+"type": "application/vnd.android.package-archive"
+},
+"application-vnd.appimage": {
+"kind": "exec",
+"label": "APP",
+"type": "application/vnd.appimage"
+},
+"application-vnd.apple.keynote": {
+"kind": "slides",
+"label": "KEY",
+"type": "application/vnd.apple.keynote"
+},
+"application-vnd.apple.mpegurl": {
+"kind": "code",
+"label": "M3U",
+"type": "application/vnd.apple.mpegurl"
+},
+"application-vnd.apple.numbers": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/vnd.apple.numbers"
+},
+"application-vnd.apple.pages": {
+"kind": "doc",
+"label": "PAGES",
+"type": "application/vnd.apple.pages"
+},
+"application-vnd.apple.pkpass": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/vnd.apple.pkpass"
+},
+"application-vnd.apple.pkpasses": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/vnd.apple.pkpasses"
+},
+"application-vnd.chess-pgn": {
+"kind": "text",
+"label": "PGN",
+"type": "application/vnd.chess-pgn"
+},
+"application-vnd.coffeescript": {
+"kind": "code",
+"label": "CODE",
+"type": "application/vnd.coffeescript"
+},
+"application-vnd.comicbook+zip": {
+"kind": "doc",
+"label": "CBZ",
+"type": "application/vnd.comicbook+zip"
+},
+"application-vnd.comicbook-rar": {
+"kind": "doc",
+"label": "CBR",
+"type": "application/vnd.comicbook-rar"
+},
+"application-vnd.corel-draw": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"application-vnd.cups-ppd": {
+"kind": "code",
+"label": "PPD",
+"type": "application/vnd.cups-ppd"
+},
+"application-vnd.dart": {
+"kind": "code",
+"label": "DART",
+"type": "application/vnd.dart"
+},
+"application-vnd.dbf": {
+"kind": "doc",
+"label": "DBF",
+"type": "application/vnd.dbf"
+},
+"application-vnd.debian.binary-package": {
+"kind": "archive",
+"label": "DEB",
+"type": "application/vnd.debian.binary-package"
+},
+"application-vnd.efi.img": {
+"kind": "disk",
+"label": "IMG",
+"type": "application/vnd.efi.img"
+},
+"application-vnd.efi.iso": {
+"kind": "disk",
+"label": "ISO",
+"type": "application/vnd.efi.iso"
+},
+"application-vnd.emusic-emusic_package": {
+"kind": "archive",
+"label": "EMP",
+"type": "application/vnd.emusic-emusic_package"
+},
+"application-vnd.flatpak": {
+"kind": "archive",
+"label": "PAK",
+"type": "application/vnd.flatpak"
+},
+"application-vnd.flatpak.ref": {
+"kind": "exec",
+"label": "REF",
+"type": "application/vnd.flatpak.ref"
+},
+"application-vnd.flatpak.repo": {
+"kind": "exec",
+"label": "REPO",
+"type": "application/vnd.flatpak.repo"
+},
+"application-vnd.framemaker": {
+"kind": "doc",
+"label": "FM",
+"type": "application/vnd.framemaker"
+},
+"application-vnd.geo+json": {
+"kind": "code",
+"label": "JSON",
+"type": "application/geo+json"
+},
+"application-vnd.gerber": {
+"kind": "text",
+"label": "GBR",
+"type": "application/vnd.gerber"
+},
+"application-vnd.google-earth.kml+xml": {
+"kind": "code",
+"label": "KML",
+"type": "application/vnd.google-earth.kml+xml"
+},
+"application-vnd.google-earth.kmz": {
+"kind": "archive",
+"label": "KMZ",
+"type": "application/vnd.google-earth.kmz"
+},
+"application-vnd.haansoft-hwp": {
+"kind": "doc",
+"label": "HWP",
+"type": "application/x-hwp"
+},
+"application-vnd.haansoft-hwt": {
+"kind": "doc",
+"label": "HWT",
+"type": "application/x-hwt"
+},
+"application-vnd.hp-hpgl": {
+"kind": "image",
+"label": "HPGL",
+"type": "application/vnd.hp-hpgl"
+},
+"application-vnd.hp-pcl": {
+"kind": "image",
+"label": "PCL",
+"type": "application/vnd.hp-pcl"
+},
+"application-vnd.iccprofile": {
+"kind": "generic",
+"label": "ICC",
+"type": "application/vnd.iccprofile"
+},
+"application-vnd.kde.bluedevil-sendfile": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/vnd.kde.bluedevil-sendfile"
+},
+"application-vnd.kde.fontspackage": {
+"kind": "archive",
+"label": "ZIP",
+"type": "application/vnd.kde.fontspackage"
+},
+"application-vnd.kde.itinerary": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/vnd.kde.itinerary"
+},
+"application-vnd.kde.kcfg": {
+"kind": "code",
+"label": "KCFG",
+"type": "application/vnd.kde.kcfg"
+},
+"application-vnd.kde.kcfgc": {
+"kind": "text",
+"label": "KCFGC",
+"type": "application/vnd.kde.kcfgc"
+},
+"application-vnd.kde.kleopatra.keygroup": {
+"kind": "text",
+"label": "KGRP",
+"type": "application/vnd.kde.kleopatra.keygroup"
+},
+"application-vnd.kde.kleopatra.pgp-encrypted-tar": {
+"kind": "archive",
+"label": "GPG",
+"type": "application/vnd.kde.kleopatra.pgp-encrypted-tar"
+},
+"application-vnd.kde.kleopatra.pgp-signed-tar": {
+"kind": "archive",
+"label": "SIG",
+"type": "application/vnd.kde.kleopatra.pgp-signed-tar"
+},
+"application-vnd.kde.kleopatra.pkcs7-encrypted-tar": {
+"kind": "archive",
+"label": "P7M",
+"type": "application/vnd.kde.kleopatra.pkcs7-encrypted-tar"
+},
+"application-vnd.kde.kleopatra.pkcs7-signed-tar": {
+"kind": "archive",
+"label": "P7S",
+"type": "application/vnd.kde.kleopatra.pkcs7-signed-tar"
+},
+"application-vnd.kde.knotificationrc": {
+"kind": "text",
+"label": "TXT",
+"type": "application/vnd.kde.knotificationrc"
+},
+"application-vnd.kde.kpatience.savedgame": {
+"kind": "code",
+"label": "KPAT",
+"type": "application/vnd.kde.kpatience.savedgame"
+},
+"application-vnd.kde.kpatience.savedstate": {
+"kind": "code",
+"label": "CODE",
+"type": "application/vnd.kde.kpatience.savedstate"
+},
+"application-vnd.kde.kphotoalbum-import": {
+"kind": "generic",
+"label": "KIM",
+"type": "application/vnd.kde.kphotoalbum-import"
+},
+"application-vnd.kde.kxmlguirc": {
+"kind": "code",
+"label": "RC",
+"type": "application/vnd.kde.kxmlguirc"
+},
+"application-vnd.kde.okular-archive": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/vnd.kde.okular-archive"
+},
+"application-vnd.lotus-1-2-3": {
+"kind": "sheet",
+"label": "WK1",
+"type": "application/vnd.lotus-1-2-3"
+},
+"application-vnd.lotus-wordpro": {
+"kind": "doc",
+"label": "LWP",
+"type": "application/vnd.lotus-wordpro"
+},
+"application-vnd.microsoft.portable-executable": {
+"kind": "exec",
+"label": "EXE",
+"type": "application/vnd.microsoft.portable-executable"
+},
+"application-vnd.microsoft.windows.thumbnail-cache": {
+"kind": "image",
+"label": "IMG",
+"type": "application/vnd.microsoft.windows.thumbnail-cache"
+},
+"application-vnd.mozilla.xul+xml": {
+"kind": "doc",
+"label": "XUL",
+"type": "application/vnd.mozilla.xul+xml"
+},
+"application-vnd.ms-3mfdocument": {
+"kind": "image",
+"label": "3MF",
+"type": "model/3mf"
+},
+"application-vnd.ms-access": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/vnd.ms-access"
+},
+"application-vnd.ms-asf": {
+"kind": "generic",
+"label": "ASF",
+"type": "application/vnd.ms-asf"
+},
+"application-vnd.ms-cab-compressed": {
+"kind": "archive",
+"label": "CAB",
+"type": "application/vnd.ms-cab-compressed"
+},
+"application-vnd.ms-excel": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/vnd.ms-excel"
+},
+"application-vnd.ms-excel.addin.macroEnabled.12": {
+"kind": "sheet",
+"label": "XLAM",
+"type": "application/vnd.ms-excel.addin.macroEnabled.12"
+},
+"application-vnd.ms-excel.sheet.binary.macroEnabled.12": {
+"kind": "sheet",
+"label": "XLSB",
+"type": "application/vnd.ms-excel.sheet.binary.macroEnabled.12"
+},
+"application-vnd.ms-excel.sheet.macroEnabled.12": {
+"kind": "sheet",
+"label": "XLSM",
+"type": "application/vnd.ms-excel.sheet.macroEnabled.12"
+},
+"application-vnd.ms-excel.template.macroEnabled.12": {
+"kind": "sheet",
+"label": "XLTM",
+"type": "application/vnd.ms-excel.template.macroEnabled.12"
+},
+"application-vnd.ms-htmlhelp": {
+"kind": "doc",
+"label": "CHM",
+"type": "application/vnd.ms-htmlhelp"
+},
+"application-vnd.ms-officetheme": {
+"kind": "text",
+"label": "THMX",
+"type": "application/vnd.ms-officetheme"
+},
+"application-vnd.ms-powerpoint": {
+"kind": "slides",
+"label": "PPT",
+"type": "application/vnd.ms-powerpoint"
+},
+"application-vnd.ms-powerpoint.addin.macroEnabled.12": {
+"kind": "slides",
+"label": "PPAM",
+"type": "application/vnd.ms-powerpoint.addin.macroEnabled.12"
+},
+"application-vnd.ms-powerpoint.presentation.macroEnabled.12": {
+"kind": "slides",
+"label": "PPTM",
+"type": "application/vnd.ms-powerpoint.presentation.macroEnabled.12"
+},
+"application-vnd.ms-powerpoint.slide.macroEnabled.12": {
+"kind": "slides",
+"label": "SLDM",
+"type": "application/vnd.ms-powerpoint.slide.macroEnabled.12"
+},
+"application-vnd.ms-powerpoint.slideshow.macroEnabled.12": {
+"kind": "slides",
+"label": "PPSM",
+"type": "application/vnd.ms-powerpoint.slideshow.macroEnabled.12"
+},
+"application-vnd.ms-powerpoint.template.macroEnabled.12": {
+"kind": "slides",
+"label": "POTM",
+"type": "application/vnd.ms-powerpoint.template.macroEnabled.12"
+},
+"application-vnd.ms-publisher": {
+"kind": "generic",
+"label": "PUB",
+"type": "application/vnd.ms-publisher"
+},
+"application-vnd.ms-tnef": {
+"kind": "generic",
+"label": "TNEF",
+"type": "application/vnd.ms-tnef"
+},
+"application-vnd.ms-visio.drawing.macroEnabled.main+xml": {
+"kind": "image",
+"label": "VSDM",
+"type": "application/vnd.ms-visio.drawing.macroEnabled.main+xml"
+},
+"application-vnd.ms-visio.drawing.main+xml": {
+"kind": "image",
+"label": "VSDX",
+"type": "application/vnd.ms-visio.drawing.main+xml"
+},
+"application-vnd.ms-visio.stencil.macroEnabled.main+xml": {
+"kind": "image",
+"label": "VSSM",
+"type": "application/vnd.ms-visio.stencil.macroEnabled.main+xml"
+},
+"application-vnd.ms-visio.stencil.main+xml": {
+"kind": "image",
+"label": "VSSX",
+"type": "application/vnd.ms-visio.stencil.main+xml"
+},
+"application-vnd.ms-visio.template.macroEnabled.main+xml": {
+"kind": "image",
+"label": "VSTM",
+"type": "application/vnd.ms-visio.template.macroEnabled.main+xml"
+},
+"application-vnd.ms-visio.template.main+xml": {
+"kind": "image",
+"label": "VSTX",
+"type": "application/vnd.ms-visio.template.main+xml"
+},
+"application-vnd.ms-word": {
+"kind": "generic",
+"label": "DOC",
+"type": "application/vnd.ms-word"
+},
+"application-vnd.ms-word.document.macroEnabled.12": {
+"kind": "doc",
+"label": "DOCM",
+"type": "application/vnd.ms-word.document.macroEnabled.12"
+},
+"application-vnd.ms-word.template.macroEnabled.12": {
+"kind": "doc",
+"label": "DOTM",
+"type": "application/vnd.ms-word.template.macroEnabled.12"
+},
+"application-vnd.ms-works": {
+"kind": "doc",
+"label": "WCM",
+"type": "application/vnd.ms-works"
+},
+"application-vnd.ms-wpl": {
+"kind": "video",
+"label": "WPL",
+"type": "application/vnd.ms-wpl"
+},
+"application-vnd.ms-xpsdocument": {
+"kind": "pdf",
+"label": "XPS",
+"type": "application/vnd.ms-xpsdocument"
+},
+"application-vnd.msaccess": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/vnd.ms-access"
+},
+"application-vnd.nintendo.snes.rom": {
+"kind": "exec",
+"label": "SFC",
+"type": "application/vnd.nintendo.snes.rom"
+},
+"application-vnd.oasis.docbook+xml": {
+"kind": "doc",
+"label": "DBK",
+"type": "application/x-docbook+xml"
+},
+"application-vnd.oasis.opendocument.chart": {
+"kind": "sheet",
+"label": "ODC",
+"type": "application/vnd.oasis.opendocument.chart"
+},
+"application-vnd.oasis.opendocument.chart-template": {
+"kind": "sheet",
+"label": "OTC",
+"type": "application/vnd.oasis.opendocument.chart-template"
+},
+"application-vnd.oasis.opendocument.database": {
+"kind": "doc",
+"label": "ODB",
+"type": "application/vnd.oasis.opendocument.database"
+},
+"application-vnd.oasis.opendocument.drawing": {
+"kind": "image",
+"label": "ODG",
+"type": null
+},
+"application-vnd.oasis.opendocument.formula": {
+"kind": "doc",
+"label": "ODF",
+"type": "application/vnd.oasis.opendocument.formula"
+},
+"application-vnd.oasis.opendocument.formula-template": {
+"kind": "doc",
+"label": "OTF",
+"type": "application/vnd.oasis.opendocument.formula-template"
+},
+"application-vnd.oasis.opendocument.graphics": {
+"kind": "image",
+"label": "ODG",
+"type": "application/vnd.oasis.opendocument.graphics"
+},
+"application-vnd.oasis.opendocument.graphics-flat-xml": {
+"kind": "image",
+"label": "FODG",
+"type": "application/vnd.oasis.opendocument.graphics-flat-xml"
+},
+"application-vnd.oasis.opendocument.graphics-template": {
+"kind": "image",
+"label": "OTG",
+"type": "application/vnd.oasis.opendocument.graphics-template"
+},
+"application-vnd.oasis.opendocument.image": {
+"kind": "image",
+"label": "ODI",
+"type": "application/vnd.oasis.opendocument.image"
+},
+"application-vnd.oasis.opendocument.presentation": {
+"kind": "slides",
+"label": "ODP",
+"type": "application/vnd.oasis.opendocument.presentation"
+},
+"application-vnd.oasis.opendocument.presentation-flat-xml": {
+"kind": "slides",
+"label": "FODP",
+"type": "application/vnd.oasis.opendocument.presentation-flat-xml"
+},
+"application-vnd.oasis.opendocument.presentation-template": {
+"kind": "slides",
+"label": "OTP",
+"type": "application/vnd.oasis.opendocument.presentation-template"
+},
+"application-vnd.oasis.opendocument.spreadsheet": {
+"kind": "sheet",
+"label": "ODS",
+"type": "application/vnd.oasis.opendocument.spreadsheet"
+},
+"application-vnd.oasis.opendocument.spreadsheet-flat-xml": {
+"kind": "sheet",
+"label": "FODS",
+"type": "application/vnd.oasis.opendocument.spreadsheet-flat-xml"
+},
+"application-vnd.oasis.opendocument.spreadsheet-template": {
+"kind": "sheet",
+"label": "OTS",
+"type": "application/vnd.oasis.opendocument.spreadsheet-template"
+},
+"application-vnd.oasis.opendocument.text": {
+"kind": "doc",
+"label": "ODT",
+"type": "application/vnd.oasis.opendocument.text"
+},
+"application-vnd.oasis.opendocument.text-flat-xml": {
+"kind": "doc",
+"label": "FODT",
+"type": "application/vnd.oasis.opendocument.text-flat-xml"
+},
+"application-vnd.oasis.opendocument.text-master": {
+"kind": "doc",
+"label": "ODM",
+"type": "application/vnd.oasis.opendocument.text-master"
+},
+"application-vnd.oasis.opendocument.text-master-template": {
+"kind": "generic",
+"label": "OTM",
+"type": "application/vnd.oasis.opendocument.text-master-template"
+},
+"application-vnd.oasis.opendocument.text-template": {
+"kind": "doc",
+"label": "OTT",
+"type": "application/vnd.oasis.opendocument.text-template"
+},
+"application-vnd.oasis.opendocument.text-web": {
+"kind": "code",
+"label": "OTH",
+"type": "application/vnd.oasis.opendocument.text-web"
+},
+"application-vnd.openofficeorg.extension": {
+"kind": "doc",
+"label": "OXT",
+"type": "application/vnd.openofficeorg.extension"
+},
+"application-vnd.openxmlformats-officedocument.presentationml.presentation": {
+"kind": "slides",
+"label": "PPTX",
+"type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+},
+"application-vnd.openxmlformats-officedocument.presentationml.slide": {
+"kind": "slides",
+"label": "SLDX",
+"type": "application/vnd.openxmlformats-officedocument.presentationml.slide"
+},
+"application-vnd.openxmlformats-officedocument.presentationml.slideshow": {
+"kind": "slides",
+"label": "PPSX",
+"type": "application/vnd.openxmlformats-officedocument.presentationml.slideshow"
+},
+"application-vnd.openxmlformats-officedocument.presentationml.template": {
+"kind": "slides",
+"label": "POTX",
+"type": "application/vnd.openxmlformats-officedocument.presentationml.template"
+},
+"application-vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+"kind": "sheet",
+"label": "XLSX",
+"type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+},
+"application-vnd.openxmlformats-officedocument.spreadsheetml.template": {
+"kind": "sheet",
+"label": "XLTX",
+"type": "application/vnd.openxmlformats-officedocument.spreadsheetml.template"
+},
+"application-vnd.openxmlformats-officedocument.wordprocessingml.document": {
+"kind": "doc",
+"label": "DOCX",
+"type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+},
+"application-vnd.openxmlformats-officedocument.wordprocessingml.template": {
+"kind": "doc",
+"label": "DOTX",
+"type": "application/vnd.openxmlformats-officedocument.wordprocessingml.template"
+},
+"application-vnd.palm": {
+"kind": "generic",
+"label": "PRC",
+"type": "application/vnd.palm"
+},
+"application-vnd.rar": {
+"kind": "archive",
+"label": "RAR",
+"type": "application/vnd.rar"
+},
+"application-vnd.rn-realmedia": {
+"kind": "video",
+"label": "RM",
+"type": "application/vnd.rn-realmedia"
+},
+"application-vnd.rn-realmedia-vbr": {
+"kind": "video",
+"label": "RM",
+"type": "application/vnd.rn-realmedia"
+},
+"application-vnd.scribus": {
+"kind": "doc",
+"label": "SLA",
+"type": null
+},
+"application-vnd.sdp": {
+"kind": "video",
+"label": "SDP",
+"type": "application/sdp"
+},
+"application-vnd.smaf": {
+"kind": "audio",
+"label": "MMF",
+"type": "application/vnd.smaf"
+},
+"application-vnd.snap": {
+"kind": "generic",
+"label": "SNAP",
+"type": "application/vnd.snap"
+},
+"application-vnd.sqlite3": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/vnd.sqlite3"
+},
+"application-vnd.squashfs": {
+"kind": "generic",
+"label": "SQSH",
+"type": "application/vnd.squashfs"
+},
+"application-vnd.stardivision.calc": {
+"kind": "sheet",
+"label": "SDC",
+"type": "application/vnd.stardivision.calc"
+},
+"application-vnd.stardivision.chart": {
+"kind": "sheet",
+"label": "SDS",
+"type": "application/vnd.stardivision.chart"
+},
+"application-vnd.stardivision.draw": {
+"kind": "image",
+"label": "SDA",
+"type": "application/vnd.stardivision.draw"
+},
+"application-vnd.stardivision.impress": {
+"kind": "slides",
+"label": "SDD",
+"type": "application/vnd.stardivision.impress"
+},
+"application-vnd.stardivision.mail": {
+"kind": "archive",
+"label": "SMD",
+"type": "application/vnd.stardivision.mail"
+},
+"application-vnd.stardivision.math": {
+"kind": "doc",
+"label": "SMF",
+"type": "application/vnd.stardivision.math"
+},
+"application-vnd.stardivision.writer": {
+"kind": "doc",
+"label": "SDW",
+"type": "application/vnd.stardivision.writer"
+},
+"application-vnd.stardivision.writer-global": {
+"kind": "doc",
+"label": "SDW",
+"type": "application/vnd.stardivision.writer"
+},
+"application-vnd.sun.xml.base": {
+"kind": "generic",
+"label": "ODB",
+"type": "application/vnd.sun.xml.base"
+},
+"application-vnd.sun.xml.calc": {
+"kind": "sheet",
+"label": "SXC",
+"type": "application/vnd.sun.xml.calc"
+},
+"application-vnd.sun.xml.calc.template": {
+"kind": "sheet",
+"label": "STC",
+"type": "application/vnd.sun.xml.calc.template"
+},
+"application-vnd.sun.xml.draw": {
+"kind": "image",
+"label": "SXD",
+"type": "application/vnd.sun.xml.draw"
+},
+"application-vnd.sun.xml.draw.template": {
+"kind": "image",
+"label": "STD",
+"type": "application/vnd.sun.xml.draw.template"
+},
+"application-vnd.sun.xml.impress": {
+"kind": "slides",
+"label": "SXI",
+"type": "application/vnd.sun.xml.impress"
+},
+"application-vnd.sun.xml.impress.template": {
+"kind": "slides",
+"label": "STI",
+"type": "application/vnd.sun.xml.impress.template"
+},
+"application-vnd.sun.xml.math": {
+"kind": "doc",
+"label": "SXM",
+"type": "application/vnd.sun.xml.math"
+},
+"application-vnd.sun.xml.writer": {
+"kind": "doc",
+"label": "SXW",
+"type": "application/vnd.sun.xml.writer"
+},
+"application-vnd.sun.xml.writer.global": {
+"kind": "doc",
+"label": "SXG",
+"type": "application/vnd.sun.xml.writer.global"
+},
+"application-vnd.sun.xml.writer.template": {
+"kind": "doc",
+"label": "STW",
+"type": "application/vnd.sun.xml.writer.template"
+},
+"application-vnd.symbian.install": {
+"kind": "archive",
+"label": "SIS",
+"type": "application/vnd.symbian.install"
+},
+"application-vnd.tcpdump.pcap": {
+"kind": "generic",
+"label": "PCAP",
+"type": "application/vnd.tcpdump.pcap"
+},
+"application-vnd.truedoc": {
+"kind": "font",
+"label": "PFR",
+"type": "application/font-tdpfr"
+},
+"application-vnd.visio": {
+"kind": "doc",
+"label": "VSD",
+"type": "application/vnd.visio"
+},
+"application-vnd.wordperfect": {
+"kind": "doc",
+"label": "WP",
+"type": "application/vnd.wordperfect"
+},
+"application-vnd.xdgapp": {
+"kind": "archive",
+"label": "PAK",
+"type": "application/vnd.flatpak"
+},
+"application-vnd.youtube.yt": {
+"kind": "video",
+"label": "YT",
+"type": "video/vnd.youtube.yt"
+},
+"application-wasm": {
+"kind": "generic",
+"label": "WASM",
+"type": "application/wasm"
+},
+"application-winhlp": {
+"kind": "generic",
+"label": "HLP",
+"type": "application/winhlp"
+},
+"application-wk1": {
+"kind": "sheet",
+"label": "WK1",
+"type": "application/vnd.lotus-1-2-3"
+},
+"application-wmf": {
+"kind": "image",
+"label": "WMF",
+"type": "image/wmf"
+},
+"application-wordperfect": {
+"kind": "doc",
+"label": "WP",
+"type": "application/vnd.wordperfect"
+},
+"application-wps-office.doc": {
+"kind": "doc",
+"label": "DOC",
+"type": null
+},
+"application-wps-office.docx": {
+"kind": "doc",
+"label": "DOCX",
+"type": null
+},
+"application-wps-office.ppt": {
+"kind": "slides",
+"label": "PPT",
+"type": null
+},
+"application-wps-office.pptx": {
+"kind": "slides",
+"label": "PPTX",
+"type": null
+},
+"application-wps-office.xls": {
+"kind": "sheet",
+"label": "XLS",
+"type": null
+},
+"application-wps-office.xlsx": {
+"kind": "sheet",
+"label": "XLSX",
+"type": null
+},
+"application-wwf": {
+"kind": "doc",
+"label": "WWF",
+"type": "application/x-wwf"
+},
+"application-x-123": {
+"kind": "sheet",
+"label": "WK1",
+"type": "application/vnd.lotus-1-2-3"
+},
+"application-x-7z-compressed": {
+"kind": "archive",
+"label": "7Z",
+"type": "application/x-7z-compressed"
+},
+"application-x-abiword": {
+"kind": "doc",
+"label": "ABW",
+"type": "application/x-abiword"
+},
+"application-x-ace": {
+"kind": "archive",
+"label": "ACE",
+"type": "application/x-ace"
+},
+"application-x-addon": {
+"kind": "exec",
+"label": "ADD",
+"type": null
+},
+"application-x-alz": {
+"kind": "archive",
+"label": "ALZ",
+"type": "application/x-alz"
+},
+"application-x-amiga-disk-format": {
+"kind": "generic",
+"label": "ADF",
+"type": "application/x-amiga-disk-format"
+},
+"application-x-amipro": {
+"kind": "doc",
+"label": "SAM",
+"type": "application/x-amipro"
+},
+"application-x-annodex": {
+"kind": "video",
+"label": "ANX",
+"type": "application/annodex"
+},
+"application-x-aportisdoc": {
+"kind": "doc",
+"label": "PDB",
+"type": "application/x-aportisdoc"
+},
+"application-x-apple-diskimage": {
+"kind": "disk",
+"label": "DMG",
+"type": "application/x-apple-diskimage"
+},
+"application-x-apple-systemprofiler+xml": {
+"kind": "code",
+"label": "SPX",
+"type": "application/x-apple-systemprofiler+xml"
+},
+"application-x-appleworks-document": {
+"kind": "doc",
+"label": "CWK",
+"type": "application/x-appleworks-document"
+},
+"application-x-applix-spreadsheet": {
+"kind": "sheet",
+"label": "AS",
+"type": "application/x-applix-spreadsheet"
+},
+"application-x-applix-word": {
+"kind": "doc",
+"label": "AW",
+"type": "application/x-applix-word"
+},
+"application-x-ar": {
+"kind": "archive",
+"label": "AR",
+"type": null
+},
+"application-x-arc": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-arc"
+},
+"application-x-archive": {
+"kind": "archive",
+"label": "A",
+"type": "application/x-archive"
+},
+"application-x-arj": {
+"kind": "archive",
+"label": "ARJ",
+"type": "application/x-arj"
+},
+"application-x-asar": {
+"kind": "generic",
+"label": "ASAR",
+"type": "application/x-asar"
+},
+"application-x-asp": {
+"kind": "code",
+"label": "ASP",
+"type": "application/x-asp"
+},
+"application-x-atari-2600-rom": {
+"kind": "exec",
+"label": "A26",
+"type": "application/x-atari-2600-rom"
+},
+"application-x-atari-7800-rom": {
+"kind": "exec",
+"label": "A78",
+"type": "application/x-atari-7800-rom"
+},
+"application-x-atari-lynx-rom": {
+"kind": "exec",
+"label": "LNX",
+"type": "application/x-atari-lynx-rom"
+},
+"application-x-audacity-project": {
+"kind": "audio",
+"label": "AUP",
+"type": null
+},
+"application-x-awk": {
+"kind": "code",
+"label": "AWK",
+"type": "application/x-awk"
+},
+"application-x-bat": {
+"kind": "code",
+"label": "BAT",
+"type": "application/x-bat"
+},
+"application-x-bcpio": {
+"kind": "archive",
+"label": "BCPIO",
+"type": "application/x-bcpio"
+},
+"application-x-bittorrent": {
+"kind": "generic",
+"label": "TOR",
+"type": "application/x-bittorrent"
+},
+"application-x-blender": {
+"kind": "image",
+"label": "BLEND",
+"type": "application/x-blender"
+},
+"application-x-bps-patch": {
+"kind": "generic",
+"label": "BPS",
+"type": "application/x-bps-patch"
+},
+"application-x-bsdiff": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-bsdiff"
+},
+"application-x-bzdvi": {
+"kind": "doc",
+"label": "BZ2",
+"type": "application/x-bzdvi"
+},
+"application-x-bzip": {
+"kind": "archive",
+"label": "BZ2",
+"type": "application/x-bzip2"
+},
+"application-x-bzip-compressed-tar": {
+"kind": "archive",
+"label": "TBZ",
+"type": "application/x-bzip2-compressed-tar"
+},
+"application-x-bzip1": {
+"kind": "archive",
+"label": "BZ",
+"type": "application/x-bzip1"
+},
+"application-x-bzip1-compressed-tar": {
+"kind": "archive",
+"label": "TBZ",
+"type": "application/x-bzip1-compressed-tar"
+},
+"application-x-bzip2": {
+"kind": "archive",
+"label": "BZ2",
+"type": "application/x-bzip2"
+},
+"application-x-bzip2-compressed-tar": {
+"kind": "archive",
+"label": "TBZ",
+"type": "application/x-bzip2-compressed-tar"
+},
+"application-x-bzip3": {
+"kind": "archive",
+"label": "BZ3",
+"type": "application/x-bzip3"
+},
+"application-x-bzip3-compressed-tar": {
+"kind": "archive",
+"label": "TBZ3",
+"type": "application/x-bzip3-compressed-tar"
+},
+"application-x-bzpdf": {
+"kind": "doc",
+"label": "BZ2",
+"type": "application/x-bzpdf"
+},
+"application-x-bzpostscript": {
+"kind": "doc",
+"label": "BZ2",
+"type": "application/x-bzpostscript"
+},
+"application-x-cabri": {
+"kind": "generic",
+"label": "FIG",
+"type": "application/x-cabri"
+},
+"application-x-cb7": {
+"kind": "doc",
+"label": "CB7",
+"type": "application/x-cb7"
+},
+"application-x-cbr": {
+"kind": "doc",
+"label": "CBR",
+"type": "application/vnd.comicbook-rar"
+},
+"application-x-cbt": {
+"kind": "doc",
+"label": "CBT",
+"type": "application/x-cbt"
+},
+"application-x-cbz": {
+"kind": "doc",
+"label": "CBZ",
+"type": "application/vnd.comicbook+zip"
+},
+"application-x-ccmx": {
+"kind": "text",
+"label": "CCMX",
+"type": "application/x-ccmx"
+},
+"application-x-cd-image": {
+"kind": "disk",
+"label": "ISO",
+"type": "application/vnd.efi.iso"
+},
+"application-x-cda": {
+"kind": "generic",
+"label": "CDA",
+"type": "application/x-cda"
+},
+"application-x-cdr": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"application-x-cdrdao-toc": {
+"kind": "text",
+"label": "TOC",
+"type": "application/x-cdrdao-toc"
+},
+"application-x-chess-pgn": {
+"kind": "text",
+"label": "PGN",
+"type": "application/vnd.chess-pgn"
+},
+"application-x-chm": {
+"kind": "doc",
+"label": "CHM",
+"type": "application/vnd.ms-htmlhelp"
+},
+"application-x-cisco-vpn-settings": {
+"kind": "text",
+"label": "PCF",
+"type": "application/x-cisco-vpn-settings"
+},
+"application-x-class-file": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-class-file"
+},
+"application-x-compress": {
+"kind": "archive",
+"label": "Z",
+"type": "application/x-compress"
+},
+"application-x-compressed-iso": {
+"kind": "disk",
+"label": "CSO",
+"type": "application/x-compressed-iso"
+},
+"application-x-compressed-tar": {
+"kind": "archive",
+"label": "TGZ",
+"type": "application/x-compressed-tar"
+},
+"application-x-core": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-core"
+},
+"application-x-coreldraw": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"application-x-cpio": {
+"kind": "archive",
+"label": "CPIO",
+"type": "application/x-cpio"
+},
+"application-x-cpio-compressed": {
+"kind": "archive",
+"label": "GZ",
+"type": "application/x-cpio-compressed"
+},
+"application-x-csh": {
+"kind": "code",
+"label": "CSH",
+"type": "application/x-csh"
+},
+"application-x-cue": {
+"kind": "text",
+"label": "CUE",
+"type": "application/x-cue"
+},
+"application-x-dar": {
+"kind": "archive",
+"label": "DAR",
+"type": "application/x-dar"
+},
+"application-x-dbase": {
+"kind": "doc",
+"label": "DBF",
+"type": "application/vnd.dbf"
+},
+"application-x-dbf": {
+"kind": "doc",
+"label": "DBF",
+"type": "application/vnd.dbf"
+},
+"application-x-deb": {
+"kind": "archive",
+"label": "DEB",
+"type": "application/vnd.debian.binary-package"
+},
+"application-x-debian-package": {
+"kind": "archive",
+"label": "DEB",
+"type": "application/vnd.debian.binary-package"
+},
+"application-x-designer": {
+"kind": "doc",
+"label": "UI",
+"type": "application/x-designer"
+},
+"application-x-desktop": {
+"kind": "exec",
+"label": "APP",
+"type": "application/x-desktop"
+},
+"application-x-dia-diagram": {
+"kind": "image",
+"label": "DIA",
+"type": "application/x-dia-diagram"
+},
+"application-x-dia-shape": {
+"kind": "image",
+"label": "SHAPE",
+"type": "application/x-dia-shape"
+},
+"application-x-discjuggler-cd-image": {
+"kind": "disk",
+"label": "CDI",
+"type": "application/x-discjuggler-cd-image"
+},
+"application-x-docbook+xml": {
+"kind": "doc",
+"label": "DBK",
+"type": "application/x-docbook+xml"
+},
+"application-x-doom-wad": {
+"kind": "archive",
+"label": "WAD",
+"type": "application/x-doom-wad"
+},
+"application-x-dosexec": {
+"kind": "exec",
+"label": "EXE",
+"type": "application/x-dosexec"
+},
+"application-x-dreamcast-rom": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-dreamcast-rom"
+},
+"application-x-drgeo": {
+"kind": "generic",
+"label": "FGEO",
+"type": "application/x-drgeo"
+},
+"application-x-dvi": {
+"kind": "doc",
+"label": "DVI",
+"type": "application/x-dvi"
+},
+"application-x-e-theme": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-e-theme"
+},
+"application-x-egon": {
+"kind": "image",
+"label": "EGON",
+"type": "application/x-egon"
+},
+"application-x-emf": {
+"kind": "image",
+"label": "EMF",
+"type": "image/emf"
+},
+"application-x-eris-link+cbor": {
+"kind": "generic",
+"label": "ERIS",
+"type": "application/x-eris-link+cbor"
+},
+"application-x-excellon": {
+"kind": "text",
+"label": "DRL",
+"type": "application/x-excellon"
+},
+"application-x-executable": {
+"kind": "exec",
+"label": "BIN",
+"type": "application/x-executable"
+},
+"application-x-executable-script": {
+"kind": "code",
+"label": "SH",
+"type": null
+},
+"application-x-fd-file": {
+"kind": "generic",
+"label": "FD",
+"type": "application/x-raw-floppy-disk-image"
+},
+"application-x-fds-disk": {
+"kind": "generic",
+"label": "FDS",
+"type": "application/x-fds-disk"
+},
+"application-x-fictionbook": {
+"kind": "doc",
+"label": "FB2",
+"type": "application/x-fictionbook+xml"
+},
+"application-x-fictionbook+xml": {
+"kind": "doc",
+"label": "FB2",
+"type": "application/x-fictionbook+xml"
+},
+"application-x-fishscript": {
+"kind": "code",
+"label": "FISH",
+"type": "application/x-fishscript"
+},
+"application-x-flash-video": {
+"kind": "video",
+"label": "FLV",
+"type": "video/x-flv"
+},
+"application-x-fluid": {
+"kind": "doc",
+"label": "FL",
+"type": "application/x-fluid"
+},
+"application-x-font-afm": {
+"kind": "font",
+"label": "AFM",
+"type": "application/x-font-afm"
+},
+"application-x-font-bdf": {
+"kind": "font",
+"label": "BDF",
+"type": "application/x-font-bdf"
+},
+"application-x-font-dos": {
+"kind": "font",
+"label": "FONT",
+"type": "application/x-font-dos"
+},
+"application-x-font-framemaker": {
+"kind": "font",
+"label": "FONT",
+"type": "application/x-font-framemaker"
+},
+"application-x-font-libgrx": {
+"kind": "font",
+"label": "FONT",
+"type": "application/x-font-libgrx"
+},
+"application-x-font-linux-psf": {
+"kind": "font",
+"label": "PSF",
+"type": "application/x-font-linux-psf"
+},
+"application-x-font-otf": {
+"kind": "font",
+"label": "OTF",
+"type": "font/otf"
+},
+"application-x-font-pcf": {
+"kind": "font",
+"label": "PCF",
+"type": "application/x-font-pcf"
+},
+"application-x-font-snf": {
+"kind": "generic",
+"label": "SNF",
+"type": "application/x-font-snf"
+},
+"application-x-font-speedo": {
+"kind": "font",
+"label": "SPD",
+"type": "application/x-font-speedo"
+},
+"application-x-font-sunos-news": {
+"kind": "font",
+"label": "FONT",
+"type": "application/x-font-sunos-news"
+},
+"application-x-font-tex": {
+"kind": "font",
+"label": "FONT",
+"type": "application/x-font-tex"
+},
+"application-x-font-tex-tfm": {
+"kind": "font",
+"label": "FONT",
+"type": "application/x-font-tex-tfm"
+},
+"application-x-font-ttf": {
+"kind": "font",
+"label": "TTF",
+"type": "font/ttf"
+},
+"application-x-font-ttx": {
+"kind": "font",
+"label": "TTX",
+"type": "application/x-font-ttx"
+},
+"application-x-font-type1": {
+"kind": "font",
+"label": "PFA",
+"type": "application/x-font-type1"
+},
+"application-x-font-vfont": {
+"kind": "font",
+"label": "FONT",
+"type": "application/x-font-vfont"
+},
+"application-x-frame": {
+"kind": "doc",
+"label": "FM",
+"type": "application/vnd.framemaker"
+},
+"application-x-gameboy-color-rom": {
+"kind": "exec",
+"label": "GBC",
+"type": "application/x-gameboy-color-rom"
+},
+"application-x-gameboy-rom": {
+"kind": "exec",
+"label": "GB",
+"type": "application/x-gameboy-rom"
+},
+"application-x-gamecube-iso-image": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-gamecube-rom"
+},
+"application-x-gamecube-rom": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-gamecube-rom"
+},
+"application-x-gamegear-rom": {
+"kind": "exec",
+"label": "GG",
+"type": "application/x-gamegear-rom"
+},
+"application-x-gba-rom": {
+"kind": "exec",
+"label": "GBA",
+"type": "application/x-gba-rom"
+},
+"application-x-gd-rom-cue": {
+"kind": "text",
+"label": "GDI",
+"type": "application/x-gd-rom-cue"
+},
+"application-x-gdbm": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-gdbm"
+},
+"application-x-gdscript": {
+"kind": "code",
+"label": "GD",
+"type": "application/x-gdscript"
+},
+"application-x-gedcom": {
+"kind": "doc",
+"label": "GED",
+"type": "text/vnd.familysearch.gedcom"
+},
+"application-x-generic": {
+"kind": "blank",
+"label": null,
+"type": null
+},
+"application-x-genesis-32x-rom": {
+"kind": "exec",
+"label": "32X",
+"type": "application/x-genesis-32x-rom"
+},
+"application-x-genesis-rom": {
+"kind": "exec",
+"label": "GEN",
+"type": "application/x-genesis-rom"
+},
+"application-x-gerber": {
+"kind": "text",
+"label": "GBR",
+"type": "application/vnd.gerber"
+},
+"application-x-gerber-job": {
+"kind": "text",
+"label": "TXT",
+"type": "application/x-gerber-job"
+},
+"application-x-gettext": {
+"kind": "text",
+"label": "PO",
+"type": "text/x-gettext-translation"
+},
+"application-x-gettext-translation": {
+"kind": "generic",
+"label": "GMO",
+"type": "application/x-gettext-translation"
+},
+"application-x-glade": {
+"kind": "doc",
+"label": "GLADE",
+"type": "application/x-glade"
+},
+"application-x-gnome-app-info": {
+"kind": "exec",
+"label": "APP",
+"type": "application/x-desktop"
+},
+"application-x-gnucash": {
+"kind": "sheet",
+"label": "GNC",
+"type": "application/x-gnucash"
+},
+"application-x-gnumeric": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/x-gnumeric"
+},
+"application-x-gnuplot": {
+"kind": "doc",
+"label": "GP",
+"type": "application/x-gnuplot"
+},
+"application-x-go-sgf": {
+"kind": "text",
+"label": "SGF",
+"type": "application/x-go-sgf"
+},
+"application-x-godot-project": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-godot-project"
+},
+"application-x-godot-resource": {
+"kind": "generic",
+"label": "RES",
+"type": "application/x-godot-resource"
+},
+"application-x-godot-scene": {
+"kind": "generic",
+"label": "SCN",
+"type": "application/x-godot-scene"
+},
+"application-x-godot-shader": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-godot-shader"
+},
+"application-x-gpx": {
+"kind": "code",
+"label": "GPX",
+"type": "application/gpx+xml"
+},
+"application-x-gpx+xml": {
+"kind": "code",
+"label": "GPX",
+"type": "application/gpx+xml"
+},
+"application-x-graphite": {
+"kind": "doc",
+"label": "GRA",
+"type": "application/x-graphite"
+},
+"application-x-gtar": {
+"kind": "archive",
+"label": "TAR",
+"type": "application/x-tar"
+},
+"application-x-gtk-builder": {
+"kind": "doc",
+"label": "UI",
+"type": "application/x-gtk-builder"
+},
+"application-x-gtktalog": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/x-gtktalog"
+},
+"application-x-gz-font-linux-psf": {
+"kind": "font",
+"label": "GZ",
+"type": "application/x-gz-font-linux-psf"
+},
+"application-x-gzdvi": {
+"kind": "doc",
+"label": "GZ",
+"type": "application/x-gzdvi"
+},
+"application-x-gzip": {
+"kind": "archive",
+"label": "GZ",
+"type": "application/gzip"
+},
+"application-x-gzpdf": {
+"kind": "doc",
+"label": "GZ",
+"type": "application/x-gzpdf"
+},
+"application-x-gzpostscript": {
+"kind": "doc",
+"label": "GZ",
+"type": "application/x-gzpostscript"
+},
+"application-x-hdf": {
+"kind": "doc",
+"label": "HDF",
+"type": "application/x-hdf"
+},
+"application-x-hfe-file": {
+"kind": "exec",
+"label": "HFE",
+"type": "application/x-hfe-floppy-image"
+},
+"application-x-hfe-floppy-image": {
+"kind": "exec",
+"label": "HFE",
+"type": "application/x-hfe-floppy-image"
+},
+"application-x-hwp": {
+"kind": "doc",
+"label": "HWP",
+"type": "application/x-hwp"
+},
+"application-x-hwt": {
+"kind": "doc",
+"label": "HWT",
+"type": "application/x-hwt"
+},
+"application-x-ica": {
+"kind": "text",
+"label": "ICA",
+"type": "application/x-ica"
+},
+"application-x-icq": {
+"kind": "generic",
+"label": "UIN",
+"type": "application/x-icq"
+},
+"application-x-iff": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-iff"
+},
+"application-x-ipod-firmware": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-ipod-firmware"
+},
+"application-x-ips-patch": {
+"kind": "generic",
+"label": "IPS",
+"type": "application/x-ips-patch"
+},
+"application-x-ipynb+json": {
+"kind": "doc",
+"label": "IPYNB",
+"type": "application/x-ipynb+json"
+},
+"application-x-iso": {
+"kind": "disk",
+"label": "ISO",
+"type": null
+},
+"application-x-iso9660-appimage": {
+"kind": "exec",
+"label": "APP",
+"type": "application/x-iso9660-appimage"
+},
+"application-x-iso9660-image": {
+"kind": "disk",
+"label": "ISO",
+"type": "application/vnd.efi.iso"
+},
+"application-x-it87": {
+"kind": "text",
+"label": "IT87",
+"type": "application/x-it87"
+},
+"application-x-iwork-keynote-sffkey": {
+"kind": "slides",
+"label": "KEY",
+"type": "application/vnd.apple.keynote"
+},
+"application-x-iwork-numbers-sffnumbers": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/vnd.apple.numbers"
+},
+"application-x-iwork-pages-sffpages": {
+"kind": "doc",
+"label": "PAGES",
+"type": "application/vnd.apple.pages"
+},
+"application-x-jar": {
+"kind": "archive",
+"label": "JAR",
+"type": "application/java-archive"
+},
+"application-x-java": {
+"kind": "generic",
+"label": "CLASS",
+"type": "application/x-java"
+},
+"application-x-java-applet": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-java-applet"
+},
+"application-x-java-archive": {
+"kind": "archive",
+"label": "JAR",
+"type": "application/java-archive"
+},
+"application-x-java-class": {
+"kind": "generic",
+"label": "CLASS",
+"type": "application/x-java"
+},
+"application-x-java-jce-keystore": {
+"kind": "generic",
+"label": "JCEKS",
+"type": "application/x-java-jce-keystore"
+},
+"application-x-java-jnlp-file": {
+"kind": "code",
+"label": "JNLP",
+"type": "application/x-java-jnlp-file"
+},
+"application-x-java-keystore": {
+"kind": "generic",
+"label": "JKS",
+"type": "application/x-java-keystore"
+},
+"application-x-java-pack200": {
+"kind": "archive",
+"label": "PACK",
+"type": "application/x-java-pack200"
+},
+"application-x-java-vm": {
+"kind": "generic",
+"label": "CLASS",
+"type": "application/x-java"
+},
+"application-x-javascript": {
+"kind": "code",
+"label": "JS",
+"type": "text/javascript"
+},
+"application-x-jbuilder-project": {
+"kind": "doc",
+"label": "JPR",
+"type": "application/x-jbuilder-project"
+},
+"application-x-k3b": {
+"kind": "disk",
+"label": "K3B",
+"type": null
+},
+"application-x-karbon": {
+"kind": "image",
+"label": "IMG",
+"type": "application/x-karbon"
+},
+"application-x-kcachegrind": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-kcachegrind"
+},
+"application-x-kchart": {
+"kind": "sheet",
+"label": "CHRT",
+"type": "application/x-kchart"
+},
+"application-x-kcsrc": {
+"kind": "generic",
+"label": "KCSRC",
+"type": "application/x-kcsrc"
+},
+"application-x-kdenlive": {
+"kind": "video",
+"label": "KDEN",
+"type": null
+},
+"application-x-kdenlivetitle": {
+"kind": "video",
+"label": "KDEN",
+"type": null
+},
+"application-x-kexi-connectiondata": {
+"kind": "generic",
+"label": "KEXIC",
+"type": "application/x-kexi-connectiondata"
+},
+"application-x-kexiproject-shortcut": {
+"kind": "generic",
+"label": "KEXIS",
+"type": "application/x-kexiproject-shortcut"
+},
+"application-x-kexiproject-sqlite": {
+"kind": "generic",
+"label": "KEXI",
+"type": "application/x-kexiproject-sqlite3"
+},
+"application-x-kexiproject-sqlite2": {
+"kind": "generic",
+"label": "KEXI",
+"type": "application/x-kexiproject-sqlite2"
+},
+"application-x-kexiproject-sqlite3": {
+"kind": "generic",
+"label": "KEXI",
+"type": "application/x-kexiproject-sqlite3"
+},
+"application-x-kformula": {
+"kind": "doc",
+"label": "KFO",
+"type": "application/x-kformula"
+},
+"application-x-kgeo": {
+"kind": "generic",
+"label": "KGEO",
+"type": "application/x-kgeo"
+},
+"application-x-kgetlist": {
+"kind": "code",
+"label": "KGT",
+"type": "application/x-kgetlist"
+},
+"application-x-khtml-adaptor": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-khtml-adaptor"
+},
+"application-x-kig": {
+"kind": "generic",
+"label": "KIG",
+"type": "application/x-kig"
+},
+"application-x-killustrator": {
+"kind": "image",
+"label": "KIL",
+"type": "application/x-killustrator"
+},
+"application-x-kivio": {
+"kind": "doc",
+"label": "FLW",
+"type": "application/x-kivio"
+},
+"application-x-kmplot": {
+"kind": "generic",
+"label": "FKT",
+"type": "application/x-kmplot"
+},
+"application-x-kmymoney": {
+"kind": "sheet",
+"label": "KMY",
+"type": null
+},
+"application-x-kns": {
+"kind": "archive",
+"label": "KNS",
+"type": "application/x-kns"
+},
+"application-x-kolf": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-kolf"
+},
+"application-x-kommander": {
+"kind": "code",
+"label": "KMDR",
+"type": "application/x-kommander"
+},
+"application-x-kontour": {
+"kind": "image",
+"label": "KON",
+"type": "application/x-kontour"
+},
+"application-x-kopete-emoticons": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-kopete-emoticons"
+},
+"application-x-kourse": {
+"kind": "generic",
+"label": "KOLF",
+"type": "application/x-kourse"
+},
+"application-x-kplato": {
+"kind": "doc",
+"label": "PLAN",
+"type": null
+},
+"application-x-kpovmodeler": {
+"kind": "image",
+"label": "KPM",
+"type": "application/x-kpovmodeler"
+},
+"application-x-kpresenter": {
+"kind": "slides",
+"label": "KPR",
+"type": "application/x-kpresenter"
+},
+"application-x-krdc": {
+"kind": "code",
+"label": "RDP",
+"type": "application/x-krdc"
+},
+"application-x-krita": {
+"kind": "doc",
+"label": "KRA",
+"type": "application/x-krita"
+},
+"application-x-kseg": {
+"kind": "generic",
+"label": "SEG",
+"type": "application/x-kseg"
+},
+"application-x-kspread": {
+"kind": "sheet",
+"label": "KSP",
+"type": "application/x-kspread"
+},
+"application-x-kspread-crypt": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/x-kspread-crypt"
+},
+"application-x-ksysguard": {
+"kind": "generic",
+"label": "SGRD",
+"type": "application/x-ksysguard"
+},
+"application-x-ksysv-package": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-ksysv-package"
+},
+"application-x-ktheme": {
+"kind": "archive",
+"label": "KTH",
+"type": "application/x-ktheme"
+},
+"application-x-kudesigner": {
+"kind": "generic",
+"label": "KUT",
+"type": "application/x-kudesigner"
+},
+"application-x-kugar": {
+"kind": "doc",
+"label": "KUD",
+"type": "application/x-kugar"
+},
+"application-x-kvtml": {
+"kind": "code",
+"label": "KVTML",
+"type": "application/x-kvtml"
+},
+"application-x-kwallet": {
+"kind": "generic",
+"label": "KWL",
+"type": "application/x-kwallet"
+},
+"application-x-kword": {
+"kind": "doc",
+"label": "KWD",
+"type": "application/x-kword"
+},
+"application-x-kword-crypt": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/x-kword-crypt"
+},
+"application-x-kwordquiz": {
+"kind": "generic",
+"label": "WQL",
+"type": "application/x-kwordquiz"
+},
+"application-x-labplot2": {
+"kind": "sheet",
+"label": "LML",
+"type": null
+},
+"application-x-lha": {
+"kind": "archive",
+"label": "LHA",
+"type": "application/x-lha"
+},
+"application-x-lhz": {
+"kind": "archive",
+"label": "LHZ",
+"type": "application/x-lhz"
+},
+"application-x-linguist": {
+"kind": "text",
+"label": "TS",
+"type": "text/vnd.trolltech.linguist"
+},
+"application-x-lmdb": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/x-lmdb"
+},
+"application-x-lotus123": {
+"kind": "sheet",
+"label": "WK1",
+"type": "application/vnd.lotus-1-2-3"
+},
+"application-x-lrzip": {
+"kind": "archive",
+"label": "LRZ",
+"type": "application/x-lrzip"
+},
+"application-x-lrzip-compressed-tar": {
+"kind": "archive",
+"label": "TLRZ",
+"type": "application/x-lrzip-compressed-tar"
+},
+"application-x-lyx": {
+"kind": "doc",
+"label": "LYX",
+"type": "application/x-lyx"
+},
+"application-x-lz4": {
+"kind": "archive",
+"label": "LZ4",
+"type": "application/x-lz4"
+},
+"application-x-lz4-compressed-tar": {
+"kind": "archive",
+"label": "LZ4",
+"type": "application/x-lz4-compressed-tar"
+},
+"application-x-lzh-compressed": {
+"kind": "archive",
+"label": "LHA",
+"type": "application/x-lha"
+},
+"application-x-lzip": {
+"kind": "archive",
+"label": "LZ",
+"type": "application/x-lzip"
+},
+"application-x-lzip-compressed-tar": {
+"kind": "archive",
+"label": "LZ",
+"type": "application/x-lzip-compressed-tar"
+},
+"application-x-lzma": {
+"kind": "archive",
+"label": "LZMA",
+"type": "application/x-lzma"
+},
+"application-x-lzma-compressed-tar": {
+"kind": "archive",
+"label": "TLZ",
+"type": "application/x-lzma-compressed-tar"
+},
+"application-x-lzop": {
+"kind": "archive",
+"label": "LZO",
+"type": "application/x-lzop"
+},
+"application-x-lzpdf": {
+"kind": "doc",
+"label": "LZ",
+"type": "application/x-lzpdf"
+},
+"application-x-m4": {
+"kind": "code",
+"label": "M4",
+"type": "application/x-m4"
+},
+"application-x-macbinary": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-macbinary"
+},
+"application-x-magicpoint": {
+"kind": "slides",
+"label": "MGP",
+"type": "application/x-magicpoint"
+},
+"application-x-mame-chd": {
+"kind": "exec",
+"label": "CHD",
+"type": "application/x-mame-chd"
+},
+"application-x-marble": {
+"kind": "generic",
+"label": "KML",
+"type": null
+},
+"application-x-markaby": {
+"kind": "code",
+"label": "MAB",
+"type": "application/x-markaby"
+},
+"application-x-mathematica": {
+"kind": "doc",
+"label": "NB",
+"type": "application/mathematica"
+},
+"application-x-matroska": {
+"kind": "video",
+"label": "VIDEO",
+"type": "application/x-matroska"
+},
+"application-x-mdb": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/vnd.ms-access"
+},
+"application-x-mif": {
+"kind": "generic",
+"label": "MIF",
+"type": "application/x-mif"
+},
+"application-x-mimearchive": {
+"kind": "archive",
+"label": "MHT",
+"type": "application/x-mimearchive"
+},
+"application-x-mobi8-ebook": {
+"kind": "generic",
+"label": "AZW3",
+"type": "application/vnd.amazon.mobi8-ebook"
+},
+"application-x-mobipocket-ebook": {
+"kind": "doc",
+"label": "MOBI",
+"type": "application/x-mobipocket-ebook"
+},
+"application-x-modrinth-modpack+zip": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-modrinth-modpack+zip"
+},
+"application-x-mozilla-bookmarks": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-mozilla-bookmarks"
+},
+"application-x-mplayer2": {
+"kind": "video",
+"label": "WMP",
+"type": "video/x-ms-wmp"
+},
+"application-x-ms-asx": {
+"kind": "audio",
+"label": "ASX",
+"type": "audio/x-ms-asx"
+},
+"application-x-ms-dos-executable": {
+"kind": "exec",
+"label": "EXE",
+"type": "application/x-msdownload"
+},
+"application-x-ms-ne-executable": {
+"kind": "exec",
+"label": "EXE",
+"type": "application/x-ms-ne-executable"
+},
+"application-x-ms-pdb": {
+"kind": "generic",
+"label": "PDB",
+"type": "application/x-ms-pdb"
+},
+"application-x-ms-shortcut": {
+"kind": "generic",
+"label": "LNK",
+"type": "application/x-ms-shortcut"
+},
+"application-x-ms-wim": {
+"kind": "generic",
+"label": "WIM",
+"type": "application/x-ms-wim"
+},
+"application-x-msaccess": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/vnd.ms-access"
+},
+"application-x-msdownload": {
+"kind": "exec",
+"label": "EXE",
+"type": "application/x-msdownload"
+},
+"application-x-msexcel": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/vnd.ms-excel"
+},
+"application-x-msi": {
+"kind": "exec",
+"label": "MSI",
+"type": "application/x-msi"
+},
+"application-x-msmetafile": {
+"kind": "image",
+"label": "WMF",
+"type": "image/wmf"
+},
+"application-x-mspowerpoint": {
+"kind": "slides",
+"label": "PPT",
+"type": "application/vnd.ms-powerpoint"
+},
+"application-x-mswinurl": {
+"kind": "code",
+"label": "URL",
+"type": "application/x-mswinurl"
+},
+"application-x-msword": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/msword"
+},
+"application-x-mswrite": {
+"kind": "doc",
+"label": "WRI",
+"type": "application/x-mswrite"
+},
+"application-x-msx-rom": {
+"kind": "exec",
+"label": "MSX",
+"type": "application/x-msx-rom"
+},
+"application-x-n64-rom": {
+"kind": "exec",
+"label": "N64",
+"type": "application/x-n64-rom"
+},
+"application-x-nautilus-link": {
+"kind": "text",
+"label": "TXT",
+"type": "application/x-nautilus-link"
+},
+"application-x-navi-animation": {
+"kind": "generic",
+"label": "ANI",
+"type": "application/x-navi-animation"
+},
+"application-x-neo-geo-pocket-color-rom": {
+"kind": "exec",
+"label": "NGC",
+"type": "application/x-neo-geo-pocket-color-rom"
+},
+"application-x-neo-geo-pocket-rom": {
+"kind": "exec",
+"label": "NGP",
+"type": "application/x-neo-geo-pocket-rom"
+},
+"application-x-nes-rom": {
+"kind": "exec",
+"label": "NES",
+"type": "application/x-nes-rom"
+},
+"application-x-netcdf": {
+"kind": "doc",
+"label": "CDF",
+"type": "application/x-netcdf"
+},
+"application-x-netscape-bookmarks": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-mozilla-bookmarks"
+},
+"application-x-netshow-channel": {
+"kind": "video",
+"label": "NSC",
+"type": "application/x-netshow-channel"
+},
+"application-x-nintendo-3ds-executable": {
+"kind": "exec",
+"label": "3DSX",
+"type": "application/x-nintendo-3ds-executable"
+},
+"application-x-nintendo-3ds-rom": {
+"kind": "exec",
+"label": "3DS",
+"type": "application/x-nintendo-3ds-rom"
+},
+"application-x-nintendo-ds-rom": {
+"kind": "exec",
+"label": "NDS",
+"type": "application/x-nintendo-ds-rom"
+},
+"application-x-nuscript": {
+"kind": "code",
+"label": "NU",
+"type": "application/x-nuscript"
+},
+"application-x-nzb": {
+"kind": "code",
+"label": "NZB",
+"type": "application/x-nzb"
+},
+"application-x-object": {
+"kind": "exec",
+"label": "OBJ",
+"type": "application/x-object"
+},
+"application-x-ogg": {
+"kind": "video",
+"label": "OGX",
+"type": "application/ogg"
+},
+"application-x-ole-storage": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/x-ole-storage"
+},
+"application-x-oleo": {
+"kind": "sheet",
+"label": "OLEO",
+"type": "application/x-oleo"
+},
+"application-x-openvpn-profile": {
+"kind": "text",
+"label": "OVPN",
+"type": "application/x-openvpn-profile"
+},
+"application-x-openzim": {
+"kind": "generic",
+"label": "ZIM",
+"type": "application/x-openzim"
+},
+"application-x-pagemaker": {
+"kind": "doc",
+"label": "P65",
+"type": "application/x-pagemaker"
+},
+"application-x-pak": {
+"kind": "archive",
+"label": "PAK",
+"type": "application/x-pak"
+},
+"application-x-palm-database": {
+"kind": "generic",
+"label": "PRC",
+"type": "application/vnd.palm"
+},
+"application-x-par2": {
+"kind": "archive",
+"label": "PAR2",
+"type": "application/x-par2"
+},
+"application-x-partial-download": {
+"kind": "archive",
+"label": "PART",
+"type": "application/x-partial-download"
+},
+"application-x-pc-engine-rom": {
+"kind": "exec",
+"label": "PCE",
+"type": "application/x-pc-engine-rom"
+},
+"application-x-pcap": {
+"kind": "generic",
+"label": "PCAP",
+"type": "application/vnd.tcpdump.pcap"
+},
+"application-x-pdf": {
+"kind": "pdf",
+"label": "PDF",
+"type": "application/pdf"
+},
+"application-x-pef-executable": {
+"kind": "exec",
+"label": "APP",
+"type": "application/x-pef-executable"
+},
+"application-x-pem-file": {
+"kind": "code",
+"label": "PEM",
+"type": "application/x-pem-file"
+},
+"application-x-pem-key": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-pem-key"
+},
+"application-x-perf-data": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-perf-data"
+},
+"application-x-perl": {
+"kind": "code",
+"label": "PL",
+"type": "application/x-perl"
+},
+"application-x-photoshop": {
+"kind": "image",
+"label": "PSD",
+"type": "image/vnd.adobe.photoshop"
+},
+"application-x-php": {
+"kind": "code",
+"label": "PHP",
+"type": "application/x-php"
+},
+"application-x-pkcs12": {
+"kind": "generic",
+"label": "P12",
+"type": "application/x-pkcs12"
+},
+"application-x-pkcs7-certificates": {
+"kind": "generic",
+"label": "P7B",
+"type": "application/x-pkcs7-certificates"
+},
+"application-x-planperfect": {
+"kind": "sheet",
+"label": "PLN",
+"type": "application/x-planperfect"
+},
+"application-x-plasma": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-plasma"
+},
+"application-x-pocket-word": {
+"kind": "doc",
+"label": "PSW",
+"type": "application/x-pocket-word"
+},
+"application-x-powershell": {
+"kind": "code",
+"label": "PS1",
+"type": "application/x-powershell"
+},
+"application-x-profile": {
+"kind": "text",
+"label": "TXT",
+"type": "application/x-profile"
+},
+"application-x-pw": {
+"kind": "doc",
+"label": "PW",
+"type": "application/x-pw"
+},
+"application-x-pyspread-bz-spreadsheet": {
+"kind": "sheet",
+"label": "PYS",
+"type": "application/x-pyspread-bz-spreadsheet"
+},
+"application-x-pyspread-spreadsheet": {
+"kind": "sheet",
+"label": "PYSU",
+"type": "application/x-pyspread-spreadsheet"
+},
+"application-x-python-bytecode": {
+"kind": "generic",
+"label": "PYC",
+"type": "application/x-python-bytecode"
+},
+"application-x-qed-disk": {
+"kind": "generic",
+"label": "QED",
+"type": "application/x-qed-disk"
+},
+"application-x-qemu-disk": {
+"kind": "disk",
+"label": "QCOW",
+"type": "application/x-qemu-disk"
+},
+"application-x-qpress": {
+"kind": "archive",
+"label": "QP",
+"type": "application/x-qpress"
+},
+"application-x-qtiplot": {
+"kind": "doc",
+"label": "QTI",
+"type": "application/x-qtiplot"
+},
+"application-x-quanta": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-quanta"
+},
+"application-x-quattropro": {
+"kind": "sheet",
+"label": "WB1",
+"type": "application/x-quattropro"
+},
+"application-x-quicktime-media-link": {
+"kind": "video",
+"label": "QTL",
+"type": "application/x-quicktime-media-link"
+},
+"application-x-quicktimeplayer": {
+"kind": "video",
+"label": "QTL",
+"type": "application/x-quicktime-media-link"
+},
+"application-x-qw": {
+"kind": "sheet",
+"label": "QIF",
+"type": "application/x-qw"
+},
+"application-x-rar": {
+"kind": "archive",
+"label": "RAR",
+"type": "application/vnd.rar"
+},
+"application-x-rar-compressed": {
+"kind": "archive",
+"label": "RAR",
+"type": "application/vnd.rar"
+},
+"application-x-raw-disk-image": {
+"kind": "disk",
+"label": "IMG",
+"type": "application/vnd.efi.img"
+},
+"application-x-raw-disk-image-xz-compressed": {
+"kind": "archive",
+"label": "XZ",
+"type": "application/x-raw-disk-image-xz-compressed"
+},
+"application-x-raw-floppy-disk-image": {
+"kind": "generic",
+"label": "FD",
+"type": "application/x-raw-floppy-disk-image"
+},
+"application-x-redhat-package-manager": {
+"kind": "archive",
+"label": "RPM",
+"type": "application/x-rpm"
+},
+"application-x-reject": {
+"kind": "text",
+"label": "REJ",
+"type": "text/x-reject"
+},
+"application-x-riff": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-riff"
+},
+"application-x-rnc": {
+"kind": "text",
+"label": "RNC",
+"type": "application/relax-ng-compact-syntax"
+},
+"application-x-rpm": {
+"kind": "archive",
+"label": "RPM",
+"type": "application/x-rpm"
+},
+"application-x-ruby": {
+"kind": "code",
+"label": "RB",
+"type": "application/x-ruby"
+},
+"application-x-sami": {
+"kind": "text",
+"label": "SMI",
+"type": "application/x-sami"
+},
+"application-x-sap-file": {
+"kind": "exec",
+"label": "SAP",
+"type": "application/x-thomson-sap-image"
+},
+"application-x-saturn-rom": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-saturn-rom"
+},
+"application-x-sc": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/x-sc"
+},
+"application-x-sdp": {
+"kind": "video",
+"label": "SDP",
+"type": "application/sdp"
+},
+"application-x-sega-cd-rom": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-sega-cd-rom"
+},
+"application-x-sega-pico-rom": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-sega-pico-rom"
+},
+"application-x-sg1000-rom": {
+"kind": "exec",
+"label": "SG",
+"type": "application/x-sg1000-rom"
+},
+"application-x-shar": {
+"kind": "archive",
+"label": "SHAR",
+"type": "application/x-shar"
+},
+"application-x-shared-library-la": {
+"kind": "code",
+"label": "LA",
+"type": "application/x-shared-library-la"
+},
+"application-x-sharedlib": {
+"kind": "exec",
+"label": "LIB",
+"type": "application/x-sharedlib"
+},
+"application-x-shellscript": {
+"kind": "code",
+"label": "SH",
+"type": "application/x-shellscript"
+},
+"application-x-shockwave-flash": {
+"kind": "video",
+"label": "SWF",
+"type": "application/vnd.adobe.flash.movie"
+},
+"application-x-shorten": {
+"kind": "audio",
+"label": "SHN",
+"type": "application/x-shorten"
+},
+"application-x-siag": {
+"kind": "sheet",
+"label": "SIAG",
+"type": "application/x-siag"
+},
+"application-x-sit": {
+"kind": "archive",
+"label": "SIT",
+"type": "application/x-stuffit"
+},
+"application-x-sitx": {
+"kind": "archive",
+"label": "SITX",
+"type": "application/x-stuffitx"
+},
+"application-x-slp": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-slp"
+},
+"application-x-smaf": {
+"kind": "audio",
+"label": "MMF",
+"type": "application/vnd.smaf"
+},
+"application-x-smb-server": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-smb-server"
+},
+"application-x-smb-workgroup": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-smb-workgroup"
+},
+"application-x-sms-rom": {
+"kind": "exec",
+"label": "SMS",
+"type": "application/x-sms-rom"
+},
+"application-x-snes-rom": {
+"kind": "exec",
+"label": "SFC",
+"type": "application/vnd.nintendo.snes.rom"
+},
+"application-x-source-rpm": {
+"kind": "archive",
+"label": "SRPM",
+"type": "application/x-source-rpm"
+},
+"application-x-spkac": {
+"kind": "generic",
+"label": "SPKAC",
+"type": "application/x-spkac"
+},
+"application-x-spkac+base64": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-spkac+base64"
+},
+"application-x-spss-por": {
+"kind": "generic",
+"label": "POR",
+"type": "application/x-spss-por"
+},
+"application-x-spss-sav": {
+"kind": "generic",
+"label": "SAV",
+"type": "application/x-spss-sav"
+},
+"application-x-spss-savefile": {
+"kind": "generic",
+"label": "SAV",
+"type": "application/x-spss-sav"
+},
+"application-x-sqlite2": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-sqlite2"
+},
+"application-x-sqlite3": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/vnd.sqlite3"
+},
+"application-x-srt": {
+"kind": "text",
+"label": "SRT",
+"type": "application/x-subrip"
+},
+"application-x-stuffit": {
+"kind": "archive",
+"label": "SIT",
+"type": "application/x-stuffit"
+},
+"application-x-stuffitx": {
+"kind": "archive",
+"label": "SITX",
+"type": "application/x-stuffitx"
+},
+"application-x-subrip": {
+"kind": "text",
+"label": "SRT",
+"type": "application/x-subrip"
+},
+"application-x-superkaramba": {
+"kind": "archive",
+"label": "SKZ",
+"type": "application/x-superkaramba"
+},
+"application-x-sv4cpio": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-sv4cpio"
+},
+"application-x-sv4crc": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-sv4crc"
+},
+"application-x-t602": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/x-t602"
+},
+"application-x-tar": {
+"kind": "archive",
+"label": "TAR",
+"type": "application/x-tar"
+},
+"application-x-targa": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"application-x-tarz": {
+"kind": "archive",
+"label": "TAZ",
+"type": "application/x-tarz"
+},
+"application-x-tex": {
+"kind": "text",
+"label": "TEX",
+"type": "text/x-tex"
+},
+"application-x-tex-gf": {
+"kind": "font",
+"label": "GF",
+"type": "application/x-tex-gf"
+},
+"application-x-tex-pk": {
+"kind": "font",
+"label": "PK",
+"type": "application/x-tex-pk"
+},
+"application-x-tga": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"application-x-tgif": {
+"kind": "doc",
+"label": "OBJ",
+"type": "application/x-tgif"
+},
+"application-x-theme": {
+"kind": "archive",
+"label": "THEME",
+"type": "application/x-theme"
+},
+"application-x-thomson-cartridge-memo7": {
+"kind": "exec",
+"label": "M7",
+"type": "application/x-thomson-cartridge-memo7"
+},
+"application-x-thomson-cassette": {
+"kind": "exec",
+"label": "K7",
+"type": "application/x-thomson-cassette"
+},
+"application-x-thomson-sap-image": {
+"kind": "exec",
+"label": "SAP",
+"type": "application/x-thomson-sap-image"
+},
+"application-x-tiled-tmx": {
+"kind": "code",
+"label": "TMX",
+"type": "application/x-tiled-tmx"
+},
+"application-x-tiled-tsx": {
+"kind": "code",
+"label": "TSX",
+"type": "application/x-tiled-tsx"
+},
+"application-x-toutdoux": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/x-toutdoux"
+},
+"application-x-trash": {
+"kind": "generic",
+"label": "BAK",
+"type": "application/x-trash"
+},
+"application-x-trig": {
+"kind": "code",
+"label": "TRIG",
+"type": "application/trig"
+},
+"application-x-troff": {
+"kind": "text",
+"label": "TR",
+"type": "text/troff"
+},
+"application-x-troff-man": {
+"kind": "text",
+"label": "MAN",
+"type": "application/x-troff-man"
+},
+"application-x-troff-man-compressed": {
+"kind": "text",
+"label": "TXT",
+"type": "application/x-troff-man-compressed"
+},
+"application-x-tuberling": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-tuberling"
+},
+"application-x-turtle": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-turtle"
+},
+"application-x-tzo": {
+"kind": "archive",
+"label": "TZO",
+"type": "application/x-tzo"
+},
+"application-x-ufraw": {
+"kind": "image",
+"label": "UFRAW",
+"type": "application/x-ufraw"
+},
+"application-x-uml": {
+"kind": "generic",
+"label": "XMI",
+"type": "application/x-uml"
+},
+"application-x-ustar": {
+"kind": "archive",
+"label": "USTAR",
+"type": "application/x-ustar"
+},
+"application-x-vdi-disk": {
+"kind": "generic",
+"label": "VDI",
+"type": "application/x-vdi-disk"
+},
+"application-x-vhd-disk": {
+"kind": "generic",
+"label": "VHD",
+"type": "application/x-vhd-disk"
+},
+"application-x-vhdx-disk": {
+"kind": "generic",
+"label": "VHDX",
+"type": "application/x-vhdx-disk"
+},
+"application-x-virt-viewer": {
+"kind": "code",
+"label": "VV",
+"type": "application/x-virt-viewer"
+},
+"application-x-virtual-boy-rom": {
+"kind": "exec",
+"label": "VB",
+"type": "application/x-virtual-boy-rom"
+},
+"application-x-virtualbox-ova": {
+"kind": "generic",
+"label": "OVA",
+"type": "application/ovf"
+},
+"application-x-virtualbox-vdi": {
+"kind": "generic",
+"label": "VDI",
+"type": "application/x-vdi-disk"
+},
+"application-x-virtualbox-vhd": {
+"kind": "generic",
+"label": "VHD",
+"type": "application/x-vhd-disk"
+},
+"application-x-virtualbox-vhdx": {
+"kind": "generic",
+"label": "VHDX",
+"type": "application/x-vhdx-disk"
+},
+"application-x-virtualbox-vmdk": {
+"kind": "generic",
+"label": "VMDK",
+"type": "application/x-vmdk-disk"
+},
+"application-x-vmdk-disk": {
+"kind": "generic",
+"label": "VMDK",
+"type": "application/x-vmdk-disk"
+},
+"application-x-vnd.akonadi.calendar.event": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.akonadi.calendar.event"
+},
+"application-x-vnd.akonadi.calendar.freebusy": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.akonadi.calendar.freebusy"
+},
+"application-x-vnd.akonadi.calendar.journal": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.akonadi.calendar.journal"
+},
+"application-x-vnd.akonadi.calendar.todo": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.akonadi.calendar.todo"
+},
+"application-x-vnd.akonadi.collection.virtual": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-vnd.akonadi.collection.virtual"
+},
+"application-x-vnd.akonadi.note": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.akonadi.note"
+},
+"application-x-vnd.kde.alarm": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.kde.alarm"
+},
+"application-x-vnd.kde.alarm.active": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.kde.alarm.active"
+},
+"application-x-vnd.kde.alarm.archived": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-vnd.kde.alarm.archived"
+},
+"application-x-vnd.kde.alarm.template": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.kde.alarm.template"
+},
+"application-x-vnd.kde.contactgroup": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-vnd.kde.contactgroup"
+},
+"application-x-vnd.kde.kexi": {
+"kind": "generic",
+"label": "KEXI",
+"type": "application/x-kexiproject-sqlite3"
+},
+"application-x-vnd.kde.kplato": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-vnd.kde.kplato"
+},
+"application-x-vnd.kde.kplato.work": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-vnd.kde.kplato.work"
+},
+"application-x-vnd.kde.kugar.mixed": {
+"kind": "generic",
+"label": "KUG",
+"type": "application/x-vnd.kde.kugar.mixed"
+},
+"application-x-vnd.kde.notes": {
+"kind": "code",
+"label": "CODE",
+"type": "application/x-vnd.kde.notes"
+},
+"application-x-vnd.kde.plan": {
+"kind": "generic",
+"label": "PLAN",
+"type": "application/x-vnd.kde.plan"
+},
+"application-x-vnd.kde.plan.work": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x-vnd.kde.plan.work"
+},
+"application-x-wais-source": {
+"kind": "text",
+"label": "SRC",
+"type": "application/x-wais-source"
+},
+"application-x-wbfs": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-wii-rom"
+},
+"application-x-webarchive": {
+"kind": "archive",
+"label": "WAR",
+"type": "application/x-webarchive"
+},
+"application-x-wia": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-wii-rom"
+},
+"application-x-wii-iso-image": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-wii-rom"
+},
+"application-x-wii-rom": {
+"kind": "exec",
+"label": "ISO",
+"type": "application/x-wii-rom"
+},
+"application-x-wii-wad": {
+"kind": "exec",
+"label": "WAD",
+"type": "application/x-wii-wad"
+},
+"application-x-win-lnk": {
+"kind": "generic",
+"label": "LNK",
+"type": "application/x-ms-shortcut"
+},
+"application-x-windows-themepack": {
+"kind": "archive",
+"label": "ARC",
+"type": "application/x-windows-themepack"
+},
+"application-x-wmf": {
+"kind": "image",
+"label": "WMF",
+"type": "image/wmf"
+},
+"application-x-wonderswan-color-rom": {
+"kind": "exec",
+"label": "WSC",
+"type": "application/x-wonderswan-color-rom"
+},
+"application-x-wonderswan-rom": {
+"kind": "exec",
+"label": "WS",
+"type": "application/x-wonderswan-rom"
+},
+"application-x-wordperfect": {
+"kind": "doc",
+"label": "WP",
+"type": "application/vnd.wordperfect"
+},
+"application-x-wpg": {
+"kind": "image",
+"label": "WPG",
+"type": "application/x-wpg"
+},
+"application-x-wwf": {
+"kind": "doc",
+"label": "WWF",
+"type": "application/x-wwf"
+},
+"application-x-x509-ca-cert": {
+"kind": "text",
+"label": "DER",
+"type": "application/x-x509-ca-cert"
+},
+"application-x-x509-user-cert": {
+"kind": "generic",
+"label": "CER",
+"type": "application/pkix-cert"
+},
+"application-x-xar": {
+"kind": "archive",
+"label": "XAR",
+"type": "application/x-xar"
+},
+"application-x-xbel": {
+"kind": "code",
+"label": "XBEL",
+"type": "application/x-xbel"
+},
+"application-x-xliff": {
+"kind": "text",
+"label": "XLF",
+"type": "application/xliff+xml"
+},
+"application-x-xpinstall": {
+"kind": "archive",
+"label": "XPI",
+"type": "application/x-xpinstall"
+},
+"application-x-xspf+xml": {
+"kind": "audio",
+"label": "XSPF",
+"type": "application/xspf+xml"
+},
+"application-x-xz": {
+"kind": "archive",
+"label": "XZ",
+"type": "application/x-xz"
+},
+"application-x-xz-compressed-tar": {
+"kind": "archive",
+"label": "TXZ",
+"type": "application/x-xz-compressed-tar"
+},
+"application-x-xzpdf": {
+"kind": "doc",
+"label": "XZ",
+"type": "application/x-xzpdf"
+},
+"application-x-yaml": {
+"kind": "code",
+"label": "YAML",
+"type": "application/yaml"
+},
+"application-x-zerosize": {
+"kind": "blank",
+"label": null,
+"type": "application/x-zerosize"
+},
+"application-x-zip": {
+"kind": "archive",
+"label": "ZIP",
+"type": "application/zip"
+},
+"application-x-zip-compressed": {
+"kind": "archive",
+"label": "ZIP",
+"type": "application/zip"
+},
+"application-x-zip-compressed-fb2": {
+"kind": "archive",
+"label": "ZIP",
+"type": "application/x-zip-compressed-fb2"
+},
+"application-x-zoo": {
+"kind": "archive",
+"label": "ZOO",
+"type": "application/x-zoo"
+},
+"application-x-zoom": {
+"kind": "generic",
+"label": "ZOOM",
+"type": "application/x-zoom"
+},
+"application-x-zpaq": {
+"kind": "archive",
+"label": "ZPAQ",
+"type": "application/x-zpaq"
+},
+"application-x-zstd-compressed-tar": {
+"kind": "archive",
+"label": "TZST",
+"type": "application/x-zstd-compressed-tar"
+},
+"application-x.systemd-catalog": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x.systemd-catalog"
+},
+"application-x.systemd-confext": {
+"kind": "exec",
+"label": "RAW",
+"type": "application/x.systemd-confext"
+},
+"application-x.systemd-credential": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x.systemd-credential"
+},
+"application-x.systemd-home": {
+"kind": "generic",
+"label": "HOME",
+"type": "application/x.systemd-home"
+},
+"application-x.systemd-hwdb": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x.systemd-hwdb"
+},
+"application-x.systemd-journal": {
+"kind": "generic",
+"label": "FILE",
+"type": "application/x.systemd-journal"
+},
+"application-x.systemd-sysext": {
+"kind": "exec",
+"label": "RAW",
+"type": "application/x.systemd-sysext"
+},
+"application-xhtml+xml": {
+"kind": "code",
+"label": "XHT",
+"type": "application/xhtml+xml"
+},
+"application-xliff+xml": {
+"kind": "text",
+"label": "XLF",
+"type": "application/xliff+xml"
+},
+"application-xml": {
+"kind": "code",
+"label": "XML",
+"type": "application/xml"
+},
+"application-xml-dtd": {
+"kind": "text",
+"label": "DTD",
+"type": "application/xml-dtd"
+},
+"application-xml-external-parsed-entity": {
+"kind": "code",
+"label": "ENT",
+"type": "application/xml-external-parsed-entity"
+},
+"application-xps": {
+"kind": "pdf",
+"label": "XPS",
+"type": "application/vnd.ms-xpsdocument"
+},
+"application-xsd": {
+"kind": "code",
+"label": "XSD",
+"type": "application/xsd"
+},
+"application-xslt+xml": {
+"kind": "text",
+"label": "XSL",
+"type": "application/xslt+xml"
+},
+"application-xspf+xml": {
+"kind": "audio",
+"label": "XSPF",
+"type": "application/xspf+xml"
+},
+"application-yaml": {
+"kind": "code",
+"label": "YAML",
+"type": "application/yaml"
+},
+"application-zip": {
+"kind": "archive",
+"label": "ZIP",
+"type": "application/zip"
+},
+"application-zlib": {
+"kind": "archive",
+"label": "ZZ",
+"type": "application/zlib"
+},
+"application-zstd": {
+"kind": "archive",
+"label": "ZST",
+"type": "application/zstd"
+},
+"audio-3gpp": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"audio-3gpp-encrypted": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"audio-3gpp2": {
+"kind": "video",
+"label": "3G2",
+"type": "video/3gpp2"
+},
+"audio-AMR": {
+"kind": "audio",
+"label": "AMR",
+"type": "audio/AMR"
+},
+"audio-AMR-WB": {
+"kind": "audio",
+"label": "AWB",
+"type": "audio/AMR-WB"
+},
+"audio-aac": {
+"kind": "audio",
+"label": "AAC",
+"type": "audio/aac"
+},
+"audio-ac3": {
+"kind": "audio",
+"label": "AC3",
+"type": "audio/ac3"
+},
+"audio-amr-encrypted": {
+"kind": "audio",
+"label": "AMR",
+"type": "audio/AMR"
+},
+"audio-amr-wb-encrypted": {
+"kind": "audio",
+"label": "AWB",
+"type": "audio/AMR-WB"
+},
+"audio-annodex": {
+"kind": "audio",
+"label": "AXA",
+"type": "audio/annodex"
+},
+"audio-basic": {
+"kind": "audio",
+"label": "AU",
+"type": "audio/basic"
+},
+"audio-dff": {
+"kind": "audio",
+"label": "DFF",
+"type": "audio/x-dff"
+},
+"audio-dsd": {
+"kind": "audio",
+"label": "DSF",
+"type": "audio/x-dsf"
+},
+"audio-dsf": {
+"kind": "audio",
+"label": "DSF",
+"type": "audio/x-dsf"
+},
+"audio-flac": {
+"kind": "audio",
+"label": "FLAC",
+"type": "audio/flac"
+},
+"audio-iMelody": {
+"kind": "text",
+"label": "IMY",
+"type": "text/x-iMelody"
+},
+"audio-m3u": {
+"kind": "audio",
+"label": "M3U",
+"type": "audio/x-mpegurl"
+},
+"audio-m4a": {
+"kind": "audio",
+"label": "M4A",
+"type": "audio/mp4"
+},
+"audio-midi": {
+"kind": "audio",
+"label": "MID",
+"type": "audio/midi"
+},
+"audio-mobile-xmf": {
+"kind": "audio",
+"label": "MXMF",
+"type": "audio/mobile-xmf"
+},
+"audio-mp2": {
+"kind": "audio",
+"label": "MP2",
+"type": "audio/mp2"
+},
+"audio-mp3": {
+"kind": "audio",
+"label": "MP3",
+"type": "audio/mpeg"
+},
+"audio-mp4": {
+"kind": "audio",
+"label": "M4A",
+"type": "audio/mp4"
+},
+"audio-mpeg": {
+"kind": "audio",
+"label": "MP3",
+"type": "audio/mpeg"
+},
+"audio-mpegurl": {
+"kind": "audio",
+"label": "M3U",
+"type": "audio/x-mpegurl"
+},
+"audio-ogg": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/ogg"
+},
+"audio-prs.sid": {
+"kind": "audio",
+"label": "SID",
+"type": "audio/prs.sid"
+},
+"audio-scpls": {
+"kind": "audio",
+"label": "PLS",
+"type": "audio/x-scpls"
+},
+"audio-tta": {
+"kind": "audio",
+"label": "TTA",
+"type": "audio/x-tta"
+},
+"audio-usac": {
+"kind": "audio",
+"label": "LOAS",
+"type": "audio/usac"
+},
+"audio-vnd.audible": {
+"kind": "audio",
+"label": "AA",
+"type": "audio/x-pn-audibleaudio"
+},
+"audio-vnd.audible.aax": {
+"kind": "audio",
+"label": "AAX",
+"type": "audio/vnd.audible.aax"
+},
+"audio-vnd.audible.aaxc": {
+"kind": "audio",
+"label": "AAXC",
+"type": "audio/vnd.audible.aaxc"
+},
+"audio-vnd.dts": {
+"kind": "audio",
+"label": "DTS",
+"type": "audio/vnd.dts"
+},
+"audio-vnd.dts.hd": {
+"kind": "audio",
+"label": "DTSHD",
+"type": "audio/vnd.dts.hd"
+},
+"audio-vnd.m-realaudio": {
+"kind": "audio",
+"label": "RA",
+"type": "audio/vnd.rn-realaudio"
+},
+"audio-vnd.nokia.mobile-xmf": {
+"kind": "audio",
+"label": "MXMF",
+"type": "audio/mobile-xmf"
+},
+"audio-vnd.rn-realaudio": {
+"kind": "audio",
+"label": "RA",
+"type": "audio/vnd.rn-realaudio"
+},
+"audio-vnd.wave": {
+"kind": "audio",
+"label": "WAV",
+"type": "audio/vnd.wave"
+},
+"audio-vorbis": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/x-vorbis+ogg"
+},
+"audio-wav": {
+"kind": "audio",
+"label": "WAV",
+"type": "audio/vnd.wave"
+},
+"audio-webm": {
+"kind": "audio",
+"label": "AUDIO",
+"type": "audio/webm"
+},
+"audio-wma": {
+"kind": "audio",
+"label": "WMA",
+"type": "audio/x-ms-wma"
+},
+"audio-x-aac": {
+"kind": "audio",
+"label": "AAC",
+"type": "audio/aac"
+},
+"audio-x-adpcm": {
+"kind": "audio",
+"label": "AUDIO",
+"type": "audio/x-adpcm"
+},
+"audio-x-aifc": {
+"kind": "audio",
+"label": "AIFC",
+"type": "audio/x-aifc"
+},
+"audio-x-aiff": {
+"kind": "audio",
+"label": "AIFF",
+"type": "audio/x-aiff"
+},
+"audio-x-aiffc": {
+"kind": "audio",
+"label": "AIFC",
+"type": "audio/x-aifc"
+},
+"audio-x-amzxml": {
+"kind": "audio",
+"label": "AMZ",
+"type": "audio/x-amzxml"
+},
+"audio-x-annodex": {
+"kind": "audio",
+"label": "AXA",
+"type": "audio/annodex"
+},
+"audio-x-ape": {
+"kind": "audio",
+"label": "APE",
+"type": "audio/x-ape"
+},
+"audio-x-dff": {
+"kind": "audio",
+"label": "DFF",
+"type": "audio/x-dff"
+},
+"audio-x-dsd": {
+"kind": "audio",
+"label": "DSF",
+"type": "audio/x-dsf"
+},
+"audio-x-dsf": {
+"kind": "audio",
+"label": "DSF",
+"type": "audio/x-dsf"
+},
+"audio-x-dts": {
+"kind": "audio",
+"label": "DTS",
+"type": "audio/vnd.dts"
+},
+"audio-x-dtshd": {
+"kind": "audio",
+"label": "DTSHD",
+"type": "audio/vnd.dts.hd"
+},
+"audio-x-flac": {
+"kind": "audio",
+"label": "FLAC",
+"type": "audio/flac"
+},
+"audio-x-flac+ogg": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/x-flac+ogg"
+},
+"audio-x-generic": {
+"kind": "audio",
+"label": "AUDIO",
+"type": null
+},
+"audio-x-gsm": {
+"kind": "audio",
+"label": "GSM",
+"type": "audio/x-gsm"
+},
+"audio-x-iMelody": {
+"kind": "text",
+"label": "IMY",
+"type": "text/x-iMelody"
+},
+"audio-x-iriver-pla": {
+"kind": "audio",
+"label": "PLA",
+"type": "audio/x-iriver-pla"
+},
+"audio-x-it": {
+"kind": "audio",
+"label": "IT",
+"type": "audio/x-it"
+},
+"audio-x-m3u": {
+"kind": "audio",
+"label": "M3U",
+"type": "audio/x-mpegurl"
+},
+"audio-x-m4a": {
+"kind": "audio",
+"label": "M4A",
+"type": "audio/mp4"
+},
+"audio-x-m4b": {
+"kind": "audio",
+"label": "M4B",
+"type": "audio/x-m4b"
+},
+"audio-x-m4r": {
+"kind": "audio",
+"label": "M4R",
+"type": "audio/x-m4r"
+},
+"audio-x-matroska": {
+"kind": "audio",
+"label": "MKA",
+"type": "audio/x-matroska"
+},
+"audio-x-midi": {
+"kind": "audio",
+"label": "MID",
+"type": "audio/midi"
+},
+"audio-x-minipsf": {
+"kind": "audio",
+"label": "AUDIO",
+"type": "audio/x-minipsf"
+},
+"audio-x-mo3": {
+"kind": "audio",
+"label": "MO3",
+"type": "audio/x-mo3"
+},
+"audio-x-mod": {
+"kind": "audio",
+"label": "MOD",
+"type": "audio/x-mod"
+},
+"audio-x-mp2": {
+"kind": "audio",
+"label": "MP2",
+"type": "audio/mp2"
+},
+"audio-x-mp3": {
+"kind": "audio",
+"label": "MP3",
+"type": "audio/mpeg"
+},
+"audio-x-mp3-playlist": {
+"kind": "audio",
+"label": "M3U",
+"type": "audio/x-mpegurl"
+},
+"audio-x-mpeg": {
+"kind": "audio",
+"label": "MP3",
+"type": "audio/mpeg"
+},
+"audio-x-mpegurl": {
+"kind": "audio",
+"label": "M3U",
+"type": "audio/x-mpegurl"
+},
+"audio-x-mpg": {
+"kind": "audio",
+"label": "MP3",
+"type": "audio/mpeg"
+},
+"audio-x-ms-asx": {
+"kind": "audio",
+"label": "ASX",
+"type": "audio/x-ms-asx"
+},
+"audio-x-ms-wma": {
+"kind": "audio",
+"label": "WMA",
+"type": "audio/x-ms-wma"
+},
+"audio-x-musepack": {
+"kind": "audio",
+"label": "MPC",
+"type": "audio/x-musepack"
+},
+"audio-x-ogg": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/ogg"
+},
+"audio-x-oggflac": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/x-flac+ogg"
+},
+"audio-x-opus+ogg": {
+"kind": "audio",
+"label": "OPUS",
+"type": "audio/x-opus+ogg"
+},
+"audio-x-pn-audibleaudio": {
+"kind": "audio",
+"label": "AA",
+"type": "audio/x-pn-audibleaudio"
+},
+"audio-x-pn-realaudio": {
+"kind": "audio",
+"label": "RA",
+"type": "audio/vnd.rn-realaudio"
+},
+"audio-x-pn-realaudio-plugin": {
+"kind": "audio",
+"label": "AUDIO",
+"type": "audio/x-pn-realaudio-plugin"
+},
+"audio-x-psf": {
+"kind": "audio",
+"label": "PSF",
+"type": "audio/x-psf"
+},
+"audio-x-psflib": {
+"kind": "audio",
+"label": "AUDIO",
+"type": "audio/x-psflib"
+},
+"audio-x-riff": {
+"kind": "audio",
+"label": "AUDIO",
+"type": "audio/x-riff"
+},
+"audio-x-rn-3gpp-amr": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"audio-x-rn-3gpp-amr-encrypted": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"audio-x-rn-3gpp-amr-wb": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"audio-x-rn-3gpp-amr-wb-encrypted": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"audio-x-s3m": {
+"kind": "audio",
+"label": "S3M",
+"type": "audio/x-s3m"
+},
+"audio-x-scpls": {
+"kind": "audio",
+"label": "PLS",
+"type": "audio/x-scpls"
+},
+"audio-x-shorten": {
+"kind": "audio",
+"label": "SHN",
+"type": "application/x-shorten"
+},
+"audio-x-speex": {
+"kind": "audio",
+"label": "SPX",
+"type": "audio/x-speex"
+},
+"audio-x-speex+ogg": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/x-speex+ogg"
+},
+"audio-x-stm": {
+"kind": "audio",
+"label": "STM",
+"type": "audio/x-stm"
+},
+"audio-x-tak": {
+"kind": "audio",
+"label": "TAK",
+"type": "audio/x-tak"
+},
+"audio-x-tta": {
+"kind": "audio",
+"label": "TTA",
+"type": "audio/x-tta"
+},
+"audio-x-voc": {
+"kind": "audio",
+"label": "VOC",
+"type": "audio/x-voc"
+},
+"audio-x-vorbis": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/x-vorbis+ogg"
+},
+"audio-x-vorbis+ogg": {
+"kind": "audio",
+"label": "OGA",
+"type": "audio/x-vorbis+ogg"
+},
+"audio-x-wav": {
+"kind": "audio",
+"label": "WAV",
+"type": "audio/vnd.wave"
+},
+"audio-x-wavpack": {
+"kind": "audio",
+"label": "WV",
+"type": "audio/x-wavpack"
+},
+"audio-x-wavpack-correction": {
+"kind": "audio",
+"label": "WVC",
+"type": "audio/x-wavpack-correction"
+},
+"audio-x-xi": {
+"kind": "audio",
+"label": "XI",
+"type": "audio/x-xi"
+},
+"audio-x-xm": {
+"kind": "audio",
+"label": "XM",
+"type": "audio/x-xm"
+},
+"audio-x-xmf": {
+"kind": "audio",
+"label": "XMF",
+"type": "audio/x-xmf"
+},
+"audio-xmf": {
+"kind": "audio",
+"label": "XMF",
+"type": "audio/x-xmf"
+},
+"chemical-x-pdb": {
+"kind": "text",
+"label": "PDB",
+"type": "chemical/x-pdb"
+},
+"flv-application-octet-stream": {
+"kind": "video",
+"label": "FLV",
+"type": "video/x-flv"
+},
+"font-collection": {
+"kind": "font",
+"label": "TTC",
+"type": "font/collection"
+},
+"font-otf": {
+"kind": "font",
+"label": "OTF",
+"type": "font/otf"
+},
+"font-ttf": {
+"kind": "font",
+"label": "TTF",
+"type": "font/ttf"
+},
+"font-woff": {
+"kind": "font",
+"label": "WOFF",
+"type": "font/woff"
+},
+"font-woff2": {
+"kind": "font",
+"label": "WOFF2",
+"type": "font/woff2"
+},
+"font-x-generic": {
+"kind": "font",
+"label": "FONT",
+"type": null
+},
+"image-apng": {
+"kind": "image",
+"label": "APNG",
+"type": "image/apng"
+},
+"image-astc": {
+"kind": "image",
+"label": "ASTC",
+"type": "image/astc"
+},
+"image-avif": {
+"kind": "image",
+"label": "AVIF",
+"type": "image/avif"
+},
+"image-avif-sequence": {
+"kind": "image",
+"label": "AVIF",
+"type": "image/avif"
+},
+"image-bmp": {
+"kind": "image",
+"label": "BMP",
+"type": "image/bmp"
+},
+"image-cdr": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"image-cgm": {
+"kind": "image",
+"label": "CGM",
+"type": "image/cgm"
+},
+"image-dpx": {
+"kind": "image",
+"label": "IMG",
+"type": "image/dpx"
+},
+"image-emf": {
+"kind": "image",
+"label": "EMF",
+"type": "image/emf"
+},
+"image-fax-g3": {
+"kind": "image",
+"label": "G3",
+"type": "image/g3fax"
+},
+"image-fits": {
+"kind": "generic",
+"label": "FITS",
+"type": "application/fits"
+},
+"image-g3fax": {
+"kind": "image",
+"label": "G3",
+"type": "image/g3fax"
+},
+"image-gif": {
+"kind": "image",
+"label": "GIF",
+"type": "image/gif"
+},
+"image-heic": {
+"kind": "image",
+"label": "HEIC",
+"type": "image/heif"
+},
+"image-heic-sequence": {
+"kind": "image",
+"label": "HEIC",
+"type": "image/heif"
+},
+"image-heif": {
+"kind": "image",
+"label": "HEIC",
+"type": "image/heif"
+},
+"image-heif-sequence": {
+"kind": "image",
+"label": "HEIC",
+"type": "image/heif"
+},
+"image-ico": {
+"kind": "image",
+"label": "ICO",
+"type": "image/vnd.microsoft.icon"
+},
+"image-icon": {
+"kind": "image",
+"label": "ICO",
+"type": "image/vnd.microsoft.icon"
+},
+"image-ief": {
+"kind": "image",
+"label": "IEF",
+"type": "image/ief"
+},
+"image-jp2": {
+"kind": "image",
+"label": "JP2",
+"type": "image/jp2"
+},
+"image-jpeg": {
+"kind": "image",
+"label": "JPG",
+"type": "image/jpeg"
+},
+"image-jpeg2000": {
+"kind": "image",
+"label": "JP2",
+"type": "image/jp2"
+},
+"image-jpeg2000-image": {
+"kind": "image",
+"label": "JP2",
+"type": "image/jp2"
+},
+"image-jpm": {
+"kind": "image",
+"label": "JPM",
+"type": "image/jpm"
+},
+"image-jpx": {
+"kind": "image",
+"label": "JPF",
+"type": "image/jpx"
+},
+"image-jxl": {
+"kind": "image",
+"label": "JXL",
+"type": "image/jxl"
+},
+"image-jxr": {
+"kind": "image",
+"label": "JXR",
+"type": "image/jxr"
+},
+"image-ktx": {
+"kind": "image",
+"label": "KTX",
+"type": "image/ktx"
+},
+"image-ktx2": {
+"kind": "image",
+"label": "KTX2",
+"type": "image/ktx2"
+},
+"image-openraster": {
+"kind": "image",
+"label": "ORA",
+"type": "image/openraster"
+},
+"image-pdf": {
+"kind": "pdf",
+"label": "PDF",
+"type": "application/pdf"
+},
+"image-photoshop": {
+"kind": "image",
+"label": "PSD",
+"type": "image/vnd.adobe.photoshop"
+},
+"image-pjpeg": {
+"kind": "image",
+"label": "JPG",
+"type": "image/jpeg"
+},
+"image-png": {
+"kind": "image",
+"label": "PNG",
+"type": "image/png"
+},
+"image-psd": {
+"kind": "image",
+"label": "PSD",
+"type": "image/vnd.adobe.photoshop"
+},
+"image-qoi": {
+"kind": "image",
+"label": "QOI",
+"type": "image/qoi"
+},
+"image-rle": {
+"kind": "image",
+"label": "RLE",
+"type": "image/rle"
+},
+"image-svg+xml": {
+"kind": "image",
+"label": "SVG",
+"type": "image/svg+xml"
+},
+"image-svg+xml-compressed": {
+"kind": "image",
+"label": "SVGZ",
+"type": "image/svg+xml-compressed"
+},
+"image-targa": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"image-tga": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"image-tiff": {
+"kind": "image",
+"label": "TIF",
+"type": "image/tiff"
+},
+"image-vnd.adobe.photoshop": {
+"kind": "image",
+"label": "PSD",
+"type": "image/vnd.adobe.photoshop"
+},
+"image-vnd.djvu": {
+"kind": "pdf",
+"label": "DJVU",
+"type": "image/vnd.djvu"
+},
+"image-vnd.djvu+multipage": {
+"kind": "doc",
+"label": "DJVU",
+"type": "image/vnd.djvu+multipage"
+},
+"image-vnd.dwg": {
+"kind": "image",
+"label": "DWG",
+"type": "image/vnd.dwg"
+},
+"image-vnd.dxf": {
+"kind": "image",
+"label": "DXF",
+"type": "image/vnd.dxf"
+},
+"image-vnd.microsoft.icon": {
+"kind": "image",
+"label": "ICO",
+"type": "image/vnd.microsoft.icon"
+},
+"image-vnd.mozilla.apng": {
+"kind": "image",
+"label": "APNG",
+"type": "image/apng"
+},
+"image-vnd.ms-modi": {
+"kind": "image",
+"label": "MDI",
+"type": "image/vnd.ms-modi"
+},
+"image-vnd.ms-photo": {
+"kind": "image",
+"label": "JXR",
+"type": "image/jxr"
+},
+"image-vnd.rn-realpix": {
+"kind": "image",
+"label": "RP",
+"type": "image/vnd.rn-realpix"
+},
+"image-vnd.wap.wbmp": {
+"kind": "image",
+"label": "WBMP",
+"type": "image/vnd.wap.wbmp"
+},
+"image-vnd.zbrush.pcx": {
+"kind": "image",
+"label": "PCX",
+"type": "image/vnd.zbrush.pcx"
+},
+"image-webp": {
+"kind": "image",
+"label": "WEBP",
+"type": "image/webp"
+},
+"image-wmf": {
+"kind": "image",
+"label": "WMF",
+"type": "image/wmf"
+},
+"image-x-3ds": {
+"kind": "image",
+"label": "3DS",
+"type": "image/x-3ds"
+},
+"image-x-MS-bmp": {
+"kind": "image",
+"label": "BMP",
+"type": "image/bmp"
+},
+"image-x-adobe-dng": {
+"kind": "image",
+"label": "DNG",
+"type": "image/x-adobe-dng"
+},
+"image-x-applix-graphics": {
+"kind": "image",
+"label": "AG",
+"type": "image/x-applix-graphics"
+},
+"image-x-bmp": {
+"kind": "image",
+"label": "BMP",
+"type": "image/bmp"
+},
+"image-x-bzeps": {
+"kind": "image",
+"label": "BZ2",
+"type": "image/x-bzeps"
+},
+"image-x-canon-cr2": {
+"kind": "image",
+"label": "CR2",
+"type": "image/x-canon-cr2"
+},
+"image-x-canon-cr3": {
+"kind": "image",
+"label": "CR3",
+"type": "image/x-canon-cr3"
+},
+"image-x-canon-crw": {
+"kind": "image",
+"label": "CRW",
+"type": "image/x-canon-crw"
+},
+"image-x-cdr": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"image-x-cmu-raster": {
+"kind": "image",
+"label": "RAS",
+"type": "image/x-cmu-raster"
+},
+"image-x-compressed-xcf": {
+"kind": "image",
+"label": "GZ",
+"type": "image/x-compressed-xcf"
+},
+"image-x-dcraw": {
+"kind": "image",
+"label": "IMG",
+"type": "image/x-dcraw"
+},
+"image-x-dds": {
+"kind": "image",
+"label": "DDS",
+"type": "image/x-dds"
+},
+"image-x-dib": {
+"kind": "image",
+"label": "IMG",
+"type": "image/x-dib"
+},
+"image-x-djvu": {
+"kind": "pdf",
+"label": "DJVU",
+"type": "image/vnd.djvu"
+},
+"image-x-emf": {
+"kind": "image",
+"label": "EMF",
+"type": "image/emf"
+},
+"image-x-eps": {
+"kind": "pdf",
+"label": "EPS",
+"type": "image/x-eps"
+},
+"image-x-exr": {
+"kind": "image",
+"label": "EXR",
+"type": "image/x-exr"
+},
+"image-x-fits": {
+"kind": "generic",
+"label": "FITS",
+"type": "application/fits"
+},
+"image-x-fpx": {
+"kind": "image",
+"label": "IMG",
+"type": "image/x-fpx"
+},
+"image-x-fuji-raf": {
+"kind": "image",
+"label": "RAF",
+"type": "image/x-fuji-raf"
+},
+"image-x-generic": {
+"kind": "image",
+"label": "IMG",
+"type": null
+},
+"image-x-gimp-gbr": {
+"kind": "image",
+"label": "GBR",
+"type": "image/x-gimp-gbr"
+},
+"image-x-gimp-gih": {
+"kind": "image",
+"label": "GIH",
+"type": "image/x-gimp-gih"
+},
+"image-x-gimp-pat": {
+"kind": "image",
+"label": "PAT",
+"type": "image/x-gimp-pat"
+},
+"image-x-gtk-path-animation": {
+"kind": "image",
+"label": "GPA",
+"type": "image/x-gtk-path-animation"
+},
+"image-x-gzeps": {
+"kind": "image",
+"label": "GZ",
+"type": "image/x-gzeps"
+},
+"image-x-hdr": {
+"kind": "image",
+"label": "HDR",
+"type": "image/x-hdr"
+},
+"image-x-icb": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"image-x-icns": {
+"kind": "image",
+"label": "ICNS",
+"type": "image/x-icns"
+},
+"image-x-ico": {
+"kind": "image",
+"label": "ICO",
+"type": "image/vnd.microsoft.icon"
+},
+"image-x-icon": {
+"kind": "image",
+"label": "ICO",
+"type": "image/vnd.microsoft.icon"
+},
+"image-x-iff": {
+"kind": "image",
+"label": "IFF",
+"type": "image/x-ilbm"
+},
+"image-x-ilbm": {
+"kind": "image",
+"label": "IFF",
+"type": "image/x-ilbm"
+},
+"image-x-jng": {
+"kind": "image",
+"label": "JNG",
+"type": "image/x-jng"
+},
+"image-x-jp2-codestream": {
+"kind": "image",
+"label": "J2C",
+"type": "image/x-jp2-codestream"
+},
+"image-x-jpeg2000-image": {
+"kind": "image",
+"label": "JP2",
+"type": "image/jp2"
+},
+"image-x-kde-raw": {
+"kind": "image",
+"label": "BAY",
+"type": "image/x-kde-raw"
+},
+"image-x-kodak-dcr": {
+"kind": "image",
+"label": "DCR",
+"type": "image/x-kodak-dcr"
+},
+"image-x-kodak-k25": {
+"kind": "image",
+"label": "K25",
+"type": "image/x-kodak-k25"
+},
+"image-x-kodak-kdc": {
+"kind": "image",
+"label": "KDC",
+"type": "image/x-kodak-kdc"
+},
+"image-x-krita": {
+"kind": "image",
+"label": "KRA",
+"type": null
+},
+"image-x-lwo": {
+"kind": "image",
+"label": "LWO",
+"type": "image/x-lwo"
+},
+"image-x-lws": {
+"kind": "image",
+"label": "LWS",
+"type": "image/x-lws"
+},
+"image-x-macpaint": {
+"kind": "image",
+"label": "PNTG",
+"type": "image/x-macpaint"
+},
+"image-x-minolta-mrw": {
+"kind": "image",
+"label": "MRW",
+"type": "image/x-minolta-mrw"
+},
+"image-x-msod": {
+"kind": "image",
+"label": "MSOD",
+"type": "image/x-msod"
+},
+"image-x-niff": {
+"kind": "image",
+"label": "IMG",
+"type": "image/x-niff"
+},
+"image-x-nikon-nef": {
+"kind": "image",
+"label": "NEF",
+"type": "image/x-nikon-nef"
+},
+"image-x-nikon-nrw": {
+"kind": "image",
+"label": "NRW",
+"type": "image/x-nikon-nrw"
+},
+"image-x-olympus-orf": {
+"kind": "image",
+"label": "ORF",
+"type": "image/x-olympus-orf"
+},
+"image-x-panasonic-raw": {
+"kind": "image",
+"label": "RAW",
+"type": "image/x-panasonic-rw"
+},
+"image-x-panasonic-raw2": {
+"kind": "image",
+"label": "RW2",
+"type": "image/x-panasonic-rw2"
+},
+"image-x-panasonic-rw": {
+"kind": "image",
+"label": "RAW",
+"type": "image/x-panasonic-rw"
+},
+"image-x-panasonic-rw2": {
+"kind": "image",
+"label": "RW2",
+"type": "image/x-panasonic-rw2"
+},
+"image-x-pcx": {
+"kind": "image",
+"label": "PCX",
+"type": "image/vnd.zbrush.pcx"
+},
+"image-x-pentax-pef": {
+"kind": "image",
+"label": "PEF",
+"type": "image/x-pentax-pef"
+},
+"image-x-photo-cd": {
+"kind": "disk",
+"label": "PCD",
+"type": "image/x-photo-cd"
+},
+"image-x-photoshop": {
+"kind": "image",
+"label": "PSD",
+"type": "image/vnd.adobe.photoshop"
+},
+"image-x-pic": {
+"kind": "image",
+"label": "PIC",
+"type": "image/x-pic"
+},
+"image-x-pict": {
+"kind": "image",
+"label": "PCT",
+"type": "image/x-pict"
+},
+"image-x-portable-anymap": {
+"kind": "image",
+"label": "PNM",
+"type": "image/x-portable-anymap"
+},
+"image-x-portable-bitmap": {
+"kind": "image",
+"label": "PBM",
+"type": "image/x-portable-bitmap"
+},
+"image-x-portable-graymap": {
+"kind": "image",
+"label": "PGM",
+"type": "image/x-portable-graymap"
+},
+"image-x-portable-pixmap": {
+"kind": "image",
+"label": "PPM",
+"type": "image/x-portable-pixmap"
+},
+"image-x-psd": {
+"kind": "image",
+"label": "PSD",
+"type": "image/vnd.adobe.photoshop"
+},
+"image-x-quicktime": {
+"kind": "image",
+"label": "QTIF",
+"type": "image/x-quicktime"
+},
+"image-x-rgb": {
+"kind": "image",
+"label": "RGB",
+"type": "image/x-rgb"
+},
+"image-x-sgi": {
+"kind": "image",
+"label": "SGI",
+"type": "image/x-sgi"
+},
+"image-x-sigma-x3f": {
+"kind": "image",
+"label": "X3F",
+"type": "image/x-sigma-x3f"
+},
+"image-x-skencil": {
+"kind": "image",
+"label": "SK",
+"type": "image/x-skencil"
+},
+"image-x-sony-arw": {
+"kind": "image",
+"label": "ARW",
+"type": "image/x-sony-arw"
+},
+"image-x-sony-sr2": {
+"kind": "image",
+"label": "SR2",
+"type": "image/x-sony-sr2"
+},
+"image-x-sony-srf": {
+"kind": "image",
+"label": "SRF",
+"type": "image/x-sony-srf"
+},
+"image-x-sun-raster": {
+"kind": "image",
+"label": "SUN",
+"type": "image/x-sun-raster"
+},
+"image-x-targa": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"image-x-tga": {
+"kind": "image",
+"label": "TGA",
+"type": "image/x-tga"
+},
+"image-x-tiff-multipage": {
+"kind": "image",
+"label": "IMG",
+"type": "image/x-tiff-multipage"
+},
+"image-x-win-bitmap": {
+"kind": "image",
+"label": "CUR",
+"type": "image/x-win-bitmap"
+},
+"image-x-win-bmp": {
+"kind": "image",
+"label": "BMP",
+"type": null
+},
+"image-x-win-metafile": {
+"kind": "image",
+"label": "WMF",
+"type": "image/wmf"
+},
+"image-x-wmf": {
+"kind": "image",
+"label": "WMF",
+"type": "image/wmf"
+},
+"image-x-xbitmap": {
+"kind": "image",
+"label": "XBM",
+"type": "image/x-xbitmap"
+},
+"image-x-xcf": {
+"kind": "image",
+"label": "XCF",
+"type": "image/x-xcf"
+},
+"image-x-xcursor": {
+"kind": "image",
+"label": "IMG",
+"type": "image/x-xcursor"
+},
+"image-x-xfig": {
+"kind": "image",
+"label": "FIG",
+"type": "image/x-xfig"
+},
+"image-x-xpixmap": {
+"kind": "image",
+"label": "XPM",
+"type": "image/x-xpixmap"
+},
+"image-x-xpm": {
+"kind": "image",
+"label": "XPM",
+"type": "image/x-xpixmap"
+},
+"image-x-xwindowdump": {
+"kind": "image",
+"label": "XWD",
+"type": "image/x-xwindowdump"
+},
+"image-x.djvu": {
+"kind": "pdf",
+"label": "DJVU",
+"type": "image/vnd.djvu"
+},
+"message-delivery-status": {
+"kind": "text",
+"label": "TXT",
+"type": "message/delivery-status"
+},
+"message-disposition-notification": {
+"kind": "text",
+"label": "TXT",
+"type": "message/disposition-notification"
+},
+"message-external-body": {
+"kind": "text",
+"label": "TXT",
+"type": "message/external-body"
+},
+"message-news": {
+"kind": "text",
+"label": "TXT",
+"type": "message/news"
+},
+"message-partial": {
+"kind": "text",
+"label": "TXT",
+"type": "message/partial"
+},
+"message-rfc822": {
+"kind": "text",
+"label": "EML",
+"type": "message/rfc822"
+},
+"message-x-gnu-rmail": {
+"kind": "text",
+"label": "TXT",
+"type": "message/x-gnu-rmail"
+},
+"model-3mf": {
+"kind": "image",
+"label": "3MF",
+"type": "model/3mf"
+},
+"model-gltf+json": {
+"kind": "image",
+"label": "GLTF",
+"type": "model/gltf+json"
+},
+"model-gltf-binary": {
+"kind": "image",
+"label": "GLB",
+"type": "model/gltf-binary"
+},
+"model-iges": {
+"kind": "doc",
+"label": "IGS",
+"type": "model/iges"
+},
+"model-mtl": {
+"kind": "image",
+"label": "MTL",
+"type": "model/mtl"
+},
+"model-obj": {
+"kind": "image",
+"label": "OBJ",
+"type": "model/obj"
+},
+"model-stl": {
+"kind": "image",
+"label": "STL",
+"type": "model/stl"
+},
+"model-vrml": {
+"kind": "doc",
+"label": "VRM",
+"type": "model/vrml"
+},
+"model-x.stl-ascii": {
+"kind": "image",
+"label": "STL",
+"type": "model/stl"
+},
+"model-x.stl-binary": {
+"kind": "image",
+"label": "STL",
+"type": "model/stl"
+},
+"package-x-generic": {
+"kind": "archive",
+"label": "ZIP",
+"type": null
+},
+"text-cache-manifest": {
+"kind": "text",
+"label": "TXT",
+"type": "text/cache-manifest"
+},
+"text-calendar": {
+"kind": "doc",
+"label": "ICS",
+"type": "text/calendar"
+},
+"text-crystal": {
+"kind": "code",
+"label": "CR",
+"type": "text/x-crystal"
+},
+"text-csharp": {
+"kind": "code",
+"label": "CS",
+"type": null
+},
+"text-css": {
+"kind": "code",
+"label": "CSS",
+"type": "text/css"
+},
+"text-csv": {
+"kind": "sheet",
+"label": "CSV",
+"type": "text/csv"
+},
+"text-csv-schema": {
+"kind": "text",
+"label": "CSVS",
+"type": "text/csv-schema"
+},
+"text-directory": {
+"kind": "doc",
+"label": "VCF",
+"type": "text/vcard"
+},
+"text-dockerfile": {
+"kind": "code",
+"label": "DOCK",
+"type": null
+},
+"text-ecmascript": {
+"kind": "code",
+"label": "ES",
+"type": "application/ecmascript"
+},
+"text-enriched": {
+"kind": "text",
+"label": "TXT",
+"type": "text/enriched"
+},
+"text-fortran": {
+"kind": "code",
+"label": "F",
+"type": null
+},
+"text-gedcom": {
+"kind": "doc",
+"label": "GED",
+"type": "text/vnd.familysearch.gedcom"
+},
+"text-google-video-pointer": {
+"kind": "text",
+"label": "GVP",
+"type": "text/x-google-video-pointer"
+},
+"text-html": {
+"kind": "code",
+"label": "HTML",
+"type": "text/html"
+},
+"text-htmlh": {
+"kind": "text",
+"label": "TXT",
+"type": "text/htmlh"
+},
+"text-ico": {
+"kind": "image",
+"label": "ICO",
+"type": "image/vnd.microsoft.icon"
+},
+"text-javascript": {
+"kind": "code",
+"label": "JS",
+"type": "text/javascript"
+},
+"text-jscript": {
+"kind": "code",
+"label": "JS",
+"type": "text/javascript"
+},
+"text-jscript.encode": {
+"kind": "code",
+"label": "JSE",
+"type": "text/jscript.encode"
+},
+"text-julia": {
+"kind": "text",
+"label": "JL",
+"type": "text/julia"
+},
+"text-markdown": {
+"kind": "doc",
+"label": "MD",
+"type": "text/markdown"
+},
+"text-mathml": {
+"kind": "code",
+"label": "MML",
+"type": "application/mathml+xml"
+},
+"text-org": {
+"kind": "text",
+"label": "ORG",
+"type": "text/org"
+},
+"text-plain": {
+"kind": "text",
+"label": "TXT",
+"type": "text/plain"
+},
+"text-rdf": {
+"kind": "code",
+"label": "RDF",
+"type": "application/rdf+xml"
+},
+"text-rfc822-headers": {
+"kind": "text",
+"label": "TXT",
+"type": "text/rfc822-headers"
+},
+"text-richtext": {
+"kind": "text",
+"label": "RTX",
+"type": "text/richtext"
+},
+"text-rss": {
+"kind": "code",
+"label": "RSS",
+"type": "application/rss+xml"
+},
+"text-rtf": {
+"kind": "doc",
+"label": "RTF",
+"type": "application/rtf"
+},
+"text-rust": {
+"kind": "code",
+"label": "RS",
+"type": "text/rust"
+},
+"text-sgml": {
+"kind": "text",
+"label": "SGML",
+"type": "text/sgml"
+},
+"text-spreadsheet": {
+"kind": "text",
+"label": "SYLK",
+"type": "text/spreadsheet"
+},
+"text-tab-separated-values": {
+"kind": "sheet",
+"label": "TSV",
+"type": "text/tab-separated-values"
+},
+"text-tcl": {
+"kind": "code",
+"label": "TCL",
+"type": "text/tcl"
+},
+"text-troff": {
+"kind": "text",
+"label": "TR",
+"type": "text/troff"
+},
+"text-turtle": {
+"kind": "text",
+"label": "TTL",
+"type": "text/turtle"
+},
+"text-vbs": {
+"kind": "code",
+"label": "VBS",
+"type": "text/vbscript"
+},
+"text-vbscript": {
+"kind": "code",
+"label": "VBS",
+"type": "text/vbscript"
+},
+"text-vbscript.encode": {
+"kind": "code",
+"label": "VBE",
+"type": "text/vbscript.encode"
+},
+"text-vcalendar": {
+"kind": "doc",
+"label": "ICS",
+"type": null
+},
+"text-vcard": {
+"kind": "doc",
+"label": "VCF",
+"type": "text/vcard"
+},
+"text-vnd.abc": {
+"kind": "text",
+"label": "ABC",
+"type": "text/vnd.abc"
+},
+"text-vnd.familysearch.gedcom": {
+"kind": "doc",
+"label": "GED",
+"type": "text/vnd.familysearch.gedcom"
+},
+"text-vnd.graphviz": {
+"kind": "doc",
+"label": "GV",
+"type": "text/vnd.graphviz"
+},
+"text-vnd.kde.kcrash-report": {
+"kind": "text",
+"label": "TXT",
+"type": "text/vnd.kde.kcrash-report"
+},
+"text-vnd.qt.linguist": {
+"kind": "text",
+"label": "TS",
+"type": "text/vnd.trolltech.linguist"
+},
+"text-vnd.rn-realtext": {
+"kind": "text",
+"label": "RT",
+"type": "text/vnd.rn-realtext"
+},
+"text-vnd.senx.warpscript": {
+"kind": "code",
+"label": "MC2",
+"type": "text/vnd.senx.warpscript"
+},
+"text-vnd.sun.j2me.app-descriptor": {
+"kind": "code",
+"label": "JAD",
+"type": "text/vnd.sun.j2me.app-descriptor"
+},
+"text-vnd.trolltech.linguist": {
+"kind": "text",
+"label": "TS",
+"type": "text/vnd.trolltech.linguist"
+},
+"text-vnd.wap.wml": {
+"kind": "text",
+"label": "WML",
+"type": "text/vnd.wap.wml"
+},
+"text-vnd.wap.wmlscript": {
+"kind": "code",
+"label": "WMLS",
+"type": "text/vnd.wap.wmlscript"
+},
+"text-vtt": {
+"kind": "text",
+"label": "VTT",
+"type": "text/vtt"
+},
+"text-wiki": {
+"kind": "text",
+"label": "WIKI",
+"type": null
+},
+"text-x-adasrc": {
+"kind": "code",
+"label": "ADB",
+"type": "text/x-adasrc"
+},
+"text-x-authors": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-authors"
+},
+"text-x-basic": {
+"kind": "code",
+"label": "BAS",
+"type": "text/x-basic"
+},
+"text-x-bibtex": {
+"kind": "text",
+"label": "BIB",
+"type": "text/x-bibtex"
+},
+"text-x-blueprint": {
+"kind": "text",
+"label": "BLP",
+"type": "text/x-blueprint"
+},
+"text-x-c": {
+"kind": "code",
+"label": "C",
+"type": "text/x-csrc"
+},
+"text-x-c++hdr": {
+"kind": "code",
+"label": "HH",
+"type": "text/x-c++hdr"
+},
+"text-x-c++src": {
+"kind": "code",
+"label": "CPP",
+"type": "text/x-c++src"
+},
+"text-x-changelog": {
+"kind": "text",
+"label": "LOG",
+"type": "text/x-changelog"
+},
+"text-x-chdr": {
+"kind": "code",
+"label": "H",
+"type": "text/x-chdr"
+},
+"text-x-cmake": {
+"kind": "code",
+"label": "CMAKE",
+"type": "text/x-cmake"
+},
+"text-x-cobol": {
+"kind": "code",
+"label": "CBL",
+"type": "text/x-cobol"
+},
+"text-x-comma-separated-values": {
+"kind": "sheet",
+"label": "CSV",
+"type": "text/csv"
+},
+"text-x-common-lisp": {
+"kind": "code",
+"label": "ASD",
+"type": "text/x-common-lisp"
+},
+"text-x-component": {
+"kind": "code",
+"label": "HTC",
+"type": "text/x-component"
+},
+"text-x-copying": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-copying"
+},
+"text-x-credits": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-credits"
+},
+"text-x-crystal": {
+"kind": "code",
+"label": "CR",
+"type": "text/x-crystal"
+},
+"text-x-csharp": {
+"kind": "code",
+"label": "CS",
+"type": "text/x-csharp"
+},
+"text-x-csrc": {
+"kind": "code",
+"label": "C",
+"type": "text/x-csrc"
+},
+"text-x-csv": {
+"kind": "sheet",
+"label": "CSV",
+"type": "text/csv"
+},
+"text-x-dart": {
+"kind": "code",
+"label": "DART",
+"type": "application/vnd.dart"
+},
+"text-x-dbus-service": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-dbus-service"
+},
+"text-x-dcl": {
+"kind": "text",
+"label": "DCL",
+"type": "text/x-dcl"
+},
+"text-x-devicetree-binary": {
+"kind": "text",
+"label": "DTB",
+"type": "text/x-devicetree-binary"
+},
+"text-x-devicetree-source": {
+"kind": "code",
+"label": "DTS",
+"type": "text/x-devicetree-source"
+},
+"text-x-diff": {
+"kind": "code",
+"label": "DIFF",
+"type": "text/x-patch"
+},
+"text-x-dsl": {
+"kind": "text",
+"label": "DSL",
+"type": "text/x-dsl"
+},
+"text-x-dsrc": {
+"kind": "code",
+"label": "D",
+"type": "text/x-dsrc"
+},
+"text-x-dtd": {
+"kind": "text",
+"label": "DTD",
+"type": "application/xml-dtd"
+},
+"text-x-eiffel": {
+"kind": "text",
+"label": "E",
+"type": "text/x-eiffel"
+},
+"text-x-elixir": {
+"kind": "text",
+"label": "EX",
+"type": "text/x-elixir"
+},
+"text-x-emacs-lisp": {
+"kind": "code",
+"label": "EL",
+"type": "text/x-emacs-lisp"
+},
+"text-x-erlang": {
+"kind": "text",
+"label": "ERL",
+"type": "text/x-erlang"
+},
+"text-x-fish": {
+"kind": "code",
+"label": "FISH",
+"type": "application/x-fishscript"
+},
+"text-x-fortran": {
+"kind": "code",
+"label": "F",
+"type": "text/x-fortran"
+},
+"text-x-gcode-gx": {
+"kind": "text",
+"label": "GX",
+"type": "text/x-gcode-gx"
+},
+"text-x-generic": {
+"kind": "text",
+"label": "TXT",
+"type": null
+},
+"text-x-generic-template": {
+"kind": "text",
+"label": "TXT",
+"type": null
+},
+"text-x-genie": {
+"kind": "text",
+"label": "GS",
+"type": "text/x-genie"
+},
+"text-x-gettext-translation": {
+"kind": "text",
+"label": "PO",
+"type": "text/x-gettext-translation"
+},
+"text-x-gettext-translation-template": {
+"kind": "text",
+"label": "POT",
+"type": "text/x-gettext-translation-template"
+},
+"text-x-gherkin": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-gherkin"
+},
+"text-x-go": {
+"kind": "code",
+"label": "GO",
+"type": "text/x-go"
+},
+"text-x-google-video-pointer": {
+"kind": "text",
+"label": "GVP",
+"type": "text/x-google-video-pointer"
+},
+"text-x-gradle": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-gradle"
+},
+"text-x-groovy": {
+"kind": "code",
+"label": "GVY",
+"type": "text/x-groovy"
+},
+"text-x-haskell": {
+"kind": "code",
+"label": "HS",
+"type": "text/x-haskell"
+},
+"text-x-hex": {
+"kind": "text",
+"label": "HEX",
+"type": "text/x-hex"
+},
+"text-x-iMelody": {
+"kind": "text",
+"label": "IMY",
+"type": "text/x-iMelody"
+},
+"text-x-idl": {
+"kind": "text",
+"label": "IDL",
+"type": "text/x-idl"
+},
+"text-x-install": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-install"
+},
+"text-x-iptables": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-iptables"
+},
+"text-x-java": {
+"kind": "code",
+"label": "JAVA",
+"type": "text/x-java"
+},
+"text-x-java-source": {
+"kind": "code",
+"label": "JAVA",
+"type": null
+},
+"text-x-javascript": {
+"kind": "code",
+"label": "JS",
+"type": null
+},
+"text-x-kaitai-struct": {
+"kind": "text",
+"label": "KSY",
+"type": "text/x-kaitai-struct"
+},
+"text-x-katefilelist": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-katefilelist"
+},
+"text-x-kotlin": {
+"kind": "code",
+"label": "KT",
+"type": "text/x-kotlin"
+},
+"text-x-ldif": {
+"kind": "text",
+"label": "LDIF",
+"type": "text/x-ldif"
+},
+"text-x-lilypond": {
+"kind": "text",
+"label": "LY",
+"type": "text/x-lilypond"
+},
+"text-x-literate-haskell": {
+"kind": "code",
+"label": "LHS",
+"type": "text/x-literate-haskell"
+},
+"text-x-log": {
+"kind": "text",
+"label": "LOG",
+"type": "text/x-log"
+},
+"text-x-lua": {
+"kind": "code",
+"label": "LUA",
+"type": "text/x-lua"
+},
+"text-x-lyx": {
+"kind": "doc",
+"label": "LYX",
+"type": "application/x-lyx"
+},
+"text-x-makefile": {
+"kind": "code",
+"label": "MAKE",
+"type": "text/x-makefile"
+},
+"text-x-markdown": {
+"kind": "doc",
+"label": "MD",
+"type": "text/markdown"
+},
+"text-x-matlab": {
+"kind": "text",
+"label": "M",
+"type": "text/x-matlab"
+},
+"text-x-maven+xml": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-maven+xml"
+},
+"text-x-meson": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-meson"
+},
+"text-x-microdvd": {
+"kind": "text",
+"label": "SUB",
+"type": "text/x-microdvd"
+},
+"text-x-moc": {
+"kind": "text",
+"label": "MOC",
+"type": "text/x-moc"
+},
+"text-x-modelica": {
+"kind": "text",
+"label": "MO",
+"type": "text/x-modelica"
+},
+"text-x-mof": {
+"kind": "text",
+"label": "MOF",
+"type": "text/x-mof"
+},
+"text-x-mpl2": {
+"kind": "text",
+"label": "MPL",
+"type": "text/x-mpl2"
+},
+"text-x-mpsub": {
+"kind": "text",
+"label": "SUB",
+"type": "text/x-mpsub"
+},
+"text-x-mrml": {
+"kind": "text",
+"label": "MRML",
+"type": "text/x-mrml"
+},
+"text-x-ms-regedit": {
+"kind": "text",
+"label": "REG",
+"type": "text/x-ms-regedit"
+},
+"text-x-mup": {
+"kind": "text",
+"label": "MUP",
+"type": "text/x-mup"
+},
+"text-x-nfo": {
+"kind": "text",
+"label": "NFO",
+"type": "text/x-nfo"
+},
+"text-x-nim": {
+"kind": "text",
+"label": "NIM",
+"type": "text/x-nim"
+},
+"text-x-nimscript": {
+"kind": "code",
+"label": "NIMS",
+"type": "text/x-nimscript"
+},
+"text-x-nu": {
+"kind": "code",
+"label": "NU",
+"type": "application/x-nuscript"
+},
+"text-x-objc++src": {
+"kind": "code",
+"label": "MM",
+"type": "text/x-objc++src"
+},
+"text-x-objchdr": {
+"kind": "code",
+"label": "H",
+"type": null
+},
+"text-x-objcsrc": {
+"kind": "code",
+"label": "M",
+"type": "text/x-objcsrc"
+},
+"text-x-ocaml": {
+"kind": "text",
+"label": "ML",
+"type": "text/x-ocaml"
+},
+"text-x-ocl": {
+"kind": "text",
+"label": "OCL",
+"type": "text/x-ocl"
+},
+"text-x-octave": {
+"kind": "text",
+"label": "M",
+"type": "text/x-matlab"
+},
+"text-x-ooc": {
+"kind": "text",
+"label": "OOC",
+"type": "text/x-ooc"
+},
+"text-x-opencl-src": {
+"kind": "code",
+"label": "CL",
+"type": "text/x-opencl-src"
+},
+"text-x-opml": {
+"kind": "code",
+"label": "OPML",
+"type": "text/x-opml+xml"
+},
+"text-x-opml+xml": {
+"kind": "code",
+"label": "OPML",
+"type": "text/x-opml+xml"
+},
+"text-x-pascal": {
+"kind": "code",
+"label": "P",
+"type": "text/x-pascal"
+},
+"text-x-patch": {
+"kind": "code",
+"label": "DIFF",
+"type": "text/x-patch"
+},
+"text-x-perl": {
+"kind": "code",
+"label": "PL",
+"type": "application/x-perl"
+},
+"text-x-plain": {
+"kind": "text",
+"label": "TXT",
+"type": null
+},
+"text-x-po": {
+"kind": "text",
+"label": "PO",
+"type": "text/x-gettext-translation"
+},
+"text-x-pot": {
+"kind": "text",
+"label": "POT",
+"type": "text/x-gettext-translation-template"
+},
+"text-x-python": {
+"kind": "code",
+"label": "PY",
+"type": "text/x-python"
+},
+"text-x-python2": {
+"kind": "code",
+"label": "PY",
+"type": null
+},
+"text-x-python3": {
+"kind": "code",
+"label": "PY",
+"type": "text/x-python3"
+},
+"text-x-qml": {
+"kind": "code",
+"label": "QML",
+"type": "text/x-qml"
+},
+"text-x-r": {
+"kind": "code",
+"label": "R",
+"type": null
+},
+"text-x-readme": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-readme"
+},
+"text-x-reject": {
+"kind": "text",
+"label": "REJ",
+"type": "text/x-reject"
+},
+"text-x-rpm-spec": {
+"kind": "text",
+"label": "SPEC",
+"type": "text/x-rpm-spec"
+},
+"text-x-rst": {
+"kind": "text",
+"label": "RST",
+"type": "text/x-rst"
+},
+"text-x-rust": {
+"kind": "code",
+"label": "RS",
+"type": null
+},
+"text-x-sagemath": {
+"kind": "text",
+"label": "SAGE",
+"type": "text/x-sagemath"
+},
+"text-x-sass": {
+"kind": "text",
+"label": "SASS",
+"type": "text/x-sass"
+},
+"text-x-scala": {
+"kind": "code",
+"label": "SC",
+"type": "text/x-scala"
+},
+"text-x-scheme": {
+"kind": "text",
+"label": "SCM",
+"type": "text/x-scheme"
+},
+"text-x-scons": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-scons"
+},
+"text-x-script": {
+"kind": "code",
+"label": "CODE",
+"type": null
+},
+"text-x-scss": {
+"kind": "text",
+"label": "SCSS",
+"type": "text/x-scss"
+},
+"text-x-setext": {
+"kind": "text",
+"label": "ETX",
+"type": "text/x-setext"
+},
+"text-x-sh": {
+"kind": "code",
+"label": "SH",
+"type": "application/x-shellscript"
+},
+"text-x-shellscript": {
+"kind": "code",
+"label": "SH",
+"type": null
+},
+"text-x-source": {
+"kind": "code",
+"label": "CODE",
+"type": null
+},
+"text-x-sql": {
+"kind": "code",
+"label": "SQL",
+"type": "application/sql"
+},
+"text-x-ssa": {
+"kind": "text",
+"label": "SSA",
+"type": "text/x-ssa"
+},
+"text-x-subviewer": {
+"kind": "text",
+"label": "SUB",
+"type": "text/x-subviewer"
+},
+"text-x-svhdr": {
+"kind": "code",
+"label": "SVH",
+"type": "text/x-svhdr"
+},
+"text-x-svsrc": {
+"kind": "code",
+"label": "SV",
+"type": "text/x-svsrc"
+},
+"text-x-systemd-unit": {
+"kind": "text",
+"label": "PATH",
+"type": "text/x-systemd-unit"
+},
+"text-x-tcl": {
+"kind": "code",
+"label": "TCL",
+"type": "text/tcl"
+},
+"text-x-tex": {
+"kind": "text",
+"label": "TEX",
+"type": "text/x-tex"
+},
+"text-x-texinfo": {
+"kind": "text",
+"label": "TEXI",
+"type": "text/x-texinfo"
+},
+"text-x-todo-txt": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-todo-txt"
+},
+"text-x-troff": {
+"kind": "text",
+"label": "TR",
+"type": "text/troff"
+},
+"text-x-troff-me": {
+"kind": "text",
+"label": "ME",
+"type": "text/x-troff-me"
+},
+"text-x-troff-mm": {
+"kind": "text",
+"label": "MM",
+"type": "text/x-troff-mm"
+},
+"text-x-troff-ms": {
+"kind": "text",
+"label": "MS",
+"type": "text/x-troff-ms"
+},
+"text-x-twig": {
+"kind": "text",
+"label": "TWIG",
+"type": "text/x-twig"
+},
+"text-x-txt2tags": {
+"kind": "text",
+"label": "T2T",
+"type": "text/x-txt2tags"
+},
+"text-x-typst": {
+"kind": "text",
+"label": "TYP",
+"type": "text/x-typst"
+},
+"text-x-uil": {
+"kind": "text",
+"label": "UIL",
+"type": "text/x-uil"
+},
+"text-x-uri": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-uri"
+},
+"text-x-uuencode": {
+"kind": "text",
+"label": "UUE",
+"type": "text/x-uuencode"
+},
+"text-x-vala": {
+"kind": "text",
+"label": "VALA",
+"type": "text/x-vala"
+},
+"text-x-vb": {
+"kind": "text",
+"label": "VB",
+"type": "text/x-vb"
+},
+"text-x-vcalendar": {
+"kind": "doc",
+"label": "ICS",
+"type": "text/calendar"
+},
+"text-x-vcard": {
+"kind": "doc",
+"label": "VCF",
+"type": "text/vcard"
+},
+"text-x-verilog": {
+"kind": "text",
+"label": "V",
+"type": "text/x-verilog"
+},
+"text-x-vhdl": {
+"kind": "text",
+"label": "VHD",
+"type": "text/x-vhdl"
+},
+"text-x-vnd.akonadi.note": {
+"kind": "text",
+"label": "TXT",
+"type": "text/x-vnd.akonadi.note"
+},
+"text-x-xmi": {
+"kind": "text",
+"label": "XMI",
+"type": "text/x-xmi"
+},
+"text-x-xslfo": {
+"kind": "text",
+"label": "FO",
+"type": "text/x-xslfo"
+},
+"text-x-yaml": {
+"kind": "code",
+"label": "YAML",
+"type": "application/yaml"
+},
+"text-x.gcode": {
+"kind": "text",
+"label": "GCODE",
+"type": "text/x.gcode"
+},
+"text-xmcd": {
+"kind": "text",
+"label": "TXT",
+"type": "text/xmcd"
+},
+"text-xml": {
+"kind": "code",
+"label": "XML",
+"type": "application/xml"
+},
+"text-xml-external-parsed-entity": {
+"kind": "code",
+"label": "ENT",
+"type": "application/xml-external-parsed-entity"
+},
+"text-yaml": {
+"kind": "code",
+"label": "YAML",
+"type": "application/yaml"
+},
+"unknown": {
+"kind": "blank",
+"label": null,
+"type": null
+},
+"video-3gp": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"video-3gpp": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"video-3gpp-encrypted": {
+"kind": "video",
+"label": "3GP",
+"type": "video/3gpp"
+},
+"video-3gpp2": {
+"kind": "video",
+"label": "3G2",
+"type": "video/3gpp2"
+},
+"video-annodex": {
+"kind": "video",
+"label": "AXV",
+"type": "video/annodex"
+},
+"video-avi": {
+"kind": "video",
+"label": "AVI",
+"type": "video/vnd.avi"
+},
+"video-divx": {
+"kind": "video",
+"label": "AVI",
+"type": "video/vnd.avi"
+},
+"video-dv": {
+"kind": "video",
+"label": "DV",
+"type": "video/dv"
+},
+"video-fli": {
+"kind": "video",
+"label": "FLI",
+"type": "video/x-flic"
+},
+"video-flv": {
+"kind": "video",
+"label": "FLV",
+"type": "video/x-flv"
+},
+"video-isivideo": {
+"kind": "video",
+"label": "VIDEO",
+"type": "video/isivideo"
+},
+"video-mediaplayer": {
+"kind": "video",
+"label": "WMP",
+"type": "video/x-ms-wmp"
+},
+"video-mj2": {
+"kind": "video",
+"label": "MJ2",
+"type": "video/mj2"
+},
+"video-mp2t": {
+"kind": "video",
+"label": "M2T",
+"type": "video/mp2t"
+},
+"video-mp4": {
+"kind": "video",
+"label": "MP4",
+"type": "video/mp4"
+},
+"video-mp4v-es": {
+"kind": "video",
+"label": "MP4",
+"type": "video/mp4"
+},
+"video-mpeg": {
+"kind": "video",
+"label": "MPEG",
+"type": "video/mpeg"
+},
+"video-mpeg-system": {
+"kind": "video",
+"label": "MPEG",
+"type": "video/mpeg"
+},
+"video-msvideo": {
+"kind": "video",
+"label": "AVI",
+"type": "video/vnd.avi"
+},
+"video-ogg": {
+"kind": "video",
+"label": "OGV",
+"type": "video/ogg"
+},
+"video-quicktime": {
+"kind": "video",
+"label": "QT",
+"type": "video/quicktime"
+},
+"video-vivo": {
+"kind": "video",
+"label": "VIV",
+"type": "video/vnd.vivo"
+},
+"video-vnd.avi": {
+"kind": "video",
+"label": "AVI",
+"type": "video/vnd.avi"
+},
+"video-vnd.divx": {
+"kind": "video",
+"label": "AVI",
+"type": "video/vnd.avi"
+},
+"video-vnd.mpegurl": {
+"kind": "video",
+"label": "M1U",
+"type": "video/vnd.mpegurl"
+},
+"video-vnd.radgamettools.bink": {
+"kind": "video",
+"label": "BIK",
+"type": "video/vnd.radgamettools.bink"
+},
+"video-vnd.radgamettools.smacker": {
+"kind": "video",
+"label": "SMK",
+"type": "video/vnd.radgamettools.smacker"
+},
+"video-vnd.rn-realvideo": {
+"kind": "video",
+"label": "RV",
+"type": "video/vnd.rn-realvideo"
+},
+"video-vnd.vivo": {
+"kind": "video",
+"label": "VIV",
+"type": "video/vnd.vivo"
+},
+"video-vnd.youtube.yt": {
+"kind": "video",
+"label": "YT",
+"type": "video/vnd.youtube.yt"
+},
+"video-wavelet": {
+"kind": "video",
+"label": "VIDEO",
+"type": "video/wavelet"
+},
+"video-webm": {
+"kind": "video",
+"label": "WEBM",
+"type": "video/webm"
+},
+"video-x-anim": {
+"kind": "video",
+"label": "VIDEO",
+"type": "video/x-anim"
+},
+"video-x-annodex": {
+"kind": "video",
+"label": "AXV",
+"type": "video/annodex"
+},
+"video-x-avi": {
+"kind": "video",
+"label": "AVI",
+"type": "video/vnd.avi"
+},
+"video-x-fli": {
+"kind": "video",
+"label": "FLI",
+"type": "video/x-flic"
+},
+"video-x-flic": {
+"kind": "video",
+"label": "FLI",
+"type": "video/x-flic"
+},
+"video-x-flv": {
+"kind": "video",
+"label": "FLV",
+"type": "video/x-flv"
+},
+"video-x-generic": {
+"kind": "video",
+"label": "VIDEO",
+"type": null
+},
+"video-x-javafx": {
+"kind": "video",
+"label": "FXM",
+"type": "video/x-javafx"
+},
+"video-x-m4v": {
+"kind": "video",
+"label": "MP4",
+"type": "video/mp4"
+},
+"video-x-matroska": {
+"kind": "video",
+"label": "MKV",
+"type": "video/x-matroska"
+},
+"video-x-matroska-3d": {
+"kind": "video",
+"label": "MK3D",
+"type": "video/x-matroska-3d"
+},
+"video-x-mjpeg": {
+"kind": "video",
+"label": "MJPG",
+"type": "video/x-mjpeg"
+},
+"video-x-mng": {
+"kind": "video",
+"label": "MNG",
+"type": "video/x-mng"
+},
+"video-x-mpeg": {
+"kind": "video",
+"label": "MPEG",
+"type": "video/mpeg"
+},
+"video-x-mpeg-system": {
+"kind": "video",
+"label": "MPEG",
+"type": "video/mpeg"
+},
+"video-x-mpeg2": {
+"kind": "video",
+"label": "MPEG",
+"type": "video/mpeg"
+},
+"video-x-mpegurl": {
+"kind": "video",
+"label": "M1U",
+"type": "video/vnd.mpegurl"
+},
+"video-x-ms-asf": {
+"kind": "generic",
+"label": "ASF",
+"type": "application/vnd.ms-asf"
+},
+"video-x-ms-asf-plugin": {
+"kind": "generic",
+"label": "ASF",
+"type": "application/vnd.ms-asf"
+},
+"video-x-ms-wax": {
+"kind": "audio",
+"label": "ASX",
+"type": "audio/x-ms-asx"
+},
+"video-x-ms-wm": {
+"kind": "generic",
+"label": "ASF",
+"type": "application/vnd.ms-asf"
+},
+"video-x-ms-wmp": {
+"kind": "video",
+"label": "WMP",
+"type": "video/x-ms-wmp"
+},
+"video-x-ms-wmv": {
+"kind": "video",
+"label": "WMV",
+"type": "video/x-ms-wmv"
+},
+"video-x-ms-wmx": {
+"kind": "audio",
+"label": "ASX",
+"type": "audio/x-ms-asx"
+},
+"video-x-ms-wvx": {
+"kind": "audio",
+"label": "ASX",
+"type": "audio/x-ms-asx"
+},
+"video-x-msvideo": {
+"kind": "video",
+"label": "AVI",
+"type": "video/vnd.avi"
+},
+"video-x-nsv": {
+"kind": "video",
+"label": "NSV",
+"type": "video/x-nsv"
+},
+"video-x-ogg": {
+"kind": "video",
+"label": "OGV",
+"type": "video/ogg"
+},
+"video-x-ogm": {
+"kind": "video",
+"label": "OGM",
+"type": "video/x-ogm+ogg"
+},
+"video-x-ogm+ogg": {
+"kind": "video",
+"label": "OGM",
+"type": "video/x-ogm+ogg"
+},
+"video-x-real-video": {
+"kind": "video",
+"label": "RV",
+"type": "video/vnd.rn-realvideo"
+},
+"video-x-sgi-movie": {
+"kind": "video",
+"label": "MOVIE",
+"type": "video/x-sgi-movie"
+},
+"video-x-theora": {
+"kind": "video",
+"label": "OGG",
+"type": "video/x-theora+ogg"
+},
+"video-x-theora+ogg": {
+"kind": "video",
+"label": "OGG",
+"type": "video/x-theora+ogg"
+},
+"video-x-wmv": {
+"kind": "video",
+"label": "WMV",
+"type": null
+},
+"x-office-address-book": {
+"kind": "doc",
+"label": "VCF",
+"type": null
+},
+"x-office-calendar": {
+"kind": "doc",
+"label": "ICS",
+"type": null
+},
+"x-office-document": {
+"kind": "doc",
+"label": "DOC",
+"type": null
+},
+"x-office-document-template": {
+"kind": "doc",
+"label": "DOT",
+"type": null
+},
+"x-office-drawing": {
+"kind": "image",
+"label": "IMG",
+"type": null
+},
+"x-office-drawing-template": {
+"kind": "image",
+"label": "OTG",
+"type": null
+},
+"x-office-presentation": {
+"kind": "slides",
+"label": "PPT",
+"type": null
+},
+"x-office-presentation-template": {
+"kind": "slides",
+"label": "POT",
+"type": null
+},
+"x-office-spreadsheet": {
+"kind": "sheet",
+"label": "XLS",
+"type": null
+},
+"x-office-spreadsheet-template": {
+"kind": "sheet",
+"label": "XLT",
+"type": null
+},
+"zz-application-zz-winassoc-123": {
+"kind": "sheet",
+"label": "WK1",
+"type": "application/vnd.lotus-1-2-3"
+},
+"zz-application-zz-winassoc-cab": {
+"kind": "archive",
+"label": "CAB",
+"type": "application/vnd.ms-cab-compressed"
+},
+"zz-application-zz-winassoc-cdr": {
+"kind": "image",
+"label": "CDR",
+"type": "application/vnd.corel-draw"
+},
+"zz-application-zz-winassoc-doc": {
+"kind": "doc",
+"label": "DOC",
+"type": "application/msword"
+},
+"zz-application-zz-winassoc-hlp": {
+"kind": "generic",
+"label": "HLP",
+"type": "application/winhlp"
+},
+"zz-application-zz-winassoc-mdb": {
+"kind": "doc",
+"label": "MDB",
+"type": "application/vnd.ms-access"
+},
+"zz-application-zz-winassoc-uu": {
+"kind": "text",
+"label": "UUE",
+"type": "text/x-uuencode"
+},
+"zz-application-zz-winassoc-xls": {
+"kind": "sheet",
+"label": "XLS",
+"type": "application/vnd.ms-excel"
+}
+}

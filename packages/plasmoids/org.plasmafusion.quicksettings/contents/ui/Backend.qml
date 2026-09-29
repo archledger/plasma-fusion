@@ -1,0 +1,581 @@
+// SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+import QtQuick
+import org.kde.kirigami as Kirigami
+import org.kde.plasma.workspace.dbus as DBus
+
+import "components"
+
+// Every data source behind one null-safe object. Each service lives in its own
+// file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
+// no KDE Connect, ...) only disables that one feature.
+Item {
+    id: backend
+
+    // ---- Set by main.qml
+    property bool popupOpen: false
+    property bool showKeyboardLayout: true
+    property bool keyboardLayoutAlways: true
+    property bool showKdeConnect: true
+    property bool showClipboard: true
+    property bool showBatteryPercent: true
+    property bool showNotifications: true
+    property string lightLookAndFeel: "org.plasmafusion.light.desktop"
+    property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
+    // Page of the pop-up: "main", "wifi", "bluetooth" or "audio".
+    property string page: "main"
+    // The pop-up was opened from the bell: show the notification list even when empty.
+    property bool showEmptyNotifications: false
+
+    // Asks the owner to close the pop-up (after launching something).
+    signal closeRequested()
+
+    readonly property FusionPalette pal: FusionPalette {
+        dark: {
+            const c = Kirigami.Theme.backgroundColor;
+            return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
+        }
+        accent: Kirigami.Theme.highlightColor
+        accentSoft: Kirigami.Theme.hoverColor
+        focus: Kirigami.Theme.focusColor
+        link: Kirigami.Theme.linkColor
+        fontFamily: Kirigami.Theme.defaultFont.family
+    }
+
+    function dbus(service: string, path: string, iface: string, member: string, args, signature: string) {
+        const message = { service: service, path: path, iface: iface, member: member };
+        if (args && args.length > 0) {
+            message.arguments = args;
+            message.signature = signature;
+        }
+        DBus.SessionBus.asyncCall(message);
+    }
+
+    // ------------------------------------------------------------------ loaders
+    Loader { id: netLoader; asynchronous: true; source: "services/Network.qml" }
+    Loader { id: audioLoader; asynchronous: true; source: "services/Audio.qml" }
+    Loader { id: batteryLoader; asynchronous: true; source: "services/Battery.qml" }
+    Loader { id: profilesLoader; asynchronous: true; source: "services/PowerProfiles.qml" }
+    Loader { id: displayLoader; asynchronous: true; source: "services/Display.qml" }
+    Loader { id: mediaLoader; asynchronous: true; source: "services/Media.qml" }
+    Loader { id: notifLoader; asynchronous: true; source: "services/Notifications.qml" }
+    Loader { id: kbdLoader; asynchronous: true; source: "services/Keyboard.qml" }
+    // Only when the phone button is wanted: the model D-Bus-activates kdeconnectd.
+    Loader { id: phoneLoader; asynchronous: true; active: backend.showKdeConnect; source: "services/KdeConnect.qml" }
+    Loader { id: btLoader; asynchronous: true; source: "services/Bluetooth.qml" }
+    Loader { id: sessionLoader; asynchronous: true; source: "services/Session.qml" }
+    Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
+
+    readonly property var sessionService: sessionLoader.item
+    readonly property var execService: execLoader.item
+
+    Binding {
+        target: netLoader.item
+        property: "listVisible"
+        value: backend.popupOpen && backend.page === "wifi"
+        when: netLoader.item !== null
+    }
+    Binding {
+        target: profilesLoader.item
+        property: "silent"
+        value: backend.popupOpen
+        when: profilesLoader.item !== null
+    }
+    Binding {
+        target: displayLoader.item
+        property: "silent"
+        value: backend.popupOpen
+        when: displayLoader.item !== null
+    }
+
+    function openSettings(kcm: string, args) {
+        if (sessionService) {
+            sessionService.openSettings(kcm, args || []);
+        }
+        backend.closeRequested();
+    }
+    function run(command: string): bool {
+        if (execService) {
+            execService.run(command);
+            return true;
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------ network
+    readonly property var net: QtObject {
+        readonly property var s: netLoader.item
+        readonly property bool available: !!s
+        readonly property bool wifiDevice: s ? s.wifiDevice : false
+        readonly property bool wifiEnabled: s ? s.wifiEnabled : false
+        readonly property bool wifiHwEnabled: s ? s.wifiHwEnabled : false
+        readonly property bool airplane: s ? s.airplane : false
+        readonly property string ssid: s ? s.ssid : ""
+        readonly property bool connecting: s ? s.connecting : false
+        readonly property string kind: s ? s.kind : "none"
+        readonly property int level: s ? s.level : 0
+        readonly property var activeModel: s ? s.activeModel : null
+        readonly property var otherModel: s ? s.otherModel : null
+        readonly property bool scanning: s ? s.scanning : false
+        readonly property bool checked: wifiDevice && wifiEnabled && !airplane
+        readonly property string subtitle: {
+            if (!available) {
+                return i18nc("@info:status network", "Unavailable");
+            }
+            if (airplane) {
+                return i18nc("@info:status", "Airplane mode");
+            }
+            if (!wifiDevice) {
+                return kind === "wired" ? i18nc("@info:status", "Wired connection") : i18nc("@info:status", "Unavailable");
+            }
+            if (!wifiHwEnabled) {
+                return i18nc("@info:status Wi-Fi switched off by a hardware switch", "Off (hardware switch)");
+            }
+            if (!wifiEnabled) {
+                return i18nc("@info:status Wi-Fi", "Off");
+            }
+            if (connecting) {
+                return i18nc("@info:status", "Connecting…");
+            }
+            if (ssid.length > 0) {
+                return ssid;
+            }
+            return i18nc("@info:status Wi-Fi", "Not connected");
+        }
+        function setWifiEnabled(on: bool) {
+            if (s) {
+                s.setWifiEnabled(on);
+            }
+        }
+        function toggle() {
+            if (s && wifiDevice && wifiHwEnabled && !airplane) {
+                s.setWifiEnabled(!wifiEnabled);
+            }
+        }
+        function scan() {
+            if (s) {
+                s.scan();
+            }
+        }
+        function activate(connectionPath: string, devicePath: string, specificPath: string) {
+            if (s) {
+                s.activate(connectionPath, devicePath, specificPath);
+            }
+        }
+        function addAndActivate(devicePath: string, specificPath: string, password: string) {
+            if (s) {
+                s.addAndActivate(devicePath, specificPath, password);
+            }
+        }
+        function deactivate(connectionPath: string, devicePath: string) {
+            if (s) {
+                s.deactivate(connectionPath, devicePath);
+            }
+        }
+        function setStatistics(devicePath: string, on: bool) {
+            if (s) {
+                s.setStatistics(devicePath, on);
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_networkmanagement", []);
+        }
+    }
+
+    // ------------------------------------------------------------------ audio
+    readonly property var audio: QtObject {
+        readonly property var s: audioLoader.item
+        readonly property bool available: s ? s.available : false
+        readonly property real volume: s ? s.volume : 0
+        readonly property bool muted: s ? s.muted : true
+        readonly property string deviceName: s ? s.deviceName : ""
+        readonly property var sinkModel: s ? s.sinkModel : null
+        readonly property int sinkCount: s ? s.sinkCount : 0
+        function setVolume(fraction: real) {
+            if (s) {
+                s.setVolume(fraction);
+            }
+        }
+        function toggleMute() {
+            if (s) {
+                s.toggleMute();
+            }
+        }
+        function setDefault(pulseObject) {
+            if (s) {
+                s.setDefault(pulseObject);
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_pulseaudio", []);
+        }
+    }
+
+    // ------------------------------------------------------------------ battery
+    readonly property var battery: QtObject {
+        readonly property var s: batteryLoader.item
+        readonly property bool present: s ? s.present : false
+        readonly property int percent: s ? s.percent : 0
+        readonly property bool charging: s ? s.charging : false
+        readonly property bool pluggedIn: s ? s.pluggedIn : false
+        readonly property bool full: s ? s.full : false
+        readonly property real remainingMsec: s ? s.remainingMsec : 0
+        function openSettings() {
+            backend.openSettings("kcm_powerdevilprofilesconfig", []);
+        }
+    }
+
+    // ------------------------------------------------------------------ brightness
+    readonly property var display: QtObject {
+        readonly property var s: displayLoader.item
+        readonly property bool brightnessAvailable: s ? s.brightnessAvailable : false
+        readonly property real brightness: s ? s.brightness : 0
+        readonly property string label: s ? s.displayLabel : ""
+        function setBrightness(fraction: real) {
+            if (s) {
+                s.setBrightness(fraction);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ night light
+    readonly property var night: QtObject {
+        readonly property var s: displayLoader.item
+        readonly property bool available: s ? s.nightAvailable : false
+        readonly property bool enabled: s ? s.nightEnabled : false
+        readonly property bool inhibited: s ? s.nightInhibited : false
+        readonly property int mode: s ? s.nightMode : 0
+        readonly property bool daylight: s ? s.nightDaylight : true
+        readonly property bool warm: s ? s.nightActive : false
+        readonly property double nextTransition: s ? s.nightNextTransition : 0
+        readonly property bool checked: available && enabled && !inhibited && (mode === 3 || warm || !daylight)
+        readonly property string subtitle: {
+            if (!available) {
+                return i18nc("@info:status Night Light", "Unavailable");
+            }
+            if (!enabled) {
+                return i18nc("@info:status Night Light", "Off");
+            }
+            if (inhibited) {
+                return i18nc("@info:status Night Light", "Paused");
+            }
+            if (mode === 3) {
+                return i18nc("@info:status Night Light", "On");
+            }
+            const time = nextTransition > 0
+                ? Qt.formatTime(new Date(nextTransition), Qt.locale().timeFormat(Locale.ShortFormat))
+                : "";
+            if (checked) {
+                return mode === 2 && time ? i18nc("@info:status Night Light, %1 is a time", "Until %1", time)
+                                          : i18nc("@info:status Night Light", "Until sunrise");
+            }
+            return mode === 2 && time ? i18nc("@info:status Night Light, %1 is a time", "From %1", time)
+                                      : i18nc("@info:status Night Light", "From sunset");
+        }
+        function toggle() {
+            if (!available) {
+                backend.openSettings("kcm_nightlight", []);
+                return;
+            }
+            if (!enabled) {
+                // KWin's Night Light reloads its settings through KConfigWatcher, which
+                // only hears writes made with --notify (a plain write or KWin's
+                // reconfigure() leaves it off).
+                if (!backend.run("kwriteconfig6 --notify --file kwinrc --group NightColor --key Active true")) {
+                    backend.openSettings("kcm_nightlight", []);
+                }
+                return;
+            }
+            if (s) {
+                s.toggleNightLightInhibition();
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_nightlight", []);
+        }
+    }
+    // ------------------------------------------------------------------ do not disturb
+    readonly property var dnd: QtObject {
+        readonly property var s: notifLoader.item
+        readonly property bool available: s ? s.serverValid : false
+        readonly property bool active: s ? s.dndActive : false
+        readonly property string subtitle: {
+            if (!active) {
+                return i18nc("@info:status Do not disturb", "Off");
+            }
+            const until = s ? s.dndUntilText : "";
+            return until ? i18nc("@info:status Do not disturb, %1 is a time", "Until %1", until)
+                         : i18nc("@info:status Do not disturb", "On");
+        }
+        function toggle() {
+            if (s) {
+                s.toggleDnd();
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_notifications", []);
+        }
+    }
+
+    // ------------------------------------------------------------------ power profile
+    readonly property var profile: QtObject {
+        readonly property var s: profilesLoader.item
+        readonly property bool available: s ? s.available : false
+        readonly property string active: s ? s.active : ""
+        readonly property var order: ["power-saver", "balanced", "performance"]
+        readonly property bool checked: available && active !== "" && active !== "balanced"
+        readonly property string subtitle: {
+            if (!available) {
+                return i18nc("@info:status power profiles", "Unavailable");
+            }
+            switch (active) {
+            case "power-saver":
+                return i18nc("@info:status power profile", "Power saver");
+            case "performance":
+                return i18nc("@info:status power profile", "Performance");
+            case "balanced":
+                return i18nc("@info:status power profile", "Balanced");
+            default:
+                return active;
+            }
+        }
+        function cycle() {
+            if (!s || !available) {
+                backend.openSettings("kcm_powerdevilprofilesconfig", []);
+                return;
+            }
+            const choices = order.filter(p => s.list.indexOf(p) !== -1);
+            if (choices.length === 0) {
+                return;
+            }
+            const next = choices[(choices.indexOf(active) + 1) % choices.length];
+            // Performance may be inhibited (for example on battery); the subtitle then stays.
+            s.setProfile(next);
+        }
+    }
+
+    // ------------------------------------------------------------------ dark style
+    readonly property var darkStyle: QtObject {
+        readonly property var s: displayLoader.item
+        readonly property bool checked: backend.pal.dark
+        readonly property string subtitle: checked ? i18nc("@info:status Dark style", "On") : i18nc("@info:status Dark style", "Off")
+        function toggle() {
+            const wantDark = !checked;
+            const current = s ? String(s.currentTheme) : "";
+            const other = s ? String(s.otherTheme) : "";
+            const fusionCurrent = current.indexOf("Plasma Fusion") === 0;
+            const fusionPairing = fusionCurrent && other.indexOf("Plasma Fusion") === 0;
+            // 1. The light/dark pairing in kdeglobals is set up (for example by the
+            //    Plasma Fusion Global Theme, or by the user): use it, like Plasma's own switch.
+            if (s && (fusionPairing || !fusionCurrent) && s.darkModeFromPairing !== wantDark) {
+                s.setDarkMode(wantDark);
+                return;
+            }
+            // 2. A Plasma Fusion theme is active but not paired: switch to its twin.
+            const target = wantDark ? backend.darkLookAndFeel : backend.lightLookAndFeel;
+            const safe = target.replace(/[^A-Za-z0-9._-]/g, "");
+            if (safe.length > 0) {
+                backend.run("sh -c \"plasma-apply-lookandfeel --list | grep -qxF '" + safe + "' && plasma-apply-lookandfeel -a '" + safe + "'\"");
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ media
+    readonly property var media: QtObject {
+        readonly property var s: mediaLoader.item
+        readonly property bool available: s ? s.available : false
+        readonly property bool playing: s ? s.playing : false
+        readonly property string title: s ? (s.track || s.identity) : ""
+        readonly property string subtitle: {
+            if (!s) {
+                return "";
+            }
+            if (playing) {
+                return s.artist || s.identity;
+            }
+            const paused = i18nc("@info:status media player", "Paused");
+            return s.artist ? i18nc("@info:status %1 artist, %2 the word Paused", "%1 · %2", s.artist, paused) : paused;
+        }
+        readonly property string artUrl: s ? s.artUrl : ""
+        readonly property string iconName: s ? s.iconName : ""
+        readonly property bool canPrevious: s ? s.canPrevious : false
+        readonly property bool canNext: s ? s.canNext : false
+        readonly property bool canPlayPause: s ? s.canPlayPause : false
+        readonly property bool canRaise: s ? s.canRaise : false
+        function previous() {
+            if (s) {
+                s.previous();
+            }
+        }
+        function next() {
+            if (s) {
+                s.next();
+            }
+        }
+        function playPause() {
+            if (s) {
+                s.playPause();
+            }
+        }
+        function raise() {
+            if (s && s.canRaise) {
+                s.raise();
+                backend.closeRequested();
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ notifications
+    readonly property var notif: QtObject {
+        readonly property var s: notifLoader.item
+        readonly property bool available: !!s && backend.showNotifications
+        readonly property var model: s ? s.model : null
+        readonly property int count: s ? s.count : 0
+        readonly property int unread: s ? s.unread : 0
+        function invokeAction(row: int, actionName: string, resident: bool) {
+            if (s) {
+                s.invokeAction(row, actionName, resident);
+            }
+        }
+        function close(row: int) {
+            if (s) {
+                s.close(row);
+            }
+        }
+        function configure(row: int) {
+            if (s) {
+                s.configure(row);
+                backend.closeRequested();
+            }
+        }
+        function killJob(row: int) {
+            if (s) {
+                s.killJob(row);
+            }
+        }
+        function clearAll() {
+            if (s) {
+                s.clearAll();
+            }
+        }
+        function markRead() {
+            if (s) {
+                s.markRead();
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ keyboard layout
+    readonly property var kbd: QtObject {
+        readonly property var s: kbdLoader.item
+        readonly property bool available: s ? s.available : false
+        readonly property int count: s ? s.count : 0
+        readonly property string label: s ? s.label : ""
+        readonly property string longName: s ? s.longName : ""
+        readonly property bool shown: backend.showKeyboardLayout && available && label.length > 0
+                                      && (backend.keyboardLayoutAlways || count > 1)
+        function next() {
+            if (s) {
+                s.next();
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ KDE Connect
+    readonly property var phone: QtObject {
+        readonly property var s: phoneLoader.item
+        readonly property int connectedCount: s ? s.connectedCount : 0
+        readonly property string deviceName: s ? s.deviceName : ""
+        readonly property bool shown: backend.showKdeConnect && connectedCount > 0
+        function open() {
+            backend.run("sh -c 'kdeconnect-app >/dev/null 2>&1 &'");
+            backend.closeRequested();
+        }
+    }
+
+    // ------------------------------------------------------------------ bluetooth
+    readonly property var bt: QtObject {
+        readonly property var s: btLoader.item
+        readonly property bool available: s ? s.available : false
+        readonly property bool enabled: s ? s.powered : false
+        readonly property int connectedCount: s ? s.connectedCount : 0
+        readonly property var devicesModel: s ? s.devicesModel : null
+        readonly property bool checked: available && enabled
+        readonly property string subtitle: {
+            if (!available) {
+                return i18nc("@info:status Bluetooth", "Unavailable");
+            }
+            if (!enabled) {
+                return i18nc("@info:status Bluetooth", "Off");
+            }
+            if (connectedCount === 1 && s.firstConnectedName) {
+                return s.firstConnectedName;
+            }
+            if (connectedCount > 0) {
+                return i18ncp("@info:status Bluetooth", "%1 connected", "%1 connected", connectedCount);
+            }
+            return i18nc("@info:status Bluetooth", "On");
+        }
+        function setEnabled(on: bool) {
+            if (s) {
+                s.setEnabled(on);
+            }
+        }
+        function toggle() {
+            if (s && available) {
+                s.setEnabled(!enabled);
+            }
+        }
+        function toggleDevice(device, ubi: string, connected: bool) {
+            if (s) {
+                s.toggleDevice(device, ubi, connected);
+            }
+        }
+        function pairNew() {
+            if (s) {
+                s.pairNew();
+                backend.closeRequested();
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_bluetooth", []);
+        }
+    }
+
+    // ------------------------------------------------------------------ session / header buttons
+    readonly property var session: QtObject {
+        readonly property var s: sessionLoader.item
+        readonly property bool canLock: s ? s.canLock : false
+        function screenshot() {
+            backend.closeRequested();
+            screenshotTimer.restart();
+        }
+        function openSystemSettings() {
+            backend.openSettings("", []);
+        }
+        function lock() {
+            backend.closeRequested();
+            if (s) {
+                s.lock();
+            }
+        }
+        function leave() {
+            backend.closeRequested();
+            if (s) {
+                s.leave();
+            }
+        }
+        function openClipboard() {
+            backend.closeRequested();
+            backend.dbus("org.kde.klipper", "/klipper", "org.kde.klipper.klipper", "showKlipperPopupMenu", [], "");
+        }
+    }
+    Timer {
+        id: screenshotTimer
+        // Let the pop-up close first so it is not in the picture.
+        interval: 250
+        onTriggered: backend.dbus("org.kde.kglobalaccel", "/component/org_kde_spectacle_desktop", "org.kde.kglobalaccel.Component",
+                                  "invokeShortcut", [new DBus.string("RectangularRegionScreenShot")], "(s)")
+    }
+}

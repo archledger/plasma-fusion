@@ -1,0 +1,163 @@
+/* SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Plasma Fusion additions for GTK 4 applications: libadwaita (GNOME) applications, which ignore
+ * GTK themes, and plain GTK 4 applications drawn with the Breeze GTK theme.
+ *
+ * libadwaita builds its whole palette from the named colours and CSS variables below. They are
+ * mapped to the named colours kde-gtk-config writes to colors.css for the active KDE colour scheme,
+ * so GNOME applications take the Plasma Fusion Dark or Light colours, the exact accent (#2F6FDF
+ * rather than the nearest of libadwaita's nine accents) and follow scheme changes.
+ * Geometry stays libadwaita's (9 px buttons, close to the design's 10 px) except menus and
+ * pop-overs (14 px, 8 px items), the focus ring (solid accent ring with a 2 px gap) and solid
+ * destructive buttons.
+ */
+
+/* --- libadwaita palette (named colours, libadwaita 1.9 reads them through its variables) --- */
+@define-color accent_bg_color @theme_selected_bg_color_breeze;
+@define-color accent_fg_color @theme_selected_fg_color_breeze;
+@define-color accent_color @link_color_breeze;
+@define-color destructive_bg_color #c93a42;
+@define-color destructive_fg_color #ffffff;
+@define-color destructive_color @error_color_breeze;
+@define-color error_bg_color #c93a42;
+@define-color error_fg_color #ffffff;
+@define-color error_color @error_color_breeze;
+@define-color success_color @success_color_breeze;
+@define-color warning_color @warning_color_breeze;
+@define-color window_bg_color @theme_bg_color_breeze;
+@define-color window_fg_color @theme_fg_color_breeze;
+@define-color view_bg_color @theme_base_color_breeze;
+@define-color view_fg_color @theme_text_color_breeze;
+@define-color headerbar_bg_color @theme_header_background_breeze;
+@define-color headerbar_fg_color @theme_header_foreground_breeze;
+@define-color headerbar_border_color @theme_header_foreground_breeze;
+@define-color headerbar_backdrop_color @theme_header_background_backdrop_breeze;
+@define-color sidebar_bg_color @theme_bg_color_breeze;
+@define-color sidebar_fg_color @theme_fg_color_breeze;
+@define-color sidebar_backdrop_color @theme_unfocused_bg_color_breeze;
+@define-color secondary_sidebar_bg_color @theme_bg_color_breeze;
+@define-color secondary_sidebar_fg_color @theme_fg_color_breeze;
+@define-color secondary_sidebar_backdrop_color @theme_unfocused_bg_color_breeze;
+@define-color card_bg_color @theme_base_color_breeze;
+@define-color card_fg_color @theme_text_color_breeze;
+@define-color dialog_bg_color @theme_bg_color_breeze;
+@define-color dialog_fg_color @theme_fg_color_breeze;
+@define-color popover_bg_color shade(@theme_base_color_breeze, 1.1);
+@define-color popover_fg_color @theme_text_color_breeze;
+@define-color thumbnail_bg_color @theme_base_color_breeze;
+@define-color thumbnail_fg_color @theme_text_color_breeze;
+
+/* The same through libadwaita's CSS variables, at user priority, so they also win over the
+ * accent libadwaita takes from the desktop portal (which it rounds to one of its own accents). */
+:root {
+  --accent-bg-color: @accent_bg_color;
+  --accent-fg-color: @accent_fg_color;
+  --accent-color: @accent_color;
+  --destructive-bg-color: @destructive_bg_color;
+  --destructive-fg-color: @destructive_fg_color;
+  --destructive-color: @destructive_color;
+  --error-bg-color: @error_bg_color;
+  --error-fg-color: @error_fg_color;
+  --error-color: @error_color;
+  --success-color: @success_color;
+  --warning-color: @warning_color;
+  --window-bg-color: @window_bg_color;
+  --window-fg-color: @window_fg_color;
+  --view-bg-color: @view_bg_color;
+  --view-fg-color: @view_fg_color;
+  --headerbar-bg-color: @headerbar_bg_color;
+  --headerbar-fg-color: @headerbar_fg_color;
+  --headerbar-border-color: @headerbar_border_color;
+  --headerbar-backdrop-color: @headerbar_backdrop_color;
+  --sidebar-bg-color: @sidebar_bg_color;
+  --sidebar-fg-color: @sidebar_fg_color;
+  --sidebar-backdrop-color: @sidebar_backdrop_color;
+  --secondary-sidebar-bg-color: @secondary_sidebar_bg_color;
+  --secondary-sidebar-fg-color: @secondary_sidebar_fg_color;
+  --secondary-sidebar-backdrop-color: @secondary_sidebar_backdrop_color;
+  --card-bg-color: @card_bg_color;
+  --card-fg-color: @card_fg_color;
+  --dialog-bg-color: @dialog_bg_color;
+  --dialog-fg-color: @dialog_fg_color;
+  --popover-bg-color: @popover_bg_color;
+  --popover-fg-color: @popover_fg_color;
+  --thumbnail-bg-color: @thumbnail_bg_color;
+  --thumbnail-fg-color: @thumbnail_fg_color;
+}
+
+/* --- destructive buttons: a solid red fill with white text, as on the board --------------- */
+button.destructive-action:not(.flat),
+menubutton.destructive-action:not(.flat) > button {
+  background-color: @destructive_bg_color;
+  color: @destructive_fg_color;
+}
+
+button.destructive-action:not(.flat):hover {
+  background-color: shade(@destructive_bg_color, 1.08);
+}
+
+button.destructive-action:not(.flat):active {
+  background-color: shade(@destructive_bg_color, 0.9);
+}
+
+/* --- accent fills: switch on, slider fill and progress in the solid accent -------------------
+ * For plain GTK 4 applications drawn with Breeze, which tints them with the hover colour at
+ * 33-50 % (a pale blue); libadwaita already fills them with the accent, so nothing changes there.
+ * Disabled controls keep the theme's own look (a rule here would outrank its :disabled rules). */
+switch:checked:not(:disabled),
+scale highlight:not(:disabled),
+progressbar progress:not(:disabled) {
+  background: @accent_bg_color;
+  border-color: @accent_bg_color;
+}
+
+/* slider knob: white with a soft shadow and a 1 px edge in both schemes, as on the board
+ * (libadwaita's dark knob is light grey) */
+scale slider:not(:disabled) {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35), 0 0 0 1px alpha(@theme_fg_color_breeze, 0.14);
+}
+
+/* --- menus and pop-overs: 14 px corners, 8 px items ---------------------------------------- */
+popover > contents,
+popover.menu > contents {
+  border-radius: 14px;
+}
+
+popover.menu modelbutton {
+  border-radius: 8px;
+}
+
+popover.menu modelbutton:hover,
+popover.menu modelbutton:selected {
+  background-color: alpha(@theme_button_decoration_hover_breeze, 0.16);
+  color: mix(@link_color_breeze, @theme_text_color_breeze, 0.3);
+}
+
+tooltip,
+tooltip.background {
+  border-radius: 8px;
+}
+
+/* --- focus: a solid ring in the scheme's focus colour, 2 px wide with a 2 px gap ------------ */
+button:focus:focus-visible,
+menubutton > button:focus:focus-visible,
+dropdown > button:focus:focus-visible,
+switch:focus:focus-visible {
+  outline-color: @theme_button_decoration_focus_breeze;
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+
+checkbutton:focus:focus-visible,
+row:focus:focus-visible {
+  outline-color: @theme_button_decoration_focus_breeze;
+}
+
+entry:focus-within,
+spinbutton:focus-within,
+searchbar entry:focus-within {
+  outline-color: @theme_button_decoration_focus_breeze;
+  box-shadow: 0 0 0 3px alpha(@theme_button_decoration_focus_breeze, 0.18);
+}

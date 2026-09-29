@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Yifan Zhu <fanzhuyifan@gmail.com>
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+singleton PasswordSync 1.0 PasswordSync.qml
+singleton PfStyle 1.0 PfStyle.qml
+singleton LockNotifications 1.0 LockNotifications.qml

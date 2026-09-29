@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Authors": [{"Name": "Wisbendji Fimerlus", "Email": "archledger236@gmail.com"}],
+        "Description": "Test-only widget for Plasma style screenshots",
+        "Icon": "battery-080",
+        "Id": "org.plasmafusion.pstest",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma style test",
+        "Version": "1.0"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

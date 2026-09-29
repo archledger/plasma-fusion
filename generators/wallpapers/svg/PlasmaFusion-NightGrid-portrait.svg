@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1920" viewBox="460 -572 1000 1600">
+<title>Plasma Fusion Night Grid</title>
+<desc>SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus; SPDX-License-Identifier: CC-BY-SA-4.0</desc>
+<rect x="458" y="-574" width="1004" height="1604" fill="#0b0e18"/>
+<rect x="458" y="180" width="1004" height="160" fill="#0e101d"/>
+<rect x="458" y="340" width="1004" height="690" fill="#111424"/>
+<circle cx="1010" cy="360" r="212" fill="none" stroke="#8ab8ff" stroke-opacity="0.18" stroke-width="2"/>
+<circle cx="1010" cy="360" r="150" fill="#8ab8ff"/>
+<path d="M0 560 L180 430 L330 505 L520 350 L700 485 L860 405 L1060 520 L1240 385 L1440 470 L1462 479.35 L1462 1030 L0 1030 Z" fill="#181f39"/>
+<path d="M0 650 L220 545 L420 620 L640 505 L880 612 L1100 540 L1300 622 L1440 580 L1462 573.4 L1462 1030 L0 1030 Z" fill="#1f2a4d"/>
+<path d="M0 760 L260 662 L520 732 L780 642 L1040 722 L1280 662 L1440 702 L1462 707.5 L1462 1030 L0 1030 Z" fill="#27355f"/>
+<path d="M0 846 L300 786 L600 834 L900 774 L1200 824 L1440 792 L1462 789.07 L1462 1030 L0 1030 Z" fill="#33457a"/>
+</svg>

@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Shell",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Description": "Plasma Fusion lock screen; every other shell file comes from the Plasma desktop shell",
+        "Icon": "system-lock-screen",
+        "Id": "org.plasmafusion.lockshell",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Lock Screen",
+        "Version": "1.0",
+        "Website": ""
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell",
+    "X-Plasma-APIVersion": "2",
+    "X-Plasma-FallbackPackage": "org.kde.plasma.desktop"
+}

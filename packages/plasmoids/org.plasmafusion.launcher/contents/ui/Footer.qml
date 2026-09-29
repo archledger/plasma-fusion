@@ -1,0 +1,235 @@
+/*
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+*/
+
+import QtQuick
+import QtQuick.Templates as T
+import org.kde.coreaddons as KCoreAddons
+import org.kde.kirigami as Kirigami
+import org.kde.kcmutils as KCMUtils
+import org.kde.plasma.private.sessions as Sessions
+
+// User row and session buttons (62 px, darker band, 1 px top edge). The band spans the
+// whole card width and follows the card's bottom corner radius.
+FocusScope {
+    id: footer
+
+    property FusionColors pal
+    property string fontFamily
+    property var launcher
+    property real cornerRadius: 21
+
+    readonly property alias firstButton: accountButton
+    readonly property alias lastButton: powerButton
+
+    signal exitTop()
+    signal tabFromLast()
+    signal backtabFromFirst()
+
+    implicitHeight: 62
+
+    KCoreAddons.KUser {
+        id: user
+    }
+
+    Sessions.SessionManagement {
+        id: session
+    }
+
+    readonly property string displayName: user.fullName.length > 0 ? user.fullName : user.loginName
+
+    Kirigami.ShadowedRectangle {
+        anchors.fill: parent
+        color: footer.pal.footer
+        corners.topLeftRadius: 0
+        corners.topRightRadius: 0
+        corners.bottomLeftRadius: footer.cornerRadius
+        corners.bottomRightRadius: footer.cornerRadius
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 1
+        color: footer.pal.footerEdge
+    }
+
+    // Avatar, name and account type. Opens the Users settings page.
+    T.AbstractButton {
+        id: accountButton
+        // The avatar sits 24 px from the card edge (board); the hover pill reaches 6 px around it.
+        x: 18
+        anchors.verticalCenter: parent.verticalCenter
+        implicitWidth: accountRow.implicitWidth + 20
+        implicitHeight: 44
+        hoverEnabled: true
+        focusPolicy: Qt.TabFocus
+        Accessible.role: Accessible.Button
+        Accessible.name: footer.displayName
+        Accessible.description: i18nc("@info:tooltip", "Open user account settings")
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
+        Keys.onBacktabPressed: footer.backtabFromFirst()
+        onClicked: {
+            footer.launcher.close();
+            KCMUtils.KCMLauncher.openSystemSettings("kcm_users");
+        }
+
+        background: Rectangle {
+            radius: 22
+            color: accountButton.hovered ? footer.pal.tint(0.05) : "transparent"
+            antialiasing: true
+
+            FocusRing {
+                visible: accountButton.visualFocus
+                baseRadius: 22
+                ringColor: footer.pal.focusRing
+            }
+        }
+
+        contentItem: Item {
+            Row {
+                id: accountRow
+                x: 6
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 12
+
+                Item {
+                    width: 36
+                    height: 36
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 18
+                        color: footer.pal.avatar
+                        antialiasing: true
+                        visible: face.status !== Image.Ready
+
+                        FusionText {
+                            anchors.centerIn: parent
+                            text: footer.displayName.length > 0 ? footer.displayName.charAt(0).toUpperCase() : ""
+                            color: "#ffffff"
+                            family: footer.fontFamily
+                            px: 15
+                            weight: 800
+                        }
+                    }
+
+                    Kirigami.ShadowedTexture {
+                        anchors.fill: parent
+                        radius: 18
+                        color: "transparent"
+                        visible: face.status === Image.Ready
+                        source: Image {
+                            id: face
+                            source: user.faceIconUrl
+                            sourceSize.width: 72
+                            sourceSize.height: 72
+                            fillMode: Image.PreserveAspectCrop
+                            cache: false
+                            visible: false
+                        }
+                    }
+                }
+
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 1
+
+                    FusionText {
+                        text: footer.displayName
+                        color: footer.pal.text
+                        family: footer.fontFamily
+                        px: 13
+                        weight: 800
+                    }
+
+                    FusionText {
+                        text: i18nc("@info kind of user account", "Local account")
+                        color: footer.pal.muted
+                        family: footer.fontFamily
+                        px: 11.5
+                    }
+                }
+            }
+        }
+    }
+
+    Row {
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 8
+
+        RoundButton {
+            id: lockButton
+            pal: footer.pal
+            glyph: "lock"
+            text: i18nc("@action:button", "Lock")
+            enabled: session.canLock
+            onClicked: {
+                footer.launcher.close();
+                session.lock();
+            }
+        }
+
+        RoundButton {
+            id: sleepButton
+            pal: footer.pal
+            glyph: "sleep"
+            text: i18nc("@action:button", "Sleep")
+            enabled: session.canSuspend
+            onClicked: {
+                footer.launcher.close();
+                session.suspend();
+            }
+        }
+
+        RoundButton {
+            id: restartButton
+            pal: footer.pal
+            glyph: "restart"
+            text: i18nc("@action:button", "Restart")
+            enabled: session.canReboot
+            onClicked: {
+                footer.launcher.close();
+                session.requestReboot();
+            }
+        }
+
+        RoundButton {
+            id: powerButton
+            pal: footer.pal
+            glyph: "power"
+            danger: true
+            text: i18nc("@action:button", "Shut Down")
+            enabled: session.canShutdown
+            Keys.onTabPressed: footer.tabFromLast()
+            onClicked: {
+                footer.launcher.close();
+                session.requestShutdown();
+            }
+        }
+    }
+
+    Keys.onUpPressed: footer.exitTop()
+    Keys.onLeftPressed: event => {
+        event.accepted = footer.moveFocus(-1);
+    }
+    Keys.onRightPressed: event => {
+        event.accepted = footer.moveFocus(1);
+    }
+
+    function moveFocus(step: int): bool {
+        const order = [accountButton, lockButton, sleepButton, restartButton, powerButton].filter(b => b.enabled);
+        const at = order.findIndex(b => b.activeFocus);
+        const next = at + step;
+        if (at < 0 || next < 0 || next >= order.length) {
+            return false;
+        }
+        order[next].forceActiveFocus(Qt.TabFocusReason);
+        return true;
+    }
+}

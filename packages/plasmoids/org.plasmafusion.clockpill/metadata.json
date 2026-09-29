@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Date and Time",
+        "Description": "Workspace dots, date and time in one pill; a click on the date shows the calendar",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system-time",
+        "Id": "org.plasmafusion.clockpill",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Clock Pill",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

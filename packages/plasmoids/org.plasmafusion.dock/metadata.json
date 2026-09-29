@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Windows and Tasks",
+        "Description": "Floating dock with Start, Search and Overview buttons, a magnifying task list, Downloads and Trash",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system-windows",
+        "Id": "org.plasmafusion.dock",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Dock",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": [
+        "org.kde.plasma.multitasking"
+    ]
+}

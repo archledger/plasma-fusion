@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+    http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <entry name="favorites" type="StringList">
+            <label>Default pinned apps, used once when the pinned list is empty. Each entry is a desktop id, a preferred:// URL or several alternatives separated by '|' (the first installed one is pinned).</label>
+            <default>org.kde.dolphin.desktop|org.gnome.Nautilus.desktop,preferred://browser,org.kde.konsole.desktop|org.gnome.Ptyxis.desktop,org.kde.kmail2.desktop|org.mozilla.Thunderbird.desktop|org.gnome.Evolution.desktop,org.kde.kate.desktop|org.kde.kdevelop.desktop|code.desktop|codium.desktop|org.kde.kwrite.desktop|org.gnome.TextEditor.desktop,org.kde.elisa.desktop|org.gnome.Decibels.desktop,org.kde.gwenview.desktop|org.kde.koko.desktop|org.gnome.Loupe.desktop,systemsettings.desktop,org.kde.korganizer.desktop|org.kde.merkuro.calendar.desktop|org.gnome.Calendar.desktop,org.kde.marknote.desktop|org.kde.knotes.desktop,org.kde.kcalc.desktop|org.kde.kalk.desktop|org.gnome.Calculator.desktop,org.kde.discover.desktop|org.gnome.Software.desktop,org.kde.haruna.desktop|org.kde.dragonplayer.desktop|vlc.desktop|org.gnome.Showtime.desktop,org.kde.neochat.desktop,org.kde.marble.desktop|org.gnome.Maps.desktop,org.kde.kweather.desktop|org.gnome.Weather.desktop,org.kde.plasma-systemmonitor.desktop|org.gnome.SystemMonitor.desktop,org.kde.spectacle.desktop</default>
+        </entry>
+        <entry name="favoritesPortedToKAstats" type="Bool">
+            <label>Whether the default pinned apps were written to the shared KActivities store</label>
+            <default>false</default>
+        </entry>
+        <entry name="favoritesClientId" type="String">
+            <label>KActivities client id of the pinned list. Every launcher instance with the same id shares its pins.</label>
+            <default>org.plasmafusion.launcher.favorites</default>
+        </entry>
+        <entry name="designLabels" type="Bool">
+            <label>Show the short design names (Files, Browser, Terminal...) on the pinned tiles of the default apps</label>
+            <default>true</default>
+        </entry>
+        <entry name="buttonStyle" type="String">
+            <label>Panel button: auto (tile in a tall panel, pill in a thin panel), icon (logo only) or hidden (zero size; open with Meta or D-Bus)</label>
+            <default>auto</default>
+        </entry>
+        <entry name="dimBackground" type="Bool">
+            <label>Dim the desktop behind the open launcher</label>
+            <default>true</default>
+        </entry>
+        <entry name="bottomOffset" type="Int">
+            <label>Distance in logical pixels between the bottom screen edge and the bottom of the launcher card (dock height + gap) when no panel reserves that space</label>
+            <default>108</default>
+            <min>0</min>
+            <max>600</max>
+        </entry>
+        <entry name="showRecommended" type="Bool">
+            <label>Show recently used files under the pinned apps</label>
+            <default>true</default>
+        </entry>
+        <entry name="openRequest" type="String">
+            <label>Written by other shell parts through desktop scripting: "search:NONCE" or "apps:NONCE" opens the launcher in that mode</label>
+            <default></default>
+        </entry>
+        <entry name="hiddenApplications" type="StringList">
+            <label>Applications hidden from the menu</label>
+            <default></default>
+        </entry>
+    </group>
+</kcfg>

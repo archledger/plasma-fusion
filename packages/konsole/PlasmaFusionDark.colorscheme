@@ -1,0 +1,106 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion Dark terminal colours. Background, text and grey output are the terminal of
+# design/boards/TabsSnap.dc.html and Overview.dc.html (#0f1320, #cdd3e4, #8f98b3); the ANSI colours
+# come from the design's accent set: teal #3cc4b0 (prompt, cyan), amber #f2a65a (yellow; bold
+# warnings use the board's #f2c38a), blue #5b9dff, purple #9b7bf0, success green #3aa65b and the
+# close-button red lightened to 5.6:1. Normal colours reach 4.5:1 on the background (black is the
+# card colour and is meant for backgrounds).
+
+[General]
+Description=Plasma Fusion Dark
+Opacity=1
+Blur=false
+ColorRandomization=false
+Wallpaper=
+
+[Background]
+Color=15,19,32
+
+[BackgroundIntense]
+Color=23,28,44
+
+[BackgroundFaint]
+Color=15,19,32
+
+[Foreground]
+Color=205,211,228
+
+[ForegroundIntense]
+Color=242,244,248
+
+[ForegroundFaint]
+Color=143,152,179
+
+[Color0]
+Color=38,45,76
+
+[Color0Intense]
+Color=93,102,128
+
+[Color0Faint]
+Color=29,35,58
+
+[Color1]
+Color=236,95,103
+
+[Color1Intense]
+Color=255,138,143
+
+[Color1Faint]
+Color=148,65,75
+
+[Color2]
+Color=58,166,91
+
+[Color2Intense]
+Color=127,217,156
+
+[Color2Faint]
+Color=41,107,67
+
+[Color3]
+Color=242,166,90
+
+[Color3Intense]
+Color=242,195,138
+
+[Color3Faint]
+Color=151,107,67
+
+[Color4]
+Color=91,157,255
+
+[Color4Intense]
+Color=138,184,255
+
+[Color4Faint]
+Color=61,102,166
+
+[Color5]
+Color=155,123,240
+
+[Color5Intense]
+Color=195,166,255
+
+[Color5Faint]
+Color=99,81,157
+
+[Color6]
+Color=60,196,176
+
+[Color6Intense]
+Color=114,220,202
+
+[Color6Faint]
+Color=42,125,118
+
+[Color7]
+Color=205,211,228
+
+[Color7Intense]
+Color=255,255,255
+
+[Color7Faint]
+Color=129,134,150

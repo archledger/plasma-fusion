@@ -1,0 +1,322 @@
+# Part: icons
+
+Two freedesktop icon themes built from the design boards (Icons.dc.html, FileIcons.dc.html,
+AppIcon.dc.html and the line icons used on the other boards):
+
+| Theme | For | Inherits |
+|---|---|---|
+| `PlasmaFusion` ("Plasma Fusion") | light colour schemes | `breeze,hicolor` |
+| `PlasmaFusion-Dark` ("Plasma Fusion Dark") | dark colour schemes | `breeze-dark,hicolor` |
+
+Coloured art is identical in both themes. Symbolic art differs only in the default colours
+written into the SVGs (what GTK and other non-KDE code sees); KDE recolours it from the
+active colour scheme (`FollowsColorScheme=true`).
+
+## What is in the themes
+
+| Family | Drawings | Names per theme | Source |
+|---|---|---|---|
+| App tiles | 18 tiles + Fusion logo tile + logo mark | 245 + 247 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
+| Places | 27 folders (the board's 10 + 17 derived symbols), 10 colour tints, 2 trash cans | 67 (coloured, 16 px, 22 px, `-symbolic`) | FileIcons.dc.html `folder()` |
+| Devices | 12 board devices + 8 derived (laptop, speaker, microphone, webcam, gamepad, touchpad, tablet, scanner) | 59 (+ 64 `-symbolic`) | FileIcons.dc.html `devices[]` |
+| File types | 820 pages: page + coloured extension tag, one per (kind, extension) | 1358 MIME icon names + 18 `-symbolic` | FileIcons.dc.html `file()` |
+| Status | battery (every level, charging, power profile), Wi-Fi, wired, VPN, flight mode, volume, microphone, Bluetooth, notifications, night light, brightness, camera, weather, media player state, software updates, Vaults | 602 | FileIcons.dc.html status groups |
+| Actions | the 24 symbolic icons of Icons.dc.html + the line icons of the other boards + a few derived | 324 | Icons.dc.html, Main, Launcher, QuickSettings, Popups, Controls, Login, Boot |
+| Categories | menu categories (applications-*) | 26 | derived line icons |
+
+In total 899 coloured and 308 symbolic drawings answer 3329 icon names per theme; 372 further
+names are handed back to Breeze (see "Lookup rules" below). About 5.1 MB per theme; each theme
+holds its own copy of the coloured art, so either one works without the other.
+
+Tiles follow the board exactly: 64 x 64 tile, radius 15, 4-unit lip, 9 % sheen, 1-unit
+14 % white edge, glyph layers g1/g2/s1/g3. Text (the calendar's `SEP` / `28`, file-type tags,
+`SD`, `Aa`) is drawn as outlines of Manrope ExtraBold and Space Grotesk Bold, placed like the
+board's CSS (flex centring, line-height 1, letter-spacing after every glyph).
+
+## Files
+
+```
+generators/icons/
+  gen_icons.py        builds both themes (Python standard library only); used by the build
+  names.py            which drawing answers which icon name (apps, places, devices, actions, categories)
+  art_tiles.py        app tiles and logo (AppIcon board)
+  art_files.py        file types, folders, trash, devices (FileIcons board)
+  art_symbolic.py     24-grid symbolic glyphs, status families, colour roles and default palettes
+  svgkit.py           path helpers (rr/ci/el/gear ported from the boards), SVG writer
+  textoutline.py      composes text from glyph outlines
+  glyphs.json         glyph outlines, advances, kerning, metrics   <- make_textpaths.py (PySide6)
+  mimetable.json      MIME icon name -> kind and tag label          <- make_mimetable.py
+  outlines.json       filled outlines of every stroked glyph         <- make_outlines.py (PySide6)
+  capture.json        Breeze names handed back to Breeze             <- make_capture.py
+  validate.py         QtSvg checks and contact sheets (PySide6)
+  compare_boards.py   renders board icons and diffs them against the board renders (PySide6, Pillow)
+  vsession-check.sh        private-session scenario: lookups, Dolphin, launcher, tray, System Settings, Nautilus
+  vsession-globaltheme.sh  private-session scenario: the Global Theme applied, icons in context
+  vsession-review.sh       private-session scenario: every part, dark or light, tray popup and file types
+tools/build.d/30-icons.sh
+```
+
+The build reads only the repository (the four committed JSON tables); it needs Python 3 and no
+PySide6, fonts or network. Output is byte-for-byte reproducible (checked by building twice).
+
+## Build, install, apply
+
+Build (writes only `$STAGE/.local/share/icons/PlasmaFusion` and `.../PlasmaFusion-Dark`):
+
+```
+bash tools/build.sh icons                     # -> stage/home/.local/share/icons/
+STAGE=/some/home bash tools/build.sh icons
+python3 generators/icons/gen_icons.py --out DIR [--copies]   # direct; --copies = no symlinks
+```
+
+Install per user: copy both directories to `~/.local/share/icons/` **with symlinks preserved**
+(`rsync -a` or `cp -a`). Every lookup name is a relative link inside its own theme (into `art/` or
+`glyphs/`); the `breeze/` hand-back links are absolute links into `/usr/share/icons/breeze` or
+`breeze-dark`. The themes do not depend on each other. The SMB share cannot hold symlinks:
+`--copies` exists only for transport, because it leaves out the Breeze hand-back links (System
+Settings would then show the Settings tile for its `preferences-system-*` pages); install a build
+made without `--copies`.
+
+Apply:
+
+* Global Theme (already in `packages/look-and-feel/*/contents/defaults`):
+  `[kdeglobals][Icons] Theme=PlasmaFusion-Dark` (dark) / `Theme=PlasmaFusion` (light).
+* By hand: `/usr/libexec/plasma-changeicons PlasmaFusion-Dark`, or
+  `kwriteconfig6 --file kdeglobals --group Icons --key Theme PlasmaFusion-Dark` and restart apps
+  (KIconLoader caches pixmaps per process).
+* GTK apps follow through kde-gtk-config (`gtk-icon-theme-name` in `~/.config/gtk-{3,4}.0/settings.ini`).
+* System-wide (phase 2, greeter): copy both directories to `/usr/share/icons/` with `cp -a`.
+* Rollback: `/usr/libexec/plasma-changeicons breeze-dark` (or `breeze`), then remove the two directories.
+
+No icon cache is shipped (GTK scans the directories; KDE does not use caches for user themes).
+
+## Lookup rules and decisions
+
+**Sizes.** Places and devices have fixed 16 and 22 px directories (plus `@2x`/`@3x` links, as
+Breeze) holding monochrome line icons, and a scalable coloured directory from 24 px up. The
+design's Files window (Main board) shows line icons in the sidebar at 16 px; the FileIcons board
+shows the coloured folders. Dolphin's Places panel therefore shows the board's line icons, the
+file view shows coloured folders. Verified at the ThinkPad's 4/3 scale: the 16/22 px requests hit
+the `@2x` directories exactly and stay crisp.
+
+**Symbolic art = filled outlines.** GTK 4 recolours `-symbolic` icons by forcing `fill` on every
+path and ignores strokes, so stroked line art rendered as black blobs in Nautilus. Every 1.75 stroke
+(round caps and joins) is converted to its filled outline with Qt's `QPainterPathStroker` (the
+code QtSvg uses to draw strokes), so KDE and GTK render the same shapes. Colour roles use
+`class="ColorScheme-Text"` etc. (KIconLoader) plus GTK's `warning`/`error`/`success` classes.
+Dimmed segments (Wi-Fi arcs, volume waves) use `opacity=".28"` as on the board.
+
+**Default colours** (from Colors.dc.html): light theme Text `#141827`, Neutral `#8f4f12`,
+Negative `#b3262e`, Positive `#23703b`; dark theme Text `#e8ebf4`, Neutral `#f5c08c`, Negative
+`#ff8a8f`, Positive `#7fd99c`. Fixed accents: charging bolt `#f7c948` (dark) / `#e0a008` (light),
+unread-notification dot `#f2a65a` (both, as on MainLight).
+
+**Dash fallback.** KIconLoader (kiconthemes 6.30 `findMatchingIcon`) runs the whole fallback chain
+inside our theme before asking Breeze (`a-b-c` -> `a-b` -> `a`, `x-symbolic` -> `x`, MIME names ->
+`<media>-x-generic`). Consequences handled here:
+
+* every coloured name has a `-symbolic` twin with a line icon;
+* families are shipped in full (battery levels x charging x power profile, Wi-Fi levels x
+  locked/limited, volume and microphone states, weather);
+* `make_capture.py` simulates the chain for every Breeze and hicolor name (laptop and ThinkPad
+  inventories) and hands back the names our prefixes would swallow, e.g. all
+  `preferences-system-*` settings icons (because `preferences-system` is the Settings tile),
+  `image-missing`, `audio-on`, `input-touchpad-on/off`, `printer-error`, `document-edit-*`,
+  `zoom-in-*`. They appear in `breeze/<dir>/` as exact-name links into `/usr/share/icons/breeze`
+  (`breeze-dark` for the dark theme), with Breeze's own size metadata, so System Settings and
+  the OSDs keep Breeze's icons. 211 captured names deliberately keep our drawing
+  (folder-*, drive-*, weather-*, unknown MIME types, ...).
+* `org.gnome.Settings` is not mapped (it only runs under GNOME and its panel icons would fall back
+  to our tile).
+
+**File types.** Every MIME type in shared-mime-info on Fedora 44 (plus aliases and a few legacy
+Breeze names) gets the board's page with a coloured tag showing its main extension (condensed when
+long); the 12 board icons (DOC, XLS, PPT, PDF, PNG, MP3, MP4, ZIP, JS, TXT, TTF, ISO) come out of
+the same table. Unknown types fall back to our generic pages (blank page, TXT, IMG, ...).
+
+**Apps.** Text editors (KWrite, GNOME Text Editor, Kate, ...) share the Code tile: on the ThinkPad
+KWrite fills the dock's Code slot. Notes apps (Marknote, KNotes, KJots, GNOME Notes) use the Notes
+tile. Kontact shares the Mail tile. Apps without a designed tile (Okular, Ark, KDE Connect, GNOME
+extras, Chrome web apps, ...) inherit Breeze/hicolor, as the task allows.
+
+**Light backgrounds.** The board's file pages (`#f6f7fb`) and trash cans (`#e8ebf4`) have no
+outline, so on the light scheme's white views (`[Colors:View] BackgroundNormal=255,255,255`) they
+disappeared and only the coloured tag was left. Pages and trash cans carry a 1-unit rim of
+`#1b2031` at 20 % opacity (the same in both themes); on the boards' dark backgrounds it is barely
+visible (board difference for file types 4.0 -> 5.0).
+
+**Tray and popups.** Names requested by the parts of the stock tray that stay visible in the Fusion
+top bar, and by the popups next to it, are drawn in the board style: `media-playback-playing`,
+`-paused`, `-stopped` (media controller), `update-none`, `update-low`, `update-medium`,
+`update-high`, `update-busy` (Discover notifier), `plasmavault`, `plasmavault-error` (Vaults),
+`media-playlist-shuffle`, `media-playlist-repeat`, `media-playlist-repeat-song`, `window-unpin`,
+`edit-clear-locationbar-ltr/-rtl` (search field clear button), `folder-add`. `edit-copy` is two
+pages; the board's Clipboard symbol answers `edit-paste` and `klipper-symbolic`.
+
+**Launcher logo.** `start-here-kde-symbolic` (the launcher's `Plasmoid.icon`, also stock Kickoff)
+and `plasmafusion-logo` give the logo mark from the Main board top bar and dock: three translucent
+discs without the tile. `start-here-kde`, `start-here-kde-plasma` and `start-here` give the full
+Fusion tile (Welcome Center).
+
+## Names other parts can rely on
+
+Standard names (use these first): app ids above, `user-home`, `folder-*`, `user-trash(-full)`,
+`drive-*`, battery/Wi-Fi/volume families, `notification-active/inactive`, `notifications-disabled`,
+`klipper-symbolic`, `kdeconnect-tray-symbolic`, `device-notifier-symbolic`, `system-search`,
+`window-duplicate`, `go-home`, `download`, `edit-delete`, `system-lock-screen`, `system-shutdown`,
+`system-reboot`, `system-suspend`, `system-log-out`, `configure`, `edit-copy`, `edit-paste`,
+`view-split-left-right`, `window-minimize/maximize/restore/close`, `go-previous/next/up/down`,
+`view-list-icons/details/tree`, `application-menu`, `media-playback-*`, `media-skip-*`,
+`weather-*` (all with `-symbolic`).
+
+Plasma Fusion names for glyphs that have no standard name: `plasmafusion-logo`,
+`plasmafusion-overview`, `plasmafusion-search`, `plasmafusion-snap`, `plasmafusion-screenshot`,
+`plasmafusion-phone`, `plasmafusion-clipboard`, `plasmafusion-settings`,
+`plasmafusion-network-settings`, `plasmafusion-dark-style`, `plasmafusion-night-light`,
+`plasmafusion-dnd`, `plasmafusion-power-mode`, `plasmafusion-appearance`, `plasmafusion-dock`,
+`plasmafusion-topbar`, `plasmafusion-windows`, `plasmafusion-displays`, `plasmafusion-keyboard`,
+`plasmafusion-accessibility`, `plasmafusion-weather`, `plasmafusion-discover`,
+`plasmafusion-installed`, `plasmafusion-3d`, `plasmafusion-photography`, `plasmafusion-meta`,
+`plasmafusion-grid`, `plasmafusion-list`, `plasmafusion-submit`, `plasmafusion-upload`
+(each also as `-symbolic`). `gen_icons.py --out DIR --list-names` prints every shipped name.
+
+## Maintainer tools (rerun when...)
+
+| Tool | Rerun when | Needs |
+|---|---|---|
+| `make_textpaths.py` | fonts or the character set change | PySide6, `fonts/` |
+| `make_mimetable.py` | shared-mime-info changes (Fedora update) | `/usr/share/mime/packages` |
+| `make_outlines.py` | any symbolic glyph changes (the build stops with "run make_outlines.py" otherwise) | PySide6 |
+| `make_capture.py [--extra names.txt]` | names change, breeze-icon-theme updates (built from 6.30.0), or new hicolor apps appear | installed Breeze/hicolor; `--extra` takes a name list from the device |
+
+`validate.py ICONS [--sheets DIR]` and `compare_boards.py ICONS RENDERS OUT` are the checks below.
+
+## Verification
+
+* `validate.py` on the stage: 2414 drawings (both themes, each with its own art) accepted by `QSvgRenderer`, rendered at
+  16/24/32/48/128 px through `QImageReader` (KIconLoader's path) with no Qt warnings; every symbolic
+  drawing passes a KIconLoader-style stylesheet replacement and all opaque pixels take the injected
+  colours; no `<text>`, filters or external references; every lookup directory is listed in
+  `index.theme`; no dangling links (also checked on the ThinkPad: 0).
+* `compare_boards.py` against `icons-1.png`/`icons-2.png` (mean absolute colour difference over the
+  icon, 0-255, after sub-pixel alignment): app tiles 2.0 (max 4.0), logo 1.4, places 1.7,
+  devices 2.0, file types 4.0, status 4.0, symbolic 6.1 (thin 24 px lines; differences are
+  anti-aliasing). Side-by-side sheets: `board-*.png`.
+* `kiconfinder6` with private XDG dirs on the laptop and inside the ThinkPad sessions: tiles,
+  folders, MIME pages and status icons resolve to our files; `preferences-system-windows`,
+  `image-missing`, `input-touchpad-on` resolve to Breeze through `breeze/`
+  (`thinkpad-session-kiconfinder.txt`).
+* Private ThinkPad sessions (vsession names ic-1 to ic-5, Plasma 6.7.5, breeze-icon-theme 6.30.0;
+  scenarios `generators/icons/vsession-check.sh` and `vsession-globaltheme.sh`, usage in their headers):
+  dark (Fusion dark colours draft) and light: Dolphin home and a folder with 28 file types (icon and
+  details views), stock Kickoff, system tray popup, System Settings (KCM icons stay Breeze),
+  Nautilus (GTK 4: sidebar, header bar and window buttons use our symbolic set); dark at the
+  ThinkPad's 4/3 scale (1920x1200 physical); and the Plasma Fusion Dark Global Theme with the other
+  parts' dock, launcher and widgets (the dock shows the board's tile sequence). No icon or SVG
+  warnings in plasmashell, KWin, Dolphin, System Settings or Nautilus logs.
+* Two builds are byte-identical (files and link targets).
+
+Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/icons/`
+(`board-*.png` + `board-scores.txt`, `sheet-*.png` contact sheets, `status-strip-both-variants.png`,
+`weather-sheet.png`, `side-by-side-*.png`, `session-dark-*`, `session-light-*`,
+`session-dark-scale4of3-*`, `session-integrated-dark-*`, `capture-report.txt`).
+
+## Deviations from the boards
+
+* Places and devices are monochrome at 16 and 22 px (the Files window board's sidebar), coloured
+  from 24 px (the FileIcons board).
+* Symbolic icons are filled outlines of the board's strokes (GTK 4, see above); the shapes are the same.
+* The calendar tile shows the board's fixed `SEP 28`; an icon theme cannot show today's date.
+* Folders keep the board's fixed blue instead of following the accent colour; Dolphin's
+  "Assign folder color" gets tinted variants (red ... black) in the same construction.
+* The Icons board's symbolic "Battery" (three bars) is not used; all battery names use the status
+  board's fill-level battery (the top bar mock-up uses the fill level too).
+* The board's warning and critical colours (`#f2c38a`, `#ff8a8f`) are applied through the colour
+  scheme's Neutral/Negative roles, so Plasma shows the active scheme's values (`#f5c08c` in the
+  dark scheme).
+* Not on the boards, derived in the same style: 17 folder symbols, 8 devices, power-profile badges,
+  VPN lock and "limited" badges, wired/VPN/flight-mode/hotspot, camera indicator, weather set,
+  menu category icons, media player states, software updates, Vaults, and about 50 further
+  actions (media, playlist modes, undo/redo, copy, cut, save, print, zoom, eye/eye-off, unpin, ...).
+* File pages and trash cans have a faint 1-unit rim that the boards do not draw (see "Light
+  backgrounds"); without it they vanish on white views.
+* RTL-specific names (`*-rtl`) of our actions come from Breeze.
+
+## Needs from other parts
+
+* **vsession tool (lead):** `vsession.sh` does not put `~/.config/kdedefaults` in `XDG_CONFIG_DIRS`
+  as `startplasma` does. `plasma-apply-lookandfeel` writes Global Theme values there (Plasma 6.7.5
+  `KLookAndFeelManager::writeNewDefaults`; seen in the ic-5 run: `[Icons] Theme=PlasmaFusion-Dark`
+  landed in `kdedefaults/kdeglobals`), so in a vsession the icon theme, fonts and other defaults of
+  a Global Theme stay invisible. The integrated test restarted plasmashell with
+  `XDG_CONFIG_DIRS="$HOME/.config/kdedefaults:/etc/xdg"`; exporting that in `inner.sh` before
+  kded6/plasmashell start would fix it for every part.
+* **Device apply script:** copy `~/.local/share/icons/PlasmaFusion*` with links preserved, and
+  both themes together.
+* **Global Theme:** already names `PlasmaFusion-Dark` / `PlasmaFusion`; nothing more needed.
+* **Colour schemes:** status colours come from `ForegroundNeutral/Negative/Positive`; the board
+  values are expected there.
+* After a breeze-icon-theme update on Fedora, rerun `make_capture.py` so the hand-back links match
+  the new Breeze file set (a stale link only means that one name falls back to our drawing).
+* **Launcher:** Kontact shares the Mail tile (as the task's name map asks), so pinning both KMail and
+  Kontact shows two identical Mail tiles (seen in the ric-dark launcher screenshot); pin one of them.
+* **vsession tool (lead):** besides the kdedefaults point above, KWin in a vsession keeps looking up
+  window icons (title bar, switcher) in hicolor/Breeze after `plasma-apply-lookandfeel` (seen in
+  ric-dark, ric-dark2 with `plasma-changeicons`, and ric-light with a seeded kdeglobals), while the
+  same session's plasmashell, Dolphin and `kiconfinder6` use Plasma Fusion. With a kdeglobals seeded
+  before the session and no Global Theme applied (builder run ic-2) KWin shows the tiles. Check the
+  title bar and Alt+Tab icons once in the real session after the device apply script runs.
+
+## Review (2026-09-29, second pass)
+
+**Checked.** Board sources and renders (AppIcon, Icons, FileIcons, and the icon tables of Main,
+Launcher, QuickSettings, Popups) against the generator; the build into a private stage (icons alone
+and all twelve parts); `validate.py` (QtSvg, 16-128 px, recolouring, index, links); `compare_boards.py`;
+determinism (two builds identical, links included); `--copies`; every icon name requested by the
+Plasma 6.7.5 sources (plasma-workspace, plasma-desktop, kdeplasma-addons, plasma-nm, plasma-pa,
+bluedevil, powerdevil, kwin, libplasma), including the names built at run time (battery levels with
+profiles, Wi-Fi strength with `-locked`/`-limited`, volume and microphone levels, media player
+state), resolved through the real KIconLoader (`kiconfinder6` with private XDG dirs) and classified
+as ours, handed back, Breeze, or captured by our dash fallback; the icon names the other parts'
+QML uses; the Icon= names of every application on the laptop and the ThinkPad; tray and file icons
+at 16/22/24/32/48 px on the dark and the light (white) view backgrounds; private ThinkPad sessions
+with every part and the Global Theme applied, dark (ric-dark, ric-dark2) and light (ric-light):
+desktop, launcher, tray popup, Dolphin home and file types in icon and details views. No icon or
+SVG warnings in plasmashell, KWin or Dolphin logs; no dangling links on the ThinkPad.
+
+**Fixed.**
+
+* File pages and trash cans were invisible on the light scheme's white views (only the tag showed;
+  an unknown file showed nothing). Added a faint rim (see "Light backgrounds").
+* `PlasmaFusion-Dark/art` was a link into the light theme: removing "Plasma Fusion" in the icons
+  settings page (allowed for user themes) or installing only the dark theme left every coloured
+  icon of the dark theme dangling. Each theme now holds its own art.
+* Tray items that stay visible in the Fusion top bar and the popups beside it used Breeze glyphs
+  next to ours: media controller state, Discover's update states, Vaults, the media popup's shuffle
+  and repeat buttons, the launcher's unpin action, the search-field clear button. Drawn in the
+  board style (list under "Tray and popups").
+* The app `-symbolic` twins used derived glyphs although the Launcher/Main boards define one-colour
+  app symbols (globe with one latitude, `>_` terminal, code with slash, 2-radius mail and calendar,
+  bag, speech bubble, map pin, cpu, crop). They now use the board's glyphs (`text-html`,
+  `x-office-calendar`, `text-x-script` and `applications-development` follow).
+* `edit-copy` showed a clipboard (every "Copy" menu entry) and `edit-paste` a clipboard with lines;
+  `edit-copy` is now two pages and `edit-paste` the board's Clipboard.
+* `battery-ups` fell back to our full battery (a UPS always shown full); handed back to Breeze.
+  `folder-add` fell back to a plain folder; it now shows the new-folder glyph.
+* `--copies` silently dropped the Breeze hand-back links; it now warns, and the install notes say
+  to install a build with links.
+
+**Remains.** Dialog and emblem icons (`dialog-*`, `emblem-*`), `preferences-*` settings icons,
+`network-mobile-*` and the Display Configuration applet keep Breeze by design. The "Display
+Configuration" entry of the tray popup therefore shows Breeze's glyph. Battery icons of mouse,
+keyboard and phone come from Breeze while headphones, headset and gamepad use ours (Breeze has
+the specific names only for the former). The integrated screenshots were taken before the
+`edit-copy`/`edit-paste` change (not visible in them). KWin's own icon lookups in vsessions: see
+"Needs from other parts".
+
+Evidence: `review-*.png` in the evidence folder: `review-{dark,light}-0{1..6}-*.png` (sessions),
+`review-light-pages-before-after.png`, `review-pages-trash-and-new-glyphs-on-white-and-dark.png`,
+`review-new-tray-and-action-glyphs.png`, `review-app-symbolic-board-glyphs.png`,
+`review-board-files.png`, `review-board-places.png`, `review-board-scores.txt` (apps 2.0, logo 1.4,
+places 1.9, devices 2.0, file types 5.0, status 4.0, symbolic 6.1), `review-capture-report.txt`,
+`review-thinkpad-kiconfinder-{dark,light}.txt`, `review-plasma-name-resolution-before.tsv`.

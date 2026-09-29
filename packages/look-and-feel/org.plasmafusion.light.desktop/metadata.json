@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "",
+        "Description": "Plasma Fusion in its light colours: frosted top bar with a centred clock, floating dock, Manrope type",
+        "Id": "org.plasmafusion.light.desktop",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Light",
+        "Version": "1.0"
+    },
+    "Keywords": "Desktop;Workspace;Appearance;Look and Feel;Plasma Fusion;Light;"
+}

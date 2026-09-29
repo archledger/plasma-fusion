@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "Snap layouts on Meta+Z, a window picker for the empty half after snapping, and gaps between snapped windows",
+        "EnabledByDefault": false,
+        "Icon": "preferences-system-windows-effect-snaphelper",
+        "Id": "plasmafusion-snap",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Snap Layouts",
+        "Version": "1.0"
+    },
+    "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
+    "X-Plasma-API": "declarativescript"
+}

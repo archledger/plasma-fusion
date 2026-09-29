@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="">
+    <entry name="FollowParent" type="Bool">
+      <label>Dialogs move with their window</label>
+      <default>true</default>
+    </entry>
+    <entry name="DetachOnMove" type="Bool">
+      <label>Dragging a dialog detaches it from its window</label>
+      <default>true</default>
+    </entry>
+    <entry name="TitleBarGap" type="Int">
+      <label>Distance in pixels between the title bar and the dialog</label>
+      <default>0</default>
+      <min>0</min>
+      <max>64</max>
+    </entry>
+    <entry name="HideDialogTitleBar" type="Bool">
+      <label>Hide the title bar of attached dialogs (also removes their shadow)</label>
+      <default>false</default>
+    </entry>
+  </group>
+</kcfg>

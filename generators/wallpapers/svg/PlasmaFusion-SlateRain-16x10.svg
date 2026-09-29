@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1440 900">
+<title>Plasma Fusion Slate Rain</title>
+<desc>SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus; SPDX-License-Identifier: CC-BY-SA-4.0</desc>
+<rect x="-2" y="-2" width="1444" height="904" fill="#20252f"/>
+<rect x="-2" y="180" width="1444" height="160" fill="#272c39"/>
+<rect x="-2" y="340" width="1444" height="562" fill="#2d3342"/>
+<circle cx="1010" cy="360" r="212" fill="none" stroke="#c9d1e0" stroke-opacity="0.18" stroke-width="2"/>
+<circle cx="1010" cy="360" r="150" fill="#c9d1e0"/>
+<path d="M-2 561.44 L0 560 L180 430 L330 505 L520 350 L700 485 L860 405 L1060 520 L1240 385 L1440 470 L1442 470.85 L1442 902 L-2 902 Z" fill="#353d4d"/>
+<path d="M-2 650.95 L0 650 L220 545 L420 620 L640 505 L880 612 L1100 540 L1300 622 L1440 580 L1442 579.4 L1442 902 L-2 902 Z" fill="#3e4659"/>
+<path d="M-2 760.75 L0 760 L260 662 L520 732 L780 642 L1040 722 L1280 662 L1440 702 L1442 702.5 L1442 902 L-2 902 Z" fill="#495166"/>
+<path d="M-2 846.4 L0 846 L300 786 L600 834 L900 774 L1200 824 L1440 792 L1442 791.73 L1442 902 L-2 902 Z" fill="#59627a"/>
+</svg>

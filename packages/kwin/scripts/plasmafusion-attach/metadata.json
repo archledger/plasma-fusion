@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "Modal dialogs open centred on their window, just under its title bar, and move with it",
+        "EnabledByDefault": false,
+        "Icon": "preferences-system-windows-actions",
+        "Id": "plasmafusion-attach",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Attached Dialogs",
+        "Version": "1.0"
+    },
+    "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
+    "X-Plasma-API": "javascript"
+}

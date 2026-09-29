@@ -1,0 +1,204 @@
+/* SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Plasma Fusion additions for GTK 3 applications drawn with the Breeze GTK theme
+ * (design/boards/Controls.dc.html): 10 px corners on controls, 14 px on menus and pop-overs,
+ * 8 px menu items, 6 px check boxes, solid accent and destructive buttons, solid accent fills for
+ * switches, sliders and progress bars, a 2 px focus ring with a 2 px gap and a soft ring around
+ * focused fields.
+ *
+ * Every colour is a named colour from colors.css (kde-gtk-config), so the file follows the active
+ * KDE colour scheme. This file is loaded at user priority, above the theme, so a rule here wins
+ * over every Breeze rule for the same property: selectors are kept narrow and the joined edges of
+ * linked groups are set again below.
+ */
+
+/* --- corners ----------------------------------------------------------------------------- */
+button.text-button:not(.flat):not(.circular),
+button.image-button:not(.flat):not(.circular),
+button.toggle:not(.flat):not(.circular),
+button.combo,
+entry,
+spinbutton:not(.vertical) {
+  border-radius: 10px;
+}
+
+spinbutton:not(.vertical) > entry {
+  border-radius: 0;
+}
+
+/* linked groups (path bars, combo boxes with an entry, segmented buttons): square inner edges */
+.linked:not(.vertical) > button:not(:first-child),
+.linked:not(.vertical) > entry:not(:first-child),
+.linked:not(.vertical) > combobox:not(:first-child) > box > button.combo {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.linked:not(.vertical) > button:not(:last-child),
+.linked:not(.vertical) > entry:not(:last-child),
+.linked:not(.vertical) > combobox:not(:last-child) > box > button.combo {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.linked.vertical > button:not(:first-child),
+.linked.vertical > entry:not(:first-child) {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.linked.vertical > button:not(:last-child),
+.linked.vertical > entry:not(:last-child) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+check {
+  border-radius: 6px;
+}
+
+/* switches: a white 18 px knob on the track, as in both columns of the board */
+switch slider {
+  background-color: #ffffff;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+switch slider:disabled {
+  background-color: mix(#ffffff, @theme_bg_color_breeze, 0.4);
+}
+
+/* --- accent fills: switch on, slider fill and progress in the solid accent -------------------
+ * Breeze GTK tints them with the hover colour at 33-50 %, which reads as a pale blue; the board
+ * (and Breeze for Qt applications, which uses the highlight colour) fills them with #2F6FDF.
+ * Disabled controls keep Breeze's own look (a rule here would outrank Breeze's :disabled rules). */
+switch:checked:not(:disabled),
+scale highlight:not(:disabled),
+progressbar progress:not(:disabled) {
+  background: @theme_selected_bg_color_breeze;
+  border-color: @theme_selected_bg_color_breeze;
+}
+
+/* slider knob: white with a soft shadow in both schemes, like the switch knob (Breeze keeps its
+ * border, so hover and focus still colour the edge) */
+scale slider:not(:disabled) {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+tooltip,
+tooltip.background {
+  border-radius: 8px;
+}
+
+/* --- menus and pop-overs: 14 px, 6 px padding, 32 px items with 8 px corners --------------- */
+menu,
+.menu {
+  padding: 6px;
+  border-radius: 14px;
+  background-color: shade(@theme_base_color_breeze, 1.1);
+}
+
+popover.background,
+.popup decoration,
+.csd.popup decoration {
+  border-radius: 14px;
+}
+
+menu menuitem,
+.menu menuitem {
+  min-height: 18px;
+  padding: 7px 10px;
+  border-radius: 8px;
+}
+
+menu menuitem:hover,
+.menu menuitem:hover {
+  border-color: transparent;
+  border-radius: 8px;
+  background-color: alpha(@theme_button_decoration_hover_breeze, 0.16);
+  color: mix(@link_color_breeze, @theme_text_color_breeze, 0.3);
+}
+
+menu separator,
+.menu separator {
+  margin: 4px 8px;
+}
+
+/* --- accent and destructive buttons: solid fills with white text --------------------------- */
+button.suggested-action:not(.flat) {
+  background-color: @theme_selected_bg_color_breeze;
+  background-image: none;
+  border-color: @theme_selected_bg_color_breeze;
+  color: @theme_selected_fg_color_breeze;
+  font-weight: 800;
+}
+
+button.suggested-action:not(.flat):hover {
+  background-color: shade(@theme_selected_bg_color_breeze, 1.08);
+}
+
+button.suggested-action:not(.flat):active,
+button.suggested-action:not(.flat):checked {
+  background-color: shade(@theme_selected_bg_color_breeze, 0.9);
+}
+
+button.destructive-action:not(.flat) {
+  background-color: #c93a42;
+  background-image: none;
+  border-color: #c93a42;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+button.destructive-action:not(.flat):hover {
+  background-color: shade(#c93a42, 1.08);
+}
+
+button.destructive-action:not(.flat):active,
+button.destructive-action:not(.flat):checked {
+  background-color: shade(#c93a42, 0.9);
+}
+
+button.suggested-action:disabled,
+button.destructive-action:disabled {
+  background-color: alpha(@theme_fg_color_breeze, 0.04);
+  border-color: alpha(@theme_fg_color_breeze, 0.07);
+  color: @insensitive_fg_color_breeze;
+}
+
+/* --- focus: 2 px ring, 2 px gap (drawn only for keyboard focus) ----------------------------- */
+button:focus,
+switch:focus,
+checkbutton:focus,
+radiobutton:focus {
+  outline-color: @theme_button_decoration_focus_breeze;
+  outline-style: solid;
+  outline-width: 2px;
+  outline-offset: 2px;
+  -gtk-outline-radius: 12px;
+}
+
+switch:focus {
+  -gtk-outline-radius: 14px;
+}
+
+checkbutton:focus,
+radiobutton:focus {
+  outline-offset: 0;
+  -gtk-outline-radius: 8px;
+}
+
+entry:focus,
+spinbutton:not(.vertical):focus {
+  border-color: @theme_button_decoration_focus_breeze;
+  box-shadow: 0 0 0 3px alpha(@theme_button_decoration_focus_breeze, 0.18);
+}
+
+/* --- selection rows: the soft accent row of the board ------------------------------------- */
+placessidebar row:selected,
+.sidebar row:selected {
+  border-radius: 8px;
+}

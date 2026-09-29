@@ -1,0 +1,106 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion Light terminal colours: the Plasma Fusion Light view colours (#ffffff, #141827,
+# secondary #4d546a) with the design's accent set darkened for white: the colour scheme's status
+# colours (#b3262e, #23703b, #8f4f12), link blue #2359c4, visited purple #6b3fb5 and a dark teal.
+# Normal colours reach 4.5:1 on white; the bright ones stay above 4.2:1 except bright white.
+# The Light boards keep the terminal dark, so the Plasma Fusion profile uses the dark scheme;
+# this one is for people who prefer a light terminal.
+
+[General]
+Description=Plasma Fusion Light
+Opacity=1
+Blur=false
+ColorRandomization=false
+Wallpaper=
+
+[Background]
+Color=255,255,255
+
+[BackgroundIntense]
+Color=238,240,245
+
+[BackgroundFaint]
+Color=255,255,255
+
+[Foreground]
+Color=20,24,39
+
+[ForegroundIntense]
+Color=11,14,27
+
+[ForegroundFaint]
+Color=77,84,106
+
+[Color0]
+Color=20,24,39
+
+[Color0Intense]
+Color=77,84,106
+
+[Color0Faint]
+Color=114,116,125
+
+[Color1]
+Color=179,38,46
+
+[Color1Intense]
+Color=201,58,66
+
+[Color1Faint]
+Color=209,125,130
+
+[Color2]
+Color=35,112,59
+
+[Color2Intense]
+Color=39,128,63
+
+[Color2Faint]
+Color=123,169,137
+
+[Color3]
+Color=143,79,18
+
+[Color3Intense]
+Color=166,94,23
+
+[Color3Faint]
+Color=188,149,113
+
+[Color4]
+Color=35,89,196
+
+[Color4Intense]
+Color=47,111,223
+
+[Color4Faint]
+Color=123,155,220
+
+[Color5]
+Color=107,63,181
+
+[Color5Intense]
+Color=123,92,214
+
+[Color5Faint]
+Color=166,140,211
+
+[Color6]
+Color=14,124,111
+
+[Color6Intense]
+Color=15,130,116
+
+[Color6Faint]
+Color=110,176,169
+
+[Color7]
+Color=111,120,146
+
+[Color7Intense]
+Color=154,160,178
+
+[Color7Faint]
+Color=169,174,190

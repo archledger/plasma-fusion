@@ -1,0 +1,50 @@
+// SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Test tooling (not installed): a declarative KWin script that places, maximizes and activates
+// windows for screenshots, one phase per invocation of the "PF DC Next Step" shortcut. The
+// scenario replaces @PHASES@ with a JSON list of phases; a phase is a list of
+// {"match": "<resourceClass substring>", "rect": [x, y, w, h], "max": bool, "activate": bool}.
+// (One long-lived script: KWin 6.7 ignores a second declarative script loaded over D-Bus.)
+import QtQuick
+import org.kde.kwin
+
+Item {
+    id: root
+    property var phases: @PHASES@
+    property int step: 0
+
+    function apply(spec) {
+        const ws = Workspace.windows;
+        let activate = null;
+        for (let i = 0; i < ws.length; ++i) {
+            const w = ws[i];
+            if (!w.normalWindow)
+                continue;
+            for (const s of spec) {
+                if (String(w.resourceClass).indexOf(s.match) < 0)
+                    continue;
+                if (s.max !== undefined)
+                    w.setMaximize(s.max, s.max);
+                if (s.rect)
+                    w.frameGeometry = Qt.rect(s.rect[0], s.rect[1], s.rect[2], s.rect[3]);
+                if (s.activate)
+                    activate = w;
+            }
+        }
+        if (activate)
+            Workspace.activeWindow = activate;
+    }
+
+    ShortcutHandler {
+        name: "PF DC Next Step"
+        text: "Plasma Fusion decoration test: next step"
+        sequence: "Meta+Ctrl+Alt+Shift+F12"
+        onActivated: {
+            root.step += 1;
+            if (root.step < root.phases.length)
+                root.apply(root.phases[root.step]);
+        }
+    }
+
+    Component.onCompleted: apply(phases[0])
+}

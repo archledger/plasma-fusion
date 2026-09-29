@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="showWorkspaces" type="Bool">
+      <label>Show the workspace indicator (hidden anyway while there is only one workspace).</label>
+      <default>true</default>
+    </entry>
+    <entry name="wheelSwitchesWorkspaces" type="Bool">
+      <label>Scrolling over the pill switches workspaces.</label>
+      <default>true</default>
+    </entry>
+    <entry name="showDate" type="Bool">
+      <label>Show the date before the time.</label>
+      <default>true</default>
+    </entry>
+    <entry name="dateFormat" type="String">
+      <label>Date format: "auto" (weekday, day and month in the order of the region's long date, without the year) or "custom".</label>
+      <default>auto</default>
+    </entry>
+    <entry name="customDateFormat" type="String">
+      <label>Date format used when dateFormat is "custom" (QLocale format string).</label>
+      <default>ddd d MMM</default>
+    </entry>
+    <entry name="use24hFormat" type="UInt">
+      <label>Hour format: 0 = 12-hour, 1 = as the region settings, 2 = 24-hour (same values as the stock digital clock).</label>
+      <default>1</default>
+    </entry>
+    <entry name="firstDayOfWeek" type="Int">
+      <label>First day of the week in the calendar: -1 = as the region settings, 0 = Sunday, 1 = Monday ... 6 = Saturday.</label>
+      <default>-1</default>
+    </entry>
+    <entry name="centerInPanel" type="Bool">
+      <label>Place the pill on the middle of the panel (within 48 px of where the layout puts the widget), independent of the widths of the widgets beside it.</label>
+      <default>true</default>
+    </entry>
+    <entry name="popupGap" type="Int">
+      <label>Gap in px between the top bar and the calendar pop-up.</label>
+      <default>10</default>
+    </entry>
+  </group>
+</kcfg>
