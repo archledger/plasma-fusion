@@ -5,6 +5,7 @@
 #
 # SEED_HOME_DIR is copied over the session HOME (for example a staged ~/.local/share and ~/.config).
 # Use '-' to keep the HOME from the previous run of NAME. Results land in ./vsession-out/NAME/.
+# PFV_SCALE and PFV_OUTPUTS in the environment are passed on (see vsession.sh).
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SEED=${3:--}; SIZE=${4:-1440x900}; TMO=${5:-240}
 HOST=${PFV_HOST:-thinkpad-fedora}
@@ -15,7 +16,7 @@ if [ "$SEED" != - ]; then
 fi
 scp -q "$HERE/vsession.sh" "$HOST:/tmp/pfv-$NAME.vsession.sh" && scp -q "$SCENARIO" "$HOST:/tmp/pfv-$NAME.scenario.sh" \
   && scp -q "$HERE/pfinput.py" "$HOST:/tmp/pfv-$NAME.pfinput.py" || exit 1
-ssh -o BatchMode=yes "$HOST" "PFINPUT=/tmp/pfv-$NAME.pfinput.py bash /tmp/pfv-$NAME.vsession.sh $NAME /tmp/pfv-$NAME.scenario.sh $SIZE $TMO" || exit 1
+ssh -o BatchMode=yes "$HOST" "PFV_SCALE=${PFV_SCALE:-1} PFV_OUTPUTS=${PFV_OUTPUTS:-1} PFINPUT=/tmp/pfv-$NAME.pfinput.py bash /tmp/pfv-$NAME.vsession.sh $NAME /tmp/pfv-$NAME.scenario.sh $SIZE $TMO" || exit 1
 mkdir -p "vsession-out/$NAME"
 rsync -a --delete "$HOST:/tmp/pfv-$NAME/out/" "vsession-out/$NAME/"
 echo "results in $(pwd)/vsession-out/$NAME"

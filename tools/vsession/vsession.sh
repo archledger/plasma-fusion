@@ -3,6 +3,10 @@
 #
 #   vsession.sh NAME SCENARIO [WIDTHxHEIGHT] [TIMEOUT_SECONDS]
 #
+# WIDTHxHEIGHT is the size of each virtual output in device pixels. PFV_SCALE (default 1, e.g. 1.25,
+# 1.333333, 2; applied with kscreen-doctor before plasmashell starts) and PFV_OUTPUTS (default 1:
+# several outputs side by side) emulate other displays.
+#
 # Everything lives under /tmp/pfv-NAME: home/ (the session's HOME; pre-seed it before the run),
 # run/ (XDG_RUNTIME_DIR), out/ (screenshots and logs). The session has its own D-Bus session bus,
 # its own Wayland socket and never touches the logged-in desktop.
@@ -58,6 +62,13 @@ trap cleanup EXIT
 dbus-update-activation-environment WAYLAND_DISPLAY QT_QPA_PLATFORM XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
   KDE_FULL_SESSION KDE_SESSION_VERSION XDG_CONFIG_DIRS QT_FORCE_STDERR_LOGGING XDG_RUNTIME_DIR HOME PATH LANG
 fc-cache -f >/dev/null 2>&1
+# Display scale, set the way System Settings does it (KWin's own --scale only enlarges the framebuffer).
+if [ "${PFV_SCALE:-1}" != 1 ]; then
+  for o in $(kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '/^Output:/{print $3}'); do
+    kscreen-doctor "output.$o.scale.$PFV_SCALE" >/dev/null 2>&1
+  done
+  sleep 1
+fi
 /usr/libexec/kactivitymanagerd >"$OUT/kamd.log" 2>&1 &
 kded6 >"$OUT/kded.log" 2>&1 &
 sleep 2
@@ -86,11 +97,13 @@ if [ -f "$PFV/home/.config/pfv-env" ]; then
   done <"$PFV/home/.config/pfv-env"
 fi
 env -i "${EXTRA_ENV[@]}" HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
+  PFV_SCALE="${PFV_SCALE:-1}" \
   PATH=/usr/bin:/bin:/usr/lib64/qt6/bin LANG=en_US.UTF-8 \
   XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
   XDG_CONFIG_DIRS="$PFV/home/.config/kdedefaults:/etc/xdg" QT_FORCE_STDERR_LOGGING=1 \
   QT_QPA_PLATFORM=wayland \
   timeout "$TMO" dbus-run-session -- kwin_wayland --virtual --width "$W" --height "$H" \
+    --output-count "${PFV_OUTPUTS:-1}" \
     --socket "pfv-$NAME" --no-lockscreen --exit-with-session "$PFV/inner.sh" >"$PFV/out/kwin.log" 2>&1
 echo "session rc=$?" >>"$PFV/out/scenario.log"
 
