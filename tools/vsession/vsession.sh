@@ -7,7 +7,7 @@
 # 1.333333, 2; applied with kscreen-doctor before plasmashell starts) and PFV_OUTPUTS (default 1:
 # several outputs side by side) emulate other displays.
 #
-# Everything lives under /tmp/pfv-NAME: home/ (the session's HOME; pre-seed it before the run),
+# Everything lives under /var/tmp/pfv-NAME (PFV_BASE overrides /var/tmp): home/ (the session's HOME; pre-seed it before the run),
 # run/ (XDG_RUNTIME_DIR), out/ (screenshots and logs). The session has its own D-Bus session bus,
 # its own Wayland socket and never touches the logged-in desktop.
 #
@@ -26,7 +26,9 @@
 # Set NO_PLASMASHELL=1 in the scenario's environment to start only KWin.
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SIZE=${3:-1440x900}; TMO=${4:-240}
-PFV=/tmp/pfv-$NAME
+# Sessions live on disk (/var/tmp): a HOME with the Fusion stage holds ~25k files, and /tmp is a
+# tmpfs with a fixed inode count that the logged-in user needs too.
+PFV=${PFV_BASE:-/var/tmp}/pfv-$NAME
 W=${SIZE%x*}; H=${SIZE#*x}
 mkdir -p "$PFV/home/.config" "$PFV/run" "$PFV/out"
 chmod 700 "$PFV/run"
