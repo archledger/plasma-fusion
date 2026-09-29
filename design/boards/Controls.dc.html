@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — application style</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#10142a;color:#e8ebf4}
+button{font:inherit;color:inherit;border:0;padding:0;margin:0;background:none;cursor:default}
+svg{display:block;flex-shrink:0}
+svg.i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+a{color:#8ab8ff}a:hover{color:#b9d4ff}
+</style>
+</helmet>
+<div style="width:1440px;height:1360px;box-sizing:border-box;padding:56px;display:flex;flex-direction:column;gap:24px;background:#10142a;color:#e8ebf4;font-size:13px">
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#f2c38a">Plasma Fusion · Application Style</span>
+<h1 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:44px;font-weight:700;line-height:1.05">Controls, in dark and light</h1>
+<p style="margin:0;max-width:900px;font-size:15px;line-height:1.55;color:#b8bfd3">One set of controls with two colour schemes. Corners are 10 px on controls and 14 px on menus; every focused control gets a 2 px accent ring with a 2 px gap; the accent fill is #2F6FDF in both schemes so white text on it always passes contrast.</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:24px">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="2">
+<section style="box-sizing:border-box;padding:28px;border-radius:24px;display:flex;flex-direction:column;gap:22px;background: {{t.bg}};color: {{t.text}};border:1px solid {{t.border}}">
+
+<div style="display:flex;justify-content:space-between;align-items:center">
+<h2 style="margin:0;font-size:20px;font-weight:800">{{t.name}}</h2>
+<span style="font-size:12px;font-weight:700;color: {{t.text2}}">Colour scheme: Fusion {{t.name}}</span>
+</div>
+
+<!-- Buttons -->
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color: {{t.text2}}">Buttons</span>
+<div style="display:flex;gap:10px">
+<button style="height:36px;padding:0 18px;border-radius:10px;background:#2f6fdf;color:#ffffff;font-weight:800">Save changes</button>
+<button style="height:36px;padding:0 18px;border-radius:10px;font-weight:700;background: {{t.surface2}};color: {{t.text}};border:1px solid {{t.border}}">Cancel</button>
+<button style="height:36px;padding:0 14px;border-radius:10px;font-weight:700;color: {{t.accentText}}">Learn more</button>
+<button style="height:36px;padding:0 18px;border-radius:10px;font-weight:800;background: {{t.danger}};color:#ffffff">Delete</button>
+</div>
+<div style="display:grid;grid-template-columns:repeat(5, minmax(0, 1fr));gap:10px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><button style="width:100%;height:34px;border-radius:10px;font-weight:700;background: {{t.surface2}};border:1px solid {{t.border}}">Button</button><span style="font-size:11px;color: {{t.text2}}">Default</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><button style="width:100%;height:34px;border-radius:10px;font-weight:700;background: {{t.hoverFill}};border:1px solid {{t.borderStrong}}">Button</button><span style="font-size:11px;color: {{t.text2}}">Hover</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><button style="width:100%;height:34px;border-radius:10px;font-weight:700;background: {{t.pressFill}};border:1px solid {{t.borderStrong}};box-shadow:inset 0 2px 3px {{t.shadowSoft}}">Button</button><span style="font-size:11px;color: {{t.text2}}">Pressed</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><button style="width:100%;height:34px;border-radius:10px;font-weight:700;background: {{t.surface2}};border:1px solid {{t.border}};box-shadow:0 0 0 2px {{t.bg}}, 0 0 0 4px {{t.focus}}">Button</button><span style="font-size:11px;color: {{t.text2}}">Focused</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><button aria-disabled="true" style="width:100%;height:34px;border-radius:10px;font-weight:700;background: {{t.disabledFill}};color: {{t.text3}};border:1px solid {{t.disabledBorder}}">Button</button><span style="font-size:11px;color: {{t.text2}}">Disabled</span></div>
+</div>
+</div>
+
+<!-- Fields -->
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color: {{t.text2}}">Text fields and pickers</span>
+<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px 14px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:12px;font-weight:700">Folder name</span>
+<div style="height:38px;box-sizing:border-box;padding:0 12px;border-radius:10px;display:flex;align-items:center;background: {{t.surface}};border:1px solid {{t.border}};color: {{t.text3}}">Untitled folder</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:12px;font-weight:700">Search</span>
+<div style="height:38px;box-sizing:border-box;padding:0 12px;border-radius:10px;display:flex;align-items:center;gap:8px;background: {{t.surface}};border:1.5px solid {{t.focus}};box-shadow:0 0 0 3px {{t.accentSoft}}">
+<svg class="i" width="16" height="16" viewBox="0 0 24 24" style="color: {{t.text2}}"><path d="M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4"></path></svg>
+<span>Q3-roadmap</span><span style="width:1.5px;height:18px;background: {{t.focus}}"></span>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:12px;font-weight:700">Email</span>
+<div style="height:38px;box-sizing:border-box;padding:0 12px;border-radius:10px;display:flex;align-items:center;background: {{t.surface}};border:1.5px solid {{t.danger}}">alex@</div>
+<span style="font-size:11.5px;font-weight:600;color: {{t.dangerText}}">Enter a full email address</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<span style="font-size:12px;font-weight:700">Power mode</span>
+<div style="display:flex;gap:10px">
+<button style="flex-grow:1;height:38px;box-sizing:border-box;padding:0 10px 0 12px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;background: {{t.surface2}};border:1px solid {{t.border}}">Balanced<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+<div style="width:108px;height:38px;box-sizing:border-box;border-radius:10px;display:flex;align-items:center;background: {{t.surface}};border:1px solid {{t.border}}">
+<span style="flex-grow:1;padding-left:12px">12 px</span>
+<div style="display:flex;flex-direction:column;height:36px;border-left:1px solid {{t.border}}">
+<button aria-label="Increase" style="width:26px;flex-grow:1;display:flex;align-items:center;justify-content:center"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"></path></svg></button>
+<button aria-label="Decrease" style="width:26px;flex-grow:1;display:flex;align-items:center;justify-content:center;border-top:1px solid {{t.border}}"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Selection -->
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color: {{t.text2}}">Checkboxes, radio buttons, switches</span>
+<div style="display:flex;align-items:center;gap:22px">
+<div style="display:flex;gap:10px">
+<button role="checkbox" aria-checked="true" aria-label="Checked" style="width:20px;height:20px;border-radius:6px;background:#2f6fdf;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" style="stroke-width:3"><path d="M5 12l4.5 4.5L19 7"></path></svg></button>
+<button role="checkbox" aria-checked="mixed" aria-label="Partly checked" style="width:20px;height:20px;border-radius:6px;background:#2f6fdf;display:flex;align-items:center;justify-content:center"><span style="width:10px;height:2.5px;border-radius:2px;background:#ffffff"></span></button>
+<button role="checkbox" aria-checked="false" aria-label="Unchecked" style="width:20px;height:20px;box-sizing:border-box;border-radius:6px;background: {{t.surface}};border:1.5px solid {{t.borderStrong}}"></button>
+<button role="checkbox" aria-checked="false" aria-disabled="true" aria-label="Disabled" style="width:20px;height:20px;box-sizing:border-box;border-radius:6px;background: {{t.disabledFill}};border:1.5px solid {{t.disabledBorder}}"></button>
+</div>
+<div style="display:flex;gap:10px">
+<button role="radio" aria-checked="true" aria-label="Selected" style="width:20px;height:20px;border-radius:10px;background:#2f6fdf;display:flex;align-items:center;justify-content:center"><span style="width:8px;height:8px;border-radius:4px;background:#ffffff"></span></button>
+<button role="radio" aria-checked="false" aria-label="Not selected" style="width:20px;height:20px;box-sizing:border-box;border-radius:10px;background: {{t.surface}};border:1.5px solid {{t.borderStrong}}"></button>
+</div>
+<div style="display:flex;gap:10px;align-items:center">
+<button role="switch" aria-checked="true" aria-label="On" style="width:40px;height:22px;border-radius:11px;background:#2f6fdf;position:relative"><span style="position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:9px;background:#ffffff"></span></button>
+<button role="switch" aria-checked="false" aria-label="Off" style="width:40px;height:22px;border-radius:11px;position:relative;background: {{t.track}}"><span style="position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:9px;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></span></button>
+</div>
+<span style="margin-left:auto;font-size:12px;color: {{t.text2}}">Labels sit 10 px to the right</span>
+</div>
+</div>
+
+<!-- Slider & progress -->
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color: {{t.text2}}">Slider and progress</span>
+<div style="display:flex;align-items:center;gap:14px">
+<span style="font-size:12px;font-weight:700;width:70px">Volume</span>
+<div role="presentation" style="flex-grow:1;height:6px;border-radius:3px;position:relative;background: {{t.track}}">
+<div style="width:60%;height:6px;border-radius:3px;background:#2f6fdf"></div>
+<span style="position:absolute;left:60%;top:-7px;margin-left:-10px;width:20px;height:20px;border-radius:10px;background:#ffffff;box-shadow:0 1px 4px rgba(0,0,0,0.35), 0 0 0 1px {{t.border}}"></span>
+</div>
+<span style="font-size:12px;font-weight:700;width:36px;text-align:right">60%</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;font-size:12px"><span style="font-weight:700">Copying 3 of 5 files</span><span style="color: {{t.text2}}">64% · about 20 s left</span></div>
+<div role="progressbar" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" style="height:6px;border-radius:3px;overflow:hidden;background: {{t.track}}"><div style="width:64%;height:6px;background:#2f6fdf"></div></div>
+</div>
+</div>
+
+<!-- Tabs -->
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color: {{t.text2}}">Tabs</span>
+<div role="tablist" style="display:flex;gap:22px;border-bottom:1px solid {{t.border}}">
+<button role="tab" aria-selected="true" style="height:38px;font-weight:800;box-shadow:inset 0 -3px 0 #2f6fdf;color: {{t.text}}">General</button>
+<button role="tab" aria-selected="false" style="height:38px;font-weight:600;color: {{t.text2}}">Display</button>
+<button role="tab" aria-selected="false" style="height:38px;font-weight:600;color: {{t.text2}}">Shortcuts</button>
+<button role="tab" aria-selected="false" style="height:38px;font-weight:600;color: {{t.text2}}">Advanced</button>
+</div>
+<div role="tablist" style="align-self:flex-start;display:flex;height:34px;box-sizing:border-box;padding:3px;gap:3px;border-radius:10px;background: {{t.surface2}}">
+<button role="tab" aria-selected="false" style="padding:0 16px;border-radius:7px;font-weight:600;color: {{t.text2}}">Day</button>
+<button role="tab" aria-selected="true" style="padding:0 16px;border-radius:7px;font-weight:800;background: {{t.surface}};box-shadow:0 1px 3px {{t.shadowSoft}}">Week</button>
+<button role="tab" aria-selected="false" style="padding:0 16px;border-radius:7px;font-weight:600;color: {{t.text2}}">Month</button>
+</div>
+</div>
+
+<!-- List, scrollbar, menu -->
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color: {{t.text2}}">List, scrollbar and right-click menu</span>
+<div style="position:relative;height:250px">
+<div role="listbox" style="position:absolute;left:0;top:0;width:290px;height:220px;box-sizing:border-box;padding:6px;border-radius:14px;overflow:hidden;background: {{t.surface}};border:1px solid {{t.border}};display:flex;flex-direction:column;gap:2px">
+<div style="height:34px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><dc-import name="AppIcon" app="files" size="20" hint-size="20px,20px"></dc-import>Wallpapers</div>
+<div role="option" aria-selected="true" style="height:34px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px;font-weight:700;background: {{t.selected}};color: {{t.selectedText}}"><dc-import name="AppIcon" app="notes" size="20" hint-size="20px,20px"></dc-import>Q3-roadmap.odt</div>
+<div style="height:34px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><dc-import name="AppIcon" app="photos" size="20" hint-size="20px,20px"></dc-import>dusk-ridge.png</div>
+<div style="height:34px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><dc-import name="AppIcon" app="code" size="20" hint-size="20px,20px"></dc-import>fusion-theme.qml</div>
+<div style="height:34px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><dc-import name="AppIcon" app="music" size="20" hint-size="20px,20px"></dc-import>demo-track.flac</div>
+<div style="height:34px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><dc-import name="AppIcon" app="videos" size="20" hint-size="20px,20px"></dc-import>screencast.webm</div>
+<span style="position:absolute;right:4px;top:10px;width:5px;height:88px;border-radius:3px;background: {{t.scroll}}"></span>
+</div>
+<div role="menu" style="position:absolute;left:200px;top:52px;width:236px;box-sizing:border-box;padding:6px;border-radius:14px;display:flex;flex-direction:column;gap:1px;background: {{t.menuBg}};border:1px solid {{t.border}};box-shadow:0 16px 40px {{t.shadow}}">
+<div role="menuitem" style="height:32px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7zM14 3v5h5"></path></svg><span style="flex-grow:1">Open</span><span style="font-size:11.5px;color: {{t.text2}}">Enter</span></div>
+<div role="menuitem" style="height:32px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M4 5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 19h12a1 1 0 0 0 1-1V9"></path></svg><span style="flex-grow:1">Open with</span><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></div>
+<span style="height:1px;margin:4px 8px;background: {{t.border}}"></span>
+<div role="menuitem" style="height:32px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px;background: {{t.accentSoft}};color: {{t.selectedText}}"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M9 4h6v3H9zM7 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1"></path></svg><span style="flex-grow:1;font-weight:700">Copy</span><span style="font-size:11.5px">Ctrl+C</span></div>
+<div role="menuitem" style="height:32px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16zM14 6l3 3"></path></svg><span style="flex-grow:1">Rename</span><span style="font-size:11.5px;color: {{t.text2}}">F2</span></div>
+<div role="menuitem" aria-disabled="true" style="height:32px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px;color: {{t.text3}}"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M5 7h14v13H5zM3 4h18v3H3zM10 11h4"></path></svg><span style="flex-grow:1">Compress</span></div>
+<span style="height:1px;margin:4px 8px;background: {{t.border}}"></span>
+<div role="menuitem" style="height:32px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px;color: {{t.dangerText}}"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"></path></svg><span style="flex-grow:1;font-weight:700">Move to Trash</span><span style="font-size:11.5px">Del</span></div>
+</div>
+</div>
+</div>
+
+<!-- Small bits -->
+<div style="display:flex;flex-direction:column;gap:12px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color: {{t.text2}}">Tooltip, badges, chips</span>
+<div style="display:flex;align-items:center;gap:14px">
+<span role="tooltip" style="padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;background: {{t.tooltipBg}};color: {{t.tooltipText}}">Pin to dock</span>
+<span style="min-width:20px;height:20px;box-sizing:border-box;padding:0 6px;border-radius:10px;background:#2f6fdf;color:#ffffff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">3</span>
+<span style="height:22px;padding:0 9px;border-radius:11px;font-size:11px;font-weight:800;display:flex;align-items:center;background: {{t.successSoft}};color: {{t.successText}}">Installed</span>
+<span style="height:22px;padding:0 9px;border-radius:11px;font-size:11px;font-weight:800;display:flex;align-items:center;background: {{t.warnSoft}};color: {{t.warnText}}">Update ready</span>
+<span style="height:28px;padding:0 6px 0 12px;border-radius:14px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;background: {{t.surface2}};border:1px solid {{t.border}}"><span style="width:8px;height:8px;border-radius:4px;background:#f2a65a"></span>Work<button aria-label="Remove tag" style="width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;color: {{t.text2}}"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"></path></svg></button></span>
+</div>
+</div>
+
+</section>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1360}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const themes = [
+      { name: 'Dark', bg: '#171c33', surface: '#1f2540', surface2: '#262d4c', border: 'rgba(255,255,255,0.12)', borderStrong: 'rgba(255,255,255,0.28)',
+        text: '#e8ebf4', text2: '#a3abc2', text3: '#6f7892', accentText: '#8ab8ff', accentSoft: 'rgba(91,157,255,0.18)', focus: '#8ab8ff',
+        danger: '#c93a42', dangerText: '#ff8a8f', hoverFill: '#2d355a', pressFill: '#212846', disabledFill: 'rgba(255,255,255,0.04)', disabledBorder: 'rgba(255,255,255,0.07)',
+        track: 'rgba(255,255,255,0.16)', selected: 'rgba(91,157,255,0.2)', selectedText: '#cfe0ff', menuBg: '#232a47', shadow: 'rgba(0,0,0,0.5)', shadowSoft: 'rgba(0,0,0,0.35)',
+        scroll: 'rgba(255,255,255,0.3)', tooltipBg: '#e8ebf4', tooltipText: '#141827',
+        successSoft: 'rgba(58,166,91,0.2)', successText: '#7fd99c', warnSoft: 'rgba(242,166,90,0.2)', warnText: '#f5c08c' },
+      { name: 'Light', bg: '#f6f7fa', surface: '#ffffff', surface2: '#eef0f5', border: 'rgba(20,24,39,0.14)', borderStrong: 'rgba(20,24,39,0.32)',
+        text: '#141827', text2: '#4d546a', text3: '#9aa0b2', accentText: '#2359c4', accentSoft: 'rgba(47,111,223,0.12)', focus: '#2f6fdf',
+        danger: '#c93a42', dangerText: '#b3262e', hoverFill: '#e4e7ef', pressFill: '#d9dde8', disabledFill: 'rgba(20,24,39,0.03)', disabledBorder: 'rgba(20,24,39,0.08)',
+        track: 'rgba(20,24,39,0.14)', selected: 'rgba(47,111,223,0.12)', selectedText: '#1d4fb0', menuBg: '#ffffff', shadow: 'rgba(20,24,39,0.18)', shadowSoft: 'rgba(20,24,39,0.14)',
+        scroll: 'rgba(20,24,39,0.3)', tooltipBg: '#1b2031', tooltipText: '#ffffff',
+        successSoft: 'rgba(45,138,74,0.12)', successText: '#23703b', warnSoft: 'rgba(184,106,29,0.12)', warnText: '#8f4f12' }
+    ];
+    return { themes };
+  }
+}
+</script>
+</body>
+</html>

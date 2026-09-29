@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fusion app icon</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div role="img" aria-label="{{label}}" style="position:relative;width: {{px}}px;height: {{px}}px">
+<svg width="{{px}}" height="{{px}}" viewBox="0 0 64 64" aria-hidden="true" style="position:absolute;left:0;top:0;display:block;overflow:visible">
+<path d="{{lipD}}" fill="{{lip}}"></path>
+<path d="{{faceD}}" fill="{{base}}"></path>
+<path d="{{sheenD}}" fill="#ffffff" fill-opacity="0.09"></path>
+<path d="{{g1}}" fill="{{c1}}"></path>
+<path d="{{g2}}" fill="{{c2}}"></path>
+<path d="{{s1}}" fill="none" stroke="{{sc}}" stroke-width="{{sw}}" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="{{g3}}" fill="{{c3}}" fill-rule="evenodd"></path>
+<path d="{{edgeD}}" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1"></path>
+</svg>
+<sc-if value="{{hasT2}}" hint-placeholder-val="{{false}}"><span style="position:absolute;left:0;display:flex;align-items:center;justify-content:center;font-family:Manrope,sans-serif;font-weight:800;letter-spacing:0.08em;line-height:1;top: {{t2Top}}px;width: {{px}}px;height: {{t2H}}px;font-size: {{t2Size}}px;color: {{t2c}}">{{t2}}</span></sc-if>
+<sc-if value="{{hasT}}" hint-placeholder-val="{{false}}"><span style="position:absolute;left:0;display:flex;align-items:center;justify-content:center;font-family:Space Grotesk,sans-serif;font-weight:700;line-height:1;top: {{tTop}}px;width: {{px}}px;height: {{tH}}px;font-size: {{tSize}}px;color: {{tc}}">{{t}}</span></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"app":{"editor":"enum","options":["files","browser","terminal","mail","code","music","photos","settings","calendar","notes","calculator","software","videos","chat","maps","weather","monitor","screenshot","fusion"],"default":"files"},"size":{"editor":"int","default":128,"min":16,"max":512,"unit":"px"},"$preview":{"width":128,"height":128}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const rr = (x, y, w, h, r) => `M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}h${-(w - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}z`;
+    const ci = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0z`;
+    const el = (cx, cy, rx, ry) => `M${cx - rx} ${cy}a${rx} ${ry} 0 1 0 ${2 * rx} 0a${rx} ${ry} 0 1 0 ${-2 * rx} 0z`;
+    const gear = (cx, cy, ro, ri, n) => {
+      const half = Math.PI / n, tw = half * 0.42, g = half * 0.14, pts = [];
+      for (let k = 0; k < n; k++) {
+        const a = k * 2 * half - Math.PI / 2;
+        pts.push([ri, a - half + g], [ro, a - tw], [ro, a + tw], [ri, a + half - g]);
+      }
+      return 'M' + pts.map(p => (cx + p[0] * Math.cos(p[1])).toFixed(2) + ' ' + (cy + p[0] * Math.sin(p[1])).toFixed(2)).join('L') + 'Z';
+    };
+    const keys = [];
+    [27, 36, 45].forEach((y, row) => [17, 28, 39].forEach((x, col) => { if (!(row === 2 && col === 2)) keys.push(rr(x, y, 8, 7, 2)); }));
+
+    const L = {
+      files: { label: 'Files', base: '#3f7fe0', lip: '#2b5db5',
+        g1: 'M13 19a4 4 0 0 1 4-4h9l4 4h17a4 4 0 0 1 4 4v19H13z', c1: '#bcd4ff',
+        g2: rr(13, 24, 38, 22, 4), c2: '#ffffff',
+        s1: 'M20 39h10', sc: '#8fb4f5', sw: 3 },
+      browser: { label: 'Browser', base: '#e8743b', lip: '#b8552a',
+        g1: ci(32, 30, 17), c1: '#ffffff',
+        s1: 'M15 30h34M18 21h28M18 39h28M32 13c7 6 7 28 0 34M32 13c-7 6-7 28 0 34', sc: '#e8743b', sw: 2.4 },
+      terminal: { label: 'Terminal', base: '#262c42', lip: '#131726',
+        g1: rr(30, 38, 14, 4, 2), c1: '#e8ebf4',
+        g2: ci(17, 13, 2) + ci(23, 13, 2) + ci(29, 13, 2), c2: '#5d6680',
+        s1: 'M18 25l8 7-8 7', sc: '#3cc4b0', sw: 4 },
+      mail: { label: 'Mail', base: '#1f9e8f', lip: '#15756a',
+        g1: rr(12, 17, 40, 28, 4), c1: '#ffffff',
+        s1: 'M14.5 20l17.5 13 17.5-13', sc: '#1f9e8f', sw: 3,
+        g3: ci(49, 17, 6.5), c3: '#f2a65a' },
+      code: { label: 'Code', base: '#7b5cd6', lip: '#5a40a8',
+        g1: 'M35 15h4.5l-10 30H25z', c1: '#d9ccff',
+        s1: 'M22 20l-10 10 10 10M42 20l10 10-10 10', sc: '#ffffff', sw: 4.5 },
+      music: { label: 'Music', base: '#d6457a', lip: '#a8325d',
+        g1: 'M26 19l20-5v5l-20 5zM26 21h4v22h-4zM42 15h4v23h-4z', c1: '#ffffff',
+        g2: el(24, 43, 6, 5) + el(40, 38, 6, 5), c2: '#ffffff' },
+      photos: { label: 'Photos', base: '#3aa65b', lip: '#2a7e44',
+        g1: rr(12, 14, 40, 32, 4), c1: '#ffffff',
+        g2: 'M16 42l10-12 7 8 5-5 10 9z', c2: '#3aa65b',
+        g3: ci(41, 23, 4), c3: '#f2a65a' },
+      settings: { label: 'Settings', base: '#5b6478', lip: '#414859',
+        g1: gear(32, 30, 18, 13.5, 8), c1: '#eef0f6',
+        g2: ci(32, 30, 6), c2: '#5b6478' },
+      calendar: { label: 'Calendar', base: '#f6f4ef', lip: '#d6d0c2',
+        g1: 'M15 0h34a15 15 0 0 1 15 15v6H0V15A15 15 0 0 1 15 0z', c1: '#e5484d',
+        t2: 'SEP', t2y: 0, t2h: 21, t2s: 9, t2c: '#ffffff',
+        t: '28', ty: 21, th: 39, ts: 26, tc: '#1b2031' },
+      notes: { label: 'Notes', base: '#f5c84c', lip: '#c99a22',
+        g1: 'M18 11h20l9 9v27a3 3 0 0 1-3 3H18a3 3 0 0 1-3-3V14a3 3 0 0 1 3-3z', c1: '#fffaf0',
+        g2: 'M38 11v6a3 3 0 0 0 3 3h6z', c2: '#f0dca8',
+        s1: 'M21 28h20M21 34h20M21 40h12', sc: '#d4b25a', sw: 2.5 },
+      calculator: { label: 'Calculator', base: '#2c3348', lip: '#1a1f2e',
+        g1: rr(17, 12, 30, 11, 3), c1: '#9fe0cf',
+        g2: keys.join(''), c2: '#e8ebf4',
+        g3: rr(39, 45, 8, 7, 2), c3: '#f2a65a' },
+      software: { label: 'Software', base: '#2f6fdf', lip: '#2152ad',
+        g1: 'M16 22h32l-2.6 21.2a4 4 0 0 1-4 3.5H22.6a4 4 0 0 1-4-3.5z', c1: '#ffffff',
+        s1: 'M25 22v-3a7 7 0 0 1 14 0v3', sc: '#ffffff', sw: 3.5,
+        g3: 'M32 27l2.2 5 5 2.2-5 2.2-2.2 5-2.2-5-5-2.2 5-2.2z', c3: '#2f6fdf' },
+      videos: { label: 'Videos', base: '#c2410c', lip: '#922f08',
+        g1: rr(12, 15, 40, 30, 5), c1: '#ffffff',
+        g2: 'M28 23.5l12 6.5-12 6.5z', c2: '#c2410c' },
+      chat: { label: 'Chat', base: '#16847a', lip: '#0f6159',
+        g1: 'M25 12h22a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4h-1v6l-7-6H25a4 4 0 0 1-4-4V16a4 4 0 0 1 4-4z', c1: '#8fdccc',
+        g2: 'M15 22h22a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H24l-7 6v-6h-2a4 4 0 0 1-4-4V26a4 4 0 0 1 4-4z', c2: '#ffffff',
+        g3: ci(19, 32, 2.2) + ci(26, 32, 2.2) + ci(33, 32, 2.2), c3: '#16847a' },
+      maps: { label: 'Maps', base: '#3f8f5a', lip: '#2d6b42',
+        g1: 'M12 18l13-5 14 5 13-5v30l-13 5-14-5-13 5z', c1: '#dff1d3',
+        g2: 'M25 13l14 5v30l-14-5z', c2: '#bfe0ad',
+        g3: 'M40 13c-4.7 0-8.5 3.6-8.5 8.2 0 6.3 8.5 14.8 8.5 14.8s8.5-8.5 8.5-14.8c0-4.6-3.8-8.2-8.5-8.2z' + ci(40, 21.5, 3.2), c3: '#e5484d' },
+      weather: { label: 'Weather', base: '#3a7bd5', lip: '#2a5ea8',
+        g1: ci(27, 23, 9), c1: '#f7c948',
+        g2: 'M22 46h21a8 8 0 0 0 1.2-15.9A10.5 10.5 0 0 0 24 31.5a7.3 7.3 0 0 0-2 14.5z', c2: '#ffffff',
+        s1: 'M27 9.5v-2M17.5 13.5l-1.5-1.5M36.5 13.5l1.5-1.5M13.5 23h-2', sc: '#f7c948', sw: 2.5 },
+      monitor: { label: 'System Monitor', base: '#475069', lip: '#323950',
+        g1: rr(12, 12, 40, 30, 4), c1: '#1b2031',
+        g2: 'M29 42h6v4h-6zM23 46h18a1.5 1.5 0 0 1 0 3H23a1.5 1.5 0 0 1 0-3z', c2: '#cfd5e4',
+        s1: 'M17 33l7-7 6 5 8-10 9 6', sc: '#3cc4b0', sw: 3,
+        g3: ci(47, 27, 3), c3: '#f2a65a' },
+      screenshot: { label: 'Screenshot', base: '#9b3fb5', lip: '#742d88',
+        g1: ci(32, 30, 8), c1: '#f3d4fb',
+        g2: ci(32, 30, 3.5), c2: '#9b3fb5',
+        s1: 'M15 23v-5a3 3 0 0 1 3-3h5M41 15h5a3 3 0 0 1 3 3v5M49 37v5a3 3 0 0 1-3 3h-5M23 45h-5a3 3 0 0 1-3-3v-5', sc: '#ffffff', sw: 4 },
+      fusion: { label: 'Fusion', base: '#1b2031', lip: '#0c0f1c',
+        g1: ci(32, 22, 11), c1: '#5b9dff',
+        g2: ci(24.5, 35, 11), c2: '#f2a65a',
+        g3: ci(39.5, 35, 11), c3: '#3cc4b0' }
+    };
+    L.folder = L.files; L.globe = L.browser;
+    const key = this.props.app ?? 'files';
+    const i = L[key] || L.files;
+    const px = Number(this.props.size) || 128;
+    const k = px / 64;
+    return {
+      px, label: i.label, base: i.base, lip: i.lip,
+      lipD: rr(0, 0, 64, 64, 15),
+      faceD: rr(0, 0, 64, 60, 15),
+      sheenD: 'M15 0h34a15 15 0 0 1 15 15v13H0V15A15 15 0 0 1 15 0z',
+      edgeD: rr(0.5, 0.5, 63, 63, 14.5),
+      g1: i.g1 || '', c1: i.c1 || 'none',
+      g2: i.g2 || '', c2: i.c2 || 'none',
+      g3: i.g3 || '', c3: i.c3 || 'none',
+      s1: i.s1 || '', sc: i.sc || 'none', sw: i.sw || 0,
+      hasT: !!i.t, t: i.t || '', tTop: (i.ty || 0) * k, tH: (i.th || 0) * k, tSize: (i.ts || 1) * k, tc: i.tc || 'inherit',
+      hasT2: !!i.t2, t2: i.t2 || '', t2Top: (i.t2y || 0) * k, t2H: (i.t2h || 0) * k, t2Size: (i.t2s || 1) * k, t2c: i.t2c || 'inherit'
+    };
+  }
+}
+</script>
+</body>
+</html>

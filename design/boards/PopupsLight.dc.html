@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — pop-ups, light</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#eef1f7;color:#141827}
+button{font:inherit;color:inherit;border:0;padding:0;margin:0;background:none;cursor:default}
+svg{display:block;flex-shrink:0}
+svg.i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+a{color:#2f6fdf}a:hover{color:#2359c4}
+</style>
+</helmet>
+<div style="position:relative;width:1440px;height:720px;overflow:hidden;box-sizing:border-box;padding:56px;display:flex;flex-direction:column;gap:24px;background:#eef1f7;color:#141827;font-size:13px">
+
+<svg width="1440" height="980" viewBox="0 0 1440 980" aria-hidden="true" style="position:absolute;left:0;top:0;opacity:0.5">
+<rect width="1440" height="980" fill="#dde6f4"></rect>
+<circle cx="1010" cy="400" r="150" fill="#f2a65a" fill-opacity="0.5"></circle>
+<path d="M0 610 L180 470 L330 550 L520 380 L700 530 L860 440 L1060 565 L1240 420 L1440 510 L1440 980 L0 980 Z" fill="#b9c9e8"></path>
+<path d="M0 710 L220 595 L420 675 L640 550 L880 665 L1100 590 L1300 680 L1440 630 L1440 980 L0 980 Z" fill="#9bb2e0"></path>
+<path d="M0 830 L260 720 L520 800 L780 700 L1040 790 L1280 720 L1440 765 L1440 980 L0 980 Z" fill="#7896d4"></path>
+</svg>
+
+<div style="position:relative;display:flex;flex-direction:column;gap:10px">
+<span style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#b0661a">Plasma Fusion · Plasma Style</span>
+<h1 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:44px;font-weight:700;line-height:1.05">Pop-ups, toasts and tray panels</h1>
+<p style="margin:0;max-width:900px;font-size:15px;line-height:1.55;color:#4d546a">Everything the shell shows on its own uses the same frosted surface as the dock and top bar: 86% white fill, 36 px blur, 1 px light edge, 18–22 px corners.</p>
+</div>
+
+<div style="position:relative;display:grid;grid-template-columns:420px 440px minmax(0, 1fr);gap:24px;flex-grow:1">
+
+<!-- Column 1 -->
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#5b6278">On-screen displays · bottom centre, 1.5 s</span>
+<div style="height:60px;box-sizing:border-box;padding:0 20px;border-radius:30px;display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.88);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<svg class="i" width="22" height="22" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
+<div style="flex-grow:1;height:8px;border-radius:4px;background:rgba(20,24,39,0.14)"><div style="width:64%;height:8px;border-radius:4px;background:#5b9dff"></div></div>
+<span style="width:30px;text-align:right;font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600">64</span>
+</div>
+<div style="height:60px;box-sizing:border-box;padding:0 20px;border-radius:30px;display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.88);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<svg class="i" width="22" height="22" viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>
+<div style="flex-grow:1;height:8px;border-radius:4px;background:rgba(20,24,39,0.14)"><div style="width:80%;height:8px;border-radius:4px;background:#f2a65a"></div></div>
+<span style="width:30px;text-align:right;font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600">80</span>
+</div>
+<div style="display:flex;gap:10px">
+<div style="height:60px;flex-grow:1;box-sizing:border-box;padding:0 18px;border-radius:30px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.88);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M8 14h8"></path></svg>
+<span style="font-weight:800">English (US)</span>
+</div>
+<div style="height:60px;box-sizing:border-box;padding:0 18px;border-radius:30px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.88);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6"></path></svg>
+<span style="font-weight:800">Muted</span>
+</div>
+</div>
+
+<span style="margin-top:12px;font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#5b6278">Tooltips · after 600 ms hover</span>
+<div style="display:flex;gap:14px;align-items:flex-start">
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+<span role="tooltip" style="padding:6px 11px;border-radius:9px;background:rgba(12,15,28,0.94);color:#ffffff;border:1px solid rgba(20,24,39,0.12);font-size:12px;font-weight:700">Browser</span>
+<dc-import name="AppIcon" app="browser" size="48" hint-size="48px,48px"></dc-import>
+</div>
+<div role="tooltip" style="flex-grow:1;box-sizing:border-box;padding:14px;border-radius:16px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,0.9);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<div style="display:flex;align-items:center;gap:8px"><svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM22 11v2"></path><path d="M5 10h9v4H5z" style="fill:currentColor;stroke:none"></path></svg><span style="font-weight:800">Battery 82%</span></div>
+<span style="font-size:12px;color:#4d546a">About 4 h 10 min left · Balanced mode</span>
+<div style="height:5px;border-radius:3px;background:rgba(20,24,39,0.12)"><div style="width:82%;height:5px;border-radius:3px;background:#3aa65b"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Column 2 -->
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#5b6278">Notifications · top right, 5 s unless pinned</span>
+
+<div style="box-sizing:border-box;padding:14px;border-radius:18px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,0.9);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<div style="display:flex;align-items:center;gap:8px">
+<dc-import name="AppIcon" app="browser" size="20" hint-size="20px,20px"></dc-import>
+<span style="flex-grow:1;font-size:11.5px;font-weight:800;color:#5b6278">Browser · Download finished</span>
+<button aria-label="Dismiss" style="width:24px;height:24px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#5b6278"><svg class="i" width="12" height="12" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"></path></svg></button>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:40px;height:44px;border-radius:6px;background:#475069;color:#ffffff;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px;box-sizing:border-box;font-size:9px;font-weight:800">ISO</span>
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:800">plasma-fusion.iso</span><span style="font-size:12px;color:#4d546a">2.9 GB · Downloads</span></div>
+</div>
+<div style="display:flex;gap:8px;margin-top:4px">
+<button style="flex-grow:1;height:32px;border-radius:10px;background:#2f6fdf;color:#ffffff;font-size:12.5px;font-weight:800">Open</button>
+<button style="flex-grow:1;height:32px;border-radius:10px;background:rgba(20,24,39,0.1);font-size:12.5px;font-weight:700">Show in folder</button>
+</div>
+</div>
+
+<div style="box-sizing:border-box;padding:14px;border-radius:18px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,0.9);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<div style="display:flex;align-items:center;gap:8px">
+<dc-import name="AppIcon" app="files" size="20" hint-size="20px,20px"></dc-import>
+<span style="flex-grow:1;font-size:11.5px;font-weight:800;color:#5b6278">Files · Copying</span>
+<button aria-label="Pause" style="width:26px;height:26px;border-radius:13px;background:rgba(20,24,39,0.08);display:flex;align-items:center;justify-content:center"><svg class="i" width="12" height="12" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"></path></svg></button>
+<button aria-label="Cancel" style="width:26px;height:26px;border-radius:13px;background:rgba(20,24,39,0.08);display:flex;align-items:center;justify-content:center"><svg class="i" width="12" height="12" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"></path></svg></button>
+</div>
+<span style="font-size:13.5px;font-weight:800">3 of 5 files to “USB drive”</span>
+<div role="progressbar" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" style="height:6px;border-radius:3px;background:rgba(20,24,39,0.12)"><div style="width:64%;height:6px;border-radius:3px;background:#5b9dff"></div></div>
+<span style="font-size:12px;color:#4d546a">412 MB of 640 MB · 38 MB/s · about 6 s left</span>
+</div>
+
+<div style="box-sizing:border-box;padding:14px;border-radius:18px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,0.9);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 18px 44px rgba(20,24,39,0.16)">
+<div style="display:flex;align-items:center;gap:8px">
+<svg class="i" width="18" height="18" viewBox="0 0 24 24" style="color:#2f6fdf"><path d="M9 2h6v5H9zM7 7h10v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z"></path></svg>
+<span style="flex-grow:1;font-size:11.5px;font-weight:800;color:#5b6278">Device connected</span>
+</div>
+<div style="display:flex;align-items:center;gap:12px">
+<span style="width:40px;height:40px;border-radius:10px;background:#3f7fe0;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M9 2h6v5H9zM7 7h10v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z"></path></svg></span>
+<div style="flex-grow:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:13.5px;font-weight:800">USB drive</span>
+<div style="height:4px;border-radius:2px;background:rgba(20,24,39,0.12)"><div style="width:35%;height:4px;border-radius:2px;background:#3cc4b0"></div></div>
+<span style="font-size:11.5px;color:#4d546a">41 GB free of 64 GB</span></div>
+</div>
+<div style="display:flex;gap:8px">
+<button style="flex-grow:1;height:32px;border-radius:10px;background:rgba(20,24,39,0.1);font-size:12.5px;font-weight:700">Open in Files</button>
+<button style="flex-grow:1;height:32px;border-radius:10px;background:rgba(20,24,39,0.1);font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M12 5l7 8H5zM5 18h14"></path></svg>Eject</button>
+</div>
+</div>
+</div>
+
+<!-- Column 3: Wi-Fi tray panel -->
+<div style="display:flex;flex-direction:column;gap:14px">
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#5b6278">Tray panel · opens under its icon</span>
+<section aria-label="Wi-Fi" style="box-sizing:border-box;padding:16px;border-radius:22px;display:flex;flex-direction:column;gap:12px;background:rgba(255,255,255,0.9);backdrop-filter:blur(36px);-webkit-backdrop-filter:blur(36px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 24px 60px rgba(20,24,39,0.18)">
+<div style="display:flex;align-items:center;gap:10px">
+<button aria-label="Back to quick settings" style="width:32px;height:32px;border-radius:16px;background:rgba(20,24,39,0.08);display:flex;align-items:center;justify-content:center"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"></path></svg></button>
+<span style="flex-grow:1;font-size:16px;font-weight:800">Wi‑Fi</span>
+<button role="switch" aria-checked="true" aria-label="Wi-Fi on" style="width:40px;height:22px;border-radius:11px;background:#2f6fdf;position:relative"><span style="position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:9px;background:#ffffff"></span></button>
+</div>
+<div style="box-sizing:border-box;padding:12px;border-radius:14px;background:rgba(91,157,255,0.16);display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;gap:10px;color:#1d4fb0">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg>
+<div style="flex-grow:1;display:flex;flex-direction:column"><span style="font-weight:800;color:#141827">Home network</span><span style="font-size:11.5px">Connected · 5 GHz · WPA3</span></div>
+<button style="height:28px;padding:0 12px;border-radius:14px;background:rgba(20,24,39,0.12);font-size:12px;font-weight:700;color:#141827">Disconnect</button>
+</div>
+<div style="display:flex;gap:18px;font-size:11.5px;color:#1d4fb0;padding-left:30px"><span>Signal excellent</span><span>↓ 412 Mb/s</span><span>↑ 96 Mb/s</span></div>
+</div>
+<span style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#6b7288;padding-left:4px">Other networks</span>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{nets}}" as="n" hint-placeholder-count="4">
+<div style="height:44px;box-sizing:border-box;padding:0 10px;border-radius:10px;display:flex;align-items:center;gap:12px;background: {{n.bg}}">
+<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8">
+<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01" stroke="rgba(20,24,39,0.22)"></path>
+<path d="{{n.on}}" stroke="#141827"></path>
+</svg>
+<span style="flex-grow:1;font-weight:700">{{n.name}}</span>
+<sc-if value="{{n.lock}}" hint-placeholder-val="{{true}}"><svg class="i" width="14" height="14" viewBox="0 0 24 24" style="color:#5b6278"><path d="M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V8a4 4 0 0 1 8 0v3"></path></svg></sc-if>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(20,24,39,0.08);padding-top:12px">
+<a href="#" style="font-size:12.5px;font-weight:700;text-decoration:none">Hidden network…</a>
+<button style="height:32px;padding:0 14px;border-radius:16px;background:rgba(20,24,39,0.08);font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"></path></svg>Network settings</button>
+</div>
+</section>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const a1 = 'M2 9a15 15 0 0 1 20 0', a2 = 'M5 12.5a10 10 0 0 1 14 0', a3 = 'M8.5 16a5 5 0 0 1 7 0', dot = 'M12 19.5h.01';
+    const nets = [
+      { name: 'Office-Guest', on: dot + a3 + a2, lock: true, bg: 'rgba(20,24,39,0.06)' },
+      { name: 'Café Libre', on: dot + a3, lock: false, bg: 'transparent' },
+      { name: 'Studio 5G', on: dot + a3 + a2, lock: true, bg: 'transparent' },
+      { name: 'Printer-Direct', on: dot, lock: true, bg: 'transparent' }
+    ];
+    return { nets };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — colour schemes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#10142a;color:#e8ebf4}
+svg{display:block;flex-shrink:0}
+a{color:#8ab8ff}a:hover{color:#b9d4ff}
+</style>
+</helmet>
+<div style="width:1440px;height:1440px;box-sizing:border-box;padding:56px;display:flex;flex-direction:column;gap:24px;background:#10142a;color:#e8ebf4;font-size:13px">
+
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#f2c38a">Plasma Fusion · Colors</span>
+<h1 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:44px;font-weight:700;line-height:1.05">Fusion Dark and Fusion Light</h1>
+<p style="margin:0;max-width:880px;font-size:15px;line-height:1.55;color:#b8bfd3">Every text-on-background pair used in the designs, grouped by the section of a KDE colour scheme it belongs to, with its measured contrast ratio. Normal text needs 4.5:1 (AA); focus rings and icons need 3:1; disabled text is exempt.</p>
+</div>
+<div style="display:flex;gap:8px;flex-shrink:0">
+<span style="height:26px;padding:0 10px;border-radius:13px;background:rgba(58,166,91,0.22);color:#7fd99c;font-size:11.5px;font-weight:800;display:flex;align-items:center">AAA ≥ 7</span>
+<span style="height:26px;padding:0 10px;border-radius:13px;background:rgba(91,157,255,0.2);color:#8ab8ff;font-size:11.5px;font-weight:800;display:flex;align-items:center">AA ≥ 4.5</span>
+<span style="height:26px;padding:0 10px;border-radius:13px;background:rgba(242,166,90,0.2);color:#f5c08c;font-size:11.5px;font-weight:800;display:flex;align-items:center">UI ≥ 3</span>
+<span style="height:26px;padding:0 10px;border-radius:13px;background:rgba(255,255,255,0.08);color:#a3abc2;font-size:11.5px;font-weight:800;display:flex;align-items:center">Exempt</span>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:24px;flex-grow:1">
+<sc-for list="{{schemes}}" as="sc" hint-placeholder-count="2">
+<section style="box-sizing:border-box;padding:24px 26px;border-radius:24px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:4px">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+<h2 style="margin:0;font-size:20px;font-weight:800">{{sc.name}}</h2>
+<span style="font-size:12px;color:#a3abc2">Accent fill #2F6FDF in both</span>
+</div>
+<div style="display:grid;grid-template-columns:132px minmax(0, 1fr) 150px 64px;gap:12px;padding:0 4px 6px;font-size:10.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#8891aa">
+<span>Sample</span><span>Role · KDE section</span><span>Text / background</span><span style="text-align:right">Ratio</span>
+</div>
+<sc-for list="{{sc.rows}}" as="r" hint-placeholder-count="21">
+<div style="display:grid;grid-template-columns:132px minmax(0, 1fr) 150px 64px;gap:12px;align-items:center;height:42px;padding:0 4px;border-top:1px solid rgba(255,255,255,0.05)">
+<span style="height:32px;border-radius:8px;display:flex;align-items:center;padding-left:12px;font-weight:800;font-size:13px;border:1px solid rgba(255,255,255,0.08);background: {{r.bg}};color: {{r.fg}};box-shadow: {{r.ring}}">{{r.sample}}</span>
+<div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+<span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{r.role}}</span>
+<span style="font-size:11px;font-family:ui-monospace,Menlo,monospace;color:#8f98b3">{{r.kde}}</span>
+</div>
+<span style="font-size:11.5px;font-family:ui-monospace,Menlo,monospace;color:#cdd3e4">{{r.fgU}} / {{r.bgU}}</span>
+<span style="justify-self:end;height:24px;padding:0 9px;border-radius:12px;font-size:11.5px;font-weight:800;display:flex;align-items:center;background: {{r.badgeBg}};color: {{r.badgeFg}}">{{r.ratio}}</span>
+</div>
+</sc-for>
+</section>
+</sc-for>
+</div>
+
+<div style="display:flex;gap:24px;font-size:12.5px;line-height:1.5;color:#b8bfd3">
+<span style="flex:1">Soft selection rows are a 20% (dark) or 12% (light) tint of the accent over the window colour; ratios are measured against the blended result.</span>
+<span style="flex:1">The dark scheme's red fill was darkened from #D9434B to #C93A42 so white text on a Delete button reaches 5.0:1 (it was 4.3:1). Close-button glyphs keep #D9434B, as icons only need 3:1.</span>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1440}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const badge = (v, exempt, ui) => {
+      if (exempt) return { badgeBg: 'rgba(255,255,255,0.08)', badgeFg: '#a3abc2' };
+      if (ui) return { badgeBg: 'rgba(242,166,90,0.2)', badgeFg: '#f5c08c' };
+      if (v >= 7) return { badgeBg: 'rgba(58,166,91,0.22)', badgeFg: '#7fd99c' };
+      if (v >= 4.5) return { badgeBg: 'rgba(91,157,255,0.2)', badgeFg: '#8ab8ff' };
+      return { badgeBg: 'rgba(242,166,90,0.2)', badgeFg: '#f5c08c' };
+    };
+    const R = (role, kde, fg, bg, v, o) => {
+      o = o || {};
+      return Object.assign({ role, kde, fg, bg, fgU: fg.toUpperCase(), bgU: bg.toUpperCase(), ratio: v.toFixed(1) + ':1',
+        sample: o.sample || 'Aa text', ring: o.ring ? '0 0 0 2px ' + bg + ', 0 0 0 4px ' + fg : 'none' }, badge(v, o.exempt, o.ui));
+    };
+    const dark = [
+      R('Text', 'Window · ForegroundNormal', '#e8ebf4', '#1b2031', 13.6),
+      R('Secondary text', 'Window · ForegroundInactive', '#a3abc2', '#1b2031', 7.1),
+      R('Disabled text', 'Window · disabled effect', '#6f7892', '#1b2031', 3.7, { exempt: true }),
+      R('Alternate background', 'Window · BackgroundAlternate', '#e8ebf4', '#181c2b', 14.2),
+      R('Fields and lists', 'View · BackgroundNormal', '#e8ebf4', '#1f2540', 12.6),
+      R('Link', 'View · ForegroundLink', '#8ab8ff', '#1f2540', 7.4, { sample: 'Link' }),
+      R('Visited link', 'View · ForegroundVisited', '#c3a6ff', '#1f2540', 7.3, { sample: 'Visited' }),
+      R('Button', 'Button · BackgroundNormal', '#e8ebf4', '#262d4c', 11.3, { sample: 'Button' }),
+      R('Button, hover', 'Button · DecorationHover', '#e8ebf4', '#2d355a', 10.0, { sample: 'Button' }),
+      R('Selected, focused', 'Selection · BackgroundNormal', '#ffffff', '#2f6fdf', 4.7, { sample: 'Selected' }),
+      R('Selected row, soft', 'Selection · tinted', '#cfe0ff', '#28395a', 8.6, { sample: 'Row' }),
+      R('Focus ring', 'Button · DecorationFocus', '#8ab8ff', '#1b2031', 8.0, { sample: 'Focus', ring: true, ui: true }),
+      R('Positive', 'Window · ForegroundPositive', '#7fd99c', '#1b2031', 9.5, { sample: 'Saved' }),
+      R('Neutral / warning', 'Window · ForegroundNeutral', '#f5c08c', '#1b2031', 9.9, { sample: 'Pending' }),
+      R('Negative', 'Window · ForegroundNegative', '#ff8a8f', '#1b2031', 7.2, { sample: 'Failed' }),
+      R('Destructive fill', 'Button · negative fill', '#ffffff', '#c93a42', 5.0, { sample: 'Delete' }),
+      R('Title bar, active', 'Header · BackgroundNormal', '#e8ebf4', '#222840', 12.2, { sample: 'Files' }),
+      R('Title bar, inactive', 'Header · Inactive', '#8891aa', '#1f2536', 4.9, { sample: 'Files' }),
+      R('Shell panels', 'Complementary · BackgroundNormal', '#e8ebf4', '#1a1f33', 13.7, { sample: '14:49' }),
+      R('Shell secondary', 'Complementary · ForegroundInactive', '#a3abc2', '#1a1f33', 7.1, { sample: 'Paused' }),
+      R('Tooltip', 'Tooltip · BackgroundNormal', '#e8ebf4', '#0c0f1c', 16.0, { sample: 'Pin' })
+    ];
+    const light = [
+      R('Text', 'Window · ForegroundNormal', '#141827', '#ffffff', 17.7),
+      R('Secondary text', 'Window · ForegroundInactive', '#4d546a', '#ffffff', 7.5),
+      R('Disabled text', 'Window · disabled effect', '#9aa0b2', '#ffffff', 2.6, { exempt: true }),
+      R('Alternate background', 'Window · BackgroundAlternate', '#141827', '#f5f6fa', 16.3),
+      R('Fields and lists', 'View · BackgroundNormal', '#141827', '#ffffff', 17.7),
+      R('Link', 'View · ForegroundLink', '#2359c4', '#ffffff', 6.4, { sample: 'Link' }),
+      R('Visited link', 'View · ForegroundVisited', '#6b3fb5', '#ffffff', 7.0, { sample: 'Visited' }),
+      R('Button', 'Button · BackgroundNormal', '#141827', '#eef0f5', 15.5, { sample: 'Button' }),
+      R('Button, hover', 'Button · DecorationHover', '#141827', '#e4e7ef', 14.3, { sample: 'Button' }),
+      R('Selected, focused', 'Selection · BackgroundNormal', '#ffffff', '#2f6fdf', 4.7, { sample: 'Selected' }),
+      R('Selected row, soft', 'Selection · tinted', '#1d4fb0', '#e6eefb', 6.4, { sample: 'Row' }),
+      R('Focus ring', 'Button · DecorationFocus', '#2f6fdf', '#ffffff', 4.7, { sample: 'Focus', ring: true, ui: true }),
+      R('Positive', 'Window · ForegroundPositive', '#23703b', '#ffffff', 6.1, { sample: 'Saved' }),
+      R('Neutral / warning', 'Window · ForegroundNeutral', '#8f4f12', '#ffffff', 6.4, { sample: 'Pending' }),
+      R('Negative', 'Window · ForegroundNegative', '#b3262e', '#ffffff', 6.5, { sample: 'Failed' }),
+      R('Destructive fill', 'Button · negative fill', '#ffffff', '#c93a42', 5.0, { sample: 'Delete' }),
+      R('Title bar, active', 'Header · BackgroundNormal', '#141827', '#eceff6', 15.3, { sample: 'Files' }),
+      R('Title bar, inactive', 'Header · Inactive', '#646b80', '#f1f3f8', 4.8, { sample: 'Files' }),
+      R('Shell panels', 'Complementary · BackgroundNormal', '#141827', '#f7f8fb', 16.6, { sample: '14:49' }),
+      R('Shell secondary', 'Complementary · ForegroundInactive', '#5b6278', '#f7f8fb', 5.7, { sample: 'Paused' }),
+      R('Tooltip', 'Tooltip · BackgroundNormal', '#ffffff', '#1b2031', 16.2, { sample: 'Pin' })
+    ];
+    return { schemes: [{ name: 'Fusion Dark', rows: dark }, { name: 'Fusion Light', rows: light }] };
+  }
+}
+</script>
+</body>
+</html>

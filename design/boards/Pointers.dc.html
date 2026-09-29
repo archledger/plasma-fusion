@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — pointers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#10142a;color:#e8ebf4}
+svg{display:block;flex-shrink:0}
+a{color:#8ab8ff}a:hover{color:#b9d4ff}
+</style>
+</helmet>
+<div style="width:1440px;height:920px;box-sizing:border-box;padding:56px 56px 48px;display:flex;flex-direction:column;gap:24px;background:#10142a;color:#e8ebf4;font-size:14px">
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#f2c38a">Plasma Fusion · Pointers</span>
+<h1 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:44px;font-weight:700;line-height:1.05">Cursor theme</h1>
+<p style="margin:0;max-width:860px;font-size:15px;line-height:1.55;color:#b8bfd3">Dark fill with a white outline so every pointer stands out on light and dark windows alike, a soft shadow for lift, and colour used only where it carries meaning: the busy spinner, the copy badge and "not allowed". The amber ring marks each pointer's hotspot — the exact pixel that clicks.</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(6, minmax(0, 1fr));gap:16px">
+<sc-for list="{{cursors}}" as="c" hint-placeholder-count="12">
+<div style="height:176px;box-sizing:border-box;padding:14px;border-radius:18px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;align-items:center;gap:10px">
+<div style="flex-grow:1;width:100%;border-radius:12px;background:#1f2644;display:flex;align-items:center;justify-content:center">
+<svg width="72" height="72" viewBox="0 0 32 32" aria-hidden="true" style="overflow:visible;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">
+<path d="{{c.fill}}" fill="#1b2031" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"></path>
+<path d="{{c.line}}" fill="none" stroke="#ffffff" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="{{c.line}}" fill="none" stroke="{{c.lc}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="{{c.a1}}" fill="{{c.a1c}}"></path>
+<path d="{{c.a2}}" fill="{{c.a2c}}"></path>
+<path d="{{c.a3}}" fill="{{c.a3c}}"></path>
+<circle cx="{{c.hx}}" cy="{{c.hy}}" r="1.1" fill="none" stroke="#f2a65a" stroke-width="0.6"></circle>
+</svg>
+</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+<span style="font-size:13px;font-weight:800">{{c.label}}</span>
+<span style="font-size:11px;font-family:ui-monospace,Menlo,monospace;color:#8f98b3">{{c.css}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:16px;flex-grow:1">
+
+<section style="box-sizing:border-box;padding:22px;border-radius:18px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0;font-size:16px;font-weight:800">Light variant</h2><span style="font-size:12px;color:#a3abc2">For dark-heavy workflows</span></div>
+<div style="flex-grow:1;border-radius:12px;background:#2a3150;display:flex;align-items:center;justify-content:space-around;padding:0 10px">
+<sc-for list="{{light}}" as="c" hint-placeholder-count="6">
+<svg width="48" height="48" viewBox="0 0 32 32" aria-hidden="true" style="overflow:visible;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">
+<path d="{{c.fill}}" fill="#ffffff" stroke="#1b2031" stroke-width="1.6" stroke-linejoin="round"></path>
+<path d="{{c.line}}" fill="none" stroke="#1b2031" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="{{c.line}}" fill="none" stroke="{{c.lcl}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="{{c.a1}}" fill="{{c.a1l}}"></path>
+<path d="{{c.a2}}" fill="{{c.a2c}}"></path>
+<path d="{{c.a3}}" fill="{{c.a3c}}"></path>
+</svg>
+</sc-for>
+</div>
+</section>
+
+<section style="box-sizing:border-box;padding:22px;border-radius:18px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0;font-size:16px;font-weight:800">Sizes</h2><span style="font-size:12px;color:#a3abc2">24 · 32 · 48 · 64 px</span></div>
+<div style="flex-grow:1;border-radius:12px;background:#eef0f5;display:flex;align-items:flex-end;justify-content:space-around;padding:0 10px 14px">
+<sc-for list="{{sizes}}" as="s" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+<svg width="{{s.px}}" height="{{s.px}}" viewBox="0 0 32 32" aria-hidden="true" style="overflow:visible;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.35))"><path d="M6 3v21l5.5-5.2 3.6 8.2 3.7-1.6-3.6-8h7.6z" fill="#1b2031" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+<span style="font-size:11px;font-weight:800;color:#3d4459">{{s.px}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section style="box-sizing:border-box;padding:22px;border-radius:18px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0;font-size:16px;font-weight:800">Busy animation</h2><span style="font-size:12px;color:#a3abc2">4 key frames · 800 ms loop</span></div>
+<div style="flex-grow:1;border-radius:12px;background:#1f2644;display:flex;align-items:center;justify-content:space-around;padding:0 10px">
+<sc-for list="{{frames}}" as="f" hint-placeholder-count="4">
+<svg width="52" height="52" viewBox="0 0 32 32" aria-hidden="true" style="overflow:visible;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">
+<circle cx="16" cy="16" r="11" fill="#1b2031" stroke="#ffffff" stroke-width="1.6"></circle>
+<g transform="{{f.t}}">
+<circle cx="16" cy="10.4" r="3" fill="#5b9dff"></circle>
+<circle cx="11.2" cy="19" r="3" fill="#f2a65a"></circle>
+<circle cx="20.8" cy="19" r="3" fill="#3cc4b0"></circle>
+</g>
+</svg>
+</sc-for>
+</div>
+</section>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":920}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ci = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0z`;
+    const arrow = 'M6 3v21l5.5-5.2 3.6 8.2 3.7-1.6-3.6-8h7.6z';
+    const dots = (cx, cy, r, s) => [ci(cx, cy - s, r), ci(cx - s * 0.87, cy + s * 0.5, r), ci(cx + s * 0.87, cy + s * 0.5, r)];
+    const bd = dots(25, 25, 1.7, 2.6);
+    const big = dots(16, 16.6, 3, 6);
+    const base = { fill: '', line: '', lc: '#1b2031', lcl: '#ffffff', a1: '', a1c: 'none', a1l: 'none', a2: '', a2c: 'none', a3: '', a3c: 'none' };
+    const C = (o) => Object.assign({}, base, o, { a1l: o.a1l || o.a1c || 'none' });
+    const cursors = [
+      C({ label: 'Normal', css: 'default', fill: arrow, hx: 6, hy: 3 }),
+      C({ label: 'Link', css: 'pointer', fill: 'M12 18V5a2 2 0 0 1 4 0v7a1.75 1.75 0 0 1 3.5 0v1.5a1.75 1.75 0 0 1 3.5 0V15a1.75 1.75 0 0 1 3.5 0v6c0 4-2.8 7-7 7h-2.5c-2.4 0-3.8-1-5-2.8L6.2 19.4a1.9 1.9 0 0 1 2.9-2.4z', hx: 14, hy: 3 }),
+      C({ label: 'Text', css: 'text', line: 'M11.5 5h2.5c1 0 2 .6 2 1.6 0-1 1-1.6 2-1.6h2.5M16 6.6v18.8M11.5 27h2.5c1 0 2-.6 2-1.6 0 1 1 1.6 2 1.6h2.5M13 16h6', hx: 16, hy: 16 }),
+      C({ label: 'Busy', css: 'wait', fill: ci(16, 16, 11), a1: big[0], a1c: '#5b9dff', a2: big[1], a2c: '#f2a65a', a3: big[2], a3c: '#3cc4b0', hx: 16, hy: 16 }),
+      C({ label: 'Working', css: 'progress', fill: arrow + ci(25, 25, 5.6), a1: bd[0], a1c: '#5b9dff', a2: bd[1], a2c: '#f2a65a', a3: bd[2], a3c: '#3cc4b0', hx: 6, hy: 3 }),
+      C({ label: 'Move', css: 'move', fill: 'M16 3l4.5 4.5h-3v7h7v-3L29 16l-4.5 4.5v-3h-7v7h3L16 29l-4.5-4.5h3v-7h-7v3L3 16l4.5-4.5v3h7v-7h-3z', hx: 16, hy: 16 }),
+      C({ label: 'Resize horizontal', css: 'ew-resize', fill: 'M3 16l6-6v4h14v-4l6 6-6 6v-4H9v4z', hx: 16, hy: 16 }),
+      C({ label: 'Resize vertical', css: 'ns-resize', fill: 'M16 3l6 6h-4v14h4l-6 6-6-6h4V9h-4z', hx: 16, hy: 16 }),
+      C({ label: 'Resize diagonal', css: 'nwse-resize', fill: 'M6 6H15L11.8 9.2 22.8 20.2 26 17V26H17L20.2 22.8 9.2 11.8 6 15Z', hx: 16, hy: 16 }),
+      C({ label: 'Precise', css: 'crosshair', line: 'M16 3v9M16 20v9M3 16h9M20 16h9', a1: ci(16, 16, 1.8), a1c: '#5b9dff', hx: 16, hy: 16 }),
+      C({ label: 'Not allowed', css: 'not-allowed', line: ci(16, 16, 10) + 'M9 9l14 14', lc: '#e5484d', lcl: '#e5484d', hx: 16, hy: 16 }),
+      C({ label: 'Copy', css: 'copy', fill: arrow, a1: ci(25, 25, 6.4), a1c: '#ffffff', a1l: '#1b2031', a2: ci(25, 25, 5), a2c: '#3aa65b', a3: 'M24.1 21.6h1.8v2.5h2.5v1.8h-2.5v2.5h-1.8v-2.5h-2.5v-1.8h2.5z', a3c: '#ffffff', hx: 6, hy: 3 })
+    ];
+    const light = [cursors[0], cursors[1], cursors[2], cursors[4], cursors[8], cursors[11]];
+    const sizes = [24, 32, 48, 64].map(px => ({ px }));
+    const frames = [0, 30, 60, 90].map(r => ({ t: 'rotate(' + r + ' 16 16.6)' }));
+    return { cursors, light, sizes, frames };
+  }
+}
+</script>
+</body>
+</html>

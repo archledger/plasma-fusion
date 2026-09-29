@@ -1,0 +1,326 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "AltTab.dc.html": {
+      "h": 900,
+      "page": "dark",
+      "title": "5 · Window switcher (Alt+Tab)",
+      "w": 1440,
+      "x": 0,
+      "y": 2040
+    },
+    "AltTabLight.dc.html": {
+      "h": 900,
+      "page": "light",
+      "title": "11 · Window switcher, light",
+      "w": 1440,
+      "x": 0,
+      "y": 2040
+    },
+    "AppIcon.dc.html": {
+      "h": 128,
+      "page": "icons",
+      "title": "AppIcon component (pick app + size in Tweaks)",
+      "w": 128,
+      "x": 1520,
+      "y": 1140
+    },
+    "Boot.dc.html": {
+      "h": 900,
+      "page": "startup",
+      "title": "20 · Boot splash + disk unlock",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Colors.dc.html": {
+      "h": 1440,
+      "page": "theme",
+      "title": "13 · Colour schemes",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Contents.dc.html": {
+      "h": 1060,
+      "is_interactive": true,
+      "page": "start",
+      "title": "0 · Contents",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Controls.dc.html": {
+      "h": 1360,
+      "page": "theme",
+      "title": "14 · Application Style — controls, dark and light",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "FileIcons.dc.html": {
+      "h": 1020,
+      "page": "icons",
+      "title": "19 · Icons — files, places, devices, status",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Icons.dc.html": {
+      "h": 1520,
+      "page": "icons",
+      "title": "18 · Icon system — apps and line icons",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Launcher.dc.html": {
+      "h": 900,
+      "page": "dark",
+      "title": "2 · Launcher — start menu + search",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "LauncherLight.dc.html": {
+      "h": 900,
+      "page": "light",
+      "title": "8 · Launcher, light",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Lock.dc.html": {
+      "h": 900,
+      "page": "startup",
+      "title": "22 · Lock screen",
+      "w": 1440,
+      "x": 0,
+      "y": 1020
+    },
+    "Login.dc.html": {
+      "h": 900,
+      "page": "startup",
+      "title": "23 · Login screen (SDDM)",
+      "w": 1440,
+      "x": 1520,
+      "y": 1020
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "page": "dark",
+      "title": "1 · Desktop — windows, dock, widgets",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "MainLight.dc.html": {
+      "h": 900,
+      "page": "light",
+      "title": "7 · Desktop, light",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Overview.dc.html": {
+      "h": 900,
+      "page": "dark",
+      "title": "3 · Overview — workspaces + window picker",
+      "w": 1440,
+      "x": 0,
+      "y": 1020
+    },
+    "OverviewLight.dc.html": {
+      "h": 900,
+      "page": "light",
+      "title": "9 · Overview, light",
+      "w": 1440,
+      "x": 0,
+      "y": 1020
+    },
+    "Pointers.dc.html": {
+      "h": 920,
+      "page": "theme",
+      "title": "17 · Pointers",
+      "w": 1440,
+      "x": 0,
+      "y": 3220
+    },
+    "Popups.dc.html": {
+      "h": 720,
+      "page": "dark",
+      "title": "6 · Pop-ups, toasts and tray panels",
+      "w": 1440,
+      "x": 1520,
+      "y": 2040
+    },
+    "PopupsLight.dc.html": {
+      "h": 720,
+      "page": "light",
+      "title": "12 · Pop-ups, light",
+      "w": 1440,
+      "x": 1520,
+      "y": 2040
+    },
+    "QuickSettings.dc.html": {
+      "h": 900,
+      "page": "dark",
+      "title": "4 · Quick settings, notifications, snap layouts",
+      "w": 1440,
+      "x": 1520,
+      "y": 1020
+    },
+    "QuickSettingsLight.dc.html": {
+      "h": 900,
+      "page": "light",
+      "title": "10 · Quick settings, light",
+      "w": 1440,
+      "x": 1520,
+      "y": 1020
+    },
+    "Splash.dc.html": {
+      "h": 900,
+      "page": "startup",
+      "title": "21 · Log-in splash",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "TabsSnap.dc.html": {
+      "h": 1360,
+      "page": "theme",
+      "title": "16 · Title-bar tabs and snapping",
+      "w": 1440,
+      "x": 1520,
+      "y": 1560
+    },
+    "Windows.dc.html": {
+      "h": 1540,
+      "page": "theme",
+      "title": "15 · Window decorations",
+      "w": 1440,
+      "x": 0,
+      "y": 1560
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-28T18:55:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "page": "start",
+    "view": "canvas"
+  },
+  "notes": {
+    "t-dark": {
+      "kind": "title1",
+      "maxW": 2960,
+      "page": "dark",
+      "text": "Desktop — dark scheme",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t-icons": {
+      "kind": "title1",
+      "maxW": 2960,
+      "page": "icons",
+      "text": "Icons",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t-light": {
+      "kind": "title1",
+      "maxW": 2960,
+      "page": "light",
+      "text": "Desktop — light scheme",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t-startup": {
+      "kind": "title1",
+      "maxW": 2960,
+      "page": "startup",
+      "text": "Start-up — boot, splash, lock, login",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t-theme": {
+      "kind": "title1",
+      "maxW": 2960,
+      "page": "theme",
+      "text": "Theme parts — colours, controls, windows, pointers",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "title": {
+      "kind": "title1",
+      "maxW": 1440,
+      "page": "start",
+      "text": "Plasma Fusion — a KDE Plasma desktop concept",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    }
+  },
+  "order": [
+    "Contents.dc.html",
+    "Main.dc.html",
+    "Launcher.dc.html",
+    "Overview.dc.html",
+    "QuickSettings.dc.html",
+    "AltTab.dc.html",
+    "Popups.dc.html",
+    "MainLight.dc.html",
+    "LauncherLight.dc.html",
+    "OverviewLight.dc.html",
+    "QuickSettingsLight.dc.html",
+    "AltTabLight.dc.html",
+    "PopupsLight.dc.html",
+    "Colors.dc.html",
+    "Controls.dc.html",
+    "Windows.dc.html",
+    "TabsSnap.dc.html",
+    "Pointers.dc.html",
+    "Icons.dc.html",
+    "FileIcons.dc.html",
+    "AppIcon.dc.html",
+    "Boot.dc.html",
+    "Splash.dc.html",
+    "Lock.dc.html",
+    "Login.dc.html"
+  ],
+  "pages": [
+    {
+      "id": "start",
+      "name": "Contents"
+    },
+    {
+      "id": "dark",
+      "name": "Desktop · dark"
+    },
+    {
+      "id": "light",
+      "name": "Desktop · light"
+    },
+    {
+      "id": "theme",
+      "name": "Theme parts"
+    },
+    {
+      "id": "icons",
+      "name": "Icons"
+    },
+    {
+      "id": "startup",
+      "name": "Start-up"
+    }
+  ],
+  "title": "Plasma Fusion Desktop"
+}

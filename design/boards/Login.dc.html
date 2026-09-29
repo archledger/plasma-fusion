@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — login</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#0f1428;color:#e8ebf4}
+button{font:inherit;color:inherit;border:0;padding:0;margin:0;background:none;cursor:default}
+input::placeholder{color:#8f98b3}
+svg{display:block;flex-shrink:0}
+svg.i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+a{color:#8ab8ff}a:hover{color:#b9d4ff}
+</style>
+</helmet>
+<div style="position:relative;width:1440px;height:900px;overflow:hidden;background:#0f1428;color:#e8ebf4;font-size:13px">
+
+<svg width="1440" height="900" viewBox="0 0 1440 900" aria-hidden="true" style="position:absolute;left:0;top:0;filter:blur(20px);transform:scale(1.08)">
+<rect width="1440" height="900" fill="#141a2e"></rect>
+<rect y="340" width="1440" height="220" fill="#1c2446"></rect>
+<circle cx="1010" cy="360" r="150" fill="#f2a65a"></circle>
+<path d="M0 560 L180 430 L330 505 L520 350 L700 485 L860 405 L1060 520 L1240 385 L1440 470 L1440 900 L0 900 Z" fill="#253058"></path>
+<path d="M0 650 L220 545 L420 620 L640 505 L880 612 L1100 540 L1300 622 L1440 580 L1440 900 L0 900 Z" fill="#2e3d73"></path>
+<path d="M0 760 L260 662 L520 732 L780 642 L1040 722 L1280 662 L1440 702 L1440 900 L0 900 Z" fill="#3b56a0"></path>
+<path d="M0 846 L300 786 L600 834 L900 774 L1200 824 L1440 792 L1440 900 L0 900 Z" fill="#5a7fd6"></path>
+</svg>
+<div aria-hidden="true" style="position:absolute;left:0;top:0;width:1440px;height:900px;background:rgba(8,11,24,0.5)"></div>
+
+<div style="position:absolute;left:32px;top:28px;display:flex;align-items:baseline;gap:12px">
+<span style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:600">14:49</span>
+<span style="font-size:14px;font-weight:700;color:#cdd3e4">Monday, 28 September</span>
+</div>
+
+<div style="position:absolute;right:28px;top:28px;display:flex;align-items:center;gap:8px">
+<button aria-label="Keyboard layout: English" style="height:34px;padding:0 12px;border-radius:17px;background:rgba(255,255,255,0.08);font-size:12px;font-weight:800">EN</button>
+<button aria-label="Accessibility" style="width:34px;height:34px;border-radius:17px;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M10.5 4.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M5 8l7 1.5L19 8M12 9.5V14l-3 6M12 14l3 6"></path></svg></button>
+<span style="height:34px;box-sizing:border-box;padding:0 12px;border-radius:17px;background:rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px">
+<svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg>
+<span style="display:flex;align-items:center;gap:5px"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M4 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM22 11v2"></path><path d="M5 10h9v4H5z" style="fill:currentColor;stroke:none"></path></svg><span style="font-size:12px;font-weight:700">82%</span></span>
+</span>
+</div>
+
+<!-- Sign-in card -->
+<div style="position:absolute;left:520px;top:210px;width:400px;display:flex;flex-direction:column;align-items:center;gap:16px">
+<span style="width:112px;height:112px;border-radius:56px;background:#7b5cd6;box-shadow:0 0 0 4px rgba(255,255,255,0.14), 0 20px 50px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:46px;font-weight:700;color:#ffffff">A</span>
+<span style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:600">Alex</span>
+<form style="width:340px;display:flex;flex-direction:column;gap:10px;margin:6px 0 0">
+<div style="height:48px;box-sizing:border-box;padding:0 6px 0 18px;border-radius:24px;background:rgba(255,255,255,0.1);border:1.5px solid #5b9dff;box-shadow:0 0 0 4px rgba(91,157,255,0.2);display:flex;align-items:center;gap:8px">
+<label for="pw" style="position:absolute;width:1px;height:1px;overflow:hidden">Password</label>
+<input id="pw" type="password" value="password" style="flex-grow:1;min-width:0;border:0;outline:0;background:transparent;color:#e8ebf4;font:inherit;font-size:16px;letter-spacing:0.2em">
+<button type="button" aria-label="Show password" style="width:36px;height:36px;border-radius:18px;display:flex;align-items:center;justify-content:center;color:#cdd3e4"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0"></path></svg></button>
+<button type="submit" aria-label="Sign in" style="width:36px;height:36px;border-radius:18px;background:#2f6fdf;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+</div>
+<div style="display:flex;justify-content:space-between;padding:0 8px;font-size:12px">
+<span style="display:flex;align-items:center;gap:6px;color:#f2c38a"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M12 4l7 8h-4v7H9v-7H5z"></path></svg>Caps Lock is on</span>
+<a href="#" style="font-weight:700;text-decoration:none">Use fingerprint</a>
+</div>
+</form>
+</div>
+
+<!-- User switcher -->
+<div aria-label="Users" style="position:absolute;left:0;top:600px;width:1440px;display:flex;justify-content:center;gap:28px">
+<button style="display:flex;flex-direction:column;align-items:center;gap:8px">
+<span style="width:56px;height:56px;border-radius:28px;background:#7b5cd6;box-shadow:0 0 0 3px #5b9dff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#ffffff">A</span>
+<span style="font-size:12.5px;font-weight:800">Alex</span>
+</button>
+<button style="display:flex;flex-direction:column;align-items:center;gap:8px">
+<span style="width:56px;height:56px;border-radius:28px;background:#1f9e8f;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#ffffff">S</span>
+<span style="font-size:12.5px;font-weight:600;color:#cdd3e4">Sam</span>
+</button>
+<button style="display:flex;flex-direction:column;align-items:center;gap:8px">
+<span style="width:56px;height:56px;border-radius:28px;background:rgba(255,255,255,0.1);border:1.5px dashed rgba(255,255,255,0.35);box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:#e8ebf4"><svg class="i" width="22" height="22" viewBox="0 0 24 24"><path d="M9 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0M5 20a7 7 0 0 1 14 0"></path></svg></span>
+<span style="font-size:12.5px;font-weight:600;color:#cdd3e4">Other user</span>
+</button>
+</div>
+
+<!-- Session -->
+<button aria-label="Session: Plasma (Wayland)" style="position:absolute;left:32px;bottom:32px;height:40px;padding:0 12px 0 14px;border-radius:20px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;gap:10px;font-weight:700">
+<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="5.5" fill="#5b9dff" fill-opacity="0.9"></circle><circle cx="8" cy="15" r="5.5" fill="#f2a65a" fill-opacity="0.9"></circle><circle cx="16" cy="15" r="5.5" fill="#3cc4b0" fill-opacity="0.85"></circle></svg>
+Plasma (Wayland)
+<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+
+<!-- Power -->
+<div style="position:absolute;right:32px;bottom:28px;display:flex;gap:18px">
+<button style="display:flex;flex-direction:column;align-items:center;gap:6px">
+<span style="width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg></span>
+<span style="font-size:11.5px;font-weight:700;color:#cdd3e4">Sleep</span>
+</button>
+<button style="display:flex;flex-direction:column;align-items:center;gap:6px">
+<span style="width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"></path></svg></span>
+<span style="font-size:11.5px;font-weight:700;color:#cdd3e4">Restart</span>
+</button>
+<button style="display:flex;flex-direction:column;align-items:center;gap:6px">
+<span style="width:44px;height:44px;border-radius:22px;background:#d9434b;border:1px solid #d9434b;display:flex;align-items:center;justify-content:center;color:#ffffff"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"></path></svg></span>
+<span style="font-size:11.5px;font-weight:700;color:#cdd3e4">Shut down</span>
+</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

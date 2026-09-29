@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — icon system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#10142a;color:#e8ebf4}
+svg{display:block;flex-shrink:0}
+svg.i{fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+a{color:#8ab8ff}a:hover{color:#b9d4ff}
+</style>
+</helmet>
+<div style="width:1440px;height:1520px;box-sizing:border-box;padding:64px;display:flex;flex-direction:column;gap:24px;background:#10142a;color:#e8ebf4;font-size:14px">
+
+<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:40px">
+<div style="display:flex;flex-direction:column;gap:10px">
+<span style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#f2c38a">Plasma Fusion</span>
+<h1 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:700;line-height:1.05">Icon system</h1>
+<p style="margin:0;max-width:760px;font-size:16px;line-height:1.55;color:#b8bfd3">Rounded-square tiles with a 4-unit lip along the bottom for depth, a soft sheen across the top, and flat two-tone symbols drawn on a 64-unit grid. The small line icons stay one colour so they take on the theme's text colour.</p>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-end">
+<div style="filter:drop-shadow(0 10px 24px rgba(0,0,0,0.45))"><dc-import name="AppIcon" app="fusion" size="104" hint-size="104px,104px"></dc-import></div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:520px minmax(0, 1fr);gap:24px;height:620px">
+
+<section style="box-sizing:border-box;padding:28px;border-radius:24px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<h2 style="margin:0;font-size:18px;font-weight:800">Construction</h2>
+<span style="font-size:12.5px;color:#a3abc2">Files · 64-unit grid</span>
+</div>
+<div style="align-self:center;position:relative;width:320px;height:320px;margin:4px 0">
+<dc-import name="AppIcon" app="files" size="320" hint-size="320px,320px"></dc-import>
+<svg width="320" height="320" viewBox="0 0 64 64" aria-hidden="true" style="position:absolute;left:0;top:0;overflow:visible">
+<path d="M8 0V64M16 0V64M24 0V64M32 0V64M40 0V64M48 0V64M56 0V64M0 8H64M0 16H64M0 24H64M0 32H64M0 40H64M0 48H64M0 56H64" stroke="#ffffff" stroke-opacity="0.22" stroke-width="0.15"></path>
+<rect x="0" y="0" width="64" height="64" rx="15" fill="none" stroke="#8ab8ff" stroke-width="0.35" stroke-dasharray="1.2 0.8"></rect>
+<path d="M-3 60H67" stroke="#f2a65a" stroke-width="0.35"></path>
+<rect x="12" y="10" width="40" height="40" fill="none" stroke="#3cc4b0" stroke-width="0.35" stroke-dasharray="1.2 0.8"></rect>
+</svg>
+</div>
+<div style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:#cdd3e4">
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:0;border-top:2px dashed #8ab8ff"></span>Tile 64 × 64, corner radius 15</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:2px;background:#f2a65a"></span>Lip: bottom 4 units, one shade darker</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:0;border-top:2px dashed #3cc4b0"></span>Symbol area 40 × 40, sitting 2 units above centre</div>
+<div style="display:flex;align-items:center;gap:10px"><span style="width:18px;height:2px;background:rgba(255,255,255,0.4)"></span>8-unit grid; 1-unit light edge on every tile</div>
+</div>
+</section>
+
+<section style="box-sizing:border-box;padding:28px;border-radius:24px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:24px">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<h2 style="margin:0;font-size:18px;font-weight:800">Applications</h2>
+<span style="font-size:12.5px;color:#a3abc2">18 icons · shown at 88 px</span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(6, minmax(0, 1fr));gap:26px 12px">
+<sc-for list="{{apps}}" as="a" hint-placeholder-count="18">
+<div style="display:flex;flex-direction:column;align-items:center;gap:9px">
+<div style="filter:drop-shadow(0 6px 14px rgba(0,0,0,0.4))"><dc-import name="AppIcon" app="{{a.key}}" size="88" hint-size="88px,88px"></dc-import></div>
+<span style="font-size:13px;font-weight:600;color:#dfe3ee;white-space:nowrap">{{a.label}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin:auto 0 0;font-size:13px;line-height:1.5;color:#a3abc2">Tile colours sit at similar lightness so no single app shouts. Each symbol uses a light main shape, one tint of the tile colour and at most one accent — amber, teal or red — shared across the set.</p>
+</section>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:24px;height:250px">
+<section style="box-sizing:border-box;padding:28px;border-radius:24px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<h2 style="margin:0;font-size:18px;font-weight:800">Size ramp</h2>
+<span style="font-size:12.5px;color:#a3abc2">Same drawing from 16 to 128 px</span>
+</div>
+<div style="display:flex;align-items:flex-end;gap:24px;margin-top:auto">
+<sc-for list="{{ramp}}" as="r" hint-placeholder-count="7">
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+<dc-import name="AppIcon" app="browser" size="{{r.s}}" hint-size="{{r.s}}px,{{r.s}}px"></dc-import>
+<span style="font-size:11.5px;font-weight:700;color:#a3abc2">{{r.s}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section style="box-sizing:border-box;padding:28px;border-radius:24px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<h2 style="margin:0;font-size:18px;font-weight:800">Light and dark backgrounds</h2>
+<span style="font-size:12.5px;color:#a3abc2">Lip and edge keep tiles separate on both</span>
+</div>
+<div style="display:flex;align-items:center;gap:14px;height:68px;box-sizing:border-box;padding:0 16px;border-radius:16px;background:#eef0f5">
+<sc-for list="{{check}}" as="c" hint-placeholder-count="7">
+<dc-import name="AppIcon" app="{{c}}" size="44" hint-size="44px,44px"></dc-import>
+</sc-for>
+<span style="margin-left:auto;font-size:12px;font-weight:800;color:#3d4459">Light</span>
+</div>
+<div style="display:flex;align-items:center;gap:14px;height:68px;box-sizing:border-box;padding:0 16px;border-radius:16px;background:#0a0d19">
+<sc-for list="{{check}}" as="c" hint-placeholder-count="7">
+<dc-import name="AppIcon" app="{{c}}" size="44" hint-size="44px,44px"></dc-import>
+</sc-for>
+<span style="margin-left:auto;font-size:12px;font-weight:800;color:#a3abc2">Dark</span>
+</div>
+</section>
+</div>
+
+<section style="box-sizing:border-box;padding:28px;border-radius:24px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<h2 style="margin:0;font-size:18px;font-weight:800">Symbolic icons</h2>
+<span style="font-size:12.5px;color:#a3abc2">24 px · 1.75 stroke · round ends · follow the text colour</span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(12, minmax(0, 1fr));gap:12px">
+<sc-for list="{{symbolic}}" as="s" hint-placeholder-count="24">
+<div style="height:78px;border-radius:12px;background:rgba(255,255,255,0.04);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:#e8ebf4">
+<svg class="i" width="24" height="24" viewBox="0 0 24 24"><path d="{{s.d}}"></path></svg>
+<span style="font-size:11px;font-weight:600;color:#a3abc2">{{s.label}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1520}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const apps = [
+      ['files', 'Files'], ['browser', 'Browser'], ['terminal', 'Terminal'], ['mail', 'Mail'], ['code', 'Code'], ['music', 'Music'],
+      ['photos', 'Photos'], ['settings', 'Settings'], ['calendar', 'Calendar'], ['notes', 'Notes'], ['calculator', 'Calculator'], ['software', 'Software'],
+      ['videos', 'Videos'], ['chat', 'Chat'], ['maps', 'Maps'], ['weather', 'Weather'], ['monitor', 'Monitor'], ['screenshot', 'Screenshot']
+    ].map(x => ({ key: x[0], label: x[1] }));
+    const ramp = [16, 24, 32, 48, 64, 96, 128].map(s => ({ s }));
+    const check = ['files', 'terminal', 'calendar', 'notes', 'calculator', 'mail', 'weather'];
+    const symbolic = [
+      ['Search', 'M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4'],
+      ['Overview', 'M4 5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 19h12a1 1 0 0 0 1-1V9'],
+      ['Home', 'M4 11l8-7 8 7v9H4zM10 20v-6h4v6'],
+      ['Folder', 'M3 7.5A2 2 0 0 1 5 5.5h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
+      ['Document', 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4'],
+      ['Download', 'M12 4v11M7 10l5 5 5-5M5 20h14'],
+      ['Trash', 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5'],
+      ['Wi‑Fi', 'M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01'],
+      ['Volume', 'M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11'],
+      ['Bluetooth', 'M7 7l10 10-5 4V3l5 4L7 17'],
+      ['Battery', 'M4 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM22 11v2M6 10v4M9 10v4M12 10v4'],
+      ['Brightness', 'M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5'],
+      ['Night light', 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z'],
+      ['Notification', 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0'],
+      ['Lock', 'M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V8a4 4 0 0 1 8 0v3'],
+      ['Power', 'M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0'],
+      ['Settings', 'M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1'],
+      ['Clipboard', 'M9 4h6v3H9zM7 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1'],
+      ['Phone', 'M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2'],
+      ['Screenshot', 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3'],
+      ['Snap', 'M4 5h16v14H4zM12 5v14M12 12h8'],
+      ['Minimize', 'M6 12h12'],
+      ['Maximize', 'M8 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z'],
+      ['Close', 'M7 7l10 10M17 7L7 17']
+    ].map(x => ({ label: x[0], d: x[1] }));
+    return { apps, ramp, check, symbolic };
+  }
+}
+</script>
+</body>
+</html>

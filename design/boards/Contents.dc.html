@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — contents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#10142a;color:#e8ebf4}
+svg{display:block;flex-shrink:0}
+a{color:#8ab8ff;text-decoration:none}a:hover{color:#b9d4ff;text-decoration:underline}
+</style>
+</helmet>
+<div style="width:1440px;height:1060px;box-sizing:border-box;padding:64px;display:flex;flex-direction:column;gap:32px;background:#10142a;color:#e8ebf4;font-size:13px">
+
+<div style="display:flex;align-items:center;gap:28px">
+<svg width="104" height="104" viewBox="0 0 24 24" aria-hidden="true"><g style="mix-blend-mode:screen"><circle cx="12" cy="8.5" r="5.5" fill="#5b9dff"></circle><circle cx="8" cy="15" r="5.5" fill="#f2a65a"></circle><circle cx="16" cy="15" r="5.5" fill="#3cc4b0"></circle></g></svg>
+<div style="display:flex;flex-direction:column;gap:8px">
+<h1 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:60px;font-weight:700;line-height:1">Plasma Fusion</h1>
+<p style="margin:0;max-width:900px;font-size:17px;line-height:1.5;color:#b8bfd3">A KDE Plasma desktop concept that blends ideas from macOS, GNOME and Windows 11. It covers every part of a Plasma Global Theme except sounds, in a dark and a light scheme.</p>
+</div>
+</div>
+
+<section style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:16px">
+<sc-for list="{{sources}}" as="s" hint-placeholder-count="4">
+<div style="box-sizing:border-box;padding:18px 20px;border-radius:18px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:center;gap:8px"><span style="width:10px;height:10px;border-radius:5px;background: {{s.c}}"></span><span style="font-size:14px;font-weight:800">From {{s.name}}</span></div>
+<span style="font-size:12.5px;line-height:1.55;color:#b8bfd3;white-space:pre-line">{{s.items}}</span>
+</div>
+</sc-for>
+</section>
+
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<h2 style="margin:0;font-size:22px;font-weight:800">Global Theme parts</h2>
+<span style="font-size:12.5px;color:#a3abc2">Board names are links in Play mode · pages are in the canvas's page menu</span>
+</div>
+
+<section style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:16px;flex-grow:1">
+<sc-for list="{{parts}}" as="p" hint-placeholder-count="8">
+<div style="box-sizing:border-box;padding:18px 20px;border-radius:18px;background:#171c33;border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+<span style="font-size:15px;font-weight:800">{{p.name}}</span>
+<span style="height:22px;padding:0 9px;border-radius:11px;font-size:11px;font-weight:800;display:flex;align-items:center;white-space:nowrap;background: {{p.chipBg}};color: {{p.chipFg}}">{{p.status}}</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<sc-for list="{{p.boards}}" as="b" hint-placeholder-count="3">
+<a href="{{b.file}}" style="font-size:12.5px;font-weight:700">{{b.label}}</a>
+</sc-for>
+</div>
+<span style="margin-top:auto;font-size:11.5px;color:#8f98b3">{{p.page}}</span>
+</div>
+</sc-for>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1060}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const sources = [
+      { name: 'macOS', c: '#e8ebf4', items: 'Floating dock that enlarges icons on hover\nApp menus in the top bar\nDialogs attached to their parent window\nRounded-square app icons' },
+      { name: 'GNOME', c: '#3cc4b0', items: 'Clock and workspace pill centred in the top bar\nOverview with workspaces and a window grid\nQuick-settings tiles and sliders\nPill-shaped volume and brightness pop-ups' },
+      { name: 'Windows 11', c: '#5b9dff', items: 'Centred start menu: pinned apps + recommended files\nSnap layouts on the maximize button\nFill-the-other-half after snapping\nFrosted, translucent surfaces' },
+      { name: 'KDE Plasma', c: '#f2a65a', items: 'Desktop widgets and the command search\nNamed virtual desktops\nCustom tiling zones (Meta+T)\nThe Global Theme structure itself' }
+    ];
+    const P = (name, status, boards, page) => ({ name, status, boards: boards.map(b => ({ label: b[0], file: b[1] })), page,
+      chipBg: status === 'Done' ? 'rgba(58,166,91,0.22)' : 'rgba(255,255,255,0.08)', chipFg: status === 'Done' ? '#7fd99c' : '#a3abc2' });
+    const parts = [
+      P('Colors', 'Done', [['Colour schemes (dark + light)', 'Colors.dc.html'], ['Controls sheet', 'Controls.dc.html']], 'Page: Theme parts'),
+      P('Application Style', 'Done', [['Controls, dark and light', 'Controls.dc.html']], 'Page: Theme parts'),
+      P('Plasma Style', 'Done', [['Desktop', 'Main.dc.html'], ['Launcher', 'Launcher.dc.html'], ['Overview', 'Overview.dc.html'], ['Quick settings', 'QuickSettings.dc.html'], ['Pop-ups and tray panels', 'Popups.dc.html']], 'Pages: Desktop · dark / light'),
+      P('Window Decorations', 'Done', [['Title bars and states', 'Windows.dc.html'], ['Tabs and snapping', 'TabsSnap.dc.html'], ['Window switcher', 'AltTab.dc.html']], 'Pages: Theme parts, Desktop'),
+      P('Icons', 'Done', [['App icons and line icons', 'Icons.dc.html'], ['Files, places, devices, status', 'FileIcons.dc.html']], 'Page: Icons'),
+      P('Pointers', 'Done', [['Cursor theme', 'Pointers.dc.html']], 'Page: Theme parts'),
+      P('System Sounds', 'Skipped', [], 'Left out at your request'),
+      P('Splash Screen', 'Done', [['Boot and disk unlock', 'Boot.dc.html'], ['Log-in splash', 'Splash.dc.html'], ['Lock screen', 'Lock.dc.html'], ['Login screen', 'Login.dc.html']], 'Page: Start-up')
+    ];
+    return { sources, parts };
+  }
+}
+</script>
+</body>
+</html>

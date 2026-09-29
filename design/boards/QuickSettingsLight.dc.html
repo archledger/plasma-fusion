@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — quick settings and snap layouts, light</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#dde6f4;color:#141827}
+button{font:inherit;color:inherit;border:0;padding:0;margin:0;background:none;cursor:default}
+input::placeholder{color:#6b7288}
+svg{display:block;flex-shrink:0}
+svg.i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+a{color:#2f6fdf}a:hover{color:#2359c4}
+</style>
+</helmet>
+<div style="position:relative;width:1440px;height:900px;overflow:hidden;background:#dde6f4;color:#141827;font-size:13px">
+
+<svg width="1440" height="900" viewBox="0 0 1440 900" aria-hidden="true" style="position:absolute;left:0;top:0">
+<rect width="1440" height="900" fill="#dde6f4"></rect>
+<rect y="180" width="1440" height="160" fill="#e6ecf7"></rect>
+<rect y="340" width="1440" height="220" fill="#eef2fa"></rect>
+<circle cx="1010" cy="360" r="212" fill="none" stroke="#f2a65a" stroke-opacity="0.18" stroke-width="2"></circle>
+<circle cx="1010" cy="360" r="150" fill="#f2a65a"></circle>
+<path d="M0 560 L180 430 L330 505 L520 350 L700 485 L860 405 L1060 520 L1240 385 L1440 470 L1440 900 L0 900 Z" fill="#b9c9e8"></path>
+<path d="M0 650 L220 545 L420 620 L640 505 L880 612 L1100 540 L1300 622 L1440 580 L1440 900 L0 900 Z" fill="#9bb2e0"></path>
+<path d="M0 760 L260 662 L520 732 L780 642 L1040 722 L1280 662 L1440 702 L1440 900 L0 900 Z" fill="#7896d4"></path>
+<path d="M0 846 L300 786 L600 834 L900 774 L1200 824 L1440 792 L1440 900 L0 900 Z" fill="#5a7fd6"></path>
+</svg>
+
+<!-- Software window -->
+<section aria-label="Software" style="position:absolute;left:48px;top:60px;width:920px;height:722px;box-sizing:border-box;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;background:#ffffff;border:1px solid rgba(20,24,39,0.14);box-shadow:0 34px 90px rgba(20,24,39,0.22)">
+<div style="height:52px;flex-shrink:0;box-sizing:border-box;padding:0 10px 0 16px;display:flex;align-items:center;gap:10px;background:#eceff6;border-bottom:1px solid rgba(20,24,39,0.06)">
+<dc-import name="AppIcon" app="software" size="26" hint-size="26px,26px"></dc-import>
+<span style="font-size:14px;font-weight:800;width:150px">Software</span>
+<label style="flex-grow:1;height:34px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 12px;margin-right:60px;border-radius:17px;background:rgba(20,24,39,0.07);color:#5b6278">
+<svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4"></path></svg>
+<input aria-label="Search apps" placeholder="Search apps" style="flex-grow:1;min-width:0;border:0;outline:0;background:transparent;color:#141827;font:inherit;font-size:13px">
+</label>
+<div style="display:flex;align-items:center;gap:6px">
+<button aria-label="Minimize" style="width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(20,24,39,0.1);color:#141827"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M6 12h12"></path></svg></button>
+<button aria-label="Maximize — snap layouts open" style="width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#2f6fdf;color:#ffffff;box-shadow:0 0 0 3px rgba(91,157,255,0.3)"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M8 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"></path></svg></button>
+<button aria-label="Close" style="width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#d9434b;color:#ffffff"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"></path></svg></button>
+</div>
+</div>
+<div style="flex-grow:1;display:flex;min-height:0">
+<nav aria-label="Software sections" style="width:200px;flex-shrink:0;box-sizing:border-box;padding:14px 10px;display:flex;flex-direction:column;gap:2px;background:#f5f6fa;border-right:1px solid rgba(20,24,39,0.05)">
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;background:rgba(91,157,255,0.18);color:#1d4fb0;font-weight:700"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M15.5 8.5l-2 5-5 2 2-5z"></path></svg>Discover</div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg><span style="flex-grow:1">Updates</span><span style="min-width:20px;height:20px;box-sizing:border-box;padding:0 6px;border-radius:10px;background:#f2a65a;color:#2a1600;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">3</span></div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"></path></svg>Installed</div>
+<div style="padding:16px 10px 6px;font-size:10.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#646b80">Categories</div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16zM14 6l3 3"></path></svg>Graphics</div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"></path></svg>Development</div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M6 8h12a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3zM7.5 11v3M6 12.5h3M16 12h.01M18 14h.01"></path></svg>Games</div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM10 9l5 3-5 3z"></path></svg>Multimedia</div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7zM14 3v5h5"></path></svg>Office</div>
+<div style="display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:#3a4157"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"></path></svg>Science</div>
+</nav>
+<div style="flex-grow:1;box-sizing:border-box;padding:22px 24px;display:flex;flex-direction:column;gap:14px;min-width:0">
+
+<div style="height:210px;flex-shrink:0;box-sizing:border-box;border-radius:18px;background:#2a2350;color:#ffffff;position:relative;overflow:hidden;display:flex;align-items:center;padding:0 32px">
+<svg width="300" height="210" viewBox="0 0 300 210" aria-hidden="true" style="position:absolute;right:0;top:0">
+<circle cx="200" cy="96" r="70" fill="#f2a65a"></circle>
+<path d="M40 170 C 100 110, 160 200, 230 140 S 300 120, 320 150" fill="none" stroke="#3cc4b0" stroke-width="18" stroke-linecap="round"></path>
+<path d="M110 60 C 140 40, 170 70, 150 100" fill="none" stroke="#d6457a" stroke-width="10" stroke-linecap="round"></path>
+<circle cx="262" cy="46" r="10" fill="#9b7bf0"></circle>
+<circle cx="84" cy="104" r="6" fill="#141827"></circle>
+</svg>
+<div style="position:relative;display:flex;flex-direction:column;gap:8px;max-width:360px">
+<span style="font-size:11.5px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#f2c38a">Editor's pick</span>
+<span style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;line-height:1">Krita</span>
+<span style="font-size:13.5px;color:#dcd6f2">Digital painting — free and open source.</span>
+<div style="display:flex;gap:8px;margin-top:6px">
+<button style="height:36px;padding:0 18px;border-radius:18px;background:#2f6fdf;color:#ffffff;font-weight:800">Install</button>
+<button style="height:36px;padding:0 18px;border-radius:18px;background:rgba(255,255,255,0.16);color:#ffffff;font-weight:700">Details</button>
+</div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+<span style="font-size:15px;font-weight:800">Popular in Graphics</span>
+<a href="#" style="font-size:12.5px;font-weight:700;text-decoration:none">See all</a>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:14px">
+<div style="box-sizing:border-box;padding:14px;border-radius:16px;background:rgba(20,24,39,0.05);display:flex;flex-direction:column;gap:8px">
+<span style="width:44px;height:44px;border-radius:12px;background:#23293d;color:#e8ebf4;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(20,24,39,0.14)"><svg class="i" width="22" height="22" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16zM14 6l3 3"></path></svg></span>
+<span style="font-size:14px;font-weight:800">Inkscape</span>
+<span style="font-size:12px;color:#5b6278">Vector graphics editor</span>
+<button style="align-self:flex-start;height:28px;padding:0 14px;border-radius:14px;background:rgba(91,157,255,0.2);color:#1d4fb0;font-size:12px;font-weight:800">Install</button>
+</div>
+<div style="box-sizing:border-box;padding:14px;border-radius:16px;background:rgba(20,24,39,0.05);display:flex;flex-direction:column;gap:8px">
+<span style="width:44px;height:44px;border-radius:12px;background:#e8743b;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="22" height="22" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"></path></svg></span>
+<span style="font-size:14px;font-weight:800">Blender</span>
+<span style="font-size:12px;color:#5b6278">3D creation suite</span>
+<button style="align-self:flex-start;height:28px;padding:0 14px;border-radius:14px;background:rgba(91,157,255,0.2);color:#1d4fb0;font-size:12px;font-weight:800">Install</button>
+</div>
+<div style="box-sizing:border-box;padding:14px;border-radius:16px;background:rgba(20,24,39,0.05);display:flex;flex-direction:column;gap:8px">
+<span style="width:44px;height:44px;border-radius:12px;background:#3aa65b;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="22" height="22" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 3l3.5 7M21 12h-7.5M16.5 19.5L12 14M7.5 19.5L10 12M3 12h7.5"></path></svg></span>
+<span style="font-size:14px;font-weight:800">darktable</span>
+<span style="font-size:12px;color:#5b6278">Photography workflow</span>
+<button style="align-self:flex-start;height:28px;padding:0 14px;border-radius:14px;background:rgba(91,157,255,0.2);color:#1d4fb0;font-size:12px;font-weight:800">Install</button>
+</div>
+<div style="box-sizing:border-box;padding:14px;border-radius:16px;background:rgba(20,24,39,0.05);display:flex;flex-direction:column;gap:8px">
+<span style="width:44px;height:44px;border-radius:12px;background:#9b3fb5;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="22" height="22" viewBox="0 0 24 24"><path d="M18 3l3 3-9 9-3-3zM9 12c-3 0-5 2-5 5 0 1.5-1 2.5-2 3 4 1 9 0 9-5z"></path></svg></span>
+<span style="font-size:14px;font-weight:800">GIMP</span>
+<span style="font-size:12px;color:#5b6278">Image editor</span>
+<button style="align-self:flex-start;height:28px;padding:0 14px;border-radius:14px;background:rgba(91,157,255,0.2);color:#1d4fb0;font-size:12px;font-weight:800">Install</button>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+<span style="font-size:15px;font-weight:800">Recently installed</span>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="height:52px;box-sizing:border-box;padding:0 12px;border-radius:12px;background:rgba(20,24,39,0.05);display:flex;align-items:center;gap:12px">
+<span style="width:34px;height:34px;border-radius:9px;background:#c2410c;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM10 9l5 3-5 3z"></path></svg></span>
+<div style="flex-grow:1;display:flex;flex-direction:column;gap:2px"><span style="font-weight:800">Kdenlive</span><span style="font-size:11.5px;color:#5b6278">Video editor</span></div>
+<button style="height:30px;padding:0 16px;border-radius:15px;background:rgba(20,24,39,0.1);font-size:12px;font-weight:800">Open</button>
+</div>
+<div style="height:52px;box-sizing:border-box;padding:0 12px;border-radius:12px;background:rgba(20,24,39,0.05);display:flex;align-items:center;gap:12px">
+<span style="width:34px;height:34px;border-radius:9px;background:#3a7bd5;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h4"></path></svg></span>
+<div style="flex-grow:1;display:flex;flex-direction:column;gap:2px"><span style="font-weight:800">Okular</span><span style="font-size:11.5px;color:#5b6278">Document viewer</span></div>
+<button style="height:30px;padding:0 16px;border-radius:15px;background:rgba(20,24,39,0.1);font-size:12px;font-weight:800">Open</button>
+</div>
+</div>
+
+</div>
+</div>
+</section>
+
+<!-- Snap layouts flyout -->
+<div aria-label="Snap layouts" style="position:absolute;left:769px;top:112px;width:280px;box-sizing:border-box;padding:12px;border-radius:16px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,0.9);backdrop-filter:blur(30px) saturate(1.4);-webkit-backdrop-filter:blur(30px) saturate(1.4);border:1px solid rgba(20,24,39,0.14);box-shadow:0 20px 50px rgba(20,24,39,0.18)">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<span style="font-size:12px;font-weight:800;color:#3a4157">Snap layouts</span>
+<span style="font-size:11px;color:#6b7288">Meta+Z</span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px">
+<div style="height:58px;box-sizing:border-box;padding:5px;border-radius:9px;background:rgba(20,24,39,0.06);display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:4px">
+<span style="border-radius:4px;background:#5b9dff"></span>
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+</div>
+<div style="height:58px;box-sizing:border-box;padding:5px;border-radius:9px;background:rgba(20,24,39,0.06);display:grid;grid-template-columns:2fr 1fr;gap:4px">
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+</div>
+<div style="height:58px;box-sizing:border-box;padding:5px;border-radius:9px;background:rgba(20,24,39,0.06);display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));grid-template-rows:repeat(2, minmax(0, 1fr));gap:4px">
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+</div>
+<div style="height:58px;box-sizing:border-box;padding:5px;border-radius:9px;background:rgba(20,24,39,0.06);display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:4px">
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+<span style="border-radius:4px;background:rgba(20,24,39,0.2)"></span>
+</div>
+</div>
+<span style="font-size:11.5px;color:#5b6278">Or drag the window to a screen edge</span>
+</div>
+
+<!-- Quick settings -->
+<section aria-label="Quick settings" style="position:absolute;left:1068px;top:44px;width:356px;box-sizing:border-box;padding:16px;border-radius:22px;display:flex;flex-direction:column;gap:14px;background:rgba(255,255,255,0.88);backdrop-filter:blur(36px) saturate(1.5);-webkit-backdrop-filter:blur(36px) saturate(1.5);border:1px solid rgba(20,24,39,0.12);box-shadow:0 30px 80px rgba(20,24,39,0.18)">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<span style="height:34px;box-sizing:border-box;padding:0 12px;border-radius:17px;background:rgba(20,24,39,0.07);display:flex;align-items:center;gap:6px;font-weight:800"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M4 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM22 11v2"></path><path d="M5 10h9v4H5z" style="fill:currentColor;stroke:none"></path></svg>82%</span>
+<div style="display:flex;gap:6px">
+<button aria-label="Screenshot" style="width:34px;height:34px;border-radius:17px;background:rgba(20,24,39,0.07);display:flex;align-items:center;justify-content:center;color:#2a3044"><svg class="i" width="17" height="17" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"></path></svg></button>
+<button aria-label="Settings" style="width:34px;height:34px;border-radius:17px;background:rgba(20,24,39,0.07);display:flex;align-items:center;justify-content:center;color:#2a3044"><svg class="i" width="17" height="17" viewBox="0 0 24 24"><path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"></path></svg></button>
+<button aria-label="Lock" style="width:34px;height:34px;border-radius:17px;background:rgba(20,24,39,0.07);display:flex;align-items:center;justify-content:center;color:#2a3044"><svg class="i" width="17" height="17" viewBox="0 0 24 24"><path d="M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V8a4 4 0 0 1 8 0v3"></path></svg></button>
+<button aria-label="Power" style="width:34px;height:34px;border-radius:17px;background:rgba(20,24,39,0.07);display:flex;align-items:center;justify-content:center;color:#2a3044"><svg class="i" width="17" height="17" viewBox="0 0 24 24"><path d="M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"></path></svg></button>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="height:28px;display:flex;align-items:center;gap:12px;color:#2a3044">
+<svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
+<div role="presentation" style="flex-grow:1;height:8px;border-radius:4px;background:rgba(20,24,39,0.14);position:relative">
+<div style="width:64%;height:8px;border-radius:4px;background:#5b9dff"></div>
+<span style="position:absolute;left:64%;top:-6px;margin-left:-10px;width:20px;height:20px;border-radius:10px;background:#ffffff;box-shadow:0 2px 6px rgba(20,24,39,0.14)"></span>
+</div>
+<button aria-label="Choose audio output" style="width:28px;height:28px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(20,24,39,0.07)"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg></button>
+</div>
+<div style="height:28px;display:flex;align-items:center;gap:12px;color:#2a3044">
+<svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>
+<div role="presentation" style="flex-grow:1;height:8px;border-radius:4px;background:rgba(20,24,39,0.14);position:relative">
+<div style="width:80%;height:8px;border-radius:4px;background:#5b9dff"></div>
+<span style="position:absolute;left:80%;top:-6px;margin-left:-10px;width:20px;height:20px;border-radius:10px;background:#ffffff;box-shadow:0 2px 6px rgba(20,24,39,0.14)"></span>
+</div>
+<span style="width:28px"></span>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px">
+<button aria-pressed="true" style="height:60px;box-sizing:border-box;padding:0 10px 0 14px;border-radius:16px;background:#2f6fdf;color:#ffffff;display:flex;align-items:center;gap:10px;text-align:left">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg>
+<span style="flex-grow:1;display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-weight:800">Wi‑Fi</span><span style="font-size:11.5px;color:rgba(255,255,255,0.9)">Home network</span></span>
+<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+</button>
+<button aria-pressed="true" style="height:60px;box-sizing:border-box;padding:0 10px 0 14px;border-radius:16px;background:#2f6fdf;color:#ffffff;display:flex;align-items:center;gap:10px;text-align:left">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M7 7l10 10-5 4V3l5 4L7 17"></path></svg>
+<span style="flex-grow:1;display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font-weight:800">Bluetooth</span><span style="font-size:11.5px;color:rgba(255,255,255,0.9)">2 connected</span></span>
+<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+</button>
+<button aria-pressed="false" style="height:60px;box-sizing:border-box;padding:0 14px;border-radius:16px;background:rgba(20,24,39,0.08);color:#141827;display:flex;align-items:center;gap:10px;text-align:left">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path></svg>
+<span style="display:flex;flex-direction:column;gap:1px"><span style="font-weight:800">Night light</span><span style="font-size:11.5px;color:#5b6278">From sunset</span></span>
+</button>
+<button aria-pressed="false" style="height:60px;box-sizing:border-box;padding:0 14px;border-radius:16px;background:rgba(20,24,39,0.08);color:#141827;display:flex;align-items:center;gap:10px;text-align:left">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0M4 4l16 16"></path></svg>
+<span style="display:flex;flex-direction:column;gap:1px"><span style="font-weight:800">Do not disturb</span><span style="font-size:11.5px;color:#5b6278">Off</span></span>
+</button>
+<button aria-pressed="false" style="height:60px;box-sizing:border-box;padding:0 14px;border-radius:16px;background:rgba(20,24,39,0.08);color:#141827;display:flex;align-items:center;gap:10px;text-align:left">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M4 16a8 8 0 0 1 16 0M12 16l4-5"></path></svg>
+<span style="display:flex;flex-direction:column;gap:1px"><span style="font-weight:800">Power mode</span><span style="font-size:11.5px;color:#5b6278">Balanced</span></span>
+</button>
+<button aria-pressed="false" style="height:60px;box-sizing:border-box;padding:0 14px;border-radius:16px;background:rgba(20,24,39,0.08);color:#141827;display:flex;align-items:center;gap:10px;text-align:left">
+<svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 3v18"></path><path d="M12 3a9 9 0 0 1 0 18z" style="fill:currentColor;stroke:none"></path></svg>
+<span style="display:flex;flex-direction:column;gap:1px"><span style="font-weight:800">Dark style</span><span style="font-size:11.5px;color:#5b6278">Off</span></span>
+</button>
+</div>
+
+<div style="height:64px;box-sizing:border-box;padding:0 10px;border-radius:16px;background:rgba(20,24,39,0.06);display:flex;align-items:center;gap:12px">
+<dc-import name="AppIcon" app="music" size="44" hint-size="44px,44px"></dc-import>
+<div style="flex-grow:1;display:flex;flex-direction:column;gap:2px"><span style="font-weight:800">Music</span><span style="font-size:11.5px;color:#5b6278">Paused</span></div>
+<button aria-label="Previous" style="width:32px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#2a3044"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M18 6l-8 6 8 6zM6 6v12"></path></svg></button>
+<button aria-label="Play" style="width:36px;height:36px;border-radius:18px;background:#141827;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" style="fill:currentColor"></path></svg></button>
+<button aria-label="Next" style="width:32px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#2a3044"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M6 6l8 6-8 6zM18 6v12"></path></svg></button>
+</div>
+</section>
+
+<!-- Notifications -->
+<section aria-label="Notifications" style="position:absolute;left:1068px;top:496px;width:356px;display:flex;flex-direction:column;gap:10px">
+<div style="height:26px;display:flex;align-items:center;justify-content:space-between;padding:0 4px">
+<span style="font-size:14px;font-weight:800;text-shadow:0 1px 8px rgba(20,24,39,0.16)">Notifications</span>
+<button style="height:26px;padding:0 12px;border-radius:13px;background:rgba(255,255,255,0.8);font-size:12px;font-weight:700;color:#2a3044">Clear all</button>
+</div>
+<div style="box-sizing:border-box;padding:14px;border-radius:18px;display:flex;flex-direction:column;gap:6px;background:rgba(255,255,255,0.88);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 16px 40px rgba(20,24,39,0.14)">
+<div style="display:flex;align-items:center;gap:8px">
+<dc-import name="AppIcon" app="calendar" size="22" hint-size="22px,22px"></dc-import>
+<span style="font-size:11.5px;font-weight:800;color:#5b6278;flex-grow:1">Calendar</span>
+<span style="font-size:11.5px;color:#6b7288">in 10 min</span>
+</div>
+<span style="font-size:13.5px;font-weight:800">Design review</span>
+<span style="font-size:12.5px;color:#3a4157">15:00 – 15:45 · Meeting room 2</span>
+<div style="display:flex;gap:8px;margin-top:6px">
+<button style="flex-grow:1;height:32px;border-radius:10px;background:#2f6fdf;color:#ffffff;font-size:12.5px;font-weight:800">Join</button>
+<button style="flex-grow:1;height:32px;border-radius:10px;background:rgba(20,24,39,0.1);font-size:12.5px;font-weight:700">Snooze</button>
+</div>
+</div>
+<div style="box-sizing:border-box;padding:14px;border-radius:18px;display:flex;flex-direction:column;gap:6px;background:rgba(255,255,255,0.88);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 16px 40px rgba(20,24,39,0.14)">
+<div style="display:flex;align-items:center;gap:8px">
+<dc-import name="AppIcon" app="software" size="22" hint-size="22px,22px"></dc-import>
+<span style="font-size:11.5px;font-weight:800;color:#5b6278;flex-grow:1">Software</span>
+<span style="font-size:11.5px;color:#6b7288">1 h ago</span>
+</div>
+<span style="font-size:13.5px;font-weight:800">3 updates are ready</span>
+<div style="display:flex;gap:8px;margin-top:6px">
+<button style="flex-grow:1;height:32px;border-radius:10px;background:rgba(20,24,39,0.1);font-size:12.5px;font-weight:700">Update now</button>
+<button style="flex-grow:1;height:32px;border-radius:10px;background:rgba(20,24,39,0.1);font-size:12.5px;font-weight:700">Tonight</button>
+</div>
+</div>
+</section>
+
+<!-- Top bar -->
+<header style="position:absolute;left:0;top:0;width:1440px;height:34px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;justify-content:space-between;background:rgba(250,251,255,0.74);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);border-bottom:1px solid rgba(20,24,39,0.06);font-size:13px">
+<div style="width:470px;display:flex;align-items:center;gap:2px">
+<button aria-label="Open launcher" style="width:32px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center">
+<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="5.5" fill="#5b9dff" fill-opacity="0.9"></circle><circle cx="8" cy="15" r="5.5" fill="#f2a65a" fill-opacity="0.9"></circle><circle cx="16" cy="15" r="5.5" fill="#3cc4b0" fill-opacity="0.85"></circle></svg>
+</button>
+<span style="padding:0 10px 0 6px;font-weight:800">Software</span>
+<span style="padding:4px 8px;border-radius:6px;color:#3a4157">File</span>
+<span style="padding:4px 8px;border-radius:6px;color:#3a4157">Edit</span>
+<span style="padding:4px 8px;border-radius:6px;color:#3a4157">View</span>
+<span style="padding:4px 8px;border-radius:6px;color:#3a4157">Help</span>
+</div>
+<div style="display:flex;align-items:center;gap:12px;height:24px;padding:0 12px;border-radius:12px;background:rgba(20,24,39,0.08)">
+<div aria-label="Workspace 2 of 4" style="display:flex;align-items:center;gap:4px">
+<span style="width:6px;height:6px;border-radius:3px;background:rgba(20,24,39,0.4)"></span>
+<span style="width:18px;height:6px;border-radius:3px;background:#141827"></span>
+<span style="width:6px;height:6px;border-radius:3px;background:rgba(20,24,39,0.4)"></span>
+<span style="width:6px;height:6px;border-radius:3px;background:rgba(20,24,39,0.4)"></span>
+</div>
+<span style="font-weight:700">Mon 28 Sep</span>
+<span style="font-family:'Space Grotesk',sans-serif;font-weight:600">14:49</span>
+</div>
+<div style="width:470px;display:flex;align-items:center;justify-content:flex-end;gap:6px;color:#141827">
+<span style="height:22px;padding:0 7px;border-radius:6px;border:1px solid rgba(20,24,39,0.18);font-size:11px;font-weight:800;display:flex;align-items:center">EN</span>
+<button aria-label="Phone connected" style="width:28px;height:26px;display:flex;align-items:center;justify-content:center"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2"></path></svg></button>
+<button aria-label="System status" aria-expanded="true" style="display:flex;align-items:center;gap:10px;height:26px;padding:0 12px;border-radius:13px;background:rgba(91,157,255,0.35);box-shadow:inset 0 0 0 1px rgba(138,184,255,0.5)">
+<svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg>
+<svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
+<span style="display:flex;align-items:center;gap:5px"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M4 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM22 11v2"></path><path d="M5 10h9v4H5z" style="fill:currentColor;stroke:none"></path></svg><span style="font-size:12px;font-weight:700">82%</span></span>
+</button>
+<button aria-label="Notifications, 2 unread" style="width:30px;height:26px;border-radius:13px;display:flex;align-items:center;justify-content:center;position:relative"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"></path></svg><span style="position:absolute;right:6px;top:4px;width:7px;height:7px;border-radius:4px;background:#f2a65a"></span></button>
+</div>
+</header>
+
+<!-- Dock -->
+<nav aria-label="Dock" style="position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:flex-end;gap:8px;padding:10px 12px 14px;border-radius:24px;background:rgba(255,255,255,0.7);backdrop-filter:blur(28px) saturate(1.4);-webkit-backdrop-filter:blur(28px) saturate(1.4);border:1px solid rgba(20,24,39,0.1);box-shadow:0 18px 44px rgba(20,24,39,0.14)">
+<button aria-label="Start" style="width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:rgba(20,24,39,0.08)">
+<svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="5.5" fill="#5b9dff" fill-opacity="0.9"></circle><circle cx="8" cy="15" r="5.5" fill="#f2a65a" fill-opacity="0.9"></circle><circle cx="16" cy="15" r="5.5" fill="#3cc4b0" fill-opacity="0.85"></circle></svg>
+</button>
+<button aria-label="Search" style="width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:rgba(20,24,39,0.08);color:#141827"><svg class="i" width="24" height="24" viewBox="0 0 24 24"><path d="M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4"></path></svg></button>
+<button aria-label="Overview" style="width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:rgba(20,24,39,0.08);color:#141827"><svg class="i" width="24" height="24" viewBox="0 0 24 24"><path d="M4 5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 19h12a1 1 0 0 0 1-1V9"></path></svg></button>
+<span style="width:1px;height:36px;margin:0 4px 6px;background:rgba(20,24,39,0.16)"></span>
+<sc-for list="{{dock}}" as="a" hint-placeholder-count="9">
+<div style="position:relative;display:flex;flex-direction:column;align-items:center">
+<button aria-label="{{a.name}}" style="display: block; width: {{a.s}}px; height: {{a.s}}px; border-radius: {{a.r}}px; filter: drop-shadow(0 3px 6px rgba(20,24,39,0.14))"><dc-import name="AppIcon" app="{{a.key}}" size="{{a.s}}" hint-size="{{a.s}}px,{{a.s}}px"></dc-import></button>
+<sc-if value="{{a.running}}" hint-placeholder-val="{{false}}"><span style="position:absolute;bottom:-9px;height:4px;border-radius:2px;width: {{a.indW}}px;background: {{a.indC}}"></span></sc-if>
+</div>
+</sc-for>
+<span style="width:1px;height:36px;margin:0 4px 6px;background:rgba(20,24,39,0.16)"></span>
+<div style="position:relative;display:flex;flex-direction:column;align-items:center">
+<button aria-label="Software (running)" style="display:block;width:48px;height:48px;border-radius:13px;filter:drop-shadow(0 3px 6px rgba(20,24,39,0.14))"><dc-import name="AppIcon" app="software" size="48" hint-size="48px,48px"></dc-import></button>
+<span style="position:absolute;bottom:-9px;width:16px;height:4px;border-radius:2px;background:#2f6fdf"></span>
+</div>
+<button aria-label="Downloads" style="width:48px;height:48px;border-radius:13px;position:relative;background:rgba(20,24,39,0.08);color:#141827;display:flex;align-items:center;justify-content:center"><span style="position:absolute;left:12px;top:9px;width:22px;height:28px;border-radius:4px;background:#f2a65a;transform:rotate(-10deg)"></span><span style="position:absolute;left:15px;top:10px;width:22px;height:28px;border-radius:4px;background:#5b9dff;transform:rotate(6deg)"></span><span style="position:absolute;left:13px;top:11px;width:22px;height:28px;border-radius:4px;background:#ffffff;display:flex;align-items:center;justify-content:center;color:#2f6fdf"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg></span></button>
+<button aria-label="Trash" style="width:48px;height:48px;border-radius:13px;background:rgba(20,24,39,0.08);color:#141827;display:flex;align-items:center;justify-content:center"><svg class="i" width="24" height="24" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"></path></svg></button>
+</nav>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const I = {
+      folder: 'M3 7.5A2 2 0 0 1 5 5.5h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+      globe: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18',
+      terminal: 'M6 8l4 4-4 4M13 16h5',
+      mail: 'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3.5 7.5l8.5 6 8.5-6',
+      code: 'M9 8l-4 4 4 4M15 8l4 4-4 4M13.5 5l-3 14',
+      music: 'M9 18V6l10-2v12M5 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M15 16a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+      photos: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM7 10a2 2 0 1 0 4 0a2 2 0 1 0-4 0M21 15l-5-5-10 10',
+      settings: 'M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1',
+      calendar: 'M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4'
+    };
+    const mk = (name, key, bg, fg, run) => ({ name, key, d: I[key], s: 48, r: 13, ic: 25, bg, fg, running: !!run, indW: 5, indC: 'rgba(20,24,39,0.6)' });
+    const dock = [
+      mk('Files', 'folder', '#3f7fe0', '#ffffff', true),
+      mk('Browser', 'globe', '#e8743b', '#ffffff', true),
+      mk('Terminal', 'terminal', '#23293d', '#141827'),
+      mk('Mail', 'mail', '#1f9e8f', '#ffffff'),
+      mk('Code', 'code', '#7b5cd6', '#ffffff', true),
+      mk('Music', 'music', '#d6457a', '#ffffff', true),
+      mk('Photos', 'photos', '#3aa65b', '#ffffff'),
+      mk('Calendar', 'calendar', '#f0b429', '#3a2a00'),
+      mk('Settings', 'settings', '#5b6478', '#ffffff')
+    ];
+    return { dock };
+  }
+}
+</script>
+</body>
+</html>

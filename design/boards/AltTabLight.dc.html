@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — window switcher, light</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#dde6f4;color:#141827}
+button{font:inherit;color:inherit;border:0;padding:0;margin:0;background:none;cursor:default}
+svg{display:block;flex-shrink:0}
+svg.i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+a{color:#2f6fdf}a:hover{color:#2359c4}
+</style>
+</helmet>
+<div style="position:relative;width:1440px;height:900px;overflow:hidden;background:#dde6f4;color:#141827;font-size:13px">
+
+<svg width="1440" height="900" viewBox="0 0 1440 900" aria-hidden="true" style="position:absolute;left:0;top:0">
+<rect width="1440" height="900" fill="#dde6f4"></rect>
+<rect y="180" width="1440" height="160" fill="#e6ecf7"></rect>
+<rect y="340" width="1440" height="220" fill="#eef2fa"></rect>
+<circle cx="1010" cy="360" r="150" fill="#f2a65a"></circle>
+<path d="M0 560 L180 430 L330 505 L520 350 L700 485 L860 405 L1060 520 L1240 385 L1440 470 L1440 900 L0 900 Z" fill="#b9c9e8"></path>
+<path d="M0 650 L220 545 L420 620 L640 505 L880 612 L1100 540 L1300 622 L1440 580 L1440 900 L0 900 Z" fill="#9bb2e0"></path>
+<path d="M0 760 L260 662 L520 732 L780 642 L1040 722 L1280 662 L1440 702 L1440 900 L0 900 Z" fill="#7896d4"></path>
+<path d="M0 846 L300 786 L600 834 L900 774 L1200 824 L1440 792 L1440 900 L0 900 Z" fill="#5a7fd6"></path>
+</svg>
+
+<!-- Background windows, dimmed -->
+<div aria-hidden="true" style="position:absolute;left:64px;top:62px;width:760px;height:500px;border-radius:14px;background:#ffffff;border:1px solid rgba(20,24,39,0.08)"></div>
+<div aria-hidden="true" style="position:absolute;left:548px;top:262px;width:652px;height:506px;border-radius:14px;background:#ffffff;border:1px solid rgba(20,24,39,0.1)"></div>
+<div aria-hidden="true" style="position:absolute;left:0;top:0;width:1440px;height:900px;background:rgba(221,230,244,0.5)"></div>
+
+<div aria-hidden="true" style="position:absolute;left:0;top:0;width:1440px;height:34px;background:rgba(250,251,255,0.74);border-bottom:1px solid rgba(20,24,39,0.06)"></div>
+
+<!-- Switcher -->
+<section role="listbox" aria-label="Switch windows" style="position:absolute;left:170px;top:268px;width:1100px;box-sizing:border-box;padding:22px 28px 20px;border-radius:26px;display:flex;flex-direction:column;gap:18px;background:rgba(255,255,255,0.86);backdrop-filter:blur(40px) saturate(1.5);-webkit-backdrop-filter:blur(40px) saturate(1.5);border:1px solid rgba(20,24,39,0.12);box-shadow:0 40px 110px rgba(20,24,39,0.22)">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div role="tablist" style="display:flex;height:32px;box-sizing:border-box;padding:3px;gap:3px;border-radius:16px;background:rgba(20,24,39,0.07)">
+<button role="tab" aria-selected="true" style="padding:0 14px;border-radius:13px;background:#2f6fdf;color:#ffffff;font-size:12px;font-weight:800">This workspace</button>
+<button role="tab" aria-selected="false" style="padding:0 14px;border-radius:13px;font-size:12px;font-weight:700;color:#3a4157">All workspaces</button>
+</div>
+<span style="font-size:12.5px;color:#5b6278">5 windows · Work</span>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(5, minmax(0, 1fr));gap:16px">
+<sc-for list="{{wins}}" as="w" hint-placeholder-count="5">
+<div role="option" aria-selected="{{w.sel}}" style="box-sizing:border-box;padding:10px;border-radius:18px;display:flex;flex-direction:column;gap:10px;background: {{w.cardBg}};box-shadow:inset 0 0 0 2px {{w.ring}}">
+<div style="height:118px;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;border:1px solid rgba(20,24,39,0.1);background: {{w.body}}">
+<div style="height:16px;flex-shrink:0;background: {{w.bar}}"></div>
+<div style="flex-grow:1;box-sizing:border-box;padding:10px;display:flex;flex-direction:column;gap:6px">
+<span style="height:8px;border-radius:4px;width: {{w.l1}}%;background: {{w.c1}}"></span>
+<span style="height:6px;border-radius:3px;width: {{w.l2}}%;background: {{w.c2}}"></span>
+<span style="height:6px;border-radius:3px;width: {{w.l3}}%;background: {{w.c2}}"></span>
+<span style="margin-top:auto;height:26px;border-radius:5px;width: {{w.l4}}%;background: {{w.c3}}"></span>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;min-width:0">
+<dc-import name="AppIcon" app="{{w.app}}" size="24" hint-size="24px,24px"></dc-import>
+<div style="display:flex;flex-direction:column;min-width:0">
+<span style="font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{w.name}}</span>
+<span style="font-size:11.5px;color:#5b6278;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{w.title}}</span>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:center;gap:22px;font-size:12px;color:#5b6278">
+<span style="display:flex;align-items:center;gap:6px"><kbd style="padding:2px 7px;border-radius:6px;background:rgba(20,24,39,0.1);border:1px solid rgba(20,24,39,0.14);font:inherit;font-weight:800;color:#141827">Tab</kbd>Next</span>
+<span style="display:flex;align-items:center;gap:6px"><kbd style="padding:2px 7px;border-radius:6px;background:rgba(20,24,39,0.1);border:1px solid rgba(20,24,39,0.14);font:inherit;font-weight:800;color:#141827">Shift</kbd>+<kbd style="padding:2px 7px;border-radius:6px;background:rgba(20,24,39,0.1);border:1px solid rgba(20,24,39,0.14);font:inherit;font-weight:800;color:#141827">Tab</kbd>Back</span>
+<span style="display:flex;align-items:center;gap:6px"><kbd style="padding:2px 7px;border-radius:6px;background:rgba(20,24,39,0.1);border:1px solid rgba(20,24,39,0.14);font:inherit;font-weight:800;color:#141827">`</kbd>Same app</span>
+<span style="display:flex;align-items:center;gap:6px"><kbd style="padding:2px 7px;border-radius:6px;background:rgba(20,24,39,0.1);border:1px solid rgba(20,24,39,0.14);font:inherit;font-weight:800;color:#141827">Q</kbd>Close window</span>
+<span style="display:flex;align-items:center;gap:6px">Release <kbd style="padding:2px 7px;border-radius:6px;background:rgba(20,24,39,0.1);border:1px solid rgba(20,24,39,0.14);font:inherit;font-weight:800;color:#141827">Alt</kbd> to switch</span>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const W = (app, name, title, bar, body, c1, c2, c3, l, sel) => ({
+      app, name, title, bar, body, c1, c2, c3, l1: l[0], l2: l[1], l3: l[2], l4: l[3], sel: sel ? 'true' : 'false',
+      cardBg: sel ? 'rgba(91,157,255,0.16)' : 'transparent', ring: sel ? '#5b9dff' : 'transparent'
+    });
+    const wins = [
+      W('settings', 'Settings', 'Appearance', '#eceff6', '#ffffff', 'rgba(20,24,39,0.35)', 'rgba(20,24,39,0.12)', 'rgba(91,157,255,0.3)', [50, 90, 70, 60]),
+      W('browser', 'Browser', 'Fusion theme notes', '#e4e7ef', '#f4f1ea', '#1b2031', '#b9b3a6', '#e8743b', [70, 95, 80, 45], true),
+      W('files', 'Files', 'Wallpapers', '#f1f3f8', '#ffffff', 'rgba(20,24,39,0.3)', 'rgba(20,24,39,0.12)', '#9bb2e0', [40, 80, 65, 100]),
+      W('terminal', 'Terminal', '~ : zsh', '#171c2c', '#0f1320', '#3cc4b0', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.06)', [55, 80, 40, 30]),
+      W('code', 'Code', 'fusion-theme.qml', '#1e2233', '#161a26', '#9b7bf0', '#2f6fdf', 'rgba(242,166,90,0.35)', [60, 85, 70, 50])
+    ];
+    return { wins };
+  }
+}
+</script>
+</body>
+</html>
