@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+<!-- SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com> -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- The Plasma Fusion logo mark (Main board top bar and dock): three translucent discs. -->
+<path d="M6.5 8.5a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0z" fill="#5b9dff" fill-opacity="0.9"/>
+<path d="M2.5 15a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0z" fill="#f2a65a" fill-opacity="0.9"/>
+<path d="M10.5 15a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0z" fill="#3cc4b0" fill-opacity="0.85"/>
+</svg>

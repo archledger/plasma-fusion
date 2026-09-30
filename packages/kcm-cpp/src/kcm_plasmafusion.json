@@ -1,0 +1,21 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Description": "Style, accent color, window buttons, dock, top bar and hot corner of Plasma Fusion",
+        "FormFactors": [
+            "desktop"
+        ],
+        "Icon": "plasmafusion-logo",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion",
+        "Version": "1.0.0"
+    },
+    "X-KDE-Keywords": "Plasma Fusion,appearance,style,light,dark,follow sunset,automatic,accent,accent color,accent colour,wallpaper,window buttons,title bar,titlebar,traffic lights,dock,magnify,magnification,global menu,menu bar,top bar,hot corner,overview,screen edge",
+    "X-KDE-System-Settings-Parent-Category": "appearance",
+    "X-KDE-Weight": 1
+}
