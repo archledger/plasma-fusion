@@ -75,6 +75,9 @@ it starts KWin; `kwinrc` is read by KWin when it starts.
 | snap, attach | `kwinrc [Plugins] plasmafusion-snapEnabled` / `plasmafusion-attachEnabled` = true | Fusion theme |
 | outline | `kwinrc [Outline] QmlPath` contains `plasmafusion` | Fusion theme |
 | switcher | effective `kwinrc [TabBox]` or `[TabBoxAlternative] LayoutName=org.plasmafusion.switcher` | Fusion theme |
+| tablet (DEVICE-1) | effective `kwinrc [Plugins] plasmafusion-tabletEnabled=true` | Fusion theme |
+| inputmethod (DEVICE-1) | user `kwinrc [Wayland] InputMethod` empty or plasma-keyboard (the Fusion keyboard policy's values) | Fusion theme |
+| powerfx, pengarage (DEVICE-1) | `~/.config/systemd/user/graphical-session.target.wants/plasma-fusion-{powerfx,pen-garage}.service` exists | Fusion theme |
 
 "Fusion theme": `kdeglobals [KDE] LookAndFeelPackage` is `org.plasmafusion.dark.desktop` or
 `org.plasmafusion.light.desktop` ("My previous desktop" is not), or automatic light/dark switching
@@ -99,6 +102,11 @@ Switching off (recorded first in `gate/off`, then written):
 | snap, attach | the `[Plugins]` key removed (the scripts are `EnabledByDefault: false`) |
 | outline | `[Outline] QmlPath` removed (KWin's own outline) |
 | switcher | `LayoutName` removed, or set to KWin's default `thumbnail_grid` where kdedefaults still names the Fusion switcher (a Global Theme without a switcher of its own, such as Breeze, leaves it there); `DesktopMode=0` and `HighlightWindows=false` (fusion-config.sh's values for the Fusion switcher) removed |
+| tablet | `plasmafusion-tabletEnabled=false` written (not removed: the script's EnabledByDefault is not the check's to know) |
+| inputmethod | the user key removed, so Fedora's default keyboard (`/usr/share/kde-settings/kde-profile/default/xdg/kwinrc`) returns; another input method the user chose is never touched |
+| powerfx, pengarage | the wants link moved to `gate/saved/` (record kind `link`, checked against the one allowed path); the service does not start at this login because startplasma reloads the systemd user manager after the check. It comes back only while the unit file is still installed |
+
+Added by DEVICE-1 (2026-09-30); see `device.md`. Tests: `tests/gate-unit.sh` cases `t`, `t3`, `t4`, `t5`.
 
 Turning back on happens when a part's needs hold again at a login, or when `fusion-config.sh` runs
 (`deploy`). A key is put back only while it still holds what the check wrote; anything changed

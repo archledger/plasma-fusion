@@ -28,9 +28,13 @@
 #    notification is queued for after the desktop is up. The next login with matching versions, or
 #    the next fusion-config.sh run, turns them back on.
 # 2. Switching back. While the Global Theme (kdeglobals [KDE] LookAndFeelPackage) is not Plasma
-#    Fusion Dark or Light, the lock-screen drop-in, the plasmafusion-snap and plasmafusion-attach KWin
-#    scripts, kwinrc [Outline] QmlPath and the Fusion window switcher are switched off, once: a part
-#    the user turns on again is left on. A Plasma Fusion theme turns them back on at the next login.
+#    Fusion Dark or Light, the lock-screen drop-in, the plasmafusion-snap, plasmafusion-attach and
+#    plasmafusion-tablet KWin scripts, kwinrc [Outline] QmlPath, the Fusion window switcher, the
+#    on-screen keyboard policy's kwinrc [Wayland] InputMethod value (so Fedora's default keyboard
+#    returns) and the plasma-fusion-powerfx and plasma-fusion-pen-garage user services (their
+#    graphical-session.target.wants links; startplasma reloads systemd after this check, so they do
+#    not start at this login) are switched off, once: a part the user turns on again is left on. A
+#    Plasma Fusion theme turns them back on at the next login.
 #
 # Every change is recorded first (~/.local/state/plasma-fusion/gate/off) and undone only while the
 # value is still the one written here. With matching versions and a Fusion theme nothing changes.
@@ -52,7 +56,13 @@ AURORAE=org.kde.kwin.aurorae.v2
 BREEZE_DECO=org.kde.breeze
 SWITCHER=org.plasmafusion.switcher
 KWIN_SWITCHER=thumbnail_grid
-PARTS=(lockscreen decoration snap attach outline switcher)
+PARTS=(lockscreen decoration snap attach outline switcher tablet inputmethod powerfx pengarage)
+# The on-screen keyboard values the Fusion keyboard policy writes (quick settings, fusion-config.sh):
+# empty (keyboard off in laptop posture) and plasma-keyboard. Any other input method is the user's.
+OSK=/usr/share/applications/org.kde.plasma.keyboard.desktop
+# User services enabled by fusion-config.sh (WantedBy=graphical-session.target): part -> unit.
+declare -A UNIT=([powerfx]=plasma-fusion-powerfx.service [pengarage]=plasma-fusion-pen-garage.service)
+WANTS_REL=systemd/user/graphical-session.target.wants
 # Package names in records, the cache and rpm output. POSIX classes, not ranges: in some locales
 # (tr_TR, et_EE...) [A-Za-z] does not match every ASCII letter, and the login runs in the user's.
 NAME_RE='^[[:alnum:]._+-]+$'
@@ -98,6 +108,8 @@ org.kde.kdecoration2|ButtonsOnLeft
 org.kde.kdecoration2|ButtonsOnRight
 Plugins|plasmafusion-snapEnabled
 Plugins|plasmafusion-attachEnabled
+Plugins|plasmafusion-tabletEnabled
+Wayland|InputMethod
 Outline|QmlPath
 TabBox|LayoutName
 TabBox|DesktopMode
@@ -247,17 +259,22 @@ ini_edit() { # FILE OPS... (each "group<TAB>key<TAB>state")
 
 # One line per change: part reason kind file group key before written before-effective (tab
 # separated, "-" for none; states are "=value" or "-"). kind "key" is a config key, "dropin" the
-# lock-screen drop-in, "kept" marks a part the user turned on again.
+# lock-screen drop-in, "link" a user service's wants link (file: its path below ~/.config, before:
+# its target), "kept" marks a part the user turned on again.
 RECS=()
 RECS_CHANGED=0
-valid_part() { case $1 in lockscreen | decoration | snap | attach | outline | switcher) return 0 ;; esac; return 1; }
+valid_part() {
+  case $1 in lockscreen | decoration | snap | attach | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
+  return 1
+}
 load_recs() {
   local line f bad=0
   [ -f "$GATE/off" ] || return 0
   while IFS= read -r line || [ -n "$line" ]; do
     case $line in '#'* | '') continue ;; esac
     IFS=$'\t' read -r -a f <<<"$line"
-    if [ ${#f[@]} -eq 9 ] && valid_part "${f[0]}" && [[ ${f[2]} =~ ^(key|dropin|kept)$ ]]; then
+    if [ ${#f[@]} -eq 9 ] && valid_part "${f[0]}" && [[ ${f[2]} =~ ^(key|dropin|link|kept)$ ]] &&
+      { [ "${f[2]}" != link ] || [ "${f[3]}" = "$WANTS_REL/${UNIT[${f[0]}]-}" ]; }; then
       RECS+=("$line")
     else
       bad=$((bad + 1))
@@ -355,6 +372,11 @@ part_on() {
     switcher)
       { eff kwinrc TabBox LayoutName && [ "$REPLY" = "$SWITCHER" ]; } ||
         { eff kwinrc TabBoxAlternative LayoutName && [ "$REPLY" = "$SWITCHER" ]; } ;;
+    tablet) eff kwinrc Plugins plasmafusion-tabletEnabled && [ "$REPLY" = true ] ;;
+    # Only the values the Fusion keyboard policy writes; the user file only (the system's value is
+    # Fedora's default).
+    inputmethod) ustate kwinrc Wayland InputMethod && case $REPLY in = | "=$OSK") return 0 ;; esac; return 1 ;;
+    powerfx | pengarage) [ -L "$CONFIG/$WANTS_REL/${UNIT[$1]}" ] || [ -e "$CONFIG/$WANTS_REL/${UNIT[$1]}" ] ;;
     *) return 1 ;;
   esac
 }
@@ -412,6 +434,25 @@ off_decoration() {
   fi
   DID+=("decoration: $CPP_DECO -> $theme")
 }
+off_tablet() {
+  # Written as false, not removed: the script's EnabledByDefault is not this check's to know.
+  set_rec tablet "$1" kwinrc Plugins plasmafusion-tabletEnabled =false
+  DID+=("KWin script plasmafusion-tablet off")
+}
+off_inputmethod() {
+  set_rec inputmethod "$1" kwinrc Wayland InputMethod -
+  DID+=("on-screen keyboard: the system's default")
+}
+off_link() { # PART REASON
+  local rel=$WANTS_REL/${UNIT[$1]} target
+  target=$(readlink "$CONFIG/$rel" 2>/dev/null) || target=-
+  [ -n "$target" ] || target=-
+  rec_has "$1" link || rec_add "$1" "$2" link "$rel" - - "$target" - -
+  FILEOPS+=("link-off:$1")
+  DID+=("user service ${UNIT[$1]} not started (link moved to $GATE/saved/)")
+}
+off_powerfx() { off_link powerfx "$1"; }
+off_pengarage() { off_link pengarage "$1"; }
 off_snap() { set_rec snap "$1" kwinrc Plugins plasmafusion-snapEnabled -; DID+=("KWin script plasmafusion-snap off"); }
 off_attach() { set_rec attach "$1" kwinrc Plugins plasmafusion-attachEnabled -; DID+=("KWin script plasmafusion-attach off"); }
 off_outline() { set_rec outline "$1" kwinrc Outline QmlPath -; DID+=("snap-zone outline: KWin's own"); }
@@ -496,14 +537,32 @@ restore_lockscreen() {
   FILEOPS+=(dropin-forget)
   rec_drop lockscreen
 }
+# A user service's link comes back while it is still missing and the unit is still installed.
+restore_link() { # PART
+  local rel=$WANTS_REL/${UNIT[$1]}
+  if rec_has "$1" link; then
+    if [ -L "$CONFIG/$rel" ] || [ -e "$CONFIG/$rel" ]; then
+      say "  $1: ${UNIT[$1]} already enabled again"
+    elif [ ! -L "$GATE/saved/${UNIT[$1]}" ] && [ ! -e "$GATE/saved/${UNIT[$1]}" ]; then
+      say "  $1: no saved link; ${UNIT[$1]} stays off (fusion-config.sh enables it)"
+    elif [ ! -f "$CONFIG/systemd/user/${UNIT[$1]}" ]; then
+      say "  $1: ${UNIT[$1]} is not installed any more; stays off"
+    else
+      FILEOPS+=("link-on:$1")
+    fi
+  fi
+  FILEOPS+=("link-forget:$1")
+  rec_drop "$1"
+}
 restore_part() {
   local n=${#WRITES[@]} nops=${#FILEOPS[@]}
   case $1 in
     lockscreen) restore_lockscreen ;;
     decoration) restore_keys decoration relaxed ;;
+    powerfx | pengarage) restore_link "$1" ;;
     *) restore_keys "$1" ;;
   esac
-  if [ ${#WRITES[@]} -gt "$n" ] || { [ "$1" = lockscreen ] && [ ${#FILEOPS[@]} -gt $((nops + 1)) ]; }; then
+  if [ ${#WRITES[@]} -gt "$n" ] || { [[ $1 =~ ^(lockscreen|powerfx|pengarage)$ ]] && [ ${#FILEOPS[@]} -gt $((nops + 1)) ]; }; then
     DID+=("$1 back on")
   else
     DID+=("$1 record cleared")
@@ -511,7 +570,7 @@ restore_part() {
 }
 
 do_fileops() {
-  local op
+  local op p lnk saved
   for op in "${FILEOPS[@]}"; do
     case $op in
       dropin-off)
@@ -534,9 +593,34 @@ do_fileops() {
       dropin-forget)
         [ "$DRY" = 1 ] || [ "${KEEP_SAVED:-0}" = 1 ] || [ ! -e "$SAVED_DROPIN" ] || rm -f "$SAVED_DROPIN"
         ;;
+      link-off:* | link-on:* | link-forget:*)
+        p=${op#*:} lnk=$CONFIG/$WANTS_REL/${UNIT[${op#*:}]} saved=$GATE/saved/${UNIT[${op#*:}]}
+        case $op in
+          link-off:*)
+            [ -L "$lnk" ] || [ -e "$lnk" ] || continue
+            if [ "$DRY" = 1 ]; then say "  would move $lnk to $saved"; continue; fi
+            { [ -d "$GATE/saved" ] || mkdir -p "$GATE/saved"; } && mv -f "$lnk" "$saved" &&
+              { rmdir "${lnk%/*}" 2>/dev/null; say "  moved $lnk aside"; } || say "  error: could not move $lnk aside"
+            ;;
+          link-on:*)
+            if [ "$DRY" = 1 ]; then say "  would put $lnk back"; continue; fi
+            if mkdir -p "${lnk%/*}" && mv -f "$saved" "$lnk"; then
+              say "  put $lnk back"
+              DROPIN_RESTORED=1
+            else
+              say "  error: could not put $lnk back (kept $saved)"
+              KEEP_LINK[$p]=1
+            fi
+            ;;
+          link-forget:*)
+            [ "$DRY" = 1 ] || [ "${KEEP_LINK[$p]:-0}" = 1 ] || { [ ! -L "$saved" ] && [ ! -e "$saved" ]; } || rm -f "$saved"
+            ;;
+        esac
+        ;;
     esac
   done
 }
+declare -A KEEP_LINK=()
 do_writes() {
   local i f files=() ops what
   for ((i = 0; i + 3 < ${#WRITES[@]}; i += 4)); do

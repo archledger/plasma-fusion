@@ -10,6 +10,8 @@
 #   gate-stub.sh BASE
 set -u
 BASE=${1:?scratch directory}
+# The cases change directory, so a relative BASE is made absolute first.
+BASE=$(realpath -m -- "$BASE")
 HERE=$(cd "$(dirname "$0")" && pwd)
 DEVICE=$HERE/..
 SOURCEENV=/usr/libexec/plasma-sourceenv.sh

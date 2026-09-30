@@ -12,6 +12,8 @@
 # machine's rpm for the timing runs (the other cases always use a fake rpm).
 set -u
 BASE=${1:?scratch directory}
+# The cases change directory, so a relative BASE is made absolute first.
+BASE=$(realpath -m -- "$BASE")
 REAL_RPM=0
 [ "${2:-}" = --real-rpm ] && REAL_RPM=1
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -330,6 +332,76 @@ kw kwinrc org.kde.kdecoration2 theme ""
 gate login
 check "c: Fusion theme again restores everything" [ "$(sums)" = "$orig" ]
 [ "$(sums)" = "$orig" ] || diff <(echo "$orig") <(sums)
+
+# ---------- (t) tablet script, keyboard policy and user services under another theme ----------
+WANTS=systemd/user/graphical-session.target.wants
+make_home "$BASE/t2"
+kw kwinrc Plugins plasmafusion-tabletEnabled true
+kw kwinrc Wayland InputMethod ""
+mkdir -p "$H/.config/$WANTS"
+for u in plasma-fusion-powerfx.service plasma-fusion-pen-garage.service; do
+  printf '[Unit]\nDescription=test\n[Install]\nWantedBy=graphical-session.target\n' >"$H/.config/systemd/user/$u"
+  ln -s "../$u" "$H/.config/$WANTS/$u"
+done
+gate deploy >/dev/null 2>&1
+orig=$(sums)
+gate login
+check "t: Fusion theme: tablet script stays on" [ "$(get kwinrc Plugins plasmafusion-tabletEnabled)" = true ]
+check "t: Fusion theme: powerfx link stays" [ -L "$H/.config/$WANTS/plasma-fusion-powerfx.service" ]
+kw kdeglobals KDE LookAndFeelPackage org.kde.breeze.desktop
+gate login
+check "t: Breeze: tablet script written false" [ "$(get kwinrc Plugins plasmafusion-tabletEnabled)" = false ]
+check "t: Breeze: InputMethod key removed (system default returns)" [ "$(get kwinrc Wayland InputMethod)" = "<absent>" ]
+check "t: Breeze: powerfx link moved aside" [ ! -e "$H/.config/$WANTS/plasma-fusion-powerfx.service" ] &&
+  check "t: Breeze: saved link is the same link" [ "$(readlink "$H/.local/state/plasma-fusion/gate/saved/plasma-fusion-powerfx.service")" = ../plasma-fusion-powerfx.service ]
+check "t: Breeze: garage link moved aside" [ ! -L "$H/.config/$WANTS/plasma-fusion-pen-garage.service" ]
+check "t: Breeze: unit files kept" [ -f "$H/.config/systemd/user/plasma-fusion-powerfx.service" ]
+check "t: Breeze: status lists the held parts" grep -q '^held=.*tablet inputmethod powerfx pengarage' "$H/.local/state/plasma-fusion/gate/status"
+# The user enables the power service again under Breeze: it stays.
+mkdir -p "$H/.config/$WANTS"
+ln -s ../plasma-fusion-powerfx.service "$H/.config/$WANTS/plasma-fusion-powerfx.service"
+gate login
+gate login
+check "t: powerfx enabled again by the user stays" [ -L "$H/.config/$WANTS/plasma-fusion-powerfx.service" ]
+rm -f "$H/.config/$WANTS/plasma-fusion-powerfx.service"
+kw kdeglobals KDE LookAndFeelPackage org.plasmafusion.dark.desktop
+gate login
+check "t: Fusion again: keys back" [ "$(sums)" = "$orig" ]
+[ "$(sums)" = "$orig" ] || diff <(echo "$orig") <(sums)
+check "t: Fusion again: garage link back" [ "$(readlink "$H/.config/$WANTS/plasma-fusion-pen-garage.service")" = ../plasma-fusion-pen-garage.service ]
+check "t: Fusion again: powerfx link back (as a removed key comes back)" [ "$(readlink "$H/.config/$WANTS/plasma-fusion-powerfx.service")" = ../plasma-fusion-powerfx.service ]
+check "t: Fusion again: no saved links left" [ -z "$(ls -A "$H/.local/state/plasma-fusion/gate/saved" 2>/dev/null)" ]
+check "t: Fusion again: nothing held" [ ! -e "$H/.local/state/plasma-fusion/gate/off" ]
+# The user's own input method is never touched.
+make_home "$BASE/t3"
+kw kwinrc Wayland InputMethod /usr/share/applications/fcitx5-wayland-launcher.desktop
+gate deploy >/dev/null 2>&1
+kw kdeglobals KDE LookAndFeelPackage org.kde.breeze.desktop
+gate login
+check "t3: another input method stays under Breeze" [ "$(get kwinrc Wayland InputMethod)" = /usr/share/applications/fcitx5-wayland-launcher.desktop ]
+# plasma-keyboard written by the policy goes; a removed unit is not linked again.
+make_home "$BASE/t4"
+kw kwinrc Wayland InputMethod /usr/share/applications/org.kde.plasma.keyboard.desktop
+mkdir -p "$H/.config/$WANTS"
+printf '[Unit]\n' >"$H/.config/systemd/user/plasma-fusion-powerfx.service"
+ln -s ../plasma-fusion-powerfx.service "$H/.config/$WANTS/plasma-fusion-powerfx.service"
+gate deploy >/dev/null 2>&1
+kw kdeglobals KDE LookAndFeelPackage org.kde.breeze.desktop
+gate login
+check "t4: plasma-keyboard value removed under Breeze" [ "$(get kwinrc Wayland InputMethod)" = "<absent>" ]
+rm -f "$H/.config/systemd/user/plasma-fusion-powerfx.service"
+kw kdeglobals KDE LookAndFeelPackage org.plasmafusion.dark.desktop
+gate login
+check "t4: uninstalled unit: link not put back" [ ! -L "$H/.config/$WANTS/plasma-fusion-powerfx.service" ]
+check "t4: InputMethod back as the policy left it" [ "$(get kwinrc Wayland InputMethod)" = /usr/share/applications/org.kde.plasma.keyboard.desktop ]
+# A record naming another path is ignored (no file outside the wants link is ever moved).
+make_home "$BASE/t5"
+gate deploy >/dev/null 2>&1
+: >"$H/.config/precious"
+printf '# x\npowerfx\ttheme\tlink\t../precious\t-\t-\t-\t-\t-\n' >"$H/.local/state/plasma-fusion/gate/off"
+gate login
+check "t5: hostile link record ignored" [ -f "$H/.config/precious" ]
+check "t5: hostile link record dropped" [ ! -e "$H/.local/state/plasma-fusion/gate/off" ]
 
 # ---------- (i) hand-edited files: KConfig reads what the check meant ----------
 make_home "$BASE/i"

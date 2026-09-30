@@ -11,15 +11,20 @@
 # Global Theme, i.e. the state before Plasma Fusion was first configured. --latest takes the
 # newest backup of any kind (undo only the last run). --list shows the backups.
 #
-# It gives the changed shortcuts their old keys back (the quick-settings Meta+N goes back to
-# none), renames the workspaces and removes the ones fusion-config.sh created, for that backup's
-# run and every later one (each run records only what it changed itself), puts every backed-up
-# configuration file back (plasmashellrc with it, which removes the top bar's floatingApplets
-# key; files that did not exist are removed, among them the lock-screen drop-in of
-# lockscreen-enable.sh), then reloads KWin and restarts plasmashell. The login check
-# (docs/parts/gate.md) is removed with its env stub, notify unit and state unless the restored
-# backup had it installed; its log stays. The installed Plasma Fusion packages, the Global Theme
-# "My previous desktop" among them, stay installed.
+# It gives the changed shortcuts their old keys back (the Windows-style set of owner decision 6,
+# the quick-settings, pen and Meta+N notification keys), renames the workspaces and removes the
+# ones fusion-config.sh created, for that backup's run and every later one (each run records only
+# what it changed itself), undoes the pen defaults of those runs (tools/pen/pen-defaults.sh
+# --restore), stops the user services they started (plasma-fusion-powerfx gives the power-tier
+# values back when it stops), tells KWin the on-screen keyboard setting of the backup, puts every
+# backed-up file back (the layout with the desktop containment, plasmashellrc, kwinrc with the
+# tablet script, fonts.conf and the text-rendering keys, the session env file, the user
+# services and their links; files that did not exist are removed, among them the lock-screen
+# drop-in of lockscreen-enable.sh), loads the blur effect unless the restored kwinrc turns it
+# off, then reloads KWin and restarts plasmashell. The login check (docs/parts/gate.md) is removed
+# with its env stub, notify unit and state unless the restored backup had it installed; its log
+# stays. The installed Plasma Fusion packages, the Global Theme "My previous desktop" among them,
+# stay installed.
 # Log out and back in afterwards so every application, the lock screen and the splash screen
 # use the restored settings.
 set -euo pipefail
@@ -28,6 +33,8 @@ STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 GATE_STUB_REL=plasma-workspace/env/plasma-fusion-gate.sh
+NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
+HERE=$(cd "$(dirname "$0")" && pwd)
 GATE_FILES=("$GATE_STUB_REL" systemd/user/plasma-fusion-gate-notify.service
   systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-gate-notify.service)
 DRY=0 PICK=first-foreign BACKUP=
@@ -105,6 +112,77 @@ for b in "${LATER[@]}" "$BACKUP"; do
   done
 done
 
+# The Meta+N notification component (Windows-style set): its key went back to none above; the
+# component goes with its desktop file (restored below when the backup had it).
+if ! grep -qx "present-file .local/share/kglobalaccel/$NOTIFY_COMPONENT" "$BACKUP/manifest" &&
+  [ -e "$DATA/kglobalaccel/$NOTIFY_COMPONENT" ]; then
+  note "$NOTIFY_COMPONENT / _launch: unregistered"
+  run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$NOTIFY_COMPONENT" _launch >/dev/null 2>&1 || true
+fi
+
+# 1b. Pen defaults (fusion-config.sh --pen), newest run first: each pen backup holds the values from
+#     before its run; KWin reads them at once (pen-defaults.sh writes them with --notify).
+PEN_TOOL=
+for f in "$HERE/../pen/pen-defaults.sh" "$(dirname "$HERE")/pen/pen-defaults.sh"; do
+  [ -f "$f" ] && { PEN_TOOL=$f; break; }
+done
+for b in "${LATER[@]}" "$BACKUP"; do
+  [ -s "$b/pen-backup" ] || continue
+  pb=$(head -n 1 "$b/pen-backup")
+  [ -d "$pb" ] || { note "pen: backup $pb is gone (skipped)"; continue; }
+  if [ -z "$PEN_TOOL" ]; then
+    note "pen: tools/pen/pen-defaults.sh is missing; run it with --restore $pb by hand"
+  elif [ "$DRY" = 1 ]; then
+    note "would: pen-defaults.sh --restore $pb"
+  else
+    echo "Pen (from $pb)"
+    bash "$PEN_TOOL" --restore "$pb" 2>&1 | sed 's/^/  /' || note "warning: pen-defaults.sh --restore failed"
+  fi
+done
+
+# 1c. User services the runs started (plasma-fusion-powerfx gives the power-tier values back when
+#     it stops: ExecStopPost=... --apply full). Stopped only in this session's own systemd manager;
+#     without one, the service's program restores the values directly.
+session_manager() {
+  local addr
+  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] || return 1
+  addr=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p')
+  [ -n "$addr" ] && [ "$addr" = "$DBUS_SESSION_BUS_ADDRESS" ]
+}
+UNITS=()
+for b in "${LATER[@]}" "$BACKUP"; do
+  [ -f "$b/services" ] || continue
+  while IFS=$'\t' read -r kind unit; do
+    [ "$kind" = unit ] && [[ $unit =~ ^plasma-fusion-[a-z-]+\.service$ ]] || continue
+    case " ${UNITS[*]} " in *" $unit "*) ;; *) UNITS+=("$unit") ;; esac
+  done <"$b/services"
+done
+for unit in "${UNITS[@]}"; do
+  grep -qx "present systemd/user/$unit" "$BACKUP/manifest" && grep -qx "present systemd/user/graphical-session.target.wants/$unit" "$BACKUP/manifest" && continue
+  note "stop $unit"
+  if session_manager; then
+    run systemctl --user stop "$unit" 2>/dev/null || true
+  elif [ "$unit" = plasma-fusion-powerfx.service ] && [ -x "$HOME/.local/libexec/plasma-fusion/plasma-fusion-powerfx" ]; then
+    run "$HOME/.local/libexec/plasma-fusion/plasma-fusion-powerfx" --apply full || true
+  fi
+done
+
+# 1d. The on-screen keyboard setting as the backup had it, told to KWin (it follows kwinrc
+#     [Wayland] InputMethod only on a notified change; a restored file alone changes nothing).
+old_im=$(kreadconfig6 --file "$BACKUP/config/kwinrc" --group Wayland --key InputMethod --default __plasma_fusion_unset__ 2>/dev/null ||
+  echo __plasma_fusion_unset__)
+cur_im=$(kreadconfig6 --file "$CONFIG/kwinrc" --group Wayland --key InputMethod --default __plasma_fusion_unset__ 2>/dev/null ||
+  echo __plasma_fusion_unset__)
+if [ "$old_im" != "$cur_im" ]; then
+  if [ "$old_im" = __plasma_fusion_unset__ ]; then
+    note "kwinrc [Wayland] InputMethod: removed (the system's default keyboard)"
+    run kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod --delete
+  else
+    note "kwinrc [Wayland] InputMethod: ${old_im:-<empty>}"
+    run kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod -- "$old_im"
+  fi
+fi
+
 # 2. Workspaces: remove the ones fusion-config.sh created, give the others their old names.
 echo "Workspaces"
 for b in "${LATER[@]}" "$BACKUP"; do
@@ -158,7 +236,8 @@ while read -r state path; do
       ;;
     absent)
       [ "$path" = kglobalshortcutsrc ] && continue
-      if [ -e "$CONFIG/$path" ]; then
+      # -L too: a wants link whose unit was removed a line earlier no longer "exists".
+      if [ -e "$CONFIG/$path" ] || [ -L "$CONFIG/$path" ]; then
         note "remove ~/.config/$path (it did not exist before)"
         run rm -rf "${CONFIG:?}/$path"
       fi
@@ -169,6 +248,20 @@ while read -r state path; do
       ;;
     absent-home)
       [ -e "$HOME/$path" ] && { note "remove ~/$path"; run rm -f "${HOME:?}/$path"; }
+      ;;
+    present-file)
+      case $path in /* | *..*) continue ;; esac
+      note "restore ~/$path"
+      run rm -rf "${HOME:?}/$path"
+      run mkdir -p "$(dirname "$HOME/$path")"
+      run cp -a "$BACKUP/home/$path" "$HOME/$path"
+      ;;
+    absent-file)
+      case $path in /* | *..*) continue ;; esac
+      if [ -e "$HOME/$path" ] || [ -L "$HOME/$path" ]; then
+        note "remove ~/$path (it did not exist before)"
+        run rm -rf "${HOME:?}/$path"
+      fi
       ;;
   esac
 done <"$BACKUP/manifest"
@@ -213,10 +306,26 @@ if [ "$DRY" = 0 ]; then
     # The lock-screen drop-in is read by systemd at the next login.
     systemctl --user daemon-reload 2>/dev/null || true
   fi
+  if grep -Eq "^(present|absent) (systemd/user/plasma-fusion-(powerfx|pen-garage)\.service|systemd/user/graphical-session\.target\.wants/)" "$BACKUP/manifest"; then
+    session_manager && systemctl --user daemon-reload 2>/dev/null || true
+    rmdir --ignore-fail-on-non-empty "$CONFIG/systemd/user/graphical-session.target.wants" 2>/dev/null || true
+  fi
   bus call org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null 2>&1 || true
   for effect in blur overview; do
     bus call org.kde.KWin /Effects org.kde.kwin.Effects reconfigureEffect s "$effect" >/dev/null 2>&1 || true
   done
+  # Directories these runs created and the restore emptied.
+  for d in "$CONFIG/fontconfig" "$CONFIG/plasma-workspace/env" "$CONFIG/plasma-workspace" \
+    "$CONFIG/systemd/user/graphical-session.target.wants" "$CONFIG/systemd/user" "$CONFIG/systemd" \
+    "$DATA/kglobalaccel" "$HOME/.local/libexec"; do
+    [ -d "$d" ] && rmdir --ignore-fail-on-non-empty "$d" 2>/dev/null || true
+  done
+  # The power service unloads blur at critical battery; back on unless the restored kwinrc turns it off.
+  if [ "$(kreadconfig6 --file kwinrc --group Plugins --key blurEnabled --default true)" != false ]; then
+    bus call org.kde.KWin /Effects org.kde.kwin.Effects loadEffect s blur >/dev/null 2>&1 || true
+  fi
+  # Text rendering (fonts.conf) for applications started from now on.
+  command -v fc-cache >/dev/null && fc-cache >/dev/null 2>&1 || true
   # Palette, style and fonts for running applications.
   dbus-send --session --type=signal /KGlobalSettings org.kde.KGlobalSettings.notifyChange int32:0 int32:0 2>/dev/null || true
   dbus-send --session --type=signal /KGlobalSettings org.kde.KGlobalSettings.notifyChange int32:2 int32:0 2>/dev/null || true
