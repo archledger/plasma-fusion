@@ -1,6 +1,6 @@
 # Plasma Fusion — build plan
 
-Status: phase 1 (no compiled code) about to start. Last edited 2026-09-29.
+Status: phases 1 and 2 and round 2 are built and installed on the ThinkPad; of phase 3, the decoration and the settings module are installed as RPMs (the decoration is not selected yet). The real session runs d4afee8 (round 2 plus text scale and the dock rework, deployed 2026-09-30 02:56Z). The one-pass build in `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md` is under way: waves 0 and 1 and batch B0 are committed (CARD-1, BASE-1, POWER-1, KCM-1, DEVICE-1, TEST-1, DECO-1, STYLE-1; not deployed); the next lanes are KWIN-1, LAYOUT-1, LOCK-1 and PEN-1. Last edited 2026-09-30.
 
 ## Decisions
 
@@ -8,12 +8,27 @@ Status: phase 1 (no compiled code) about to start. Last edited 2026-09-29.
 |---|---|---|
 | Test device | ThinkPad X13 Yoga Gen 4, `ssh thinkpad-fedora`, user `test`, Fedora 44, Plasma 6.7.5, KF 6.30, Qt 6.11.2 | user |
 | Root on the ThinkPad | Allowed (passwordless sudo is intended). Back up first, record rollback. Never touch PAM (`/etc/pam.d`) or irlume. | user |
-| Display scale | Set the ThinkPad panel to 4/3 (1.3333, logical 1440x900) so board pixels map 1:1 to logical pixels. Design values are used as logical px. | user ("adjust it so it matches the ThinkPad screen") |
+| Display scale | Exactly 4/3 on the ThinkPad panel (stored 1.3333333, ±1e-6; logical 1440x900), so board pixels map 1:1 to logical pixels. Design values are used as logical px. Set from inside the session (`kscreen-doctor output.eDP-1.scale.1.3333333333`) and checked in `kwinoutputconfig.json` and KWin `supportInformation`. Proven to stick in a private session (stored 1.3333333333333333, survives a KWin restart, the Display page shows 133.333 % and opening it changes nothing). The live session still runs 1.325 (origin unexplained) until DEPLOY-1 sets 4/3. | user ("adjust it so it matches the ThinkPad screen"); owner decision 1, 2026-09-30 |
 | Compiled code | Phase 3, after the no-code desktop works: C++ KDecoration3 decoration and a Fusion KCM, built on the laptop in a Fedora 44 container. | user |
 | Application style | Breeze + Fusion colour schemes first. `plasma-union` (6.7.5, in development) is evaluated per app before any session-wide switch. | research |
 | Login screen | Stock plasma-login-manager greeter (its QML is compiled in). Fusion colours, Plasma style, fonts, cursor, icons and wallpaper installed system-wide and synced with "Apply Plasma Settings". No SDDM switch (PAM stack change). | research |
 | Lock screen | Own Plasma/Shell package holding only `contents/lockscreen/`, selected with `PLASMA_DEFAULT_SHELL` in a `plasma-kwin_wayland.service` drop-in. PAM prompts, fingerprint and irlume face messages must keep working. | research |
 | Build host | Everything is generated and packaged on the laptop (same Plasma/KF/Qt versions). Only artefacts go to the ThinkPad. | research |
+
+## Owner decisions (2026-09-30)
+
+The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/DECISIONS.md`: decisions 1-8 and every listed default. The build plan for these answers is `PLAN.md` in the same folder; each decision-dependent behaviour sits behind a config key.
+
+| # | Topic | Answer |
+|---|---|---|
+| 1 | Display scale | exactly 4/3 (Decisions table above) |
+| 2 | Tablet mode | apps full screen without title bars (large dialogs too); the dock hides over apps and comes back with a swipe up; "Windowed" per app in the window card, "Full-screen apps" in quick settings for all apps |
+| 3 | Accent colour | every Fusion part follows it; boot splash and login screen stay blue |
+| 4 | Snap layouts | on hold (about 0.5 s) or Meta+Z; a click always maximizes (`SnapLayoutsOnHover=false`) |
+| 5 | Top bar next to a window | solid while a window is maximized or touches it, frosted over the desktop |
+| 6 | Shortcuts | Windows-style set: Meta+Space, Meta+S, Alt+Space and Alt+F2 search in the Fusion launcher (KRunner no longer starts); Meta+A quick settings; Meta+N notifications; Meta+Up/Down maximize/restore (quick tile on Meta+Alt+Up/Down); Meta+Tab Overview; Meta+1..4 workspaces; Meta+Alt+1..9 dock apps |
+| 7 | KDE Mail and Calendar | no apps were named, so KMail, KOrganizer and Akonadi stay unchanged (pins, autostart, calendar card click) |
+| 8 | Second monitor | a top bar on every screen; dock, status icons, quick settings and desktop cards on the main screen; launcher and pop-ups on the active screen |
 
 ## Naming table (use these exact ids)
 
@@ -21,11 +36,14 @@ Status: phase 1 (no compiled code) about to start. Last edited 2026-09-29.
 |---|---|---|
 | Global Theme, dark | `org.plasmafusion.dark.desktop` ("Plasma Fusion Dark") | `~/.local/share/plasma/look-and-feel/` |
 | Global Theme, light | `org.plasmafusion.light.desktop` ("Plasma Fusion Light") | same |
+| Global Theme, previous look | `org.plasmafusion.previous.desktop` ("My previous desktop": the look before the first `fusion-config.sh` apply, written by `tools/device/previous-theme.py`) | same |
 | Colour schemes | `PlasmaFusionDark.colors`, `PlasmaFusionLight.colors` ([General] Name "Plasma Fusion Dark/Light") | `~/.local/share/color-schemes/` |
 | Plasma style | `plasma-fusion-dark`, `plasma-fusion-light` | `~/.local/share/plasma/desktoptheme/` |
 | Icon themes | `PlasmaFusion` (light UI, inherits `breeze`), `PlasmaFusion-Dark` (dark UI, inherits `breeze-dark`) | `~/.local/share/icons/` |
 | Cursor themes | `PlasmaFusion-cursors` (dark fill, default), `PlasmaFusion-Light-cursors` | `~/.local/share/icons/` |
 | Window decoration (phase 1) | Aurorae v2 themes `PlasmaFusionDark`, `PlasmaFusionLight` (+ `PlasmaFusionDark-Left`, `PlasmaFusionLight-Left` for buttons on the left); kwinrc `library=org.kde.kwin.aurorae.v2`, `theme=__aurorae__svg__PlasmaFusionDark` | `~/.local/share/aurorae/themes/` |
+| Window decoration (phase 3) | `org.plasmafusion.decoration` (KDecoration3 plugin, listed as "Plasma Fusion"); kwinrc `[org.kde.kdecoration2] library=org.plasmafusion.decoration` | `/usr/lib64/qt6/plugins/org.kde.kdecoration3/` (root, RPM `plasma-fusion-decoration`) |
+| Settings module (phase 3) | `kcm_plasmafusion` ("Plasma Fusion" in System Settings > Appearance & Style; `kcmshell6 kcm_plasmafusion`) | `/usr/lib64/qt6/plugins/plasma/kcms/systemsettings/`, `/usr/share/applications/kcm_plasmafusion.desktop` (root, RPM `plasma-fusion-settings`) |
 | Wallpapers | `PlasmaFusion` (Dusk Ridge; `images/` light, `images_dark/` dark) plus `PlasmaFusion-<Name>` for the other board palettes | `~/.local/share/wallpapers/` |
 | Splash | inside both Global Themes (`contents/splash/Splash.qml`); ksplashrc `Theme=org.plasmafusion.dark.desktop` | — |
 | Lock screen shell | `org.plasmafusion.lockshell` (Plasma/Shell, fallback `org.kde.plasma.desktop`) | `~/.local/share/plasma/shells/` |
@@ -37,10 +55,38 @@ Status: phase 1 (no compiled code) about to start. Last edited 2026-09-29.
 | Plasmoid, top-right | `org.plasmafusion.quicksettings` (status pill + quick-settings popup + notification list) | same |
 | Plasmoid, launcher | `org.plasmafusion.launcher` (centred start menu; `X-Plasma-Provides: org.kde.plasma.launchermenu`) | same |
 | Plasmoid, dock | `org.plasmafusion.dock` (Start/Search/Overview buttons, magnifying task list, Downloads, Trash) | same |
+| Plasmoid, desktop card | `org.plasmafusion.weathercard` (current weather, today's high and low) | same |
+| Plasmoid, desktop card | `org.plasmafusion.calendarcard` (this month; a click on a day opens KOrganizer) | same |
+| Plasmoid, desktop card | `org.plasmafusion.systemcard` (processor and memory bars) | same |
 | Konsole | `PlasmaFusionDark.colorscheme`, `PlasmaFusionLight.colorscheme`, profile `Plasma Fusion.profile` | `~/.local/share/konsole/` |
 | Kate/KWrite | `Plasma Fusion Dark.theme`, `Plasma Fusion Light.theme` | `~/.local/share/org.kde.syntax-highlighting/themes/` |
-| Plymouth (phase 2) | `plasma-fusion` | `/usr/share/plymouth/themes/` (root) |
+| Plymouth theme (system, phase 2) | `plasma-fusion` (shipped as a source in `/usr/share/plasma-fusion/plymouth/`; installed and selected by `tools/system/plymouth-install.sh --select`; rollback `plymouth-set-default-theme -R bgrt`) | `/usr/share/plymouth/themes/plasma-fusion/` (root) |
 | Fonts | Manrope (UI, variable), Space Grotesk (display, variable), OFL-1.1 | `~/.local/share/fonts/plasma-fusion/` |
+| Login check (gate) | `plasma-fusion-gate.sh` (`login`, `check`, `deploy`, `notify`, `status`; from `tools/device/gate/`) | `~/.local/share/plasma-fusion/gate/` |
+| Login check, env stub | `plasma-fusion-gate.sh` (runs the check before KWin starts, 4 s time limit) | `~/.config/plasma-workspace/env/` |
+| Login check, notification | `plasma-fusion-gate-notify.service` (wanted by `xdg-desktop-autostart.target`) | `~/.config/systemd/user/` |
+| Login check, state | `gate.log`, `gate/{tested,cache,off,saved,notify,notified,status}` | `~/.local/state/plasma-fusion/` |
+| RPM packages | `plasma-fusion` (the data parts above in system paths: colour schemes, Global Themes, Plasma styles, widgets, lock shell, icons, cursors, Aurorae themes, wallpapers, switcher, KWin scripts, Konsole and Kate themes, fonts; plus greeter and Plymouth sources and tools under `/usr/share/plasma-fusion/`; `packaging/build-rpm.sh`), `plasma-fusion-decoration` (`packages/decoration-cpp/tools/build-rpm.sh`), `plasma-fusion-settings` (`packages/kcm-cpp/build-rpm.sh`) | `/usr` (root) |
+
+## New names and keys (one-pass build registry, 2026-09-30)
+
+Copied from section 2 of `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md`. "Owner WP" is the work package there that creates the name or key; use these exact ids and keys.
+
+| Kind | Id / key | Owner WP |
+|---|---|---|
+| KWin script | `plasmafusion-tablet` (shortcut "Plasma Fusion: Tablet Window Mode") | KWIN-1 |
+| Plasmoid | `org.plasmafusion.pen` | PEN-1 |
+| Global Theme | `org.plasmafusion.previous.desktop` ("My previous desktop") | gate lane / DEVICE-1 |
+| Layout templates | `org.plasmafusion.panel.topbar`, `org.plasmafusion.panel.dock` (Plasma/LayoutTemplate, X-Plasma-ContainmentCategories=panel) | LAYOUT-1 |
+| User services | `plasma-fusion-powerfx.service`; `plasma-fusion-gate-notify.service` (gate lane); `plasma-fusion-pen-garage.service` (only if V2 passes) | POWER-1, PEN-1 |
+| Env script | `~/.config/plasma-workspace/env/plasma-fusion-gate.sh` | gate lane |
+| Shared QML | `packages/common/{FusionMetrics,Motion,FusionTablet,FusionBackdrop,FusionAccent,FusionIconTile}.qml` (`FusionIconTile`: the neutral tile behind icons without a Fusion icon, used by DOCK-2 and LAUNCH-1) | BASE-1 (lead) |
+| Build script | `tools/build.d/81-kwin-tablet.sh` (new; `80-kwin.sh` names each KWin script explicitly and belongs to KWIN-2) | KWIN-1 |
+| Shared script | `packages/look-and-feel/common/contents/layouts/ensure-topbars.js` (plasmashell script; used by KWIN-2 hot-plug and `fusion-config.sh --screens`) | LAYOUT-1 |
+| plasmafusionrc | `[Decoration] ButtonStyle`, `SnapLayoutsOnHover` (default becomes **false**); `[Effects] Glass=Full\|Reduced\|Solid` and `[Motion] PreviousAnimationDurationFactor` (as EFFECTS 2 and 7: "Reduce motion" has no stored flag, it shows `AnimationDurationFactor == 0`); `[Power] LighterOnCritical=true`, `ShorterAnimationsOnCritical=false`, `Tier`, `UserDockMagnify`, `UserGlass`; `[Tablet] GestureCardShown`, `RotationLocked`; `[Pen] GarageService`; `[Config] FusionConfigVersion` | DECO-1, KCM-1, POWER-1, DOCK-2, QS-1, PEN-1, DEVICE-1 |
+| kwinrc | `[Script-plasmafusion-tablet] WindowMode=fullscreen\|windowed`, `DockHiding=dodgewindows\|none`, `EdgeLeft`, `EdgeRight`, `DialogPolicy=fullscreen\|framed`, `DisableWindowMove=false`; `[Plugins] plasmafusion-tabletEnabled` | KWIN-1 |
+| plasmashell config | `[PlasmaFusion] tabletApplied` and the saved laptop panel values (TABLET 3.6) | KWIN-1 |
+| Widget keys | dock: `magnify`, `magnifiedSize` (off/56/62), `homeIndicator`, `tabletTile`, `tabletShowDownloadsTrash`, `powerTier`, `glass`; systemcard: `updateInterval` (default 3000), `powerTier` (hidden), `glass`; quicksettings: `keyboardPolicy`, `openRequest`, `glass`; launcher: `openRequest`, `glass`; pen: `showButton`, `actions`, `garageAction`, `openRequest` | the widget's lane |
 
 ## Repository layout
 
