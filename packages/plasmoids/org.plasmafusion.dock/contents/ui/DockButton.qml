@@ -11,6 +11,7 @@ Item {
     id: button
 
     required property DockPalette pal
+    required property Motion motion
     property string text
     property string description
     property bool active: false
@@ -69,7 +70,7 @@ Item {
         anchors.bottomMargin: button.bottomPad
         width: button.tile
         height: button.tile
-        radius: 13
+        radius: Math.round(button.tile * 13 / 48)
         antialiasing: true
         color: {
             if (button.active || button.dropHighlight > 0) {
@@ -82,7 +83,14 @@ Item {
         }
 
         Behavior on color {
-            ColorAnimation { duration: 120 }
+            enabled: button.motion.animate
+            ColorAnimation { duration: button.motion.hover }
+        }
+        // Press feedback: 0.94 (TABLET 4.4).
+        scale: mouse.pressed ? 0.94 : 1
+        Behavior on scale {
+            enabled: button.motion.animate
+            NumberAnimation { duration: button.motion.pressScale; easing.type: button.motion.standardEasing }
         }
     }
 
@@ -111,8 +119,8 @@ Item {
 
     Rectangle {
         anchors.horizontalCenter: face.horizontalCenter
-        y: face.y + face.height + 5
-        width: 16
+        y: face.y + face.height + (button.tile > 48 ? 4 : 5)
+        width: button.tile > 48 ? 18 : 16
         height: 4
         radius: 2
         color: button.pal.activePill

@@ -9,20 +9,26 @@ import QtQuick
 // (<nav aria-label="Dock">) and the Launcher/Overview boards for the pressed state.
 QtObject {
     property bool dark: true
+    // The user's accent (decision 3), bound by the dock to its FusionAccent; the board's blues
+    // until then.
+    property color accent: "#5b9dff"
+    property color accentRing: dark ? "#8ab8ff" : "#2f6fdf"
+    property color accentFill: "#2f6fdf"
+    property color accentText: "#ffffff"
 
     readonly property color ink: dark ? "#e8ebf4" : "#141827"
     readonly property color buttonFill: dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.08)
     readonly property color buttonHover: dark ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.13)
     readonly property color buttonPressed: dark ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.05)
     // aria-pressed="true" (launcher open, Overview active)
-    readonly property color activeFill: Qt.rgba(91 / 255, 157 / 255, 1, 0.3)
+    readonly property color activeFill: Qt.rgba(accent.r, accent.g, accent.b, 0.3)
     // The Launcher and LauncherLight boards (Start pressed, the only pressed state the dock
     // shows) use the same ring in both variants; OverviewLight's would be rgba(47,111,223,.5).
-    readonly property color activeRing: Qt.rgba(138 / 255, 184 / 255, 1, 0.5)
+    readonly property color activeRing: Qt.rgba(accentRing.r, accentRing.g, accentRing.b, 0.5)
     readonly property color activeInk: dark ? "#ffffff" : "#1d4fb0"
     readonly property color separator: dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.16)
     readonly property color runningDot: dark ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.6)
-    readonly property color activePill: dark ? "#8ab8ff" : "#2f6fdf"
+    readonly property color activePill: accentRing
     readonly property color attention: "#f2a65a"
     // drop-shadow colour. MultiEffect blends shadowColor as a premultiplied colour, so the
     // tinted light-mode colour is premultiplied here (rgb * alpha).
@@ -38,5 +44,9 @@ QtObject {
     readonly property color cardFront: dark ? "#e8ebf4" : "#ffffff"
     readonly property color cardArrow: dark ? "#1b2031" : "#2f6fdf"
     // Keyboard focus ring (Controls board: 2 px accent ring with a 2 px gap)
-    readonly property color focusRing: "#2f6fdf"
+    readonly property color focusRing: accentRing
+    // The disc behind a progress ring.
+    readonly property color progressDisc: dark ? Qt.rgba(12 / 255, 15 / 255, 28 / 255, 0.85) : Qt.rgba(1, 1, 1, 0.92)
+    // The home indicator over full-screen apps (TABLET 4.4).
+    readonly property color homeIndicator: dark ? Qt.rgba(1, 1, 1, 0.55) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.40)
 }

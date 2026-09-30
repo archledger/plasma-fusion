@@ -7,11 +7,12 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Shapes
 
-import org.kde.kirigami as Kirigami
-
-// One app in the dock: its icon from the icon theme with a soft drop shadow,
-// the running dot (5x4) or active pill (16x4) under it.
+// One app in the dock: its tile (the Fusion icon, or any other icon on a neutral Fusion tile,
+// FusionIconTile) over a soft drop shadow, the running dot or active pill under it, an unread
+// count or progress ring (Unity LauncherEntry, GAPS G17) and, when the app asks for attention,
+// one short bounce next to the orange dot (G26). Calendar apps show today's date on their tile.
 //
 // The item keeps its rest size (`iconSize`) and rest position. Magnification never changes a
 // size: the dock sets `grow` (extra px of the magnified icon) and `shift` (horizontal offset),
@@ -23,24 +24,43 @@ Item {
     required property int index
     required property var model
     required property DockPalette pal
+    required property Motion motion
 
     property real iconSize: 48
     property int bottomPad: 14
+    // Tablet posture: bigger dot and pill, 4 px under the icon (TABLET 4.4).
+    property bool tablet: false
     // Magnification of this frame, set by the dock.
     property real grow: 0
     property real shift: 0
     // Size of the crisp magnified icon; it is loaded once the dock was first hovered.
     property int zoomSize: 62
     property bool zoomReady: false
+    // Start-up pulse cycles (3, or fewer on battery: the dock's powerTier).
+    property int pulseCycles: 3
+    // Unity LauncherEntry state of this app ({count, countVisible, progress, progressVisible,
+    // urgent}) or null.
+    property var entry: null
+    // Today, for the calendar tile ("SEP", "28").
+    property string monthText: ""
+    property string dayText: ""
 
     readonly property bool isLauncher: model.IsLauncher === true
     readonly property bool isStartup: model.IsStartup === true
     readonly property bool isRunning: !isLauncher && !isStartup
     readonly property bool isActive: model.IsActive === true
-    readonly property bool demandsAttention: model.IsDemandingAttention === true
+    readonly property bool demandsAttention: model.IsDemandingAttention === true || (entry !== null && entry.urgent === true)
     // Launchers of apps that are not installed have no AppId; they are not shown.
     readonly property bool resolvable: !isLauncher || (model.AppId ?? "") !== ""
     readonly property string name: model.AppName || model.display || ""
+    // The theme icon's name: apps name their icon after their desktop id, which is AppId (without
+    // the ".desktop" some entries carry).
+    readonly property string iconName: String(model.AppId ?? "").replace(/\.desktop$/, "")
+    readonly property bool calendarTile: ["korganizer", "org.kde.korganizer", "office-calendar", "org.gnome.Calendar",
+                                          "gnome-calendar", "org.kde.merkuro.calendar", "org.kde.kalendar",
+                                          "kalendar"].indexOf(iconName) !== -1 && !restTile.foreign
+    readonly property int badgeCount: entry !== null && entry.countVisible === true ? Math.max(0, Math.round(entry.count || 0)) : 0
+    readonly property real progress: entry !== null && entry.progressVisible === true ? Math.max(0, Math.min(1, entry.progress || 0)) : -1
     // Set by the dock, which knows from its magnification which icon is under the pointer; the
     // item's own MouseArea does not track hover (one hover pass per pointer event for the whole
     // dock instead of one per item).
@@ -56,16 +76,20 @@ Item {
     signal menuRequested()
     signal dragMoved(real sceneX)
     signal dragFinished()
+    // A drag upwards (48 px) with a mouse, touchpad or pen: the dock drags the app's launcher,
+    // for a desktop shortcut (BACKLOG M3); false when the drag ends.
+    signal desktopDrag(bool active)
 
     visible: resolvable
     width: Math.round(iconSize)
     activeFocusOnTab: visible
-    transform: Translate { x: task.shift }
+    transform: Translate { x: task.shift; y: -bounce.lift }
 
     Accessible.role: Accessible.Button
-    Accessible.name: name
+    Accessible.name: task.badgeCount > 0 ? i18ncp("@info:tooltip app name and its unread count", "%2, %1 unread", "%2, %1 unread", task.badgeCount, name) : name
     Accessible.description: isLauncher ? i18nc("@info:tooltip", "Pinned, not running")
-                                       : (isActive ? i18nc("@info:tooltip", "Active") : i18nc("@info:tooltip", "Running"))
+                                       : (demandsAttention ? i18nc("@info:tooltip", "Needs attention")
+                                                           : (isActive ? i18nc("@info:tooltip", "Active") : i18nc("@info:tooltip", "Running")))
     Accessible.onPressAction: task.activated(0)
 
     Keys.onPressed: event => {
@@ -91,47 +115,41 @@ Item {
         height: width
         anchors.horizontalCenter: parent.horizontalCenter
         y: task.height - task.bottomPad - height
-        opacity: task.isStartup ? startupPulse.value : (mouse.pressed && !mouse.dragging ? 0.75 : 1)
+        // Press feedback: 0.94 and 80 % opacity (TABLET 4.4).
+        readonly property bool held: mouse.pressed && !mouse.dragging
+        property real pressScale: held ? 0.94 : 1
+        Behavior on pressScale {
+            enabled: task.motion.animate
+            NumberAnimation { duration: task.motion.pressScale; easing.type: task.motion.standardEasing }
+        }
+        opacity: task.isStartup ? startupPulse.value : (held ? 0.8 : 1)
         transform: Scale {
             origin.x: iconBox.width / 2
             origin.y: iconBox.height
-            xScale: task.magnification
-            yScale: task.magnification
+            xScale: task.magnification * iconBox.pressScale
+            yScale: task.magnification * iconBox.pressScale
         }
 
-        // Source of the shadow (hidden: MultiEffect draws it).
-        Kirigami.Icon {
-            id: shadowSource
+        // filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)) in the boards, under the tile shape (the
+        // Fusion tiles and the neutral tile share radius 0.234 x size): one signed-distance
+        // shader, no layer and no blur pass per item.
+        RectangularShadow {
             anchors.fill: parent
-            source: task.model.decoration
-            roundToIconSize: false
-            animated: false
-            visible: false
+            radius: 0.234 * width
+            offset.y: 3
+            blur: 6
+            spread: -1
+            color: task.pal.iconShadow
         }
 
-        // filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)) in the boards. Blur values were matched
-        // to the rendered board: the darkening below a tile is within 1-2 % of it, row by row.
-        // Its size never changes, so it is rendered once and only transformed afterwards.
-        MultiEffect {
-            source: shadowSource
-            anchors.fill: shadowSource
-            shadowEnabled: true
-            shadowColor: task.pal.iconShadow
-            shadowVerticalOffset: 3
-            shadowHorizontalOffset: 0
-            shadowBlur: 0.75
-            blurMax: 40
-            autoPaddingEnabled: true
-        }
-
-        // The crisp icon on top: at rest size, or at the magnified size while magnified (so a
+        // The crisp tile on top: at rest size, or at the magnified size while magnified (so a
         // scaled-up texture is never shown).
-        Kirigami.Icon {
-            id: restIcon
+        FusionIconTile {
+            id: restTile
             anchors.fill: parent
+            size: iconBox.width
             source: task.model.decoration
-            roundToIconSize: false
-            animated: false
+            iconName: task.iconName
             visible: !zoomLoader.item || task.grow <= 0.5
         }
 
@@ -140,19 +158,116 @@ Item {
             active: task.zoomReady && task.zoomSize > task.iconSize
             asynchronous: true
             anchors.centerIn: parent
-            sourceComponent: Kirigami.Icon {
+            sourceComponent: FusionIconTile {
                 width: task.zoomSize
                 height: task.zoomSize
+                size: task.zoomSize
                 scale: task.iconSize / task.zoomSize
                 source: task.model.decoration
-                roundToIconSize: false
-                animated: false
+                iconName: task.iconName
                 visible: task.grow > 0.5
+            }
+        }
+
+        // Calendar apps: today's month and day over the tile's fixed "SEP" / "28" (AppIcon board,
+        // 64-unit tile: red band 0-21 with the month, the day in 21-60).
+        Item {
+            id: calOverlay
+            anchors.fill: parent
+            visible: task.calendarTile && task.dayText !== ""
+            readonly property real u: width / 64
+
+            Rectangle {
+                x: 14 * calOverlay.u
+                y: 3 * calOverlay.u
+                width: 36 * calOverlay.u
+                height: 16 * calOverlay.u
+                color: "#e7585d"
+                Text {
+                    anchors.centerIn: parent
+                    text: task.monthText
+                    color: "#ffffff"
+                    font.pixelSize: 9 * calOverlay.u
+                    font.weight: Font.ExtraBold
+                    textFormat: Text.PlainText
+                }
+            }
+            Rectangle {
+                x: 10 * calOverlay.u
+                y: 23 * calOverlay.u
+                width: 44 * calOverlay.u
+                height: 35 * calOverlay.u
+                color: "#f6f4ef"
+                Text {
+                    anchors.centerIn: parent
+                    text: task.dayText
+                    color: "#1b2031"
+                    font.pixelSize: 26 * calOverlay.u
+                    font.weight: Font.ExtraBold
+                    font.features: { "tnum": 1 }
+                    textFormat: Text.PlainText
+                }
+            }
+        }
+
+        // Unread count: the Controls board's badge (20 px, radius 10, accent, 11 px 800), at the
+        // tile's top-right corner.
+        Rectangle {
+            visible: task.badgeCount > 0
+            x: parent.width - width + 6
+            y: -6
+            height: 20
+            width: Math.max(20, countText.implicitWidth + 12)
+            radius: 10
+            color: task.pal.accentFill
+            Text {
+                id: countText
+                anchors.centerIn: parent
+                text: task.badgeCount > 99 ? "99+" : String(task.badgeCount)
+                color: task.pal.accentText
+                font.pixelSize: 11
+                font.weight: Font.ExtraBold
+                font.features: { "tnum": 1 }
+                textFormat: Text.PlainText
+            }
+        }
+
+        // Progress (a download, a copy): a ring on a small disc at the top-right corner (next to
+        // no count: the count wins).
+        Item {
+            visible: task.progress >= 0 && task.badgeCount === 0
+            x: parent.width - width + 6
+            y: -6
+            width: 20
+            height: 20
+            Rectangle {
+                anchors.fill: parent
+                radius: 10
+                color: task.pal.progressDisc
+            }
+            Shape {
+                anchors.fill: parent
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    strokeColor: task.pal.accentFill
+                    strokeWidth: 3
+                    fillColor: "transparent"
+                    capStyle: ShapePath.RoundCap
+                    PathAngleArc {
+                        centerX: 10
+                        centerY: 10
+                        radiusX: 6.5
+                        radiusY: 6.5
+                        startAngle: -90
+                        sweepAngle: 360 * Math.max(0.01, task.progress)
+                    }
+                }
             }
         }
     }
 
-    // Launch feedback: the icon pulses until the app's window appears, at most three times.
+    // Launch feedback: the icon pulses until the app's window appears, at most three times
+    // (fewer on battery).
     QtObject {
         id: startupPulse
         property real value: 1
@@ -160,16 +275,16 @@ Item {
 
     SequentialAnimation {
         id: pulseAnimation
-        loops: 3
+        loops: task.motion.loops(task.pulseCycles)
         onStopped: startupPulse.value = 1
-        NumberAnimation { target: startupPulse; property: "value"; to: 0.45; duration: 500; easing.type: Easing.InOutSine }
-        NumberAnimation { target: startupPulse; property: "value"; to: 1; duration: 500; easing.type: Easing.InOutSine }
+        NumberAnimation { target: startupPulse; property: "value"; to: 0.45; duration: task.motion.pulse; easing.type: Easing.InOutSine }
+        NumberAnimation { target: startupPulse; property: "value"; to: 1; duration: task.motion.pulse; easing.type: Easing.InOutSine }
     }
 
     // Restarted on every launch (a binding on `running` would be dropped when the animation
-    // stops itself); no pulse with animations turned off.
+    // stops itself); no pulse with animations turned off or at the critical battery tier.
     function updatePulse(): void {
-        if (isStartup && Kirigami.Units.longDuration > 0) {
+        if (isStartup && task.motion.animate && task.pulseCycles > 0) {
             pulseAnimation.restart();
         } else {
             pulseAnimation.stop();
@@ -178,6 +293,22 @@ Item {
     }
     onIsStartupChanged: updatePulse()
     Component.onCompleted: updatePulse()
+
+    // Needs attention: one short bounce (the dot alone is a colour-only cue, GAPS G26).
+    QtObject {
+        id: bounce
+        property real lift: 0
+    }
+    SequentialAnimation {
+        id: bounceAnimation
+        NumberAnimation { target: bounce; property: "lift"; to: 10; duration: task.motion.popupIn; easing.type: Easing.OutCubic }
+        NumberAnimation { target: bounce; property: "lift"; to: 0; duration: task.motion.surface; easing.type: Easing.OutBounce }
+    }
+    onDemandsAttentionChanged: {
+        if (demandsAttention && task.motion.animate) {
+            bounceAnimation.restart();
+        }
+    }
 
     // Keyboard focus ring around the icon.
     Rectangle {
@@ -191,20 +322,22 @@ Item {
         antialiasing: true
     }
 
-    // Running indicator: 9 px below the icon's bottom edge (bottom:-9px, height 4).
+    // Running indicator under the icon: 5 x 4 dot or 16 x 4 pill 5 px below it (6 x 4 / 18 x 4,
+    // 4 px, in tablet posture).
     Rectangle {
         id: indicator
         anchors.horizontalCenter: parent.horizontalCenter
-        y: task.height - task.bottomPad + 5
+        y: task.height - task.bottomPad + (task.tablet ? 4 : 5)
         height: 4
         radius: 2
-        width: task.isActive ? 16 : 5
+        width: task.isActive ? (task.tablet ? 18 : 16) : (task.tablet ? 6 : 5)
         color: task.isActive ? task.pal.activePill : (task.demandsAttention ? task.pal.attention : task.pal.runningDot)
         visible: task.isRunning || task.isStartup
         opacity: task.isStartup ? startupPulse.value : 1
 
         Behavior on width {
-            NumberAnimation { duration: Kirigami.Units.shortDuration; easing.type: Easing.OutCubic }
+            enabled: task.motion.animate
+            NumberAnimation { duration: task.motion.toggle; easing.type: task.motion.standardEasing }
         }
     }
 
@@ -216,7 +349,7 @@ Item {
         property bool suppressClick: false
 
         // Reach into the gaps next to the icon so that the pointer is always over one item: the
-        // rest size plus the 4 px gap on each side, widened by the icon's growth so that the
+        // rest size plus half the gap on each side, widened by the icon's growth so that the
         // magnified neighbours never leave a gap without an item between them.
         x: -4 - task.grow / 2
         y: iconBox.y - 10 - task.grow
@@ -224,17 +357,26 @@ Item {
         height: parent.height - y
         hoverEnabled: false
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+        // A long press opens the menu (touch, TABLET 4.4; also the mouse).
+        pressAndHoldInterval: 500
 
         onPressed: mouse => {
             pressPoint = Qt.point(mouse.x, mouse.y);
             dragging = false;
             suppressClick = false;
         }
+        onPressAndHold: mouse => {
+            if (!dragging && mouse.button === Qt.LeftButton) {
+                suppressClick = true;
+                task.menuRequested();
+            }
+        }
         onPositionChanged: mouse => {
             if (!(mouse.buttons & Qt.LeftButton)) {
                 return;
             }
-            if (!dragging && Math.abs(mouse.x - pressPoint.x) > Qt.styleHints.startDragDistance) {
+            const dx = mouse.x - pressPoint.x;
+            if (!dragging && Math.abs(dx) > Qt.styleHints.startDragDistance) {
                 dragging = true;
             }
             if (dragging) {
@@ -254,6 +396,21 @@ Item {
                 task.dragFinished();
             }
         }
+        // Upwards: a drag of the launcher (Kickoff's way, a pointer handler that takes the point
+        // from this mouse area once it has moved 48 px up; sideways stays the reorder above).
+        DragHandler {
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
+            target: null
+            xAxis.enabled: false
+            dragThreshold: 48
+            onActiveChanged: {
+                if (active) {
+                    mouse.suppressClick = true;
+                }
+                task.desktopDrag(active);
+            }
+        }
+
         onClicked: mouse => {
             if (suppressClick) {
                 suppressClick = false;

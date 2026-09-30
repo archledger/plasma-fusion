@@ -68,8 +68,22 @@
       <label>Folder shown by the Downloads stack. Empty means the XDG download folder.</label>
       <default></default>
     </entry>
+    <entry name="tabletTile" type="Int">
+      <label>App tile size in tablet posture (TABLET 4.4: 56 px; 48 keeps more room for apps)</label>
+      <default>56</default>
+      <min>44</min>
+      <max>64</max>
+    </entry>
+    <entry name="tabletShowDownloadsTrash" type="Bool">
+      <label>Show Downloads and Trash in tablet posture (landscape only)</label>
+      <default>true</default>
+    </entry>
+    <entry name="powerTier" type="Int">
+      <label>Written by plasma-fusion-powerfx: 0 full (3 start-up pulses), 1 saver (1), 2 critical (none)</label>
+      <default>0</default>
+    </entry>
     <entry name="debugAction" type="String">
-      <label>Testing only: run one action and clear the key. Values: start, search, overview, downloads-menu, trash-menu, close-menu, configure, menu:ROW, activate:ROW, new:ROW.</label>
+      <label>Testing only: run one action and clear the key. Values: start, search, overview, downloads-menu, trash-menu, close-menu, configure, dump-targets (logs every target's rectangle), add-desktop:ROW, badge:ROW:COUNT:PROGRESS, menu:ROW, activate:ROW, new:ROW.</label>
       <default></default>
     </entry>
     <entry name="debugPointerX" type="Int">

@@ -298,3 +298,82 @@ EFFECTS.md 4.6 (about 10 %) is not reached. Next candidates: the per-event cost 
 Functional check (`build/lead/dk/scen-func.sh`, real EIS input): hover pill and magnification, the launcher
 and running-app menus, drag to reorder (the launcher order is saved), hover and pill on the fixed buttons,
 pill cleared on a slow exit and on a jump off the panel, magnification off, and a click launching the app.
+
+## DOCK-2 (2026-09-30)
+
+Work package DOCK-2 of the one-pass plan (TABLET 4.4 and 5, BACKLOG M3, GAPS G17/G26, ADAPTIVE 27),
+built by the lead directly.
+
+### Changes
+
+- **Tablet posture** (`FusionTablet`, KWin's own state): 56 px tiles (`tabletTile`), 12 px gaps, 40 px
+  separators with 6 px margins, a 6 x 4 dot / 18 x 4 pill 4 px under the icon, 12 px bottom padding;
+  magnification by mouse and pen only, 56 to 70; Search leaves the dock (it is in the launcher
+  sheet), and in portrait only Start and Overview stay (`tabletShowDownloadsTrash` for landscape);
+  never below 44 px when crowded. A tap on the active app does not minimize it (apps are full
+  screen there). The panel's thickness (96) comes from KWIN-1's panel script.
+- **Touch**: a top layer above the icons sees a touch first (an item's own handlers come after its
+  children's, so handlers on the dock root never saw touches over the icons): it turns
+  magnification off (`touchSuppress`) and holds the swipe. A swipe up of 24 px on the dock opens
+  the launcher at once; a launcher with `beginReveal` / `updateReveal(progress)` / `endReveal(open)`
+  (LAUNCH-2's sheet) follows the finger (progress = dy / 240; opens at 0.3 or 800 px/s). A long
+  press of 500 ms opens the icon's menu (`pressAndHoldInterval`); press feedback 0.94 and 80 %.
+  Reorder by touch stays the sideways drag (the menu cannot hand a moving finger back to the icon).
+- **Home indicator** (`HomeIndicator.qml`, TABLET P2): a 120 x 5 pill 8 px above the bottom, its own
+  `Dock` window without input or focus, shown in tablet posture while the active window is
+  maximized (not full screen), with a `toggle` fade; static afterwards.
+- **First tablet use** (`GestureCard.qml`, TABLET 5): a centred card with the three gestures and a 44 px
+  "Got it"; dismissing it writes `plasmafusionrc [Tablet] GestureCardShown=true` (read once at start).
+- **Desktop shortcuts** (BACKLOG M3): "Add to Desktop" in the icon's menu makes a symlink in
+  `~/Desktop` (trusted: no "untrusted program" prompt); a pinned icon dragged 48 px upwards (mouse,
+  touchpad or pen; a vertical `DragHandler` inside the icon's mouse area) starts a real drag of its
+  launcher through Kicker's drag helper. Over the desktop, KIO's drop menu then offers "Link Here"
+  (its only action). A QML `Drag` offering only a link, Kickoff's way, was tried and did not drop
+  (action 0) in private sessions; the menu item links without asking.
+- **Tiles** (ADAPTIVE 27): every icon is a `FusionIconTile` (the neutral Fusion tile behind icons the
+  Plasma Fusion theme does not draw) over one `RectangularShadow` of the tile shape (0 3 6, .35):
+  no per-icon `layer` + `MultiEffect` any more. Calendar apps (KOrganizer, Merkuro, GNOME Calendar)
+  show today's month and day over the tile's fixed "SEP 28"; one timer to the next midnight.
+  `AppId`s that carry ".desktop" are stripped before they are used as icon names.
+- **Attention** (G26): one short bounce when an app asks for attention (besides the orange dot).
+- **Unread counts and progress** (G17): `TaskItem` draws the Controls board's badge (20 px, accent,
+  11 px 800, tabular) and a 3 px progress ring on a 20 px disc. **No live source yet**: apps send
+  `com.canonical.Unity.LauncherEntry.Update` as broadcasts from any object path, and the QML D-Bus
+  watcher of plasma-workspace 6.7.5 needs a fixed sender and path (`DBusSignalWatcher::isValid()`;
+  the stock task manager's SmartLauncher is compiled into its own applet). A small compiled helper
+  is needed; until then only the test hook `debugAction badge:ROW:COUNT[:PROGRESS]` sets them.
+- **Motion and accent**: every duration from `Motion` (zoom `popupIn`, press `pressScale`, hover
+  colours `hover`, pulse `pulse` with `loops()`, indicator `toggle`); the active fill, ring, pill and
+  focus ring follow the user's accent (`FusionAccent`, the board's blues otherwise). The start-up
+  pulse runs 3 / 1 / 0 cycles by `powerTier` (written by plasma-fusion-powerfx). The pen watchdog is
+  1000 ms and also restarted by `Airbrush` events (PEN.md 3.8).
+- **Plain south frame** (STYLE-1): the dock reads its headroom from its height (72 px plate: 16 px
+  above it; 88 px: inside), so magnification keeps its full size with either frame.
+- Test hooks: `debugAction` `dump-targets` (one log line with every target's rectangle, badges and
+  the calendar day; TABLET T6), `add-desktop:ROW`, `badge:ROW:COUNT:PROGRESS`. Log lines use
+  `console.info` (Fedora's Qt logging rules drop `console.log`).
+
+### Verification
+
+Private session `dk-1` (1920 x 1200 at 4/3, `build/dk/scen-dk1.sh`, EIS pointer, keyboard and touch;
+the tablet script's window policy switched on for the virtual output): 20/20.
+
+- Laptop: 48 px tiles, Search and Downloads shown, the calendar tile shows today's day (30), panel
+  88.
+- Tablet: 56 px tiles, no Search, Trash kept in landscape, every target at least 44 px (smallest 56;
+  T6), panel 96; the gesture card appears the first time and "Got it" records it.
+- T7: a touch held 2 s on an icon leaves the dock's geometry unchanged (no magnification) and opens
+  the menu; a tap launches Konsole.
+- Home indicator over the maximized Konsole (pill 150 against 22 above it).
+- T8 (partly): a touch swipe up on the dock opens the launcher (the laptop card until LAUNCH-2).
+- Portrait tablet: Start and Overview only.
+- Badge 3 and progress 0.4 drawn (test hook).
+- M3: "Add to Desktop" makes `~/Desktop/org.kde.konsole.desktop` → `/usr/share/applications/…`; a drag
+  from the dock to the desktop gets KIO's "Link Here", which makes the Dolphin link.
+- No QML warnings from the dock, no core dumps.
+
+Touch in private sessions: a touch tap shorter than about 0.3 s, or sent right after the EIS client
+connects, was often lost (the long presses arrived); the scenario waits 0.8 s and taps for 0.3 s.
+
+Not covered here: M16/M17 (INT-1 matrix), the side-by-side against the dock board and light
+screenshots (INT-1), pen hover (hand check V7).

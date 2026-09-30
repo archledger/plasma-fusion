@@ -74,6 +74,7 @@ KCM.SimpleKCM {
             enabled: magnify.checked
             QQC2.SpinBox {
                 id: magnifiedSize
+                Accessible.name: i18nc("@label:spinbox", "Magnified size")
                 from: 48
                 to: 72
                 stepSize: 2

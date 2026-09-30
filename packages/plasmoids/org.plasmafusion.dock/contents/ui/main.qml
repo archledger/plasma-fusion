@@ -16,25 +16,56 @@ import org.kde.plasma.plasma5support as P5Support
 import org.kde.plasma.workspace.dbus as DBus
 import org.kde.taskmanager as TaskManager
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.private.kicker as Kicker
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
-// (88 px: 16 px transparent headroom + the 72 px dock drawn by the Plasma style), so
-// magnified icons can grow into the headroom.
+// (88 px: 16 px transparent headroom + the 72 px dock drawn by the Plasma style; with the plain
+// south frame the 72 px plate, and the headroom above the panel), and magnified icons grow into
+// the headroom. In tablet posture (FusionTablet, TABLET 4.4) the tiles are 56 px, Search moves
+// into the launcher sheet, touch never magnifies, a long press opens the menu and a swipe up
+// opens the launcher.
 PlasmoidItem {
     id: root
 
-    // ---- Board metrics (logical px, Main.dc.html <nav aria-label="Dock">) ----
-    readonly property int tile: 48
-    readonly property int gap: 8
-    readonly property int sepSlot: 9            // 1 px line + 4 px margin on each side
+    FusionTablet {
+        id: tabletState
+    }
+    Motion {
+        id: motion
+    }
+    FusionAccent {
+        id: tint
+    }
+
+    // ---- Board metrics (logical px, Main.dc.html <nav aria-label="Dock">; TABLET 4.4) ----
+    readonly property bool tablet: tabletState.tablet
+    readonly property bool portraitScreen: {
+        const g = Plasmoid.containment ? Plasmoid.containment.screenGeometry : undefined;
+        return g !== undefined && g.height > g.width;
+    }
+    readonly property int tile: tablet ? Plasmoid.configuration.tabletTile : 48
+    readonly property int gap: tablet ? 12 : 8
+    readonly property int sepLength: tablet ? 40 : 36
+    readonly property int sepSlot: tablet ? 13 : 9   // 1 px line + 6 (laptop 4) px margin on each side
     readonly property int sidePad: 12
-    readonly property int bottomPad: 14
+    readonly property int bottomPad: tablet ? 12 : 14
+    // Room above the panel that magnified icons may use: with the plain south frame (STYLE-1) the
+    // dock's 16 px headroom is above the panel; with the headroom frame it is inside it.
+    readonly property int headroomAbove: height <= tile + bottomPad + 20 ? 16 : 0
+    readonly property int zoomTarget: tablet ? tile + 14 : Plasmoid.configuration.magnifiedSize
     readonly property int zoomSize: Plasmoid.configuration.magnify
-        ? Math.max(tile, Math.min(Plasmoid.configuration.magnifiedSize, Math.floor(height) - bottomPad))
+        ? Math.max(tile, Math.min(zoomTarget, Math.floor(height) - bottomPad + headroomAbove))
         : tile
-    // App icons shrink below 48 px only when the dock would otherwise be wider than the screen.
-    readonly property int minTaskTile: 24
+    // App icons shrink below their size only when the dock would otherwise be wider than the
+    // screen (in tablet posture never below 44 px, the touch minimum).
+    readonly property int minTaskTile: tablet ? 44 : 24
+    // Fixed buttons: in tablet posture Search is in the launcher sheet, and in portrait only
+    // Start and Overview stay (TABLET 4.4).
+    readonly property bool showSearch: !tablet
+    readonly property bool showDownloadsTrash: !tablet || (!portraitScreen && Plasmoid.configuration.tabletShowDownloadsTrash)
+    // Start-up pulse cycles by battery tier (plasma-fusion-powerfx writes powerTier).
+    readonly property int pulseCycles: [3, 1, 0][Math.max(0, Math.min(2, Plasmoid.configuration.powerTier))]
     // Floating panel margins (Plasma style: 8 px left and right of the dock).
     readonly property int screenMargin: 8
     readonly property real screenWidth: {
@@ -96,11 +127,16 @@ PlasmoidItem {
     property bool fallbacksApplied: false
 
     Behavior on zoom {
-        NumberAnimation { duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic }
+        enabled: motion.animate
+        NumberAnimation { duration: motion.popupIn; easing.type: motion.standardEasing }
     }
 
     DockPalette {
         id: dockPal
+        accent: tint.hoverAccent
+        accentRing: dark ? (tint.schemeAccent ? "#8ab8ff" : Qt.tint(tint.hoverAccent, Qt.rgba(1, 1, 1, 0.35))) : tint.fill
+        accentFill: tint.fill
+        accentText: tint.fillText
         dark: {
             switch (Plasmoid.configuration.colorVariant) {
             case 1: return true;
@@ -271,7 +307,11 @@ PlasmoidItem {
         const n = taskRepeater.count;
         const slots = [];
         const push = (kind, row) => slots.push({ kind: kind, row: row, w: (kind === "sep1" || kind === "sep2") ? sepSlot : tile });
-        push("start"); push("search"); push("overview"); push("sep1");
+        push("start");
+        if (showSearch) {
+            push("search");
+        }
+        push("overview"); push("sep1");
         let anyPinned = false;
         let sep2 = false;
         for (let i = 0; i < n; ++i) {
@@ -289,7 +329,9 @@ PlasmoidItem {
         if (anyPinned && !sep2) {
             push("sep2");
         }
-        push("downloads"); push("trash");
+        if (showDownloadsTrash) {
+            push("downloads"); push("trash");
+        }
 
         // Too many apps for the screen: shrink the app icons (not the fixed buttons) so that
         // Downloads and Trash stay reachable. Magnification needs no room of its own: the icons
@@ -545,6 +587,13 @@ PlasmoidItem {
     onPadRightChanged: Qt.callLater(relayout)
     onZoomSizeChanged: markMagnification()
     onScreenWidthChanged: Qt.callLater(relayout)
+    onTabletChanged: {
+        clearHover();
+        Qt.callLater(relayout);
+        maybeShowGestureCard();
+    }
+    onPortraitScreenChanged: Qt.callLater(relayout)
+    onShowDownloadsTrashChanged: Qt.callLater(relayout)
     // The launcher or a context menu opening ends the magnification (zoom binding) and the name
     // pill (pillTarget); the hover state is cleared too so it cannot stay behind.
     onLauncherOpenChanged: if (launcherOpen) clearHover()
@@ -574,7 +623,7 @@ PlasmoidItem {
             root.markMagnification();
             // A pen leaving range does not end a hover in Qt; a pen that stops reporting for a
             // moment has left (EFFECTS.md 4.4).
-            if (point.device && point.device.type === PointerDevice.Stylus) {
+            if (point.device && (point.device.type === PointerDevice.Stylus || point.device.type === PointerDevice.Airbrush)) {
                 stylusWatchdog.restart();
             }
         }
@@ -586,22 +635,13 @@ PlasmoidItem {
         }
     }
 
+    // A pen held still (or lifted away) for 1 s ends the magnification (PEN.md 3.8, resolution 3).
     Timer {
         id: stylusWatchdog
-        interval: 600
+        interval: 1000
         onTriggered: root.clearHover()
     }
 
-    // A touchscreen press: no magnification and no name pill until the next real hover.
-    PointHandler {
-        acceptedDevices: PointerDevice.TouchScreen
-        onActiveChanged: {
-            if (active) {
-                root.touchSuppress = true;
-                root.clearHover();
-            }
-        }
-    }
 
     // The containment adds its own margins around applets; measure them once the panel
     // has settled so that the outer padding matches the board's 12 px.
@@ -747,6 +787,14 @@ PlasmoidItem {
         case "menu": if (item) showTaskMenu(item); break;
         case "activate": if (item) activateTask(row, 0); break;
         case "new": if (item) tasksModel.requestNewInstance(tasksModel.makeModelIndex(row)); break;
+        case "dump-targets": dumpTargets(); break;
+        case "add-desktop": if (item && launcherPath(row) !== "") addToDesktop(launcherPath(row)); break;
+        case "badge": if (item) {
+            const next = Object.assign({}, launcherEntries);
+            next[item.iconName] = { count: parseInt(parts[2] || "0"), countVisible: parseInt(parts[2] || "0") > 0,
+                                    progress: parseFloat(parts[3] || "-1"), progressVisible: parseFloat(parts[3] || "-1") >= 0, urgent: false };
+            launcherEntries = next;
+        } break;
         case "configure": {
             const configure = Plasmoid.internalAction("configure");
             if (configure) {
@@ -755,6 +803,30 @@ PlasmoidItem {
             break;
         }
         }
+    }
+
+    // TABLET T6: every visible target's global rectangle and hit size, one log line.
+    function dumpTargets(): void {
+        const out = [];
+        const add = (name, item, hitW, hitH) => {
+            if (!item || !item.visible) {
+                return;
+            }
+            const p = item.mapToGlobal(0, 0);
+            out.push(name + "@" + Math.round(p.x) + "," + Math.round(p.y) + ":" + Math.round(hitW) + "x" + Math.round(hitH));
+        };
+        for (const b of [startButton, searchButton, overviewButton, downloadsButton, trashButton]) {
+            add(b.text.replace(/ /g, "_"), b, b.width + root.gap, b.tile);
+        }
+        for (let i = 0; i < taskRepeater.count; ++i) {
+            const t = taskRepeater.itemAt(i) as TaskItem;
+            if (t && t.visible) {
+                add("task" + i + "-" + t.iconName + (t.badgeCount > 0 ? "#" + t.badgeCount : "")
+                    + (t.progress >= 0 ? "%" + t.progress.toFixed(2) : "") + (t.calendarTile ? "=" + t.dayText : ""),
+                    t, t.width + root.gap, t.iconItem.height);
+            }
+        }
+        console.info("dock: targets tablet=" + root.tablet + " tile=" + root.tile + " " + out.join(" "));
     }
 
     // ---- Task actions (same rules as the stock task manager) ----
@@ -792,7 +864,8 @@ PlasmoidItem {
         } else if (tasksModel.data(index, atm.IsMinimized) === true) {
             tasksModel.requestToggleMinimized(index);
             tasksModel.requestActivate(index);
-        } else if (tasksModel.data(index, atm.IsActive) === true && Plasmoid.configuration.minimizeActiveTaskOnClick) {
+        } else if (tasksModel.data(index, atm.IsActive) === true && Plasmoid.configuration.minimizeActiveTaskOnClick && !tablet) {
+            // (Not in tablet posture: apps are full screen there, minimizing would hide the only one.)
             tasksModel.requestToggleMinimized(index);
         } else {
             tasksModel.requestActivate(index);
@@ -827,6 +900,70 @@ PlasmoidItem {
             tasksModel.requestAddLauncher(url);
         } else {
             tasksModel.requestRemoveLauncher(url);
+        }
+    }
+
+    // ---- Desktop shortcuts (BACKLOG M3) ----
+    // The app's .desktop file: a file URL, or an applications: URL looked up in the XDG data dirs.
+    function launcherPath(row: int): string {
+        const url = String(role(row, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon) || "");
+        if (url.startsWith("file://")) {
+            return decodeURIComponent(url.slice(7));
+        }
+        if (url.startsWith("applications:")) {
+            const found = String(StandardPaths.locate(StandardPaths.ApplicationsLocation, url.slice(13)));
+            return found.startsWith("file://") ? decodeURIComponent(found.slice(7)) : "";
+        }
+        return "";
+    }
+    // "Add to Desktop": a symlink in ~/Desktop, which KDE trusts (no "untrusted program" prompt),
+    // as Folder View's own "Add to Desktop" makes.
+    function addToDesktop(path: string): void {
+        const desktop = decodeURIComponent(String(StandardPaths.writableLocation(StandardPaths.DesktopLocation)).replace(/^file:\/\//, ""));
+        const name = path.slice(path.lastIndexOf("/") + 1);
+        executable.run("d=" + shellQuote(desktop) + "; mkdir -p \"$d\" && { [ -e \"$d\"/" + shellQuote(name) + " ] || ln -s "
+                       + shellQuote(path) + " \"$d\"/" + shellQuote(name) + "; }");
+    }
+    // A pinned icon dragged upwards (48 px) starts a real drag of its launcher: the .desktop URL
+    // as text/uri-list, through Kicker's drag helper. Over the desktop, Folder View offers "Link
+    // Here" (KIO's drop menu); "Add to Desktop" in the icon's menu links without asking.
+    Kicker.DragHelper {
+        id: dragHelper
+        dragIconSize: 48
+    }
+    function desktopDrag(item: TaskItem, active: bool): void {
+        const path = launcherPath(item.index);
+        if (!active || path === "" || dragHelper.dragging) {
+            return;
+        }
+        console.info("dock: desktop drag of " + path);
+        dragHelper.startDrag(root, "file://" + encodeURI(path), item.iconName);
+    }
+
+    // ---- Unread counts and progress (GAPS G17) ----
+    // Per desktop id: {count, countVisible, progress, progressVisible, urgent}, drawn by TaskItem.
+    // Apps broadcast them as com.canonical.Unity.LauncherEntry.Update signals from any object path;
+    // the QML D-Bus watcher needs a fixed sender and path, so a live source needs a small compiled
+    // helper (docs/parts/shell-dock.md). Until then only the test hook (debugAction badge:) sets them.
+    property var launcherEntries: ({})
+
+    // ---- Today, for the calendar tile ----
+    property date today: new Date()
+    readonly property string todayMonth: Qt.locale().toString(today, "MMM").toUpperCase().replace(".", "")
+    readonly property string todayDay: String(today.getDate())
+    // One timer to the next midnight (no polling).
+    Timer {
+        id: midnight
+        running: true
+        interval: {
+            const now = new Date();
+            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+            return Math.max(1000, next.getTime() - now.getTime());
+        }
+        onTriggered: {
+            root.today = new Date();
+            interval = 24 * 3600 * 1000;
+            restart();
         }
     }
 
@@ -905,6 +1042,11 @@ PlasmoidItem {
         if (role(row, atm.LauncherUrlWithoutIcon)) {
             menu.addAction(i18nc("@action:inmenu", "Keep in Dock"), "window-pin-symbolic",
                            () => root.setPinned(row, !pinned), { checkable: true, checked: pinned });
+            const desktopFile = launcherPath(row);
+            if (desktopFile !== "") {
+                menu.addAction(i18nc("@action:inmenu", "Add to Desktop"), "list-add-symbolic",
+                               () => root.addToDesktop(desktopFile), {});
+            }
         }
         if (!item.isLauncher && !item.isStartup) {
             const count = tasksModel.rowCount(index);
@@ -1065,6 +1207,125 @@ PlasmoidItem {
         }
     }
 
+    // ---- Touch (TABLET 4.4): above every icon, so it sees a touch before the icons' mouse areas do
+    // (an item's own handlers come after its children's); it only takes passive grabs until a
+    // swipe starts, so taps and long presses still reach the icons.
+    Item {
+        id: touchLayer
+        anchors.fill: parent
+        z: 100
+
+        // A touchscreen press: no magnification and no name pill until the next real hover.
+        PointHandler {
+            acceptedDevices: PointerDevice.TouchScreen
+            onActiveChanged: {
+                if (active) {
+                    root.touchSuppress = true;
+                    root.clearHover();
+                }
+            }
+        }
+
+        // ---- Swipe up on the dock: the launcher (TABLET 4.4, TouchScreen only) ----
+        // 24 px upwards opens it; a launcher that follows the finger (the Plasma Fusion launcher's
+        // sheet, LAUNCH-2) gets the progress (dy / 240) and, on release, opens when it is at 0.3 or
+        // more or the finger moved up at 800 px/s or faster.
+        DragHandler {
+            id: swipeUp
+            acceptedDevices: PointerDevice.TouchScreen
+            target: null
+            xAxis.enabled: false
+            dragThreshold: 24
+            property bool following: false
+            // Active means 24 px upwards (the threshold): open at once; a following launcher gets
+            // the progress while the finger moves and the decision on release (the travel is
+            // already reset when `active` turns false, so it is kept here).
+            property real lastProgress: 0
+            onActiveChanged: {
+                const applet = root.findLauncherApplet();
+                root.launcherApplet = applet;
+                if (active) {
+                    root.clearHover();
+                    lastProgress = Math.max(0, -translation.y) / 240;
+                    following = applet !== null && typeof applet["beginReveal"] === "function";
+                    if (following) {
+                        applet["beginReveal"]();
+                        applet["updateReveal"](lastProgress);
+                    } else if (!root.launcherOpen) {
+                        console.info("dock: swipe up opens the launcher");
+                        root.toggleLauncher(false, "home");
+                    }
+                } else if (following) {
+                    applet["endReveal"](lastProgress >= 0.3 || -centroid.velocity.y >= 800);
+                    following = false;
+                }
+            }
+            onTranslationChanged: {
+                if (active && following && root.launcherApplet) {
+                    lastProgress = Math.max(0, -translation.y) / 240;
+                    root.launcherApplet["updateReveal"](lastProgress);
+                }
+            }
+        }
+
+    }
+
+    // ---- Home indicator and the first tablet use (TABLET 4.4 and 5) ----
+    // The active window on this screen, maximized (not full screen): the dock hides over it, and
+    // the indicator shows where to swipe.
+    property bool activeMaximized: false
+    function updateActiveMaximized(): void {
+        const index = tasksModel.activeTask;
+        const atm = TaskManager.AbstractTasksModel;
+        activeMaximized = index.valid && tasksModel.data(index, atm.IsMaximized) === true
+            && tasksModel.data(index, atm.IsFullScreen) !== true;
+    }
+    Connections {
+        target: tasksModel
+        function onActiveTaskChanged(): void { root.updateActiveMaximized(); }
+        function onDataChanged(): void { root.updateActiveMaximized(); }
+    }
+    Loader {
+        active: root.tablet && root.activeMaximized
+        sourceComponent: HomeIndicator {
+            pal: dockPal
+            motion: motion
+            screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
+        }
+    }
+    // Shown once, the first time tablet mode turns on (plasmafusionrc [Tablet] GestureCardShown).
+    property bool gestureCardShown: true
+    property bool gestureCardOpen: false
+    P5Support.DataSource {
+        id: rcReader
+        engine: "executable"
+        connectedSources: ["kreadconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown --default false"]
+        onNewData: (sourceName, data) => {
+            root.gestureCardShown = String(data["stdout"] || "").trim() === "true";
+            disconnectSource(sourceName);
+            root.maybeShowGestureCard();
+        }
+    }
+    function maybeShowGestureCard(): void {
+        if (tablet && !gestureCardShown && !gestureCardOpen) {
+            gestureCardOpen = true;
+        }
+    }
+    function dismissGestureCard(): void {
+        gestureCardOpen = false;
+        gestureCardShown = true;
+        executable.run("kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true");
+    }
+    Loader {
+        active: root.gestureCardOpen
+        sourceComponent: GestureCard {
+            pal: dockPal
+            motion: motion
+            screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
+            onDismissed: root.dismissGestureCard()
+        }
+    }
+
     // ---- Content ----
     Item {
         id: row0
@@ -1074,10 +1335,12 @@ PlasmoidItem {
 
         DockButton {
             id: startButton
-            x: root.rest.start
+            x: root.rest.start ?? 0
             transform: Translate { x: root.mag.fixed.start ?? 0 }
             height: row0.height
             pal: dockPal
+            motion: motion
+            tile: root.tile
             bottomPad: root.bottomPad
             text: i18nc("@action:button", "Start")
             description: i18nc("@info:tooltip", "Open the application launcher")
@@ -1088,16 +1351,19 @@ PlasmoidItem {
 
             FusionLogo {
                 anchors.centerIn: parent
-                size: 28
+                size: Math.round(28 * root.tile / 48)
             }
         }
 
         DockButton {
             id: searchButton
-            x: root.rest.search
+            visible: root.showSearch
+            x: root.rest.search ?? 0
             transform: Translate { x: root.mag.fixed.search ?? 0 }
             height: row0.height
             pal: dockPal
+            motion: motion
+            tile: root.tile
             bottomPad: root.bottomPad
             text: i18nc("@action:button", "Search")
             description: i18nc("@info:tooltip", "Search apps, files and settings")
@@ -1106,7 +1372,7 @@ PlasmoidItem {
 
             Glyph {
                 anchors.centerIn: parent
-                size: 24
+                size: Math.round(24 * root.tile / 48)
                 color: dockPal.ink
                 path: "M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4"
             }
@@ -1114,10 +1380,12 @@ PlasmoidItem {
 
         DockButton {
             id: overviewButton
-            x: root.rest.overview
+            x: root.rest.overview ?? 0
             transform: Translate { x: root.mag.fixed.overview ?? 0 }
             height: row0.height
             pal: dockPal
+            motion: motion
+            tile: root.tile
             bottomPad: root.bottomPad
             text: i18nc("@action:button", "Overview")
             description: i18nc("@info:tooltip", "Show all windows and workspaces")
@@ -1125,18 +1393,18 @@ PlasmoidItem {
 
             Glyph {
                 anchors.centerIn: parent
-                size: 24
+                size: Math.round(24 * root.tile / 48)
                 color: overviewButton.active ? dockPal.activeInk : dockPal.ink
                 path: "M4 5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 19h12a1 1 0 0 0 1-1V9"
             }
         }
 
         Rectangle {
-            x: root.rest.sep1 + 4
+            x: root.rest.sep1 + (root.sepSlot - 1) / 2
             transform: Translate { x: root.mag.fixed.sep1 ?? 0 }
-            y: row0.height - root.bottomPad - 6 - 36
+            y: row0.height - root.bottomPad - (root.tile - root.sepLength) / 2 - root.sepLength
             width: 1
-            height: 36
+            height: root.sepLength
             color: dockPal.separator
         }
 
@@ -1148,6 +1416,12 @@ PlasmoidItem {
             delegate: TaskItem {
                 id: taskItem
                 pal: dockPal
+                motion: motion
+                tablet: root.tablet
+                pulseCycles: root.pulseCycles
+                entry: root.launcherEntries[taskItem.iconName] ?? null
+                monthText: root.todayMonth
+                dayText: root.todayDay
                 x: root.rest.taskX[taskItem.index] ?? 0
                 iconSize: root.rest.taskW[taskItem.index] ?? root.tile
                 zoomSize: root.zoomSize
@@ -1159,25 +1433,29 @@ PlasmoidItem {
                 onMenuRequested: root.showTaskMenu(taskItem)
                 onDragMoved: sceneX => root.reorderTo(taskItem.index, sceneX)
                 onDragFinished: root.finishReorder()
+                onDesktopDrag: active => root.desktopDrag(taskItem, active)
             }
         }
 
         Rectangle {
-            x: root.rest.sep2 + 4
+            x: root.rest.sep2 + (root.sepSlot - 1) / 2
             transform: Translate { x: root.mag.fixed.sep2 ?? 0 }
-            y: row0.height - root.bottomPad - 6 - 36
+            y: row0.height - root.bottomPad - (root.tile - root.sepLength) / 2 - root.sepLength
             width: 1
-            height: 36
+            height: root.sepLength
             color: dockPal.separator
             visible: root.rest.sep2 >= 0
         }
 
         DockButton {
             id: downloadsButton
-            x: root.rest.downloads
+            visible: root.showDownloadsTrash
+            x: root.rest.downloads ?? 0
             transform: Translate { x: root.mag.fixed.downloads ?? 0 }
             height: row0.height
             pal: dockPal
+            motion: motion
+            tile: root.tile
             bottomPad: root.bottomPad
             acceptsMenu: true
             text: i18nc("@action:button", "Downloads")
@@ -1193,10 +1471,13 @@ PlasmoidItem {
 
         DockButton {
             id: trashButton
-            x: root.rest.trash
+            visible: root.showDownloadsTrash
+            x: root.rest.trash ?? 0
             transform: Translate { x: root.mag.fixed.trash ?? 0 }
             height: row0.height
             pal: dockPal
+            motion: motion
+            tile: root.tile
             bottomPad: root.bottomPad
             acceptsMenu: true
             text: root.trashFull ? i18nc("@action:button", "Trash (full)") : i18nc("@action:button", "Trash")
@@ -1206,7 +1487,7 @@ PlasmoidItem {
 
             Glyph {
                 anchors.centerIn: parent
-                size: 24
+                size: Math.round(24 * root.tile / 48)
                 color: dockPal.ink
                 path: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"
             }
