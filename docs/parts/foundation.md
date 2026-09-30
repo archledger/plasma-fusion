@@ -7,13 +7,14 @@ and fixed in a second pass (see "Review" at the end). Evidence:
 
 ## What this part builds
 
-`tools/build.d/10-foundation.sh` (about 40 s; `PF_WALLPAPER_SIZES=quick` renders only three
-sizes for test builds). Output is byte-identical between runs (checked: two builds, 122 files,
+`tools/build.d/10-foundation.sh` (about 95 s with every wallpaper size; `PF_WALLPAPER_SIZES=quick`
+renders only three sizes for test builds, about 15 s). Output is byte-identical between runs (checked: two builds, 122 files,
 same SHA-256).
 
 | Source | Installed at (in the HOME tree) |
 |---|---|
-| `packages/color-schemes/PlasmaFusionDark.colors`, `PlasmaFusionLight.colors` | `.local/share/color-schemes/` |
+| `packages/color-schemes/PlasmaFusionDark.colors`, `PlasmaFusionLight.colors`, `PlasmaFusionHighContrast.colors` | `.local/share/color-schemes/` |
+| `generators/fonts/60-plasma-fusion-fallback.conf` (Noto fallbacks, GAPS G28) | `.config/fontconfig/conf.d/` |
 | `fonts/manrope/Manrope[wght].ttf`, `fonts/spacegrotesk/SpaceGrotesk[wght].ttf` + both `OFL.txt` | `.local/share/fonts/plasma-fusion/` (`OFL-Manrope.txt`, `OFL-SpaceGrotesk.txt`) |
 | `generators/wallpapers/gen_wallpapers.py wallpapers` | `.local/share/wallpapers/PlasmaFusion/` (Dusk Ridge: `contents/images/` light, `contents/images_dark/` dark) and `.local/share/wallpapers/PlasmaFusion-<Name>/` for Aurora, CoralBay, DesertNoon, Ember, Glacier, Lagoon, Meadow, NightGrid, PineFog, PlumHills, SlateRain |
 | `generators/wallpapers/gen_wallpapers.py backgrounds` | `.local/share/plasma-fusion/backgrounds/dusk-ridge-dark-{dimmed,blurred,login,splash}.png` |
@@ -117,15 +118,20 @@ plasma-apply-wallpaperimage ~/.local/share/wallpapers/PlasmaFusion
 Global Theme: `[Wallpaper] Image=PlasmaFusion`. With the image unset or set to the package without a
 URL fragment the picture follows the Plasma style's darkness (verified: Breeze following Fusion Dark
 shows `images_dark/`, Fusion Light shows `images/`). Sizes in every package: 1920x1200, 2560x1600,
-3840x2400 (16:10), 1920x1080, 2560x1440, 3840x2160 (16:9) and 1200x1920 (portrait, for the X13 Yoga
-in tablet mode); Plasma picks the closest. The ThinkPad panel (1920x1200 physical) gets the exact
+3840x2400 (16:10), 1920x1080, 2560x1440, 3840x2160 (16:9), 2560x1080, 3440x1440 (21:9), 5120x1440
+(32:9), 3000x2000, 2256x1504 (3:2), 2048x1536 (4:3), 1280x1024 (5:4), 1200x1920 (10:16, the X13 Yoga
+in tablet mode) and 1080x1920, 1440x2560, 2160x3840 (9:16); Plasma picks the image closest in aspect
+ratio, then width (`packagefinder.cpp distance()`), so no screen shape gets a cropped picture. The ThinkPad panel (1920x1200 physical) gets the exact
 board scene.
 
 How the scene is made: `scene_svg()` writes the Main.dc.html SVG (sky #141a2e, bands at y 180/340,
 sun r150 at 1010,360 with the r212 orbit ring at 18 %, four ridges) and MainLight.dc.html for the
-light variant. Other aspect ratios extend the scene instead of stretching it: 16:9 shows 80 board
-units more on each side (ridges continue along their outer slopes, the lower sky band is carried
-down behind them); portrait is a 1000-unit crop with the sun at 55 % width and 58 % height, more
+light variant. Other aspect ratios extend or crop the scene instead of stretching it: 16:9 shows 80
+board units more on each side (ridges continue along their outer slopes, the lower sky band is carried
+down behind them); 21:9 and 32:9 continue the ridges mirrored at the board edges (a straight
+continuation ran them off the bottom on one side and into the sky on the other); 3:2, 4:3 and 5:4
+show the full scene height with the sides cropped around the centre, so the sun keeps its size
+relative to the screen height and the lightest ridge stays under the dock; portrait is a 1000-unit crop with the sun at 55 % width and 58 % height, more
 sky above and the front ridge filling the lowest 8 %. The palette packages use the thumbnail
 palettes of Main.dc.html (background, sun, near ridge, front ridge); the missing sky, bands and
 ridges are mixed from them with weights that reproduce the board's own Dusk Ridge scenes from their
@@ -562,3 +568,72 @@ Open (outside this part's files):
 
 Review scratch work ran under `build/rfd/` (git-ignored) because the /tmp quota was full; the
 ThinkPad's `/tmp/pfv-rfd-*` were removed afterwards.
+
+## STYLE-1 (2026-09-30)
+
+### Plasma Fusion High Contrast (GAPS G10)
+
+`packages/color-schemes/PlasmaFusionHighContrast.colors` ("Plasma Fusion High Contrast"): black
+surfaces (Window, View, Tooltip, Complementary #000000; Button #12141e; title bar #0c0e16), white
+text, secondary text #d6dae6, the Fusion blue #8ab8ff for selections (black text on it, 10.4:1) and
+links, yellow #ffd23f for keyboard focus so focus never looks like a selection, state colours
+#ff9aa0 / #ffd08a / #8fe6a8 (dark variants on the selection fill), disabled text faded 35 % towards
+the background (#a6a6a6, 8.6:1), `[KDE] contrast=10` and `frameContrast=0.5` for stronger Breeze
+frames, `TintFactor=0` so the inactive title bar keeps its own colours. Every text colour of every
+colour set is 7:1 or more on its background (WCAG AAA), focus and hover colours 4.5:1 or more
+(`check_contrast.py` checks it; table in the evidence `reports/contrast-report.md`). It is meant
+with the Plasma Fusion Dark style and Glass = Solid; the settings module applies both when the
+scheme is chosen (KCM-1).
+
+### Fallback fonts (GAPS G28)
+
+`generators/fonts/60-plasma-fusion-fallback.conf`, installed as
+`~/.config/fontconfig/conf.d/60-plasma-fusion-fallback.conf` (fusion-config copies every staged
+`.config` file and backs it up first). Manrope covers Latin, Cyrillic and Greek; Space Grotesk Latin
+and Vietnamese. The file gives both families a weak fallback list (weak, so fontconfig still ranks
+fonts that cover the text's language first): Noto Sans, then the Noto family of each script
+(Arabic, Hebrew, Devanagari, Bengali, Tamil, Thai, Armenian, Georgian, Ethiopic), then Noto Sans CJK
+SC for Han text without a language hint, then the system's sans-serif chain; Space Grotesk falls
+back to Manrope first. Chinese, Japanese and Korean pick the regional Noto Sans CJK font by language
+(SC for zh-cn/zh-sg, TC for zh-tw, HK for zh-hk, JP, KR). No rendering settings (antialiasing,
+hinting) are set here; DEVICE-1 writes those the way the Fonts page does.
+
+Checked on the ThinkPad with the fonts and the file in a sandbox (`fc-match -s FAMILY:lang=L`, first
+font that covers the language): Manrope ru/el → Manrope itself; vi → Noto Sans; ar → Noto Sans
+Arabic; he → Noto Sans Hebrew; hi → Noto Sans Devanagari; zh-cn → Noto Sans CJK SC; zh-tw → TC; ja →
+JP; ko → KR. Space Grotesk ru/el → Manrope, vi → itself, the rest as Manrope. Without the file the
+ThinkPad already fell back to Noto (Fedora's defaults), but through the generic chain; the file
+makes it explicit and keeps it when other fonts (DejaVu, Vazirmatn, Droid Sans Fallback) are
+installed. Qt check on the laptop (`generators/fonts/tests/check_fallback.py`, QTextLayout glyph
+runs offscreen, English locale): every sample is drawn by the Fusion family or a Noto family; before
+the Noto Sans CJK SC entry, Chinese in an English session came out in Droid Sans Fallback.
+`--render` writes the samples in Manrope and Space Grotesk (evidence `offscreen/fonts-fallback-laptop.png`).
+
+### Wallpapers for more screen shapes (ADAPTIVE 5.13, fix 15)
+
+Ten more sizes per package (list in "Wallpapers" above): 21:9, 32:9, 3:2, 4:3, 5:4 and 9:16. The
+scene is anchored to the bottom and the horizontal centre: 3:2, 4:3 and 5:4 show the full height
+(sun and ridges keep their size relative to the screen height; a nearly square screen shifts the
+crop so the sun stays 40 board units from the edge), 21:9 and 32:9 continue the ridges mirrored at
+the board edges (up to 90 units past an edge, as for 16:9, they still continue straight, so the
+16:10, 16:9 and portrait pictures and the checked-in SVG sources are unchanged). The wallpaper PNGs
+grow from 6.5 MB to 14.9 MB in all; a full foundation build takes about 95 s. Checked in private
+sessions: 3440x1440 at scale 1 (M08) and 2256x1504 at 1.5 (3:2), dark and light: the lightest ridge
+lies under the dock and the whole sun is on screen (evidence `screens/wallpaper-*`).
+
+### Translucent surfaces over the wallpapers (EFFECTS rule 6, BACKLOG S4)
+
+`check_contrast.py --surfaces WALLPAPER_DIR` (run by the build after the wallpapers) composites
+every translucent Plasma-style fill (read from the style generator) over the brightest and darkest
+KWin-blurred pixel of the surface's screen region in every shipped wallpaper (1920x1200 images;
+blur as a Gaussian of 24 device px), and the surfaces that can sit over windows (pop-ups,
+launcher, OSD, notifications, tooltips) also over white and black; every surface's no-blur and
+opaque fallbacks over white and black. Text and secondary text need 4.5:1, the focus ring 3:1.
+Required: each style over the wallpapers of its own polarity (Plasma shows `images_dark/` with a dark
+scheme; the palette scenes are either dark or light) and every transient surface over everything.
+Result: all required checks pass after one change: the light dock's fill alpha is 0.72 instead of
+the board's 0.70, so the accent-coloured active-app pill keeps 3:1 over Pine Fog's front ridge
+(2.95:1 at 0.70). Reported, not required: the bars and the desktop cards over a wallpaper of the
+other polarity (for example Fusion Dark over Meadow or Glacier) fall to 1.7-4.0:1 for secondary text
+and focus; that combination needs the Reduced or Solid glass level (the settings module's Glass
+switch). The table is in the evidence (`reports/contrast-report.md`).

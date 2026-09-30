@@ -54,6 +54,7 @@ REQUIRED = {
     "widgets/arrows.svg": ["up-arrow", "down-arrow", "left-arrow", "right-arrow"],
     "widgets/toolbar.svg": [""],
     "widgets/pager.svg": ["normal", "hover", "active"],
+    "widgets/action-overlays.svg": [f"{k}-{s}" for k in ("add", "remove", "open") for s in ("normal", "hover", "pressed")],
 }
 
 
@@ -101,6 +102,13 @@ def main():
                         print(rel, p, s)
                         print(f"{rel}: prefix '{p}' has inconsistent cell sizes"); errors += 1
                 base = rel.split("/", 1)[1] if rel.startswith(("translucent/", "solid/")) else rel
+                if base == "widgets/panel-background.svg" and "floating-hint-top-margin" in ids:
+                    # --south-frame plain: the headroom is the floating top margin and a 44 px
+                    # bottom panel must keep its thickness (south frame drawable at 44 px)
+                    if size("floating-hint-top-margin")[1] >= 1:
+                        sh = size("south-topleft")[1] + size("south-bottomleft")[1]
+                        if sh > 44:
+                            print(f"{rel}: plain south frame needs {sh} px (max 44)"); errors += 1
                 if base == "widgets/panel-background.svg":
                     # PanelView clamps a panel's thickness to the unprefixed frame's minimum
                     # drawing size while the panel QML starts: keep it below the 34 px top bar.

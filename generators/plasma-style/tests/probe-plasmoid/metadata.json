@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Authors": [{"Name": "Wisbendji Fimerlus", "Email": "archledger236@gmail.com"}],
+        "Description": "Test-only widget: fills its area in magenta and logs its geometry",
+        "Icon": "applications-system",
+        "Id": "org.plasmafusion.test.probe",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma style geometry probe",
+        "Version": "1.0"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

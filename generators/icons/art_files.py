@@ -230,3 +230,29 @@ def device_svg(key):
     if i.get('t'):
         s.fill(text_in_box(i['t'], 'manrope-800', i['ts'], i['box'], 0.04), i['tc'])
     return s.render()
+
+
+# ------------------------------------------------------------------ emblems
+# emblem-symbolic-link (BACKLOG M3/S6): the badge Dolphin and the desktop draw on the bottom-left corner
+# of a link, a desktop shortcut made by "Add to Desktop" or a drag from the launcher. Derived (no board
+# draws it): a white rounded badge with a faint ink edge and a curved "shortcut" arrow in the accent
+# colour (ColorScheme-Highlight, so it follows the accent). Drawn on the pixel grid of each size.
+EMBLEM_LINK = {
+    # size: (badge inset, badge radius, edge width, arrow path, stroke width, arrow head polygon)
+    16: (1, 4, 1, 'M5 11.6V10a3.6 3.6 0 0 1 3.6-3.6H9.8', 1.75, 'M9.2 3.6L12.5 6.4 9.2 9.2Z'),
+    22: (1, 5.5, 1, 'M6.8 16V13.6a5 5 0 0 1 5-5h1.7', 2.25, 'M12.6 4.8L17 8.6 12.6 12.4Z'),
+}
+
+
+def emblem_link_svg(size):
+    """The link emblem at 16 or 22 px (the scalable file is the 16 px drawing)."""
+    inset, radius, edge, arrow, width, head = EMBLEM_LINK[size]
+    s = Svg(size, style='.ColorScheme-Highlight{color:#2f6fdf}')
+    box = size - 2 * inset
+    s.fill(rr(inset, inset, box, box, radius), '#ffffff')
+    s.fill(rr(inset, inset, box, box, radius) + rr(inset + edge, inset + edge, box - 2 * edge, box - 2 * edge,
+                                                   radius - edge),
+           'rgba(20,24,39,0.22)', evenodd=True)
+    s.stroke(arrow, 'currentColor', width, cls='ColorScheme-Highlight', cap='round', join='round')
+    s.fill(head, 'currentColor', cls='ColorScheme-Highlight')
+    return s.render()

@@ -59,9 +59,13 @@ DIRS = {
     'status/symbolic': ('Status', 16, 'Scalable', 8, 512, 1),
     'actions/symbolic': ('Actions', 16, 'Scalable', 8, 512, 1),
     'categories/symbolic': ('Categories', 16, 'Scalable', 8, 512, 1),
+    'emblems/16': ('Emblems', 16, 'Fixed', None, None, 1),
+    'emblems/22': ('Emblems', 22, 'Fixed', None, None, 1),
+    'emblems/scalable': ('Emblems', 16, 'Scalable', 8, 256, 1),
 }
 # Fractional and integer display scales look for an exact match in these first (as in Breeze).
-SCALED = {f'{d}@{s}x': (d, s) for d in ('places/16', 'places/22', 'devices/16', 'devices/22') for s in (2, 3)}
+SCALED = {f'{d}@{s}x': (d, s) for d in ('places/16', 'places/22', 'devices/16', 'devices/22', 'emblems/16',
+                                        'emblems/22') for s in (2, 3)}
 LICENSE_TEXT = """Plasma Fusion icon themes (PlasmaFusion, PlasmaFusion-Dark)
 Copyright 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 
@@ -225,6 +229,12 @@ def build_registry():
         reg.link('mimetypes/scalable', n, 'art', art_id)
         if n in mime_symbolic:
             reg.link('mimetypes/symbolic', n + '-symbolic', 'glyph', board_glyph(reg, mime_symbolic[n]))
+    # ---- emblems: the link badge (pixel-grid drawings at 16 and 22 px, the 16 px one scalable)
+    claim('emblem-symbolic-link')
+    for size in (16, 22):
+        art_id = reg.add_art(f'emblem-link-{size}', art_files.emblem_link_svg(size))
+        reg.link(f'emblems/{size}', 'emblem-symbolic-link', 'art', art_id)
+    reg.link('emblems/scalable', 'emblem-symbolic-link', 'art', 'emblem-link-16')
     add_status(reg, claim)
     add_actions(reg, claim)
     add_categories(reg, claim)

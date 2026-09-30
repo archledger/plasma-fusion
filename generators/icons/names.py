@@ -47,7 +47,9 @@ APPS = {
     'calendar': ['korganizer', 'org.kde.korganizer', 'office-calendar', 'org.gnome.Calendar', 'gnome-calendar',
                  'org.kde.merkuro.calendar', 'org.kde.kalendar', 'kalendar'],
     'notes': ['marknote', 'org.kde.marknote', 'knotes', 'org.kde.knotes', 'kjots', 'org.kde.kjots',
-              'org.gnome.Notes', 'bijiben'],
+              'org.gnome.Notes', 'bijiben',
+              # handwritten notes (the pen menu's note app; installed on the test device)
+              'com.github.xournalpp.xournalpp', 'xournalpp', 'com.github.flxzt.rnote'],
     'calculator': ['accessories-calculator', 'org.kde.kcalc', 'kcalc', 'org.kde.kalk', 'kalk',
                    'org.gnome.Calculator', 'gnome-calculator', 'galculator', 'qalculate', 'qalculate-qt',
                    'io.github.Qalculate', 'speedcrunch', 'org.speedcrunch.SpeedCrunch'],
@@ -69,6 +71,12 @@ APPS = {
                    'org.gnome.Screenshot', 'gnome-screenshot', 'org.flameshot.Flameshot', 'flameshot',
                    'ksnip', 'org.ksnip.ksnip', 'accessories-screenshot-tool'],
     'fusion': ['start-here-kde', 'start-here-kde-plasma', 'start-here', 'plasmafusion'],
+    # derived tiles (coverage report, BACKLOG C8)
+    'archive': ['ark', 'org.kde.ark', 'utilities-file-archiver', 'file-roller', 'org.gnome.FileRoller',
+                'engrampa', 'xarchiver'],
+    'reader': ['okular', 'org.kde.okular', 'org.gnome.Papers', 'org.gnome.Evince', 'evince', 'atril',
+               'org.pwmt.zathura'],
+    'camera': ['kamoso', 'org.kde.kamoso', 'org.gnome.Snapshot', 'org.gnome.Cheese', 'cheese'],
 }
 # tile key -> symbolic glyph used for the NAME-symbolic twins: the one-colour app symbols of the
 # Launcher/Main boards' icon table (folder, globe, terminal, ... cpu, crop)
@@ -77,6 +85,7 @@ APP_SYMBOLIC = {
     'music': 'music', 'photos': 'image', 'settings': 'settings', 'calendar': 'calendar', 'notes': 'document',
     'calculator': 'calculator', 'software': 'bag', 'videos': 'video', 'chat': 'chat', 'maps': 'map',
     'weather': 'cloud', 'monitor': 'sysmon', 'screenshot': 'crop', 'fusion': '@logo',
+    'archive': 'archive', 'reader': 'document', 'camera': 'camera',
 }
 
 # ------------------------------------------------------------------ places

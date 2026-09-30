@@ -26,7 +26,7 @@ control colours come from the active Fusion colour scheme, surface fills are fix
 | `tools/build.d/20-plasma-style.sh` | writes `$STAGE/.local/share/plasma/desktoptheme/plasma-fusion-{dark,light}/` |
 | `generators/plasma-style/tests/` | test tooling only (not installed): `validate.py`, `coverage.py`, `run-harness.sh` + `harness.qml` (offscreen KSvg/PC3 render), `make-seed.sh` + `vsession-scenario.sh` + `vsession-dock-scenario.sh` + `pstest-plasmoid/` (virtual-session screenshots), `make-integrated-seed.sh` + `vsession-integrated.sh` (all parts with the Global Theme layout), `render-test-wallpapers.py`, `sidebyside.py` |
 
-Generated per variant (35 SVG files):
+Generated per variant (36 SVG files):
 
 - Surfaces: `dialogs/background`, `widgets/tooltip`, `widgets/panel-background`, `widgets/background`
   in three selectors: `translucent/` (KWin blur available, design alphas), root (no blur, 0.96-0.97
@@ -34,12 +34,13 @@ Generated per variant (35 SVG files):
 - Controls used by Plasma Components 3 and the stock applets: `button`, `lineedit`, `viewitem`,
   `listitem`, `tabbar`, `menubaritem`, `tasks`, `scrollbar`, `slider`, `switch`, `checkmarks`,
   `radiobutton`, `actionbutton`, `frame`, `bar_meter_horizontal`, `bar_meter_vertical`,
-  `busywidget`, `line`, `arrows`, `toolbar`, `pager`.
+  `busywidget`, `line`, `arrows`, `toolbar`, `pager`, and Folder View's `action-overlays`
+  (selection markers and the folder pop-up button, STYLE-1).
 - Not generated (Breeze fallback, as the research's tier 3): `notes`, `clock`, `timer`,
   `analog_meter`, `calendar` (the calendar applet itself uses `button` and `viewitem`, which are
   ours), `containment-controls`, `margins-highlight`, `configuration-icons`, `dragger`, `glowbar`,
   `media-delegate`, `monitor`, `picker`, `plot-background`, `scrollwidget`, `branding`,
-  `action-overlays`, `weather/wind-arrows`, `dialogs/shutdowndialog`. `icons/` is unused in 6.7.5.
+  `weather/wind-arrows`, `dialogs/shutdowndialog`. `icons/` is unused in 6.7.5.
 
 ## Build, install, apply
 
@@ -67,7 +68,7 @@ enabled=true`.
 | Surface | Dark | Light | Shape |
 |---|---|---|---|
 | Top bar, `panel-background` prefix `north` | rgba(9,12,24,.58), bottom edge white .06 | rgba(250,251,255,.74), edge rgba(20,24,39,.06) | square, 1 px cells, margins t/b 4, l/r 6 |
-| Dock, prefix `south` | rgba(14,18,34,.60), edge white .10 | white .70, edge ink .10 | radius 24, 16 px transparent headroom (contract below) |
+| Dock, prefix `south` | rgba(14,18,34,.60), edge white .10 | white .72 (board .70, see STYLE-1), edge ink .10 | radius 24, 16 px transparent headroom (contract below); `--south-frame plain`: a plain bar, headroom above it (STYLE-1) |
 | Vertical panels, prefixes `west`, `east` | as dock | as dock | radius 24, no headroom, margins 8 |
 | Unprefixed panel frame (a panel before its edge is known, or without an edge) | as dock | as dock | radius 6 in 6 px cells, margins 8 (see the Review section) |
 | Pop-ups, `dialogs/background` | rgba(22,27,46,.88), edge white .12 | white .88, edge ink .12 | radius 22, margins 14 |
@@ -323,3 +324,94 @@ See `docs/parts/polish.md`. Changes in `gen_plasma_style.py`:
   `mask-snaplayouts-*`), the QuickSettings board's Meta+Z flyout; plasmafusion-snap uses it.
 - The top bar's `floatingApplets=1` is now written by the layout script and `fusion-config.sh`
   (the "Still missing" note under "Needed from other parts" is resolved).
+
+## STYLE-1 (2026-09-30)
+
+Work package STYLE-1 of the one-pass build plan. Changes in `gen_plasma_style.py`,
+`tests/validate.py`, `tools/build.d/20-plasma-style.sh`; new test tooling in `tests/`.
+
+### Panel frame switches (ADAPTIVE fix 12, TABLET corners)
+
+Both switches default to the frames deployed since round 2, so a build without them is the
+deployed look (element-identical to HEAD: same ids, sizes and pixels for every element; the only
+addition is the `south-hint-*-inset` hints below). The lead flips them in INT-1, in the same commit
+as the dock, top-bar and quick-settings padding.
+
+| Build switch (`tools/build.d/20-plasma-style.sh`) | Generator option | Default | Flipped |
+|---|---|---|---|
+| `PF_SOUTH_FRAME=headroom\|plain` | `--south-frame` | `headroom` | `plain` |
+| `PF_NORTH_SIDE_MARGIN=6\|0` | `--north-side-margin` | `6` | `0` |
+
+**`--south-frame plain`.** Today the `south` frame carries the dock contract: 16 px transparent,
+unblurred headroom inside an 88 px panel and 26/14 content margins, so every bottom panel gets it: a
+44 px bottom panel that a user adds is raised to 64 px on the next shell start (the frame's minimum
+drawing size) and its applets get 24 px rows (measured, `o1st-b1`). The plain frame is the dock look
+without headroom: radius 24 drawn in 22 px corner cells (minimum drawing size 44 px; the 24 px arc
+clipped to a 22 px cell is 0.08 px off the straight edge), content margins 4/4/8/8 (t/b/l/r: a 44 px
+panel gives its applets 36 px rows), `south-hint-*-inset` 0, mask and shadow of the frame itself.
+
+The headroom moves out of the frame into the panel window: `floating-hint-top-margin` becomes 16
+(bottom 16, left/right 8 unchanged). Panel.qml places a floating panel's frame that far below the
+window top, so the dock window stays 16 + 72 + 16 = 104 px tall with the plate in the same place;
+the 16 px above the plate are outside the frame's mask, so they are not blurred and, because
+PanelView cuts the input region at the mask's top edge, not clickable (both as today). The panel's
+thickness is now the plate: the dock panel is 72 px instead of 88. The dock applet (CanFillArea)
+gets the plate's 72 rows; magnified icons are drawn above its top edge (negative y) into the window's
+top 16 px, which no ancestor clips. KWin's shadow is unchanged (PanelShadows subtracts the floating
+padding from the frame's shadow margins: 37 − 16 = 21 px above the window, as the headroom frame's
+21). A floating panel on any edge gets the 16 px top margin (a floating top panel sits 16 px below the
+screen edge); the Fusion top bar is not floating. Stock task managers on a bottom panel use the
+ordinary bottom frames (the dock-aware `south-*` task frames are dropped with the plain frame).
+
+Why not "the dock draws the headroom in QML" with a transparent panel: in 6.7.5 the panel
+containment's background cannot be switched off per panel (Panel.qml tests the containment's own
+`backgroundHints`, which org.kde.panel does not make configurable), and with no background PanelView
+turns KWin blur off for the whole panel (`panelview.cpp:1450`) and the input region covers the whole
+window. Switching the dock's frame prefix from QML would work but reaches into Panel.qml's private
+items. The floating top margin is a documented theme hint and needs no private access.
+
+**`--north-side-margin 0`.** The panel containment insets its applets by
+`min(floor((T − 22) / 2), frame.fixedMargins.left + 4)` at each screen edge
+(`containments/panel/main.qml:386-387`; T = bar thickness, 4 = Kirigami smallSpacing). With side
+margins 6 that is 6 px at T = 34 and 10 px at T = 44 (tablet); with 0 it is 4 px at any T ≥ 30. The
+containment's 4 px row spacing cannot be removed by the style; edge plasmoids reach the screen
+corner by extending their hit area 4 px outwards (an item outside its parent's bounds still gets
+pointer events when nothing clips). Measured (`o1st-b1`, 1920x1200 at 4/3): the leftmost and
+rightmost top-bar content moves 2 px towards the screen edges; nothing else in the bar changes.
+
+### Action overlays (BACKLOG S6)
+
+`widgets/action-overlays` with the nine elements Folder View's `FolderItemActionButton` asks for:
+`add`, `remove`, `open` × `normal`, `hover`, `pressed`, each 16 x 16 (drawn at smallMedium, 22 px, for
+48 px desktop icons). A 16 px accent disc (`ColorScheme-Highlight`) with a white glyph
+(`ColorScheme-HighlightedText`: plus, minus, a chevron) and a 1 px white rim that separates it from
+the icon under it; hover lightens the disc with white .18, pressed darkens it with the light boards'
+ink .22. The selection markers show on hover when the desktop uses single-click activation; the
+`open` button only in Folder View pop-ups (`popups=true`). Screenshots of every state, dark and light,
+over the Dusk Ridge wallpapers: `screens/desktop-states-{dark,light}-1to1.png` (1:1 device pixels at
+4/3; hover, marker hover, marker pressed, selected+hover with the remove marker, selected,
+the link emblem, the drag-selection band and the band's result).
+
+### viewitem review over the wallpapers (BACKLOG S6)
+
+The desktop's hover, selected and selected+hover highlights are the Plasma style's `viewitem`
+(accent .20 / .30 / .38, radius 8; Folder View draws it at 60 % while the desktop window is not
+active). Reviewed in private sessions over the Dusk Ridge dark and light pictures: every state is
+visible and distinct on both; the stock drag-selection band (accent border, 30 % fill, radius 5) and
+the moving-card placeholder need nothing from the style. Kept as it is, because the same element
+is the list highlight in every pop-up (Controls board "Copy" row).
+
+Not fixable in the style: Folder View draws desktop labels white with a black drop shadow
+(`FolderItemDelegate.qml:357-370`, `PlasmaExtras.ShadowedLabel`), whatever the colour scheme. On the
+light Dusk Ridge sky the white glyphs have 1.1-1.3:1 against the bare wallpaper; the shadow halo is
+what makes them readable (brightest glyph pixel against the darkest 5 % of the label, the shadow
+core: 4.5-5.6:1; `tests/label_contrast.py`). On the dark picture white has 15-17:1. The subpixel
+colour fringes in the same screenshots go away with DEVICE-1's greyscale antialiasing (D9). A
+dark-label-on-light variant needs a Folder View fork or an upstream option.
+
+### Accent colour (decision 3)
+
+Every accent-coloured element of the style takes its colour from the colour scheme
+(`ColorScheme-Highlight`, `ColorScheme-ButtonFocus`, and `ColorScheme-HighlightedText` on accent
+fills); the generated files contain no fixed accent value outside the `current-color-scheme`
+stylesheet (checked with a grep of both packages for #2f6fdf and #8ab8ff).

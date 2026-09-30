@@ -15,9 +15,11 @@
 
 Every picture is an SVG document (see scene_svg) rendered with QtSvg and full anti-aliasing, so
 the ridge edges are crisp at every size. The board scene is 1440x900 (16:10). Other aspect ratios
-extend the scene instead of stretching it: wider screens get more ridge at both sides (the ridge
-lines continue along their outer slopes), portrait screens get more sky above a narrower crop
-around the sun.
+extend or crop the scene instead of stretching it: wider screens (16:9, 21:9, 32:9) get more ridge
+at both sides (the ridge lines continue along their outer slopes); 3:2, 4:3 and 5:4 screens show the
+full height with the sides cropped around the centre, so the sun and the ridges keep their size
+relative to the screen height; portrait screens get more sky above a narrower crop around the sun,
+with the front ridge filling the lowest 8 % (under the dock).
 """
 import json
 import os
@@ -34,6 +36,8 @@ RIDGES = [
 ]
 SUN = (1010, 360, 150)       # cx, cy, r
 RING_R = 212                 # orbit ring: 2 px stroke of the sun colour at 18 %
+SUN_MARGIN = 40              # board units kept between the sun and a cropped screen edge
+LINEAR_REACH = 90            # ridges continue straight up to this far past the board (16:9: 80)
 BANDS = [(180, 160), (340, 220)]   # y, height of the two sky bands
 
 # The two Dusk Ridge scenes, exactly as drawn on Main.dc.html and MainLight.dc.html.
@@ -58,7 +62,11 @@ PALETTES = [
     ('Slate Rain', '#2b313f', '#c9d1e0', '#3e4659', '#59627a'),
 ]
 
-SIZES_ALL = ['1920x1200', '2560x1600', '3840x2400', '1920x1080', '2560x1440', '3840x2160', '1200x1920']
+SIZES_ALL = ['1920x1200', '2560x1600', '3840x2400', '1920x1080', '2560x1440', '3840x2160', '1200x1920',
+             # ADAPTIVE 5.13: 21:9 and 32:9, 3:2, 4:3, 5:4 and 9:16 screens get their own picture, so
+             # Plasma (which picks the image closest in aspect ratio, then width) never crops one
+             '2560x1080', '3440x1440', '5120x1440', '3000x2000', '2256x1504', '2048x1536', '1280x1024',
+             '1080x1920', '1440x2560', '2160x3840']
 SIZES_QUICK = ['1920x1200', '1920x1080', '1200x1920']
 ASPECTS = {'16x10': (1600, 1000), '16x9': (1600, 900), 'portrait': (1200, 1920)}
 
@@ -122,9 +130,14 @@ def view_box(width, height):
     if aspect > BOARD_W / BOARD_H:            # wider: more ridge on both sides
         w = BOARD_H * aspect
         return (BOARD_W - w) / 2.0, 0.0, w, float(BOARD_H)
-    if aspect >= 1.0:                         # between square and 16:10: more sky
-        h = BOARD_W / aspect
-        return 0.0, BOARD_H - h, float(BOARD_W), h
+    if aspect >= 1.0:                         # between square and 16:10 (3:2, 4:3, 5:4)
+        # The whole height of the scene, cropped at both sides: the ridge stays anchored to the
+        # bottom centre (the lightest ridge under the dock) and the sun keeps its size relative
+        # to the screen height. Nearly square screens shift the crop right so the sun stays whole.
+        w = BOARD_H * aspect
+        x0 = (BOARD_W - w) / 2.0
+        x0 = max(x0, SUN[0] + SUN[2] + SUN_MARGIN - w)
+        return x0, 0.0, w, float(BOARD_H)
     # portrait: a 1000-unit wide crop with the sun at 55 % of the width and 58 % of the height;
     # more sky above, and the front ridge carried down to fill the lowest 8 %
     w = 1000.0
@@ -133,15 +146,42 @@ def view_box(width, height):
 
 
 def extend(points, x0, x1):
-    """Continue a ridge polyline along its outer segments so it spans [x0, x1]."""
+    """Continue a ridge polyline so it spans [x0, x1].
+
+    Up to LINEAR_REACH board units past an edge (16:9 and narrower) the outer segment continues in a
+    straight line, as before. Wider screens (21:9, 32:9) mirror the ridge at the board edges instead:
+    a straight continuation over hundreds of units ran the ridges off the bottom on one side and up
+    into the sky on the other; the mirrored profile keeps the same mountains and height range.
+    """
     pts = list(points)
-    if x0 < pts[0][0]:
-        (ax, ay), (bx, by) = pts[0], pts[1]
-        pts.insert(0, (x0, ay + (by - ay) * (x0 - ax) / (bx - ax)))
-    if x1 > pts[-1][0]:
-        (ax, ay), (bx, by) = pts[-2], pts[-1]
-        pts.append((x1, by + (by - ay) * (x1 - bx) / (bx - ax)))
-    return pts
+    lo, hi = pts[0][0], pts[-1][0]
+    if x0 >= lo - LINEAR_REACH and x1 <= hi + LINEAR_REACH:
+        if x0 < lo:
+            (ax, ay), (bx, by) = pts[0], pts[1]
+            pts.insert(0, (x0, ay + (by - ay) * (x0 - ax) / (bx - ax)))
+        if x1 > hi:
+            (ax, ay), (bx, by) = pts[-2], pts[-1]
+            pts.append((x1, by + (by - ay) * (x1 - bx) / (bx - ax)))
+        return pts
+    width = hi - lo
+
+    def y_at(x):
+        # reflect x into [lo, hi] (period 2 * width), then interpolate the board polyline
+        t = (x - lo) % (2 * width)
+        xx = lo + (t if t <= width else 2 * width - t)
+        for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+            if ax <= xx <= bx:
+                return ay + (by - ay) * (xx - ax) / (bx - ax)
+        return pts[-1][1]
+    # every board vertex mirrored into [x0, x1], plus the two ends
+    xs = {x0, x1}
+    k0, k1 = int((x0 - lo) // width) - 1, int((x1 - lo) // width) + 1
+    for k in range(k0, k1 + 1):
+        for px, _ in pts:
+            for x in (px + 2 * k * width, 2 * lo - px + 2 * k * width):
+                if x0 < x < x1:
+                    xs.add(x)
+    return [(x, y_at(x)) for x in sorted(xs)]
 
 
 def fmt(v):

@@ -4,11 +4,24 @@
 """Generate the Plasma Fusion Plasma styles (desktop themes).
 
     gen_plasma_style.py OUTDIR [--variant dark|light|all]
+                        [--south-frame headroom|plain] [--north-side-margin 6|0]
 
 Writes OUTDIR/plasma-fusion-dark/ and/or OUTDIR/plasma-fusion-light/, each a
 complete Plasma/Theme package with plain .svg files, metadata.json and plasmarc.
 Every value comes from the design boards (design/boards/*.dc.html); the board
 and the CSS it quotes are named next to each token below.
+
+Panel frame switches (defaults = the frames deployed since round 2):
+  --south-frame headroom  the `south` frame is the dock contract: 16 px transparent,
+                          unblurred headroom inside an 88 px panel, 72 px frosted dock.
+  --south-frame plain     `south` is a plain floating bar (any bottom panel of 44 px or
+                          more keeps its thickness; applets get thickness - 8). The
+                          headroom moves above the frame: floating-hint-top-margin 16, so
+                          a floating panel window is 16 + thickness + 16 px tall and the
+                          dock (72 px thick) draws its magnified icons into the top 16 px.
+  --north-side-margin 6|0 left/right margin of the `north` (top bar) frame. With 0 the
+                          panel containment keeps only its own 4 px row spacing at the
+                          screen edges, and the edge plasmoids pad themselves.
 
 Surface colours are fixed per variant (the style never takes surface fills from
 the colour scheme). Controls inside pop-ups use colour-scheme classes so they
@@ -96,8 +109,10 @@ VARIANTS = {
         # MainLight.dc.html <header>: rgba(250,251,255,0.74), border-bottom rgba(20,24,39,0.06)
         topbar=dict(fill=(250, 251, 255), a=0.74, edge=(INK, 0.06)),
         # MainLight.dc.html dock: rgba(255,255,255,0.7), border rgba(20,24,39,0.1),
-        # box-shadow 0 18px 44px rgba(20,24,39,0.14)
-        dock=dict(fill=WHITE, a=0.70, edge=(INK, 0.10), radius=24,
+        # box-shadow 0 18px 44px rgba(20,24,39,0.14). Alpha 0.72, not 0.70: the active-app pill
+        # (ButtonFocus #2f6fdf) keeps 3:1 over the darkest shipped light scene (Pine Fog's front
+        # ridge: 2.95:1 at 0.70, 3.05:1 at 0.72; check_contrast.py --surfaces)
+        dock=dict(fill=WHITE, a=0.72, edge=(INK, 0.10), radius=24,
                   shadow=dict(dy=18, blur=44, color=INK, alpha=0.14)),
         # MainLight.dc.html widget cards: rgba(255,255,255,0.62), border rgba(20,24,39,0.1)
         widget=dict(fill=WHITE, a=0.62, edge=(INK, 0.10), radius=18),
@@ -123,6 +138,13 @@ DOCK_HEADROOM = 16                        # transparent, unblurred band on top o
 DOCK_MARGINS = (DOCK_HEADROOM + 10, 14, 8, 8)  # board padding 10/12/14; +4 px row spacing on l/r
 FLOATING_GAP = (0, 16, 8, 8)              # floating- hints (t, b, l, r): dock sits 16 px above the edge
 PANEL_FALLBACK_R = 6                      # unprefixed panel frame: minimum drawing size 12 px (as Breeze)
+# --south-frame plain (ADAPTIVE fix 12): a plain floating bar. Corner cells of 22 px keep the
+# minimum drawing size at 44 px (a 44 px bottom panel is not raised) while the dock keeps the
+# board's radius 24: the 24 px arc clipped to a 22 px cell is 0.08 px off the straight edge.
+PLAIN_SOUTH_CELL = 22
+PLAIN_SOUTH_MARGINS = (4, 4, 8, 8)        # (t, b, l, r): a 44 px panel gives its applets 36 px
+FLOATING_GAP_PLAIN = (DOCK_HEADROOM, 16, 8, 8)  # the headroom becomes transparent window space above the frame
+TOPBAR_SIDE_DEFAULT = TOPBAR_MARGINS[2]
 WIDGET_MARGINS = (14, 14, 14, 14)         # widget cards: padding 14
 CTRL_R = 10                               # Controls.dc.html: corners are 10 px on controls
 FOCUS_GAP, FOCUS_W = 2, 2                 # 2 px accent ring with a 2 px gap
@@ -235,14 +257,20 @@ def tooltip(v, a, solid=False):
     return doc.render()
 
 
-def panel_background(v, a):
-    """widgets/panel-background: north = top bar, south = dock (shared contract), others generic."""
+def panel_background(v, a, opts):
+    """widgets/panel-background: north = top bar, south = dock (shared contract), others generic.
+
+    opts["south"] == "headroom": the round-2 dock contract (16 px headroom inside the frame).
+    opts["south"] == "plain": `south` is a plain floating bar and the headroom is the floating
+    top margin (outside the frame, so outside the blur mask and the input region).
+    """
     doc = Doc("widgets/panel-background")
     stretch_hint(doc)
     d, t = v["dock"], v["topbar"]
     fa_d = v["dock"]["a"] if a is None else a
     fa_t = v["topbar"]["a"] if a is None else a
     R = d["radius"]
+    plain = opts["south"] == "plain"
     # Unprefixed: the frame Panel.qml draws before it knows the panel's edge. PanelView clamps
     # the thickness to this frame's minimum drawing size (top + bottom cells) when the panel
     # QML is ready, on every plasmashell start; with 24 px cells a 34 px top bar came back as
@@ -254,26 +282,40 @@ def panel_background(v, a):
     for pfx in ("west", "east"):
         add_frame(doc, Frame(pfx, R, surface_layers(d["fill"], fa_d, d["edge"]), (8, 8, 8, 8), mask=True,
                              note=f"{pfx} panel"))
-    # south: 16 px transparent headroom on top, then the 72 px frosted dock
-    add_frame(doc, Frame("south", R, surface_layers(d["fill"], fa_d, d["edge"]), DOCK_MARGINS,
-                         insets=(DOCK_HEADROOM, 0, 0, 0), mask=True,
-                         note=f"dock: {DOCK_HEADROOM} px transparent headroom above a "
-                              f"{DOCK_THICKNESS - DOCK_HEADROOM} px, radius {R} surface ({DOCK_THICKNESS} px panel)"))
+    if plain:
+        # south: a plain floating bar, the dock look without headroom; 22 px corner cells keep
+        # a 44 px bottom panel at 44 px (its applets get 36 px rows)
+        c = PLAIN_SOUTH_CELL
+        add_frame(doc, Frame("south", R, surface_layers(d["fill"], fa_d, d["edge"]), PLAIN_SOUTH_MARGINS,
+                             cells=(c, c, c, c), mask=True,
+                             note=f"bottom panel: plain floating bar, radius {R} in {c} px cells"))
+        insets_hint(doc, "south", (0, 0, 0, 0))
+    else:
+        # south: 16 px transparent headroom on top, then the 72 px frosted dock
+        add_frame(doc, Frame("south", R, surface_layers(d["fill"], fa_d, d["edge"]), DOCK_MARGINS,
+                             insets=(DOCK_HEADROOM, 0, 0, 0), mask=True,
+                             note=f"dock: {DOCK_HEADROOM} px transparent headroom above a "
+                                  f"{DOCK_THICKNESS - DOCK_HEADROOM} px, radius {R} surface ({DOCK_THICKNESS} px panel)"))
+        # The dock reads this to learn where its frosted frame starts (0 with --south-frame plain).
+        insets_hint(doc, "south", (DOCK_HEADROOM, 0, 0, 0))
     # north: square top bar, 1 px bottom edge (non-floating top panel draws only its bottom border)
-    add_frame(doc, Frame("north", 0, surface_layers(t["fill"], fa_t, t["edge"]), TOPBAR_MARGINS,
-                         cells=(1, 1, 1, 1), mask=True, note="top bar"))
+    side = opts["north_side"]
+    add_frame(doc, Frame("north", 0, surface_layers(t["fill"], fa_t, t["edge"]),
+                         (TOPBAR_MARGINS[0], TOPBAR_MARGINS[1], side, side),
+                         cells=(1, 1, 1, 1), mask=True, note=f"top bar (side margins {side})"))
     # floating gap (hint-only prefix; Panel.qml reads floating-hint-*-margin)
     doc.newline()
     add_element(doc, "floating-center", 4, 4, lambda x, y: "")
-    g = FLOATING_GAP
+    g = FLOATING_GAP_PLAIN if plain else FLOATING_GAP
     margins_hint(doc, "floating", (g[0], g[1], g[2], g[3]))
     # one shadow set for every panel (PanelShadows is a singleton): drawn for the dock.
     # The top bar only ever gets the shadow-bottom tile (its other borders touch the screen
     # edges), so shadow-bottom is transparent and the dock's bottom shadow lives in two very
-    # wide bottom corner tiles that KWin splits in the middle.
+    # wide bottom corner tiles that KWin splits in the middle. With the plain south frame the
+    # shadow belongs to the frame itself: PanelShadows subtracts the floating paddings.
     s = d["shadow"]
     pads, tiles = window_shadow(R, s["dy"], s["blur"], s["alpha"], s["color"], wide=1280,
-                                headroom=DOCK_HEADROOM)
+                                headroom=0 if plain else DOCK_HEADROOM)
     tiles["shadow-bottom"] = tiles["shadow-bottom"].point(lambda v: 0)
     add_shadow_tiles(doc, pads, tiles)
     return doc.render()
@@ -469,7 +511,7 @@ def menubaritem(v):
     return doc.render()
 
 
-def tasks(v):
+def tasks(v, opts):
     """Task manager items: running bar, active (focus) accent bar, hover tint (Main.dc.html dock)."""
     c = v["ctl"]
     doc = Doc("widgets/tasks")
@@ -504,7 +546,9 @@ def tasks(v):
                 doc.overlay(f"{pfx}-{side}", lambda x, y, w, h, side=side, bar=bar: _task_bar(doc, side, bar, x, y, w, h))
         add_frame(doc, Frame(f"{loc}progress", R, [Fill(0, Scheme(HL, 0.30))], (4, 4, 4, 4),
                              note="task progress"))
-    _dock_tasks(doc, states, R)
+    if opts["south"] == "headroom":
+        # plain south frame: bottom panels use the unprefixed (bottom bar) frames above
+        _dock_tasks(doc, states, R)
     return doc.render()
 
 
@@ -774,6 +818,49 @@ def pager(v):
     return doc.render()
 
 
+def _overlay_glyph(kind, x, y):
+    """White glyph of a 16 px action overlay: plus, minus, or a chevron pointing right."""
+    if kind == "add":
+        return (f"M{fmt(x + 4.25)},{fmt(y + 7.25)}H{fmt(x + 7.25)}V{fmt(y + 4.25)}H{fmt(x + 8.75)}"
+                f"V{fmt(y + 7.25)}H{fmt(x + 11.75)}V{fmt(y + 8.75)}H{fmt(x + 8.75)}V{fmt(y + 11.75)}"
+                f"H{fmt(x + 7.25)}V{fmt(y + 8.75)}H{fmt(x + 4.25)}Z")
+    if kind == "remove":
+        return f"M{fmt(x + 4.25)},{fmt(y + 7.25)}H{fmt(x + 11.75)}V{fmt(y + 8.75)}H{fmt(x + 4.25)}Z"
+    # open: 1.5 px chevron, 3.5 px deep
+    pts = [(6.4, 4.4), (7.46, 3.34), (12.12, 8.0), (7.46, 12.66), (6.4, 11.6), (10.0, 8.0)]
+    return "M" + " L".join(f"{fmt(x + px)},{fmt(y + py)}" for px, py in pts) + "Z"
+
+
+def action_overlays(v):
+    """widgets/action-overlays: Folder View's selection markers and folder pop-up button (BACKLOG S6).
+
+    FolderItemActionButton draws `<add|remove|open>-<normal|hover|pressed>` at 16 x 16, scaled to
+    the icon size's smallMedium (22 px for 48 px desktop icons), over the icon's top-left corner.
+    A 16 px accent disc (ColorScheme-Highlight, so it follows the accent colour) with a white
+    glyph and a 1 px white rim that separates it from the icon under it; hover lightens the
+    accent, pressed darkens it with the light boards' ink.
+    """
+    doc = Doc("widgets/action-overlays")
+    rim = Scheme(HLTEXT, 0.92)
+    glyph = Scheme(HLTEXT, 1.0)
+    states = {
+        "normal": [],
+        "hover": [RGBA(*WHITE, 0.18)],
+        "pressed": [RGBA(*INK, 0.22)],
+    }
+    for kind in ("add", "remove", "open"):
+        doc.newline()
+        for state, tints in states.items():
+            def draw(x, y, tints=tints, kind=kind):
+                out = f'<path {doc.paint_attrs(rim)} d="{circle_path(x + 8, y + 8, 8)}"/>'
+                out += f'<path {doc.paint_attrs(Scheme(HL, 1.0))} d="{circle_path(x + 8, y + 8, 7)}"/>'
+                for t in tints:
+                    out += f'<path {doc.paint_attrs(t)} d="{circle_path(x + 8, y + 8, 7)}"/>'
+                return out + f'<path {doc.paint_attrs(glyph)} d="{_overlay_glyph(kind, x, y)}"/>'
+            add_element(doc, f"{kind}-{state}", 16, 16, draw)
+    return doc.render()
+
+
 # ---------------------------------------------------------------------------
 # package
 # ---------------------------------------------------------------------------
@@ -812,7 +899,11 @@ enabled=true
 """
 
 
-def build(outdir, key):
+DEFAULT_OPTS = {"south": "headroom", "north_side": TOPBAR_SIDE_DEFAULT}
+
+
+def build(outdir, key, opts=None):
+    opts = dict(DEFAULT_OPTS, **(opts or {}))
     v = VARIANTS[key]
     root = os.path.join(outdir, v["id"])
     if os.path.isdir(root):
@@ -822,17 +913,17 @@ def build(outdir, key):
         # translucent/: KWin blur available (ext_background_effect blur capability)
         "translucent/dialogs/background.svg": dialog_background(v, v["popup"]["a"]),
         "translucent/widgets/tooltip.svg": tooltip(v, v["tooltip"]["a"]),
-        "translucent/widgets/panel-background.svg": panel_background(v, None),
+        "translucent/widgets/panel-background.svg": panel_background(v, None, opts),
         "translucent/widgets/background.svg": widget_background(v, True),
         # root: no blur: nearly opaque surfaces
         "dialogs/background.svg": dialog_background(v, nb),
         "widgets/tooltip.svg": tooltip(v, nb),
-        "widgets/panel-background.svg": panel_background(v, nb),
+        "widgets/panel-background.svg": panel_background(v, nb, opts),
         "widgets/background.svg": widget_background(v, False),
         # solid/: opaque requests (opaque/adaptive panels, SolidBackground dialogs, PC3 ToolTip)
         "solid/dialogs/background.svg": dialog_background(v, 1.0),
         "solid/widgets/tooltip.svg": tooltip(v, 1.0, solid=True),
-        "solid/widgets/panel-background.svg": panel_background(v, 1.0),
+        "solid/widgets/panel-background.svg": panel_background(v, 1.0, opts),
         "solid/widgets/background.svg": widget_background(v, False),
         # shared by all selectors
         "widgets/translucentbackground.svg": translucent_background(v),
@@ -843,7 +934,8 @@ def build(outdir, key):
         "widgets/listitem.svg": listitem(v),
         "widgets/tabbar.svg": tabbar(v),
         "widgets/menubaritem.svg": menubaritem(v),
-        "widgets/tasks.svg": tasks(v),
+        "widgets/tasks.svg": tasks(v, opts),
+        "widgets/action-overlays.svg": action_overlays(v),
         "widgets/scrollbar.svg": scrollbar(v),
         "widgets/slider.svg": slider(v),
         "widgets/switch.svg": switch(v),
@@ -876,10 +968,15 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("outdir", help="directory that receives plasma-fusion-dark/ and plasma-fusion-light/")
     ap.add_argument("--variant", choices=["dark", "light", "all"], default="all")
+    ap.add_argument("--south-frame", choices=["headroom", "plain"], default=DEFAULT_OPTS["south"],
+                    help="bottom panel frame: the dock contract with 16 px headroom (default) or a plain floating bar")
+    ap.add_argument("--north-side-margin", type=int, choices=[TOPBAR_SIDE_DEFAULT, 0],
+                    default=DEFAULT_OPTS["north_side"], help="left/right margin of the top bar frame")
     a = ap.parse_args()
+    opts = {"south": a.south_frame, "north_side": a.north_side_margin}
     keys = ["dark", "light"] if a.variant == "all" else [a.variant]
     for k in keys:
-        print(build(a.outdir, k))
+        print(build(a.outdir, k, opts))
 
 
 if __name__ == "__main__":

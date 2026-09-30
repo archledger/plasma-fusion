@@ -1,8 +1,9 @@
 #!/bin/bash
 # Foundation: colour schemes, fonts, wallpapers, startup backgrounds, Konsole and Kate/KWrite
 # themes and the GTK additions, into the HOME tree $STAGE:
-#   .local/share/color-schemes/PlasmaFusion{Dark,Light}.colors
+#   .local/share/color-schemes/PlasmaFusion{Dark,Light,HighContrast}.colors
 #   .local/share/fonts/plasma-fusion/                     Manrope, Space Grotesk (+ OFL texts)
+#   .config/fontconfig/conf.d/60-plasma-fusion-fallback.conf   Noto fallbacks for other scripts
 #   .local/share/wallpapers/PlasmaFusion, PlasmaFusion-<Name>
 #   .local/share/plasma-fusion/backgrounds/               dusk-ridge-dark-{dimmed,blurred,login,splash}.png
 #   .local/share/konsole/PlasmaFusion{Dark,Light}.colorscheme, "Plasma Fusion.profile"
@@ -20,7 +21,7 @@ SHARE=$STAGE/.local/share
 python3 -B "$PKG/color-schemes/check_contrast.py" "$PKG/color-schemes" >/dev/null
 mkdir -p "$SHARE/color-schemes"
 install -m 0644 "$PKG/color-schemes/PlasmaFusionDark.colors" "$PKG/color-schemes/PlasmaFusionLight.colors" \
-  "$SHARE/color-schemes/"
+  "$PKG/color-schemes/PlasmaFusionHighContrast.colors" "$SHARE/color-schemes/"
 
 # Fonts: one static file per weight (generators/fonts/make_static.py). Qt synthesises bold on
 # top of the variable files for weights of 700 and more, and Space Grotesk has no 600 instance.
@@ -30,6 +31,11 @@ mkdir -p "$fonts"
 install -m 0644 "$ROOT"/fonts/manrope/static/*.ttf "$ROOT"/fonts/spacegrotesk/static/*.ttf "$fonts/"
 install -m 0644 "$ROOT/fonts/manrope/OFL.txt" "$fonts/OFL-Manrope.txt"
 install -m 0644 "$ROOT/fonts/spacegrotesk/OFL.txt" "$fonts/OFL-SpaceGrotesk.txt"
+# Fallback fonts for the scripts Manrope and Space Grotesk lack (fontconfig must parse the file).
+fcconf=$ROOT/generators/fonts/60-plasma-fusion-fallback.conf
+python3 -c 'import sys, xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1])' "$fcconf"
+mkdir -p "$STAGE/.config/fontconfig/conf.d"
+install -m 0644 "$fcconf" "$STAGE/.config/fontconfig/conf.d/"
 
 # Wallpapers: the checked-in SVG sources must match the generator, then render the packages.
 python3 -B "$GEN/gen_wallpapers.py" check-svg "$GEN/svg"
@@ -43,6 +49,9 @@ for d in "$walls/PlasmaFusion" "$walls/PlasmaFusion-CoralBay"; do
   [ -s "$d/metadata.json" ] && [ -s "$d/contents/images/1920x1200.png" ] || { echo "foundation: missing $d" >&2; exit 1; }
 done
 [ -s "$walls/PlasmaFusion/contents/images_dark/1920x1200.png" ] || { echo "foundation: no dark Dusk Ridge" >&2; exit 1; }
+# Every translucent Plasma-style surface over every shipped wallpaper (and white/black where it can
+# sit over windows), and every Solid fallback: text 4.5:1, focus ring 3:1 (EFFECTS rule 6).
+python3 -B "$PKG/color-schemes/check_contrast.py" "$PKG/color-schemes" --surfaces "$walls" >/dev/null
 
 # Konsole colour schemes and profile.
 mkdir -p "$SHARE/konsole"

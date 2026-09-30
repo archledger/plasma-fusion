@@ -16,15 +16,16 @@ active colour scheme (`FollowsColorScheme=true`).
 
 | Family | Drawings | Names per theme | Source |
 |---|---|---|---|
-| App tiles | 18 tiles + Fusion logo tile + logo mark | 245 + 247 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
+| App tiles | 18 tiles + Fusion logo tile + logo mark, and 3 derived tiles (Archive, Document Viewer, Camera; STYLE-1) | 267 + 269 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
 | Places | 27 folders (the board's 10 + 17 derived symbols), 10 colour tints, 2 trash cans | 67 (coloured, 16 px, 22 px, `-symbolic`) | FileIcons.dc.html `folder()` |
 | Devices | 12 board devices + 8 derived (laptop, speaker, microphone, webcam, gamepad, touchpad, tablet, scanner) | 59 (+ 64 `-symbolic`) | FileIcons.dc.html `devices[]` |
 | File types | 820 pages: page + coloured extension tag, one per (kind, extension) | 1358 MIME icon names + 18 `-symbolic` | FileIcons.dc.html `file()` |
 | Status | battery (every level, charging, power profile), Wi-Fi, wired, VPN, flight mode, volume, microphone, Bluetooth, notifications, night light, brightness, camera, weather, media player state, software updates, Vaults | 602 | FileIcons.dc.html status groups |
 | Actions | the 24 symbolic icons of Icons.dc.html + the line icons of the other boards + a few derived | 324 | Icons.dc.html, Main, Launcher, QuickSettings, Popups, Controls, Login, Boot |
 | Categories | menu categories (applications-*) | 26 | derived line icons |
+| Emblems | the link badge `emblem-symbolic-link` at 16 and 22 px (pixel grid) and scalable (STYLE-1) | 1 (in `emblems/16`, `emblems/22`, `emblems/scalable`, and `@2x`/`@3x`) | derived |
 
-In total 899 coloured and 308 symbolic drawings answer 3329 icon names per theme; 372 further
+In total 904 coloured and 308 symbolic drawings answer 3376 icon names per theme; 372 further
 names are handed back to Breeze (see "Lookup rules" below). About 5.1 MB per theme; each theme
 holds its own copy of the coloured art, so either one works without the other.
 
@@ -50,6 +51,7 @@ generators/icons/
   capture.json        Breeze names handed back to Breeze             <- make_capture.py
   validate.py         QtSvg checks and contact sheets (PySide6)
   compare_boards.py   renders board icons and diffs them against the board renders (PySide6, Pillow)
+  coverage_report.py  installed apps and dock pins against the Fusion tiles (BACKLOG C8; informational)
   vsession-check.sh        private-session scenario: lookups, Dolphin, launcher, tray, System Settings, Nautilus
   vsession-globaltheme.sh  private-session scenario: the Global Theme applied, icons in context
   vsession-review.sh       private-session scenario: every part, dark or light, tray popup and file types
@@ -320,3 +322,65 @@ Evidence: `review-*.png` in the evidence folder: `review-{dark,light}-0{1..6}-*.
 `review-board-files.png`, `review-board-places.png`, `review-board-scores.txt` (apps 2.0, logo 1.4,
 places 1.9, devices 2.0, file types 5.0, status 4.0, symbolic 6.1), `review-capture-report.txt`,
 `review-thinkpad-kiconfinder-{dark,light}.txt`, `review-plasma-name-resolution-before.tsv`.
+
+
+## STYLE-1 (2026-09-30)
+
+### Link emblem (BACKLOG M3, S6)
+
+`emblem-symbolic-link`, drawn by `art_files.emblem_link_svg()`: a white rounded badge (radius 4 at
+16 px, 5.5 at 22 px) with a faint ink edge (rgba(20,24,39,.22)) and a curved "shortcut" arrow in
+`ColorScheme-Highlight` (so KIconLoader recolours it with the accent colour; default #2f6fdf).
+Pixel-grid drawings at 16 and 22 px, the 16 px drawing also as `emblems/scalable` (8-256), and the
+`@2x`/`@3x` directories as links like `places/16`. Dolphin and Folder View draw it on the bottom-left
+corner of every symlink, so desktop shortcuts made by "Add to Desktop" (a symlink, BACKLOG M3) carry
+the Fusion badge instead of Breeze's grey chain. No board draws an emblem; the badge follows the
+tile rules (rounded white plate, accent glyph). Checked in a private session: Konsole's symlinked
+`.desktop` file and a link to a text file on the desktop show it (`o1st-a3`, evidence below).
+
+### Coverage report and new tiles (BACKLOG C8)
+
+`coverage_report.py APPS.json` lists every app the launcher shows (Type=Application, not
+NoDisplay/Hidden, shown in KDE) and the dock pins (the dock's default `launchers`, with its
+`launcherFallbacks`), and says how each icon is drawn: Fusion tile, Breeze, the app's own hicolor
+icon, or missing. APPS.json is collected on the device, read-only:
+
+```
+ssh thinkpad-fedora 'python3 - <<"PY"
+import configparser, glob, json, os
+out = []
+for d in ["/usr/share/applications", os.path.expanduser("~/.local/share/applications"),
+          "/var/lib/flatpak/exports/share/applications"]:
+    for f in sorted(glob.glob(d + "/*.desktop")):
+        cp = configparser.RawConfigParser(strict=False, interpolation=None); cp.optionxform = str
+        try: cp.read(f, encoding="utf-8"); e = cp["Desktop Entry"]
+        except Exception: continue
+        out.append({"file": f, "name": e.get("Name", ""), "icon": e.get("Icon", ""), "type": e.get("Type", ""),
+                    "nodisplay": e.get("NoDisplay", "false").lower() == "true",
+                    "hidden": e.get("Hidden", "false").lower() == "true",
+                    "onlyshowin": e.get("OnlyShowIn", ""), "notshowin": e.get("NotShowIn", ""),
+                    "categories": e.get("Categories", "")})
+print(json.dumps(out))
+PY' > apps.json
+```
+
+The report runs best on the device itself (its Breeze and hicolor directories). ThinkPad,
+2026-09-30: 96 apps in the launcher; before this pass 34 had a Fusion tile, 32 used Breeze and
+30 their own hicolor icon; all nine dock pins have Fusion tiles. The full table is in the evidence.
+
+Added from it, in the board's tile construction (derived; `art_tiles.TILES`, `names.APPS`):
+
+| Tile | Names | Look |
+|---|---|---|
+| `archive` | ark, org.kde.ark, utilities-file-archiver, file-roller, org.gnome.FileRoller, engrampa, xarchiver | amber tile, white lid over a cream box, slot |
+| `reader` | okular, org.kde.okular, org.gnome.Papers, org.gnome.Evince, evince, atril, org.pwmt.zathura | red tile, white page with a folded corner and lines |
+| `camera` | kamoso, org.kde.kamoso, org.gnome.Snapshot, org.gnome.Cheese, cheese | slate tile, light camera body, dark lens with a blue ring, amber flash dot |
+| `notes` (existing) | + com.github.xournalpp.xournalpp, xournalpp, com.github.flxzt.rnote | the pen menu's note app |
+
+`make_capture.py` was rerun after adding the names: `capture.json` is unchanged (no Breeze name is
+swallowed by the new ones). Remaining apps without a Fusion tile keep their own Breeze or hicolor
+icon (never a grey plate); the dock and the launcher draw those on the neutral Fusion tile
+(`FusionIconTile`, BASE-1). The next candidates by visibility: LibreOffice (5 apps, own icons),
+KDE Connect, Filelight / Disk Usage Analyzer, Help Center, Info Center, KolourPaint, Kleopatra.
+
+Checks: `validate.py` passes (2424 drawings, both themes); two builds are byte-identical.
