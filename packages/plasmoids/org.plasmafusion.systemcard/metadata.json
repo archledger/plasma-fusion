@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Processor load and memory use as two bars on a small desktop card",
+        "EnabledByDefault": true,
+        "FormFactors": [
+            "desktop"
+        ],
+        "Icon": "utilities-system-monitor",
+        "Id": "org.plasmafusion.systemcard",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion System Card",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

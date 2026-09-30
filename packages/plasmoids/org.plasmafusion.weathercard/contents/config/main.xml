@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <entry name="source" type="String">
+      <label>Weather engine source of the location: provider|weather|place|station (empty: no location)</label>
+      <default></default>
+    </entry>
+    <entry name="placeDisplayName" type="String">
+      <label>Place name shown in the settings and the tooltip</label>
+      <default></default>
+    </entry>
+    <entry name="providerName" type="String">
+      <label>Display name of the weather provider of the location</label>
+      <default></default>
+    </entry>
+    <entry name="updateInterval" type="Int">
+      <label>Minutes between weather updates</label>
+      <default>30</default>
+      <min>10</min>
+      <max>180</max>
+    </entry>
+    <entry name="temperatureUnit" type="Int">
+      <label>0: from the region settings, 1: Celsius, 2: Fahrenheit</label>
+      <default>0</default>
+    </entry>
+    <entry name="titleMode" type="Int">
+      <label>Card title. 0: "Local weather", 1: the place name</label>
+      <default>0</default>
+    </entry>
+  </group>
+</kcfg>

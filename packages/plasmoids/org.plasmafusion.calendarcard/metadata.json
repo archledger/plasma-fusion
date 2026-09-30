@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Date and Time",
+        "Description": "This month on a small desktop card; a click on a day opens it in KOrganizer",
+        "EnabledByDefault": true,
+        "FormFactors": [
+            "desktop"
+        ],
+        "Icon": "view-calendar",
+        "Id": "org.plasmafusion.calendarcard",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Calendar Card",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
