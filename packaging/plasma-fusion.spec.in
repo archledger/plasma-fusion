@@ -1,0 +1,240 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Template for plasma-fusion.spec: packaging/build-rpm.sh fills in the version, the release, the
+# git revision and the changelog date, then builds the SRPM and the noarch RPM.
+# The RPM holds everything of Plasma Fusion that can be shared by all users of the system. The
+# per-user step stays /usr/share/plasma-fusion/tools/device/fusion-config.sh, run by each user
+# inside their Plasma session; the login greeter is styled by
+# /usr/share/plasma-fusion/tools/system/greeter-apply.sh (root). See docs/parts/system.md.
+
+Name:           plasma-fusion
+Version:        @VERSION@
+Release:        @RELEASE@%{?dist}
+Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
+
+# Code (QML, JavaScript, shell scripts, KWin scripts): GPL-2.0-or-later.
+# Artwork (Plasma style, icons, cursors, window decorations, wallpapers, backgrounds,
+# previews): CC-BY-SA-4.0. Fonts (Manrope, Space Grotesk): OFL-1.1.
+License:        GPL-2.0-or-later AND CC-BY-SA-4.0 AND OFL-1.1
+# Built from the working tree of the Plasma Fusion repository, git revision @GITREV@.
+Source0:        %{name}-%{version}.tar.gz
+
+BuildArch:      noarch
+
+# tools/build.sh renders the artwork: Pillow for the wallpapers and the decoration,
+# PySide6 (QtSvg, offscreen) for the wallpaper check and the cursors.
+BuildRequires:  bash
+BuildRequires:  coreutils
+BuildRequires:  findutils
+BuildRequires:  python3
+BuildRequires:  python3-pillow
+BuildRequires:  python3-pyside6
+
+# Plasma 6.7 packages the themes plug into (Global Theme, Plasma style, shells, KWin
+# switcher/scripts, Aurorae v2 decoration).
+Requires:       plasma-workspace >= 6.7
+Requires:       plasma-desktop >= 6.7
+Requires:       libplasma >= 6.7
+Requires:       kwin >= 6.7
+Requires:       aurorae >= 6.7
+# The icon themes inherit breeze/breeze-dark and link part of their names to Breeze's files.
+Requires:       breeze-icon-theme >= 6.30
+Requires:       fonts-filesystem
+Requires:       kde-filesystem
+# tools/device/*.sh and tools/system/*.sh
+Requires:       python3
+Requires:       /usr/bin/kreadconfig6
+Requires:       /usr/bin/kwriteconfig6
+Requires:       /usr/bin/busctl
+Requires:       /usr/bin/setpriv
+# The design's Code and Notes apps, the terminal whose theme is included, the login screen
+# styled by tools/system/greeter-apply.sh.
+Suggests:       kate
+Suggests:       marknote
+Suggests:       konsole
+Suggests:       plasma-login-manager
+
+%description
+Plasma Fusion is a desktop for KDE Plasma 6 built from the Plasma Fusion
+design concept, in a dark and a light variant: Global Themes with the desktop
+layout and splash screen, color schemes, Plasma styles, icon and cursor
+themes, Aurorae window decorations, wallpapers, a top bar, launcher, dock and
+quick-settings widgets, a window switcher and KWin scripts, a lock-screen
+shell, Konsole and Kate/KWrite color themes and the Manrope and Space Grotesk
+fonts.
+
+The package installs these for every user. Each user then runs
+/usr/share/plasma-fusion/tools/device/fusion-config.sh inside their Plasma
+session to apply the Global Theme and the settings a Global Theme cannot
+carry. As root, /usr/share/plasma-fusion/tools/system/greeter-apply.sh styles
+the Plasma login greeter.
+
+%prep
+%autosetup -n %{name}-%{version}
+
+%build
+# No display: the generators render offscreen and must not start anything in a session.
+unset DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS
+export QT_QPA_PLATFORM=offscreen
+export STAGE="$PWD/_stage"
+rm -rf "$STAGE"
+bash tools/build.sh
+
+%install
+share=_stage/.local/share
+dest=%{buildroot}%{_datadir}
+
+# Copy with the links as they are (the icon themes are mostly symbolic links).
+copy_tree() { # $1 source below $share, $2 destination below %%{_datadir}
+  mkdir -p "$dest/$2"
+  cp -a "$share/$1/." "$dest/$2/"
+}
+copy_tree color-schemes color-schemes
+for t in look-and-feel desktoptheme plasmoids shells; do
+  copy_tree "plasma/$t" "plasma/$t"
+done
+copy_tree icons icons
+copy_tree aurorae/themes aurorae/themes
+copy_tree wallpapers wallpapers
+copy_tree kwin/tabbox kwin/tabbox
+copy_tree kwin/scripts kwin/scripts
+copy_tree konsole konsole
+copy_tree org.kde.syntax-highlighting/themes org.kde.syntax-highlighting/themes
+copy_tree fonts/plasma-fusion fonts/plasma-fusion
+copy_tree plasma-fusion/backgrounds plasma-fusion/backgrounds
+
+# Everything the build staged must be in the package: a new part that writes somewhere below
+# .local/share without a copy line above (and a %%files line below) fails here instead of being
+# left out without a word. The build writes nothing else than .local/share and .config.
+(cd _stage/.local/share && find . \( -type f -o -type l \) | LC_ALL=C sort) >staged-files.txt
+(cd "$dest" && find . \( -type f -o -type l \) | LC_ALL=C sort) >copied-files.txt
+LC_ALL=C comm -23 staged-files.txt copied-files.txt >not-copied.txt
+(cd _stage && find . -mindepth 1 -maxdepth 2 ! -path ./.local ! -path ./.local/share ! -path ./.config ! -path './.config/*') >>not-copied.txt
+if [ -s not-copied.txt ]; then
+  echo "staged by tools/build.sh but not packaged:" >&2
+  head -n 50 not-copied.txt >&2
+  exit 1
+fi
+
+# The icon themes hand some names back to Breeze with absolute links (right for a per-user
+# install in ~/.local/share). Here they become relative links to ../breeze and ../breeze-dark,
+# which resolve inside whatever root the package is installed to.
+find "$dest/icons" -type l -lname '/usr/share/icons/*' -print0 |
+  while IFS= read -r -d '' link; do
+    ln -sfn "$(realpath -m -s --relative-to="$(dirname "${link#%{buildroot}}")" "$(readlink "$link")")" "$link"
+  done
+
+# Per-user configuration from the build (GTK 3/4 stylesheets), kept as templates for the
+# per-user step; the package itself writes nothing into a home directory.
+mkdir -p "$dest/plasma-fusion/config"
+cp -a _stage/.config/. "$dest/plasma-fusion/config/"
+
+# Scripts: per-user setup (tools/device) and root setup of the login greeter (tools/system).
+for d in device system; do
+  mkdir -p "$dest/plasma-fusion/tools/$d"
+  for f in tools/$d/*.sh; do
+    [ -e "$f" ] && install -m 0755 "$f" "$dest/plasma-fusion/tools/$d/"
+  done
+done
+
+# Documentation.
+mkdir -p "$dest/plasma-fusion/docs/parts"
+install -m 0644 README.md docs/PLAN.md "$dest/plasma-fusion/docs/"
+install -m 0644 docs/parts/*.md "$dest/plasma-fusion/docs/parts/"
+
+# Plain permissions everywhere (links keep theirs), executable scripts only in tools/.
+find "$dest" -type d -exec chmod 0755 {} +
+find "$dest" -type f -exec chmod 0644 {} +
+find "$dest/plasma-fusion/tools" -type f -name '*.sh' -exec chmod 0755 {} +
+
+%check
+# Every symbolic link must resolve, inside the package or (the Breeze hand-back links) in
+# breeze-icon-theme, a requirement that is installed on the build host too: look at the
+# buildroot with Breeze's two themes linked in for the moment.
+ln -s /usr/share/icons/breeze %{buildroot}%{_datadir}/icons/breeze
+ln -s /usr/share/icons/breeze-dark %{buildroot}%{_datadir}/icons/breeze-dark
+find %{buildroot} -xtype l >broken-links.txt
+rm %{buildroot}%{_datadir}/icons/breeze %{buildroot}%{_datadir}/icons/breeze-dark
+find %{buildroot} -type l -lname '/*' >absolute-links.txt
+if [ -s absolute-links.txt ] || [ -s broken-links.txt ]; then
+  cat absolute-links.txt broken-links.txt >&2
+  exit 1
+fi
+# The naming table's packages are all there.
+for p in plasma/look-and-feel/org.plasmafusion.dark.desktop plasma/look-and-feel/org.plasmafusion.light.desktop \
+         plasma/desktoptheme/plasma-fusion-dark plasma/desktoptheme/plasma-fusion-light \
+         plasma/plasmoids/org.plasmafusion.appname plasma/plasmoids/org.plasmafusion.clockpill \
+         plasma/plasmoids/org.plasmafusion.quicksettings plasma/plasmoids/org.plasmafusion.launcher \
+         plasma/plasmoids/org.plasmafusion.dock plasma/shells/org.plasmafusion.lockshell \
+         kwin/tabbox/org.plasmafusion.switcher kwin/scripts/plasmafusion-snap kwin/scripts/plasmafusion-attach; do
+  test -s "%{buildroot}%{_datadir}/$p/metadata.json"
+done
+for t in PlasmaFusion PlasmaFusion-Dark PlasmaFusion-cursors PlasmaFusion-Light-cursors; do
+  test -s "%{buildroot}%{_datadir}/icons/$t/index.theme"
+done
+test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.png
+
+%files
+%license packaging/LICENSES/GPL-2.0-or-later.txt
+%license packaging/LICENSES/CC-BY-SA-4.0.txt
+# Colour schemes (the directory has no owner in Fedora 44)
+%dir %{_datadir}/color-schemes
+%{_datadir}/color-schemes/PlasmaFusionDark.colors
+%{_datadir}/color-schemes/PlasmaFusionLight.colors
+# Global Themes, Plasma styles, widgets, lock-screen shell
+%{_datadir}/plasma/look-and-feel/org.plasmafusion.dark.desktop/
+%{_datadir}/plasma/look-and-feel/org.plasmafusion.light.desktop/
+%{_datadir}/plasma/desktoptheme/plasma-fusion-dark/
+%{_datadir}/plasma/desktoptheme/plasma-fusion-light/
+# every Plasma Fusion widget (top bar, launcher, dock, quick settings, desktop cards...); the
+# check section makes sure the naming table's ones are there
+%{_datadir}/plasma/plasmoids/org.plasmafusion.*/
+%{_datadir}/plasma/shells/org.plasmafusion.lockshell/
+# Icon and cursor themes
+%{_datadir}/icons/PlasmaFusion/
+%{_datadir}/icons/PlasmaFusion-Dark/
+%{_datadir}/icons/PlasmaFusion-cursors/
+%{_datadir}/icons/PlasmaFusion-Light-cursors/
+# Window decorations (Aurorae v2 reads aurorae/themes in the data directories)
+%dir %{_datadir}/aurorae
+%dir %{_datadir}/aurorae/themes
+%{_datadir}/aurorae/themes/PlasmaFusionDark/
+%{_datadir}/aurorae/themes/PlasmaFusionDark-Left/
+%{_datadir}/aurorae/themes/PlasmaFusionLight/
+%{_datadir}/aurorae/themes/PlasmaFusionLight-Left/
+# Wallpapers
+%{_datadir}/wallpapers/PlasmaFusion/
+%{_datadir}/wallpapers/PlasmaFusion-*/
+# KWin window switcher and scripts (KWin 6.7 reads kwin-wayland/ and kwin/; kpackagetool6
+# installs into kwin/)
+%dir %{_datadir}/kwin
+%dir %{_datadir}/kwin/tabbox
+%dir %{_datadir}/kwin/scripts
+%{_datadir}/kwin/tabbox/org.plasmafusion.switcher/
+%{_datadir}/kwin/scripts/plasmafusion-attach/
+%{_datadir}/kwin/scripts/plasmafusion-snap/
+# Konsole colour schemes and profile, Kate/KWrite colour themes
+%dir %{_datadir}/konsole
+%{_datadir}/konsole/PlasmaFusionDark.colorscheme
+%{_datadir}/konsole/PlasmaFusionLight.colorscheme
+"%{_datadir}/konsole/Plasma Fusion.profile"
+%dir %{_datadir}/org.kde.syntax-highlighting
+%dir %{_datadir}/org.kde.syntax-highlighting/themes
+"%{_datadir}/org.kde.syntax-highlighting/themes/Plasma Fusion Dark.theme"
+"%{_datadir}/org.kde.syntax-highlighting/themes/Plasma Fusion Light.theme"
+# Fonts: one static file per weight (fontconfig's file trigger refreshes its cache)
+%dir %{_datadir}/fonts/plasma-fusion
+%{_datadir}/fonts/plasma-fusion/*.ttf
+%license %{_datadir}/fonts/plasma-fusion/OFL-Manrope.txt
+%license %{_datadir}/fonts/plasma-fusion/OFL-SpaceGrotesk.txt
+# Backgrounds, per-user templates, scripts and documentation
+%dir %{_datadir}/plasma-fusion
+%{_datadir}/plasma-fusion/backgrounds/
+%{_datadir}/plasma-fusion/config/
+%{_datadir}/plasma-fusion/tools/
+%doc %{_datadir}/plasma-fusion/docs/
+
+%changelog
+* @CHANGELOG_DATE@ Wisbendji Fimerlus <archledger236@gmail.com> - @VERSION@-@RELEASE@
+- Snapshot of git revision @GITREV@

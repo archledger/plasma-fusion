@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# rpmlint filters for plasma-fusion, each with its reason (see docs/parts/system.md).
+
+# The icon themes hand part of their names back to Breeze with links into
+# /usr/share/icons/breeze and /usr/share/icons/breeze-dark (relative in the package,
+# ../../../../breeze/...; breeze-icon-theme >= 6.30 is a requirement). rpmlint only looks inside
+# this package; the spec's check section verifies on the build host that every link resolves.
+addFilter(r"dangling-relative-symlink /usr/share/icons/PlasmaFusion(-Dark)?/\S+ (\.\./)+breeze(-dark)?/")
+
+# There is no public upstream web site or download location: the sources come from the
+# Plasma Fusion repository's working tree (packaging/build-rpm.sh makes the tarball).
+addFilter(r"no-url-tag")
+addFilter(r"invalid-url Source0: plasma-fusion-\S+\.tar\.gz")
+
+# The GPL text is the licence as published (with the FSF's postal address).
+addFilter(r"incorrect-fsf-address /usr/share/licenses/plasma-fusion/GPL-2.0-or-later.txt")
+
+# Paths in %description ("/usr/share/...") are not words.
+addFilter(r"spelling-error \('usr',")
