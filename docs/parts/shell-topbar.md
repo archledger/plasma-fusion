@@ -14,13 +14,16 @@ Last edited 2026-09-29.
 |---|---|
 | `packages/plasmoids/org.plasmafusion.appname/metadata.json` | Plasma/Applet metadata |
 | `.../org.plasmafusion.appname/contents/config/main.xml` | `startPadding`, `endPadding`, `maximumNameWidth` (no settings page) |
-| `.../org.plasmafusion.appname/contents/ui/main.qml` | logo button, active application name (TasksModel), launcher activation |
+| `.../org.plasmafusion.appname/contents/ui/main.qml` | logo button, active application name (TasksModel), launcher activation; tablet window pill, width-budget hook |
+| `.../org.plasmafusion.appname/contents/ui/WindowCard.qml` | the tablet window card (Full screen, Split left/right, Minimize, Close) |
+| `.../org.plasmafusion.appname/contents/ui/LineIcon.qml` | the card's line glyphs (24-unit SVG paths) |
 | `.../org.plasmafusion.appname/contents/ui/FusionLogo.qml` | the three-circle mark |
 | `.../org.plasmafusion.appname/contents/ui/FusionText.qml` | text in board px and CSS weight (variable-font `wght` axis) |
 | `packages/plasmoids/org.plasmafusion.clockpill/metadata.json` | Plasma/Applet metadata |
 | `.../org.plasmafusion.clockpill/contents/config/main.xml`, `config.qml`, `ui/ConfigGeneral.qml` | settings (below) and their page |
 | `.../org.plasmafusion.clockpill/contents/ui/main.qml` | the pill, panel centring, workspace switching, calendar pop-up |
 | `.../org.plasmafusion.clockpill/contents/ui/WorkspaceDots.qml` | dots / current bar, clicks, keys, tooltips |
+| `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
 | `.../org.plasmafusion.clockpill/contents/ui/CalendarView.qml` | month view of the pop-up |
 | `.../org.plasmafusion.clockpill/contents/ui/Chevron.qml`, `FusionText.qml` | 16 px stroke chevron, text helper |
 | `.../org.plasmafusion.clockpill/contents/code/formats.js` | locale-aware date and time formats |
@@ -47,9 +50,9 @@ No configuration is needed; the defaults are the board values.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `startPadding` | 4 | px before the logo button. The 34 px Fusion top bar has a 6 px panel margin, so the button lands at x = 10 as on the board |
+| `startPadding` | 4 | px before the logo button behind a 6 px panel margin, so the button lands at x = 10 as on the board. The padding follows the margin the panel really has (TOP-2): 6 px with the north frame's side margins at 0 (4 px margin), none in the 44 px tablet bar (10 px margin) |
 | `endPadding` | 7 | px after the name. With the panel's applet spacing this gives the board's 22 px from the name to the first menu title (measured) |
-| `maximumNameWidth` | 220 | longer names are elided |
+| `maximumNameWidth` | 220 | longer names are elided; 140 on a narrow screen (`compactWidth`) |
 
 `org.plasmafusion.clockpill`, `[General]` (settings page "General"):
 
@@ -64,6 +67,10 @@ No configuration is needed; the defaults are the board values.
 | `firstDayOfWeek` | -1 | calendar week start, -1 = region |
 | `centerInPanel` | true | keep the pill on the middle of the panel (horizontal panels only; see Behaviour) |
 | `popupGap` | 10 | px between the bar and the calendar card (the quick-settings pop-up uses 10 too) |
+| `widthBudget` | true | the top bar's width budget (TOP-2); off: only tablet posture collapses |
+| `menuPolicy` | `centre` | when the budget compacts the global menu: `centre` (whenever the pill cannot stay centred with the full menu, ADAPTIVE 5.1) or `overlap` (only when the bar would otherwise overlap; the pill may leave the middle) |
+| `menuCompacted` | false | internal: the budget compacted the global menu (and may switch it back) |
+| `debugAction` | "" | testing only: `dump-bar:TAG` logs the bar's widgets, the pill's offset and the budget step |
 
 Formats follow the region settings (`LC_TIME` / KDE Region & Language). The time zone is the
 system one.
@@ -400,3 +407,81 @@ the lead directly.
   no QML warnings, no core dumps.
 - T6 (touch dump) and M18 are part of the INT-1 matrix; every screen has its own pill, so the calendar
   opens on the screen it was asked on.
+
+## TOP-2 (2026-09-30): window pill and card, width budget
+
+Work package TOP-2 of the one-pass plan (TABLET 4.3 and 4.9, ADAPTIVE 5.1 fix 4, LEAD-1 resolution 11),
+built by the lead directly.
+
+### Changes
+
+- **Window pill** (`org.plasmafusion.appname`, tablet posture): the logo button and the name become one
+  pill, 32 px tall, radius 16, padding 0 14, the app's icon (20 px, `FusionIconTile`) and its name
+  (14 px 800, at most 220·ts). In portrait or on a narrow screen only the icon shows (a target of at
+  least 44 x 44). The hit area is the whole bar's height and reaches the screen corner (measured:
+  x 0-122, 44 tall in landscape). A tap or a 24 px pull-down (TouchScreen) opens the window card;
+  with no active window the pill shows the Fusion mark and "Desktop" and opens the launcher.
+  `Plasmoid.CanFillArea`, `Motion` tokens for the press scale and colours, `FusionAccent` for the open
+  state and the focus ring. On the laptop the button and the name stay as they were; their click area
+  now also covers the bar's height and the corner.
+- **Window card** (`WindowCard.qml`, built on first open in an asynchronous `Loader`): 320 px, a 56 px
+  header (icon 32, app name 15 px 800, window title 12.5 px at 75 %), 52 px rows (glyph 20, label 15 px
+  600): **Full screen** with a switch, **Split left**, **Split right**, **Minimize**, **Close** (#D9434B).
+  Keyboard: the switch has the focus, Up/Down move, Return/Space act, Escape closes. The card acts on
+  the window that was active when it opened (looked up by its window id when an action runs).
+  - Full screen off (LEAD-1 resolution 11): `TasksModel.requestToggleMaximized` for that window only.
+    KWin gives the title bar back on un-maximize (the borderless-maximized option). The tablet script
+    (`plasmafusion-tablet`) now follows maximize changes: a window the user un-maximizes leaves its
+    lists, so it is not touched when tablet mode ends; one that first opened in tablet mode gets 70 % of
+    the work area. The next fold maximizes it again. The global switch stays QS-1's "Full-screen apps".
+  - Split: the card activates the window, waits until KWin reports it active, then invokes "Window
+    Quick Tile Left/Right" (component `kwin`); the tile loses its title bar as before (KWIN-1).
+- **Width budget** (`WidthBudget.qml` in the clock pill, which sits between the bar's two expanding
+  spacers): the pill stays on the middle while each side fits within W/2 − pill/2 − 24; otherwise the
+  steps of ADAPTIVE 5.1 apply in order: 1 the global menu compact, 2 phone and clipboard into quick
+  settings (QS-1 adds its hook), 3 the app name hidden, 4 the short date, 5 the time only, 6 no
+  battery % (QS-1), 7 no workspace dots. Tablet posture starts at step 2, portrait or a narrow screen
+  at step 5 (TABLET 4.3); the clock pill has no dots in tablet posture and uses 14 px 800 text with
+  16 px padding. The step is computed in one go from the widgets' level-0 widths: each Fusion widget
+  of the bar has `budgetLevel` and `budgetSaving(level)`; the stock menu's full width is measured from
+  its menu model (titles in the panel font plus the `menubaritem` margins; measured exactly equal to
+  the full view for Konsole, Dolphin and Kate). Nothing is laid out to be judged, so nothing flickers.
+- **Global menu crash (Plasma 6.7.5)**: the stock appmenu crashes plasmashell when it goes from its
+  compact view back to its full view after its menu changed (the full view is kept unparented and
+  its layout keeps a deleted item; libplasma `AppletQuickItemPrivate::compactRepresentationCheck`).
+  Private sessions t2m, E1-E6: compact and back without a menu change is safe; after an app switch
+  it crashes every time; `destroy()` on the cached view is refused and a forced layout rebuild does
+  not help; a menu that loaded compact (no full view built yet) switches back safely. So the budget
+  switches the menu back only in those safe cases; otherwise it stays compact until plasmashell
+  starts again (one log line says so). `menuPolicy=overlap` compacts it only when the bar would
+  otherwise overlap (the pill then leaves the middle), which keeps full menus far more often. The
+  earlier plan to switch it from the tablet script's panel script is dropped for the same reason.
+- **Left edge**: the app-name widget reads its own x in the panel window and pads to the board's
+  10 px from whatever margin the panel has (the north frame's side margins 6 or 0, the tablet bar's
+  larger margin); its click area reaches the screen corner.
+- **Alt underlines (ADAPTIVE 26)**: the stock appmenu shows accelerator underlines while Alt is held
+  (`Kirigami.MnemonicData.active: altState.pressed` in its `main.qml`), so holding Alt for Alt+Tab shows
+  them. The applet has no option for it: accepted, as the plan allows.
+- Not in TOP-2: the keyboard button (quick settings, QS-1); the Chrome stretch (BACKLOG C2, app-name
+  button actions for apps without a global menu) is left for later.
+
+### Verification
+
+- `qmllint` (Qt 6.11) on the changed files: only the unqualified `i18n*` notes (the clock pill's two
+  calendar-loader casts fixed on the way); `a11y-lint` and `motion-lint`: nothing new.
+- Private session `t2a` (1920 x 1200 at 4/3; `build/t2/scen-t2a.sh`): with Konsole and Dolphin
+  maximized in tablet posture, a tap on the pill opens the card (first frame 52-70 ms after the tap,
+  the pop-up window's creation, as the calendar's); Full screen off: Konsole un-maximized with its
+  title bar (1048 x 740), Dolphin still full screen and borderless; Split left from the card: Dolphin
+  in the left tile (711 px with the tile gaps, no title bar, T18); a pull-down on the pill opens the
+  card; after the next fold Konsole is full screen again. Portrait (rotated): the pill shows the icon
+  only (51 px), the clock the time only.
+- Width budget, judged by `build/t2/check-bars.py` from the clock pill's `dump-bar` lines (no two widgets
+  overlap, quick settings inside the window, pill offset): `t2a` (1440 x 900 and its portrait 900 x 1440,
+  laptop and tablet, Konsole, Dolphin, Kate), `t2m19` (1024 x 768 at 1, M19) and `t2m12` (12.75 pt, M12):
+  every one of the 27 bars has the pill within 0.5 px of the middle, no overlap, the bell and the
+  battery fully visible. Konsole and Dolphin keep their full menus at 1440 x 900; Kate, portrait, M19
+  and M12 compact it.
+- No plasmashell crash in the final runs (the probe runs' seven core dumps were removed); no QML
+  warnings from the two widgets.
+

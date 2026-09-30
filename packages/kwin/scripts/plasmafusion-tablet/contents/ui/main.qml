@@ -242,22 +242,30 @@ Item {
 
     // Tiled windows follow their tile while window policy is applied: quick-tiling a borderless
     // maximized window gives it its title bar back, so a tile gets noBorder again (TABLET 4.2).
+    // Maximize changes are followed too: a window the user un-maximizes (the window card's
+    // "Full screen" switch, LEAD-1 resolution 11) keeps its title bar and is left alone until
+    // the next fold; one that never had a laptop geometry gets 70 % of the work area.
     function follow(w) {
         const k = key(w);
         if (tileHandlers[k]) {
             return;
         }
-        const handler = function () {
+        const onTile = function () {
             root.tileChanged(w);
         };
-        w.tileChanged.connect(handler);
-        tileHandlers[k] = [w, handler];
+        const onMaximize = function () {
+            root.maximizeChanged(w);
+        };
+        w.tileChanged.connect(onTile);
+        w.maximizedChanged.connect(onMaximize);
+        tileHandlers[k] = [w, onTile, onMaximize];
     }
     function unfollowAll() {
         for (const k in tileHandlers) {
             const entry = tileHandlers[k];
             if (entry[0] && !entry[0].deleted) {
                 entry[0].tileChanged.disconnect(entry[1]);
+                entry[0].maximizedChanged.disconnect(entry[2]);
             }
         }
         tileHandlers = ({});
@@ -275,6 +283,35 @@ Item {
         } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
             w.noBorder = false;
             delete borderlessTiles[k];
+        }
+    }
+
+    // Un-maximized by the user: settled after the event loop turn, so that a quick tile (which
+    // un-maximizes first) has its tile by then and enter()/leave() are over.
+    property var unmaximized: [] // windows un-maximized outside enter()/leave()
+    function maximizeChanged(w) {
+        if (!applied || busy || !w || w.deleted || w.maximizeMode === 3) {
+            return;
+        }
+        unmaximized.push(w);
+        Qt.callLater(settleUnmaximized);
+    }
+    function settleUnmaximized() {
+        const list = unmaximized;
+        unmaximized = [];
+        for (let i = 0; i < list.length; ++i) {
+            const w = list[i];
+            if (!applied || !w || w.deleted || w.maximizeMode === 3 || w.tile) {
+                continue;
+            }
+            const k = key(w);
+            const placed = openedInTablet[k] === true;
+            delete maximizedByUs[k];
+            delete openedInTablet[k];
+            if (placed) {
+                w.frameGeometry = restoreRect(w);
+            }
+            log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", title bar " + !w.noBorder);
         }
     }
 

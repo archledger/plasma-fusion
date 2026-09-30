@@ -62,12 +62,48 @@ PlasmoidItem {
         area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
         tablet: tabletState.tablet
     }
-    // The top bar's width budget (ADAPTIVE 5.1, set by the top bar, TOP-2): 0 the full pill,
-    // 1 the short date, 2 the time only; the dots hide at step 6.
-    property int compactLevel: 0
-    property bool hideDots: false
-    // Board padding and gap of the pill (12), scaled with the text.
-    readonly property real pillPadding: m.px(12)
+    // The top bar's width budget (ADAPTIVE 5.1, WidthBudget.qml): step 4 the short date, step 5
+    // the time only, step 7 no workspace dots. Tablet posture never shows the dots (TABLET 4.3).
+    property int budgetLevel: 0
+    readonly property int compactLevel: budgetLevel >= 5 ? 2 : budgetLevel >= 4 ? 1 : 0
+    readonly property bool hideDots: budgetLevel >= 7 || tabletState.tablet
+    readonly property real pillWidth: pill.width
+    readonly property Item pillItem: pill
+    // Board padding and gap of the pill (12; 16 in tablet posture), scaled with the text.
+    readonly property real pillPadding: m.px(tabletState.tablet ? 16 : 12)
+    // Date and time: 13 px (700 and 600); 14 px 800 in tablet posture (TABLET 4.3).
+    readonly property real textPx: tabletState.tablet ? 14 : 13
+
+    // The width the pill gives up at a budget step, against step 0 (WidthBudget.qml).
+    readonly property string fullDateText: Qt.locale().toString(clock.dateTime, root.dateFormat)
+    readonly property string shortDateText: Qt.locale().toString(clock.dateTime,
+        Formats.shortDateFormat(Qt.locale(), Qt.locale().dateFormat(Locale.ShortFormat)))
+    TextMetrics {
+        id: fullDateMetrics
+        font: dateLabel.font
+        text: root.fullDateText
+    }
+    TextMetrics {
+        id: shortDateMetrics
+        font: dateLabel.font
+        text: root.shortDateText
+    }
+    // The dots' width, last seen while they were shown (hidden, they measure 0).
+    property real dotsSeen: 0
+    function budgetSaving(level: int): real {
+        if (vertical) {
+            return 0;
+        }
+        let saving = 0;
+        if (Plasmoid.configuration.showDate) {
+            const full = Math.ceil(fullDateMetrics.advanceWidth), short = Math.ceil(shortDateMetrics.advanceWidth);
+            saving += level >= 5 ? full + pillPadding : level >= 4 ? full - short : 0;
+        }
+        if (level >= 7 && !tabletState.tablet && Plasmoid.configuration.showWorkspaces && desktopCount > 1) {
+            saving += dotsSeen + pillPadding - 2 * dots.cellPadding;
+        }
+        return saving;
+    }
 
     // ---- Formats
     readonly property string timeFormat: Formats.timeFormat(Qt.locale().timeFormat(Locale.ShortFormat),
@@ -263,6 +299,37 @@ PlasmoidItem {
         // No time zone: follows the system time zone.
     }
 
+    // Testing hook (config key debugAction, cleared after use): "dump-bar:TAG".
+    readonly property string debugAction: Plasmoid.configuration.debugAction
+    onDebugActionChanged: Qt.callLater(runDebugAction)
+    function runDebugAction(): void {
+        const action = Plasmoid.configuration.debugAction;
+        if (!action) {
+            return;
+        }
+        Plasmoid.configuration.debugAction = "";
+        const parts = action.split(":");
+        if (parts[0] === "dump-bar" && widthBudget.item) {
+            (widthBudget.item as WidthBudget).dump(parts.slice(1).join(":"));
+        }
+    }
+
+    // The top bar's width budget (horizontal panels only).
+    Loader {
+        id: widthBudget
+        active: root.inPanel && !root.vertical
+        sourceComponent: WidthBudget {
+            clock: root
+            metrics: m
+            tablet: tabletState.tablet
+            cell: root.layoutCell
+            active: Plasmoid.configuration.widthBudget
+            menuPolicy: Plasmoid.configuration.menuPolicy === "overlap" ? "overlap" : "centre"
+            menuCompacted: Plasmoid.configuration.menuCompacted
+            onMenuCompactedWritten: compacted => Plasmoid.configuration.menuCompacted = compacted
+        }
+    }
+
     // The time never changes the pill's width (BACKLOG M8): its box is as wide as the widest of
     // this time, 10:58 and 22:58 in the same format (two-digit hours, AM and PM), with every digit
     // the widest one.
@@ -373,6 +440,7 @@ PlasmoidItem {
                 touch: m.touch
                 motion: motion
                 width: visible ? implicitWidth : 0
+                onImplicitWidthChanged: if (visible && implicitWidth > 0) root.dotsSeen = implicitWidth
                 anchors.verticalCenter: parent.verticalCenter
                 cellHeight: pill.height
                 count: root.desktopCount
@@ -441,12 +509,10 @@ PlasmoidItem {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: Plasmoid.configuration.showDate && root.compactLevel < 2
                             metrics: m
-                            px: 13
-                            weight: 700
+                            px: root.textPx
+                            weight: tabletState.tablet ? 800 : 700
                             color: root.textColor
-                            text: Qt.locale().toString(clock.dateTime, root.compactLevel >= 1
-                                                       ? Formats.shortDateFormat(Qt.locale(), Qt.locale().dateFormat(Locale.ShortFormat))
-                                                       : root.dateFormat)
+                            text: root.compactLevel >= 1 ? root.shortDateText : root.fullDateText
                             font.features: { "tnum": 1 }
                         }
 
@@ -458,8 +524,8 @@ PlasmoidItem {
                             font.features: { "tnum": 1 }
                             metrics: m
                             display: true
-                            px: 13
-                            weight: 600
+                            px: root.textPx
+                            weight: tabletState.tablet ? 800 : 600
                             color: root.textColor
                             // CLDR puts a narrow no-break space before AM/PM ("2:49 PM"); Space
                             // Grotesk has no glyph for it, and a fallback font for one character
@@ -535,10 +601,11 @@ PlasmoidItem {
         visible: root.popupOpen && calendarLoader.status === Loader.Ready
 
         onVisibleChanged: {
-            if (visible && calendarLoader.item) {
-                calendarLoader.item.showToday();
+            const calendar = calendarLoader.item as CalendarView;
+            if (visible && calendar) {
+                calendar.showToday();
                 popup.requestActivate();
-                calendarLoader.item.forceActiveFocus();
+                calendar.forceActiveFocus();
             } else if (!visible) {
                 closeSync.restart();
             }
@@ -550,8 +617,9 @@ PlasmoidItem {
             asynchronous: true
             focus: true
             onLoaded: {
-                item.showToday();
-                item.forceActiveFocus();
+                const calendar = item as CalendarView;
+                calendar.showToday();
+                calendar.forceActiveFocus();
             }
             sourceComponent: CalendarView {
                 now: clock.dateTime

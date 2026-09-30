@@ -41,6 +41,22 @@
       <label>Place the pill on the middle of the panel (within 48 px of where the layout puts the widget), independent of the widths of the widgets beside it.</label>
       <default>true</default>
     </entry>
+    <entry name="widthBudget" type="Bool">
+      <label>Top bar width budget (ADAPTIVE 5.1): when a side of the bar does not fit beside the centred pill, collapse the global menu, the app name, the date, the battery % and the dots, in that order. Off: only tablet posture collapses.</label>
+      <default>true</default>
+    </entry>
+    <entry name="menuPolicy" type="String">
+      <label>When the width budget switches the global menu to its compact view: "centre" (whenever the pill cannot stay on the middle with the full menu, ADAPTIVE 5.1) or "overlap" (only when the bar would otherwise overlap; the pill may leave the middle). Plasma 6.7.5 cannot switch the menu back after it changed, so a compacted menu may stay compact until plasmashell starts again.</label>
+      <default>centre</default>
+    </entry>
+    <entry name="menuCompacted" type="Bool">
+      <label>Internal: the width budget switched the global menu to its compact view (and switches it back). A compact view the user chose is left alone.</label>
+      <default>false</default>
+    </entry>
+    <entry name="debugAction" type="String">
+      <label>Testing only: run one action and clear the key. Values: dump-bar:TAG (logs the top bar's widgets, their x and width in the panel window, the pill's offset from the middle and the budget step).</label>
+      <default></default>
+    </entry>
     <entry name="popupGap" type="Int">
       <label>Gap in px between the top bar and the calendar pop-up.</label>
       <default>10</default>

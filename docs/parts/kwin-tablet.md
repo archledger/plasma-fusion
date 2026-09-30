@@ -42,8 +42,8 @@ needed.
   its signals. The script does nothing until KWin has answered, so the Kirigami value (which can start
   stale inside KWin, TABLET F3) never moves windows.
 - **Panels, at once on every change**: one `evaluateScript` call in plasmashell (TABLET 3.6): the top bar
-  `round(44 x text scale)` (the layout script's `textScale()`), the dock 96 and `DockHiding`; the stock
-  appmenu `compactView` in `[Appearance]`. The laptop height and hiding are saved once per panel in
+  `round(44 x text scale)` (the layout script's `textScale()`), the dock 96 and `DockHiding` (not the stock
+  appmenu's `compactView`: see Verification). The laptop height and hiding are saved once per panel in
   its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave.
   Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
   start), the call is made again after 500 ms (one call for several panels).
@@ -61,6 +61,12 @@ needed.
   maximized get their title bar back as `Workspace::slotReconfigure` does. Windows the user
   un-maximized in tablet mode are not touched. Focus, stacking, desktop, activity and minimized state
   never change.
+- **Windowed by the user** (TOP-2, LEAD-1 resolution 11): the script follows `maximizedChanged` of the
+  windows it follows. When the user un-maximizes one in tablet mode (the window card's Full screen
+  switch, a shortcut), one event-loop turn later (a quick tile un-maximizes first and has its tile by
+  then) the window leaves the script's lists, so leaving tablet mode does not touch it; a window first
+  opened in tablet mode is placed at 70 % of the work area (it has no laptop geometry). KWin gives the
+  title bar back itself. The next fold maximizes it again like any other window.
 - **KWin reconfigure** reloads the options from kwinrc (also once about 0.2 s after every session
   start): the script sets them again inside the change handler (synchronously, so KWin does not give
   every maximized window its frame back); the reloaded values become the laptop values.
@@ -115,8 +121,9 @@ Private sessions on the ThinkPad (1920 x 1200 at 4/3), `build/kt/` (scenarios `s
   panels, including a corrupted saved value).
 
 Not covered in private sessions (hand checks): the real hinge switch and accelerometer, touch
-gestures that need a physical screen size, the rotation lock (QS-1), and the window card's
-"Windowed" row (TOP/QS lanes).
+gestures that need a physical screen size and the rotation lock (QS-1). The window card's Full screen
+switch was tested with TOP-2 (`docs/parts/shell-topbar.md`, private session t2a: Konsole windowed with
+its title bar, Dolphin still full screen, Konsole full screen again after the next fold).
 
 ## Needs from other parts
 
@@ -126,5 +133,6 @@ gestures that need a physical screen size, the rotation lock (QS-1), and the win
 - The quick-settings keyboard policy (TABLET 3.3, `services/TabletPolicy.qml`) is QS-1's; the script does
   not start or stop the on-screen keyboard.
 - DOCK-2: the tablet dock content fits a 96 px panel (the script sets the thickness).
-- TOP-1: a compact global menu in tablet mode (TABLET 4.3) must come from the top-bar widgets; the
-  panel script cannot switch the stock appmenu's `compactView` without crashing plasmashell 6.7.5.
+- TOP-1/TOP-2: a compact global menu in tablet mode (TABLET 4.3) comes from the top bar's width budget
+  (the clock pill), which switches the stock appmenu only where Plasma 6.7.5 does not crash
+  (`docs/parts/shell-topbar.md`, TOP-2).
