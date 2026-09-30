@@ -43,6 +43,7 @@ and stays off when critical ends.
 |---|---|---|
 | `packages/powerfx/plasma-fusion-powerfx` (bash) | `.local/libexec/plasma-fusion/plasma-fusion-powerfx` (0755) | per user `~/.local/libexec/plasma-fusion/` (fusion-config.sh `--install` copies `.local`); system package `/usr/libexec/plasma-fusion/` (PKG-1) |
 | `packages/powerfx/plasma-fusion-powerfx.service` | `.config/systemd/user/plasma-fusion-powerfx.service` (0644) | per user `~/.config/systemd/user/` (fusion-config.sh copies the `.config` templates, also from `/usr/share/plasma-fusion/config`); optionally `%{_userunitdir}` (PKG-1) |
+| (the same unit) | `.local/share/plasma-fusion/powerfx/plasma-fusion-powerfx.service` | where `fusion-config.sh` (`install_user_service`) looks for the unit in the build being installed and in `/usr/share`; without this copy a staged install placed the unit but did not enable it (found at PKG-1) |
 | `packages/powerfx/tests/*` | not staged | tests (below) |
 
 The unit finds the script with `ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion`

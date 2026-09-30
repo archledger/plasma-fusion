@@ -8,6 +8,10 @@
 #                                                               /usr/libexec/plasma-fusion/plasma-fusion-powerfx
 #   $STAGE/.config/systemd/user/plasma-fusion-powerfx.service    its user unit (0644), a per-user
 #                                                               template like the other .config files
+#   $STAGE/.local/share/plasma-fusion/powerfx/plasma-fusion-powerfx.service
+#                                                               the same unit where fusion-config.sh
+#                                                               looks for it (the build being
+#                                                               installed or /usr/share) to enable it
 # The unit finds the script in ~/.local/libexec/plasma-fusion, /usr/local/libexec/plasma-fusion or
 # /usr/libexec/plasma-fusion (ExecSearchPath). Installing enables nothing: fusion-config.sh does.
 # Checks: bash -n, shellcheck -S warning (when installed), the unit's key lines, and with node the
@@ -35,4 +39,5 @@ fi
 
 install -D -m 0755 "$SCRIPT" "$STAGE/.local/libexec/plasma-fusion/plasma-fusion-powerfx"
 install -D -m 0644 "$UNIT" "$STAGE/.config/systemd/user/plasma-fusion-powerfx.service"
+install -D -m 0644 "$UNIT" "$STAGE/.local/share/plasma-fusion/powerfx/plasma-fusion-powerfx.service"
 echo "  powerfx -> .local/libexec/plasma-fusion/plasma-fusion-powerfx, .config/systemd/user/plasma-fusion-powerfx.service"

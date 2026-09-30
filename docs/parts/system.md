@@ -33,34 +33,43 @@ packaging/build-rpm.sh [--topdir DIR] [--no-lint]      # default DIR: build/rpmb
 * `%build` runs `tools/build.sh` into `_stage/` (no display, `QT_QPA_PLATFORM=offscreen`, session
   variables removed). BuildRequires: `python3`, `python3-pillow`, `python3-pyside6` (the imports of
   the generators the build runs; the GTK CSS check uses PyGObject only when present).
-* `%install` copies `_stage/.local/share/<dir>` to `/usr/share/<dir>` with `cp -a` (links kept),
-  sets 0755/0644 (scripts in `tools/` 0755). It then compares the staged file list with what it
-  copied and fails when the build staged anything without a copy line (a new part writing to a
-  new directory below `.local/share`, or anything outside `.local/share` and `.config`), so
-  nothing is dropped without a word.
-* `%check`: every naming-table package has its `metadata.json`, all four icon/cursor themes their
-  `index.theme`, the login background exists; no absolute links; no link is dangling (Breeze's two
-  themes are linked into the buildroot for the moment of the check).
+* `%install` copies `_stage/.local/share/<dir>` to `/usr/share/<dir>` with `cp -a` (links kept)
+  and `_stage/.local/libexec/plasma-fusion` to `/usr/libexec/plasma-fusion`, sets 0755/0644
+  (scripts in `tools/` and the programs in libexec 0755). It then compares the staged file lists
+  with what it copied and fails when the build staged anything without a copy line (a new part
+  writing to a new directory below `.local/share` or `.local/libexec`, or anything outside
+  `.local/share`, `.local/libexec` and `.config`), so nothing is dropped without a word.
+* `%check`: every naming-table package has its `metadata.json` (the pen menu, the desktop cards,
+  the two layout templates and the tablet script included), all four icon/cursor themes their
+  `index.theme`, the login background exists, and what the per-user step takes from the package
+  is there (power-tiers unit and program, pen templates, login check, pen defaults, the Global
+  Themes' `ensure-topbars.js`, the font fallback, the switcher's shader, the snap script's
+  `ensureTopBars.js`); no absolute links; no link is dangling (Breeze's two themes are linked
+  into the buildroot for the moment of the check).
 
 ### Contents (`rpm -qpl`, 12 000+ entries, 10 MB)
 
 | Installed at | From the build | Notes |
 |---|---|---|
-| `/usr/share/color-schemes/PlasmaFusion{Dark,Light}.colors` | foundation | directory has no owner in Fedora 44: co-owned |
+| `/usr/share/color-schemes/PlasmaFusion{Dark,Light,HighContrast}.colors` | foundation | directory has no owner in Fedora 44: co-owned |
 | `/usr/share/plasma/look-and-feel/org.plasmafusion.{dark,light}.desktop/` | lookandfeel | |
 | `/usr/share/plasma/desktoptheme/plasma-fusion-{dark,light}/` | plasma-style | |
 | `/usr/share/plasma/plasmoids/org.plasmafusion.*/` | top bar, quick settings, launcher, dock, desktop cards | glob, so new Plasma Fusion widgets are packaged without a spec change |
 | `/usr/share/plasma/shells/org.plasmafusion.lockshell/` | lockscreen | |
+| `/usr/share/plasma/layout-templates/org.plasmafusion.panel.{topbar,dock}/` | lookandfeel | the "Add Panel" entries; the directory belongs to plasma-desktop |
 | `/usr/share/icons/{PlasmaFusion,PlasmaFusion-Dark,PlasmaFusion-cursors,PlasmaFusion-Light-cursors}/` | icons, cursors | all 8 816 links kept (see below) |
 | `/usr/share/aurorae/themes/PlasmaFusion{Dark,Light}{,-Left}/` | decoration | `aurorae/` and `aurorae/themes/` co-owned (no owner in Fedora) |
 | `/usr/share/wallpapers/PlasmaFusion{,-*}/` | foundation | |
-| `/usr/share/kwin/tabbox/org.plasmafusion.switcher/`, `/usr/share/kwin/scripts/plasmafusion-{snap,attach}/` | kwin | see "KWin paths" |
+| `/usr/share/kwin/tabbox/org.plasmafusion.switcher/`, `/usr/share/kwin/scripts/plasmafusion-{snap,attach,tablet}/` | kwin, kwin-tablet | see "KWin paths"; the switcher's compiled shader (`shaders/thumbnail.frag.qsb`) is the repository's file unless `qsb` is installed at build time |
 | `/usr/share/konsole/PlasmaFusion{Dark,Light}.colorscheme`, `Plasma Fusion.profile` | foundation | `konsole/` co-owned (Konsole 26.08 installs nothing there) |
 | `/usr/share/org.kde.syntax-highlighting/themes/Plasma Fusion {Dark,Light}.theme` | foundation | `themes/` co-owned |
 | `/usr/share/fonts/plasma-fusion/*.ttf` + `OFL-Manrope.txt`, `OFL-SpaceGrotesk.txt` | foundation (static per-weight files) | the OFL texts are marked `%license`; `font(manrope)` etc. provides generated automatically |
 | `/usr/share/plasma-fusion/backgrounds/` | foundation | `dusk-ridge-dark-{dimmed,blurred,login,splash}.png` |
-| `/usr/share/plasma-fusion/config/gtk-{3,4}.0/{gtk.css,plasma-fusion.css}` | foundation (`.config` of the build) | templates for the per-user step only; the package writes nothing into a home directory |
-| `/usr/share/plasma-fusion/tools/{device,system}/*.sh` | `tools/device`, `tools/system` | shebangs become `/usr/bin/bash` (Fedora's brp-mangle-shebangs) |
+| `/usr/share/plasma-fusion/pen/templates/{Note,Whiteboard}.xopp` | pen | the pen menu finds them with StandardPaths |
+| `/usr/share/plasma-fusion/powerfx/plasma-fusion-powerfx.service` | powerfx | where `fusion-config.sh` looks for the unit to enable it per user |
+| `/usr/libexec/plasma-fusion/plasma-fusion-powerfx` | powerfx (`.local/libexec` of the build) | the unit's `ExecSearchPath` ends here; nothing is enabled by the package |
+| `/usr/share/plasma-fusion/config/` | the build's `.config`: `gtk-{3,4}.0/{gtk.css,plasma-fusion.css}`, `fontconfig/conf.d/60-plasma-fusion-fallback.conf`, `systemd/user/plasma-fusion-powerfx.service` | templates for the per-user step only; the package writes nothing into a home directory |
+| `/usr/share/plasma-fusion/tools/{device,system,pen}/*.sh`, `tools/device/gate/plasma-fusion-gate.sh`, `tools/device/previous-theme.py` | `tools/device`, `tools/system`, `tools/pen` | shebangs become `/usr/bin/bash` (Fedora's brp-mangle-shebangs); the login check and "My previous desktop" generator sit where `fusion-config.sh` expects them |
 | `/usr/share/plasma-fusion/docs/` | `README.md`, `docs/PLAN.md`, `docs/parts/*.md` | `%doc` |
 | `/usr/share/licenses/plasma-fusion/{GPL-2.0-or-later,CC-BY-SA-4.0}.txt` | `packaging/LICENSES/` | `%license` |
 
@@ -91,10 +100,10 @@ each carry their own); following the icons part ("No icon cache is shipped") the
 themes get no `icon-theme.cache`, so there is no cache that could go stale after an update. KPackage
 reads `metadata.json` directly (no sycoca step).
 
-**Requires**: `plasma-workspace`, `plasma-desktop`, `libplasma`, `kwin`, `aurorae` (all >= 6.7),
-`breeze-icon-theme >= 6.30`, `fonts-filesystem`, `kde-filesystem`, `python3`,
+**Requires**: `plasma-workspace`, `plasma-desktop`, `libplasma`, `kwin`, `aurorae`, `plasma5support`
+(all >= 6.7), `breeze-icon-theme >= 6.30`, `fonts-filesystem`, `kde-filesystem`, `python3`,
 `/usr/bin/{kreadconfig6,kwriteconfig6,busctl,setpriv}` (the scripts). **Suggests**: `kate`,
-`marknote`, `konsole`, `plasma-login-manager`.
+`marknote`, `konsole`, `plasma-login-manager`. **Recommends**: `xournalpp` (the pen menu's tiles).
 
 **rpmlint**: `0 errors, 0 warnings` with four justified filters (`packaging/plasma-fusion.rpmlintrc`):
 `dangling-relative-symlink` for the Breeze hand-back links (target in a required package; `%check`

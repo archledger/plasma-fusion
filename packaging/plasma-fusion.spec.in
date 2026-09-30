@@ -38,6 +38,8 @@ Requires:       plasma-desktop >= 6.7
 Requires:       libplasma >= 6.7
 Requires:       kwin >= 6.7
 Requires:       aurorae >= 6.7
+# The quick settings and the snap script run small commands through Plasma's "executable" source.
+Requires:       plasma5support >= 6.7
 # The icon themes inherit breeze/breeze-dark and link part of their names to Breeze's files.
 Requires:       breeze-icon-theme >= 6.30
 Requires:       fonts-filesystem
@@ -54,6 +56,8 @@ Suggests:       kate
 Suggests:       marknote
 Suggests:       konsole
 Suggests:       plasma-login-manager
+# The pen menu's note, whiteboard and mark-up tiles open Xournal++.
+Recommends:     xournalpp
 
 %description
 Plasma Fusion is a desktop for KDE Plasma 6 built from the Plasma Fusion
@@ -95,7 +99,7 @@ copy_tree() { # $1 source below $share, $2 destination below %%{_datadir}
   cp -a "$share/$1/." "$dest/$2/"
 }
 copy_tree color-schemes color-schemes
-for t in look-and-feel desktoptheme plasmoids shells; do
+for t in look-and-feel desktoptheme plasmoids shells layout-templates; do
   copy_tree "plasma/$t" "plasma/$t"
 done
 copy_tree icons icons
@@ -107,6 +111,12 @@ copy_tree konsole konsole
 copy_tree org.kde.syntax-highlighting/themes org.kde.syntax-highlighting/themes
 copy_tree fonts/plasma-fusion fonts/plasma-fusion
 copy_tree plasma-fusion/backgrounds plasma-fusion/backgrounds
+# Xournal++ templates of the pen menu; the power-tiers unit where fusion-config.sh looks for it
+copy_tree plasma-fusion/pen plasma-fusion/pen
+copy_tree plasma-fusion/powerfx plasma-fusion/powerfx
+# The power-tiers service itself: the unit's ExecSearchPath ends in /usr/libexec/plasma-fusion.
+mkdir -p %{buildroot}%{_libexecdir}/plasma-fusion
+cp -a _stage/.local/libexec/plasma-fusion/. %{buildroot}%{_libexecdir}/plasma-fusion/
 
 # Everything the build staged must be in the package: a new part that writes somewhere below
 # .local/share without a copy line above (and a %%files line below) fails here instead of being
@@ -114,7 +124,10 @@ copy_tree plasma-fusion/backgrounds plasma-fusion/backgrounds
 (cd _stage/.local/share && find . \( -type f -o -type l \) | LC_ALL=C sort) >staged-files.txt
 (cd "$dest" && find . \( -type f -o -type l \) | LC_ALL=C sort) >copied-files.txt
 LC_ALL=C comm -23 staged-files.txt copied-files.txt >not-copied.txt
-(cd _stage && find . -mindepth 1 -maxdepth 2 ! -path ./.local ! -path ./.local/share ! -path ./.config ! -path './.config/*') >>not-copied.txt
+(cd _stage/.local/libexec && find . \( -type f -o -type l \) | LC_ALL=C sort) >staged-libexec.txt
+(cd %{buildroot}%{_libexecdir} && find . \( -type f -o -type l \) | LC_ALL=C sort) >copied-libexec.txt
+LC_ALL=C comm -23 staged-libexec.txt copied-libexec.txt >>not-copied.txt
+(cd _stage && find . -mindepth 1 -maxdepth 2 ! -path ./.local ! -path ./.local/share ! -path ./.local/libexec ! -path ./.config ! -path './.config/*') >>not-copied.txt
 if [ -s not-copied.txt ]; then
   echo "staged by tools/build.sh but not packaged:" >&2
   head -n 50 not-copied.txt >&2
@@ -138,23 +151,27 @@ cp -a _plymouth/plasma-fusion "$dest/plasma-fusion/plymouth/"
 mkdir -p "$dest/plasma-fusion/config"
 cp -a _stage/.config/. "$dest/plasma-fusion/config/"
 
-# Scripts: per-user setup (tools/device) and root setup of the login greeter (tools/system).
-for d in device system; do
+# Scripts: per-user setup (tools/device, with the login check in gate/ and the "My previous
+# desktop" generator), the pen defaults (tools/pen) and root setup of the login greeter
+# (tools/system).
+for d in device device/gate pen system; do
   mkdir -p "$dest/plasma-fusion/tools/$d"
   for f in tools/$d/*.sh; do
     [ -e "$f" ] && install -m 0755 "$f" "$dest/plasma-fusion/tools/$d/"
   done
 done
+install -m 0755 tools/device/previous-theme.py "$dest/plasma-fusion/tools/device/"
 
 # Documentation.
 mkdir -p "$dest/plasma-fusion/docs/parts"
 install -m 0644 README.md docs/PLAN.md "$dest/plasma-fusion/docs/"
 install -m 0644 docs/parts/*.md "$dest/plasma-fusion/docs/parts/"
 
-# Plain permissions everywhere (links keep theirs), executable scripts only in tools/.
+# Plain permissions everywhere (links keep theirs), executable scripts only in tools/ and libexec.
 find "$dest" -type d -exec chmod 0755 {} +
 find "$dest" -type f -exec chmod 0644 {} +
-find "$dest/plasma-fusion/tools" -type f -name '*.sh' -exec chmod 0755 {} +
+find "$dest/plasma-fusion/tools" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod 0755 {} +
+find %{buildroot}%{_libexecdir}/plasma-fusion -type f -exec chmod 0755 {} +
 
 %check
 # Every symbolic link must resolve, inside the package or (the Breeze hand-back links) in
@@ -174,14 +191,33 @@ for p in plasma/look-and-feel/org.plasmafusion.dark.desktop plasma/look-and-feel
          plasma/desktoptheme/plasma-fusion-dark plasma/desktoptheme/plasma-fusion-light \
          plasma/plasmoids/org.plasmafusion.appname plasma/plasmoids/org.plasmafusion.clockpill \
          plasma/plasmoids/org.plasmafusion.quicksettings plasma/plasmoids/org.plasmafusion.launcher \
-         plasma/plasmoids/org.plasmafusion.dock plasma/shells/org.plasmafusion.lockshell \
-         kwin/tabbox/org.plasmafusion.switcher kwin/scripts/plasmafusion-snap kwin/scripts/plasmafusion-attach; do
+         plasma/plasmoids/org.plasmafusion.dock plasma/plasmoids/org.plasmafusion.pen \
+         plasma/plasmoids/org.plasmafusion.calendarcard plasma/plasmoids/org.plasmafusion.weathercard \
+         plasma/plasmoids/org.plasmafusion.systemcard plasma/shells/org.plasmafusion.lockshell \
+         plasma/layout-templates/org.plasmafusion.panel.topbar plasma/layout-templates/org.plasmafusion.panel.dock \
+         kwin/tabbox/org.plasmafusion.switcher kwin/scripts/plasmafusion-snap kwin/scripts/plasmafusion-attach \
+         kwin/scripts/plasmafusion-tablet; do
   test -s "%{buildroot}%{_datadir}/$p/metadata.json"
 done
 for t in PlasmaFusion PlasmaFusion-Dark PlasmaFusion-cursors PlasmaFusion-Light-cursors; do
   test -s "%{buildroot}%{_datadir}/icons/$t/index.theme"
 done
 test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.png
+# What the per-user step takes from the package: the power-tiers unit and program, the pen
+# templates, the login check, the top-bar script of the Global Themes, the font fallback.
+test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
+test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
+test -s %{buildroot}%{_datadir}/plasma-fusion/pen/templates/Note.xopp
+test -x %{buildroot}%{_datadir}/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh
+test -x %{buildroot}%{_datadir}/plasma-fusion/tools/pen/pen-defaults.sh
+test -s %{buildroot}%{_datadir}/plasma-fusion/tools/device/previous-theme.py
+for t in dark light; do
+  test -s %{buildroot}%{_datadir}/plasma/look-and-feel/org.plasmafusion.$t.desktop/contents/layouts/ensure-topbars.js
+done
+test -s %{buildroot}%{_datadir}/plasma-fusion/config/fontconfig/conf.d/60-plasma-fusion-fallback.conf
+test -s %{buildroot}%{_datadir}/plasma-fusion/config/systemd/user/plasma-fusion-powerfx.service
+test -s %{buildroot}%{_datadir}/kwin/tabbox/org.plasmafusion.switcher/contents/ui/shaders/thumbnail.frag.qsb
+test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensureTopBars.js
 
 %files
 %license packaging/LICENSES/GPL-2.0-or-later.txt
@@ -190,6 +226,7 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 %dir %{_datadir}/color-schemes
 %{_datadir}/color-schemes/PlasmaFusionDark.colors
 %{_datadir}/color-schemes/PlasmaFusionLight.colors
+%{_datadir}/color-schemes/PlasmaFusionHighContrast.colors
 # Global Themes, Plasma styles, widgets, lock-screen shell
 %{_datadir}/plasma/look-and-feel/org.plasmafusion.dark.desktop/
 %{_datadir}/plasma/look-and-feel/org.plasmafusion.light.desktop/
@@ -199,6 +236,9 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 # check section makes sure the naming table's ones are there
 %{_datadir}/plasma/plasmoids/org.plasmafusion.*/
 %{_datadir}/plasma/shells/org.plasmafusion.lockshell/
+# "Add Panel" entries for the top bar and the dock (the directory belongs to plasma-desktop)
+%{_datadir}/plasma/layout-templates/org.plasmafusion.panel.topbar/
+%{_datadir}/plasma/layout-templates/org.plasmafusion.panel.dock/
 # Icon and cursor themes
 %{_datadir}/icons/PlasmaFusion/
 %{_datadir}/icons/PlasmaFusion-Dark/
@@ -222,6 +262,7 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 %{_datadir}/kwin/tabbox/org.plasmafusion.switcher/
 %{_datadir}/kwin/scripts/plasmafusion-attach/
 %{_datadir}/kwin/scripts/plasmafusion-snap/
+%{_datadir}/kwin/scripts/plasmafusion-tablet/
 # Konsole colour schemes and profile, Kate/KWrite colour themes
 %dir %{_datadir}/konsole
 %{_datadir}/konsole/PlasmaFusionDark.colorscheme
@@ -239,10 +280,15 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 # Backgrounds, per-user templates, scripts and documentation
 %dir %{_datadir}/plasma-fusion
 %{_datadir}/plasma-fusion/backgrounds/
+%{_datadir}/plasma-fusion/pen/
+%{_datadir}/plasma-fusion/powerfx/
 %{_datadir}/plasma-fusion/config/
 %{_datadir}/plasma-fusion/plymouth/
 %{_datadir}/plasma-fusion/tools/
 %doc %{_datadir}/plasma-fusion/docs/
+# The power-tiers service (started per user by fusion-config.sh; nothing is enabled by the package)
+%dir %{_libexecdir}/plasma-fusion
+%{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
 
 %changelog
 * @CHANGELOG_DATE@ Wisbendji Fimerlus <archledger236@gmail.com> - @VERSION@-@RELEASE@
