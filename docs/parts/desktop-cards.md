@@ -155,18 +155,19 @@ Settings (`[General]`, `contents/config/main.xml`):
 ## CPU and memory card
 
 - `cpu/all/usage`, `memory/physical/used` and `memory/physical/total` from ksystemstats through
-  `org.kde.ksysguard.sensors` (the stock system monitor's source), every 2 s (setting
-  `updateInterval`, 1-10 s).
+  `org.kde.ksysguard.sensors` (the stock system monitor's source), every 3 s (setting
+  `updateInterval`, 1-10 s; x 2 or x 4 in the power tiers), paused while nobody can see the card
+  (see "CARD-1" below).
 - "23%" and "6.1 / 16 GB": used memory with one decimal, the total rounded up to whole GB (the
   kernel reports a little less than the installed memory, e.g. 15.3 GiB for 16 GB). GiB values
   labelled "GB" as on the board.
-- Bars glide to each value (one Kirigami longDuration, 200 ms at normal speed, OutCubic), in whole
-  pixels; changes under 3 px step without animation, and nothing glides when animations are
-  off. Every animation frame redraws the whole desktop window (wallpaper and the blurred
-  cards), and it keeps drawing while windows cover the desktop: measured in the review, the
-  original 600 ms glide every 2 s kept plasmashell at 1200-1570 ms CPU per 30 s (4-5 % of a
-  core), the current one at 470-650 ms (1.6-2.2 %), no animation at 190-300 ms, no system card
-  at about 100 ms.
+- Bars step to each value in whole pixels (one frame); only a change of 10 points or more glides
+  (one Kirigami longDuration, 200 ms at normal speed, OutCubic), and nothing glides when
+  animations are off. Every animation frame redraws the whole desktop window (wallpaper and the
+  blurred cards): measured in the first review, the original 600 ms glide every 2 s kept
+  plasmashell at 1200-1570 ms CPU per 30 s (4-5 % of a core), a 200 ms glide for changes of 3 px
+  or more at 470-650 ms (1.6-2.2 %), no animation at 190-300 ms, no system card at about 100 ms.
+  CARD-1 below replaced that glide rule.
 - Context menu: Open System Monitor (`kstart --application org.kde.plasma-systemmonitor`, so
   nothing stays a child of the shell).
 
@@ -174,6 +175,160 @@ The card sizes are fixed through the widgets' minimum sizes (164 x 94, 164 x 160
 the frame); users can make them larger in edit mode. The widgets always show the card itself:
 `switchWidth`/`switchHeight` are not used, because libplasma shows the icon unless the widget is
 strictly larger than them (`appletShouldBeExpanded`), which a card of exactly the board size is not.
+
+## CARD-1: idle cost of the system card
+
+Work package CARD-1 of the 2026-09-30 build plan (EFFECTS.md section 5, E6 and the X3 idle rows;
+BACKLOG M5). It replaces the update interval and the glide rule of "CPU and memory card" above;
+the look, the text scale (FusionMetrics) and keyboard access are unchanged. Built and measured
+2026-09-30 (builder `cd1`, finished by the lead) on HEAD d4afee8 plus this package. Not deployed.
+
+Why: every change on the card redraws the whole desktop window (wallpaper and the blurred cards)
+and makes KWin composite a frame. The committed card updated every 2 s and glided (200 ms, about
+15 frames) whenever a bar moved 3 px or more, which idle jitter does on most updates, and it kept
+doing so under maximized windows and behind the lock screen.
+
+| | Before (d4afee8) | Now |
+|---|---|---|
+| Interval | `updateInterval` default 2000 ms | default **3000 ms** (settings list 1, 2, 3, 5, 10 s) |
+| Power tier | none | hidden key `powerTier` (Int 0-2, default 0): effective interval = `updateInterval` x 1 (full), x 2 (saver), x 4 (critical), so 3 / 6 / 12 s at the default |
+| Bars | glide when the bar moves 3 px or more | **step** (one frame); glide only when the value moved 10 points or more since the bar last moved (CPU 4 % -> 14 %), only while the card samples, not in the first 1.5 s after a pause, and not at Plasma's animation speed "Instant" |
+| Sensors | always subscribed | `enabled: false` (libksysguard unsubscribes; ksystemstats then stops reading CPU and memory) while the card cannot be seen, see below |
+| After a pause | - | for 1.5 s every ksystemstats tick is taken, then one value per interval |
+
+When the sensors are off:
+- **Covered:** a maximized or full-screen window on the card's screen, on that screen's current
+  virtual desktop and the current activity. The windows come from a `TaskManager.TasksModel`
+  filtered as the stock panel's `touchingWindow` model (plasma-desktop `Panel.qml`: current
+  virtual desktop per screen, activity, not minimized, not hidden, no grouping) plus
+  `filterByScreen` with the containment's `screenGeometry`; an `Instantiator` counts rows whose
+  `IsMaximized` or `IsFullScreen` is true. "Show Desktop" (`KWindowSystem.showingDesktop`)
+  uncovers. TasksModel 6.7.5 has no `filterSkipTaskbar` property and always drops skip-taskbar
+  windows, so a maximized skip-taskbar window does not pause the card (the stock panel ignores
+  them too).
+- **Not shown:** the card's item or its window is not visible (the desktop hides the containment
+  of another activity: libplasma `ContainmentView::setContainment`).
+- **Locked:** `org.kde.plasma.workspace.dbus` (plasma-workspace 6.7.5): a `DBusServiceWatcher` on
+  `org.freedesktop.ScreenSaver`, `GetActive` on `/ScreenSaver` while that name has an owner (so the
+  call never activates a service), and a `SignalWatcher` for `ActiveChanged(bool)` (kscreenlocker
+  `interface.cpp` emits it on lock and unlock). While locked KWin draws no desktop anyway
+  (EFFECTS E3), so this saves the sensor work only.
+
+Fresh values after a pause: libksysguard asks for the current value when a sensor is enabled
+again, but ksystemstats has not read CPU and memory while nobody subscribed, so that reply is the
+value from before the pause, and its first CPU tick is the average over the pause; ticks come
+every 500 ms. With the rate limit lifted for 1.5 s the card shows a current 0.5 s sample about
+0.6 s after it can be seen again (measured below), then one value per interval.
+
+The power service (EFFECTS 8.3) writes only `powerTier` (`evaluateScript`,
+`writeConfig("powerTier", n)`); the user's `updateInterval` is never rewritten and its kcfg `<max>`
+10000 stays. The settings page declares `cfg_powerTier` (so the dialog passes no unknown initial
+property) and, on Apply/OK, hands back the tier the card has at that moment, so an open settings
+dialog never restores an older tier.
+
+Debug output for tests: `QT_LOGGING_RULES="org.plasmafusion.systemcard.debug=true"` makes the card
+log sensor state changes, each CPU value and each bar step or glide with the epoch time in ms
+(off by default).
+
+### Measurements (private sessions on the ThinkPad, 1920 x 1200 at 4/3)
+
+Method: `build/lead/dk/perf-remote.sh` (KWin's `KWIN_LOG_PERFORMANCE_DATA` frame log, `pfstat.py`
+snapshots, `analyze_ab.py` helpers). Old = a clean `git archive` of d4afee8 built with
+`tools/build.sh`; new = the same stage with this package. Installed with `fusion-config.sh
+--install`, plasmashell restarted, pointer parked at 720,450, 20 s settle. Runs interleaved:
+new1 old1 new2 old2 new3 old3. new1, old1, new2 and old2 ran on a quiet host (system CPU
+0.38-0.44 % in the visible window, load 0.22-0.65); new3 and old3 overlapped other lanes' private
+sessions (system CPU up to 16 %), where CPU really moved by 10 points or more and new3 glided four
+times (1.70 frames/s visible). Table: quiet runs, mean (min..max), n = 2 per arm.
+
+| 30 s window | frames/s old | frames/s new | bursts > 2 frames old / new | plasmashell CPU % old / new | KWin CPU % old / new |
+|---|---|---|---|---|---|
+| card visible, idle | 0.87 (0.60..1.13) | **0.17 (0.17..0.17)** | 1.5 / 0 | 0.78 / 0.60 | 0.27 / 0.08 |
+| Konsole maximized over the card | 0.93 (0.27..1.60) | **0.02 (0..0.03)** | 1.5 / 0 | 0.70 / 0.33 | 0.25 / 0.00 |
+| Konsole maximized on desktop 2 (12 s) | 1.00 (0.42..1.58) | 0.29 (0.17..0.42) | 0.5 / 0 | 0.87 / 0.46 | 0.25 / 0.13 |
+| stub locker "locked" (14 s) | 1.14 (0.14..2.14) | **0.07 (0.07..0.07)** | 1 / 0 | 0.85 / 0.36 | 0.32 / 0.00 |
+| power tier 2, card visible (40 s) | 0.66 (0.55..0.77) | 0.04 (0..0.08) | 1.5 / 0 | 0.70 / 0.44 | 0.21 / 0.03 |
+
+plasmashell GPU (% busy) visible 0.11 -> 0.02, covered 0.12 -> 0.00. The only frames in the new
+covered and locked windows are the clock's minute tick (at hh:mm:00.0); the visible window holds
+four card frames (a value whose rounded text or whole-pixel bar changed) plus that tick. EFFECTS X3
+acceptance: covered 0.02 <= 0.1, visible 0.17 <= 0.45, no burst longer than 2 frames without a
+10-point change. The old card kept compositing under an opaque maximized window (up to 1.6
+frames/s, glide bursts of 14 frames).
+
+Functional checks (debug log and frame log):
+- Un-maximize: sampling again after 0.07-0.08 s; values at +0.07 s (the pre-pause reply), +0.10-0.13
+  s (pause average), **+0.60-0.63 s (current)**, +1.1 s, then +4.6 s and every 3 s (3 runs).
+- Maximized Konsole on the second virtual desktop: no pause (4 values in 12 s, 3 runs).
+- Show Desktop over a maximized Konsole: sampling resumed 20 ms after `showDesktop(true)` and paused
+  again when KWin left the mode (KWin ended it by itself after about 20 ms in these sessions).
+- Stub locker (a D-Bus service owning `org.freedesktop.ScreenSaver` on the private bus, as KWin's
+  locker does): paused at `ActiveChanged(true)`, no values while locked, values 0.24-0.30 s after
+  `ActiveChanged(false)` and current by +0.74-0.80 s.
+- Power tier 2: values 12.0 and 12.5 s apart; `updateInterval` stayed unset (default) in the
+  config.
+- CPU jump of about 17 points (two busy loops): one glide up and one down (14-15 frames each);
+  at `AnimationDurationFactor` 0 the same jump steps (single frames; the old card still ran a
+  1 ms "glide" of 2-3 frames because Kirigami's longDuration is 1, not 0, at factor 0).
+- Activity switch (1920 x 1200 at 1.325, `cd1-func-new`): paused 11 ms after
+  `SetCurrentActivity` (the card's containment is hidden), resumed 11 ms after switching back, no
+  values while away.
+- KWin's real screen locker (a `PFV_LOCK=1` session, `pfv_lock`; never unlocked, no password
+  typed): paused 0.32 s after the `Lock` call, no values afterwards.
+- Glide rule, from the debug logs of every new run: 12 glides, each after a change of 10 points or
+  more; 18 changes of 1-9 points and 14 under 1 point stepped; 6 steps of 10 points or more, all at
+  factor 0.
+- Settings dialog (`cd1-cfg-new1`, 1920 x 1200 at 1.325; opened from the card's context menu,
+  because the scripting `showConfigurationInterface()` is a no-op in 6.7.5): a `powerTier` of 1
+  written while the dialog was open survived OK, and `updateInterval` stayed unset. The dialog
+  showed "Update every: 1 second" although the card used 3 s. `currentIndex` was bound to
+  `ComboBox.indexOfValue()`, which answers -1 until the combo has read its model, so the binding
+  stayed on the first entry; HEAD had the same binding (it showed 1 s for its 2 s default). The
+  page now looks the value up in its own list (`findIndex`). Re-run `cd1-cfg-new2`: the dialog shows "3 seconds";
+  the tier written while it was open survived OK. HEAD's card (`cd1-cfg-old`) shows "1 second" for its
+  2 s default, so the fault predates this work.
+- +3 pt text (fonts, `KGlobalSettings` notify, shell restart): the card draws the larger text and
+  still fits; after the restart it sampled at the tier-1 interval (6 s).
+
+Lint: `qmllint` (Qt 6.11.2) old vs new: the same warnings (unqualified `i18n*` only) plus one for the
+new "3 seconds" list entry. Core dumps on the ThinkPad since the first run (`coredumpctl list
+--since "2026-09-29 23:08:48"`): none.
+
+Not covered: resuming after the real locker's `ActiveChanged(false)` (a private session is never
+unlocked; the stub covers that path); the power service itself (EFFECTS 8.3, POWER-1).
+
+Two readers of the same sensor in one plasmashell (a second card, or a stock system monitor
+widget): ksystemstats 6.7.5 (`Client::subscribeSensors`) adds one D-Bus connection per subscribe
+call and `unsubscribeSensors` removes one, so the other reader keeps its values while this card
+pauses; after the card resumes, each value reaches the process twice (harmless: the same value).
+From the sources; not tested.
+
+Perf gate (`tools/tests/perf/run.sh`, 3 runs, all quiet, 1920 x 1200 at 4/3; stage = d4afee8 plus
+this package; run by the lead 2026-09-30 00:08-00:21 EDT): no regression against the 282b1a5
+baseline. Idle rows, median of this build vs the baseline: composited frames 0.30 vs 1.23 per s,
+plasmashell CPU 0.63 vs 1.00 % (better), KWin CPU 0.13 vs 0.40 %, whole session 1.36 vs 1.96 %
+(better), plasmashell GPU 0.04 vs 0.16 %. The idle budget rows (EFFECTS 9.1) still fail: the
+remaining frames come from the clock and other widgets, not from this card. Not caused by this
+package, seen in the same run: Alt+Tab to its first frame took 313 ms (312-314) against the
+baseline's 255 ms (248-279); the gate's noise rule calls it the same, but every run was slower
+than the slowest baseline run (d4afee8 changes against 282b1a5, for the lead to follow up).
+Results: `build/cd1/gate/results/` (table.md, result.json).
+
+### CARD-1 review (lead)
+
+The workflow's reviewer stage was replaced by a lead review when the lead took the lane over
+(2026-09-30 04:04Z).
+- The code matches the spec. The covered model uses the same filters as plasma-desktop 6.7.5
+  `Panel.qml` plus the screen filter, so a minimized, a partly covering or another desktop's
+  maximized window does not pause the card.
+- The settings dialog (plasma-desktop `AppletConfiguration.qml`) calls the page's `saveConfig()`
+  before it copies the `cfg_` values, so OK or Apply writes back the live tier.
+- Low, not fixed: suppose the tier changes while the dialog is open, and the user then edits a
+  setting and reverts it. Apply then stays enabled (`isConfigurationChanged` sees the tier), so
+  closing asks to apply or discard. Either answer keeps the live tier.
+
+Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/card1/` (runs, analysis,
+scenarios, crops); laptop scratch `build/cd1/`.
 
 ## Layout script: cards
 

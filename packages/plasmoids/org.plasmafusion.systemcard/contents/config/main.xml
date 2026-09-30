@@ -11,9 +11,17 @@
   <group name="General">
     <entry name="updateInterval" type="Int">
       <label>Milliseconds between sensor updates</label>
-      <default>2000</default>
+      <default>3000</default>
       <min>1000</min>
       <max>10000</max>
+    </entry>
+    <!-- Written by the Plasma Fusion power service, never shown in the settings: the card waits
+         updateInterval x 1 (0, full), x 2 (1, power saver) or x 4 (2, critical battery). -->
+    <entry name="powerTier" type="Int" hidden="true">
+      <label>Power tier: 0 full, 1 saver, 2 critical</label>
+      <default>0</default>
+      <min>0</min>
+      <max>2</max>
     </entry>
   </group>
 </kcfg>

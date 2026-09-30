@@ -10,12 +10,22 @@ import QtQuick.Layouts
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
+import org.kde.plasma.workspace.dbus as DBus
 import org.kde.ksysguard.sensors as Sensors
 import org.kde.kirigami as Kirigami
+import org.kde.kwindowsystem
+import org.kde.taskmanager as TaskManager
 
 // CPU and memory card of the Main board's desktop widgets: two labelled 5 px bars, CPU in teal
 // (#3cc4b0) with its load in percent, memory in blue (#5b9dff) as "used / total GB". Values from
 // ksystemstats through org.kde.ksysguard.sensors, as the stock system monitor widget reads them.
+//
+// Every change on the card redraws the whole desktop window (wallpaper and blurred cards), so the
+// card changes as little as it can (docs/parts/desktop-cards.md, "CARD-1"):
+// - one update per interval (3 s by default; x 2 in power saver, x 4 on critical battery);
+// - a bar steps to its new value (one frame) and glides only for a change of 10 points or more;
+// - the sensors are off while nobody can see the card: a maximized or full-screen window on the
+//   current virtual desktop of its screen, the card not shown, or the session locked.
 PlasmoidItem {
     id: root
 
@@ -35,22 +45,151 @@ PlasmoidItem {
     readonly property real contentWidth: m.px(boardWidth)
     readonly property real contentHeight: m.px(boardHeight)
 
-    readonly property int updateInterval: Math.max(1000, Plasmoid.configuration.updateInterval)
+    // The user's interval (1-10 s) times the power tier's factor. The power service writes only
+    // the hidden powerTier key (0 full, 1 saver, 2 critical), never the user's updateInterval.
+    readonly property int powerTier: Math.max(0, Math.min(2, Plasmoid.configuration.powerTier))
+    readonly property int updateInterval: Math.max(1000, Plasmoid.configuration.updateInterval) * (1 << powerTier)
+
+    // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.systemcard.debug=true".
+    LoggingCategory {
+        id: log
+        name: "org.plasmafusion.systemcard"
+        defaultLogLevel: LoggingCategory.Warning
+    }
+
+    // --- When the card can be seen ---
+
+    // Set by the card (fullRepresentation): it is shown in a visible window.
+    property bool cardShown: false
+
+    // Windows on the card's screen and on that screen's current virtual desktop and activity,
+    // as the stock panel's touchingWindow model (plasma-desktop Panel.qml) filters them. Any of
+    // them maximized or full screen covers the whole card.
+    TaskManager.ActivityInfo {
+        id: activityInfo
+    }
+    TaskManager.TasksModel {
+        id: screenWindows
+        filterByCurrentVirtualDesktop: true
+        filterByActivity: true
+        filterByScreen: true
+        filterMinimized: true
+        filterHidden: true
+        groupMode: TaskManager.TasksModel.GroupDisabled
+        sortMode: TaskManager.TasksModel.SortDisabled
+        screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
+        activity: activityInfo.currentActivity
+    }
+    component WindowState: QtObject {
+        required property var model
+        readonly property bool covers: model.IsMaximized === true || model.IsFullScreen === true
+        onCoversChanged: Qt.callLater(root.countCovering)
+    }
+    Instantiator {
+        id: windowStates
+        model: screenWindows
+        delegate: WindowState {}
+        onObjectAdded: Qt.callLater(root.countCovering)
+        onObjectRemoved: Qt.callLater(root.countCovering)
+    }
+    property int coveringWindows: 0
+    function countCovering(): void {
+        let n = 0;
+        for (let i = 0; i < windowStates.count; ++i) {
+            const w = windowStates.objectAt(i) as WindowState;
+            if (w && w.covers) {
+                ++n;
+            }
+        }
+        coveringWindows = n;
+    }
+    // "Show desktop" hides every window without minimizing it.
+    readonly property bool covered: coveringWindows > 0 && !KWindowSystem.showingDesktop
+
+    // The lock screen (KWin's screen locker on the session bus). While locked KWin draws no
+    // desktop at all, so this only saves the sensor work.
+    property bool sessionLocked: false
+    DBus.DBusServiceWatcher {
+        id: screenSaverService
+        busType: DBus.BusType.Session
+        watchedService: "org.freedesktop.ScreenSaver"
+        // Asked only while the service is there, so the call never starts one.
+        onRegisteredChanged: root.readLockState()
+        Component.onCompleted: root.readLockState()
+    }
+    DBus.SignalWatcher {
+        busType: DBus.BusType.Session
+        service: "org.freedesktop.ScreenSaver"
+        path: "/ScreenSaver"
+        iface: "org.freedesktop.ScreenSaver"
+        function dbusActiveChanged(active) {
+            root.sessionLocked = active === true;
+        }
+    }
+    function readLockState(): void {
+        if (!screenSaverService.registered) {
+            sessionLocked = false;
+            return;
+        }
+        DBus.SessionBus.asyncCall({
+            "service": "org.freedesktop.ScreenSaver",
+            "path": "/ScreenSaver",
+            "iface": "org.freedesktop.ScreenSaver",
+            "member": "GetActive"
+        }, reply => {
+            root.sessionLocked = reply.value === true;
+        }, () => {
+            root.sessionLocked = false;
+        });
+    }
+
+    readonly property bool sampling: cardShown && !covered && !sessionLocked
+
+    // ksystemstats stops reading CPU and memory while nobody subscribes, so after a pause (and at
+    // start) its first reply is the value from before the pause and its first CPU tick the average
+    // over the pause; ticks come every 500 ms. For the first 1.5 s every tick is taken, so the
+    // card shows current values about 1 s after it can be seen again, then one per interval.
+    property bool catchingUp: false
+    Timer {
+        id: catchUp
+        interval: 1500
+        onTriggered: root.catchingUp = false
+    }
+    onSamplingChanged: {
+        catchingUp = sampling;
+        if (sampling) {
+            catchUp.restart();
+        } else {
+            catchUp.stop();
+        }
+        console.debug(log, "sampling", sampling, "shown", cardShown, "covering", coveringWindows,
+                      "showingDesktop", KWindowSystem.showingDesktop, "locked", sessionLocked,
+                      "interval", updateInterval, "at", Date.now());
+    }
+    onUpdateIntervalChanged: console.debug(log, "interval", updateInterval, "tier", powerTier, "at", Date.now())
+    readonly property int rateLimit: catchingUp ? 0 : updateInterval
+    // A glide only while the card is seen, after the catch-up, and with animations on
+    // (AnimationDurationFactor 0 makes longDuration 1 ms).
+    readonly property bool glideAllowed: sampling && !catchingUp && Kirigami.Units.longDuration > 1
 
     Sensors.Sensor {
         id: cpuSensor
         sensorId: "cpu/all/usage"
-        updateRateLimit: root.updateInterval
+        enabled: root.sampling
+        updateRateLimit: root.rateLimit
+        onValueChanged: console.debug(log, "cpu", cpuSensor.value, "at", Date.now())
     }
     Sensors.Sensor {
         id: memUsed
         sensorId: "memory/physical/used"
-        updateRateLimit: root.updateInterval
+        enabled: root.sampling
+        updateRateLimit: root.rateLimit
     }
     Sensors.Sensor {
         id: memTotal
         sensorId: "memory/physical/total"
-        updateRateLimit: root.updateInterval
+        enabled: root.sampling
+        updateRateLimit: root.rateLimit
     }
 
     readonly property bool cpuValid: typeof cpuSensor.value === "number" && isFinite(cpuSensor.value)
@@ -106,6 +245,14 @@ PlasmoidItem {
         // 1 px of slack: the snapped sizes at fractional scales are a fraction of a pixel larger.
         readonly property real fitScale: Math.min(1, (width + 1) / root.contentWidth, (height + 1) / root.contentHeight)
 
+        // Shown: visible (with every parent: the desktop hides the containment of another
+        // activity) in a visible window.
+        Binding {
+            target: root
+            property: "cardShown"
+            value: card.visible && card.Window.window !== null && card.Window.window.visible
+        }
+
         CardPalette { id: cardPalette }
 
         component Meter: ColumnLayout {
@@ -140,7 +287,7 @@ PlasmoidItem {
                     text: meter.value
                 }
             }
-            // 5 px track and bar, radius 3 (board), the bar glides to each new value.
+            // 5 px track and bar, radius 3 (board).
             Rectangle {
                 id: track
                 Layout.fillWidth: true
@@ -151,18 +298,22 @@ PlasmoidItem {
 
                 // Whole pixels, so a change too small to see changes nothing.
                 readonly property real target: meter.fraction > 0 ? Math.max(height, Math.round(width * meter.fraction)) : 0
-                // Every animation frame redraws the whole desktop (wallpaper and blurred cards),
-                // also under windows: a 600 ms glide every 2 s kept plasmashell at 3-5 % of a core
-                // (0.6 % without animation). So the glide takes one standard duration and only
-                // changes of 3 px or more glide; the idle load's small jitter just steps.
+                // The value the bar last moved to.
+                property real shownFraction: 0
+                // Each glide frame redraws the whole desktop (about 12 frames per glide), so the
+                // bar steps in one frame; only a change of 10 points or more (CPU 4 % -> 14 %),
+                // which idle jitter never makes, glides.
                 onTargetChanged: {
+                    const jump = Math.abs(meter.fraction - shownFraction) >= 0.1;
+                    shownFraction = meter.fraction;
                     glide.stop();
-                    if (Kirigami.Units.longDuration > 0 && bar.width > 0 && Math.abs(target - bar.width) >= 3) {
+                    if (root.glideAllowed && jump && bar.width > 0) {
                         glide.to = target;
                         glide.start();
                     } else {
                         bar.width = target;
                     }
+                    console.debug(log, "bar", meter.label, glide.running ? "glide" : "step", target, "at", Date.now());
                 }
                 // A new width of the card (edit mode) applies at once.
                 onWidthChanged: {
