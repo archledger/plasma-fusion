@@ -1,33 +1,24 @@
 # Plasma Fusion Light: what the Global Theme sets (read by libklookandfeel).
 # Every value names a package installed by another Plasma Fusion part; a name that is not
 # installed is skipped by Plasma and the current value stays.
+#
+# No fonts and no cursor here: every Global Theme apply (also the automatic light/dark switch
+# and the quick-settings Dark tile) writes the theme's values to ~/.config/kdedefaults and
+# deletes the user's own keys for them (KLookAndFeelManager::writeNewDefaults, plasma-workspace
+# 6.7.5), which would undo the user's font size or cursor at every switch.
+# tools/device/fusion-config.sh sets Manrope and PlasmaFusion-cursors once instead.
 
 [kdeglobals][KDE]
 widgetStyle=Breeze
 
 [kdeglobals][General]
 ColorScheme=PlasmaFusionLight
-# Manrope 13 px for text, menus and toolbars; 12 px for the smallest readable text.
-font=Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0
-menuFont=Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0
-toolBarFont=Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0
-smallestReadableFont=Manrope,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0
-# Not a real kdeglobals key. Plasma 6.7 only detects the font block of a Global Theme when
-# [kdeglobals][General] has activeFont, but it applies [kdeglobals][WM] activeFont below.
-activeFont=Manrope,10.5,-1,5,800,0,0,0,0,0,0,0,0,0,0,1,,0,0
-
-[kdeglobals][WM]
-# Window titles: Manrope ExtraBold 14 px.
-activeFont=Manrope,10.5,-1,5,800,0,0,0,0,0,0,0,0,0,0,1,,0,0
 
 [kdeglobals][Icons]
 Theme=PlasmaFusion
 
 [plasmarc][Theme]
 name=plasma-fusion-light
-
-[kcminputrc][Mouse]
-cursorTheme=PlasmaFusion-cursors
 
 [kwinrc][org.kde.kdecoration2]
 library=org.kde.kwin.aurorae.v2

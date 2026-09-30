@@ -20,6 +20,8 @@
 #   --reset-layout     always rebuild the top bar, dock and desktop cards
 #   --keep-layout      never touch the panels (appearance and settings only)
 #   --hot-corner       let the top-left screen corner open Overview (off by default)
+#   --fonts            set the Plasma Fusion fonts and cursor again (normally only the first
+#                      run sets them, so the user's own later choices are kept)
 #   -h, --help
 #
 # By default the layout is rebuilt only when the current panels are not the Plasma Fusion
@@ -29,6 +31,11 @@
 # that back.
 #
 # What it sets (see docs/parts/lookandfeel.md for the reasons):
+#   Fonts, cursor      first run only (plasmafusionrc [Setup] FontsAndCursor): kdeglobals
+#                      [General] font, menuFont, toolBarFont Manrope 9.75, smallestReadableFont
+#                      Manrope 9, [WM] activeFont Manrope ExtraBold 10.5; cursor theme
+#                      PlasmaFusion-cursors (plasma-apply-cursortheme). The Global Themes carry
+#                      neither, so light/dark switches keep the user's own fonts and cursor.
 #   Global Theme       plasma-apply-lookandfeel -a org.plasmafusion.{dark,light}.desktop
 #                      [--resetLayout]; kdeglobals [KDE] DefaultDarkLookAndFeel,
 #                      DefaultLightLookAndFeel, AutomaticLookAndFeel
@@ -71,6 +78,12 @@ BLUR_STRENGTH=13
 BLUR_NOISE=0
 BLUR_SATURATION=140
 TOOLTIP_DELAY=600
+# Fonts and cursor (set once, see section 1b). Manrope 13 px for text, menus and toolbars,
+# 12 px for the smallest readable text, window titles Manrope ExtraBold 14 px.
+UI_FONT=Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0
+SMALL_FONT=Manrope,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0
+TITLE_FONT=Manrope,10.5,-1,5,800,0,0,0,0,0,0,0,0,0,0,1,,0,0
+CURSOR_THEME=PlasmaFusion-cursors
 NOTIFICATION_TIMEOUT=5000
 # Global shortcut for the quick-settings pop-up (org.plasmafusion.quicksettings): Qt key code
 # of Meta+N and its QKeySequence text. Meta+Alt+S is Plasma's screen-reader toggle and Meta+A
@@ -88,7 +101,7 @@ WALLPAPER=PlasmaFusion
 KONSOLE_PROFILE="Plasma Fusion.profile"
 EDITOR_THEME="Plasma Fusion Dark"
 
-DRY=0 VARIANT=dark AUTO=0 LAYOUT=auto HOT_CORNER=0 INSTALL=
+DRY=0 VARIANT=dark AUTO=0 LAYOUT=auto HOT_CORNER=0 FONTS=0 INSTALL=
 usage() { sed -n '/^#   fusion-config.sh/,/^#   -h/p' "$0" | sed 's/^# \{0,1\}//'; }
 while [ $# -gt 0 ]; do
   case $1 in
@@ -103,6 +116,7 @@ while [ $# -gt 0 ]; do
     --reset-layout) LAYOUT=reset ;;
     --keep-layout) LAYOUT=keep ;;
     --hot-corner) HOT_CORNER=1 ;;
+    --fonts) FONTS=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -162,6 +176,30 @@ package_dir() { # $1 type dir (plasma/look-and-feel, kwin/scripts...), $2 id
   done
   return 1
 }
+# Where a data file is, or will be after --install: the user's data directory first, then the
+# system's (the plasma-fusion package installs everything below /usr/share).
+data_path() { # $1 path relative to a data directory
+  local d base
+  if [ -e "$DATA/$1" ] || { [ -n "$INSTALL" ] && [ -e "$INSTALL/.local/share/$1" ]; }; then
+    echo "$DATA/$1"
+    return 0
+  fi
+  # shellcheck disable=SC2086
+  for d in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do
+    for base in ${d//:/ }; do
+      [ -e "$base/$1" ] && { echo "$base/$1"; return 0; }
+    done
+  done
+  return 1
+}
+# Per-user configuration files (GTK stylesheets): from the build with --install, otherwise the
+# templates of a system-wide install (/usr/share/plasma-fusion/config).
+CONFIG_SRC=
+if [ -n "$INSTALL" ]; then
+  [ ! -d "$INSTALL/.config" ] || CONFIG_SRC=$INSTALL/.config
+else
+  CONFIG_SRC=$(data_path plasma-fusion/config) || CONFIG_SRC=
+fi
 if [ -n "$INSTALL" ]; then
   [ -f "$INSTALL/.local/share/plasma/look-and-feel/$LNF/metadata.json" ] ||
     die "$INSTALL is not a Plasma Fusion build (no .local/share/plasma/look-and-feel/$LNF)"
@@ -175,17 +213,17 @@ fi
 BACKUP_FILES=(
   kdeglobals kwinrc kglobalshortcutsrc plasmarc plasmanotifyrc plasmashellrc
   plasma-org.kde.plasma.desktop-appletsrc ksplashrc kcminputrc krunnerrc kscreenlockerrc
-  konsolerc katerc kwriterc
+  konsolerc katerc kwriterc plasmafusionrc
   gtk-3.0/settings.ini gtk-4.0/settings.ini xsettingsd/xsettingsd.conf Trolltech.conf
   gtk-3.0/gtk.css gtk-4.0/gtk.css gtk-3.0/plasma-fusion.css gtk-4.0/plasma-fusion.css
   systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf
 )
-# Configuration files the build would install (--install) are saved as well.
-if [ -n "$INSTALL" ] && [ -d "$INSTALL/.config" ]; then
+# Configuration files the build or the system templates would install are saved as well.
+if [ -n "$CONFIG_SRC" ]; then
   while IFS= read -r -d '' f; do
-    f=${f#"$INSTALL/.config/"}
+    f=${f#"$CONFIG_SRC/"}
     case " ${BACKUP_FILES[*]} " in *" $f "*) ;; *) BACKUP_FILES+=("$f") ;; esac
-  done < <(find "$INSTALL/.config" -type f -print0 | sort -z)
+  done < <(find "$CONFIG_SRC" -type f -print0 | sort -z)
 fi
 BACKUP_DIRS=(kdedefaults)
 
@@ -508,23 +546,32 @@ install_build() {
       mkdir -p "$HOME/.local" && cp -a "$src/.local/." "$HOME/.local/"
     fi
   fi
-  if [ -d "$src/.config" ]; then
-    while IFS= read -r -d '' f; do
-      f=${f#"$src/.config/"}
-      dest=$CONFIG/$f
-      if [ -e "$dest" ] && cmp -s "$src/.config/$f" "$dest"; then
-        note "$dest (unchanged)"
+  [ -z "$CONFIG_SRC" ] || install_config "$CONFIG_SRC"
+  if [ "$DRY" = 0 ]; then
+    command -v fc-cache >/dev/null && fc-cache -f >/dev/null 2>&1 || true
+    command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
+  fi
+}
+
+# Copy per-user configuration files (GTK stylesheets) into ~/.config. $1 source directory
+install_config() {
+  local src=$1 f dest
+  while IFS= read -r -d '' f; do
+    f=${f#"$src/"}
+    dest=$CONFIG/$f
+    if [ -e "$dest" ] && cmp -s "$src/$f" "$dest"; then
+      note "$dest (unchanged)"
+      continue
+    fi
+    if [ "$(basename "$f")" = gtk.css ] && [ -e "$dest" ] && ! gtk_css_is_plain "$dest"; then
+      if grep -q "plasma-fusion.css" "$dest"; then
+        note "$dest already imports plasma-fusion.css (kept as it is)"
         continue
       fi
-      if [ "$(basename "$f")" = gtk.css ] && [ -e "$dest" ] && ! gtk_css_is_plain "$dest"; then
-        if grep -q "plasma-fusion.css" "$dest"; then
-          note "$dest already imports plasma-fusion.css (kept as it is)"
-          continue
-        fi
-        note "$dest has its own rules: add @import 'plasma-fusion.css'; after its colors.css import"
-        CHANGES=$((CHANGES + 1))
-        [ "$DRY" = 1 ] && continue
-        python3 - "$dest" <<'PY'
+      note "$dest has its own rules: add @import 'plasma-fusion.css'; after its colors.css import"
+      CHANGES=$((CHANGES + 1))
+      [ "$DRY" = 1 ] && continue
+      python3 - "$dest" <<'PY'
 import sys
 path = sys.argv[1]
 lines = open(path, encoding="utf-8").read().splitlines(True)
@@ -539,26 +586,26 @@ else:
     lines.insert(at, line)
 open(path, "w", encoding="utf-8").writelines(lines)
 PY
-        continue
-      fi
-      note "copy $dest"
-      CHANGES=$((CHANGES + 1))
-      if [ "$DRY" = 0 ]; then
-        mkdir -p "$(dirname "$dest")"
-        cp "$src/.config/$f" "$dest"
-      fi
-    done < <(find "$src/.config" -type f -print0 | sort -z)
-  fi
-  if [ "$DRY" = 0 ]; then
-    command -v fc-cache >/dev/null && fc-cache -f >/dev/null 2>&1 || true
-    command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
-  fi
+      continue
+    fi
+    note "copy $dest"
+    CHANGES=$((CHANGES + 1))
+    if [ "$DRY" = 0 ]; then
+      mkdir -p "$(dirname "$dest")"
+      cp "$src/$f" "$dest"
+    fi
+  done < <(find "$src" -type f -print0 | sort -z)
 }
 
 # ---------- 1. Global Theme and layout ----------
 
 [ "$DRY" = 1 ] && say "Dry run: nothing is changed." || make_backup
-[ -z "$INSTALL" ] || install_build
+if [ -n "$INSTALL" ]; then
+  install_build
+elif [ -n "$CONFIG_SRC" ]; then
+  say "Per-user configuration from $CONFIG_SRC"
+  install_config "$CONFIG_SRC"
+fi
 
 current_lnf=$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)
 reset=0
@@ -625,6 +672,41 @@ fi
 set_key kdeglobals KDE DefaultDarkLookAndFeel "$DARK"
 set_key kdeglobals KDE DefaultLightLookAndFeel "$LIGHT"
 set_key kdeglobals KDE AutomaticLookAndFeel "$([ "$AUTO" = 1 ] && echo true || echo false)"
+
+# ---------- 1b. fonts and cursor ----------
+
+# Set once. The Global Themes carry no fonts and no cursor: every theme apply (the automatic
+# light/dark switch and the quick-settings Dark tile too) writes a theme's values to
+# ~/.config/kdedefaults and deletes the user's own keys for them, so fonts in the theme would
+# undo the user's font size at every switch. Later runs leave the user's choices alone.
+# KConfig does not write a value that ~/.config/kdedefaults already gives (an older Plasma
+# Fusion theme left Manrope there); that is fine, set_key then reports it unchanged.
+say "Fonts and cursor"
+if [ "$FONTS" = 1 ] || [ "$(kreadconfig6 --file plasmafusionrc --group Setup --key FontsAndCursor)" != "done" ]; then
+  set_key kdeglobals General font "$UI_FONT"
+  set_key kdeglobals General menuFont "$UI_FONT"
+  set_key kdeglobals General toolBarFont "$UI_FONT"
+  set_key kdeglobals General smallestReadableFont "$SMALL_FONT"
+  set_key kdeglobals WM activeFont "$TITLE_FONT"
+  cur_cursor=$(kreadconfig6 --file kcminputrc --group Mouse --key cursorTheme)
+  if ! data_path "icons/$CURSOR_THEME/index.theme" >/dev/null; then
+    note "note: cursor theme $CURSOR_THEME is not installed; the cursor stays ${cur_cursor:-<default>}"
+  elif [ "$cur_cursor" = "$CURSOR_THEME" ]; then
+    note "kcminputrc [Mouse] cursorTheme = $CURSOR_THEME (unchanged)"
+  else
+    # plasma-apply-cursortheme writes kcminputrc and switches the running session's cursor.
+    note "cursor: ${cur_cursor:-<default>} -> $CURSOR_THEME (plasma-apply-cursortheme)"
+    CHANGES=$((CHANGES + 1))
+    if [ "$DRY" = 0 ] && ! plasma-apply-cursortheme "$CURSOR_THEME" >/dev/null 2>&1; then
+      kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme --notify "$CURSOR_THEME"
+      note "note: plasma-apply-cursortheme failed; kcminputrc set, the cursor changes at the next login"
+    fi
+  fi
+  set_key plasmafusionrc Setup FontsAndCursor "done"
+  [ "$DRY" = 1 ] || dbus-send --session --type=signal /KDEPlatformTheme org.kde.KDEPlatformTheme.refreshFonts 2>/dev/null || true
+else
+  note "set by an earlier run (plasmafusionrc [Setup] FontsAndCursor=done): the current fonts and cursor stay; --fonts sets them again"
+fi
 
 # ---------- 2. virtual desktops ----------
 
@@ -712,7 +794,7 @@ done
 set_key kwinrc Plugins sheetEnabled true
 # Snap-zone preview drawn by plasmafusion-snap's outline (KWin resolves the path in the data
 # directories; it loads it the next time it shows an outline after a restart of KWin).
-if [ -f "$DATA/$OUTLINE_QML" ] || { [ -n "$INSTALL" ] && [ -f "$INSTALL/.local/share/$OUTLINE_QML" ]; }; then
+if data_path "$OUTLINE_QML" >/dev/null; then
   set_key kwinrc Outline QmlPath "$OUTLINE_QML"
 else
   note "note: $OUTLINE_QML is not installed yet; KWin keeps its own snap-zone outline"
@@ -782,9 +864,9 @@ fi
 # ---------- 6. lock screen ----------
 
 say "Lock screen"
-if package_dir wallpapers "$WALLPAPER" >/dev/null; then
+if wallpaper_meta=$(data_path "wallpapers/$WALLPAPER/metadata.json"); then
   set_key kscreenlockerrc Greeter WallpaperPlugin org.kde.image
-  set_key kscreenlockerrc Greeter/Wallpaper/org.kde.image/General Image "file://$DATA/wallpapers/$WALLPAPER/"
+  set_key kscreenlockerrc Greeter/Wallpaper/org.kde.image/General Image "file://$(dirname "$wallpaper_meta")/"
 else
   note "note: wallpaper $WALLPAPER is not installed; the lock screen keeps its wallpaper"
 fi
@@ -805,13 +887,12 @@ fi
 # ---------- 7. terminal and editor ----------
 
 say "Terminal and editor"
-if [ -f "$DATA/konsole/$KONSOLE_PROFILE" ] || { [ -n "$INSTALL" ] && [ -f "$INSTALL/.local/share/konsole/$KONSOLE_PROFILE" ]; }; then
+if data_path "konsole/$KONSOLE_PROFILE" >/dev/null; then
   set_key konsolerc "Desktop Entry" DefaultProfile "$KONSOLE_PROFILE"
 else
   note "note: Konsole profile $KONSOLE_PROFILE is not installed"
 fi
-if [ -f "$DATA/org.kde.syntax-highlighting/themes/$EDITOR_THEME.theme" ] ||
-   { [ -n "$INSTALL" ] && [ -f "$INSTALL/.local/share/org.kde.syntax-highlighting/themes/$EDITOR_THEME.theme" ]; }; then
+if data_path "org.kde.syntax-highlighting/themes/$EDITOR_THEME.theme" >/dev/null; then
   for rc in katerc kwriterc; do
     # KTextEditor picks only Breeze Light/Dark on its own, so the theme is set explicitly.
     set_key "$rc" "KTextEditor Renderer" "Auto Color Theme Selection" false

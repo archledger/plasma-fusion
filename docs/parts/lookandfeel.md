@@ -45,13 +45,8 @@ Written by Plasma into `~/.config/kdedefaults/<file>` (the layer startplasma put
 |---|---|---|---|
 | kdeglobals [KDE] | widgetStyle | Breeze | Breeze |
 | kdeglobals [General] | ColorScheme | PlasmaFusionDark | PlasmaFusionLight |
-| kdeglobals [General] | font, menuFont, toolBarFont | `Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0` (13 px) | same |
-| kdeglobals [General] | smallestReadableFont | `Manrope,9,-1,5,400,…` (12 px) | same |
-| kdeglobals [General] | activeFont | sentinel, same as [WM] activeFont: Plasma 6.7.5 detects fonts by this key but applies [WM] (klookandfeelmanager.cpp:118-120 vs 556-566) | same |
-| kdeglobals [WM] | activeFont | `Manrope,10.5,-1,5,800,…` (14 px ExtraBold) | same |
 | kdeglobals [Icons] | Theme | PlasmaFusion-Dark | PlasmaFusion |
 | plasmarc [Theme] | name | plasma-fusion-dark | plasma-fusion-light |
-| kcminputrc [Mouse] | cursorTheme | PlasmaFusion-cursors | PlasmaFusion-cursors |
 | kwinrc [org.kde.kdecoration2] | library, theme, NoPlugin | org.kde.kwin.aurorae.v2, `__aurorae__svg__PlasmaFusionDark`, false | …`PlasmaFusionLight` |
 | kwinrc [org.kde.kdecoration2] | BorderSize | None (used once `BorderSizeAuto=false`, set by fusion-config.sh) | None |
 | kwinrc [WindowSwitcher] | LayoutName | org.plasmafusion.switcher | same |
@@ -63,7 +58,19 @@ Written by Plasma into `~/.config/kdedefaults/<file>` (the layer startplasma put
 `contents/layouts/defaults`: kwinrc [org.kde.kdecoration2] ButtonsOnLeft=M, ButtonsOnRight=IAX;
 [Windows] BorderlessMaximizedWindows=false (applied only together with the layout).
 
-The Qt 6.11 font strings were printed by PySide6 6.11.2 `QFont.toString()` on the build laptop.
+Fonts and cursor are NOT in the Global Themes (changed 2026-09-30, ADAPTIVE.md fix 1). Every
+theme apply, including Plasma's automatic light/dark switch and the quick-settings Dark tile
+(AppearanceSettings), writes each value the theme provides to `kdedefaults` and reverts the
+user's own key (`KLookAndFeelManager::writeNewDefaults`), so fonts or a cursor in the theme would
+undo the user's font size or cursor at every switch. `tools/device/fusion-config.sh` sets them
+once instead (section 1b, marker `plasmafusionrc [Setup] FontsAndCursor=done`; `--fonts` sets
+them again): kdeglobals [General] font, menuFont, toolBarFont
+`Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0` (13 px), smallestReadableFont
+`Manrope,9,-1,5,400,…` (12 px), [WM] activeFont `Manrope,10.5,-1,5,800,…` (14 px ExtraBold), and
+the cursor theme PlasmaFusion-cursors through `plasma-apply-cursortheme`. Sessions configured by
+an earlier version keep Manrope in `kdedefaults` (a theme apply never clears that file), and
+KConfig does not write a user key equal to it, so nothing changes for them. The Qt 6.11 font
+strings were printed by PySide6 6.11.2 `QFont.toString()` on the build laptop.
 A name that is not installed is skipped by Plasma (the old value stays), so the Global Theme can
 be applied before every part exists.
 
