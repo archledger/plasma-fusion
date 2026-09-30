@@ -12,7 +12,10 @@ Reproduces the background layer of design/boards/Splash.dc.html:
 The element is blurred in its own coordinates with transparent surroundings (so the edges
 soften the way the browser draws them), scaled by 1.08 about the centre, faded to 28 % and
 laid over #0b0e1b. The result is written as an opaque PNG at the requested size; the splash
-crops it to the screen with PreserveAspectCrop.
+crops it to the screen with PreserveAspectCrop. For a portrait size (height > width) the crop puts
+the sun at 68 % of the width, as on the board, instead of cropping the board's middle, so the whole
+sun stays in the picture (ADAPTIVE 5.11: the centre crop cut it off); the splash uses that image
+on portrait screens.
 
 Usage: splash_background.py OUTPUT.png [WIDTHxHEIGHT]   (default 1920x1200, 16:10)
 """
@@ -80,6 +83,11 @@ def render(width, height):
     out = out.convert("RGB")
     if (lw, lh) != (width, height):
         left, top = (lw - width) // 2, (lh - height) // 2
+        if height > width:
+            # The sun at 68 % of the width, as on the landscape board (1010 of 1440, after the
+            # 1.08 scale about the board's centre): right of the emblem, and all of it in view.
+            sun_x = (lw / 2.0) + (SUN[1][0] * k - lw / 2.0) * SCALE
+            left = int(round(min(max(sun_x - 0.68 * width, 0), lw - width)))
         out = out.crop((left, top, left + width, top + height))
     return out
 

@@ -1,0 +1,22 @@
+{
+    "KPackageStructure": "Plasma/LayoutTemplate",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "",
+        "Description": "The Plasma Fusion top bar: app name, menu, clock, and on the main screen the status icons and quick settings",
+        "EnabledByDefault": true,
+        "Id": "org.plasmafusion.panel.topbar",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Top Bar",
+        "Website": "https://www.kde.org/plasma-desktop"
+    },
+    "X-Plasma-ContainmentCategories": [
+        "panel"
+    ],
+    "X-Plasma-Shell": "plasmashell"
+}

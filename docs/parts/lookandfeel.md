@@ -83,9 +83,10 @@ existing panels.
 
 | Piece | Settings | Widgets (fallback when a Fusion widget is not installed) |
 |---|---|---|
-| Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity translucent` | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu`, panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.kde.plasma.systemtray`, `org.plasmafusion.quicksettings` |
+| Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity adaptive` (solid next to a maximized window, decision 5) | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu` (`allScreens=false`: the menu of that screen's window), panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.kde.plasma.systemtray`, `org.plasmafusion.pen` (when installed), `org.plasmafusion.quicksettings` |
+| Top bars on the other screens | as above | app name, appmenu (`allScreens=false`), clock pill; no tray, quick settings or dock (decision 8) |
 | Dock | `location bottom`, `height 88` (72 px dock + 16 px headroom, shared contract with the Plasma style), `floating true`, `lengthMode fit`, `alignment center`, `hiding dodgewindows`, `opacity translucent` | `org.plasmafusion.launcher` with `[General] buttonStyle=hidden` when the app-name widget holds the top-left corner (the dock finds it in its own panel for Start; Meta finds it in any panel), then `org.plasmafusion.dock` (else Kickoff when there is no Fusion launcher, and `org.kde.plasma.icontasks`) |
-| Desktop | `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | Weather, calendar, CPU/memory cards, see below |
+| Desktop | Folder View (`org.kde.plasma.folder`, BACKLOG M1): `url desktop:/`, `arrangement 1` (columns), `alignment 0` (from the left), `iconSize 2`, `sortMode -1` (free placement), `popups false`, `toolTips false`, `selectionMarkers true`, `useTypeAhead true`, previews for the installed image/SVG/PDF/office/video thumbnailers; `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | the weather, calendar and system cards, see below |
 
 System tray: when the quick-settings widget is installed, `[General] hiddenItems` =
 `org.kde.plasma.networkmanagement, org.kde.plasma.volume, org.kde.plasma.battery,
@@ -94,20 +95,19 @@ org.kde.plasma.keyboardlayout, org.kde.kdeconnect, org.kde.plasma.clipboard,
 org.kde.plasma.mediacontroller` (the ten ids of docs/parts/shell-quicksettings.md: the pill, tiles
 and bell replace the first six, the widget draws the EN badge, phone and clipboard buttons and the
 media card itself). They stay loaded (notification server and popups, network secrets, battery
-warnings, Klipper, KDE Connect) but sit in the tray's hidden section.
+warnings, Klipper, KDE Connect) but sit in the tray's hidden section. Five passive items are also
+hidden and disabled as status notifiers, so the tray has no expander arrow: `org.kde.plasma.vault`,
+`org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager` and
+`org.kde.plasma.manage-inputmethod` (quick settings has its own keyboard button).
 
-Desktop cards, on the primary screen, in the area left free by the top bar, all with
-`StandardBackground` (so the Plasma style's `blurred-*` card and the wallpaper blur apply):
-
-| Card | Rect (logical px) | Configuration |
-|---|---|---|
-| `org.kde.plasma.weather` | 1008,16 416x208 | none (asks for a location) |
-| `org.kde.plasma.calendar` | 1008,240 416x288 | none |
-| `org.kde.plasma.systemmonitor` | 1008,544 416x144 | face `org.kde.ksysguard.horizontalbars`; sensors `cpu/all/usage` (label CPU, 60,196,176) and `memory/physical/usedPercent` (label Memory, 91,157,255); range 0-100; no title |
-
-Sizes come from the stock widgets' minimums in grid units (18 px for Manrope 13 px) plus the
-card padding (14 px), rounded up to the desktop's 16 px cells; x is right-aligned with a 16 px
-margin. Verified exactly in the virtual sessions (`dump-layout.js`).
+Desktop cards: the Plasma Fusion weather, calendar and system cards (`docs/parts/desktop-cards.md`),
+each with the stock widget as fallback when the Fusion one is not installed, on the primary screen.
+Their places are written for each screen shape (`ItemGeometries-WxH` for the screen's landscape and
+portrait sizes and for 1440x900 / 900x1440, plus the `ItemGeometriesHorizontal` / `Vertical`
+fallbacks): landscape a right-hand column 16 px under the top bar; portrait the first two side by
+side under the bar and the rest below. The column keeps clear of the top bar and the dock's 104 px
+area; when it does not fit, the system card goes first. Icons fill from the left, so they never
+sit under a card.
 
 ## Splash
 
@@ -286,12 +286,10 @@ restarts plasmashell with it (as a login would) and copies KWin's keys with
 
 ## Deviations from the boards
 
-- Desktop cards are 416 px wide (board 192) and 208/288/144 px high (board about 120/188/92):
-  the stock calendar needs 21x14 grid units for its month view (below that it shows only an
-  icon), the stock weather view needs 10 grid units of height (FullRepresentation.qml), and the
-  desktop snaps widgets to 16 px cells. The column sits 16 px from the right edge and top bar
-  (board 22 px / 56 px from the top). Matching the board needs small custom card widgets (see
-  "Needs").
+- Desktop cards: the Plasma Fusion cards follow the board (`docs/parts/desktop-cards.md`); only the
+  stock fallbacks are larger (416 px wide; the stock calendar needs 21x14 grid units for its
+  month view, the stock weather view 10 grid units of height). The column sits 16 px from the
+  right edge and the top bar (board 22 px / 56 px from the top).
 - The weather card shows "Configure…" until the user sets a location (no automatic location in
   6.7.5); the memory row shows used percent, not "6.1 / 16 GB", and the stock bars face draws
   each bar above its label, not below.
@@ -313,10 +311,8 @@ restarts plasmashell with it (as a login would) and copies KWin's keys with
 
 ## Needs from other parts
 
-- Decision for the lead: board-sized desktop cards need three small widgets (weather, calendar,
-  CPU/memory; about 100-150 lines of QML each) with new ids, a new part; the layout script's
-  `CARDS` table takes them with a one-line change per card and keeps the stock widgets as
-  fallback.
+- Desktop cards: done (`org.plasmafusion.weathercard`, `calendarcard`, `systemcard`,
+  `docs/parts/desktop-cards.md`); the `CARDS` table keeps the stock widgets as fallback.
 - Window switcher / KWin part: fusion-config.sh sets [TabBox]/[TabBoxAlternative] DesktopMode=0
   and HighlightWindows=false (what `org.plasmafusion.switcher`'s main.qml and its test seed
   expect), [Outline] QmlPath for the snap script's outline and [Plugins] sheetEnabled=true (as in
@@ -411,3 +407,68 @@ screen and the Aurorae title bars until `fusion-config.sh` records the new versi
 the lock screen, snap/attach scripts, snap outline and Fusion switcher off while another Global
 Theme is chosen (automatic light/dark switching with a Plasma Fusion theme as one of the two counts
 as Plasma Fusion). `fusion-restore.sh` removes the check; "My previous desktop" stays installed.
+
+## LAYOUT-1 (2026-09-30)
+
+Work package LAYOUT-1 of the one-pass plan (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md`),
+built by the lead directly. The layout script runs only on a fresh layout or `--reset-layout`; the
+live session gets these changes through DEVICE-1's in-place migration.
+
+### Changes
+
+- `contents/defaults` (both themes): `[kwinrc][org.kde.kdecoration2] library=org.plasmafusion.decoration`,
+  `theme=` (the compiled title bars; where the plugin is missing the login check picks the matching
+  Aurorae theme, `docs/parts/gate.md`), and the desktop containment `org.kde.plasma.folder`.
+- Layout script: Folder View desktop with the keys above; a top bar on every screen (decision 8; the
+  primary one with tray, pen and quick settings, the others with app name, appmenu and clock pill);
+  every appmenu for its own screen; top bars `adaptive`; the five passive tray items hidden (no
+  expander arrow); the pen widget between tray and quick settings when installed; card places per
+  screen shape (above).
+- `contents/layouts/ensure-topbars.js` (new): adds a top bar to any screen without one, never removes
+  one, prints `top bars: screens N, added M`; for `fusion-config.sh --screens` and KWIN-2's hot-plug
+  handler (`workspace.screensChanged` through `evaluateScript`).
+- Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
+  `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into
+  `~/.local/share/plasma/layout-templates/`: "Add Panel" offers the Fusion top bar and dock.
+- Splash (ADAPTIVE 5.11): emblem and greeting `× clamp(min(W/1440, H/900), 0.75, 1.4)`; a portrait
+  background (`background-portrait.png`, 1200 x 1920, the sun kept at 68 % of the width) when H > W.
+
+### Verification
+
+Private sessions on the ThinkPad (1920 x 1200 at 4/3 unless noted; scratch `build/ly/`):
+
+- `ly-1` (24/24): Folder View and its keys; three cards; the landscape column and the portrait
+  side-by-side geometries (and both fallbacks) clear of the bar and the dock area; one 34 px
+  adaptive top bar; the dock translucent, dodgewindows, 88; the tray hides the passive items and
+  the replaced ones; appmenu for its own screen; the compiled decoration named and used by KWin;
+  `ensure-topbars.js` adds nothing on one screen; with EIS input on 20, 60 and 50 files: the band
+  selects, Del trashes, Ctrl+Z restores, F2 renames, Ctrl-click adds one, Shift-click a range, a
+  drag moves an icon.
+- `ly-2` (19/19, two outputs): a top bar on each screen (the second one with app name, menu and
+  clock pill only), dock and cards on the primary; the primary output disabled (lid closed): the
+  remaining screen has exactly one top bar with tray and quick settings, the dock and the cards;
+  back to two screens with a bar each; M24: font, cursor, buttons and the compiled decoration
+  survive Dark, Light, Dark through `plasma-apply-lookandfeel`; plasmafusionrc untouched; panels
+  unchanged.
+- `ly-3` (6/6): the decoration plugin hidden with bwrap: KWin draws Breeze, then the login check
+  picks Aurorae `__aurorae__svg__PlasmaFusionDark` with no notification, and KWin draws it.
+- Matrix subset on the same stage: M01, M10, M12, M23 pass. M09 and M14 fail only on the portrait
+  top bar (quick settings 16 px past the 900 px edge; 46 px before LAYOUT-1): TOP-2's width
+  budget. M18 fails only because the launcher opens on the primary screen: LAUNCH-1.
+- Splash rendered offscreen at 1440 x 900, 900 x 1440 (portrait background, emblem 0.75) and
+  1366 x 768 (0.85).
+- Perf gate (`tools/tests/perf/run.sh`, 3 quiet runs per arm, 1920 x 1200 at 4/3, exclusive host;
+  HEAD 024570a's stage against this one; `gate.py --baseline` HEAD's `result.json`): no regression.
+  Idle frames 0.07 (0.03..0.17) /s against 0.17 (0.07..0.17), plasmashell idle CPU 0.47 % against
+  0.57 % (budget: at most +0.02 frames/s and +0.1 point); plasmashell PSS after settle 200 against
+  196 MiB and GEM 138 against 136 MiB with an empty desktop; KWin RSS 278 against 306 MiB. Alt+Tab
+  animation done 566 (543..587) against 513 (510..551) ms, within the gate's noise (not a layout
+  change; the open Alt+Tab follow-up).
+- **Memory with desktop icons (over budget, owner decision)**: plasmashell with 50 files on the
+  desktop against the pre-LAYOUT-1 desktop (no icons), two sessions per arm: anonymous memory
+  +31 and +67 MiB (PSS +38 / +69), GEM +24 and +15 MiB; the plan's budget is +15 MiB PSS and
+  +10 MiB GEM. Folder View with no files costs about +2 MiB; switching previews off does not help
+  (+60 / +41). Stock Plasma (no Plasma Fusion) shows the same: 0 to 50 files +49 / +50 MiB
+  anonymous, +47 / +36 MiB GEM. The cost is upstream Folder View's per-icon cost, not the layout's;
+  the budget cannot be met with Folder View. Options: keep the icons (decision M1), or ship icons
+  off by default with KCM-1's "Desktop icons" switch.

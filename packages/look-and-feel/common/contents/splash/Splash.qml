@@ -28,6 +28,10 @@ Rectangle {
 
     color: "#0b0e1b"
 
+    // The emblem and its place scale with the screen, as on the board at 1440 x 900 (ADAPTIVE
+    // 5.11): 380 px x clamp(min(W / 1440, H / 900), 0.75, 1.4).
+    readonly property real emblemScale: Math.max(0.75, Math.min(1.4, Math.min(width / 1440, height / 900)))
+
     // Fraction of the bar for each stage; the bar never runs backwards.
     readonly property real stageProgress: stage <= 1 ? 0.05 : Math.min(1, (stage - 1) / 5)
     readonly property real nextStageProgress: stage <= 1 ? 0.2 : Math.min(1, stage / 5)
@@ -77,10 +81,11 @@ Rectangle {
         easing.type: Easing.OutCubic
     }
 
-    // Pre-blurred Dusk Ridge wallpaper (generated from the board at build time).
+    // Pre-blurred Dusk Ridge wallpaper (generated from the board at build time); on a portrait
+    // screen the portrait render, which keeps the sun in view.
     Image {
         anchors.fill: parent
-        source: "images/background.png"
+        source: root.height > root.width ? "images/background-portrait.png" : "images/background.png"
         fillMode: Image.PreserveAspectCrop
         asynchronous: false
         cache: false
@@ -96,13 +101,15 @@ Rectangle {
         anchors.fill: parent
         opacity: 0
 
-        // Logo, rings and orbiting dots; centred 70 px above the middle of the screen.
+        // Logo, rings and orbiting dots; centred 70 px above the middle of the screen (both at the
+        // board's size; scaled about their centre with the screen).
         Item {
             id: emblem
             width: 380
             height: 380
             x: Math.round((root.width - width) / 2)
-            y: Math.round(root.height / 2 - 70 - height / 2)
+            y: Math.round(root.height / 2 - 70 * root.emblemScale - height / 2)
+            scale: root.emblemScale
 
             Rectangle {
                 anchors.centerIn: parent
@@ -181,7 +188,7 @@ Rectangle {
         Column {
             id: greeting
             x: 0
-            y: Math.round(root.height / 2 + 160)
+            y: Math.round(root.height / 2 + 160 * root.emblemScale)
             width: root.width
             spacing: m.px(18)
 

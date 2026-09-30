@@ -1,0 +1,22 @@
+{
+    "KPackageStructure": "Plasma/LayoutTemplate",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "",
+        "Description": "The Plasma Fusion dock: pinned and running apps in a floating bar at the bottom",
+        "EnabledByDefault": true,
+        "Id": "org.plasmafusion.panel.dock",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Dock",
+        "Website": "https://www.kde.org/plasma-desktop"
+    },
+    "X-Plasma-ContainmentCategories": [
+        "panel"
+    ],
+    "X-Plasma-Shell": "plasmashell"
+}

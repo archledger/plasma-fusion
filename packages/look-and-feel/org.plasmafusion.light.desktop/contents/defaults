@@ -20,9 +20,12 @@ Theme=PlasmaFusion
 [plasmarc][Theme]
 name=plasma-fusion-light
 
+# The compiled decoration (plasma-fusion-decoration), with no Aurorae theme. Where the plugin is
+# missing, the login check (tools/device/gate) chooses the matching Aurorae theme instead
+# (__aurorae__svg__PlasmaFusionLight, or ...-Left for left circles) and switches back once it is installed.
 [kwinrc][org.kde.kdecoration2]
-library=org.kde.kwin.aurorae.v2
-theme=__aurorae__svg__PlasmaFusionLight
+library=org.plasmafusion.decoration
+theme=
 NoPlugin=false
 # Applied only while kwinrc [org.kde.kdecoration2] BorderSizeAuto=false (tools/device/fusion-config.sh).
 BorderSize=None
@@ -39,5 +42,6 @@ Theme=org.plasmafusion.dark.desktop
 [Wallpaper]
 Image=PlasmaFusion
 
+# Folder View: desktop icons from ~/Desktop (BACKLOG M1); the layout script sets its keys.
 [Desktop][org.kde.plasma.desktop]
-Containment=org.kde.desktopcontainment
+Containment=org.kde.plasma.folder

@@ -6,13 +6,17 @@
     SPDX-License-Identifier: GPL-2.0-or-later
 
     Top bar: a 34 px, full-width, non-floating panel at the top edge (34 px at the design's
-    9.75 pt UI font, scaled with the user's text size at layout time):
-        app name | global menu | spacer | clock pill | spacer | system tray | quick settings
+    9.75 pt UI font, scaled with the user's text size at layout time), solid next to a maximized
+    window and frosted over the desktop (owner decision 5):
+        app name | global menu | spacer | clock pill | spacer | system tray | pen | quick settings
+    Every other screen gets its own top bar with the app name, the global menu of its own windows
+    and the clock pill (owner decision 8; ensure-topbars.js does the same for screens added later).
     Dock: a floating, fit-content, centred panel at the bottom edge, 88 px thick
         (72 px of visible dock plus 16 px of transparent headroom that the Plasma style keeps
         clear, so magnified icons can grow above the dock), hidden when a window covers it.
-    Desktop: the "Desktop" containment with weather, calendar and CPU/memory cards in a column
-        on the right, drawn on the standard background so the wallpaper blur applies.
+    Desktop: a Folder View (desktop icons from ~/Desktop in the left column) with weather,
+        calendar and CPU/memory cards in a column on the right, drawn on the standard background so
+        the wallpaper blur applies; in portrait the first two cards sit side by side under the bar.
 
     Every Plasma Fusion widget falls back to a stock widget when it is not installed, so the
     layout is never left empty.
@@ -68,6 +72,18 @@ var TRAY_ITEMS_UNLOADED = [
     "org.kde.plasma.weather"
 ];
 
+// Tray items hidden the same way (disabledStatusNotifiers and hiddenItems), so the tray has no
+// expander arrow (round 2): vaults, removable devices, display configuration and printers stay
+// passive most of the time and would only sit behind the arrow; the input-method item because
+// quick settings has its own keyboard button (TABLET 4.3). They stay loaded.
+var TRAY_ITEMS_HIDDEN = [
+    "org.kde.plasma.vault",
+    "org.kde.plasma.devicenotifier",
+    "org.kde.kscreen",
+    "org.kde.plasma.printmanager",
+    "org.kde.plasma.manage-inputmethod"
+];
+
 // A string-list key of an applet's configuration as an array (the scripting engine returns a
 // list, or a comma-separated string for a key it cannot type).
 function readList(applet, key) {
@@ -106,6 +122,17 @@ function addFirst(container, candidates) {
     return null;
 }
 
+// The stock global menu shows the menu of the active window of its own screen only (its default,
+// allScreens=true, puts the menu of a window on screen 2 into screen 1's bar; ADAPTIVE 6).
+function appMenuForOwnScreen(menu) {
+    if (menu) {
+        menu.currentConfigGroup = ["Appearance"];
+        menu.writeConfig("allScreens", false);
+        menu.currentConfigGroup = [];
+    }
+    return menu;
+}
+
 /* ---------- top bar ---------- */
 
 var topBar = new Panel;
@@ -121,7 +148,8 @@ topBar.floating = false;
 topBar.lengthMode = "fill";
 topBar.alignment = "center";
 topBar.hiding = "none";
-topBar.opacity = "translucent";
+// Solid while a window is maximized or touches it, frosted over the desktop (owner decision 5).
+topBar.opacity = "adaptive";
 
 var hasAppName = installed("org.plasmafusion.appname");
 var hasLauncher = installed("org.plasmafusion.launcher");
@@ -135,7 +163,7 @@ if (hasAppName) {
 } else {
     launcherPlaced = addFirst(topBar, ["org.plasmafusion.launcher", "org.kde.plasma.kickoff"]) !== null && hasLauncher;
 }
-addFirst(topBar, ["org.kde.plasma.appmenu"]);
+appMenuForOwnScreen(addFirst(topBar, ["org.kde.plasma.appmenu"]));
 addFirst(topBar, ["org.kde.plasma.panelspacer"]);
 
 // Centre: workspace dots, date and time. Two expanding spacers keep it on the screen centre.
@@ -155,13 +183,17 @@ addFirst(topBar, ["org.kde.plasma.panelspacer"]);
 // Right: the stock tray for application status icons (StatusNotifierItems, shown as usual),
 // then the quick-settings status pill.
 var tray = addFirst(topBar, ["org.kde.plasma.systemtray"]);
+// The pen menu (PEN-1), hidden in laptop posture; its Meta+Shift+W is set by fusion-config.sh --pen,
+// not here. Skipped while the pen widget is not installed.
+if (installed("org.plasmafusion.pen")) {
+    addFirst(topBar, ["org.plasmafusion.pen"]);
+}
 var quickSettings = addFirst(topBar, ["org.plasmafusion.quicksettings"]);
 if (tray) {
     tray.currentConfigGroup = ["General"];
-    if (quickSettings) {
-        tray.writeConfig("disabledStatusNotifiers", TRAY_ITEMS_REPLACED);
-        tray.writeConfig("hiddenItems", TRAY_ITEMS_REPLACED);
-    }
+    var trayOff = TRAY_ITEMS_HIDDEN.concat(quickSettings ? TRAY_ITEMS_REPLACED : []);
+    tray.writeConfig("disabledStatusNotifiers", trayOff);
+    tray.writeConfig("hiddenItems", trayOff);
     // The tray may or may not have enabled its default items yet: either way the unloaded ones
     // end up known (never enabled again) and out of extraItems.
     var knownItems = readList(tray, "knownItems");
@@ -212,7 +244,55 @@ if (!addFirst(dock, ["org.plasmafusion.dock"])) {
     addFirst(dock, ["org.kde.plasma.icontasks", "org.kde.plasma.taskmanager"]);
 }
 
+/* ---------- other screens ---------- */
+
+// Every other screen gets a top bar of its own: app name, global menu, clock pill (owner decision 8).
+// The primary screen keeps the tray, quick settings, the dock and the cards. The same bar is added
+// to screens connected later by ensure-topbars.js (fusion-config.sh --screens).
+// The primary screen is screen 0 in Plasma 6 (a panel created here has no screen yet: its
+// `screen` is not 0 while the script runs, so it cannot tell which screen it is on).
+for (var sc = 1; sc < screenCount; ++sc) {
+    var bar = new Panel;
+    bar.screen = sc;
+    ConfigFile(ConfigFile("plasmashellrc", "PlasmaViews"), "Panel " + bar.id).writeEntry("floatingApplets", 1);
+    bar.location = "top";
+    bar.height = TOP_BAR_THICKNESS;
+    bar.floating = false;
+    bar.lengthMode = "fill";
+    bar.alignment = "center";
+    bar.hiding = "none";
+    bar.opacity = "adaptive";
+    addFirst(bar, ["org.plasmafusion.appname", "org.kde.plasma.kickoff"]);
+    appMenuForOwnScreen(addFirst(bar, ["org.kde.plasma.appmenu"]));
+    addFirst(bar, ["org.kde.plasma.panelspacer"]);
+    if (!addFirst(bar, ["org.plasmafusion.clockpill"])) {
+        addFirst(bar, ["org.kde.plasma.digitalclock"]);
+    }
+    addFirst(bar, ["org.kde.plasma.panelspacer"]);
+}
+
 /* ---------- desktop ---------- */
+
+// The desktop is a Folder View (the Global Theme's defaults name org.kde.plasma.folder) showing
+// ~/Desktop in the left column, as BACKLOG M1 decided: sorted by hand (sortMode -1), in columns
+// from the top left, 48 px icons, no folder pop-ups or tooltips, selection markers and type-ahead.
+// Thumbnails only from thumbnailers that are installed.
+var FOLDER_KEYS = { url: "desktop:/", sortMode: -1, arrangement: 1, alignment: 0, iconSize: 2, popups: false,
+                    toolTips: false, selectionMarkers: true, useTypeAhead: true };
+var PREVIEWS = ["imagethumbnail", "jpegthumbnail", "svgthumbnail", "gsthumbnail", "opendocumentthumbnail", "ffmpegthumbs"];
+var PLUGIN_DIRS = ["/usr/lib64/qt6/plugins", "/usr/lib/qt6/plugins", "/usr/lib/x86_64-linux-gnu/qt6/plugins"];
+function installedPreviews() {
+    var out = [];
+    for (var i = 0; i < PREVIEWS.length; ++i) {
+        for (var d = 0; d < PLUGIN_DIRS.length; ++d) {
+            if (fileExists(PLUGIN_DIRS[d] + "/kf6/thumbcreator/" + PREVIEWS[i] + ".so")) {
+                out.push(PREVIEWS[i]);
+                break;
+            }
+        }
+    }
+    return out;
+}
 
 // Desktop cards in a column on the right, as on the board: weather, calendar, CPU/memory.
 // The Plasma Fusion card widgets are drawn at the board's card size (192 px wide; 122, 188 and 92
@@ -232,6 +312,9 @@ if (!addFirst(dock, ["org.plasmafusion.dock"])) {
 var GRID_UNIT = 2 * Math.round(9 * TS);
 var CELL = 16;
 var CARD_PADDING = 14;  // margins of the Plasma style's card background (widgets/background)
+// The dock does not reserve space (it hides over windows), so the cards leave its area free by
+// hand: 88 px of dock plus the 16 px floating gap (ADAPTIVE 5.9).
+var DOCK_AREA = 104;
 function cells(px) { return Math.ceil(px / CELL) * CELL; }
 // A Fusion card: its content box at this text size plus the frame.
 function cardSize(width, height) { return { width: cells(width * TS + 2 * CARD_PADDING), height: cells(height * TS + 2 * CARD_PADDING) }; }
@@ -244,8 +327,8 @@ var CARDS = [
      { plugin: "org.kde.plasma.weather", width: STOCK_WIDTH, height: cells(GRID_UNIT * 10 + 2 * CARD_PADDING) }],
     [{ plugin: "org.plasmafusion.calendarcard", width: CALENDAR_CARD.width, height: CALENDAR_CARD.height },
      { plugin: "org.kde.plasma.calendar", width: STOCK_WIDTH, height: cells(GRID_UNIT * 14 + 2 * CARD_PADDING) }],
-    [{ plugin: "org.plasmafusion.systemcard", width: SYSTEM_CARD.width, height: SYSTEM_CARD.height },
-     { plugin: "org.kde.plasma.systemmonitor", width: STOCK_WIDTH, height: cells(GRID_UNIT * 6 + 2 * CARD_PADDING) }]
+    [{ plugin: "org.plasmafusion.systemcard", width: SYSTEM_CARD.width, height: SYSTEM_CARD.height, monitor: true },
+     { plugin: "org.kde.plasma.systemmonitor", width: STOCK_WIDTH, height: cells(GRID_UNIT * 6 + 2 * CARD_PADDING), monitor: true }]
 ];
 
 // CPU and memory card: horizontal bars, CPU in teal, memory in blue (board colours).
@@ -272,17 +355,88 @@ function configure(widget, groups) {
     widget.currentConfigGroup = [];
 }
 
+// Card places for one screen shape (logical W x H of the whole screen): a right-hand column in
+// landscape; in portrait the first two cards side by side under the bar, right-aligned, the rest
+// under the right one. Coordinates are relative to the area below the top bar. A card that does not
+// fit above the dock area is left out, the CPU/memory card first (ADAPTIVE 5.9): a desktop widget
+// that collides is moved to any free spot by Plasma, which scattered the cards (c01).
+function cardPlaces(cards, width, height) {
+    var free = height - TOP_BAR_THICKNESS - DOCK_AREA - 2 * CELL;
+    var list = cards.slice();
+    function total(l, portrait) {
+        if (!portrait) {
+            var h = 0;
+            for (var i = 0; i < l.length; ++i) h += l[i].height + (i > 0 ? CELL : 0);
+            return h;
+        }
+        var first = Math.max(l[0] ? l[0].height : 0, l[1] ? l[1].height : 0), rest = 0;
+        for (var j = 2; j < l.length; ++j) rest += CELL + l[j].height;
+        return first + rest;
+    }
+    var portrait = height > width;
+    while (list.length > 0 && total(list, portrait) > free) {
+        var drop = -1;
+        for (var k = list.length - 1; k >= 0; --k) if (list[k].monitor) { drop = k; break; }
+        list.splice(drop >= 0 ? drop : list.length - 1, 1);
+    }
+    var places = [];
+    if (!portrait) {
+        var y = CELL;
+        for (var c = 0; c < list.length; ++c) {
+            places.push({ card: list[c], x: Math.floor((width - CELL - list[c].width) / CELL) * CELL, y: y });
+            y += list[c].height + CELL;
+        }
+        return places;
+    }
+    var right = list.length > 1 ? list[1] : list[0];
+    if (!right) {
+        return places;
+    }
+    var xr = Math.floor((width - CELL - right.width) / CELL) * CELL;
+    var yNext = CELL + right.height + CELL;
+    if (list.length > 1) {
+        var left = list[0];
+        places.push({ card: left, x: Math.max(Math.floor((xr - CELL - left.width) / CELL) * CELL, 0), y: CELL });
+        yNext = CELL + Math.max(left.height, right.height) + CELL;
+    }
+    places.push({ card: right, x: xr, y: CELL });
+    for (var r = 2; r < list.length; ++r) {
+        places.push({ card: list[r], x: Math.floor((width - CELL - list[r].width) / CELL) * CELL, y: yNext });
+        yNext += list[r].height + CELL;
+    }
+    return places;
+}
+function geometries(places) {
+    var value = "";
+    for (var i = 0; i < places.length; ++i) {
+        if (places[i].widget) {
+            value += "Applet-" + places[i].widget.id + ":" + places[i].x + "," + places[i].y + ","
+                   + places[i].card.width + "," + places[i].card.height + ",0;";
+        }
+    }
+    return value;
+}
+
 var desktopsArray = desktopsForActivity(currentActivity());
 var cardDesktop = null;
+var previews = installedPreviews();
 for (var j = 0; j < desktopsArray.length; j++) {
     var desktop = desktopsArray[j];
     desktop.wallpaperPlugin = "org.kde.image";
     // The wallpaper is left unset on purpose: Plasma then shows the Global Theme's default
     // (PlasmaFusion), and its light or dark image follows the Plasma style.
-    if (desktop.type !== "org.kde.desktopcontainment") {
+    if (desktop.type !== "org.kde.plasma.folder") {
         print("Plasma Fusion layout: desktop " + desktop.id + " is " + desktop.type
               + "; restart plasmashell after applying the theme, then reset the layout");
     }
+    desktop.currentConfigGroup = ["General"];
+    for (var fk in FOLDER_KEYS) {
+        desktop.writeConfig(fk, FOLDER_KEYS[fk]);
+    }
+    if (previews.length > 0) {
+        desktop.writeConfig("previewPlugins", previews);
+    }
+    desktop.currentConfigGroup = [];
     // The cards go on the primary screen (screen 0), or the first screen there is.
     if (desktop.screen >= 0 && (cardDesktop === null || desktop.screen < cardDesktop.screen)) {
         cardDesktop = desktop;
@@ -291,9 +445,8 @@ for (var j = 0; j < desktopsArray.length; j++) {
 
 if (cardDesktop !== null) {
     var desktop = cardDesktop;
-    // Coordinates are relative to the area left free by the top bar; each card is right-aligned.
     var geometry = screenGeometry(desktop.screen);
-    var y = CELL;
+    var chosen = [];
     for (var c = 0; c < CARDS.length; ++c) {
         var card = null;
         for (var k = 0; k < CARDS[c].length && card === null; ++k) {
@@ -306,19 +459,49 @@ if (cardDesktop !== null) {
                   + " is installed, card skipped");
             continue;
         }
-        var x = Math.floor((geometry.width - CELL - card.width) / CELL) * CELL;
-        var isMonitor = card.plugin === "org.kde.plasma.systemmonitor";
+        chosen.push(card);
+    }
+    var W = Math.round(geometry.width), H = Math.round(geometry.height);
+    var here = cardPlaces(chosen, W, H);
+    for (var h = 0; h < here.length; ++h) {
         // A new desktop widget's card takes exactly this rectangle (its padding is added later,
         // inside it).
-        var widget = desktop.addWidget(card.plugin, x, y, card.width, card.height);
+        var widget = desktop.addWidget(here[h].card.plugin, here[h].x, here[h].y, here[h].card.width, here[h].card.height);
         if (!widget || typeof widget !== "object" || widget.type === undefined) {
-            print("Plasma Fusion layout: could not add " + card.plugin);
+            print("Plasma Fusion layout: could not add " + here[h].card.plugin);
             continue;
         }
+        here[h].widget = widget;
         widget.userBackgroundHints = "StandardBackground";
-        if (isMonitor) {
+        if (here[h].card.monitor && here[h].card.plugin === "org.kde.plasma.systemmonitor") {
             configure(widget, MONITOR_CONFIG);
         }
-        y += card.height + CELL;
+    }
+    // Places for the other orientation and for the ThinkPad X13's panel (1440 x 900 at 4/3), under
+    // the containment's per-size keys and its landscape/portrait fallbacks (desktop containment
+    // main.qml: ItemGeometries-WxH, then ItemGeometriesHorizontal / ItemGeometriesVertical). A card
+    // left out for one shape has no entry there and keeps its last place.
+    function placesFor(w, hh) {
+        var p = cardPlaces(chosen, w, hh);
+        for (var i = 0; i < p.length; ++i) {
+            for (var n = 0; n < here.length; ++n) {
+                if (here[n].card === p[i].card) {
+                    p[i].widget = here[n].widget;
+                }
+            }
+        }
+        return p;
+    }
+    var landscape = W >= H ? [W, H] : [H, W];
+    var shapes = [[landscape[0], landscape[1]], [landscape[1], landscape[0]], [1440, 900], [900, 1440]];
+    desktop.currentConfigGroup = [];
+    for (var sh = 0; sh < shapes.length; ++sh) {
+        var value = geometries(placesFor(shapes[sh][0], shapes[sh][1]));
+        desktop.writeConfig("ItemGeometries-" + shapes[sh][0] + "x" + shapes[sh][1], value);
+        if (sh === 0) {
+            desktop.writeConfig("ItemGeometriesHorizontal", value);
+        } else if (sh === 1) {
+            desktop.writeConfig("ItemGeometriesVertical", value);
+        }
     }
 }
