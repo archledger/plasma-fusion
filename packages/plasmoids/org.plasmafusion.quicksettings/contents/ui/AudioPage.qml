@@ -15,7 +15,8 @@ ColumnLayout {
 
     required property var backend
     required property FusionPalette pal
-    property real listMaxHeight: 230
+    required property FusionMetrics metrics
+    property real listMaxHeight: metrics.px(230)
 
     signal back()
 
@@ -30,12 +31,13 @@ ColumnLayout {
         return /head(phone|set)/i.test(name) ? Icons.headphones : Icons.speaker + Icons.wave1 + Icons.wave2;
     }
 
-    spacing: 12
+    spacing: metrics.px(12)
 
     PageHeader {
         id: header
         Layout.fillWidth: true
         pal: page.pal
+        metrics: page.metrics
         title: i18nc("@title", "Sound output")
         onBack: page.back()
     }
@@ -48,7 +50,7 @@ ColumnLayout {
         Layout.maximumHeight: contentHeight
         visible: count > 0
         clip: true
-        spacing: 2
+        spacing: page.metrics.px(2)
         interactive: contentHeight > height
         boundsBehavior: Flickable.StopAtBounds
         model: page.backend.audio.sinkModel
@@ -59,6 +61,7 @@ ColumnLayout {
 
             width: ListView.view.width
             pal: page.pal
+            metrics: page.metrics
             text: model.Description || model.Name || ""
             iconPath: page.portIcon(model.PulseObject)
             selected: !!(model.PulseObject && model.PulseObject.default)
@@ -71,8 +74,9 @@ ColumnLayout {
     FText {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.minimumHeight: 44
+        Layout.minimumHeight: page.metrics.px(44)
         pal: page.pal
+        metrics: page.metrics
         visible: !list.visible
         horizontalAlignment: Text.AlignHCenter
         color: page.pal.secondary
@@ -95,9 +99,10 @@ ColumnLayout {
         }
         TextButton {
             pal: page.pal
-            implicitHeight: 32
-            radius: 16
-            sidePadding: 14
+            metrics: page.metrics
+            implicitHeight: page.metrics.px(32)
+            radius: height / 2
+            sidePadding: page.metrics.px(14)
             fill: page.pal.overlay(0.08)
             fontSize: 12.5
             iconPath: Icons.settingsSmall

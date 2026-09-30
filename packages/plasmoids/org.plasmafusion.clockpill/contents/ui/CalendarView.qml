@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.plasmoid
 
 import "../code/formats.js" as Formats
 
@@ -33,9 +34,17 @@ FocusScope {
     Component.onCompleted: showToday()
     readonly property bool showingToday: shown.getFullYear() === now.getFullYear() && shown.getMonth() === now.getMonth()
 
-    readonly property int contentWidth: 280
-    readonly property int cellWidth: 40
-    readonly property int cellHeight: 32
+    // Text scale and pixel grid of the pop-up window (docs/parts/shell-topbar.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
+
+    // Board: 280 px wide, day cells 40 x 32 in six rows, scaled with the text. The cells divide
+    // the snapped width and grid height, so the grid stays exactly as wide as the pop-up.
+    readonly property real contentWidth: m.px(280)
+    readonly property real cellWidth: contentWidth / 7
+    readonly property real cellHeight: m.px(6 * 32) / 6
 
     // Board colours (Main / MainLight calendar and weather cards).
     readonly property color textColor: Kirigami.Theme.textColor
@@ -151,6 +160,7 @@ FocusScope {
         // ---- Today
         FusionText {
             Layout.fillWidth: true
+            metrics: m
             px: 12
             weight: 700
             color: view.secondary
@@ -159,8 +169,9 @@ FocusScope {
         }
         FusionText {
             Layout.fillWidth: true
-            Layout.topMargin: 2
-            family: "Space Grotesk"
+            Layout.topMargin: m.px(2)
+            metrics: m
+            display: true
             px: 24
             weight: 600
             color: view.textColor
@@ -170,8 +181,8 @@ FocusScope {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.topMargin: 12
-            Layout.bottomMargin: 10
+            Layout.topMargin: m.px(12)
+            Layout.bottomMargin: m.px(10)
             implicitHeight: 1
             color: view.tint(0.08)
         }
@@ -179,10 +190,11 @@ FocusScope {
         // ---- Month title and navigation
         RowLayout {
             Layout.fillWidth: true
-            spacing: 2
+            spacing: m.px(2)
 
             FusionText {
                 Layout.fillWidth: true
+                metrics: m
                 px: 13
                 weight: 800
                 color: view.textColor
@@ -195,9 +207,9 @@ FocusScope {
             FlatButton {
                 id: todayButton
                 visible: !view.showingToday
-                Layout.preferredWidth: todayLabel.implicitWidth + 20
-                Layout.preferredHeight: 26
-                Layout.rightMargin: 4
+                Layout.preferredWidth: todayLabel.implicitWidth + m.px(20)
+                Layout.preferredHeight: m.px(26)
+                Layout.rightMargin: m.px(4)
                 label: i18nc("@action:button go to the current month", "Today")
                 onTriggered: view.showToday()
 
@@ -209,6 +221,7 @@ FocusScope {
                 FusionText {
                     id: todayLabel
                     anchors.centerIn: parent
+                    metrics: m
                     px: 12
                     weight: 700
                     color: view.textColor
@@ -218,12 +231,13 @@ FocusScope {
 
             FlatButton {
                 id: previousButton
-                Layout.preferredWidth: 26
-                Layout.preferredHeight: 26
+                Layout.preferredWidth: m.px(26)
+                Layout.preferredHeight: m.px(26)
                 label: i18nc("@action:button", "Previous month")
                 onTriggered: view.moveMonths(-1)
                 Chevron {
                     anchors.centerIn: parent
+                    size: m.px(16)
                     color: view.secondary
                     next: Application.layoutDirection === Qt.RightToLeft
                 }
@@ -231,12 +245,13 @@ FocusScope {
 
             FlatButton {
                 id: nextButton
-                Layout.preferredWidth: 26
-                Layout.preferredHeight: 26
+                Layout.preferredWidth: m.px(26)
+                Layout.preferredHeight: m.px(26)
                 label: i18nc("@action:button", "Next month")
                 onTriggered: view.moveMonths(1)
                 Chevron {
                     anchors.centerIn: parent
+                    size: m.px(16)
                     color: view.secondary
                     next: Application.layoutDirection !== Qt.RightToLeft
                 }
@@ -245,8 +260,8 @@ FocusScope {
 
         // ---- Weekday initials
         Row {
-            Layout.topMargin: 8
-            Layout.bottomMargin: 2
+            Layout.topMargin: m.px(8)
+            Layout.bottomMargin: m.px(2)
             LayoutMirroring.enabled: Application.layoutDirection === Qt.RightToLeft
             Repeater {
                 model: 7
@@ -254,8 +269,9 @@ FocusScope {
                     required property int index
                     readonly property int day: (view.weekStart + index) % 7
                     width: view.cellWidth
-                    height: 20
+                    height: m.px(20)
                     horizontalAlignment: Text.AlignHCenter
+                    metrics: m
                     px: 10.5
                     weight: 700
                     color: view.tertiary
@@ -289,15 +305,16 @@ FocusScope {
                     Rectangle {
                         visible: cell.today
                         anchors.centerIn: parent
-                        width: 28
-                        height: 28
-                        radius: 14
+                        width: m.px(28)
+                        height: width
+                        radius: width / 2
                         antialiasing: true
                         color: view.todayFill
                     }
                     FusionText {
                         anchors.fill: parent
                         horizontalAlignment: Text.AlignHCenter
+                        metrics: m
                         px: 12.5
                         weight: cell.today ? 800 : 500
                         color: cell.today ? "#ffffff" : cell.weekend ? view.tertiary : view.dayColor

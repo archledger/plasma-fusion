@@ -13,11 +13,14 @@ import "components/Icons.js" as Icons
 
 // Main page of the pop-up (Quick Settings board): battery chip and header
 // buttons, volume and brightness sliders, six tiles and the media card.
+// Text, the rows and chips that hold it and the gaps between them follow the user's text size
+// (`metrics`); the round icon buttons, sliders and the album art keep their board sizes.
 ColumnLayout {
     id: page
 
     required property var backend
     required property FusionPalette pal
+    required property FusionMetrics metrics
 
     signal openPage(string name, Item opener)
 
@@ -26,36 +29,37 @@ ColumnLayout {
     readonly property alias bluetoothDetails: bluetoothTile.detailsButton
     readonly property alias audioDetails: audioChevron
 
-    spacing: 14
+    spacing: metrics.px(14)
 
     // ---------------------------------------------------------------- header row
     RowLayout {
         Layout.fillWidth: true
-        Layout.preferredHeight: 34
+        Layout.preferredHeight: Math.max(34, page.metrics.px(34))
         spacing: 6
 
         Rectangle {
             id: batteryChip
             visible: page.backend.battery.present
-            Layout.preferredHeight: 34
-            Layout.preferredWidth: chipRow.implicitWidth + 24
-            radius: 17
+            Layout.preferredHeight: page.metrics.px(34)
+            Layout.preferredWidth: chipRow.implicitWidth + page.metrics.px(24)
+            radius: height / 2
             color: chipHover.hovered ? page.pal.overlay(0.1) : page.pal.overlay(0.07)
 
             Row {
                 id: chipRow
                 anchors.centerIn: parent
-                spacing: 6
+                spacing: page.metrics.px(6)
                 BatteryGlyph {
                     anchors.verticalCenter: parent.verticalCenter
                     pal: page.pal
-                    size: 18
+                    size: page.metrics.px(18)
                     percent: page.backend.battery.percent
                     charging: page.backend.battery.charging
                 }
                 FText {
                     anchors.verticalCenter: parent.verticalCenter
                     pal: page.pal
+                    metrics: page.metrics
                     text: i18nc("@info battery charge", "%1%", page.backend.battery.percent)
                     font.weight: Font.ExtraBold
                 }
@@ -227,14 +231,15 @@ ColumnLayout {
     GridLayout {
         Layout.fillWidth: true
         columns: 2
-        rowSpacing: 10
-        columnSpacing: 10
+        rowSpacing: page.metrics.px(10)
+        columnSpacing: page.metrics.px(10)
         uniformCellWidths: true
 
         Tile {
             id: wifiTile
             Layout.fillWidth: true
             pal: page.pal
+            metrics: page.metrics
             title: i18nc("@title tile", "Wi‑Fi")
             subtitle: page.backend.net.subtitle
             iconPath: Icons.wifi
@@ -255,6 +260,7 @@ ColumnLayout {
             id: bluetoothTile
             Layout.fillWidth: true
             pal: page.pal
+            metrics: page.metrics
             title: i18nc("@title tile", "Bluetooth")
             subtitle: page.backend.bt.subtitle
             iconPath: Icons.bluetooth
@@ -274,6 +280,7 @@ ColumnLayout {
         Tile {
             Layout.fillWidth: true
             pal: page.pal
+            metrics: page.metrics
             title: i18nc("@title tile", "Night light")
             subtitle: page.backend.night.subtitle
             iconPath: Icons.moon
@@ -286,6 +293,7 @@ ColumnLayout {
         Tile {
             Layout.fillWidth: true
             pal: page.pal
+            metrics: page.metrics
             title: i18nc("@title tile", "Do not disturb")
             subtitle: page.backend.dnd.subtitle
             iconPath: Icons.bellOff
@@ -296,6 +304,7 @@ ColumnLayout {
         Tile {
             Layout.fillWidth: true
             pal: page.pal
+            metrics: page.metrics
             title: i18nc("@title tile", "Power mode")
             subtitle: page.backend.profile.subtitle
             iconPath: Icons.gauge
@@ -307,6 +316,7 @@ ColumnLayout {
         Tile {
             Layout.fillWidth: true
             pal: page.pal
+            metrics: page.metrics
             title: i18nc("@title tile", "Dark style")
             subtitle: page.backend.darkStyle.subtitle
             iconPath: Icons.contrast
@@ -319,7 +329,7 @@ ColumnLayout {
     // ---------------------------------------------------------------- media card
     Rectangle {
         Layout.fillWidth: true
-        Layout.preferredHeight: 64
+        Layout.preferredHeight: Math.max(64, mediaText.implicitHeight + page.metrics.px(20))
         visible: page.backend.media.available
         radius: 16
         color: page.pal.overlay(0.06)
@@ -328,7 +338,7 @@ ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 10
             anchors.rightMargin: 10
-            spacing: 12
+            spacing: page.metrics.px(12)
 
             Item {
                 Layout.preferredWidth: 44
@@ -358,17 +368,20 @@ ColumnLayout {
             }
 
             ColumnLayout {
+                id: mediaText
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: page.metrics.px(2)
                 FText {
                     Layout.fillWidth: true
                     pal: page.pal
+                    metrics: page.metrics
                     text: page.backend.media.title
                     font.weight: Font.ExtraBold
                 }
                 FText {
                     Layout.fillWidth: true
                     pal: page.pal
+                    metrics: page.metrics
                     text: page.backend.media.subtitle
                     visible: text.length > 0
                     color: page.pal.secondary

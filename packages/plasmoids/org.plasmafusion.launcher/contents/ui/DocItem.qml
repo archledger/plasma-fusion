@@ -11,7 +11,8 @@ import Qt.labs.folderlistmodel
 import "../code/launcher.js" as Launcher
 
 // Recent file row: 52 px, radius 12, 34 px coloured type tile, name (13 px, 700) and
-// "Folder · 12 min ago" (11.5 px, muted).
+// "Folder · 12 min ago" (11.5 px, muted). The row height (from the grid), the text and the
+// paddings next to it follow the user's text size; the type tile keeps its size.
 Item {
     id: row
 
@@ -43,6 +44,9 @@ Item {
     // Delegates are reused for other files: forget the previous file's time.
     onUrlChanged: lastUsed = new Date(0)
     readonly property string age: lastUsed.getTime() > 0 && grid && grid.launcher ? grid.launcher.formatAge(lastUsed) : ""
+    function px(v: real): real {
+        return grid && grid.metrics ? grid.metrics.px(v) : v;
+    }
 
     width: grid ? grid.cellWidth - grid.gap : 313
     height: grid ? grid.itemHeight : 52
@@ -67,7 +71,7 @@ Item {
 
     Rectangle {
         id: typeTile
-        x: 10
+        x: row.px(10)
         anchors.verticalCenter: parent.verticalCenter
         width: 34
         height: 34
@@ -85,18 +89,18 @@ Item {
 
     Column {
         anchors.left: typeTile.right
-        anchors.leftMargin: 12
+        anchors.leftMargin: row.px(12)
         anchors.right: parent.right
-        anchors.rightMargin: 10
+        anchors.rightMargin: row.px(10)
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 2
+        spacing: row.px(2)
 
         FusionText {
             width: parent.width
             text: row.model.display || row.fileName
             elide: Text.ElideMiddle
             color: row.grid ? row.grid.pal.text : "white"
-            family: row.grid ? row.grid.fontFamily : ""
+            metrics: row.grid ? row.grid.metrics : null
             px: 13
             weight: 700
         }
@@ -108,7 +112,7 @@ Item {
             visible: text.length > 0
             text: [row.folderName, row.age].filter(s => s.length > 0).join(" · ")
             color: row.grid ? row.grid.pal.muted : "gray"
-            family: row.grid ? row.grid.fontFamily : ""
+            metrics: row.grid ? row.grid.metrics : null
             px: 11.5
         }
     }

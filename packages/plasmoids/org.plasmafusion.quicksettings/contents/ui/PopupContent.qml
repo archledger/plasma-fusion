@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.plasmoid
 
 import "components"
 
@@ -27,6 +28,14 @@ Item {
         focus: Kirigami.Theme.focusColor
         link: Kirigami.Theme.linkColor
         fontFamily: Kirigami.Theme.defaultFont.family
+    }
+
+    // Text scale and pixel grid of the pop-up window (docs/parts/shell-quicksettings.md,
+    // "Text scale"): gaps, headers and rows next to text follow it; the card padding does not.
+    readonly property alias metrics: fusionMetrics
+    FusionMetrics {
+        id: fusionMetrics
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
     }
 
     // Outer size of the card on the board; the window adds the frame padding.
@@ -112,7 +121,7 @@ Item {
         x: content.innerLeft
         y: content.innerTop
         width: content.width - content.innerLeft - content.innerRight
-        spacing: 14
+        spacing: content.metrics.px(14)
 
         // ---------------------------------------------------------------- pages
         Item {
@@ -127,6 +136,7 @@ Item {
                 width: parent.width
                 backend: content.backend
                 pal: content.pal
+                metrics: content.metrics
                 visible: content.backend.page === "main"
                 opacity: visible ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 150 } }
@@ -160,19 +170,21 @@ Item {
         ColumnLayout {
             id: notifications
             Layout.fillWidth: true
-            spacing: 10
+            spacing: content.metrics.px(10)
             visible: content.backend.page === "main" && content.backend.notif.available
                      && (content.backend.notif.count > 0 || content.backend.showEmptyNotifications)
 
             RowLayout {
+                id: notificationHeader
                 Layout.fillWidth: true
-                Layout.preferredHeight: 26
-                Layout.leftMargin: 4
-                spacing: 8
+                Layout.preferredHeight: content.metrics.px(26)
+                Layout.leftMargin: content.metrics.px(4)
+                spacing: content.metrics.px(8)
 
                 FText {
                     Layout.fillWidth: true
                     pal: content.pal
+                    metrics: content.metrics
                     text: i18nc("@title", "Notifications")
                     px: 14
                     font.weight: Font.ExtraBold
@@ -180,10 +192,11 @@ Item {
                 TextButton {
                     visible: content.backend.notif.count > 0
                     pal: content.pal
-                    implicitHeight: 26
-                    radius: 13
+                    metrics: content.metrics
+                    radius: height / 2
                     fill: content.pal.clearAllFill
                     textColor: content.pal.controlText
+                    implicitHeight: content.metrics.px(26)
                     fontSize: 12
                     text: i18nc("@action:button", "Clear all")
                     onClicked: content.backend.notif.clearAll()
@@ -192,9 +205,10 @@ Item {
 
             FText {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
+                Layout.preferredHeight: content.metrics.px(44)
                 visible: content.backend.notif.count === 0
                 pal: content.pal
+                metrics: content.metrics
                 horizontalAlignment: Text.AlignHCenter
                 color: content.pal.secondary
                 text: content.backend.dnd.active ? i18nc("@info", "No notifications · Do not disturb is on")
@@ -206,10 +220,11 @@ Item {
                 visible: count > 0
                 Layout.fillWidth: true
                 readonly property real available: content.maxContentHeight - content.innerTop - content.innerBottom
-                                                  - pageArea.Layout.preferredHeight - 14 - 26 - 10
-                Layout.preferredHeight: Math.min(contentHeight, Math.max(140, available))
+                                                  - pageArea.Layout.preferredHeight - column.spacing
+                                                  - notificationHeader.Layout.preferredHeight - notifications.spacing
+                Layout.preferredHeight: Math.min(contentHeight, Math.max(content.metrics.px(140), available))
                 clip: true
-                spacing: 10
+                spacing: content.metrics.px(10)
                 interactive: contentHeight > height
                 boundsBehavior: Flickable.StopAtBounds
                 model: content.backend.notif.available ? content.backend.notif.model : null
@@ -217,6 +232,7 @@ Item {
                 delegate: NotificationCard {
                     width: ListView.view.width
                     pal: content.pal
+                    metrics: content.metrics
                     now: content.now
                     onFocusInsideChanged: {
                         if (focusInside) {
@@ -248,6 +264,7 @@ Item {
         WifiPage {
             backend: content.backend
             pal: content.pal
+            metrics: content.metrics
             onBack: content.closePage(false)
         }
     }
@@ -256,6 +273,7 @@ Item {
         BluetoothPage {
             backend: content.backend
             pal: content.pal
+            metrics: content.metrics
             onBack: content.closePage(false)
         }
     }
@@ -264,6 +282,7 @@ Item {
         AudioPage {
             backend: content.backend
             pal: content.pal
+            metrics: content.metrics
             onBack: content.closePage(false)
         }
     }

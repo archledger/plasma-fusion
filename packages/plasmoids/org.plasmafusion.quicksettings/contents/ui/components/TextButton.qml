@@ -4,22 +4,24 @@
 import QtQuick
 import QtQuick.Templates as T
 
-// Rounded text button ("Clear all", "Disconnect", notification actions).
+// Rounded text button ("Clear all", "Disconnect", notification actions). Height, paddings and
+// text follow the user's text size (`metrics`); callers pass board values.
 T.AbstractButton {
     id: button
 
     required property FusionPalette pal
+    required property FusionMetrics metrics
     property bool primary: false
     property real radius: height / 2
-    property real sidePadding: 12
+    property real sidePadding: metrics.px(12)
     property real fontSize: 12
     property int fontWeight: Font.Bold
     property color fill: primary ? pal.accent : pal.overlay(0.1)
     property color textColor: primary ? pal.accentText : pal.text
     property string iconPath: ""
 
-    implicitHeight: 26
-    implicitWidth: label.implicitWidth + 2 * sidePadding + (iconPath.length > 0 ? 20 : 0)
+    implicitHeight: metrics.px(26)
+    implicitWidth: label.implicitWidth + 2 * sidePadding + (iconPath.length > 0 ? metrics.px(20) : 0)
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
     Accessible.name: text
@@ -55,23 +57,24 @@ T.AbstractButton {
         Row {
             id: row
             anchors.centerIn: parent
-            spacing: 6
+            spacing: button.metrics.px(6)
             LineIcon {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: button.iconPath.length > 0
-                size: 14
+                size: button.metrics.px(14)
                 path: button.iconPath
                 color: button.textColor
             }
             FText {
                 id: label
                 pal: button.pal
+                metrics: button.metrics
                 anchors.verticalCenter: parent.verticalCenter
                 text: button.text
                 color: button.textColor
                 px: button.fontSize
                 font.weight: button.fontWeight
-                width: Math.min(implicitWidth, button.width - 2 * button.sidePadding - (button.iconPath.length > 0 ? 20 : 0))
+                width: Math.min(implicitWidth, button.width - 2 * button.sidePadding - (button.iconPath.length > 0 ? button.metrics.px(20) : 0))
             }
         }
     }

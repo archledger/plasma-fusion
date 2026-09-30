@@ -14,10 +14,14 @@ import org.kde.kirigami as Kirigami
 Column {
     id: cards
 
+    required property FusionMetrics metrics
     property Backdrop backdrop: null
     property var groups: []
     property int maximumCards: 3
     property bool showSummaries: false
+
+    // Height of one card: 56 px on the board, scaled with the text.
+    readonly property real cardHeight: metrics.px(56)
 
     spacing: 8
     width: 400
@@ -49,7 +53,7 @@ Column {
 
             backdrop: cards.backdrop
             width: cards.width
-            height: 56
+            height: cards.cardHeight
             radius: 16
 
             Accessible.role: Accessible.ListItem
@@ -57,13 +61,13 @@ Column {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
-                spacing: 12
+                anchors.leftMargin: cards.metrics.px(14)
+                anchors.rightMargin: cards.metrics.px(14)
+                spacing: cards.metrics.px(12)
 
                 Kirigami.Icon {
-                    Layout.preferredWidth: 30
-                    Layout.preferredHeight: 30
+                    Layout.preferredWidth: cards.metrics.px(30)
+                    Layout.preferredHeight: cards.metrics.px(30)
                     source: card.modelData.iconName.length > 0 ? card.modelData.iconName : "preferences-desktop-notification-bell"
                     fallback: "preferences-desktop-notification-bell"
                     roundToIconSize: false
@@ -80,7 +84,7 @@ Column {
                         maximumLineCount: 1
                         color: PfStyle.text
                         font.family: PfStyle.uiFont
-                        font.pixelSize: 13
+                        font.pixelSize: cards.metrics.font(13)
                         font.weight: Font.DemiBold
                         font.styleName: PfStyle.extraBold
                         textFormat: Text.PlainText
@@ -92,7 +96,7 @@ Column {
                         maximumLineCount: 1
                         color: PfStyle.textSecondary
                         font.family: PfStyle.uiFont
-                        font.pixelSize: 12
+                        font.pixelSize: cards.metrics.font(12)
                         textFormat: Text.PlainText
                     }
                 }
@@ -102,7 +106,7 @@ Column {
                     text: card.timeText
                     color: PfStyle.textTertiary
                     font.family: PfStyle.uiFont
-                    font.pointSize: 8.625 // 11.5 px at 96 dpi
+                    font.pointSize: cards.metrics.font(11.5) * 0.75 // 11.5 px at 96 dpi
                     textFormat: Text.PlainText
                 }
             }

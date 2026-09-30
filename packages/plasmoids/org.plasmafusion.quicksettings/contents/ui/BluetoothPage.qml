@@ -16,18 +16,20 @@ ColumnLayout {
 
     required property var backend
     required property FusionPalette pal
-    property real listMaxHeight: 230
+    required property FusionMetrics metrics
+    property real listMaxHeight: metrics.px(230)
 
     signal back()
 
     readonly property Item firstFocusItem: header.backButton
 
-    spacing: 12
+    spacing: metrics.px(12)
 
     PageHeader {
         id: header
         Layout.fillWidth: true
         pal: page.pal
+        metrics: page.metrics
         title: i18nc("@title", "Bluetooth")
         hasSwitch: true
         switchChecked: page.backend.bt.enabled
@@ -39,13 +41,14 @@ ColumnLayout {
     FText {
         Layout.fillWidth: true
         pal: page.pal
-        leftPadding: 4
+        metrics: page.metrics
+        leftPadding: page.metrics.px(4)
         visible: list.visible
         text: i18nc("@title:group", "Devices").toUpperCase()
         color: page.pal.tertiary
         px: 11
         font.weight: Font.ExtraBold
-        font.letterSpacing: 0.88
+        font.letterSpacing: page.metrics.font(0.88)
     }
 
     ListView {
@@ -56,7 +59,7 @@ ColumnLayout {
         Layout.maximumHeight: contentHeight
         visible: page.backend.bt.enabled && count > 0
         clip: true
-        spacing: 2
+        spacing: page.metrics.px(2)
         interactive: contentHeight > height
         boundsBehavior: Flickable.StopAtBounds
         model: page.backend.bt.enabled ? page.backend.bt.devicesModel : null
@@ -67,6 +70,7 @@ ColumnLayout {
 
             width: ListView.view.width
             pal: page.pal
+            metrics: page.metrics
             text: model.DeviceFullName || model.Name || ""
             iconName: model.Icon || "preferences-system-bluetooth"
             selected: !!model.Connected
@@ -92,8 +96,9 @@ ColumnLayout {
     FText {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.minimumHeight: 44
+        Layout.minimumHeight: page.metrics.px(44)
         pal: page.pal
+        metrics: page.metrics
         visible: !list.visible
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
@@ -120,11 +125,12 @@ ColumnLayout {
     }
     RowLayout {
         Layout.fillWidth: true
-        spacing: 8
+        spacing: page.metrics.px(8)
 
         TextButton {
             pal: page.pal
-            implicitHeight: 32
+            metrics: page.metrics
+            implicitHeight: page.metrics.px(32)
             sidePadding: 0
             fill: "transparent"
             textColor: page.pal.link
@@ -138,9 +144,10 @@ ColumnLayout {
         }
         TextButton {
             pal: page.pal
-            implicitHeight: 32
-            radius: 16
-            sidePadding: 14
+            metrics: page.metrics
+            implicitHeight: page.metrics.px(32)
+            radius: height / 2
+            sidePadding: page.metrics.px(14)
             fill: page.pal.overlay(0.08)
             fontSize: 12.5
             iconPath: Icons.settingsSmall

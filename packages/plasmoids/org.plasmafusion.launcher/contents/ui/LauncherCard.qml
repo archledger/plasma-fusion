@@ -11,13 +11,15 @@ import org.kde.plasma.extras as PlasmaExtras
 import "../code/launcher.js" as Launcher
 
 // The launcher card in board coordinates: (0, 0) is the top-left corner of the 680 px wide
-// window, including the Plasma style frame (1 px edge + 24 px padding = 25 px inset).
+// window, including the Plasma style frame (1 px edge + 24 px padding = 25 px inset). Rows,
+// fields, chips and gaps next to text follow the user's text size (`metrics`); the inset is
+// the style frame's and stays.
 FocusScope {
     id: card
 
     property var launcher
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property real cornerRadius: 22
 
     readonly property int inset: 25
@@ -34,10 +36,26 @@ FocusScope {
         ? launcher.rootModel.modelForRow(chips[chipIndex].row) : null
     readonly property var allAppsModel: launcher && view === "apps" ? launcher.allAppsModel() : null
 
-    // Vertical budget of the home view (board: 3 pinned rows and 2 recent rows in a 700 px card).
+    // Board rows (px, before the text scale): chips 30, header 26, gaps 16, app tiles 84 with a
+    // 4 px gap, recent-file rows 52 with a 6 px gap.
+    readonly property real chipHeight: metrics.px(30)
+    readonly property real sectionGap: metrics.px(16)
+    readonly property real headerHeight: metrics.px(26)
+    readonly property real headerY: chipHeight + sectionGap
+    readonly property real gridY: headerY + headerHeight + sectionGap
+    readonly property real tileHeight: metrics.px(84)
+    readonly property real docHeight: metrics.px(52)
+    // App grid columns: six on the board (680 px card: a 634 px grid of 105.67 px cells); fewer
+    // when a large text size meets a narrow screen. The epsilon keeps 6 at exactly 680 px.
+    readonly property int columns: Math.max(4, Math.min(7, Math.floor((width - 46) / (634 / 6 * metrics.ts) + 1e-6)))
+
+    // Vertical budget of the home view (board: 3 pinned rows and 2 recent rows in a 700 px card:
+    // 88 above the grid, 88 per row, 168 for the "Recommended" block).
     readonly property real bodyHeight: body.height
-    readonly property bool recommendedFits: launcher && launcher.showRecommended && bodyHeight >= 88 + 2 * 88 + 168
-    readonly property int pinnedRows: Math.max(1, Math.min(3, Math.floor((bodyHeight - 88 - (recommendedFits ? 168 : 0) + 4) / 88)))
+    readonly property real rowPitch: tileHeight + 4
+    readonly property real recommendedHeight: 2 * sectionGap + headerHeight + 2 * docHeight + 6
+    readonly property bool recommendedFits: launcher && launcher.showRecommended && bodyHeight >= gridY + 2 * rowPitch + recommendedHeight
+    readonly property int pinnedRows: Math.max(1, Math.min(3, Math.floor((bodyHeight - gridY - (recommendedFits ? recommendedHeight : 0) + 4) / rowPitch)))
 
     function reset() {
         search.clear();
@@ -141,10 +159,10 @@ FocusScope {
         x: card.inset
         y: card.inset
         width: card.innerWidth
-        height: 50
+        height: card.metrics.px(50)
         focus: true
         pal: card.pal
-        fontFamily: card.fontFamily
+        metrics: card.metrics
 
         onTextChanged: {
             card.launchWhenReady = false;
@@ -196,26 +214,27 @@ FocusScope {
     Item {
         id: body
         x: card.inset
-        y: search.y + search.height + 16
+        y: search.y + search.height + card.sectionGap
         width: card.innerWidth
-        height: footer.y - 16 - y
+        height: footer.y - card.sectionGap - y
 
         // Category chips. Chips that do not fit move into a round "more" chip with a menu.
         FocusScope {
             id: chipRow
             width: parent.width
-            height: 30
+            height: card.chipHeight
             visible: !card.searching
             activeFocusOnTab: true
             Accessible.role: Accessible.PageTabList
             Accessible.name: i18nc("@label", "Categories")
 
+            readonly property real chipGap: card.metrics.px(8)
             readonly property int fitCount: {
                 const n = chipRepeater.count;
                 let total = 0;
                 for (let i = 0; i < n; ++i) {
                     const item = chipRepeater.itemAt(i);
-                    total += (item ? item.implicitWidth : 0) + (i > 0 ? 8 : 0);
+                    total += (item ? item.implicitWidth : 0) + (i > 0 ? chipGap : 0);
                 }
                 if (total <= width) {
                     return n;
@@ -224,8 +243,8 @@ FocusScope {
                 let k = 0;
                 for (let i = 0; i < n; ++i) {
                     const item = chipRepeater.itemAt(i);
-                    const w = (item ? item.implicitWidth : 0) + (i > 0 ? 8 : 0);
-                    if (used + w + 38 > width) {
+                    const w = (item ? item.implicitWidth : 0) + (i > 0 ? chipGap : 0);
+                    if (used + w + chipGap + card.chipHeight > width) {
                         break;
                     }
                     used += w;
@@ -236,7 +255,7 @@ FocusScope {
             readonly property bool overflowing: fitCount < chipRepeater.count
 
             Row {
-                spacing: 8
+                spacing: chipRow.chipGap
 
                 Repeater {
                     id: chipRepeater
@@ -247,7 +266,7 @@ FocusScope {
                         required property var modelData
                         visible: index < chipRow.fitCount
                         pal: card.pal
-                        fontFamily: card.fontFamily
+                        metrics: card.metrics
                         text: modelData.label
                         selected: index === card.chipIndex
                         showFocus: selected && chipRow.activeFocus
@@ -258,9 +277,9 @@ FocusScope {
                 Chip {
                     id: moreChip
                     visible: chipRow.overflowing
-                    implicitWidth: 30
+                    implicitWidth: card.chipHeight
                     pal: card.pal
-                    fontFamily: card.fontFamily
+                    metrics: card.metrics
                     text: ""
                     selected: card.chipIndex >= chipRow.fitCount
                     showFocus: selected && chipRow.activeFocus
@@ -270,7 +289,7 @@ FocusScope {
                     Glyph {
                         anchors.centerIn: parent
                         name: "more"
-                        size: 16
+                        size: card.metrics.px(16)
                         strokeWidth: 3.8
                         color: moreChip.selected ? "#ffffff" : card.pal.textSecondary
                     }
@@ -330,11 +349,11 @@ FocusScope {
         // "Pinned" / "All apps" / "Recommended" header of the view.
         SectionHeader {
             id: topHeader
-            y: 46
+            y: card.headerY
             width: parent.width
             visible: !card.searching
             pal: card.pal
-            fontFamily: card.fontFamily
+            metrics: card.metrics
             title: card.view === "category" && card.chipIndex < card.chips.length ? card.chips[card.chipIndex].label
                  : card.view === "apps" ? i18nc("@title", "All apps")
                  : card.view === "recent" ? i18nc("@title", "Recommended")
@@ -360,13 +379,14 @@ FocusScope {
         // Home: pinned apps (6 columns, up to 3 rows).
         AppGrid {
             id: pinnedGrid
-            y: 88
+            y: card.gridY
+            columns: card.columns
             width: parent.width + gap
             height: card.pinnedRows * cellHeight
             visible: !card.searching && card.view === "home"
             interactive: count > card.pinnedRows * columns
             pal: card.pal
-            fontFamily: card.fontFamily
+            metrics: card.metrics
             launcher: card.launcher
             designLabels: card.launcher ? card.launcher.designLabels : false
             model: card.launcher ? card.launcher.favoritesModel : null
@@ -396,18 +416,18 @@ FocusScope {
                 wrapMode: Text.WordWrap
                 text: i18nc("@info", "Pin apps here with right-click → Pin to Launcher")
                 color: card.pal.muted
-                family: card.fontFamily
+                metrics: card.metrics
                 px: 13
             }
         }
 
         SectionHeader {
             id: recHeader
-            y: pinnedGrid.y + pinnedGrid.height - pinnedGrid.gap + 16
+            y: pinnedGrid.y + pinnedGrid.height - pinnedGrid.gap + card.sectionGap
             width: parent.width
             visible: !card.searching && card.view === "home" && card.recommendedFits
             pal: card.pal
-            fontFamily: card.fontFamily
+            metrics: card.metrics
             title: i18nc("@title", "Recommended")
             buttonText: i18nc("@action:button", "More")
             onButtonClicked: {
@@ -430,14 +450,14 @@ FocusScope {
         // Home: four most recent files.
         DocGrid {
             id: docGrid
-            y: recHeader.y + 26 + 16
+            y: recHeader.y + card.headerHeight + card.sectionGap
             width: parent.width + gap
             height: 2 * cellHeight
             visible: recHeader.visible
             interactive: false
             limit: 4
             pal: card.pal
-            fontFamily: card.fontFamily
+            metrics: card.metrics
             launcher: card.launcher
             model: card.launcher ? card.launcher.recentDocsModel : null
             onExitTop: {
@@ -459,7 +479,7 @@ FocusScope {
                 wrapMode: Text.WordWrap
                 text: i18nc("@info", "Files you open will show up here")
                 color: card.pal.muted
-                family: card.fontFamily
+                metrics: card.metrics
                 px: 13
             }
         }
@@ -467,12 +487,13 @@ FocusScope {
         // Category and "All apps" views.
         AppGrid {
             id: mainGrid
-            y: 88
+            y: card.gridY
+            columns: card.columns
             width: parent.width + gap
             height: parent.height - y
             visible: !card.searching && (card.view === "category" || card.view === "apps")
             pal: card.pal
-            fontFamily: card.fontFamily
+            metrics: card.metrics
             launcher: card.launcher
             model: card.view === "category" ? card.categoryModel : card.allAppsModel
             onExitTop: {
@@ -497,12 +518,12 @@ FocusScope {
         // "More": every recent file.
         DocGrid {
             id: recentGrid
-            y: 88
+            y: card.gridY
             width: parent.width + gap
             height: parent.height - y
             visible: !card.searching && card.view === "recent"
             pal: card.pal
-            fontFamily: card.fontFamily
+            metrics: card.metrics
             launcher: card.launcher
             model: visible && card.launcher ? card.launcher.recentDocsModel : null
             onExitTop: topHeader.button.forceActiveFocus(Qt.BacktabFocusReason)
@@ -519,7 +540,7 @@ FocusScope {
             height: parent.height
             visible: card.searching
             pal: card.pal
-            fontFamily: card.fontFamily
+            metrics: card.metrics
             launcher: card.launcher
             model: card.launcher && card.launcher.runnerModel.count > 0 ? card.launcher.runnerModel.modelForRow(0) : null
             onCountChanged: {
@@ -538,14 +559,14 @@ FocusScope {
 
             FusionText {
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: 40
+                y: card.metrics.px(40)
                 width: parent.width - 60
                 visible: card.searching && parent.count === 0 && card.launcher && !card.launcher.runnerModel.querying
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
                 text: i18nc("@info", "No results for “%1”", search.text)
                 color: card.pal.muted
-                family: card.fontFamily
+                metrics: card.metrics
                 px: 13
             }
         }
@@ -555,10 +576,10 @@ FocusScope {
         id: footer
         x: 1
         width: card.width - 2
-        height: 62
+        height: card.metrics.px(62)
         y: card.height - 1 - height
         pal: card.pal
-        fontFamily: card.fontFamily
+        metrics: card.metrics
         launcher: card.launcher
         cornerRadius: Math.max(0, card.cornerRadius - 1)
         onExitTop: {

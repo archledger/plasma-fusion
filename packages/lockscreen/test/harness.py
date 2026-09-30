@@ -12,9 +12,12 @@ states and saves one PNG per scenario. Run it on a private bus with fonts from t
 Scenarios: idle, prompt, messages, fperror, focus, nopassword. Environment: PF_LOCALE (default en_GB),
 PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board wallpaper).
 """
+import atexit
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 
 from PySide6.QtCore import QObject, QTimer, QUrl, Slot, QLocale, QSize, Qt, QByteArray
 from PySide6.QtGui import QGuiApplication, QFontDatabase, QImage, QPainter, QIcon
@@ -24,7 +27,21 @@ from PySide6.QtSvg import QSvgRenderer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-PKG = os.path.join(HERE, "..", "org.plasmafusion.lockshell", "contents", "lockscreen")
+SRC_PKG = os.path.join(HERE, "..", "org.plasmafusion.lockshell", "contents", "lockscreen")
+
+
+def staged_package():
+    """The package as tools/build.d/90-lockscreen.sh installs it: the source files plus a copy of
+    packages/common/FusionMetrics.qml, in a temporary folder removed at exit."""
+    tmp = tempfile.mkdtemp(prefix="pf-lockshell-")
+    atexit.register(shutil.rmtree, tmp, True)
+    pkg = os.path.join(tmp, "lockscreen")
+    shutil.copytree(SRC_PKG, pkg)
+    shutil.copy(os.path.join(ROOT, "packages", "common", "FusionMetrics.qml"), pkg)
+    return pkg
+
+
+PKG = staged_package()
 
 # The Lock board's wallpaper (design/boards/Lock.dc.html), used when PF_WALLPAPER is unset.
 BOARD_WALLPAPER = """<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">

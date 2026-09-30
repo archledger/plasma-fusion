@@ -5,10 +5,11 @@
 
 import QtQuick
 
-// Six-column grid of 84 px app tiles with a 4 px gap (Launcher board).
+// Six-column grid of 84 px app tiles with a 4 px gap (Launcher board); the tile height
+// follows the user's text size.
 NavGrid {
     columns: 6
     gap: 4
-    itemHeight: 84
+    itemHeight: metrics ? metrics.px(84) : 84
     delegate: AppTile {}
 }

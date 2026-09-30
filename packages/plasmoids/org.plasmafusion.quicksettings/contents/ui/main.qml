@@ -6,6 +6,8 @@ import QtQuick.Layouts
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 
+import "components"
+
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
 // quick settings and the notification list.
@@ -19,7 +21,18 @@ PlasmoidItem {
 
     readonly property bool inPanel: [PlasmaCore.Types.TopEdge, PlasmaCore.Types.RightEdge,
         PlasmaCore.Types.BottomEdge, PlasmaCore.Types.LeftEdge].includes(Plasmoid.location)
-    readonly property real outerWidth: 356
+    // Text scale and pixel grid of the panel window (docs/parts/shell-quicksettings.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
+    // Width of the pop-up card: 356 px on the board, scaled with the text, at most the screen
+    // less 32 px, in whole device pixels of the pop-up's screen.
+    readonly property real outerWidth: {
+        const pm = content.metrics;
+        const screenWidth = Plasmoid.containment ? Plasmoid.containment.availableScreenRect.width : 1440;
+        return pm.windowSize(Math.min(pm.px(356), screenWidth - 32));
+    }
     readonly property int popupGap: Plasmoid.configuration.popupGap
     readonly property int popupScreenMargin: Plasmoid.configuration.popupScreenMargin
 
@@ -38,7 +51,7 @@ PlasmoidItem {
     Layout.preferredWidth: topBar.implicitWidth
     Layout.maximumWidth: topBar.implicitWidth
     Layout.minimumHeight: 26
-    Layout.preferredHeight: 34
+    Layout.preferredHeight: m.px(34)
 
     function togglePopup() {
         setPopupOpen(!popupOpen);
@@ -111,6 +124,7 @@ PlasmoidItem {
         id: topBar
         anchors.fill: parent
         backend: backend
+        metrics: m
         popupOpen: root.popupOpen
         onPillPressed: root.openOnPress = !root.popupOpen
         onPillClicked: {

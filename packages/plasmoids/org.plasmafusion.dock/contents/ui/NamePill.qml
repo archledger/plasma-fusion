@@ -9,7 +9,8 @@ import org.kde.plasma.core as PlasmaCore
 
 // The name pill above the hovered dock item (Main board: padding 5/10, radius 8,
 // rgba(12,15,28,.92) fill, 1 px edge, 12 px bold text). It is a separate tooltip
-// window so it can sit above the panel; it never takes focus or input.
+// window so it can sit above the panel; it never takes focus or input. The text, its padding
+// and the maximum text width follow the user's text size; the radius and the edge do not.
 PlasmaCore.Dialog {
     id: pill
 
@@ -38,11 +39,15 @@ PlasmaCore.Dialog {
     onVisibleChanged: if (visible) Qt.callLater(reposition)
 
     mainItem: Rectangle {
+        // Text scale and pixel grid of the pill window (docs/parts/shell-dock.md, "Text scale").
+        FusionMetrics {
+            id: m
+        }
         // Very long names are elided so the pill never runs off the screen.
-        readonly property real maxTextWidth: 320
-        implicitWidth: Math.round(Math.min(label.implicitWidth, maxTextWidth)) + 20 + 2
+        readonly property real maxTextWidth: m.px(320)
+        implicitWidth: Math.round(Math.min(label.implicitWidth, maxTextWidth)) + 2 * m.px(10) + 2
         // CSS line box of Manrope at 12 px (1.366 em) + 5 px padding + 1 px edge, top and bottom.
-        implicitHeight: Math.round(label.font.pixelSize * 1.366) + 10 + 2
+        implicitHeight: Math.round(label.font.pixelSize * 1.366) + 2 * m.px(5) + 2
         width: implicitWidth
         height: implicitHeight
         radius: 8
@@ -67,8 +72,8 @@ PlasmaCore.Dialog {
             elide: Text.ElideRight
             text: pill.text
             color: pill.pal.tipText
-            font.family: "Manrope"
-            font.pixelSize: 12
+            font.family: m.family
+            font.pixelSize: m.font(12)
             font.weight: Font.Bold
             renderType: Text.QtRendering
         }

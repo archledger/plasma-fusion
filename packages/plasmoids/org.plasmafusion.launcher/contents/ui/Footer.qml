@@ -11,12 +11,14 @@ import org.kde.kcmutils as KCMUtils
 import org.kde.plasma.private.sessions as Sessions
 
 // User row and session buttons (62 px, darker band, 1 px top edge). The band spans the
-// whole card width and follows the card's bottom corner radius.
+// whole card width and follows the card's bottom corner radius. Its height (set by the card),
+// the account button and the text follow the user's text size; the avatar and the round
+// session buttons keep their size.
 FocusScope {
     id: footer
 
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property var launcher
     property real cornerRadius: 21
 
@@ -27,7 +29,7 @@ FocusScope {
     signal tabFromLast()
     signal backtabFromFirst()
 
-    implicitHeight: 62
+    implicitHeight: metrics.px(62)
 
     KCoreAddons.KUser {
         id: user
@@ -62,8 +64,8 @@ FocusScope {
         // The avatar sits 24 px from the card edge (board); the hover pill reaches 6 px around it.
         x: 18
         anchors.verticalCenter: parent.verticalCenter
-        implicitWidth: accountRow.implicitWidth + 20
-        implicitHeight: 44
+        implicitWidth: accountRow.implicitWidth + footer.metrics.px(20)
+        implicitHeight: footer.metrics.px(44)
         hoverEnabled: true
         focusPolicy: Qt.TabFocus
         Accessible.role: Accessible.Button
@@ -78,13 +80,13 @@ FocusScope {
         }
 
         background: Rectangle {
-            radius: 22
+            radius: height / 2
             color: accountButton.hovered ? footer.pal.tint(0.05) : "transparent"
             antialiasing: true
 
             FocusRing {
                 visible: accountButton.visualFocus
-                baseRadius: 22
+                baseRadius: accountButton.height / 2
                 ringColor: footer.pal.focusRing
             }
         }
@@ -92,9 +94,9 @@ FocusScope {
         contentItem: Item {
             Row {
                 id: accountRow
-                x: 6
+                x: footer.metrics.px(6)
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 12
+                spacing: footer.metrics.px(12)
 
                 Item {
                     width: 36
@@ -111,7 +113,7 @@ FocusScope {
                             anchors.centerIn: parent
                             text: footer.displayName.length > 0 ? footer.displayName.charAt(0).toUpperCase() : ""
                             color: "#ffffff"
-                            family: footer.fontFamily
+                            metrics: footer.metrics
                             px: 15
                             weight: 800
                         }
@@ -141,7 +143,7 @@ FocusScope {
                     FusionText {
                         text: footer.displayName
                         color: footer.pal.text
-                        family: footer.fontFamily
+                        metrics: footer.metrics
                         px: 13
                         weight: 800
                     }
@@ -149,7 +151,7 @@ FocusScope {
                     FusionText {
                         text: i18nc("@info kind of user account", "Local account")
                         color: footer.pal.muted
-                        family: footer.fontFamily
+                        metrics: footer.metrics
                         px: 11.5
                     }
                 }

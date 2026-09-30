@@ -4,7 +4,8 @@
 #
 # Lock-screen shell package org.plasmafusion.lockshell (Plasma/Shell holding only
 # contents/lockscreen/; everything else falls back to org.kde.plasma.desktop)
-# -> $STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/
+# -> $STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/, with a copy of
+# packages/common/FusionMetrics.qml in contents/lockscreen.
 # It only takes effect once tools/device/lockscreen-enable.sh has pointed KWin's
 # PLASMA_DEFAULT_SHELL at it (see docs/parts/lockscreen.md).
 set -euo pipefail
@@ -31,10 +32,13 @@ for f in LockScreen.qml LockScreenUi.qml MainBlock.qml NoPasswordUnlock.qml Lock
 done
 python3 -c 'import sys, xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1])' "$SRC/contents/lockscreen/config.xml"
 
+[ ! -e "$SRC/contents/lockscreen/FusionMetrics.qml" ] || { echo "lockscreen: the package has its own FusionMetrics.qml" >&2; exit 1; }
+
 rm -rf "$DEST"
 mkdir -p "$DEST/contents"
 install -m 0644 "$SRC/metadata.json" "$DEST/metadata.json"
 cp -r "$SRC/contents/lockscreen" "$DEST/contents/"
+install -m 0644 "$ROOT/packages/common/FusionMetrics.qml" "$DEST/contents/lockscreen/FusionMetrics.qml"
 find "$DEST" -type d -exec chmod 0755 {} +
 find "$DEST" -type f -exec chmod 0644 {} +
 echo "lockscreen: $(find "$DEST" -type f | wc -l) files in ${DEST#"$STAGE"/}"

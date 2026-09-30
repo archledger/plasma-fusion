@@ -27,10 +27,20 @@ KWin.TabBoxSwitcher {
     Item {
         id: root
 
-        readonly property string fontFamily: "Manrope"
+        // Text scale and pixel grid of the switcher's screen (docs/parts/kwin.md, "Text scale").
+        // Its sizes are needed before the card window exists, so the scale comes from the output.
+        FusionMetrics {
+            id: fusionMetrics
+            screenScale: root.output ? root.output.devicePixelRatio : 0
+            area: root.dimArea
+        }
+        readonly property FusionMetrics metrics: fusionMetrics
+
         readonly property int cellWidth: 196
         readonly property int thumbnailHeight: 118
-        readonly property int cellHeight: 10 + thumbnailHeight + 10 + 34 + 10
+        // Board: padding 10, the preview, 10, the caption (34 px of text, scaled with it), 10.
+        readonly property real captionHeight: metrics.px(34)
+        readonly property real cellHeight: 10 + thumbnailHeight + 10 + captionHeight + 10
         readonly property int gap: 16
         readonly property int maxColumns: 5
 
@@ -355,32 +365,33 @@ KWin.TabBoxSwitcher {
             return { app: app, title: title };
         }
 
-        // Card metrics (board: 1100 px, padding 22/28/20/28, gaps 18, grid gap 16).
+        // Card metrics (board: 1100 px, padding 22/28/20/28, gaps 18, grid gap 16). The gaps
+        // between the text rows and the header follow the text size; the card padding does not.
         readonly property int padTop: 23
         readonly property int padSide: 28
         readonly property int padBottom: 21
-        readonly property int sectionGap: 18
+        readonly property real sectionGap: metrics.px(18)
         readonly property int maxCardWidth: Math.min(1100, tabBox.screenGeometry.width - 64)
         readonly property int columnsFit: Math.max(1, Math.min(maxColumns,
             Math.floor((maxCardWidth - 2 * padSide + gap) / (cellWidth + gap))))
         readonly property int columns: Math.max(1, Math.min(columnsFit, shownCount))
         readonly property int gridRows: Math.max(1, Math.ceil(shownCount / columns))
         readonly property int gridWidth: columns * cellWidth + (columns - 1) * gap
-        readonly property int fullGridHeight: gridRows * cellHeight + (gridRows - 1) * gap
-        property int headerHeight: 32
+        readonly property real fullGridHeight: gridRows * cellHeight + (gridRows - 1) * gap
+        readonly property real headerHeight: metrics.px(32)
         property int hintWidth: 620
         property int hintHeight: 22
-        readonly property int chromeHeight: padTop + headerHeight + 2 * sectionGap + hintHeight + padBottom
-        readonly property int maxGridHeight: {
+        readonly property int chromeHeight: Math.ceil(padTop + headerHeight + 2 * sectionGap + hintHeight + padBottom)
+        readonly property real maxGridHeight: {
             const room = Math.floor(tabBox.screenGeometry.height * 0.86) - chromeHeight;
             const fit = Math.max(1, Math.floor((room + gap) / (cellHeight + gap)));
             return fit * cellHeight + (fit - 1) * gap;
         }
-        readonly property int gridViewportHeight: shownCount === 0 ? cellHeight : Math.min(fullGridHeight, maxGridHeight)
+        readonly property real gridViewportHeight: shownCount === 0 ? cellHeight : Math.min(fullGridHeight, maxGridHeight)
         readonly property int contentWidth: Math.min(maxCardWidth - 2 * padSide,
             Math.max(shownCount === 0 ? 0 : gridWidth, hintWidth, 520))
         readonly property int cardWidth: contentWidth + 2 * padSide
-        readonly property int cardHeight: chromeHeight + gridViewportHeight
+        readonly property int cardHeight: Math.ceil(chromeHeight + gridViewportHeight)
 
         // Work area of the switcher's screen: the dim layer leaves the top bar undimmed.
         readonly property rect dimArea: {
@@ -525,15 +536,17 @@ KWin.TabBoxSwitcher {
 
                             Rectangle {
                                 id: tabTrack
-                                height: 32
-                                width: tabRow.width + 6
-                                radius: 16
+                                // Board: a 32 px track with 26 px tabs, 3 px inside it.
+                                readonly property real inset: (height - root.metrics.px(26)) / 2
+                                height: root.headerHeight
+                                width: tabRow.width + 2 * inset
+                                radius: height / 2
                                 color: root.pal.tabTrack
 
                                 Row {
                                     id: tabRow
-                                    x: 3
-                                    y: 3
+                                    x: tabTrack.inset
+                                    y: tabTrack.inset
                                     spacing: 3
 
                                     Repeater {
@@ -546,9 +559,9 @@ KWin.TabBoxSwitcher {
                                             required property var modelData
                                             readonly property bool current: root.showAll === modelData.all
                                             readonly property bool usable: !modelData.all || root.canShowAll
-                                            width: tabLabel.implicitWidth + 28
-                                            height: 26
-                                            radius: 13
+                                            width: tabLabel.implicitWidth + root.metrics.px(28)
+                                            height: root.metrics.px(26)
+                                            radius: height / 2
                                             color: current ? root.pal.accent
                                                            : (tabArea.containsMouse && usable ? root.pal.hoverFill : "transparent")
                                             opacity: usable ? 1 : 0.45
@@ -561,8 +574,8 @@ KWin.TabBoxSwitcher {
                                                 id: tabLabel
                                                 anchors.centerIn: parent
                                                 text: tab.modelData.label
-                                                font.family: root.fontFamily
-                                                font.pointSize: 9
+                                                font.family: root.metrics.family
+                                                font.pointSize: root.metrics.font(12) * 0.75
                                                 font.weight: tab.current ? Font.ExtraBold : Font.Bold
                                                 color: tab.current ? root.pal.tabText : root.pal.tabTextInactive
                                                 renderType: Text.QtRendering
@@ -584,15 +597,15 @@ KWin.TabBoxSwitcher {
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
                                 // A long workspace name is cut short instead of running into the tabs.
-                                width: Math.min(implicitWidth, parent.width - tabTrack.width - 24)
+                                width: Math.min(implicitWidth, parent.width - tabTrack.width - root.metrics.px(24))
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
                                 horizontalAlignment: Text.AlignRight
                                 textFormat: Text.PlainText
                                 text: i18ndp("plasmafusion", "%1 window", "%1 windows", root.shownCount)
                                       + " · " + (root.showAll ? i18nd("plasmafusion", "All workspaces") : root.desktopName)
-                                font.family: root.fontFamily
-                                font.pointSize: 9.375
+                                font.family: root.metrics.family
+                                font.pointSize: root.metrics.font(12.5) * 0.75
                                 color: root.pal.textMuted
                                 renderType: Text.QtRendering
                             }
@@ -649,7 +662,7 @@ KWin.TabBoxSwitcher {
                                         width: root.cellWidth
                                         height: root.cellHeight
                                         pal: root.pal
-                                        fontFamily: root.fontFamily
+                                        metrics: root.metrics
                                         windowId: model.windowId
                                         icon: model.icon
                                         appName: info.app
@@ -675,8 +688,8 @@ KWin.TabBoxSwitcher {
                             text: root.showAll || !root.hasOtherWorkspaces
                                   ? i18ndc("kwin", "@info:placeholder no entries in the task switcher", "No open windows")
                                   : i18nd("plasmafusion", "No windows on this workspace")
-                            font.family: root.fontFamily
-                            font.pointSize: 10.5
+                            font.family: root.metrics.family
+                            font.pointSize: root.metrics.font(14) * 0.75
                             font.weight: Font.Bold
                             color: root.pal.textMuted
                             renderType: Text.QtRendering
@@ -687,37 +700,37 @@ KWin.TabBoxSwitcher {
                             id: hints
                             anchors.horizontalCenter: parent.horizontalCenter
                             y: flick.y + flick.height + root.sectionGap
-                            spacing: 22
+                            spacing: root.metrics.px(22)
                             onImplicitWidthChanged: root.hintWidth = Math.ceil(implicitWidth)
                             onImplicitHeightChanged: root.hintHeight = Math.ceil(implicitHeight)
 
                             Hint {
                                 pal: root.pal
-                                fontFamily: root.fontFamily
+                                metrics: root.metrics
                                 keys: [i18ndc("plasmafusion", "keyboard key", "Tab")]
                                 after: i18nd("plasmafusion", "Next")
                             }
                             Hint {
                                 pal: root.pal
-                                fontFamily: root.fontFamily
+                                metrics: root.metrics
                                 keys: [i18ndc("plasmafusion", "keyboard key", "Shift"), i18ndc("plasmafusion", "keyboard key", "Tab")]
                                 after: i18nd("plasmafusion", "Back")
                             }
                             Hint {
                                 pal: root.pal
-                                fontFamily: root.fontFamily
+                                metrics: root.metrics
                                 keys: ["`"]
                                 after: i18nd("plasmafusion", "Same app")
                             }
                             Hint {
                                 pal: root.pal
-                                fontFamily: root.fontFamily
+                                metrics: root.metrics
                                 keys: [i18ndc("plasmafusion", "keyboard key", "Q")]
                                 after: i18nd("plasmafusion", "Close window")
                             }
                             Hint {
                                 pal: root.pal
-                                fontFamily: root.fontFamily
+                                metrics: root.metrics
                                 before: i18nd("plasmafusion", "Release")
                                 keys: [i18ndc("plasmafusion", "keyboard key", "Alt")]
                                 after: i18nd("plasmafusion", "to switch")

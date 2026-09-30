@@ -6,6 +6,7 @@
 #   $STAGE/.local/share/kwin/tabbox/org.plasmafusion.switcher/
 #   $STAGE/.local/share/kwin/scripts/plasmafusion-snap/     (outline: contents/outline/outline.qml)
 #   $STAGE/.local/share/kwin/scripts/plasmafusion-attach/
+# The switcher and the snap script get a copy of packages/common/FusionMetrics.qml in contents/ui.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
@@ -24,9 +25,13 @@ PY
 }
 
 install_package() { # $1 source dir, $2 destination dir
+  [ -z "$(find "$1" -name FusionMetrics.qml)" ] || { echo "kwin: $1 has its own FusionMetrics.qml" >&2; exit 1; }
   rm -rf "$2"
   mkdir -p "$2"
   cp -r "$1/metadata.json" "$1/contents" "$2/"
+  if [ -d "$2/contents/ui" ]; then
+    install -m 0644 "$ROOT/packages/common/FusionMetrics.qml" "$2/contents/ui/FusionMetrics.qml"
+  fi
   find "$2" -type d -exec chmod 0755 {} +
   find "$2" -type f -exec chmod 0644 {} +
   echo "  $(basename "$2") -> ${2#"$STAGE"/}"

@@ -10,6 +10,7 @@ import org.kde.kirigami as Kirigami
 Column {
     id: header
 
+    required property FusionMetrics metrics
     property string userName: ""
     property url userIcon: ""
 
@@ -22,7 +23,7 @@ Column {
         return String.fromCodePoint(cp).toLocaleUpperCase(Qt.locale().name.replace("_", "-"));
     }
 
-    spacing: 16
+    spacing: metrics.px(16)
 
     Item {
         id: avatarBox
@@ -89,13 +90,13 @@ Column {
 
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(implicitWidth, 400)
+        width: Math.min(implicitWidth, header.metrics.px(400))
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
         text: header.userName
         color: PfStyle.text
         font.family: PfStyle.displayFont
-        font.pixelSize: 28
+        font.pixelSize: header.metrics.font(28)
         font.weight: Font.DemiBold
         textFormat: Text.PlainText
     }

@@ -5,16 +5,17 @@
 
 import QtQuick
 
-// A key cap of the hint bar: padding 2 x 7, radius 6, 1 px edge, 12 px ExtraBold.
+// A key cap of the hint bar: padding 2 x 7, radius 6, 1 px edge, 12 px ExtraBold; the size
+// follows the user's text size.
 Rectangle {
     id: cap
 
     property alias text: label.text
     property FusionPalette pal
-    property string fontFamily: "Manrope"
+    property FusionMetrics metrics
 
-    implicitWidth: Math.round(label.implicitWidth) + 14
-    implicitHeight: 22
+    implicitWidth: Math.round(label.implicitWidth) + 2 * metrics.px(7)
+    implicitHeight: metrics.px(22)
     radius: 6
     color: pal.kbdFill
     border.width: 1
@@ -23,8 +24,8 @@ Rectangle {
     Text {
         id: label
         anchors.centerIn: parent
-        font.family: cap.fontFamily
-        font.pointSize: 9
+        font.family: cap.metrics.family
+        font.pointSize: cap.metrics.font(12) * 0.75
         font.weight: Font.ExtraBold
         color: cap.pal.text
         renderType: Text.QtRendering

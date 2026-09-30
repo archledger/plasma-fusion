@@ -33,13 +33,21 @@ Rectangle {
     readonly property real nextStageProgress: stage <= 1 ? 0.2 : Math.min(1, stage / 5)
     property real creep: 0
 
+    // Text scale and pixel grid of the splash window (docs/parts/lookandfeel.md, "Text scale"):
+    // the greeting, the status line and their gap follow the user's text size; the emblem,
+    // the progress bar and the mark do not.
+    FusionMetrics {
+        id: m
+        area: Qt.rect(0, 0, root.width, root.height)
+    }
+
     // Manrope and Space Grotesk are installed as one static file per weight (the build's
     // fonts/*/static), so the CSS weight is the font weight and Qt draws no synthetic bold.
-    // Without the font installed, the fallback font gets the same weight.
+    // Without the font installed, the Plasma UI font (FusionMetrics) gets the same weight.
     component FusionText: Text {
-        property string family: "Manrope"
+        property bool display: false
         property int weight: 400
-        font.family: family
+        font.family: display ? m.displayFamily : m.family
         font.weight: weight
         renderType: Text.QtRendering
         textFormat: Text.PlainText
@@ -175,14 +183,14 @@ Rectangle {
             x: 0
             y: Math.round(root.height / 2 + 160)
             width: root.width
-            spacing: 18
+            spacing: m.px(18)
 
             FusionText {
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: root.textColor
-                family: "Space Grotesk"
+                display: true
                 weight: 600
-                font.pixelSize: 30
+                font.pixelSize: m.font(30)
                 text: {
                     const name = (user.fullName || "").trim().split(/\s+/)[0] || user.loginName;
                     return name ? "Welcome back, " + name : "Welcome back";
@@ -216,7 +224,7 @@ Rectangle {
             FusionText {
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: root.secondaryTextColor
-                font.pixelSize: 13
+                font.pixelSize: m.font(13)
                 text: {
                     switch (root.stage) {
                     case 3: return "Starting Plasma · loading settings";
@@ -263,7 +271,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 color: root.secondaryTextColor
                 weight: 700
-                font.pixelSize: 13
+                font.pixelSize: m.font(13)
                 text: "Plasma Fusion"
             }
         }

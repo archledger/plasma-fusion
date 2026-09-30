@@ -11,6 +11,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PC3
 
 // App tile of the launcher grids: 84 px tall, radius 14, 52 px icon with a soft drop shadow, 12 px name.
+// The height, the name and its gap follow the user's text size; the icon keeps its size.
 Item {
     id: tile
 
@@ -21,6 +22,7 @@ Item {
     readonly property bool isCurrent: GridView.isCurrentItem
     readonly property bool keyboardCurrent: isCurrent && grid !== null && grid.activeFocus
     readonly property string label: grid ? grid.labelFor(model) : (model.display || "")
+    readonly property real nameGap: grid && grid.metrics ? grid.metrics.px(7) : 7
 
     width: grid ? grid.cellWidth - grid.gap : 102
     height: grid ? grid.cellHeight - grid.gap : 84
@@ -56,7 +58,7 @@ Item {
         id: icon
         // Tiles sit at fractional x (board columns are 101.67 px); keep the icon on whole pixels.
         x: Math.round(tile.x + (tile.width - width) / 2) - tile.x
-        y: Math.round((tile.height - (52 + 7 + name.height)) / 2)
+        y: Math.round((tile.height - (52 + tile.nameGap + name.height)) / 2)
         width: 52
         height: 52
         source: tile.model.decoration || "application-x-executable"
@@ -79,7 +81,7 @@ Item {
     FusionText {
         id: name
         anchors.top: icon.bottom
-        anchors.topMargin: 7
+        anchors.topMargin: tile.nameGap
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width - 8
         horizontalAlignment: Text.AlignHCenter
@@ -87,7 +89,7 @@ Item {
         maximumLineCount: 1
         text: tile.label
         color: tile.grid ? tile.grid.pal.tileText : "white"
-        family: tile.grid ? tile.grid.fontFamily : ""
+        metrics: tile.grid ? tile.grid.metrics : null
         px: 12
         weight: 600
     }

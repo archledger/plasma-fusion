@@ -12,6 +12,7 @@ import org.kde.kirigami as Kirigami
 T.AbstractButton {
     id: root
 
+    required property FusionMetrics metrics
     property string iconPath: ""
 
     hoverEnabled: true
@@ -34,7 +35,7 @@ T.AbstractButton {
 
     contentItem: Column {
         id: column
-        spacing: 6
+        spacing: root.metrics.px(6)
 
         Rectangle {
             id: circle
@@ -75,7 +76,7 @@ T.AbstractButton {
             textFormat: Text.StyledText
             color: PfStyle.textMuted
             font.family: PfStyle.uiFont
-            font.pointSize: 8.625 // 11.5 px at 96 dpi
+            font.pointSize: root.metrics.font(11.5) * 0.75 // 11.5 px at 96 dpi
             font.weight: Font.DemiBold
             font.styleName: PfStyle.bold
         }

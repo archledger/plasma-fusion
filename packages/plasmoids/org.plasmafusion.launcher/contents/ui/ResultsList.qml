@@ -11,12 +11,13 @@ import org.kde.kirigami as Kirigami
 
 import "../code/launcher.js" as Launcher
 
-// KRunner results (merged RunnerModel) as 48 px rows grouped by category.
+// KRunner results (merged RunnerModel) as 48 px rows grouped by category. Row and header
+// heights, text and the paddings next to it follow the user's text size; icons keep their size.
 ListView {
     id: list
 
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property var launcher
     property bool keyboardNavigation: false
     // Hover selects only after the pointer really moved, not when results appear under a
@@ -49,7 +50,7 @@ ListView {
     highlightFollowsCurrentItem: false
     keyNavigationEnabled: true
     reuseItems: true
-    spacing: 2
+    spacing: metrics.px(2)
     Accessible.role: Accessible.List
 
     T.ScrollBar.vertical: ThinScrollBar {
@@ -62,16 +63,16 @@ ListView {
     section.delegate: Item {
         required property string section
         width: ListView.view.width
-        height: 30
+        height: list.metrics.px(30)
 
         FusionText {
             anchors.left: parent.left
-            anchors.leftMargin: 10
+            anchors.leftMargin: list.metrics.px(10)
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 6
+            anchors.bottomMargin: list.metrics.px(6)
             text: parent.section
             color: list.pal.muted
-            family: list.fontFamily
+            metrics: list.metrics
             px: 12
             weight: 800
         }
@@ -95,7 +96,7 @@ ListView {
         readonly property bool isCurrent: ListView.isCurrentItem
 
         width: ListView.view.width - 10
-        height: 48
+        height: list.metrics.px(48)
 
         Accessible.role: Accessible.Button
         Accessible.name: model.display || ""
@@ -117,7 +118,7 @@ ListView {
 
         Kirigami.Icon {
             id: resultIcon
-            x: 10
+            x: list.metrics.px(10)
             anchors.verticalCenter: parent.verticalCenter
             width: 32
             height: 32
@@ -127,11 +128,11 @@ ListView {
 
         Column {
             anchors.left: resultIcon.right
-            anchors.leftMargin: 12
+            anchors.leftMargin: list.metrics.px(12)
             anchors.right: parent.right
-            anchors.rightMargin: 12
+            anchors.rightMargin: list.metrics.px(12)
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
+            spacing: list.metrics.px(2)
 
             FusionText {
                 width: parent.width
@@ -139,7 +140,7 @@ ListView {
                 elide: Text.ElideRight
                 maximumLineCount: 1
                 color: list.pal.text
-                family: list.fontFamily
+                metrics: list.metrics
                 px: 13
                 weight: 700
             }
@@ -154,7 +155,7 @@ ListView {
                 elide: Text.ElideRight
                 maximumLineCount: 1
                 color: list.pal.muted
-                family: list.fontFamily
+                metrics: list.metrics
                 px: 11.5
             }
         }

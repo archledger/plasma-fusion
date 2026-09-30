@@ -19,6 +19,8 @@ PlasmaCore.Dialog {
     property var launcher
     property int cardWidth: 680
     property int cardHeight: 700
+    // Text scale and pixel grid of this window (docs/parts/shell-launcher.md, "Text scale").
+    readonly property alias metrics: fusionMetrics
     property var frameItem: null
     readonly property string framePrefix: frameItem && frameItem.usedPrefix !== undefined ? frameItem.usedPrefix : ""
     readonly property alias card: card
@@ -63,6 +65,11 @@ PlasmaCore.Dialog {
         Kirigami.Theme.colorSet: Kirigami.Theme.Window
         Kirigami.Theme.inherit: false
 
+        FusionMetrics {
+            id: fusionMetrics
+            area: window.launcher ? window.launcher.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+        }
+
         FusionColors {
             id: colors
             dark: {
@@ -81,7 +88,7 @@ PlasmaCore.Dialog {
             focus: true
             launcher: window.launcher
             pal: colors
-            fontFamily: window.launcher ? window.launcher.fontFamily : ""
+            metrics: fusionMetrics
             cornerRadius: window.cornerRadius
         }
     }

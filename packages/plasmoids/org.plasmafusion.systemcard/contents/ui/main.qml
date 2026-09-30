@@ -21,12 +21,19 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.StandardBackground
     preferredRepresentation: fullRepresentation
+    // Text scale and pixel grid of the card (docs/parts/desktop-cards.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
     // Board card 192 x 92 minus the style's 14 px frame margins (the desktop's 16 px grid makes
-    // the card 192 x 96).
+    // the card 192 x 96), scaled with the text (the layout script sizes the card the same way).
     // Always the card itself: switchWidth/switchHeight would show the icon whenever the card is
     // not larger than them (libplasma appletShouldBeExpanded).
-    readonly property int contentWidth: 164
-    readonly property int contentHeight: 64
+    readonly property int boardWidth: 164
+    readonly property int boardHeight: 64
+    readonly property real contentWidth: m.px(boardWidth)
+    readonly property real contentHeight: m.px(boardHeight)
 
     readonly property int updateInterval: Math.max(1000, Plasmoid.configuration.updateInterval)
 
@@ -88,10 +95,16 @@ PlasmoidItem {
     fullRepresentation: FocusScope {
         id: card
 
-        Layout.minimumWidth: root.contentWidth
-        Layout.minimumHeight: root.contentHeight
+        // The minimum never exceeds the board size: the desktop keeps a widget at least as large
+        // as its minimum and stores the enlarged geometry, so a text size seen only for a moment
+        // (the shell's font while a Global Theme is being applied) would grow the card for good.
+        // The layout script gives the card the scaled size (docs/parts/desktop-cards.md).
+        Layout.minimumWidth: Math.min(root.contentWidth, root.boardWidth)
+        Layout.minimumHeight: Math.min(root.contentHeight, root.boardHeight)
         Layout.preferredWidth: root.contentWidth
         Layout.preferredHeight: root.contentHeight
+        // 1 px of slack: the snapped sizes at fractional scales are a fraction of a pixel larger.
+        readonly property real fitScale: Math.min(1, (width + 1) / root.contentWidth, (height + 1) / root.contentHeight)
 
         CardPalette { id: cardPalette }
 
@@ -103,15 +116,16 @@ PlasmoidItem {
             property color barColor
 
             Layout.fillWidth: true
-            spacing: 5
+            spacing: m.px(5)
             Accessible.role: Accessible.ProgressBar
             Accessible.name: label + " " + value
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: m.px(8)
                 CardText {
                     pal: cardPalette
+                    metrics: m
                     Layout.fillWidth: true
                     px: 12
                     weight: 700
@@ -120,6 +134,7 @@ PlasmoidItem {
                 }
                 CardText {
                     pal: cardPalette
+                    metrics: m
                     px: 12
                     weight: 700
                     text: meter.value
@@ -175,12 +190,14 @@ PlasmoidItem {
 
         ColumnLayout {
             // Board: 16 px padding + 1 px edge from the card side (the style's frame gives 14).
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.leftMargin: 3
-            anchors.rightMargin: 3
+            // Laid out across the card; when the desktop gave the card less than this text size
+            // needs (the text size was raised after the layout was made), laid out at the size
+            // it needs and scaled down to fit, so nothing is cut off.
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 10
+            width: (card.fitScale < 1 ? root.contentWidth : parent.width) - 2 * 3
+            scale: card.fitScale
+            spacing: m.px(10)
 
             Meter {
                 label: i18nc("@label processor load", "CPU")

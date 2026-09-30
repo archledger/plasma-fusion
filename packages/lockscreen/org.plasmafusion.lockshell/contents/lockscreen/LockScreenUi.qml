@@ -67,6 +67,15 @@ Item {
     Kirigami.Theme.inherit: false
     Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
 
+    // Text scale and pixel grid of the lock screen window (docs/parts/lockscreen.md, "Text
+    // scale"): text, the pills and cards that hold it and the gaps next to it follow the user's
+    // text size; the clock, the avatar, the round buttons and the screen margins do not.
+    readonly property alias metrics: fusionMetrics
+    FusionMetrics {
+        id: fusionMetrics
+        area: Qt.rect(0, 0, lockScreenUi.width, lockScreenUi.height)
+    }
+
     // qmllint disable unqualified
     Connections {
         target: authenticator
@@ -87,7 +96,8 @@ Item {
             } else {
                 mainStack.replace(null, Qt.resolvedUrl("NoPasswordUnlock.qml"),
                     {
-                        userListModel: users
+                        userListModel: users,
+                        metrics: lockScreenUi.metrics
                     },
                     StackView.Immediate,
                 );
@@ -260,6 +270,7 @@ Item {
             id: bigClock
             anchors.horizontalCenter: parent.horizontalCenter
             y: Math.round(lockScreenRoot.height * 92 / PfStyle.boardHeight) - 12 * lockScreenRoot.promptFactor
+            metrics: lockScreenUi.metrics
             dateTime: timeSource.dateTime
             opacity: lockScreenUi.alwaysShowClock && !lockScreenUi.hideClockWhenIdle ? 1 - lockScreenRoot.promptFactor : 0
             visible: opacity > 0
@@ -270,6 +281,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             y: Math.round(lockScreenRoot.height * 430 / PfStyle.boardHeight)
             backdrop: backdrop
+            metrics: lockScreenUi.metrics
             text: i18nd("plasma_shell_org.plasmafusion.lockshell", "Press any key or click to unlock")
             opacity: 1 - lockScreenRoot.promptFactor
             visible: opacity > 0
@@ -279,6 +291,7 @@ Item {
         SmallClock {
             x: LayoutMirroring.enabled ? lockScreenRoot.width - width - 32 : 32
             y: 28
+            metrics: lockScreenUi.metrics
             dateTime: timeSource.dateTime
             opacity: lockScreenUi.alwaysShowClock ? lockScreenRoot.promptFactor : 0
             visible: opacity > 0
@@ -317,6 +330,7 @@ Item {
                 id: mainBlock
                 objectName: "mainBlock"
                 lockRoot: lockScreenUi.lockRoot
+                metrics: lockScreenUi.metrics
                 // qmllint disable unqualified
                 authenticatorObject: authenticator
                 userName: kscreenlocker_userName
@@ -347,18 +361,21 @@ Item {
 
                 actionItems: [
                     PowerButton {
+                        metrics: lockScreenUi.metrics
                         text: i18ndc("plasma_shell_org.kde.plasma.desktop", "@action:button", "Slee&p")
                         iconPath: PfStyle.iconSleep
                         onClicked: sessionManagement.suspend()
                         visible: sessionManagement.canSuspend
                     },
                     PowerButton {
+                        metrics: lockScreenUi.metrics
                         text: i18ndc("plasma_shell_org.kde.plasma.desktop", "@action:button", "&Hibernate")
                         iconPath: PfStyle.iconHibernate
                         onClicked: sessionManagement.hibernate()
                         visible: sessionManagement.canHibernate
                     },
                     PowerButton {
+                        metrics: lockScreenUi.metrics
                         text: i18ndc("plasma_shell_org.kde.plasma.desktop", "@action:button", "Switch &User")
                         iconPath: PfStyle.iconSwitchUser
                         onClicked: {
@@ -379,20 +396,22 @@ Item {
             readonly property real baseY: Math.round(lockScreenRoot.height * 620 / PfStyle.boardHeight)
             readonly property real promptY: mainStack.y + mainBlock.contentBottom + 28
             // Room above the media card / status chip (or the power buttons while prompting).
-            readonly property bool sharesBottomRow: lockScreenRoot.width < width + 2 * (PfStyle.edge + 348 + 16)
+            readonly property bool sharesBottomRow: lockScreenRoot.width < width + 2 * (PfStyle.edge + lockScreenUi.metrics.px(348) + 16)
             readonly property real limit: sharesBottomRow
-                ? lockScreenRoot.height - PfStyle.edge - 72 - 16
+                ? lockScreenRoot.height - PfStyle.edge - lockScreenUi.metrics.px(72) - 16
                 : lockScreenRoot.height - (lockScreenRoot.uiVisible ? mainBlock.height - mainBlock.actionsTop + 16 : PfStyle.edge)
 
             anchors.horizontalCenter: parent.horizontalCenter
             y: lockScreenRoot.uiVisible ? Math.max(baseY, promptY) : baseY
+            width: Math.min(lockScreenUi.metrics.px(400), lockScreenRoot.width - 64)
+            metrics: lockScreenUi.metrics
             backdrop: backdrop
             visible: lockScreenUi.showNotifications && groups.length > 0 && maximumCards > 0
             // The singleton (and with it the watcher registration with Plasma's notification
             // server) is only created when the cards are enabled.
             groups: lockScreenUi.showNotifications ? LockNotifications.groups : []
             showSummaries: lockScreenUi.showNotificationSummaries
-            maximumCards: Math.max(0, Math.floor((limit - y + 8) / 64))
+            maximumCards: Math.max(0, Math.floor((limit - y + spacing) / (cardHeight + spacing)))
 
             Behavior on y {
                 NumberAnimation {
@@ -419,6 +438,12 @@ Item {
             value: backdrop
             when: mediaLoader.status === Loader.Ready
         }
+        Binding {
+            target: mediaLoader.item
+            property: "metrics"
+            value: lockScreenUi.metrics
+            when: mediaLoader.status === Loader.Ready
+        }
         Connections {
             target: mediaLoader.item
             ignoreUnknownSignals: true
@@ -436,6 +461,7 @@ Item {
                 margins: PfStyle.edge
             }
             backdrop: backdrop
+            metrics: lockScreenUi.metrics
             virtualKeyboardAvailable: inputPanel.status === Loader.Ready
                                       && (!Qt.platform.pluginName.includes("wayland") || Keyboards.KWinVirtualKeyboard.available)
             virtualKeyboardActive: inputPanel.keyboardActive

@@ -11,13 +11,18 @@ import "components"
 import "components/Icons.js" as Icons
 
 // Right side of the top bar: EN badge, phone, clipboard, the status pill and
-// the notification bell (Main and Quick Settings boards).
+// the notification bell (Main and Quick Settings boards). Heights, paddings, gaps and the
+// icons in the row follow the user's text size (`metrics`), never taller than the panel row;
+// radii and the unread dot do not.
 Item {
     id: bar
 
     required property var backend
+    required property FusionMetrics metrics
     readonly property FusionPalette pal: backend.pal
     property bool popupOpen: false
+    // Height of the pills and buttons: 26 px on the board.
+    readonly property real rowHeight: Math.min(metrics.px(26), Math.max(1, height))
 
     readonly property alias pill: pill
     readonly property alias bell: bellButton
@@ -28,7 +33,7 @@ Item {
     signal bellClicked()
 
     implicitWidth: row.implicitWidth
-    implicitHeight: 34
+    implicitHeight: metrics.px(34)
 
     function formatDuration(ms) {
         const minutes = Math.round(ms / 60000);
@@ -42,15 +47,15 @@ Item {
         id: row
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right
-        spacing: 6
+        spacing: bar.metrics.px(6)
 
         // ---- Keyboard layout badge
         T.AbstractButton {
             id: layoutBadge
             anchors.verticalCenter: parent.verticalCenter
             visible: bar.backend.kbd.shown
-            implicitHeight: 22
-            implicitWidth: layoutLabel.implicitWidth + 16
+            implicitHeight: Math.min(bar.metrics.px(22), bar.rowHeight)
+            implicitWidth: layoutLabel.implicitWidth + bar.metrics.px(16)
             focusPolicy: Qt.TabFocus
             hoverEnabled: true
             text: bar.backend.kbd.label
@@ -72,6 +77,7 @@ Item {
             contentItem: FText {
                 id: layoutLabel
                 pal: bar.pal
+                metrics: bar.metrics
                 text: layoutBadge.text
                 horizontalAlignment: Text.AlignHCenter
                 px: 11
@@ -89,6 +95,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             visible: bar.backend.phone.shown
             pal: bar.pal
+            metrics: bar.metrics
+            implicitHeight: bar.rowHeight
             iconPath: Icons.phone
             text: bar.backend.phone.deviceName
                   ? i18nc("@action:button %1 phone name", "%1 connected", bar.backend.phone.deviceName)
@@ -101,6 +109,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             visible: bar.backend.showClipboard
             pal: bar.pal
+            metrics: bar.metrics
+            implicitHeight: bar.rowHeight
             iconPath: Icons.clipboard
             text: i18nc("@action:button", "Clipboard")
             onClicked: bar.backend.session.openClipboard()
@@ -110,8 +120,8 @@ Item {
         T.AbstractButton {
             id: pill
             anchors.verticalCenter: parent.verticalCenter
-            implicitHeight: 26
-            implicitWidth: pillRow.implicitWidth + 24
+            implicitHeight: bar.rowHeight
+            implicitWidth: pillRow.implicitWidth + bar.metrics.px(24)
             focusPolicy: Qt.TabFocus
             hoverEnabled: true
             text: i18nc("@action:button", "System status")
@@ -130,13 +140,13 @@ Item {
             onClicked: bar.pillClicked()
 
             background: Rectangle {
-                radius: 13
+                radius: height / 2
                 color: bar.popupOpen ? bar.pal.pillOpen : bar.pal.overlay(pill.down ? 0.16 : (pill.hovered ? 0.12 : 0.08))
                 border.width: bar.popupOpen ? 1 : 0
                 border.color: bar.pal.pillOpenEdge
                 Behavior on color { ColorAnimation { duration: 140 } }
                 FocusRing {
-                    baseRadius: 13
+                    baseRadius: pill.height / 2
                     ringColor: bar.pal.focus
                     shown: pill.visualFocus
                 }
@@ -147,13 +157,13 @@ Item {
             Row {
                 id: pillRow
                 anchors.centerIn: parent
-                spacing: 10
+                spacing: bar.metrics.px(10)
 
                 NetworkGlyph {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: bar.backend.net.available && bar.backend.net.kind !== "none"
                     pal: bar.pal
-                    size: 16
+                    size: bar.metrics.px(16)
                     kind: bar.backend.net.kind
                     level: bar.backend.net.level
                 }
@@ -161,18 +171,18 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: bar.backend.audio.available
                     pal: bar.pal
-                    size: 16
+                    size: bar.metrics.px(16)
                     volume: bar.backend.audio.volume
                     muted: bar.backend.audio.muted
                 }
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: bar.backend.battery.present
-                    spacing: 5
+                    spacing: bar.metrics.px(5)
                     BatteryGlyph {
                         anchors.verticalCenter: parent.verticalCenter
                         pal: bar.pal
-                        size: 18
+                        size: bar.metrics.px(18)
                         percent: bar.backend.battery.percent
                         charging: bar.backend.battery.charging
                     }
@@ -180,6 +190,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: bar.backend.showBatteryPercent
                         pal: bar.pal
+                        metrics: bar.metrics
                         text: i18nc("@info battery charge", "%1%", bar.backend.battery.percent)
                         px: 12
                         font.weight: Font.Bold
@@ -189,7 +200,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !(bar.backend.net.available && bar.backend.net.kind !== "none")
                              && !bar.backend.audio.available && !bar.backend.battery.present
-                    size: 16
+                    size: bar.metrics.px(16)
                     path: Icons.settingsSmall
                     color: bar.pal.text
                 }
@@ -257,8 +268,8 @@ Item {
             id: bellButton
             anchors.verticalCenter: parent.verticalCenter
             visible: bar.backend.notif.available
-            implicitWidth: 30
-            implicitHeight: 26
+            implicitWidth: bar.metrics.px(30)
+            implicitHeight: bar.rowHeight
             focusPolicy: Qt.TabFocus
             hoverEnabled: true
             text: bar.backend.notif.unread > 0
@@ -277,10 +288,10 @@ Item {
             onClicked: bar.bellClicked()
 
             background: Rectangle {
-                radius: 13
+                radius: height / 2
                 color: bellButton.hovered ? bar.pal.overlay(bellButton.down ? 0.14 : 0.08) : "transparent"
                 FocusRing {
-                    baseRadius: 13
+                    baseRadius: bellButton.height / 2
                     ringColor: bar.pal.focus
                     shown: bellButton.visualFocus
                 }
@@ -288,7 +299,7 @@ Item {
             contentItem: Item {
                 LineIcon {
                     anchors.centerIn: parent
-                    size: 16
+                    size: bar.metrics.px(16)
                     path: bar.backend.dnd.active ? Icons.bellOff : Icons.bell
                     color: bar.pal.text
                 }
@@ -321,9 +332,10 @@ Item {
     component BarIconButton: T.AbstractButton {
         id: iconButton
         required property FusionPalette pal
+        required property FusionMetrics metrics
         property string iconPath: ""
-        implicitWidth: 28
-        implicitHeight: 26
+        implicitWidth: metrics.px(28)
+        implicitHeight: metrics.px(26)
         focusPolicy: Qt.TabFocus
         hoverEnabled: true
         Accessible.name: text
@@ -341,7 +353,7 @@ Item {
         contentItem: Item {
             LineIcon {
                 anchors.centerIn: parent
-                size: 16
+                size: iconButton.metrics.px(16)
                 path: iconButton.iconPath
                 color: iconButton.pal.text
             }

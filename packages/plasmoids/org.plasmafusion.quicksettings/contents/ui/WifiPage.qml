@@ -18,8 +18,11 @@ ColumnLayout {
 
     required property var backend
     required property FusionPalette pal
-    // 4.5 rows, so a cut row shows that the list scrolls
-    property real listMaxHeight: 206
+    required property FusionMetrics metrics
+    // 4.5 rows, so a cut row shows that the list scrolls (rows follow the text size)
+    property real listMaxHeight: 4.5 * rowHeight + 4 * 2
+    // Height of a network row: 44 px on the board, scaled with the text.
+    readonly property real rowHeight: metrics.px(44)
 
     signal back()
 
@@ -89,13 +92,14 @@ ColumnLayout {
         return "";
     }
 
-    spacing: 12
+    spacing: metrics.px(12)
 
     // ---------------------------------------------------------------- header
     PageHeader {
         id: header
         Layout.fillWidth: true
         pal: page.pal
+        metrics: page.metrics
         title: i18nc("@title", "Wi‑Fi")
         hasSwitch: true
         switchText: i18nc("@action:button", "Wi‑Fi")
@@ -123,7 +127,7 @@ ColumnLayout {
 
             Layout.fillWidth: true
             visible: index === 0
-            implicitHeight: cardColumn.implicitHeight + 24
+            implicitHeight: cardColumn.implicitHeight + 2 * cardColumn.anchors.margins
             radius: 14
             color: page.pal.activeCard
 
@@ -152,17 +156,18 @@ ColumnLayout {
                     left: parent.left
                     right: parent.right
                     top: parent.top
-                    margins: 12
+                    margins: page.metrics.px(12)
                 }
-                spacing: 8
+                spacing: page.metrics.px(8)
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: page.metrics.px(10)
 
                     NetworkGlyph {
+                        id: activeGlyph
                         pal: page.pal
-                        size: 20
+                        size: page.metrics.px(20)
                         kind: "wifi"
                         level: page.levelFor(activeCard.model.Signal || 0)
                         baseColor: page.pal.activeCardText
@@ -174,6 +179,7 @@ ColumnLayout {
                         FText {
                             Layout.fillWidth: true
                             pal: page.pal
+                            metrics: page.metrics
                             text: activeCard.model.ItemUniqueName || activeCard.model.Ssid || ""
                             color: page.pal.activeCardTitle
                             font.weight: Font.ExtraBold
@@ -181,6 +187,7 @@ ColumnLayout {
                         FText {
                             Layout.fillWidth: true
                             pal: page.pal
+                            metrics: page.metrics
                             color: page.pal.activeCardText
                             px: 11.5
                             text: {
@@ -202,8 +209,8 @@ ColumnLayout {
                     }
                     TextButton {
                         pal: page.pal
-                        implicitHeight: 28
-                        radius: 14
+                        metrics: page.metrics
+                        implicitHeight: page.metrics.px(28)
                         fill: page.pal.overlay(0.12)
                         textColor: page.pal.activeCardTitle
                         text: i18nc("@action:button", "Disconnect")
@@ -212,17 +219,19 @@ ColumnLayout {
                 }
                 Row {
                     Layout.fillWidth: true
-                    leftPadding: 30
-                    spacing: 18
+                    leftPadding: activeGlyph.width + page.metrics.px(10)
+                    spacing: page.metrics.px(18)
                     visible: activeCard.connected
                     FText {
                         pal: page.pal
+                        metrics: page.metrics
                         text: page.signalText(activeCard.model.Signal || 0)
                         color: page.pal.activeCardStats
                         px: 11.5
                     }
                     FText {
                         pal: page.pal
+                        metrics: page.metrics
                         visible: activeCard.measured
                         text: "↓ " + page.formatRate(activeCard.rxSpeed)
                         color: page.pal.activeCardStats
@@ -230,6 +239,7 @@ ColumnLayout {
                     }
                     FText {
                         pal: page.pal
+                        metrics: page.metrics
                         visible: activeCard.measured
                         text: "↑ " + page.formatRate(activeCard.txSpeed)
                         color: page.pal.activeCardStats
@@ -244,13 +254,14 @@ ColumnLayout {
     FText {
         Layout.fillWidth: true
         pal: page.pal
-        leftPadding: 4
+        metrics: page.metrics
+        leftPadding: page.metrics.px(4)
         visible: page.backend.net.wifiEnabled
         text: i18nc("@title:group", "Other networks").toUpperCase()
         color: page.pal.tertiary
         px: 11
         font.weight: Font.ExtraBold
-        font.letterSpacing: 0.88
+        font.letterSpacing: page.metrics.font(0.88)
     }
 
     ListView {
@@ -279,7 +290,7 @@ ColumnLayout {
             property bool expanded: false
 
             width: ListView.view.width
-            height: expanded ? 44 + passwordRow.implicitHeight + 8 : 44
+            height: expanded ? page.rowHeight + passwordRow.implicitHeight + page.metrics.px(8) : page.rowHeight
 
             function connect() {
                 if (row.model.Uuid) {
@@ -313,7 +324,7 @@ ColumnLayout {
                     right: parent.right
                     top: parent.top
                 }
-                height: 44
+                height: page.rowHeight
                 hoverEnabled: true
                 onClicked: row.connect()
             }
@@ -323,15 +334,15 @@ ColumnLayout {
                     left: parent.left
                     right: parent.right
                     top: parent.top
-                    leftMargin: 10
-                    rightMargin: 10
+                    leftMargin: page.metrics.px(10)
+                    rightMargin: page.metrics.px(10)
                 }
-                height: 44
-                spacing: 12
+                height: page.rowHeight
+                spacing: page.metrics.px(12)
 
                 NetworkGlyph {
                     pal: page.pal
-                    size: 20
+                    size: page.metrics.px(20)
                     kind: "wifi"
                     level: page.levelFor(row.model.Signal || 0)
                     color: page.pal.text
@@ -340,11 +351,13 @@ ColumnLayout {
                 FText {
                     Layout.fillWidth: true
                     pal: page.pal
+                    metrics: page.metrics
                     text: row.model.ItemUniqueName || row.model.Ssid || ""
                     font.weight: Font.Bold
                 }
                 FText {
                     pal: page.pal
+                    metrics: page.metrics
                     visible: row.busy
                     text: i18nc("@info:status", "Connecting…")
                     color: page.pal.secondary
@@ -352,7 +365,7 @@ ColumnLayout {
                 }
                 LineIcon {
                     visible: page.isSecured(row.model.SecurityType)
-                    size: 14
+                    size: page.metrics.px(14)
                     path: Icons.lock
                     color: page.pal.secondary
                 }
@@ -365,11 +378,11 @@ ColumnLayout {
                     left: parent.left
                     right: parent.right
                     top: parent.top
-                    topMargin: 44
-                    leftMargin: 10
-                    rightMargin: 10
+                    topMargin: page.rowHeight
+                    leftMargin: page.metrics.px(10)
+                    rightMargin: page.metrics.px(10)
                 }
-                spacing: 8
+                spacing: page.metrics.px(8)
 
                 PlasmaExtras.PasswordField {
                     id: passwordField
@@ -384,8 +397,9 @@ ColumnLayout {
                 TextButton {
                     id: connectButton
                     pal: page.pal
+                    metrics: page.metrics
                     primary: true
-                    implicitHeight: 30
+                    implicitHeight: page.metrics.px(30)
                     radius: 10
                     text: i18nc("@action:button", "Connect")
                     enabled: passwordField.text.length >= (row.model.SecurityType === 1 ? 5 : 8)
@@ -413,8 +427,9 @@ ColumnLayout {
     FText {
         Layout.fillWidth: true
         Layout.fillHeight: true
-        Layout.minimumHeight: 44
+        Layout.minimumHeight: page.metrics.px(44)
         pal: page.pal
+        metrics: page.metrics
         visible: !list.visible
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
@@ -443,11 +458,12 @@ ColumnLayout {
     }
     RowLayout {
         Layout.fillWidth: true
-        spacing: 8
+        spacing: page.metrics.px(8)
 
         TextButton {
             pal: page.pal
-            implicitHeight: 32
+            metrics: page.metrics
+            implicitHeight: page.metrics.px(32)
             sidePadding: 0
             fill: "transparent"
             textColor: page.pal.link
@@ -460,9 +476,10 @@ ColumnLayout {
         }
         TextButton {
             pal: page.pal
-            implicitHeight: 32
-            radius: 16
-            sidePadding: 14
+            metrics: page.metrics
+            implicitHeight: page.metrics.px(32)
+            radius: height / 2
+            sidePadding: page.metrics.px(14)
             fill: page.pal.overlay(0.08)
             fontSize: 12.5
             iconPath: Icons.settingsSmall

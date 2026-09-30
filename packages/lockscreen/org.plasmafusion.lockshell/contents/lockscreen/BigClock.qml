@@ -9,6 +9,7 @@ import QtQuick.Effects
 Item {
     id: clock
 
+    required property FusionMetrics metrics
     property date dateTime: new Date()
 
     readonly property bool softwareRendering: GraphicsInfo.api === GraphicsInfo.Software
@@ -16,8 +17,9 @@ Item {
     readonly property string dateText: Qt.locale().toString(dateTime, PfStyle.dateFormatWithoutYear(Qt.locale()))
 
     // CSS line boxes: the date line is 27 px (Manrope's normal line height at 20 px), the
-    // clock line exactly 148 px; glyphs sit centred in their line box as in the browser.
-    readonly property real dateLine: 27
+    // clock line exactly 148 px; glyphs sit centred in their line box as in the browser. The
+    // date follows the user's text size; the clock does not.
+    readonly property real dateLine: metrics.px(27)
     readonly property real clockLine: 148
 
     implicitWidth: Math.max(dateLabel.implicitWidth, timeRow.implicitWidth)
@@ -57,7 +59,7 @@ Item {
             text: clock.dateText
             color: PfStyle.text
             font.family: PfStyle.uiFont
-            font.pixelSize: 20
+            font.pixelSize: clock.metrics.font(20)
             font.weight: Font.DemiBold
             font.styleName: PfStyle.bold
             textFormat: Text.PlainText

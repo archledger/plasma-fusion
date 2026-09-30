@@ -19,13 +19,22 @@ Item {
     id: media
 
     property Backdrop backdrop: null
+    // Text scale and pixel grid of the lock screen window (bound by LockScreenUi once loaded;
+    // board sizes until then).
+    property FusionMetrics metrics: null
+    function px(v: real): real {
+        return metrics ? metrics.px(v) : v;
+    }
+    function font(v: real): real {
+        return metrics ? metrics.font(v) : v;
+    }
 
     signal interacted()
 
     readonly property bool hasPlayer: repeater.count > 0
 
     implicitWidth: repeater.count > 0 && repeater.itemAt(0) ? repeater.itemAt(0).implicitWidth : 0
-    implicitHeight: 72
+    implicitHeight: px(72)
     visible: hasPlayer
 
     Repeater {
@@ -77,8 +86,8 @@ Item {
             backdrop: media.backdrop
             radius: 18
             width: implicitWidth
-            height: 72
-            implicitWidth: showSkip ? 348 : 300
+            height: media.px(72)
+            implicitWidth: media.px(showSkip ? 348 : 300)
             enabled: canControl
 
             Accessible.role: Accessible.Grouping
@@ -86,9 +95,9 @@ Item {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 12
+                anchors.leftMargin: media.px(12)
+                anchors.rightMargin: media.px(12)
+                spacing: media.px(12)
 
                 Item {
                     Layout.preferredWidth: 44
@@ -122,7 +131,7 @@ Item {
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: media.px(2)
 
                     Text {
                         Layout.fillWidth: true
@@ -131,7 +140,7 @@ Item {
                         maximumLineCount: 1
                         color: PfStyle.text
                         font.family: PfStyle.uiFont
-                        font.pixelSize: 13
+                        font.pixelSize: media.font(13)
                         font.weight: Font.DemiBold
                         font.styleName: PfStyle.extraBold
                         textFormat: Text.PlainText
@@ -144,7 +153,7 @@ Item {
                         maximumLineCount: 1
                         color: PfStyle.textSecondary
                         font.family: PfStyle.uiFont
-                        font.pixelSize: 12
+                        font.pixelSize: media.font(12)
                         textFormat: Text.PlainText
                     }
                 }

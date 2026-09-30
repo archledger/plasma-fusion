@@ -3,6 +3,7 @@
 # org.plasmafusion.systemcard (Main board, "Plasma desktop widgets"), copied into the staged HOME
 # as kpackagetool6 -t Plasma/Applet -i would install them:
 #   $STAGE/.local/share/plasma/plasmoids/org.plasmafusion.{weathercard,calendarcard,systemcard}/
+# each with a copy of packages/common/FusionMetrics.qml in contents/ui.
 # Checks: metadata ids, the config schemas parse, the three copies of the shared card files are
 # identical, and (when node is installed) the weather helper tests pass.
 set -euo pipefail
@@ -35,9 +36,12 @@ assert meta["KPlugin"]["Id"] == sys.argv[2], "plugin id does not match the direc
 PY
   python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$src/contents/config/main.xml"
 
+  [ ! -e "$src/contents/ui/FusionMetrics.qml" ] || { echo "desktopcards: $id has its own FusionMetrics.qml" >&2; exit 1; }
+
   rm -rf "$dest"
   mkdir -p "$dest"
   cp -r "$src/metadata.json" "$src/contents" "$dest/"
+  install -m 0644 "$ROOT/packages/common/FusionMetrics.qml" "$dest/contents/ui/FusionMetrics.qml"
   find "$dest" -type d -exec chmod 0755 {} +
   find "$dest" -type f -exec chmod 0644 {} +
   echo "  $id -> ${dest#"$STAGE"/} ($(find "$dest" -type f | wc -l) files)"

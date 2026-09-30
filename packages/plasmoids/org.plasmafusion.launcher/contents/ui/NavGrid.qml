@@ -14,7 +14,7 @@ GridView {
     id: grid
 
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property var launcher
     property bool designLabels: false
     property int columns: 6

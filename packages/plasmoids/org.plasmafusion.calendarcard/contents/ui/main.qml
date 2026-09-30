@@ -24,12 +24,19 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.StandardBackground
     preferredRepresentation: fullRepresentation
+    // Text scale and pixel grid of the card (docs/parts/desktop-cards.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
     // Board card 192 x 188 minus the style's 14 px frame margins (the desktop's 16 px grid makes
-    // the card 192 x 192).
+    // the card 192 x 192), scaled with the text (the layout script sizes the card the same way).
     // Always the card itself: switchWidth/switchHeight would show the icon whenever the card is
     // not larger than them (libplasma appletShouldBeExpanded).
-    readonly property int contentWidth: 164
-    readonly property int contentHeight: 160
+    readonly property int boardWidth: 164
+    readonly property int boardHeight: 160
+    readonly property real contentWidth: m.px(boardWidth)
+    readonly property real contentHeight: m.px(boardHeight)
 
     // Today, refreshed every half minute so the circle moves at midnight (and after a resume).
     // A new day also brings the card back to today's month unless someone is browsing right
@@ -148,10 +155,16 @@ PlasmoidItem {
     fullRepresentation: FocusScope {
         id: card
 
-        Layout.minimumWidth: root.contentWidth
-        Layout.minimumHeight: root.contentHeight
+        // The minimum never exceeds the board size: the desktop keeps a widget at least as large
+        // as its minimum and stores the enlarged geometry, so a text size seen only for a moment
+        // (the shell's font while a Global Theme is being applied) would grow the card for good.
+        // The layout script gives the card the scaled size (docs/parts/desktop-cards.md).
+        Layout.minimumWidth: Math.min(root.contentWidth, root.boardWidth)
+        Layout.minimumHeight: Math.min(root.contentHeight, root.boardHeight)
         Layout.preferredWidth: root.contentWidth
         Layout.preferredHeight: root.contentHeight
+        // 1 px of slack: the snapped sizes at fractional scales are a fraction of a pixel larger.
+        readonly property real fitScale: Math.min(1, (width + 1) / root.contentWidth, (height + 1) / root.contentHeight)
 
         CardPalette { id: cardPalette }
 
@@ -174,11 +187,11 @@ PlasmoidItem {
 
         readonly property bool rtl: Application.layoutDirection === Qt.RightToLeft
         // Board: 5 rows of 21 px with 2 px gaps. A month that needs 6 rows gets 18 px rows with
-        // 1 px gaps, so the card never changes size.
+        // 1 px gaps, so the card never changes size. Rows follow the text size, gaps do not.
         readonly property int offset: (root.shown.getDay() - root.weekStart + 7) % 7
         readonly property int daysInMonth: new Date(root.shown.getFullYear(), root.shown.getMonth() + 1, 0).getDate()
         readonly property int rows: Math.ceil((offset + daysInMonth) / 7)
-        readonly property int rowHeight: rows > 5 ? 18 : 21
+        readonly property real rowHeight: m.px(rows > 5 ? 18 : 21)
         readonly property int rowGap: rows > 5 ? 1 : 2
 
         component ChevronButton: MouseArea {
@@ -187,8 +200,8 @@ PlasmoidItem {
             property string label
             signal triggered()
 
-            implicitWidth: 16
-            implicitHeight: 16
+            implicitWidth: m.px(16)
+            implicitHeight: m.px(16)
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             activeFocusOnTab: true
@@ -213,23 +226,23 @@ PlasmoidItem {
             // Hover and pressed tint around the 16 px glyph (the board shows the glyph only).
             Rectangle {
                 anchors.centerIn: parent
-                width: 22
-                height: 22
+                width: m.px(22)
+                height: m.px(22)
                 radius: 7
                 antialiasing: true
                 color: chevron.pressed ? cardPalette.tint(0.16) : chevron.containsMouse ? cardPalette.tint(0.10) : "transparent"
             }
             LineGlyph {
                 anchors.centerIn: parent
-                size: 16
+                size: m.px(16)
                 color: cardPalette.label
                 path: chevron.next !== card.rtl ? "M9 6l6 6-6 6" : "M15 6l-6 6 6 6"
             }
             Rectangle {
                 visible: chevron.activeFocus
                 anchors.centerIn: parent
-                width: 24
-                height: 24
+                width: m.px(22) + 2
+                height: m.px(22) + 2
                 radius: 8
                 color: "transparent"
                 border.width: 2
@@ -239,21 +252,24 @@ PlasmoidItem {
 
         ColumnLayout {
             // Board: 14 px padding + 1 px edge; the style's frame gives 14.
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.leftMargin: 1
-            anchors.rightMargin: 1
+            // Laid out across the card; when the desktop gave the card less than this text size
+            // needs (the text size was raised after the layout was made), laid out at the size
+            // it needs and scaled down to fit, so nothing is cut off.
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 8
+            width: (card.fitScale < 1 ? root.contentWidth : parent.width) - 2 * 1
+            scale: card.fitScale
+            spacing: m.px(8)
 
             // ---- Month title and arrows
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: m.px(2)
 
                 CardText {
                     id: titleText
                     pal: cardPalette
+                    metrics: m
                     Layout.fillWidth: true
                     px: 13
                     weight: 800
@@ -301,7 +317,7 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 // The board's line box (10.5 px Manrope, CSS line-height normal: 14.3 px). Qt's
                 // Text is 16 px high at this size, which put the days 2 px lower than the board.
-                implicitHeight: 14
+                implicitHeight: m.px(14)
                 readonly property real cellWidth: (width - 6 * weekdayRow.spacing) / 7
                 Row {
                     id: weekdayRow
@@ -314,6 +330,7 @@ PlasmoidItem {
                             required property int index
                             readonly property int day: (root.weekStart + index) % 7
                             pal: cardPalette
+                            metrics: m
                             width: weekdays.cellWidth
                             horizontalAlignment: Text.AlignHCenter
                             px: 10.5
@@ -458,6 +475,7 @@ PlasmoidItem {
                             CardText {
                                 visible: cell.inMonth
                                 pal: cardPalette
+                                metrics: m
                                 anchors.centerIn: parent
                                 px: 11.5
                                 weight: cell.today ? 800 : 500

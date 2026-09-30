@@ -12,12 +12,13 @@ import org.kde.kwin as KWin
 
 // One window of the switcher grid (AltTab board): padding 10, radius 18, a 118 px live preview
 // with radius 10 and a 1 px edge, then the app icon (24) with the app name and window title.
-// Selected: accent fill .16 and a 2 px ring.
+// Selected: accent fill .16 and a 2 px ring. The caption (icon, gap and text) follows the
+// user's text size; the preview and the paddings do not.
 Item {
     id: card
 
     property FusionPalette pal
-    property string fontFamily: "Manrope"
+    property FusionMetrics metrics
     property var windowId
     property var icon
     property string appName
@@ -158,20 +159,20 @@ Item {
         x: 10
         y: thumbBox.y + thumbBox.height + 10
         width: card.width - 20
-        height: Math.max(24, texts.implicitHeight)
+        height: Math.max(appIcon.height, texts.implicitHeight)
 
         Kirigami.Icon {
             id: appIcon
             anchors.verticalCenter: parent.verticalCenter
-            width: 24
-            height: 24
+            width: card.metrics.px(24)
+            height: width
             source: card.icon
         }
 
         Column {
             id: texts
             anchors.verticalCenter: parent.verticalCenter
-            x: appIcon.width + 8
+            x: appIcon.width + card.metrics.px(8)
             width: parent.width - x
 
             Text {
@@ -180,8 +181,8 @@ Item {
                 elide: Text.ElideRight
                 maximumLineCount: 1
                 textFormat: Text.PlainText
-                font.family: card.fontFamily
-                font.pointSize: 9.75
+                font.family: card.metrics.family
+                font.pointSize: card.metrics.font(13) * 0.75
                 font.weight: Font.ExtraBold
                 color: card.pal.text
                 renderType: Text.QtRendering
@@ -194,8 +195,8 @@ Item {
                 elide: Text.ElideRight
                 maximumLineCount: 1
                 textFormat: Text.PlainText
-                font.family: card.fontFamily
-                font.pointSize: 8.625
+                font.family: card.metrics.family
+                font.pointSize: card.metrics.font(11.5) * 0.75
                 color: card.pal.textMuted
                 renderType: Text.QtRendering
             }

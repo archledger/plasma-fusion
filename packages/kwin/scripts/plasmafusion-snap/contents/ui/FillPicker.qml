@@ -13,7 +13,8 @@ import org.kde.kwin
 // "Pick a window for this side" (TabsSnap board, "Fill the other half"): covers the empty
 // half with the blurred wallpaper under a tint (rgba(8,11,24,.55) on dark) and offers the other
 // windows of the workspace as cards. A popup: Esc, a click elsewhere or any focus change
-// dismisses it; it also closes itself after a minute without input.
+// dismisses it; it also closes itself after a minute without input. The heading and the card
+// captions follow the user's text size.
 Window {
     id: picker
 
@@ -24,7 +25,8 @@ Window {
     property var desktop: null
     property int current: 0
 
-    readonly property string fontFamily: "Manrope"
+    // Text scale and pixel grid of this window (docs/parts/kwin.md, "Text scale").
+    readonly property alias metrics: fusionMetrics
     readonly property int pad: 24
     readonly property int spacing: 12
     readonly property int columns: {
@@ -78,6 +80,11 @@ Window {
         } else if (item.y + item.height > flick.contentY + flick.height) {
             flick.contentY = Math.min(flick.contentHeight - flick.height, item.y + item.height - flick.height);
         }
+    }
+
+    FusionMetrics {
+        id: fusionMetrics
+        area: picker.area
     }
 
     FusionPalette {
@@ -177,8 +184,8 @@ Window {
             width: parent.width - 2 * picker.pad
             text: i18nd("plasmafusion", "Pick a window for this side")
             elide: Text.ElideRight
-            font.family: picker.fontFamily
-            font.pointSize: 10.5
+            font.family: picker.metrics.family
+            font.pointSize: picker.metrics.font(14) * 0.75
             font.weight: Font.ExtraBold
             color: picker.pal.pickerHeading
         }
@@ -186,7 +193,7 @@ Window {
         Flickable {
             id: flick
             x: picker.pad
-            y: heading.y + heading.height + 14
+            y: heading.y + heading.height + picker.metrics.px(14)
             width: parent.width - 2 * picker.pad
             height: parent.height - y - picker.pad
             contentWidth: width
@@ -209,7 +216,7 @@ Window {
                         width: picker.cardWidth
                         thumbnailHeight: picker.thumbHeight
                         pal: picker.pal
-                        fontFamily: picker.fontFamily
+                        metrics: picker.metrics
                         window: modelData
                         selected: index === picker.current
                         onHoveredChanged: {

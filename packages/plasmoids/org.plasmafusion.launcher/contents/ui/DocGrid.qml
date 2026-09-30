@@ -5,10 +5,11 @@
 
 import QtQuick
 
-// Two columns of 52 px recent-file rows with a 6 px gap (Launcher board, "Recommended").
+// Two columns of 52 px recent-file rows with a 6 px gap (Launcher board, "Recommended"); the
+// row height follows the user's text size.
 NavGrid {
     columns: 2
     gap: 6
-    itemHeight: 52
+    itemHeight: metrics ? metrics.px(52) : 52
     delegate: DocItem {}
 }

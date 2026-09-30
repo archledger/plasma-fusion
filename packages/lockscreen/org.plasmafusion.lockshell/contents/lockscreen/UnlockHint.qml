@@ -8,11 +8,12 @@ import QtQuick
 GlassPanel {
     id: hint
 
+    required property FusionMetrics metrics
     property alias text: label.text
 
-    implicitWidth: Math.max(320, row.implicitWidth + 48)
-    implicitHeight: 48
-    radius: 24
+    implicitWidth: Math.max(metrics.px(320), row.implicitWidth + metrics.px(48))
+    implicitHeight: metrics.px(48)
+    radius: height / 2
     fill: PfStyle.glassFillPill
     borderColor: PfStyle.glassBorderPill
 
@@ -22,11 +23,11 @@ GlassPanel {
     Row {
         id: row
         anchors.centerIn: parent
-        spacing: 10
+        spacing: hint.metrics.px(10)
 
         LineIcon {
             anchors.verticalCenter: parent.verticalCenter
-            size: 18
+            size: hint.metrics.px(18)
             path: PfStyle.iconLock
         }
         Text {
@@ -34,7 +35,7 @@ GlassPanel {
             anchors.verticalCenter: parent.verticalCenter
             color: PfStyle.text
             font.family: PfStyle.uiFont
-            font.pixelSize: 14
+            font.pixelSize: hint.metrics.font(14)
             font.weight: Font.DemiBold
             font.styleName: PfStyle.bold
             textFormat: Text.PlainText

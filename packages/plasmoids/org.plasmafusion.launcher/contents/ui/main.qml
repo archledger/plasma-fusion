@@ -9,7 +9,6 @@ import QtQuick
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.private.kicker as Kicker
-import org.kde.kirigami as Kirigami
 
 import "../code/launcher.js" as Launcher
 
@@ -33,7 +32,6 @@ PlasmoidItem {
     toolTipMainText: i18nc("@info:tooltip", "Start")
     toolTipSubText: i18nc("@info:tooltip", "Apps, recent files and search")
 
-    readonly property string fontFamily: Qt.fontFamilies().indexOf("Manrope") >= 0 ? "Manrope" : Kirigami.Theme.defaultFont.family
     readonly property bool designLabels: Plasmoid.configuration.designLabels
     readonly property bool showRecommended: Plasmoid.configuration.showRecommended
     readonly property bool menuOpen: launcherWindow.visible
@@ -244,13 +242,17 @@ PlasmoidItem {
     // Card: 680 px wide, centred on the screen; its bottom edge sits `bottomOffset` px above the
     // screen bottom (board: 16 px dock gap + 74 px dock + 18 px) or, when a bottom panel reserves
     // more room, 4 px above that panel's reserved area (a floating panel's reserved area already
-    // includes its floating gap, 16 px in the Plasma Fusion style).
+    // includes its floating gap, 16 px in the Plasma Fusion style). Width and height limits
+    // follow the user's text size (at most the screen width less 32 px), rounded to whole
+    // device pixels of the window's screen.
     function placeWindows() {
         const s = screenArea();
+        const m = launcherWindow.metrics;
         const bottom = Math.min(s.y + s.height - Plasmoid.configuration.bottomOffset, s.availBottom - 4);
         const top = s.availTop + 8;
-        const height = Math.max(420, Math.min(700, bottom - top));
-        launcherWindow.cardHeight = height;
+        const height = Math.max(m.px(420), Math.min(m.px(700), bottom - top));
+        launcherWindow.cardWidth = m.windowSize(Math.min(m.px(680), s.width - 32));
+        launcherWindow.cardHeight = m.windowSize(height);
         launcherWindow.x = Math.round(s.x + (s.width - launcherWindow.cardWidth) / 2);
         launcherWindow.y = Math.round(Math.max(top, bottom - height));
         // The dim layer covers the whole screen; panels stay above it (they are in a higher layer).

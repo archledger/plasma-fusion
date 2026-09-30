@@ -23,12 +23,20 @@ PlasmoidItem {
     // The Plasma style's card: frosted "blurred" widget background over the wallpaper blur.
     Plasmoid.backgroundHints: PlasmaCore.Types.StandardBackground
     preferredRepresentation: fullRepresentation
+    // Text scale and pixel grid of the card (docs/parts/desktop-cards.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
     // Content box of the board card (192 x 122 minus the style's 14 px frame margins, which the
-    // desktop's 16 px grid rounds to a 192 x 128 card).
+    // desktop's 16 px grid rounds to a 192 x 128 card), scaled with the text (the layout script
+    // sizes the card the same way).
     // Always the card itself: switchWidth/switchHeight would show the icon whenever the card is
     // not larger than them (libplasma appletShouldBeExpanded).
-    readonly property int contentWidth: 164
-    readonly property int contentHeight: 94
+    readonly property int boardWidth: 164
+    readonly property int boardHeight: 94
+    readonly property real contentWidth: m.px(boardWidth)
+    readonly property real contentHeight: m.px(boardHeight)
 
     readonly property string source: Plasmoid.configuration.source
     readonly property bool configured: Weather.isSafeSource(source)
@@ -183,10 +191,16 @@ PlasmoidItem {
     fullRepresentation: FocusScope {
         id: card
 
-        Layout.minimumWidth: root.contentWidth
-        Layout.minimumHeight: root.contentHeight
+        // The minimum never exceeds the board size: the desktop keeps a widget at least as large
+        // as its minimum and stores the enlarged geometry, so a text size seen only for a moment
+        // (the shell's font while a Global Theme is being applied) would grow the card for good.
+        // The layout script gives the card the scaled size (docs/parts/desktop-cards.md).
+        Layout.minimumWidth: Math.min(root.contentWidth, root.boardWidth)
+        Layout.minimumHeight: Math.min(root.contentHeight, root.boardHeight)
         Layout.preferredWidth: root.contentWidth
         Layout.preferredHeight: root.contentHeight
+        // 1 px of slack: the snapped sizes at fractional scales are a fraction of a pixel larger.
+        readonly property real fitScale: Math.min(1, (width + 1) / root.contentWidth, (height + 1) / root.contentHeight)
 
         CardPalette { id: cardPalette }
 
@@ -205,20 +219,23 @@ PlasmoidItem {
         ColumnLayout {
             id: column
             // Board: 16 px padding + 1 px edge from the card side (the style's frame gives 14).
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.leftMargin: 3
-            anchors.rightMargin: 3
+            // Laid out across the card; when the desktop gave the card less than this text size
+            // needs (the text size was raised after the layout was made), laid out at the size
+            // it needs and scaled down to fit, so nothing is cut off.
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 6
+            width: (card.fitScale < 1 ? root.contentWidth : parent.width) - 2 * 3
+            scale: card.fitScale
+            spacing: m.px(6)
 
             // "Local weather" and the condition glyph.
             RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
-                spacing: 8
+                Layout.preferredHeight: m.px(22)
+                spacing: m.px(8)
                 CardText {
                     pal: cardPalette
+                    metrics: m
                     Layout.fillWidth: true
                     px: 12
                     weight: 700
@@ -226,7 +243,7 @@ PlasmoidItem {
                     text: root.title
                 }
                 WeatherGlyph {
-                    size: 22
+                    size: m.px(22)
                     color: cardPalette.weatherIcon
                     condition: root.glyph
                 }
@@ -236,9 +253,10 @@ PlasmoidItem {
             Item {
                 visible: root.configured
                 Layout.fillWidth: true
-                Layout.preferredHeight: 42
+                Layout.preferredHeight: m.px(42)
                 CardText {
                     pal: cardPalette
+                    metrics: m
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
@@ -253,6 +271,7 @@ PlasmoidItem {
             CardText {
                 visible: root.configured
                 pal: cardPalette
+                metrics: m
                 Layout.fillWidth: true
                 px: 12
                 color: cardPalette.body
@@ -269,13 +288,15 @@ PlasmoidItem {
                 id: setupButton
                 visible: !root.configured
                 pal: cardPalette
-                Layout.topMargin: 4
+                metrics: m
+                Layout.topMargin: m.px(4)
                 text: i18nc("@action:button", "Set location")
                 onTriggered: root.openSettings()
             }
             CardText {
                 visible: !root.configured
                 pal: cardPalette
+                metrics: m
                 Layout.fillWidth: true
                 px: 12
                 color: cardPalette.body

@@ -15,7 +15,8 @@ import org.kde.plasma.core as PlasmaCore
 // the maximize button, as on the board.
 //
 // It is a popup: Esc, a click outside or any focus change closes it. It also closes itself
-// after 30 s without input.
+// after 30 s without input. The whole card follows the user's text size (it is sized before
+// it is shown, so the scale comes from the window's output); radii and zone gaps do not.
 PlasmaCore.Dialog {
     id: flyout
 
@@ -33,14 +34,15 @@ PlasmaCore.Dialog {
     readonly property int activeLayout: hoverLayout >= 0 ? hoverLayout : focusLayout
     readonly property int activeZone: hoverLayout >= 0 ? hoverZone : focusZone
 
-    readonly property string fontFamily: "Manrope"
-    readonly property int pad: 13 // 12 + the 1 px edge
+    // Text scale and pixel grid (docs/parts/kwin.md, "Text scale").
+    readonly property alias metrics: fusionMetrics
+    readonly property real pad: metrics.px(12) + 1 // 12 + the 1 px edge
 
     signal preview(int layoutIndex, int zoneIndex)
     signal chosen(int layoutIndex, int zoneIndex)
     signal dismissed()
 
-    readonly property int cardWidth: 280
+    readonly property int cardWidth: metrics.windowSize(metrics.px(280))
     readonly property int cardHeight: Math.ceil(column.implicitHeight) + 2 * pad
     readonly property real marginLeft: margins.left
     readonly property real marginTop: margins.top
@@ -154,6 +156,11 @@ PlasmaCore.Dialog {
         FusionPalette {
             id: palette_
         }
+        FusionMetrics {
+            id: fusionMetrics
+            screenScale: flyout.target && flyout.target.output ? flyout.target.output.devicePixelRatio : 0
+            area: flyout.screenArea
+        }
 
         Timer {
             id: idle
@@ -213,7 +220,7 @@ PlasmaCore.Dialog {
                 x: flyout.pad
                 y: flyout.pad
                 width: parent.width - 2 * flyout.pad
-                spacing: 10
+                spacing: flyout.metrics.px(10)
 
                 Item {
                     width: parent.width
@@ -222,8 +229,8 @@ PlasmaCore.Dialog {
                     Text {
                         id: heading
                         text: i18nd("plasmafusion", "Snap layouts")
-                        font.family: flyout.fontFamily
-                        font.pointSize: 9
+                        font.family: flyout.metrics.family
+                        font.pointSize: flyout.metrics.font(12) * 0.75
                         font.weight: Font.ExtraBold
                         color: flyout.pal.heading
                     }
@@ -231,8 +238,8 @@ PlasmaCore.Dialog {
                         anchors.right: parent.right
                         anchors.verticalCenter: heading.verticalCenter
                         text: "Meta+Z"
-                        font.family: flyout.fontFamily
-                        font.pointSize: 8.25
+                        font.family: flyout.metrics.family
+                        font.pointSize: flyout.metrics.font(11) * 0.75
                         color: flyout.pal.shortcut
                     }
                 }
@@ -240,7 +247,7 @@ PlasmaCore.Dialog {
                 Grid {
                     id: cards
                     columns: 2
-                    spacing: 10
+                    spacing: flyout.metrics.px(10)
 
                     Repeater {
                         model: flyout.layouts.length
@@ -249,7 +256,7 @@ PlasmaCore.Dialog {
                             required property int index
                             readonly property var layout: flyout.layouts[index]
                             width: (column.width - cards.spacing) / 2
-                            height: 58
+                            height: flyout.metrics.px(58)
                             radius: 9
                             color: flyout.pal.cardFill
 
@@ -309,8 +316,8 @@ PlasmaCore.Dialog {
                     width: parent.width
                     text: i18nd("plasmafusion", "Or drag the window to a screen edge")
                     elide: Text.ElideRight
-                    font.family: flyout.fontFamily
-                    font.pointSize: 8.625
+                    font.family: flyout.metrics.family
+                    font.pointSize: flyout.metrics.font(11.5) * 0.75
                     color: flyout.pal.muted
                 }
             }

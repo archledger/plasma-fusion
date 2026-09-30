@@ -10,6 +10,7 @@ import org.kde.plasma.private.battery
 GlassPanel {
     id: chip
 
+    required property FusionMetrics metrics
     property bool virtualKeyboardAvailable: false
     property bool virtualKeyboardActive: false
 
@@ -23,9 +24,9 @@ GlassPanel {
     readonly property bool hasBattery: batteryControl.hasInternalBatteries
     readonly property bool hasContent: hasLayout || virtualKeyboardAvailable || hasNetwork || hasBattery
 
-    implicitWidth: row.implicitWidth + 32
-    implicitHeight: 40
-    radius: 20
+    implicitWidth: row.implicitWidth + metrics.px(32)
+    implicitHeight: metrics.px(40)
+    radius: height / 2
     visible: hasContent
 
     PW.KeyboardLayoutSwitcher {
@@ -41,7 +42,7 @@ GlassPanel {
     Row {
         id: row
         anchors.centerIn: parent
-        spacing: 14
+        spacing: chip.metrics.px(14)
 
         // Keyboard layout: the badge switches to the next layout when there are several.
         Rectangle {
@@ -51,8 +52,8 @@ GlassPanel {
 
             anchors.verticalCenter: parent.verticalCenter
             visible: chip.hasLayout
-            width: badgeText.implicitWidth + 14
-            height: 21
+            width: badgeText.implicitWidth + chip.metrics.px(14)
+            height: chip.metrics.px(21)
             radius: 5
             antialiasing: true
             color: badgeMouse.containsMouse && switchable ? PfStyle.chipFill : "transparent"
@@ -82,7 +83,7 @@ GlassPanel {
                 text: layoutBadge.name
                 color: PfStyle.text
                 font.family: PfStyle.uiFont
-                font.pixelSize: 11
+                font.pixelSize: chip.metrics.font(11)
                 font.weight: Font.DemiBold
                 font.styleName: PfStyle.extraBold
                 textFormat: Text.PlainText
@@ -130,22 +131,22 @@ GlassPanel {
             anchors.verticalCenter: parent.verticalCenter
             source: "NetworkIndicator.qml"
             visible: chip.hasNetwork
-            width: visible ? 17 : 0
-            height: 17
+            width: visible ? chip.metrics.px(17) : 0
+            height: chip.metrics.px(17)
         }
 
         Row {
             id: battery
             anchors.verticalCenter: parent.verticalCenter
             visible: chip.hasBattery
-            spacing: 5
+            spacing: chip.metrics.px(5)
 
             Accessible.role: Accessible.Indicator
             Accessible.name: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "Battery at %1%", batteryControl.percent)
 
             LineIcon {
                 anchors.verticalCenter: parent.verticalCenter
-                size: 19
+                size: chip.metrics.px(19)
                 path: PfStyle.iconBattery
                 fillPath: PfStyle.batteryFill(batteryControl.percent)
                 fillColor: batteryControl.percent <= 10 && !batteryControl.pluggedIn ? "#ff6b6b"
@@ -157,7 +158,7 @@ GlassPanel {
                 text: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "%1%", batteryControl.percent)
                 color: PfStyle.text
                 font.family: PfStyle.uiFont
-                font.pixelSize: 13
+                font.pixelSize: chip.metrics.font(13)
                 font.weight: Font.DemiBold
                 font.styleName: PfStyle.bold
                 textFormat: Text.PlainText

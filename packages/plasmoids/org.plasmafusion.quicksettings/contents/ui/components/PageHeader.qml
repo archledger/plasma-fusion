@@ -6,11 +6,13 @@ import QtQuick.Layouts
 
 import "Icons.js" as Icons
 
-// Header of a drill-down page: back button, title and an optional switch.
+// Header of a drill-down page: back button, title and an optional switch. The title and the
+// gap follow the user's text size (`metrics`); the round back button and the switch do not.
 RowLayout {
     id: header
 
     required property FusionPalette pal
+    required property FusionMetrics metrics
     property string title: ""
     property bool hasSwitch: false
     property bool switchChecked: false
@@ -22,7 +24,7 @@ RowLayout {
     signal back()
     signal switchToggled(bool on)
 
-    spacing: 10
+    spacing: metrics.px(10)
 
     IconButton {
         id: backButton
@@ -37,6 +39,7 @@ RowLayout {
     FText {
         Layout.fillWidth: true
         pal: header.pal
+        metrics: header.metrics
         text: header.title
         px: 16
         font.weight: Font.ExtraBold

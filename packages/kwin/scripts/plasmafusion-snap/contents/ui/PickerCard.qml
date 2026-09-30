@@ -10,11 +10,12 @@ import org.kde.kwin
 
 // A window offered for the empty half (TabsSnap board): radius 12, padding 8, fill .06, a live
 // preview with a title-bar-like top, app icon and name; selected: accent fill .22 + 2 px ring.
+// The caption (icon, gap and text) follows the user's text size.
 Item {
     id: card
 
     property FusionPalette pal
-    property string fontFamily: "Manrope"
+    property FusionMetrics metrics
     property var window: null
     property bool selected: false
     property real thumbnailHeight: 140
@@ -147,20 +148,20 @@ Item {
         x: 8
         y: thumbBox.y + thumbBox.height + 8
         width: card.width - 16
-        height: Math.max(20, texts.implicitHeight)
+        height: Math.max(appIcon.height, texts.implicitHeight)
 
         Kirigami.Icon {
             id: appIcon
             anchors.verticalCenter: parent.verticalCenter
-            width: 20
-            height: 20
+            width: card.metrics.px(20)
+            height: width
             source: card.window ? card.window.icon : ""
         }
 
         Column {
             id: texts
             anchors.verticalCenter: parent.verticalCenter
-            x: appIcon.width + 8
+            x: appIcon.width + card.metrics.px(8)
             width: parent.width - x
 
             Text {
@@ -169,8 +170,8 @@ Item {
                 elide: Text.ElideRight
                 maximumLineCount: 1
                 textFormat: Text.PlainText
-                font.family: card.fontFamily
-                font.pointSize: 9.75
+                font.family: card.metrics.family
+                font.pointSize: card.metrics.font(13) * 0.75
                 font.weight: Font.ExtraBold
                 color: card.pal.text
             }
@@ -181,8 +182,8 @@ Item {
                 elide: Text.ElideRight
                 maximumLineCount: 1
                 textFormat: Text.PlainText
-                font.family: card.fontFamily
-                font.pointSize: 8.625
+                font.family: card.metrics.family
+                font.pointSize: card.metrics.font(11.5) * 0.75
                 color: card.pal.muted
             }
         }

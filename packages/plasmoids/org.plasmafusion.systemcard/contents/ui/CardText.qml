@@ -6,17 +6,20 @@
 import QtQuick
 
 // Text in the boards' type scale: size in board pixels (fractions allowed, 10.5 and 11.5 are
-// used) and CSS weight. Shared by the three card widgets (identical copies).
+// used), scaled by the user's text size, and CSS weight. Shared by the three card widgets
+// (identical copies). The families come resolved from the card's FusionMetrics.
 Text {
     required property CardPalette pal
+    // The card's metrics (one per card, passed down from its root).
+    required property FusionMetrics metrics
     property bool display: false
     property real px: 13
     property int weight: 400
 
     color: pal.text
-    font.family: display ? pal.displayFont : pal.uiFont
+    font.family: display ? metrics.displayFamily : metrics.family
     // Logical pixels to points at Qt's 96 dpi logical resolution.
-    font.pointSize: px * 0.75
+    font.pointSize: metrics.font(px) * 0.75
     font.weight: weight
     textFormat: Text.PlainText
     maximumLineCount: 1

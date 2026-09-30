@@ -26,6 +26,8 @@ FocusScope {
     required property color inkColor
     required property color focusColor
     property int location: PlasmaCore.Types.TopEdge
+    // Height of the cells (hit areas): the pill's height.
+    property real cellHeight: 24
 
     readonly property int cellPadding: 2
 
@@ -33,7 +35,7 @@ FocusScope {
     signal overviewRequested()
 
     implicitWidth: row.implicitWidth
-    implicitHeight: 24
+    implicitHeight: cellHeight
     activeFocusOnTab: count > 1
 
     Accessible.role: Accessible.PageTabList

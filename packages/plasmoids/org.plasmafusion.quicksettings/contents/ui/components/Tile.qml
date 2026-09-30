@@ -7,10 +7,12 @@ import org.kde.plasma.core as PlasmaCore
 
 // Quick settings tile: 60 px tall, 16 px radius, accent fill when on. With
 // "hasDetails" the right part is a separate chevron button that opens a list.
+// Height, paddings, icons and text follow the user's text size (`metrics`); the radius does not.
 Item {
     id: tile
 
     required property FusionPalette pal
+    required property FusionMetrics metrics
     property string title: ""
     property string subtitle: ""
     property string iconPath: ""
@@ -27,7 +29,7 @@ Item {
     readonly property alias mainButton: mainArea
     readonly property alias detailsButton: chevronArea
 
-    implicitHeight: 60
+    implicitHeight: metrics.px(60)
     implicitWidth: 158
     opacity: available ? 1 : 0.55
 
@@ -89,16 +91,17 @@ Item {
         Row {
             anchors {
                 left: parent.left
-                leftMargin: 14
+                leftMargin: tile.metrics.px(14)
                 right: parent.right
-                rightMargin: tile.hasDetails ? 0 : 14
+                rightMargin: tile.hasDetails ? 0 : tile.metrics.px(14)
                 verticalCenter: parent.verticalCenter
             }
-            spacing: 10
+            spacing: tile.metrics.px(10)
 
             LineIcon {
+                id: tileIcon
                 anchors.verticalCenter: parent.verticalCenter
-                size: 20
+                size: tile.metrics.px(20)
                 path: tile.iconPath
                 fillPath: tile.iconFillPath
                 color: tile.foreground
@@ -106,11 +109,12 @@ Item {
 
             Column {
                 anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - 30
+                width: parent.width - tileIcon.width - parent.spacing
                 spacing: 1
 
                 FText {
                     pal: tile.pal
+                    metrics: tile.metrics
                     width: parent.width
                     text: tile.title
                     color: tile.foreground
@@ -119,6 +123,7 @@ Item {
                 }
                 FText {
                     pal: tile.pal
+                    metrics: tile.metrics
                     width: parent.width
                     text: tile.subtitle
                     visible: text.length > 0
@@ -140,7 +145,7 @@ Item {
     T.AbstractButton {
         id: chevronArea
         visible: tile.hasDetails
-        width: tile.hasDetails ? 34 : 0
+        width: tile.hasDetails ? tile.metrics.px(34) : 0
         anchors {
             right: parent.right
             top: parent.top
@@ -170,10 +175,10 @@ Item {
         LineIcon {
             anchors {
                 right: parent.right
-                rightMargin: 10
+                rightMargin: tile.metrics.px(10)
                 verticalCenter: parent.verticalCenter
             }
-            size: 14
+            size: tile.metrics.px(14)
             path: "M9 6l6 6-6 6"
             color: tile.foreground
         }

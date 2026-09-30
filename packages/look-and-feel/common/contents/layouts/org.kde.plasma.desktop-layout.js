@@ -5,7 +5,8 @@
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
 
-    Top bar: a 34 px, full-width, non-floating panel at the top edge:
+    Top bar: a 34 px, full-width, non-floating panel at the top edge (34 px at the design's
+    9.75 pt UI font, scaled with the user's text size at layout time):
         app name | global menu | spacer | clock pill | spacer | system tray | quick settings
     Dock: a floating, fit-content, centred panel at the bottom edge, 88 px thick
         (72 px of visible dock plus 16 px of transparent headroom that the Plasma style keeps
@@ -17,7 +18,25 @@
     layout is never left empty.
 */
 
-var TOP_BAR_THICKNESS = 34;
+// Text scale at layout time, as FusionMetrics computes it in the widgets (docs/parts/lookandfeel.md,
+// "Text scale"): the UI font's point size against the design's 9.75 pt (Manrope 13 px), clamped
+// to 0.85-1.6. A font without a point size (set in pixels) falls back to the scripting engine's
+// grid unit, which is 18 at the design font (24 at 12.75 pt).
+function textScale() {
+    var pt = NaN;
+    var font = ConfigFile("kdeglobals", "General").readEntry("font");
+    if (font !== undefined && font !== null && String(font) !== "") {
+        pt = parseFloat(String(font).split(",")[1]);
+    }
+    var s = pt > 0 ? pt / 9.75 : gridUnit / 18;
+    return Math.max(0.85, Math.min(1.6, s));
+}
+var TS = textScale();
+
+// The bar holds text: 34 px at the design font, scaled with it (whole logical px: the scripting
+// engine does not know the screen's scale, so the widgets snap their own pills).
+var TOP_BAR_THICKNESS = Math.round(34 * TS);
+// The dock's tile is its own setting (48 px), not a text size.
 var DOCK_THICKNESS = 88;
 
 // Items the quick-settings widget replaces: the status pill, tiles and bell (first six), the
@@ -197,28 +216,35 @@ if (!addFirst(dock, ["org.plasmafusion.dock"])) {
 
 // Desktop cards in a column on the right, as on the board: weather, calendar, CPU/memory.
 // The Plasma Fusion card widgets are drawn at the board's card size (192 px wide; 122, 188 and 92
-// px high). The desktop places widgets on a 16 px grid, so each card is its board size rounded
-// up to whole cells: 192 x 128, 192 x 192 and 192 x 96, 16 px apart (board: 12). Without them
-// the stock widgets take their place, sized from their own minimums plus the card background's
-// padding, rounded up to whole cells (they never shrink below that):
+// px high): a content box of 164 x 94, 164 x 160 and 164 x 64 that follows the text size, plus
+// the style's 14 px frame on each side. The desktop places widgets on a 16 px grid, so each card
+// is its size rounded up to whole cells: 192 x 128, 192 x 192 and 192 x 96 at the design font,
+// 16 px apart (board: 12). Without them the stock widgets take their place, sized from their own
+// minimums plus the card background's padding, rounded up to whole cells (they never shrink below
+// that):
 //   width     21 grid units (the stock calendar's month view is 1.5 times its height)
 //   weather   10 grid units high (the stock weather view's minimum)
 //   calendar  14 grid units high (the stock month view's minimum)
 //   monitor    6 grid units high (two horizontal bars with labels; smaller shows only an icon)
 // The column keeps one cell (16 px) from the right edge and from the top bar (board: 22).
-// Widgets measure in Kirigami grid units (the UI font's line height: 18 px for Manrope 13 px);
-// the scripting engine's own `gridUnit` is the height of an "M", so it is not used here.
-var GRID_UNIT = 18;
+// Widgets measure in Kirigami grid units: the UI font's line height, made even (18 px for
+// Manrope 13 px), so it follows the text scale.
+var GRID_UNIT = 2 * Math.round(9 * TS);
 var CELL = 16;
 var CARD_PADDING = 14;  // margins of the Plasma style's card background (widgets/background)
 function cells(px) { return Math.ceil(px / CELL) * CELL; }
+// A Fusion card: its content box at this text size plus the frame.
+function cardSize(width, height) { return { width: cells(width * TS + 2 * CARD_PADDING), height: cells(height * TS + 2 * CARD_PADDING) }; }
 var STOCK_WIDTH = cells(GRID_UNIT * 21 + 2 * CARD_PADDING);
+var WEATHER_CARD = cardSize(164, 94);
+var CALENDAR_CARD = cardSize(164, 160);
+var SYSTEM_CARD = cardSize(164, 64);
 var CARDS = [
-    [{ plugin: "org.plasmafusion.weathercard", width: cells(192), height: cells(122) },
+    [{ plugin: "org.plasmafusion.weathercard", width: WEATHER_CARD.width, height: WEATHER_CARD.height },
      { plugin: "org.kde.plasma.weather", width: STOCK_WIDTH, height: cells(GRID_UNIT * 10 + 2 * CARD_PADDING) }],
-    [{ plugin: "org.plasmafusion.calendarcard", width: cells(192), height: cells(188) },
+    [{ plugin: "org.plasmafusion.calendarcard", width: CALENDAR_CARD.width, height: CALENDAR_CARD.height },
      { plugin: "org.kde.plasma.calendar", width: STOCK_WIDTH, height: cells(GRID_UNIT * 14 + 2 * CARD_PADDING) }],
-    [{ plugin: "org.plasmafusion.systemcard", width: cells(192), height: cells(92) },
+    [{ plugin: "org.plasmafusion.systemcard", width: SYSTEM_CARD.width, height: SYSTEM_CARD.height },
      { plugin: "org.kde.plasma.systemmonitor", width: STOCK_WIDTH, height: cells(GRID_UNIT * 6 + 2 * CARD_PADDING) }]
 ];
 

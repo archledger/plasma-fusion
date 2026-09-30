@@ -11,11 +11,11 @@ T.AbstractButton {
     id: pill
 
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property bool back: false
 
-    implicitWidth: row.implicitWidth + 18
-    implicitHeight: 26
+    implicitWidth: row.implicitWidth + metrics.px(18)
+    implicitHeight: metrics.px(26)
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
 
@@ -26,33 +26,33 @@ T.AbstractButton {
     Keys.onEnterPressed: clicked()
 
     background: Rectangle {
-        radius: 13
+        radius: height / 2
         color: pill.hovered || pill.down ? pill.pal.pillHover : pill.pal.pill
         antialiasing: true
 
         FocusRing {
             visible: pill.visualFocus
-            baseRadius: 13
+            baseRadius: pill.height / 2
             ringColor: pill.pal.focusRing
         }
     }
 
     contentItem: Item {
         implicitWidth: row.implicitWidth
-        implicitHeight: 26
+        implicitHeight: pill.metrics.px(26)
 
         Row {
             id: row
-            x: pill.back ? 6 : 12
+            x: pill.metrics.px(pill.back ? 6 : 12)
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 4
+            spacing: pill.metrics.px(4)
             layoutDirection: pill.back ? Qt.RightToLeft : Qt.LeftToRight
 
             FusionText {
                 anchors.verticalCenter: parent.verticalCenter
                 text: pill.text
                 color: pill.pal.textSecondary
-                family: pill.fontFamily
+                metrics: pill.metrics
                 px: 12
                 weight: 700
             }
@@ -60,7 +60,7 @@ T.AbstractButton {
             Glyph {
                 anchors.verticalCenter: parent.verticalCenter
                 name: pill.back ? "chevronLeft" : "chevronRight"
-                size: 14
+                size: pill.metrics.px(14)
                 color: pill.pal.textSecondary
             }
         }

@@ -6,17 +6,18 @@
 import QtQuick
 import QtQuick.Templates as T
 
-// Category chip: 30 px pill, 14 px side padding, 12 px text (800 when selected, 700 otherwise).
+// Category chip: 30 px pill, 14 px side padding, 12 px text (800 when selected, 700 otherwise),
+// scaled with the user's text size.
 T.AbstractButton {
     id: chip
 
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property bool selected: false
     property bool showFocus: visualFocus
 
-    implicitWidth: label.implicitWidth + 28
-    implicitHeight: 30
+    implicitWidth: label.implicitWidth + metrics.px(28)
+    implicitHeight: metrics.px(30)
     focusPolicy: Qt.NoFocus
     hoverEnabled: true
 
@@ -25,13 +26,13 @@ T.AbstractButton {
     Accessible.checked: selected
 
     background: Rectangle {
-        radius: 15
+        radius: height / 2
         color: chip.selected ? chip.pal.accent : (chip.hovered ? chip.pal.chipHover : chip.pal.chip)
         antialiasing: true
 
         FocusRing {
             visible: chip.showFocus
-            baseRadius: 15
+            baseRadius: chip.height / 2
             ringColor: chip.pal.focusRing
         }
     }
@@ -40,7 +41,7 @@ T.AbstractButton {
         id: label
         text: chip.text
         color: chip.selected ? "#ffffff" : chip.pal.textSecondary
-        family: chip.fontFamily
+        metrics: chip.metrics
         px: 12
         weight: chip.selected ? 800 : 700
         horizontalAlignment: Text.AlignHCenter

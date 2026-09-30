@@ -11,6 +11,7 @@ import QtQuick.Templates as T
 T.TextField {
     id: field
 
+    required property FusionMetrics metrics
     property bool showPassword: false
 
     echoMode: showPassword ? TextInput.Normal : TextInput.Password
@@ -26,10 +27,10 @@ T.TextField {
     placeholderTextColor: PfStyle.placeholder
 
     font.family: PfStyle.uiFont
-    font.pixelSize: 16
-    font.letterSpacing: echoMode === TextInput.Password && length > 0 ? 3.2 : 0
+    font.pixelSize: metrics.font(16)
+    font.letterSpacing: echoMode === TextInput.Password && length > 0 ? metrics.font(3.2) : 0
 
-    implicitHeight: 36
+    implicitHeight: metrics.px(36)
     implicitWidth: 200
 
     Accessible.name: placeholderText
@@ -42,7 +43,7 @@ T.TextField {
         text: field.placeholderText
         color: field.placeholderTextColor
         font.family: PfStyle.uiFont
-        font.pixelSize: 16
+        font.pixelSize: field.metrics.font(16)
         elide: Text.ElideRight
         textFormat: Text.PlainText
     }

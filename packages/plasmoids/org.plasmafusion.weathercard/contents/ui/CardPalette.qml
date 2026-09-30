@@ -6,8 +6,8 @@
 import QtQuick
 import org.kde.kirigami as Kirigami
 
-// Colours and fonts of the desktop cards (Main.dc.html / MainLight.dc.html, "Plasma desktop
-// widgets"). The card itself is the Plasma style's widget background (StandardBackground, the
+// Colours of the desktop cards (Main.dc.html / MainLight.dc.html, "Plasma desktop
+// widgets"); the fonts come from FusionMetrics. The card itself is the Plasma style's widget background (StandardBackground, the
 // "blurred" frame over the wallpaper blur); this item only picks the dark or light text set for
 // it. Shared by the three card widgets: the same file is in each package (the build checks that
 // the copies are identical).
@@ -37,9 +37,4 @@ Item {
     function tint(alpha: real): color {
         return dark ? Qt.rgba(1, 1, 1, alpha) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, alpha);
     }
-
-    readonly property var families: Qt.fontFamilies()
-    // The build installs one static file per weight, so font.weight picks the real instance.
-    readonly property string uiFont: families.indexOf("Manrope") !== -1 ? "Manrope" : Kirigami.Theme.defaultFont.family
-    readonly property string displayFont: families.indexOf("Space Grotesk") !== -1 ? "Space Grotesk" : uiFont
 }

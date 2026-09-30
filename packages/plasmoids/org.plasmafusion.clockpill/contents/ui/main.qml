@@ -46,6 +46,14 @@ PlasmoidItem {
     property bool popupOpen: false
     property bool openOnPress: false
 
+    // Text scale and pixel grid of the panel window (docs/parts/shell-topbar.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
+    // Board padding and gap of the pill (12), scaled with the text.
+    readonly property real pillPadding: m.px(12)
+
     // ---- Formats
     readonly property string timeFormat: Formats.timeFormat(Qt.locale().timeFormat(Locale.ShortFormat),
                                                             Plasmoid.configuration.use24hFormat,
@@ -251,7 +259,8 @@ PlasmoidItem {
 
         anchors.verticalCenter: parent.verticalCenter
         width: row.implicitWidth
-        height: 24
+        // 24 px on the board, scaled with the text, never taller than the panel row.
+        height: root.vertical ? m.px(24) : Math.min(m.px(24), Math.max(1, root.height))
         onWidthChanged: root.placePill()
 
         // Wheel over any part of the pill switches workspaces (one step per notch).
@@ -280,7 +289,7 @@ PlasmoidItem {
         Rectangle {
             id: background
             anchors.fill: parent
-            radius: 12
+            radius: height / 2
             antialiasing: true
             color: root.popupOpen ? Qt.rgba(91 / 255, 157 / 255, 1, 0.35)
                  : root.tint(dateArea.pressed ? 0.16 : dateArea.containsMouse ? 0.12 : 0.08)
@@ -299,7 +308,7 @@ PlasmoidItem {
 
             // Padding 12; the dot cells carry 2 px of it themselves.
             Item {
-                width: root.showDots ? 12 - dots.cellPadding : 0
+                width: root.showDots ? root.pillPadding - dots.cellPadding : 0
                 height: 1
             }
 
@@ -308,6 +317,7 @@ PlasmoidItem {
                 visible: root.showDots
                 width: visible ? implicitWidth : 0
                 anchors.verticalCenter: parent.verticalCenter
+                cellHeight: pill.height
                 count: root.desktopCount
                 currentIndex: root.currentIndex
                 names: desktopInfo.desktopNames
@@ -325,10 +335,10 @@ PlasmoidItem {
             PlasmaCore.ToolTipArea {
                 id: dateTip
 
-                readonly property int leading: root.showDots ? 12 - dots.cellPadding : 12
+                readonly property real leading: root.showDots ? root.pillPadding - dots.cellPadding : root.pillPadding
 
                 anchors.verticalCenter: parent.verticalCenter
-                width: leading + timeRow.implicitWidth + 12
+                width: leading + timeRow.implicitWidth + root.pillPadding
                 height: pill.height
                 active: !root.popupOpen
                 location: Plasmoid.location
@@ -360,13 +370,13 @@ PlasmoidItem {
                         id: timeRow
                         x: dateTip.leading
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: 12
+                        spacing: root.pillPadding
 
                         FusionText {
                             id: dateLabel
                             anchors.verticalCenter: parent.verticalCenter
                             visible: Plasmoid.configuration.showDate
-                            family: "Manrope"
+                            metrics: m
                             px: 13
                             weight: 700
                             color: root.textColor
@@ -376,7 +386,8 @@ PlasmoidItem {
                         FusionText {
                             id: timeLabel
                             anchors.verticalCenter: parent.verticalCenter
-                            family: "Space Grotesk"
+                            metrics: m
+                            display: true
                             px: 13
                             weight: 600
                             color: root.textColor
@@ -395,7 +406,7 @@ PlasmoidItem {
             visible: dateArea.activeFocus
             anchors.fill: parent
             anchors.margins: -4
-            radius: 16
+            radius: height / 2
             color: "transparent"
             border.width: 2
             border.color: root.focusColor

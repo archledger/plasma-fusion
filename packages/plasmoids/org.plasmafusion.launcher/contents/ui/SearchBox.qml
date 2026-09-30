@@ -7,11 +7,12 @@ import QtQuick
 import QtQuick.Templates as T
 
 // Search field of the launcher: 50 px pill, 1.5 px accent border while focused, "Meta" hint badge.
+// Heights, paddings and the text follow the user's text size (`metrics`); the border does not.
 FocusScope {
     id: box
 
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property alias text: input.text
     property alias input: input
 
@@ -20,7 +21,7 @@ FocusScope {
     signal accepted()
     signal escapePressed()
 
-    implicitHeight: 50
+    implicitHeight: metrics.px(50)
 
     function clear() {
         input.clear();
@@ -28,7 +29,7 @@ FocusScope {
 
     Rectangle {
         anchors.fill: parent
-        radius: 25
+        radius: height / 2
         color: box.pal.field
         border.width: 1.5
         border.color: input.activeFocus ? box.pal.fieldBorder : box.pal.fieldBorderIdle
@@ -38,10 +39,10 @@ FocusScope {
     Glyph {
         id: searchGlyph
         // 1.5 px border + 18 px padding (the board's box-sizing: border-box).
-        x: 19.5
+        x: 1.5 + box.metrics.px(18)
         anchors.verticalCenter: parent.verticalCenter
         name: "search"
-        size: 20
+        size: box.metrics.px(20)
         color: box.pal.textSecondary
     }
 
@@ -49,17 +50,17 @@ FocusScope {
         id: input
         focus: true
         anchors.left: searchGlyph.right
-        anchors.leftMargin: 12
+        anchors.leftMargin: box.metrics.px(12)
         anchors.right: trailing.left
-        anchors.rightMargin: 12
+        anchors.rightMargin: box.metrics.px(12)
         anchors.verticalCenter: parent.verticalCenter
         clip: true
         color: box.pal.text
         selectionColor: box.pal.accent
         selectedTextColor: "#ffffff"
         selectByMouse: true
-        font.family: box.fontFamily
-        font.pointSize: 14.5 * 0.75
+        font.family: box.metrics.family
+        font.pointSize: box.metrics.font(14.5) * 0.75
         inputMethodHints: Qt.ImhNoPredictiveText
         Accessible.role: Accessible.EditableText
         Accessible.name: i18nc("@label:textbox", "Search")
@@ -108,31 +109,31 @@ FocusScope {
     Item {
         id: trailing
         anchors.right: parent.right
-        anchors.rightMargin: 8
+        anchors.rightMargin: box.metrics.px(8)
         anchors.verticalCenter: parent.verticalCenter
         width: input.text.length > 0 ? clearButton.width : badge.width
-        height: 30
+        height: box.metrics.px(30)
 
         // Hint that the Meta key opens the launcher.
         Rectangle {
             id: badge
             visible: input.text.length === 0
             anchors.right: parent.right
-            width: badgeRow.implicitWidth + 20
-            height: 30
-            radius: 15
+            width: badgeRow.implicitWidth + box.metrics.px(20)
+            height: box.metrics.px(30)
+            radius: height / 2
             color: box.pal.badge
             antialiasing: true
 
             Row {
                 id: badgeRow
                 anchors.centerIn: parent
-                spacing: 6
+                spacing: box.metrics.px(6)
 
                 Glyph {
                     anchors.verticalCenter: parent.verticalCenter
                     name: "meta"
-                    size: 13
+                    size: box.metrics.px(13)
                     color: box.pal.muted
                 }
 
@@ -140,7 +141,7 @@ FocusScope {
                     anchors.verticalCenter: parent.verticalCenter
                     text: i18nc("@label name of the Meta (Super) key", "Meta")
                     color: box.pal.muted
-                    family: box.fontFamily
+                    metrics: box.metrics
                     px: 11.5
                     weight: 800
                 }
@@ -151,8 +152,8 @@ FocusScope {
             id: clearButton
             visible: input.text.length > 0
             anchors.right: parent.right
-            width: 30
-            height: 30
+            width: box.metrics.px(30)
+            height: width
             hoverEnabled: true
             focusPolicy: Qt.NoFocus
             Accessible.name: i18nc("@action:button", "Clear search")
@@ -162,7 +163,7 @@ FocusScope {
             }
 
             background: Rectangle {
-                radius: 15
+                radius: height / 2
                 color: clearButton.hovered ? box.pal.chipHover : box.pal.badge
                 antialiasing: true
             }
@@ -171,7 +172,7 @@ FocusScope {
                 Glyph {
                     anchors.centerIn: parent
                     name: "clear"
-                    size: 14
+                    size: box.metrics.px(14)
                     color: box.pal.textSecondary
                 }
             }

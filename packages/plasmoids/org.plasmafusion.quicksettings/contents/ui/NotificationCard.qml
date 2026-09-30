@@ -12,10 +12,13 @@ import "components/Icons.js" as Icons
 
 // One notification of the list (Quick Settings board, notification cards):
 // app icon and name, time, summary, body, job progress and action buttons.
+// Text, the rows and buttons that hold it and the gaps follow the user's text size
+// (`metrics`); the radius, the border, the progress bar and the close button do not.
 Rectangle {
     id: card
 
     required property FusionPalette pal
+    required property FusionMetrics metrics
     required property var model
     required property int index
     property double now: Date.now()
@@ -74,7 +77,7 @@ Rectangle {
             .replace(/^(\s|<br\s*\/?>)+|(\s|<br\s*\/?>)+$/gi, "");
     }
 
-    implicitHeight: column.implicitHeight + 28
+    implicitHeight: column.implicitHeight + 2 * column.anchors.margins
     radius: 18
     color: pal.overlay(0.06)
     border.width: 1
@@ -94,23 +97,24 @@ Rectangle {
             left: parent.left
             right: parent.right
             top: parent.top
-            margins: 14
+            margins: card.metrics.px(14)
         }
-        spacing: 6
+        spacing: card.metrics.px(6)
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 22
-            spacing: 8
+            Layout.preferredHeight: card.metrics.px(22)
+            spacing: card.metrics.px(8)
 
             Kirigami.Icon {
-                Layout.preferredWidth: 22
-                Layout.preferredHeight: 22
+                Layout.preferredWidth: card.metrics.px(22)
+                Layout.preferredHeight: card.metrics.px(22)
                 source: card.model.applicationIconName || card.model.iconName || "preferences-desktop-notification-bell"
             }
             FText {
                 Layout.fillWidth: true
                 pal: card.pal
+                metrics: card.metrics
                 text: card.model.applicationName || ""
                 color: card.pal.secondary
                 px: 11.5
@@ -120,7 +124,7 @@ Rectangle {
             // stays in the tab chain (transparent) so keyboard users can close a card too.
             Item {
                 Layout.preferredWidth: card.showClose ? closeButton.implicitWidth : timeLabel.implicitWidth
-                Layout.preferredHeight: 22
+                Layout.preferredHeight: card.metrics.px(22)
 
                 FText {
                     id: timeLabel
@@ -128,6 +132,7 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !card.showClose
                     pal: card.pal
+                    metrics: card.metrics
                     text: card.relativeTime(card.model.created, card.model.updated)
                     color: card.pal.tertiary
                     px: 11.5
@@ -153,6 +158,7 @@ Rectangle {
         FText {
             Layout.fillWidth: true
             pal: card.pal
+            metrics: card.metrics
             visible: text.length > 0
             text: card.model.summary || ""
             px: 13.5
@@ -163,6 +169,7 @@ Rectangle {
         FText {
             Layout.fillWidth: true
             pal: card.pal
+            metrics: card.metrics
             visible: !card.isJob && text.length > 0
             text: card.cleanBody(card.model.body)
             textFormat: Text.StyledText
@@ -177,9 +184,9 @@ Rectangle {
         // Job progress (file copies and downloads)
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 2
+            Layout.topMargin: card.metrics.px(2)
             visible: card.isJob
-            spacing: 10
+            spacing: card.metrics.px(10)
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 6
@@ -194,6 +201,7 @@ Rectangle {
             }
             FText {
                 pal: card.pal
+                metrics: card.metrics
                 text: i18nc("@info job progress", "%1%", card.model.percentage || 0)
                 color: card.pal.secondary
                 px: 11.5
@@ -201,8 +209,7 @@ Rectangle {
             TextButton {
                 visible: card.jobRunning && !!card.model.killable
                 pal: card.pal
-                implicitHeight: 26
-                radius: 13
+                metrics: card.metrics
                 fontSize: 12
                 text: i18nc("@action:button cancel a file transfer", "Cancel")
                 onClicked: card.killJobClicked()
@@ -211,9 +218,9 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 6
+            Layout.topMargin: card.metrics.px(6)
             visible: !card.isJob && card.actionNames.length > 0
-            spacing: 8
+            spacing: card.metrics.px(8)
 
             Repeater {
                 model: card.actionNames.length
@@ -222,7 +229,8 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
                     pal: card.pal
-                    implicitHeight: 32
+                    metrics: card.metrics
+                    implicitHeight: card.metrics.px(32)
                     radius: 10
                     fontSize: 12.5
                     primary: index === 0 && card.primaryAction

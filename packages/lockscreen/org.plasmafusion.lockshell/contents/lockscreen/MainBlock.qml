@@ -24,6 +24,8 @@ FocusScope {
 
     // LockScreen.qml's root item: clearPassword() and notificationRepeated() come from there.
     property var lockRoot: null
+    // Text scale and pixel grid of the lock screen window (LockScreenUi).
+    required property FusionMetrics metrics
     // The PamAuthenticators object (context property "authenticator").
     property QtObject authenticatorObject: null
 
@@ -68,11 +70,12 @@ FocusScope {
         id: card
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(Kirigami.Units.gridUnit, Math.round(sessionManager.height * 210 / PfStyle.boardHeight))
-        width: 400
-        spacing: 22
+        width: Math.min(sessionManager.metrics.px(400), sessionManager.width - 64)
+        spacing: sessionManager.metrics.px(22)
 
         UserHeader {
             anchors.horizontalCenter: parent.horizontalCenter
+            metrics: sessionManager.metrics
             userName: sessionManager.userName
             userIcon: sessionManager.userIcon
         }
@@ -80,15 +83,15 @@ FocusScope {
         Column {
             id: form
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 340
-            spacing: 10
+            width: Math.min(sessionManager.metrics.px(340), card.width)
+            spacing: sessionManager.metrics.px(10)
 
             // The password pill: 48 px, radius 24, 10 % white fill, 1.5 px accent border and a
             // 4 px accent halo while focused.
             Item {
                 id: pill
                 width: parent.width
-                height: 48
+                height: sessionManager.metrics.px(48)
 
                 Rectangle {
                     anchors.fill: parent
@@ -118,13 +121,14 @@ FocusScope {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 18
-                    anchors.rightMargin: 6
-                    spacing: 8
+                    anchors.leftMargin: sessionManager.metrics.px(18)
+                    anchors.rightMargin: sessionManager.metrics.px(6)
+                    spacing: sessionManager.metrics.px(8)
 
                     PasswordField {
                         id: passwordBox
                         objectName: "passwordBox"
+                        metrics: sessionManager.metrics
 
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -203,14 +207,14 @@ FocusScope {
                 Row {
                     id: capsRow
                     anchors.left: parent.left
-                    anchors.leftMargin: 8
+                    anchors.leftMargin: sessionManager.metrics.px(8)
                     anchors.top: parent.top
-                    spacing: 6
+                    spacing: sessionManager.metrics.px(6)
                     visible: sessionManager.capsLockOn
 
                     LineIcon {
                         anchors.verticalCenter: parent.verticalCenter
-                        size: 14
+                        size: sessionManager.metrics.px(14)
                         path: PfStyle.iconCapsLock
                         color: PfStyle.warning
                     }
@@ -219,7 +223,7 @@ FocusScope {
                         text: i18ndc("plasma_shell_org.kde.plasma.desktop", "@info:status", "Caps Lock is on")
                         color: PfStyle.warning
                         font.family: PfStyle.uiFont
-                        font.pixelSize: 12
+                        font.pixelSize: sessionManager.metrics.font(12)
                         textFormat: Text.PlainText
                     }
                 }
@@ -227,18 +231,21 @@ FocusScope {
                 Column {
                     id: hints
                     anchors.right: parent.right
-                    anchors.rightMargin: 8
+                    anchors.rightMargin: sessionManager.metrics.px(8)
                     anchors.top: parent.top
-                    width: sessionManager.capsLockOn ? parent.width - capsRow.implicitWidth - 32 : parent.width - 16
-                    spacing: 2
+                    width: sessionManager.capsLockOn ? parent.width - capsRow.implicitWidth - sessionManager.metrics.px(32)
+                                                     : parent.width - sessionManager.metrics.px(16)
+                    spacing: sessionManager.metrics.px(2)
 
                     FailableLabel {
+                        metrics: sessionManager.metrics
                         authenticatorObject: sessionManager.authenticatorObject
                         available: sessionManager.fingerprintAvailable
                         kind: ScreenLocker.Authenticator.Fingerprint
                         label: i18nd("plasma_shell_org.plasmafusion.lockshell", "Use fingerprint")
                     }
                     FailableLabel {
+                        metrics: sessionManager.metrics
                         authenticatorObject: sessionManager.authenticatorObject
                         available: sessionManager.smartcardAvailable
                         kind: ScreenLocker.Authenticator.Smartcard
@@ -257,7 +264,7 @@ FocusScope {
                 wrapMode: Text.WordWrap
                 color: PfStyle.text
                 font.family: PfStyle.uiFont
-                font.pixelSize: 13
+                font.pixelSize: sessionManager.metrics.font(13)
                 font.weight: Font.DemiBold
                 textFormat: Text.PlainText
                 transformOrigin: Item.Top
@@ -295,7 +302,7 @@ FocusScope {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 28
-        spacing: 18
+        spacing: sessionManager.metrics.px(18)
     }
 
     // A hint that is replaced by the authenticator's error for a moment when that kind of
@@ -303,6 +310,7 @@ FocusScope {
     component FailableLabel: Text {
         id: failableLabel
 
+        required property FusionMetrics metrics
         required property QtObject authenticatorObject
         required property bool available
         required property int kind
@@ -327,7 +335,7 @@ FocusScope {
         }
         color: showingError ? PfStyle.warning : PfStyle.link
         font.family: PfStyle.uiFont
-        font.pixelSize: 12
+        font.pixelSize: metrics.font(12)
         font.weight: Font.DemiBold
         font.styleName: PfStyle.bold
         textFormat: Text.PlainText

@@ -7,10 +7,12 @@ import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 
 // 44 px list row of the drill-down pages: icon, name, status text, trailing mark.
+// Height, paddings, icons and text follow the user's text size (`metrics`).
 T.AbstractButton {
     id: row
 
     required property FusionPalette pal
+    required property FusionMetrics metrics
     property string iconPath: ""
     property string iconName: ""
     property string status: ""
@@ -18,7 +20,7 @@ T.AbstractButton {
     property bool busy: false
     property string trailingPath: ""
 
-    implicitHeight: 44
+    implicitHeight: metrics.px(44)
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
     Accessible.name: text
@@ -39,16 +41,16 @@ T.AbstractButton {
     }
 
     contentItem: RowLayout {
-        spacing: 12
+        spacing: row.metrics.px(12)
 
         Item {
-            Layout.leftMargin: 10
-            Layout.preferredWidth: 20
-            Layout.preferredHeight: 20
+            Layout.leftMargin: row.metrics.px(10)
+            Layout.preferredWidth: row.metrics.px(20)
+            Layout.preferredHeight: row.metrics.px(20)
             LineIcon {
                 anchors.fill: parent
                 visible: row.iconPath.length > 0
-                size: 20
+                size: row.metrics.px(20)
                 path: row.iconPath
                 color: row.pal.text
             }
@@ -63,27 +65,29 @@ T.AbstractButton {
         FText {
             Layout.fillWidth: true
             pal: row.pal
+            metrics: row.metrics
             text: row.text
             font.weight: Font.Bold
         }
         FText {
             visible: row.status.length > 0
             pal: row.pal
+            metrics: row.metrics
             text: row.status
             color: row.pal.secondary
             px: 11.5
             opacity: row.busy ? 0.7 : 1
         }
         LineIcon {
-            Layout.rightMargin: 10
+            Layout.rightMargin: row.metrics.px(10)
             visible: row.trailingPath.length > 0
-            size: 16
+            size: row.metrics.px(16)
             path: row.trailingPath
             color: row.pal.accentSoft
         }
         Item {
             Layout.preferredWidth: 0
-            Layout.rightMargin: row.trailingPath.length > 0 ? 0 : 10
+            Layout.rightMargin: row.trailingPath.length > 0 ? 0 : row.metrics.px(10)
         }
     }
 }

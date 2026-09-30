@@ -10,7 +10,8 @@ import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
 // The panel button: the Fusion logo. In a tall panel (the dock) it is the 48 px Start tile
-// with the open indicator under it; in a thin panel (the top bar) it is the 32x26 logo pill.
+// with the open indicator under it; in a thin panel (the top bar) it is the 32x26 logo pill,
+// scaled with the user's text size like the rest of the top bar.
 MouseArea {
     id: button
 
@@ -43,6 +44,14 @@ MouseArea {
 
     property bool wasOpen: false
 
+    // Text scale and pixel grid of the panel window (docs/parts/shell-launcher.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
+    readonly property real pillWidth: m.px(32)
+    readonly property real pillHeight: m.px(26)
+
     // Tell the applet that the next `expanded` change comes from the shell showing this button.
     Component.onCompleted: {
         if (launcher && !launcher.expanded) {
@@ -50,7 +59,7 @@ MouseArea {
         }
     }
 
-    readonly property real naturalSize: style === "hidden" ? 0 : style === "tile" ? tileSize : style === "pill" ? 32 : Kirigami.Units.iconSizes.medium
+    readonly property real naturalSize: style === "hidden" ? 0 : style === "tile" ? tileSize : style === "pill" ? pillWidth : Kirigami.Units.iconSizes.medium
 
     // Across the panel the button takes the whole thickness (that decides tile or pill);
     // along the panel it is as long as the tile or pill.
@@ -59,9 +68,9 @@ MouseArea {
     Layout.minimumWidth: vertical ? -1 : naturalSize
     Layout.preferredWidth: vertical ? -1 : naturalSize
     Layout.maximumWidth: vertical ? Infinity : naturalSize
-    Layout.minimumHeight: vertical ? (style === "pill" ? 26 : naturalSize) : -1
-    Layout.preferredHeight: vertical ? (style === "pill" ? 26 : naturalSize) : -1
-    Layout.maximumHeight: vertical ? (style === "pill" ? 26 : naturalSize) : Infinity
+    Layout.minimumHeight: vertical ? (style === "pill" ? pillHeight : naturalSize) : -1
+    Layout.preferredHeight: vertical ? (style === "pill" ? pillHeight : naturalSize) : -1
+    Layout.maximumHeight: vertical ? (style === "pill" ? pillHeight : naturalSize) : Infinity
 
     implicitWidth: vertical ? 48 : naturalSize
     implicitHeight: vertical ? naturalSize : 48
@@ -137,15 +146,15 @@ MouseArea {
     Rectangle {
         visible: button.style === "pill"
         anchors.centerIn: parent
-        width: 32
-        height: 26
+        width: button.pillWidth
+        height: button.pillHeight
         radius: 8
         antialiasing: true
         color: button.open ? button.tint(0.16) : button.containsMouse ? button.tint(0.10) : "transparent"
 
         FusionLogo {
             anchors.centerIn: parent
-            size: 18
+            size: m.px(18)
         }
     }
 
@@ -158,8 +167,8 @@ MouseArea {
     Rectangle {
         visible: button.activeFocus && button.style !== "hidden"
         anchors.centerIn: parent
-        width: (button.style === "tile" ? button.tileSize : 32) + 8
-        height: (button.style === "tile" ? button.tileSize : 26) + 8
+        width: (button.style === "tile" ? button.tileSize : button.pillWidth) + 8
+        height: (button.style === "tile" ? button.tileSize : button.pillHeight) + 8
         radius: (button.style === "tile" ? tile.radius : 8) + 4
         color: "transparent"
         border.width: 2

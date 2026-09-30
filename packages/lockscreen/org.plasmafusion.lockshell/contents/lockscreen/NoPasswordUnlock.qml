@@ -16,6 +16,8 @@ FocusScope {
     id: root
 
     property var userListModel
+    // Text scale and pixel grid of the lock screen window (set by LockScreenUi).
+    required property FusionMetrics metrics
     readonly property var user: userListModel && userListModel.count > 0 ? userListModel.get(0) : null
 
     focus: true
@@ -23,11 +25,12 @@ FocusScope {
     Column {
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(Kirigami.Units.gridUnit, Math.round(root.height * 210 / PfStyle.boardHeight))
-        width: 400
-        spacing: 22
+        width: Math.min(root.metrics.px(400), root.width - 64)
+        spacing: root.metrics.px(22)
 
         UserHeader {
             anchors.horizontalCenter: parent.horizontalCenter
+            metrics: root.metrics
             userName: root.user ? root.user.realName : ""
             userIcon: root.user ? root.user.icon : ""
         }
@@ -35,8 +38,8 @@ FocusScope {
         T.AbstractButton {
             id: loginButton
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 340
-            height: 48
+            width: Math.min(root.metrics.px(340), parent.width)
+            height: root.metrics.px(48)
             focus: true
             hoverEnabled: true
             text: i18ndc("plasma_shell_org.kde.plasma.desktop", "@action:button no-password unlock", "Unlock")
@@ -55,10 +58,10 @@ FocusScope {
             contentItem: Item {
                 Row {
                     anchors.centerIn: parent
-                    spacing: 10
+                    spacing: root.metrics.px(10)
                     LineIcon {
                         anchors.verticalCenter: parent.verticalCenter
-                        size: 18
+                        size: root.metrics.px(18)
                         path: PfStyle.iconUnlock
                         color: PfStyle.textOnAccent
                     }
@@ -67,7 +70,7 @@ FocusScope {
                         text: loginButton.text
                         color: PfStyle.textOnAccent
                         font.family: PfStyle.uiFont
-                        font.pixelSize: 14
+                        font.pixelSize: root.metrics.font(14)
                         font.weight: Font.DemiBold
                         font.styleName: PfStyle.bold
                         textFormat: Text.PlainText

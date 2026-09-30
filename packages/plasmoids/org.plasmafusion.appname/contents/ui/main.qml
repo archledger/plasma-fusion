@@ -24,15 +24,23 @@ PlasmoidItem {
 
     readonly property bool vertical: Plasmoid.formFactor === PlasmaCore.Types.Vertical
 
+    // Text scale and pixel grid of the panel window (docs/parts/shell-topbar.md, "Text scale").
+    FusionMetrics {
+        id: m
+        area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    }
+
     // Board geometry (px): header padding-left 10, button 32x26 radius 8, gap 2, name padding
-    // 0 10 0 6. `startPadding` makes up the difference between the panel's own left margin and
-    // the board's 10 px, so that the button lands at x = 10 in a Plasma Fusion top bar.
+    // 0 10 0 6, all scaled with the text except the radius. `startPadding` makes up the
+    // difference between the panel's own left margin and the board's 10 px, so that the
+    // button lands at x = 10 in a Plasma Fusion top bar (a screen-edge offset, not scaled).
+    // The button is never taller than the panel row (a bar built for a smaller text size).
     readonly property int startPadding: Plasmoid.configuration.startPadding
-    readonly property int buttonWidth: 32
-    readonly property int buttonHeight: 26
-    readonly property int nameGap: 2 + 6
-    readonly property int nameEndPadding: Plasmoid.configuration.endPadding
-    readonly property int nameMaxWidth: Plasmoid.configuration.maximumNameWidth
+    readonly property real buttonWidth: m.px(32)
+    readonly property real buttonHeight: vertical ? m.px(26) : Math.min(m.px(26), Math.max(1, height))
+    readonly property real nameGap: m.px(2 + 6)
+    readonly property real nameEndPadding: m.px(Plasmoid.configuration.endPadding)
+    readonly property real nameMaxWidth: m.px(Plasmoid.configuration.maximumNameWidth)
 
     // Colours follow the colour scheme: dark boards use white tints, light boards the text ink.
     readonly property bool dark: {
@@ -289,7 +297,7 @@ PlasmoidItem {
 
                 FusionLogo {
                     anchors.centerIn: parent
-                    size: 18
+                    size: m.px(18)
                 }
 
                 // Keyboard focus: the Controls board's 2 px ring with a 2 px gap.
@@ -314,7 +322,7 @@ PlasmoidItem {
             id: nameLabel
             anchors.verticalCenter: parent.verticalCenter
             visible: !root.vertical
-            family: "Manrope"
+            metrics: m
             px: 13
             weight: 800
             color: Kirigami.Theme.textColor

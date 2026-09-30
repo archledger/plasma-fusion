@@ -10,7 +10,7 @@ Item {
     id: header
 
     property FusionColors pal
-    property string fontFamily
+    property FusionMetrics metrics
     property string title
     property string buttonText
     property bool buttonBack: false
@@ -22,17 +22,17 @@ Item {
     signal navUp()
     signal navDown()
 
-    implicitHeight: 26
+    implicitHeight: metrics.px(26)
 
     FusionText {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: pill.visible ? pill.left : parent.right
-        anchors.rightMargin: 8
+        anchors.rightMargin: header.metrics.px(8)
         text: header.title
         color: header.pal.text
         elide: Text.ElideRight
-        family: header.fontFamily
+        metrics: header.metrics
         px: 14
         weight: 800
         Accessible.role: Accessible.Heading
@@ -44,7 +44,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         visible: header.buttonText.length > 0
         pal: header.pal
-        fontFamily: header.fontFamily
+        metrics: header.metrics
         text: header.buttonText
         back: header.buttonBack
         onClicked: header.buttonClicked()
