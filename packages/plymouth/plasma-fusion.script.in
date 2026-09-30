@@ -1,0 +1,654 @@
+/*
+ * Plasma Fusion boot splash and disk unlock, for plymouth's script plugin.
+ * Design: design/boards/Boot.dc.html (render startup-1).
+ *
+ * SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Black screen, the three-circle logo and three pulsing dots. When a disk passphrase (or a
+ * PIN, recovery key or any other secret) is asked, the prompt, the field with its bullets, the
+ * disk name, "Esc shows boot messages" and the keyboard layout appear as on the board.
+ *
+ * All text is pre-rendered with Manrope by generators/plymouth/gen_plymouth.py: fixed texts as
+ * images, text only known at boot (disk name, other prompts, messages, answers, the layout
+ * label) from glyph atlases. The generated tables are inserted at the marker below. Every
+ * image exists for several scale factors; the one that fits the screen is chosen at start and
+ * whenever a display is added or removed.
+ *
+ * Variables inside functions are written local.x / global.x on purpose: a bare name that
+ * already exists globally would refer to the global.
+ */
+
+#@PF_DATA@
+
+# ------------------------------------------------------------------------ state
+
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+Plymouth.SetRefreshRate(30);
+
+global.FPS = 30;
+global.st.mode = "splash";        # splash | password | question
+global.st.frame = 0;
+global.st.prompt = "#none";
+global.st.bullets = 0;
+global.st.answer = "";
+global.st.message = "";
+global.st.capslock = 0;
+global.st.frame_caret = 0;
+global.st.title = NULL;
+global.st.disk = 0;
+global.st.update = -1;            # system update progress in %, -1 when not updating
+global.st.sid = "";
+global.G = [];                    # geometry: x, y, w, h, s, sid, fx, fy, bottom, right
+global.L = [];                    # layout tables of the current scale
+global.img = [];                  # images of the current scale
+global.cache = [];                # glyph images cropped from the atlases
+global.spr = [];                  # fixed sprites
+global.txt = [];                  # glyph sprite runs
+
+# Text roles have their own z so that later runs never hide earlier ones.
+global.Z_BASE = 10;
+global.Z_FORM = 20;
+global.Z_TEXT = 30;
+
+# ------------------------------------------------------------------------ strings
+
+# Position of needle in hay, or -1.
+fun pf_find(hay, needle) {
+    local.n = String(needle).Length();
+    local.h = String(hay).Length();
+    for (local.i = 0; local.i + local.n <= local.h; local.i++) {
+        if (String(hay).SubString(local.i, local.i + local.n) == needle)
+            return local.i;
+    }
+    return -1;
+}
+
+# Position of the last needle in hay, or -1.
+fun pf_find_last(hay, needle) {
+    local.n = String(needle).Length();
+    for (local.i = String(hay).Length() - local.n; local.i >= 0; local.i--) {
+        if (String(hay).SubString(local.i, local.i + local.n) == needle)
+            return local.i;
+    }
+    return -1;
+}
+
+# 1 or 0 ("a && b" yields one of its operands, not a number).
+fun pf_b(value) {
+    if (value) return 1;
+    return 0;
+}
+
+fun pf_ends_with(text, tail) {
+    local.n = String(tail).Length();
+    local.h = String(text).Length();
+    if (local.n > local.h) return 0;
+    return String(text).SubString(local.h - local.n, local.h) == tail;
+}
+
+# Remove trailing spaces and one trailing colon.
+fun pf_trim(text) {
+    local.t = text;
+    local.h = String(local.t).Length();
+    while (local.h > 0 && String(local.t).CharAt(local.h - 1) == " ") {
+        local.t = String(local.t).SubString(0, local.h - 1);
+        local.h--;
+    }
+    if (local.h > 0 && String(local.t).CharAt(local.h - 1) == ":") {
+        local.t = String(local.t).SubString(0, local.h - 1);
+        local.h--;
+    }
+    while (local.h > 0 && String(local.t).CharAt(local.h - 1) == " ") {
+        local.t = String(local.t).SubString(0, local.h - 1);
+        local.h--;
+    }
+    return local.t;
+}
+
+fun pf_replace_all(text, from, to) {
+    local.out = "";
+    local.rest = text;
+    local.n = String(from).Length();
+    local.p = pf_find(local.rest, from);
+    while (local.p >= 0) {
+        local.out = local.out + String(local.rest).SubString(0, local.p) + to;
+        local.rest = String(local.rest).SubString(local.p + local.n, String(local.rest).Length());
+        local.p = pf_find(local.rest, from);
+    }
+    return local.out + local.rest;
+}
+
+# ------------------------------------------------------------------------ glyph runs
+
+# Split a UTF-8 string into glyph keys of a character set. Characters without a glyph become
+# one "?" (a run of unknown bytes is one character as far as the reader is concerned).
+fun pf_keys(text, charset) {
+    local.keys = [];
+    local.n = 0;
+    local.len = String(text).Length();
+    local.unknown = 0;
+    local.cs = pf.charset[charset];
+    local.i = 0;
+    while (local.i < local.len) {
+        local.key = NULL;
+        local.step = 1;
+        local.c = String(text).CharAt(local.i);
+        # (The script scanner knows only the escapes \n \e \0 and \"; "\t" would be "t".)
+        if (local.c == "\n") local.c = " ";
+        if (local.cs[local.c]) {
+            local.key = local.c;
+        } else if (local.i + 1 < local.len && local.cs[String(text).SubString(local.i, local.i + 2)]) {
+            local.key = String(text).SubString(local.i, local.i + 2);
+            local.step = 2;
+        } else if (local.i + 2 < local.len && local.cs[String(text).SubString(local.i, local.i + 3)]) {
+            local.key = String(text).SubString(local.i, local.i + 3);
+            local.step = 3;
+        }
+        if (local.key) {
+            local.keys[local.n] = local.key;
+            local.n++;
+            local.unknown = 0;
+        } else if (!local.unknown) {
+            local.keys[local.n] = "?";
+            local.n++;
+            local.unknown = 1;
+        }
+        local.i += local.step;
+    }
+    local.keys.n = local.n;
+    return local.keys;
+}
+
+fun pf_advance(role, key) {
+    local.a = pf.adv[pf.role[role].weight][key];
+    if (!local.a) return 0;
+    return local.a;
+}
+
+fun pf_kerning(role, prev, key) {
+    if (prev == "") return 0;
+    local.k = pf.kern[pf.role[role].weight][prev + key];
+    if (!local.k) return 0;
+    return local.k;
+}
+
+# Width in device px of the first n keys.
+fun pf_run_width(role, keys, n) {
+    local.k = pf.role[role].size * G.s / 1000;
+    local.w = 0;
+    local.prev = "";
+    for (local.i = 0; local.i < n; local.i++) {
+        local.w += (pf_kerning(role, local.prev, keys[local.i]) + pf_advance(role, keys[local.i])) * local.k;
+        local.prev = keys[local.i];
+    }
+    return local.w;
+}
+
+fun pf_glyph(role, key, phase) {
+    local.ck = role + "|" + phase + "|" + key;
+    if (!global.cache[local.ck]) {
+        local.A = L.atlas[role];
+        local.index = pf.charset[pf.role[role].charset][key] - 1;
+        global.cache[local.ck] = img.atlas[role].Crop(local.index * local.A.cellw, phase * local.A.cellh,
+                                                       local.A.cellw, local.A.cellh);
+    }
+    return global.cache[local.ck];
+}
+
+# Keys that fit in maxw device px, ending with an ellipsis when cut ("from_start" keeps the end
+# of the text instead, for a typed answer).
+fun pf_fit(role, keys, maxw, from_start) {
+    if (pf_run_width(role, keys, keys.n) <= maxw) return keys;
+    local.ell = "…";
+    if (!pf.charset[pf.role[role].charset][local.ell]) local.ell = "-";
+    local.ew = pf_advance(role, local.ell) * pf.role[role].size * G.s / 1000;
+    local.out = [];
+    if (from_start) {
+        local.first = 0;
+        while (local.first < keys.n) {
+            local.rest = [];
+            for (local.i = local.first; local.i < keys.n; local.i++) local.rest[local.i - local.first] = keys[local.i];
+            if (pf_run_width(role, local.rest, keys.n - local.first) + local.ew <= maxw) break;
+            local.first++;
+        }
+        local.out[0] = local.ell;
+        for (local.i = local.first; local.i < keys.n; local.i++) local.out[local.i - local.first + 1] = keys[local.i];
+        local.out.n = keys.n - local.first + 1;
+        return local.out;
+    }
+    local.n = keys.n;
+    while (local.n > 0 && pf_run_width(role, keys, local.n) + local.ew > maxw) local.n--;
+    while (local.n > 0 && keys[local.n - 1] == " ") local.n--;
+    for (local.i = 0; local.i < local.n; local.i++) local.out[local.i] = keys[local.i];
+    local.out[local.n] = local.ell;
+    local.out.n = local.n + 1;
+    return local.out;
+}
+
+# Sprites for a line of text. x is the pen start, or the centre when centred is 1; baseline is
+# in device px. Returns a hash of sprites with .n and .width.
+fun pf_text(role, text, x, baseline, maxw, centred, from_start) {
+    local.A = L.atlas[role];
+    local.keys = pf_fit(role, pf_keys(text, pf.role[role].charset), maxw, from_start);
+    local.k = pf.role[role].size * G.s / 1000;
+    local.w = pf_run_width(role, local.keys, local.keys.n);
+    local.pen = x;
+    if (centred) local.pen = x - local.w / 2;
+    local.run = [];
+    local.m = 0;
+    local.prev = "";
+    for (local.i = 0; local.i < local.keys.n; local.i++) {
+        local.key = local.keys[local.i];
+        local.pen += pf_kerning(role, local.prev, local.key) * local.k;
+        if (local.key != " ") {
+            local.ix = Math.Int(local.pen);
+            local.ph = Math.Int((local.pen - local.ix) * local.A.phases + 0.5);
+            if (local.ph >= local.A.phases) {
+                local.ph = 0;
+                local.ix++;
+            }
+            local.sp = Sprite(pf_glyph(role, local.key, local.ph));
+            local.sp.SetX(local.ix - local.A.ox);
+            local.sp.SetY(baseline - local.A.base);
+            local.sp.SetZ(Z_TEXT);
+            local.run[local.m] = local.sp;
+            local.m++;
+        }
+        local.pen += pf_advance(role, local.key) * local.k;
+        local.prev = local.key;
+    }
+    local.run.n = local.m;
+    local.run.width = local.w;
+    return local.run;
+}
+
+fun pf_run_opacity(run, o) {
+    if (!run) return;
+    for (local.i = 0; local.i < run.n; local.i++) run[local.i].SetOpacity(o);
+}
+
+# ------------------------------------------------------------------------ geometry
+
+fun pf_geometry() {
+    # All displays show the same picture, centred on the largest one; lay out for the area that
+    # every display shows so nothing is cut off on the smaller ones.
+    local.w = Window.GetWidth(0);
+    local.h = Window.GetHeight(0);
+    for (local.i = 1; Window.GetWidth(local.i); local.i++) {
+        local.w = Math.Min(local.w, Window.GetWidth(local.i));
+        local.h = Math.Min(local.h, Window.GetHeight(local.i));
+    }
+    if (!local.w || !local.h) {
+        local.w = Window.GetWidth();
+        local.h = Window.GetHeight();
+    }
+    global.G.w = local.w;
+    global.G.h = local.h;
+    global.G.x = Window.GetX();
+    global.G.y = Window.GetY();
+    local.fit = Math.Min(local.w / 1440, local.h / 900);
+    local.k = 0;
+    for (local.i = 1; local.i < pf.nscales; local.i++) {
+        if (pf.scale[local.i] <= local.fit + 0.06) local.k = local.i;
+    }
+    global.G.s = pf.scale[local.k];
+    global.G.sid = pf.sid[local.k];
+    global.G.fx = G.x + Math.Int((local.w - Math.Int(1440 * G.s + 0.5)) / 2);
+    global.G.fy = G.y + Math.Int((local.h - Math.Int(900 * G.s + 0.5)) / 2);
+    global.G.bottom = G.y + local.h;
+    global.G.right = G.x + local.w;
+}
+
+fun pf_sprite(name, image, z) {
+    if (!global.spr[name]) global.spr[name] = Sprite();
+    global.spr[name].SetImage(image);
+    global.spr[name].SetZ(z);
+    return global.spr[name];
+}
+
+# Load the images of the current scale and position the fixed sprites.
+fun pf_layout() {
+    pf_geometry();
+    if (G.sid != st.sid) {
+        global.st.sid = G.sid;
+        global.L = pf_data(G.sid);
+        global.cache = [];
+        global.img = [];
+        img.logo = Image(L.logo.file);
+        img.pill = Image(L.pill.file);
+        img.pillq = Image(L.pillq.file);
+        for (local.i = 0; local.i < L.bullet.phases; local.i++) img.bullet[local.i] = Image(L.bullet["file" + local.i]);
+        img.caret = Image(L.caret.file);
+        img.esc = Image(L.esc.file);
+        img.kbd = Image(L.kbd.file);
+        img.track = Image(L.track.file);
+        img.fill = Image(L.fill.file);
+        img.fill_cap = img.fill.Crop(L.fill.w - L.fill.cap, 0, L.fill.cap, L.fill.h);
+        for (local.i = 0; local.i < 3; local.i++) img.dot[local.i] = Image(L["dot" + local.i].file);
+        img.atlas["prompt"] = Image(L.atlas["prompt"].file);
+        img.atlas["hint"] = Image(L.atlas["hint"].file);
+        img.atlas["chip"] = Image(L.atlas["chip"].file);
+    }
+
+    pf_sprite("logo", img.logo, Z_BASE).SetPosition(G.fx + L.logo.x, G.fy + L.logo.y, Z_BASE);
+    for (local.i = 0; local.i < 3; local.i++) {
+        local.d = L["dot" + local.i];
+        pf_sprite("dot" + local.i, img.dot[local.i], Z_BASE).SetPosition(G.fx + local.d.x, G.bottom + local.d.y, Z_BASE);
+    }
+    pf_sprite("pill", img.pill, Z_FORM).SetPosition(G.fx + L.pill.x, G.fy + L.pill.y, Z_FORM);
+    pf_sprite("pillq", img.pillq, Z_FORM).SetPosition(G.fx + L.pillq.x, G.fy + L.pillq.y, Z_FORM);
+    pf_sprite("caret", img.caret, Z_TEXT).SetY(G.fy + L.caret.y);
+    pf_sprite("esc", img.esc, Z_TEXT).SetPosition(G.x + L.esc.x, G.bottom + L.esc.y, Z_TEXT);
+    pf_sprite("kbd", img.kbd, Z_TEXT).SetY(G.bottom + L.kbd.y);
+    pf_sprite("track", img.track, Z_FORM).SetPosition(G.fx + L.track.x, G.fy + L.track.y, Z_FORM);
+    pf_sprite("fill", img.fill, Z_FORM + 1).SetPosition(G.fx + L.fill.x, G.fy + L.fill.y, Z_FORM + 1);
+    pf_sprite("fill_cap", img.fill_cap, Z_FORM + 1).SetY(G.fy + L.fill.y);
+    # Fixed texts: one sprite each, shown by pf_show().
+    global.text_keys = ["t-passphrase", "t-recovery", "t-either", "t-verify", "t-pin", "t-answer",
+                        "t-updates", "t-upgrade", "t-firmware", "t-reset",
+                        "t-encrypted", "t-capslock", "t-dontoff"];
+    for (local.i = 0; text_keys[local.i]; local.i++) {
+        local.key = text_keys[local.i];
+        if (!img[local.key]) img[local.key] = Image(L[local.key].file);
+        pf_sprite(local.key, img[local.key], Z_TEXT).SetPosition(G.fx + L[local.key].x, G.fy + L[local.key].y, Z_TEXT);
+    }
+    global.bullets = [];
+    global.txt = [];
+    pf_update_texts();
+    pf_show();
+}
+
+# ------------------------------------------------------------------------ content
+
+# What systemd-cryptsetup asks: "Please enter passphrase for disk DESCRIPTION (VOLUME) on
+# MOUNTPOINT:" and variants (recovery key, "passphrase or recovery key", "(verification)"),
+# "Please enter LUKS2 token PIN:", "Please enter TPM2 PIN:", "Please enter security token PIN:".
+fun pf_parse_prompt(prompt) {
+    local.r = [];
+    local.r.title = NULL;        # key of a fixed text, or NULL to draw local.r.text
+    local.r.text = pf_trim(prompt);
+    local.r.hint = NULL;         # disk name, NULL for the fixed "Encrypted disk"
+    local.r.disk = 0;
+    local.p = pf_find(prompt, " for disk ");
+    if (local.p >= 0) {
+        local.r.disk = 1;
+        local.head = String(prompt).SubString(0, local.p);
+        local.name = pf_trim(String(prompt).SubString(local.p + 10, String(prompt).Length()));
+        if (pf_ends_with(local.name, " (verification)")) {
+            local.name = String(local.name).SubString(0, String(local.name).Length() - 15);
+            local.r.title = "t-verify";
+        } else if (pf_find(local.head, "passphrase or recovery key") >= 0) {
+            local.r.title = "t-either";
+        } else if (pf_find(local.head, "recovery key") >= 0) {
+            local.r.title = "t-recovery";
+        } else {
+            local.r.title = "t-passphrase";
+        }
+        # NAME is "DESCRIPTION (VOLUME) on MOUNT", "VOLUME on MOUNT", "DESCRIPTION (VOLUME)" or
+        # "VOLUME". The volume (luks-UUID) is left out; the description is the partition label
+        # or the drive model.
+        local.mount = NULL;
+        local.desc = NULL;
+        local.q = pf_find(local.name, ") on ");
+        if (local.q >= 0) {
+            local.mount = String(local.name).SubString(local.q + 5, String(local.name).Length());
+            local.name = String(local.name).SubString(0, local.q + 1);
+        } else {
+            local.q = pf_find(local.name, " on ");
+            if (local.q >= 0 && pf_find(local.name, " (") < 0) {
+                local.mount = String(local.name).SubString(local.q + 4, String(local.name).Length());
+                local.name = String(local.name).SubString(0, local.q);
+            }
+        }
+        if (pf_ends_with(local.name, ")")) {
+            local.q = pf_find_last(local.name, " (");
+            if (local.q > 0) local.desc = String(local.name).SubString(0, local.q);
+        }
+        if (local.desc && pf_find(local.desc, " ") < 0 && pf_find(local.desc, "_") >= 0) {
+            # udev writes ATA/SCSI models with underscores for spaces.
+            local.desc = pf_replace_all(local.desc, "_", " ");
+        }
+        if (local.desc && local.mount) local.r.hint = local.desc + " · " + local.mount;
+        else if (local.desc) local.r.hint = local.desc;
+        else if (local.mount) local.r.hint = "Encrypted disk · " + local.mount;
+    } else if (pf_find(prompt, "token PIN") >= 0 || pf_find(prompt, "TPM2 PIN") >= 0) {
+        local.r.title = "t-pin";
+        local.r.disk = 1;
+    } else if (local.r.text == "") {
+        local.r.title = "t-passphrase";
+        local.r.disk = 1;
+    }
+    return local.r;
+}
+
+# Rebuild the glyph runs that depend on the prompt, the scale or the answer.
+fun pf_update_texts() {
+    global.txt = [];
+    local.lines = L.lines;
+    if (st.mode == "password" || st.mode == "question") {
+        local.r = pf_parse_prompt(st.prompt);
+        global.st.title = local.r.title;
+        global.st.disk = local.r.disk;
+        if (!local.r.title) {
+            if (local.r.text == "" && st.mode == "question") global.st.title = "t-answer";
+            else txt.prompt = pf_text("prompt", local.r.text, G.fx + local.lines.cx, G.fy + local.lines.prompt,
+                                      local.lines.maxw, 1, 0);
+        }
+        if (local.r.hint) txt.hint = pf_text("hint", local.r.hint, G.fx + local.lines.cx, G.fy + local.lines.hint,
+                                            local.lines.hintmaxw, 1, 0);
+        if (st.mode == "question") txt.answer = pf_text("prompt", st.answer, G.fx + L.answer.x0,
+                                                        G.fy + L.answer.base, L.answer.maxw, 0, 1);
+    }
+    if (st.message != "") {
+        # Splash: where the prompt would be. Prompt on screen: under the form. System update:
+        # in the hint style under the percentage.
+        if (st.mode != "splash") {
+            txt.message = pf_text("prompt", st.message, G.fx + local.lines.cx, G.fy + local.lines.message,
+                                  local.lines.maxw, 1, 0);
+        } else if (st.update >= 0) {
+            txt.message = pf_text("hint", st.message, G.fx + local.lines.cx, G.fy + local.lines.hint,
+                                  local.lines.maxw, 1, 0);
+        } else {
+            txt.message = pf_text("prompt", st.message, G.fx + local.lines.cx, G.fy + local.lines.prompt,
+                                  local.lines.maxw, 1, 0);
+        }
+    }
+    if (st.update >= 0) {
+        txt.percent = pf_text("hint", Math.Int(st.update + 0.5) + " %", G.fx + local.lines.cx,
+                              G.fy + L.percent.base, local.lines.maxw, 1, 0);
+    }
+    if (global.PFKeyboardLayout) {
+        # Right-align the label 32 px from the right edge, the keyboard icon 6 px before it.
+        local.keys = pf_keys(PFKeyboardLayout, pf.role["chip"].charset);
+        local.left = G.right + L.kbd.right - pf_run_width("chip", local.keys, local.keys.n);
+        global.txt.chip = pf_text("chip", PFKeyboardLayout, local.left, G.bottom + L.kbd.base, 200 * G.s, 0, 0);
+        spr.kbd.SetX(Math.Int(local.left - L.kbd.gap - L.kbd.size + 0.5) + L.kbd.x);
+    }
+}
+
+# Opacity of everything for the current mode.
+fun pf_show() {
+    local.form = pf_b(st.mode == "password" || st.mode == "question");
+    local.pw = pf_b(st.mode == "password");
+    local.fade = Math.Min(1, st.frame / 12);
+    spr.logo.SetOpacity(local.fade);
+    spr.pill.SetOpacity(local.pw);
+    spr.pillq.SetOpacity(st.mode == "question");
+    spr.esc.SetOpacity(local.form);
+    spr.kbd.SetOpacity(pf_b(local.form && global.PFKeyboardLayout));
+    pf_run_opacity(txt.chip, local.form);
+    for (local.i = 0; text_keys[local.i]; local.i++) spr[text_keys[local.i]].SetOpacity(0);
+    if (local.form && st.title) spr[st.title].SetOpacity(1);
+    pf_run_opacity(txt.prompt, local.form);
+    pf_run_opacity(txt.answer, st.mode == "question");
+    # Under the field: Caps Lock warning, else the disk name.
+    local.caps = pf_b(local.pw && st.capslock);
+    pf_run_opacity(txt.hint, pf_b(local.form && !local.caps));
+    if (local.form && !local.caps && st.disk && !txt.hint) spr["t-encrypted"].SetOpacity(1);
+    if (local.caps) spr["t-capslock"].SetOpacity(1);
+    pf_run_opacity(txt.message, 1);
+    # System update: title, bar, percentage (hidden while a question is on screen).
+    local.up = pf_b(st.update >= 0 && !local.form);
+    spr.track.SetOpacity(local.up);
+    local.fw = Math.Int(L.fill.w * Math.Clamp(st.update, 0, 100) / 100 + 0.5);
+    if (local.up && local.fw >= L.fill.cap * 2) {
+        spr.fill.SetImage(img.fill.Crop(0, 0, local.fw - L.fill.cap, L.fill.h));
+        spr.fill.SetOpacity(1);
+        spr.fill_cap.SetX(G.fx + L.fill.x + local.fw - L.fill.cap);
+        spr.fill_cap.SetOpacity(1);
+    } else {
+        spr.fill.SetOpacity(0);
+        spr.fill_cap.SetOpacity(0);
+    }
+    pf_run_opacity(txt.percent, local.up);
+    if (local.up) {
+        spr[pf_update_title()].SetOpacity(1);
+        spr["t-dontoff"].SetOpacity(1);
+    }
+    pf_update_bullets();
+}
+
+fun pf_update_title() {
+    local.m = Plymouth.GetMode();
+    if (local.m == "system-upgrade") return "t-upgrade";
+    if (local.m == "firmware-upgrade") return "t-firmware";
+    if (local.m == "system-reset") return "t-reset";
+    return "t-updates";
+}
+
+fun pf_update_bullets() {
+    local.n = 0;
+    if (st.mode == "password") local.n = Math.Min(st.bullets, L.bullet.max);
+    for (local.i = 0; local.i < local.n || global.bullets[local.i]; local.i++) {
+        if (!global.bullets[local.i]) {
+            global.bullets[local.i] = Sprite();
+            global.bullets[local.i].SetZ(Z_TEXT);
+        }
+        local.pen = L.bullet.x0 + local.i * L.bullet.pitch;
+        local.ix = Math.Int(local.pen);
+        local.ph = Math.Int((local.pen - local.ix) * L.bullet.phases + 0.5);
+        if (local.ph >= L.bullet.phases) {
+            local.ph = 0;
+            local.ix++;
+        }
+        global.bullets[local.i].SetImage(img.bullet[local.ph]);
+        global.bullets[local.i].SetX(G.fx + local.ix + L.bullet.x);
+        global.bullets[local.i].SetY(G.fy + L.bullet.base + L.bullet.y);
+        global.bullets[local.i].SetOpacity(local.i < local.n);
+    }
+    # The text cursor follows the last bullet (or the typed answer).
+    local.cx = L.caret.x0;
+    if (local.n > 0) local.cx = L.bullet.x0 + local.n * L.bullet.pitch + L.caret.after;
+    if (st.mode == "question") {
+        local.cx = L.answer.x0;
+        if (txt.answer) local.cx = local.cx + txt.answer.width + L.caret.gap;
+    }
+    spr.caret.SetX(G.fx + Math.Int(local.cx + 0.5));
+    global.st.caret_x = local.cx;
+}
+
+# ------------------------------------------------------------------------ callbacks
+
+fun pf_refresh() {
+    global.st.frame++;
+    local.t = st.frame / FPS;
+    local.fade = Math.Min(1, st.frame / 12);
+    if (st.frame <= 13) spr.logo.SetOpacity(local.fade);
+    # Three dots pulse in turn, left to right: a raised cosine per dot, a quarter period apart;
+    # at the start of a period they show the board's 1, 0.55 and 0.25.
+    for (local.i = 0; local.i < 3; local.i++) {
+        local.c = (1 + Math.Cos(2 * Math.Pi * (local.t / 1.4 - local.i / 4))) / 2;
+        spr["dot" + local.i].SetOpacity(local.fade * (0.25 + 0.75 * local.c * Math.Sqrt(local.c)));
+    }
+    if (st.mode == "password" || st.mode == "question") {
+        # Caret blinks like Qt's (about 530 ms on, 530 ms off).
+        spr.caret.SetOpacity(pf_b(Math.Int((st.frame - st.frame_caret) / 16) % 2 == 0));
+        if (st.mode == "password") {
+            local.caps = Plymouth.GetCapslockState();
+            if (local.caps != st.capslock) {
+                global.st.capslock = local.caps;
+                pf_show();
+            }
+        }
+    } else {
+        spr.caret.SetOpacity(0);
+    }
+}
+
+fun pf_display_normal() {
+    if (st.mode != "splash") {
+        global.st.mode = "splash";
+        global.st.prompt = "#none";
+        pf_update_texts();
+    }
+    pf_show();
+}
+
+fun pf_display_password(prompt, bullets) {
+    local.changed = (st.mode != "password" || prompt != st.prompt);
+    global.st.mode = "password";
+    global.st.prompt = prompt;
+    global.st.bullets = bullets;
+    global.st.capslock = Plymouth.GetCapslockState();
+    if (local.changed) pf_update_texts();
+    pf_show();
+    global.st.frame_caret = st.frame;
+}
+
+fun pf_display_question(prompt, entry) {
+    local.changed = (st.mode != "question" || prompt != st.prompt || entry != st.answer);
+    global.st.mode = "question";
+    global.st.prompt = prompt;
+    global.st.answer = entry;
+    if (local.changed) pf_update_texts();
+    pf_show();
+    global.st.frame_caret = st.frame;
+}
+
+fun pf_display_message(text) {
+    global.st.message = text;
+    pf_update_texts();
+    pf_show();
+}
+
+fun pf_hide_message(text) {
+    if (text == st.message) {
+        global.st.message = "";
+        pf_update_texts();
+        pf_show();
+    }
+}
+
+fun pf_system_update(progress) {
+    global.st.update = progress;
+    pf_update_texts();
+    pf_show();
+}
+
+fun pf_quit() {
+    # Leave the logo on screen for whatever comes next (plymouth may keep the last frame).
+    global.st.mode = "splash";
+    global.st.message = "";
+    global.st.update = -1;
+    global.txt = [];
+    pf_show();
+    for (local.i = 0; local.i < 3; local.i++) spr["dot" + local.i].SetOpacity(0);
+}
+
+pf_layout();
+if (Plymouth.GetMode() == "updates" || Plymouth.GetMode() == "system-upgrade"
+    || Plymouth.GetMode() == "firmware-upgrade" || Plymouth.GetMode() == "system-reset") {
+    pf_system_update(0);
+}
+
+Plymouth.SetRefreshFunction(pf_refresh);
+Plymouth.SetDisplayNormalFunction(pf_display_normal);
+Plymouth.SetDisplayPasswordFunction(pf_display_password);
+Plymouth.SetDisplayQuestionFunction(pf_display_question);
+Plymouth.SetDisplayMessageFunction(pf_display_message);
+Plymouth.SetHideMessageFunction(pf_hide_message);
+Plymouth.SetSystemUpdateFunction(pf_system_update);
+Plymouth.SetDisplayHotplugFunction(pf_layout);
+Plymouth.SetQuitFunction(pf_quit);

@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Plymouth theme self-test, only in the test VM's initramfs overlay (tests/vmtest.sh).
+[Unit]
+Description=Plasma Fusion plymouth theme self-test
+DefaultDependencies=no
+After=plymouth-start.service
+ConditionKernelCommandLine=pf.selftest
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pf-selftest.sh
+StandardOutput=null
