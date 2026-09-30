@@ -56,7 +56,10 @@ K
 check "pending: files unchanged" "$(cmp -s "$OUT/files-before-pending.txt" "$OUT/files-pending.txt" && echo same)" same
 check "pending: filterMode unchanged" "$(fkey filterMode)" ""
 check "pending: page asked for Apply" "$(gets needsSave)" "true false"
-check "reset: values back" "$(lastget glass) $(lastget desktopIcons) $(lastget tabletMode)" "0 true 0"
+# The tablet-mode choice as the session started (PFV_TABLET writes kwinrc [Input] TabletMode):
+# auto 0, on 1, off 2.
+case "$(kreadconfig6 --file kwinrc --group Input --key TabletMode --default auto)" in on) tm0=1 ;; off) tm0=2 ;; *) tm0=0 ;; esac
+check "reset: values back" "$(lastget glass) $(lastget desktopIcons) $(lastget tabletMode)" "0 true $tm0"
 
 # 2. Snap layouts.
 kcm <<'K'
@@ -90,7 +93,8 @@ check "reduced: launcher glass" "$(wkey org.plasmafusion.launcher glass)" reduce
 check "reduced: system card glass" "$(wkey org.plasmafusion.systemcard glass)" reduced
 check "reduced: blur loaded" "$(blur_loaded)" true
 check "reduced: blurEnabled" "$(ck kwinrc Plugins blurEnabled)" ""
-check "reduced: top-bar choice kept" "$(ck plasmafusionrc TopBar SolidNextToWindows)" false
+# The layout makes the top bar solid next to maximized windows (owner decision 5, LAYOUT-1).
+check "reduced: top-bar choice kept" "$(ck plasmafusionrc TopBar SolidNextToWindows)" true
 kcm <<'K'
 waitshell
 set glass 2
@@ -102,7 +106,7 @@ shot c03-glass-solid
 check "solid: Glass" "$(ck plasmafusionrc Effects Glass)" Solid
 check "solid: blurEnabled" "$(ck kwinrc Plugins blurEnabled)" false
 check "solid: blur loaded" "$(blur_loaded)" false
-check "solid: top bar keeps the choice made before Reduced (translucent at HEAD's layout)" "$(popacity top)" translucent
+check "solid: top bar keeps the choice made before Reduced (the layout's adaptive)" "$(popacity top)" adaptive
 check "solid: dock" "$(popacity dock)" translucent
 check "solid: dock glass" "$(wkey org.plasmafusion.dock glass)" solid
 kcm <<'K'

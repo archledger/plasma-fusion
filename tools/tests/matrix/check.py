@@ -31,6 +31,10 @@
 import glob, json, os, re, sys
 
 TOL = 1.0      # logical px of rounding allowed at edges
+# A floating panel's frame sits this far inside its window (the Plasma style's
+# floating-hint-top-margin; with the plain south frame the dock's 16 px headroom lives there),
+# so its applets start that far down and the window is thicker than the panel.
+FLOAT_INSET = 16
 TARGET, EDGE_TARGET, GAP = 44, 48, 8
 BASE_STEPS = ["01-desktop", "02b-dock-after-leave", "03-launcher", "04-quicksettings", "05-clock-popup",
               "06-dolphin", "07-konsole", "09-snap-flyout", "10-notification", "99-end"]
@@ -197,7 +201,8 @@ class Checker:
                     bad.append("%s in the %s panel at %g..%g of %g" % (w["type"], p["location"], along, along + across, length))
                 cross = w["x"] if vertical else w["y"]
                 size = w["w"] if vertical else w["h"]
-                if cross < -TOL or cross + size > thick + TOL:
+                slack = FLOAT_INSET if p.get("floating") else 0
+                if cross < -TOL or cross + size > thick + slack + TOL or size > thick + TOL:
                     bad.append("%s in the %s panel %g px thick at %g..%g" % (w["type"], p["location"], thick, cross, cross + size))
                 if w["type"] != "org.kde.plasma.panelspacer":  # invisible filler; applets may sit on it
                     spans.append((along, along + across, w["type"]))

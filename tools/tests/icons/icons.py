@@ -225,9 +225,16 @@ def grid(state):
     screen = max(0, d["screen"])
     r = state["avail"][screen] if screen < len(state["avail"]) else state["avail"][0]
     ncol = max(1, r["w"] // CELL_BASE)
-    per = int(head[1]) if head else max(1, r["h"] // CELL_BASE)
+    per_fit = max(1, r["h"] // CELL_BASE)
+    per = int(head[1]) if head else per_fit
     arrangement = int(g.get("arrangement", "0") or 0)
     guessed = False
+    if cl and arrangement == 1 and per > per_fit:
+        # Positions saved while the area was taller (the layout's Folder View writes them before the
+        # dock has taken its room): Folder View shows the same order in columns of per_fit, so the
+        # cells are re-flowed the same way.
+        cl = {u: divmod(stripe * per + pos, per_fit) for u, (stripe, pos) in cl.items()}
+        per = per_fit
     if not cl:
         # No positions saved yet (Plasma writes them on the first move): the files are listed in
         # creation order (the order readdir gives on this file system; the test creates them in

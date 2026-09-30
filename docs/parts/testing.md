@@ -269,6 +269,22 @@ Not done in TEST-1:
   `QSG_RENDER_TIMING=1`, `perf top -p`) is not profiled yet.
 - A new baseline is recorded after DEPLOY-1 (the plan), with `--runs 5` on a quiet host.
 
+## INT-1 (2026-09-30): fixes to the suites
+
+- **Icons (`icons.py grid()`):** since LAYOUT-1 the layout ships the Folder View, which saves its
+  positions before the dock has taken its room (header `10,9`: nine per column for the 866 px
+  area). The drag plan took nine rows of 84 px from that header, while Folder View shows seven
+  rows of 108 px in the 762 px available area, so the pattern was never reached (setup failure,
+  exit 2; the same on the build before INT-1). Positions saved for a taller area are now re-flowed
+  into the columns Folder View shows (same order) before planning. Result on 321228a: setup
+  reached, 8 PASS, 3 REWRITTEN, 0 FAIL of 11 (as on 282b1a5).
+- **Matrix (`check.py`, applets-in-panel):** a floating panel's frame sits `FLOAT_INSET` (16 px,
+  the Plasma style's floating-hint-top-margin) inside its window, where the plain south frame
+  keeps the dock's headroom; its applets start 16 px down. The check allowed only 0..thickness
+  and failed every configuration on the dock (72 px panel, applet at 16..88). Now an applet may
+  lie in 0..thickness + 16 of a floating panel, but not be thicker than the panel. Result: 18 of
+  18 configurations PASS (M11's touch-target check NOT RUN, as before).
+
 ## Results on 282b1a5 (the deployed round-2 build)
 
 ### Icon positions

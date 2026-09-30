@@ -72,11 +72,25 @@ PlasmoidItem {
     }
     property real maxPopupHeight: 800
 
-    onButtonShownChanged: Qt.callLater(() => {
-        const g = button.mapToGlobal(0, 0);
-        console.info("pen: button " + (buttonShown ? "shown at " + Math.round(g.x) + "," + Math.round(g.y) + " "
-                                                    + Math.round(button.width) + "x" + Math.round(button.height) : "hidden"));
-    })
+    // Test hook: the button's place once the panel has laid the applet out (it gets its width only
+    // after buttonShown changes, so the report waits until the geometry stops changing).
+    onButtonShownChanged: buttonReport.restart()
+    onWidthChanged: buttonReport.restart()
+    Timer {
+        id: buttonReport
+        interval: 150
+        onTriggered: {
+            const g = button.mapToGlobal(0, 0);
+            console.info("pen: button " + (root.buttonShown ? "shown at " + Math.round(g.x) + "," + Math.round(g.y) + " "
+                                                             + Math.round(button.width) + "x" + Math.round(button.height) : "hidden"));
+        }
+    }
+    Connections {
+        target: root.buttonShown ? button : null
+        function onXChanged() { buttonReport.restart(); }
+        function onYChanged() { buttonReport.restart(); }
+        function onWidthChanged() { buttonReport.restart(); }
+    }
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     Plasmoid.status: popupOpen ? PlasmaCore.Types.RequiresAttentionStatus

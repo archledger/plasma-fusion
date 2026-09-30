@@ -506,3 +506,13 @@ Open (not in this part's files):
 - Not checked with real hardware input; everything above used KWin's EIS input in virtual
   sessions.
 
+## INT-1 (2026-09-30)
+
+`tests/scenario-controls.sh` against the integration build 321228a (plain dock frame, LAYOUT-1's
+layout): 96/96 after three expectations were brought up to date. Since LAYOUT-1 the layout makes
+the top bar solid next to maximized windows (owner decision 5), so after Reduced the top-bar choice
+kept is `SolidNextToWindows=true` and Solid gives back `adaptive` (the test expected the old
+`false` / `translucent`); and the "Reset" check now takes the tablet-mode choice the session
+started with (the integration runs start with `TabletMode=off`, the lane's with automatic). No
+change in the module.
+
