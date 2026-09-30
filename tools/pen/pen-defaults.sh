@@ -1,0 +1,140 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion pen defaults (docs/parts/pen.md, spec PEN.md section 2). Run it inside the user's
+# session (a terminal, or SSH with the session's DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR).
+#
+#   pen-defaults.sh [--dry-run] [--no-install]
+#   pen-defaults.sh --restore BACKUP_DIR
+#
+# Sets, for the first tablet tool KWin knows (the ThinkPad X13 Yoga Gen 4 "Wacom HID 534D Pen"):
+#   - the pen's click button (BTN_STYLUS, evdev 331) gives a right click (kcminputrc
+#     [ButtonRebinds][TabletTool][<pen name>] 331=MouseButton,273); unmapped, Qt and GTK treat it
+#     as a middle click, which pastes the primary selection;
+#   - the pen stays on the built-in panel when an external monitor is connected (KWin D-Bus
+#     outputName; KWin stores OutputUuid itself); unmapped, a pen follows the active output;
+#   - pen, touchpad and TrackPoint share one pointer (kcminputrc [Tablet] SyncWithMouse=true);
+#   - Xournal++ is installed for notes and the whiteboard (dnf, needs sudo; --no-install skips it).
+# Every setting takes effect at once. Before changing anything it copies kcminputrc and the pen's
+# current output to ~/.local/state/plasma-fusion/pen-backup-<UTC timestamp>/; --restore puts them
+# back (the Xournal++ package stays installed).
+set -euo pipefail
+
+DRY=0 INSTALL=1 RESTORE=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --dry-run) DRY=1 ;;
+    --no-install) INSTALL=0 ;;
+    --restore) RESTORE=${2:?--restore needs a backup directory}; shift ;;
+    -h|--help) sed -n '/^#   pen-defaults.sh/,/^# back (the/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
+STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
+CLICK_CODE=331          # BTN_STYLUS
+CLICK_ACTION=MouseButton,273   # BTN_RIGHT
+say() { printf '%s\n' "$*"; }
+note() { printf '  %s\n' "$*"; }
+die() { printf 'pen-defaults: %s\n' "$*" >&2; exit 1; }
+KWIN=org.kde.KWin
+DEV_ROOT=/org/kde/KWin/InputDevice
+DEV_IF=org.kde.KWin.InputDevice
+
+busctl --user status "$KWIN" >/dev/null 2>&1 || die "KWin is not running on this session bus"
+
+prop() { # $1 sysName, $2 property: prints the value without the type prefix
+  busctl --user get-property "$KWIN" "$DEV_ROOT/$1" "$DEV_IF" "$2" 2>/dev/null | cut -d' ' -f2- | sed 's/^"\(.*\)"$/\1/'
+}
+
+# The pen: the first device with tabletTool=true (its sysName is e.g. event7).
+PEN='' PEN_NAME=''
+for d in $(busctl --user get-property "$KWIN" "$DEV_ROOT" org.kde.KWin.InputDeviceManager devicesSysNames | tr -d '"' | cut -d' ' -f3-); do
+  if [ "$(prop "$d" tabletTool)" = true ]; then PEN=$d; PEN_NAME=$(prop "$d" name); break; fi
+done
+[ -n "$PEN" ] || { say "No pen (tablet tool) is known to KWin: nothing to do."; exit 0; }
+
+# The built-in panel: a connected DRM connector named eDP*, LVDS* or DSI* (sysfs, so no Qt tool
+# has to run; the connector name without the card prefix is KWin's output name).
+INTERNAL=
+for c in /sys/class/drm/card*-eDP-* /sys/class/drm/card*-LVDS-* /sys/class/drm/card*-DSI-*; do
+  [ -e "$c/status" ] && [ "$(cat "$c/status")" = connected ] || continue
+  INTERNAL=${c##*/}; INTERNAL=${INTERNAL#card*-}; break
+done
+
+if [ -n "$RESTORE" ]; then
+  [ -f "$RESTORE/keys" ] || die "$RESTORE is not a pen backup"
+  say "Restore from $RESTORE"
+  # Each line: <unset|set> TAB <group path joined by />, TAB <key> TAB <old value>. Written back with
+  # --notify so KWin (button rebinds, SyncWithMouse) picks the old values up at once.
+  while IFS=$'\t' read -r state gpath key value; do
+    args=()
+    IFS=/ read -r -a groups <<<"$gpath"
+    for g in "${groups[@]}"; do args+=(--group "$g"); done
+    if [ "$state" = unset ]; then
+      note "kcminputrc ${gpath} $key: delete"
+      kwriteconfig6 --notify --file kcminputrc "${args[@]}" --key "$key" --delete
+    else
+      note "kcminputrc ${gpath} $key: -> $value"
+      kwriteconfig6 --notify --file kcminputrc "${args[@]}" --key "$key" "$value"
+    fi
+  done <"$RESTORE/keys"
+  old_output=$(cat "$RESTORE/pen-output" 2>/dev/null || true)
+  note "pen output: -> ${old_output:-<active screen>}"
+  busctl --user set-property "$KWIN" "$DEV_ROOT/$PEN" "$DEV_IF" outputName s "$old_output"
+  say "Done. Xournal++ stays installed (sudo dnf remove xournalpp to remove it)."
+  exit 0
+fi
+
+say "Pen: $PEN_NAME ($PEN)"
+if [ "$DRY" = 0 ]; then
+  BACKUP=$STATE/pen-backup-$(date -u +%Y%m%dT%H%M%SZ)
+  mkdir -p "$BACKUP"
+  [ ! -f "$CONFIG/kcminputrc" ] || cp -a "$CONFIG/kcminputrc" "$BACKUP/kcminputrc"
+  : >"$BACKUP/keys"
+  prop "$PEN" outputName >"$BACKUP/pen-output"
+  say "backup: $BACKUP"
+fi
+
+set_key() { # $1 group path joined by "/", $2 key, $3 value
+  local gpath=$1 key=$2 value=$3 cur args=() groups g
+  IFS=/ read -r -a groups <<<"$gpath"
+  for g in "${groups[@]}"; do args+=(--group "$g"); done
+  cur=$(kreadconfig6 --file kcminputrc "${args[@]}" --key "$key" 2>/dev/null || true)
+  if [ "$cur" = "$value" ]; then note "kcminputrc [$gpath] $key = $value (unchanged)"; return; fi
+  note "kcminputrc [$gpath] $key: ${cur:-<unset>} -> $value"
+  [ "$DRY" = 1 ] && return
+  if [ -z "$cur" ]; then
+    printf 'unset\t%s\t%s\t\n' "$gpath" "$key" >>"$BACKUP/keys"
+  else
+    printf 'set\t%s\t%s\t%s\n' "$gpath" "$key" "$cur" >>"$BACKUP/keys"
+  fi
+  kwriteconfig6 --notify --file kcminputrc "${args[@]}" --key "$key" "$value"
+}
+
+set_key "ButtonRebinds/TabletTool/$PEN_NAME" "$CLICK_CODE" "$CLICK_ACTION"
+set_key Tablet SyncWithMouse true
+
+cur_output=$(prop "$PEN" outputName)
+if [ -z "$INTERNAL" ]; then
+  note "no built-in panel found: the pen keeps following the active screen"
+elif [ "$cur_output" = "$INTERNAL" ]; then
+  note "pen output = $INTERNAL (unchanged)"
+else
+  note "pen output: ${cur_output:-<active screen>} -> $INTERNAL"
+  [ "$DRY" = 1 ] || busctl --user set-property "$KWIN" "$DEV_ROOT/$PEN" "$DEV_IF" outputName s "$INTERNAL"
+fi
+
+if [ "$INSTALL" = 1 ]; then
+  if rpm -q xournalpp >/dev/null 2>&1; then
+    note "Xournal++ installed (unchanged)"
+  else
+    note "install Xournal++ (sudo dnf install --setopt=install_weak_deps=False xournalpp)"
+    # Without weak dependencies: its optional LaTeX tool would pull in about 260 MB of TeX Live.
+    [ "$DRY" = 1 ] || sudo dnf install -y --setopt=install_weak_deps=False xournalpp >/dev/null
+  fi
+fi
+[ "$DRY" = 1 ] && say "Dry run: nothing was changed." || say "Done. Undo with: $0 --restore $BACKUP"
