@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Install the Plasma Fusion Plymouth theme (boot splash and disk unlock) system-wide. Run as
-# root on the target machine, with a theme directory built by generators/plymouth/build.sh.
+# root on the target machine, with a theme directory built by generators/plymouth/build.sh or
+# the copy the plasma-fusion package ships.
 #
-#   plymouth-install.sh [--select] [--layout LABEL|none] [--no-dnf] [--dry-run] THEME_DIR
+#   plymouth-install.sh [--select] [--layout LABEL|none] [--no-dnf] [--dry-run] [THEME_DIR]
 #
-#   THEME_DIR        the built theme (plasma-fusion.plymouth, plasma-fusion.script, *.png)
+#   THEME_DIR        the built theme (plasma-fusion.plymouth, plasma-fusion.script, *.png);
+#                    default: /usr/share/plasma-fusion/plymouth/plasma-fusion from the package
 #   --select         also make it the default theme and rebuild the initramfs of the running
 #                    kernel (plymouth-set-default-theme -R plasma-fusion). A copy of the current
 #                    initramfs is kept first as /boot/initramfs-<kernel>.img.pre-plasma-fusion
@@ -50,7 +52,8 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-[ -n "$SRC" ] || usage 2
+PACKAGED=/usr/share/plasma-fusion/plymouth/$NAME
+[ -n "$SRC" ] || { [ -d "$PACKAGED" ] && SRC=$PACKAGED; } || usage 2
 [ -f "$SRC/$NAME.plymouth" ] && [ -f "$SRC/$NAME.script" ] || {
   echo "plymouth-install: $SRC is not a built $NAME theme" >&2; exit 1; }
 if [ "$DRY" = 0 ] && [ "$(id -u)" != 0 ]; then

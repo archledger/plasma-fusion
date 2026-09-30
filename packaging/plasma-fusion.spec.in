@@ -80,6 +80,10 @@ export QT_QPA_PLATFORM=offscreen
 export STAGE="$PWD/_stage"
 rm -rf "$STAGE"
 bash tools/build.sh
+# The Plymouth theme (boot splash and disk unlock) is system-wide only, so it is not in the HOME
+# stage. It is shipped as a source for tools/system/plymouth-install.sh, not installed into
+# /usr/share/plymouth/themes: installing this package never changes the boot splash.
+bash generators/plymouth/build.sh "$PWD/_plymouth/plasma-fusion"
 
 %install
 share=_stage/.local/share
@@ -124,6 +128,10 @@ find "$dest/icons" -type l -lname '/usr/share/icons/*' -print0 |
   while IFS= read -r -d '' link; do
     ln -sfn "$(realpath -m -s --relative-to="$(dirname "${link#%{buildroot}}")" "$(readlink "$link")")" "$link"
   done
+
+# Plymouth theme for plymouth-install.sh (see %%build)
+mkdir -p "$dest/plasma-fusion/plymouth"
+cp -a _plymouth/plasma-fusion "$dest/plasma-fusion/plymouth/"
 
 # Per-user configuration from the build (GTK 3/4 stylesheets), kept as templates for the
 # per-user step; the package itself writes nothing into a home directory.
@@ -232,6 +240,7 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 %dir %{_datadir}/plasma-fusion
 %{_datadir}/plasma-fusion/backgrounds/
 %{_datadir}/plasma-fusion/config/
+%{_datadir}/plasma-fusion/plymouth/
 %{_datadir}/plasma-fusion/tools/
 %doc %{_datadir}/plasma-fusion/docs/
 

@@ -128,6 +128,17 @@ driver switch at boot).
 
 ## Install and select (root, on the target)
 
+With the plasma-fusion package installed, the theme ships in
+`/usr/share/plasma-fusion/plymouth/plasma-fusion/` (built in the package's `%build`; installing the
+package does not change the boot splash) and the scripts default to it:
+
+```
+sudo /usr/share/plasma-fusion/tools/system/plymouth-install.sh           # files only
+sudo /usr/share/plasma-fusion/tools/system/plymouth-install.sh --select  # also select it, rebuild the initramfs
+```
+
+Without the package:
+
 ```
 # on the build machine
 generators/plymouth/build.sh                      # -> stage/plymouth/plasma-fusion
