@@ -20,7 +20,7 @@ T.AbstractButton {
 
     implicitWidth: 124
     // card, 6 px gap, one 12 px line (17 px)
-    implicitHeight: 72 + 6 + 17
+    implicitHeight: 72 + 6 + pal.m.px(17)
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
 
@@ -138,7 +138,7 @@ T.AbstractButton {
             y: frame.height + 6
             text: card.text
             font.family: card.pal.family
-            font.pixelSize: 12
+            font.pixelSize: card.pal.m.font(12)
             font.weight: card.selected ? Font.ExtraBold : Font.Normal
             color: card.selected ? card.pal.labelSelected : card.pal.label
         }

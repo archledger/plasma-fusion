@@ -6,7 +6,7 @@
 
 Name:           plasma-fusion-settings
 Version:        1.0.0
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        Plasma Fusion page for System Settings
 License:        GPL-2.0-or-later AND CC-BY-SA-4.0
 Source0:        %{name}-%{version}.tar.gz
@@ -40,9 +40,12 @@ Requires:       hicolor-icon-theme
 The Appearance page of the Plasma Fusion desktop as a System Settings module
 (Appearance & Style > Plasma Fusion): Light, Dark or Follow sunset style, the
 accent color, the window-button layout of the Plasma Fusion window decoration,
-dock magnification, the global menu in the top bar and the Overview hot corner.
-Plasma Fusion itself (Global Themes, dock, top bar, decoration) is installed
-separately.
+dock magnification, the global menu in the top bar and the Overview hot corner;
+snap layouts on hold or hover, the glass level, high contrast, reduced motion,
+the top bar next to windows and on every screen, desktop icons, what dragging
+files does, the battery saving at 10 %, tablet mode, and two ways to start over
+(the previous desktop look, a fresh Plasma Fusion layout). Plasma Fusion itself
+(Global Themes, dock, top bar, decoration) is installed separately.
 
 %prep
 %autosetup
@@ -54,7 +57,7 @@ separately.
 # the stamp, and an update would keep showing the previous page. The stamp is derived from the
 # sources instead: the same sources give the same stamp (the build stays reproducible), any
 # change gives a new one.
-export SOURCE_DATE_EPOCH=$(( 1700000000 + 0x$(cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/*.json src/ui/*.qml | sha256sum | cut -c1-6) ))
+export SOURCE_DATE_EPOCH=$(( 1700000000 + 0x$(cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/*.json src/ui/*.qml common/*.qml | sha256sum | cut -c1-6) ))
 export QT_RCC_SOURCE_DATE_OVERRIDE=$SOURCE_DATE_EPOCH
 echo "QML time stamp: $SOURCE_DATE_EPOCH"
 %cmake_kf6
@@ -70,6 +73,16 @@ echo "QML time stamp: $SOURCE_DATE_EPOCH"
 %{_kf6_datadir}/icons/hicolor/scalable/apps/plasmafusion-logo.svg
 
 %changelog
+* Wed Sep 30 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0.0-4
+- Add snap layouts on hold or hover, the glass level (Full, Reduced, Solid),
+  high contrast colors, reduce motion, the magnified dock icon size, a solid
+  top bar next to windows, a top bar on every screen, desktop icons and their
+  size, what dragging files does, lighter visuals at 10 % battery and a Tablet
+  section
+- Add "Restore my previous desktop" and "Reset Fusion layout", which gives the
+  new widgets the keyboard shortcuts of the old ones
+- Follow the user's font size with the shared Plasma Fusion metrics
+
 * Tue Sep 29 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0.0-3
 - Keep a window-button choice applied just after Follow sunset when Plasma
   switches the Global Theme

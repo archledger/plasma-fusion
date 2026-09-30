@@ -103,7 +103,7 @@ T.AbstractButton {
             anchors.centerIn: parent
             text: pill.text
             font.family: pill.pal.family
-            font.pointSize: 8.625 // 11.5 px (pixelSize is an integer)
+            font.pointSize: 8.625 * pill.pal.m.ts // 11.5 px (pixelSize is an integer)
             font.weight: Font.Bold
             color: pill.pal.label
         }

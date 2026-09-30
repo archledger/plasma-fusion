@@ -8,6 +8,8 @@
 # System Settings is placed at 180,60 1080x700; the module's content starts at X0,Y0 below and
 # every control is addressed from there (board layout: cards at y 26, swatches at 165,
 # segmented control at 235, switch rows at 287/328/369, 560 px wide column).
+# at() prints "X Y"; click takes them as two words on purpose.
+# shellcheck disable=SC2046
 exec 2>&1
 set -x
 source "$HOME/pf-kcm-tests/session-common.sh"

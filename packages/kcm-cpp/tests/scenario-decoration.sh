@@ -4,6 +4,8 @@
 # Test tooling (not installed). The window-button choice with the Plasma Fusion decoration
 # (org.plasmafusion.decoration) installed: seed from make-seed.sh with DECO_PLUGIN_DIR. Starts
 # from Plasma Fusion Dark with the Aurorae title bars the Global Theme sets.
+# at() prints "X Y"; click takes them as two words on purpose.
+# shellcheck disable=SC2046
 exec 2>&1
 set -x
 source "$HOME/pf-kcm-tests/session-common.sh"

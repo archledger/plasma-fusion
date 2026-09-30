@@ -2,6 +2,7 @@
     Segmented control (Main board "Window buttons"): 34 px track, 3 px padding and gaps,
     radius 10; the chosen segment is an accent pill with white ExtraBold text.
     Segment widths follow the board's flex layout: text width plus an equal share of the rest.
+    currentIndex -1 shows no segment chosen (a value the page does not offer is kept).
 
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
@@ -22,10 +23,11 @@ Rectangle {
     property string accessibleName
     signal activated(int index)
 
-    implicitHeight: 34
-    implicitWidth: 3 * 2 + textSum + (model.length - 1) * 3 + model.length * 24
+    implicitHeight: pal.m.px(34)
+    implicitWidth: 3 * 2 + textSum + (model.length - 1) * 3 + model.length * pal.m.px(24)
     radius: 10
     color: pal.segmentBackground
+    opacity: enabled ? 1 : 0.5
 
     Accessible.role: Accessible.Grouping
     Accessible.name: accessibleName
@@ -46,7 +48,7 @@ Rectangle {
     FontMetrics {
         id: metrics
         font.family: control.pal.family
-        font.pixelSize: 12
+        font.pixelSize: control.pal.m.font(12)
         font.weight: Font.ExtraBold
     }
 
@@ -78,7 +80,7 @@ Rectangle {
                 readonly property bool chosen: index === control.currentIndex
 
                 width: (control.textWidths[index] || 0) + control.share
-                height: 28
+                height: control.height - 6
                 text: modelData
                 hoverEnabled: true
                 focusPolicy: Qt.StrongFocus
@@ -122,7 +124,7 @@ Rectangle {
                         anchors.centerIn: parent
                         text: segment.text
                         font.family: control.pal.family
-                        font.pixelSize: 12
+                        font.pixelSize: control.pal.m.font(12)
                         font.weight: segment.chosen ? Font.ExtraBold : Font.DemiBold
                         color: segment.chosen ? control.pal.accentText : control.pal.label
                     }

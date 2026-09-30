@@ -6,7 +6,7 @@
                 "Name": "Wisbendji Fimerlus"
             }
         ],
-        "Description": "Style, accent color, window buttons, dock, top bar and hot corner of Plasma Fusion",
+        "Description": "Style, accent color, window buttons, glass, dock, top bar, desktop and tablet settings of Plasma Fusion",
         "FormFactors": [
             "desktop"
         ],
@@ -15,7 +15,7 @@
         "Name": "Plasma Fusion",
         "Version": "1.0.0"
     },
-    "X-KDE-Keywords": "Plasma Fusion,appearance,style,light,dark,follow sunset,automatic,accent,accent color,accent colour,wallpaper,window buttons,title bar,titlebar,traffic lights,dock,magnify,magnification,global menu,menu bar,top bar,hot corner,overview,screen edge",
+    "X-KDE-Keywords": "Plasma Fusion,appearance,style,light,dark,follow sunset,automatic,accent,accent color,accent colour,wallpaper,window buttons,title bar,titlebar,traffic lights,dock,magnify,magnification,global menu,menu bar,top bar,hot corner,overview,screen edge,snap layouts,glass,blur,transparency,reduce transparency,high contrast,reduce motion,animations,desktop icons,icon size,drag and drop,move,battery,tablet,tablet mode,on-screen keyboard,virtual keyboard,home indicator,restore,reset layout,previous desktop",
     "X-KDE-System-Settings-Parent-Category": "appearance",
     "X-KDE-Weight": 1
 }

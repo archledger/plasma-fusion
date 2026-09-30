@@ -1,9 +1,12 @@
 # Settings module: `kcm_plasmafusion` (System Settings > Appearance & Style > Plasma Fusion)
 
-Status: reviewed; `plasma-fusion-settings-1.0.0-3` built as the x86_64 RPM in the Fedora 44 build
-container on the ThinkPad and checked in private virtual sessions on the ThinkPad (dark and light,
-scale 1 and 1.325, with the system-wide Plasma Fusion decoration and with the Aurorae fallback).
-Not installed (the lead installs it; see "Install"). Phase 3. Last edited 2026-09-29.
+Status: `plasma-fusion-settings-1.0.0-4` (work package KCM-1 of the one-pass plan): the Appearance
+page of 1.0.0-3 plus the Plasma Fusion switches that have no page of their own (snap layouts,
+glass, high contrast, reduce motion, dock size, top bar, desktop icons, file drag, battery, tablet)
+and two actions (restore the previous desktop, reset the Plasma Fusion layout). Built as the x86_64
+RPM in the Fedora 44 build container on the ThinkPad and checked in private virtual sessions on the
+ThinkPad (see "Verification, 1.0.0-4"). Not installed (the lead installs it at DEPLOY-1). 1.0.0-3
+(reviewed) is installed in the real session since 2026-09-30 01:19Z. Last edited 2026-09-30.
 
 ## What it is
 
@@ -28,23 +31,62 @@ brings its own decoration):
 | `org.plasmafusion.decoration` found in `org.kde.kdecoration3` plugins | `library=org.plasmafusion.decoration`, `theme=` (empty), `NoPlugin=false`; button lists kept (the decoration draws its left circles itself), except that the left-circles lists `XIA` / `_` are put back to `M` / `IAX` when leaving Left · circles |
 | no (Aurorae fallback, phase 1 decoration part) | `library=org.kde.kwin.aurorae.v2`, `theme=__aurorae__svg__PlasmaFusion{Dark,Light}` for Right · glyphs and Show on hover, `...-Left` for Left · circles (variant from the current Global Theme, else the colour scheme's brightness), `ButtonsOnLeft=M` / `ButtonsOnRight=IAX`, or `XIA` / `_` for Left · circles |
 
-`SnapLayoutsOnHover` has no control on the board, so the page never writes it (default `true`).
+### Below the board (1.0.0-4)
+
+The board ends with the three switches; everything below them is new in 1.0.0-4 and has no board of
+its own (same section titles, segmented controls and switch rows; a row with a label and a segmented
+control is `ChoiceRow`, an action row `ActionRow`). The keys are the plan's registry
+(`docs/PLAN.md`, one-pass plan section 2) plus two new `[TopBar]` keys (marked *new*).
+
+| Section | Control | Written on Apply |
+|---|---|---|
+| Windows | Snap layouts on maximize: Hold / Hover | plasmafusionrc `[Decoration] SnapLayoutsOnHover` `false` / `true`, always written (the installed decoration 1.0-2 reads a missing key as hover; 1.0-3 defaults to hold, owner decision 4), then KWin reconfigure. The note under it gives the caveat of Hover (a click on maximize only closes an open picker) and says when the Plasma Fusion title bars are not in use |
+| Glass and motion | Glass: Full / Reduced / Solid | plasmafusionrc `[Effects] Glass=Full\|Reduced\|Solid` (EFFECTS.md 2, 3.3). Full and Reduced: kwinrc `[Plugins] blurEnabled` removed and `org.kde.kwin.Effects.loadEffect blur`; Solid: `blurEnabled=false` and `unloadEffect blur`. Reduced: both Fusion panels `opacity = "opaque"`; Full / Solid: top bar `adaptive` or `translucent` (next switch), dock `translucent`. The `[General] glass` key (`full` / `reduced` / `solid`) of every dock, quick-settings, launcher and system-card widget. One evaluateScript call for panels and widgets |
+| | High contrast colors | `plasma-apply-colorscheme PlasmaFusionHighContrast` (the style part's scheme; the switch is disabled with a note while it is not installed); turning it on selects Solid on the page (GAPS.md G10), which can be changed before Apply. Off: the scheme of the Global Theme in use (`PlasmaFusionDark` / `PlasmaFusionLight`). The accent colour is kept. After Light / Dark it is applied again on top of the theme's scheme; Follow sunset's switches at dawn and dusk bring the normal scheme back (the note says so) |
+| | Reduce motion | kdeglobals `[KDE] AnimationDurationFactor=0` with notification; the previous factor goes to plasmafusionrc `[Motion] PreviousAnimationDurationFactor` (not written when the key was missing, = 1.0). Off: the saved factor is written back, or the key removed; the saved one is then removed. The switch shows the live state (`factor == 0`), so it follows the Animations page's slider |
+| Dock and top bar | Magnified icon size: 56 px / 62 px | every dock's `[General] magnifiedSize` (disabled while magnification is off; another value shows no segment chosen and is kept) |
+| | Solid top bar next to windows | the top bars' panel `opacity`: `adaptive` (owner decision 5) or `translucent`; plasmafusionrc `[TopBar] SolidNextToWindows` (*new*) keeps the choice, which Reduced glass cannot show (both bars opaque; the switch is disabled with a note then) |
+| | Top bar on every screen | plasmafusionrc `[TopBar] EveryScreen` (*new*, default `true`, owner decision 8). Off: the top bars on screens other than the main one (the screen of the top bar with quick settings) are removed; on: the layout part's `ensure-topbars.js` is run when it is installed (`contents/layouts/` of either Plasma Fusion Global Theme), then the page's glass and top-bar opacity are applied to the new bars |
+| Desktop | Icons on the desktop | every Folder View desktop: off = `[General] filterPattern=/` and `filterMode=1` ("show files matching" a pattern no file name can match; `QRegularExpression::fromWildcard` anchors it); on = `filterMode=0`, `filterPattern=*`, only when the desktop holds exactly that state (a filter set up in Folder View's own settings is left alone). Positions are kept: Folder View's positioner only adds entries while items are filtered out (`positioner.cpp` sourceRowsRemoved / updatePositionsList) |
+| | Icon size: Small / Medium / Large | Folder View `[General] iconSize` 1 / 2 / 3 (32 / 48 / 64 px; Medium is the Plasma Fusion default, BACKLOG M1) |
+| | When I drag files between folders: Ask / Move | kdeglobals `[KDE] DndBehavior`: Ask = key removed (KDE's default `AlwaysAsk`), Move = `MoveIfSameDevice` (the General Behavior page's key; BACKLOG S7) |
+| Battery | Lighter at 10 % battery | plasmafusionrc `[Power] LighterOnCritical` (`true` default), read by the power service |
+| Tablet | Tablet mode: Automatic / Always / Never | kwinrc `[Input] TabletMode` removed / `on` / `off` with notification (KWin's TabletModeManager watches it). The note shows KWin's current mode (`org.kde.KWin.TabletModeManager`, one GetAll and its two signals) |
+| | Apps in tablet mode: Full screen / Windowed | kwinrc `[Script-plasmafusion-tablet] WindowMode=fullscreen\|windowed` |
+| | Dock in tablet mode: Hide over apps / Always show | `[Script-plasmafusion-tablet] DockHiding=dodgewindows\|none` |
+| | On-screen keyboard: Tablet mode / On touch / Never | every quick-settings widget's `[General] keyboardPolicy=tablet\|touch\|never` |
+| | Swipe from the left / right edge | `[Script-plasmafusion-tablet] EdgeLeft`, `EdgeRight` |
+| | Home indicator | every dock's `[General] homeIndicator` |
+| | (after any of the four script keys) | kglobalaccel `invokeShortcut "Plasma Fusion: Tablet Window Mode"` on `/component/kwin` (the tablet script re-reads its keys; nothing happens without the script) |
+| Start over | Restore my previous desktop… (confirmation) | `plasma-apply-lookandfeel --apply org.plasmafusion.previous.desktop` at once (the gate lane's "My previous desktop"); automatic light/dark switching goes off with it. The login check switches the Fusion lock screen, title bars and KWin scripts off at the next login. Panels and desktop widgets stay (the confirmation says so; `fusion-restore.sh` is the full undo). Disabled when the package does not exist |
+| | Reset Fusion layout… (confirmation) | `org.kde.PlasmaShell.loadLookAndFeelDefaultLayout` with the Plasma Fusion Global Theme in use (only the layout: no colours, decoration or fonts are applied). The widgets' global shortcuts are read first; the rebuilt layout's widgets get the key their type had (quick settings Meta+A under owner decision 6, Meta+N before it), and quick settings / the pen widget get Meta+A / Meta+Shift+W when their type had none, the way `fusion-config.sh`'s `ensure_widget_shortcut` does: a key still held by a widget of the old layout (an `activate widget N` entry whose widget is gone; old ids are always lower than the new ones) is released with `unregister`, a key another live action holds is left alone and reported, the key is set through the widget and read back. Meta+N for the notification list is a kglobalaccel component of its own (DEVICE-1), not tied to a widget id, so it needs nothing. Then the glass level and the top-bar choice are applied to the new panels, extra top bars are removed when Every screen is off, and a running power service is restarted when its tier is not full, so it applies itself to the new widgets. Disabled without a Plasma Fusion Global Theme or without the shell |
+
+With the power service at its critical tier (plasmafusionrc `[Power] Tier=critical` and
+`LighterOnCritical`), it holds the glass at Solid and dock magnification off and restores the user's
+values it remembered (`[Power] UserGlass`, `UserDockMagnify`) when the battery recovers. The page
+then shows those remembered values (magnification) and notes the state; a change of Glass writes
+`[Effects] Glass` and `UserGlass` and the panel opacity, but leaves blur and the widgets' glass key to
+the service; a change of magnification writes `UserDockMagnify` instead of the dock.
 
 ## Files
 
 | Path | What |
 |---|---|
 | `packages/kcm-cpp/CMakeLists.txt`, `src/CMakeLists.txt` | ECM / KCMUtils project (`kcmutils_add_qml_kcm`: plugin, QML as resources, generated `kcm_plasmafusion.desktop`) |
-| `src/kcm.h`, `src/kcm.cpp` | `PlasmaFusionKcm`: state, load / save / defaults, the writes above |
+| `src/kcm.h`, `src/kcm.cpp` | `PlasmaFusionKcm`: state, load / save / defaults, the configuration-file writes above |
+| `src/shell.cpp` | everything through the Plasma shell (desktop scripting over `evaluateScript`: dock, top bar, panels, glass keys, Folder View, widget keys) and the two actions (restore, layout reset with the widgets' shortcuts) |
+| `src/kcm_p.h` | names and helpers shared by the two source files |
 | `src/kcm_plasmafusion.json` | plugin metadata: name "Plasma Fusion", icon `plasmafusion-logo`, `X-KDE-System-Settings-Parent-Category: appearance`, weight 1 (first in Appearance & Style), keywords |
 | `src/ui/main.qml` | the page (`KCM.SimpleKCM`) |
 | `src/ui/FusionPalette.qml` | board colours dark / light; accent-dependent ones from the colour scheme |
 | `src/ui/SectionTitle.qml`, `StyleCard.qml`, `Swatch.qml`, `WallpaperPill.qml`, `Segmented.qml`, `ToggleRow.qml` | the board's controls |
+| `src/ui/ChoiceRow.qml`, `ActionRow.qml` | a label with a segmented control (side by side, stacked in a narrow window), an action with its explanation and button |
+| `packages/common/FusionMetrics.qml` (shared, not this part's) | compiled into the module's resources next to `main.qml` (`src/CMakeLists.txt`; `common/` in the source tarball): board text through `m.font()`, text-holding heights through `m.px()`, so the page follows the user's font size (identical at the default font) |
 | `icons/plasmafusion-logo.svg` | the logo mark (three discs), installed as hicolor `apps/plasmafusion-logo` (CC-BY-SA-4.0) |
 | `plasma-fusion-settings.spec` | RPM spec (Fedora 44, `%cmake_kf6`) |
 | `build-rpm.sh`, `container-build.sh` | build in the container on the ThinkPad, fetch RPMs and an unpacked root |
 | `LICENSES/` | GPL-2.0-or-later (code), CC-BY-SA-4.0 (icon) |
-| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh` |
+| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh` |
 
 ## Build
 
@@ -52,11 +94,13 @@ brings its own decoration):
 packages/kcm-cpp/build-rpm.sh [OUTDIR]          # default OUTDIR build/kcm-cpp
 ```
 
-It packs `CMakeLists.txt src icons LICENSES` into a reproducible tarball, copies it with the spec to
+It packs `CMakeLists.txt src icons LICENSES` and `common/FusionMetrics.qml` (from
+`packages/common`) into a reproducible tarball (run it from a clean checkout of the commit to
+package, not a working tree with other lanes' edits), copies it with the spec to
 `/tmp/pfv-kcm-build` on the ThinkPad (`PF_REMOTE_DIR`, must be below `/tmp/pfv-`), and runs
 `nice -n 10 podman run --rm --network=none -v DIR:/work:Z localhost/plasma-fusion-build:f44-6.7.5
 bash /work/container-build.sh` (`rpmbuild -ba`, `-j6`). OUTDIR gets `RPMS/x86_64/`
-(`plasma-fusion-settings-1.0.0-3.fc44.x86_64.rpm` plus debuginfo / debugsource), `SRPMS/`,
+(`plasma-fusion-settings-1.0.0-4.fc44.x86_64.rpm` plus debuginfo / debugsource), `SRPMS/`,
 `build.log` (no compiler warnings with KDE's `-Wall -Wextra` set) and `root/` (the RPM unpacked,
 for test sessions). About a minute, most of it copying.
 
@@ -72,36 +116,53 @@ Package contents:
 Requires `plasma-systemsettings`, `plasma-workspace` (`plasma-apply-lookandfeel`,
 `plasma-apply-colorscheme`, the accent-colour and automatic light/dark kded modules),
 `kf6-kirigami`, `kf6-kcmutils`, `qt6-qtdeclarative`, `hicolor-icon-theme`; all 28 requirements of
-1.0.0-3 resolve on the ThinkPad (checked with `rpm -q --whatprovides`).
+1.0.0-3 resolve on the ThinkPad (checked with `rpm -q --whatprovides`). 1.0.0-4 adds no requirement
+(the layout reset and the power-service restart use `org.kde.PlasmaShell` and `systemctl`, present
+on every Plasma session).
+
+The spec's QML time stamp (`SOURCE_DATE_EPOCH` from a hash of the sources) includes
+`common/*.qml`, so a changed FusionMetrics gives a new stamp too.
 
 ## Install, open, roll back (lead / real session)
 
-The reviewed RPM is on the ThinkPad in `/var/tmp/plasma-fusion-rpms/kcm-cpp/` (with its `.sha256`)
-and in `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/kcm-cpp/rpm/`.
+1.0.0-3 is installed (2026-09-30 01:19Z). The 1.0.0-4 RPM of KCM-1 is in
+`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KCM-1/rpm/` (with `SHA256SUMS`); PKG-1
+builds the final one from the INT-1 commit with `build-rpm.sh`. The lead installs it at DEPLOY-1:
 
 ```
-sudo dnf install /var/tmp/plasma-fusion-rpms/kcm-cpp/plasma-fusion-settings-1.0.0-3.fc44.x86_64.rpm
+sudo dnf install ./plasma-fusion-settings-1.0.0-4.fc44.x86_64.rpm   # upgrades 1.0.0-3
 systemsettings kcm_plasmafusion          # or System Settings > Appearance & Style > Plasma Fusion
 kcmshell6 kcm_plasmafusion               # the page alone
-sudo dnf remove plasma-fusion-settings   # rollback of the package
+sudo dnf remove plasma-fusion-settings   # rollback of the package (or dnf downgrade to 1.0.0-3)
 ```
 
-The package changes nothing by being installed. Apply writes only the keys listed above;
-`tools/device/fusion-restore.sh` restores kdeglobals, kwinrc and the shell layout from a
-fusion-config.sh backup; `~/.config/plasmafusionrc` is new (delete it to undo; see "Needs").
+The package changes nothing by being installed. Apply writes only the keys listed above, and every
+control can be set back on the page (Defaults gives the Plasma Fusion defaults). The two actions
+are undone by choosing Light / Dark (restore) or by `fusion-restore.sh` with a backup taken
+before (layout reset: panels, pins and desktop icon positions come from the backed-up
+`plasma-org.kde.plasma.desktop-appletsrc`). `tools/device/fusion-restore.sh` restores kdeglobals,
+kwinrc, plasmafusionrc and the shell layout from a fusion-config.sh backup.
 
 ## Behaviour
 
 - Load: every value is read from the session when the page opens (kdeglobals, kwinrc,
-  plasmafusionrc; the dock and top bar through one evaluateScript call, asynchronously; the two
-  switches are disabled for that moment). Style shows nothing chosen when the current Global Theme
+  plasmafusionrc; the dock, top bars, quick settings and Folder View desktop through one
+  evaluateScript call, asynchronously; the controls that depend on them are disabled for that
+  moment). Style shows nothing chosen when the current Global Theme
   is not Plasma Fusion (or automatic switching uses other themes). An accent colour that is not a
   board swatch shows no swatch chosen and is kept.
 - Nothing is written until Apply (checked: the state files before and after a pending change are
   identical). Reset reads everything again; Defaults = Dark, Blue (scheme accent), Right · glyphs,
-  the Plasma Fusion decoration when it is installed, magnify on, global menu on, hot corner off.
-  Apply writes only what changed, in this order: Style, accent (on top of the scheme the style just
-  applied), window buttons and hot corner (one KWin reconfigure), dock, top bar.
+  the Plasma Fusion decoration when it is installed, magnify on, global menu on, hot corner off;
+  1.0.0-4: snap layouts on hold, Glass Full, high contrast off, reduce motion off, 62 px, solid top
+  bar next to windows, a top bar on every screen, desktop icons on at Medium, file drag Ask,
+  lighter at 10 % on, tablet mode Automatic, apps full screen, dock hides over apps, keyboard in
+  tablet mode only, edge swipes off, home indicator on. Apply writes only what changed, in this
+  order: Style, colour scheme (high contrast), accent (on top of the scheme just applied), window
+  buttons, snap layouts and hot corner (one KWin reconfigure), glass (plasmafusionrc and blur),
+  motion, file drag, battery, tablet keys (then the tablet script's shortcut), then the shell:
+  dock, home indicator, top bar menu, panels and glass keys, top bars on other screens, desktop,
+  keyboard policy.
 - Light / Dark run `plasma-apply-lookandfeel` synchronously, like the Global Theme page applies a
   theme: System Settings waits about 1-2 s.
 - "From wallpaper" asks Plasma for the colour when chosen (a read: Plasma's own accent service
@@ -119,14 +180,23 @@ fusion-config.sh backup; `~/.config/plasmafusionrc` is new (delete it to undo; s
   notices the switch (LookAndFeelPackage notification, checks at 1.5 / 3 / 6 / 10 s) and writes the
   chosen window buttons again. Verified with and without the decoration (see Verification).
   Switches at dawn and dusk while the page is closed are not covered (see "Needs").
-- Changes made elsewhere (quick-settings Dark style tile, Colors page, automatic switching) show up
-  on the open page while nothing is pending (KConfigWatcher on kdeglobals and kwinrc).
+- Changes made elsewhere (quick-settings Dark style tile, Colors page, automatic switching, the
+  Animations page's slider, the quick-settings tablet switches, the power service) show up on the
+  open page while nothing is pending (KConfigWatcher on kdeglobals, kwinrc and plasmafusionrc).
 - Errors (a tool failed, a theme is missing, the shell did not answer) are shown in an inline
   message at the top of the page; the dock / global-menu switches say so when the Plasma Fusion
   dock or top bar is not on the desktop, or when the Plasma shell is not running (they are read
   again 3 s after it starts; a change still pending on them is kept). A dock or top-bar change
   that cannot be applied because the shell stopped meanwhile is dropped on Apply, so the page shows
-  what is in effect.
+  what is in effect. 1.0.0-4: the same holds for every control that goes through the shell (glass,
+  magnified size, solid top bar, every screen, desktop icons and size, keyboard, home indicator)
+  and for the layout reset; each has the same notes (not running / widget or Folder View desktop
+  missing).
+- The two actions run at once after their confirmation (a Kirigami prompt), not on Apply; a busy
+  indicator shows next to "Start over" and both buttons are disabled meanwhile. The result or an
+  error is shown in the message area at the top (a positive message lists the shortcuts the
+  reset gave). Restore reloads the page (the Global Theme changed everything); the layout reset
+  keeps changes still pending on the page.
 - Keyboard: Tab reaches every card, swatch, pill, segment and switch row (each is a tab stop, as
   with Qt Quick radio buttons); Space chooses or toggles (Return does not, as in other Qt Quick
   controls); Left / Right in the segmented control choose the neighbouring segment and move the
@@ -204,6 +274,41 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/kcm-cpp/`
 `interact/` (km-12 screenshots and `state-*.txt`), `decoration/` (km-13), `follow-sunset/`
 (km-7, km-8), `rpm/` (RPM, SRPM, build log, SHA256SUMS).
 
+## Verification, 1.0.0-4
+
+KCM-1 builder `o1km`; the lead took the lane over at 04:31Z and made the final build and runs.
+
+- Build: the x86_64 RPM in the Fedora 44 build container on the ThinkPad (`build-rpm.sh`), 0 compiler
+  warnings; rpmlint as 1.0.0-3. Local compile check with the laptop's KF6: 0 warnings. qmllint: only
+  the unqualified `kcm` / `i18n*` names, as at HEAD.
+- `o1km-a` (`tests/scenario-controls.sh`, 1920 x 1200 at 4/3, the module driven through `kcmctl`):
+  96/96. Covered: pending changes, Apply and Reset; snap layouts hold or hover; Glass Full, Reduced
+  and Solid (blur loaded or not, panel opacity, each Fusion widget's `glass`, the top-bar choice
+  kept); reduce motion (factor 0, the previous factor kept and given back); dock magnification 56,
+  62 and off; desktop icons off and on (filter keys; icon positions unchanged, also across a shell
+  restart); icon size; file drag; battery; tablet always, never and automatic (KWin follows the
+  key, the page follows KWin), apps windowed or full screen, the dock in tablet mode, edge swipes,
+  keyboard policy, home indicator; high contrast (scheme, forced Solid, kept after Light, off gives
+  Dark and Full back; switching it off before Apply leaves nothing pending); pending changes
+  survive a page restart; a stopped shell; the critical power tier (the user's glass and
+  magnification remembered, blur left unloaded, the dock's glass left to the power service);
+  Defaults.
+- `o1km-b` (`tests/scenario-actions.sh`, two outputs): 23/23. Top bar on every screen off and on;
+  Reset layout twice (the quick-settings key carried over, Meta+N and Meta+A; the pen widget gets
+  Meta+Shift+W; the glass applied to the new panels); Restore previous desktop ("My previous
+  desktop", the page then shows no Fusion style and offers the layout reset only with a Fusion
+  theme).
+- `o1km-c` (`tests/scenario-page.sh`, 1440 x 2400 at 1): the whole page in System Settings and in
+  `kcmshell6` (`p01-systemsettings-top.png`, `p02-kcmshell-full.png`). The High Contrast switch is
+  disabled there ("not installed"): that stage has no High Contrast scheme yet (STYLE-1).
+- Lead change: after `plasma-apply-colorscheme --accent-color` the module announces the palette
+  change again (KGlobalSettings `notifyChange`, PaletteChanged). The tool's accent path in
+  plasma-workspace 6.7.5 announces it before kdeglobals is written (it does not sync; the file is
+  written when the tool exits), so plasmashell could read the old accent (BASE-1 found it).
+
+Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KCM-1/` (RPMs with
+`SHA256SUMS`, the three runs, notes).
+
 ## Deviations from the board, with reasons
 
 - The board's window is System Settings itself: its sidebar sections (Desktop & Dock, Top bar,
@@ -223,8 +328,70 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/kcm-cpp/`
   board's is greyscale with fractional advances; the 11.5 px pill text is about 2 px narrower.
 - Follow sunset relies on Plasma's automatic light/dark switching (its schedule, idle handling
   and location), not on a Plasma Fusion service.
+- 1.0.0-4: the controls below the board have no board. They reuse the board's section titles,
+  segmented control and switch rows; a segmented control in a row sits right of its label (under
+  it in a narrow window). The dock magnification is the board's switch plus a size row (56 / 62 px)
+  rather than one Off / 56 / 62 control, so the board's rows stay where they are.
+- "On-screen keyboard: Tablet mode only" (TABLET.md 4.15) reads "Tablet mode" to fit the row.
+- Text sizes follow the user's font size (FusionMetrics); the board's values hold at the Plasma
+  Fusion default font.
 
 ## Needs from other parts
+
+1.0.0-4 (KCM-1). Keys the page writes for other parts, and what those parts need to do with them:
+
+- Lead (registry, low): two plasmafusionrc keys are new and belong in the registry (plan section 2,
+  `docs/PLAN.md`): `[TopBar] EveryScreen` (bool, default true; "Top bar on every screen", decision
+  8, which had no key) and `[TopBar] SolidNextToWindows` (bool, default true; the "Solid next to
+  windows" choice while Reduced glass makes the bars opaque, and for bars added later). The page
+  also writes the power service's `[Power] UserGlass` / `UserDockMagnify` while the tier is
+  critical (below).
+- Layout (LAYOUT-1), medium: `ensure-topbars.js` (installed as `contents/layouts/ensure-topbars.js`
+  of both Global Themes, where the page looks for it) should do nothing when plasmafusionrc
+  `[TopBar] EveryScreen` is `false` (`ConfigFile("plasmafusionrc", "TopBar").readEntry("EveryScreen")`),
+  so KWin's hot-plug hook (KWIN-2) respects the switch, and give a new bar the opacity of the
+  page: `opaque` when `[Effects] Glass=Reduced`, else `adaptive` when `[TopBar] SolidNextToWindows`
+  is not `false`, else `translucent` (the page applies both after it runs the script itself). The
+  layout script can do the same for a fresh layout; after "Reset Fusion layout" the page applies
+  them anyway.
+- Style (STYLE-1), medium: the page looks for the high-contrast scheme as
+  `color-schemes/PlasmaFusionHighContrast.colors` (scheme id `PlasmaFusionHighContrast`); name the
+  file that way, or tell the settings lane the id. The switch is disabled until it is installed.
+- Power (POWER-1), medium: the page reads `[Power] Tier` (expects `critical` for the critical tier)
+  and, while critical and `LighterOnCritical`, writes the user's choices into `[Power] UserGlass`
+  (`Full` / `Reduced` / `Solid`, the `[Effects] Glass` names) and `UserDockMagnify` (`true` /
+  `false`) instead of loading blur or changing the dock, so the service restores what the user
+  chose when the battery recovers. The service should use exactly these names and values (or tell
+  the settings lane). The page restarts the service (`systemctl --user try-restart
+  plasma-fusion-powerfx.service`) after a layout reset when the tier is not `full`, so it applies
+  its `powerTier` keys to the new widgets.
+- KWin tablet script (KWIN-1), low: the "Plasma Fusion: Tablet Window Mode" shortcut handler
+  should also re-read `EdgeLeft` and `EdgeRight` (TABLET.md 4.2 names only `WindowMode` and
+  `DockHiding`); the page invokes it after any of the four keys changes.
+- Quick settings (QS-1), dock (DOCK-2), launcher (LAUNCH-1), cards (CARD-2): declare the keys the
+  page writes in each widget's `main.xml` so the running widget follows at once (the page writes
+  through the widget's configuration scheme): `glass` (String `full` / `reduced` / `solid`) on the
+  dock, quick settings, launcher and system card; `keyboardPolicy` (`tablet` / `touch` / `never`)
+  on quick settings; `homeIndicator` (Bool) on the dock. Until then the key is stored and read at
+  the next start of the widget.
+- Decoration (DECO-1), low: the page always writes `[Decoration] SnapLayoutsOnHover` `true` or
+  `false` and reconfigures KWin; the decoration reads it at reconfigure (it does today).
+- Device scripts (DEVICE-1), low: `fusion-restore.sh` restores plasmafusionrc from the backup
+  (already), which undoes `[Effects]`, `[Motion]` and `[TopBar]`; the kdeglobals keys
+  (`DndBehavior`, `AnimationDurationFactor`) and the kwinrc keys (`[Input] TabletMode`,
+  `[Script-plasmafusion-tablet]`, `[Plugins] blurEnabled`) are in files it already restores. If the
+  restore does not load blur again after a Solid level, add `qdbus org.kde.KWin /Effects
+  loadEffect blur`.
+- Tests (TEST-1), note: after desktop icons were hidden and the shell restarted, Plasma rewrites
+  the positions JSON header (row count and rows per column: `["1","9"]` instead of `["5","7"]`
+  in o1km-a) while every file's entry stays the same; an M2 check that compares the whole JSON
+  byte for byte across such a restart would report a change. Compare the entries (as
+  `tests/session-common.sh same_positions` does), or the screenshots.
+- Not built (open): the S11 "What changed" list for `[Config] FusionConfigVersion` (DEVICE-1 writes
+  the change list; the page has no list yet: its format is DEVICE-1's), and "Use stock widgets
+  (safe mode)" (deferred by the plan).
+
+Earlier (1.0.0-3), kept for the record:
 
 - Look-and-feel (Global Themes), medium, now actionable: both Global Themes still set
   `[kwinrc][org.kde.kdecoration2] library=org.kde.kwin.aurorae.v2` and the Aurorae theme, and every

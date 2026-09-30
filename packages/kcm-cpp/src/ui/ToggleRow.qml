@@ -18,7 +18,8 @@ T.AbstractButton {
     property bool last: false
     property string note
 
-    implicitHeight: 40 + (last ? 0 : 1) + (noteLabel.visible ? noteLabel.implicitHeight + 2 : 0)
+    readonly property real rowHeight: pal.m.px(40)
+    implicitHeight: rowHeight + (last ? 0 : 1) + (noteLabel.visible ? noteLabel.implicitHeight + 2 : 0)
     implicitWidth: label.implicitWidth + 16 + 40
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
@@ -55,14 +56,14 @@ T.AbstractButton {
     contentItem: Item {
         Text {
             id: label
-            y: (40 - height) / 2
+            y: (row.rowHeight - height) / 2
             anchors.left: parent.left
             anchors.right: track.left
             anchors.rightMargin: 16
             elide: Text.ElideRight
             text: row.text
             font.family: row.pal.family
-            font.pixelSize: 13
+            font.pixelSize: row.pal.m.font(13)
             color: row.pal.text
         }
         Text {
@@ -71,18 +72,18 @@ T.AbstractButton {
             anchors.left: parent.left
             anchors.right: track.left
             anchors.rightMargin: 16
-            y: 30
+            y: row.rowHeight - row.pal.m.px(10)
             wrapMode: Text.WordWrap
             text: row.note
             font.family: row.pal.family
-            font.pointSize: 8.625 // 11.5 px (pixelSize is an integer)
+            font.pointSize: 8.625 * row.pal.m.ts // 11.5 px (pixelSize is an integer)
             color: row.pal.section
         }
 
         Rectangle {
             id: track
             anchors.right: parent.right
-            y: (40 - height) / 2
+            y: (row.rowHeight - height) / 2
             width: 40
             height: 22
             radius: 11

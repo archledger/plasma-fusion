@@ -13,10 +13,10 @@ QQC2.Label {
     required property FusionPalette pal
 
     // CSS line box of 12 px Manrope is 16.4 px; 16 keeps the sections on the board's rows.
-    Layout.preferredHeight: 16
+    Layout.preferredHeight: pal.m.px(16)
     verticalAlignment: Text.AlignTop
     font.family: pal.family
-    font.pixelSize: 12
+    font.pixelSize: pal.m.font(12)
     font.weight: Font.ExtraBold
     color: pal.section
     Accessible.role: Accessible.Heading

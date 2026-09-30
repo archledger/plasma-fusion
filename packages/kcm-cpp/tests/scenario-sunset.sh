@@ -6,6 +6,8 @@
 # module (still open) puts the chosen window buttons back. Starts from Plasma Fusion Dark, so the
 # re-apply only shows while it is day (Plasma switches to Light); after dusk Plasma keeps Dark and
 # nothing needs to be put back.
+# at() prints "X Y"; click takes them as two words on purpose.
+# shellcheck disable=SC2046
 exec 2>&1
 set -x
 source "$HOME/pf-kcm-tests/session-common.sh"

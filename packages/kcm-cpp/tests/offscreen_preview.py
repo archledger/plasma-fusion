@@ -4,13 +4,15 @@
 """Test tooling (not installed): render the module's QML offscreen with a stand-in for the C++
 module object, to check the layout against the board without a Plasma session.
 
-    tests/offscreen_preview.py OUT.png [dark|light] [--state key=value ...] [--width 468] [--height 560]
+    tests/offscreen_preview.py OUT.png [dark|light] [--state key=value ...] [--width 468] [--height 560] [--font-pt 9.75]
 
 Uses the system Qt (PySide6 6.11 = Plasma's Qt), Kirigami, KCMUtils QML and the KDE platform
 theme with a private XDG_CONFIG_HOME whose kdeglobals holds the Plasma Fusion colour scheme and
 fonts (packages/color-schemes). Prints the window's QML warnings. --state sets values of the
-stand-in module (style, accentMode, accentColor, buttonStyle, magnify, globalMenu, hotCorner,
-shellLoading, shellRunning, dockAvailable, topBarAvailable, decorationInstalled, fusionDecoration, errorText).
+stand-in module (every property of PlasmaFusionKcm, for example style, glass, tabletMode,
+shellRunning, dockAvailable, powerCritical, errorText, infoText). The page's QML and the shared
+packages/common/FusionMetrics.qml are copied into one directory first, as the module's
+resources hold them.
 Environment: PFKM_TMP (directory for the private configuration, default the system temp
 directory), PFKM_THEME (Qt platform theme, default kde).
 """
@@ -23,16 +25,17 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 UI = os.path.join(HERE, "..", "src", "ui")
+COMMON = os.path.join(ROOT, "packages", "common")
 
 
-def write_kdeglobals(config_home, variant):
+def write_kdeglobals(config_home, variant, font_pt=9.75):
     scheme = "PlasmaFusionDark" if variant == "dark" else "PlasmaFusionLight"
     src = os.path.join(ROOT, "packages", "color-schemes", scheme + ".colors")
     cp = configparser.RawConfigParser(strict=False, interpolation=None)
     cp.optionxform = str
     cp.read(src)
     lines = ["[General]", "ColorScheme=" + scheme,
-             "font=Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0", "",
+             "font=Manrope,%g,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0" % font_pt, "",
              "[KDE]", "widgetStyle=Breeze", ""]
     for section in cp.sections():
         if section.startswith("Colors:") or section.startswith("WM"):
@@ -51,10 +54,11 @@ def main():
     ap.add_argument("--state", nargs="*", default=[])
     ap.add_argument("--width", type=int, default=468)
     ap.add_argument("--height", type=int, default=560)
+    ap.add_argument("--font-pt", type=float, default=9.75, help="UI font size (the text scale is pt / 9.75)")
     args = ap.parse_args()
 
     config_home = tempfile.mkdtemp(prefix="pfkm-cfg-", dir=os.environ.get("PFKM_TMP"))
-    write_kdeglobals(config_home, args.variant)
+    write_kdeglobals(config_home, args.variant, args.font_pt)
     os.environ["XDG_CONFIG_HOME"] = config_home
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     os.environ.setdefault("QT_QUICK_BACKEND", "software")
@@ -76,7 +80,14 @@ def main():
              "magnify": True, "globalMenu": True, "hotCorner": False, "shellLoading": False, "shellRunning": True,
              "dockAvailable": True, "topBarAvailable": True, "decorationInstalled": False,
              "fusionDecoration": False,
-             "errorText": ""}
+             "errorText": "", "infoText": "",
+             "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62,
+             "solidTopBar": True, "everyScreen": True, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
+             "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
+             "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
+             "quickSettingsAvailable": True, "folderAvailable": True, "highContrastAvailable": True,
+             "previousDesktopAvailable": True, "topBarScriptAvailable": True, "tabletModeAvailable": True,
+             "tabletModeActive": False, "powerCritical": False, "fusionLookAndFeel": True, "busy": False}
     for kv in args.state:
         k, v = kv.split("=", 1)
         cur = state[k]
@@ -114,6 +125,43 @@ def main():
         decorationInstalled = Property(bool, _get("decorationInstalled"), notify=changed)
         fusionDecoration = Property(bool, _get("fusionDecoration"), notify=changed)
         errorText = Property(str, _get("errorText"), notify=changed)
+        infoText = Property(str, _get("infoText"), notify=changed)
+        snapTrigger = Property(int, _get("snapTrigger"), _set("snapTrigger"), notify=changed)
+        glass = Property(int, _get("glass"), _set("glass"), notify=changed)
+        highContrast = Property(bool, _get("highContrast"), _set("highContrast"), notify=changed)
+        reduceMotion = Property(bool, _get("reduceMotion"), _set("reduceMotion"), notify=changed)
+        magnifiedSize = Property(int, _get("magnifiedSize"), _set("magnifiedSize"), notify=changed)
+        solidTopBar = Property(bool, _get("solidTopBar"), _set("solidTopBar"), notify=changed)
+        everyScreen = Property(bool, _get("everyScreen"), _set("everyScreen"), notify=changed)
+        desktopIcons = Property(bool, _get("desktopIcons"), _set("desktopIcons"), notify=changed)
+        iconSize = Property(int, _get("iconSize"), _set("iconSize"), notify=changed)
+        dndBehavior = Property(int, _get("dndBehavior"), _set("dndBehavior"), notify=changed)
+        lighterOnCritical = Property(bool, _get("lighterOnCritical"), _set("lighterOnCritical"), notify=changed)
+        tabletMode = Property(int, _get("tabletMode"), _set("tabletMode"), notify=changed)
+        tabletApps = Property(int, _get("tabletApps"), _set("tabletApps"), notify=changed)
+        tabletDock = Property(int, _get("tabletDock"), _set("tabletDock"), notify=changed)
+        keyboardPolicy = Property(int, _get("keyboardPolicy"), _set("keyboardPolicy"), notify=changed)
+        edgeLeft = Property(bool, _get("edgeLeft"), _set("edgeLeft"), notify=changed)
+        edgeRight = Property(bool, _get("edgeRight"), _set("edgeRight"), notify=changed)
+        homeIndicator = Property(bool, _get("homeIndicator"), _set("homeIndicator"), notify=changed)
+        quickSettingsAvailable = Property(bool, _get("quickSettingsAvailable"), notify=changed)
+        folderAvailable = Property(bool, _get("folderAvailable"), notify=changed)
+        highContrastAvailable = Property(bool, _get("highContrastAvailable"), notify=changed)
+        previousDesktopAvailable = Property(bool, _get("previousDesktopAvailable"), notify=changed)
+        topBarScriptAvailable = Property(bool, _get("topBarScriptAvailable"), notify=changed)
+        tabletModeAvailable = Property(bool, _get("tabletModeAvailable"), notify=changed)
+        tabletModeActive = Property(bool, _get("tabletModeActive"), notify=changed)
+        powerCritical = Property(bool, _get("powerCritical"), notify=changed)
+        fusionLookAndFeel = Property(bool, _get("fusionLookAndFeel"), notify=changed)
+        busy = Property(bool, _get("busy"), notify=changed)
+
+        @Slot()
+        def restorePreviousDesktop(self):
+            pass
+
+        @Slot()
+        def resetLayout(self):
+            pass
 
         @Slot()
         def setSchemeAccent(self):
@@ -146,6 +194,11 @@ def main():
         def i18nc(self, context, text):
             return text
 
+    import shutil
+    ui_dir = os.path.join(config_home, "ui")
+    shutil.copytree(UI, ui_dir)
+    shutil.copy(os.path.join(COMMON, "FusionMetrics.qml"), ui_dir)
+
     kcm = Kcm()
     i18n = I18n()
     engine = QQmlApplicationEngine()
@@ -162,7 +215,7 @@ QQC2.ApplicationWindow {
     color: Kirigami.Theme.backgroundColor
     Loader { anchors.fill: parent; source: "%s" }
 }
-""" % (args.width, args.height, QUrl.fromLocalFile(os.path.abspath(os.path.join(UI, "main.qml"))).toString())
+""" % (args.width, args.height, QUrl.fromLocalFile(os.path.join(ui_dir, "main.qml")).toString())
     path = os.path.join(config_home, "harness.qml")
     with open(path, "w") as f:
         f.write(qml)

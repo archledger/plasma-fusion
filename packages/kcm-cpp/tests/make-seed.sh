@@ -14,6 +14,7 @@
 #             session HOME is $PFV_BASE/pfv-NAME/home, PFV_BASE defaulting to /var/tmp as in
 #             tools/vsession/vsession.sh)
 #   DECO_PLUGIN_DIR  optional: a Qt plugin directory holding org.kde.kdecoration3/<plugin>.so
+#   PF_KCMCTL        optional (environment): the tests/kcmctl binary, copied to pf-kcmctl/kcmctl
 #
 # The session gets QT_PLUGIN_PATH with the module (and the decoration, if given) and
 # XDG_DATA_DIRS with the module's data (desktop file, icon).
@@ -28,6 +29,10 @@ cp -a "$STAGE" "$SEED/pf-stage"
 cp -a "$ROOT/tools" "$SEED/pf-tools"
 cp -a "$KCM/." "$SEED/pf-kcm/"
 cp -a "$HERE" "$SEED/pf-kcm-tests"
+if [ -n "${PF_KCMCTL:-}" ]; then
+  mkdir -p "$SEED/pf-kcmctl"
+  cp -a "$PF_KCMCTL" "$SEED/pf-kcmctl/kcmctl"
+fi
 plugins=$H/pf-kcm/usr/lib64/qt6/plugins
 if [ -n "$DECO" ]; then
   cp -a "$DECO" "$SEED/pf-deco"

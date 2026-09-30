@@ -9,6 +9,8 @@
 #
 # OUTDIR (default build/kcm-cpp) receives RPMS/, SRPMS/, build.log and root/, the binary RPM
 # unpacked (usr/lib64/qt6/plugins/..., usr/share/...) for test sessions (QT_PLUGIN_PATH).
+# The tarball holds CMakeLists.txt, src/, icons/, LICENSES/ and common/FusionMetrics.qml (from
+# packages/common). Run it from a clean checkout of the commit to package.
 # Environment: PF_BUILD_HOST (ssh host, default thinkpad-fedora), PF_BUILD_IMAGE (default
 # localhost/plasma-fusion-build:f44-6.7.5, built from tools/container), PF_REMOTE_DIR (scratch
 # directory on the host, default /tmp/pfv-kcm-build, removed first), PF_JOBS (default 6).
@@ -30,6 +32,9 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/$NAME-$VERSION"
 cp -a "$HERE/CMakeLists.txt" "$HERE/src" "$HERE/icons" "$HERE/LICENSES" "$tmp/$NAME-$VERSION/"
+# The shared Plasma Fusion QML the page uses (src/CMakeLists.txt looks for it in common/).
+mkdir -p "$tmp/$NAME-$VERSION/common"
+cp -a "$ROOT/packages/common/FusionMetrics.qml" "$tmp/$NAME-$VERSION/common/"
 # Reproducible tarball: fixed order, owner and times.
 tar -C "$tmp" --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -czf "$tmp/$NAME-$VERSION.tar.gz" "$NAME-$VERSION"
 

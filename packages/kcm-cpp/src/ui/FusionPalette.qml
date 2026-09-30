@@ -9,10 +9,19 @@ import QtQuick
 import org.kde.kirigami as Kirigami
 
 // An invisible Item (not a QtObject) so that Kirigami.Theme follows the page's colour set.
+// It also carries the page's FusionMetrics (packages/common, compiled into the module): board
+// text sizes go through m.font(), text-holding control heights through m.px(), so the page
+// follows the user's font size like every other Plasma Fusion surface (exact at the default).
 Item {
     visible: false
     width: 0
     height: 0
+
+    readonly property FusionMetrics m: metrics
+
+    FusionMetrics {
+        id: metrics
+    }
 
     readonly property bool dark: Kirigami.ColorUtils.brightnessForColor(Kirigami.Theme.backgroundColor) === Kirigami.ColorUtils.Dark
     readonly property string family: Kirigami.Theme.defaultFont.family
