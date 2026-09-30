@@ -254,3 +254,65 @@ See `docs/parts/polish.md`. `FusionText.qml` uses the CSS weight as the font wei
 per-weight Manrope files ignore the `wght` axis the old workaround used, so every launcher label
 was drawn regular. Right-click on a pinned tile opened the context menu 3 of 3 times with real
 input (the intermittent miss of the review was not reproduced).
+
+## LAUNCH-1 (2026-09-30): drag to the desktop, pins, search, size, cost
+
+Work package LAUNCH-1 of the one-pass plan (BACKLOG M3, M8, S2, S10; ADAPTIVE 5.6 and fix 27; GAPS C7;
+EFFECTS 5), built by the lead directly.
+
+### Changes
+
+- **Drag an app to the desktop** (M3): a `DragHandler` on every app tile (mouse, touchpad, pen; a finger
+  scrolls the grid) starts Kicker's `DragHelper` with the app's desktop file, a 48 px drag image and an
+  extra `application/x-xbel` type. KIO's DropJob treats a drop carrying that type as a bookmark and
+  links it without the Move/Copy/Link menu, so Folder View gets a symlink to the system desktop file
+  (it starts without a trust prompt) at the drop position. The launcher closes when the drag leaves
+  its card (and at the latest when the drag ends); the check runs through `Qt.callLater`, because
+  QML timers stand still during the drag's own event loop.
+- **Reorder the pins** (GAPS C7): the same drag dropped on the pinned grid moves that pin there
+  (`favoritesModel.moveRow`); a card-wide drop area below the grid tells a hand-over inside the card
+  from leaving it.
+- **Tiles** (fix 27, S2): `FusionIconTile` (the neutral tile for icons outside the Fusion theme) over one
+  `RectangularShadow` instead of a `MultiEffect` layer per tile.
+- **Built on idle** (S2): the card is an asynchronous `Loader` in the launcher window, built 4 s after
+  start or at once when the pointer reaches the Start button; an open request before that waits for it.
+- **Size and placement** (ADAPTIVE 5.6): height clamp(0.78 H, 420, 700) scaled with the text, 960 with up
+  to five pinned rows in portrait; opens on KWin's active screen when there are several (with the dim
+  layer there); an on-screen keyboard pushes the card up (Qt's keyboard rectangle, else the lower 40 %
+  while it is shown).
+- **Search** (S10, decision 6): the runners are a fixed list without web or network runners (web
+  shortcuts, bookmarks, browser history and tabs, dictionary, software centre, contacts, spelling);
+  every search key already opens the launcher (DEVICE-1), KRunner keeps no key. The sections still come
+  in Kicker's merged order (relevance), not a fixed Top hit / Apps / Settings / Files order.
+- **Caret** (EFFECTS 5): blinks for 10 s after the last input or focus change, then stays on, so an open
+  and untouched launcher draws no frames.
+- **Recent files** (M8): the menu of a recent file says "Hide from Recent Files" and "Clear Recent Files"
+  (Kicker's forget actions).
+- Test hook: `openRequest` `frames:NONCE` logs the frames drawn since the last request, the geometry,
+  pinned rows, columns and the pinned tiles' centres; log lines for the first frame of each open and the
+  first search results.
+
+### Verification
+
+- `qmllint` (Qt 6.11): only warnings that HEAD already had (Kicker model roles on QObject, the dialog's
+  margins); `a11y-lint` and `motion-lint`: no launcher findings (the dim layer's pointer area marked).
+- Private sessions (1920 x 1200 at 4/3; `build/l1/scen-l1a.sh`, `scen-l1c.sh`):
+  - M3: a pinned tile dragged to (260, 250) became `~/Desktop/org.kde.dolphin.desktop ->
+    /usr/share/applications/org.kde.dolphin.desktop`, shown at the drop cell with the link emblem; no
+    menu window; the link existed before the input tool returned (the exact delay to the icon was not
+    measured). The launcher closed when the drag left the card in two of three runs, and at the drop in
+    the third.
+  - C7: pin 0 dropped on pin 2 moved there.
+  - "Meta, fir, Enter" typed at once launched Firefox; the first results for "fi" came after 82 ms; no
+    KRunner process in the session.
+  - 0 frames in 5 s with the launcher open and untouched after the caret's 10 s.
+  - M09 (portrait): five pinned rows in a 960 px card.
+- `l1d` (two 1024 x 768 outputs at 1): M19 the card inside the screen (680 x 599); M18 with the pointer on
+  the second screen the launcher opened there.
+- Cost (A/B `l1b`, HEAD's package with the same timing log): first open after login 224 ms against HEAD's
+  248 ms, later opens 83 / 42 ms against 81 / 42 ms; plasmashell GEM +71 MiB on the first open against
+  +72 MiB. The plan's budgets (50 ms, 30 MiB) are not met; the full-screen dim layer is most of it: with
+  `dimBackground=false` the first open is 111 ms, later opens 47 / 16 ms and GEM +28 MiB. Whether to keep
+  the dim layer is left to the owner.
+- Not in LAUNCH-1: the fixed section order of the search, a finger drag (touch scrolls the grids; the
+  tablet sheet is LAUNCH-2).

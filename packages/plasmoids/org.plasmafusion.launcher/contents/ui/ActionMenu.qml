@@ -71,7 +71,14 @@ Item {
                     actions.push({ type: "separator" });
                 }
                 for (const a of extra) {
-                    actions.push(a);
+                    // Recent files (BACKLOG M8): "Hide" and "Clear" instead of Kicker's "Forget".
+                    if (a.actionId === "forget") {
+                        actions.push(Object.assign({}, a, { "text": i18nc("@action:inmenu recent file", "Hide from Recent Files") }));
+                    } else if (a.actionId === "forgetAll") {
+                        actions.push(Object.assign({}, a, { "text": i18nc("@action:inmenu recent files", "Clear Recent Files") }));
+                    } else {
+                        actions.push(a);
+                    }
                 }
             }
         }

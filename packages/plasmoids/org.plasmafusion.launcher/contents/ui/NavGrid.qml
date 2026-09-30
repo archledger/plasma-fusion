@@ -5,6 +5,7 @@
 
 import QtQuick
 import QtQuick.Templates as T
+import org.kde.plasma.private.kicker as Kicker
 
 import "../code/launcher.js" as Launcher
 
@@ -36,6 +37,70 @@ GridView {
     signal typed(string text)
 
     property int itemHeight: 84
+    // The pinned grid: a tile dropped on it moves there (GAPS C7).
+    property bool reorderable: false
+
+    // Drags a tile's desktop file (BACKLOG M3). The extra application/x-xbel type makes KIO treat
+    // the drop as a bookmark, which it links without the Move/Copy/Link menu (KIO DropJob): onto
+    // the desktop the app becomes a link (a symlink to the system desktop file, so it starts
+    // without a trust prompt). The helper's drag is modal; the launcher closes when the pointer
+    // leaves its card (LauncherCard's drop area) and when the drag ends outside it.
+    Kicker.DragHelper {
+        id: dragHelper
+        dragIconSize: 48
+        onDropped: {
+            const launcher = grid.launcher;
+            if (launcher) {
+                launcher.dragEnded();
+            }
+        }
+    }
+    property int dragIndex: -1
+    function startDrag(tile: AppTile) {
+        // qmllint disable missing-property
+        const entry = tile.model;
+        const url = entry && entry.url ? entry.url : "";
+        // qmllint enable missing-property
+        if (!url || String(url) === "" || dragHelper.dragging) {
+            return;
+        }
+        dragIndex = tile.index;
+        if (launcher) {
+            launcher.dragStarted();
+        }
+        console.info("launcher: drag " + url);
+        dragHelper.startDrag(tile, url, Launcher.iconNameFor(entry) || "application-x-executable", "application/x-xbel",
+                             "<?xml version=\"1.0\"?><xbel version=\"1.0\"></xbel>");
+    }
+
+    DropArea {
+        anchors.fill: parent
+        enabled: grid.reorderable
+        keys: ["text/uri-list"]
+        onEntered: {
+            if (grid.launcher) {
+                grid.launcher.dragInsideCard();
+            }
+        }
+        onExited: {
+            if (grid.launcher) {
+                grid.launcher.dragLeftCard();
+            }
+        }
+        onDropped: drop => {
+            const from = grid.dragIndex;
+            // (the drop area lies in the view's content item: content coordinates)
+            const to = grid.indexAt(drop.x, drop.y);
+            if (from >= 0 && to >= 0 && from !== to && grid.launcher) {
+                console.info("launcher: pin " + from + " moved to " + to);
+                grid.launcher.favoritesModel.moveRow(from, to);
+                drop.accept(Qt.MoveAction);
+            } else {
+                drop.accept(Qt.IgnoreAction);
+            }
+            grid.dragIndex = -1;
+        }
+    }
 
     // Fractional on purpose: the board's columns are (width - gaps) / columns wide.
     cellWidth: width / columns

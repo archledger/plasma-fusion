@@ -152,3 +152,23 @@ function pinnedSlots(entries) {
     }
     return slots;
 }
+
+// The search's runners (S10, decision 6): apps first, then settings, files, calculators and the
+// session; no runner that reaches the network or starts a service (web shortcuts, bookmarks,
+// browser history and tabs, dictionary, software centre, contacts, spell checking).
+const searchRunners = [
+    "krunner_services", "krunner_systemsettings", "baloosearch", "krunner_recentdocuments",
+    "krunner_placesrunner", "calculator", "unitconverter", "org.kde.datetime", "windows",
+    "krunner_sessions", "krunner_powerdevil", "krunner_shell", "locations", "krunner_kill",
+    "krunner_charrunner", "krunner_katesessions", "krunner_konsoleprofiles",
+];
+
+// The icon theme name of an app entry (its desktop file name), for FusionIconTile's coverage
+// check: "applications:org.kde.dolphin.desktop" -> "org.kde.dolphin".
+function iconNameFor(entry) {
+    const id = entry && entry.favoriteId ? String(entry.favoriteId) : "";
+    if (id === "" || id.indexOf("://") >= 0) {
+        return "";
+    }
+    return id.replace(/^applications:/, "").replace(/\.desktop$/, "");
+}

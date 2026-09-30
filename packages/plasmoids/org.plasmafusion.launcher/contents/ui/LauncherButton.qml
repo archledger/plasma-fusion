@@ -83,6 +83,8 @@ MouseArea {
     Accessible.checkable: true
     Accessible.checked: open
 
+    // The card starts building when the pointer reaches the button (BACKLOG S2).
+    onContainsMouseChanged: if (containsMouse && launcher) launcher.prepareCard()
     onPressed: wasOpen = launcher ? launcher.recentlyOpen() : false
     onClicked: {
         if (launcher) {

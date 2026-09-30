@@ -35,6 +35,8 @@ PlasmaCore.Dialog {
         color: backdrop.dimColor
 
         MouseArea {
+            // A pointer convenience over the dimmed screen (Esc and the button close the launcher).
+            Accessible.ignored: true
             anchors.fill: parent
             acceptedButtons: Qt.AllButtons
             onPressed: backdrop.clicked()

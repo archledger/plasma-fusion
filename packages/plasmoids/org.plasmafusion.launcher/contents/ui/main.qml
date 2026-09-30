@@ -9,6 +9,7 @@ import QtQuick
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.private.kicker as Kicker
+import org.kde.plasma.workspace.dbus as DBus
 
 import "../code/launcher.js" as Launcher
 
@@ -71,6 +72,8 @@ PlasmoidItem {
     readonly property Kicker.RunnerModel runnerModel: Kicker.RunnerModel {
         appletInterface: root
         mergeResults: true
+        // No web or network runners (decision 6, S10).
+        runners: Launcher.searchRunners
         favoritesModel: root.favoritesModel
         query: root.searchText
     }
@@ -245,12 +248,27 @@ PlasmoidItem {
     // includes its floating gap, 16 px in the Plasma Fusion style). Width and height limits
     // follow the user's text size (at most the screen width less 32 px), rounded to whole
     // device pixels of the window's screen.
-    function placeWindows() {
-        const s = screenArea();
+    //
+    // Height (ADAPTIVE 5.6): clamp(0.78 H, 420, 700) scaled with the text, or 960 in portrait (five
+    // pinned rows), never more than the room between the top bar and the dock. `area` is another
+    // screen's (the active one, openOn()); there is no dock there. An on-screen keyboard pushes the
+    // card up (Qt's keyboard rectangle; without one while KWin shows its keyboard, the lower 40 %).
+    function placeWindows(area) {
+        const s = area || screenArea();
         const m = launcherWindow.metrics;
-        const bottom = Math.min(s.y + s.height - Plasmoid.configuration.bottomOffset, s.availBottom - 4);
+        let bottom = area ? s.y + s.height - 24 : Math.min(s.y + s.height - Plasmoid.configuration.bottomOffset, s.availBottom - 4);
+        // qmllint disable missing-property
+        const keyboard = Qt.inputMethod.keyboardRectangle;
+        if (keyboard.height > 0) {
+            bottom = Math.min(bottom, s.y + keyboard.y - 8);
+        } else if (Qt.inputMethod.visible) {
+            bottom = Math.min(bottom, s.y + Math.round(s.height * 0.6) - 8);
+        }
+        // qmllint enable missing-property
         const top = s.availTop + 8;
-        const height = Math.max(m.px(420), Math.min(m.px(700), bottom - top));
+        const portrait = s.height > s.width;
+        const wanted = portrait ? m.px(960) : Math.max(m.px(420), Math.min(m.px(700), 0.78 * s.height));
+        const height = Math.max(Math.min(m.px(420), bottom - top), Math.min(wanted, bottom - top));
         launcherWindow.cardWidth = m.windowSize(Math.min(m.px(680), s.width - 32));
         launcherWindow.cardHeight = m.windowSize(height);
         launcherWindow.x = Math.round(s.x + (s.width - launcherWindow.cardWidth) / 2);
@@ -258,9 +276,81 @@ PlasmoidItem {
         // The dim layer covers the whole screen; panels stay above it (they are in a higher layer).
         backdrop.area = Qt.rect(s.x, s.y, s.width, s.height);
     }
+    Connections {
+        target: Qt.inputMethod
+        function onKeyboardRectangleChanged() {
+            if (launcherWindow.visible) {
+                root.placeWindows();
+            }
+        }
+    }
 
+    // The card is built on idle; an open request before that waits for it.
+    property var pendingOpen: null
+    property real openStarted: 0
+    property bool firstShown: false
+    function prepareCard() {
+        launcherWindow.cardWanted = true;
+    }
+    Timer {
+        // 4 s after start (3-5 s, BACKLOG S2).
+        interval: 4000
+        running: !launcherWindow.cardWanted
+        onTriggered: root.prepareCard()
+    }
+    Connections {
+        target: launcherWindow
+        function onCardReady() {
+            if (root.pendingOpen) {
+                const request = root.pendingOpen;
+                root.pendingOpen = null;
+                root.open(request.mode, request.argument);
+            }
+        }
+    }
+
+    // Opens on the active screen (M18): with several screens KWin names it first.
     function open(mode, argument) {
-        placeWindows();
+        if (openStarted === 0) {
+            openStarted = Date.now();
+        }
+        if (!launcherWindow.card) {
+            prepareCard();
+            pendingOpen = { "mode": mode, "argument": argument };
+            return;
+        }
+        // qmllint disable missing-property
+        const screens = Qt.application.screens;
+        // qmllint enable missing-property
+        if (screens.length > 1) {
+            DBus.SessionBus.asyncCall({
+                "service": "org.kde.KWin",
+                "path": "/KWin",
+                "iface": "org.kde.KWin",
+                "member": "activeOutputName",
+                "arguments": []
+            }, reply => root.openOn(mode, argument, String(reply.value || "")), () => root.openOn(mode, argument, ""));
+            return;
+        }
+        openOn(mode, argument, "");
+    }
+    function openOn(mode, argument, output) {
+        let area = null;
+        const own = root.screenGeometry;
+        // qmllint disable missing-property
+        for (const screen of Qt.application.screens) {
+            if (output !== "" && screen.name === output && (screen.virtualX !== own.x || screen.virtualY !== own.y)) {
+                // Another screen than the applet's: its top bar is as tall as this one's.
+                const topBar = root.availableScreenRect.y;
+                area = {
+                    x: screen.virtualX, y: screen.virtualY, width: screen.width, height: screen.height,
+                    availTop: screen.virtualY + topBar, availBottom: screen.virtualY + screen.height,
+                    availLeft: screen.virtualX, availWidth: screen.width, availHeight: screen.height - topBar
+                };
+            }
+        }
+        // qmllint enable missing-property
+        placeWindows(area);
         launcherWindow.card.openMode(mode || "home", argument || "");
         if (Plasmoid.configuration.dimBackground) {
             const light = !launcherWindow.card.pal.dark;
@@ -326,10 +416,75 @@ PlasmoidItem {
         onVisibleChanged: {
             if (!visible) {
                 root.lastClosed = Date.now();
+                root.openStarted = 0;
                 backdrop.visible = false;
                 root.searchText = "";
                 root.syncExpanded();
             }
+        }
+        // The time from the open request to the card's first frame (the budget is 50 ms).
+        onFrameSwapped: {
+            root.framesDrawn++;
+            if (root.openStarted > 0 && visible) {
+                console.info("launcher: " + (root.firstShown ? "open" : "first open") + ", first frame after "
+                             + (Date.now() - root.openStarted) + " ms");
+                root.openStarted = 0;
+                root.firstShown = true;
+            }
+        }
+    }
+
+    // Testing: frames drawn by the launcher window since the last "frames" request (openRequest).
+    property int framesDrawn: 0
+    function reportFrames() {
+        const card = launcherWindow.card;
+        console.info("launcher: frames " + framesDrawn + ", open " + launcherWindow.visible + ", card "
+                     + launcherWindow.x + "," + launcherWindow.y + " " + launcherWindow.cardWidth + "x" + launcherWindow.cardHeight
+                     + ", pinned rows " + (card ? card.pinnedRows : -1) + ", columns " + (card ? card.columns : -1)
+                     + ", screen " + root.screenGeometry.width + "x" + root.screenGeometry.height
+                     + ", pinned " + (card && launcherWindow.visible ? card.pinnedCentres(launcherWindow.x, launcherWindow.y) : "-"));
+        framesDrawn = 0;
+    }
+
+    // A tile dragged out of the card (BACKLOG M3): the launcher closes once the pointer leaves the
+    // card, and at the latest when the drag ends.
+    property bool dragging: false
+    function dragStarted() {
+        dragging = true;
+    }
+    // A drop area of the card lost the drag: unless another one took it in the same event (the
+    // pointer only moved between the pinned grid and the rest of the card), it left the card.
+    // Qt.callLater, not a Timer: QML timers run on the animation driver, which does not tick
+    // during the drag's own event loop.
+    property bool dragInCard: false
+    function dragLeftCard() {
+        dragInCard = false;
+        Qt.callLater(checkDragLeft);
+    }
+    function dragInsideCard() {
+        dragInCard = true;
+    }
+    function checkDragLeft() {
+        if (!dragInCard && dragging && launcherWindow.visible) {
+            console.info("launcher: drag left the card, closing");
+            close();
+        }
+    }
+    function dragEnded() {
+        if (dragging) {
+            dragging = false;
+            console.info("launcher: drag ended");
+            close();
+        }
+    }
+
+    // Search timing: the query's first results (the budget is 100 ms).
+    property real searchStarted: 0
+    onSearchTextChanged: searchStarted = searchText.length > 0 ? Date.now() : 0
+    function noteResults(count: int) {
+        if (searchStarted > 0 && count > 0) {
+            console.info("launcher: first results for \"" + searchText + "\" after " + (Date.now() - searchStarted) + " ms");
+            searchStarted = 0;
         }
     }
 
@@ -387,6 +542,8 @@ PlasmoidItem {
             const argument = parts.slice(2).join(":");
             if (["home", "search", "apps", "recent", "category"].indexOf(mode) >= 0) {
                 root.open(mode, argument);
+            } else if (mode === "frames") {
+                root.reportFrames();
             }
         }
         function onHiddenApplicationsChanged() {

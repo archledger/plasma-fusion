@@ -63,6 +63,31 @@ FocusScope {
         font.pointSize: box.metrics.font(14.5) * 0.75
         inputMethodHints: Qt.ImhNoPredictiveText
         Accessible.role: Accessible.EditableText
+        // The caret blinks for 10 s after the last input or focus change, then stays on: an open,
+        // untouched launcher draws no frames (EFFECTS 5).
+        cursorDelegate: Rectangle {
+            id: caret
+            width: 2
+            color: box.pal.text
+            property bool lit: true
+            opacity: lit || !blinkWindow.running ? 1 : 0
+            Timer {
+                // qmllint disable missing-property
+                interval: Math.max(250, Qt.styleHints.cursorFlashTime / 2)
+                // qmllint enable missing-property
+                repeat: true
+                running: blinkWindow.running && input.activeFocus
+                onTriggered: caret.lit = !caret.lit
+                onRunningChanged: caret.lit = true
+            }
+        }
+        onTextChanged: blinkWindow.restart()
+        onCursorPositionChanged: blinkWindow.restart()
+        onActiveFocusChanged: if (activeFocus) blinkWindow.restart()
+        Timer {
+            id: blinkWindow
+            interval: 10000
+        }
         Accessible.name: i18nc("@label:textbox", "Search")
         Accessible.searchEdit: true
 

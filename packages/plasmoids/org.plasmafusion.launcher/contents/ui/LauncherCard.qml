@@ -55,7 +55,9 @@ FocusScope {
     readonly property real rowPitch: tileHeight + 4
     readonly property real recommendedHeight: 2 * sectionGap + headerHeight + 2 * docHeight + 6
     readonly property bool recommendedFits: launcher && launcher.showRecommended && bodyHeight >= gridY + 2 * rowPitch + recommendedHeight
-    readonly property int pinnedRows: Math.max(1, Math.min(3, Math.floor((bodyHeight - gridY - (recommendedFits ? recommendedHeight : 0) + 4) / rowPitch)))
+    // Up to 5 pinned rows in portrait (ADAPTIVE 5.6: a 960 px card), 3 otherwise.
+    readonly property int maxPinnedRows: metrics.portrait ? 5 : 3
+    readonly property int pinnedRows: Math.max(1, Math.min(maxPinnedRows, Math.floor((bodyHeight - gridY - (recommendedFits ? recommendedHeight : 0) + 4) / rowPitch)))
 
     function reset() {
         search.clear();
@@ -130,6 +132,19 @@ FocusScope {
             return recentGrid;
         }
         return mainGrid;
+    }
+
+    // Testing: the pinned tiles' centres in screen coordinates (window origin ox, oy).
+    function pinnedCentres(ox: real, oy: real): string {
+        const out = [];
+        for (let i = 0; i < Math.min(pinnedGrid.count, 12); ++i) {
+            const item = pinnedGrid.itemAtIndex(i);
+            if (item) {
+                const c = item.mapToItem(null, item.width / 2, item.height / 2);
+                out.push(i + " " + Math.round(ox + c.x) + "," + Math.round(oy + c.y));
+            }
+        }
+        return out.join("; ");
     }
 
     function focusSearch() {
@@ -209,6 +224,25 @@ FocusScope {
 
     function focusFooterLast() {
         footer.lastButton.forceActiveFocus(Qt.BacktabFocusReason);
+    }
+
+    // A tile dragged out of the card: the launcher gets out of the way (BACKLOG M3). Below the
+    // grids, so that the pinned grid's own drop area (reordering) gets the drags over it; moving
+    // between the two is not leaving (the launcher waits a moment, see dragLeftCard()).
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onEntered: {
+            if (card.launcher) {
+                card.launcher.dragInsideCard();
+            }
+        }
+        onExited: {
+            if (card.launcher) {
+                card.launcher.dragLeftCard();
+            }
+        }
+        onDropped: drop => drop.accept(Qt.IgnoreAction)
     }
 
     Item {
@@ -379,6 +413,7 @@ FocusScope {
         // Home: pinned apps (6 columns, up to 3 rows).
         AppGrid {
             id: pinnedGrid
+            reorderable: true
             y: card.gridY
             columns: card.columns
             width: parent.width + gap
@@ -544,6 +579,9 @@ FocusScope {
             launcher: card.launcher
             model: card.launcher && card.launcher.runnerModel.count > 0 ? card.launcher.runnerModel.modelForRow(0) : null
             onCountChanged: {
+                if (card.launcher) {
+                    card.launcher.noteResults(count);
+                }
                 if (!activeFocus) {
                     currentIndex = count > 0 ? 0 : -1;
                 }

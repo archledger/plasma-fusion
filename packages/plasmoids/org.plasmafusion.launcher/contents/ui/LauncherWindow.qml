@@ -13,6 +13,8 @@ import org.kde.kirigami as Kirigami
 // centred horizontally on the screen and just above the dock, wherever the applet sits.
 // Its background is the Plasma style's dialogs/background frame (translucent fill, 1 px edge,
 // KWin blur through the frame mask); a "launcher-" prefixed frame is used when the style has one.
+// The card is built in the background (an asynchronous Loader, BACKLOG S2): a few seconds after
+// login, or at once when the pointer reaches the Start button or anything opens the launcher.
 PlasmaCore.Dialog {
     id: window
 
@@ -23,7 +25,10 @@ PlasmaCore.Dialog {
     readonly property alias metrics: fusionMetrics
     property var frameItem: null
     readonly property string framePrefix: frameItem && frameItem.usedPrefix !== undefined ? frameItem.usedPrefix : ""
-    readonly property alias card: card
+    // The card once it is built (null before).
+    readonly property LauncherCard card: cardLoader.item as LauncherCard
+    property bool cardWanted: false
+    signal cardReady()
 
     type: PlasmaCore.Dialog.AppletPopup
     location: PlasmaCore.Types.Floating
@@ -79,17 +84,23 @@ PlasmaCore.Dialog {
             accent: Kirigami.Theme.highlightColor
         }
 
-        LauncherCard {
-            id: card
+        Loader {
+            id: cardLoader
             x: -holder.ml
             y: -holder.mt
             width: window.cardWidth
             height: window.cardHeight
             focus: true
-            launcher: window.launcher
-            pal: colors
-            metrics: fusionMetrics
-            cornerRadius: window.cornerRadius
+            active: window.cardWanted
+            asynchronous: true
+            onLoaded: window.cardReady()
+            sourceComponent: LauncherCard {
+                focus: true
+                launcher: window.launcher
+                pal: colors
+                metrics: fusionMetrics
+                cornerRadius: window.cornerRadius
+            }
         }
     }
 
