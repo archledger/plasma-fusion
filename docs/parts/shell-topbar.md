@@ -353,3 +353,50 @@ See `docs/parts/polish.md`.
   no longer observed with Plasma 6.7.5.
 - The double focus indicator during panel keyboard navigation is kept (the shell's underline is
   the only indicator of the stock tray icons).
+
+## TOP-1 (2026-09-30): clock pill and calendar
+
+Work package TOP-1 of the one-pass plan (BACKLOG M8 and S2, ADAPTIVE 5.1/5.2, TABLET 4.1 and 4.7), built by
+the lead directly.
+
+### Changes (`org.plasmafusion.clockpill`)
+
+- **Steady width** (M8): the time sits in a box as wide as the widest of the current time, 10:58
+  and 22:58 in the same format (two-digit hours, AM and PM) with every digit the widest one; the
+  time and date also ask for tabular figures (`font.features: tnum`). The pill's width never changes
+  from minute to minute.
+- **Calendar on demand** (S2): the calendar is a `Loader` (asynchronous) that starts building when
+  the pointer enters the pill, anything presses it, or a pull-down begins; nothing is built at login.
+  The pop-up shows once the calendar is ready. One log line per open gives the time from the request
+  to the pop-up's first frame.
+- **Touch** (ADAPTIVE 5.1/5.2, TABLET 4.7): in touch mode (`FusionMetrics.touch`: tablet posture from
+  `FusionTablet`, or a recent touch) the calendar is 308 px wide with 44 x 44 day cells, 44 px
+  navigation buttons, a 17 px month title and a 36 px today disc; the workspace dots get cells of at
+  least 24 px. The pill is 32 px tall in tablet posture (24 otherwise) and its hit area is the whole
+  bar's height. A **pull-down of 24 px** (TouchScreen only; a layer above the pill's mouse areas that
+  holds a passive grab until then) opens the calendar; the travel is taken from the press position,
+  because `translation` is still 0 when the handler turns active.
+- `Plasmoid.CanFillArea`.
+- **Width budget hooks** for TOP-2: `compactLevel` (1: the short date, 2: the time only) and `hideDots`
+  (the dots hide; Overview still switches workspaces).
+- **Accent and Motion**: the open pill (accent at 35 %, 1 px edge), today's disc (`accent.fill` with its
+  text colour) and the focus rings follow the user's accent; the pill's colour, the dots' width and
+  colour animate with `Motion` tokens.
+- Settings page: the three combo boxes take their index from the model itself (`indexOfValue()` is -1
+  until the model is read, which left them on their first entry); the combo, text field and spin box
+  have accessible names.
+
+### Verification
+
+- Offscreen (`build/tp/mw/minutes.qml`, the repository's Space Grotesk SemiBold, 13 px at 4/3): every
+  minute from 00:00 to 23:59 gives one box width: 47 px for `HH:mm`, 77 px for `h:mm AP` (the text
+  alone varies over 3 widths in 12-hour time).
+- Private session `tp-1` (1920 x 1200 at 4/3, `build/tp/scen-tp1.sh`, five workspaces): no calendar before
+  the first open; the first open's first frame 61 ms after the click (53-91 ms over the runs: the
+  pop-up's window is created on its first show, which Plasma offers no way to do earlier without
+  showing it; later opens 4-18 ms), so the 50 ms budget is met from the second open on; tablet
+  posture: pill 32 px, dot cells 24 px; a 16 px pull-down does not open the calendar and a 30 px one
+  does (T10); the touch calendar at 308 px with 44 px cells; text at 12.75 pt: nothing clipped (M12);
+  no QML warnings, no core dumps.
+- T6 (touch dump) and M18 are part of the INT-1 matrix; every screen has its own pill, so the calendar
+  opens on the screen it was asked on.

@@ -28,6 +28,9 @@ FocusScope {
     property int location: PlasmaCore.Types.TopEdge
     // Height of the cells (hit areas): the pill's height.
     property real cellHeight: 24
+    // Touch: every dot's cell at least 24 px wide (ADAPTIVE 5.1).
+    property bool touch: false
+    required property Motion motion
 
     readonly property int cellPadding: 2
 
@@ -86,7 +89,7 @@ FocusScope {
                 required property int index
                 readonly property bool current: index === dots.currentIndex
 
-                width: dot.width + 2 * dots.cellPadding
+                width: dots.touch ? Math.max(24, dot.width + 2 * dots.cellPadding) : dot.width + 2 * dots.cellPadding
                 height: dots.implicitHeight
                 mainText: dots.nameOf(index)
                 subText: i18nc("@info:tooltip %1 workspace number, %2 number of workspaces",
@@ -108,13 +111,15 @@ FocusScope {
                          : Qt.rgba(dots.inkColor.r, dots.inkColor.g, dots.inkColor.b, area.containsMouse ? 0.7 : 0.4)
 
                     Behavior on width {
+                        enabled: dots.motion.animate
                         NumberAnimation {
-                            duration: Kirigami.Units.longDuration
+                            duration: dots.motion.toggle
                             easing.type: Easing.OutCubic
                         }
                     }
                     Behavior on color {
-                        ColorAnimation { duration: Kirigami.Units.longDuration }
+                        enabled: dots.motion.animate
+                        ColorAnimation { duration: dots.motion.toggle }
                     }
                 }
 

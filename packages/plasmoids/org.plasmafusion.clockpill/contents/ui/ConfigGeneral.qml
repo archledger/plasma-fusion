@@ -62,6 +62,7 @@ KCM.SimpleKCM {
 
         QQC2.ComboBox {
             id: dateFormat
+            Accessible.name: i18nc("@label:listbox", "Date format")
             enabled: showDate.checked
             textRole: "label"
             valueRole: "value"
@@ -73,7 +74,9 @@ KCM.SimpleKCM {
                 },
                 { "label": i18nc("@item:inlistbox", "Custom"), "value": "custom" }
             ]
-            currentIndex: Math.max(0, indexOfValue(page.cfg_dateFormat))
+            // From the model itself: indexOfValue() is -1 until the model is read, which left the
+            // combo on its first entry.
+            currentIndex: Math.max(0, model.findIndex(entry => entry.value === page.cfg_dateFormat))
             onActivated: page.cfg_dateFormat = currentValue
         }
 
@@ -82,6 +85,7 @@ KCM.SimpleKCM {
             enabled: showDate.checked
             QQC2.TextField {
                 id: customDateFormat
+                Accessible.name: i18nc("@label:textbox", "Custom date format")
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 10
             }
             QQC2.Label {
@@ -104,7 +108,9 @@ KCM.SimpleKCM {
                 { "label": i18nc("@item:inlistbox", "12-hour"), "value": 0 },
                 { "label": i18nc("@item:inlistbox", "24-hour"), "value": 2 }
             ]
-            currentIndex: Math.max(0, indexOfValue(page.cfg_use24hFormat))
+            // From the model itself: indexOfValue() is -1 until the model is read, which left the
+            // combo on its first entry.
+            currentIndex: Math.max(0, model.findIndex(entry => entry.value === page.cfg_use24hFormat))
             onActivated: page.cfg_use24hFormat = currentValue
         }
 
@@ -125,7 +131,9 @@ KCM.SimpleKCM {
             valueRole: "value"
             model: [{ "label": i18nc("@item:inlistbox", "Use region settings"), "value": -1 }].concat(
                 [0, 1, 2, 3, 4, 5, 6].map(day => ({ "label": Qt.locale().dayName(day), "value": day })))
-            currentIndex: Math.max(0, indexOfValue(page.cfg_firstDayOfWeek))
+            // From the model itself: indexOfValue() is -1 until the model is read, which left the
+            // combo on its first entry.
+            currentIndex: Math.max(0, model.findIndex(entry => entry.value === page.cfg_firstDayOfWeek))
             onActivated: page.cfg_firstDayOfWeek = currentValue
         }
 
@@ -139,6 +147,7 @@ KCM.SimpleKCM {
             Kirigami.FormData.label: i18nc("@label:spinbox", "Calendar gap:")
             QQC2.SpinBox {
                 id: popupGap
+                Accessible.name: i18nc("@label:spinbox", "Calendar gap")
                 from: 0
                 to: 40
             }

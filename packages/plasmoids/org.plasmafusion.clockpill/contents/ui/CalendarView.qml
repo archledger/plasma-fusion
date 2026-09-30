@@ -25,6 +25,10 @@ FocusScope {
     required property date now
     required property int firstDayOfWeek
     required property bool dark
+    // Touch sizes (ADAPTIVE 5.2, TABLET 4.7): 44 x 44 day cells in a 308 px grid, 44 px buttons,
+    // a 17 px month title.
+    property bool touch: false
+    property Motion motion: null
 
     signal closeRequested()
 
@@ -41,18 +45,24 @@ FocusScope {
     }
 
     // Board: 280 px wide, day cells 40 x 32 in six rows, scaled with the text. The cells divide
-    // the snapped width and grid height, so the grid stays exactly as wide as the pop-up.
-    readonly property real contentWidth: m.px(280)
+    // the snapped width and grid height, so the grid stays exactly as wide as the pop-up. Touch:
+    // 7 x 44 = 308 px, square cells.
+    readonly property real contentWidth: touch ? Math.max(308, m.px(280)) : m.px(280)
     readonly property real cellWidth: contentWidth / 7
-    readonly property real cellHeight: m.px(6 * 32) / 6
+    readonly property real cellHeight: touch ? Math.max(44, m.px(32)) : m.px(6 * 32) / 6
+    readonly property real buttonSize: touch ? 44 : m.px(26)
 
     // Board colours (Main / MainLight calendar and weather cards).
     readonly property color textColor: Kirigami.Theme.textColor
     readonly property color secondary: dark ? "#a3abc2" : "#5b6278"
     readonly property color tertiary: dark ? "#8f98b3" : "#6b7288"
     readonly property color dayColor: dark ? "#dfe3ee" : "#2a3044"
-    readonly property color todayFill: "#2f6fdf"
-    readonly property color focusColor: dark ? "#8ab8ff" : "#2f6fdf"
+    // The user's accent (decision 3).
+    FusionAccent {
+        id: accent
+    }
+    readonly property color todayFill: accent.fill
+    readonly property color focusColor: accent.focusRing
     readonly property color ink: dark ? "#ffffff" : Kirigami.Theme.textColor
     function tint(alpha: real): color {
         return Qt.rgba(ink.r, ink.g, ink.b, alpha);
@@ -195,7 +205,7 @@ FocusScope {
             FusionText {
                 Layout.fillWidth: true
                 metrics: m
-                px: 13
+                px: view.touch ? 17 : 13
                 weight: 800
                 color: view.textColor
                 text: Qt.locale().standaloneMonthName(view.shown.getMonth(), Locale.LongFormat) + " " + view.shown.getFullYear()
@@ -207,8 +217,8 @@ FocusScope {
             FlatButton {
                 id: todayButton
                 visible: !view.showingToday
-                Layout.preferredWidth: todayLabel.implicitWidth + m.px(20)
-                Layout.preferredHeight: m.px(26)
+                Layout.preferredWidth: Math.max(todayLabel.implicitWidth + m.px(20), view.touch ? 44 : 0)
+                Layout.preferredHeight: view.buttonSize
                 Layout.rightMargin: m.px(4)
                 label: i18nc("@action:button go to the current month", "Today")
                 onTriggered: view.showToday()
@@ -231,8 +241,8 @@ FocusScope {
 
             FlatButton {
                 id: previousButton
-                Layout.preferredWidth: m.px(26)
-                Layout.preferredHeight: m.px(26)
+                Layout.preferredWidth: view.buttonSize
+                Layout.preferredHeight: view.buttonSize
                 label: i18nc("@action:button", "Previous month")
                 onTriggered: view.moveMonths(-1)
                 Chevron {
@@ -245,8 +255,8 @@ FocusScope {
 
             FlatButton {
                 id: nextButton
-                Layout.preferredWidth: m.px(26)
-                Layout.preferredHeight: m.px(26)
+                Layout.preferredWidth: view.buttonSize
+                Layout.preferredHeight: view.buttonSize
                 label: i18nc("@action:button", "Next month")
                 onTriggered: view.moveMonths(1)
                 Chevron {
@@ -305,7 +315,7 @@ FocusScope {
                     Rectangle {
                         visible: cell.today
                         anchors.centerIn: parent
-                        width: m.px(28)
+                        width: view.touch ? 36 : m.px(28)
                         height: width
                         radius: width / 2
                         antialiasing: true
@@ -317,7 +327,8 @@ FocusScope {
                         metrics: m
                         px: 12.5
                         weight: cell.today ? 800 : 500
-                        color: cell.today ? "#ffffff" : cell.weekend ? view.tertiary : view.dayColor
+                        color: cell.today ? accent.fillText : cell.weekend ? view.tertiary : view.dayColor
+                        font.features: { "tnum": 1 }
                         opacity: cell.inMonth || cell.today ? 1 : 0.35
                         text: cell.day.getDate()
                     }

@@ -38,7 +38,7 @@ PlasmoidItem {
     }
     readonly property color textColor: Kirigami.Theme.textColor
     readonly property color ink: dark ? "#ffffff" : Kirigami.Theme.textColor
-    readonly property color focusColor: dark ? "#8ab8ff" : "#2f6fdf"
+    readonly property color focusColor: accent.focusRing
     function tint(alpha: real): color {
         return Qt.rgba(ink.r, ink.g, ink.b, alpha);
     }
@@ -46,11 +46,26 @@ PlasmoidItem {
     property bool popupOpen: false
     property bool openOnPress: false
 
+    FusionTablet {
+        id: tabletState
+    }
+    Motion {
+        id: motion
+    }
+    // The user's accent (decision 3): the open pill and the focus ring.
+    FusionAccent {
+        id: accent
+    }
     // Text scale and pixel grid of the panel window (docs/parts/shell-topbar.md, "Text scale").
     FusionMetrics {
         id: m
         area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+        tablet: tabletState.tablet
     }
+    // The top bar's width budget (ADAPTIVE 5.1, set by the top bar, TOP-2): 0 the full pill,
+    // 1 the short date, 2 the time only; the dots hide at step 6.
+    property int compactLevel: 0
+    property bool hideDots: false
     // Board padding and gap of the pill (12), scaled with the text.
     readonly property real pillPadding: m.px(12)
 
@@ -67,9 +82,10 @@ PlasmoidItem {
     property var currentDesktop: ""
     readonly property int desktopCount: desktopInfo.numberOfDesktops
     readonly property int currentIndex: desktopInfo.desktopIds.indexOf(currentDesktop)
-    readonly property bool showDots: Plasmoid.configuration.showWorkspaces && desktopCount > 1
+    readonly property bool showDots: Plasmoid.configuration.showWorkspaces && desktopCount > 1 && !hideDots
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
+    Plasmoid.constraintHints: Plasmoid.CanFillArea
     Plasmoid.status: popupOpen ? PlasmaCore.Types.RequiresAttentionStatus : PlasmaCore.Types.ActiveStatus
     activationTogglesExpanded: false
     hideOnWindowDeactivate: true
@@ -145,9 +161,22 @@ PlasmoidItem {
         }
     }
 
+    // The calendar is not built at login (BACKLOG S2): it starts building in the background as
+    // soon as the pointer enters the pill or anything presses it, so it is ready by the click;
+    // the time from the first open request to its first frame is logged once.
+    property bool calendarWanted: false
+    property real openStarted: 0
+    function prepareCalendar(): void {
+        calendarWanted = true;
+    }
     function setPopupOpen(open: bool) {
+        if (open && openStarted === 0) {
+            openStarted = Date.now();
+        }
+        calendarWanted = calendarWanted || open;
         popupOpen = open;
     }
+    property bool calendarShown: false
 
     function refreshDesktop() {
         const screen = Plasmoid.containment ? Plasmoid.containment.screenGeometry : null;
@@ -234,6 +263,29 @@ PlasmoidItem {
         // No time zone: follows the system time zone.
     }
 
+    // The time never changes the pill's width (BACKLOG M8): its box is as wide as the widest of
+    // this time, 10:58 and 22:58 in the same format (two-digit hours, AM and PM), with every digit
+    // the widest one.
+    readonly property string timeText: Qt.locale().toString(clock.dateTime, root.timeFormat).replace(/\u202f/g, "\u2009")
+    FontMetrics {
+        id: timeMetrics
+        font: timeLabel.font
+    }
+    readonly property real timeBoxWidth: {
+        let widest = "0";
+        for (const d of "0123456789") {
+            if (timeMetrics.advanceWidth(d) > timeMetrics.advanceWidth(widest)) {
+                widest = d;
+            }
+        }
+        const format = t => Qt.locale().toString(t, root.timeFormat).replace(/\u202f/g, "\u2009");
+        let width = 0;
+        for (const sample of [timeText, format(new Date(2000, 0, 1, 10, 58)), format(new Date(2000, 0, 1, 22, 58))]) {
+            width = Math.max(width, timeMetrics.advanceWidth(sample.replace(/[0-9]/g, widest)));
+        }
+        return Math.ceil(width);
+    }
+
     Connections {
         target: Plasmoid
         function onActivated() {
@@ -259,8 +311,10 @@ PlasmoidItem {
 
         anchors.verticalCenter: parent.verticalCenter
         width: row.implicitWidth
-        // 24 px on the board, scaled with the text, never taller than the panel row.
-        height: root.vertical ? m.px(24) : Math.min(m.px(24), Math.max(1, root.height))
+        // 24 px on the board (32 in tablet posture, TABLET T5), scaled with the text, never taller
+        // than the panel row.
+        readonly property real boardHeight: m.px(tabletState.tablet ? 32 : 24)
+        height: root.vertical ? boardHeight : Math.min(boardHeight, Math.max(1, root.height))
         onWidthChanged: root.placePill()
 
         // Wheel over any part of the pill switches workspaces (one step per notch).
@@ -291,12 +345,13 @@ PlasmoidItem {
             anchors.fill: parent
             radius: height / 2
             antialiasing: true
-            color: root.popupOpen ? Qt.rgba(91 / 255, 157 / 255, 1, 0.35)
+            color: root.popupOpen ? accent.soft(0.35)
                  : root.tint(dateArea.pressed ? 0.16 : dateArea.containsMouse ? 0.12 : 0.08)
             border.width: root.popupOpen ? 1 : 0
-            border.color: Qt.rgba(138 / 255, 184 / 255, 1, 0.5)
+            border.color: Qt.rgba(accent.focusRing.r, accent.focusRing.g, accent.focusRing.b, 0.5)
             Behavior on color {
-                ColorAnimation { duration: Kirigami.Units.shortDuration }
+                enabled: motion.animate
+                ColorAnimation { duration: motion.hover }
             }
         }
 
@@ -315,6 +370,8 @@ PlasmoidItem {
             WorkspaceDots {
                 id: dots
                 visible: root.showDots
+                touch: m.touch
+                motion: motion
                 width: visible ? implicitWidth : 0
                 anchors.verticalCenter: parent.verticalCenter
                 cellHeight: pill.height
@@ -347,7 +404,10 @@ PlasmoidItem {
 
                 MouseArea {
                     id: dateArea
+                    // The whole bar's height is the hit area (the drawn pill stays 24 or 32).
                     anchors.fill: parent
+                    anchors.topMargin: root.vertical ? 0 : -Math.max(0, (root.height - pill.height) / 2)
+                    anchors.bottomMargin: anchors.topMargin
                     hoverEnabled: true
                     activeFocusOnTab: true
                     acceptedButtons: Qt.LeftButton
@@ -357,7 +417,11 @@ PlasmoidItem {
                     Accessible.description: i18nc("@info:whatsthis", "Show the calendar")
                     Accessible.onPressAction: root.setPopupOpen(!root.popupOpen)
 
-                    onPressed: root.openOnPress = !root.popupOpen
+                    onContainsMouseChanged: if (containsMouse) root.prepareCalendar()
+                    onPressed: {
+                        root.prepareCalendar();
+                        root.openOnPress = !root.popupOpen;
+                    }
                     onClicked: root.setPopupOpen(root.openOnPress)
                     Keys.onPressed: event => {
                         if ([Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space, Qt.Key_Select].indexOf(event.key) !== -1) {
@@ -375,17 +439,23 @@ PlasmoidItem {
                         FusionText {
                             id: dateLabel
                             anchors.verticalCenter: parent.verticalCenter
-                            visible: Plasmoid.configuration.showDate
+                            visible: Plasmoid.configuration.showDate && root.compactLevel < 2
                             metrics: m
                             px: 13
                             weight: 700
                             color: root.textColor
-                            text: Qt.locale().toString(clock.dateTime, root.dateFormat)
+                            text: Qt.locale().toString(clock.dateTime, root.compactLevel >= 1
+                                                       ? Formats.shortDateFormat(Qt.locale(), Qt.locale().dateFormat(Locale.ShortFormat))
+                                                       : root.dateFormat)
+                            font.features: { "tnum": 1 }
                         }
 
                         FusionText {
                             id: timeLabel
                             anchors.verticalCenter: parent.verticalCenter
+                            width: root.timeBoxWidth
+                            horizontalAlignment: Text.AlignHCenter
+                            font.features: { "tnum": 1 }
                             metrics: m
                             display: true
                             px: 13
@@ -394,8 +464,36 @@ PlasmoidItem {
                             // CLDR puts a narrow no-break space before AM/PM ("2:49 PM"); Space
                             // Grotesk has no glyph for it, and a fallback font for one character
                             // would change the line's height. Its thin space looks the same.
-                            text: Qt.locale().toString(clock.dateTime, root.timeFormat).replace(/\u202f/g, "\u2009")
+                            text: root.timeText
                         }
+                    }
+                }
+            }
+        }
+
+        // Touch: a pull-down of 24 px opens the calendar (TABLET 4.1 and 4.7). A layer above the
+        // pill's mouse areas, so it sees the touch first; it holds only a passive grab until the
+        // finger has moved 24 px, so taps still reach the pill.
+        Item {
+            anchors.fill: parent
+            anchors.topMargin: root.vertical ? 0 : -Math.max(0, (root.height - pill.height) / 2)
+            anchors.bottomMargin: anchors.topMargin
+            z: 10
+            DragHandler {
+                acceptedDevices: PointerDevice.TouchScreen
+                target: null
+                xAxis.enabled: false
+                dragThreshold: 24
+                onActiveChanged: {
+                    // (translation is still 0 when `active` turns true: use the press position)
+                    const dy = centroid.position.y - centroid.pressPosition.y;
+                    if (active) {
+                        console.info("clockpill: pull-down gesture, dy " + Math.round(dy));
+                        root.prepareCalendar();
+                    }
+                    if (active && dy > 0 && !root.popupOpen) {
+                        console.info("clockpill: pull-down opens the calendar");
+                        root.setPopupOpen(true);
                     }
                 }
             }
@@ -434,29 +532,53 @@ PlasmoidItem {
         floating: !root.inPanel
         removeBorderStrategy: PlasmaCore.AppletPopup.Never
         hideOnWindowDeactivate: true
-        visible: root.popupOpen
+        visible: root.popupOpen && calendarLoader.status === Loader.Ready
 
         onVisibleChanged: {
-            if (visible) {
-                calendar.showToday();
+            if (visible && calendarLoader.item) {
+                calendarLoader.item.showToday();
                 popup.requestActivate();
-                calendar.forceActiveFocus();
-            } else {
+                calendarLoader.item.forceActiveFocus();
+            } else if (!visible) {
                 closeSync.restart();
             }
         }
 
-        mainItem: CalendarView {
-            id: calendar
-            now: clock.dateTime
-            firstDayOfWeek: Plasmoid.configuration.firstDayOfWeek
-            dark: {
-                // The pop-up may use another colour set than the panel.
-                const c = Kirigami.Theme.backgroundColor;
-                return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
-            }
+        mainItem: Loader {
+            id: calendarLoader
+            active: root.calendarWanted
+            asynchronous: true
             focus: true
-            onCloseRequested: root.setPopupOpen(false)
+            onLoaded: {
+                item.showToday();
+                item.forceActiveFocus();
+            }
+            sourceComponent: CalendarView {
+                now: clock.dateTime
+                firstDayOfWeek: Plasmoid.configuration.firstDayOfWeek
+                touch: m.touch
+                motion: motion
+                dark: {
+                    // The pop-up may use another colour set than the panel.
+                    const c = Kirigami.Theme.backgroundColor;
+                    return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
+                }
+                focus: true
+                onCloseRequested: root.setPopupOpen(false)
+            }
+        }
+        Connections {
+            target: popup
+            enabled: root.openStarted > 0
+            function onFrameSwapped() {
+                if (!popup.visible) {
+                    return;
+                }
+                console.info("clockpill: calendar " + (root.calendarShown ? "open" : "first open") + ", first frame after "
+                             + (Date.now() - root.openStarted) + " ms");
+                root.openStarted = 0;
+                root.calendarShown = true;
+            }
         }
     }
 }
