@@ -36,7 +36,8 @@
 # defaults.conf sets the wallpaper, so a drop-in in /etc/plasmalogin.conf.d/ has no effect.
 #
 # This script does the same for Plasma Fusion Dark, with the values of the installed Global Theme
-# org.plasmafusion.dark.desktop (its contents/defaults), as the greeter user:
+# org.plasmafusion.dark.desktop (its contents/defaults) and, since the Global Themes carry no fonts
+# or cursor, the fonts and cursor that tools/device/fusion-config.sh sets once, as the greeter user:
 #   ~/.config/kdeglobals   colour scheme PlasmaFusionDark (applied with plasma-apply-colorscheme),
 #                          fonts (Manrope), icon theme PlasmaFusion-Dark, widget style,
 #                          [KDE] LookAndFeelPackage=org.plasmafusion.dark.desktop
@@ -130,11 +131,18 @@ lnf() { # $1 file group, $2 group, $3 key: a value of the Global Theme's default
 SCHEME=$(lnf kdeglobals General ColorScheme)
 PLASMA_STYLE=$(lnf plasmarc Theme name)
 ICONS=$(lnf kdeglobals Icons Theme)
-CURSORS=$(lnf kcminputrc Mouse cursorTheme)
 WIDGET_STYLE=$(lnf kdeglobals KDE widgetStyle)
+# Fonts and cursor: the same values as tools/device/fusion-config.sh (UI_FONT, SMALL_FONT,
+# CURSOR_THEME). The Global Themes no longer carry them, so that light/dark switches keep a user's
+# own choices (docs/parts/lookandfeel.md).
+CURSORS=PlasmaFusion-cursors
 FONT_KEYS=(font menuFont toolBarFont smallestReadableFont)
-declare -A FONT
-for k in "${FONT_KEYS[@]}"; do FONT[$k]=$(lnf kdeglobals General "$k"); done
+declare -A FONT=(
+  [font]="Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0"
+  [menuFont]="Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0"
+  [toolBarFont]="Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0"
+  [smallestReadableFont]="Manrope,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0"
+)
 [ -f "$DATA/color-schemes/$SCHEME.colors" ] || die "colour scheme $SCHEME is not installed in $DATA"
 [ -f "$DATA/plasma/desktoptheme/$PLASMA_STYLE/metadata.json" ] || die "Plasma style $PLASMA_STYLE is not installed in $DATA"
 [ -f "$DATA/icons/$ICONS/index.theme" ] || die "icon theme $ICONS is not installed in $DATA"
