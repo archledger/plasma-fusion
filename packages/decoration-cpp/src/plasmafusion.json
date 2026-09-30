@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Description": "Plasma Fusion window decoration: round title-bar buttons, rounded corners with content clipping, a light edge and soft shadows",
+        "EnabledByDefault": true,
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion",
+        "Version": "1.0"
+    },
+    "org.kde.kdecoration3": {
+        "blur": false,
+        "recommendedBorderSize": "None"
+    }
+}
