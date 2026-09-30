@@ -104,7 +104,7 @@ file, so `fusion-restore.sh` gives every key back.
 | Meta+Space, Meta+S, Alt+Space, Alt+F2, Search (KRunner's own `_launch` keys) | `plasmashell` / `activate application launcher`: the shell activates the launcher on the active screen, exactly as for Meta |
 | (KRunner) | `org.kde.krunner.desktop` `_launch` and `RunClipboard` keep no key, so nothing starts KRunner |
 | Meta+A | the quick-settings widget's own "activate widget <id>" (widget API, as before) |
-| Meta+N | `org.plasmafusion.notifications.desktop` / `_launch`: a desktop file in `~/.local/share/kglobalaccel/` (how System Settings adds a command shortcut) that writes the quick-settings widget's `[General] openRequest = "notifications <ms>"` through `evaluateScript` (`busctl`) |
+| Meta+N | `org.plasmafusion.notifications.desktop` / `_launch`: a desktop file in `~/.local/share/kglobalaccel/` (how System Settings adds a command shortcut) that writes the quick-settings widget's `[General] openRequest = "notifications:<ms>"` through `evaluateScript` (`busctl`) |
 | Meta+Up / Meta+Down | `kwin` / `Window Maximize` (a toggle in KWin 6.7.5) / `Window Restore` (Meta+PgUp and Meta+Backspace stay) |
 | Meta+Alt+Up / Meta+Alt+Down | `kwin` / `Window Quick Tile Top` / `Bottom` (`Switch Window Up/Down` lose them) |
 | Meta+Tab | `kwin` / `Overview` (Meta+W stays; `Walk Through Windows` keeps Alt+Tab) |

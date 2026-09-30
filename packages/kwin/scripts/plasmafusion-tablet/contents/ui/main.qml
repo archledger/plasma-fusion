@@ -504,9 +504,20 @@ Item {
 
     // ---------------------------------------------------------------- start and stop
 
+    // KWin quitting (logout, --replace) destroys the scripts after the workspace: leave() would
+    // touch windows that are gone (a KWin crash at exit, seen in private sessions that ended in
+    // tablet mode). The session's windows go with it, so there is nothing to restore then.
+    property bool quitting: false
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            root.quitting = true;
+        }
+    }
+
     Component.onDestruction: {
-        // Disabled (the kill switch) or KWin quits: laptop options and windows first.
-        if (applied) {
+        // Disabled (the kill switch): laptop options and windows first.
+        if (applied && !quitting) {
             leave();
         }
     }

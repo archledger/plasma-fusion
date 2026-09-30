@@ -21,6 +21,9 @@ KCM.SimpleKCM {
     property alias cfg_darkLookAndFeel: darkField.text
     // Every key of main.xml needs a cfg_ property here, or the settings dialog warns.
     property string cfg_startPage: "main"
+    property string cfg_keyboardPolicy: "tablet"
+    property string cfg_openRequest: ""
+    property string cfg_debugAction: ""
 
     Kirigami.FormLayout {
         QQC2.CheckBox {
@@ -75,8 +78,23 @@ KCM.SimpleKCM {
                 { value: "bluetooth", text: i18nc("@item:inlistbox", "Bluetooth devices") },
                 { value: "audio", text: i18nc("@item:inlistbox", "Sound output") }
             ]
-            Component.onCompleted: currentIndex = Math.max(0, indexOfValue(page.cfg_startPage))
+            // The index from the model itself: indexOfValue() is -1 until the model is read.
+            Component.onCompleted: currentIndex = Math.max(0, model.findIndex(entry => entry.value === page.cfg_startPage))
             onActivated: page.cfg_startPage = currentValue
+        }
+        QQC2.ComboBox {
+            id: keyboardPolicyBox
+            Kirigami.FormData.label: i18nc("@label:listbox", "On-screen keyboard:")
+            Accessible.name: i18nc("@label:listbox", "On-screen keyboard")
+            textRole: "text"
+            valueRole: "value"
+            model: [
+                { value: "tablet", text: i18nc("@item:inlistbox on-screen keyboard", "In tablet mode") },
+                { value: "touch", text: i18nc("@item:inlistbox on-screen keyboard", "On every touch") },
+                { value: "never", text: i18nc("@item:inlistbox on-screen keyboard", "Never") }
+            ]
+            Component.onCompleted: currentIndex = Math.max(0, model.findIndex(entry => entry.value === page.cfg_keyboardPolicy))
+            onActivated: page.cfg_keyboardPolicy = currentValue
         }
 
         Item { Kirigami.FormData.isSection: true }

@@ -5,12 +5,18 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Templates as T
 
-// Slider of the Quick Settings board: 8 px track, accent fill, 20 px white knob.
+// Slider of the Quick Settings board: 8 px track, accent fill, 20 px white knob (28 px in touch
+// mode, ADAPTIVE 5.3). In tablet posture (TABLET 4.6) it is a 44 px tall bar, radius 22, filled
+// up to the value, and it moves relatively: a drag adds dx / width to the value and a tap does not
+// jump.
 T.Slider {
     id: slider
 
     required property FusionPalette pal
     property bool dimmed: false
+
+    readonly property bool bar: pal.tablet
+    readonly property real knobSize: pal.touch ? 28 : 20
 
     from: 0
     to: 1
@@ -18,7 +24,7 @@ T.Slider {
     focusPolicy: Qt.StrongFocus
     hoverEnabled: true
     implicitWidth: 200
-    implicitHeight: 28
+    implicitHeight: bar ? 44 : Math.max(28, knobSize)
     wheelEnabled: false
 
     Keys.onPressed: event => {
@@ -42,28 +48,67 @@ T.Slider {
         }
     }
 
-    background: Rectangle {
+    // Tablet bar: relative drag over the whole bar; the template's own jump-to-press is covered.
+    MouseArea {
+        id: barDrag
+        anchors.fill: parent
+        // The slider itself is the accessible control; this is only its pointer surface.
+        Accessible.ignored: true
+        enabled: slider.bar
+        visible: slider.bar
+        preventStealing: true
+        property real startX: 0
+        property real startValue: 0
+        onPressed: mouse => {
+            startX = mouse.x;
+            startValue = slider.value;
+            slider.forceActiveFocus(Qt.MouseFocusReason);
+        }
+        onPositionChanged: mouse => {
+            const span = slider.to - slider.from;
+            const next = Math.max(slider.from, Math.min(slider.to, startValue + (mouse.x - startX) / Math.max(1, width) * span));
+            if (Math.abs(next - slider.value) >= slider.stepSize / 2) {
+                slider.value = next;
+                slider.moved();
+            }
+        }
+    }
+    // The owners rebind `value` when `pressed` turns false; the bar's drag counts as pressed.
+    readonly property bool dragging: pressed || barDrag.pressed
+
+    background: Item {
         x: slider.leftPadding
         y: slider.topPadding + (slider.availableHeight - height) / 2
         width: slider.availableWidth
-        height: 8
-        radius: 4
-        color: slider.pal.overlay(0.14)
+        height: slider.bar ? 44 : 8
 
         Rectangle {
-            width: Math.max(height, slider.handle.x - slider.leftPadding + slider.handle.width / 2)
+            anchors.fill: parent
+            radius: height / 2
+            color: slider.pal.overlay(slider.bar ? 0.10 : 0.14)
+        }
+        Rectangle {
+            width: slider.bar ? Math.max(parent.height, slider.visualPosition * parent.width)
+                              : Math.max(parent.height, slider.handle.x - slider.leftPadding + slider.handle.width / 2)
             height: parent.height
-            radius: 4
-            color: slider.pal.accentSoft
+            radius: height / 2
+            color: slider.bar ? slider.pal.accent : slider.pal.accentSoft
             opacity: slider.dimmed ? 0.5 : 1
+        }
+        FocusRing {
+            visible: slider.bar
+            baseRadius: parent.height / 2
+            ringColor: slider.pal.focus
+            shown: slider.bar && slider.visualFocus
         }
     }
 
     handle: Item {
+        visible: !slider.bar
         x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
         y: slider.topPadding + (slider.availableHeight - height) / 2
-        width: 20
-        height: 20
+        width: slider.bar ? 0 : slider.knobSize
+        height: slider.bar ? 0 : slider.knobSize
 
         RectangularShadow {
             anchors.fill: knob
@@ -75,13 +120,16 @@ T.Slider {
         Rectangle {
             id: knob
             anchors.fill: parent
-            radius: 10
+            radius: width / 2
             color: slider.pal.knob
             scale: slider.pressed ? 1.08 : 1
-            Behavior on scale { NumberAnimation { duration: 100 } }
+            Behavior on scale {
+                enabled: slider.pal.motion.animate
+                NumberAnimation { duration: slider.pal.motion.pressScale }
+            }
         }
         FocusRing {
-            baseRadius: 10
+            baseRadius: parent.width / 2
             ringColor: slider.pal.focus
             shown: slider.visualFocus
         }

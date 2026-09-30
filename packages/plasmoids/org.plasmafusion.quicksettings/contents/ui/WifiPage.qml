@@ -266,6 +266,7 @@ ColumnLayout {
 
     ListView {
         id: list
+        Accessible.name: i18nc("@title:group", "Other networks")
         Layout.fillWidth: true
         Layout.fillHeight: true
         Layout.preferredHeight: Math.min(contentHeight, page.listMaxHeight)
@@ -319,6 +320,8 @@ ColumnLayout {
 
             MouseArea {
                 id: rowMouse
+                // The row's own name and actions are its accessible face (the list's keys).
+                Accessible.ignored: true
                 anchors {
                     left: parent.left
                     right: parent.right

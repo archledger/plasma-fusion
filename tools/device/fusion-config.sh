@@ -149,7 +149,7 @@ PEN_SHORTCUT=$((META + SHIFT + 0x57))
 PEN_SHORTCUT_TEXT=Meta+Shift+W
 # Meta+N: a kglobalaccel service component (a desktop file in ~/.local/share/kglobalaccel/, the way
 # System Settings adds a command shortcut) that asks the quick-settings widget to open on its
-# notification list: it writes the widget's [General] openRequest = "notifications <ms>".
+# notification list: it writes the widget's [General] openRequest = "notifications:<ms>".
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
 NOTIFY_SHORTCUT=$((META + 0x4e))
 LAUNCHER_ACTION="activate application launcher"
@@ -1298,8 +1298,8 @@ pen_defaults_tool() {
 
 # Meta+N: the notification list of quick settings. The desktop file is the kglobalaccel component
 # (as System Settings > Shortcuts > Add Command makes one); its command asks the quick-settings
-# widget to open on the list through its [General] openRequest key ("notifications <ms>").
-NOTIFY_JS="var q=panels();for(var i=0;i<q.length;i++){var w=q[i].widgets('org.plasmafusion.quicksettings');for(var j=0;j<w.length;j++){w[j].currentConfigGroup=['General'];w[j].writeConfig('openRequest','notifications '+Date.now());}}"
+# widget to open on the list through its [General] openRequest key ("notifications:<ms>").
+NOTIFY_JS="var q=panels();for(var i=0;i<q.length;i++){var w=q[i].widgets('org.plasmafusion.quicksettings');for(var j=0;j<w.length;j++){w[j].currentConfigGroup=['General'];w[j].writeConfig('openRequest','notifications:'+Date.now());}}"
 notify_desktop() {
   cat <<EOF
 [Desktop Entry]

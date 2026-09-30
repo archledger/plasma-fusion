@@ -18,6 +18,12 @@ QtObject {
     property color focus: dark ? "#8ab8ff" : "#2f6fdf"
     property color link: dark ? "#8ab8ff" : "#2359c4"
     property string fontFamily: ""
+    // Touch sizes (ADAPTIVE 5.3, TABLET 4.6): `touch` in tablet posture or after a touch
+    // (FusionMetrics.touch), `tablet` in tablet posture only (the sheet's own layout).
+    property bool touch: false
+    property bool tablet: false
+    // Animation durations (EFFECTS.md 6.2): the system's animation speed and reduced motion.
+    readonly property Motion motion: Motion {}
 
     // Base of all translucent overlays: white on dark, #141827 on light.
     readonly property color overlayBase: dark ? "#ffffff" : "#141827"

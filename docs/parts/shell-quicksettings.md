@@ -88,7 +88,9 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/services/             one file per data source, each loaded by a Loader:
                                     Network (plasma-nm), Audio (plasma-pa), Battery, PowerProfiles,
                                     Display (brightness, Night Light, light/dark pairing), Media (MPRIS),
-                                    Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec
+                                    Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
+                                    TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
+                                    tablet-mode setting, full-screen apps; QS-1)
 tools/build.d/71-quicksettings.sh   copies the package to $STAGE/.local/share/plasma/plasmoids/
 ```
 
@@ -142,6 +144,9 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `popupGap` | 10 | px between the bar and the pop-up |
 | `popupScreenMargin` | 16 | px between the pop-up and the screen edge |
 | `startPage` | main | page shown on open: `main`, `wifi`, `bluetooth`, `audio` (settings page: "Page shown when opened") |
+| `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
+| `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`; without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
+| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
 Dark style: when kdeglobals `[KDE] DefaultLightLookAndFeel` / `DefaultDarkLookAndFeel` pair the two
@@ -376,3 +381,92 @@ See `docs/parts/polish.md`.
   within 10 % of the board's ink, no synthetic bold.
 - Tray items: the media controller and the other replaced items are hidden by the layout script;
   the expander arrow is with the desktop-cards part.
+
+## QS-1 (2026-09-30): tablet sheet, keyboard policy, touch sizes
+
+Work package QS-1 of the one-pass plan (TABLET 4.3 and 4.6, ADAPTIVE 5.3, BACKLOG S2, G18), built by
+the lead directly.
+
+### Changes
+
+- **Tablet bar** (TopBar.qml, tablet posture): the status pill 32 px (padding 16, gap 12, icons 18,
+  battery % 14 px 800, tabular figures), the bell 44 x 44 (32 drawn, 8 px unread dot), a keyboard
+  button (44 x 44, 32 drawn; shown while KWin's on-screen keyboard is available; shows or hides it),
+  no EN badge, phone or clipboard (phone and clipboard become 52 px rows in the sheet), Wi-Fi and
+  battery only in portrait. Every target covers the bar's whole height (`CanFillArea`); the last
+  target keeps the board's 6 px from the screen edge (12 in tablet posture) whatever margin the panel
+  has. A 24 px pull-down (TouchScreen) on the pill or the bell opens the sheet.
+- **Width budget hooks** (with TOP-2): step 2 moves phone and clipboard into the sheet, step 6 hides
+  the battery % (`budgetLevel`, `budgetSaving()`).
+- **Sheet** (tablet posture): 400 px wide, 8 px under the bar, 12 px from the edge; in portrait
+  min(W − 32, 560), centred (measured: 561 px on the 4/3 grid, centred). Header 44 px (chip radius 22,
+  four 44 px buttons 12 apart); a **tablet row** of four 44 px toggles: rotation lock (a lock badge while
+  locked), keyboard (show now), full-screen apps (the tablet script's `WindowMode`, applied through its
+  shortcut), pen (opens the pen widget's menu; shown while a pen is connected, read from the pen widget
+  in the same bar); sliders as 44 px fill bars with relative drag (a tap does not jump); tiles 64 px,
+  radius 18, 12 apart; a **Tablet mode** tile (Automatic / On / Off, kwinrc `[Input] TabletMode`) where
+  the posture can change by itself or the setting is not automatic; media card 72 px.
+- **Touch sizes** (ADAPTIVE 5.3, touch mode = tablet posture or a recent touch): every icon button's
+  target at least 44 x 44 (drawn size unchanged), tile chevrons 44 wide, switch 48 x 28, slider knob
+  28, notification actions 44 tall (radius 12), the notification close button always shown (32 drawn,
+  44 target) beside the time, and a horizontal swipe dismisses a card (40 % of its width or 800 px/s;
+  the card follows the finger). A long press on an icon button shows its label.
+- **One Flickable** (ADAPTIVE 5.3): the page and the notification list scroll together when they are
+  taller than the screen allows; the maximum height comes from the available area (the dock's reserve
+  excluded). Before, only the list shrank and the rest was cut off.
+- **Keyboard policy** (`services/TabletPolicy.qml`, TABLET 3.3): kwinrc `[Wayland] InputMethod` per
+  posture, written with `--notify` only when it differs and only once KWin has reported the posture;
+  `VirtualKeyboardMode` is never written.
+- **Rotation lock** (F14, T19): lock = one `kscreen-doctor output.<o>.rotation.<current>
+  output.<o>.autoRotatePolicy.never`; unlock = `autoRotatePolicy.inTabletMode rotation.normal`; leaving
+  tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc
+  `[Tablet] RotationLocked`); the lock is read back from `kscreen-doctor -j` when the sheet opens in
+  tablet posture (outputs with the auto-rotation capability report it).
+- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow" (06:00)
+  and "Until turned off"; the time is kept in the notification settings, a timer releases it.
+- **Built on demand** (S2): the sheet's content is a `Loader` built 4 s after start, or at once when the
+  pointer reaches the bar or anything opens it; the Bluetooth device model exists only while the
+  Bluetooth page is shown (the tile keeps using BluezQt's manager).
+- **Entry points**: `openRequest` = `MODE:NONCE[:OUTPUT]` (the tablet script's right edge writes
+  `sheet:`, Meta+N now writes `notifications:`; fusion-config.sh changed); without an output only the
+  widget on KWin's active screen (`activeOutputName`) opens. Meta+A stays the widget's own shortcut.
+- **Motion and accessibility**: every animation takes a `Motion` token (the palette carries one; the
+  motion lint has no quick-settings findings left); accessible names for the battery chip, album art,
+  the Wi-Fi list, notification cards; the settings page's combo boxes take their index from the model.
+- **KWin exit crash** (found here, in the KWIN-1 tablet script): the script's destruction handler ran its
+  leave step while KWin was quitting, after the workspace was gone (SIGSEGV in
+  `WorkspaceWrapper::qt_static_metacall` from `Component.onDestruction`, a private session that ended in
+  tablet mode). The script now notes `aboutToQuit` and restores nothing when KWin itself quits; disabling
+  the script still restores the windows. Probe `q1p` ended in tablet mode without a core dump.
+
+### Verification
+
+- `qmllint` (Qt 6.11) on the changed files: only the unqualified `i18n*` notes; `a11y-lint` and
+  `motion-lint`: no quick-settings findings (five a11y and eleven motion findings fixed).
+- Private session `q1a` (1920 x 1200 at 4/3, `build/q1/scen-q1a.sh`), all PASS:
+  - T11, three rounds: plasma-keyboard starts 198-206 ms after tablet mode turns on and is gone 41-57 ms
+    after it turns off (limits 1 s and 2.5 s); with the default policy the laptop posture empties
+    `InputMethod` at start.
+  - T6: no target of the bar or the sheet under 44 x 44 in tablet posture (dump of every visible button,
+    slider and mouse area).
+  - T10: a 16 px pull-down on the status pill does not open the sheet, a 30 px one does.
+  - Full-screen apps writes `WindowMode=windowed` and back; Do Not Disturb for 1 hour shows "Until
+    <time>" and `plasmanotifyrc [DoNotDisturb] Until`; no Bluetooth device model while its page is hidden,
+    one while it is shown, none after closing.
+  - T12: portrait sheet 561 px wide (min(W − 32, 560) on the 4/3 pixel grid), centred.
+  - T19 (virtual output): the lock runs `rotation.left` + `autoRotatePolicy.never` (exit 0) and the
+    rotation stays left; leaving tablet mode turns it normal; unlocking runs `inTabletMode` +
+    `rotation.normal`. A virtual output stores neither the rotation nor `autoRotation` in
+    `kwinoutputconfig.json` (probe `q1p`), so the stored policy is part of hand check H3.
+  - Tablet mode tile: On -> Off -> Automatic -> On with the matching kwinrc values.
+- `q1c2` (960 x 600 logical, 12.75 pt, M12): the sheet stays inside the screen (436 px, its maximum) and a
+  swipe scrolls page and list together to the end.
+- First frame of the sheet (A/B `q1b`, the same timing log in HEAD's package, click on the pill): first
+  open 96, 111, 103 ms with QS-1 against 85, 94 ms with HEAD (the pop-up window is created on its first
+  show; the settings re-read was moved after the first frame); later opens 5-6 ms in both. The first open
+  is about 12 ms slower in these few runs.
+- No plasmashell crash; no QML warnings from the widget; the one KWin core dump of a run before the exit
+  fix was removed.
+- Not in QS-1: a swipe up on the sheet to close it (Esc, a tap outside and the pill close it), the icon
+  inside the slider bars (the icons stay beside them), the stretch QS-2.
+

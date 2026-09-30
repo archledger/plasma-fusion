@@ -41,6 +41,18 @@
       <label>Page shown when the pop-up opens: main, wifi, bluetooth or audio</label>
       <default>main</default>
     </entry>
+    <entry name="keyboardPolicy" type="String">
+      <label>On-screen keyboard (kwinrc [Wayland] InputMethod, TABLET 4.6): "tablet" (in tablet posture only; the process stops on the laptop), "touch" (always; KWin shows it on a touch or pen tap) or "never"</label>
+      <default>tablet</default>
+    </entry>
+    <entry name="openRequest" type="String">
+      <label>Written by other shell parts through desktop scripting: "MODE:NONCE" or "MODE:NONCE:OUTPUT" with MODE sheet (quick settings), notifications (the list, as the bell), toggle or close. Without OUTPUT only the widget on KWin's active screen acts. "MODE NONCE" is accepted too.</label>
+      <default></default>
+    </entry>
+    <entry name="debugAction" type="String">
+      <label>Testing only: run one action and clear the key. Values: dump:TAG (logs the sheet's geometry and scrolling, every visible target of the bar and the sheet with its centre and size, and the tablet policy state).</label>
+      <default></default>
+    </entry>
     <entry name="lightLookAndFeel" type="String">
       <label>Global Theme used when Dark style is switched off</label>
       <default>org.plasmafusion.light.desktop</default>

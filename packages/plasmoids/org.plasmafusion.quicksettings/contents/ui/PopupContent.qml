@@ -12,7 +12,9 @@ import "components"
 
 // Content of the pop-up: the quick settings page (or one of its drill-down
 // pages) and, below it, the notification list. The frosted card around it is
-// the Plasma style's dialog background drawn by the pop-up window.
+// the Plasma style's dialog background drawn by the pop-up window. When the page and the
+// notifications together are taller than the screen allows, they scroll together in one
+// Flickable (ADAPTIVE 5.3; before, only the list shrank and the rest was cut off).
 Item {
     id: content
 
@@ -28,11 +30,14 @@ Item {
         focus: Kirigami.Theme.focusColor
         link: Kirigami.Theme.linkColor
         fontFamily: Kirigami.Theme.defaultFont.family
+        touch: content.touch
+        tablet: content.tablet
     }
 
     // Text scale and pixel grid of the pop-up window (docs/parts/shell-quicksettings.md,
     // "Text scale"): gaps, headers and rows next to text follow it; the card padding does not.
     readonly property alias metrics: fusionMetrics
+    readonly property alias scroller: scroller
     FusionMetrics {
         id: fusionMetrics
         area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
@@ -47,6 +52,9 @@ Item {
     // Largest outer height the pop-up may take on this screen.
     property real maxOuterHeight: 820
     property bool open: false
+    // Tablet posture and touch sizes (TABLET 4.6, ADAPTIVE 5.3).
+    property bool tablet: false
+    property bool touch: false
 
     readonly property real innerLeft: Math.max(0, 16 - framePaddingLeft)
     readonly property real innerRight: Math.max(0, 16 - framePaddingRight)
@@ -116,144 +124,179 @@ Item {
         onTriggered: content.now = Date.now()
     }
 
-    ColumnLayout {
-        id: column
-        x: content.innerLeft
-        y: content.innerTop
-        width: content.width - content.innerLeft - content.innerRight
-        spacing: content.metrics.px(14)
+    // Scrolls `item` (inside the column) into view.
+    function ensureVisible(item: Item) {
+        if (!scroller.interactive || !item) {
+            return;
+        }
+        const top = item.mapToItem(column, 0, 0).y + column.y;
+        const bottom = top + item.height;
+        if (top < scroller.contentY) {
+            scroller.contentY = Math.max(0, top - innerTop);
+        } else if (bottom > scroller.contentY + scroller.height) {
+            scroller.contentY = Math.min(scroller.contentHeight - scroller.height, bottom - scroller.height + innerBottom);
+        }
+    }
+    onOpenChanged: {
+        if (open) {
+            scroller.contentY = 0;
+        }
+    }
 
-        // ---------------------------------------------------------------- pages
-        Item {
-            id: pageArea
-            Layout.fillWidth: true
-            readonly property real mainHeight: mainPage.implicitHeight
-            readonly property real subHeight: subPage.pageItem ? subPage.pageItem.implicitHeight : 0
-            Layout.preferredHeight: content.backend.page === "main" ? mainHeight : Math.max(mainHeight, subHeight)
+    Flickable {
+        id: scroller
+        objectName: "sheetScroller"
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: column.implicitHeight + content.innerTop + content.innerBottom
+        interactive: contentHeight > height + 0.5
+        clip: interactive
+        boundsBehavior: Flickable.StopAtBounds
 
-            QuickSettingsMain {
-                id: mainPage
-                width: parent.width
-                backend: content.backend
-                pal: content.pal
-                metrics: content.metrics
-                visible: content.backend.page === "main"
-                opacity: visible ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150 } }
-                onOpenPage: (name, opener) => content.openPage(name, opener)
-            }
+        ColumnLayout {
+            id: column
+            x: content.innerLeft
+            y: content.innerTop
+            width: content.width - content.innerLeft - content.innerRight
+            spacing: content.metrics.px(14)
 
-            Loader {
-                id: subPage
-                readonly property var pageItem: item
-                width: parent.width
-                height: parent.height
-                active: content.backend.page !== "main"
-                opacity: status === Loader.Ready ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: 150 } }
-                sourceComponent: {
-                    switch (content.backend.page) {
-                    case "wifi":
-                        return wifiComponent;
-                    case "bluetooth":
-                        return bluetoothComponent;
-                    case "audio":
-                        return audioComponent;
-                    default:
-                        return null;
+            // ---------------------------------------------------------------- pages
+            Item {
+                id: pageArea
+                Layout.fillWidth: true
+                readonly property real mainHeight: mainPage.implicitHeight
+                readonly property real subHeight: subPage.pageItem ? subPage.pageItem.implicitHeight : 0
+                Layout.preferredHeight: content.backend.page === "main" ? mainHeight : Math.max(mainHeight, subHeight)
+
+                QuickSettingsMain {
+                    id: mainPage
+                    width: parent.width
+                    backend: content.backend
+                    pal: content.pal
+                    metrics: content.metrics
+                    visible: content.backend.page === "main"
+                    opacity: visible ? 1 : 0
+                    Behavior on opacity {
+                        enabled: content.pal.motion.animate
+                        NumberAnimation { duration: content.pal.motion.toggle }
+                    }
+                    onOpenPage: (name, opener) => content.openPage(name, opener)
+                }
+
+                Loader {
+                    id: subPage
+                    readonly property var pageItem: item
+                    width: parent.width
+                    height: parent.height
+                    active: content.backend.page !== "main"
+                    opacity: status === Loader.Ready ? 1 : 0
+                    Behavior on opacity {
+                        enabled: content.pal.motion.animate
+                        NumberAnimation { duration: content.pal.motion.toggle }
+                    }
+                    sourceComponent: {
+                        switch (content.backend.page) {
+                        case "wifi":
+                            return wifiComponent;
+                        case "bluetooth":
+                            return bluetoothComponent;
+                        case "audio":
+                            return audioComponent;
+                        default:
+                            return null;
+                        }
                     }
                 }
             }
-        }
 
-        // ---------------------------------------------------------------- notifications
-        ColumnLayout {
-            id: notifications
-            Layout.fillWidth: true
-            spacing: content.metrics.px(10)
-            visible: content.backend.page === "main" && content.backend.notif.available
-                     && (content.backend.notif.count > 0 || content.backend.showEmptyNotifications)
-
-            RowLayout {
-                id: notificationHeader
+            // ---------------------------------------------------------------- notifications
+            ColumnLayout {
+                id: notifications
                 Layout.fillWidth: true
-                Layout.preferredHeight: content.metrics.px(26)
-                Layout.leftMargin: content.metrics.px(4)
-                spacing: content.metrics.px(8)
+                spacing: content.metrics.px(10)
+                visible: content.backend.page === "main" && content.backend.notif.available
+                         && (content.backend.notif.count > 0 || content.backend.showEmptyNotifications)
+
+                RowLayout {
+                    id: notificationHeader
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: content.metrics.px(26)
+                    Layout.leftMargin: content.metrics.px(4)
+                    spacing: content.metrics.px(8)
+
+                    FText {
+                        Layout.fillWidth: true
+                        pal: content.pal
+                        metrics: content.metrics
+                        text: i18nc("@title", "Notifications")
+                        px: 14
+                        font.weight: Font.ExtraBold
+                    }
+                    TextButton {
+                        visible: content.backend.notif.count > 0
+                        pal: content.pal
+                        metrics: content.metrics
+                        radius: height / 2
+                        fill: content.pal.clearAllFill
+                        textColor: content.pal.controlText
+                        implicitHeight: content.metrics.px(26)
+                        fontSize: 12
+                        text: i18nc("@action:button", "Clear all")
+                        onClicked: content.backend.notif.clearAll()
+                    }
+                }
 
                 FText {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: content.metrics.px(44)
+                    visible: content.backend.notif.count === 0
                     pal: content.pal
                     metrics: content.metrics
-                    text: i18nc("@title", "Notifications")
-                    px: 14
-                    font.weight: Font.ExtraBold
+                    horizontalAlignment: Text.AlignHCenter
+                    color: content.pal.secondary
+                    text: content.backend.dnd.active ? i18nc("@info", "No notifications · Do not disturb is on")
+                                                     : i18nc("@info", "No notifications")
                 }
-                TextButton {
-                    visible: content.backend.notif.count > 0
-                    pal: content.pal
-                    metrics: content.metrics
-                    radius: height / 2
-                    fill: content.pal.clearAllFill
-                    textColor: content.pal.controlText
-                    implicitHeight: content.metrics.px(26)
-                    fontSize: 12
-                    text: i18nc("@action:button", "Clear all")
-                    onClicked: content.backend.notif.clearAll()
-                }
-            }
 
-            FText {
-                Layout.fillWidth: true
-                Layout.preferredHeight: content.metrics.px(44)
-                visible: content.backend.notif.count === 0
-                pal: content.pal
-                metrics: content.metrics
-                horizontalAlignment: Text.AlignHCenter
-                color: content.pal.secondary
-                text: content.backend.dnd.active ? i18nc("@info", "No notifications · Do not disturb is on")
-                                                 : i18nc("@info", "No notifications")
-            }
+                // At its full height: the sheet's Flickable scrolls it with the page.
+                ListView {
+                    id: notificationList
+                    visible: count > 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: contentHeight
+                    spacing: content.metrics.px(10)
+                    interactive: false
+                    model: content.backend.notif.available ? content.backend.notif.model : null
 
-            ListView {
-                id: notificationList
-                visible: count > 0
-                Layout.fillWidth: true
-                readonly property real available: content.maxContentHeight - content.innerTop - content.innerBottom
-                                                  - pageArea.Layout.preferredHeight - column.spacing
-                                                  - notificationHeader.Layout.preferredHeight - notifications.spacing
-                Layout.preferredHeight: Math.min(contentHeight, Math.max(content.metrics.px(140), available))
-                clip: true
-                spacing: content.metrics.px(10)
-                interactive: contentHeight > height
-                boundsBehavior: Flickable.StopAtBounds
-                model: content.backend.notif.available ? content.backend.notif.model : null
-
-                delegate: NotificationCard {
-                    width: ListView.view.width
-                    pal: content.pal
-                    metrics: content.metrics
-                    now: content.now
-                    onFocusInsideChanged: {
-                        if (focusInside) {
-                            notificationList.positionViewAtIndex(index, ListView.Contain);
+                    delegate: NotificationCard {
+                        id: noteCard
+                        width: ListView.view.width
+                        pal: content.pal
+                        metrics: content.metrics
+                        now: content.now
+                        onFocusInsideChanged: {
+                            if (focusInside) {
+                                content.ensureVisible(noteCard);
+                            }
                         }
-                    }
-                    onActionInvoked: name => {
-                        content.backend.notif.invokeAction(index, name, !!model.resident);
-                        if (name === "default") {
-                            content.backend.closeRequested();
+                        onActionInvoked: name => {
+                            content.backend.notif.invokeAction(index, name, !!model.resident);
+                            if (name === "default") {
+                                content.backend.closeRequested();
+                            }
                         }
+                        onCloseClicked: content.backend.notif.close(index)
+                        onKillJobClicked: content.backend.notif.killJob(index)
                     }
-                    onCloseClicked: content.backend.notif.close(index)
-                    onKillJobClicked: content.backend.notif.killJob(index)
-                }
 
-                add: Transition {
-                    NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 180 }
-                }
-                displaced: Transition {
-                    NumberAnimation { property: "y"; duration: 180; easing.type: Easing.OutCubic }
+                    add: Transition {
+                        enabled: content.pal.motion.animate
+                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: content.pal.motion.toggle }
+                    }
+                    displaced: Transition {
+                        enabled: content.pal.motion.animate
+                        NumberAnimation { property: "y"; duration: content.pal.motion.toggle; easing.type: content.pal.motion.standardEasing }
+                    }
                 }
             }
         }

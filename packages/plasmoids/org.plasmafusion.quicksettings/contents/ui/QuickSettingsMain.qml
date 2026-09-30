@@ -12,7 +12,10 @@ import "components"
 import "components/Icons.js" as Icons
 
 // Main page of the pop-up (Quick Settings board): battery chip and header
-// buttons, volume and brightness sliders, six tiles and the media card.
+// buttons, volume and brightness sliders, six tiles and the media card. In tablet posture
+// (TABLET 4.6) the header is 44 px, a tablet row (rotation lock, keyboard, full-screen apps, pen)
+// follows it, the sliders are 44 px bars and a Tablet mode tile joins the tiles; phone and
+// clipboard get rows here when the top bar has no room for them.
 // Text, the rows and chips that hold it and the gaps between them follow the user's text size
 // (`metrics`); the round icon buttons, sliders and the album art keep their board sizes.
 ColumnLayout {
@@ -29,21 +32,29 @@ ColumnLayout {
     readonly property alias bluetoothDetails: bluetoothTile.detailsButton
     readonly property alias audioDetails: audioChevron
 
+    readonly property bool tablet: pal.tablet
+    readonly property var tabletPolicy: backend.tabletPolicy
+    // The Do Not Disturb durations are shown (the tile's chevron).
+    property bool dndChoicesOpen: false
+
     spacing: metrics.px(14)
 
     // ---------------------------------------------------------------- header row
     RowLayout {
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.max(34, page.metrics.px(34))
-        spacing: 6
+        Layout.preferredHeight: page.tablet ? Math.max(44, page.metrics.px(34)) : Math.max(34, page.metrics.px(34))
+        spacing: page.tablet ? 12 : 6
 
         Rectangle {
             id: batteryChip
             visible: page.backend.battery.present
-            Layout.preferredHeight: page.metrics.px(34)
+            Layout.preferredHeight: page.tablet ? Math.max(44, page.metrics.px(34)) : page.metrics.px(34)
             Layout.preferredWidth: chipRow.implicitWidth + page.metrics.px(24)
             radius: height / 2
             color: chipHover.hovered ? page.pal.overlay(0.1) : page.pal.overlay(0.07)
+            Accessible.role: Accessible.Button
+            Accessible.name: i18nc("@action:button %1 battery charge", "Battery %1%, power settings", page.backend.battery.percent)
+            Accessible.onPressAction: page.backend.battery.openSettings()
 
             Row {
                 id: chipRow
@@ -62,6 +73,7 @@ ColumnLayout {
                     metrics: page.metrics
                     text: i18nc("@info battery charge", "%1%", page.backend.battery.percent)
                     font.weight: Font.ExtraBold
+                    font.features: { "tnum": 1 }
                 }
             }
             HoverHandler {
@@ -102,18 +114,21 @@ ColumnLayout {
         IconButton {
             id: screenshotButton
             pal: page.pal
+            size: page.tablet ? 44 : 34
             iconPath: Icons.screenshot
             text: i18nc("@action:button", "Take a screenshot")
             onClicked: page.backend.session.screenshot()
         }
         IconButton {
             pal: page.pal
+            size: page.tablet ? 44 : 34
             iconPath: Icons.settings
             text: i18nc("@action:button", "System Settings")
             onClicked: page.backend.session.openSystemSettings()
         }
         IconButton {
             pal: page.pal
+            size: page.tablet ? 44 : 34
             iconPath: Icons.lock
             text: i18nc("@action:button", "Lock the screen")
             enabled: page.backend.session.canLock
@@ -121,21 +136,93 @@ ColumnLayout {
         }
         IconButton {
             pal: page.pal
+            size: page.tablet ? 44 : 34
             iconPath: Icons.power
             text: i18nc("@action:button", "Shut down, restart or log out…")
             onClicked: page.backend.session.leave()
         }
     }
 
+    // ---------------------------------------------------------------- tablet row
+    // Four 44 px round toggles, 12 apart (TABLET 4.6); the label shows on a long press.
+    Row {
+        id: tabletRow
+        Layout.fillWidth: true
+        visible: page.tablet && page.tabletPolicy !== null
+        spacing: 12
+
+        IconButton {
+            id: rotationToggle
+            objectName: "tabletRow-rotation"
+            pal: page.pal
+            size: 44
+            iconPath: Icons.rotate
+            toggleOn: page.tabletPolicy ? page.tabletPolicy.rotationLocked : false
+            text: toggleOn ? i18nc("@action:button", "Rotation locked") : i18nc("@action:button", "Rotation lock")
+            Accessible.role: Accessible.CheckBox
+            Accessible.checkable: true
+            Accessible.checked: toggleOn
+            onClicked: page.tabletPolicy.setRotationLocked(!toggleOn)
+
+            // The lock badge while locked (owner decision T17).
+            Rectangle {
+                visible: rotationToggle.toggleOn
+                x: parent.width - width - 2
+                y: 2
+                width: 16
+                height: 16
+                radius: 8
+                color: page.pal.accentText
+                LineIcon {
+                    anchors.centerIn: parent
+                    size: 11
+                    path: Icons.lock
+                    color: page.pal.accent
+                }
+            }
+        }
+        IconButton {
+            objectName: "tabletRow-keyboard"
+            visible: page.tabletPolicy ? page.tabletPolicy.oskAvailable : false
+            pal: page.pal
+            size: 44
+            iconPath: Icons.keyboard
+            toggleOn: page.tabletPolicy ? page.tabletPolicy.oskVisible : false
+            text: toggleOn ? i18nc("@action:button", "Hide the keyboard") : i18nc("@action:button", "Show the keyboard")
+            onClicked: page.tabletPolicy.toggleOsk()
+        }
+        IconButton {
+            objectName: "tabletRow-fullscreen"
+            pal: page.pal
+            size: 44
+            iconPath: Icons.fullscreen
+            toggleOn: page.tabletPolicy ? page.tabletPolicy.windowMode === "fullscreen" : true
+            text: i18nc("@action:button", "Full-screen apps")
+            Accessible.role: Accessible.CheckBox
+            Accessible.checkable: true
+            Accessible.checked: toggleOn
+            onClicked: page.tabletPolicy.setWindowMode(toggleOn ? "windowed" : "fullscreen")
+        }
+        IconButton {
+            objectName: "tabletRow-pen"
+            visible: page.backend.penPresent
+            pal: page.pal
+            size: 44
+            iconPath: Icons.pen
+            text: i18nc("@action:button", "Pen menu")
+            onClicked: page.backend.penRequested()
+        }
+    }
+
     // ---------------------------------------------------------------- sliders
     ColumnLayout {
         Layout.fillWidth: true
-        spacing: 10
+        spacing: page.tablet ? 12 : 10
         visible: page.backend.audio.available || page.backend.display.brightnessAvailable
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 28
+            Layout.preferredHeight: page.pal.touch ? 44 : 28
             spacing: 12
             visible: page.backend.audio.available
 
@@ -150,8 +237,8 @@ ColumnLayout {
                 iconPath: ""
                 text: page.backend.audio.muted ? i18nc("@action:button", "Unmute") : i18nc("@action:button", "Mute")
                 onClicked: page.backend.audio.toggleMute()
-                Layout.preferredWidth: 18
-                Layout.preferredHeight: 28
+                Layout.preferredWidth: page.pal.touch ? 44 : 18
+                Layout.preferredHeight: page.pal.touch ? 44 : 28
 
                 VolumeGlyph {
                     anchors.centerIn: parent
@@ -170,8 +257,8 @@ ColumnLayout {
                 Accessible.name: i18nc("@label:slider", "Volume")
                 value: Math.min(1, page.backend.audio.volume)
                 onMoved: page.backend.audio.setVolume(value)
-                onPressedChanged: {
-                    if (!pressed) {
+                onDraggingChanged: {
+                    if (!dragging) {
                         value = Qt.binding(() => Math.min(1, page.backend.audio.volume));
                     }
                 }
@@ -186,7 +273,7 @@ ColumnLayout {
             IconButton {
                 id: audioChevron
                 pal: page.pal
-                size: 28
+                size: page.pal.touch ? 32 : 28
                 iconSize: 14
                 iconPath: Icons.chevronRight
                 text: i18nc("@action:button", "Choose audio output")
@@ -196,15 +283,19 @@ ColumnLayout {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 28
+            Layout.preferredHeight: page.pal.touch ? 44 : 28
             spacing: 12
             visible: page.backend.display.brightnessAvailable
 
-            LineIcon {
-                Layout.preferredWidth: 18
-                size: 18
-                path: Icons.brightness
-                color: page.pal.controlText
+            Item {
+                Layout.preferredWidth: page.pal.touch ? 44 : 18
+                Layout.preferredHeight: 28
+                LineIcon {
+                    anchors.centerIn: parent
+                    size: 18
+                    path: Icons.brightness
+                    color: page.pal.controlText
+                }
             }
             FusionSlider {
                 id: brightnessSlider
@@ -214,14 +305,14 @@ ColumnLayout {
                 Accessible.name: i18nc("@label:slider", "Screen brightness")
                 value: page.backend.display.brightness
                 onMoved: page.backend.display.setBrightness(value)
-                onPressedChanged: {
-                    if (!pressed) {
+                onDraggingChanged: {
+                    if (!dragging) {
                         value = Qt.binding(() => page.backend.display.brightness);
                     }
                 }
             }
             Item {
-                Layout.preferredWidth: 28
+                Layout.preferredWidth: audioChevron.implicitWidth
                 Layout.preferredHeight: 28
             }
         }
@@ -231,8 +322,8 @@ ColumnLayout {
     GridLayout {
         Layout.fillWidth: true
         columns: 2
-        rowSpacing: page.metrics.px(10)
-        columnSpacing: page.metrics.px(10)
+        rowSpacing: page.tablet ? 12 : page.metrics.px(10)
+        columnSpacing: page.tablet ? 12 : page.metrics.px(10)
         uniformCellWidths: true
 
         Tile {
@@ -299,7 +390,10 @@ ColumnLayout {
             iconPath: Icons.bellOff
             checked: page.backend.dnd.active
             available: page.backend.dnd.available
+            hasDetails: page.backend.dnd.available
+            detailsText: i18nc("@action:button", "Do not disturb for a while")
             onToggled: page.backend.dnd.toggle()
+            onDetailsRequested: page.dndChoicesOpen = !page.dndChoicesOpen
         }
         Tile {
             Layout.fillWidth: true
@@ -324,12 +418,105 @@ ColumnLayout {
             checked: page.backend.darkStyle.checked
             onToggled: page.backend.darkStyle.toggle()
         }
+        // Tablet mode Auto / On / Off (TABLET 3.2): shown where the posture can change by itself,
+        // or when it is not automatic.
+        Tile {
+            objectName: "tile-tabletmode"
+            Layout.fillWidth: true
+            visible: page.tabletPolicy !== null && (page.backend.tabletAvailable || page.tabletPolicy.tabletModeSetting !== "auto")
+            pal: page.pal
+            metrics: page.metrics
+            title: i18nc("@title tile", "Tablet mode")
+            subtitle: {
+                switch (page.tabletPolicy ? page.tabletPolicy.tabletModeSetting : "auto") {
+                case "on":
+                    return i18nc("@info:status tablet mode", "On");
+                case "off":
+                    return i18nc("@info:status tablet mode", "Off");
+                default:
+                    return i18nc("@info:status tablet mode follows the hinge", "Automatic");
+                }
+            }
+            iconPath: Icons.tablet
+            checked: page.tabletPolicy ? page.tabletPolicy.tabletModeSetting === "on" : false
+            toolTip: i18nc("@info:tooltip", "Click to switch between Automatic, On and Off")
+            onToggled: page.tabletPolicy.cycleTabletMode()
+        }
+    }
+
+    // Do Not Disturb for a while (G18).
+    Flow {
+        Layout.fillWidth: true
+        visible: page.dndChoicesOpen && page.backend.dnd.available
+        spacing: page.metrics.px(8)
+
+        Repeater {
+            model: [
+                { "id": "hour", "text": i18nc("@action:button do not disturb", "For 1 hour") },
+                { "id": "tomorrow", "text": i18nc("@action:button do not disturb", "Until tomorrow") },
+                { "id": "off", "text": page.backend.dnd.active ? i18nc("@action:button do not disturb", "Turn off")
+                                                              : i18nc("@action:button do not disturb", "Until turned off") }
+            ]
+            delegate: TextButton {
+                required property var modelData
+                objectName: "dnd-" + modelData.id
+                pal: page.pal
+                metrics: page.metrics
+                radius: height / 2
+                implicitHeight: page.pal.touch ? 44 : page.metrics.px(30)
+                fontSize: 12.5
+                text: modelData.text
+                onClicked: {
+                    if (modelData.id === "hour") {
+                        page.backend.dnd.forHour();
+                    } else if (modelData.id === "tomorrow") {
+                        page.backend.dnd.untilTomorrow();
+                    } else {
+                        page.backend.dnd.toggle();
+                    }
+                    page.dndChoicesOpen = false;
+                }
+            }
+        }
+    }
+
+    // Phone and clipboard, when the top bar has no room for their buttons (52 px rows).
+    ColumnLayout {
+        Layout.fillWidth: true
+        visible: page.backend.barCompact && (page.backend.phone.shown || page.backend.showClipboard)
+        spacing: page.metrics.px(4)
+
+        ListRow {
+            objectName: "sheet-clipboard"
+            Layout.fillWidth: true
+            implicitHeight: page.metrics.px(52)
+            visible: page.backend.showClipboard
+            pal: page.pal
+            metrics: page.metrics
+            iconPath: Icons.clipboard
+            text: i18nc("@action:button", "Clipboard")
+            trailingPath: Icons.chevronRight
+            onClicked: page.backend.session.openClipboard()
+        }
+        ListRow {
+            objectName: "sheet-phone"
+            Layout.fillWidth: true
+            implicitHeight: page.metrics.px(52)
+            visible: page.backend.phone.shown
+            pal: page.pal
+            metrics: page.metrics
+            iconPath: Icons.phone
+            text: page.backend.phone.deviceName || i18nc("@action:button", "Phone")
+            status: i18nc("@info:status", "Connected")
+            trailingPath: Icons.chevronRight
+            onClicked: page.backend.phone.open()
+        }
     }
 
     // ---------------------------------------------------------------- media card
     Rectangle {
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.max(64, mediaText.implicitHeight + page.metrics.px(20))
+        Layout.preferredHeight: Math.max(page.tablet ? 72 : 64, mediaText.implicitHeight + page.metrics.px(20))
         visible: page.backend.media.available
         radius: 16
         color: page.pal.overlay(0.06)
@@ -361,6 +548,9 @@ ColumnLayout {
                     source: page.backend.media.iconName || "emblem-music-symbolic"
                     fallback: "emblem-music-symbolic"
                 }
+                Accessible.role: Accessible.Button
+                Accessible.name: i18nc("@action:button", "Show the player")
+                Accessible.onPressAction: page.backend.media.raise()
                 TapHandler {
                     enabled: page.backend.media.canRaise
                     onTapped: page.backend.media.raise()

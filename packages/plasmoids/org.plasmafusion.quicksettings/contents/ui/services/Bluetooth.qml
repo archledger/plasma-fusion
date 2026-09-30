@@ -5,9 +5,12 @@ import QtQuick
 import org.kde.bluezqt as BluezQt
 import org.kde.plasma.private.bluetooth as PlasmaBt
 
-// Bluetooth through BluezQt, sharing bluedevil's device state model.
+// Bluetooth through BluezQt, sharing bluedevil's device state model. The device list model is
+// created only while the Bluetooth page is shown (`listVisible`, BACKLOG S2).
 Item {
     id: bt
+
+    property bool listVisible: false
 
     readonly property bool available: BluezQt.Manager.adapters.length > 0 || BluezQt.Manager.bluetoothBlocked
     readonly property bool powered: BluezQt.Manager.bluetoothOperational
@@ -15,7 +18,7 @@ Item {
     readonly property var connectedDevices: BluezQt.Manager.connectedDevices
     readonly property int connectedCount: connectedDevices.length
     readonly property string firstConnectedName: connectedCount > 0 ? (connectedDevices[0].name || "") : ""
-    readonly property var devicesModel: devices
+    readonly property var devicesModel: devices.object
 
     function setEnabled(on: bool) {
         BluezQt.Manager.bluetoothBlocked = !on;
@@ -39,9 +42,13 @@ Item {
         PlasmaBt.LaunchApp.launchWizard();
     }
 
-    PlasmaBt.DevicesProxyModel {
+    Instantiator {
         id: devices
-        hideBlockedDevices: true
-        sourceModel: PlasmaBt.SharedDevicesStateProxyModel
+        active: bt.listVisible
+        model: 1
+        delegate: PlasmaBt.DevicesProxyModel {
+            hideBlockedDevices: true
+            sourceModel: PlasmaBt.SharedDevicesStateProxyModel
+        }
     }
 }

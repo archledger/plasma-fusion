@@ -34,6 +34,30 @@ Item {
         return "";
     }
 
+    // Do Not Disturb until a time (G18: "1 hour", "until tomorrow"). The notification settings
+    // keep the time; the server is inhibited at once and released when it passes.
+    function dndUntil(until) {
+        settings.notificationsInhibitedUntil = until;
+        settings.save();
+        NotificationManager.Server.inhibited = true;
+        dndExpiry.restart();
+    }
+    Timer {
+        id: dndExpiry
+        running: notif.dndActive && notif.inhibitedUntil !== undefined && notif.inhibitedUntil !== null
+        repeat: true
+        // Checked every minute while a timed Do Not Disturb is on.
+        interval: 60000
+        onTriggered: {
+            const until = notif.inhibitedUntil;
+            if (until && !isNaN(until.getTime()) && until.getTime() <= Date.now() && !notif.inhibitedByApp) {
+                settings.notificationsInhibitedUntil = undefined;
+                settings.save();
+                NotificationManager.Server.inhibited = false;
+            }
+        }
+    }
+
     function toggleDnd() {
         const before = dndActive;
         DBus.SessionBus.asyncCall({

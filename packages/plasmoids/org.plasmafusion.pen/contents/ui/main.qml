@@ -47,6 +47,8 @@ PlasmoidItem {
         id: penExec
     }
 
+    // A pen is connected (quick settings' tablet row reads it from the same bar).
+    readonly property bool hasPen: penDevice.hasPen
     readonly property string showButton: String(Plasmoid.configuration.showButton)
     readonly property bool buttonShown: penDevice.hasPen && (showButton === "always" || (showButton === "tablet" && tabletState.tablet))
     // The global shortcut as portable text ("Meta+Shift+W"), for the click-button choice.

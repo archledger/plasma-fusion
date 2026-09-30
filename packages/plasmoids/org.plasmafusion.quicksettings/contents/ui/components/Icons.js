@@ -53,3 +53,9 @@ var airplane = "M12 3c1 0 1.5 1 1.5 2v4.5L21 14v2l-7.5-2.5V18l2 1.5V21L12 20l-3.
 var plus = "M12 5v14M5 12h14";
 var headphones = "M4 15v-3a8 8 0 0 1 16 0v3M4 15a2 2 0 0 1 2-2h1v7H6a2 2 0 0 1-2-2zM20 15a2 2 0 0 0-2-2h-1v7h1a2 2 0 0 0 2-2z";
 var check = "M5 12.5l4.5 4.5L19 7.5";
+
+// Tablet row and tile (TABLET 4.6).
+var rotate = "M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5";
+var fullscreen = "M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5";
+var pen = "M4 20l4.2-1 11-11a2.1 2.1 0 0 0-3-3l-11 11zM14.5 6.5l3 3";
+var tablet = "M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2";

@@ -5,8 +5,9 @@ import QtQuick
 import QtQuick.Templates as T
 import org.kde.plasma.core as PlasmaCore
 
-// Quick settings tile: 60 px tall, 16 px radius, accent fill when on. With
-// "hasDetails" the right part is a separate chevron button that opens a list.
+// Quick settings tile: 60 px tall, 16 px radius, accent fill when on (64 px, radius 18 in tablet
+// posture, TABLET 4.6). With "hasDetails" the right part is a separate chevron button that opens
+// a list (44 px wide in touch mode).
 // Height, paddings, icons and text follow the user's text size (`metrics`); the radius does not.
 Item {
     id: tile
@@ -29,7 +30,8 @@ Item {
     readonly property alias mainButton: mainArea
     readonly property alias detailsButton: chevronArea
 
-    implicitHeight: metrics.px(60)
+    readonly property real radius: pal.tablet ? 18 : 16
+    implicitHeight: metrics.px(pal.tablet ? 64 : 60)
     implicitWidth: 158
     opacity: available ? 1 : 0.55
 
@@ -41,17 +43,20 @@ Item {
     Rectangle {
         id: background
         anchors.fill: parent
-        radius: 16
+        radius: tile.radius
         color: {
             if (tile.checked) {
                 return tile.pressed ? Qt.darker(tile.pal.accent, 1.12) : (tile.hovered ? Qt.lighter(tile.pal.accent, 1.1) : tile.pal.accent);
             }
             return tile.pal.overlay(tile.pressed ? 0.15 : (tile.hovered ? 0.12 : 0.08));
         }
-        Behavior on color { ColorAnimation { duration: 140 } }
+        Behavior on color {
+            enabled: tile.pal.motion.animate
+            ColorAnimation { duration: tile.pal.motion.hover }
+        }
 
         FocusRing {
-            baseRadius: 16
+            baseRadius: tile.radius
             ringColor: tile.pal.focus
             shown: mainArea.visualFocus
         }
@@ -145,7 +150,7 @@ Item {
     T.AbstractButton {
         id: chevronArea
         visible: tile.hasDetails
-        width: tile.hasDetails ? tile.metrics.px(34) : 0
+        width: tile.hasDetails ? Math.max(tile.metrics.px(34), tile.pal.touch ? 44 : 0) : 0
         anchors {
             right: parent.right
             top: parent.top

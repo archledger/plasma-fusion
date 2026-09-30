@@ -14,6 +14,9 @@ import "components/Icons.js" as Icons
 // app icon and name, time, summary, body, job progress and action buttons.
 // Text, the rows and buttons that hold it and the gaps follow the user's text size
 // (`metrics`); the radius, the border, the progress bar and the close button do not.
+// Touch mode (TABLET 4.6, ADAPTIVE 5.3): the close button is always shown (32 px drawn, 44 px
+// target) beside the time, actions are 44 px tall, and a horizontal swipe dismisses the card
+// (40 % of its width or 800 px/s; the card follows the finger).
 Rectangle {
     id: card
 
@@ -35,7 +38,7 @@ Rectangle {
     readonly property bool primaryAction: model.urgency === 4 || model.timeout === 0
     readonly property bool hovered: cardHover.hovered
     readonly property bool closable: !jobRunning && model.closable !== false
-    readonly property bool showClose: closable && (hovered || closeButton.activeFocus)
+    readonly property bool showClose: closable && (pal.touch || hovered || closeButton.activeFocus)
     // Keyboard focus is on one of this card's buttons (the list scrolls it into view).
     readonly property bool focusInside: {
         for (let item = Window.activeFocusItem; item; item = item.parent) {
@@ -78,6 +81,9 @@ Rectangle {
     }
 
     implicitHeight: column.implicitHeight + 2 * column.anchors.margins
+    Accessible.role: Accessible.ListItem
+    Accessible.name: model.summary || model.applicationName || ""
+    Accessible.description: model.applicationName || ""
     radius: 18
     color: pal.overlay(0.06)
     border.width: 1
@@ -85,6 +91,69 @@ Rectangle {
 
     HoverHandler {
         id: cardHover
+    }
+
+    // Swipe to dismiss (touch).
+    transform: Translate {
+        id: swipeShift
+        x: 0
+    }
+    opacity: 1 - Math.min(0.6, Math.abs(swipeShift.x) / Math.max(1, width))
+    DragHandler {
+        id: swipe
+        enabled: card.closable
+        acceptedDevices: PointerDevice.TouchScreen
+        target: null
+        yAxis.enabled: false
+        dragThreshold: 16
+        property real lastX: 0
+        property real lastTime: 0
+        property real velocity: 0
+        onActiveChanged: {
+            if (active) {
+                swipeBack.stop();
+                velocity = 0;
+                lastX = centroid.position.x;
+                lastTime = Date.now();
+                return;
+            }
+            const dx = swipeShift.x;
+            if (Math.abs(dx) > card.width * 0.4 || Math.abs(velocity) > 800) {
+                swipeOut.to = (dx !== 0 ? Math.sign(dx) : Math.sign(velocity)) * card.width;
+                swipeOut.start();
+            } else {
+                swipeBack.start();
+            }
+        }
+        onCentroidChanged: {
+            if (!active) {
+                return;
+            }
+            const now = Date.now();
+            const x = centroid.position.x;
+            if (now > lastTime) {
+                velocity = (x - lastX) / (now - lastTime) * 1000;
+            }
+            lastX = x;
+            lastTime = now;
+            swipeShift.x = centroid.position.x - centroid.pressPosition.x;
+        }
+    }
+    NumberAnimation {
+        id: swipeBack
+        target: swipeShift
+        property: "x"
+        to: 0
+        duration: card.pal.motion.popupOut
+        easing.type: card.pal.motion.standardEasing
+    }
+    NumberAnimation {
+        id: swipeOut
+        target: swipeShift
+        property: "x"
+        duration: card.pal.motion.popupOut
+        easing.type: card.pal.motion.exitEasing
+        onFinished: card.closeClicked()
     }
     TapHandler {
         enabled: !!card.model.hasDefaultAction
@@ -120,17 +189,20 @@ Rectangle {
                 px: 11.5
                 font.weight: Font.ExtraBold
             }
-            // Time, replaced by the close button on hover or keyboard focus. The button
-            // stays in the tab chain (transparent) so keyboard users can close a card too.
+            // Time, replaced by the close button on hover or keyboard focus (in touch mode
+            // both are shown). The button stays in the tab chain (transparent) so keyboard
+            // users can close a card too.
             Item {
-                Layout.preferredWidth: card.showClose ? closeButton.implicitWidth : timeLabel.implicitWidth
+                Layout.preferredWidth: card.pal.touch ? timeLabel.implicitWidth + card.metrics.px(4) + closeButton.implicitWidth
+                                                      : card.showClose ? closeButton.implicitWidth : timeLabel.implicitWidth
                 Layout.preferredHeight: card.metrics.px(22)
 
                 FText {
                     id: timeLabel
-                    anchors.right: parent.right
+                    anchors.right: card.pal.touch ? closeButton.left : parent.right
+                    anchors.rightMargin: card.pal.touch ? card.metrics.px(4) : 0
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: !card.showClose
+                    visible: card.pal.touch || !card.showClose
                     pal: card.pal
                     metrics: card.metrics
                     text: card.relativeTime(card.model.created, card.model.updated)
@@ -144,8 +216,8 @@ Rectangle {
                     enabled: card.closable
                     opacity: card.showClose ? 1 : 0
                     pal: card.pal
-                    size: 22
-                    iconSize: 12
+                    size: card.pal.touch ? 32 : 22
+                    iconSize: card.pal.touch ? 14 : 12
                     fill: "transparent"
                     iconPath: Icons.close
                     text: i18nc("@action:button", "Close notification")
@@ -230,8 +302,8 @@ Rectangle {
                     Layout.preferredWidth: 1
                     pal: card.pal
                     metrics: card.metrics
-                    implicitHeight: card.metrics.px(32)
-                    radius: 10
+                    implicitHeight: card.pal.touch ? Math.max(44, card.metrics.px(32)) : card.metrics.px(32)
+                    radius: card.pal.touch ? 12 : 10
                     fontSize: 12.5
                     primary: index === 0 && card.primaryAction
                     fontWeight: primary ? Font.ExtraBold : Font.Bold

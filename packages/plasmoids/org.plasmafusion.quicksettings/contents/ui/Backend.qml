@@ -27,6 +27,18 @@ Item {
     property string page: "main"
     // The pop-up was opened from the bell: show the notification list even when empty.
     property bool showEmptyNotifications: false
+    // Tablet posture (FusionTablet) and whether it can change by itself; the screen's name.
+    property bool tablet: false
+    property bool postureKnown: true
+    property bool tabletAvailable: false
+    property string screenName: ""
+    property string keyboardPolicy: "tablet"
+    // Phone and clipboard live in the sheet instead of the bar (tablet posture, or the top bar's
+    // width budget at step 2).
+    property bool barCompact: false
+    // A pen is connected (the pen widget in the same bar says so); its menu opens on request.
+    property bool penPresent: false
+    signal penRequested()
 
     // Asks the owner to close the pop-up (after launching something).
     signal closeRequested()
@@ -66,6 +78,32 @@ Item {
     Loader { id: btLoader; asynchronous: true; source: "services/Bluetooth.qml" }
     Loader { id: sessionLoader; asynchronous: true; source: "services/Session.qml" }
     Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
+    Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
+    readonly property var tabletPolicy: tabletLoader.item
+    Binding {
+        target: tabletLoader.item
+        property: "tablet"
+        value: backend.tablet
+        when: tabletLoader.item !== null
+    }
+    Binding {
+        target: tabletLoader.item
+        property: "postureKnown"
+        value: backend.postureKnown
+        when: tabletLoader.item !== null
+    }
+    Binding {
+        target: tabletLoader.item
+        property: "keyboardPolicy"
+        value: backend.keyboardPolicy
+        when: tabletLoader.item !== null
+    }
+    Binding {
+        target: tabletLoader.item
+        property: "screenName"
+        value: backend.screenName
+        when: tabletLoader.item !== null
+    }
 
     readonly property var sessionService: sessionLoader.item
     readonly property var execService: execLoader.item
@@ -75,6 +113,12 @@ Item {
         property: "listVisible"
         value: backend.popupOpen && backend.page === "wifi"
         when: netLoader.item !== null
+    }
+    Binding {
+        target: btLoader.item
+        property: "listVisible"
+        value: backend.popupOpen && backend.page === "bluetooth"
+        when: btLoader.item !== null
     }
     Binding {
         target: profilesLoader.item
@@ -311,6 +355,20 @@ Item {
         function toggle() {
             if (s) {
                 s.toggleDnd();
+            }
+        }
+        // G18: for one hour, or until tomorrow morning (06:00).
+        function forHour() {
+            if (s) {
+                s.dndUntil(new Date(Date.now() + 3600 * 1000));
+            }
+        }
+        function untilTomorrow() {
+            if (s) {
+                const d = new Date();
+                d.setDate(d.getDate() + 1);
+                d.setHours(6, 0, 0, 0);
+                s.dndUntil(d);
             }
         }
         function openSettings() {

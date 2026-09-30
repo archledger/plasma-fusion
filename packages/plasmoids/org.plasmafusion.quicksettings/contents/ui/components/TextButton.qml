@@ -42,7 +42,10 @@ T.AbstractButton {
             }
             return button.hovered ? Qt.rgba(button.fill.r, button.fill.g, button.fill.b, Math.min(1, button.fill.a + 0.05)) : button.fill;
         }
-        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on color {
+            enabled: button.pal.motion.animate
+            ColorAnimation { duration: button.pal.motion.hover }
+        }
 
         FocusRing {
             baseRadius: button.radius

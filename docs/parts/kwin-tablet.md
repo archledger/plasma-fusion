@@ -74,7 +74,9 @@ needed.
   second screen appears and comes back when it goes.
 - **Kill switch**: disabling the script (`kwriteconfig6 --file kwinrc --group Plugins --key
   plasmafusion-tabletEnabled false`, then `qdbus6 org.kde.KWin /KWin reconfigure`) runs its leave step
-  first, so the windows and options come back.
+  first, so the windows and options come back. When KWin itself quits (logout, `--replace`) nothing is
+  restored: the scripts are destroyed after the workspace, and a leave step there crashed KWin at exit
+  (found in QS-1's private sessions that ended in tablet mode; the script notes `aboutToQuit`).
 - **Idle**: no timers except the 300 ms debounce and the 500 ms panel coalescing, both single-shot.
 
 ## Verification
@@ -127,9 +129,10 @@ its title bar, Dolphin still full screen, Konsole full screen again after the ne
 
 ## Needs from other parts
 
-- QS-1: accept `openRequest` = `<mode>:<nonce>` (the launcher's form) with mode `sheet` (right edge);
-  DEVICE-1's Meta+N writes `notifications <ms>` today and should move to `notifications:<ms>` when
-  QS-1 lands. QS-1's "Full-screen apps" toggle writes `WindowMode` and invokes the shortcut.
+- QS-1 (done): quick settings accepts `openRequest` = `<mode>:<nonce>[:<output>]` with mode `sheet`
+  (right edge) and `notifications` (Meta+N now writes `notifications:<ms>`); without an output only
+  the widget on KWin's active screen opens. Its "Full-screen apps" toggle writes `WindowMode` and
+  invokes the shortcut.
 - The quick-settings keyboard policy (TABLET 3.3, `services/TabletPolicy.qml`) is QS-1's; the script does
   not start or stop the on-screen keyboard.
 - DOCK-2: the tablet dock content fits a 96 px panel (the script sets the thickness).
