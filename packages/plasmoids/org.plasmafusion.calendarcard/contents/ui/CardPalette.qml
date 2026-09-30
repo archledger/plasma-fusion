@@ -29,7 +29,8 @@ Item {
     // Accent (Selection background, #2f6fdf in both Fusion schemes; a user accent still applies).
     readonly property color accent: Kirigami.Theme.highlightColor
     readonly property color accentText: "#ffffff"
-    readonly property color focusRing: dark ? "#8ab8ff" : "#2f6fdf"
+    // The focus ring follows the user's accent too (decision 3).
+    readonly property color focusRing: Kirigami.Theme.focusColor
     readonly property color cpu: "#3cc4b0"
     readonly property color memory: "#5b9dff"
 

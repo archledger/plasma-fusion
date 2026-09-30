@@ -653,3 +653,37 @@ and light at scale 4/3 from before the fixes, location keyboard flow, calendar f
 `review-logs/` (CPU measurements, KOrganizer stub calls, layout dumps, kded modules, the scenario
 and helper scripts).
 
+
+## CARD-2 (2026-09-30): the system card gives way, tabular figures
+
+Work package CARD-2 of the one-pass plan (ADAPTIVE 5.9, GAPS D5, TABLET 4.14, BACKLOG M2 and M8), built
+by the lead directly.
+
+### Changes
+
+- **The system card gives way**: in portrait, and wherever its lower edge (with the style's 14 px frame)
+  would come closer than 16 px to the dock's area (104 px; 112 in tablet posture, read from KWin through
+  `FusionTablet`), it draws nothing: no frame (`NoBackground`), no content, no sensor reads. It reads its
+  own place in the desktop window whenever the card, its container or the available area changes. The
+  layout script still leaves the card out where it does not fit at install time; this covers the
+  shapes that come later (rotation, another scale, a larger text size).
+- **Tabular figures** (M8) for the values that change in place: the CPU and memory values
+  (`CardText.tabular`). The weather and calendar cards keep their figures, so their look is unchanged.
+- The focus ring follows the accent (`Kirigami.Theme.focusColor`) in all three cards.
+- Settings pages: the calendar's week-start combo and the weather card's two combos take their index
+  from the model (`indexOfValue()` is -1 until the combo has read it); accessible names for the
+  calendar card and the list of places found.
+- Already in place and checked again: no card writes its configuration (BACKLOG M2 rule; positions come
+  from LAYOUT-1's keys); a day click opens KOrganizer when it is installed (decision 7); without
+  ksystemstats the values show "–".
+
+### Verification
+
+- `qmllint`, `a11y-lint`, `motion-lint`: no findings in the three cards; the build's check that the
+  shared files are identical passes.
+- Private session `c2a` (1920 x 1200 at 4/3; `build/c2/scen-c2a.sh`): landscape shows three cards;
+  rotated to portrait the weather and calendar cards sit side by side under the bar and the system card
+  draws nothing; back in landscape it is shown again; the desktop's `ItemGeometries*` keys are
+  byte-identical before and after (M2); no warnings.
+- `c2b` (installed at 1366 x 768, then the scale raised to 1.25, 1093 x 614 logical): the card would end
+  at 464 with room to 390 and draws nothing.

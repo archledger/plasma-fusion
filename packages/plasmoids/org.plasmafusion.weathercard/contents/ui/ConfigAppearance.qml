@@ -36,7 +36,8 @@ KCM.SimpleKCM {
                 { "label": i18nc("@item:inlistbox card title", "Local weather"), "value": 0 },
                 { "label": i18nc("@item:inlistbox card title", "Place name"), "value": 1 }
             ]
-            currentIndex: Math.max(0, indexOfValue(page.cfg_titleMode))
+            // Looked up in the list itself: indexOfValue() answers -1 until the combo has read it.
+            currentIndex: Math.max(0, model.findIndex(entry => entry.value === page.cfg_titleMode))
             onActivated: page.cfg_titleMode = currentValue
         }
 
@@ -50,7 +51,7 @@ KCM.SimpleKCM {
                 { "label": i18nc("@item:inlistbox", "Celsius (°C)"), "value": 1 },
                 { "label": i18nc("@item:inlistbox", "Fahrenheit (°F)"), "value": 2 }
             ]
-            currentIndex: Math.max(0, indexOfValue(page.cfg_temperatureUnit))
+            currentIndex: Math.max(0, model.findIndex(entry => entry.value === page.cfg_temperatureUnit))
             onActivated: page.cfg_temperatureUnit = currentValue
         }
 

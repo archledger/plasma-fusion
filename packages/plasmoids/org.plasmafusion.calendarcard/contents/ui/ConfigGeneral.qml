@@ -31,7 +31,8 @@ KCM.SimpleKCM {
                 }
                 return days;
             }
-            currentIndex: Math.max(0, indexOfValue(page.cfg_firstDayOfWeek))
+            // Looked up in the list itself: indexOfValue() answers -1 until the combo has read it.
+            currentIndex: Math.max(0, model.findIndex(entry => entry.value === page.cfg_firstDayOfWeek))
             onActivated: page.cfg_firstDayOfWeek = currentValue
         }
 

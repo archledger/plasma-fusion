@@ -155,6 +155,9 @@ PlasmoidItem {
     fullRepresentation: FocusScope {
         id: card
 
+        Accessible.role: Accessible.Pane
+        Accessible.name: i18nc("@title accessible name of the calendar card", "Calendar")
+
         // The minimum never exceeds the board size: the desktop keeps a widget at least as large
         // as its minimum and stores the enlarged geometry, so a text size seen only for a moment
         // (the shell's font while a Global Theme is being applied) would grow the card for good.

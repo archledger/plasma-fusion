@@ -26,16 +26,36 @@ import org.kde.taskmanager as TaskManager
 // - a bar steps to its new value (one frame) and glides only for a change of 10 points or more;
 // - the sensors are off while nobody can see the card: a maximized or full-screen window on the
 //   current virtual desktop of its screen, the card not shown, or the session locked.
+//
+// The card is the first to give way (ADAPTIVE 5.9, GAPS D5): in portrait, and wherever it would
+// reach into the dock's area (104 px; 112 in tablet posture, TABLET 4.14), it draws nothing (no
+// frame, no content) and reads no sensors.
 PlasmoidItem {
     id: root
 
-    Plasmoid.backgroundHints: PlasmaCore.Types.StandardBackground
+    Plasmoid.backgroundHints: hiddenByLayout ? PlasmaCore.Types.NoBackground : PlasmaCore.Types.StandardBackground
     preferredRepresentation: fullRepresentation
+    FusionTablet {
+        id: tabletState
+    }
     // Text scale and pixel grid of the card (docs/parts/desktop-cards.md, "Text scale").
     FusionMetrics {
         id: m
         area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+        tablet: tabletState.tablet
     }
+
+    // --- Room on the desktop ---
+    // The card's lower edge in the desktop window (the content's, plus the style's 14 px frame),
+    // set by the card; the room ends 16 px above the dock's area.
+    property real cardBottom: 0
+    readonly property int dockArea: tabletState.tablet ? 112 : 104
+    readonly property rect room: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 0, 0)
+    readonly property bool overBudget: cardBottom > 0 && room.height > 0 && cardBottom > room.y + room.height - dockArea - 16 + 1
+    readonly property bool hiddenByLayout: m.portrait || overBudget
+    onHiddenByLayoutChanged: console.info("systemcard: " + (hiddenByLayout ? "hidden" : "shown") + " (portrait " + m.portrait
+                                          + ", bottom " + Math.round(cardBottom) + ", room to "
+                                          + Math.round(room.y + room.height - dockArea - 16) + ")")
     // Board card 192 x 92 minus the style's 14 px frame margins (the desktop's 16 px grid makes
     // the card 192 x 96), scaled with the text (the layout script sizes the card the same way).
     // Always the card itself: switchWidth/switchHeight would show the icon whenever the card is
@@ -143,7 +163,7 @@ PlasmoidItem {
         });
     }
 
-    readonly property bool sampling: cardShown && !covered && !sessionLocked
+    readonly property bool sampling: cardShown && !hiddenByLayout && !covered && !sessionLocked
 
     // ksystemstats stops reading CPU and memory while nobody subscribes, so after a pause (and at
     // start) its first reply is the value from before the pause and its first CPU tick the average
@@ -255,6 +275,33 @@ PlasmoidItem {
 
         CardPalette { id: cardPalette }
 
+        // Where the card ends on the desktop (see "Room on the desktop"): read again whenever
+        // the card or its place changes.
+        function reportBottom(): void {
+            if (card.Window.window) {
+                root.cardBottom = card.mapToItem(null, 0, card.height).y + 14;
+            }
+        }
+        onHeightChanged: Qt.callLater(reportBottom)
+        onVisibleChanged: Qt.callLater(reportBottom)
+        Component.onCompleted: Qt.callLater(reportBottom)
+        Connections {
+            target: root.parent
+            ignoreUnknownSignals: true
+            function onYChanged() {
+                Qt.callLater(card.reportBottom);
+            }
+            function onHeightChanged() {
+                Qt.callLater(card.reportBottom);
+            }
+        }
+        Connections {
+            target: root
+            function onRoomChanged() {
+                Qt.callLater(card.reportBottom);
+            }
+        }
+
         component Meter: ColumnLayout {
             id: meter
             property string label
@@ -284,6 +331,7 @@ PlasmoidItem {
                     metrics: m
                     px: 12
                     weight: 700
+                    tabular: true
                     text: meter.value
                 }
             }
@@ -349,6 +397,7 @@ PlasmoidItem {
             width: (card.fitScale < 1 ? root.contentWidth : parent.width) - 2 * 3
             scale: card.fitScale
             spacing: m.px(10)
+            visible: !root.hiddenByLayout
 
             Meter {
                 label: i18nc("@label processor load", "CPU")

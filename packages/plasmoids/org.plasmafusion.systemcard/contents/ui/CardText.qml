@@ -15,12 +15,15 @@ Text {
     property bool display: false
     property real px: 13
     property int weight: 400
+    // Tabular figures, for numbers that change in place (BACKLOG M8).
+    property bool tabular: false
 
     color: pal.text
     font.family: display ? metrics.displayFamily : metrics.family
     // Logical pixels to points at Qt's 96 dpi logical resolution.
     font.pointSize: metrics.font(px) * 0.75
     font.weight: weight
+    font.features: tabular ? { "tnum": 1 } : ({})
     textFormat: Text.PlainText
     maximumLineCount: 1
     elide: Text.ElideRight

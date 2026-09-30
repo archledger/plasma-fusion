@@ -223,6 +223,7 @@ KCM.ScrollViewKCM {
 
     view: ListView {
         id: placesView
+        Accessible.name: i18nc("@title accessible name of the list of places found", "Places found")
         model: ListModel {
             id: results
         }
