@@ -32,9 +32,12 @@ import org.kde.ksvg as KSvg
 // view back to its full view after its menu changed (another window, a menu update): the full
 // view is kept, unparented, and its layout keeps a deleted item (tested in private sessions
 // t2m, E1-E6: compact and back without a menu change is safe, after one it crashes; neither
-// destroy() nor a layout rebuild from outside helps). So the menu goes back to full only while
-// that is safe: the full view was never built (the menu loaded compact) or its menu has not
-// changed since. Otherwise it stays compact until plasmashell starts again. `menuPolicy`
+// destroy() nor a layout rebuild from outside helps). A hidden layout does not lay out, so the
+// same holds for a change while the applet hides its full view because the active window has
+// no menu (private session ov2: no menu, a new window's menu, compact at once, back: crash). So
+// the menu goes back to full only while that is safe: the full view was never built (the menu
+// loaded compact) or it has drawn the current menu while shown (`fullSeenGeneration`).
+// Otherwise it stays compact until plasmashell starts again. `menuPolicy`
 // "centre" (the default, ADAPTIVE 5.1) compacts it as the first step whenever the pill cannot
 // stay centred with it; "overlap" compacts it only when the bar would otherwise overlap: the
 // pill may then leave the middle, and the menu is compacted (and stuck) far less often.
@@ -93,11 +96,36 @@ Item {
     property real compactMenuWidth: metrics.px(34)
     // Measured full view minus the model estimate, last seen.
     property real menuCorrection: 0
-    // Menu changes counted by the delegates below; the count when the menu was compacted.
+    // Menu changes counted by the delegates below.
     property int menuGeneration: 0
-    property int compactedGeneration: -1
+    // The full view while it is in the bar and visible (the applet hides it when the active
+    // window has no menu; compact, it is unparented).
+    readonly property Item fullView: menuApplet ? menuApplet.fullRepresentationItem : null
+    readonly property bool fullShown: fullView !== null && !menuCompact && fullView.visible && fullView.parent !== null
+    // The last menu generation the full view has laid out: two frames drawn while it was shown
+    // with it (the second frame's polish comes after the change).
+    property int fullSeenGeneration: -1
+    property int framesSinceChange: 0
+    onFullShownChanged: noteMenuChange()
+    onMenuGenerationChanged: noteMenuChange()
+    function noteMenuChange() {
+        framesSinceChange = 0;
+        if (fullShown && fullSeenGeneration !== menuGeneration) {
+            fullView.Window.window?.update();
+        }
+    }
+    Connections {
+        target: budget.fullShown && budget.fullSeenGeneration !== budget.menuGeneration ? budget.fullView.Window.window : null
+        function onFrameSwapped() {
+            if (++budget.framesSinceChange >= 2) {
+                budget.fullSeenGeneration = budget.menuGeneration;
+            } else {
+                budget.fullView.Window.window?.update();
+            }
+        }
+    }
     // Going back to the full view is safe (see the header).
-    readonly property bool menuExpandSafe: !menuApplet || !menuApplet.fullRepresentationItem || compactedGeneration === menuGeneration
+    readonly property bool menuExpandSafe: !menuApplet || !fullView || fullSeenGeneration === menuGeneration
     property bool stuckReported: false
 
     KSvg.FrameSvgItem {
@@ -355,8 +383,8 @@ Item {
             if (!applet || applet.plasmoid.configuration.compactView === compact || (!compact && !budget.menuExpandSafe)) {
                 return;
             }
-            console.info("clockpill: width budget: global menu " + (compact ? "compact" : "full"));
-            budget.compactedGeneration = budget.menuGeneration;
+            console.info("clockpill: width budget: global menu " + (compact ? "compact" : "full")
+                         + " (menu " + budget.menuGeneration + ", laid out " + budget.fullSeenGeneration + ")");
             budget.menuCompactedWritten(compact);
             applet.plasmoid.configuration.compactView = compact;
         }

@@ -451,9 +451,22 @@ built by the lead directly.
   its layout keeps a deleted item; libplasma `AppletQuickItemPrivate::compactRepresentationCheck`).
   Private sessions t2m, E1-E6: compact and back without a menu change is safe; after an app switch
   it crashes every time; `destroy()` on the cached view is refused and a forced layout rebuild does
-  not help; a menu that loaded compact (no full view built yet) switches back safely. So the budget
-  switches the menu back only in those safe cases; otherwise it stays compact until plasmashell
-  starts again (one log line says so). `menuPolicy=overlap` compacts it only when the bar would
+  not help; a menu that loaded compact (no full view built yet) switches back safely. A hidden
+  layout does not lay out, so a change while the applet hides its full view (the active window has
+  no menu) counts too: private session ov2 (tablet, portrait, no menu, then Konsole's menu and the
+  compact switch in the same moment, back to landscape) crashed; after the fix below, ov3 and
+  oB1-oB3 did not (the deployed 0efb34f crashed in oA2 as well, 2 of 4 runs). So the budget counts
+  a menu as seen only after two frames were drawn while the full view showed it
+  (`fullSeenGeneration`), and switches the menu back only when the full view was never built or has
+  seen the current menu; otherwise it stays compact until plasmashell starts again (one log line
+  says so; the compact line prints both counts). Control runs: compact and back without a change
+  still goes back (ov4); a change while hidden, then shown for a few seconds, then compact and back
+  is safe with the stock menu (ov5 T1), a change while compact crashes (ov5 T2). Left open: libplasma
+  preloads a compact applet's full view once, 1-5 s after plasmashell starts, when it loaded
+  compact; if the budget compacts the menu again inside that time and the menu then changes, the
+  preload reads the stale layout and crashes (seen once, oA2, right after a KCrash restart in
+  tablet posture). A start in laptop posture with the menu left compact is safe (sA1-2, sB1-2: the
+  full menu comes back and stays). `menuPolicy=overlap` compacts it only when the bar would
   otherwise overlap (the pill then leaves the middle), which keeps full menus far more often. The
   earlier plan to switch it from the tablet script's panel script is dropped for the same reason.
 - **Left edge**: the app-name widget reads its own x in the panel window and pads to the board's
