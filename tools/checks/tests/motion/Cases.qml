@@ -15,6 +15,10 @@ Item {
     NumberAnimation { duration: 2 * 500 } // expect: literal-duration
     NumberAnimation { duration: motion.surface * 1.2 }
     NumberAnimation { duration: 2 * motion.pulse }
+    NumberAnimation { duration: motion.scaled(motion.surface, 1.2) }
+    NumberAnimation { duration: root.x > 0.5 ? motion.scaled(motion.surface, 1.2) : motion.popupIn }
+    NumberAnimation { duration: root.x > 0.5 ? 300 : motion.popupIn } // expect: literal-duration
+    NumberAnimation { duration: motion.scaled(250, 1.2) } // expect: literal-duration
     NumberAnimation { duration: root.cond ? 600 : 0 } // expect: literal-duration
     NumberAnimation { duration: Kirigami.Units.veryLongDuration * 2 } // expect: over-max
     NumberAnimation { duration: Kirigami.Units.longDuration }

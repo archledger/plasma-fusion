@@ -33,22 +33,29 @@ T.AbstractButton {
         onActivated: root.animateClick()
     }
 
+    Motion {
+        id: motion
+    }
+
     contentItem: Column {
         id: column
         spacing: root.metrics.px(6)
 
         Rectangle {
             id: circle
+            objectName: "powerCircle"
             anchors.horizontalCenter: parent.horizontalCenter
-            width: 44
-            height: 44
-            radius: 22
+            // 44 px, 48 in tablet posture (TABLET 4.13).
+            width: root.metrics.tablet ? 48 : 44
+            height: width
+            radius: width / 2
             antialiasing: true
             color: root.hovered || root.visualFocus ? PfStyle.chipFillHover : PfStyle.chipFill
             scale: root.down ? 0.94 : 1
 
             Behavior on scale {
-                NumberAnimation { duration: Kirigami.Units.shortDuration }
+                enabled: motion.animate
+                NumberAnimation { duration: motion.pressScale }
             }
 
             // The 1 px edge over the fill, as the board's CSS border over its background.

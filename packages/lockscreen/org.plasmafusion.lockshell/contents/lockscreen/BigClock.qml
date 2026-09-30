@@ -11,6 +11,9 @@ Item {
 
     required property FusionMetrics metrics
     property date dateTime: new Date()
+    // The clock's size against the Lock board (148 px at 1440 x 900; ADAPTIVE 5.10: the screen's
+    // proportion, 0.7 to 1.4). The date line follows the text scale instead.
+    property real sizeScale: 1
 
     readonly property bool softwareRendering: GraphicsInfo.api === GraphicsInfo.Software
     readonly property var timeParts: PfStyle.timeParts(Qt.locale(), dateTime)
@@ -20,7 +23,7 @@ Item {
     // clock line exactly 148 px; glyphs sit centred in their line box as in the browser. The
     // date follows the user's text size; the clock does not.
     readonly property real dateLine: metrics.px(27)
-    readonly property real clockLine: 148
+    readonly property real clockLine: Math.round(148 * sizeScale)
 
     implicitWidth: Math.max(dateLabel.implicitWidth, timeRow.implicitWidth)
     implicitHeight: dateLine + 6 + clockLine
@@ -69,16 +72,16 @@ Item {
             id: timeRow
             anchors.horizontalCenter: parent.horizontalCenter
             y: clock.dateLine + 6 + (clock.clockLine - (clockMetrics.ascent + clockMetrics.descent)) / 2
-            spacing: 12
+            spacing: Math.round(12 * clock.sizeScale)
 
             Text {
                 id: timeLabel
                 text: clock.timeParts.main
                 color: PfStyle.text
                 font.family: PfStyle.displayFont
-                font.pixelSize: 148
+                font.pixelSize: clock.clockLine
                 font.weight: Font.DemiBold
-                font.letterSpacing: -0.02 * 148
+                font.letterSpacing: -0.02 * clock.clockLine
                 textFormat: Text.PlainText
                 renderType: Text.QtRendering
             }
@@ -89,7 +92,7 @@ Item {
                 text: clock.timeParts.suffix
                 color: PfStyle.text
                 font.family: PfStyle.displayFont
-                font.pixelSize: 44
+                font.pixelSize: Math.round(44 * clock.sizeScale)
                 font.weight: Font.DemiBold
                 textFormat: Text.PlainText
             }

@@ -7,7 +7,7 @@ Loads contents/lockscreen/LockScreen.qml the way kscreenlocker_greet does (same 
 properties, wallpaper item re-parented under the root) with a mock authenticator, drives the
 states and saves one PNG per scenario. Run it on a private bus with fonts from the repository:
 
-  QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 harness.py OUTDIR [scenario...]
+  test/run.sh OUTDIR [scenario...]   (a private bus without activation, mock services, no display)
 
 Scenarios: idle, prompt, messages, fperror, focus, nopassword. Environment: PF_LOCALE (default en_GB),
 PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board wallpaper).
@@ -18,6 +18,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import json
 
 from PySide6.QtCore import QObject, QTimer, QUrl, Slot, QLocale, QSize, Qt, QByteArray
 from PySide6.QtGui import QGuiApplication, QFontDatabase, QImage, QPainter, QIcon
@@ -27,17 +29,21 @@ from PySide6.QtSvg import QSvgRenderer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-SRC_PKG = os.path.join(HERE, "..", "org.plasmafusion.lockshell", "contents", "lockscreen")
+# PF_PKG_SRC: another copy of the package (org.plasmafusion.lockshell) to render, for A/B runs.
+PKG_ROOT = os.environ.get("PF_PKG_SRC", os.path.join(HERE, "..", "org.plasmafusion.lockshell"))
+SRC_PKG = os.path.join(PKG_ROOT, "contents", "lockscreen")
 
 
 def staged_package():
-    """The package as tools/build.d/90-lockscreen.sh installs it: the source files plus a copy of
-    packages/common/FusionMetrics.qml, in a temporary folder removed at exit."""
+    """The package as tools/build.d/90-lockscreen.sh installs it: the source files plus copies of
+    the shared blocks it uses (packages/common, tools/build-lib/shared-qml.sh), in a temporary
+    folder removed at exit."""
     tmp = tempfile.mkdtemp(prefix="pf-lockshell-")
     atexit.register(shutil.rmtree, tmp, True)
     pkg = os.path.join(tmp, "lockscreen")
     shutil.copytree(SRC_PKG, pkg)
-    shutil.copy(os.path.join(ROOT, "packages", "common", "FusionMetrics.qml"), pkg)
+    subprocess.run(["bash", os.path.join(ROOT, "tools", "build-lib", "shared-qml.sh"), "install",
+                    PKG_ROOT, pkg], check=True)
     return pkg
 
 
@@ -127,6 +133,34 @@ def main():
                 % (os.path.join(ROOT, "fonts"), os.path.join(out, "fontcache")))
     os.environ["FONTCONFIG_FILE"] = conf
 
+    # The colour scheme, as the greeter reads it from kdeglobals (Kirigami's colours through the
+    # org.kde.desktop style): Plasma Fusion Dark, or PF_SCHEME=Light. PF_ACCENT=#rrggbb applies a
+    # user accent the way System Settings does (DecorationFocus, DecorationHover and the
+    # selection fill of every colour set).
+    cfg = os.path.join(out, "config")
+    os.makedirs(cfg, exist_ok=True)
+    scheme = os.path.join(ROOT, "packages", "color-schemes",
+                          "PlasmaFusion%s.colors" % os.environ.get("PF_SCHEME", "Dark"))
+    text = open(scheme).read()
+    accent = os.environ.get("PF_ACCENT", "")
+    if accent:
+        rgb = ",".join(str(int(accent.lstrip("#")[i:i + 2], 16)) for i in (0, 2, 4))
+        lines, group = [], ""
+        for line in text.splitlines():
+            if line.startswith("["):
+                group = line
+            key = line.split("=", 1)[0]
+            if group.startswith("[Colors:") and key in ("DecorationFocus", "DecorationHover"):
+                line = key + "=" + rgb
+            if group == "[Colors:Selection]" and key == "BackgroundNormal":
+                line = key + "=" + rgb
+            lines.append(line)
+        text = "\n".join(lines) + "\n[General]\nAccentColor=" + rgb + "\n"
+    with open(os.path.join(cfg, "kdeglobals"), "w") as f:
+        f.write(text)
+    os.environ["XDG_CONFIG_HOME"] = cfg
+    os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop")
+
     QLocale.setDefault(QLocale(os.environ.get("PF_LOCALE", "en_GB")))
     app = QGuiApplication(sys.argv[:1])
     families = QFontDatabase.families()
@@ -189,7 +223,10 @@ def render(app, out, scenario, w, h, wp_path):
     wallpaper.setZ(-1000)
     wallpaper.setWidth(w)
     wallpaper.setHeight(h)
-    view.show()
+    if os.environ.get("PF_FULLSCREEN") == "1":
+        view.showFullScreen()
+    else:
+        view.show()
     root.setProperty("viewVisible", True)
 
     lock_root = root.findChild(QQuickItem, "lockScreenRoot")
@@ -231,9 +268,228 @@ def render(app, out, scenario, w, h, wp_path):
         view.close()
         app.quit()
 
+    if scenario == "timing":
+        timing(app, out, view, root, lock_root)
+        return
+    if scenario == "tablet":
+        tablet(app, out, view, root, lock_root, w, h)
+        return
     if scenario != "idle":
         QTimer.singleShot(1200, step_prompt)
     QTimer.singleShot(4200, grab)
+    app.exec()
+
+
+def gpu_ns():
+    """GPU time of this process so far (ns): the drm-engine-render lines of its DRM file
+    descriptors (one per DRM client)."""
+    total, seen = 0, set()
+    fdinfo = "/proc/self/fdinfo"
+    for fd in os.listdir(fdinfo):
+        try:
+            text = open(os.path.join(fdinfo, fd)).read()
+        except OSError:
+            continue
+        fields = dict(line.split(":", 1) for line in text.splitlines() if ":" in line)
+        client = fields.get("drm-client-id", "").strip()
+        if not client or client in seen:
+            continue
+        seen.add(client)
+        for key, value in fields.items():
+            if key.startswith("drm-engine-"):
+                total += int(value.split()[0])
+    return total
+
+
+def timing(app, out, view, root, lock_root):
+    """BACKLOG S1 and EFFECTS X7 on a real GPU (a private Wayland session): frames while idle,
+    the reveal and hide times, the first key's echo, and this process's GPU time for each phase.
+    Writes timing.json."""
+    from PySide6.QtTest import QTest
+    pw = root.findChild(QQuickItem, "passwordBox")
+    bd = root.findChild(QQuickItem, "backdrop")
+    res = {"renderer": "", "phases": {}}
+    frames = []
+    view.frameSwapped.connect(lambda: frames.append(time.perf_counter()))
+    marks = {}
+
+    def phase(name, start):
+        res["phases"][name] = {"frames": len([f for f in frames if f >= start["t"]]),
+                               "gpu_ms": round((gpu_ns() - start["gpu"]) / 1e6, 2),
+                               "seconds": round(time.perf_counter() - start["t"], 2)}
+
+    def mark():
+        return {"t": time.perf_counter(), "gpu": gpu_ns()}
+
+    def step_idle():
+        marks["idle"] = mark()
+        QTimer.singleShot(5000, step_key)
+
+    def step_key():
+        phase("idle_5s", marks["idle"])
+        view.requestActivate()
+        marks["key"] = mark()
+        t0 = marks["key"]["t"]
+        QTest.keyClick(view, Qt.Key_A)
+
+        def watch():
+            now = time.perf_counter()
+            if "echo" not in marks and pw is not None and pw.property("text") == "a":
+                marks["echo"] = now
+            if "echo" in marks and "echo_frame" not in marks:
+                after = [f for f in frames if f >= marks["echo"]]
+                if after:
+                    marks["echo_frame"] = after[0]
+                    res["echo_ms"] = round((after[0] - t0) * 1000, 1)
+            if "revealed" not in marks and lock_root.property("promptFactor") >= 1:
+                marks["revealed"] = now
+                res["reveal_ms"] = round((now - marks.get("forced", t0)) * 1000, 1)
+            # A package whose first key does not show the prompt (HEAD before LOCK-1, with no
+            # pointer over the window): open it the way a click would, to compare the reveal.
+            if "forced" not in marks and now - t0 > 0.5 and not lock_root.property("uiVisible"):
+                marks["forced"] = now
+                res["key_reveals"] = False
+                marks["key"] = mark()
+                lock_root.setProperty("uiVisible", True)
+            if "revealed" in marks and "echo_frame" in marks:
+                phase("reveal", marks["key"])
+                marks["prompt"] = mark()
+                QTimer.singleShot(3000, step_hide)
+                return
+            if now - t0 > 3:
+                res["error"] = "no echo or reveal within 3 s"
+                res["state"] = {"uiVisible": lock_root.property("uiVisible"),
+                                "promptFactor": lock_root.property("promptFactor"),
+                                "fieldActiveFocus": pw.property("activeFocus") if pw is not None else None,
+                                "fieldVisible": pw.property("visible") if pw is not None else None,
+                                "rootActiveFocus": lock_root.property("activeFocus"),
+                                "activeFocusItem": str(view.activeFocusItem().objectName() if view.activeFocusItem() else None),
+                                "windowActive": view.isActive()}
+                finish()
+                return
+            QTimer.singleShot(2, watch)
+        # The state when the key is sent (the prompt hidden).
+        res["before_key"] = {"fieldActiveFocus": pw.property("activeFocus") if pw is not None else None,
+                             "fieldVisible": pw.property("visible") if pw is not None else None,
+                             "activeFocusItem": str(view.activeFocusItem().metaObject().className() if view.activeFocusItem() else None),
+                             "windowActive": view.isActive()}
+        watch()
+
+    def step_hide():
+        phase("prompt_3s", marks["prompt"])
+        view.grabWindow().save(os.path.join(out, "timing-prompt.png"))
+        marks["hide"] = mark()
+        t0 = marks["hide"]["t"]
+        lock_root.setProperty("uiVisible", False)
+
+        def watch():
+            now = time.perf_counter()
+            if lock_root.property("promptFactor") <= 0:
+                res["hide_ms"] = round((now - t0) * 1000, 1)
+                phase("hide", marks["hide"])
+                marks["after"] = mark()
+                QTimer.singleShot(5000, step_after)
+                return
+            if now - t0 > 3:
+                res["error"] = "not hidden within 3 s"
+                finish()
+                return
+            QTimer.singleShot(2, watch)
+        watch()
+
+    def step_after():
+        phase("idle_after_5s", marks["after"])
+        finish()
+
+    def finish():
+        res["renderer"] = str(view.rendererInterface().graphicsApi())
+        res["backdrop"] = {k: bd.property(k) for k in ("effectsAvailable", "blurPx", "dpr", "brightness")} if bd else {}
+        res["typed"] = pw.property("text") if pw is not None else None
+        img = view.grabWindow()
+        img.save(os.path.join(out, "timing-end.png"))
+        with open(os.path.join(out, "timing.json"), "w") as f:
+            json.dump(res, f, indent=1)
+        print("timing:", json.dumps(res))
+        view.close()
+        app.quit()
+
+    # Settle (the wallpaper copy is taken 400 ms after start), then measure.
+    QTimer.singleShot(2500, step_idle)
+    app.exec()
+
+
+def tablet(app, out, view, root, lock_root, w, h):
+    """TABLET T13: run with KDE_KIRIGAMI_TABLET_MODE=1 (no KWin on the harness bus, so FusionTablet
+    follows Kirigami). The prompt block (avatar, name, pill) centred at 38 % of the height (a third
+    in portrait), 48 px pill, 44 px buttons inside it, 48 px power and keyboard buttons; with the
+    on-screen keyboard shown, the whole prompt 24 px or more above it. Writes tablet.json."""
+    from PySide6.QtCore import QPointF
+    res = {"size": [w, h], "checks": []}
+
+    def item(name):
+        return root.findChild(QQuickItem, name)
+
+    def rect(it):
+        p = it.mapToScene(QPointF(0, 0))
+        return [round(p.x(), 1), round(p.y(), 1), round(it.width(), 1), round(it.height(), 1)]
+
+    def check(name, ok, detail):
+        res["checks"].append({"check": name, "pass": bool(ok), "detail": detail})
+
+    def step_prompt():
+        lock_root.setProperty("uiVisible", True)
+        QTimer.singleShot(1500, step_measure)
+
+    def step_measure():
+        card, pill = item("promptCard"), item("passwordPill")
+        header_bottom = pill.mapToScene(QPointF(0, pill.height())).y()
+        top = card.mapToScene(QPointF(0, 0)).y()
+        centre = (top + header_bottom) / 2
+        target = h / 3 if h > w else 0.38 * h
+        check("prompt block centred at %s of the height" % ("1/3" if h > w else "38 %"),
+              abs(centre - target) <= 2, "centre %.1f, target %.1f" % (centre, target))
+        check("password pill at least 48 px tall", pill.height() >= 48, rect(pill))
+        check("pill width min(400 x ts, W - 64)", pill.width() <= min(400 * 1.34, w - 64) and pill.width() >= min(400, w - 64) - 1, rect(pill))
+        for name in ("unlockButton", "revealButton"):
+            b = item(name)
+            check(name + " 44 px", b is not None and b.width() >= 44 and b.height() >= 44, rect(b) if b else None)
+        circles = [c for c in root.findChildren(QQuickItem, "powerCircle") if c.isVisible()]
+        check("power buttons 48 px", circles and all(c.width() >= 48 and c.height() >= 48 for c in circles), [rect(c) for c in circles])
+        kb = item("keyboardButton")
+        check("keyboard button 48 px (when shown)", kb is None or not kb.isVisible() or (kb.width() >= 48 and kb.height() >= 48),
+              rect(kb) if kb and kb.isVisible() else "not shown")
+        res["prompt_before_keyboard"] = rect(card)
+        view.grabWindow().save(os.path.join(out, "tablet-prompt.png"))
+        panel = item("inputPanel")
+        if panel is None:
+            check("on-screen keyboard loader", False, "inputPanel not found")
+            finish()
+            return
+        panel.setProperty("state", "visible")
+        QTimer.singleShot(1200, step_keyboard)
+
+    def step_keyboard():
+        panel, card = item("inputPanel"), item("promptCard")
+        kb_top = panel.mapToScene(QPointF(0, 0)).y()
+        kb_h = panel.height()
+        bottom = card.mapToScene(QPointF(0, card.height())).y()
+        res["keyboard"] = rect(panel)
+        res["prompt_with_keyboard"] = rect(card)
+        check("keyboard has a height", kb_h > 50, kb_h)
+        check("whole prompt 24 px above the keyboard", bottom + 24 <= kb_top + 0.5 or kb_h <= 50,
+              "prompt bottom %.1f, keyboard top %.1f" % (bottom, kb_top))
+        view.grabWindow().save(os.path.join(out, "tablet-keyboard.png"))
+        finish()
+
+    def finish():
+        res["pass"] = all(c["pass"] for c in res["checks"])
+        with open(os.path.join(out, "tablet.json"), "w") as f:
+            json.dump(res, f, indent=1)
+        print("tablet:", json.dumps(res))
+        view.close()
+        app.quit()
+
+    QTimer.singleShot(1200, step_prompt)
     app.exec()
 
 

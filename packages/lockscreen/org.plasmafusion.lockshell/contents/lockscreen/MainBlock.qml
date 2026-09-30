@@ -45,14 +45,19 @@ FocusScope {
     readonly property bool fingerprintAvailable: (authenticatorTypes & ScreenLocker.Authenticator.Fingerprint) !== 0
     readonly property bool smartcardAvailable: (authenticatorTypes & ScreenLocker.Authenticator.Smartcard) !== 0
 
-    // The y position that has to stay visible above the on-screen keyboard.
-    property int visibleBoundary: card.y + form.y + pill.y + pill.height + Kirigami.Units.largeSpacing
+    // Tablet posture (FusionMetrics.tablet follows KWin): touch-sized controls (TABLET 4.13).
+    readonly property bool tablet: metrics.tablet
+    // The y position that has to stay visible above the on-screen keyboard: the whole prompt,
+    // messages included, 24 px above it (TABLET 4.13).
+    property int visibleBoundary: Math.ceil(card.y + card.height + 24)
     // Bottom of the prompt (avatar to message area) and top of the power buttons.
     readonly property real contentBottom: card.y + card.height
     readonly property real actionsTop: actionRow.visibleChildren.length > 0 ? actionRow.y : height
 
     signal passwordResult(string password)
     signal userSelected()
+    // A message for screen readers (LockScreenUi announces it).
+    signal announcement(string text, bool urgent)
 
     function startLogin() {
         const password = passwordBox.text;
@@ -68,12 +73,22 @@ FocusScope {
 
     Column {
         id: card
+        objectName: "promptCard"
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.max(Kirigami.Units.gridUnit, Math.round(sessionManager.height * 210 / PfStyle.boardHeight))
-        width: Math.min(sessionManager.metrics.px(400), sessionManager.width - 64)
+        // Login board: 210 px from the top of a 900 px screen. Tablet: the avatar, name and
+        // password pill centred at 38 % of the height (a third in portrait); messages hang below
+        // without moving them.
+        y: sessionManager.tablet
+           ? Math.max(Kirigami.Units.gridUnit, Math.round(sessionManager.height * (sessionManager.metrics.portrait ? 1 / 3 : 0.38)
+                                                          - (header.height + spacing + pill.height) / 2))
+           : Math.max(Kirigami.Units.gridUnit, Math.round(sessionManager.height * 210 / PfStyle.boardHeight))
+        // min(400 x text scale, W - 64); in tablet posture at least 400 (TABLET 4.13).
+        width: Math.min(sessionManager.tablet ? Math.max(400, sessionManager.metrics.px(400)) : sessionManager.metrics.px(400),
+                        sessionManager.width - 64)
         spacing: sessionManager.metrics.px(22)
 
         UserHeader {
+            id: header
             anchors.horizontalCenter: parent.horizontalCenter
             metrics: sessionManager.metrics
             userName: sessionManager.userName
@@ -83,15 +98,18 @@ FocusScope {
         Column {
             id: form
             anchors.horizontalCenter: parent.horizontalCenter
-            width: Math.min(sessionManager.metrics.px(340), card.width)
+            width: sessionManager.tablet ? card.width : Math.min(sessionManager.metrics.px(340), card.width)
             spacing: sessionManager.metrics.px(10)
 
             // The password pill: 48 px, radius 24, 10 % white fill, 1.5 px accent border and a
-            // 4 px accent halo while focused.
+            // 4 px accent halo while focused. Tablet: at least 48 px, as wide as the prompt.
             Item {
                 id: pill
+                objectName: "passwordPill"
                 width: parent.width
-                height: sessionManager.metrics.px(48)
+                height: sessionManager.tablet ? Math.max(48, sessionManager.metrics.px(48)) : sessionManager.metrics.px(48)
+                // Reveal and unlock buttons: 36 px, touch-sized (44) in tablet posture.
+                readonly property real buttonSize: sessionManager.tablet ? Math.min(44, height - 4) : 36
 
                 Rectangle {
                     anchors.fill: parent
@@ -122,7 +140,7 @@ FocusScope {
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: sessionManager.metrics.px(18)
-                    anchors.rightMargin: sessionManager.metrics.px(6)
+                    anchors.rightMargin: sessionManager.tablet ? (pill.height - pill.buttonSize) / 2 : sessionManager.metrics.px(6)
                     spacing: sessionManager.metrics.px(8)
 
                     PasswordField {
@@ -171,7 +189,10 @@ FocusScope {
 
                     RoundButton {
                         id: revealButton
+                        objectName: "revealButton"
                         Layout.alignment: Qt.AlignVCenter
+                        implicitWidth: pill.buttonSize
+                        implicitHeight: pill.buttonSize
                         visible: KConfig.KAuthorized.authorize("lineedit_reveal_password")
                         iconPath: passwordBox.showPassword ? PfStyle.iconEye + PfStyle.iconSlash : PfStyle.iconEye
                         foreground: PfStyle.textMuted
@@ -188,6 +209,8 @@ FocusScope {
                         id: loginButton
                         objectName: "unlockButton"
                         Layout.alignment: Qt.AlignVCenter
+                        implicitWidth: pill.buttonSize
+                        implicitHeight: pill.buttonSize
                         fillColor: PfStyle.accentStrong
                         hoverFillColor: PfStyle.accentStrongHover
                         foreground: PfStyle.textOnAccent
@@ -243,6 +266,7 @@ FocusScope {
                         available: sessionManager.fingerprintAvailable
                         kind: ScreenLocker.Authenticator.Fingerprint
                         label: i18nd("plasma_shell_org.plasmafusion.lockshell", "Use fingerprint")
+                        onAnnounce: (text, urgent) => sessionManager.announcement(text, urgent)
                     }
                     FailableLabel {
                         metrics: sessionManager.metrics
@@ -250,6 +274,7 @@ FocusScope {
                         available: sessionManager.smartcardAvailable
                         kind: ScreenLocker.Authenticator.Smartcard
                         label: i18nd("plasma_shell_org.plasmafusion.lockshell", "Use smartcard")
+                        onAnnounce: (text, urgent) => sessionManager.announcement(text, urgent)
                     }
                 }
             }
@@ -299,6 +324,7 @@ FocusScope {
     // Login board power row: 44 px buttons with labels, 18 px apart, 28 px above the edge.
     Row {
         id: actionRow
+        objectName: "actionRow"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 28
@@ -315,6 +341,9 @@ FocusScope {
         required property bool available
         required property int kind
         required property string label
+
+        // Guidance and errors for screen readers (MainBlock.announcement).
+        signal announce(string text, bool urgent)
 
         property bool showingError: false
         // The authenticator's own instruction (pam_fprintd: "Place your finger on …"); shown
@@ -354,11 +383,13 @@ FocusScope {
                     failableLabel.showingError = true;
                     failableLabel.text = Qt.binding(() => authenticator.errorMessage);
                     rejectAnimation.start();
+                    failableLabel.announce(authenticator.errorMessage, true);
                 }
             }
             function onNoninteractiveInfo(kind, authenticator) {
                 if ((kind & failableLabel.kind) && authenticator && authenticator.infoMessage) {
                     failableLabel.infoText = authenticator.infoMessage;
+                    failableLabel.announce(authenticator.infoMessage, false);
                 }
             }
         }

@@ -51,7 +51,7 @@ Item {
     readonly property bool showNotifications: setting("showNotifications", true)
     readonly property bool showNotificationSummaries: setting("showNotificationSummaries", false)
 
-    function handleMessage(msg) {
+    function handleMessage(msg, urgent) {
         if (!msg) {
             return;
         }
@@ -62,10 +62,39 @@ Item {
         } else {
             lockRoot.notification += "\n" + msg;
         }
+        announce(msg, urgent === true);
+    }
+
+    // Screen readers hear every PAM message (face and fingerprint guidance, errors) as it
+    // arrives, also a repeated one, whether or not the prompt is shown (GAPS G25). Announced
+    // from the full-screen item, which is always visible.
+    function announce(msg, urgent) {
+        lockScreenRoot.Accessible.announce(msg, urgent ? Accessible.Assertive : Accessible.Polite);
     }
 
     Kirigami.Theme.inherit: false
     Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
+
+    // The user's accent for the focus border, halo, unlock button and focus rings (PfStyle.tint).
+    // The lock screen is always dark, whatever the scheme's Complementary background.
+    FusionAccent {
+        id: accentTint
+        dark: true
+    }
+    Binding {
+        target: PfStyle
+        property: "tint"
+        value: accentTint
+    }
+
+    // Tablet posture from KWin (TABLET 4.13): touch-sized controls and the prompt higher up.
+    FusionTablet {
+        id: tabletState
+    }
+
+    Motion {
+        id: motion
+    }
 
     // Text scale and pixel grid of the lock screen window (docs/parts/lockscreen.md, "Text
     // scale"): text, the pills and cards that hold it and the gaps next to it follow the user's
@@ -74,7 +103,10 @@ Item {
     FusionMetrics {
         id: fusionMetrics
         area: Qt.rect(0, 0, lockScreenUi.width, lockScreenUi.height)
+        tablet: tabletState.tablet
     }
+    // The Lock board's sizes in proportion to the screen (ADAPTIVE 5.10): 1 at 1440 x 900.
+    readonly property real boardScale: Math.max(0.7, Math.min(1.4, Math.min(width / 1440, height / PfStyle.boardHeight)))
 
     // qmllint disable unqualified
     Connections {
@@ -84,7 +116,7 @@ Item {
                 return;
             }
             const msg = i18ndc("plasma_shell_org.kde.plasma.desktop", "@info:status", "Unlocking failed");
-            lockScreenUi.handleMessage(msg);
+            lockScreenUi.handleMessage(msg, true);
             graceLockTimer.restart();
             notificationRemoveTimer.restart();
             rejectPasswordAnimation.start();
@@ -110,7 +142,7 @@ Item {
         }
 
         function onErrorMessageChanged() {
-            lockScreenUi.handleMessage(authenticator.errorMessage);
+            lockScreenUi.handleMessage(authenticator.errorMessage, true);
         }
 
         function onPromptChanged(msg) {
@@ -139,6 +171,21 @@ Item {
         }
     }
 
+    // The password field keeps the keyboard focus while the prompt is hidden, so the first key
+    // goes straight into it and the root's key handler never sees it: typing shows the prompt
+    // (without it, only a pointer resting over the screen did, through blockUI), and every key
+    // keeps it up.
+    Connections {
+        target: mainBlock.mainPasswordBox
+        function onTextEdited() {
+            if (!lockScreenRoot.uiVisible) {
+                lockScreenRoot.uiVisible = true;
+            } else if (!lockScreenRoot.blockUI) {
+                fadeoutTimer.restart();
+            }
+        }
+    }
+
     RejectPasswordAnimation {
         id: rejectPasswordAnimation
         target: mainBlock
@@ -153,16 +200,27 @@ Item {
         id: lockScreenRoot
         objectName: "lockScreenRoot"
 
+        // The whole screen: a click or a key shows the prompt. Screen readers hear its name, and
+        // the PAM messages are announced from it (announce()).
+        Accessible.role: Accessible.Pane
+        Accessible.name: i18nd("plasma_shell_org.plasmafusion.lockshell", "Lock screen")
+        Accessible.description: i18nd("plasma_shell_org.plasmafusion.lockshell", "Press any key or click to unlock")
+
         property bool uiVisible: false
         property bool seenPositionChange: false
         property bool blockUI: containsMouse && (mainStack.depth > 1 || mainBlock.mainPasswordBox.text.length > 0 || inputPanel.keyboardActive)
 
-        // 0 = idle (Lock board), 1 = prompt shown (Login board); animated.
+        // 0 = idle (Lock board), 1 = prompt shown (Login board); animated (BACKLOG S1): the
+        // prompt comes in over 300 ms, decelerating, and goes in 200 ms; both follow Plasma's
+        // animation speed, and reduced motion switches at once.
         property real promptFactor: uiVisible ? 1 : 0
         Behavior on promptFactor {
+            id: promptBehavior
+            enabled: motion.animate
             NumberAnimation {
-                duration: Kirigami.Units.veryLongDuration * 2
-                easing.type: Easing.InOutQuad
+                duration: promptBehavior.targetValue > 0.5 ? motion.scaled(motion.surface, 1.2) : motion.popupIn
+                easing.type: promptBehavior.targetValue > 0.5 ? Easing.Bezier : motion.exitEasing
+                easing.bezierCurve: motion.decelerate
             }
         }
 
@@ -244,13 +302,15 @@ Item {
             }
         }
 
-        PropertyAnimation {
+        NumberAnimation {
             id: launchAnimation
             target: lockScreenRoot
             property: "opacity"
             from: 0
             to: 1
-            duration: Kirigami.Units.veryLongDuration * 2
+            duration: motion.scaled(motion.surface, 1.2)
+            easing.type: Easing.Bezier
+            easing.bezierCurve: motion.decelerate
         }
 
         Component.onCompleted: launchAnimation.start();
@@ -265,12 +325,14 @@ Item {
             factor: lockScreenRoot.promptFactor
         }
 
-        // Idle: date and large clock (Lock board, 92 px from the top of a 900 px screen).
+        // Idle: date and large clock (Lock board, 92 px from the top of a 900 px screen; the
+        // clock 148 px there, in proportion to the screen elsewhere).
         BigClock {
             id: bigClock
             anchors.horizontalCenter: parent.horizontalCenter
             y: Math.round(lockScreenRoot.height * 92 / PfStyle.boardHeight) - 12 * lockScreenRoot.promptFactor
             metrics: lockScreenUi.metrics
+            sizeScale: lockScreenUi.boardScale
             dateTime: timeSource.dateTime
             opacity: lockScreenUi.alwaysShowClock && !lockScreenUi.hideClockWhenIdle ? 1 - lockScreenRoot.promptFactor : 0
             visible: opacity > 0
@@ -315,6 +377,7 @@ Item {
 
         StackView {
             id: mainStack
+            objectName: "mainStack"
             anchors {
                 left: parent.left
                 right: parent.right
@@ -352,6 +415,7 @@ Item {
                 userListModel: users
 
                 notificationMessage: lockScreenUi.lockRoot ? lockScreenUi.lockRoot.notification : ""
+                onAnnouncement: (text, urgent) => lockScreenUi.announce(text, urgent)
 
                 onPasswordResult: password => {
                     // qmllint disable unqualified
@@ -476,6 +540,7 @@ Item {
 
         VirtualKeyboardLoader {
             id: inputPanel
+            objectName: "inputPanel"
 
             z: 1
 

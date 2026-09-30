@@ -9,6 +9,8 @@
 #
 # Findings, one per line as FILE:LINE: RULE message | source:
 #   literal-duration   `duration: 150`, `duration: cond ? 600 : 0`, `anim.duration = 150`
+#                      (a token times a number, `motion.scaled(token, ratio)` and numbers in a
+#                      comparison are not literals)
 #   over-max           a Kirigami unit scaled past Motion.max (`veryLongDuration * 2`)
 #   infinite-loop      `loops: Animation.Infinite` (or -1); at most 3 cycles (Motion.loops())
 #   no-duration        an *Animation / *Animator with no `duration`: it runs Qt's own 250 ms and
@@ -46,6 +48,10 @@ UNIT_FACTOR = {"veryShortDuration": 0.25, "shortDuration": 0.5, "longDuration": 
 NUMBER = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?![\w.])")
 # a token scaled by a number (`motion.surface * 1.2`, `2 * motion.hover`) is not a literal
 PRODUCT = re.compile(r"(?:[A-Za-z_$][\w.$]*|\))\s*[*/]\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?\s*\*\s*(?=[A-Za-z_$(])")
+# Motion.scaled(token, ratio) is a token (`motion.scaled(motion.surface, 1.2)`, the lock prompt)
+SCALED = re.compile(r"\bscaled\(\s*[A-Za-z_$][\w.$]*\s*,\s*\d+(?:\.\d+)?\s*\)")
+# a number compared with, not used as a duration (`anim.targetValue > 0.5 ? motion.surface : ...`)
+COMPARE = re.compile(r"(?:[<>]=?|[=!]==?)\s*-?\d+(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:[<>]=?|[=!]==?)")
 ASSIGN = re.compile(r"\.duration\s*=\s*(\d)")
 
 findings = []
@@ -62,7 +68,7 @@ def check_duration(path, line, value):
                              f"{m.group(0)} * {mult.group(1)} = {int(200 * f * float(mult.group(1)))} ms at factor 1; "
                              "the longest token is Motion.max (400 ms), use a token"))
         return
-    rest = PRODUCT.sub(" ", e)
+    rest = COMPARE.sub(" ", PRODUCT.sub(" ", SCALED.sub(" ", e)))
     nums = NUMBER.findall(rest)
     if nums:
         findings.append((path, line, "literal-duration", f"duration {', '.join(nums)} ms is a literal; use a Motion token"))

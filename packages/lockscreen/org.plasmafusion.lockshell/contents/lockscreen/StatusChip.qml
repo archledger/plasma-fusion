@@ -25,7 +25,8 @@ GlassPanel {
     readonly property bool hasContent: hasLayout || virtualKeyboardAvailable || hasNetwork || hasBattery
 
     implicitWidth: row.implicitWidth + metrics.px(32)
-    implicitHeight: metrics.px(40)
+    // 40 px; in tablet posture 48, with a 48 px keyboard button (TABLET 4.13).
+    implicitHeight: metrics.tablet ? Math.max(48, metrics.px(40)) : metrics.px(40)
     radius: height / 2
     visible: hasContent
 
@@ -112,10 +113,11 @@ GlassPanel {
 
         RoundButton {
             id: keyboardButton
+            objectName: "keyboardButton"
             anchors.verticalCenter: parent.verticalCenter
             visible: chip.virtualKeyboardAvailable
-            implicitWidth: 28
-            implicitHeight: 28
+            implicitWidth: chip.metrics.tablet ? 48 : 28
+            implicitHeight: implicitWidth
             iconSize: 18
             iconPath: PfStyle.iconKeyboard
             foreground: chip.virtualKeyboardActive ? PfStyle.accent : PfStyle.text

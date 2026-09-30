@@ -2,12 +2,18 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import QtQuick
-import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 
 // The wallpaper behind the lock screen.
 //   factor 0: Lock board, the wallpaper as it is under a 22 % dim.
 //   factor 1: Login board, the wallpaper blurred and zoomed by 8 % under a 50 % dim.
-// glassSource is a blurred copy of the wallpaper that GlassPanel shows through its glass.
+//
+// The greeter draws its wallpaper item itself, under everything (z -1000). Nothing re-renders
+// it here (EFFECTS.md 6.4): one small copy (1/8 size) is taken when the wallpaper is ready,
+// when it changes and when the prompt opens, blurred once at that size into a cached layer, and
+// the prompt cross-fades that layer in (opacity = factor, zoomed with it). glassSource, what
+// GlassPanel shows through its glass, is the same cached layer. The blur radius follows the
+// screen size (ADAPTIVE 5.10).
 Item {
     id: backdrop
 
@@ -18,10 +24,24 @@ Item {
     readonly property bool softwareRendering: GraphicsInfo.api === GraphicsInfo.Software
     readonly property bool effectsAvailable: source !== null && !softwareRendering
     readonly property real zoom: effectsAvailable ? 1 + 0.08 * factor : 1
-    readonly property Item glassSource: effectsAvailable ? glassBlur : null
+    readonly property Item glassSource: effectsAvailable ? blurred : null
     // The dim over the wallpaper; glass panels put it over their blurred copy too, since the
     // board's backdrop blur sees the dimmed wallpaper.
     readonly property color dimColor: dim.color
+
+    // Device pixels per logical pixel of this window (on Wayland at a fractional scale the
+    // window's own ratio; Screen.devicePixelRatio is the output's whole buffer scale there).
+    readonly property real dpr: {
+        const w = Window.window;
+        const r = w && w.devicePixelRatio > 0 ? w.devicePixelRatio : Screen.devicePixelRatio;
+        return r > 0 ? r : 1;
+    }
+    // The board's 72 px blur at 1440 x 900, proportional to the screen (ADAPTIVE 5.10), in the
+    // pixels of the 1/8 copy it runs on (logical; MultiEffect's blurMax, at most 64). For the
+    // same number MultiEffect blurs less than the FastBlur the board was matched with (10-90 %
+    // edge 56 against 90 device px on the ThinkPad), hence the 1.6.
+    readonly property real copyScale: 1 / 8
+    readonly property real blurPx: 72 * 1.6 * Math.min(width, height) / 900 * copyScale
 
     // Mean luminance (0..1) of the wallpaper's upper half, where the clock sits. The Lock board
     // is drawn for a dark wallpaper; a bright one (the light Plasma Fusion wallpaper, a photo)
@@ -57,6 +77,49 @@ Item {
         }, Qt.size(32, 20));
     }
 
+    // Take the small copy (and the brightness) again: when the wallpaper is ready and whenever
+    // it changes (GAPS G23: no timer while locked). A wallpaper plugin signals a new picture by
+    // repainting; the copy is refreshed on its own `live: false` schedule only when asked.
+    function refresh() {
+        measureBrightness();
+        copy.scheduleUpdate();
+    }
+    Timer {
+        id: settle
+        interval: 400
+        onTriggered: backdrop.refresh()
+    }
+    onSourceChanged: settle.restart()
+    Component.onCompleted: settle.restart()
+    // The prompt opening takes the copy again (a slideshow may have moved on while locked): one
+    // small copy and one blur per prompt, no timer.
+    property bool promptRefreshed: false
+    onFactorChanged: {
+        if (factor > 0 && !promptRefreshed) {
+            promptRefreshed = true;
+            refresh();
+        } else if (factor === 0) {
+            promptRefreshed = false;
+        }
+    }
+    Connections {
+        target: backdrop.source
+        ignoreUnknownSignals: true
+        // org.kde.image and the slideshow plugin: a new image or a new slide.
+        function onImageChanged() { settle.restart(); }
+        function onSourceChanged() { settle.restart(); }
+        function onWidthChanged() { settle.restart(); }
+        function onHeightChanged() { settle.restart(); }
+    }
+    Connections {
+        // qmllint disable missing-property
+        target: backdrop.source ? backdrop.source.configuration || null : null
+        // qmllint enable missing-property
+        ignoreUnknownSignals: true
+        function onImageChanged() { settle.restart(); }
+        function onValueChanged() { settle.restart(); }
+    }
+
     // A tiny canvas that reads the grabbed pixels (drawn at 1 % opacity: a canvas only paints
     // while it is visible).
     Canvas {
@@ -82,19 +145,6 @@ Item {
             unloadImage(grabUrl);
         }
     }
-    // Measure early (during the launch fade), twice more while the wallpaper may still be
-    // loading, then now and then (slideshows, day/night images).
-    Timer {
-        property int runs: 0
-        interval: 400
-        running: backdrop.source !== null
-        repeat: true
-        onTriggered: {
-            backdrop.measureBrightness();
-            runs += 1;
-            interval = runs < 3 ? 1000 : 60000;
-        }
-    }
 
     // Shown when there is no wallpaper at all (the board's night sky).
     Rectangle {
@@ -103,24 +153,56 @@ Item {
         visible: backdrop.source === null
     }
 
-    // Always-blurred copy for the glass surfaces; rendered only into their textures.
-    FastBlur {
-        id: glassBlur
-        anchors.fill: parent
+    // The small copy of the wallpaper: rendered once (live: false) and again on refresh().
+    ShaderEffectSource {
+        id: copy
+        width: 1
+        height: 1
         visible: false
-        source: backdrop.effectsAvailable ? backdrop.source : null
-        radius: 64
-        cached: false
+        sourceItem: backdrop.effectsAvailable ? backdrop.source : null
+        textureSize: Qt.size(Math.max(1, Math.round(backdrop.width * backdrop.copyScale * backdrop.dpr)),
+                             Math.max(1, Math.round(backdrop.height * backdrop.copyScale * backdrop.dpr)))
+        live: false
+        hideSource: false
+        smooth: true
     }
 
-    // The visible wallpaper: sharp while idle, blurred and zoomed while the prompt is shown.
-    FastBlur {
-        id: wallpaperBlur
+    // The blurred copy, shown with the prompt: faded in by `factor` and zoomed with it. Glass
+    // panels sample it through their own ShaderEffectSource also while it is hidden (idle).
+    Item {
+        id: blurred
         anchors.fill: parent
-        visible: backdrop.effectsAvailable
-        source: backdrop.effectsAvailable ? backdrop.source : null
-        radius: 72 * backdrop.factor
+        visible: backdrop.effectsAvailable && backdrop.factor > 0
+        opacity: backdrop.factor
         scale: backdrop.zoom
+
+        // The blur runs at the copy's size (1/8) into a cached layer, which changes only when
+        // the copy is taken again, and is drawn scaled up with smooth filtering: a blurred
+        // picture has no detail that the small texture loses.
+        Item {
+            id: smallBlur
+            width: Math.max(1, Math.ceil(backdrop.width * backdrop.copyScale))
+            height: Math.max(1, Math.ceil(backdrop.height * backdrop.copyScale))
+            transform: Scale {
+                xScale: backdrop.width / smallBlur.width
+                yScale: backdrop.height / smallBlur.height
+            }
+            layer.enabled: backdrop.effectsAvailable
+            layer.smooth: true
+
+            MultiEffect {
+                anchors.fill: parent
+                source: copy
+                blurEnabled: true
+                blur: 1.0
+                blurMax: Math.max(2, Math.min(64, Math.round(backdrop.blurPx)))
+                autoPaddingEnabled: false
+            }
+        }
+    }
+
+    Motion {
+        id: motion
     }
 
     Rectangle {
@@ -131,9 +213,10 @@ Item {
                        PfStyle.dimIdle.b + (PfStyle.dimActive.b - PfStyle.dimIdle.b) * backdrop.factor,
                        backdrop.idleDim + (backdrop.promptDim - backdrop.idleDim) * backdrop.factor)
 
+        // A brightness reading (a new wallpaper) changes the dim smoothly while nothing else moves.
         Behavior on color {
-            enabled: backdrop.factor === 0 || backdrop.factor === 1
-            ColorAnimation { duration: 400 }
+            enabled: motion.animate && (backdrop.factor === 0 || backdrop.factor === 1)
+            ColorAnimation { duration: motion.surface }
         }
     }
 }

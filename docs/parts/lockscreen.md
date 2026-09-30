@@ -14,28 +14,32 @@ through `PLASMA_DEFAULT_SHELL` in KWin's environment, so plasmashell and its lay
 |---|---|---|
 | Wallpaper | the lock wallpaper under `rgba(8,10,22,.22)` | greeter's `wallpaper` item + dim (`Backdrop.qml`); bright wallpapers get up to +30 % dim (see deviations) |
 | Date | Manrope 20 px / 700, `#e8ebf4`, 92 px from the top | locale long date without the year (`Monday, 28 September` in en_GB) |
-| Clock | Space Grotesk 148 px / 600, letter-spacing −0.02 em, line-height 1, text-shadow `0 2px 20px rgba(0,0,0,.35)` | `BigClock.qml`; 12-hour locales show AM/PM at 44 px beside it |
+| Clock | Space Grotesk 148 px / 600, letter-spacing −0.02 em, line-height 1, text-shadow `0 2px 20px rgba(0,0,0,.35)` | `BigClock.qml`; 12-hour locales show AM/PM at 44 px beside it; both in proportion to the screen, `148 × clamp(min(W/1440, H/900), 0.7, 1.4)` (ADAPTIVE 5.10) |
 | Hint pill | 320 × 48, radius 24, glass `rgba(14,18,34,.55)` + blur 24, 1 px `rgba(255,255,255,.14)`, 18 px lock icon, 14 px / 700 | `UnlockHint.qml` at 430/900 of the height |
 | Notification cards | 400 × 56, radius 16, glass `.6`, 1 px `.1`, 8 px apart, 30 px app icon, name 800, 12 px `#b8bfd3` line, 11.5 px `#a3abc2` time | `NotificationCards.qml` at 620/900; one card per application, newest first, up to 3 (fewer when space is short) |
 | Media card | 300 × 72 at 32/32, radius 18, 44 px icon, title 800, `Paused`, 38 px `#e8ebf4` play button | `MediaControls.qml` (MPRIS); album art or the player's icon; previous/next appear (card 348 px) when the player offers them |
 | Status chip | 40 px at 32/32 right, radius 20, 14 px gaps: `EN` badge (11 px / 800, 1 px `.25` border, radius 5), Wi-Fi 17 px, battery 19 px + `82%` 700 | `StatusChip.qml`: keyboard layout (click/scroll switches when there are several), virtual keyboard toggle (only when KWin has an input method), plasma-nm connection state, battery with charge fill, bolt when plugged in, amber ≤ 30 %, red ≤ 10 % |
 
-**Prompt** (after a key press, click or pointer movement; Login board styling):
+**Prompt** (after a key press, click or pointer movement; Login board styling). It comes in over 300 ms
+(decelerating) and goes in 200 ms, both from the Motion tokens (Plasma's animation speed; reduced motion
+switches at once). The first key goes into the password field and shows the prompt:
 
 | Element | Board value | Implementation |
 |---|---|---|
-| Wallpaper | blur 20 px, zoom 1.08, `rgba(8,11,24,.5)` | FastBlur 72 and 8 % zoom, animated from the idle state; the dim is the board's 50 % on the dark wallpaper and rises for bright wallpapers until the backdrop is as dark as the board's (at most 90 %) |
+| Wallpaper | blur 20 px, zoom 1.08, `rgba(8,11,24,.5)` | one 1/8-size copy of the wallpaper, blurred once into a cached layer (`MultiEffect`, the look of the earlier FastBlur 72, radius in proportion to the screen) and cross-faded in with the 8 % zoom (EFFECTS 6.4); the dim is the board's 50 % on the dark wallpaper and rises for bright wallpapers until the backdrop is as dark as the board's (at most 90 %) |
 | Clock | top left 32/28: Space Grotesk 28 px / 600 + date 14 px / 700 `#cdd3e4` on one baseline, 12 px apart | `SmallClock.qml` |
 | Avatar | 112 px, `#7b5cd6`, first letter Space Grotesk 46 px / 700, 4 px `rgba(255,255,255,.14)` ring, shadow `0 20px 50px rgba(0,0,0,.4)` | `UserHeader.qml`; the account picture (`kscreenlocker_userImage`) replaces the letter when set |
 | Name | Space Grotesk 28 px / 600 | full name, or the login name when there is none (no placeholder names) |
-| Password pill | 340 × 48 (y 396 on the 900 px board), radius 24, `rgba(255,255,255,.1)`, 1.5 px `#5b9dff` + 4 px `rgba(91,157,255,.2)` halo when focused, bullets 16 px 0.2 em apart, 36 px reveal button `#cdd3e4`, 36 px `#2f6fdf` unlock button | `MainBlock.qml` + `PasswordField.qml` |
+| Password pill | 340 × 48 (y 396 on the 900 px board), radius 24, `rgba(255,255,255,.1)`, 1.5 px `#5b9dff` + 4 px `rgba(91,157,255,.2)` halo when focused, bullets 16 px 0.2 em apart, 36 px reveal button `#cdd3e4`, 36 px `#2f6fdf` unlock button | `MainBlock.qml` + `PasswordField.qml`; the blues follow the user's accent (decision 3) |
 | Hints | 12 px, 8 px inset: `Caps Lock is on` `#f2c38a` with arrow icon (left), `Use fingerprint` `#8ab8ff` 700 (right) | Caps Lock from `KeyState`; the fingerprint (and smartcard) hint only while that authenticator is available; once pam_fprintd sends its instruction (`noninteractiveInfo`, e.g. `Place your finger on …`) that text replaces `Use fingerprint`; its error text replaces it for a moment |
 | PAM messages | (not on the board) | 13 px / 600 lines under the hints: prompts, info and errors of the PAM stack, including irlume face messages (`irlume: …`) and `Unlocking failed` |
 | Power buttons | 44 px glass circles, 18 px icons, 11.5 px / 700 `#cdd3e4` labels, 18 px apart, 28 px above the edge | Sleep, Hibernate, Switch User (each only when the system allows it), bottom centre |
 
 Notification cards, media card and status chip stay in the prompt state. Keyboard: Tab reaches the
 reveal and unlock buttons, the power buttons, the layout badge, the virtual keyboard button and the
-media buttons; focused controls get the Controls board's dark-scheme focus ring (2 px `#8ab8ff`, 2 px outside). Alt+P,
+media buttons; focused controls get the Controls board's dark-scheme focus ring (2 px `#8ab8ff`, 2 px outside; a user
+accent gets its own lighter shade). Screen readers hear every PAM message as it arrives (face and fingerprint
+guidance, errors; `Accessible.announce`), and the full screen is named "Lock screen". Alt+P,
 Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the password.
 
 ## Authentication contract (unchanged from Plasma 6.7.5)
@@ -75,11 +79,12 @@ Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the pa
 | `…/NotificationCards.qml`, `LockNotifications.qml` (singleton) | notifications while locked (`WatchedNotificationsModel`, grouped per app) |
 | `…/MediaControls.qml`, `StatusChip.qml`, `NetworkIndicator.qml` (loaded on demand, so a system without plasma-nm still locks) | bottom corners |
 | `…/Backdrop.qml`, `GlassPanel.qml` | wallpaper blur/dim/zoom, frosted surfaces (blurred wallpaper through `Kirigami.ShadowedTexture`) |
-| `…/PowerButton.qml`, `RoundButton.qml`, `FocusRing.qml`, `LineIcon.qml`, `PfStyle.qml` (singleton: colours, fonts, the boards' 24 px line-icon paths, date/time helpers) | building blocks |
+| `…/PowerButton.qml`, `RoundButton.qml`, `FocusRing.qml`, `LineIcon.qml`, `PfStyle.qml` (singleton: colours, fonts, the boards' 24 px line-icon paths, date/time helpers; the accent from `FusionAccent`) | building blocks |
+| `FusionMetrics.qml`, `Motion.qml`, `FusionAccent.qml`, `FusionTablet.qml` (installed copies of `packages/common/`, `tools/build-lib/shared-qml.sh`) | text scale, motion tokens, accent, KWin's tablet posture |
 | `…/LockOsd.qml`, `PasswordSync.qml`, `qmldir` | stock |
 | `…/config.xml`, `config.qml` | settings (below) |
-| `packages/lockscreen/test/` | offscreen harness, mock authenticator and `org.kde.kscreenlocker` enum, mock MPRIS / notification server, `scenario-greeter.sh` (real greeter in a virtual session; usage in its header) (not installed) |
-| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (27 files) |
+| `packages/lockscreen/test/` | offscreen harness (`run.sh`: a private bus without service activation, `session-bus.conf`), mock authenticator and `org.kde.kscreenlocker` enum, mock MPRIS / notification server, `scenario-greeter.sh` (real greeter in a virtual session; usage in its header) (not installed) |
+| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (31 files) |
 | `tools/device/lockscreen-enable.sh`, `lockscreen-disable.sh` | select / deselect it for the user |
 
 ## Install and enable
@@ -199,7 +204,8 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 * Status chip adds a virtual-keyboard button when KWin has an input method (the X13 Yoga in tablet
   mode); media card adds previous/next (348 px wide) when the player offers them.
 * Bright wallpapers get up to 30 % extra dim while idle (measured from a 32 × 20 grab of the
-  wallpaper's upper half, 0.4 s after start, twice more, then every minute) so the white clock
+  wallpaper's upper half when the wallpaper is ready, when it changes and when the prompt opens;
+  no timer while locked) so the white clock
   stays readable, and up to 90 % dim behind the prompt so the Login board's white text and
   `#8f98b3` placeholder keep their contrast; the dark wallpaper keeps the boards' 22 % and 50 %.
 * Software rendering (no OpenGL): no blur, glass fills 18 % more opaque, no text shadow.
@@ -302,3 +308,87 @@ Evidence (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 See `docs/parts/polish.md`. No functional change: the `DemiBold` + style name approach picks the
 right static files (Bold, ExtraBold, and Space Grotesk's new SemiBold file for the clocks); the
 comment in `PfStyle.qml` now says so.
+
+## LOCK-1 (2026-09-30)
+
+Work package LOCK-1 of the one-pass plan (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md`;
+EFFECTS 6.4, ADAPTIVE 5.10, TABLET 4.13, GAPS G23 and G25, BACKLOG S1), built by the lead directly.
+Every PAM prompt and message path is as it was; `/etc/pam.d` was not touched.
+
+### Changes
+
+- **Backdrop** (`Backdrop.qml`): the greeter keeps drawing its wallpaper item underneath (z −1000).
+  Both `FastBlur`s (Qt5Compat) are gone. One `ShaderEffectSource` (`live: false`, 1/8 of the
+  screen's device pixels) copies the wallpaper when it is ready, when it changes (the image
+  plugin's signals) and when the prompt opens; `MultiEffect` blurs it once at that size into a
+  cached layer, which is drawn scaled up with smooth filtering and cross-faded in (`opacity` =
+  prompt factor, the 8 % zoom as `scale`). The glass panels' `glassSource` is the same layer. The
+  radius is the board's 72 px in proportion to `min(W, H)/900`, times 1.6 because `MultiEffect`
+  blurs less than FastBlur for the same number (measured: sun edge 10–90 % 79–86 device px against
+  FastBlur's 88–93). The brightness probe runs on the same events, never on a timer (G23).
+- **Motion** (`LockScreenUi.qml`, S1): the prompt comes in over `scaled(surface, 1.2)` = 300 ms with the
+  decelerate curve and goes in `popupIn` = 200 ms with the exit easing; the launch fade uses the
+  300 ms token; the dim follows a new wallpaper with `surface`; power-button press scale from
+  `pressScale`. All follow Plasma's animation speed; reduced motion switches at once.
+- **First key**: the password field keeps the keyboard focus while the prompt is hidden, so the
+  first key goes straight into it and the root's key handler never sees it. The prompt used to
+  appear only because of `blockUI`, which needs a pointer resting over the screen; with no pointer
+  there (touch-only tablet posture, a pointer on another screen) typing filled a hidden field. The
+  stock 6.7.5 lock screen has the same handler. Now any typed text shows the prompt, and each key
+  restarts its 10 s fade-out timer.
+- **Proportional sizes** (ADAPTIVE 5.10): the big clock and AM/PM `× clamp(min(W/1440, H/900), 0.7, 1.4)`;
+  prompt and notification width `min(400 × text scale, W − 64)` as before; blur radius above.
+- **Tablet posture** (TABLET 4.13): `FusionTablet` (KWin's `TabletModeManager` over D-Bus, Kirigami
+  until KWin answers) drives `FusionMetrics.tablet`. In tablet posture: the avatar, name and pill
+  are centred at 38 % of the height (a third in portrait) and messages hang below without moving
+  them; the pill is at least 48 px tall and at least 400 px wide (`W − 64` at most); its reveal and
+  unlock buttons 44 px; power buttons 48 px; the status chip 48 px with a 48 px keyboard button.
+  Independent of posture, the on-screen keyboard (the stock `VirtualKeyboardLoader`) now keeps
+  the whole prompt, messages included, 24 px above it (`visibleBoundary`).
+- **Accent** (decision 3): `PfStyle` takes the focus border, halo, unlock button, focus rings and
+  the fingerprint hint from a `FusionAccent` on the lock screen (always the dark variant); the
+  board's exact blues stay while the colour scheme's own Plasma Fusion blue is in effect.
+- **Screen readers** (G25): every message `handleMessage()` receives (PAM prompts, info and errors,
+  irlume face lines, `Unlocking failed`) and the fingerprint/smartcard authenticators' info and
+  errors are announced (`Accessible.announce`, errors assertive) from the full-screen item, which is
+  always visible, so they are heard with the prompt hidden too. The full-screen item is named
+  "Lock screen" with the unlock hint as description.
+- **Tooling**: `tools/checks/motion-lint.sh` accepts `motion.scaled(token, ratio)` and numbers in a
+  comparison (fixture cases added); the harness installs the shared blocks through
+  `shared-qml.sh`, reads the Plasma Fusion colour scheme through `kdeglobals` (`PF_SCHEME`,
+  `PF_ACCENT=#rrggbb` for a user accent) and has two new scenarios, `timing` and `tablet`.
+
+### Verification
+
+- Offscreen harness (`test/run.sh OUT idle prompt messages fperror focus nopassword`): all states
+  render, no QML warnings; red accent (`PF_ACCENT=#e0484e`): unlock button, focus ring and hint
+  follow; portrait 900 × 1440 tablet and 2560 × 1600 idle; dark and light wallpaper at 4/3 and 1.325
+  (`QT_SCALE_FACTOR`, 1920 × 1200 device pixels).
+- T13 (`KDE_KIRIGAMI_TABLET_MODE=1 test/run.sh OUT tablet`) at 1440 × 900, 900 × 1440 and 1366 × 768:
+  9/9 checks each: block centre within 0.5 px of 38 % (one third in portrait), pill 400 × 48,
+  44 px pill buttons, 48 px power and keyboard buttons, and with the keyboard shown (450, 281 and
+  427 px) the prompt bottom 24 px above it (at 1366 × 768 the prompt moves up 114 px).
+- GPU A/B on the ThinkPad (private Wayland session 1920 × 1200 at 4/3, harness `timing` scenario full
+  screen, mock authenticator, two rounds each, HEAD 024570a against this tree):
+
+  | | HEAD | LOCK-1 |
+  |---|---|---|
+  | first key shows the prompt (no pointer over the screen) | no | yes |
+  | first key echoed in the field | 5–7 ms | 8–11 ms |
+  | reveal | 771–789 ms, 47–48 frames, 150–154 ms GPU | 292–310 ms, 18–19 frames, 49 ms GPU |
+  | hide | 763–787 ms, 47–48 frames, 150–153 ms GPU | 173–188 ms, 11–12 frames, 30–31 ms GPU |
+  | idle, 5 s (after start) | 11–13 frames, 31–37 ms GPU | 9–10 frames, 17–19 ms GPU |
+  | prompt shown, 3 s (cursor blink) | 9–10 frames, 25.6 ms GPU | 9–10 frames, 20.8–21.0 ms GPU |
+
+  (HEAD's prompt was opened by the harness after 0.5 s, as a click would, to compare the reveal.)
+- Real greeter (`test/scenario-greeter.sh`, `kscreenlocker_greet --testing` 6.7.5 in private sessions
+  `lk-gdark` and `lk-glight`, 1440 x 900, OpenGL, the package through `PLASMA_DEFAULT_SHELL`, PAM
+  untouched, nothing typed): idle and prompt render in both themes with the cached blur and the
+  board's blues from the real colour scheme; greeter logs without QML warnings.
+- `motion-lint`: lock screen 0 findings (HEAD 3); `a11y-lint`: 0 (HEAD 1); qmllint (Qt 6.11.2, mock
+  `org.kde.kscreenlocker`): only the `i18n*()` context-object warnings every KDE QML file has, plus the
+  pre-existing `twinFormLayouts` one in `config.qml`; `90-lockscreen.sh` installs 31 files.
+
+Not covered here (DEPLOY-1 hand check H8, a ship blocker): unlocking by typing on the real
+on-screen keyboard in tablet posture, by fingerprint and by face; Orca reading the announcements.
+Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/LOCK-1/`.

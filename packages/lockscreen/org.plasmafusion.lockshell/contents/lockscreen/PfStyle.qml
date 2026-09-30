@@ -25,18 +25,24 @@ QtObject {
     readonly property color textTertiary: "#a3abc2"
     readonly property color textMuted: "#cdd3e4"
     readonly property color placeholder: "#8f98b3"
-    readonly property color link: "#8ab8ff"
+    readonly property color link: focusRing // the accent's light shade, #8ab8ff on the board
     readonly property color warning: "#f2c38a"
     readonly property color error: "#ff9b9f"
 
-    // Accent (Login board: focus border, focus halo, unlock button).
-    readonly property color accent: "#5b9dff"
-    readonly property color accentHalo: Qt.rgba(91 / 255, 157 / 255, 1, 0.2)
-    readonly property color accentStrong: "#2f6fdf"
-    readonly property color accentStrongHover: "#3d7cea"
-    readonly property color textOnAccent: "#ffffff"
-    // Keyboard focus ring (Controls board, dark scheme: 2 px #8ab8ff, 2 px gap).
-    readonly property color focusRing: "#8ab8ff"
+    // Accent (Login board: focus border, focus halo, unlock button), following the user's
+    // accent (decision 3): LockScreenUi sets `tint` to its FusionAccent, whose colours come from
+    // the colour scheme's Complementary set, which Plasma rewrites when an accent is picked. The
+    // board's exact blues stay while the scheme's own Plasma Fusion blue is in effect.
+    property FusionAccent tint: null
+    readonly property bool userAccent: tint !== null && !Qt.colorEqual(tint.hoverAccent, "#5b9dff")
+    readonly property color accent: userAccent ? tint.hoverAccent : "#5b9dff"
+    readonly property color accentHalo: Qt.rgba(accent.r, accent.g, accent.b, 0.2)
+    readonly property color accentStrong: userAccent ? tint.fill : "#2f6fdf"
+    readonly property color accentStrongHover: userAccent ? Qt.lighter(accentStrong, 1.1) : "#3d7cea"
+    readonly property color textOnAccent: userAccent ? tint.fillText : "#ffffff"
+    // Keyboard focus ring (Controls board, dark scheme: 2 px #8ab8ff, 2 px gap); a user accent
+    // gets the same lighter shade of itself.
+    readonly property color focusRing: userAccent ? Qt.tint(accent, Qt.rgba(1, 1, 1, 0.35)) : "#8ab8ff"
 
     // Glass surfaces (Lock board).
     readonly property color glassFill: Qt.rgba(14 / 255, 18 / 255, 34 / 255, 0.6)
