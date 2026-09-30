@@ -299,7 +299,8 @@ PlasmoidItem {
         // No time zone: follows the system time zone.
     }
 
-    // Testing hook (config key debugAction, cleared after use): "dump-bar:TAG".
+    // Testing hooks (config key debugAction, cleared after use): "dump-bar:TAG", "menu-refresh"
+    // (rebuild the global menu's cached full view now).
     readonly property string debugAction: Plasmoid.configuration.debugAction
     onDebugActionChanged: Qt.callLater(runDebugAction)
     function runDebugAction(): void {
@@ -311,6 +312,8 @@ PlasmoidItem {
         const parts = action.split(":");
         if (parts[0] === "dump-bar" && widthBudget.item) {
             (widthBudget.item as WidthBudget).dump(parts.slice(1).join(":"));
+        } else if (parts[0] === "menu-refresh" && widthBudget.item) {
+            console.info("clockpill: debug: full view rebuilt " + (widthBudget.item as WidthBudget).refreshFullView());
         }
     }
 

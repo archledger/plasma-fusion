@@ -447,28 +447,29 @@ built by the lead directly.
   its menu model (titles in the panel font plus the `menubaritem` margins; measured exactly equal to
   the full view for Konsole, Dolphin and Kate). Nothing is laid out to be judged, so nothing flickers.
 - **Global menu crash (Plasma 6.7.5)**: the stock appmenu crashes plasmashell when it goes from its
-  compact view back to its full view after its menu changed (the full view is kept unparented and
-  its layout keeps a deleted item; libplasma `AppletQuickItemPrivate::compactRepresentationCheck`).
-  Private sessions t2m, E1-E6: compact and back without a menu change is safe; after an app switch
-  it crashes every time; `destroy()` on the cached view is refused and a forced layout rebuild does
-  not help; a menu that loaded compact (no full view built yet) switches back safely. A hidden
-  layout does not lay out, so a change while the applet hides its full view (the active window has
-  no menu) counts too: private session ov2 (tablet, portrait, no menu, then Konsole's menu and the
-  compact switch in the same moment, back to landscape) crashed; after the fix below, ov3 and
-  oB1-oB3 did not (the deployed 0efb34f crashed in oA2 as well, 2 of 4 runs). So the budget counts
-  a menu as seen only after two frames were drawn while the full view showed it
-  (`fullSeenGeneration`), and switches the menu back only when the full view was never built or has
-  seen the current menu; otherwise it stays compact until plasmashell starts again (one log line
-  says so; the compact line prints both counts). Control runs: compact and back without a change
-  still goes back (ov4); a change while hidden, then shown for a few seconds, then compact and back
-  is safe with the stock menu (ov5 T1), a change while compact crashes (ov5 T2). Left open: libplasma
-  preloads a compact applet's full view once, 1-5 s after plasmashell starts, when it loaded
-  compact; if the budget compacts the menu again inside that time and the menu then changes, the
-  preload reads the stale layout and crashes (seen once, oA2, right after a KCrash restart in
-  tablet posture). A start in laptop posture with the menu left compact is safe (sA1-2, sB1-2: the
-  full menu comes back and stays). `menuPolicy=overlap` compacts it only when the bar would
-  otherwise overlap (the pill then leaves the middle), which keeps full menus far more often. The
-  earlier plan to switch it from the tablet script's panel script is dropped for the same reason.
+  compact view back to its full view after its menu changed (libplasma
+  `AppletQuickItemPrivate::compactRepresentationCheck` reads the full view's size hint). Cause, in
+  Qt 6.11's `QQuickGridLayoutBase` (qtdeclarative v6.11.2, src/quicklayouts): a removed child stays in
+  the layout engine until the layout's next polish (`ensureLayoutItemsUpdated`), and `sizeHint()`
+  reads the engine without rebuilding it. A full view that is compact (unparented) or hidden (the
+  active window has no menu) is not polished, so the next size read after a change reads a deleted
+  item. Found in private sessions t2m (E1-E6: compact and back without a change is safe, after an
+  app switch it crashes every time; `destroy()` is refused, adding a child does not rebuild) and ov2
+  (tablet, portrait, no menu, then a new window's menu and the compact switch at once, back to
+  landscape; the deployed 0efb34f crashed in 2 of 4 runs of that sequence, oA2 twice, once in
+  libplasma's preload of a compact applet a few seconds after a start).
+  **Fix (2026-09-30):** the budget rebuilds the full view's layout itself with `ensurePolished()`
+  (QQuickItem, Qt 6.3) right before it switches the menu either way, and at once after a menu change
+  while the full view is not shown (for the preload). Proof with the width budget off (ov6a/b): a
+  change while compact, the rebuild, then full: 8 of 8 without a crash; the same without the rebuild
+  crashed both times. With the budget (ov3 x3, ov4, a start with the menu compact, a start in
+  tablet portrait with changes inside the preload time x3, 15 rotations with app switches): no
+  crash, and the menu goes back to full every time (it no longer stays compact until plasmashell
+  starts again; an interim version, cc1bce8, did that). Evidence:
+  artifacts/plasma-fusion/2026-09-30-deploy2/menu-fix/. `menuPolicy=overlap` compacts the menu only
+  when the bar would otherwise overlap (the pill then leaves the middle), which keeps full menus far
+  more often. The earlier plan to switch it from the tablet script's panel script was dropped when
+  the crash was found; with the rebuild it would be possible again.
 - **Left edge**: the app-name widget reads its own x in the panel window and pads to the board's
   10 px from whatever margin the panel has (the north frame's side margins 6 or 0, the tablet bar's
   larger margin); its click area reaches the screen corner.

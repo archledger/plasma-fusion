@@ -29,18 +29,19 @@ import org.kde.ksvg as KSvg
 // Tablet posture starts at step 2 (portrait or a narrow screen: step 5), TABLET 4.3.
 //
 // The global menu (step 1): Plasma 6.7.5 crashes when the stock appmenu goes from its compact
-// view back to its full view after its menu changed (another window, a menu update): the full
-// view is kept, unparented, and its layout keeps a deleted item (tested in private sessions
-// t2m, E1-E6: compact and back without a menu change is safe, after one it crashes; neither
-// destroy() nor a layout rebuild from outside helps). A hidden layout does not lay out, so the
-// same holds for a change while the applet hides its full view because the active window has
-// no menu (private session ov2: no menu, a new window's menu, compact at once, back: crash). So
-// the menu goes back to full only while that is safe: the full view was never built (the menu
-// loaded compact) or it has drawn the current menu while shown (`fullSeenGeneration`).
-// Otherwise it stays compact until plasmashell starts again. `menuPolicy`
+// view back to its full view after its menu changed (another window, a menu update; private
+// sessions t2m E1-E6, ov2). The cause is in Qt 6.11's GridLayout: a removed child stays in the
+// layout engine until the layout's next polish, and its size hint reads the engine as it is. A
+// full view that is not in the bar (compact: unparented) or hidden (the active window has no
+// menu) is not polished, and libplasma reads its size hint when it moves it back into the bar
+// (or into the popup, when it preloads a compact applet a few seconds after start): a deleted
+// item. So the budget rebuilds the full view's layout itself (`ensurePolished()`) right before
+// it switches the menu either way, and at once after a menu change while the full view is not
+// shown. Private sessions ov6a/b: a change while compact, then full, crashed without the
+// rebuild and never with it. `menuPolicy`
 // "centre" (the default, ADAPTIVE 5.1) compacts it as the first step whenever the pill cannot
 // stay centred with it; "overlap" compacts it only when the bar would otherwise overlap: the
-// pill may then leave the middle, and the menu is compacted (and stuck) far less often.
+// pill may then leave the middle, and the menu is compacted far less often.
 //
 // The level is computed in one go, never by trying: every widget of the bar that takes part
 // has `budgetLevel` (written here) and `budgetSaving(level)`, the width it gives up at that
@@ -99,33 +100,26 @@ Item {
     // Menu changes counted by the delegates below.
     property int menuGeneration: 0
     // The full view while it is in the bar and visible (the applet hides it when the active
-    // window has no menu; compact, it is unparented).
+    // window has no menu; compact, it is unparented, so nothing polishes it).
     readonly property Item fullView: menuApplet ? menuApplet.fullRepresentationItem : null
     readonly property bool fullShown: fullView !== null && !menuCompact && fullView.visible && fullView.parent !== null
-    // The last menu generation the full view has laid out: two frames drawn while it was shown
-    // with it (the second frame's polish comes after the change).
-    property int fullSeenGeneration: -1
-    property int framesSinceChange: 0
-    onFullShownChanged: noteMenuChange()
-    onMenuGenerationChanged: noteMenuChange()
-    function noteMenuChange() {
-        framesSinceChange = 0;
-        if (fullShown && fullSeenGeneration !== menuGeneration) {
-            fullView.Window.window?.update();
+    onMenuGenerationChanged: {
+        if (!fullShown) {
+            Qt.callLater(refreshFullView);
         }
     }
-    Connections {
-        target: budget.fullShown && budget.fullSeenGeneration !== budget.menuGeneration ? budget.fullView.Window.window : null
-        function onFrameSwapped() {
-            if (++budget.framesSinceChange >= 2) {
-                budget.fullSeenGeneration = budget.menuGeneration;
-            } else {
-                budget.fullView.Window.window?.update();
-            }
+    // Rebuilds the cached full view's layout now (see the header).
+    function refreshFullView(): bool {
+        const view = fullView;
+        if (!view || typeof view.ensurePolished !== "function") {
+            return false;
         }
+        view.ensurePolished();
+        return true;
     }
-    // Going back to the full view is safe (see the header).
-    readonly property bool menuExpandSafe: !menuApplet || !fullView || fullSeenGeneration === menuGeneration
+    // Going back to the full view is safe when its layout can be rebuilt first (Qt 6.3 and later);
+    // otherwise the menu stays compact until plasmashell starts again.
+    readonly property bool menuExpandSafe: !menuApplet || !fullView || typeof fullView.ensurePolished === "function"
     property bool stuckReported: false
 
     KSvg.FrameSvgItem {
@@ -152,7 +146,10 @@ Item {
                 budget.menuGeneration++;
                 Qt.callLater(budget.measureMenu);
             }
-            Component.onDestruction: Qt.callLater(budget.measureMenu)
+            Component.onDestruction: {
+                budget.menuGeneration++;
+                Qt.callLater(budget.measureMenu);
+            }
             TextMetrics {
                 id: titleMetrics
                 font: Kirigami.Theme.defaultFont
@@ -383,8 +380,10 @@ Item {
             if (!applet || applet.plasmoid.configuration.compactView === compact || (!compact && !budget.menuExpandSafe)) {
                 return;
             }
+            // libplasma reads the full view's size hint while it moves it (see the header).
+            const rebuilt = budget.refreshFullView();
             console.info("clockpill: width budget: global menu " + (compact ? "compact" : "full")
-                         + " (menu " + budget.menuGeneration + ", laid out " + budget.fullSeenGeneration + ")");
+                         + (rebuilt ? " (full view rebuilt)" : ""));
             budget.menuCompactedWritten(compact);
             applet.plasmoid.configuration.compactView = compact;
         }
