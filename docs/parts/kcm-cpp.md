@@ -1,9 +1,9 @@
 # Settings module: `kcm_plasmafusion` (System Settings > Appearance & Style > Plasma Fusion)
 
-Status: built as the x86_64 RPM `plasma-fusion-settings` in the Fedora 44 build container on the
-ThinkPad, checked offline and in private virtual sessions on the ThinkPad (dark and light, with and
-without the Plasma Fusion window decoration). Not installed system-wide (the reviewer does that).
-Phase 3. Last edited 2026-09-29.
+Status: reviewed; `plasma-fusion-settings-1.0.0-3` built as the x86_64 RPM in the Fedora 44 build
+container on the ThinkPad and checked in private virtual sessions on the ThinkPad (dark and light,
+scale 1 and 1.325, with the system-wide Plasma Fusion decoration and with the Aurorae fallback).
+Not installed (the lead installs it; see "Install"). Phase 3. Last edited 2026-09-29.
 
 ## What it is
 
@@ -18,7 +18,7 @@ renders desktop-dark-1 / desktop-light-1) as a System Settings module: a C++
 | Window buttons | Right · glyphs / Left · circles / Show on hover | `~/.config/plasmafusionrc [Decoration] ButtonStyle = RightGlyphs / LeftCircles / ShowOnHover` and kwinrc `[org.kde.kdecoration2]` (below), then KWin reconfigure |
 | (switches) | Magnify dock icons on hover | the `[General] magnify` key of every `org.plasmafusion.dock` widget, through `org.kde.PlasmaShell.evaluateScript` (`writeConfig` goes through the widget's configuration scheme, so the running dock follows at once) |
 | | Global menu in the top bar | adds `org.kde.plasma.appmenu` right after `org.plasmafusion.appname` in the panel that holds it (inserted at that position, not added and moved), or removes it; evaluateScript |
-| | Hot corner opens Overview | kwinrc `[Effect-overview] BorderActivate` 7 (top-left corner) or 9 (none), as fusion-config.sh; KWin reconfigure and `reconfigureEffect overview` |
+| | Hot corner opens Overview | kwinrc `[Effect-overview] BorderActivate`: the top-left corner (7) is added or removed; other screen edges set for Overview are kept, and 9 (none) is written when no edge is left, as fusion-config.sh does; KWin reconfigure and `reconfigureEffect overview` |
 
 Window decoration written with the buttons (and again after Light / Dark, because a Global Theme
 brings its own decoration):
@@ -56,9 +56,9 @@ It packs `CMakeLists.txt src icons LICENSES` into a reproducible tarball, copies
 `/tmp/pfv-kcm-build` on the ThinkPad (`PF_REMOTE_DIR`, must be below `/tmp/pfv-`), and runs
 `nice -n 10 podman run --rm --network=none -v DIR:/work:Z localhost/plasma-fusion-build:f44-6.7.5
 bash /work/container-build.sh` (`rpmbuild -ba`, `-j6`). OUTDIR gets `RPMS/x86_64/`
-(`plasma-fusion-settings-1.0.0-1.fc44.x86_64.rpm` plus debuginfo / debugsource), `SRPMS/`,
+(`plasma-fusion-settings-1.0.0-3.fc44.x86_64.rpm` plus debuginfo / debugsource), `SRPMS/`,
 `build.log` (no compiler warnings with KDE's `-Wall -Wextra` set) and `root/` (the RPM unpacked,
-for test sessions). About 10 s.
+for test sessions). About a minute, most of it copying.
 
 Package contents:
 
@@ -71,13 +71,16 @@ Package contents:
 
 Requires `plasma-systemsettings`, `plasma-workspace` (`plasma-apply-lookandfeel`,
 `plasma-apply-colorscheme`, the accent-colour and automatic light/dark kded modules),
-`kf6-kirigami`, `kf6-kcmutils`, `qt6-qtdeclarative`; all 27 requirements resolve on the ThinkPad
-(checked with `rpm -q --whatprovides`).
+`kf6-kirigami`, `kf6-kcmutils`, `qt6-qtdeclarative`, `hicolor-icon-theme`; all 28 requirements of
+1.0.0-3 resolve on the ThinkPad (checked with `rpm -q --whatprovides`).
 
-## Install, open, roll back (reviewer / real session)
+## Install, open, roll back (lead / real session)
+
+The reviewed RPM is on the ThinkPad in `/var/tmp/plasma-fusion-rpms/kcm-cpp/` (with its `.sha256`)
+and in `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/kcm-cpp/rpm/`.
 
 ```
-sudo dnf install ./plasma-fusion-settings-1.0.0-1.fc44.x86_64.rpm
+sudo dnf install /var/tmp/plasma-fusion-rpms/kcm-cpp/plasma-fusion-settings-1.0.0-3.fc44.x86_64.rpm
 systemsettings kcm_plasmafusion          # or System Settings > Appearance & Style > Plasma Fusion
 kcmshell6 kcm_plasmafusion               # the page alone
 sudo dnf remove plasma-fusion-settings   # rollback of the package
@@ -104,8 +107,10 @@ fusion-config.sh backup; `~/.config/plasmafusionrc` is new (delete it to undo; s
 - "From wallpaper" asks Plasma for the colour when chosen (a read: Plasma's own accent service
   only applies it when `accentColorFromWallpaper` is set) and shows it as the ring around the pill;
   Plasma keeps updating it when the wallpaper changes. The Plasma Fusion wallpaper declares
-  `#2F6FDF` as its accent colour, so "From wallpaper" on it gives the board blue (as an explicit
-  accent).
+  `#2F6FDF` as its accent colour, so "From wallpaper" on it gives `AccentColor=47,111,223`; as for
+  any accent colour, Plasma then derives the selection colour itself (light: 109,154,232 with
+  black selected text; dark: 42,88,175), so the page and the desktop look paler than with Blue,
+  which keeps the colour scheme's own tuned colours.
 - With the Plasma Fusion decoration installed but another decoration in use, a note with a
   "Use It" button appears under the window buttons. "Show on hover" without that decoration shows a
   note that the buttons stay visible (the Aurorae themes cannot hide them).
@@ -118,10 +123,15 @@ fusion-config.sh backup; `~/.config/plasmafusionrc` is new (delete it to undo; s
   on the open page while nothing is pending (KConfigWatcher on kdeglobals and kwinrc).
 - Errors (a tool failed, a theme is missing, the shell did not answer) are shown in an inline
   message at the top of the page; the dock / global-menu switches say so when the Plasma Fusion
-  dock or top bar is not on the desktop.
-- Keyboard: Tab reaches every card, swatch, pill, segment and switch row; Space / Enter chooses;
-  Left / Right move within the segmented control; 2 px focus ring in the scheme's focus colour
-  (outside the selection ring on a chosen swatch). Accessible roles and names are set (radio
+  dock or top bar is not on the desktop, or when the Plasma shell is not running (they are read
+  again 3 s after it starts; a change still pending on them is kept). A dock or top-bar change
+  that cannot be applied because the shell stopped meanwhile is dropped on Apply, so the page shows
+  what is in effect.
+- Keyboard: Tab reaches every card, swatch, pill, segment and switch row (each is a tab stop, as
+  with Qt Quick radio buttons); Space chooses or toggles (Return does not, as in other Qt Quick
+  controls); Left / Right in the segmented control choose the neighbouring segment and move the
+  focus with it; 2 px focus ring in the scheme's focus colour (outside the selection ring on a
+  chosen swatch or pill, 1 px outside a segment). Accessible roles and names are set (radio
   buttons, check boxes, groups, headings).
 
 ## Look (board values, logical px)
@@ -133,11 +143,13 @@ fusion-config.sh backup; `~/.config/plasmafusionrc` is new (delete it to undo; s
 | cards 124 x 72, radius 10, 2 px border rgba(255,255,255,.1) / rgba(20,24,39,.1), selected #5b9dff / #2f6fdf; bar 8 px, window 62 x 36 at 14,16 radius 5 with 0 2 6 shadow, dock 48 x 8 radius 4 at 5 from the bottom; sunset card halves 60 + 60 with a 46 x 36 window at 38 | same geometry (contents in the 120 x 68 padding box, per-corner radii); selected border = the scheme's DecorationHover (dark, #5b9dff) / DecorationFocus (light, #2f6fdf), so it follows an accent; measured exact |
 | card label 12 px, #cdd3e4 / #3a4157, chosen 800 #cfe0ff / #1d4fb0 | same; with another accent: derived from it |
 | swatches 26 px, 10 apart; chosen: 2 px page-colour gap and 2 px ring | same; hover grows the swatch to 1.08 |
-| "From wallpaper" 26 px pill, padding 0 10, 1 px dashed rgba(255,255,255,.3) / rgba(20,24,39,.3), 11.5 px 700 | same (Canvas, 2 px dashes, 1 px gaps as the browser draws them); chosen: the swatch ring in the wallpaper colour, solid edge |
+| "From wallpaper" 26 px pill, padding 0 10, 1 px dashed rgba(255,255,255,.3) / rgba(20,24,39,.3), 11.5 px 700 | same: text width + 22 (padding and border), Canvas edge with 2 px dashes and 1 px gaps as the browser draws them; chosen: the swatch ring in the wallpaper colour, solid edge; measured 104 px wide against the board's 106 (text rendering) |
 | segmented 34 px, padding and gap 3, radius 10, rgba(255,255,255,.06); segments radius 7, flex widths; chosen #2f6fdf with white 12 px 800, others 12 px 600 #cdd3e4 / #3a4157 | same; widths = text width (measured at 800) + an equal share of the rest; chosen = Selection background and text |
 | switch rows 40 px, 13 px text, 1 px rgba(...,.06) lines; switch 40 x 22, knob 18 at 2 px, on #2f6fdf, off rgba(255,255,255,.18) knob #e8ebf4 / rgba(20,24,39,.18) knob white with 0 1 3 shadow | same; animated knob |
 
 ## Verification
+
+The builder's checks (1.0.0-1); the review's checks of 1.0.0-3 are under "Review" at the end.
 
 - `qmllint` (Qt 6.11.2) on every QML file: clean apart from the usual unqualified `kcm` / `i18n`
   context names.
@@ -207,30 +219,35 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/kcm-cpp/`
   background, e.g. teal → 51,148,142 dark, 118,213,199 light with black selected text).
 - States the board does not draw: "From wallpaper" chosen (swatch ring in the wallpaper colour),
   hover on cards, swatches and segments, keyboard focus rings, the notes described above.
-- Text uses the session's font rendering (subpixel antialiasing), the board's is greyscale; the
-  11.5 px pill text is about 4 px narrower in total.
+- Text uses the session's font rendering (subpixel antialiasing, whole-pixel glyph advances), the
+  board's is greyscale with fractional advances; the 11.5 px pill text is about 2 px narrower.
 - Follow sunset relies on Plasma's automatic light/dark switching (its schedule, idle handling
   and location), not on a Plasma Fusion service.
 
 ## Needs from other parts
 
-- Look-and-feel (Global Themes), medium: both Global Themes set `[kwinrc][org.kde.kdecoration2]
-  library=org.kde.kwin.aurorae.v2` and the Aurorae theme, and every Global Theme apply writes them
-  to kdedefaults and removes the user's values. Plasma's automatic switching (Follow sunset) applies
-  the Global Theme at dawn and dusk without this page, so the chosen window buttons are lost then:
-  with the Plasma Fusion decoration the title bars go back to Aurorae, with the Aurorae fallback and
-  Left · circles the right-hand theme is shown with the left-circles button lists. Once the
-  decoration package is part of the install, name `library=org.plasmafusion.decoration` with an
-  empty `theme` in both Global Themes (the decoration follows the colour scheme, and plasmafusionrc
-  is not touched by a Global Theme). The page itself re-applies the buttons whenever it applies a
-  theme and while it is open.
+- Look-and-feel (Global Themes), medium, now actionable: both Global Themes still set
+  `[kwinrc][org.kde.kdecoration2] library=org.kde.kwin.aurorae.v2` and the Aurorae theme, and every
+  Global Theme apply writes them to kdedefaults and removes the user's values. Everything that
+  applies a Global Theme without this page therefore drops the chosen window buttons: Plasma's
+  automatic switching at dawn and dusk (Follow sunset), the quick-settings Dark style tile
+  (`plasma-apply-lookandfeel -a`), fusion-config.sh. With the Plasma Fusion decoration the title
+  bars go back to Aurorae (the page then shows its "Use It" note); with the Aurorae fallback and
+  Left · circles the right-hand theme is shown with the left-circles button lists. The decoration
+  package is installed system-wide on the ThinkPad since 2026-09-30 00:08Z, so name
+  `library=org.plasmafusion.decoration` with an empty `theme` in both Global Themes (the decoration
+  follows the colour scheme, plasmafusionrc is not touched by a Global Theme, and Plasma skips a
+  decoration that is not installed). The page itself re-applies the buttons whenever it applies a
+  theme and while it is open (verified).
 - Device scripts (`tools/device/fusion-config.sh` / `fusion-restore.sh`), low: add
   `plasmafusionrc` to the backed-up files so a restore also removes the window-button choice.
 - Dock (observation, low): in the virtual sessions the name pill and the magnification stay after
   the pointer jumps off the dock (absolute EIS motion) until it comes back; worth one check with a
   real mouse.
-- Lead: install the RPM after review (commands above); the module needs no other change on the
-  device.
+- Lead: install `plasma-fusion-settings-1.0.0-3` (commands above); the module needs no other
+  change on the device. With the decoration installed, the first visit shows the "Use It" note
+  until the Plasma Fusion decoration is chosen (Use It, any window-button choice, Light / Dark, or
+  Defaults, then Apply).
 
 ## ThinkPad changes made by this part
 
@@ -239,3 +256,86 @@ the real session untouched. Build scratch `/tmp/pfv-km-build` (tarball, rpmbuild
 sessions `/tmp/pfv-km-1..12` (earlier tooling) and `/var/tmp/pfv-km-*` (removed by remote.sh); the
 podman containers ran with `--rm` (no image built or pulled; the SELinux relabel of `:Z` applies
 only to the scratch directory). All removed at the end.
+
+Review (2026-09-29, prefixes `rkm-` and `rkm2-`): build scratch `/tmp/pfv-rkm2-build` and virtual
+sessions `/var/tmp/pfv-rkm2-1..5` (removed); the final RPM and its `.sha256` copied to
+`/var/tmp/plasma-fusion-rpms/kcm-cpp/` for the lead (kept). One session (rkm2-1) ran inside an
+unprivileged `bwrap` mount namespace that hid the system-wide decoration plugin from that session
+only. No sudo,
+no install, no input to the real session, no processes of the real session touched.
+
+## Review
+
+Adversarial review, 2026-09-29. It continues the first review (prefix `rkm-`, killed by the
+laptop reboot at 23:50Z; its fixes are in commit 12d00d3, its run rkm-6 left no results). Every
+earlier fix was checked again in the code and in the runs below. Result: `1.0.0-3`, ready to
+install.
+
+Build checks (1.0.0-3, `build/rkm2/kcm`): 0 compiler warnings with KDE's `-Wall -Wextra` set;
+rpmlint only `no-url-tag`, `no-documentation`, `no-%check-section`, `invalid-url Source0`,
+`desktopfile-without-binary` (System Settings is not on the build host) and `incorrect-fsf-address`
+in the verbatim GPL-2.0 text (licence text left as published); `desktop-file-validate` clean;
+qmllint (Qt 6.11.2) clean apart from the unqualified `kcm` / `i18n` context names; the SRPM's
+tarball and spec are identical to the tree; all 28 requirements resolve on the ThinkPad.
+
+Runs (private virtual sessions on the ThinkPad with the whole stage installed by fusion-config.sh;
+scenarios, state dumps and logs in the share's `kcm-cpp/review-states/`; `build/rkm2/remote-run.sh`
+is `tools/vsession/remote.sh` plus the optional `bwrap` wrapper):
+
+| Run | Setup | Checked |
+|---|---|---|
+| rkm2-1 | Light, 1440x900, scale 1, decoration hidden (Aurorae fallback) | the missing rkm-6 checks: board comparison, From wallpaper, Show on hover note, Left · circles + Follow sunset (after dusk Plasma switched to Dark and the page put `PlasmaFusionDark-Left` back within 3 s); keyboard; a second Apply inside the re-apply window; 8 Apply clicks within a second (one apply, no error); a Global Theme applied from outside while the page is open (page follows) |
+| rkm2-2 | Dark, scale 1, the system-wide decoration | Use It, Right · glyphs / Left · circles / Show on hover (hidden away from the title bar, shown over it), Light, Follow sunset from Light (decoration kept after the switch to Dark), Dark, a pending switch across a shell restart, no panels, no shell, a Global Theme applied while the page is closed then Use It again, Defaults |
+| rkm2-3 | Dark then Light, 1920x1200 at scale 1.325 (the real session's) | look and focus rings at the fractional scale, kcmshell6 |
+| rkm2-4 | Dark, scale 1, final build | Overview edges `7,3` → off `3` → on `7,3` → off without the shell `3`; segment focus ring; pill width |
+| rkm2-5 | Dark and Light, scale 1, final build | the board state in both variants; a switch change that cannot be applied (shell stopped) is dropped; regression pass (Teal + Left · circles + hot corner, Light, Defaults) |
+
+Board comparison (rkm2-5, System Settings at scale 1 against desktop-dark-1 / desktop-light-1,
+`review-sbs-*-board-vs-session-2x.png`): measured from the section title's top, the card top (22),
+swatches (161-186), segmented track (231-264), switches (292, 333, 374) and row lines (323, 364)
+are on the board's rows in both variants; colours within 1-2 levels of the render (page, card
+fills, track, chosen segment #2f6fdf, switch on / off, knob). Remaining differences are the
+documented ones (560 px column, text rendering: the pill is 104 px against 106).
+
+Decoration contract with the system copy (`plasma-fusion-decoration-1.0-2`, `rpm -V` clean): the
+session's `QT_PLUGIN_PATH` held only the module's directory (no `org.kde.kdecoration3` in it); after
+Use It KWin's supportInformation shows `Plugin: org.plasmafusion.decoration` with an empty theme,
+and every button style, Light / Dark, Follow sunset and Defaults work with it.
+
+Re-verified fixes of the first review: switch rows 41 px apart (measured); `ComponentBehavior:
+Bound`, minimum width and wrapping (qmllint, runs); absolute OUTDIR; `hicolor-icon-theme`; the
+source-derived QML time stamp (rkm-2 showed stale QML without it and the new QML with it; each of
+this review's builds got a new stamp); `quit_app` / `session_pids` (used in every run, only PIDs of
+the private session; whether the builder's old `pkill -f "^systemsettings"` ever closed the real
+session's System Settings cannot be established afterwards); reload after a failed Apply (code;
+rkm-2); the shell watcher (rkm2-2, rkm2-5: notes switch to "not running" and back).
+
+Findings of this review, fixed in 1.0.0-3:
+
+- Medium: after Follow sunset, a second Apply within 20 s (for example another window-button
+  choice) was undone at the next re-apply check, which still used the button style of the first
+  Apply. The re-apply now uses the applied choice (`m_saved`); rkm2-1 kept Right · glyphs.
+- Medium: a pending dock or top-bar switch change was silently replaced when the Plasma shell
+  restarted while the page was open. It is kept now (rkm2-2); a change whose dock or top bar is gone
+  at Apply (shell stopped) is dropped instead of being shown as applied (rkm2-5).
+- Low: the hot-corner switch overwrote every Overview screen edge the user had set on the Screen
+  Edges page; now only the top-left corner is added or removed (rkm2-4).
+- Low (keyboard): Left / Right in the window-button control chose the neighbour but left the focus
+  on the old segment, and the focus mark on the chosen segment was a faint white inner edge. The
+  focus now moves with the choice, and every segment gets the page's 2 px focus ring 1 px outside
+  (rkm2-1, rkm2-4).
+- Low (look): the From wallpaper pill left out the CSS border (text + 20 instead of text + 22).
+- Docs: Return does not choose (only Space; the doc said Space / Enter); From wallpaper on the
+  Plasma Fusion wallpaper does not give the Blue look (Plasma derives a paler selection from any
+  accent colour); the pill text difference is about 2 px, not 4.
+- Test tooling: `dump_state` wrote the scenario's `set -x` trace into every state file.
+
+Open (not in this part's files):
+
+- The Global Themes still name the Aurorae decoration, so Follow sunset at dawn and dusk with the
+  page closed, the quick-settings Dark style tile and fusion-config.sh put Aurorae back (see
+  "Needs"). This matters now that the decoration is installed.
+- Without the decoration, Show on hover keeps the buttons visible (Aurorae limit; the page says so).
+- Not checked with real hardware input; everything above used KWin's EIS input in virtual
+  sessions.
+

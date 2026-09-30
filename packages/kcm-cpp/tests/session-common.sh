@@ -81,8 +81,11 @@ JS
   qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript pfkmgeom >/dev/null 2>&1
 }
 
-# Every value the module reads or writes, to $OUT/state-$1.txt.
+# Every value the module reads or writes, to $OUT/state-$1.txt (without the scenario's set -x
+# trace, which would otherwise land in the file too).
 dump_state() {
+  local trace=0
+  case $- in *x*) trace=1; set +x ;; esac
   {
     for k in LookAndFeelPackage AutomaticLookAndFeel DefaultLightLookAndFeel DefaultDarkLookAndFeel; do
       echo "kdeglobals [KDE] $k=$(kreadconfig6 --file kdeglobals --group KDE --key $k)"
@@ -115,4 +118,6 @@ JS
 )"
     qdbus org.kde.KWin /KWin supportInformation | grep -E "^(Plugin|Theme):" | sed 's/^/kwin decoration /'
   } >"$OUT/state-$1.txt" 2>&1
+  [ "$trace" = 1 ] && set -x
+  return 0
 }

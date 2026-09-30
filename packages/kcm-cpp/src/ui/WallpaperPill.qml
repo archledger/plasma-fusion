@@ -19,7 +19,8 @@ T.AbstractButton {
     property color wallpaperColor: "transparent"
     readonly property color ringColor: wallpaperColor.a > 0 ? wallpaperColor : pal.cardSelected
 
-    implicitWidth: label.implicitWidth + 20
+    // CSS box: 10 px padding and the 1 px border on each side.
+    implicitWidth: label.implicitWidth + 22
     implicitHeight: 26
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus

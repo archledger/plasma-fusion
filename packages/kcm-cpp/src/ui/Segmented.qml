@@ -50,12 +50,26 @@ Rectangle {
         font.weight: Font.ExtraBold
     }
 
+    // Left / Right on a segment choose the neighbouring one and move the keyboard focus with it,
+    // as in a group of radio buttons.
+    function step(from, delta) {
+        const index = Math.max(0, Math.min(model.length - 1, from + delta));
+        if (index !== currentIndex) {
+            activated(index);
+        }
+        const item = segments.itemAt(index);
+        if (item) {
+            item.forceActiveFocus(Qt.TabFocusReason);
+        }
+    }
+
     Row {
         x: 3
         y: 3
         spacing: 3
 
         Repeater {
+            id: segments
             model: control.model
             delegate: T.AbstractButton {
                 id: segment
@@ -75,20 +89,32 @@ Rectangle {
                 Accessible.onPressAction: segment.clicked()
 
                 onClicked: control.activated(index)
-                Keys.onLeftPressed: control.activated(Math.max(0, control.currentIndex - 1))
-                Keys.onRightPressed: control.activated(Math.min(control.model.length - 1, control.currentIndex + 1))
+                Keys.onLeftPressed: control.step(index, -1)
+                Keys.onRightPressed: control.step(index, 1)
 
-                background: Rectangle {
-                    radius: 7
-                    color: segment.chosen ? control.pal.accent
-                        : segment.down ? control.pal.segmentBackground
-                        : segment.hovered ? control.pal.segmentHover : "transparent"
-                    border.width: segment.visualFocus ? 2 : 0
-                    border.color: segment.chosen ? Qt.rgba(1, 1, 1, 0.7) : control.pal.focusRing
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: Kirigami.Units.shortDuration
+                background: Item {
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 7
+                        color: segment.chosen ? control.pal.accent
+                            : segment.down ? control.pal.segmentBackground
+                            : segment.hovered ? control.pal.segmentHover : "transparent"
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: Kirigami.Units.shortDuration
+                            }
                         }
+                    }
+                    // Keyboard focus: a 2 px ring in the focus colour 1 px outside the segment (in
+                    // the track's 3 px padding), so it also shows around the chosen segment.
+                    Rectangle {
+                        visible: segment.visualFocus
+                        anchors.fill: parent
+                        anchors.margins: -3
+                        radius: 10
+                        color: "transparent"
+                        border.width: 2
+                        border.color: control.pal.focusRing
                     }
                 }
                 contentItem: Item {

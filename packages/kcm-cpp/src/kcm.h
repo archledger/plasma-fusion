@@ -176,10 +176,9 @@ private:
     KConfigWatcher::Ptr m_kwinWatcher;
     QTimer m_reloadTimer;
     // After "Follow sunset" is applied, Plasma switches the Global Theme on its own, which puts
-    // the Global Theme's window decoration back; the window-button choice is re-applied when
-    // that happens within this time.
+    // the Global Theme's window decoration back; the applied window-button choice (m_saved, also
+    // when it is applied again meanwhile) is put back when that happens within this time.
     QDeadlineTimer m_reapplyDecorationUntil;
-    int m_reapplyButtonStyle = RightGlyphs;
     bool reapplyingDecoration() const;
     void restoreDecorationIfReplaced();
 };

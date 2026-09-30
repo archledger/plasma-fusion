@@ -588,11 +588,20 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         const QJsonObject state = QJsonDocument::fromJson(lastLine(reply.value()).toUtf8()).object();
         m_dockAvailable = state.value(u"docks"_s).toInt() > 0;
         m_topBarAvailable = state.value(u"topBars"_s).toInt() > 0;
+        // A change still pending on the page (the shell restarted meanwhile) is kept.
         if (m_dockAvailable) {
-            m_current.magnify = m_saved.magnify = state.value(u"magnify"_s).toBool(true);
+            const bool pending = m_current.magnify != m_saved.magnify;
+            m_saved.magnify = state.value(u"magnify"_s).toBool(true);
+            if (!pending) {
+                m_current.magnify = m_saved.magnify;
+            }
         }
         if (m_topBarAvailable) {
-            m_current.globalMenu = m_saved.globalMenu = state.value(u"menu"_s).toBool(true);
+            const bool pending = m_current.globalMenu != m_saved.globalMenu;
+            m_saved.globalMenu = state.value(u"menu"_s).toBool(true);
+            if (!pending) {
+                m_current.globalMenu = m_saved.globalMenu;
+            }
         }
     }
     Q_EMIT shellStateChanged();
@@ -643,12 +652,15 @@ void PlasmaFusionKcm::restoreDecorationIfReplaced()
     const KConfigGroup decoration(kwin, s_kwinDecorationGroup);
     const QString library = decoration.readEntry("library", QString());
     const QString theme = decoration.readEntry("theme", QString());
+    // The last applied choice: an Apply made after "Follow sunset" (still within the time above)
+    // may have changed it.
+    const int buttonStyle = m_saved.buttonStyle;
     const bool matches = m_decorationInstalled
         ? library == s_decorationId
-        : (library == s_auroraeLibrary && theme == s_auroraeThemePrefix + expectedAuroraeTheme(currentVariantIsLight(), m_reapplyButtonStyle));
+        : (library == s_auroraeLibrary && theme == s_auroraeThemePrefix + expectedAuroraeTheme(currentVariantIsLight(), buttonStyle));
     if (!matches) {
         qCInfo(KCM_PLASMAFUSION) << "Global Theme switched: applying the window buttons again";
-        applyDecoration(m_reapplyButtonStyle);
+        applyDecoration(buttonStyle);
         reconfigureKWin(false);
     }
 }
@@ -735,17 +747,27 @@ void PlasmaFusionKcm::save()
     if (reconfigure) {
         reconfigureKWin(after.hotCorner != before.hotCorner);
     }
-    // 4. Plasma shell.
-    if (m_dockAvailable && after.magnify != before.magnify) {
-        applyMagnify(after.magnify);
+    // 4. Plasma shell. A switch whose dock or top bar went away meanwhile (the shell stopped)
+    //    keeps the value last read, so the page shows what is in effect.
+    if (after.magnify != before.magnify) {
+        if (m_dockAvailable) {
+            applyMagnify(after.magnify);
+        } else {
+            m_current.magnify = before.magnify;
+            Q_EMIT magnifyChanged();
+        }
     }
-    if (m_topBarAvailable && after.globalMenu != before.globalMenu) {
-        applyGlobalMenu(after.globalMenu);
+    if (after.globalMenu != before.globalMenu) {
+        if (m_topBarAvailable) {
+            applyGlobalMenu(after.globalMenu);
+        } else {
+            m_current.globalMenu = before.globalMenu;
+            Q_EMIT globalMenuChanged();
+        }
     }
 
     if (after.style == FollowSunset && before.style != FollowSunset) {
         m_reapplyDecorationUntil = QDeadlineTimer(20000);
-        m_reapplyButtonStyle = after.buttonStyle;
     }
     if (decoration) {
         // applyDecoration uses the Plasma Fusion decoration whenever it is installed.
@@ -911,7 +933,19 @@ void PlasmaFusionKcm::applyHotCorner(bool on)
 {
     KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
     kwin->reparseConfiguration();
-    KConfigGroup(kwin, u"Effect-overview"_s).writeEntry("BorderActivate", on ? s_hotCornerOn : s_hotCornerOff, KConfig::Notify);
+    KConfigGroup overview(kwin, u"Effect-overview"_s);
+    // Only the top-left corner changes; other screen edges set for Overview (Screen Edges page)
+    // are kept. With no edge left the value is 9 (none), as tools/device/fusion-config.sh writes.
+    QList<int> borders = overview.readEntry("BorderActivate", QList<int>{s_hotCornerOn});
+    borders.removeAll(s_hotCornerOn);
+    borders.removeAll(s_hotCornerOff);
+    if (on) {
+        borders.prepend(s_hotCornerOn);
+    }
+    if (borders.isEmpty()) {
+        borders.append(s_hotCornerOff);
+    }
+    overview.writeEntry("BorderActivate", borders, KConfig::Notify);
     kwin->sync();
 }
 

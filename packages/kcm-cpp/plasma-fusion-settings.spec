@@ -6,7 +6,7 @@
 
 Name:           plasma-fusion-settings
 Version:        1.0.0
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Plasma Fusion page for System Settings
 License:        GPL-2.0-or-later AND CC-BY-SA-4.0
 Source0:        %{name}-%{version}.tar.gz
@@ -70,6 +70,16 @@ echo "QML time stamp: $SOURCE_DATE_EPOCH"
 %{_kf6_datadir}/icons/hicolor/scalable/apps/plasmafusion-logo.svg
 
 %changelog
+* Tue Sep 29 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0.0-3
+- Keep a window-button choice applied just after Follow sunset when Plasma
+  switches the Global Theme
+- Keep a pending dock or top-bar switch change when the Plasma shell restarts,
+  and drop one that could not be applied
+- Keep other Overview screen edges when the hot corner is changed
+- Move the keyboard focus with the arrow keys in the window-button control and
+  show a focus ring around the chosen segment
+- Make the From wallpaper pill as wide as on the board
+
 * Tue Sep 29 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0.0-2
 - Show a new error after the previous error message was closed
 - Show the settings in effect after an Apply that failed
