@@ -148,11 +148,13 @@ has_name() { bus call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop
 has_name org.kde.KWin || die "KWin is not running on this session bus"
 has_name org.kde.kglobalaccel || die "kglobalaccel is not running on this session bus"
 
-# Run from outside the session (SSH with only the session bus): the Qt tools need the session's
-# display, and the configuration cascade its XDG_CONFIG_DIRS (with ~/.config/kdedefaults), so
-# take them from the running plasmashell. Without one, Qt tools run offscreen.
+# Run from outside the session (SSH with the session bus, with or without WAYLAND_DISPLAY): the
+# Qt tools need the session's display, and the configuration cascade its XDG_CONFIG_DIRS (with
+# ~/.config/kdedefaults, which startplasma always adds), so take them from the running
+# plasmashell. Without the kdedefaults layer every key a Global Theme set would read as unset.
+# Without a plasmashell, Qt tools run offscreen.
 OUTSIDE=0
-if [ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]; then
+if [ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ] || [[ ":${XDG_CONFIG_DIRS:-}:" != *"/kdedefaults:"* ]]; then
   OUTSIDE=1
   shell_pid=$(bus call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s org.kde.plasmashell 2>/dev/null | awk '{print $2}')
   if [ -n "$shell_pid" ] && [ -r "/proc/$shell_pid/environ" ]; then
@@ -164,6 +166,8 @@ if [ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]; then
     done <"/proc/$shell_pid/environ"
   fi
   [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ] || export QT_QPA_PLATFORM=offscreen
+  [[ ":${XDG_CONFIG_DIRS:-}:" == *"/kdedefaults:"* ]] ||
+    echo "fusion-config: note: no running plasmashell to take XDG_CONFIG_DIRS from; values from ~/.config/kdedefaults read as unset" >&2
 fi
 
 package_dir() { # $1 type dir (plasma/look-and-feel, kwin/scripts...), $2 id
