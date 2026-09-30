@@ -37,7 +37,7 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 | Global Theme, dark | `org.plasmafusion.dark.desktop` ("Plasma Fusion Dark") | `~/.local/share/plasma/look-and-feel/` |
 | Global Theme, light | `org.plasmafusion.light.desktop` ("Plasma Fusion Light") | same |
 | Global Theme, previous look | `org.plasmafusion.previous.desktop` ("My previous desktop": the look before the first `fusion-config.sh` apply, written by `tools/device/previous-theme.py`) | same |
-| Colour schemes | `PlasmaFusionDark.colors`, `PlasmaFusionLight.colors` ([General] Name "Plasma Fusion Dark/Light") | `~/.local/share/color-schemes/` |
+| Colour schemes | `PlasmaFusionDark.colors`, `PlasmaFusionLight.colors` ([General] Name "Plasma Fusion Dark/Light"), `PlasmaFusionHighContrast.colors` (the settings module's high-contrast switch) | `~/.local/share/color-schemes/` |
 | Plasma style | `plasma-fusion-dark`, `plasma-fusion-light` | `~/.local/share/plasma/desktoptheme/` |
 | Icon themes | `PlasmaFusion` (light UI, inherits `breeze`), `PlasmaFusion-Dark` (dark UI, inherits `breeze-dark`) | `~/.local/share/icons/` |
 | Cursor themes | `PlasmaFusion-cursors` (dark fill, default), `PlasmaFusion-Light-cursors` | `~/.local/share/icons/` |
@@ -50,6 +50,7 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 | Window switcher | `org.plasmafusion.switcher` (KWin/WindowSwitcher) | `~/.local/share/kwin/tabbox/` |
 | KWin script, snapping | `plasmafusion-snap` (Meta+Z snap layouts, fill-the-other-half); shortcut name `Plasma Fusion: Snap Layouts` | `~/.local/share/kwin/scripts/` |
 | KWin script, dialogs | `plasmafusion-attach` (modal dialogs pinned under the parent's title bar) | same |
+| KWin script, tablet | `plasmafusion-tablet` (tablet posture: full-screen apps, panels 44/80 px, dock hiding; shortcut "Plasma Fusion: Tablet Window Mode") | same |
 | Plasmoid, top-left | `org.plasmafusion.appname` (logo button + active app name) | `~/.local/share/plasma/plasmoids/` |
 | Plasmoid, top-centre | `org.plasmafusion.clockpill` (workspace dots + date + time) | same |
 | Plasmoid, top-right | `org.plasmafusion.quicksettings` (status pill + quick-settings popup + notification list) | same |
@@ -58,6 +59,9 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 | Plasmoid, desktop card | `org.plasmafusion.weathercard` (current weather, today's high and low) | same |
 | Plasmoid, desktop card | `org.plasmafusion.calendarcard` (this month; a click on a day opens KOrganizer) | same |
 | Plasmoid, desktop card | `org.plasmafusion.systemcard` (processor and memory bars) | same |
+| Plasmoid, pen | `org.plasmafusion.pen` (pen button in tablet posture, New note / Snip / Mark up / Whiteboard / pen settings; Meta+Shift+W) and its Xournal++ templates `plasma-fusion/pen/templates/{Note,Whiteboard}.xopp` | same; templates in `~/.local/share/plasma-fusion/pen/` |
+| Layout templates | `org.plasmafusion.panel.topbar`, `org.plasmafusion.panel.dock` ("Add Panel" entries) | `~/.local/share/plasma/layout-templates/` |
+| Power tiers | `plasma-fusion-powerfx` (program) and `plasma-fusion-powerfx.service` (user unit, enabled by `fusion-config.sh`) | `~/.local/libexec/plasma-fusion/`, `~/.config/systemd/user/` (system package: `/usr/libexec/plasma-fusion/`, `/usr/share/plasma-fusion/powerfx/`) |
 | Konsole | `PlasmaFusionDark.colorscheme`, `PlasmaFusionLight.colorscheme`, profile `Plasma Fusion.profile` | `~/.local/share/konsole/` |
 | Kate/KWrite | `Plasma Fusion Dark.theme`, `Plasma Fusion Light.theme` | `~/.local/share/org.kde.syntax-highlighting/themes/` |
 | Plymouth theme (system, phase 2) | `plasma-fusion` (shipped as a source in `/usr/share/plasma-fusion/plymouth/`; installed and selected by `tools/system/plymouth-install.sh --select`; rollback `plymouth-set-default-theme -R bgrt`) | `/usr/share/plymouth/themes/plasma-fusion/` (root) |
@@ -66,7 +70,7 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 | Login check, env stub | `plasma-fusion-gate.sh` (runs the check before KWin starts, 4 s time limit) | `~/.config/plasma-workspace/env/` |
 | Login check, notification | `plasma-fusion-gate-notify.service` (wanted by `xdg-desktop-autostart.target`) | `~/.config/systemd/user/` |
 | Login check, state | `gate.log`, `gate/{tested,cache,off,saved,notify,notified,status}` | `~/.local/state/plasma-fusion/` |
-| RPM packages | `plasma-fusion` (the data parts above in system paths: colour schemes, Global Themes, Plasma styles, widgets, lock shell, icons, cursors, Aurorae themes, wallpapers, switcher, KWin scripts, Konsole and Kate themes, fonts; plus greeter and Plymouth sources and tools under `/usr/share/plasma-fusion/`; `packaging/build-rpm.sh`), `plasma-fusion-decoration` (`packages/decoration-cpp/tools/build-rpm.sh`), `plasma-fusion-settings` (`packages/kcm-cpp/build-rpm.sh`) | `/usr` (root) |
+| RPM packages | `plasma-fusion` (the data parts above in system paths: colour schemes, Global Themes, Plasma styles, widgets, layout templates, lock shell, icons, cursors, Aurorae themes, wallpapers, switcher, KWin scripts, Konsole and Kate themes, fonts, pen templates, the power-tiers program and unit; plus greeter and Plymouth sources, the per-user templates and the tools (with the login check) under `/usr/share/plasma-fusion/`; `packaging/build-rpm.sh`), `plasma-fusion-decoration` (`packages/decoration-cpp/tools/build-rpm.sh`), `plasma-fusion-settings` (`packages/kcm-cpp/build-rpm.sh`) | `/usr` (root) |
 
 ## New names and keys (one-pass build registry, 2026-09-30)
 
@@ -106,15 +110,19 @@ Each part owns its own `generators/<part>/`, `packages/<part>/` and `tools/build
 
 ## Visual testing
 
-`tools/vsession/remote.sh NAME SCENARIO SEED_HOME [1440x900] [TIMEOUT]` copies a HOME tree to `/tmp/pfv-NAME/home` on the ThinkPad, starts a private headless KWin (virtual output, OpenGL on the Iris Xe, blur available) with kactivitymanagerd, kded6 and plasmashell on a private D-Bus bus, sources the scenario, and copies screenshots and logs back to `./vsession-out/NAME/`. The scenario can call `shot NAME`, `evaljs FILE`, `qdbus ...`, `wait_for_name NAME`. It never touches the logged-in desktop. Use a unique NAME per agent.
+`tools/vsession/remote.sh NAME SCENARIO SEED_HOME [SIZE] [TIMEOUT]` (run under `build/lead/vslot.sh`, which holds a session slot) copies a HOME tree to `/var/tmp/pfv-NAME/home` on the ThinkPad, starts a private headless KWin (virtual output, OpenGL on the Iris Xe, blur available) with kactivitymanagerd, kded6 and plasmashell on a private D-Bus bus, sources the scenario, and copies screenshots and logs back to `./vsession-out/NAME/`. The scenario can call `shot NAME`, `evaljs FILE`, `qdbus ...`, `wait_for_name NAME`. It never touches the logged-in desktop. Use a unique NAME per agent.
 
-Compare screenshots with the board renders in `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-design-source/renders/` (and the boards' source for exact numbers). The virtual output is 1440x900, the same size as the boards.
+Compare screenshots with the board renders in `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-design-source/renders/` (and the boards' source for exact numbers). Test at 1920x1200 with `PFV_SCALE=1.3333333` (the ThinkPad panel at 4/3, 1440x900 logical: the boards' size); `tools/vsession/vsession.sh` lists the other `PFV_*` options (tablet mode, two outputs, fonts, reduced motion).
 
 ## Phases
 
 1. **Phase 1 — no compiled code, per user.** Colours, fonts, wallpapers, Plasma style, icons, cursors, Aurorae decoration, Global Themes with layout and splash, shell plasmoids, KWin switcher and scripts, lock-screen shell, Konsole/Kate themes, GTK overrides. Built and checked in virtual sessions, then applied to the ThinkPad's real session with a backup and restore script.
 2. **Phase 2 — root on the ThinkPad.** System-wide copies for the login greeter, greeter settings, Plymouth theme (preview with `plymouthd --debug`, rollback `plymouth-set-default-theme -R bgrt`), missing apps for the Code and Notes slots (Kate, Marknote), optional plasma-union evaluation.
 3. **Phase 3 — compiled.** C++ KDecoration3 "Plasma Fusion" decoration (14 px corners with clipping, per-state shadows, show-on-hover buttons, hover-hold on maximize for snap layouts) and a Fusion KCM (Appearance page), built in a Fedora 44 container on the laptop.
+
+## Integration (INT-1, 2026-09-30)
+
+The one-pass build's test gate, its results and the exceptions for the deploy: `docs/parts/integration.md`.
 
 ## Accepted deviations (known platform limits)
 
@@ -123,3 +131,10 @@ Compare screenshots with the board renders in `/mnt/archledger-gp/artifacts/plas
 - Stock OSD component: styled by the Plasma style, placed by KWin at 2/3 height instead of the bottom.
 - Login screen layout stays the stock greeter layout (styling only).
 - Plasmashell's own QMenu context menus keep Breeze's small radius until Union covers QtWidgets.
+- The Aurorae title bars and the Plymouth boot splash stay blue (they cannot follow the accent colour).
+- Stock system-tray items keep their 36 px targets (the Fusion widgets have 44 px in tablet posture).
+- Two focus indicators show during keyboard navigation in a panel (Plasma's and the widget's own),
+  kept in round 2 against GAPS G25.
+- The Alt+Tab switcher keeps the board's full-screen dim: KWin's render time while it opens is about
+  6 ms per frame against the 3.5 ms budget (3.7 ms without the dim; owner's choice, see
+  `docs/parts/kwin.md`, KWIN-2).
