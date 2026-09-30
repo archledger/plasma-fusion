@@ -6,14 +6,14 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import org.kde.kirigami as Kirigami
 import org.kde.kwin as KWin
 
 // One window of the switcher grid (AltTab board): padding 10, radius 18, a 118 px live preview
 // with radius 10 and a 1 px edge, then the app icon (24) with the app name and window title.
 // Selected: accent fill .16 and a 2 px ring. The caption (icon, gap and text) follows the
-// user's text size; the preview and the paddings do not.
+// user's text size; the preview and the paddings do not. Moving the pointer over a card selects
+// it, a click activates it; in touch mode the selected card shows its close button.
 Item {
     id: card
 
@@ -26,9 +26,13 @@ Item {
     property bool selected: false
     property bool closeable: false
     property int thumbnailHeight: 118
+    // Touch mode: the close button shows on the selected card (there is no hover).
+    property bool touch: false
 
     signal activated()
     signal closeRequested()
+    // The pointer moved over the card (not: the card appeared under a resting pointer).
+    signal hoverSelected()
 
     Accessible.role: Accessible.ListItem
     Accessible.name: title.length > 0 ? appName + ", " + title : appName
@@ -73,15 +77,17 @@ Item {
         }
 
         // The preview fills the box like CSS "cover", top aligned, clipped to the rounded box.
+        // KWin paints the thumbnail (it alone knows where the frame is inside its texture, which
+        // also holds the window's shadow); one layer and one small shader round the corners
+        // (shaders/thumbnail.frag).
         Item {
             id: thumbClip
             anchors.fill: parent
             layer.enabled: true
-            layer.effect: MultiEffect {
-                maskEnabled: true
-                maskSource: thumbMask
-                maskThresholdMin: 0.5
-                maskSpreadAtMin: 1.0
+            layer.effect: ShaderEffect {
+                readonly property real radius: 10
+                readonly property size boxSize: Qt.size(width, height)
+                fragmentShader: Qt.resolvedUrl("shaders/thumbnail.frag.qsb")
             }
 
             KWin.WindowThumbnail {
@@ -98,15 +104,6 @@ Item {
         }
 
         Rectangle {
-            id: thumbMask
-            anchors.fill: parent
-            radius: 10
-            visible: false
-            layer.enabled: true
-            layer.smooth: true
-        }
-
-        Rectangle {
             anchors.fill: parent
             radius: 10
             color: "transparent"
@@ -114,17 +111,21 @@ Item {
             border.color: card.pal.thumbEdge
         }
 
-        // Close button, only while the pointer is over the card.
+        // Close button: while the pointer is over the card, and on the selected card in touch
+        // mode (28 px drawn there, a 44 px target).
         Rectangle {
             id: closeButton
+            readonly property bool forTouch: card.touch && card.selected
             anchors.top: parent.top
             anchors.right: parent.right
             anchors.margins: 6
-            width: 22
-            height: 22
-            radius: 11
-            visible: card.closeable && (pointer.containsMouse || closeArea.containsMouse)
-            color: closeArea.containsMouse ? "#d9434b" : Qt.rgba(0, 0, 0, 0.45)
+            width: forTouch ? 28 : 22
+            height: width
+            radius: width / 2
+            visible: card.closeable && (forTouch || pointer.containsMouse || closeArea.containsMouse)
+            color: closeArea.containsMouse || closeArea.pressed ? "#d9434b" : Qt.rgba(0, 0, 0, 0.45)
+            Accessible.role: Accessible.Button
+            Accessible.name: i18nd("plasmafusion", "Close window")
 
             Canvas {
                 anchors.centerIn: parent
@@ -148,6 +149,7 @@ Item {
             MouseArea {
                 id: closeArea
                 anchors.fill: parent
+                anchors.margins: closeButton.forTouch ? -8 : 0
                 hoverEnabled: true
                 onClicked: card.closeRequested()
             }
@@ -209,6 +211,18 @@ Item {
         z: -1
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+        // Hover selects only after the pointer really moved: the card under a resting pointer
+        // when the switcher opens must not take the selection.
+        property point last: Qt.point(NaN, NaN)
+        onPositionChanged: mouse => {
+            const p = mapToItem(null, mouse.x, mouse.y);
+            const moved = !isNaN(last.x) && (Math.abs(p.x - last.x) >= 1 || Math.abs(p.y - last.y) >= 1);
+            last = Qt.point(p.x, p.y);
+            if (moved && !card.selected) {
+                card.hoverSelected();
+            }
+        }
+        onExited: last = Qt.point(NaN, NaN)
         onClicked: mouse => {
             if (mouse.button === Qt.MiddleButton) {
                 if (card.closeable) {

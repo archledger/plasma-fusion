@@ -14,9 +14,10 @@ import org.kde.plasma.core as PlasmaCore
 // Plasma Fusion window switcher (boards AltTab.dc.html and AltTabLight.dc.html).
 //
 // Two internal windows: a dim layer over the work area (below the top bar), then the frosted
-// card on top of it. The card is created only after the dim layer has shown a frame, so it is
-// always stacked above it, and it is declared first so that KWin (which sends key events to
-// the first window it finds below this object) talks to the card.
+// card on top of it. Both are created the first time the switcher opens and then only shown and
+// hidden (BACKLOG S3, E14): the dim layer first, the card right after it in the same turn, so the
+// card is stacked above it and both appear in the same frame. The card is declared first so that
+// KWin (which sends key events to the first window it finds below this object) talks to it.
 //
 // Workspace tabs: the switcher filters KWin's list itself. With kwinrc [TabBox] DesktopMode=0
 // (every workspace in the list) "This workspace" and "All workspaces" both work (click or A).
@@ -31,18 +32,26 @@ KWin.TabBoxSwitcher {
         // Its sizes are needed before the card window exists, so the scale comes from the output.
         FusionMetrics {
             id: fusionMetrics
-            screenScale: root.output ? root.output.devicePixelRatio : 0
+            screenScale: (root.output && root.output.devicePixelRatio) || 0
             area: root.dimArea
         }
         readonly property FusionMetrics metrics: fusionMetrics
 
-        readonly property int cellWidth: 196
-        readonly property int thumbnailHeight: 118
+        // ADAPTIVE 5.7: cells clamp(round(W / 7.35), 160, 260) wide (196 at 1440), previews
+        // 0.6 x the cell, at most 5 columns (6 on a wide screen).
+        readonly property int cellWidth: Math.max(160, Math.min(260, Math.round(tabBox.screenGeometry.width / 7.35)))
+        readonly property int thumbnailHeight: Math.round(cellWidth * 0.6)
         // Board: padding 10, the preview, 10, the caption (34 px of text, scaled with it), 10.
         readonly property real captionHeight: metrics.px(34)
         readonly property real cellHeight: 10 + thumbnailHeight + 10 + captionHeight + 10
         readonly property int gap: 16
-        readonly property int maxColumns: 5
+        readonly property int maxColumns: metrics.wide ? 6 : 5
+        Motion {
+            id: motion
+        }
+        FusionTablet {
+            id: tabletState
+        }
 
         // Filter state, rebuilt whenever the switcher opens or its list changes.
         property bool showAll: false
@@ -55,8 +64,30 @@ KWin.TabBoxSwitcher {
         property var output: null
         property var desktop: null
         property string desktopName: ""
-        property bool dimShown: false
         property bool open: false
+        // The two windows, once they exist (see the top comment).
+        property bool everShown: false
+        property var cardWindow: null
+        property var dimWindow: null
+        function showWindows() {
+            everShown = true;
+            if (dimWindow) {
+                dimWindow.visible = true;
+            }
+            if (cardWindow) {
+                cardWindow.visible = true;
+                cardWindow.requestActivate();
+                cardWindow.mainItem.forceActiveFocus();
+            }
+        }
+        function hideWindows() {
+            if (cardWindow) {
+                cardWindow.visible = false;
+            }
+            if (dimWindow) {
+                dimWindow.visible = false;
+            }
+        }
 
         readonly property bool canShowAll: tabBox.allDesktops
         readonly property int shownCount: shownRows.length
@@ -424,9 +455,11 @@ KWin.TabBoxSwitcher {
                 }
             }
             function onVisibleChanged() {
-                if (!tabBox.visible) {
+                if (tabBox.visible) {
+                    root.showWindows();
+                } else {
                     root.open = false;
-                    root.dimShown = false;
+                    root.hideWindows();
                 }
             }
             function onCurrentIndexChanged() {
@@ -448,7 +481,7 @@ KWin.TabBoxSwitcher {
         // The card. Declared first: see the comment at the top.
         Instantiator {
             id: cardInstantiator
-            active: tabBox.visible && root.dimShown
+            active: root.everShown
             delegate: PlasmaCore.Dialog {
                 id: cardWindow
 
@@ -492,8 +525,10 @@ KWin.TabBoxSwitcher {
 
                 Component.onCompleted: {
                     useCardFrame();
-                    visible = true;
-                    requestActivate();
+                    root.cardWindow = cardWindow;
+                    // Keys typed before the window's first frame (KWin sends them to this
+                    // window as soon as the switcher is asked for) must reach the card.
+                    scope.forceActiveFocus();
                 }
 
                 onSceneGraphError: () => {
@@ -636,7 +671,8 @@ KWin.TabBoxSwitcher {
                             }
 
                             Behavior on contentY {
-                                NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                                enabled: motion.animate
+                                NumberAnimation { duration: motion.hover; easing.type: motion.standardEasing }
                             }
 
                             Grid {
@@ -670,8 +706,15 @@ KWin.TabBoxSwitcher {
                                         closeable: model.closeable === true
                                         selected: index === tabBox.currentIndex
                                         thumbnailHeight: root.thumbnailHeight
+                                        touch: tabletState.tablet || root.metrics.touch
                                         onActivated: tabBox.model.activate(index)
                                         onCloseRequested: tabBox.model.close(index)
+                                        onHoverSelected: {
+                                            if (root.shownMap[index] === true) {
+                                                root.lastIndex = index;
+                                                tabBox.currentIndex = index;
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -695,14 +738,23 @@ KWin.TabBoxSwitcher {
                             renderType: Text.QtRendering
                         }
 
-                        // Key hints.
-                        Row {
+                        // Key hints: one centred row; on a narrow screen they wrap (ADAPTIVE 5.7).
+                        Flow {
                             id: hints
+                            readonly property real natural: {
+                                let total = 0;
+                                for (let i = 0; i < children.length; ++i) {
+                                    total += children[i].implicitWidth + (i > 0 ? spacing : 0);
+                                }
+                                return Math.ceil(total);
+                            }
+                            readonly property real room: root.maxCardWidth - 2 * root.padSide
                             anchors.horizontalCenter: parent.horizontalCenter
                             y: flick.y + flick.height + root.sectionGap
+                            width: Math.min(natural, room)
                             spacing: root.metrics.px(22)
-                            onImplicitWidthChanged: root.hintWidth = Math.ceil(implicitWidth)
-                            onImplicitHeightChanged: root.hintHeight = Math.ceil(implicitHeight)
+                            onWidthChanged: root.hintWidth = Math.ceil(width)
+                            onHeightChanged: root.hintHeight = Math.ceil(height)
 
                             Hint {
                                 pal: root.pal
@@ -747,41 +799,33 @@ KWin.TabBoxSwitcher {
         // premultiplied (the light tint would turn into opaque white).
         Instantiator {
             id: dimInstantiator
-            active: tabBox.visible
+            active: root.everShown
             delegate: Window {
-                flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint
+                id: dimLayer
+                // A tooltip-type window: KWin fades it in like the card (its popup fade). As a
+                // normal window it got KWin's 200 ms scale animation, full screen, which ended
+                // after the card's and set the time to a settled picture.
+                flags: Qt.ToolTip | Qt.BypassWindowManagerHint | Qt.FramelessWindowHint
                        | Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus
                 color: "transparent"
                 x: root.dimArea.x
                 y: root.dimArea.y
                 width: root.dimArea.width
                 height: root.dimArea.height
-                visible: true
+                visible: false
                 title: i18nd("plasmafusion", "Window switcher backdrop")
-                onFrameSwapped: {
-                    if (!root.dimShown) {
-                        root.dimShown = true;
-                    }
-                }
+                Component.onCompleted: root.dimWindow = dimLayer
 
                 Rectangle {
                     anchors.fill: parent
                     color: root.pal.dim
-                    // Keys typed before the card exists (at most its first frame) arrive here.
-                    // The window never becomes active (it does not take focus), so the item
-                    // takes active focus itself, or Qt Quick would not deliver them.
+                    // Keys that arrive here (the window never becomes active, so the item takes
+                    // active focus itself) go to the switcher too.
                     focus: true
                     Component.onCompleted: forceActiveFocus()
                     Keys.onPressed: event => root.handleKey(event)
                 }
             }
-        }
-
-        // Never leave the switcher without its card if the dim layer cannot draw.
-        Timer {
-            interval: 150
-            running: tabBox.visible && !root.dimShown
-            onTriggered: root.dimShown = true
         }
     }
 }

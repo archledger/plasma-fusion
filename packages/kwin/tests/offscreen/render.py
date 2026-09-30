@@ -75,7 +75,10 @@ def main():
     engine.rootContext().setContextObject(i18n)
     for k, v in props.items():
         engine.rootContext().setContextProperty(k, convert(v))
-    engine.rootContext().setContextProperty("packagesRoot", os.path.normpath(os.path.join(HERE, "..", "..")))
+    # PFK_PACKAGES: a tree with switcher/ and scripts/ built by tools/build.d/80-kwin.sh (the packages
+    # with their shared QML blocks); the default is the source tree.
+    packages = os.environ.get("PFK_PACKAGES") or os.path.normpath(os.path.join(HERE, "..", ".."))
+    engine.rootContext().setContextProperty("packagesRoot", os.path.abspath(packages))
     engine.warnings.connect(lambda ws: [print("QML:", w.toString(), file=sys.stderr) for w in ws])
     engine.load(QUrl.fromLocalFile(os.path.abspath(harness)))
     if not engine.rootObjects():

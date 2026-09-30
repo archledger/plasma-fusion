@@ -9,6 +9,8 @@
 # STAGE_HOME is a HOME tree from tools/build.sh (Plasma style and icons are taken from it). The
 # render runs with a private HOME/XDG tree and a private Xvfb display (:97 unless PFK_DISPLAY is
 # set), so it never touches the logged-in session. Pass dark=false for the light variant.
+# PFK_PACKAGES=DIR renders the built packages (DIR/switcher/<id>, DIR/scripts/<id>, as staged by
+# tools/build.d/80-kwin.sh with the shared QML blocks) instead of the source tree.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../../.." && pwd)
@@ -32,11 +34,21 @@ COLORS=$STAGE/.local/share/color-schemes/PlasmaFusion$VARIANT.colors
 printf '[Theme]\nname=%s\n' "$STYLE" > "$T/config/plasmarc"
 
 DISP=${PFK_DISPLAY:-:97}
+XVFB=
 if ! [ -e "/tmp/.X11-unix/X${DISP#:}" ]; then
   Xvfb "$DISP" -screen 0 1440x900x24 -nolisten tcp >/dev/null 2>&1 &
+  XVFB=$!
+  trap '[ -z "$XVFB" ] || kill "$XVFB" 2>/dev/null || true; rm -rf "$T"' EXIT
   sleep 1.5
 fi
-env -i HOME="$T" PATH=/usr/bin:/bin XDG_DATA_HOME="$T/data" XDG_CONFIG_HOME="$T/config" \
-  XDG_CACHE_HOME="$T/cache" XDG_DATA_DIRS=/usr/local/share:/usr/share XDG_RUNTIME_DIR="$T" \
-  QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="js.debug=true;qml.debug=true" DISPLAY="$DISP" QT_QPA_PLATFORM=xcb QSG_RENDER_LOOP=basic LANG=en_US.UTF-8 \
-  timeout -s KILL 60 python3 "$HERE/render.py" "$HARNESS" "$OUT" "$@"
+# A private session bus without service directories (session-bus.conf): without one Qt starts a
+# bus through dbus-launch, and that bus activates desktop portals that outlive the render and
+# mount a document directory inside the temporary tree.
+export T DISP HERE HARNESS OUT PFK_PACKAGES="${PFK_PACKAGES:-}"
+dbus-run-session --config-file="$HERE/session-bus.conf" -- bash -c '
+  exec env -i HOME="$T" PATH=/usr/bin:/bin XDG_DATA_HOME="$T/data" XDG_CONFIG_HOME="$T/config" \
+    XDG_CACHE_HOME="$T/cache" XDG_DATA_DIRS=/usr/local/share:/usr/share XDG_RUNTIME_DIR="$T" \
+    DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" PFK_PACKAGES="$PFK_PACKAGES" \
+    QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="js.debug=true;qml.debug=true" DISPLAY="$DISP" \
+    QT_QPA_PLATFORM=xcb QSG_RENDER_LOOP=basic LANG=en_US.UTF-8 \
+    timeout -s KILL 60 python3 "$HERE/render.py" "$HARNESS" "$OUT" "$@"' render "$@"

@@ -19,6 +19,8 @@ Item {
     property var window: null
     property bool selected: false
     property real thumbnailHeight: 140
+    // Tablet posture: the title is 14 px 700 (TABLET 4.10); the whole card is the target.
+    property bool tablet: false
     readonly property bool hovered: pointer.containsMouse
     readonly property var names: describe(window)
 
@@ -171,8 +173,8 @@ Item {
                 maximumLineCount: 1
                 textFormat: Text.PlainText
                 font.family: card.metrics.family
-                font.pointSize: card.metrics.font(13) * 0.75
-                font.weight: Font.ExtraBold
+                font.pointSize: card.metrics.font(card.tablet ? 14 : 13) * 0.75
+                font.weight: card.tablet ? Font.Bold : Font.ExtraBold
                 color: card.pal.text
             }
             Text {

@@ -112,8 +112,10 @@ Window {
 
     SequentialAnimation {
         id: appear
-        PauseAnimation { duration: 150 }
-        NumberAnimation { target: zone; property: "opacity"; to: 1; duration: 120; easing.type: Easing.OutCubic }
+        // Durations from Plasma's animation speed (the Motion tokens' base: short 100 ms, long
+        // 200 ms at speed 1; near 0 with animations off).
+        PauseAnimation { duration: Math.round(Kirigami.Units.shortDuration * 1.5) }
+        NumberAnimation { target: zone; property: "opacity"; to: 1; duration: Kirigami.Units.shortDuration; easing.type: Easing.OutCubic }
     }
 
     Rectangle {
@@ -124,9 +126,9 @@ Window {
         border.width: 2
         border.color: window.edgeColor
 
-        Behavior on x { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Behavior on y { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Behavior on width { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-        Behavior on height { enabled: window.animated; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+        Behavior on x { enabled: window.animated; NumberAnimation { duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic } }
+        Behavior on y { enabled: window.animated; NumberAnimation { duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic } }
+        Behavior on width { enabled: window.animated; NumberAnimation { duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic } }
+        Behavior on height { enabled: window.animated; NumberAnimation { duration: Kirigami.Units.longDuration; easing.type: Easing.OutCubic } }
     }
 }

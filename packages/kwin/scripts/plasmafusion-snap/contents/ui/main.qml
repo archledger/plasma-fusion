@@ -7,6 +7,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import org.kde.kwin
+import "ensureTopBars.js" as EnsureTopBars
 
 // Plasma Fusion snapping (boards QuickSettings.dc.html "Snap layouts", TabsSnap.dc.html).
 //
@@ -109,6 +110,8 @@ Item {
         switch (index) {
         case 0: Workspace.slotWindowQuickTileLeft(); break;
         case 1: Workspace.slotWindowQuickTileRight(); break;
+        case 2: Workspace.slotWindowQuickTileTop(); break;
+        case 3: Workspace.slotWindowQuickTileBottom(); break;
         case 4: Workspace.slotWindowQuickTileTopLeft(); break;
         case 5: Workspace.slotWindowQuickTileTopRight(); break;
         case 6: Workspace.slotWindowQuickTileBottomLeft(); break;
@@ -167,25 +170,41 @@ Item {
         return Qt.rect(Math.round(x0 + l), Math.round(y0 + t), Math.round(x1 - r - (x0 + l)), Math.round(y1 - b - (y0 + t)));
     }
 
-    function thirdRect(area, i, g) {
+    function thirdRect(area, i, g, rows) {
+        if (rows) {
+            const h = (area.height - 4 * g) / 3;
+            return Qt.rect(Math.round(area.x + g), Math.round(area.y + g + i * (h + g)), Math.round(area.width - 2 * g), Math.round(h));
+        }
         const w = (area.width - 4 * g) / 3;
         return Qt.rect(Math.round(area.x + g + i * (w + g)), Math.round(area.y + g), Math.round(w), Math.round(area.height - 2 * g));
     }
 
     // Layouts of the flyout (board order): zones as fractions [x, y, w, h], plus how to place.
-    readonly property var layouts: [
+    // An area taller than it is wide gets row layouts (ADAPTIVE 5.8): top/bottom halves, 2/3
+    // over 1/3, quarters, three rows.
+    readonly property var columnLayouts: [
         { name: "halves", zones: [[0, 0, 0.5, 1], [0.5, 0, 0.5, 1]], quick: [0, 1], h: 0.5, v: 0 },
         { name: "twoThirds", zones: [[0, 0, 2 / 3, 1], [2 / 3, 0, 1 / 3, 1]], quick: [0, 1], h: 2 / 3, v: 0 },
         { name: "quarters", zones: [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]], quick: [4, 5, 6, 7], h: 0.5, v: 0.5 },
         { name: "thirds", zones: [[0, 0, 1 / 3, 1], [1 / 3, 0, 1 / 3, 1], [2 / 3, 0, 1 / 3, 1]], quick: [], h: 0, v: 0 }
     ]
+    readonly property var rowLayouts: [
+        { name: "halves", zones: [[0, 0, 1, 0.5], [0, 0.5, 1, 0.5]], quick: [2, 3], h: 0, v: 0.5 },
+        { name: "twoThirds", zones: [[0, 0, 1, 2 / 3], [0, 2 / 3, 1, 1 / 3]], quick: [2, 3], h: 0, v: 2 / 3 },
+        { name: "quarters", zones: [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]], quick: [4, 5, 6, 7], h: 0.5, v: 0.5 },
+        { name: "thirds", zones: [[0, 0, 1, 1 / 3], [0, 1 / 3, 1, 1 / 3], [0, 2 / 3, 1, 1 / 3]], quick: [], h: 0, v: 0, rows: true }
+    ]
+    function layoutsFor(win) {
+        const area = Workspace.clientArea(Workspace.MaximizeArea, win);
+        return area.height > area.width ? rowLayouts : columnLayouts;
+    }
 
     function targetRect(win, layoutIndex, zoneIndex) {
         const area = Workspace.clientArea(Workspace.MaximizeArea, win);
-        const layout = layouts[layoutIndex];
+        const layout = layoutsFor(win)[layoutIndex];
         const g = setting("QuickTileGaps", true) || layout.quick.length === 0 ? gap() : 0;
         if (layout.quick.length === 0) {
-            return thirdRect(area, zoneIndex, g);
+            return thirdRect(area, zoneIndex, g, layout.rows === true);
         }
         const z = layout.zones[zoneIndex];
         return zoneRect(area, z[0], z[1], z[2], z[3], g);
@@ -195,7 +214,7 @@ Item {
         if (!usable(win)) {
             return;
         }
-        const layout = layouts[layoutIndex];
+        const layout = layoutsFor(win)[layoutIndex];
         if (layout.quick.length > 0) {
             if (quickTile(win, layout.quick[zoneIndex], layout.h, layout.v)) {
                 // A window that was already in this quick tile (e.g. 2:1 -> halves) gets no
@@ -236,8 +255,25 @@ Item {
             }
             pickerLoader.active = false;
             flyoutLoader.target = win;
+            flyoutLoader.layouts = root.layoutsFor(win);
             flyoutLoader.active = true;
+            // The button side may have changed since the last look (System Settings).
+            if (sideLoader.item) {
+                sideLoader.item.refresh();
+            }
         }
+    }
+
+    // ---------------------------------------------------------------- the maximize button's side
+
+    // The flyout hangs under the real maximize button (ADAPTIVE 5.8). A script cannot see the
+    // decoration's buttons, so DecorationSide.qml reads the settings that decide their side. It
+    // is loaded on its own: without its module the script still works, with the flyout on the
+    // right.
+    readonly property bool maximizeOnLeft: sideLoader.item !== null && sideLoader.item.onLeft === true
+    Loader {
+        id: sideLoader
+        source: "DecorationSide.qml"
     }
 
     // Popups are closed on the next event-loop turn: never delete a window from its own signal.
@@ -253,10 +289,12 @@ Item {
     Instantiator {
         id: flyoutLoader
         property var target: null
+        property var layouts: root.columnLayouts
         active: false
         delegate: SnapFlyout {
             target: flyoutLoader.target
-            layouts: root.layouts
+            layouts: flyoutLoader.layouts
+            buttonsOnLeft: root.maximizeOnLeft
             onPreview: (layoutIndex, zoneIndex) => {
                 if (layoutIndex < 0 || !root.usable(flyoutLoader.target)) {
                     Workspace.hideOutline();
@@ -343,7 +381,7 @@ Item {
             return;
         }
         const index = quickIndexOf(win);
-        if ((index !== 0 && index !== 1) || win !== Workspace.activeWindow) {
+        if (index < 0 || index > 3 || win !== Workspace.activeWindow) {
             return;
         }
         pendingSnap = win;
@@ -356,11 +394,12 @@ Item {
             return;
         }
         const index = quickIndexOf(win);
-        if (index !== 0 && index !== 1) {
+        if (index < 0 || index > 3) {
             return;
         }
         const quickRoot = quickRootOf(win);
-        const other = quickRoot.tiles[index === 0 ? 1 : 0];
+        // The other half: left/right (0, 1) or top/bottom (2, 3).
+        const other = quickRoot.tiles[index ^ 1];
         if (other.windows.length > 0) {
             return;
         }
@@ -500,6 +539,113 @@ Item {
             flyoutLoader.active = false;
             pickerLoader.active = false;
         }
+    }
+
+    // ---------------------------------------------------------------- screens come and go
+
+    // After an output or geometry change every normal window must lie inside its screen's
+    // maximize area (ADAPTIVE fix 24: a window opened in portrait ended below the landscape
+    // screen); a window larger than the area is made to fit. Tiled, maximized and full-screen
+    // windows are KWin's own business. And every screen gets its top bar (owner decision 8): the
+    // Global Theme's ensure-topbars.js, run in plasmashell. The build puts its text into
+    // ensureTopBars.js next to this file (tools/build.d/80-kwin.sh), so there is one source.
+    Timer {
+        id: screensSettled
+        interval: 800
+        onTriggered: {
+            root.clampWindows();
+            topBarsCall.call();
+        }
+    }
+    function clampWindows() {
+        const list = Workspace.stackingOrder;
+        let moved = 0;
+        for (let i = 0; i < list.length; ++i) {
+            const w = list[i];
+            if (!w || w.deleted || !w.normalWindow || w.fullScreen || w.minimized || w.tile || w.maximizeMode !== 0
+                    || !w.moveable) {
+                continue;
+            }
+            const area = Workspace.clientArea(Workspace.MaximizeArea, w);
+            const g = w.frameGeometry;
+            const width = w.resizeable ? Math.min(g.width, area.width) : g.width;
+            const height = w.resizeable ? Math.min(g.height, area.height) : g.height;
+            const x = Math.max(area.x, Math.min(g.x, area.x + area.width - width));
+            const y = Math.max(area.y, Math.min(g.y, area.y + area.height - height));
+            if (x !== g.x || y !== g.y || width !== g.width || height !== g.height) {
+                w.frameGeometry = Qt.rect(x, y, width, height);
+                moved++;
+            }
+        }
+        console.info("plasmafusion-snap: screens changed, " + moved + " window(s) moved into their work area");
+    }
+    DBusCall {
+        id: topBarsCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+        arguments: [EnsureTopBars.script]
+        onFinished: returnValue => console.info("plasmafusion-snap: " + String(returnValue.length > 0 ? returnValue[0] : "").trim())
+        onFailed: console.info("plasmafusion-snap: plasmashell did not run the top-bar check")
+    }
+    Connections {
+        target: Workspace
+        function onScreensChanged() {
+            screensSettled.restart();
+        }
+        function onVirtualScreenGeometryChanged() {
+            screensSettled.restart();
+        }
+    }
+
+    // ---------------------------------------------------------------- three-finger swipes
+
+    // Touchpad, three fingers (BACKLOG S15): up opens Overview, down closes it or, when it is
+    // closed, shows the desktop. KWin's own three-finger vertical swipe only switches between
+    // rows of virtual desktops; the Fusion layout has one row (hand check on the device).
+    SwipeGestureHandler {
+        direction: SwipeGestureHandler.Direction.Up
+        fingerCount: 3
+        deviceType: SwipeGestureHandler.Device.Touchpad
+        onActivated: {
+            console.info("plasmafusion-snap: three-finger swipe up");
+            overviewCall.call();
+        }
+    }
+    SwipeGestureHandler {
+        direction: SwipeGestureHandler.Direction.Down
+        fingerCount: 3
+        deviceType: SwipeGestureHandler.Device.Touchpad
+        onActivated: {
+            console.info("plasmafusion-snap: three-finger swipe down");
+            activeEffectsCall.call();
+        }
+    }
+    DBusCall {
+        id: overviewCall
+        service: "org.kde.kglobalaccel"
+        path: "/component/kwin"
+        dbusInterface: "org.kde.kglobalaccel.Component"
+        method: "invokeShortcut"
+        arguments: ["Overview"]
+    }
+    DBusCall {
+        id: activeEffectsCall
+        service: "org.kde.KWin"
+        path: "/Effects"
+        dbusInterface: "org.freedesktop.DBus.Properties"
+        method: "Get"
+        arguments: ["org.kde.kwin.Effects", "activeEffects"]
+        onFinished: returnValue => {
+            const active = String(returnValue.length > 0 ? returnValue[0] : "");
+            if (active.indexOf("overview") >= 0) {
+                overviewCall.call();
+            } else {
+                Workspace.slotToggleShowDesktop();
+            }
+        }
+        onFailed: Workspace.slotToggleShowDesktop()
     }
 
     // One watcher per window for snaps and pair changes.

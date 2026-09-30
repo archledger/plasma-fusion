@@ -6,15 +6,15 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Window
 import org.kde.kwin
 
 // "Pick a window for this side" (TabsSnap board, "Fill the other half"): covers the empty
-// half with the blurred wallpaper under a tint (rgba(8,11,24,.55) on dark) and offers the other
-// windows of the workspace as cards. A popup: Esc, a click elsewhere or any focus change
-// dismisses it; it also closes itself after a minute without input. The heading and the card
-// captions follow the user's text size.
+// half with the Tinted material (EFFECTS 3.2: one blurred capture of this screen's wallpaper,
+// taken when the picker opens, under the tint; no live blur) and offers the other windows of the
+// workspace as cards. In tablet posture the cards are wider and taller (TABLET 4.10). A popup:
+// Esc, a click elsewhere or any focus change dismisses it; it also closes itself after a minute
+// without input. The heading and the card captions follow the user's text size.
 Window {
     id: picker
 
@@ -29,13 +29,20 @@ Window {
     readonly property alias metrics: fusionMetrics
     readonly property int pad: 24
     readonly property int spacing: 12
+    // Tablet posture (TABLET 4.10): cards clamp(W / 5, 220, 300) wide, thumbnails 0.6 x width.
+    readonly property bool tablet: tabletState.tablet
+    readonly property real tabletCard: Math.max(220, Math.min(300, (output ? output.geometry.width : width) / 5))
     readonly property int columns: {
         const room = width - 2 * pad + spacing;
+        if (tablet) {
+            return Math.max(1, Math.floor(room / (tabletCard + spacing)));
+        }
         const fit = Math.max(1, Math.floor(room / (180 + spacing)));
         return Math.max(1, Math.min(candidates.length <= 4 ? 2 : 3, fit));
     }
-    readonly property real cardWidth: (width - 2 * pad - (columns - 1) * spacing) / columns
-    readonly property real thumbHeight: Math.min(220, Math.round(cardWidth * 0.62))
+    readonly property real cardWidth: tablet ? Math.min(300, (width - 2 * pad - (columns - 1) * spacing) / columns)
+                                             : (width - 2 * pad - (columns - 1) * spacing) / columns
+    readonly property real thumbHeight: tablet ? Math.round(cardWidth * 0.6) : Math.min(220, Math.round(cardWidth * 0.62))
 
     signal picked(var win)
     signal dismissed()
@@ -82,9 +89,13 @@ Window {
         }
     }
 
+    FusionTablet {
+        id: tabletState
+    }
     FusionMetrics {
         id: fusionMetrics
         area: picker.area
+        tablet: tabletState.tablet
     }
 
     FusionPalette {
@@ -98,7 +109,9 @@ Window {
         onTriggered: picker.dismissed()
     }
 
-    // Frosted backdrop: the wallpaper of this screen and workspace, blurred, then the tint.
+    // The backdrop: the wallpaper of this screen and workspace, captured once into
+    // FusionBackdrop's small blurred copy (the capture is taken again after the wallpaper item's
+    // first frame, EFFECTS 6.4).
     Item {
         anchors.fill: parent
         clip: true
@@ -115,24 +128,21 @@ Window {
             width: screen.width
             height: screen.height
         }
-
-        MultiEffect {
-            source: wallpaper
+        FusionBackdrop {
+            id: backdrop
             x: wallpaper.x
             y: wallpaper.y
             width: wallpaper.width
             height: wallpaper.height
-            blurEnabled: true
-            blur: 1.0
-            blurMax: 48
-            saturation: 0.1
-            autoPaddingEnabled: false
+            sourceItem: picker.output !== null ? wallpaper : null
+            dark: picker.pal.dark
         }
     }
-
-    Rectangle {
-        anchors.fill: parent
-        color: picker.pal.pickerFill
+    property int framesSeen: 0
+    onFrameSwapped: {
+        if (framesSeen < 2 && ++framesSeen === 2) {
+            backdrop.recapture();
+        }
     }
 
     FocusScope {
@@ -173,6 +183,8 @@ Window {
 
         // A click on the tint (not on a card) dismisses, like a click outside.
         MouseArea {
+            // A pointer convenience (Esc dismisses too).
+            Accessible.ignored: true
             anchors.fill: parent
             onClicked: picker.dismissed()
         }
@@ -215,6 +227,7 @@ Window {
                         required property var modelData
                         width: picker.cardWidth
                         thumbnailHeight: picker.thumbHeight
+                        tablet: picker.tablet
                         pal: picker.pal
                         metrics: picker.metrics
                         window: modelData

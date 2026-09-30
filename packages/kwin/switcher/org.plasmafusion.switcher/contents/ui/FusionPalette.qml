@@ -30,8 +30,9 @@ QtObject {
     readonly property color kbdFill: tint(0.10)
     readonly property color kbdEdge: tint(0.14)
     readonly property color hoverFill: tint(dark ? 0.05 : 0.04)
+    // Light: a neutral dark dim, not a light wash (dark windows turned into grey slabs, ADAPTIVE 5.7).
     readonly property color dim: dark ? Qt.rgba(6 / 255, 8 / 255, 18 / 255, 0.55)
-                                      : Qt.rgba(221 / 255, 230 / 255, 244 / 255, 0.5)
+                                      : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.22)
     // Used only when the Plasma style has no frame for the card (never with Plasma Fusion).
     readonly property color cardFill: dark ? Qt.rgba(22 / 255, 27 / 255, 46 / 255, 0.86)
                                            : Qt.rgba(1, 1, 1, 0.86)

@@ -23,6 +23,10 @@ PlasmaCore.Dialog {
     readonly property FusionPalette pal: palette_
     property var target: null
     property var layouts: []
+    // The maximize button is in the left button group (the script reads the decoration's
+    // settings); a right-to-left layout mirrors the side.
+    property bool buttonsOnLeft: false
+    readonly property bool anchorLeft: buttonsOnLeft !== (Application.layoutDirection === Qt.RightToLeft)
     property var frameItem: null
 
     // Keyboard focus and pointer hover, as (layout, zone).
@@ -53,8 +57,10 @@ PlasmaCore.Dialog {
     flags: Qt.Popup | Qt.X11BypassWindowManagerHint
     title: i18nd("plasmafusion", "Snap layouts")
 
-    // Centred on the maximize button (the right one of a 28 px button pair 10 px from the
-    // edge, 6 px apart: its centre is 58 px from the right edge) and hanging from the title bar.
+    // Centred on the maximize button and hanging from the title bar: on the right its centre is
+    // 59 px from the edge (the middle of three 28 px buttons 10 px from the edge, 6 px apart), on
+    // the left 58.5 px (the third of the left circles; the same in the Aurorae "-Left" themes).
+    // A portrait area draws the layout cards in its own aspect ratio (ADAPTIVE 5.8).
     readonly property rect anchorRect: {
         const f = target ? target.frameGeometry : Qt.rect(0, 0, 0, 0);
         const c = target ? target.clientGeometry : f;
@@ -62,8 +68,10 @@ PlasmaCore.Dialog {
         return Qt.rect(f.x, f.y, f.width, titleHeight);
     }
     readonly property rect screenArea: target ? Workspace.clientArea(Workspace.MaximizeArea, target) : Qt.rect(0, 0, 1920, 1080)
+    readonly property bool portraitArea: screenArea.height > screenArea.width
+    readonly property real anchorX: anchorLeft ? anchorRect.x + 58.5 : anchorRect.x + anchorRect.width - 59
     x: Math.round(Math.max(screenArea.x + 8, Math.min(screenArea.x + screenArea.width - cardWidth - 8,
-                  anchorRect.x + anchorRect.width - 59 - cardWidth / 2)))
+                  anchorX - cardWidth / 2)))
     y: Math.round(Math.max(screenArea.y + 8, Math.min(screenArea.y + screenArea.height - cardHeight - 8,
                   anchorRect.y + (anchorRect.height > 0 ? anchorRect.height : 8))))
     visible: false
@@ -256,20 +264,26 @@ PlasmaCore.Dialog {
                             required property int index
                             readonly property var layout: flyout.layouts[index]
                             width: (column.width - cards.spacing) / 2
-                            height: flyout.metrics.px(58)
+                            // 58 px on the board; a portrait area gets taller cards, so the
+                            // zones keep the area's shape.
+                            height: flyout.metrics.px(flyout.portraitArea ? 104 : 58)
                             radius: 9
                             color: flyout.pal.cardFill
 
                             Accessible.role: Accessible.Grouping
                             Accessible.name: [i18nd("plasmafusion", "Two halves"), i18nd("plasmafusion", "Two thirds and one third"),
-                                              i18nd("plasmafusion", "Quarters"), i18nd("plasmafusion", "Three columns")][index] || ""
+                                              i18nd("plasmafusion", "Quarters"),
+                                              flyout.portraitArea ? i18nd("plasmafusion", "Three rows") : i18nd("plasmafusion", "Three columns")][index] || ""
 
                             Item {
                                 id: inner
-                                x: 5
-                                y: 5
-                                width: card.width - 10
+                                // Landscape: the whole card (board). Portrait: the area's aspect
+                                // ratio, centred.
+                                readonly property real aspect: flyout.screenArea.height > 0 ? flyout.screenArea.width / flyout.screenArea.height : 1
+                                width: flyout.portraitArea ? Math.min(card.width - 10, Math.round((card.height - 10) * aspect)) : card.width - 10
                                 height: card.height - 10
+                                x: (card.width - width) / 2
+                                y: 5
 
                                 Repeater {
                                     model: card.layout.zones.length

@@ -1,7 +1,10 @@
 # KWin packages: window switcher, snap layouts, attached dialogs, snap-zone outline
 
 Status: built, checked offline and in private virtual sessions on the ThinkPad (dark and light,
-1440x900); reviewed and fixed (see "Review" at the end). Last edited 2026-09-29.
+1440x900); reviewed and fixed (see "Review" at the end). KWIN-2 (2026-09-30) changed the switcher's
+windows and previews, the flyout's side and layouts, the picker's backdrop, and added the
+screen-change and touchpad handling: see "KWIN-2" at the end, which replaces the older text where
+they differ. Last edited 2026-09-30.
 
 ## What it is
 
@@ -21,19 +24,22 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 |---|---|
 | `packages/kwin/switcher/org.plasmafusion.switcher/metadata.json` | KPackage metadata (KWin/WindowSwitcher) |
 | `.../contents/ui/main.qml` | `KWin.TabBoxSwitcher`: filter state (tabs), selection handling, card window, dim window |
-| `.../contents/ui/WindowCard.qml` | one window: preview (cover-fit, rounded), icon, app name, title, ring, hover close button |
+| `.../contents/ui/WindowCard.qml` | one window: preview (cover-fit, rounded), icon, app name, title, ring, close button (hover; in touch mode on the selected card) |
+| `.../contents/ui/shaders/thumbnail.frag` (+ compiled `thumbnail.frag.qsb`) | rounds the corners of a preview's layer |
 | `.../contents/ui/Hint.qml`, `Kbd.qml` | hint bar items and key caps |
 | `.../contents/ui/FusionPalette.qml` | board colours, dark/light |
 | `packages/kwin/scripts/plasmafusion-snap/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM) |
 | `.../contents/ui/main.qml` | shortcut, quick-tile logic, gaps, picker trigger, pairs |
 | `.../contents/ui/SnapFlyout.qml` | Meta+Z flyout |
+| `.../contents/ui/DecorationSide.qml` | which side the maximize button is on (reads the decoration settings with `kreadconfig6`) |
+| `.../contents/ui/ensureTopBars.js` | generated at build from `packages/look-and-feel/common/contents/layouts/ensure-topbars.js`: the script text the hot-plug handler sends to plasmashell (not in the source tree) |
 | `.../contents/ui/FillPicker.qml`, `PickerCard.qml` | "Pick a window for this side" |
 | `.../contents/ui/FusionPalette.qml` | colours (created inside each popup, where Kirigami's theme is reliable) |
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | settings shown in System Settings > Window Management > KWin Scripts |
 | `.../contents/outline/outline.qml` | snap-zone outline |
 | `packages/kwin/scripts/plasmafusion-attach/metadata.json` | KPackage metadata (KWin/Script, javascript, config KCM) |
 | `.../contents/code/main.js`, `contents/config/main.xml`, `contents/ui/config.ui` | script and settings |
-| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the three packages into the stage |
+| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the three packages into the stage, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
 | `packages/kwin/tests/` | test tooling only, not installed (see Verification) |
 
 ## Build and install
@@ -284,7 +290,8 @@ tools/vsession/remote.sh kw-3 packages/kwin/tests/vsession/scenario-evidence.sh 
 
 | Path | Use |
 |---|---|
-| `packages/kwin/tests/offscreen/run.sh`, `render.py`, `switcher-harness.qml`, `snap-harness.qml`, `stubs/org/kde/kwin/` | offscreen renders with a stand-in KWin module |
+| `packages/kwin/tests/offscreen/run.sh`, `render.py`, `switcher-harness.qml`, `snap-harness.qml`, `stubs/org/kde/kwin/`, `session-bus.conf` | offscreen renders with a stand-in KWin module, on a private session bus that activates nothing; `PFK_PACKAGES=DIR` renders the built packages (`DIR/switcher/<id>`, `DIR/scripts/<id>`) |
+| `packages/kwin/tests/vsession/scenario-kwin2-a.sh`, `-b.sh`, `-c.sh` | KWIN-2 sessions for `tools/vsession/remote.sh` with a `fusion-config.sh` seed: flyout side, switcher, snap and picker, portrait, tablet (a); hot-plug top bar with two outputs (b); Light (c) |
 | `packages/kwin/tests/compare.py` | board-vs-build side-by-sides and crops |
 | `packages/kwin/tests/vsession/make-seed.sh`, `fakeinput.py`, `scenario-*.sh` | ThinkPad virtual-session tests |
 | `packages/kwin/tests/vsession/manywindows.py` | one PySide6 process with N plain windows (switcher and picker with many windows, long titles) |
@@ -378,3 +385,128 @@ See `docs/parts/polish.md`.
 - Snap flyout: the Plasma style now has the `snaplayouts` prefix, so the flyout is the board's
   (radius 16, edge .14); the deviation "Flyout radius 18" no longer applies.
 - Font weights (Font.Bold / Font.ExtraBold) resolve to the static font files; no synthetic bold.
+
+## KWIN-2 (2026-09-30)
+
+PLAN.md "KWIN-2"; BACKLOG S3, S15, E14; ADAPTIVE 5.7, 5.8, fix 24, M09/M13/M14/M23; TABLET 4.10;
+owner decisions 4 (snap layouts on hold: no hover flyout, so no spike) and 8 (a top bar on every
+screen).
+
+### Window switcher
+
+- Two windows, made once. The dim layer and the card are created the first time the switcher
+  opens and then only shown and hidden; the dim is shown first and the card right after it in the
+  same turn, so the card is above it and both appear in the same frame. The old gate (card after
+  the dim's first frame) and its timer are gone. Keys typed before the card's first frame reach
+  it: its focus scope takes active focus when the window is created and each time it is shown
+  (`tests/offscreen/keytest.py`: both cases "handled").
+- The dim layer is a tooltip-type window. As a normal window it got KWin's scale animation
+  (200 ms, full screen), which ended after the card's fade and set the time to a settled
+  picture; as a tooltip type KWin fades it like the card.
+- Previews: KWin paints the thumbnail (cover size, top aligned) into one layer per card, and one
+  small shader (`shaders/thumbnail.frag`) rounds the layer's corners. This replaces the layer +
+  MultiEffect + mask layer of before. The plan's single pass (the thumbnail's texture fed
+  straight to a shader, no layer) was built and measured and then dropped:
+  - KWin's texture holds everything the window draws, the shadow around the frame included, and
+    the script API does not tell where the frame is in it (`Window::visibleGeometry` is no
+    property). The single pass had to search the texture for the frame's opaque edge; that
+    works for the Fusion and Aurorae title bars but not for a translucent window.
+  - It was not faster: Alt+Tab settled 408 ms (400..458, 3 runs) against 404 ms (402..405,
+    2 runs) with the layer; KWin's render time per frame is the same (about 6 ms) in both.
+  The previews stay live (the terminal's clock changes between two screenshots 0.8 s apart).
+- Cells `clamp(round(W / 7.35), 160, 260)` wide (196 at 1440), previews 0.6 x the cell, up to 5
+  columns (6 on a wide screen); the hint row is a `Flow` that wraps when the card is narrower
+  than the hints.
+- Pointer: moving it over a card selects that card (a pointer that only rests where a card
+  appears does not); a click switches to it. KWin keeps the list's order while the switcher is
+  open.
+- Touch (tablet posture or a touch-sized screen): the selected card carries the close button
+  (28 px, 44 px target).
+- Light: the dim is a neutral dark rgba(20,24,39,.22) instead of a light wash.
+- Motion tokens for the grid's scroll; `[TabBox] DelayTime` is 120 ms (`fusion-config.sh`).
+
+### Snap layouts
+
+- The flyout hangs under the real maximize button: 59 px from the window's right edge, or 58.5 px
+  from the left when the buttons are on the left; a right-to-left layout mirrors the side. The
+  side comes from `DecorationSide.qml`, which reads with `kreadconfig6` (through Plasma's
+  `executable` data source, so the values are the ones on disk with KDE's defaults):
+  `plasmafusionrc [Decoration] ButtonStyle` (LeftCircles) when `kwinrc [org.kde.kdecoration2]
+  library` is the Fusion decoration, else a theme name ending in `-Left`, else an "A" in
+  `ButtonsOnLeft`. Read when the script starts and at every Meta+Z. The file is loaded on its
+  own: without `org.kde.plasma.plasma5support` the script still works, with the flyout on the
+  right. (Asking plasmashell for the values did not work: its view of kwinrc is not read again
+  after the decoration changes.)
+- A work area taller than it is wide gets row layouts: top/bottom halves, 2/3 over 1/3,
+  quarters, three rows; the layout cards are 104 px tall and drawn in the area's aspect ratio.
+  Top and bottom halves are KWin's quick tiles, so the other half is offered for them too.
+- "Pick a window for this side": the backdrop is `FusionBackdrop` (one blurred capture of the
+  wallpaper, taken again after the second frame) instead of a live blur. In tablet posture the
+  cards are `clamp(W / 5, 220, 300)` wide with 0.6 x previews and 14 px titles.
+- After a screen or geometry change (800 ms later) every normal window that is not tiled,
+  maximized, full screen or minimized is moved, and if needed shrunk, into its screen's maximize
+  area. KWin 6.7.5 already does this for a rotation in both directions (the log line says
+  "0 window(s) moved"); the script is the net for what KWin leaves outside.
+- Hot-plug: the same handler sends the Global Theme's `ensure-topbars.js` to plasmashell
+  (`evaluateScript`), so a screen that appears after login gets its top bar. The text comes from
+  `ensureTopBars.js`, which the build generates from the Global Theme's file. (A layout template
+  with `loadTemplate()` did not work: plasmashell loads only templates of the panel category,
+  which would also put it into "Add Panel".)
+- Touchpad, three fingers: up opens Overview, down closes it or shows the desktop
+  (`SwipeGestureHandler`, device type touchpad). KWin's own three-finger vertical swipe switches
+  between rows of virtual desktops; the Fusion layout has one row. Hand check on the device.
+- The outline's durations follow Plasma's animation speed.
+
+### Verification
+
+Offline (laptop), against the built packages (the source tree lacks the shared QML blocks and
+`ensureTopBars.js`):
+
+```
+S=build/k2/stage; P=build/k2/pkgroot
+ROOT=$PWD STAGE=$PWD/$S bash tools/build.d/80-kwin.sh
+mkdir -p $P/switcher $P/scripts
+ln -sfn $PWD/$S/.local/share/kwin/tabbox/org.plasmafusion.switcher $P/switcher/
+ln -sfn $PWD/$S/.local/share/kwin/scripts/plasmafusion-snap $P/scripts/
+env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY QT_QPA_PLATFORM=offscreen \
+  dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+  python3 packages/kwin/tests/offscreen/keytest.py $PWD/$P        # both lines: "handled"
+PFK_PACKAGES=$PWD/$P PFK_TMP=$PWD/build/k2 packages/kwin/tests/offscreen/run.sh \
+  STAGE_HOME packages/kwin/tests/offscreen/switcher-harness.qml out.png [dark=false]
+```
+
+Private sessions on the ThinkPad (seed from `fusion-config.sh --install`):
+
+- `scenario-kwin2-a.sh` (1920x1200 at 4/3), 19 checks PASS:
+  - flyout centre against the maximize button: compiled decoration right 1061.5 / 1061.25 and
+    left 378.5 / 378.5, Aurorae `-Left` 378.5 / 378.5, Aurorae right 1061.5 / 1061.25;
+  - switcher: hover selects, a resting pointer does not, click activates;
+  - halves with the 6 px gap and the picker; M09 rows (top half, bottom half offered, bottom
+    third 461 px of a 1406 px area); M14 every window inside the work area after rotating and
+    back; T18 split in tablet posture (picker, two tiles without title bars, title bars back
+    after leaving);
+  - no QML warnings from the scripts, no KWin or plasmashell crash.
+- `scenario-kwin2-b.sh` (two outputs, the second disabled before the install and enabled after):
+  M23 PASS: "top bars: screens 2, added 1", one top bar per screen, none added on a second
+  hot-plug.
+- `scenario-kwin2-c.sh` (1920x1080 at 1, Light): M13: white under the dim is (203,204,208), the
+  top bar is not dimmed; previews, flyout and picker in Light.
+- Perf gate (`tools/tests/perf/run.sh`, 1920x1200 at 4/3, 2 quiet runs of this code): Alt+Tab
+  Alt to first frame 221 ms (219..222; budget 233, baseline 255), Alt to a settled picture
+  404 ms (402..405; budget 420, baseline 489). The first Alt+Tab of a session, which creates
+  the two windows, settles at 533-641 ms. No regression against the baseline, no core dumps.
+- NOT met: KWin render p95 of 3.5 ms. The 73 frames of six openings take 6.0 ms in the median
+  (p95 7.5, at most 9.2) against about 3 ms just before Alt. The full-screen dim layer is most
+  of the difference: the same build without it (2 runs, a comparison only) gives 3.7 ms in the
+  median (p95 6.0, at most 7.2) and settles as fast. The previews are not the cost (see above).
+  Keeping the board's dim or dropping it is the owner's choice.
+- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KWIN-2/`.
+
+### Not done
+
+- The split divider handle (TABLET 4.10, P2): T18's "drag the divider" step has no handle; the
+  two tiles still share their edge when one is resized by its border.
+- Touchpad swipes cannot be produced in a private session: hand check at DEPLOY-1 (also that
+  KWin's own three-finger vertical gesture does nothing visible with one desktop row).
+- The 6 px strip between a snapped half and the picker shows the windows under it (as before).
+
