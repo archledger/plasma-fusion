@@ -1,0 +1,228 @@
+{
+  "_spdx": "SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>; SPDX-License-Identifier: GPL-2.0-or-later",
+  "_comment": "Plasma Fusion performance budget, BACKLOG section 7 (2026-09-30-research/BACKLOG.md). Lower is better for every metric. 'budget' holds the limit per geometry (virtual output size in device px @ scale; 'default' is the 1440x900 value, used when section 7 gives one value); 'noise' is the regression margin against the stored baseline: a run regresses when its median exceeds the baseline's maximum by more than max(abs, rel * baseline median). Margins come from the spread of the perf-measure A/B runs (n=4 per arm). The idle rows have wide margins while the round-2 system card is on the desktop: it redraws on every 2 s update and glides (14 frames) when a bar moves 3 px or more, so its idle cost follows the host's own CPU and memory activity (1.2-5.9 frames/s measured on one build); one glide more per 30 s is 0.47 frames/s. Tighten them after BACKLOG M5.",
+  "metrics": {
+    "idle_fps": {
+      "label": "idle 30 s: composited frames per s",
+      "unit": "/s",
+      "budget": {
+        "default": 0.1
+      },
+      "noise": {
+        "abs": 1.0,
+        "rel": 0.25
+      }
+    },
+    "idle_cpu_plasmashell": {
+      "label": "idle: plasmashell CPU % of a core",
+      "unit": "%",
+      "budget": {
+        "default": 0.5
+      },
+      "noise": {
+        "abs": 0.3,
+        "rel": 0.25
+      }
+    },
+    "idle_cpu_kwin": {
+      "label": "idle: KWin CPU %",
+      "unit": "%",
+      "budget": {
+        "default": 0.05
+      },
+      "noise": {
+        "abs": 0.3,
+        "rel": 0.3
+      }
+    },
+    "idle_cpu_session": {
+      "label": "idle: whole session CPU %",
+      "unit": "%",
+      "budget": {
+        "default": 0.8
+      },
+      "noise": {
+        "abs": 0.5,
+        "rel": 0.25
+      }
+    },
+    "idle_gpu_plasmashell": {
+      "label": "idle: plasmashell GPU busy %",
+      "unit": "%",
+      "budget": {
+        "default": 0.02
+      },
+      "noise": {
+        "abs": 0.15,
+        "rel": 0.3
+      }
+    },
+    "sweep_cpu_plasmashell": {
+      "label": "dock hover sweep 10 s: plasmashell CPU %",
+      "unit": "%",
+      "budget": {
+        "default": 8,
+        "1920x1200@1.333333": 10
+      },
+      "noise": {
+        "abs": 3,
+        "rel": 0.15
+      }
+    },
+    "sweep_cpu_kwin": {
+      "label": "dock hover sweep: KWin CPU %",
+      "unit": "%",
+      "budget": {
+        "default": 9
+      },
+      "noise": {
+        "abs": 3,
+        "rel": 0.25
+      }
+    },
+    "sweep_gpu_plasmashell": {
+      "label": "dock hover sweep: plasmashell GPU %",
+      "unit": "%",
+      "budget": {
+        "default": 0.5
+      },
+      "noise": {
+        "abs": 0.4,
+        "rel": 0.2
+      }
+    },
+    "pss_plasmashell_settled": {
+      "label": "plasmashell PSS after settle",
+      "unit": "MiB",
+      "budget": {
+        "default": 175
+      },
+      "noise": {
+        "abs": 8,
+        "rel": 0.05
+      }
+    },
+    "session_pss_settled": {
+      "label": "session PSS after settle (KWin at RSS)",
+      "unit": "MiB",
+      "budget": {
+        "default": 460
+      },
+      "noise": {
+        "abs": 12,
+        "rel": 0.04
+      }
+    },
+    "gem_plasmashell_settled": {
+      "label": "plasmashell GPU buffers (GEM) after settle",
+      "unit": "MiB",
+      "budget": {
+        "default": 70
+      },
+      "noise": {
+        "abs": 6,
+        "rel": 0.06
+      }
+    },
+    "gem_launcher_first_open": {
+      "label": "launcher first open: plasmashell GEM growth",
+      "unit": "MiB",
+      "budget": {
+        "default": 30
+      },
+      "noise": {
+        "abs": 8,
+        "rel": 0.15
+      }
+    },
+    "gem_plasmashell_end": {
+      "label": "plasmashell GEM after one round of use",
+      "unit": "MiB",
+      "budget": {
+        "default": 120,
+        "1920x1200@1.333333": 170
+      },
+      "noise": {
+        "abs": 12,
+        "rel": 0.08
+      }
+    },
+    "kwin_rss_end": {
+      "label": "KWin RSS with 2 windows open",
+      "unit": "MiB",
+      "budget": {
+        "default": 255
+      },
+      "noise": {
+        "abs": 10,
+        "rel": 0.05
+      }
+    },
+    "launcher_first_frame_ms": {
+      "label": "launcher: Meta -> first frame",
+      "unit": "ms",
+      "budget": {
+        "default": 50
+      },
+      "noise": {
+        "abs": 15,
+        "rel": 0.25
+      }
+    },
+    "launcher_settled_ms": {
+      "label": "launcher: Meta -> opening animation done",
+      "unit": "ms",
+      "budget": {
+        "default": 300
+      },
+      "noise": {
+        "abs": 60,
+        "rel": 0.2
+      }
+    },
+    "qs_first_frame_ms": {
+      "label": "quick settings: click -> first frame (incl. ~150 ms injection)",
+      "unit": "ms",
+      "budget": {
+        "default": 186
+      },
+      "noise": {
+        "abs": 25,
+        "rel": 0.15
+      }
+    },
+    "alttab_first_frame_ms": {
+      "label": "Alt+Tab: Alt -> first frame",
+      "unit": "ms",
+      "budget": {
+        "default": 233
+      },
+      "noise": {
+        "abs": 40,
+        "rel": 0.15
+      }
+    },
+    "alttab_settled_ms": {
+      "label": "Alt+Tab: Alt -> animation done",
+      "unit": "ms",
+      "budget": {
+        "default": 420
+      },
+      "noise": {
+        "abs": 50,
+        "rel": 0.1
+      }
+    },
+    "overview_late_frames": {
+      "label": "overview: late frames per open/close cycle",
+      "unit": "",
+      "budget": {
+        "default": 2
+      },
+      "noise": {
+        "abs": 2,
+        "rel": 0.25
+      }
+    }
+  }
+}

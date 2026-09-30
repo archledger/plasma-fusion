@@ -24,6 +24,19 @@
 # The session environment matches startplasma where it matters: XDG_CONFIG_DIRS starts with
 # ~/.config/kdedefaults (where a Global Theme writes its defaults) and Qt logs to stderr.
 # Set NO_PLASMASHELL=1 in the scenario's environment to start only KWin.
+#
+# Optional switches (environment of this script; unset = no change to the session):
+#   PFV_TABLET=on|off|auto  kwinrc [Input] TabletMode, written into the HOME before KWin starts
+#   PFV_ANIM=FACTOR         kdeglobals [KDE] AnimationDurationFactor (0 = no animations, 1 = normal)
+#   PFV_FONT_PT=PT          kdeglobals [General] font, menuFont, toolBarFont at PT points (family
+#                           kept); fusion-config.sh --install sets the Fusion fonts on its first
+#                           run, so after it use the pfv_font helper instead
+#   PFV_LANGUAGE=LIST       LANGUAGE for the whole session (e.g. ar for right-to-left)
+#   PFV_SHELL=PATH          SHELL for the whole session (e.g. /bin/bash; Konsole warns without it)
+#   PFV_CWD=DIR             working directory of the session, relative to the run root (e.g. out:
+#                           KWin writes its KWIN_LOG_PERFORMANCE_DATA CSV there, and out/ is fetched)
+# Extra scenario helpers: pfv_font PT, pfv_anim FACTOR, pfv_tablet on|off|auto (write the setting
+# and notify the running session), pfv_restart_shell (quit plasmashell, start it again, wait).
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SIZE=${3:-1440x900}; TMO=${4:-240}
 # Sessions live on disk (/var/tmp): a HOME with the Fusion stage holds ~25k files, and /tmp is a
@@ -35,11 +48,25 @@ chmod 700 "$PFV/run"
 # Services that must not run in a test session: KDE Connect would announce a second device on
 # the network. The private bus reads ~/.local/share/dbus-1/services first, so a stub wins.
 mkdir -p "$PFV/home/.local/share/dbus-1/services"
+# shellcheck disable=SC2043  # one service today; the list is meant to grow
 for svc in org.kde.kdeconnect; do
   printf '[D-BUS Service]\nName=%s\nExec=/bin/false\n' "$svc" >"$PFV/home/.local/share/dbus-1/services/$svc.service"
 done
 # Plasma Welcome would open on first start; mark this version as seen.
 [ -e "$PFV/home/.config/plasma-welcomerc" ] || printf '[General]\nLastSeenVersion=6.7.5\nShowUpdatePage=false\n' >"$PFV/home/.config/plasma-welcomerc"
+# Optional switches (see the header). kwriteconfig6 only edits files; offscreen keeps Qt away
+# from any display.
+pfv_kwc() { QT_QPA_PLATFORM=offscreen kwriteconfig6 --file "$PFV/home/.config/$1" --group "$2" --key "$3" "$4"; }
+[ -n "${PFV_TABLET:-}" ] && pfv_kwc kwinrc Input TabletMode "$PFV_TABLET"
+[ -n "${PFV_ANIM:-}" ] && pfv_kwc kdeglobals KDE AnimationDurationFactor "$PFV_ANIM"
+if [ -n "${PFV_FONT_PT:-}" ]; then
+  # the family as the session will see it (a Global Theme's kdedefaults layer included)
+  fam=$(QT_QPA_PLATFORM=offscreen XDG_CONFIG_HOME="$PFV/home/.config" XDG_CONFIG_DIRS="$PFV/home/.config/kdedefaults:/etc/xdg" \
+    kreadconfig6 --file kdeglobals --group General --key font --default "Noto Sans,10")
+  for k in font menuFont toolBarFont; do
+    pfv_kwc kdeglobals General "$k" "${fam%%,*},$PFV_FONT_PT,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+  done
+fi
 rm -rf "$PFV/run/"* "$PFV/out/"*
 cp "$SCENARIO" "$PFV/scenario.sh"
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -56,6 +83,22 @@ wait_for_name() { for _ in $(seq 1 40); do qdbus-qt6 | grep -qx " *$1" && return
 evaljs() { local js; if [ "$1" = - ]; then js=$(cat); else js=$(cat "$1"); fi; qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$js"; }
 pfinput() { python3 "$PFV/pfinput.py" "$@" >>"$OUT/pfinput.log" 2>&1; }
 export -f shot qdbus wait_for_name evaljs pfinput
+# Settings switches for a running session (they notify KWin and Plasma like System Settings does).
+pfv_font() {
+  local fam k; fam=$(kreadconfig6 --file kdeglobals --group General --key font --default "Noto Sans,10")
+  for k in font menuFont toolBarFont; do
+    kwriteconfig6 --file kdeglobals --group General --key "$k" --notify "${fam%%,*},$1,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
+  done
+}
+pfv_anim() { kwriteconfig6 --file kdeglobals --group KDE --key AnimationDurationFactor --notify "$1"; }
+pfv_tablet() { kwriteconfig6 --file kwinrc --group Input --key TabletMode --notify "$1"; }
+pfv_restart_shell() {
+  kquitapp6 plasmashell >/dev/null 2>&1; sleep 2
+  plasmashell >>"$OUT/plasmashell.log" 2>&1 &
+  wait_for_name org.kde.plasmashell; sleep "${1:-8}"
+}
+# (not exported: the scenario is sourced by this shell, and exported functions would add variables
+# to the environment of every program the session starts)
 cleanup() { kill $(jobs -p) 2>/dev/null; sleep 1; kill -9 $(jobs -p) 2>/dev/null; }
 trap cleanup EXIT
 # The private bus was started before KWin, so services it activates would not know the Wayland
@@ -63,6 +106,8 @@ trap cleanup EXIT
 # --systemd, which would change the logged-in user's systemd manager).
 dbus-update-activation-environment WAYLAND_DISPLAY QT_QPA_PLATFORM XDG_SESSION_TYPE XDG_CURRENT_DESKTOP \
   KDE_FULL_SESSION KDE_SESSION_VERSION XDG_CONFIG_DIRS QT_FORCE_STDERR_LOGGING XDG_RUNTIME_DIR HOME PATH LANG
+# PFV_LANGUAGE / PFV_SHELL: bus-activated services get them too (names in bus-env, only when set)
+[ -s "$PFV/bus-env" ] && dbus-update-activation-environment $(cat "$PFV/bus-env")
 fc-cache -f >/dev/null 2>&1
 # Display scale, set the way System Settings does it (KWin's own --scale only enlarges the framebuffer).
 if [ "${PFV_SCALE:-1}" != 1 ]; then
@@ -98,7 +143,14 @@ if [ -f "$PFV/home/.config/pfv-env" ]; then
     case "$line" in ''|'#'*) ;; *=*) EXTRA_ENV+=("$line") ;; esac
   done <"$PFV/home/.config/pfv-env"
 fi
-env -i "${EXTRA_ENV[@]}" HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
+if [ -n "${PFV_CWD:-}" ]; then
+  mkdir -p "$PFV/$PFV_CWD" && cd "$PFV/$PFV_CWD" || exit 1
+fi
+OPT_ENV=()
+rm -f "$PFV/bus-env"
+[ -n "${PFV_LANGUAGE:-}" ] && OPT_ENV+=("LANGUAGE=$PFV_LANGUAGE") && echo LANGUAGE >>"$PFV/bus-env"
+[ -n "${PFV_SHELL:-}" ] && OPT_ENV+=("SHELL=$PFV_SHELL") && echo SHELL >>"$PFV/bus-env"
+env -i "${EXTRA_ENV[@]}" "${OPT_ENV[@]}" HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
   PFV_SCALE="${PFV_SCALE:-1}" \
   PATH=/usr/bin:/bin:/usr/lib64/qt6/bin LANG=en_US.UTF-8 \
   XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \

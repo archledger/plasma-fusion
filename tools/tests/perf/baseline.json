@@ -1,0 +1,1158 @@
+{
+ "_spdx": "SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>; SPDX-License-Identifier: GPL-2.0-or-later",
+ "budget_fail": [
+  "idle_fps",
+  "idle_cpu_plasmashell",
+  "idle_cpu_kwin",
+  "idle_cpu_session",
+  "idle_gpu_plasmashell",
+  "sweep_cpu_plasmashell",
+  "sweep_cpu_kwin",
+  "sweep_gpu_plasmashell",
+  "pss_plasmashell_settled",
+  "session_pss_settled",
+  "gem_plasmashell_settled",
+  "gem_launcher_first_open",
+  "gem_plasmashell_end",
+  "kwin_rss_end",
+  "launcher_first_frame_ms",
+  "alttab_first_frame_ms",
+  "alttab_settled_ms",
+  "overview_late_frames"
+ ],
+ "clean_runs": 1,
+ "date": "2026-09-29T22:43:04-0400",
+ "geometry": "1920x1200@1.333333",
+ "host": [
+  {
+   "after": "time=2026-09-29T21:42:33-04:00 load=0.91 0.71 0.82 sessions=pfv-gt-a ",
+   "before": "time=2026-09-29T21:39:44-04:00 load=0.16 0.69 0.84 sessions=",
+   "run": "ts-perf-1"
+  },
+  {
+   "after": "time=2026-09-29T21:46:22-04:00 load=0.62 0.65 0.77 sessions=",
+   "before": "time=2026-09-29T21:43:34-04:00 load=0.58 0.66 0.79 sessions=pfv-gt-ld ",
+   "run": "ts-perf-2"
+  },
+  {
+   "after": "time=2026-09-29T21:49:11-04:00 load=0.26 0.48 0.69 sessions=",
+   "before": "time=2026-09-29T21:46:23-04:00 load=0.57 0.64 0.77 sessions=",
+   "run": "ts-perf-3"
+  },
+  {
+   "after": "time=2026-09-29T21:54:05-04:00 load=0.79 0.62 0.68 sessions=pfv-perf-dk-new2",
+   "before": "time=2026-09-29T21:51:17-04:00 load=0.43 0.47 0.65 sessions=",
+   "run": "ts-perfb-1"
+  },
+  {
+   "after": "time=2026-09-29T21:57:55-04:00 load=0.56 0.52 0.62 sessions=pfv-perf-dk-new3",
+   "before": "time=2026-09-29T21:55:07-04:00 load=0.35 0.52 0.64 sessions=",
+   "run": "ts-perfb-2"
+  },
+  {
+   "after": "time=2026-09-29T22:05:12-04:00 load=0.47 0.46 0.54 sessions=pfv-perf-dk-prof-old",
+   "before": "time=2026-09-29T22:02:22-04:00 load=0.35 0.42 0.55 sessions=",
+   "run": "ts-perfb-3"
+  },
+  {
+   "after": "time=2026-09-29T22:33:45-04:00 load=0.21 0.49 0.66 sessions=",
+   "before": "time=2026-09-29T22:30:57-04:00 load=0.38 0.63 0.72 sessions=",
+   "run": "rts-perfa-1"
+  },
+  {
+   "after": "time=2026-09-29T22:36:33-04:00 load=0.53 0.54 0.65 sessions=pfv-perf-dk-new8",
+   "before": "time=2026-09-29T22:33:46-04:00 load=0.21 0.49 0.66 sessions=",
+   "run": "rts-perfa-2"
+  },
+  {
+   "after": "time=2026-09-29T22:42:46-04:00 load=0.86 0.56 0.62 sessions=pfv-perf-dk-dir-nomag",
+   "before": "time=2026-09-29T22:39:58-04:00 load=0.20 0.48 0.61 sessions=",
+   "run": "rts-perfa-3"
+  }
+ ],
+ "label": "282b1a5 stage (= deployed 3a27b3f); 9 runs 2026-09-29 21:39-22:43 EDT (ts-perf-1..3, ts-perfb-1..3, rts-perfa-1..3); per metric its quiet windows (review noise rule)",
+ "metrics": {
+  "alttab_first_frame_ms": {
+   "clean": true,
+   "max": 278.907749998325,
+   "median": 254.56522299646167,
+   "min": 247.53490400325973,
+   "n": 5,
+   "of": 9,
+   "produced": 9
+  },
+  "alttab_settled_ms": {
+   "clean": true,
+   "max": 530.2581610012567,
+   "median": 488.8969140010886,
+   "min": 480.868227998144,
+   "n": 5,
+   "of": 9,
+   "produced": 9
+  },
+  "gem_launcher_first_open": {
+   "clean": true,
+   "max": 82.796875,
+   "median": 72.53125,
+   "min": 68.7578125,
+   "n": 3,
+   "of": 9,
+   "produced": 9
+  },
+  "gem_plasmashell_end": {
+   "clean": true,
+   "max": 240.45703125,
+   "median": 238.421875,
+   "min": 236.52734375,
+   "n": 3,
+   "of": 9,
+   "produced": 9
+  },
+  "gem_plasmashell_settled": {
+   "clean": true,
+   "max": 137.4921875,
+   "median": 132.529296875,
+   "min": 127.56640625,
+   "n": 2,
+   "of": 9,
+   "produced": 9
+  },
+  "idle_cpu_kwin": {
+   "clean": true,
+   "max": 0.3992821825771026,
+   "median": 0.3992821825771026,
+   "min": 0.3992821825771026,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  },
+  "idle_cpu_plasmashell": {
+   "clean": true,
+   "max": 0.9982054564427564,
+   "median": 0.9982054564427564,
+   "min": 0.9982054564427564,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  },
+  "idle_cpu_session": {
+   "clean": true,
+   "max": 1.9631373976707542,
+   "median": 1.9631373976707542,
+   "min": 1.9631373976707542,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  },
+  "idle_fps": {
+   "clean": true,
+   "max": 1.2311200629460661,
+   "median": 1.2311200629460661,
+   "min": 1.2311200629460661,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  },
+  "idle_gpu_plasmashell": {
+   "clean": true,
+   "max": 0.15706374222469063,
+   "median": 0.15706374222469063,
+   "min": 0.15706374222469063,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  },
+  "kwin_rss_end": {
+   "clean": true,
+   "max": 306.21875,
+   "median": 305.609375,
+   "min": 300.95703125,
+   "n": 3,
+   "of": 9,
+   "produced": 9
+  },
+  "launcher_first_frame_ms": {
+   "clean": true,
+   "max": 51.76233399834018,
+   "median": 51.00130700157024,
+   "min": 50.758016994223,
+   "n": 3,
+   "of": 9,
+   "produced": 9
+  },
+  "launcher_settled_ms": {
+   "clean": true,
+   "max": 335.56497799872886,
+   "median": 235.09565999847837,
+   "min": 234.09134299436118,
+   "n": 3,
+   "of": 9,
+   "produced": 9
+  },
+  "overview_late_frames": {
+   "clean": true,
+   "max": 4,
+   "median": 3,
+   "min": 3,
+   "n": 3,
+   "of": 9,
+   "produced": 9
+  },
+  "pss_plasmashell_settled": {
+   "clean": true,
+   "max": 192.9697265625,
+   "median": 192.4921875,
+   "min": 192.0146484375,
+   "n": 2,
+   "of": 9,
+   "produced": 9
+  },
+  "qs_first_frame_ms": {
+   "clean": true,
+   "max": 186.42071999784093,
+   "median": 183.05946700274944,
+   "min": 174.76525899837725,
+   "n": 5,
+   "of": 9,
+   "produced": 9
+  },
+  "session_pss_settled": {
+   "clean": true,
+   "max": 494.373046875,
+   "median": 493.46630859375,
+   "min": 492.5595703125,
+   "n": 2,
+   "of": 9,
+   "produced": 9
+  },
+  "sweep_cpu_kwin": {
+   "clean": true,
+   "max": 18.74926815073168,
+   "median": 18.74926815073168,
+   "min": 18.74926815073168,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  },
+  "sweep_cpu_plasmashell": {
+   "clean": true,
+   "max": 41.190102051348354,
+   "median": 41.190102051348354,
+   "min": 41.190102051348354,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  },
+  "sweep_gpu_plasmashell": {
+   "clean": true,
+   "max": 4.417474267477708,
+   "median": 4.417474267477708,
+   "min": 4.417474267477708,
+   "n": 1,
+   "of": 9,
+   "produced": 9
+  }
+ },
+ "missing": [],
+ "noisy_worse": [],
+ "packages": [
+  "kernel-core-6.19.10-300.fc44.x86_64",
+  "kernel-core-7.2.7-200.fc44.x86_64",
+  "kwin-6.7.5-1.fc44.x86_64",
+  "libplasma-6.7.5-1.fc44.x86_64",
+  "mesa-dri-drivers-26.2.3-1.fc44.x86_64",
+  "plasma-fusion-0.1.0-20.git282b1a5.fc44.noarch",
+  "plasma-fusion-decoration-1.0-2.fc44.x86_64",
+  "plasma-fusion-settings-1.0.0-3.fc44.x86_64",
+  "plasma-workspace-6.7.5-1.fc44.x86_64",
+  "qt6-qtbase-6.11.2-2.fc44.x86_64",
+  "qt6-qtdeclarative-6.11.2-2.fc44.x86_64",
+  "7.2.7-200.fc44.x86_64"
+ ],
+ "per_run": [
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 285.0933739973698,
+    "alttab_settled_ms": 518.42669799953,
+    "gem_launcher_first_open": 70.78125,
+    "gem_plasmashell_end": 244.40625,
+    "gem_plasmashell_settled": 127.56640625,
+    "idle_cpu_kwin": 0.7987699949061703,
+    "idle_cpu_plasmashell": 1.56425790669125,
+    "idle_cpu_session": 3.061951647140319,
+    "idle_fps": 3.061951647140319,
+    "idle_gpu_plasmashell": 0.3930513904094752,
+    "kwin_rss_end": 300.22265625,
+    "launcher_first_frame_ms": 40.351219999138266,
+    "launcher_settled_ms": 240.35121199995046,
+    "overview_late_frames": 4,
+    "pss_plasmashell_settled": 192.9697265625,
+    "qs_first_frame_ms": 172.2072560005472,
+    "session_pss_settled": 494.373046875,
+    "sweep_cpu_kwin": 17.019055349340018,
+    "sweep_cpu_plasmashell": 39.09520143105535,
+    "sweep_gpu_plasmashell": 4.759355021215796
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 52.5,
+      "noisy": true,
+      "session": 20.6
+     },
+     "idle0..idle1": {
+      "foreign": 33.1,
+      "noisy": true,
+      "session": 3.1
+     },
+     "launcher1-0..end": {
+      "foreign": 61.3,
+      "noisy": true,
+      "session": 15.6
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 114.7,
+      "noisy": true,
+      "session": 16.9
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 89.9,
+      "noisy": true,
+      "session": 13.9
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 42.9,
+      "noisy": true,
+      "session": 15.7
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 45.4,
+      "noisy": true,
+      "session": 11.0
+     },
+     "sweep0..sweep1": {
+      "foreign": 76.7,
+      "noisy": true,
+      "session": 57.1
+     },
+     "windows-open..end": {
+      "foreign": 47.9,
+      "noisy": true,
+      "session": 17.9
+     }
+    },
+    "idle_machine_cpu": 3.012515228707498,
+    "load1_max": 0.99,
+    "noisy_metrics": [
+     "alttab_first_frame_ms",
+     "alttab_settled_ms",
+     "gem_launcher_first_open",
+     "gem_plasmashell_end",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "kwin_rss_end",
+     "launcher_first_frame_ms",
+     "launcher_settled_ms",
+     "overview_late_frames",
+     "qs_first_frame_ms",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-gt-a"
+    ],
+    "sweep_events": 978
+   },
+   "run": "ts-perf-1"
+  },
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 250.93815400032327,
+    "alttab_settled_ms": 484.27147799520753,
+    "gem_launcher_first_open": 77.0390625,
+    "gem_plasmashell_end": 240.45703125,
+    "gem_plasmashell_settled": 125.625,
+    "idle_cpu_kwin": 0.698850706003144,
+    "idle_cpu_plasmashell": 1.397701412006288,
+    "idle_cpu_session": 2.662288403821501,
+    "idle_fps": 2.5957311937259635,
+    "idle_gpu_plasmashell": 0.33485105447811175,
+    "kwin_rss_end": 300.95703125,
+    "launcher_first_frame_ms": 43.371717001718935,
+    "launcher_settled_ms": 293.3717069972772,
+    "overview_late_frames": 4,
+    "pss_plasmashell_settled": 184.7958984375,
+    "qs_first_frame_ms": 174.76525899837725,
+    "session_pss_settled": 480.8984375,
+    "sweep_cpu_kwin": 17.36336546045683,
+    "sweep_cpu_plasmashell": 40.74085750498251,
+    "sweep_gpu_plasmashell": 4.582842834710137
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 10.0,
+      "noisy": false,
+      "session": 18.7
+     },
+     "idle0..idle1": {
+      "foreign": 47.7,
+      "noisy": true,
+      "session": 2.7
+     },
+     "launcher1-0..end": {
+      "foreign": 23.9,
+      "noisy": false,
+      "session": 13.6
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 125.0,
+      "noisy": true,
+      "session": 15.3
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 63.6,
+      "noisy": true,
+      "session": 12.4
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 14.7,
+      "noisy": false,
+      "session": 13.1
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 10.5,
+      "noisy": false,
+      "session": 8.4
+     },
+     "sweep0..sweep1": {
+      "foreign": 63.6,
+      "noisy": true,
+      "session": 59.4
+     },
+     "windows-open..end": {
+      "foreign": 13.0,
+      "noisy": false,
+      "session": 15.6
+     }
+    },
+    "idle_machine_cpu": 4.194021995069115,
+    "load1_max": 0.79,
+    "noisy_metrics": [
+     "gem_launcher_first_open",
+     "gem_plasmashell_settled",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "launcher_first_frame_ms",
+     "launcher_settled_ms",
+     "pss_plasmashell_settled",
+     "session_pss_settled",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-gt-ld"
+    ],
+    "sweep_events": 976
+   },
+   "run": "ts-perf-2"
+  },
+  {
+   "clean": true,
+   "metrics": {
+    "alttab_first_frame_ms": 255.56358999892836,
+    "alttab_settled_ms": 488.8969140010886,
+    "gem_launcher_first_open": 72.53125,
+    "gem_plasmashell_end": 236.52734375,
+    "gem_plasmashell_settled": 137.4921875,
+    "idle_cpu_kwin": 0.3992821825771026,
+    "idle_cpu_plasmashell": 0.9982054564427564,
+    "idle_cpu_session": 1.9631373976707542,
+    "idle_fps": 1.2311200629460661,
+    "idle_gpu_plasmashell": 0.15706374222469063,
+    "kwin_rss_end": 305.609375,
+    "launcher_first_frame_ms": 50.758016994223,
+    "launcher_settled_ms": 234.09134299436118,
+    "overview_late_frames": 3,
+    "pss_plasmashell_settled": 192.0146484375,
+    "qs_first_frame_ms": 183.05946700274944,
+    "session_pss_settled": 492.5595703125,
+    "sweep_cpu_kwin": 18.74926815073168,
+    "sweep_cpu_plasmashell": 41.190102051348354,
+    "sweep_gpu_plasmashell": 4.417474267477708
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 11.6,
+      "noisy": false,
+      "session": 20.0
+     },
+     "idle0..idle1": {
+      "foreign": 4.2,
+      "noisy": false,
+      "session": 2.0
+     },
+     "launcher1-0..end": {
+      "foreign": 10.7,
+      "noisy": false,
+      "session": 14.4
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 8.0,
+      "noisy": false,
+      "session": 15.2
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 8.4,
+      "noisy": false,
+      "session": 12.2
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 10.6,
+      "noisy": false,
+      "session": 13.5
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 9.9,
+      "noisy": false,
+      "session": 10.0
+     },
+     "sweep0..sweep1": {
+      "foreign": 12.5,
+      "noisy": false,
+      "session": 61.2
+     },
+     "windows-open..end": {
+      "foreign": 11.5,
+      "noisy": false,
+      "session": 16.5
+     }
+    },
+    "idle_machine_cpu": 0.5129342612360329,
+    "load1_max": 0.43,
+    "noisy_metrics": [],
+    "other_sessions": [],
+    "sweep_events": 973
+   },
+   "run": "ts-perf-3"
+  },
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 278.8033050019294,
+    "alttab_settled_ms": 512.1366290040896,
+    "gem_launcher_first_open": 71.79296875,
+    "gem_plasmashell_end": 236.49609375,
+    "gem_plasmashell_settled": 127.59765625,
+    "idle_cpu_kwin": 0.5986001022280351,
+    "idle_cpu_plasmashell": 1.0974335207513977,
+    "idle_cpu_session": 2.3278892864423586,
+    "idle_fps": 1.662778061744542,
+    "idle_gpu_plasmashell": 0.2191801410845918,
+    "kwin_rss_end": 305.86328125,
+    "launcher_first_frame_ms": 37.39528399455594,
+    "launcher_settled_ms": 232.88066600071033,
+    "overview_late_frames": 8,
+    "pss_plasmashell_settled": 184.1650390625,
+    "qs_first_frame_ms": 172.86919700563885,
+    "session_pss_settled": 480.53515625,
+    "sweep_cpu_kwin": 20.97718364178173,
+    "sweep_cpu_plasmashell": 46.61596364840384,
+    "sweep_gpu_plasmashell": 4.742473002898637
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 85.7,
+      "noisy": true,
+      "session": 20.5
+     },
+     "idle0..idle1": {
+      "foreign": 12.8,
+      "noisy": false,
+      "session": 2.3
+     },
+     "launcher1-0..end": {
+      "foreign": 73.7,
+      "noisy": true,
+      "session": 15.9
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 15.8,
+      "noisy": false,
+      "session": 14.9
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 39.4,
+      "noisy": true,
+      "session": 14.7
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 90.1,
+      "noisy": true,
+      "session": 15.5
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 84.1,
+      "noisy": true,
+      "session": 9.7
+     },
+     "sweep0..sweep1": {
+      "foreign": 82.5,
+      "noisy": true,
+      "session": 68.7
+     },
+     "windows-open..end": {
+      "foreign": 88.5,
+      "noisy": true,
+      "session": 17.8
+     }
+    },
+    "idle_machine_cpu": 1.2580010529524233,
+    "load1_max": 0.99,
+    "noisy_metrics": [
+     "alttab_first_frame_ms",
+     "alttab_settled_ms",
+     "gem_launcher_first_open",
+     "gem_plasmashell_end",
+     "gem_plasmashell_settled",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "kwin_rss_end",
+     "launcher_first_frame_ms",
+     "launcher_settled_ms",
+     "overview_late_frames",
+     "pss_plasmashell_settled",
+     "qs_first_frame_ms",
+     "session_pss_settled",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-perf-dk-new2",
+     "pfv-perf-dk-old1"
+    ],
+    "sweep_events": 976
+   },
+   "run": "ts-perfb-1"
+  },
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 254.9700559975463,
+    "alttab_settled_ms": 488.3033799997065,
+    "gem_launcher_first_open": 81.62109375,
+    "gem_plasmashell_end": 236.625,
+    "gem_plasmashell_settled": 127.9765625,
+    "idle_cpu_kwin": 0.5991795074696951,
+    "idle_cpu_plasmashell": 1.165071264524407,
+    "idle_cpu_session": 2.263567028218848,
+    "idle_fps": 2.230279277803865,
+    "idle_gpu_plasmashell": 0.29394902459112715,
+    "kwin_rss_end": 307.74609375,
+    "launcher_first_frame_ms": 44.552757004566956,
+    "launcher_settled_ms": 238.56841599626932,
+    "overview_late_frames": 4,
+    "pss_plasmashell_settled": 185.1650390625,
+    "qs_first_frame_ms": 175.2238010012661,
+    "session_pss_settled": 481.2490234375,
+    "sweep_cpu_kwin": 17.19320536576129,
+    "sweep_cpu_plasmashell": 40.89457321460736,
+    "sweep_gpu_plasmashell": 4.923874700476946
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 36.1,
+      "noisy": true,
+      "session": 20.1
+     },
+     "idle0..idle1": {
+      "foreign": 36.0,
+      "noisy": true,
+      "session": 2.3
+     },
+     "launcher1-0..end": {
+      "foreign": 57.6,
+      "noisy": true,
+      "session": 13.5
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 83.7,
+      "noisy": true,
+      "session": 18.4
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 55.3,
+      "noisy": true,
+      "session": 13.6
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 15.1,
+      "noisy": false,
+      "session": 10.9
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 89.9,
+      "noisy": true,
+      "session": 7.9
+     },
+     "sweep0..sweep1": {
+      "foreign": 70.6,
+      "noisy": true,
+      "session": 59.4
+     },
+     "windows-open..end": {
+      "foreign": 25.5,
+      "noisy": false,
+      "session": 15.2
+     }
+    },
+    "idle_machine_cpu": 3.1859485815602837,
+    "load1_max": 0.67,
+    "noisy_metrics": [
+     "alttab_first_frame_ms",
+     "alttab_settled_ms",
+     "gem_launcher_first_open",
+     "gem_plasmashell_end",
+     "gem_plasmashell_settled",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "kwin_rss_end",
+     "launcher_first_frame_ms",
+     "launcher_settled_ms",
+     "overview_late_frames",
+     "pss_plasmashell_settled",
+     "qs_first_frame_ms",
+     "session_pss_settled",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-perf-dk-new3",
+     "pfv-perf-dk-old2"
+    ],
+    "sweep_events": 976
+   },
+   "run": "ts-perfb-2"
+  },
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 259.3326540009002,
+    "alttab_settled_ms": 492.66597800306045,
+    "gem_launcher_first_open": 72.61328125,
+    "gem_plasmashell_end": 237.21484375,
+    "gem_plasmashell_settled": 127.48828125,
+    "idle_cpu_kwin": 1.4306390494864554,
+    "idle_cpu_plasmashell": 2.2624059387227664,
+    "idle_cpu_session": 4.158834446181556,
+    "idle_fps": 5.855638900223631,
+    "idle_gpu_plasmashell": 0.7400053812037645,
+    "kwin_rss_end": 306.5234375,
+    "launcher_first_frame_ms": 46.481031997245736,
+    "launcher_settled_ms": 246.48102399805794,
+    "overview_late_frames": 4,
+    "pss_plasmashell_settled": 186.8603515625,
+    "qs_first_frame_ms": 174.90820999955758,
+    "session_pss_settled": 483.67578125,
+    "sweep_cpu_kwin": 18.549925019967322,
+    "sweep_cpu_plasmashell": 42.34433145919242,
+    "sweep_gpu_plasmashell": 4.460232273328839
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 38.1,
+      "noisy": true,
+      "session": 19.0
+     },
+     "idle0..idle1": {
+      "foreign": 67.1,
+      "noisy": true,
+      "session": 4.2
+     },
+     "launcher1-0..end": {
+      "foreign": 53.1,
+      "noisy": true,
+      "session": 14.2
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 18.6,
+      "noisy": false,
+      "session": 14.1
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 15.6,
+      "noisy": false,
+      "session": 12.3
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 64.9,
+      "noisy": true,
+      "session": 13.4
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 52.0,
+      "noisy": true,
+      "session": 9.3
+     },
+     "sweep0..sweep1": {
+      "foreign": 17.5,
+      "noisy": false,
+      "session": 62.2
+     },
+     "windows-open..end": {
+      "foreign": 52.5,
+      "noisy": true,
+      "session": 16.0
+     }
+    },
+    "idle_machine_cpu": 5.925966911968129,
+    "load1_max": 0.6,
+    "noisy_metrics": [
+     "alttab_first_frame_ms",
+     "alttab_settled_ms",
+     "gem_launcher_first_open",
+     "gem_plasmashell_end",
+     "gem_plasmashell_settled",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "kwin_rss_end",
+     "launcher_first_frame_ms",
+     "launcher_settled_ms",
+     "overview_late_frames",
+     "pss_plasmashell_settled",
+     "qs_first_frame_ms",
+     "session_pss_settled",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-perf-dk-prof-new",
+     "pfv-perf-dk-prof-old"
+    ],
+    "sweep_events": 974
+   },
+   "run": "ts-perfb-3"
+  },
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 278.907749998325,
+    "alttab_settled_ms": 512.2410740004852,
+    "gem_launcher_first_open": 68.7578125,
+    "gem_plasmashell_end": 238.421875,
+    "gem_plasmashell_settled": 127.703125,
+    "idle_cpu_kwin": 0.8989366493657609,
+    "idle_cpu_plasmashell": 1.3317579990603865,
+    "idle_cpu_session": 2.7301038980737924,
+    "idle_fps": 3.395982897603986,
+    "idle_gpu_plasmashell": 0.44413339536170454,
+    "kwin_rss_end": 306.21875,
+    "launcher_first_frame_ms": 51.00130700157024,
+    "launcher_settled_ms": 335.56497799872886,
+    "overview_late_frames": 3,
+    "pss_plasmashell_settled": 191.2763671875,
+    "qs_first_frame_ms": 185.11942199984333,
+    "session_pss_settled": 488.12109375,
+    "sweep_cpu_kwin": 15.62786331455108,
+    "sweep_cpu_plasmashell": 38.82698960136914,
+    "sweep_gpu_plasmashell": 4.778343687752654
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 11.9,
+      "noisy": false,
+      "session": 21.9
+     },
+     "idle0..idle1": {
+      "foreign": 50.9,
+      "noisy": true,
+      "session": 2.7
+     },
+     "launcher1-0..end": {
+      "foreign": 11.2,
+      "noisy": false,
+      "session": 15.7
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 9.1,
+      "noisy": false,
+      "session": 15.4
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 11.3,
+      "noisy": false,
+      "session": 13.9
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 9.6,
+      "noisy": false,
+      "session": 15.9
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 8.8,
+      "noisy": false,
+      "session": 10.8
+     },
+     "sweep0..sweep1": {
+      "foreign": 131.3,
+      "noisy": true,
+      "session": 55.5
+     },
+     "windows-open..end": {
+      "foreign": 11.2,
+      "noisy": false,
+      "session": 18.6
+     }
+    },
+    "idle_machine_cpu": 4.460575164847343,
+    "load1_max": 0.57,
+    "noisy_metrics": [
+     "gem_plasmashell_settled",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "pss_plasmashell_settled",
+     "session_pss_settled",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-ld-dk-func"
+    ],
+    "sweep_events": 980
+   },
+   "run": "rts-perfa-1"
+  },
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 254.56522299646167,
+    "alttab_settled_ms": 530.2581610012567,
+    "gem_launcher_first_open": 70.8359375,
+    "gem_plasmashell_end": 236.35546875,
+    "gem_plasmashell_settled": 127.9375,
+    "idle_cpu_kwin": 0.8985667484162729,
+    "idle_cpu_plasmashell": 1.5974519971844852,
+    "idle_cpu_session": 2.99522249472091,
+    "idle_fps": 4.026910242902557,
+    "idle_gpu_plasmashell": 0.5062528255481277,
+    "kwin_rss_end": 301.28125,
+    "launcher_first_frame_ms": 47.4162989994511,
+    "launcher_settled_ms": 242.9930250000325,
+    "overview_late_frames": 4,
+    "pss_plasmashell_settled": 185.8232421875,
+    "qs_first_frame_ms": 186.42071999784093,
+    "session_pss_settled": 482.3701171875,
+    "sweep_cpu_kwin": 17.675215104136726,
+    "sweep_cpu_plasmashell": 40.88607449912946,
+    "sweep_gpu_plasmashell": 4.79221693540407
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 14.4,
+      "noisy": false,
+      "session": 21.5
+     },
+     "idle0..idle1": {
+      "foreign": 48.7,
+      "noisy": true,
+      "session": 3.0
+     },
+     "launcher1-0..end": {
+      "foreign": 35.9,
+      "noisy": true,
+      "session": 14.2
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 235.4,
+      "noisy": true,
+      "session": 11.7
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 94.9,
+      "noisy": true,
+      "session": 12.1
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 42.4,
+      "noisy": true,
+      "session": 12.2
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 8.8,
+      "noisy": false,
+      "session": 9.0
+     },
+     "sweep0..sweep1": {
+      "foreign": 46.1,
+      "noisy": true,
+      "session": 59.4
+     },
+     "windows-open..end": {
+      "foreign": 29.5,
+      "noisy": true,
+      "session": 16.5
+     }
+    },
+    "idle_machine_cpu": 4.299318974586125,
+    "load1_max": 0.64,
+    "noisy_metrics": [
+     "gem_launcher_first_open",
+     "gem_plasmashell_end",
+     "gem_plasmashell_settled",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "kwin_rss_end",
+     "launcher_first_frame_ms",
+     "launcher_settled_ms",
+     "overview_late_frames",
+     "pss_plasmashell_settled",
+     "session_pss_settled",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-ld-dk-func",
+     "pfv-perf-dk-new8"
+    ],
+    "sweep_events": 976
+   },
+   "run": "rts-perfa-2"
+  },
+  {
+   "clean": false,
+   "metrics": {
+    "alttab_first_frame_ms": 247.53490400325973,
+    "alttab_settled_ms": 480.868227998144,
+    "gem_launcher_first_open": 82.796875,
+    "gem_plasmashell_end": 248.47265625,
+    "gem_plasmashell_settled": 127.265625,
+    "idle_cpu_kwin": 0.4326231046780826,
+    "idle_cpu_plasmashell": 1.0981971118751328,
+    "idle_cpu_session": 2.2629516244699706,
+    "idle_fps": 1.5973776172729204,
+    "idle_gpu_plasmashell": 0.20634270466256519,
+    "kwin_rss_end": 305.66015625,
+    "launcher_first_frame_ms": 51.76233399834018,
+    "launcher_settled_ms": 235.09565999847837,
+    "overview_late_frames": 3,
+    "pss_plasmashell_settled": 184.1767578125,
+    "qs_first_frame_ms": 180.45783900015522,
+    "session_pss_settled": 480.060546875,
+    "sweep_cpu_kwin": 17.56884566908262,
+    "sweep_cpu_plasmashell": 41.4469453077253,
+    "sweep_gpu_plasmashell": 4.619544398514394
+   },
+   "noise": {
+    "foreign_cpu": {
+     "alttab1-0..alttab3-1": {
+      "foreign": 10.3,
+      "noisy": false,
+      "session": 17.0
+     },
+     "idle0..idle1": {
+      "foreign": 35.3,
+      "noisy": true,
+      "session": 2.3
+     },
+     "launcher1-0..end": {
+      "foreign": 21.1,
+      "noisy": false,
+      "session": 13.1
+     },
+     "launcher1-0..launcher1-1": {
+      "foreign": 8.8,
+      "noisy": false,
+      "session": 15.1
+     },
+     "launcher1-0..launcher3-1": {
+      "foreign": 9.4,
+      "noisy": false,
+      "session": 12.2
+     },
+     "ov1-0..ov3-1": {
+      "foreign": 58.4,
+      "noisy": true,
+      "session": 12.3
+     },
+     "qs1-0..qs3-1": {
+      "foreign": 9.3,
+      "noisy": false,
+      "session": 8.9
+     },
+     "sweep0..sweep1": {
+      "foreign": 42.6,
+      "noisy": true,
+      "session": 60.5
+     },
+     "windows-open..end": {
+      "foreign": 36.1,
+      "noisy": true,
+      "session": 14.5
+     }
+    },
+    "idle_machine_cpu": 3.127421676076608,
+    "load1_max": 0.5,
+    "noisy_metrics": [
+     "gem_plasmashell_end",
+     "gem_plasmashell_settled",
+     "idle_cpu_kwin",
+     "idle_cpu_plasmashell",
+     "idle_cpu_session",
+     "idle_fps",
+     "idle_gpu_plasmashell",
+     "kwin_rss_end",
+     "overview_late_frames",
+     "pss_plasmashell_settled",
+     "session_pss_settled",
+     "sweep_cpu_kwin",
+     "sweep_cpu_plasmashell",
+     "sweep_gpu_plasmashell"
+    ],
+    "other_sessions": [
+     "pfv-perf-dk-dir-nomag",
+     "pfv-perf-dk-new9"
+    ],
+    "sweep_events": 975
+   },
+   "run": "rts-perfa-3"
+  }
+ ],
+ "regressions": [],
+ "runs": 9
+}
