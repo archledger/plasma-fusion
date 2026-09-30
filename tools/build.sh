@@ -8,8 +8,8 @@
 #
 # Before the parts, the QML checks in tools/checks/ run over packages/: motion-lint.sh (literal
 # durations, endless loops, animations without a duration; EFFECTS.md 6.2) and a11y-lint.py
-# (interactive items without an accessible name; GAPS.md G25). PF_LINTS=warn (default: list the
-# findings, build anyway), fail (stop on a finding; INT-1 switches the default to this) or off.
+# (interactive items without an accessible name; GAPS.md G25). PF_LINTS=fail (default: stop on
+# a finding), warn (list the findings, build anyway) or off.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 STAGE=${STAGE:-$ROOT/stage/home}
@@ -17,7 +17,7 @@ export ROOT STAGE
 mkdir -p "$STAGE"
 shopt -s nullglob
 
-lints=${PF_LINTS:-warn}
+lints=${PF_LINTS:-fail}
 case "$lints" in
   off) ;;
   warn|fail)

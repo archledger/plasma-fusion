@@ -85,7 +85,7 @@ existing panels.
 |---|---|---|
 | Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity adaptive` (solid next to a maximized window, decision 5) | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu` (`allScreens=false`: the menu of that screen's window), panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.kde.plasma.systemtray`, `org.plasmafusion.pen` (when installed), `org.plasmafusion.quicksettings` |
 | Top bars on the other screens | as above | app name, appmenu (`allScreens=false`), clock pill; no tray, quick settings or dock (decision 8) |
-| Dock | `location bottom`, `height 88` (72 px dock + 16 px headroom, shared contract with the Plasma style), `floating true`, `lengthMode fit`, `alignment center`, `hiding dodgewindows`, `opacity translucent` | `org.plasmafusion.launcher` with `[General] buttonStyle=hidden` when the app-name widget holds the top-left corner (the dock finds it in its own panel for Start; Meta finds it in any panel), then `org.plasmafusion.dock` (else Kickoff when there is no Fusion launcher, and `org.kde.plasma.icontasks`) |
+| Dock | `location bottom`, `height 72` (the dock plate; the Plasma style keeps the 16 px headroom above it in the panel window. 88 with the headroom frame until INT-1), `floating true`, `lengthMode fit`, `alignment center`, `hiding dodgewindows`, `opacity translucent` | `org.plasmafusion.launcher` with `[General] buttonStyle=hidden` when the app-name widget holds the top-left corner (the dock finds it in its own panel for Start; Meta finds it in any panel), then `org.plasmafusion.dock` (else Kickoff when there is no Fusion launcher, and `org.kde.plasma.icontasks`) |
 | Desktop | Folder View (`org.kde.plasma.folder`, BACKLOG M1): `url desktop:/`, `arrangement 1` (columns), `alignment 0` (from the left), `iconSize 2`, `sortMode -1` (free placement), `popups false`, `toolTips false`, `selectionMarkers true`, `useTypeAhead true`, previews for the installed image/SVG/PDF/office/video thumbnailers; `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | the weather, calendar and system cards, see below |
 
 System tray: when the quick-settings widget is installed, `[General] hiddenItems` =
@@ -188,7 +188,8 @@ What it sets, in order (all idempotent; a second run reports only the theme re-a
    session bus, otherwise with kquitapp6 + `setsid plasmashell` (output in
    `~/.local/state/plasma-fusion/plasmashell.log`). Without a running plasmashell it removes the
    appletsrc so the next start builds the layout. A panel that came up at another thickness is set
-   back to 34 / 88 px (safety net; with the current Plasma style it reports "as designed").
+   back to 34 / 72 px (88 until INT-1; this is also what moves a deployed 88 px dock to the
+   plain frame's 72 px on the next `fusion-config.sh` run).
    kdeglobals [KDE] `DefaultDarkLookAndFeel=org.plasmafusion.dark.desktop`,
    `DefaultLightLookAndFeel=org.plasmafusion.light.desktop`, `AutomaticLookAndFeel=false` (true
    with `--auto`); keys checked in plasma-workspace 6.7.5

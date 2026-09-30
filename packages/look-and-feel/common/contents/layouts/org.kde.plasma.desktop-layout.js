@@ -11,9 +11,9 @@
         app name | global menu | spacer | clock pill | spacer | system tray | pen | quick settings
     Every other screen gets its own top bar with the app name, the global menu of its own windows
     and the clock pill (owner decision 8; ensure-topbars.js does the same for screens added later).
-    Dock: a floating, fit-content, centred panel at the bottom edge, 88 px thick
-        (72 px of visible dock plus 16 px of transparent headroom that the Plasma style keeps
-        clear, so magnified icons can grow above the dock), hidden when a window covers it.
+    Dock: a floating, fit-content, centred panel at the bottom edge, 72 px thick (the visible
+        dock; the Plasma style keeps 16 px of transparent headroom above it in the panel window,
+        so magnified icons can grow above the dock), hidden when a window covers it.
     Desktop: a Folder View (desktop icons from ~/Desktop in the left column) with weather,
         calendar and CPU/memory cards in a column on the right, drawn on the standard background so
         the wallpaper blur applies; in portrait the first two cards sit side by side under the bar.
@@ -41,7 +41,7 @@ var TS = textScale();
 // engine does not know the screen's scale, so the widgets snap their own pills).
 var TOP_BAR_THICKNESS = Math.round(34 * TS);
 // The dock's tile is its own setting (48 px), not a text size.
-var DOCK_THICKNESS = 88;
+var DOCK_THICKNESS = 72;
 
 // Items the quick-settings widget replaces: the status pill, tiles and bell (first six), the
 // keyboard-layout badge, phone and clipboard buttons it draws itself, and its media card.
@@ -313,7 +313,7 @@ var GRID_UNIT = 2 * Math.round(9 * TS);
 var CELL = 16;
 var CARD_PADDING = 14;  // margins of the Plasma style's card background (widgets/background)
 // The dock does not reserve space (it hides over windows), so the cards leave its area free by
-// hand: 88 px of dock plus the 16 px floating gap (ADAPTIVE 5.9).
+// hand: the 72 px dock, its 16 px headroom and the 16 px floating gap (ADAPTIVE 5.9).
 var DOCK_AREA = 104;
 function cells(px) { return Math.ceil(px / CELL) * CELL; }
 // A Fusion card: its content box at this text size plus the frame.

@@ -334,8 +334,10 @@ Work package STYLE-1 of the one-pass build plan. Changes in `gen_plasma_style.py
 
 Both switches default to the frames deployed since round 2, so a build without them is the
 deployed look (element-identical to HEAD: same ids, sizes and pixels for every element; the only
-addition is the `south-hint-*-inset` hints below). The lead flips them in INT-1, in the same commit
-as the dock, top-bar and quick-settings padding.
+addition is the `south-hint-*-inset` hints below). INT-1 flipped them: `tools/build.d/20-plasma-style.sh`
+now defaults to `plain` and `0`, the layout script and `fusion-config.sh` make the dock 72 px and the
+tablet script 80 px; `PF_SOUTH_FRAME=headroom PF_NORTH_SIDE_MARGIN=6` still builds the old frames (they
+need an 88 px dock).
 
 | Build switch (`tools/build.d/20-plasma-style.sh`) | Generator option | Default | Flipped |
 |---|---|---|---|

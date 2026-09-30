@@ -12,7 +12,7 @@ import org.kde.kwin
 // - Posture comes from KWin's own TabletModeManager (FusionTablet: one D-Bus read, then its
 //   signals). Nothing happens until KWin has answered, so a stale start value never moves windows.
 // - At once on every change: the panel script in plasmashell (top bar round(44 x text scale),
-//   dock 96 and its tablet hiding; the laptop values are kept in plasmashell's own config).
+//   dock 80 and its tablet hiding; the laptop values are kept in plasmashell's own config).
 // - After 300 ms of a stable posture: window policy. Apps open maximized and without title bars
 //   (placement "Maximizing", borderless maximized windows), eligible open windows are maximized,
 //   tiled windows lose their title bar. Only while a built-in screen is the only screen, and only
@@ -392,7 +392,7 @@ Item {
     // representation inside the scripting writeConfig while its layout is updated), so the
     // compact menu is left to the top-bar widgets.
     function panelScript(isTablet, hiding) {
-        return "var TABLET = " + (isTablet ? "true" : "false") + ", DOCK_HIDING = \"" + hiding + "\", HEIGHT_DOCK = 96;\n"
+        return "var TABLET = " + (isTablet ? "true" : "false") + ", DOCK_HIDING = \"" + hiding + "\", HEIGHT_DOCK = 80;\n"
             + "function textScale() {\n"
             + "    var pt = NaN, font = ConfigFile(\"kdeglobals\", \"General\").readEntry(\"font\");\n"
             + "    if (font !== undefined && font !== null && String(font) !== \"\") pt = parseFloat(String(font).split(\",\")[1]);\n"
@@ -408,10 +408,10 @@ Item {
             + "    if (!isTop && !isDock) return;\n"
             + "    p.currentConfigGroup = [\"PlasmaFusion\"];\n"
             + "    var applied = p.readConfig(\"tabletApplied\", false) === true || p.readConfig(\"tabletApplied\", \"\") === \"true\";\n"
-            + "    var h = isTop ? HEIGHT_TOP : HEIGHT_DOCK, laptop = isTop ? Math.round(34 * textScale()) : 88;\n"
+            + "    var h = isTop ? HEIGHT_TOP : HEIGHT_DOCK, laptop = isTop ? Math.round(34 * textScale()) : 72;\n"
             + "    if (TABLET) {\n"
             + "        if (!applied) {\n"
-            + "            p.writeConfig(\"laptopHeight\", p.height == h ? laptop : p.height);\n"
+            + "            p.writeConfig(\"laptopHeight\", p.height == h || (isDock && (p.height == 88 || p.height == 96)) ? laptop : p.height);\n"
             + "            p.writeConfig(\"laptopHiding\", p.hiding);\n"
             + "            p.writeConfig(\"tabletApplied\", true);\n"
             + "        }\n"
@@ -419,6 +419,7 @@ Item {
             + "        if (isDock && p.hiding != DOCK_HIDING) p.hiding = DOCK_HIDING;\n"
             + "    } else if (applied) {\n"
             + "        var saved = Number(p.readConfig(\"laptopHeight\", laptop));\n"
+            + "        if (isDock && (saved == 88 || saved == 96)) saved = laptop;\n"
             + "        p.height = saved > 0 && saved != h ? saved : laptop;\n"
             + "        if (isDock) p.hiding = String(p.readConfig(\"laptopHiding\", \"dodgewindows\"));\n"
             + "        p.writeConfig(\"tabletApplied\", false);\n"

@@ -626,7 +626,7 @@ var ps = panels(), fixed = [];
 for (var i = 0; i < ps.length; i++) {
     var p = ps[i];
     if (p.location === "top" && p.lengthMode === "fill" && p.height !== top) { p.height = top; fixed.push("top bar " + top); }
-    if (p.location === "bottom" && p.floating && p.lengthMode === "fit" && p.height !== 88) { p.height = 88; fixed.push("dock"); }
+    if (p.location === "bottom" && p.floating && p.lengthMode === "fit" && p.height !== 72) { p.height = 72; fixed.push("dock 72"); }
 }
 print(fixed.length ? "set " + fixed.join(", ") : "as designed");'
 }

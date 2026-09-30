@@ -110,6 +110,8 @@ Item {
         opacity: 0.85
     }
     MouseArea {
+        // A pointer convenience: a click beside the buttons cancels, like the Cancel button.
+        Accessible.ignored: true
         anchors.fill: parent
         onClicked: root.cancelRequested()
     }

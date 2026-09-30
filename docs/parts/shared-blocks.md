@@ -208,8 +208,8 @@ is active. An icon given as a file path or a `QIcon` without `iconName` counts a
 
 ## Checks
 
-`tools/build.sh` runs both checks over `packages/` before the parts. `PF_LINTS=warn` (default) lists the
-findings and builds anyway, `fail` stops (both checks run first; INT-1 switches the default), `off`
+`tools/build.sh` runs both checks over `packages/` before the parts. `PF_LINTS=fail` (default since
+INT-1) stops on a finding (both checks run first), `warn` lists the findings and builds anyway, `off`
 skips them. Both print `FILE:LINE: RULE message | source line` and a count on stderr, exit 1 on a
 finding, 0 with `--warn`.
 

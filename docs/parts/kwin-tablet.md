@@ -42,9 +42,10 @@ needed.
   its signals. The script does nothing until KWin has answered, so the Kirigami value (which can start
   stale inside KWin, TABLET F3) never moves windows.
 - **Panels, at once on every change**: one `evaluateScript` call in plasmashell (TABLET 3.6): the top bar
-  `round(44 x text scale)` (the layout script's `textScale()`), the dock 96 and `DockHiding` (not the stock
+  `round(44 x text scale)` (the layout script's `textScale()`), the dock 80 (96 with the headroom frame until INT-1) and `DockHiding` (not the stock
   appmenu's `compactView`: see Verification). The laptop height and hiding are saved once per panel in
-  its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave.
+  its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave
+  (72 for the dock; a saved 88 or 96 from the headroom frame counts as 72).
   Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
   start), the call is made again after 500 ms (one call for several panels).
 - **Window policy, after 300 ms of stable posture** (flip bouncing), only with `WindowMode=fullscreen`
@@ -135,7 +136,7 @@ its title bar, Dolphin still full screen, Konsole full screen again after the ne
   invokes the shortcut.
 - The quick-settings keyboard policy (TABLET 3.3, `services/TabletPolicy.qml`) is QS-1's; the script does
   not start or stop the on-screen keyboard.
-- DOCK-2: the tablet dock content fits a 96 px panel (the script sets the thickness).
+- DOCK-2: the tablet dock content fits the tablet panel (80 px plate; the script sets the thickness).
 - TOP-1/TOP-2: a compact global menu in tablet mode (TABLET 4.3) comes from the top bar's width budget
   (the clock pill), which switches the stock appmenu only where Plasma 6.7.5 does not crash
   (`docs/parts/shell-topbar.md`, TOP-2).

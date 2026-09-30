@@ -2,14 +2,15 @@
 # Plasma styles plasma-fusion-dark and plasma-fusion-light
 # -> $STAGE/.local/share/plasma/desktoptheme/plasma-fusion-{dark,light}/
 # Panel frame switches (see generators/plasma-style/gen_plasma_style.py and docs/parts/plasma-style.md):
-#   PF_SOUTH_FRAME=headroom|plain   bottom panel frame (default headroom: the 88 px dock contract)
-#   PF_NORTH_SIDE_MARGIN=6|0        top bar frame side margins (default 6)
-# The defaults are the frames deployed since round 2; the plain/0 pair lands together with the dock,
-# top bar and quick-settings changes that pad for it.
+#   PF_SOUTH_FRAME=plain|headroom   bottom panel frame (default plain: a 72 px dock plate, the
+#                                   16 px headroom above it in the panel window)
+#   PF_NORTH_SIDE_MARGIN=0|6        top bar frame side margins (default 0: the widgets pad)
+# headroom/6 are the frames deployed until the one-pass build (the 88 px dock contract); they go
+# with a dock panel of 88 px (the layout script, fusion-config.sh and the tablet script use 72).
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
-south=${PF_SOUTH_FRAME:-headroom}
-north=${PF_NORTH_SIDE_MARGIN:-6}
+south=${PF_SOUTH_FRAME:-plain}
+north=${PF_NORTH_SIDE_MARGIN:-0}
 case "$south" in headroom|plain) ;; *) echo "plasma-style: PF_SOUTH_FRAME must be headroom or plain" >&2; exit 1 ;; esac
 case "$north" in 6|0) ;; *) echo "plasma-style: PF_NORTH_SIDE_MARGIN must be 6 or 0" >&2; exit 1 ;; esac
 out="$STAGE/.local/share/plasma/desktoptheme"

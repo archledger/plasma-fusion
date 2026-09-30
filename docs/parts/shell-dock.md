@@ -39,7 +39,7 @@ The dock panel (what the Global Theme layout script already creates):
 
 ```js
 var dock = new Panel;
-dock.location = "bottom"; dock.height = 88; dock.floating = true; dock.lengthMode = "fit";
+dock.location = "bottom"; dock.height = 72; dock.floating = true; dock.lengthMode = "fit";   // 88 with the headroom frame
 dock.alignment = "center"; dock.hiding = "dodgewindows"; dock.opacity = "translucent";
 var l = dock.addWidget("org.plasmafusion.launcher");            // optional, see "Launcher" below
 l.currentConfigGroup = ["General"]; l.writeConfig("buttonStyle", "hidden");
