@@ -16,17 +16,19 @@ package.
 | One pointer for pen, touchpad and TrackPoint | on | `kcminputrc [Tablet] SyncWithMouse=true` |
 | Pen screen | built-in panel (`eDP-1`) | KWin D-Bus `outputName`; KWin writes `OutputUuid` |
 | Notes and whiteboard app | Xournal++ | `dnf install --setopt=install_weak_deps=False xournalpp` (3 packages, about 8 MB; with weak dependencies its optional LaTeX tool pulls in about 260 MB of TeX Live) |
+| Device description (X13 Yoga Gen 4 digitizer only) | `~/.config/libwacom/lenovo-x13-yoga-gen4-534d.tablet` | per user (libwacom reads `$XDG_CONFIG_HOME/libwacom` first); names the device, `Reversible=false` removes the left-handed option that mirrors a display pen; libinput reads it when KWin adds the device, i.e. from the next login. No `Styli` line until hand check V1 (every `isdv4-aes` stylus has one button) |
 
 The internal output is found through sysfs (`/sys/class/drm/card*-eDP-*`), so no Qt tool runs. The
 backup (`~/.local/state/plasma-fusion/pen-backup-<UTC>/`) holds a copy of `kcminputrc`, the old value
 of each key the script set (`keys`) and the pen's previous output (`pen-output`).
 
-Not yet applied: the per-user libwacom description (`~/.config/libwacom/`, PEN.md section 2), which
-waits for the spec review, and the Pen menu plasmoid. The click-button mapping assumes the barrel
-button closest to the tip sends 331 (hand check V1).
+Not yet built: the Pen menu plasmoid (PEN.md section 3). The click-button mapping assumes the
+button that sends 331 is the one a user expects to right-click with (hand check V1).
 
 ## Live device
 
-2026-09-30 01:17Z: applied to the ThinkPad's real session (backup `pen-backup-20260930T011729Z`).
+2026-09-30 01:17Z: applied to the ThinkPad's real session (backup `pen-backup-20260930T011729Z`);
+01:41Z the libwacom description (backup `pen-backup-20260930T014140Z`; `libwacom-list-local-devices`
+lists the pen as 'Lenovo ThinkPad X13 Yoga Gen 4 Pen', General Pen + Eraser, 2 buttons).
 Undo: `~/.local/state/plasma-fusion/tools-pen/pen-defaults.sh --restore
 ~/.local/state/plasma-fusion/pen-backup-20260930T011729Z`; `sudo dnf remove xournalpp` for the app.

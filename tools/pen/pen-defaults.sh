@@ -15,7 +15,11 @@
 #   - the pen stays on the built-in panel when an external monitor is connected (KWin D-Bus
 #     outputName; KWin stores OutputUuid itself); unmapped, a pen follows the active output;
 #   - pen, touchpad and TrackPoint share one pointer (kcminputrc [Tablet] SyncWithMouse=true);
-#   - Xournal++ is installed for notes and the whiteboard (dnf, needs sudo; --no-install skips it).
+#   - Xournal++ is installed for notes and the whiteboard (dnf, needs sudo; --no-install skips it);
+#   - on the X13 Yoga Gen 4 digitizer (056a:534d), which libwacom does not know, a per-user libwacom
+#     description (~/.config/libwacom/, read by libinput when KWin adds the device, so from the
+#     next login): it names the device and removes the left-handed option, which on a display pen
+#     mirrors the pen's position.
 # Every setting takes effect at once. Before changing anything it copies kcminputrc and the pen's
 # current output to ~/.local/state/plasma-fusion/pen-backup-<UTC timestamp>/; --restore puts them
 # back (the Xournal++ package stays installed).
@@ -36,6 +40,31 @@ done
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
 CLICK_CODE=331          # BTN_STYLUS
+LIBWACOM_NAME=lenovo-x13-yoga-gen4-534d.tablet
+LIBWACOM_DEVICE="Wacom HID 534D Pen"
+# Checked with libwacom-list-local-devices on the device (PEN.md section 2). No Styli line until hand
+# check V1 shows which buttons the pen sends: every isdv4-aes stylus has one button.
+libwacom_file() {
+  cat <<'TABLET'
+# Lenovo ThinkPad X13 Yoga Gen 4 (21F3), integrated Wacom digitizer WACF2200 (i2c 056a:534d)
+# Garaged Lenovo Integrated Pen (WG16): eraser tool, click button, 4096 pressure levels, tilt.
+# Installed per user by Plasma Fusion (tools/pen/pen-defaults.sh); libwacom 2.19 does not know 534d.
+[Device]
+Name=Lenovo ThinkPad X13 Yoga Gen 4 Pen
+ModelName=WACF2200
+DeviceMatch=i2c|056a|534d
+Class=ISDV4
+Width=286
+Height=179
+IntegratedIn=Display;System
+
+[Features]
+Stylus=true
+Reversible=false
+Touch=true
+NumRings=0
+TABLET
+}
 CLICK_ACTION=MouseButton,273   # BTN_RIGHT
 say() { printf '%s\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
@@ -82,6 +111,12 @@ if [ -n "$RESTORE" ]; then
       kwriteconfig6 --notify --file kcminputrc "${args[@]}" --key "$key" "$value"
     fi
   done <"$RESTORE/keys"
+  if [ -f "$RESTORE/libwacom.absent" ]; then
+    note "remove ~/.config/libwacom/$LIBWACOM_NAME (from the next login)"
+    rm -f "$CONFIG/libwacom/$LIBWACOM_NAME"
+  elif [ -f "$RESTORE/$LIBWACOM_NAME" ]; then
+    cp "$RESTORE/$LIBWACOM_NAME" "$CONFIG/libwacom/$LIBWACOM_NAME"
+  fi
   old_output=$(cat "$RESTORE/pen-output" 2>/dev/null || true)
   note "pen output: -> ${old_output:-<active screen>}"
   busctl --user set-property "$KWIN" "$DEV_ROOT/$PEN" "$DEV_IF" outputName s "$old_output"
@@ -126,6 +161,20 @@ elif [ "$cur_output" = "$INTERNAL" ]; then
 else
   note "pen output: ${cur_output:-<active screen>} -> $INTERNAL"
   [ "$DRY" = 1 ] || busctl --user set-property "$KWIN" "$DEV_ROOT/$PEN" "$DEV_IF" outputName s "$INTERNAL"
+fi
+
+if [ "$PEN_NAME" = "$LIBWACOM_DEVICE" ]; then
+  dest=$CONFIG/libwacom/$LIBWACOM_NAME
+  if [ -f "$dest" ] && cmp -s <(libwacom_file) "$dest"; then
+    note "libwacom description $dest (unchanged)"
+  else
+    note "libwacom description $dest (takes effect at the next login)"
+    if [ "$DRY" = 0 ]; then
+      if [ -f "$dest" ]; then cp -a "$dest" "$BACKUP/"; else : >"$BACKUP/libwacom.absent"; fi
+      mkdir -p "$CONFIG/libwacom"
+      libwacom_file >"$dest"
+    fi
+  fi
 fi
 
 if [ "$INSTALL" = 1 ]; then
