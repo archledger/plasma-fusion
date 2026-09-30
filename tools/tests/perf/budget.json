@@ -1,17 +1,18 @@
 {
   "_spdx": "SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>; SPDX-License-Identifier: GPL-2.0-or-later",
-  "_comment": "Plasma Fusion performance budget, BACKLOG section 7 (2026-09-30-research/BACKLOG.md). Lower is better for every metric. 'budget' holds the limit per geometry (virtual output size in device px @ scale; 'default' is the 1440x900 value, used when section 7 gives one value); 'noise' is the regression margin against the stored baseline: a run regresses when its median exceeds the baseline's maximum by more than max(abs, rel * baseline median). Margins come from the spread of the perf-measure A/B runs (n=4 per arm). The idle rows have wide margins while the round-2 system card is on the desktop: it redraws on every 2 s update and glides (14 frames) when a bar moves 3 px or more, so its idle cost follows the host's own CPU and memory activity (1.2-5.9 frames/s measured on one build); one glide more per 30 s is 0.47 frames/s. Tighten them after BACKLOG M5.",
+  "_comment": "Plasma Fusion performance budget: BACKLOG section 7 (2026-09-30-research/BACKLOG.md) and the EFFECTS.md 9.1 rows (2026-09-30-tablet/EFFECTS.md, aligned by PLAN.md resolution 5), with the owner's exceptions E12 and E13 (DECISIONS.md: all recommended). Lower is better for every metric. 'budget' holds the limit per geometry (virtual output size in device px @ scale; 'default' is the 1440x900 value, used when the source gives one value); 'exception' raises a row's limit by an owner decision (the gate prints its id); 'noise' is the regression margin against the stored baseline: a run regresses when its median exceeds the baseline's maximum by more than max(abs, rel * baseline median). Margins come from the spread of the perf-measure A/B runs (n=4 per arm). The idle rows keep wide margins until a baseline after BACKLOG M5 (CARD-1) exists; then re-record it and tighten them.",
   "metrics": {
     "idle_fps": {
-      "label": "idle 30 s: composited frames per s",
+      "label": "idle 30 s, system card visible: composited frames per s",
       "unit": "/s",
       "budget": {
-        "default": 0.1
+        "default": 0.45
       },
       "noise": {
         "abs": 1.0,
         "rel": 0.25
-      }
+      },
+      "source": "EFFECTS 9.1: <= 1.2 / interval + 0.05 with the card visible (0.45 at the 3 s default); supersedes BACKLOG M5's 0.1 (PLAN.md LEAD-1 resolution 5)"
     },
     "idle_cpu_plasmashell": {
       "label": "idle: plasmashell CPU % of a core",
@@ -67,6 +68,13 @@
       "noise": {
         "abs": 3,
         "rel": 0.15
+      },
+      "exception": {
+        "id": "E12",
+        "budget": {
+          "1920x1200@1.333333": 25.9
+        },
+        "reason": "EFFECTS E12 (owner: recommended): keep magnification and accept up to the measured magnification-off cost + 3 points; magnification off measured 22.9 % at 1920x1200@4/3 (docs/parts/shell-dock.md, d4afee8, the lead's perf-dk harness). Re-measure in this gate with run.sh --dock-magnify off and update the number."
       }
     },
     "sweep_cpu_kwin": {
@@ -223,6 +231,85 @@
         "abs": 2,
         "rel": 0.25
       }
+    },
+    "idle_fps_covered": {
+      "label": "idle 30 s, maximized window over the cards: frames per s",
+      "unit": "/s",
+      "budget": {
+        "default": 0.1
+      },
+      "noise": {
+        "abs": 0.3,
+        "rel": 0.25
+      },
+      "source": "EFFECTS 9.1 and X3: <= 0.1 with the system card covered"
+    },
+    "popup_render_p95_ms": {
+      "label": "KWin render p95 during launcher, quick settings and Alt+Tab",
+      "unit": "ms",
+      "budget": {
+        "default": 3.5
+      },
+      "noise": {
+        "abs": 1.0,
+        "rel": 0.25
+      },
+      "source": "BACKLOG 7 / EFFECTS 9.1 (value given for 1440x900; used for every geometry)"
+    },
+    "popup_late_frames": {
+      "label": "late frames per launcher or quick-settings opening",
+      "unit": "",
+      "budget": {
+        "default": 0
+      },
+      "noise": {
+        "abs": 1,
+        "rel": 0.25
+      },
+      "source": "EFFECTS 9.1 missed vblanks per Fusion animation: 0 on AC (virtual output: render end after the target page flip)"
+    },
+    "overview_render_p95_ms": {
+      "label": "overview: KWin render p95",
+      "unit": "ms",
+      "budget": {
+        "default": 12.5
+      },
+      "noise": {
+        "abs": 2.0,
+        "rel": 0.15
+      },
+      "source": "BACKLOG 7 / EFFECTS 9.1 (stock 12.3 at 1920x1200@4/3)"
+    },
+    "sweep_panel_resizes": {
+      "label": "dock hover sweep: panel window resizes",
+      "unit": "",
+      "budget": {
+        "default": 0
+      },
+      "noise": {
+        "abs": 2,
+        "rel": 0.1
+      },
+      "source": "EFFECTS 9.1 (panel geometry fixed during hover; winmon.js geometry lines)"
+    },
+    "kwin_gpu_launcher_ms_per_frame": {
+      "label": "KWin GPU per frame, launcher open and close (sudo)",
+      "unit": "ms",
+      "budget": {
+        "default": 2.0
+      },
+      "noise": {
+        "abs": 0.5,
+        "rel": 0.25
+      },
+      "exception": {
+        "id": "E13",
+        "budget": {
+          "default": 2.5
+        },
+        "reason": "EFFECTS E13 (owner: recommended): accept 2.5 ms for the laptop launcher card, which keeps Full glass at 0.85 MP"
+      },
+      "source": "EFFECTS 9.1 KWin GPU per animation frame; needs run.sh --kwin-gpu (pfstat.py reads KWin's private fdinfo with sudo -n)"
     }
   }
 }

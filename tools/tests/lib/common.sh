@@ -72,16 +72,108 @@ host_cleanup() {
 # run_remote LOG NAME CMD...: run a remote.sh command line with output in LOG; when it failed
 # before the session started because the ssh connection failed (Wi-Fi banner timeouts) and no
 # process of session NAME runs on the host, wait 10 s and run it once more (first log kept as LOG.1).
+# When remote.sh refused because the host user's inotify use is high (exit 75), wait
+# PFV_BUSY_WAIT seconds (default 120) and try again, at most PFV_BUSY_TRIES times (default 3);
+# the slot is not held while waiting (the slot wrapper is part of CMD).
 run_remote() {
-  local log=$1 name=$2; shift 2
-  "$@" >"$log" 2>&1 && return 0
-  grep -qx 'kwin.log' "$log" && return 1  # the session ran (vsession.sh lists out/ at its end)
+  local log=$1 name=$2 rc busy=0; shift 2
+  while :; do
+    "$@" >"$log" 2>&1 && return 0
+    rc=$?
+    grep -qx 'kwin.log' "$log" && return 1  # the session ran (vsession.sh lists out/ at its end)
+    if [ "$rc" = 75 ] && grep -q 'inotify' "$log" && [ "$busy" -lt "${PFV_BUSY_TRIES:-3}" ]; then
+      busy=$((busy + 1))
+      echo "   host busy ($(grep -m1 inotify "$log" | sed 's/^remote.sh: //')); waiting ${PFV_BUSY_WAIT:-120} s ($busy)"
+      mv -f "$log" "$log.busy$busy"
+      sleep "${PFV_BUSY_WAIT:-120}"
+      continue
+    fi
+    break
+  done
   grep -qiE 'banner exchange|timed out|connection (refused|reset|closed)|kex_exchange_identification|no route to host|could not resolve|broken pipe' "$log" || return 1
   session_in_use "$name" && return 1
   echo "   ssh connection failed before the session started; retrying once (first log: $log.1)"
   mv -f "$log" "$log.1"
   sleep 10
   "$@" >"$log" 2>&1
+}
+
+# Session slots. Every private session, performance measurement and container build that runs
+# on the test host from this laptop holds the lead's slot lock, build/lead/vslot.sh: N session
+# slots (N in build/locks/slots, changed by the lead at any time), --exclusive takes all of them
+# (a quiet host for measurements), --build the single container-build lock. The drivers in
+# tools/tests wrap each remote.sh call themselves:
+#
+#   slot_prefix one|exclusive|build || exit 2
+#   run_remote LOG NAME "${SLOT[@]}" env ... bash tools/vsession/remote.sh NAME ...
+#
+# "exclusive" here also takes the build lock, so no container build runs during a measurement.
+# A driver started under vslot.sh inherits the lock's open descriptor (flock locks belong to the
+# open file, which the child shares); it then runs its sessions in that slot instead of taking a
+# second one, which with every slot busy would wait for itself. Asking for "exclusive" while
+# holding a single slot is refused for the same reason. Without vslot.sh (PFV_VSLOT, else
+# build/lead/vslot.sh in this checkout or one of its parents, which finds it from a snapshot in
+# build/<prefix>/snap too) the drivers run unlocked with a note. PFV_VSLOT=none turns it off.
+
+# pf_vslot: path of vslot.sh, or failure.
+pf_vslot() {
+  local d
+  case "${PFV_VSLOT:-}" in none) return 1 ;; '') ;; *) echo "$PFV_VSLOT"; return 0 ;; esac
+  d=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P) || return 1
+  while [ "$d" != / ]; do
+    [ -x "$d/build/lead/vslot.sh" ] && { echo "$d/build/lead/vslot.sh"; return 0; }
+    d=$(dirname "$d")
+  done
+  return 1
+}
+
+# pf_locks_held LOCKDIR: HELD_SLOTS (session slots) and HELD_BUILD (0/1) this shell inherited.
+pf_locks_held() {
+  local fd t
+  HELD_SLOTS=0; HELD_BUILD=0
+  for fd in /proc/$$/fd/*; do
+    t=$(readlink "$fd" 2>/dev/null) || continue
+    case "$t" in
+      "$1"/slot[0-9]*) HELD_SLOTS=$((HELD_SLOTS + 1)) ;;
+      "$1"/build.lock) HELD_BUILD=1 ;;
+    esac
+  done
+}
+
+# slot_prefix MODE: SLOT=(the vslot.sh command line to put in front of a remote.sh call) for MODE
+# one, exclusive or build; SLOT=() when this driver already holds what MODE needs or runs without
+# vslot.sh. Returns 1 (with a message) when MODE cannot be taken from here.
+slot_prefix() {
+  local v d n
+  SLOT=()
+  v=$(pf_vslot) || {
+    [ "${PFV_VSLOT:-}" = none ] || echo "note: no build/lead/vslot.sh found (set PFV_VSLOT); running without the session-slot lock" >&2
+    return 0
+  }
+  d=$(cd "$(dirname "$v")/../locks" 2>/dev/null && pwd -P) || { echo "slot_prefix: no lock directory next to $v" >&2; return 1; }
+  n=$(cat "$d/slots" 2>/dev/null || echo 3)
+  pf_locks_held "$d"
+  case "$1" in
+    one) [ "$HELD_SLOTS" -gt 0 ] || SLOT=("$v") ;;
+    build) [ "$HELD_BUILD" = 1 ] || SLOT=("$v" --build) ;;
+    exclusive)
+      if [ "$HELD_SLOTS" -gt 0 ] && [ "$HELD_SLOTS" -lt "$n" ]; then
+        echo "this driver holds $HELD_SLOTS of $n session slots but measures on a quiet host: start it under 'vslot.sh --exclusive' or without vslot.sh" >&2
+        return 1
+      fi
+      [ "$HELD_BUILD" = 1 ] || SLOT=("$v" --build)
+      [ "$HELD_SLOTS" -ge "$n" ] || SLOT+=("$v" --exclusive) ;;
+    *) echo "slot_prefix: unknown mode $1" >&2; return 1 ;;
+  esac
+  return 0
+}
+
+# slot_note: one line for the results: which lock the sessions ran under.
+slot_note() {
+  local v
+  if [ ${#SLOT[@]} -gt 0 ]; then echo "slot lock: ${SLOT[*]}"
+  elif v=$(pf_vslot); then echo "slot lock: inherited from the caller (${HELD_SLOTS:-0} session slots, build lock ${HELD_BUILD:-0})"
+  else echo "slot lock: none (no vslot.sh)"; fi
 }
 
 # host_packages: versions of what the measured sessions run besides the stage (Plasma, KWin, Qt and

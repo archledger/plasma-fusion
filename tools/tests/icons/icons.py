@@ -6,7 +6,10 @@
 # (tools/vsession). Reads plasmashell's live configuration through desktop scripting, KWin's windows
 # through tools/tests/lib/pfkwin.py and this session's core dumps from the journal.
 #
-#   icons.py desktop-id                 id of the desktop containment on screen 0
+#   icons.py desktop-id                 id and plugin of the desktop containment on screen 0
+#   icons.py upgrade BEFORE AFTER       compare two states around an upgrade: every panel with its
+#                                       widgets, the dock's pinned apps and the desktop cards kept
+#                                       (checks.jsonl step 00-upgrade; exit 1 if not)
 #   icons.py state LABEL                write $OUT/state-LABEL.json
 #   icons.py plan                       pfinput drag commands for the target pattern (one per line)
 #   icons.py pattern                    check that the target pattern is in place (exit 1 if not)
@@ -65,8 +68,16 @@ for (var i = 0; i < ds.length; ++i) {
 }
 var ps = panels();
 for (var p = 0; p < ps.length; ++p) {
+    var pw = ps[p].widgets(), types = [], pins = null;
+    for (var q = 0; q < pw.length; ++q) {
+        types.push(pw[q].type);
+        if (pw[q].type === "org.plasmafusion.dock") {
+            pw[q].currentConfigGroup = ["General"];
+            pins = String(pw[q].readConfig("launchers", ""));
+        }
+    }
     out.panels.push({id: ps[p].id, location: ps[p].location, hiding: ps[p].hiding, height: ps[p].height,
-                     screen: ps[p].screen, floating: ps[p].floating});
+                     screen: ps[p].screen, floating: ps[p].floating, widgets: types, pins: pins});
 }
 print(JSON.stringify(out));
 """
@@ -350,12 +361,49 @@ def check(step):
     return r["pass"]
 
 
+def upgrade(before, after):
+    """An upgrade keeps every panel (location) with the widgets it had, the dock's pinned apps and
+    the desktop cards (type and geometry); new widgets are allowed."""
+    a = json.load(open(os.path.join(OUT, "state-%s.json" % before)))
+    b = json.load(open(os.path.join(OUT, "state-%s.json" % after)))
+    bad = []
+    pa = {p["location"]: p for p in a["plasma"].get("panels", [])}
+    pb = {p["location"]: p for p in b["plasma"].get("panels", [])}
+    for loc, p in sorted(pa.items()):
+        if loc not in pb:
+            bad.append("the %s panel is gone" % loc)
+            continue
+        lost = [w for w in p.get("widgets", []) if w not in pb[loc].get("widgets", [])]
+        if lost:
+            bad.append("the %s panel lost %s" % (loc, ", ".join(lost)))
+        if p.get("pins") is not None and p.get("pins") != pb[loc].get("pins"):
+            bad.append("dock pins changed: %s -> %s" % (p.get("pins"), pb[loc].get("pins")))
+    cards = lambda st: sorted((w["type"], round(w["x"]), round(w["y"]), round(w["w"]), round(w["h"]))
+                              for d in st["plasma"].get("desktops", []) for w in d["widgets"])
+    if cards(a) != cards(b):
+        bad.append("desktop cards changed: %s -> %s" % (cards(a), cards(b)))
+    plug = lambda st: sorted((d["screen"], d["type"]) for d in st["plasma"].get("desktops", []))
+    r = {"step": "00-upgrade", "result": "FAIL" if bad else "PASS", "pass": not bad, "problems": bad,
+         "desktop_before": plug(a), "desktop_after": plug(b),
+         "panels_before": {k: v.get("widgets") for k, v in pa.items()},
+         "panels_after": {k: v.get("widgets") for k, v in pb.items()},
+         "coredumps": [c for c in b.get("coredumps", []) if c["time"] >= float(os.environ.get("PFV_T0", "0"))]}
+    if r["coredumps"]:
+        r["result"], r["pass"] = "FAIL", False
+    with open(os.path.join(OUT, "upgrade.json"), "w") as f:
+        json.dump(r, f, indent=1)
+    print(json.dumps({k: r[k] for k in ("step", "result", "problems", "desktop_before", "desktop_after")}))
+    return r["pass"]
+
+
 def main(argv):
     cmd = argv[0] if argv else ""
     if cmd == "desktop-id":
         st = json.loads(plasma_eval(STATE_JS))
-        ids = [d["id"] for d in st["desktops"] if d["screen"] == 0] or [d["id"] for d in st["desktops"]]
-        print(ids[0])
+        ds = [d for d in st["desktops"] if d["screen"] == 0] or st["desktops"]
+        print(ds[0]["id"], ds[0]["type"])
+    elif cmd == "upgrade":
+        return 0 if upgrade(argv[1], argv[2]) else 1
     elif cmd == "state":
         capture(argv[1])
     elif cmd == "plan":
@@ -375,7 +423,7 @@ def main(argv):
     elif cmd == "check":
         return 0 if check(argv[1]) else 1
     else:
-        print("usage: icons.py desktop-id|state LABEL|plan|pattern|base|check STEP", file=sys.stderr)
+        print("usage: icons.py desktop-id|state LABEL|plan|pattern|base|check STEP|upgrade BEFORE AFTER", file=sys.stderr)
         return 2
     return 0
 

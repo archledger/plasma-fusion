@@ -6,6 +6,7 @@
 # test host (PFV_HOST, default thinkpad-fedora) in three private virtual sessions (tools/vsession):
 #
 #   run.sh [--stage DIR] [--name NAME] [--work DIR] [--scale S] [--size WxH] [--keep] [--strict]
+#          [--from-stage DIR --from-tools DIR]
 #
 #   --stage DIR   built HOME tree to test (tools/build.sh output; default <repo>/stage/home)
 #   --name NAME   virtual session name (default icons; the host directory is /var/tmp/pfv-NAME)
@@ -14,7 +15,14 @@
 #   --size WxH    virtual output in device pixels (default 1920x1200, the ThinkPad panel)
 #   --keep        keep the session directory on the host after the last session
 #   --strict      fail a step whose positions entry Plasma rewrote even when every icon kept its cell
+#   --from-stage DIR, --from-tools DIR
+#                 upgrade path: session 1 first installs this older build (its HOME tree and its
+#                 tools/ directory, e.g. the deployed 3a27b3f: build/lead/stage-3a27b3f/home and
+#                 build/lead/snap-3a27b3f/tools), then upgrades to --stage and checks that every
+#                 panel with its widgets, the dock's pinned apps and the desktop cards are kept
 #
+# The desktop is the build's own Folder View when its layout ships one (BACKLOG M1); otherwise the
+# test writes the M1 settings into the containment (the summary says which).
 # Session 1 installs Plasma Fusion, switches the desktop to Folder View with 12 files, drags six
 # of them into a pattern (one at column 5, row 4) and saves the baseline; then after each of:
 # plasmashell restart, KWin reconfigure, scale 4/3 -> 1 -> 4/3, portrait and back, dock hidden by
@@ -26,12 +34,15 @@
 # failed, 2 the setup failed. Runtime about 4 minutes. Step results: PASS (entry byte-identical to
 # the one before the step), REWRITTEN (the step saved the entry again, every icon in its cell and
 # unchanged on screen), FAIL.
+# Each session runs in one session slot of build/lead/vslot.sh (tools/tests/lib/common.sh,
+# slot_prefix); started under vslot.sh, the driver uses the slot it was given.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 # shellcheck source=tools/tests/lib/common.sh
 source "$HERE/../lib/common.sh"
 STAGE=$ROOT/stage/home; NAME=icons; WORK=$ROOT/build/tests/icons; SCALE=1.333333; SIZE=1920x1200; KEEP=0; STRICT=
+FROM_STAGE=; FROM_TOOLS=
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage) STAGE=$2; shift 2 ;;
@@ -41,23 +52,36 @@ while [ $# -gt 0 ]; do
     --size) SIZE=$2; shift 2 ;;
     --keep) KEEP=1; shift ;;
     --strict) STRICT=--strict; shift ;;
+    --from-stage) FROM_STAGE=$2; shift 2 ;;
+    --from-tools) FROM_TOOLS=$2; shift 2 ;;
     -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
 [ -d "$STAGE/.local/share/plasma" ] || { echo "no built HOME tree at $STAGE (run tools/build.sh)" >&2; exit 2; }
 [[ "$NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "bad session name $NAME" >&2; exit 2; }
+slot_prefix one || exit 2
 mkdir -p "$WORK" || exit 2
 WORK=$(cd "$WORK" && pwd)
 RES=$WORK/results
 rm -rf "$RES" "$WORK/vsession-out"; mkdir -p "$RES"
 make_seed "$STAGE" "$ROOT/tools" "$WORK/seed" || { echo "seed failed" >&2; exit 2; }
+rm -rf "$WORK/seed/pf-stage-old" "$WORK/seed/pf-tools-old"
+if [ -n "$FROM_STAGE$FROM_TOOLS" ]; then
+  [ -d "$FROM_STAGE/.local/share/plasma" ] && [ -f "$FROM_TOOLS/device/fusion-config.sh" ] \
+    || { echo "--from-stage needs a built HOME tree and --from-tools its tools/ directory" >&2; exit 2; }
+  mkdir -p "$WORK/seed/pf-stage-old" "$WORK/seed/pf-tools-old"
+  rsync -a "$FROM_STAGE"/ "$WORK/seed/pf-stage-old/" && rsync -a --exclude __pycache__ "$FROM_TOOLS"/ "$WORK/seed/pf-tools-old/" \
+    || { echo "seed failed" >&2; exit 2; }
+  touch "$RES/upgrade-expected"
+fi
 T0=$(hssh 'date +%s') || { echo "host $HOST not reachable" >&2; exit 2; }
 if session_in_use "$NAME"; then
   echo "a session named $NAME is running on $HOST (or the host did not answer); choose another --name" >&2
   exit 2
 fi
 echo "start: $(host_state)" | tee "$RES/host.txt"
+slot_note | tee -a "$RES/host.txt"
 host_packages >"$RES/packages.txt"
 cd "$WORK" || exit 2
 # Interrupted: stop the session and remove its directory on the host (it would stay until the
@@ -66,7 +90,7 @@ trap 'echo "interrupted; cleaning up $NAME on $HOST"; host_cleanup "$NAME"; exit
 run_session() {  # N SCENARIO SEED TIMEOUT [ENV...]
   local n=$1 scen=$2 seed=$3 tmo=$4; shift 4
   echo "== session $n ($(date +%T))"
-  run_remote "$RES/remote-$n.log" "$NAME" \
+  run_remote "$RES/remote-$n.log" "$NAME" "${SLOT[@]}" \
     env PFV_SCALE="$SCALE" "$@" bash "$ROOT/tools/vsession/remote.sh" "$NAME" "$HERE/$scen" "$seed" "$SIZE" "$tmo"
   local rc=$?
   [ -d "vsession-out/$NAME" ] && mv "vsession-out/$NAME" "$RES/$n"

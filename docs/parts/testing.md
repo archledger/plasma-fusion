@@ -9,12 +9,17 @@ Two regression gates that run from the laptop against the ThinkPad in private vi
   compared with the section 7 budget and a stored baseline; non-zero exit on a regression.
 - **Harness hygiene** (`tools/vsession/`, ADAPTIVE fix 21): new options and input commands, all
   off by default except a free-space guard that only stops a run on a nearly full disk.
+- **Adaptive matrix** (`tools/tests/matrix/`, ADAPTIVE 11, TEST-1): one private session per
+  configuration (sizes, scales, two outputs, lid, tablet, rotation) with layout assertions.
+- **Rubber-band test** (`tools/tests/perf/band.sh`, BACKLOG S5): band selection over 20, 60 and
+  100 desktop icons.
 
 Status: built and run on HEAD 282b1a5 (the staged HOME tree is byte-identical to the deployed
 3a27b3f and to b69fe19); reviewed and fixed afterwards (see "Review" at the end), re-run on the
 282b1a5 stage and on HEAD 31affe9 and d4afee8. Not a deployable part: nothing here touches the
-real session.
-Last edited 2026-09-29.
+real session. Work package TEST-1 (2026-09-30) added the session-slot lock, the teardown fix,
+more harness options, the matrix, the band test and new gate rows; see "TEST-1 (2026-09-30)".
+Last edited 2026-09-30.
 Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/tests/` (review:
 `tests/review-rts/`).
 
@@ -35,6 +40,9 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/tests/` (
 | `tools/tests/perf/budget.json` | section 7 budget and the noise margin of every metric |
 | `tools/tests/perf/baseline.json` | stored baseline (282b1a5 stage, 1920x1200 at 4/3; per metric the quiet runs; see "Performance" below) |
 | `tools/vsession/{vsession.sh,remote.sh,pfinput.py}` | backward-compatible additions (below) |
+| `tools/tests/matrix/{run.sh,body.sh,mx.py,check.py,configs.txt}` | adaptive matrix (TEST-1): driver, in-session walk, per-configuration steps, layout judge, the configurations |
+| `tools/tests/perf/{band.sh,scen-band.sh,band.py}` | rubber-band selection with 20/60/100 icons (S5): driver, scenario, table and verdict |
+| `tools/tests/lib/slot-test.sh` | self-test of the slot lock semantics on a private lock directory |
 
 ## Running them
 
@@ -186,6 +194,80 @@ and `off` switch KWin's `tabletMode` property at run time (false, true, false).
 Not done from ADAPTIVE fix 21: adding a second output after login (the virtual backend has a fixed
 output count; the M2 test uses `PFV_OUTPUTS=2` and disables/enables outputs instead) and the
 virtual keyboard.
+
+## TEST-1 (2026-09-30): slots, teardown, harness options and new suites
+
+Work package TEST-1 of the one-pass plan. Builder `o1ts`; the lead took the lane over at 04:19Z
+and finished it (review notes in `build/o1ts/REVIEW.md`).
+
+Session slots. Every private session and container build is wrapped in the laptop's slot lock
+`build/lead/vslot.sh` (N slots in `build/locks/slots`, 4 today; `--exclusive` takes every slot for a
+performance measurement; `--build` is the single container-build lock). The drivers take it
+themselves (`tools/tests/lib/common.sh`: `pf_vslot`, `slot_prefix`, `pf_locks_held`; a driver
+started under `vslot.sh` uses the slot it runs in). The perf gate and the band test hold every slot
+and the build lock for each run; started under a single slot they refuse (exit 2).
+`remote.sh` refuses to start (exit 75) while the host user's inotify instances or watches are
+above `PFV_INOTIFY_MAX_PCT` (75) % of the limit; the drivers retry such a start.
+`slot-test.sh` checks the semantics on a private lock directory: a fourth session waits,
+an exclusive run waits for all slots, builds run one at a time, and an inherited slot is
+detected. Review: single-slot starters probed the exclusive lock with an exclusive `flock`, so two
+starting at the same moment made one wait 10 s; `vslot.sh` now probes with `flock -s -n`.
+
+Teardown (`vsession.sh`). At the end of the scenario, or at its time limit (the scenario shell gets
+SIGTERM; `timeout` stops everything 30 s later), every process of the session except KWin, the
+processes that started it and its children (the bus daemon, Xwayland) gets SIGTERM while KWin
+still runs, SIGKILL after 5 s, and the sweep repeats for services the bus started meanwhile.
+Before, the portal frontend re-activated `xdg-desktop-portal-kde` after KWin had gone, and the
+new instance aborted with a core dump (4 of 27 dock runs). The sweep selects processes by their
+`XDG_RUNTIME_DIR` (the session's `$PFV/run`), so it can never reach the logged-in session.
+`out/teardown.log` lists what was stopped.
+
+New harness options (defaults unchanged):
+
+| Where | Addition |
+|---|---|
+| `vsession.sh` | `PFV_KDE_PROFILE=1`: Fedora's kde-profile layer in `XDG_CONFIG_DIRS` (plasma-keyboard is the input method, as in the ThinkPad's session) |
+| `vsession.sh` | `PFV_XWAYLAND=1`: KWin with Xwayland; `DISPLAY` reaches the private bus |
+| `vsession.sh` | `PFV_LOCK=1`: a lock-capable session (KWin without `--no-lockscreen`) and `pfv_lock`; pfinput refuses Return, Enter and `type` while it is locked, so no password can be submitted (pam_faillock counts against the host user) |
+| `vsession.sh` | `pfv_rotate [OUTPUT] normal\|left\|right\|inverted` (kscreen-doctor inside the session) |
+| `pfinput.py` | `hold X Y [HOLD_S]`, `hswipe X1 Y1 X2 Y2 HOLD_S` (edge swipe without fling), `mswipe N X Y DX DY [STEPS [STEP_S]]` (N fingers; KWin's touchscreen gestures need a physical output size, which virtual outputs lack), `type TEXT`; `PFINPUT_WAIT` (default 5 s) for KWin's input devices |
+
+Suites:
+- Matrix (`tools/tests/matrix/run.sh`): ADAPTIVE 11 subset (`configs.txt`), about 2.5 minutes per
+  configuration, one slot each (`--jobs N`). `check.py` judges every step: widgets inside their
+  screen and clear of panels and each other, panel applets inside their panel, pop-ups on the
+  right screen, the configuration's settings, core dumps. Touch-target dumps need a
+  `debugDumpTargets` hook in the widgets (the owning lanes; M11 reports them as NOT RUN).
+  Results on the HEAD 3e950d4 stage: M03 PASS (61 checks), M10L PASS, M11 PASS (targets not run);
+  M09 and M14 FAIL (quick settings pushed off the top bar in portrait with a global menu, ADAPTIVE
+  fix 4), M10 and M18 FAIL (no top bar on the second output, decision 8), M18 also opens the
+  launcher on output 1. M23 (two outputs, hotplug) FAIL on the same missing second top bar; M24 (12 pt font, Global
+  Theme switch) PASS (74 checks). These are open work for the top-bar and layout lanes, not
+  harness faults.
+- Performance gate: new rows from EFFECTS 9.1 (idle with a maximized window over the cards,
+  pop-up and overview render p95, pop-up late frames, dock-window geometry changes during the
+  sweep, KWin GPU time per launcher frame with `--kwin-gpu`, which reads KWin's counters with
+  `sudo -n`), the owner's E12/E13 exceptions as raised limits (shown as "25.9 (E12)"), and
+  `--dock-magnify off` for the E12 reference. Validation run `perf-o1tsv-1` (d4afee8 + CARD-1,
+  quiet): exit 0, no regression; covered idle 0.03 frames/s (budget 0.1), no dock-window resize
+  during the sweep, overview render p95 13.6 ms (budget 12.5).
+- Band test (S5): `band.sh` (each run holds every slot and the build lock), HEAD 3e950d4
+  stage, 1920 x 1200 at 4/3, 3 s band sweeps. Quiet host, 2 runs (`o1ts-band2`), median
+  plasmashell CPU / late frames: 20 icons 13.0 % / 30, 60 icons 25.5 % / 24, 100 icons 38.7 % / 38;
+  KWin 8-11 %, render p95 about 4 ms. The 100-icon budget (at most 15 % plasmashell CPU, 0 late
+  frames) fails, so the upstream Folder View fix that S5 asks about is needed (for the lead and the
+  owner). An earlier run that overlapped two other sessions (`o1ts-band-1`) gave 33 % / 34.
+- Icon positions: the suite now takes the desktop's Folder View from the layout when it has one
+  (it writes the M1 keys itself otherwise) and runs an upgrade from an earlier build first
+  (`--from-stage`, `--from-tools`: the earlier build is installed, then this one over it, and the
+  panels, dock pins and cards must survive). Run `o1ts-icons` (HEAD 3e950d4 stage over the
+  3a27b3f stage and tools): upgrade PASS (panels, dock pins and cards kept), 8 PASS, 3 REWRITTEN,
+  0 FAIL of 11 steps, no core dumps; the same pattern as the 282b1a5 baseline run.
+
+Not done in TEST-1:
+- The unexplained 0.45-point idle plasmashell CPU of the top-bar widgets (BACKLOG M5 correction 9,
+  `QSG_RENDER_TIMING=1`, `perf top -p`) is not profiled yet.
+- A new baseline is recorded after DEPLOY-1 (the plan), with `--runs 5` on a quiet host.
 
 ## Results on 282b1a5 (the deployed round-2 build)
 

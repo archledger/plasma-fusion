@@ -22,7 +22,7 @@
 # Exit status: 0 no regression (and with --strict-budget every budget met), 1 regression, missing
 # metric or budget failure, 2 internal error, 3 no usable run, 4 the baseline was measured at
 # another geometry, 5 worse only in noisy runs (re-run on a quiet host).
-import argparse, json, os, statistics as st, sys
+import argparse, json, os, re, statistics as st, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -40,6 +40,8 @@ def mib(stats, label, comm, key):
 # The snapshots that bound each metric's measurement window: a metric counts as noisy in a run when
 # another virtual session had live processes at either end of its window.
 WINDOWS = {
+    "idle_fps_covered": ("idlec0", "idlec1"), "kwin_gpu_launcher": ("launcher1-0", "launcher3-1"),
+    "popup_": ("launcher1-0", "qs3-1"),
     "idle_": ("idle0", "idle1"), "sweep_": ("sweep0", "sweep1"), "pss_": ("settled", "settled"),
     "session_pss": ("settled", "settled"), "gem_plasmashell_settled": ("settled", "settled"),
     "gem_launcher_first_open": ("launcher1-0", "launcher1-1"), "gem_plasmashell_end": ("launcher1-0", "end"),
@@ -80,9 +82,45 @@ def med(values):
     return st.median(v) if v else None
 
 
+def panel_resizes(run, M):
+    """Geometry changes of dock (panel) windows during the dock sweep, from winmon.js's lines in
+    dbusmon.log; None for a run whose winmon.js did not log geometry (its "loaded" line has no
+    "geometry" word) or without sweep marks."""
+    path = os.path.join(run, "dbusmon.log")
+    if not os.path.exists(path) or "sweep0" not in M or "sweep1" not in M:
+        return None
+    text = open(path, errors="replace").read()
+    if not re.search(r"PFPERF winmon loaded \d+ geometry", text):
+        return None
+    t0, t1 = M["sweep0"]["epoch"] * 1000, M["sweep1"]["epoch"] * 1000
+    seen = set()
+    for m in re.finditer(r'PFPERF geometry (\d+) ([^ "]+) ([^"]*)', text):
+        if t0 <= int(m.group(1)) <= t1:
+            seen.add((m.group(1), m.group(2), m.group(3)))
+    return len(seen)
+
+
+def kwin_gpu_ms_per_frame(S, M, F):
+    """KWin GPU time per composited frame over the three launcher open/close cycles (EFFECTS 9.1,
+    E13); None without KWin's GPU counters (pfstat.py reads them only with PFSTAT_SUDO=1)."""
+    v = []
+    for i in (1, 2, 3):
+        a, b = S.get("launcher%d-0" % i), S.get("launcher%d-1" % i)
+        if not a or not b:
+            continue
+        ka = [p for p in a["procs"] if p["comm"] == "kwin_wayland" and "gpu_ns" in p]
+        kb = [p for p in b["procs"] if p["comm"] == "kwin_wayland" and "gpu_ns" in p]
+        n = analyze_ab.frames_in(F, a["mono"], b["mono"])["n"] if F else 0
+        if ka and kb and n:
+            v.append((kb[0]["gpu_ns"] - ka[0]["gpu_ns"]) / 1e6 / n)
+    return med(v)
+
+
 def metrics(run):
     arm, S, M, F, A = analyze_ab.load(run)
     r = analyze_ab.analyze(run)
+    p95 = lambda frames: [f["p95"] for f in frames if f.get("p95") is not None]
+    popups = r["launcher_frames"] + r["qs_frames"]
     g0, g1 = mib(S, "launcher1-0", "plasmashell", "gem_total_kB"), mib(S, "launcher1-1", "plasmashell", "gem_total_kB")
     m = {
         "idle_fps": r["idle_frames"]["fps"],
@@ -105,16 +143,26 @@ def metrics(run):
         "alttab_first_frame_ms": med(r["alttab_first_frame_ms"]),
         "alttab_settled_ms": med(r["alttab_settled_ms"]),
         "overview_late_frames": med([f["late"] for f in r["ov_frames"]]),
+        # EFFECTS.md 9.1 rows added by TEST-1
+        "idle_fps_covered": analyze_ab.frames_in(F, S["idlec0"]["mono"], S["idlec1"]["mono"])["fps"]
+        if "idlec0" in S and "idlec1" in S else None,
+        "popup_render_p95_ms": med(p95(popups + r["alttab_frames"])),
+        "popup_late_frames": med([f["late"] for f in popups]),
+        "overview_render_p95_ms": med(p95(r["ov_frames"])),
+        "sweep_panel_resizes": panel_resizes(run, M),
+        "kwin_gpu_launcher_ms_per_frame": kwin_gpu_ms_per_frame(S, M, F),
     }
     if not F:
         # no KWin frame log (KWIN_LOG_PERFORMANCE_DATA or PFV_CWD=out missing): 0 frames would read as
         # a perfect idle desktop, so every frame-based metric is unknown instead
         for k in ("idle_fps", "launcher_first_frame_ms", "launcher_settled_ms", "qs_first_frame_ms",
-                  "alttab_first_frame_ms", "alttab_settled_ms", "overview_late_frames"):
+                  "alttab_first_frame_ms", "alttab_settled_ms", "overview_late_frames", "idle_fps_covered",
+                  "popup_render_p95_ms", "popup_late_frames", "overview_render_p95_ms",
+                  "kwin_gpu_launcher_ms_per_frame"):
             m[k] = None
     sweep_events = next((int(k.split("-")[-1]) for k in M if k.startswith("sweep-events-")), None)
     if sweep_events is None or sweep_events < SWEEP_MIN_EVENTS:
-        for k in ("sweep_cpu_plasmashell", "sweep_cpu_kwin", "sweep_gpu_plasmashell"):
+        for k in ("sweep_cpu_plasmashell", "sweep_cpu_kwin", "sweep_gpu_plasmashell", "sweep_panel_resizes"):
             m[k] = None
     others = sorted({o for s in S.values() for o in s.get("others", [])})
     foreign = {}
@@ -134,7 +182,7 @@ def metrics(run):
 def fmt(v, unit):
     if v is None:
         return "-"
-    d = 0 if unit in ("ms", "MiB", "") else 2 if abs(v) < 10 else 1
+    d = 0 if unit in ("MiB", "") or (unit == "ms" and abs(v) >= 20) else 2 if abs(v) < 10 else 1
     return "%.*f" % (d, v)
 
 
@@ -187,7 +235,12 @@ def main():
     for k, s in spec.items():
         cur = agg.get(k)
         limit = s["budget"].get(a.geometry, s["budget"]["default"])
-        bv = "-" if cur is None else ("PASS" if cur["median"] <= limit else "FAIL")
+        exc = s.get("exception")
+        if exc and a.geometry in exc.get("budget", {}) or exc and "default" in exc.get("budget", {}):
+            # an owner decision raised this row's limit (EFFECTS.md E12, E13)
+            limit = "%s (%s)" % (exc["budget"].get(a.geometry, exc["budget"].get("default")), exc["id"])
+        lim = float(str(limit).split()[0])
+        bv = "-" if cur is None else ("PASS" if cur["median"] <= lim else "FAIL")
         if bv == "FAIL":
             budget_fail.append(k)
         verdict, bdesc = "-", "-"

@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Copied from the perf-measure study (/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-research/
-# perf-measure/scripts/pfstat.py); change: records the other virtual sessions with live processes on
-# the host ("others", noise).
+# perf-measure/scripts/pfstat.py); changes: records the other virtual sessions with live processes on
+# the host ("others", noise); with PFSTAT_SUDO=1 it reads KWin's GPU counters (private fdinfo) with
+# sudo -n, read-only.
 #
 # pfstat.py LABEL: snapshot every process of this private session (environ XDG_RUNTIME_DIR ==
 # $XDG_RUNTIME_DIR, plus KWin, whose environ is unreadable because of its file capabilities) and
@@ -39,14 +40,33 @@ def kv(text, keys):
     return out
 
 
+def sudo_fdinfo(pid):
+    """KWin's fdinfo is private (file capabilities): read it with sudo -n when PFSTAT_SUDO=1."""
+    import subprocess
+    try:
+        text = subprocess.run(["sudo", "-n", "sh", "-c", f"grep -H '' /proc/{int(pid)}/fdinfo/*"],
+                              capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return {}
+    out = {}
+    for line in text.splitlines():
+        path, _, rest = line.partition(":")
+        out.setdefault(path.rsplit("/", 1)[-1], []).append(rest)
+    return {fd: "\n".join(lines) for fd, lines in out.items()}
+
+
 def drm(pid):
     res = {}; seen = set()
+    private = None
     try:
         fds = os.listdir(f"/proc/{pid}/fdinfo")
     except Exception:
-        return None
+        if pid != kwin or os.environ.get("PFSTAT_SUDO") != "1":
+            return None
+        private = sudo_fdinfo(pid)
+        fds = list(private)
     for fd in fds:
-        t = rd(f"/proc/{pid}/fdinfo/{fd}")
+        t = private.get(fd) if private is not None else rd(f"/proc/{pid}/fdinfo/{fd}")
         if not t or "drm-client-id" not in t:
             continue
         d = kv(t, {"drm-client-id", "drm-total-system0", "drm-resident-system0", "drm-shared-system0"})

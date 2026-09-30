@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Adaptive test matrix: the ADAPTIVE.md section 11 configurations INT-1 runs (PLAN.md section 5).
+# SIZE is each virtual output in device px; SCALE the display scale of every output; FLAGS as in
+# body.sh (tablet: KWin starts in tablet mode). M27 (faked Plasma version) is run by tools/device/tests (the login check).
+# ID   SIZE       SCALE      OUTPUTS FLAGS                    WHAT
+M01    1366x768   1          1       -                        compact height: cards, launcher, quick settings
+M03    1920x1200  1.3333333  1       -                        the ThinkPad at 4/3
+M03b   1920x1200  1.325      1       -                        the ThinkPad at 1.325
+M09    1200x1920  1.3333333  1       -                        portrait: top bar, launcher, snap, switcher, cards
+M10    1920x1080  1          2       -                        two monitors: bars and menus per screen
+M10L   1920x1080  1          2       lid                      M10 with the first output disabled (lid closed)
+M11    1920x1200  1.3333333  1       tablet,targets           tablet mode and on-screen keyboard: touch sizes
+M12    1920x1200  1.3333333  1       font=12.75               text scale everywhere
+M13    1920x1080  1          1       light                    Light contrast, switcher dim
+M14    1920x1200  1.3333333  1       tablet,rotate            tablet, rotate to portrait and back
+M16    1200x1920  1.3333333  1       manyapps                 many apps in portrait: dock shrink, pill clamp
+M17    1366x768   1          1       manyapps                 many apps at 1366x768
+M18    1920x1080  1          2       screen2                  work on screen 2: launcher and pop-ups follow
+M19    1024x768   1          1       -                        compact width in landscape
+M22    1920x1200  1.3333333  2       mixed=1                  mixed scales (the second output at 100 %; same size: the virtual backend has one size)
+M23    1920x1200  1.3333333  2       hotplug                  a second output added after login
+M24    1920x1200  1.3333333  1       font=12,lnfswitch        font 12 pt, then Light and Dark: fonts, cursor, buttons kept
+M25    1920x1200  1.3333333  1       anim=0                   reduced motion

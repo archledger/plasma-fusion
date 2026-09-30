@@ -35,8 +35,25 @@
 #   PFV_SHELL=PATH          SHELL for the whole session (e.g. /bin/bash; Konsole warns without it)
 #   PFV_CWD=DIR             working directory of the session, relative to the run root (e.g. out:
 #                           KWin writes its KWIN_LOG_PERFORMANCE_DATA CSV there, and out/ is fetched)
+#   PFV_KDE_PROFILE=1       append /usr/share/kde-settings/kde-profile/default/xdg to XDG_CONFIG_DIRS,
+#                           as Fedora's Plasma session does (its kwinrc starts plasma-keyboard as the
+#                           input method)
+#   PFV_XWAYLAND=1          KWin with Xwayland (X11 clients; DISPLAY also reaches the private bus)
+#   PFV_LOCK=1              a lock-capable session: KWin without --no-lockscreen; pfv_lock locks it.
+#                           Never type a password into its lock screen: pam_faillock counts failures
+#                           against the host user. pfinput refuses Return, Enter and 'type' while the
+#                           screen is locked. The locker's own idle timeout applies (kscreenlockerrc).
 # Extra scenario helpers: pfv_font PT, pfv_anim FACTOR, pfv_tablet on|off|auto (write the setting
-# and notify the running session), pfv_restart_shell (quit plasmashell, start it again, wait).
+# and notify the running session), pfv_restart_shell (quit plasmashell, start it again, wait),
+# pfv_rotate [OUTPUT] normal|left|right|inverted (kscreen-doctor inside the session; default the
+# first output), pfv_lock (lock-capable sessions only).
+#
+# Teardown: when the scenario ends, or at TIMEOUT (the scenario shell then gets SIGTERM; a hard
+# stop follows 30 s later), every process of the session except KWin's own (the processes that
+# started KWin, the bus daemon, KWin's children such as Xwayland) gets SIGTERM while KWin still
+# runs, SIGKILL after 5 s, and the sweep repeats for services the bus started meanwhile. A Qt
+# service started after KWin had gone aborts with a core dump: the portal frontend re-activated
+# xdg-desktop-portal-kde that way. out/teardown.log lists what was stopped.
 set -u
 NAME=${1:?name}; SCENARIO=${2:?scenario}; SIZE=${3:-1440x900}; TMO=${4:-240}
 # Sessions live on disk (/var/tmp): a HOME with the Fusion stage holds ~25k files, and /tmp is a
@@ -54,6 +71,9 @@ for svc in org.kde.kdeconnect; do
 done
 # Plasma Welcome would open on first start; mark this version as seen.
 [ -e "$PFV/home/.config/plasma-welcomerc" ] || printf '[General]\nLastSeenVersion=6.7.5\nShowUpdatePage=false\n' >"$PFV/home/.config/plasma-welcomerc"
+# Configuration search path of the session (Fedora adds its kde-profile layer; PFV_KDE_PROFILE).
+CONFIG_DIRS="$PFV/home/.config/kdedefaults:/etc/xdg"
+[ "${PFV_KDE_PROFILE:-0}" = 1 ] && CONFIG_DIRS+=":/usr/share/kde-settings/kde-profile/default/xdg"
 # Optional switches (see the header). kwriteconfig6 only edits files; offscreen keeps Qt away
 # from any display.
 pfv_kwc() { QT_QPA_PLATFORM=offscreen kwriteconfig6 --file "$PFV/home/.config/$1" --group "$2" --key "$3" "$4"; }
@@ -61,7 +81,7 @@ pfv_kwc() { QT_QPA_PLATFORM=offscreen kwriteconfig6 --file "$PFV/home/.config/$1
 [ -n "${PFV_ANIM:-}" ] && pfv_kwc kdeglobals KDE AnimationDurationFactor "$PFV_ANIM"
 if [ -n "${PFV_FONT_PT:-}" ]; then
   # the family as the session will see it (a Global Theme's kdedefaults layer included)
-  fam=$(QT_QPA_PLATFORM=offscreen XDG_CONFIG_HOME="$PFV/home/.config" XDG_CONFIG_DIRS="$PFV/home/.config/kdedefaults:/etc/xdg" \
+  fam=$(QT_QPA_PLATFORM=offscreen XDG_CONFIG_HOME="$PFV/home/.config" XDG_CONFIG_DIRS="$CONFIG_DIRS" \
     kreadconfig6 --file kdeglobals --group General --key font --default "Noto Sans,10")
   for k in font menuFont toolBarFont; do
     pfv_kwc kdeglobals General "$k" "${fam%%,*},$PFV_FONT_PT,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"
@@ -97,10 +117,84 @@ pfv_restart_shell() {
   plasmashell >>"$OUT/plasmashell.log" 2>&1 &
   wait_for_name org.kde.plasmashell; sleep "${1:-8}"
 }
+# Rotate an output inside this session (the M2 portrait step, tablet rotation tests).
+pfv_rotate() {  # [OUTPUT] normal|left|right|inverted
+  local o r
+  if [ $# -ge 2 ]; then o=$1; r=$2; else
+    r=${1:?pfv_rotate: normal, left, right or inverted}
+    o=$(kscreen-doctor -o 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '/^Output:/{print $3; exit}')
+  fi
+  kscreen-doctor "output.$o.rotation.$r" >>"$OUT/kscreen-doctor.log" 2>&1 || echo "pfv_rotate $o $r failed" >>"$OUT/errors.log"
+  sleep 1
+}
+# Lock the screen (PFV_LOCK=1 sessions only); waits until the locker reports it is active.
+pfv_lock() {
+  qdbus-qt6 org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver.Lock >/dev/null 2>&1
+  for _ in $(seq 1 20); do
+    [ "$(qdbus-qt6 org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null)" = true ] && return 0
+    sleep 0.25
+  done
+  echo "pfv_lock: the screen did not lock (PFV_LOCK=1 not set?)" >>"$OUT/errors.log"; return 1
+}
 # (not exported: the scenario is sourced by this shell, and exported functions would add variables
 # to the environment of every program the session starts)
-cleanup() { kill $(jobs -p) 2>/dev/null; sleep 1; kill -9 $(jobs -p) 2>/dev/null; }
-trap cleanup EXIT
+# Teardown (see the header). Only shell builtins look at /proc here, so the sweep never meets its
+# own helpers.
+pfv_alive() { local st; read -r st 2>/dev/null <"/proc/$1/stat" || return 1; st=${st##*) }; [ "${st%% *}" != Z ]; }
+pfv_pids() {  # PFV_PIDS := this session's processes except PFV_KEEP and their children (not ours)
+  local p pid e st mine
+  PFV_PIDS=()
+  for p in /proc/[0-9]*; do
+    pid=${p#/proc/}
+    [[ " $PFV_KEEP " == *" $pid "* ]] && continue
+    mapfile -d '' -t e 2>/dev/null <"$p/environ" || continue
+    mine=0
+    for st in "${e[@]}"; do [ "$st" = "XDG_RUNTIME_DIR=$PFV/run" ] && { mine=1; break; }; done
+    [ "$mine" = 1 ] || continue
+    read -r st 2>/dev/null <"$p/stat" || continue
+    st=${st##*) }; read -r -a e <<<"$st"   # e[0] state, e[1] parent
+    [ "${e[0]}" = Z ] && continue
+    # the bus daemon (child of dbus-run-session), Xwayland and KWin's input method (children of KWin)
+    [[ " $PFV_KEEP " == *" ${e[1]} "* && "${e[1]}" != "$$" ]] && continue
+    PFV_PIDS+=("$pid")
+  done
+}
+pfv_teardown() {
+  trap '' TERM
+  local p st pid round t left names c
+  # this shell and its ancestors: KWin, dbus-run-session, timeout, vsession.sh, ...
+  PFV_KEEP=$$; p=$PPID
+  while [ "${p:-1}" -gt 1 ]; do
+    PFV_KEEP+=" $p"
+    read -r st 2>/dev/null <"/proc/$p/stat" || break
+    st=${st##*) }; read -r -a st <<<"$st"; p=${st[1]}
+  done
+  for round in 1 2 3 4; do
+    pfv_pids
+    [ ${#PFV_PIDS[@]} -gt 0 ] || break
+    names=
+    for pid in "${PFV_PIDS[@]}"; do c=; read -r c 2>/dev/null <"/proc/$pid/comm"; names+=" $pid:$c"; done
+    echo "$EPOCHREALTIME round $round SIGTERM$names" >>"$OUT/teardown.log"
+    kill -TERM "${PFV_PIDS[@]}" 2>/dev/null
+    for ((t = 0; t < (round == 1 ? 25 : 10); t++)); do
+      left=()
+      for pid in "${PFV_PIDS[@]}"; do pfv_alive "$pid" && left+=("$pid"); done
+      [ ${#left[@]} -gt 0 ] || break
+      sleep 0.2
+    done
+    left=()
+    for pid in "${PFV_PIDS[@]}"; do pfv_alive "$pid" && left+=("$pid"); done
+    if [ ${#left[@]} -gt 0 ]; then
+      echo "$EPOCHREALTIME round $round SIGKILL ${left[*]}" >>"$OUT/teardown.log"
+      kill -KILL "${left[@]}" 2>/dev/null
+    fi
+    sleep 0.5  # services that the stopping processes asked the bus for appear now
+  done
+  pfv_pids
+  echo "$EPOCHREALTIME done; left: ${PFV_PIDS[*]:-none}" >>"$OUT/teardown.log"
+}
+cleanup() { pfv_teardown; }
+trap pfv_teardown EXIT
 # The private bus was started before KWin, so services it activates would not know the Wayland
 # socket and abort. Give the bus the session environment, as startplasma does (bus only; never
 # --systemd, which would change the logged-in user's systemd manager).
@@ -108,6 +202,8 @@ dbus-update-activation-environment WAYLAND_DISPLAY QT_QPA_PLATFORM XDG_SESSION_T
   KDE_FULL_SESSION KDE_SESSION_VERSION XDG_CONFIG_DIRS QT_FORCE_STDERR_LOGGING XDG_RUNTIME_DIR HOME PATH LANG
 # PFV_LANGUAGE / PFV_SHELL: bus-activated services get them too (names in bus-env, only when set)
 [ -s "$PFV/bus-env" ] && dbus-update-activation-environment $(cat "$PFV/bus-env")
+# PFV_XWAYLAND: KWin started Xwayland and set DISPLAY for this shell; bus-activated X11 clients need it
+[ -n "${DISPLAY:-}" ] && dbus-update-activation-environment DISPLAY ${XAUTHORITY:+XAUTHORITY}
 fc-cache -f >/dev/null 2>&1
 # Display scale, set the way System Settings does it (KWin's own --scale only enlarges the framebuffer).
 if [ "${PFV_SCALE:-1}" != 1 ]; then
@@ -150,16 +246,41 @@ OPT_ENV=()
 rm -f "$PFV/bus-env"
 [ -n "${PFV_LANGUAGE:-}" ] && OPT_ENV+=("LANGUAGE=$PFV_LANGUAGE") && echo LANGUAGE >>"$PFV/bus-env"
 [ -n "${PFV_SHELL:-}" ] && OPT_ENV+=("SHELL=$PFV_SHELL") && echo SHELL >>"$PFV/bus-env"
+[ "${PFV_LOCK:-0}" = 1 ] && OPT_ENV+=("PFV_LOCK=1")
+KWIN_OPTS=(--no-lockscreen)
+[ "${PFV_LOCK:-0}" = 1 ] && KWIN_OPTS=()
+[ "${PFV_XWAYLAND:-0}" = 1 ] && KWIN_OPTS+=(--xwayland)
+# Soft time limit: at TIMEOUT the scenario shell gets SIGTERM, which runs the teardown while KWin
+# still runs; `timeout` 30 s later is the hard stop.
+rm -f "$PFV/timed-out"
+(
+  trap 'kill "$s" 2>/dev/null; exit 0' TERM
+  sleep "$TMO" & s=$!; wait "$s"
+  for p in /proc/[0-9]*; do
+    [ "$(cat "$p/comm" 2>/dev/null)" = inner.sh ] || continue
+    grep -qz "^XDG_RUNTIME_DIR=$PFV/run\$" "$p/environ" 2>/dev/null || continue
+    touch "$PFV/timed-out"; kill -TERM "${p#/proc/}"
+  done
+) &
+WATCHDOG=$!
 env -i "${EXTRA_ENV[@]}" "${OPT_ENV[@]}" HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
   PFV_SCALE="${PFV_SCALE:-1}" \
   PATH=/usr/bin:/bin:/usr/lib64/qt6/bin LANG=en_US.UTF-8 \
   XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
-  XDG_CONFIG_DIRS="$PFV/home/.config/kdedefaults:/etc/xdg" QT_FORCE_STDERR_LOGGING=1 \
+  XDG_CONFIG_DIRS="$CONFIG_DIRS" QT_FORCE_STDERR_LOGGING=1 \
   QT_QPA_PLATFORM=wayland \
-  timeout "$TMO" dbus-run-session -- kwin_wayland --virtual --width "$W" --height "$H" \
+  timeout "$((TMO + 30))" dbus-run-session -- kwin_wayland --virtual --width "$W" --height "$H" \
     --output-count "${PFV_OUTPUTS:-1}" \
-    --socket "pfv-$NAME" --no-lockscreen --exit-with-session "$PFV/inner.sh" >"$PFV/out/kwin.log" 2>&1
-echo "session rc=$?" >>"$PFV/out/scenario.log"
+    --socket "pfv-$NAME" "${KWIN_OPTS[@]}" --exit-with-session "$PFV/inner.sh" >"$PFV/out/kwin.log" 2>&1
+rc=$?
+kill "$WATCHDOG" 2>/dev/null; wait "$WATCHDOG" 2>/dev/null
+if [ -e "$PFV/timed-out" ]; then
+  echo "session rc=124" >>"$PFV/out/scenario.log"
+  echo "time limit of ${TMO} s reached: the scenario was stopped (kwin rc=$rc)" >>"$PFV/out/scenario.log"
+  rm -f "$PFV/timed-out"
+else
+  echo "session rc=$rc" >>"$PFV/out/scenario.log"
+fi
 
 # Kill anything that still belongs to this session (matched by its private runtime dir).
 for p in /proc/[0-9]*; do

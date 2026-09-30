@@ -43,6 +43,14 @@ have = {(r["session"], r["step"]) for r in rows}
 missing = [s + "/" + step for s, steps in EXPECTED.items() for step in steps if (s, step) not in have]
 if missing:
     setup.append("no result for step(s) %s (see remote-N.log and N/steps.log)" % ", ".join(missing))
+upgrade = None
+if os.path.exists(os.path.join(res_dir, "1", "upgrade.json")):
+    upgrade = json.load(open(os.path.join(res_dir, "1", "upgrade.json")))
+elif os.path.exists(os.path.join(res_dir, "upgrade-expected")):
+    setup.append("the upgrade path ran without a result (1/upgrade.json missing)")
+folderview = ""
+if os.path.exists(os.path.join(res_dir, "1", "folderview.txt")):
+    folderview = open(os.path.join(res_dir, "1", "folderview.txt")).read().strip().split("=")[-1]
 late = []
 if os.path.exists(os.path.join(res_dir, "coredumps.json")):
     late = json.load(open(os.path.join(res_dir, "coredumps.json")))
@@ -119,6 +127,13 @@ for r in rows:
         "n/a" if px is None else ("yes" if px <= 50 else "NO (%d px)" % px), r.get("icons_on") or "-",
         yn(r["cards_equal"]), yn(r["itemgeom_equal"]), pops, dumps, r["result"]))
 text = "\n".join(lines)
+if folderview:
+    text += "\n\nFolder View: %s" % ("from the build's layout (M1)" if folderview == "layout"
+                                    else "written by the test (the build's layout has none)")
+if upgrade:
+    text += "\n\nUpgrade from the previous build: %s%s (desktop %s -> %s)" % (
+        upgrade["result"], (": " + "; ".join(upgrade["problems"])) if upgrade["problems"] else
+        " (panels, dock pins and cards kept)", upgrade["desktop_before"], upgrade["desktop_after"])
 if setup:
     text += "\n\nSetup problems:\n" + "\n".join("- " + s for s in setup)
 text += "\n\nCore dumps of the test sessions (journal, whole run): %s" % (
@@ -129,10 +144,11 @@ print(text)
 keys = ("step", "result", "positions_bytes_equal", "rewritten", "positions_same_cells", "header", "icons_on",
         "screen_diff_px", "cards_equal", "itemgeom_equal", "lastResolution", "resolutions")
 summary = {"steps": [{k: r.get(k) for k in keys} | {"popups": len(r["popups"]), "coredumps": len(r["coredumps"])}
-                     for r in rows], "setup_problems": setup, "coredumps": late, "counts": counts, "total": len(rows)}
+                     for r in rows], "setup_problems": setup, "coredumps": late, "counts": counts, "total": len(rows),
+           "folderview": folderview, "upgrade": upgrade}
 json.dump(summary, open(os.path.join(res_dir, "summary.json"), "w"), indent=1)
 open(os.path.join(res_dir, "summary.md"), "w").write(text + "\n")
 if setup or not rows:
     sys.exit(2)
-bad = counts["FAIL"] or late or (strict and counts["REWRITTEN"])
+bad = counts["FAIL"] or late or (strict and counts["REWRITTEN"]) or (upgrade and not upgrade["pass"])
 sys.exit(1 if bad else 0)

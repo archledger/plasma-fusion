@@ -17,8 +17,21 @@
 #   keydown KEY / keyup KEY        hold / release one key (e.g. Alt for a held Alt+Tab). Every key
 #                                  still held when the command list ends is released before exit:
 #                                  KWin 6.7.5 crashes when an EIS client exits holding a key.
+#                                  A pointer button pressed with 'down' is released when this
+#                                  client exits: to hold it across a screenshot, run the call in
+#                                  the background (pfinput 'down' 'sleep 2' 'up' & shot x; wait).
 #   tap X Y [HOLD_S]               one-finger touch tap (HOLD_S default 0.08; 0.8 = long press)
+#   hold X Y [HOLD_S]              one-finger long press (HOLD_S default 0.8)
 #   swipe X1 Y1 X2 Y2 [SECONDS]    one-finger touch swipe in 10 steps (default 0.2 s)
+#   hswipe X1 Y1 X2 Y2 HOLD_S      one-finger swipe in 20 steps 16 ms apart, then held HOLD_S
+#                                  before lifting (edge swipes that must not fling)
+#   mswipe N X Y DX DY [STEPS [STEP_S]]
+#                                  N fingers 30 px apart from X Y, moved together by DX DY in
+#                                  STEPS steps (default 15) STEP_S apart (default 0.016). Virtual
+#                                  outputs report no physical size, so KWin's touchscreen gestures
+#                                  do not recognise it; apps and Plasma still get the touch points.
+#   type TEXT                      press and release each character: letters (typed lower-case),
+#                                  digits, spaces and - = [ ] ; ' ` \ , . /
 #   sweep X1 X2 Y SECONDS          pointer back and forth between X1 and X2 at height Y, 2 s per
 #                                  direction, at most one motion every 8 ms; each motion also waits
 #                                  up to 10 ms for KWin's events, so about 98 motions/s in practice
@@ -27,7 +40,11 @@
 #                                  $PFPERF_MARKS, then marks.jsonl in $OUT or $PFV/out; never in
 #                                  the working directory, which is the host user's HOME by default)
 #   sleep SECONDS
-# Touch is requested from KWin only when a tap or swipe command is given, or with PFINPUT_TOUCH=1.
+# Touch is requested from KWin only when a touch command is given, or with PFINPUT_TOUCH=1.
+# PFINPUT_WAIT (seconds, default 5): how long to wait for KWin's input devices at the start; the
+# client goes on with what it has after that and logs which device was missing.
+# In a lock-capable session (PFV_LOCK=1) the client refuses Return, Enter and 'type' while the
+# screen is locked: a password typed there would be checked against the host user (pam_faillock).
 import ctypes, json, os, select, sys, time
 from gi.repository import Gio, GLib
 
@@ -84,16 +101,35 @@ KEYS.update({"f11": 87, "f12": 88, "minus": 12, "equal": 13, "backspace": 14, "l
              "menu": 127, "mute": 113, "volumedown": 114, "volumeup": 115})
 
 ARGS = sys.argv[1:]
-WANT_TOUCH = os.environ.get("PFINPUT_TOUCH") == "1" or any(
-    c.split()[:1] in (["tap"], ["swipe"]) for c in ARGS)
+TOUCH_CMDS = (["tap"], ["hold"], ["swipe"], ["hswipe"], ["mswipe"])
+WANT_TOUCH = os.environ.get("PFINPUT_TOUCH") == "1" or any(c.split()[:1] in TOUCH_CMDS for c in ARGS)
+CHARS = {"-": "minus", "=": "equal", "[": "leftbrace", "]": "rightbrace", ";": "semicolon", "'": "apostrophe",
+         "`": "grave", "\\": "backslash", ",": "comma", ".": "period", "/": "slash"}
 # Key names of keydown/keyup are checked before anything is sent: an unknown name must not end
 # the client while another key is held.
 for _cmd in ARGS:
     _a = _cmd.split()
     if _a[:1] in (["keydown"], ["keyup"]) and (len(_a) < 2 or _a[1].lower() not in KEYS):
         sys.exit("unknown key in '%s'" % _cmd)
+    if _a[:1] == ["type"] and any(ch.lower() not in KEYS and ch not in CHARS for ch in "".join(_a[1:])):
+        sys.exit("cannot type '%s' (letters, digits and - = [ ] ; ' ` \\ , . / only)" % _cmd)
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+
+# Lock-capable sessions: nothing that could submit a password while the screen is locked.
+SUBMITS = ("return", "enter")
+if os.environ.get("PFV_LOCK") == "1" and any(
+        c.split()[:1] == ["type"] or (c.split()[:1] in (["key"], ["keydown"]) and len(c.split()) > 1
+                                     and any(k in SUBMITS for k in c.split()[1].lower().split("+")))
+        for c in ARGS):
+    try:
+        _act = bus.call_sync("org.freedesktop.ScreenSaver", "/ScreenSaver", "org.freedesktop.ScreenSaver",
+                             "GetActive", None, GLib.VariantType("(b)"), Gio.DBusCallFlags.NONE, 2000,
+                             None).unpack()[0]
+    except GLib.Error:
+        _act = False
+    if _act:
+        sys.exit("the screen is locked: refusing Return, Enter and 'type' (never enter a password here)")
 res, fds = bus.call_with_unix_fd_list_sync(
     "org.kde.KWin", "/org/kde/KWin/EIS/RemoteDesktop", "org.kde.KWin.EIS.RemoteDesktop",
     "connectToEIS", GLib.Variant("(i)", (7 if WANT_TOUCH else 3,)), GLib.VariantType("(hi)"),
@@ -147,9 +183,15 @@ def ready():
     return state["abs"] and state["kbd"] and state["touch"] and len(state["resumed"]) >= len(devs)
 
 
-deadline = time.time() + 5
+_wait = float(os.environ.get("PFINPUT_WAIT") or 5)
+_t0 = time.time()
+deadline = _t0 + _wait
 while time.time() < deadline and not ready():
     pump()
+if not ready():
+    print("devices not all ready after %.1f s (pointer %s, keyboard %s, touch %s, resumed %d); going on" % (
+        time.time() - _t0, bool(state["abs"]), bool(state["kbd"]), bool(state["touch"]), len(state["resumed"])),
+        file=sys.stderr)
 if not state["abs"]:
     sys.exit("no absolute pointer device")
 
@@ -228,6 +270,29 @@ def touch(points, hold_s):
     ei.ei_touch_unref(t)
 
 
+def fingers(n, x, y, dx, dy, steps, step_s):
+    d = state["touch"]
+    if not d:
+        print("no touch device", file=sys.stderr)
+        return
+    start(d)
+    pts = []
+    for i in range(n):
+        t = ei.ei_device_touch_new(d)
+        ei.ei_touch_down(t, x + i * 30.0, y)
+        pts.append((t, x + i * 30.0, y))
+    frame(d)
+    for k in range(1, steps + 1):
+        for t, px, py in pts:
+            ei.ei_touch_motion(t, px + dx * k / steps, py + dy * k / steps)
+        frame(d); time.sleep(step_s)
+    for t, _, _ in pts:
+        ei.ei_touch_up(t)
+    frame(d)
+    for t, _, _ in pts:
+        ei.ei_touch_unref(t)
+
+
 def release_held():
     d = state["kbd"]
     while held:
@@ -247,6 +312,9 @@ try:
             button(b, True); time.sleep(0.06); button(b, False)
         elif a[0] == "down":
             button(a[1] if len(a) > 1 else "left", True)
+            if not any(c.split()[:1] == ["up"] for c in ARGS):
+                print("'down' without 'up' in this call: the button is released when this client exits",
+                      file=sys.stderr)
         elif a[0] == "up":
             button(a[1] if len(a) > 1 else "left", False)
         elif a[0] == "drag":  # drag x1 y1 x2 y2 [steps [step_s [press_hold_s [drop_hold_s]]]]
@@ -283,6 +351,29 @@ try:
                     held.remove(c)
         elif a[0] == "tap":
             touch([(a[1], a[2])], float(a[3]) if len(a) > 3 else 0.08)
+        elif a[0] == "hold":
+            touch([(a[1], a[2])], float(a[3]) if len(a) > 3 else 0.8)
+        elif a[0] == "hswipe":
+            x1, y1, x2, y2, hs = map(float, a[1:6])
+            d = state["touch"]
+            if not d:
+                print("no touch device", file=sys.stderr)
+            else:
+                start(d)
+                t = ei.ei_device_touch_new(d)
+                ei.ei_touch_down(t, x1, y1); frame(d)
+                for i in range(1, 21):
+                    ei.ei_touch_motion(t, x1 + (x2 - x1) * i / 20, y1 + (y2 - y1) * i / 20); frame(d)
+                    time.sleep(0.016)
+                hold(hs)
+                ei.ei_touch_up(t); frame(d)
+                ei.ei_touch_unref(t)
+        elif a[0] == "mswipe":
+            fingers(int(a[1]), float(a[2]), float(a[3]), float(a[4]), float(a[5]),
+                    int(a[6]) if len(a) > 6 else 15, float(a[7]) if len(a) > 7 else 0.016)
+        elif a[0] == "type":
+            for ch in " ".join(a[1:]):
+                key("space" if ch == " " else CHARS.get(ch, ch.lower()))
         elif a[0] == "swipe":
             x1, y1, x2, y2 = map(float, a[1:5])
             touch([(x1 + (x2 - x1) * i / 10, y1 + (y2 - y1) * i / 10) for i in range(11)],

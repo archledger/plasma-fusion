@@ -7,12 +7,18 @@
 # dock and top bar instead of fixed coordinates:
 #   install Plasma Fusion, fresh plasmashell, KWin reconfigure, 30 s settle; idle 30 s with the
 #   pointer mid-screen; 10 s dock hover sweep (about 98 motions/s); launcher (Meta) x3; quick settings x3;
-#   Konsole + KWrite, Alt+Tab held 1.2 s x3; overview (Meta+W) x3; snapshot "end".
+#   Konsole + KWrite, Alt+Tab held 1.2 s x3; overview (Meta+W) x3; snapshot "end"; then KWrite
+#   maximized over the desktop cards and idle 30 s again (EFFECTS.md X3: the covered case).
 # pfstat.py snapshots every session process around each step (stats.jsonl), pfinput marks the
-# input times (marks.jsonl), winmon.js logs window mapping through dbus-monitor (dbusmon.log).
+# input times (marks.jsonl), winmon.js logs window mapping and the dock windows' geometry changes
+# through dbus-monitor (dbusmon.log).
+# Options from ~/pf-perf.env (written by run.sh): PF_DOCK_MAGNIFY=off turns the dock's
+# magnification off after the install (the E12 reference); PFSTAT_SUDO=1 lets pfstat.py read
+# KWin's GPU counters with sudo -n (KWin's /proc entries are private).
 # shellcheck shell=bash
 exec 2>&1
-export OUT KWIN_PID=$PPID PFINPUT_MARKS=$OUT/marks.jsonl
+[ -f "$HOME/pf-perf.env" ] && . "$HOME/pf-perf.env"
+export OUT KWIN_PID=$PPID PFINPUT_MARKS=$OUT/marks.jsonl PFSTAT_SUDO=${PFSTAT_SUDO:-0}
 T=$HOME/pf-tools/tests
 P() { python3 "$PFV/pfinput.py" "$@" >>"$OUT/pfinput.log" 2>&1; }
 S() { python3 "$T/perf/pfstat.py" "$1"; }
@@ -27,6 +33,13 @@ M shell-start
 plasmashell >>"$OUT/plasmashell2.log" 2>&1 &
 wait_for_name org.kde.plasmashell
 M shell-on-bus
+if [ "${PF_DOCK_MAGNIFY:-}" = off ]; then
+  sleep 3
+  evaljs - >>"$OUT/arm.txt" 2>&1 <<'JS'
+panels().forEach(function (p) { p.widgets("org.plasmafusion.dock").forEach(function (w) {
+    w.currentConfigGroup = ["General"]; w.writeConfig("magnify", false); print("dock magnify=false"); }); });
+JS
+fi
 qdbus org.kde.KWin /KWin reconfigure
 dbus-monitor "type='method_call',interface='org.freedesktop.DBus',member='NameHasOwner'" >"$OUT/dbusmon.log" 2>&1 &
 sleep 0.5
@@ -85,4 +98,10 @@ S end
 M end
 # Outside the measured windows: one screenshot for the record.
 shot end
+# 7. idle 30 s with a maximized window over the desktop cards (the system card should pause)
+python3 "$T/lib/pfkwin.py" maximize org.kde.kwrite >"$OUT/maximize.json" 2>>"$OUT/errors.log"
+P "move $MX $MY"
+sleep 6
+M idlec0; S idlec0; sleep 30; S idlec1; M idlec1
+shot covered
 qdbus org.kde.KWin /KWin supportInformation >"$OUT/kwin-support-end.txt" 2>&1

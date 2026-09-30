@@ -9,6 +9,7 @@
 #
 #   run.sh [--stage DIR] [--runs N] [--name NAME] [--work DIR] [--size WxH] [--scale S]
 #          [--baseline FILE] [--save-baseline] [--label TEXT] [--strict-budget] [--quiet-wait SEC]
+#          [--dock-magnify on|off] [--kwin-gpu]
 #
 #   --stage DIR       built HOME tree (tools/build.sh output; default <repo>/stage/home)
 #   --runs N          sessions to measure (default 3; about 3 minutes each)
@@ -19,19 +20,30 @@
 #   --save-baseline   write this result as the baseline file (after a clean measurement)
 #   --label TEXT      what was measured (for example the commit), stored with the result
 #   --strict-budget   also fail when a budget row fails (today most rows do; see docs/parts/testing.md)
-#   --quiet-wait SEC  before each run, wait up to SEC seconds (default 600) until no other virtual
-#                     session runs on the host; a run that saw another session is marked noisy
+#   --quiet-wait SEC  without vslot.sh: before each run, wait up to SEC seconds (default 600) until
+#                     no other virtual session runs on the host; a run that saw another session is
+#                     marked noisy (with vslot.sh the exclusive slot lock does this)
+#   --dock-magnify off  turn the dock's magnification off after the install: the reference for the
+#                     E12 sweep budget (budget.json); judged against the budget only unless
+#                     --baseline is given
+#   --kwin-gpu        read KWin's GPU counters with sudo -n (read-only; KWin's /proc entries are
+#                     private) for the E13 row "KWin GPU per frame" of the launcher
 #
+# Each run ends with KWrite maximized over the desktop cards and 30 s more idle (EFFECTS.md X3:
+# the covered row); the dock windows' geometry changes during the sweep are counted (winmon.js).
 # Exit status: 0 no regression, 1 regression (or budget failure with --strict-budget), 2 setup
 # error, 3 no usable run, 4 the baseline is for another geometry, 5 worse than the baseline only in
 # runs that overlapped another virtual session (not counted as a regression; re-run when quiet).
+# Each run holds every session slot and the container-build lock of build/lead/vslot.sh (a quiet
+# host; tools/tests/lib/common.sh, slot_prefix exclusive). Started under 'vslot.sh --exclusive',
+# the driver uses those locks; started under a single slot it refuses (exit 2).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 # shellcheck source=tools/tests/lib/common.sh
 source "$HERE/../lib/common.sh"
 STAGE=$ROOT/stage/home; RUNS=3; NAME=perf; WORK=$ROOT/build/tests/perf; SIZE=1920x1200; SCALE=1.333333
-BASELINE=$HERE/baseline.json; SAVE=0; LABEL=; STRICT=(); QUIET=600
+BASELINE=$HERE/baseline.json; SAVE=0; LABEL=; STRICT=(); QUIET=600; MAGNIFY=on; KWIN_GPU=0; BASE_SET=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage) STAGE=$2; shift 2 ;;
@@ -40,7 +52,9 @@ while [ $# -gt 0 ]; do
     --work) WORK=$2; shift 2 ;;
     --size) SIZE=$2; shift 2 ;;
     --scale) SCALE=$2; shift 2 ;;
-    --baseline) BASELINE=$2; shift 2 ;;
+    --baseline) BASELINE=$2; BASE_SET=1; shift 2 ;;
+    --dock-magnify) MAGNIFY=$2; shift 2 ;;
+    --kwin-gpu) KWIN_GPU=1; shift ;;
     --save-baseline) SAVE=1; shift ;;
     --label) LABEL=$2; shift 2 ;;
     --strict-budget) STRICT=(--strict-budget); shift ;;
@@ -52,6 +66,8 @@ done
 [ -d "$STAGE/.local/share/plasma" ] || { echo "no built HOME tree at $STAGE (run tools/build.sh)" >&2; exit 2; }
 [[ "$NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "bad session name $NAME" >&2; exit 2; }
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "bad --runs $RUNS" >&2; exit 2; }
+case "$MAGNIFY" in on) ;; off) [ "$BASE_SET" = 1 ] || BASELINE= ;; *) echo "bad --dock-magnify $MAGNIFY" >&2; exit 2 ;; esac
+slot_prefix exclusive || exit 2
 [ -n "$LABEL" ] || LABEL=$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
 mkdir -p "$WORK" || exit 2
 WORK=$(cd "$WORK" && pwd)
@@ -61,6 +77,10 @@ make_seed "$STAGE" "$ROOT/tools" "$WORK/seed" || { echo "seed failed" >&2; exit 
 # KWin's per-frame CSV (render start/end, presentation) and the window log of winmon.js.
 mkdir -p "$WORK/seed/.config"
 printf 'KWIN_LOG_PERFORMANCE_DATA=1\nQT_LOGGING_RULES=kwin_scripting.debug=true\n' >"$WORK/seed/.config/pfv-env"
+# Scenario options (scen-perf.sh reads ~/pf-perf.env).
+rm -f "$WORK/seed/pf-perf.env"
+[ "$MAGNIFY" = off ] && echo "PF_DOCK_MAGNIFY=off" >>"$WORK/seed/pf-perf.env"
+[ "$KWIN_GPU" = 1 ] && echo "PFSTAT_SUDO=1" >>"$WORK/seed/pf-perf.env"
 T0=$(hssh 'date +%s') || { echo "host $HOST not reachable" >&2; exit 2; }
 # shellcheck disable=SC2046  # one name per run
 if session_in_use $(for i in $(seq 1 "$RUNS"); do echo "$NAME-$i"; done); then
@@ -80,15 +100,17 @@ wait_quiet() {
   done
 }
 : >"$RES/host.jsonl"
+slot_note | tee "$RES/slot.txt"
 host_packages >"$RES/packages.txt"
 cur=
 trap 'echo "interrupted; cleaning up $cur on $HOST"; [ -n "$cur" ] && host_cleanup "$cur"; exit 130' INT TERM
 for i in $(seq 1 "$RUNS"); do
-  wait_quiet
+  # the exclusive slot lock keeps the laptop's other sessions away; without vslot.sh, wait
+  pf_vslot >/dev/null || wait_quiet
   before=$(host_state)
   echo "== run $i/$RUNS ($(date +%T)) $before"
   cur=$NAME-$i
-  run_remote "$RES/remote-$i.log" "$NAME-$i" env PFV_SCALE="$SCALE" PFV_CWD=out \
+  run_remote "$RES/remote-$i.log" "$NAME-$i" "${SLOT[@]}" env PFV_SCALE="$SCALE" PFV_CWD=out \
     bash "$ROOT/tools/vsession/remote.sh" "$NAME-$i" "$HERE/scen-perf.sh" "$WORK/seed" "$SIZE" 420 \
     || echo "   run $i: remote.sh failed (see $RES/remote-$i.log)"
   after=$(host_state)
@@ -106,6 +128,7 @@ echo "core dumps of these sessions: $(cat "$RES/coredumps.json")"
 echo
 # A new baseline is not compared with the old one (it may be for another geometry).
 CMP=$BASELINE; [ "$SAVE" = 1 ] && CMP=
+[ "$MAGNIFY" = off ] && LABEL="$LABEL (dock magnification off)"
 python3 "$HERE/gate.py" --geometry "$SIZE@$SCALE" --baseline "$CMP" --label "$LABEL" --host "$RES/host.jsonl" \
   --packages "$RES/packages.txt" --save "$RES/result.json" "${STRICT[@]}" "$RES"/runs/* | tee "$RES/table.md"
 rc=${PIPESTATUS[0]}
