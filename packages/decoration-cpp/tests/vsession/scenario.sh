@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Virtual-session scenario for the C++ decoration (test tooling, not installed):
 #
@@ -9,45 +10,13 @@
 # Applies the whole Plasma Fusion desktop (fusion-config.sh --install), switches KWin to
 # org.plasmafusion.decoration, places System Settings (active, at the Main board's Appearance
 # window: 549,263 650x504), Dolphin (inactive, the board's Files window) and Konsole, and then
-# drives real pointer input (pfinput): hover / press states, the snap-layouts trigger (hover and
-# hold on maximize), maximize, quick tiles, the other button styles, and a burst of odd states
-# on several windows. Geometry dumps and the decoration's debug lines land in $OUT/kwin.log.
+# drives real pointer input (pfinput): hover / press states, the snap-layouts trigger (the
+# default hold, and hover as the option), maximize, quick tiles, the other button styles, and a
+# burst of odd states on several windows. Geometry dumps (with the title-bar height KWin applied),
+# flyout checks and the decoration's debug lines land in $OUT/kwin.log.
 . "$HOME/pf-deco/params.sh"
-log() { echo "[$(date +%T)] $*"; }
-kwinjs() {
-  local f=$PFV/helper-$RANDOM.js
-  cat >"$f"
-  local id
-  id=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$f" "pfcx-helper-$RANDOM")
-  qdbus org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null 2>&1
-  sleep 0.5
-}
-geom() {
-  kwinjs <<JS
-const out = workspace.windowList().filter(w => w.normalWindow && !w.minimized)
-  .map(w => (w.resourceClass || "?") + " " + JSON.stringify(w.frameGeometry) + " max=" + w.maximizeMode
-       + " tile=" + (w.tile ? "yes" : "no") + " active=" + (w === workspace.activeWindow));
-console.warn("PFCXGEOM $1 " + out.join(" | "));
-JS
-}
-setdeco() { # ButtonStyle SnapLayoutsOnHover
-  kwriteconfig6 --file plasmafusionrc --group Decoration --key ButtonStyle "$1"
-  kwriteconfig6 --file plasmafusionrc --group Decoration --key SnapLayoutsOnHover "$2"
-  qdbus org.kde.KWin /KWin reconfigure >/dev/null 2>&1
-  sleep 1.2
-}
-place() {
-  kwinjs <<'JS'
-function find(c) { return workspace.windowList().find(w => w.normalWindow && (w.resourceClass || "").toLowerCase().indexOf(c) >= 0); }
-const d = find("dolphin"), s = find("systemsettings"), k = find("konsole");
-for (const w of [d, s, k]) { if (w) { try { if (w.tile) { w.tile = null; } } catch (e) {} w.setMaximize(false, false); w.minimized = false; } }
-if (k) { k.frameGeometry = {x: 200, y: 400, width: 620, height: 380}; workspace.activeWindow = k; }
-if (d) { d.frameGeometry = {x: 65, y: 63, width: 758, height: 498}; workspace.activeWindow = d; }
-if (s) { s.frameGeometry = {x: 549, y: 263, width: 650, height: 504}; workspace.activeWindow = s; }
-console.warn("PFCX placed dolphin=" + !!d + " systemsettings=" + !!s + " konsole=" + !!k);
-JS
-  sleep 0.8
-}
+# shellcheck source=lib.sh
+. "$HOME/pf-deco/lib.sh"
 AWAY='move 1320 760'
 
 date "+%Y-%m-%d %H:%M:%S" >"$OUT/start.txt"
@@ -76,10 +45,10 @@ env -u XDG_CONFIG_DIRS kwriteconfig6 --file kdeglobals --group WM --key activeFo
 env -u XDG_CONFIG_DIRS kwriteconfig6 --file kdeglobals --group General --key font "Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0"
 dbus-send --session --type=signal /KDEPlatformTheme org.kde.KDEPlatformTheme.refreshFonts
 sleep 1
-# The C++ decoration (contract: library=org.plasmafusion.decoration, theme empty).
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library org.plasmafusion.decoration
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme ""
-setdeco RightGlyphs false
+# The C++ decoration (contract: library=org.plasmafusion.decoration, theme empty), contract
+# defaults (SnapLayoutsOnHover absent = hold only).
+use_decoration cpp
+setdeco RightGlyphs default
 qdbus org.kde.KWin /KWin supportInformation >"$OUT/kwin-support-fusion.txt" 2>&1
 grep -A12 -i "^Decoration" "$OUT/kwin-support-fusion.txt" | head -14
 grep -q '^font: Manrope' "$OUT/kwin-support-fusion.txt" || log "WARNING: KWin title font is not Manrope"
@@ -92,6 +61,7 @@ konsole >"$OUT/konsole.log" 2>&1 &
 sleep 10
 place
 geom placed
+check_plugin
 pfinput "$AWAY" 'sleep 1.0'
 shot 01-desktop
 
@@ -107,12 +77,24 @@ shot 04-pressed-minimize
 wait $PID
 geom after-press-outside
 
-log "snap layouts: hover 600 ms on maximize"
+log "snap layouts, default (hold only): resting on maximize opens nothing, the first click maximizes"
+pfinput "$AWAY" 'sleep 0.4' 'move 1141 287' 'sleep 1.4'
+flyout default-rest
+shot 05a-default-rest-no-flyout
+pfinput 'click 1141 287' 'sleep 1.0'
+geom default-first-click
+flyout default-first-click
+shot 05a2-default-first-click-maximized
+place
+pfinput "$AWAY" 'sleep 0.6'
+
+log "snap layouts: hover 600 ms on maximize (option SnapLayoutsOnHover=true)"
 setdeco RightGlyphs true
 pfinput "$AWAY" 'sleep 0.4' 'move 1141 287' 'sleep 1.4'
 shot 05-snap-hover
 # KWin's popup filter: a click outside an open popup only closes it, so the first click on
 # maximize while the hover flyout is open does not maximize (documented behaviour).
+flyout hover-option
 pfinput 'click 1141 287' 'sleep 0.8'
 geom click-while-flyout-open
 shot 05b-click-while-flyout-open
@@ -122,12 +104,14 @@ log "inactive window (Dolphin): hovering its maximize does nothing"
 pfinput 'move 765 87' 'sleep 1.4'
 shot 05c-inactive-hover-no-flyout
 pfinput "$AWAY" 'sleep 0.6'
-log "snap layouts: hold maximize"
+log "snap layouts: hold maximize (default)"
+setdeco RightGlyphs default
 pfinput 'move 1141 287' 'down' 'sleep 1.8' 'up' 'sleep 0.3' &
 PID=$!
 sleep 1.3
 shot 06-snap-hold
 wait $PID
+flyout after-hold
 geom after-hold
 pfinput 'key esc' 'sleep 0.4'
 log "click maximize (quick)"
@@ -158,24 +142,24 @@ geom tiled
 
 log "buttons on the left"
 place
-setdeco LeftCircles true
+setdeco LeftCircles default
 pfinput "$AWAY" 'sleep 0.6'
 shot 10-left
 pfinput 'move 587 287' 'sleep 0.7'
 shot 11-left-hover
 log "show on hover"
-setdeco ShowOnHover true
+setdeco ShowOnHover default
 pfinput "$AWAY" 'sleep 0.7'
 shot 12-showonhover-away
 pfinput 'move 850 287' 'sleep 0.7'
 shot 13-showonhover-over
-setdeco RightGlyphs true
+setdeco RightGlyphs default
 
 log "odd states on many windows"
 for i in 1 2 3; do konsole >>"$OUT/konsole-$i.log" 2>&1 & done
 kdialog --title "Plasma Fusion" --msgbox "Modal message" >"$OUT/kdialog.log" 2>&1 &
 sleep 5
-for round in 1 2; do
+for _ in 1 2; do
   kwinjs <<'JS'
 for (const w of workspace.windowList()) {
   if (!w.normalWindow && !w.dialog) { continue; }

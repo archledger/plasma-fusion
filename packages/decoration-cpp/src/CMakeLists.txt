@@ -8,6 +8,7 @@ add_library(plasmafusiondecoration MODULE
     fusionconfig.cpp
     glyphs.cpp
     shadow.cpp
+    tabletmode.cpp
 )
 
 # KWin finds decoration plugins by file name / plugin id: org.plasmafusion.decoration

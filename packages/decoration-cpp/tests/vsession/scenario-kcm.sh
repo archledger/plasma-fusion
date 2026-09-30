@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Virtual-session scenario (test tooling): the Window Decorations settings page with the plugin on
 # QT_PLUGIN_PATH. Its previews create the decoration and its buttons through the plugin factory
@@ -38,4 +39,17 @@ for xy in ${KCM_CLICKS:-}; do
   pfinput "click ${xy%,*} ${xy#*,}" 'sleep 1.5'
   shot "k02-kcm-click-${xy/,/-}"
 done
-pgrep -u "$(id -u)" -f "^systemsettings" >/dev/null && echo "systemsettings still running" || echo "systemsettings NOT running"
+# The previews follow tablet mode too (the settings page's own D-Bus connection hears KWin's
+# signal): touch-sized previews, then back.
+kwriteconfig6 --file kwinrc --group Input --key TabletMode --notify on
+sleep 2
+shot k03-kcm-tablet
+kwriteconfig6 --file kwinrc --group Input --key TabletMode --notify off
+sleep 2
+shot k04-kcm-laptop-again
+running=no
+for p in /proc/[0-9]*; do
+  [ "$(cat "$p/comm" 2>/dev/null)" = systemsettings ] || continue
+  grep -qz "^XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR\$" "$p/environ" 2>/dev/null && running=yes
+done
+echo "systemsettings of this session still running: $running"

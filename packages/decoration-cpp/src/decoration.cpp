@@ -10,6 +10,7 @@
 
 #include "button.h"
 #include "shadow.h"
+#include "tabletmode.h"
 
 #include <KDecoration3/DecoratedWindow>
 #include <KDecoration3/DecorationSettings>
@@ -21,6 +22,7 @@
 #include <QGuiApplication>
 #include <QHoverEvent>
 #include <QLoggingCategory>
+#include <QMetaProperty>
 #include <QPainter>
 #include <QPainterPath>
 #include <QTimer>
@@ -44,6 +46,7 @@ namespace
 int s_decorationCount = 0;
 constexpr int s_activeDuration = 150; // title / icon fade between active and inactive
 constexpr int s_buttonsDuration = 150; // ShowOnHover fade
+constexpr qreal s_shortScreenHeight = 800; // ADAPTIVE.md 5.12: 40 px title bars below this height
 
 QPainterPath roundedRect(const QRectF &r, qreal radius, bool tl, bool tr, bool br, bool bl)
 {
@@ -116,6 +119,12 @@ qreal Decoration::snap(qreal value) const
     return scale > 0 ? KDecoration3::snapToPixelGrid(value, scale) : value;
 }
 
+qreal Decoration::snapUp(qreal value) const
+{
+    const qreal scale = window()->nextScale();
+    return scale > 0 ? std::ceil(value * scale - 1e-6) / scale : value;
+}
+
 QVariant Decoration::windowProperty(const char *name) const
 {
     // KWin creates the decoration with the KWin::Window as its parent; its scripting properties
@@ -137,11 +146,41 @@ bool Decoration::isToolWindow() const
     return false;
 }
 
-bool Decoration::snapTriggerAllowed() const
+bool Decoration::isShortScreen() const
 {
-    if (!FusionConfig::self().snapTrigger()) {
-        return false;
+    return m_screenHeight > 0 && m_screenHeight < s_shortScreenHeight;
+}
+
+bool Decoration::snapHoldAllowed() const
+{
+    return FusionConfig::self().snapHold() && windowSnappable();
+}
+
+bool Decoration::snapHoverAllowed() const
+{
+    // Tablet mode: hold only (TABLET.md 4.9); a finger never hovers, and a pen resting over the
+    // button must not open the flyout by itself.
+    return FusionConfig::self().snapHover() && !m_tablet && windowSnappable();
+}
+
+QFont Decoration::titleFont() const
+{
+    // spec 2: the system window-title font (kdeglobals [WM] activeFont, Manrope 10.5 pt 800 =
+    // 14 px); tablet mode 15 px (TABLET.md 4.9)
+    QFont font = settings()->font();
+    const qreal scale = m_metrics.fontScale;
+    if (!qFuzzyCompare(scale, 1.0)) {
+        if (font.pixelSize() > 0) {
+            font.setPixelSize(int(std::lround(font.pixelSize() * scale)));
+        } else if (font.pointSizeF() > 0) {
+            font.setPointSizeF(font.pointSizeF() * scale);
+        }
     }
+    return font;
+}
+
+bool Decoration::windowSnappable() const
+{
     const auto *w = window();
     // The script's flyout acts on the active, normal, movable and resizable window only.
     if (!w->isActive() || !w->isMaximizeable() || !w->isMoveable() || !w->isResizeable()) {
@@ -163,7 +202,21 @@ bool Decoration::init()
     FusionConfig::reload();
     m_style = FusionConfig::self().buttonStyle;
     m_activeProgress = window()->isActive() ? 1 : 0;
-    m_buttonsOpacity = m_style == ButtonStyle::ShowOnHover ? 0 : 1;
+    TabletMode *tabletMode = TabletMode::self();
+    m_tablet = tabletMode->isTablet();
+    connect(tabletMode, &TabletMode::tabletChanged, this, &Decoration::onTabletChanged);
+    m_buttonsOpacity = (m_style == ButtonStyle::ShowOnHover && !m_tablet) ? 0 : 1;
+    // The window's screen (KWin::Window.output, a KWin::LogicalOutput): short screens get 40 px
+    // title bars. Only KWin has it; elsewhere (settings-page preview) the height stays unknown.
+    updateOutput();
+    if (const QObject *owner = parent()) {
+        const QMetaObject *mo = owner->metaObject();
+        const int property = mo->indexOfProperty("output");
+        const int slot = metaObject()->indexOfSlot("updateOutput()");
+        if (property >= 0 && slot >= 0 && mo->property(property).hasNotifySignal()) {
+            connect(owner, mo->property(property).notifySignal(), this, metaObject()->method(slot));
+        }
+    }
 
     m_activeAnimation = makeAnimation(this, &m_activeProgress, [this] {
         update();
@@ -231,9 +284,64 @@ bool Decoration::init()
     createButtons();
     updateShadow();
     qCDebug(PFDECO) << "decoration for" << (parent() ? parent()->metaObject()->className() : "no parent") << window()->caption() << "tool" << isToolWindow()
-                    << "normal" << windowProperty("normalWindow") << "style" << int(m_style) << "snap" << FusionConfig::self().snapTrigger() << "scale"
-                    << window()->nextScale() << "title" << m_metrics.titleHeight;
+                    << "normal" << windowProperty("normalWindow") << "style" << int(m_style) << "snap hold" << FusionConfig::self().snapHold() << "hover"
+                    << FusionConfig::self().snapHover() << "scale" << window()->nextScale() << "tablet" << m_tablet << "screen height" << m_screenHeight
+                    << "title" << m_metrics.titleHeight;
+    m_ready = true;
     return true;
+}
+
+void Decoration::onTabletChanged(bool tablet)
+{
+    if (tablet == m_tablet) {
+        return;
+    }
+    m_tablet = tablet;
+    updateButtonsVisibility(false);
+    updateState(); // title bar height: KWin sends the window a configure
+    updateShadow();
+    layoutButtons();
+    update();
+}
+
+void Decoration::updateOutput()
+{
+    QObject *output = windowProperty("output").value<QObject *>();
+    if (output != m_output.data()) {
+        disconnect(m_outputConnection);
+        m_outputConnection = {};
+        m_output = output;
+        if (output) {
+            const QMetaObject *mo = output->metaObject();
+            const int property = mo->indexOfProperty("geometry");
+            const int slot = metaObject()->indexOfSlot("updateOutputGeometry()");
+            if (property >= 0 && slot >= 0 && mo->property(property).hasNotifySignal()) {
+                m_outputConnection = connect(output, mo->property(property).notifySignal(), this, metaObject()->method(slot));
+            }
+        }
+    }
+    updateOutputGeometry();
+}
+
+void Decoration::updateOutputGeometry()
+{
+    const bool wasShort = isShortScreen();
+    qreal height = 0;
+    if (m_output) {
+        // KWin::Rect; KWin's scripting registers its conversion to QRect at workspace start
+        const QVariant geometry = m_output->property("geometry");
+        if (geometry.canConvert<QRect>()) {
+            height = geometry.value<QRect>().height();
+        } else if (geometry.canConvert<QRectF>()) {
+            height = geometry.value<QRectF>().height();
+        }
+    }
+    m_screenHeight = height;
+    if (isShortScreen() != wasShort && m_ready) {
+        updateState();
+        updateShadow();
+        layoutButtons();
+    }
 }
 
 void Decoration::reconfigure()
@@ -242,8 +350,7 @@ void Decoration::reconfigure()
     const ButtonStyle style = FusionConfig::self().buttonStyle;
     if (style != m_style) {
         m_style = style;
-        m_buttonsAnimation->stop();
-        m_buttonsOpacity = (m_style != ButtonStyle::ShowOnHover || m_pointerOverTitle) ? 1 : 0;
+        updateButtonsVisibility(false);
         m_groupAnimation->stop();
         m_groupHover = 0;
         m_groupHovered = false;
@@ -332,7 +439,25 @@ void Decoration::computeMetrics()
 {
     Metrics m;
     const bool maximized = isMaximizedFully();
-    if (isToolWindow()) {
+    if (m_tablet) {
+        // TABLET.md 4.9 touch title bar: 52 px (44 maximized), 36 px circles 8 apart and 8 from
+        // the edge, so every button's hit area is 44 px wide and at least 44 high; 28 px icon,
+        // 15 px title, 16 px glyphs. Tool windows and short screens also get 44 (TABLET.md says
+        // 40 for tool windows, which cannot hold a 44 px hit area).
+        m.titleHeight = (maximized || isToolWindow() || isShortScreen()) ? 44 : 52;
+        m.centerY = m.titleHeight / 2;
+        m.circle = 36;
+        m.gap = 8;
+        m.sideMargin = 8;
+        m.iconSize = 28;
+        m.glyph = 16;
+        m.dot = 36;
+        m.dotGap = 8;
+        m.dotMargin = 8;
+        m.dotGlyph = 16;
+        m.minHit = 44;
+        m.fontScale = 15.0 / 14.0;
+    } else if (isToolWindow()) {
         // spec 7: 32 px title bar for tool windows; buttons scaled down with it
         m.titleHeight = 32;
         m.centerY = 16;
@@ -343,14 +468,19 @@ void Decoration::computeMetrics()
         m.iconMargin = 9;
         m.titleGap = 8;
         m.glyph = 10;
-    } else if (maximized) {
-        // spec 7: 40 px maximized
+    } else if (maximized || isShortScreen()) {
+        // spec 7: 40 px maximized; ADAPTIVE.md 5.12: 40 px on screens under 800 px high
         m.titleHeight = 40;
         m.centerY = 20;
     }
-    m.titleHeight = snap(m.titleHeight);
+    // Tablet sizes are minimums (44 px hit areas): round up to the device grid, not to the nearest.
+    m.titleHeight = m_tablet ? snapUp(m.titleHeight) : snap(m.titleHeight);
     m.radius = snap(13);
-    m.outline = std::max(devicePixel(), snap(1));
+    // The 1 px light edge as a Plasma Fusion hairline (FusionMetrics): 1 device px up to 1.5, 2 from
+    // 1.75. Rounding 1 px to the grid gave 2 device px at 1.5 (an edge a third heavier than the
+    // shell's hairlines, and an outline outer radius of 14.67 instead of 14).
+    const qreal scale = window()->nextScale();
+    m.outline = scale > 0 ? std::max(1.0, std::floor(scale + 0.25)) / scale : 1.0;
     m_metrics = m;
 }
 
@@ -504,7 +634,8 @@ void Decoration::layoutButtons()
                 continue;
             }
             const QRectF visual(x, m.centerY - m.dot / 2, m.dot, m.dot);
-            QRectF hit(x - m.dotGap / 2, 0, m.dot + m.dotGap, height);
+            const qreal hitWidth = std::max(m.dot + m.dotGap, m.minHit);
+            QRectF hit(visual.center().x() - hitWidth / 2, 0, hitWidth, height);
             if (!any && maximized) {
                 hit.setLeft(0);
             }
@@ -515,12 +646,18 @@ void Decoration::layoutButtons()
         }
         m_captionLeft = any ? x - m.dotGap + m.titleGap : m.iconMargin;
         m_captionRight = width - m.sideMargin;
+        logLayout();
         update(titleBar());
         return;
     }
 
     // Left group: app icon 26 px 16 px from the left (spec 1), circles 10 px from the edge.
+    // Hit areas never overlap: KDecoration gives a press to the first hovered button, so in an
+    // overlap the wrong one would act. A hit area widened beyond circle + gap (tablet mode: the
+    // 28 px app icon's grows to 44) moves its neighbour over instead (laptop values are unchanged:
+    // there every hit area is exactly circle + gap and they only touch).
     qreal x = 0;
+    qreal hitEnd = 0;
     bool first = true;
     for (const auto &b : std::as_const(m_left)) {
         if (!b || !b->isVisible()) {
@@ -528,21 +665,24 @@ void Decoration::layoutButtons()
         }
         const bool icon = b->type() == DecorationButtonType::Menu;
         const qreal size = icon ? m.iconSize : m.circle;
-        x = first ? (icon ? m.iconMargin : m.sideMargin) : x + m.gap;
+        const qreal hitWidth = std::max(size + m.gap, m.minHit);
+        x = first ? (icon ? m.iconMargin : m.sideMargin) : std::max(x + m.gap, hitEnd + (hitWidth - size) / 2);
         const QRectF visual(x, m.centerY - size / 2, size, size);
-        QRectF hit(x - m.gap / 2, 0, size + m.gap, height);
+        QRectF hit(visual.center().x() - hitWidth / 2, 0, hitWidth, height);
         if (first && maximized) {
             hit.setLeft(0); // Fitts: the screen corner hits the first button
         }
         b->setGeometry(hit);
         b->setVisualRect(visual);
         x += size;
+        hitEnd = hit.right();
         first = false;
     }
     m_captionLeft = first ? m.iconMargin : x + m.titleGap;
 
     // Right group: 28 px circles 6 px apart, 10 px from the right (spec 3).
     qreal rx = width;
+    qreal hitStart = width;
     first = true;
     for (auto it = m_right.crbegin(); it != m_right.crend(); ++it) {
         const auto &b = *it;
@@ -551,19 +691,51 @@ void Decoration::layoutButtons()
         }
         const bool icon = b->type() == DecorationButtonType::Menu;
         const qreal size = icon ? m.iconSize : m.circle;
-        rx = first ? width - m.sideMargin : rx - m.gap;
+        const qreal hitWidth = std::max(size + m.gap, m.minHit);
+        rx = first ? width - m.sideMargin : std::min(rx - m.gap, hitStart - (hitWidth - size) / 2);
         const QRectF visual(rx - size, m.centerY - size / 2, size, size);
-        QRectF hit(rx - size - m.gap / 2, 0, size + m.gap, height);
+        QRectF hit(visual.center().x() - hitWidth / 2, 0, hitWidth, height);
         if (first && maximized) {
             hit.setRight(width);
         }
         b->setGeometry(hit);
         b->setVisualRect(visual);
         rx -= size;
+        hitStart = hit.left();
         first = false;
     }
     m_captionRight = first ? width - m.iconMargin : rx - m.titleGap;
+    logLayout();
     update(titleBar());
+}
+
+void Decoration::logLayout()
+{
+    // Debug output for the session tests (hit areas in tablet mode): one line per change.
+    if (!PFDECO().isDebugEnabled()) {
+        return;
+    }
+    QString line = QStringLiteral("tablet=%1 short=%2 title=%3").arg(int(m_tablet)).arg(int(isShortScreen())).arg(m_metrics.titleHeight);
+    for (const auto &list : {std::cref(m_left), std::cref(m_right)}) {
+        for (const auto &b : list.get()) {
+            if (b && b->isVisible()) {
+                const QRectF g = b->geometry();
+                const QRectF v = b->visualRect();
+                line += QStringLiteral(" %1:hit=%2,%3,%4x%5/vis=%6x%7")
+                            .arg(int(b->type()))
+                            .arg(g.x(), 0, 'f', 2)
+                            .arg(g.y(), 0, 'f', 2)
+                            .arg(g.width(), 0, 'f', 2)
+                            .arg(g.height(), 0, 'f', 2)
+                            .arg(v.width(), 0, 'f', 2)
+                            .arg(v.height(), 0, 'f', 2);
+            }
+        }
+    }
+    if (line != m_lastLayoutLog) {
+        m_lastLayoutLog = line;
+        qCDebug(PFDECO).noquote() << "layout" << window()->caption() << line;
+    }
 }
 
 void Decoration::buttonHoverChanged()
@@ -601,19 +773,24 @@ void Decoration::setPointerOverTitle(bool over)
         return;
     }
     m_pointerOverTitle = over;
-    if (m_style != ButtonStyle::ShowOnHover) {
-        return;
-    }
+    updateButtonsVisibility(true);
+}
+
+void Decoration::updateButtonsVisibility(bool animate)
+{
+    // ShowOnHover: buttons fade in while the pointer is over the title bar; always visible in
+    // tablet mode (TABLET.md 4.9: nothing may depend on hover alone).
+    const qreal target = (m_style != ButtonStyle::ShowOnHover || m_tablet || m_pointerOverTitle) ? 1 : 0;
     m_buttonsAnimation->stop();
-    const int duration = animationDuration(s_buttonsDuration);
-    if (duration <= 0) {
-        m_buttonsOpacity = over ? 1 : 0;
+    const int duration = animate ? animationDuration(s_buttonsDuration) : 0;
+    if (duration <= 0 || qFuzzyCompare(m_buttonsOpacity, target)) {
+        m_buttonsOpacity = target;
         update(titleBar());
         return;
     }
     m_buttonsAnimation->setDuration(duration);
     m_buttonsAnimation->setStartValue(m_buttonsOpacity);
-    m_buttonsAnimation->setEndValue(over ? 1.0 : 0.0);
+    m_buttonsAnimation->setEndValue(target);
     m_buttonsAnimation->start();
 }
 
@@ -682,9 +859,10 @@ void Decoration::paintCaption(QPainter *painter) const
     if (right - left < 4) {
         return;
     }
-    // spec 2: 14 px extra bold (the system window-title font, kdeglobals [WM] activeFont), left
-    // aligned, fading to the inactive colour (Colors.dc.html #8891aa) on inactive windows.
-    const QFont font = settings()->font();
+    // spec 2: 14 px extra bold (the system window-title font, kdeglobals [WM] activeFont; 15 px in
+    // tablet mode), left aligned, fading to the inactive colour (Colors.dc.html #8891aa) on
+    // inactive windows.
+    const QFont font = titleFont();
     const QFontMetricsF fm(font);
     painter->save();
     painter->setFont(font);

@@ -10,6 +10,7 @@
 #include <KDecoration3/Decoration>
 #include <KDecoration3/DecorationButton>
 
+#include <QFont>
 #include <QList>
 #include <QPointer>
 #include <QVariant>
@@ -22,6 +23,7 @@ namespace PlasmaFusion
 class Button;
 
 // Title-bar geometry for the current window state (logical px, snapped to the device grid).
+// Laptop values from the boards; tablet values from TABLET.md 4.9 (touch title bars).
 struct Metrics {
     qreal titleHeight = 50; // Windows.dc.html spec 7: 50, 40 maximized, 32 tool windows
     qreal centerY = 24.5; // button / icon / caption centre (the board's 49 px row above its 1 px line)
@@ -39,6 +41,8 @@ struct Metrics {
     qreal dotGlyph = 9;
     qreal radius = 13; // frame corner radius; the 1 px outline makes it 14 outside (spec 4)
     qreal outline = 1;
+    qreal minHit = 0; // smallest hit-area width of any button (tablet mode: 44)
+    qreal fontScale = 1; // title font relative to the system window-title font (tablet: 15 / 14)
 };
 
 class Decoration : public KDecoration3::Decoration
@@ -78,8 +82,20 @@ public:
     }
     int animationDuration(int base) const;
     bool isToolWindow() const;
-    bool snapTriggerAllowed() const;
+    // KWin's TabletModeManager reports tablet mode: touch-sized title bars (TABLET.md 4.9)
+    bool isTablet() const
+    {
+        return m_tablet;
+    }
+    // the window's screen is under 800 logical px high: 40 px title bars (ADAPTIVE.md 5.12)
+    bool isShortScreen() const;
+    // Snap-layouts trigger on maximize: hold whenever the script is on, hover only with
+    // SnapLayoutsOnHover=true and never in tablet mode.
+    bool snapHoldAllowed() const;
+    bool snapHoverAllowed() const;
+    QFont titleFont() const;
     qreal snap(qreal value) const; // round to the device pixel grid of the next scale
+    qreal snapUp(qreal value) const; // the same, rounding up
     qreal devicePixel() const;
 
     void buttonHoverChanged();
@@ -108,8 +124,14 @@ private Q_SLOTS:
     void layoutButtons();
     void updateShadow();
     void onActiveChanged();
+    void onTabletChanged(bool tablet);
+    void updateOutput();
+    void updateOutputGeometry();
 
 private:
+    bool windowSnappable() const;
+    void updateButtonsVisibility(bool animate);
+    void logLayout();
     bool isMaximizedFully() const;
     bool tiledEdges(Qt::Edges *edges) const; // tiled or maximized in one direction; edges on the screen border
     void cornerFlags(bool &tl, bool &tr, bool &br, bool &bl) const;
@@ -136,6 +158,12 @@ private:
     bool m_snapHoverFired = false;
     qreal m_captionLeft = 0;
     qreal m_captionRight = 0;
+    bool m_tablet = false;
+    QPointer<QObject> m_output; // the KWin::LogicalOutput the window is on (KWin only)
+    QMetaObject::Connection m_outputConnection;
+    qreal m_screenHeight = 0; // logical px; 0 = unknown (settings-page preview)
+    bool m_ready = false; // init() done: later changes re-layout
+    QString m_lastLayoutLog;
 };
 
 } // namespace PlasmaFusion

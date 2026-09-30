@@ -7,7 +7,7 @@
 
 Name:           plasma-fusion-decoration
 Version:        1.0
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        Plasma Fusion window decoration for KWin
 
 License:        GPL-2.0-or-later
@@ -37,9 +37,11 @@ The Plasma Fusion window decoration: a 50 px title bar with the app icon and
 a left-aligned title, 28 px round buttons (minimize, maximize, close, and
 the other KWin buttons in the same style), 14 px rounded corners with the
 window content clipped, a 1 px light edge and soft shadows. Square corners
-and no shadow when maximized, square inner corners when tiled. Button
-layouts and the snap-layouts trigger on the maximize button are read from
-~/.config/plasmafusionrc [Decoration].
+and no shadow when maximized, square inner corners when tiled. In tablet
+mode the title bar and its buttons grow to touch size (44 px hit areas);
+screens under 800 px high get 40 px title bars. Button layouts and the
+snap-layouts trigger on the maximize button (hold, or also hover) are read
+from ~/.config/plasmafusionrc [Decoration].
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -56,6 +58,15 @@ layouts and the snap-layouts trigger on the maximize button are read from
 %{_qt6_plugindir}/org.kde.kdecoration3/org.plasmafusion.decoration.so
 
 %changelog
+* Wed Sep 30 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0-3
+- Snap layouts open on hold by default; SnapLayoutsOnHover=true adds hover
+- Touch-sized title bars while KWin reports tablet mode, updated live
+- 40 px title bars on screens under 800 px high
+- Tooltip "Maximize · hold for snap layouts" on English desktops
+- A press that slides off maximize no longer opens the snap layouts
+- Tablet hit areas never overlap a neighbouring button
+- The light window edge is one device pixel at 150 %, like the shell's hairlines
+
 * Tue Sep 29 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0-2
 - Read the animation speed from the cascaded kdeglobals, as KWin does
 - Source formatting (KDE clang-format); package description wrapped for rpmlint

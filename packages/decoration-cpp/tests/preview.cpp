@@ -9,7 +9,9 @@
     window states, hover and press events, and composites what KWin would show (shadow nine-patch,
     client area clipped with the border radius, decoration image, outline) into PNG files at the
     given scales. It also checks the snap-layouts trigger against a fake kglobalaccel D-Bus service
-    when a session bus is available (run it under dbus-run-session).
+    and the tablet-mode title bars against a fake org.kde.KWin.TabletModeManager when a session bus
+    is available (run it under dbus-run-session), the 40 px title bar on short screens through a
+    fake KWin output, and the shadow at 200 % against an exact Gaussian rendered at 2x.
 
       pfdeco-preview --out DIR --scheme FILE.colors --name dark [--fonts DIR] [--backdrop PNG]
                      [--frame X,Y,W,H] [--scales 1,1.3333333]
@@ -36,6 +38,7 @@
 
 #include <QCommandLineParser>
 #include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDir>
 #include <QEventLoop>
 #include <QFileInfo>
@@ -52,6 +55,7 @@
 #include <QTextStream>
 #include <QTimer>
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -103,6 +107,7 @@ struct WindowState {
     int close = 0;
     int minimize = 0;
     int menu = 0;
+    QString toolTip;
 };
 
 class MockWindow : public DecoratedWindowPrivateV4
@@ -221,8 +226,9 @@ public:
     {
         return st->scale;
     }
-    void requestShowToolTip(const QString &) override
+    void requestShowToolTip(const QString &text) override
     {
+        st->toolTip = text;
     }
     void requestHideToolTip() override
     {
@@ -379,6 +385,48 @@ public:
 
 } // namespace
 
+// KWin's TabletModeManager stand-in on /org/kde/KWin (service org.kde.KWin): a property the
+// decoration reads with an asynchronous Properties.Get and a signal it follows.
+class FakeTabletMode : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.kde.KWin.TabletModeManager")
+    Q_PROPERTY(bool tabletMode READ tabletMode NOTIFY tabletModeChanged)
+public:
+    bool mode = false;
+    bool tabletMode() const
+    {
+        return mode;
+    }
+    void set(bool tablet)
+    {
+        mode = tablet;
+        Q_EMIT tabletModeChanged(tablet);
+    }
+Q_SIGNALS:
+    void tabletModeChanged(bool tabletMode);
+};
+
+// KWin::LogicalOutput stand-in: the window's screen (window.output.geometry, logical px).
+class FakeOutput : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(QRect geometry READ geometry NOTIFY geometryChanged)
+public:
+    QRect rect;
+    QRect geometry() const
+    {
+        return rect;
+    }
+    void setGeometry(const QRect &r)
+    {
+        rect = r;
+        Q_EMIT geometryChanged();
+    }
+Q_SIGNALS:
+    void geometryChanged();
+};
+
 // kglobalaccel stand-in: counts invokeShortcut calls on /component/kwin.
 class FakeAccel : public QObject
 {
@@ -502,17 +550,178 @@ void composite(QPainter &p, Decoration *deco, const QPointF &pos, const QColor &
     }
 }
 
-void writeConfig(const QString &style, bool snapOnHover, bool snapScript)
+// snapOnHover: 1 / 0 writes true / false, -1 leaves the key out (the contract's default)
+void writeConfig(const QString &style, int snapOnHover, bool snapScript)
 {
     KConfig fusion(QStringLiteral("plasmafusionrc"), KConfig::NoGlobals);
     KConfigGroup deco(&fusion, QStringLiteral("Decoration"));
     deco.writeEntry("ButtonStyle", style);
-    deco.writeEntry("SnapLayoutsOnHover", snapOnHover);
+    if (snapOnHover < 0) {
+        deco.deleteEntry("SnapLayoutsOnHover");
+    } else {
+        deco.writeEntry("SnapLayoutsOnHover", snapOnHover == 1);
+    }
     fusion.sync();
     KConfig kwin(QStringLiteral("kwinrc"), KConfig::NoGlobals);
     KConfigGroup plugins(&kwin, QStringLiteral("Plugins"));
     plugins.writeEntry("plasmafusion-snapEnabled", snapScript);
     kwin.sync();
+}
+
+// --- the shadow at 200 % -------------------------------------------------------------------
+
+bool insideRoundedRect(qreal x, qreal y, const QRectF &r, qreal radius)
+{
+    if (!r.contains(x, y)) {
+        return false;
+    }
+    const qreal cx = std::clamp(x, r.left() + radius, r.right() - radius);
+    const qreal cy = std::clamp(y, r.top() + radius, r.bottom() - radius);
+    return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= radius * radius;
+}
+
+// Exact CSS box-shadow alpha at `scale` device px per image px: the rounded shape (antialiased),
+// blurred with a true Gaussian of sigma * scale (separable, 4 sigma reach), times the opacity.
+std::vector<float> exactShadow(int w, int h, const QRectF &shape, qreal radius, qreal sigma, qreal opacity)
+{
+    QImage mask(w, h, QImage::Format_Alpha8);
+    mask.fill(0);
+    {
+        QPainter p(&mask);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(Qt::black);
+        QPainterPath path;
+        path.addRoundedRect(shape, radius, radius);
+        p.drawPath(path);
+    }
+    const int reach = int(std::ceil(4 * sigma));
+    std::vector<float> kernel(2 * reach + 1);
+    double sum = 0;
+    for (int i = -reach; i <= reach; ++i) {
+        kernel[i + reach] = float(std::exp(-0.5 * (i / sigma) * (i / sigma)));
+        sum += kernel[i + reach];
+    }
+    for (auto &k : kernel) {
+        k = float(k / sum);
+    }
+    std::vector<float> a(size_t(w) * h), b(size_t(w) * h, 0.f);
+    for (int y = 0; y < h; ++y) {
+        const uchar *line = mask.constScanLine(y);
+        for (int x = 0; x < w; ++x) {
+            a[size_t(y) * w + x] = line[x] / 255.f;
+        }
+    }
+    for (int y = 0; y < h; ++y) {
+        const float *src = a.data() + size_t(y) * w;
+        float *dst = b.data() + size_t(y) * w;
+        for (int x = 0; x < w; ++x) {
+            float acc = 0;
+            const int lo = std::max(0, x - reach), hi = std::min(w - 1, x + reach);
+            for (int i = lo; i <= hi; ++i) {
+                acc += src[i] * kernel[i - x + reach];
+            }
+            dst[x] = acc;
+        }
+    }
+    std::vector<float> col(h);
+    for (int x = 0; x < w; ++x) {
+        for (int y = 0; y < h; ++y) {
+            col[y] = b[size_t(y) * w + x];
+        }
+        for (int y = 0; y < h; ++y) {
+            float acc = 0;
+            const int lo = std::max(0, y - reach), hi = std::min(h - 1, y + reach);
+            for (int i = lo; i <= hi; ++i) {
+                acc += col[i] * kernel[i - y + reach];
+            }
+            a[size_t(y) * w + x] = float(acc * opacity);
+        }
+    }
+    return a;
+}
+
+// KWin's GL_LINEAR sampling of a 1x image at `scale` device px per image px (texel centres).
+float sampleLinear(const std::vector<float> &img, int w, int h, qreal dx, qreal dy, qreal scale)
+{
+    const qreal u = std::clamp((dx + 0.5) / scale - 0.5, 0.0, qreal(w - 1));
+    const qreal v = std::clamp((dy + 0.5) / scale - 0.5, 0.0, qreal(h - 1));
+    const int x0 = int(std::floor(u)), y0 = int(std::floor(v));
+    const int x1 = std::min(x0 + 1, w - 1), y1 = std::min(y0 + 1, h - 1);
+    const qreal fx = u - x0, fy = v - y0;
+    auto at = [&](int x, int y) {
+        return qreal(img[size_t(y) * w + x]);
+    };
+    return float((at(x0, y0) * (1 - fx) + at(x1, y0) * fx) * (1 - fy) + (at(x0, y1) * (1 - fx) + at(x1, y1) * fx) * fy);
+}
+
+struct ShadowCheck {
+    qreal at1x = 1; // plugin image vs exact, at 1x
+    qreal upscale = 1; // exact 1x sampled at 2x vs exact 2x: what the missing @2x image costs
+    qreal total = 1; // plugin image sampled at 2x vs exact 2x: what a 200 % screen shows
+};
+
+ShadowCheck checkShadowAt2x(const QImage &plugin, const QMarginsF &pad, qreal opacity, const QString &prefix)
+{
+    // Geometry of the plugin's image (shadow.cpp): frame box x box at (ext, ext - dy), shape =
+    // frame grown by the 1 px outline (outer radius 14), moved down by dy; sigma = 90 / 2.
+    const int w = plugin.width(), h = plugin.height();
+    const qreal ext = pad.left();
+    const qreal dy = pad.bottom() - pad.left();
+    const qreal box = w - 2 * ext;
+    const QRectF frame(ext, ext - dy, box, box);
+    const QRectF grown = frame.adjusted(-1, -1, 1, 1);
+    const qreal radius = 14, sigma = 45;
+    std::vector<float> pluginAlpha(size_t(w) * h);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            pluginAlpha[size_t(y) * w + x] = qAlpha(plugin.pixel(x, y)) / 255.f;
+        }
+    }
+    ShadowCheck r;
+    const std::vector<float> ref1 = exactShadow(w, h, grown.translated(0, dy), radius, sigma, opacity);
+    r.at1x = 0;
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            if (!insideRoundedRect(x + 0.5, y + 0.5, grown, radius)) {
+                r.at1x = std::max(r.at1x, qreal(std::abs(pluginAlpha[size_t(y) * w + x] - ref1[size_t(y) * w + x])));
+            }
+        }
+    }
+    const qreal k = 2;
+    const int W = int(w * k), H = int(h * k);
+    const QRectF grown2(grown.x() * k, grown.y() * k, grown.width() * k, grown.height() * k);
+    const std::vector<float> ref2 = exactShadow(W, H, grown2.translated(0, dy * k), radius * k, sigma * k, opacity);
+    r.upscale = 0;
+    r.total = 0;
+    // evidence: the bottom-left corner at 200 %, 2x zoom: KWin's sampling of the plugin image,
+    // the exact 2x Gaussian, and their difference x 50
+    const QRect crop(0, int((frame.bottom() - 60) * k), int((ext + 80) * k), int((h - frame.bottom() + 60) * k));
+    QImage sheet(crop.width() * 3, crop.height(), QImage::Format_RGB32);
+    sheet.fill(Qt::white);
+    for (int Y = 0; Y < H; ++Y) {
+        for (int X = 0; X < W; ++X) {
+            const bool outside = !insideRoundedRect((X + 0.5) / k, (Y + 0.5) / k, grown, radius);
+            const float exact = ref2[size_t(Y) * W + X];
+            const float kwin = sampleLinear(pluginAlpha, w, h, X, Y, k);
+            if (outside) {
+                r.upscale = std::max(r.upscale, qreal(std::abs(sampleLinear(ref1, w, h, X, Y, k) - exact)));
+                r.total = std::max(r.total, qreal(std::abs(kwin - exact)));
+            }
+            if (crop.contains(X, Y)) {
+                const int cx = X - crop.x(), cy = Y - crop.y();
+                auto grey = [](float a) {
+                    const int v = std::clamp(int(std::lround(255 * (1 - a))), 0, 255);
+                    return qRgb(v, v, v);
+                };
+                sheet.setPixel(cx, cy, outside ? grey(kwin) : qRgb(40, 60, 120));
+                sheet.setPixel(cx + crop.width(), cy, outside ? grey(exact) : qRgb(40, 60, 120));
+                sheet.setPixel(cx + 2 * crop.width(), cy, outside ? grey(std::min(1.f, 50 * std::abs(kwin - exact))) : qRgb(40, 60, 120));
+            }
+        }
+    }
+    sheet.scaled(sheet.size() * 2, Qt::IgnoreAspectRatio, Qt::FastTransformation).save(prefix + QStringLiteral("-shadow-200pct-corner-2x.png"));
+    return r;
 }
 
 struct Harness {
@@ -535,7 +744,7 @@ struct Harness {
         std::unique_ptr<WindowState> state;
     };
 
-    Instance create(std::unique_ptr<WindowState> state, bool tool = false, const QRectF &tile = QRectF())
+    Instance create(std::unique_ptr<WindowState> state, bool tool = false, const QRectF &tile = QRectF(), QObject *output = nullptr)
     {
         Instance in;
         in.state = std::move(state);
@@ -553,6 +762,10 @@ struct Harness {
             auto *t = new QObject(in.owner.get());
             t->setProperty("relativeGeometry", tile);
             in.owner->setProperty("tile", QVariant::fromValue<QObject *>(t));
+        }
+        if (output) {
+            // KWin's window.output (a KWin::LogicalOutput with a geometry property)
+            in.owner->setProperty("output", QVariant::fromValue<QObject *>(output));
         }
         bridge.next = in.state.get();
         const QVariantMap args{{QStringLiteral("bridge"), QVariant::fromValue(static_cast<DecorationBridge *>(&bridge))}};
@@ -629,8 +842,58 @@ struct Harness {
         }
         composite(p, deco, where.topLeft(), clientColor);
         p.end();
-        const QString file = QStringLiteral("%1/%2-%3-s%4.png").arg(outDir, name, scene, scale == 1 ? QStringLiteral("1") : QStringLiteral("4-3"));
+        const QString file = QStringLiteral("%1/%2-%3-s%4.png").arg(outDir, name, scene, scaleLabel(scale));
         canvas.save(file);
+    }
+
+    static QString scaleLabel(qreal scale)
+    {
+        if (qFuzzyCompare(scale, 1.0)) {
+            return QStringLiteral("1");
+        }
+        if (std::abs(scale - 4.0 / 3.0) < 0.001) {
+            return QStringLiteral("4-3");
+        }
+        return QString::number(scale).replace(QLatin1Char('.'), QLatin1Char('_'));
+    }
+
+    // The visible buttons: hit areas (geometry) by type.
+    QList<DecorationButton *> visibleButtons(Decoration *deco)
+    {
+        QList<DecorationButton *> list;
+        for (auto *b : deco->findChildren<DecorationButton *>()) {
+            if (b->isVisible() && b->type() != DecorationButtonType::Spacer) {
+                list << b;
+            }
+        }
+        return list;
+    }
+    QRectF hitOf(Decoration *deco, DecorationButtonType type)
+    {
+        for (auto *b : visibleButtons(deco)) {
+            if (b->type() == type) {
+                return b->geometry();
+            }
+        }
+        return QRectF();
+    }
+    qreal smallestHit(Decoration *deco, bool height)
+    {
+        qreal smallest = 1e9;
+        for (auto *b : visibleButtons(deco)) {
+            smallest = std::min(smallest, height ? b->geometry().height() : b->geometry().width());
+        }
+        return smallest;
+    }
+    QImage paintTitle(Decoration *deco, qreal scale = 1)
+    {
+        const QSizeF size(deco->size().width(), deco->borderTop());
+        QImage img((size * scale).toSize(), QImage::Format_ARGB32_Premultiplied);
+        img.setDevicePixelRatio(scale);
+        img.fill(Qt::transparent);
+        QPainter p(&img);
+        deco->paint(&p, QRectF(QPointF(0, 0), size));
+        return img;
     }
 
     void check(bool ok, const QString &what)
@@ -719,6 +982,18 @@ int main(int argc, char **argv)
         }
     }
     out() << "fake kglobalaccel on the session bus: " << (dbus ? "yes" : "no (snap checks skipped)") << "\n";
+    FakeTabletMode fakeTablet;
+    bool tabletDbus = false;
+    {
+        QDBusConnection bus = QDBusConnection::sessionBus();
+        if (bus.isConnected() && bus.registerService(QStringLiteral("org.kde.KWin"))
+            && bus.registerObject(QStringLiteral("/org/kde/KWin"),
+                                  &fakeTablet,
+                                  QDBusConnection::ExportAllProperties | QDBusConnection::ExportAllSignals | QDBusConnection::ExportAllSlots)) {
+            tabletDbus = true;
+        }
+    }
+    out() << "fake KWin TabletModeManager on the session bus: " << (tabletDbus ? "yes" : "no (tablet checks skipped)") << "\n";
 
     QList<qreal> scales;
     for (const QString &s : parser.value(QStringLiteral("scales")).split(QLatin1Char(','))) {
@@ -732,6 +1007,28 @@ int main(int argc, char **argv)
         st->scale = scale;
         return st;
     };
+
+    // Tablet mode at start (the first decoration of the process creates the watcher): the value
+    // comes from an asynchronous Properties.Get, so KWin started in tablet mode is not missed
+    // (TABLET.md F3); later changes come from the signal.
+    if (tabletDbus) {
+        writeConfig(QStringLiteral("RightGlyphs"), -1, true);
+        wait(5);
+        fakeTablet.mode = true; // no signal: only the Get can see it
+        auto in = h.create(base(1));
+        if (in.deco) {
+            const qreal before = in.deco->borderTop();
+            wait(400);
+            const qreal after = in.deco->borderTop();
+            h.check(std::abs(after - 52) <= 0.01,
+                    QStringLiteral("tablet mode at start read with an asynchronous Properties.Get: title bar %1 -> %2 (52)").arg(before).arg(after));
+            fakeTablet.set(false);
+            wait(200);
+            h.check(std::abs(in.deco->borderTop() - 50) <= 0.01,
+                    QStringLiteral("tabletModeChanged(false) signal: title bar back to %1").arg(in.deco->borderTop()));
+            h.destroy(in);
+        }
+    }
 
     for (qreal scale : scales) {
         using Setup = std::function<void(WindowState &)>;
@@ -1154,9 +1451,9 @@ int main(int argc, char **argv)
                     h.destroy(inactive);
                 }
             }
-            // SnapLayoutsOnHover=false or the script disabled: plain maximize
-            for (const auto &cfg : {std::pair<bool, bool>{false, true}, std::pair<bool, bool>{true, false}}) {
-                writeConfig(QStringLiteral("RightGlyphs"), cfg.first, cfg.second);
+            // The script disabled: no flyout at all, so hold and release maximize as usual.
+            for (int hoverKey : {1, 0, -1}) {
+                writeConfig(QStringLiteral("RightGlyphs"), hoverKey, false);
                 wait(5);
                 auto off = h.create(base(scale));
                 if (off.deco) {
@@ -1167,10 +1464,69 @@ int main(int argc, char **argv)
                     wait(800);
                     h.release(off.deco, c);
                     wait(100);
-                    h.check(accel.count == 0 && off.state->toggleMaximize == 1,
-                            QStringLiteral("SnapLayoutsOnHover=%1 script=%2: hold does nothing special, release maximizes")
-                                .arg(cfg.first ? QStringLiteral("true") : QStringLiteral("false"), cfg.second ? QStringLiteral("on") : QStringLiteral("off")));
+                    h.check(accel.count == 0 && off.state->toggleMaximize == 1 && !off.state->toolTip.contains(QLatin1String("hold")),
+                            QStringLiteral("script off (SnapLayoutsOnHover=%1): hold does nothing special, release maximizes, plain tooltip '%2'")
+                                .arg(hoverKey)
+                                .arg(off.state->toolTip));
                     h.destroy(off);
+                }
+            }
+            // Contract default (owner decision 4, hold): SnapLayoutsOnHover absent or false.
+            for (int hoverKey : {-1, 0}) {
+                writeConfig(QStringLiteral("RightGlyphs"), hoverKey, true);
+                wait(5);
+                auto hold = h.create(base(scale));
+                if (hold.deco) {
+                    const QString label = hoverKey < 0 ? QStringLiteral("default (key absent)") : QStringLiteral("SnapLayoutsOnHover=false");
+                    const QPointF c = h.buttonCenter(hold.deco, DecorationButtonType::Maximize);
+                    accel.count = 0;
+                    h.hover(hold.deco, c);
+                    wait(900);
+                    h.check(accel.count == 0, QStringLiteral("%1: resting 900 ms on maximize opens nothing").arg(label));
+                    h.check(hold.state->toolTip == QStringLiteral("Maximize \u00b7 hold for snap layouts"),
+                            QStringLiteral("%1: tooltip '%2'").arg(label, hold.state->toolTip));
+                    h.press(hold.deco, c);
+                    wait(80);
+                    h.release(hold.deco, c);
+                    wait(100);
+                    h.check(hold.state->toggleMaximize == 1 && accel.count == 0, QStringLiteral("%1: after the rest, the first click maximizes").arg(label));
+                    h.press(hold.deco, c);
+                    wait(750);
+                    h.check(accel.count == 1, QStringLiteral("%1: holding 600 ms opens the snap layouts (%2 calls)").arg(label).arg(accel.count));
+                    h.release(hold.deco, c);
+                    wait(100);
+                    h.check(hold.state->toggleMaximize == 1, QStringLiteral("%1: the release after the hold does not toggle maximize").arg(label));
+                    h.leave(hold.deco);
+                    h.destroy(hold);
+                }
+            }
+            // A press that slides off maximize cancels its click, and the hold with it (review).
+            {
+                writeConfig(QStringLiteral("RightGlyphs"), -1, true);
+                wait(5);
+                auto slide = h.create(base(scale));
+                if (slide.deco) {
+                    const QPointF c = h.buttonCenter(slide.deco, DecorationButtonType::Maximize);
+                    const QPointF away(slide.deco->size().width() / 2, c.y());
+                    accel.count = 0;
+                    h.hover(slide.deco, c);
+                    h.press(slide.deco, c);
+                    wait(100);
+                    h.hover(slide.deco, away);
+                    wait(750);
+                    h.check(accel.count == 0,
+                            QStringLiteral("hold: a press that slides off maximize does not open the snap layouts (%1 calls)").arg(accel.count));
+                    h.release(slide.deco, away);
+                    wait(100);
+                    h.check(slide.state->toggleMaximize == 0, QStringLiteral("hold: the release off the button does not maximize"));
+                    h.hover(slide.deco, c);
+                    h.press(slide.deco, c);
+                    wait(750);
+                    h.check(accel.count == 1, QStringLiteral("hold: the next hold on maximize still opens the snap layouts"));
+                    h.release(slide.deco, c);
+                    wait(100);
+                    h.leave(slide.deco);
+                    h.destroy(slide);
                 }
             }
             // reconfigure switches the style live
@@ -1192,6 +1548,219 @@ int main(int argc, char **argv)
                         QStringLiteral("reconfigure: back to RightGlyphs"));
                 h.destroy(live);
             }
+        }
+
+        // Short screens (ADAPTIVE.md 5.12): 40 px title bars under 800 logical px, following the
+        // output's geometry (rotation to portrait gives 50 again).
+        {
+            writeConfig(QStringLiteral("RightGlyphs"), -1, true);
+            wait(5);
+            FakeOutput screen;
+            screen.rect = QRect(0, 0, 1366, 768);
+            const qreal tol = 1.0 / scale + 0.01;
+            auto in = h.create(base(scale), false, QRectF(), &screen);
+            if (in.deco) {
+                h.check(std::abs(in.deco->borderTop() - 40) <= tol, QStringLiteral("1366x768 screen: title bar %1 (40)").arg(in.deco->borderTop()));
+                h.check(std::abs((in.deco->size().width() - h.buttonCenter(in.deco, DecorationButtonType::Maximize).x()) - 58) <= 0.01,
+                        QStringLiteral("1366x768 screen: maximize centre still 58 px from the right"));
+                h.render(in.deco, QStringLiteral("23-short-screen"), scale, h.frame);
+                screen.setGeometry(QRect(0, 0, 768, 1366));
+                wait(10);
+                h.check(std::abs(in.deco->borderTop() - 50) <= tol, QStringLiteral("rotated to 768x1366: title bar %1 (50)").arg(in.deco->borderTop()));
+                screen.setGeometry(QRect(0, 0, 1280, 799));
+                wait(10);
+                h.check(std::abs(in.deco->borderTop() - 40) <= tol, QStringLiteral("1280x799: title bar %1 (40)").arg(in.deco->borderTop()));
+                screen.setGeometry(QRect(0, 0, 1440, 900));
+                wait(10);
+                h.check(std::abs(in.deco->borderTop() - 50) <= tol, QStringLiteral("1440x900: title bar %1 (50)").arg(in.deco->borderTop()));
+                h.destroy(in);
+            }
+            screen.rect = QRect(0, 0, 1366, 768);
+            auto tool = h.create(base(scale), true, QRectF(), &screen);
+            if (tool.deco) {
+                h.check(std::abs(tool.deco->borderTop() - 32) <= tol, QStringLiteral("1366x768 screen: tool window keeps %1 (32)").arg(tool.deco->borderTop()));
+                h.destroy(tool);
+            }
+        }
+
+        // Tablet mode (TABLET.md 4.9): touch title bars while KWin reports tablet mode, live.
+        if (tabletDbus && dbus) {
+            const qreal tol = 1.0 / scale + 0.01;
+            writeConfig(QStringLiteral("RightGlyphs"), 1, true); // hover on: tablet mode must still ignore it
+            wait(5);
+            auto in = h.create(base(scale));
+            if (in.deco) {
+                h.check(std::abs(in.deco->borderTop() - 50) <= tol, QStringLiteral("laptop: title bar %1 (50)").arg(in.deco->borderTop()));
+                fakeTablet.set(true);
+                wait(200);
+                const qreal w = in.deco->size().width();
+                h.check(std::abs(in.deco->borderTop() - 52) <= tol, QStringLiteral("tablet: title bar %1 (52)").arg(in.deco->borderTop()));
+                h.check(h.smallestHit(in.deco, false) >= 44 - 0.01 && h.smallestHit(in.deco, true) >= 44 - 0.01,
+                        QStringLiteral("tablet: every hit area at least 44 x 44 (smallest %1 x %2)")
+                            .arg(h.smallestHit(in.deco, false))
+                            .arg(h.smallestHit(in.deco, true)));
+                h.check(std::abs((w - h.buttonCenter(in.deco, DecorationButtonType::Close).x()) - 26) <= 0.01
+                            && std::abs((w - h.buttonCenter(in.deco, DecorationButtonType::Maximize).x()) - 70) <= 0.01,
+                        QStringLiteral("tablet: close centre %1, maximize centre %2 px from the right (26, 70)")
+                            .arg(w - h.buttonCenter(in.deco, DecorationButtonType::Close).x())
+                            .arg(w - h.buttonCenter(in.deco, DecorationButtonType::Maximize).x()));
+                h.render(in.deco, QStringLiteral("21-tablet"), scale, h.frame);
+                const QPointF c = h.buttonCenter(in.deco, DecorationButtonType::Maximize);
+                accel.count = 0;
+                h.hover(in.deco, c);
+                wait(900);
+                h.check(accel.count == 0, QStringLiteral("tablet: resting on maximize opens nothing even with SnapLayoutsOnHover=true"));
+                h.render(in.deco, QStringLiteral("22-tablet-hover-maximize"), scale, h.frame);
+                const int toggles = in.state->toggleMaximize;
+                h.press(in.deco, c);
+                wait(750);
+                h.check(accel.count == 1, QStringLiteral("tablet: holding 600 ms (touch long press) opens the snap layouts"));
+                h.release(in.deco, c);
+                wait(100);
+                h.check(in.state->toggleMaximize == toggles, QStringLiteral("tablet: no maximize after the hold"));
+                h.press(in.deco, c);
+                wait(80);
+                h.release(in.deco, c);
+                wait(100);
+                h.check(in.state->toggleMaximize == toggles + 1, QStringLiteral("tablet: a tap maximizes"));
+                h.leave(in.deco);
+                fakeTablet.set(false);
+                wait(200);
+                const qreal closeHit = h.hitOf(in.deco, DecorationButtonType::Close).width();
+                h.check(std::abs(in.deco->borderTop() - 50) <= tol && std::abs(closeHit - 34) <= 0.01,
+                        QStringLiteral("back to laptop: title bar %1, close hit width %2 (50, 34)").arg(in.deco->borderTop()).arg(closeHit));
+                h.destroy(in);
+            }
+            fakeTablet.set(true);
+            wait(50);
+            // maximized, tool window, short screen: 44 px bars
+            {
+                auto st = base(scale);
+                st->maximized = true;
+                auto mx = h.create(std::move(st));
+                if (mx.deco) {
+                    h.check(std::abs(mx.deco->borderTop() - 44) <= tol && h.smallestHit(mx.deco, true) >= 44 - 0.01,
+                            QStringLiteral("tablet maximized: title bar %1 (44), hit height %2").arg(mx.deco->borderTop()).arg(h.smallestHit(mx.deco, true)));
+                    h.destroy(mx);
+                }
+                auto tool = h.create(base(scale), true);
+                if (tool.deco) {
+                    h.check(
+                        std::abs(tool.deco->borderTop() - 44) <= tol && h.smallestHit(tool.deco, false) >= 44 - 0.01,
+                        QStringLiteral("tablet tool window: title bar %1 (44), hit width %2").arg(tool.deco->borderTop()).arg(h.smallestHit(tool.deco, false)));
+                    h.destroy(tool);
+                }
+                FakeOutput screen;
+                screen.rect = QRect(0, 0, 1366, 768);
+                auto shortScreen = h.create(base(scale), false, QRectF(), &screen);
+                if (shortScreen.deco) {
+                    h.check(std::abs(shortScreen.deco->borderTop() - 44) <= tol,
+                            QStringLiteral("tablet on a 1366x768 screen: title bar %1 (44)").arg(shortScreen.deco->borderTop()));
+                    h.destroy(shortScreen);
+                }
+            }
+            // Every KWin button with the app icon next to another button (review): no two hit
+            // areas overlap (KDecoration gives a press to the first hovered button), each >= 44.
+            {
+                s_left = {DecorationButtonType::Menu, DecorationButtonType::OnAllDesktops};
+                s_right = {DecorationButtonType::ContextHelp,
+                           DecorationButtonType::KeepAbove,
+                           DecorationButtonType::KeepBelow,
+                           DecorationButtonType::Minimize,
+                           DecorationButtonType::Maximize,
+                           DecorationButtonType::Menu,
+                           DecorationButtonType::Close};
+                writeConfig(QStringLiteral("RightGlyphs"), -1, true);
+                wait(5);
+                auto st = base(scale);
+                st->contextHelp = true;
+                st->width = 900;
+                auto many = h.create(std::move(st));
+                if (many.deco) {
+                    QList<QRectF> hits;
+                    for (auto *b : h.visibleButtons(many.deco)) {
+                        hits << b->geometry();
+                    }
+                    std::sort(hits.begin(), hits.end(), [](const QRectF &a, const QRectF &b) {
+                        return a.left() < b.left();
+                    });
+                    qreal overlap = 0;
+                    for (int i = 1; i < hits.size(); ++i) {
+                        overlap = std::max(overlap, hits[i - 1].right() - hits[i].left());
+                    }
+                    h.check(hits.size() == 9 && overlap <= 1e-6 && h.smallestHit(many.deco, false) >= 44 - 0.01,
+                            QStringLiteral("tablet, app icon next to other buttons on both sides: %1 hit areas, largest overlap %2, smallest width %3")
+                                .arg(hits.size())
+                                .arg(overlap)
+                                .arg(h.smallestHit(many.deco, false)));
+                    h.render(many.deco, QStringLiteral("26-tablet-many-buttons"), scale, h.frame);
+                    h.destroy(many);
+                }
+                s_left = {DecorationButtonType::Menu};
+                s_right = {DecorationButtonType::Minimize, DecorationButtonType::Maximize, DecorationButtonType::Close};
+            }
+            // LeftCircles: 36 px circles with glyphs, hit areas 44
+            writeConfig(QStringLiteral("LeftCircles"), -1, true);
+            wait(5);
+            auto left = h.create(base(scale));
+            if (left.deco) {
+                h.check(
+                    h.smallestHit(left.deco, false) >= 44 - 0.01 && h.smallestHit(left.deco, true) >= 44 - 0.01,
+                    QStringLiteral("tablet LeftCircles: smallest hit area %1 x %2").arg(h.smallestHit(left.deco, false)).arg(h.smallestHit(left.deco, true)));
+                h.render(left.deco, QStringLiteral("24-tablet-left"), scale, h.frame);
+                h.destroy(left);
+            }
+            // ShowOnHover: always visible in tablet mode (the close circle is red without hover)
+            writeConfig(QStringLiteral("ShowOnHover"), -1, true);
+            wait(5);
+            auto soh = h.create(base(scale));
+            if (soh.deco) {
+                // below the glyph, inside the circle (36 px in tablet mode)
+                const QPointF close = h.buttonCenter(soh.deco, DecorationButtonType::Close) + QPointF(0, 10);
+                wait(50);
+                const QImage tabletImage = h.paintTitle(soh.deco);
+                const QColor tabletColor = tabletImage.pixelColor(close.toPoint());
+                h.render(soh.deco, QStringLiteral("25-tablet-showonhover"), scale, h.frame);
+                fakeTablet.set(false);
+                wait(300);
+                const QImage laptopImage = h.paintTitle(soh.deco);
+                const QColor laptopColor = laptopImage.pixelColor(close.toPoint());
+                const QColor bar = laptopImage.pixelColor(QPoint(300, 10));
+                auto near = [](const QColor &a, const QColor &b) {
+                    return std::abs(a.red() - b.red()) <= 3 && std::abs(a.green() - b.green()) <= 3 && std::abs(a.blue() - b.blue()) <= 3;
+                };
+                h.check(near(tabletColor, QColor(217, 67, 75)) && near(laptopColor, bar),
+                        QStringLiteral("ShowOnHover: close visible in tablet mode (%1), hidden away from the pointer in laptop mode (%2, bar %3)")
+                            .arg(tabletColor.name(), laptopColor.name(), bar.name()));
+                h.destroy(soh);
+            }
+            fakeTablet.set(false);
+            wait(50);
+        }
+    }
+
+    // The shadow on a 200 % screen. KWin 6.7.5 draws a decoration shadow image at one image pixel
+    // per logical pixel (Shadow::elementSize, GL_LINEAR nine-patch; no device-pixel-ratio path), so
+    // at 200 % it samples the 1x image. Compare that with an exact Gaussian rendered at 2x.
+    {
+        writeConfig(QStringLiteral("RightGlyphs"), -1, true);
+        wait(5);
+        auto in = h.create(base(1));
+        if (in.deco && in.deco->shadow()) {
+            const bool dark = in.window->palette().color(QPalette::Window).lightness() < 128;
+            const qreal opacity = dark ? 0.55 : 0.22;
+            const QImage plugin = in.deco->shadow()->shadow();
+            const QMarginsF pad = in.deco->shadow()->padding();
+            const ShadowCheck result = checkShadowAt2x(plugin, pad, opacity, h.outDir + QStringLiteral("/") + h.name);
+            h.check(result.upscale < 0.004,
+                    QStringLiteral("200 %: upscaling alone (exact 1x shadow sampled like KWin vs exact 2x) differs by at most %1 alpha (%2/255)")
+                        .arg(result.upscale, 0, 'f', 4)
+                        .arg(result.upscale * 255, 0, 'f', 2));
+            h.check(result.total < 0.02,
+                    QStringLiteral("200 %: the plugin's shadow as KWin draws it vs an exact 2x Gaussian: at most %1 alpha (at 1x: %2)")
+                        .arg(result.total, 0, 'f', 4)
+                        .arg(result.at1x, 0, 'f', 4));
+            h.destroy(in);
         }
     }
 

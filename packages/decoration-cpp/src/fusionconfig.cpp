@@ -26,7 +26,7 @@ FusionConfig readConfig()
     KConfig fusionrc(QStringLiteral("plasmafusionrc"), KConfig::NoGlobals);
     const KConfigGroup deco(&fusionrc, QStringLiteral("Decoration"));
     c.buttonStyle = FusionConfig::parseStyle(deco.readEntry("ButtonStyle", QStringLiteral("RightGlyphs")));
-    c.snapLayoutsOnHover = deco.readEntry("SnapLayoutsOnHover", true);
+    c.snapLayoutsOnHover = deco.readEntry("SnapLayoutsOnHover", false);
 
     KConfig kwinrc(QStringLiteral("kwinrc"), KConfig::NoGlobals);
     const KConfigGroup plugins(&kwinrc, QStringLiteral("Plugins"));

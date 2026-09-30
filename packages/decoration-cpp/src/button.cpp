@@ -12,6 +12,7 @@
 #include <QDBusMessage>
 #include <QDBusPendingCall>
 #include <QIcon>
+#include <QLocale>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -29,6 +30,14 @@ namespace
 {
 constexpr int s_hoverDuration = 150; // ms at AnimationDurationFactor 1
 constexpr int s_pressDuration = 80;
+
+// The board's tooltip text is English; the plugin has no translations, so other languages keep
+// KWin's translated "Maximize" / "Restore".
+bool englishUi()
+{
+    static const bool english = QLocale::system().uiLanguages().value(0, QStringLiteral("en")).startsWith(QLatin1String("en"));
+    return english;
+}
 
 QColor darker(const QColor &c, qreal amount)
 {
@@ -146,13 +155,22 @@ void Button::onHoveredChanged(bool hovered)
         return;
     }
     if (hovered && !isPressed()) {
-        // Hovering the maximize button of the active window for 600 ms opens the snap layouts.
         Decoration *deco = fusionDecoration();
-        if (deco && deco->snapTriggerAllowed()) {
+        if (deco && deco->snapHoldAllowed() && englishUi()) {
+            // Windows.dc.html tooltip; replaces the text KDecoration just requested (KWin shows
+            // the last request after its wake-up delay).
+            deco->requestShowToolTip(isChecked() ? QStringLiteral("Restore \u00b7 hold for snap layouts")
+                                                 : QStringLiteral("Maximize \u00b7 hold for snap layouts"));
+        }
+        // With SnapLayoutsOnHover=true, resting on maximize of the active window for 600 ms opens
+        // the snap layouts too (never in tablet mode).
+        if (deco && deco->snapHoverAllowed()) {
             m_snapMode = SnapMode::Hover;
             m_snapTimer->start();
         }
-    } else if (!hovered && m_snapMode == SnapMode::Hover) {
+    } else if (!hovered && m_snapMode != SnapMode::None) {
+        // Leaving the button ends the hover trigger, and a press that slides off the button
+        // (which cancels its click as well) does not open the snap layouts either.
         m_snapTimer->stop();
         m_snapMode = SnapMode::None;
     }
@@ -169,7 +187,7 @@ void Button::mousePressEvent(QMouseEvent *event)
     m_snapMode = SnapMode::None;
     m_snapFiredOnHold = false;
     Decoration *deco = fusionDecoration();
-    if (event->button() == Qt::LeftButton && isPressed() && deco && deco->snapTriggerAllowed()) {
+    if (event->button() == Qt::LeftButton && isPressed() && deco && deco->snapHoldAllowed()) {
         m_snapMode = SnapMode::Hold;
         m_snapTimer->start();
     }
@@ -204,13 +222,13 @@ void Button::onSnapTimeout()
     Decoration *deco = fusionDecoration();
     const SnapMode mode = m_snapMode;
     m_snapMode = SnapMode::None;
-    if (!deco || !deco->snapTriggerAllowed()) {
+    if (!deco) {
         return;
     }
-    if (mode == SnapMode::Hover && isHovered() && !isPressed() && !deco->snapHoverFired()) {
+    if (mode == SnapMode::Hover && deco->snapHoverAllowed() && isHovered() && !isPressed() && !deco->snapHoverFired()) {
         deco->setSnapHoverFired();
         invokeSnapLayouts();
-    } else if (mode == SnapMode::Hold && isPressed()) {
+    } else if (mode == SnapMode::Hold && deco->snapHoldAllowed() && isPressed() && isHovered()) {
         m_snapFiredOnHold = true;
         invokeSnapLayouts();
     }
@@ -372,10 +390,13 @@ void Button::paintDot(QPainter *painter) const
         dot = QRectF(geometry().center() - QPointF(m.dot / 2, m.dot / 2), QSizeF(m.dot, m.dot));
     }
     const qreal t = deco->activeProgress();
-    const qreal group = deco->groupHoverProgress();
+    // Tablet mode (TABLET.md 4.9, nothing may depend on hover): the active window shows the hover
+    // look all the time, and every window shows the glyphs.
+    const bool tablet = deco->isTablet();
+    const qreal group = tablet ? std::max(deco->groupHoverProgress(), t) : deco->groupHoverProgress();
     const bool close = type() == DecorationButtonType::Close;
     QColor fill = withAlpha(c.dot, c.dotInactiveOpacity + (1 - c.dotInactiveOpacity) * t);
-    QColor glyphColor = withAlpha(QColor(Qt::white), group);
+    QColor glyphColor = withAlpha(QColor(Qt::white), tablet ? 1.0 : group);
     if (!isEnabled()) {
         fill = withAlpha(c.dot, 0.30);
         glyphColor = withAlpha(QColor(Qt::white), 0.5 * group);
