@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion power tiers: a lighter desktop at low battery (docs/parts/powerfx.md in the Plasma
+# Fusion sources). Turn on with
+#   systemctl --user enable --now plasma-fusion-powerfx.service
+# Stopping or disabling it gives back every value it changed (ExecStopPost). After changing the
+# plasmafusionrc [Power] options: systemctl --user reload plasma-fusion-powerfx.service
+[Unit]
+Description=Plasma Fusion power tiers
+PartOf=graphical-session.target
+# After plasmashell and KWin (plasma-workspace.target orders after both), so at log-out it stops,
+# and gives the values back, while they still run.
+After=graphical-session.target plasma-workspace.target
+# Plasma sessions only: in another desktop it would switch KWin's blur off in the files.
+ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
+
+[Service]
+Type=exec
+# The user's own copy (fusion-config.sh --install) first, then the system package's.
+ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion
+ExecStart=plasma-fusion-powerfx
+ExecReload=/usr/bin/kill -HUP $MAINPID
+ExecStopPost=-plasma-fusion-powerfx --apply full
+# SIGTERM to the script only: it finishes a change in progress and stops its monitors itself.
+KillMode=mixed
+TimeoutStopSec=20s
+Restart=on-failure
+RestartSec=5
+Slice=background.slice
+Nice=10
+MemoryMax=32M
+NoNewPrivileges=yes
+SyslogIdentifier=plasma-fusion-powerfx
+
+[Install]
+WantedBy=graphical-session.target

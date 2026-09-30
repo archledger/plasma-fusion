@@ -1,0 +1,543 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion power tiers: makes the desktop lighter only when the battery needs it
+# (docs/parts/powerfx.md in the Plasma Fusion sources).
+#
+#   plasma-fusion-powerfx                follow the power state (plasma-fusion-powerfx.service runs this)
+#   plasma-fusion-powerfx --apply TIER   apply full, saver, critical or auto (the tier of the power
+#                                        state) once and exit; the unit's ExecStopPost runs --apply full
+#   plasma-fusion-powerfx --status       print the power state, its tier and what is applied
+#   plasma-fusion-powerfx -h|--help
+#
+# Tiers (the first that matches):
+#   critical  on battery at 10 % or less, or UPower WarningLevel 4 (critical) or 5 (action)
+#   saver     the power-saver profile, or on battery at 20 % or less
+#   full      everything else
+#
+# What a tier changes (everything else, blur strength and animations included, stays the user's):
+#   saver     Fusion system card and dock powerTier 1 (card interval x 2, one dock start-up pulse);
+#             Plasma's own system monitor widgets update at most every 2 x their interval (6 s
+#             when it is unlimited)
+#   critical  powerTier 2 (card interval x 4, no pulse), system monitors x 4; with plasmafusionrc
+#             [Power] LighterOnCritical (default true) also KWin blur off (kwinrc [Plugins]
+#             blurEnabled false and unloaded), dock magnification off and glass=solid for the Fusion
+#             dock, system card, quick settings and launcher; with ShorterAnimationsOnCritical
+#             (default false) AnimationDurationFactor at most 0.75
+#   full      gives every value back
+#
+# A value is remembered (plasmafusionrc [Power]) when the service first overrides it, so it never
+# records a value it wrote itself. It is given back when no tier overrides it any more, and only if
+# it still holds the service's value: a change the user made meanwhile stays. Changed [Power] options
+# take effect at the next tier change, or at once with `systemctl --user reload` (SIGHUP).
+#
+# The running service follows the power profile (net.hadess.PowerProfiles: power-profiles-daemon or
+# tuned-ppd) and UPower on the system bus and plasmashell on the session bus with three
+# `gdbus monitor` processes: no polling and no work while nothing changes. Power events closer than
+# 0.5 s are one change. When plasmashell (re)appears the widget part is applied again. One journal
+# line per tier change (logger -t plasma-fusion-powerfx).
+#
+# Exit status of --apply: 0 applied; 3 applied except the Plasma widgets (plasmashell is not running
+# or has not loaded its layout: the running service sets them when it is back); 1 error; 2 usage.
+set -u
+export LC_ALL=C.UTF-8 # "." in numbers; UTF-8 so the Qt tools do not warn
+# The unit finds this script through ExecSearchPath, which also becomes its PATH.
+PATH=${PATH:+$PATH:}/usr/local/bin:/usr/bin:/bin
+
+ME=plasma-fusion-powerfx
+CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
+RCFILE=$CONFIG_HOME/plasmafusionrc
+LOCKFILE=${XDG_RUNTIME_DIR:-/tmp}/$ME-$UID.lock
+CRITICAL_PERCENT=10
+SAVER_PERCENT=20
+CRITICAL_WARNING_LEVEL=4          # UPower DisplayDevice WarningLevel: 3 low, 4 critical, 5 action
+SAVER_PROFILE=power-saver
+PPD=net.hadess.PowerProfiles      # owned by power-profiles-daemon and by tuned-ppd
+PPD_PATH=/net/hadess/PowerProfiles
+UPOWER=org.freedesktop.UPower
+UPOWER_PATH=/org/freedesktop/UPower
+DISPLAY_DEVICE=/org/freedesktop/UPower/devices/DisplayDevice
+PLASMASHELL=org.kde.plasmashell
+COALESCE_US=500000                # power events closer than this are one change
+SHELL_WAIT_US=2000000             # after plasmashell appears, and between tries while it loads
+SHELL_TRIES=15
+
+# The widget part, run inside plasmashell (org.kde.PlasmaShell.evaluateScript). The service puts
+# PFX in front: apply (write, or only report what it would write), tier and prev (0 full, 1 saver,
+# 2 critical: the tier to set and the one set before), light and prevLight (glass and magnification
+# overridden at critical, now and before) and map (the user's values the service holds,
+# "WIDGET-ID/key=value,..."). It prints "found=CONTAINMENTS;writes=N;dock=MAGNIFY;map=NEW-MAP".
+read -r -d '' SHELL_JS <<'JS'
+var saved = {};
+PFX.map.split(",").forEach(function (e) {
+    var i = e.indexOf("=");
+    if (i > 0)
+        saved[e.slice(0, i)] = e.slice(i + 1);
+});
+var multiplier = [1, 2, 4];
+// The value the service holds KEY at in TIER, or null where the user's value applies.
+function forced(key, tier, light, user) {
+    if (key === "updateRateLimit") {
+        var n = parseInt(user, 10);
+        return tier > 0 ? String((n >= 1000 ? n : 3000) * multiplier[tier]) : null;
+    }
+    if (tier === 2 && light) {
+        if (key === "magnify")
+            return "false";
+        if (key === "glass")
+            return "solid";
+    }
+    return null;
+}
+var keep = [], writes = 0, found = 0, dockUser = "";
+function put(w, key, value) {
+    writes++;
+    if (!PFX.apply)
+        return;
+    if (value === "true" || value === "false")
+        w.writeConfig(key, value === "true");
+    else if (/^[0-9]+$/.test(value))
+        w.writeConfig(key, parseInt(value, 10));
+    else
+        w.writeConfig(key, value);
+}
+function handle(w, group, key, def) {
+    w.currentConfigGroup = [group];
+    var id = w.id + "/" + key;
+    var cur = String(w.readConfig(key, def));
+    if (!/^[A-Za-z0-9._-]+$/.test(cur))
+        return;
+    var had = Object.prototype.hasOwnProperty.call(saved, id);
+    var was = had ? forced(key, PFX.prev, PFX.prevLight, saved[id]) : null;
+    var user = was !== null ? saved[id] : cur;
+    var want = forced(key, PFX.tier, PFX.light, user);
+    if (want !== null) {
+        keep.push(id + "=" + user);
+        if (key === "magnify" && dockUser === "")
+            dockUser = user;
+        if (was !== null && cur !== was)
+            return; // the user changed it while the service held it: theirs
+        if (cur !== want)
+            put(w, key, want);
+    } else if (was !== null && cur === was && cur !== user) {
+        put(w, key, user);
+    }
+}
+function tierKey(w) {
+    w.currentConfigGroup = ["General"];
+    if (Number(w.readConfig("powerTier", 0)) !== PFX.tier)
+        put(w, "powerTier", String(PFX.tier));
+}
+var cs = desktops().concat(panels());
+for (var i = 0; i < cs.length; i++) {
+    found++;
+    var ws = cs[i].widgets();
+    for (var j = 0; j < ws.length; j++) {
+        var w = ws[j], t = String(w.type);
+        if (t === "org.plasmafusion.dock") {
+            tierKey(w);
+            handle(w, "General", "magnify", true);
+            handle(w, "General", "glass", "full");
+        } else if (t === "org.plasmafusion.systemcard") {
+            tierKey(w);
+            handle(w, "General", "glass", "full");
+        } else if (t === "org.plasmafusion.quicksettings" || t === "org.plasmafusion.launcher") {
+            handle(w, "General", "glass", "full");
+        } else if (t.indexOf("org.kde.plasma.systemmonitor") === 0) {
+            handle(w, "Appearance", "updateRateLimit", 0);
+        }
+    }
+}
+print("found=" + found + ";writes=" + writes + ";dock=" + dockUser + ";map=" + keep.join(","));
+JS
+
+usage() { sed -n '/^#   plasma-fusion-powerfx  /,/^#   plasma-fusion-powerfx -h/p' "$0" | sed 's/^# \{0,1\}//'; exit "$1"; }
+
+log() {
+  logger -t "$ME" -- "$*" 2>/dev/null
+  # under systemd stderr is the journal already
+  [ -n "${JOURNAL_STREAM:-}" ] || printf '%s: %s\n' "$ME" "$*" >&2
+}
+
+is_true() { case ${1,,} in true | 1 | yes | on) return 0 ;; esac; return 1; }
+is_false() { case ${1,,} in false | 0 | no | off) return 0 ;; esac; return 1; }
+
+# ini_get FILE GROUP KEY: R = KEY of the top-level [GROUP] in the KConfig file FILE (that file only,
+# no cascade); status 1 when it is not there.
+ini_get() {
+  local line in=0 found=1
+  R=
+  [ -r "$1" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in
+      '['*) if [ "$line" = "[$2]" ]; then in=1; else in=0; fi ;;
+      "$3="*) if [ "$in" = 1 ]; then R=${line#*=}; found=0; fi ;;
+    esac
+  done <"$1"
+  return "$found"
+}
+
+# The service's own state, plasmafusionrc [Power].
+st_get() { ini_get "$RCFILE" Power "$1" || R=$2; }
+st_set() { kwriteconfig6 --file plasmafusionrc --group Power --key "$1" "$2" >/dev/null 2>&1; }
+st_del() {
+  ini_get "$RCFILE" Power "$1" || return 0
+  kwriteconfig6 --file plasmafusionrc --group Power --key "$1" --delete >/dev/null 2>&1
+}
+
+sysget() { busctl --system --timeout=5 get-property "$@" 2>/dev/null; }
+# Session bus calls never start a service: at log-out plasmashell and KWin may be gone.
+sessioncall() { busctl --user --timeout=10 --auto-start=no call "$@"; }
+blur_effect() { sessioncall org.kde.KWin /Effects org.kde.kwin.Effects "$1" s blur >/dev/null 2>&1; }
+
+RE_STRING='^s "([a-z-]*)"$'
+RE_BOOL='^b (true|false)$'
+RE_DISPLAY=$'^d ([0-9.e+-]+)\nu ([0-9]+)$'
+RE_ON_BATTERY="'OnBattery': <(true|false)>"
+RE_PERCENT="'Percentage': <([0-9.e+-]+)>"
+RE_WARNING="'WarningLevel': <uint32 ([0-9]+)>"
+RE_PROFILE="'ActiveProfile': <'([a-z-]+)'>"
+RE_JS='^s "found=([0-9]+);writes=([0-9]+);dock=([a-z]*);map=([A-Za-z0-9/=,._-]*)"$'
+RE_MAP='^[A-Za-z0-9/=,._-]*$'
+
+# read_power: P_PROFILE, P_ON_BATTERY, P_PERCENT and P_WARNING from the system bus. A missing
+# service reads as balanced, on AC, 100 %, no warning.
+read_power() {
+  local out
+  P_PROFILE=unknown P_ON_BATTERY=false P_PERCENT=100 P_WARNING=1
+  out=$(sysget "$PPD" "$PPD_PATH" "$PPD" ActiveProfile) && [[ $out =~ $RE_STRING ]] && P_PROFILE=${BASH_REMATCH[1]}
+  out=$(sysget "$UPOWER" "$UPOWER_PATH" "$UPOWER" OnBattery) && [[ $out =~ $RE_BOOL ]] && P_ON_BATTERY=${BASH_REMATCH[1]}
+  if out=$(sysget "$UPOWER" "$DISPLAY_DEVICE" "$UPOWER.Device" Percentage WarningLevel) && [[ $out =~ $RE_DISPLAY ]]; then
+    P_PERCENT=${BASH_REMATCH[1]} P_WARNING=${BASH_REMATCH[2]}
+  fi
+}
+
+# compute_tier: TIER from the P_* values.
+compute_tier() {
+  local pct
+  printf -v pct '%.0f' "$P_PERCENT" 2>/dev/null || pct=100
+  [[ $pct =~ ^-?[0-9]+$ ]] || pct=100
+  [[ $P_WARNING =~ ^[0-9]+$ ]] || P_WARNING=1
+  if [ "$P_ON_BATTERY" = true ] && { [ "$pct" -le "$CRITICAL_PERCENT" ] || [ "$P_WARNING" -ge "$CRITICAL_WARNING_LEVEL" ]; }; then
+    TIER=critical
+  elif [ "$P_PROFILE" = "$SAVER_PROFILE" ] || { [ "$P_ON_BATTERY" = true ] && [ "$pct" -le "$SAVER_PERCENT" ]; }; then
+    TIER=saver
+  else
+    TIER=full
+  fi
+}
+
+power_text() { printf '%s, %s %%, warning level %s, profile %s' "$([ "$P_ON_BATTERY" = true ] && echo "on battery" || echo "on AC")" "${P_PERCENT%%.*}" "$P_WARNING" "$P_PROFILE"; }
+
+# read_flags: the user's options and glass level.
+read_flags() {
+  F_LIGHTER=true F_SHORTER=false GLASS=
+  ini_get "$RCFILE" Power LighterOnCritical && is_false "$R" && F_LIGHTER=false
+  ini_get "$RCFILE" Power ShorterAnimationsOnCritical && is_true "$R" && F_SHORTER=true
+  ini_get "$RCFILE" Effects Glass && GLASS=$R
+  return 0
+}
+
+tier_index() { case $1 in saver) R=1 ;; critical) R=2 ;; *) R=0 ;; esac; }
+
+lock() {
+  exec {LOCKFD}>>"$LOCKFILE" || return 1
+  flock -w 30 "$LOCKFD" || { exec {LOCKFD}>&-; return 1; }
+}
+unlock() { exec {LOCKFD}>&-; }
+
+# apply_kwin TIER: KWin blur and the animation factor. The files come first, so a KWin that is not
+# running, or restarts, reads the tier's state. 1 when a file could not be written.
+apply_kwin() {
+  local want=false forced user cur milli=1000
+  [ "$1" = critical ] && [ "$F_LIGHTER" = true ] && want=true
+  st_get ForcedBlur false; forced=$R
+  if [ "$want" = true ] && ! is_true "$forced"; then
+    user=absent; ini_get "$CONFIG_HOME/kwinrc" Plugins blurEnabled && user=$R
+    if ! is_false "$user"; then
+      st_set UserBlurEnabled "$user" && st_set ForcedBlur true || return 1
+      kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled false >/dev/null 2>&1 || return 1
+      # KWin's reconfigure never unloads an effect, so unload it too
+      blur_effect unloadEffect || log "KWin is not reachable; blur stays off from its next start"
+      DONE+=("blur off")
+    fi
+  elif [ "$want" = false ] && is_true "$forced"; then
+    st_get UserBlurEnabled absent; user=$R
+    cur=absent; ini_get "$CONFIG_HOME/kwinrc" Plugins blurEnabled && cur=$R
+    # Glass = Solid in the settings module also means blur off: then it stays off.
+    if [ "$GLASS" != Solid ] && is_false "$cur"; then
+      if [ "$user" = absent ]; then
+        kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled --delete >/dev/null 2>&1 || return 1
+      else
+        kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled "$user" >/dev/null 2>&1 || return 1
+      fi
+      is_false "$user" || blur_effect loadEffect || log "KWin is not reachable; blur is back from its next start"
+      DONE+=("blur back")
+    fi
+    st_del UserBlurEnabled; st_del ForcedBlur
+  fi
+
+  want=false
+  [ "$1" = critical ] && [ "$F_SHORTER" = true ] && want=true
+  st_get ForcedAnimationDurationFactor ''; forced=$R
+  if [ "$want" = true ] && [ -z "$forced" ]; then
+    user=absent; ini_get "$CONFIG_HOME/kdeglobals" KDE AnimationDurationFactor && user=$R
+    [ "$user" = absent ] || printf -v milli '%.0f' "${user}e3" 2>/dev/null || milli=0
+    [[ $milli =~ ^[0-9]+$ ]] || milli=0
+    if [ "$milli" -gt 750 ]; then # never longer, 0 (no animations) stays 0
+      st_set UserAnimationDurationFactor "$user" && st_set ForcedAnimationDurationFactor 0.75 || return 1
+      kwriteconfig6 --notify --file kdeglobals --group KDE --key AnimationDurationFactor 0.75 >/dev/null 2>&1 || return 1
+      DONE+=("animations x0.75")
+    fi
+  elif [ "$want" = false ] && [ -n "$forced" ]; then
+    st_get UserAnimationDurationFactor absent; user=$R
+    cur=absent; ini_get "$CONFIG_HOME/kdeglobals" KDE AnimationDurationFactor && cur=$R
+    if [ "$cur" = "$forced" ]; then
+      if [ "$user" = absent ]; then
+        kwriteconfig6 --notify --file kdeglobals --group KDE --key AnimationDurationFactor --delete >/dev/null 2>&1 || return 1
+      else
+        kwriteconfig6 --notify --file kdeglobals --group KDE --key AnimationDurationFactor "$user" >/dev/null 2>&1 || return 1
+      fi
+      DONE+=("animations back")
+    fi
+    st_del UserAnimationDurationFactor; st_del ForcedAnimationDurationFactor
+  fi
+  return 0
+}
+
+# js APPLY TIER LIGHT PREV PREV_LIGHT MAP: run SHELL_JS in plasmashell; JS_FOUND, JS_WRITES, JS_DOCK
+# and JS_MAP from its output. 1 (JS_ERROR set) when plasmashell did not answer as expected.
+js() {
+  local out
+  JS_ERROR=
+  if ! out=$(sessioncall "$PLASMASHELL" /PlasmaShell org.kde.PlasmaShell evaluateScript s \
+    "var PFX = {apply: $1, tier: $2, light: $3, prev: $4, prevLight: $5, map: \"$6\"};
+$SHELL_JS" 2>&1); then
+    JS_ERROR=${out//$'\n'/ }
+    return 1
+  fi
+  [[ $out =~ $RE_JS ]] || { JS_ERROR="unexpected answer: ${out:0:200}"; return 1; }
+  JS_FOUND=${BASH_REMATCH[1]} JS_WRITES=${BASH_REMATCH[2]} JS_DOCK=${BASH_REMATCH[3]} JS_MAP=${BASH_REMATCH[4]}
+}
+
+# apply_shell TIER: the Plasma widgets. 0 done, 1 plasmashell is not there or has not loaded yet.
+apply_shell() {
+  local tier=$1 t light=false p pname pl map
+  tier_index "$tier"; t=$R
+  [ "$tier" = critical ] && [ "$F_LIGHTER" = true ] && light=true
+  st_get ShellTier full; pname=$R; tier_index "$pname"; p=$R
+  st_get ShellLighter false; if is_true "$R"; then pl=true; else pl=false; fi
+  st_get UserWidgetValues ''; map=$R
+  [[ $map =~ $RE_MAP ]] || map=
+  # First only ask what would change: the values to remember are stored before anything is written.
+  js false "$t" "$light" "$p" "$pl" "$map" || return 1
+  [ "$JS_FOUND" -gt 0 ] || { JS_ERROR="no layout loaded yet"; return 1; }
+  if [ "$JS_WRITES" = 0 ] && [ "$JS_MAP" = "$map" ] && [ "$p" = "$t" ] && [ "$pl" = "$light" ]; then
+    return 0
+  fi
+  if [ -n "$JS_MAP" ]; then st_set UserWidgetValues "$JS_MAP"; else st_del UserWidgetValues; fi
+  if [ -n "$JS_DOCK" ]; then st_set UserDockMagnify "$JS_DOCK"; else st_del UserDockMagnify; fi
+  if [ "$light" = true ]; then st_set UserGlass "${GLASS:-Full}"; else st_del UserGlass; fi
+  st_set ShellLighter "$light"
+  st_set ShellTier "$tier"
+  if [ "$JS_WRITES" -gt 0 ]; then
+    local writes=$JS_WRITES
+    if ! js true "$t" "$light" "$p" "$pl" "$map"; then
+      # nothing was written: back to the state before, so the next try starts from the same point
+      if [ -n "$map" ]; then st_set UserWidgetValues "$map"; else st_del UserWidgetValues; fi
+      st_set ShellLighter "$pl"
+      st_set ShellTier "$pname"
+      return 1
+    fi
+    DONE+=("$writes widget setting(s)")
+  fi
+  return 0
+}
+
+# apply_tier TIER [WHY]: everything for TIER. 0 done, 1 error, 3 the widgets are still to do.
+apply_tier() {
+  local tier=$1 why=${2:-requested} old rc=0
+  DONE=()
+  lock || { log "another $ME holds $LOCKFILE; tier $tier not applied"; return 1; }
+  read_flags
+  st_get Tier full; old=$R
+  if ! apply_kwin "$tier"; then
+    unlock
+    log "could not write the KWin settings for tier $tier"
+    return 1
+  fi
+  [ "$old" = "$tier" ] || kwriteconfig6 --notify --file plasmafusionrc --group Power --key Tier "$tier" >/dev/null 2>&1
+  apply_shell "$tier" || rc=3
+  unlock
+  if [ "$old" != "$tier" ] || [ "${#DONE[@]}" -gt 0 ] || [ "$rc" != 0 ]; then
+    local text=
+    [ "${#DONE[@]}" -gt 0 ] && printf -v text '%s, ' "${DONE[@]}"
+    text=${text%, }
+    [ "$rc" = 3 ] && text+="${text:+; }Plasma widgets when plasmashell is back (${JS_ERROR:-no answer})"
+    log "tier $tier ($why): ${text:-no change}"
+  fi
+  return "$rc"
+}
+
+status() {
+  local k
+  read_power; compute_tier; read_flags
+  printf 'profile=%s\non_battery=%s\npercentage=%s\nwarning_level=%s\ntier=%s\n' \
+    "$P_PROFILE" "$P_ON_BATTERY" "$P_PERCENT" "$P_WARNING" "$TIER"
+  printf 'LighterOnCritical=%s\nShorterAnimationsOnCritical=%s\nGlass=%s\n' "$F_LIGHTER" "$F_SHORTER" "${GLASS:-unset}"
+  for k in Tier ShellTier ShellLighter ForcedBlur UserBlurEnabled ForcedAnimationDurationFactor \
+    UserAnimationDurationFactor UserDockMagnify UserGlass UserWidgetValues; do
+    st_get "$k" -; printf 'state.%s=%s\n' "$k" "$R"
+  done
+}
+
+# ---------- the service ----------
+
+# The event stream: one line per event, from three gdbus monitor processes. SIGUSR1 adds a wake
+# line (bash runs a trap during `read` but goes on reading, so the service's own signal handlers
+# wake it this way). When one monitor ends, all end.
+# shellcheck disable=SC2046  # one PID per word
+monitors() {
+  local woke
+  trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM INT
+  trap 'woke=1; echo "$ME: wake"' USR1
+  gdbus monitor --system --dest "$PPD" --object-path "$PPD_PATH" &
+  gdbus monitor --system --dest "$UPOWER" &
+  # a path nothing uses: only the lines about who owns the name
+  gdbus monitor --session --dest "$PLASMASHELL" --object-path /org/plasmafusion/powerfx/none &
+  while :; do
+    woke=0
+    wait -n
+    [ "$woke" = 1 ] || break
+  done
+  kill $(jobs -p) 2>/dev/null
+}
+
+now_us() { R=${EPOCHREALTIME/./}; }
+power_due() { if [ "$POWER_DUE" = 0 ]; then now_us; POWER_DUE=$((R + COALESCE_US)); fi; }
+shell_due() { now_us; SHELL_DUE=$((R + SHELL_WAIT_US)); }
+
+on_line() {
+  local l=$1 name owner first=0
+  case $l in
+    "The name "*" is owned by "* | "The name "*" does not have an owner"*)
+      name=${l#The name }; name=${name%% *}
+      owner=; [[ $l == *" is owned by "* ]] && owner=${l##* }
+      [ "${OWNERS[$name]+set}" = set ] || first=1
+      [ "$first" = 0 ] && [ "${OWNERS[$name]}" = "$owner" ] && return
+      OWNERS[$name]=$owner
+      if [ "$name" = "$PLASMASHELL" ]; then
+        # a new plasmashell (restart or late start): set its widgets once it has loaded
+        if [ -n "$owner" ] && { [ "$first" = 0 ] || [ "$SHELL_PENDING" = 1 ]; }; then
+          SHELL_LEFT=$SHELL_TRIES; shell_due
+        fi
+      elif [ "$first" = 0 ]; then
+        POWER_REREAD=1; power_due # UPower or the profile daemon came or went
+      fi ;;
+    "$UPOWER_PATH: org.freedesktop.DBus.Properties.PropertiesChanged "*)
+      [[ $l =~ $RE_ON_BATTERY ]] && { P_ON_BATTERY=${BASH_REMATCH[1]}; power_due; } ;;
+    "$DISPLAY_DEVICE: org.freedesktop.DBus.Properties.PropertiesChanged "*)
+      [[ $l =~ $RE_PERCENT ]] && { P_PERCENT=${BASH_REMATCH[1]}; power_due; }
+      [[ $l =~ $RE_WARNING ]] && { P_WARNING=${BASH_REMATCH[1]}; power_due; } ;;
+    "$PPD_PATH: org.freedesktop.DBus.Properties.PropertiesChanged "*)
+      [[ $l =~ $RE_PROFILE ]] && { P_PROFILE=${BASH_REMATCH[1]}; power_due; } ;;
+  esac
+  return 0
+}
+
+# The applied state is the one in plasmafusionrc, so a manual --apply is followed too.
+on_power() {
+  local rc applied shell
+  if [ "$POWER_REREAD" = 1 ]; then POWER_REREAD=0; read_power; fi
+  compute_tier
+  st_get Tier full; applied=$R
+  st_get ShellTier full; shell=$R
+  [ "$TIER" = "$applied" ] && { [ "$TIER" = "$shell" ] || [ "$SHELL_PENDING" = 1 ]; } && [ "$FORCE" = 0 ] && return
+  FORCE=0
+  apply_tier "$TIER" "$(power_text)"; rc=$?
+  [ "$rc" = 1 ] && return # a file could not be written: again at the next event
+  if [ "$rc" = 3 ]; then SHELL_PENDING=1; else SHELL_PENDING=0; fi
+}
+
+on_shell() {
+  local tier
+  DONE=()
+  lock || return
+  read_flags
+  st_get Tier full; tier=$R
+  if apply_shell "$tier"; then
+    unlock
+    SHELL_PENDING=0 SHELL_LEFT=0
+    [ "${#DONE[@]}" -gt 0 ] && log "plasmashell is back: tier $tier set on its widgets (${DONE[*]})"
+  else
+    unlock
+    SHELL_PENDING=1
+    SHELL_LEFT=$((SHELL_LEFT - 1))
+    if [ "$SHELL_LEFT" -gt 0 ]; then
+      shell_due
+    else
+      log "plasmashell did not take the tier $tier settings (${JS_ERROR:-no answer}); widgets wait for its next start"
+    fi
+  fi
+  return 0
+}
+
+follow() {
+  local line rest=0 rc wait_us d t partial=
+  declare -gA OWNERS=()
+  STOP=0 RELOAD=0 FORCE=0 POWER_DUE=0 SHELL_DUE=0 SHELL_LEFT=0 POWER_REREAD=0 SHELL_PENDING=0 MON_PID=
+  # A change in progress is finished first: the flags are looked at between steps.
+  trap 'STOP=1; [ -z "$MON_PID" ] || kill -USR1 "$MON_PID" 2>/dev/null' TERM INT
+  trap 'RELOAD=1; [ -z "$MON_PID" ] || kill -USR1 "$MON_PID" 2>/dev/null' HUP
+  read_power; compute_tier
+  apply_tier "$TIER" "start, $(power_text)"; rc=$?
+  [ "$rc" = 3 ] && SHELL_PENDING=1
+  exec {MON}< <(monitors)
+  MON_PID=$!
+  trap 'kill "$MON_PID" 2>/dev/null' EXIT
+  while [ "$STOP" = 0 ]; do
+    if [ "$RELOAD" = 1 ]; then RELOAD=0; FORCE=1; POWER_REREAD=1; power_due; fi
+    now_us
+    if [ "$POWER_DUE" != 0 ] && [ "$R" -ge "$POWER_DUE" ]; then POWER_DUE=0; on_power; continue; fi
+    if [ "$SHELL_DUE" != 0 ] && [ "$R" -ge "$SHELL_DUE" ]; then SHELL_DUE=0; on_shell; continue; fi
+    wait_us=0
+    for d in "$POWER_DUE" "$SHELL_DUE"; do
+      [ "$d" != 0 ] || continue
+      if [ "$wait_us" = 0 ] || [ $((d - R)) -lt "$wait_us" ]; then wait_us=$((d - R)); fi
+    done
+    if [ "$wait_us" -gt 0 ]; then
+      printf -v t '%d.%06d' $((wait_us / 1000000)) $((wait_us % 1000000))
+      IFS= read -r -t "$t" -u "$MON" line; rc=$?
+    else
+      IFS= read -r -u "$MON" line; rc=$?
+    fi
+    if [ "$rc" = 0 ]; then
+      on_line "$partial$line"; partial=
+    elif [ "$rc" -gt 128 ]; then
+      partial+=$line # a time-out; keep what was read of the line
+    elif [ "$STOP" = 0 ]; then
+      rest=1; break
+    fi
+  done
+  if [ "$rest" = 1 ]; then
+    log "the power event monitor stopped; exiting for a restart"
+    return 1
+  fi
+  return 0
+}
+
+case ${1:-} in
+  --apply)
+    [ $# = 2 ] || usage 2
+    case $2 in
+      full | saver | critical) apply_tier "$2" ;;
+      auto) read_power; compute_tier; apply_tier "$TIER" "$(power_text)" ;;
+      *) usage 2 ;;
+    esac
+    exit $? ;;
+  --status) [ $# = 1 ] || usage 2; status ;;
+  -h | --help) usage 0 ;;
+  '') follow; exit $? ;;
+  *) usage 2 ;;
+esac
