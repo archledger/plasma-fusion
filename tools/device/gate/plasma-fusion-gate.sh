@@ -35,6 +35,10 @@
 #    graphical-session.target.wants links; startplasma reloads systemd after this check, so they do
 #    not start at this login) are switched off, once: a part the user turns on again is left on. A
 #    Plasma Fusion theme turns them back on at the next login.
+# 3. A missing decoration plugin. While the compiled decoration is named (by the user or by the
+#    Global Theme's defaults) but not installed, the title bars become the matching Plasma Fusion
+#    Aurorae theme at login, without a notification; they switch back at the first login after the
+#    plugin is installed again.
 #
 # Every change is recorded first (~/.local/state/plasma-fusion/gate/off) and undone only while the
 # value is still the one written here. With matching versions and a Fusion theme nothing changes.
@@ -810,7 +814,7 @@ queue_notification() {
 FUSION=0 LNF=
 UPD_OFF=()
 evaluate() { # the decision for every part; deploy only turns parts back on
-  local p need_upd need_theme risky=0
+  local p need_upd need_theme missing risky=0
   eff kdeglobals KDE LookAndFeelPackage
   LNF=$REPLY
   case $LNF in "$DARK" | "$LIGHT") FUSION=1 ;; esac
@@ -836,7 +840,22 @@ evaluate() { # the decision for every part; deploy only turns parts back on
       decoration) [ "${UPDATE_OK:-1}" = 1 ] || need_upd=1 ;;
     esac
     [ "$p" != decoration ] && [ "$FUSION" = 0 ] && need_theme=1
-    if [ "$need_upd" = 1 ]; then
+    # The compiled decoration named (by the user or by the Global Theme's defaults) but not
+    # installed: KWin would fall back to its built-in default, so the matching Aurorae theme is
+    # chosen instead, without a notification. While the plugin is missing the record stays, and the
+    # compiled title bars come back at the first login after it is installed again.
+    missing=0
+    if [ "$p" = decoration ] && [ "$need_upd" = 0 ] && [ "$MODE" != deploy ] && ! cpp_deco_installed; then
+      if part_on decoration; then
+        missing=1
+      elif rec_has decoration; then
+        say "  decoration: $CPP_DECO is still not installed; the title bars stay Aurorae"
+        continue
+      fi
+    fi
+    if [ "$missing" = 1 ]; then
+      off_decoration missing
+    elif [ "$need_upd" = 1 ]; then
       if part_on "$p"; then
         "off_$p" update
         [ "$p" = decoration ] || [ "$FUSION" = 1 ] && UPD_OFF+=("$p")

@@ -116,6 +116,14 @@ compiled decoration comes back whenever the title bars are still a Plasma Fusion
 the plugin is installed), written to the user file unless kdedefaults already names it. The
 drop-in comes back only when it is not there already and the lock-screen package is installed.
 
+A missing plugin (added 2026-09-30 with LAYOUT-1, whose Global Themes name the compiled decoration
+in their defaults): while `org.plasmafusion.decoration` is named, by the user or by kdedefaults, and
+its plugin is not installed, KWin would fall back to its built-in default, so the check chooses the
+matching Plasma Fusion Aurorae theme at login (as for an update, the `-Left` pair with left circles),
+records it with the reason `missing` and queues no notification. The record stays while the plugin
+is missing; at the first login after it is installed again the compiled decoration comes back (the
+user's keys are removed when kdedefaults names it). Unit test `p` in `tests/gate-unit.sh`.
+
 A part switched off because of the Global Theme is switched off once: if the user turns it on
 again under that theme (for example snap layouts under Breeze), it stays on. Parts held off because
 of an update are enforced at every login.

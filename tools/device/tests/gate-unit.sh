@@ -494,6 +494,31 @@ FAKE="kwin=6.8.0" gate login
 check "w2: one [org.kde.kdecoration2] group after replacing its last line" [ "$(grep -c '^\[org.kde.kdecoration2\]' "$H/.config/kwinrc")" = 1 ]
 check "w2: KConfig reads the -Left Aurorae theme" [ "$(kread kwinrc org.kde.kdecoration2 theme)" = __aurorae__svg__PlasmaFusionDark-Left ]
 
+# ---------- (p) the Global Theme names the compiled decoration, but the plugin is missing ----------
+# (LAYOUT-1: both themes' defaults name org.plasmafusion.decoration.) KWin would fall back to its
+# built-in default; the check chooses the matching Aurorae theme without a notification, keeps it
+# while the plugin is missing and gives the compiled one back once it is installed again.
+make_home "$BASE/p"
+gate deploy >/dev/null 2>&1
+kw kwinrc org.kde.kdecoration2 library --delete
+kw kwinrc org.kde.kdecoration2 theme --delete
+kwd kwinrc org.kde.kdecoration2 library org.plasmafusion.decoration
+kwd kwinrc org.kde.kdecoration2 theme ""
+mv "$PLUGINS/org.kde.kdecoration3/org.plasmafusion.decoration.so" "$BASE/p-plugin.so"
+gate login >"$BASE/p.login1.log" 2>&1
+check "p: plugin missing: Aurorae title bars" [ "$(keff kwinrc org.kde.kdecoration2 library)" = org.kde.kwin.aurorae.v2 ]
+check "p: plugin missing: the matching theme" [ "$(keff kwinrc org.kde.kdecoration2 theme)" = __aurorae__svg__PlasmaFusionDark ]
+check "p: plugin missing: no notification" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
+mid=$(sums)
+gate login >"$BASE/p.login2.log" 2>&1
+check "p: still missing: nothing changes" [ "$(sums)" = "$mid" ]
+check "p: still missing: the record stays" grep -q '^decoration' "$H/.local/state/plasma-fusion/gate/off"
+mv "$BASE/p-plugin.so" "$PLUGINS/org.kde.kdecoration3/org.plasmafusion.decoration.so"
+gate login >"$BASE/p.login3.log" 2>&1
+check "p: plugin back: the compiled decoration again" [ "$(keff kwinrc org.kde.kdecoration2 library)" = org.plasmafusion.decoration ]
+check "p: plugin back: no user decoration keys left" [ "$(get kwinrc org.kde.kdecoration2 library)" = "<absent>" ]
+check "p: plugin back: the record is gone" [ -z "$(grep '^decoration' "$H/.local/state/plasma-fusion/gate/off" 2>/dev/null)" ]
+
 # ---------- (e) robustness ----------
 make_home "$BASE/e"
 gate deploy >/dev/null 2>&1
