@@ -316,3 +316,59 @@ EFFECTS 5), built by the lead directly.
   the dim layer is left to the owner.
 - Not in LAUNCH-1: the fixed section order of the search, a finger drag (touch scrolls the grids; the
   tablet sheet is LAUNCH-2).
+
+## LAUNCH-2 (2026-09-30): the launcher sheet in tablet posture
+
+Work package LAUNCH-2 of the one-pass plan (TABLET 4.5), built by the lead directly.
+
+### Changes
+
+- **`SheetWindow.qml`**: a full-screen, frameless normal-layer dialog without the style's background (no
+  KWin blur; the top bar and the dock stay above it). It takes the focus (the dim layer's
+  `WindowDoesNotAcceptFocus` is not set), does not hide by itself, and the launcher closes it when
+  another window becomes active. The sheet inside is an asynchronous `Loader`, built 3 s after tablet
+  posture starts or on first use, then kept; the icon delegates exist only while it is shown.
+- **`TabletSheet.qml`**: the Tinted backdrop (`FusionBackdrop`, the wallpaper's static blurred copy); a
+  search pill (560 x 48, narrower where the session buttons need the room; at the grid's left edge in
+  portrait), not focused on open; four 44 px session buttons right-aligned to the grid; the page title;
+  pages of 128 x 120 cells with 72 px `FusionIconTile`s and 13 px labels (7 columns, 5 in portrait or on
+  a narrow screen, 4 below 700 px; rows from the height above the dock's 128 px reserve, at most 7),
+  page 1 the pins, then all apps (one `KSortFilterProxyModel` slice per page); page dots (tappable);
+  search results (the card's list, at most 720 wide) that end above the on-screen keyboard (Qt's
+  keyboard rectangle, else plasma-keyboard's height rule while KWin shows its keyboard). Typing on a
+  keyboard searches without touching the pill.
+- **Gestures**: a horizontal swipe changes the page; a swipe down of 96 px or 800 px/s closes (the
+  content follows the finger, in a layer above the tiles so taps and flicks still reach them); a tap on
+  empty space, Esc, Meta, Start or launching an app closes; a long press on a tile opens its menu.
+- **Open and reveal**: `progress` (0 to 1) drives the backdrop's opacity and the content's scale
+  (0.96 to 1) and offset (24 px to 0). Opening animates it in `Motion.popupIn` (200 ms; the spec's
+  250 ms put open-to-settled over its own 300 ms limit with the window's first frame), closing in
+  `Motion.popupOut`. The dock's swipe drives it through `beginReveal()`, `updateReveal(progress)` and
+  `endReveal(commit)`.
+- `main.qml` routes every open to the sheet in tablet posture (FusionTablet) and to the card otherwise;
+  the expanded state now follows both windows (it is read from the windows themselves: inside a
+  visibleChanged handler the combined binding was one step behind and every second Meta press did
+  nothing).
+
+### Verification
+
+- `qmllint`, `a11y-lint`, `motion-lint`: nothing new.
+- Private session `l2a` (1920 x 1200 at 4/3, tablet posture; `build/l1/scen-l2a.sh`), 18 checks PASS:
+  - T8: a touch swipe up on the dock opens the sheet (7 x 4 grid, 5 pages); the search field is not
+    focused and KWin's keyboard is not shown.
+  - T9: a horizontal swipe goes to page 2; a swipe down closes; 0 frames 1 s after closing; a tap on
+    empty space closes.
+  - Meta opens it (open to settled 272-295 ms, 14 frames; limits 300 ms and 20 frames); the window
+    pill ("Desktop") opens it; Esc closes.
+  - 0 frames in 5 s while open and untouched.
+  - A tap on the pill focuses the field and the keyboard appears; "kons" and Enter start Konsole and
+    the sheet closes; the next open has no focus in the field again.
+  - Portrait: 5 x 7 grid. Laptop posture: the card.
+- plasmashell GPU memory on the first open: +82 to +83 MiB against the 30 MiB budget (BACKLOG S2). A
+  full-screen surface at 1920 x 1200 needs about 9 MiB per buffer (swap chain and depth: about 37 MiB)
+  before any content; the budget cannot hold for a full-screen sheet. Left to the owner with the
+  card's dim-layer question (LAUNCH-1).
+- In the private session the backdrop showed only its tint (the wallpaper query gave nothing there);
+  the wallpaper copy is part of the INT-1 screenshots in the deployed session.
+- Not done: the date on a calendar app's tile (the dock has it), GPU time per animation frame (the INT-1
+  perf run measures it).

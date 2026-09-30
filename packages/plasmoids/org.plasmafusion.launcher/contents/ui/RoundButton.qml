@@ -7,16 +7,18 @@ import QtQuick
 import QtQuick.Templates as T
 import org.kde.plasma.components as PC3
 
-// Footer session button: 38 px circle with an 18 px glyph; the power button is red.
+// Footer session button: 38 px circle with an 18 px glyph (`size`: 44 in the tablet sheet); the
+// power button is red.
 T.AbstractButton {
     id: button
 
     property FusionColors pal
     property string glyph
     property bool danger: false
+    property real size: 38
 
-    implicitWidth: 38
-    implicitHeight: 38
+    implicitWidth: size
+    implicitHeight: size
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
 
@@ -31,7 +33,7 @@ T.AbstractButton {
     PC3.ToolTip.delay: 600
 
     background: Rectangle {
-        radius: 19
+        radius: button.size / 2
         antialiasing: true
         opacity: button.enabled ? 1 : 0.45
         color: button.danger ? (button.hovered || button.down ? button.pal.dangerHover : button.pal.danger)
@@ -39,7 +41,7 @@ T.AbstractButton {
 
         FocusRing {
             visible: button.visualFocus
-            baseRadius: 19
+            baseRadius: button.size / 2
             ringColor: button.pal.focusRing
         }
     }

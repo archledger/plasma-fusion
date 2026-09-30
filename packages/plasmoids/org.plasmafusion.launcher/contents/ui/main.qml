@@ -35,7 +35,15 @@ PlasmoidItem {
 
     readonly property bool designLabels: Plasmoid.configuration.designLabels
     readonly property bool showRecommended: Plasmoid.configuration.showRecommended
-    readonly property bool menuOpen: launcherWindow.visible
+    readonly property bool menuOpen: launcherWindow.visible || sheetWindow.visible
+    // Tablet posture: the full-screen sheet instead of the card (TABLET 4.5).
+    readonly property bool tablet: tabletState.tablet
+    FusionTablet {
+        id: tabletState
+    }
+    Motion {
+        id: motion
+    }
     property string searchText: ""
     property var chips: [{ key: "all", label: i18nc("@title:tab all applications", "All"), row: -1 }]
     property double lastClosed: 0
@@ -311,6 +319,10 @@ PlasmoidItem {
 
     // Opens on the active screen (M18): with several screens KWin names it first.
     function open(mode, argument) {
+        if (tablet) {
+            openSheet(mode, argument, true);
+            return;
+        }
         if (openStarted === 0) {
             openStarted = Date.now();
         }
@@ -364,11 +376,14 @@ PlasmoidItem {
     }
 
     function close() {
+        if (sheetWindow.visible) {
+            closeSheet();
+        }
         launcherWindow.visible = false;
     }
 
     function toggle() {
-        if (launcherWindow.visible) {
+        if (menuOpen) {
             close();
         } else {
             open("home");
@@ -378,8 +393,150 @@ PlasmoidItem {
     // True while the menu is open or was closed a moment ago (a click on the panel button can
     // deactivate and close the menu before the click itself arrives).
     function recentlyOpen() {
-        return launcherWindow.visible || (Date.now() - lastClosed) < 300;
+        return menuOpen || (Date.now() - lastClosed) < 300;
     }
+
+    // BEGIN tablet sheet
+    // The sheet is built in the background when tablet posture starts, or on its first use.
+    property var pendingSheet: null
+    Timer {
+        interval: 3000
+        running: root.tablet && !sheetWindow.sheetWanted
+        onTriggered: sheetWindow.sheetWanted = true
+    }
+    property real sheetStarted: 0
+    property int sheetFrames: 0
+    function openSheet(mode, argument, animated) {
+        if (!sheetWindow.sheet) {
+            sheetWindow.sheetWanted = true;
+            pendingSheet = { "mode": mode, "argument": argument, "animated": animated };
+            return;
+        }
+        const s = screenArea();
+        sheetWindow.area = Qt.rect(s.x, s.y, s.width, s.height);
+        sheetWindow.topBar = Math.max(0, root.availableScreenRect.y);
+        sheetWindow.screenNumber = Plasmoid.containment ? Plasmoid.containment.screen : 0;
+        const sheet = sheetWindow.sheet;
+        sheetAnimation.stop();
+        if (!sheetWindow.visible) {
+            sheet.reset();
+            sheet.progress = 0;
+        }
+        sheetStarted = Date.now();
+        sheetFrames = 0;
+        sheetWindow.visible = true;
+        sheetWindow.requestActivate();
+        sheet.forceActiveFocus();
+        if (animated) {
+            sheetAnimation.closing = false;
+            // popupIn (200 ms), not surface (250): with the window's first frame the open stays
+            // under the 300 ms budget (TABLET 4.5 acceptance).
+            sheetAnimation.to = 1;
+            sheetAnimation.duration = motion.popupIn;
+            sheetAnimation.easing.type = Easing.OutCubic;
+            sheetAnimation.start();
+        }
+        syncExpanded();
+    }
+    function closeSheet() {
+        if (!sheetWindow.visible || !sheetWindow.sheet) {
+            sheetWindow.visible = false;
+            return;
+        }
+        sheetAnimation.stop();
+        sheetAnimation.closing = true;
+        sheetAnimation.to = 0;
+        sheetAnimation.duration = motion.popupOut;
+        sheetAnimation.easing.type = Easing.InCubic;
+        sheetAnimation.start();
+    }
+    NumberAnimation {
+        id: sheetAnimation
+        property bool closing: false
+        target: sheetWindow.sheet
+        property: "progress"
+        duration: motion.popupIn
+        onFinished: {
+            if (closing) {
+                sheetWindow.visible = false;
+            } else if (root.sheetStarted > 0) {
+                console.info("launcher: sheet open settled after " + (Date.now() - root.sheetStarted) + " ms, " + root.sheetFrames + " frames");
+                root.sheetStarted = 0;
+            }
+        }
+    }
+    // The dock's swipe (DOCK-2): the sheet follows the finger, then opens or goes back.
+    function beginReveal() {
+        openSheet("home", "", false);
+    }
+    function updateReveal(progress: real) {
+        if (sheetWindow.sheet && sheetWindow.visible && !sheetAnimation.running) {
+            sheetWindow.sheet.progress = Math.max(0, Math.min(1, progress));
+        }
+    }
+    function endReveal(commit: bool) {
+        if (!sheetWindow.sheet) {
+            // Not built yet: a committed swipe opens it when it is ready.
+            if (!commit) {
+                pendingSheet = null;
+            } else if (pendingSheet) {
+                pendingSheet.animated = true;
+            }
+            return;
+        }
+        if (commit) {
+            console.info("launcher: sheet opened by the dock swipe");
+            sheetAnimation.closing = false;
+            sheetAnimation.to = 1;
+            sheetAnimation.duration = motion.popupIn;
+            sheetAnimation.easing.type = Easing.OutCubic;
+            sheetAnimation.start();
+        } else {
+            closeSheet();
+        }
+    }
+
+    SheetWindow {
+        id: sheetWindow
+        launcher: root
+        visible: false
+        property bool wasActive: false
+        onSheetReady: {
+            if (root.pendingSheet) {
+                const request = root.pendingSheet;
+                root.pendingSheet = null;
+                root.openSheet(request.mode, request.argument, request.animated);
+            }
+        }
+        onCloseRequested: root.close()
+        onFrameSwapped: {
+            root.framesDrawn++;
+            root.sheetFrames++;
+        }
+        // Another window took the focus (an app started, the dock, a click on the top bar).
+        onActiveChanged: {
+            if (active) {
+                wasActive = true;
+            } else if (visible && wasActive) {
+                root.closeSheet();
+            }
+        }
+        onVisibleChanged: {
+            if (!visible) {
+                wasActive = false;
+                root.lastClosed = Date.now();
+                root.searchText = "";
+                root.syncExpanded();
+            }
+        }
+    }
+    // Leaving tablet posture closes the sheet.
+    onTabletChanged: {
+        if (!tablet && sheetWindow.visible) {
+            closeSheet();
+        }
+    }
+    // END tablet sheet
 
     // `expanded` mirrors the menu state, so that the shell (Meta key, applet shortcut) and other
     // widgets (the dock's Start button) can open and close the menu by toggling it. The shell sets
@@ -389,7 +546,9 @@ PlasmoidItem {
 
     function syncExpanded() {
         syncingExpanded = true;
-        root.expanded = launcherWindow.visible;
+        // The windows themselves, not `menuOpen`: inside a visibleChanged handler that binding
+        // has not caught up yet, and the state would stay one toggle behind.
+        root.expanded = launcherWindow.visible || sheetWindow.visible;
         syncingExpanded = false;
     }
 
@@ -402,9 +561,9 @@ PlasmoidItem {
             Qt.callLater(syncExpanded);
             return;
         }
-        if (root.expanded && !launcherWindow.visible) {
+        if (root.expanded && !menuOpen) {
             open("home");
-        } else if (!root.expanded && launcherWindow.visible) {
+        } else if (!root.expanded && menuOpen) {
             close();
         }
     }
@@ -438,6 +597,16 @@ PlasmoidItem {
     property int framesDrawn: 0
     function reportFrames() {
         const card = launcherWindow.card;
+        const sheet = sheetWindow.sheet;
+        if (sheetWindow.visible && sheet) {
+            console.info("launcher: frames " + framesDrawn + ", sheet open, " + sheet.columns + " x " + sheet.rows + ", pages " + sheet.pageCount
+                         + ", grid " + Math.round(sheet.gridWidth) + "x" + Math.round(sheet.gridHeight) + " at y " + Math.round(sheet.gridY)
+                         + ", screen " + Math.round(sheet.width) + "x" + Math.round(sheet.height) + ", search focus "
+                         + (sheetWindow.activeFocusItem && sheetWindow.activeFocusItem.objectName === "sheetSearch")
+                         + ", page " + sheet.currentPage + ", progress " + sheet.progress.toFixed(2));
+            framesDrawn = 0;
+            return;
+        }
         console.info("launcher: frames " + framesDrawn + ", open " + launcherWindow.visible + ", card "
                      + launcherWindow.x + "," + launcherWindow.y + " " + launcherWindow.cardWidth + "x" + launcherWindow.cardHeight
                      + ", pinned rows " + (card ? card.pinnedRows : -1) + ", columns " + (card ? card.columns : -1)
