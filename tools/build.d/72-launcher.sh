@@ -1,7 +1,7 @@
 #!/bin/bash
 # Plasmoid org.plasmafusion.launcher (centred start menu). Copies the hand-written package into
-# the staged HOME: $STAGE/.local/share/plasma/plasmoids/org.plasmafusion.launcher, with a copy of
-# packages/common/FusionMetrics.qml in contents/ui.
+# the staged HOME: $STAGE/.local/share/plasma/plasmoids/org.plasmafusion.launcher, with copies of
+# the shared QML blocks it uses (packages/common/*.qml, tools/build-lib/shared-qml.sh) in contents/ui.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
@@ -16,11 +16,11 @@ assert meta["KPlugin"]["Id"] == "org.plasmafusion.launcher", "wrong plugin id"
 assert "org.kde.plasma.launchermenu" in meta.get("X-Plasma-Provides", []), "missing launchermenu provider"
 PY
 
-[ ! -e "$src/contents/ui/FusionMetrics.qml" ] || { echo "launcher: the package has its own FusionMetrics.qml" >&2; exit 1; }
+bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" launcher
 
 rm -rf "$dest"
 mkdir -p "$dest"
 cp -r "$src/metadata.json" "$src/contents" "$dest/"
-install -m 0644 "$ROOT/packages/common/FusionMetrics.qml" "$dest/contents/ui/FusionMetrics.qml"
+bash "$ROOT/tools/build-lib/shared-qml.sh" install "$src" "$dest/contents/ui"
 find "$dest" -type f -exec chmod 0644 {} +
 echo "launcher: $dest"

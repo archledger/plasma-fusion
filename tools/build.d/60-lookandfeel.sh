@@ -1,14 +1,16 @@
 #!/bin/bash
 # Global Themes org.plasmafusion.dark.desktop and org.plasmafusion.light.desktop: defaults,
 # desktop layout, splash screen, log-out screen and previews, into
-# $STAGE/.local/share/plasma/look-and-feel/. The splash gets a copy of
-# packages/common/FusionMetrics.qml in contents/splash.
+# $STAGE/.local/share/plasma/look-and-feel/. The splash gets copies of the shared QML blocks it
+# uses (packages/common/*.qml, tools/build-lib/shared-qml.sh) in contents/splash.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
 SRC=$ROOT/packages/look-and-feel
 GEN=$ROOT/generators/look-and-feel
 DEST=$STAGE/.local/share/plasma/look-and-feel
+
+bash "$ROOT/tools/build-lib/shared-qml.sh" check "$SRC/common/contents/splash" "look-and-feel: splash"
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -23,7 +25,7 @@ for id in org.plasmafusion.dark.desktop org.plasmafusion.light.desktop; do
   install -m 0644 "$SRC/$id/metadata.json" "$pkg/metadata.json"
   install -m 0644 "$SRC/$id/contents/defaults" "$pkg/contents/defaults"
   cp -r "$SRC/common/contents/layouts" "$SRC/common/contents/splash" "$SRC/common/contents/logout" "$pkg/contents/"
-  install -m 0644 "$ROOT/packages/common/FusionMetrics.qml" "$pkg/contents/splash/FusionMetrics.qml"
+  bash "$ROOT/tools/build-lib/shared-qml.sh" install "$SRC/common/contents/splash" "$pkg/contents/splash"
   mkdir -p "$pkg/contents/splash/images" "$pkg/contents/previews"
   install -m 0644 "$WORK/background.png" "$pkg/contents/splash/images/background.png"
   for f in preview.png fullscreenpreview.jpg splash.png; do

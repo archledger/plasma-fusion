@@ -30,11 +30,21 @@ Item {
     // The screen area this window lays itself out in (logical px).
     property rect area: Qt.rect(0, 0, 1440, 900)
 
-    // Device pixels per logical pixel of this window's screen; two monitors can differ. A
-    // component that sizes a window before the window exists (KWin's switcher) sets
-    // `screenScale` from its output instead.
+    // Device pixels per logical pixel of this window; two monitors can differ. It is the
+    // window's own ratio (QQuickWindow.devicePixelRatio, Qt 6.11): on Wayland at a fractional
+    // scale, Screen.devicePixelRatio is the output's whole-number buffer scale (2 at 4/3, 1.325
+    // and 1.5, measured in plasmashell), not the ratio the window draws at. A component that
+    // sizes a window before the window exists (KWin's switcher) sets `screenScale` from its
+    // output instead.
     property real screenScale: 0
-    readonly property real dpr: screenScale > 0 ? screenScale : Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+    readonly property real dpr: {
+        if (screenScale > 0) {
+            return screenScale;
+        }
+        const w = Window.window;
+        const r = w && w.devicePixelRatio > 0 ? w.devicePixelRatio : Screen.devicePixelRatio;
+        return r > 0 ? r : 1;
+    }
 
     // Text scale: the user's UI font against the design font (Manrope 9.75 pt = 13 px), so it
     // is exactly 1 at the Plasma Fusion default and the boards stay exact. The point size is
@@ -74,8 +84,13 @@ Item {
     // "1 px" design edges: 1 device px up to 1.5, 2 device px from 1.75.
     readonly property real hairline: Math.max(1, Math.floor(dpr + 0.25)) / dpr
 
+    // Tablet posture. Bind it to the window's FusionTablet, which follows KWin's own state
+    // (TABLET.md 3.1): FusionTablet { id: tabletState }  FusionMetrics { tablet: tabletState.tablet }.
+    // Unbound it is Kirigami's, which can start stale inside KWin (TABLET.md F3).
+    property bool tablet: Kirigami.Settings.tabletMode
+
     // Modes and breakpoints (logical px of `area`).
-    readonly property bool touch: Kirigami.Settings.tabletMode || Kirigami.Settings.hasTransientTouchInput
+    readonly property bool touch: tablet || Kirigami.Settings.hasTransientTouchInput
     readonly property bool portrait: area.height > area.width
     readonly property bool compactWidth: area.width < 1280 * Math.min(ts, 1.25)
     readonly property bool compactHeight: area.height < 800
