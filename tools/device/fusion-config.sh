@@ -1545,6 +1545,10 @@ if [ "$FONTS" = 1 ] || [ "$(kreadconfig6 --file plasmafusionrc --group Setup --k
   fi
   set_key plasmafusionrc Setup FontsAndCursor "done"
   [ "$DRY" = 1 ] || dbus-send --session --type=signal /KDEPlatformTheme org.kde.KDEPlatformTheme.refreshFonts 2>/dev/null || true
+  # The layout above was sized with the font from before (its text scale): size the bars again.
+  if [ "$DRY" = 0 ] && has_name org.kde.plasmashell && fusion_layout_present; then
+    note "panel thickness with the new font: $(fix_panel_thickness)"
+  fi
 else
   note "set by an earlier run (plasmafusionrc [Setup] FontsAndCursor=done): the current fonts and cursor stay; --fonts sets them again"
 fi
