@@ -7,9 +7,10 @@ import QtQuick
 import org.kde.kirigami as Kirigami
 
 // Text in the design's type scale: size in board pixels and CSS weight (400-800).
-// Manrope and Space Grotesk are variable fonts. Qt adds a synthetic bold on top of their named
-// Bold/ExtraBold instances, so for them the weight goes on the "wght" axis and the font weight
-// stays Normal. When the family is not installed the Plasma UI font is used with a plain weight.
+// Plasma Fusion installs Manrope and Space Grotesk as one static file per weight (the build's
+// fonts/*/static), so the CSS weight is the font weight: Qt picks the matching file and draws
+// no synthetic bold (it only emboldens files lighter than 700). When the family is not
+// installed the Plasma UI font is used with the same weight.
 Text {
     id: label
 
@@ -19,12 +20,10 @@ Text {
     property int weight: 400
 
     readonly property bool installed: family !== "" && Qt.fontFamilies().indexOf(family) !== -1
-    readonly property bool variableWeight: installed && (family === "Manrope" || family === "Space Grotesk")
 
     font.family: installed ? family : Kirigami.Theme.defaultFont.family
     font.pixelSize: px
-    font.weight: variableWeight ? Font.Normal : weight
-    font.variableAxes: variableWeight ? { "wght": weight } : ({})
+    font.weight: weight
     textFormat: Text.PlainText
     verticalAlignment: Text.AlignVCenter
 }

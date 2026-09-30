@@ -296,3 +296,9 @@ Evidence (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 `review-text-weight-board-before-after.png`, `review-glass-edges-board-before-after.png`,
 `review-light-prompt-before-after.png`, `review-offscreen-fingerprint-info-error-focus.png`,
 `review-greeter-log-{dark,light}.txt`.
+
+## Polish (2026-09-29)
+
+See `docs/parts/polish.md`. No functional change: the `DemiBold` + style name approach picks the
+right static files (Bold, ExtraBold, and Space Grotesk's new SemiBold file for the clocks); the
+comment in `PfStyle.qml` now says so.

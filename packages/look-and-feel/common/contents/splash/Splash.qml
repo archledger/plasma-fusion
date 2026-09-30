@@ -33,16 +33,14 @@ Rectangle {
     readonly property real nextStageProgress: stage <= 1 ? 0.2 : Math.min(1, stage / 5)
     property real creep: 0
 
-    // Manrope and Space Grotesk are variable fonts: Qt draws a synthetic bold on top of their
-    // named bold instances, so the weight goes on the "wght" axis and the font weight stays
-    // Normal. Without the font installed, the fallback font gets a plain weight.
+    // Manrope and Space Grotesk are installed as one static file per weight (the build's
+    // fonts/*/static), so the CSS weight is the font weight and Qt draws no synthetic bold.
+    // Without the font installed, the fallback font gets the same weight.
     component FusionText: Text {
         property string family: "Manrope"
         property int weight: 400
-        readonly property bool variable: Qt.fontFamilies().indexOf(family) !== -1
         font.family: family
-        font.weight: variable ? Font.Normal : weight
-        font.variableAxes: variable ? { "wght": weight } : ({})
+        font.weight: weight
         renderType: Text.QtRendering
         textFormat: Text.PlainText
         Accessible.role: Accessible.StaticText

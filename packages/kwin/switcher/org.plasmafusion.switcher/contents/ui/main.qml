@@ -234,6 +234,49 @@ KWin.TabBoxSwitcher {
             refresh();
         }
 
+        // Keys of the switcher (KWin itself handles Tab, Shift+Tab, ` and Esc). Used by the card
+        // and, before the card window exists (its first frame), by the dim layer, which is then
+        // the window KWin sends the keys to.
+        function handleKey(event) {
+            switch (event.key) {
+            case Qt.Key_Left:
+                stepSelection(-1);
+                break;
+            case Qt.Key_Right:
+                stepSelection(1);
+                break;
+            case Qt.Key_Up:
+                stepSelection(-columns);
+                break;
+            case Qt.Key_Down:
+                stepSelection(columns);
+                break;
+            case Qt.Key_Home:
+                stepSelection(-rows.count);
+                break;
+            case Qt.Key_End:
+                stepSelection(rows.count);
+                break;
+            case Qt.Key_A:
+                setShowAll(!showAll);
+                break;
+            case Qt.Key_Q:
+                if (shownMap[tabBox.currentIndex] === true) {
+                    tabBox.model.close(tabBox.currentIndex);
+                }
+                break;
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                if (shownMap[tabBox.currentIndex] === true) {
+                    tabBox.model.activate(tabBox.currentIndex);
+                }
+                break;
+            default:
+                return;
+            }
+            event.accepted = true;
+        }
+
         // "Wallpapers — Dolphin" -> app "Dolphin", title "Wallpapers". The suffix counts as the
         // app name only when it matches the window's application ids.
         function appKeys(w) {
@@ -452,45 +495,7 @@ KWin.TabBoxSwitcher {
                     width: root.cardWidth - cardWindow.marginLeft - cardWindow.marginRight
                     height: root.cardHeight - cardWindow.marginTop - cardWindow.marginBottom
 
-                    Keys.onPressed: event => {
-                        switch (event.key) {
-                        case Qt.Key_Left:
-                            root.stepSelection(-1);
-                            break;
-                        case Qt.Key_Right:
-                            root.stepSelection(1);
-                            break;
-                        case Qt.Key_Up:
-                            root.stepSelection(-root.columns);
-                            break;
-                        case Qt.Key_Down:
-                            root.stepSelection(root.columns);
-                            break;
-                        case Qt.Key_Home:
-                            root.stepSelection(-rows.count);
-                            break;
-                        case Qt.Key_End:
-                            root.stepSelection(rows.count);
-                            break;
-                        case Qt.Key_A:
-                            root.setShowAll(!root.showAll);
-                            break;
-                        case Qt.Key_Q:
-                            if (root.shownMap[tabBox.currentIndex] === true) {
-                                tabBox.model.close(tabBox.currentIndex);
-                            }
-                            break;
-                        case Qt.Key_Return:
-                        case Qt.Key_Enter:
-                            if (root.shownMap[tabBox.currentIndex] === true) {
-                                tabBox.model.activate(tabBox.currentIndex);
-                            }
-                            break;
-                        default:
-                            return;
-                        }
-                        event.accepted = true;
-                    }
+                    Keys.onPressed: event => root.handleKey(event)
 
                     // Laid out against the window edges, whatever the frame margins are.
                     Item {
@@ -749,6 +754,12 @@ KWin.TabBoxSwitcher {
                 Rectangle {
                     anchors.fill: parent
                     color: root.pal.dim
+                    // Keys typed before the card exists (at most its first frame) arrive here.
+                    // The window never becomes active (it does not take focus), so the item
+                    // takes active focus itself, or Qt Quick would not deliver them.
+                    focus: true
+                    Component.onCompleted: forceActiveFocus()
+                    Keys.onPressed: event => root.handleKey(event)
                 }
             }
         }

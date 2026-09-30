@@ -247,3 +247,10 @@ results, Esc clears, grid keyboard ring, Esc closes, dock Start + category, All 
 context menu, more-categories menu, dim-layer click closes), `review-board-vs-build-*.png`,
 `review-dark-recommended-keyboard-limit.png`, `review-dark-more-twelve-files.png`,
 `review-config-dialog.png`, and `review-test/` (EIS input tool, scenarios).
+
+## Polish (2026-09-29)
+
+See `docs/parts/polish.md`. `FusionText.qml` uses the CSS weight as the font weight: the static
+per-weight Manrope files ignore the `wght` axis the old workaround used, so every launcher label
+was drawn regular. Right-click on a pinned tile opened the context menu 3 of 3 times with real
+input (the intermittent miss of the review was not reproduced).

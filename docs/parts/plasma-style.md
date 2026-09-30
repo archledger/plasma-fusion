@@ -308,3 +308,18 @@ Re-run from the repository root (results land in the git-ignored `vsession-out/`
 tools/vsession/remote.sh rps-N generators/plasma-style/tests/vsession-integrated.sh $SEED 1440x900 270`;
 `touch $SEED/pf-tools/floating-applets` before the run sets `floatingApplets=1`.
 
+
+## Polish (2026-09-29)
+
+See `docs/parts/polish.md`. Changes in `gen_plasma_style.py`:
+
+- `widgets/menubaritem`: every frame has 4 px of transparent space above and below the pill and
+  1 px at each side, margins (4, 4, 9, 9): the stock global menu's pill is 26 px tall in the 34 px
+  bar (y 4..29, as on the board) with 2 px between titles. Light variant: hover and open pills are
+  the accent (`ColorScheme-Highlight`) darkened with ink .10 / .18, because the appmenu draws the
+  title in the Selection foreground (white); white on it is 5.4:1 / 6.0:1 (was 1.3:1 on the grey
+  pill). Dark variant unchanged (white on white .10 / .14).
+- `dialogs/background`: new prefix `snaplayouts` (radius 16, fill .90, edge .14, margins 12,
+  `mask-snaplayouts-*`), the QuickSettings board's Meta+Z flyout; plasmafusion-snap uses it.
+- The top bar's `floatingApplets=1` is now written by the layout script and `fusion-config.sh`
+  (the "Still missing" note under "Needed from other parts" is resolved).

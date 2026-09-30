@@ -11,10 +11,13 @@
 # Global Theme, i.e. the state before Plasma Fusion was first configured. --latest takes the
 # newest backup of any kind (undo only the last run). --list shows the backups.
 #
-# It gives the changed shortcuts their old keys back, renames the workspaces and removes the
-# ones fusion-config.sh created, puts every backed-up configuration file back (files that did
-# not exist are removed, among them the lock-screen drop-in of lockscreen-enable.sh), then
-# reloads KWin and restarts plasmashell. The installed Plasma Fusion packages stay installed.
+# It gives the changed shortcuts their old keys back (the quick-settings Meta+N goes back to
+# none), renames the workspaces and removes the ones fusion-config.sh created, for that backup's
+# run and every later one (each run records only what it changed itself), puts every backed-up
+# configuration file back (plasmashellrc with it, which removes the top bar's floatingApplets
+# key; files that did not exist are removed, among them the lock-screen drop-in of
+# lockscreen-enable.sh), then reloads KWin and restarts plasmashell. The installed Plasma Fusion
+# packages stay installed.
 # Log out and back in afterwards so every application, the lock screen and the splash screen
 # use the restored settings.
 set -euo pipefail
@@ -27,7 +30,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1 ;;
     --latest) PICK=latest ;;
     --list) PICK=list ;;
-    -h|--help) sed -n '/^#   fusion-restore.sh/,/^# splash/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '/^#   fusion-restore.sh/,/^# use the restored settings/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) BACKUP=$1 ;;
   esac
@@ -70,25 +73,42 @@ lnf=$(sed -n 's/^lookandfeel=//p' "$BACKUP/info")
 echo "Restoring from $BACKUP (Global Theme before: ${lnf:-<default>})"
 [ "$DRY" = 1 ] && echo "Dry run: nothing is changed."
 
+# Backups taken after this one, newest first. Each run of fusion-config.sh records only the
+# shortcuts and workspaces it changed itself (a later run can add one, such as the quick-settings
+# Meta+N of a newer fusion-config.sh), and kglobalaccel and KWin keep those whatever files are put
+# back, so their records are undone as well.
+LATER=()
+if [ "$(cd "$(dirname "$BACKUP")" && pwd -P)" = "$(cd "$STATE" 2>/dev/null && pwd -P)" ]; then
+  for ((i = ${#backups[@]} - 1; i >= 0; i--)); do
+    b=${backups[$i]%/}
+    [[ "$(basename "$b")" > "$(basename "$BACKUP")" ]] && LATER+=("$b")
+  done
+fi
+[ ${#LATER[@]} -eq 0 ] || echo "Also undoing the shortcuts and workspaces of ${#LATER[@]} later run(s)"
+
 # 1. Shortcuts, newest change first, through kglobalaccel (it lives inside KWin and would
 #    overwrite a restored kglobalshortcutsrc).
 echo "Shortcuts"
-if [ -s "$BACKUP/shortcuts" ]; then
-  tac "$BACKUP/shortcuts" | while IFS=$'\t' read -r comp action keys; do
+for b in "${LATER[@]}" "$BACKUP"; do
+  [ -s "$b/shortcuts" ] || continue
+  tac "$b/shortcuts" | while IFS=$'\t' read -r comp action keys; do
     # shellcheck disable=SC2086
     set -- $keys
     note "$comp / $action -> ${keys:-none}"
     run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcut asai 4 "$comp" "$action" "" "" $# "$@"
   done
-fi
+done
 
 # 2. Workspaces: remove the ones fusion-config.sh created, give the others their old names.
 echo "Workspaces"
-while read -r id; do
-  [ -n "$id" ] || continue
-  note "remove workspace $id"
-  run bus call org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager removeDesktop s "$id"
-done <"$BACKUP/created-desktops"
+for b in "${LATER[@]}" "$BACKUP"; do
+  [ -f "$b/created-desktops" ] || continue
+  while read -r id; do
+    [ -n "$id" ] || continue
+    note "remove workspace $id"
+    run bus call org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager removeDesktop s "$id"
+  done <"$b/created-desktops"
+done
 python3 -c '
 import json,sys
 for d in json.load(open(sys.argv[1]))["data"]:

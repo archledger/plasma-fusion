@@ -360,3 +360,19 @@ session), `review-{dark,light}-{bar,popup,wifi}.png`, `review-dark-{bluetooth,au
 `review-dark-nightlight-{enabled-fix,on,paused}.png`, `review-dark-clipboard-menu.png`,
 `review-light-screenshot-button.png`. Scenarios, stand-ins and the input tool:
 `review-tooling/`.
+
+## Polish (2026-09-29)
+
+See `docs/parts/polish.md`.
+
+- Keyboard badge (decision): the current layout's `kxkbrc [Layout] DisplayNames` entry if the user
+  set one, else its short name in capitals ("US" on the ThinkPad), also with a single layout;
+  hidden only when KWin reports no layout. Nothing writes kxkbrc.
+- `fusion-config.sh` gives the widget Meta+N (only when it has no shortcut and the key is free;
+  undone by `fusion-restore.sh`). Meta+Alt+S is Plasma's screen-reader toggle. A layout rebuilt
+  from System Settings (or `--reset-layout`) creates a new widget without the key; the next
+  `fusion-config.sh` run gives it Meta+N again after removing the dropped widget's dead entry.
+- Text weights (Font.Bold / Font.ExtraBold) resolve to the static font files: tile titles measured
+  within 10 % of the board's ink, no synthetic bold.
+- Tray items: the media controller and the other replaced items are hidden by the layout script;
+  the expander arrow is with the desktop-cards part.

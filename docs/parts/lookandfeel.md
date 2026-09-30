@@ -375,3 +375,21 @@ restore). Findings and fixes:
   KWin's title bars showed its default left buttons (menu + on all desktops): that KWin does not
   read `~/.config/kdedefaults`, and the keys copied into kwinrc for the test did not stay there
   (not investigated; the real session reads `ButtonsOnLeft=M` from kdedefaults).
+
+## Polish (2026-09-29)
+
+See `docs/parts/polish.md`.
+
+- Layout script, top-bar section: writes `plasmashellrc [PlasmaViews][Panel <id>]
+  floatingApplets=1` through `ConfigFile` right after `new Panel` and before the location is set,
+  so the stock pop-ups of the bar float with rounded corners also when the Global Theme is applied
+  from System Settings (verified live, no restart).
+- `fusion-config.sh`: sets the same key for existing Fusion top bars (older layouts) before its
+  last plasmashell restart, restarting once when only this key changed; gives the quick-settings
+  widget Meta+N when it has no shortcut and the key is free (recorded for `fusion-restore.sh`);
+  still writes nothing to kxkbrc (the badge shows the layout's display name or short name).
+  `fusion-restore.sh` puts plasmashellrc back from the backup as a whole; since the polish review
+  it also undoes the shortcut and workspace records of every later run (the Meta+N of a newer
+  `fusion-config.sh` lands in a later backup than the pre-Fusion one the restore picks).
+- Splash: the title and status use the plain CSS weight on the static font files (they were
+  drawn regular).

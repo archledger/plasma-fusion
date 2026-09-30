@@ -336,3 +336,20 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-top
 `review-launcher-state-sequence.png`, `review-appmenu-light-hover.png`, `review-settings-dark.png`,
 `review-full-{dark,light}-{dolphin,calendar}.png`, `review-test/` (scenarios, `pfinput.py`,
 `locate.py`, `session-common.sh`, locale test, per-run logs).
+
+## Polish (2026-09-29)
+
+See `docs/parts/polish.md`.
+
+- `FusionText.qml` (both widgets): Plasma Fusion now installs static per-weight font files, which
+  ignore the `wght` axis, so the old `font.weight: Normal` + `variableAxes` workaround drew the
+  name, date and time in regular weight. The CSS weight is now the font weight (name 800, date
+  700, time Space Grotesk 600), measured equal to the board.
+- Global menu (plasma-style): light hover / open title readable (accent pill, 4.9-5.5:1 measured),
+  pill 26 px tall with 2 px gaps in both variants. The remaining global-menu deviations are the rest
+  colour and the light pill colour (accent instead of grey).
+- Logo button: a launcher opened with Meta now shows the pressed state and the Meta / logo / Esc
+  sequences keep it right (real input, polish run po-8), so the "Meta-opened launcher" limit is
+  no longer observed with Plasma 6.7.5.
+- The double focus indicator during panel keyboard navigation is kept (the shell's underline is
+  the only indicator of the stock tray icons).

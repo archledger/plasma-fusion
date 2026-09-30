@@ -8,6 +8,9 @@
 exec 2>&1
 set -x
 T=$HOME/pf-tools
+# tools/vsession/vsession.sh already starts the whole session (KWin included) with kdedefaults
+# first in XDG_CONFIG_DIRS, as startplasma does; this export and merge_kdedefaults() are no-ops
+# there and only matter with the older vsession.sh.
 export XDG_CONFIG_DIRS=$HOME/.config/kdedefaults:/etc/xdg QT_FORCE_STDERR_LOGGING=1
 VARIANTS=${VARIANTS:-"dark light"}
 kpackagetool6 -t Plasma/Applet -i "$HOME/pkg/org.plasmafusion.pstest" >/dev/null 2>&1

@@ -366,3 +366,15 @@ Re-run: `STAGE=$PWD/build/rkw/home tools/build.sh && packages/kwin/tests/vsessio
 build/rkw/home build/rkw/seed-dark dark && tools/vsession/remote.sh rkw-3
 packages/kwin/tests/vsession/scenario-review.sh build/rkw/seed-dark 1440x900 230`, then
 `ssh thinkpad-fedora journalctl --user _PID=$(cat vsession-out/rkw-3/kwin.pid) -o cat`.
+
+## Polish (2026-09-29)
+
+See `docs/parts/polish.md`.
+
+- Switcher: keys typed before the card's first frame are no longer lost. KWin sends them to the
+  dim layer then; its focus item now takes active focus itself and calls the same `handleKey()` as
+  the card. Test: `QT_QPA_PLATFORM=offscreen python3 tests/offscreen/keytest.py` (commit 0918220
+  loses the key, this revision handles it). Keys in KWin's own 90 ms show delay still go nowhere.
+- Snap flyout: the Plasma style now has the `snaplayouts` prefix, so the flyout is the board's
+  (radius 16, edge .14); the deviation "Flyout radius 18" no longer applies.
+- Font weights (Font.Bold / Font.ExtraBold) resolve to the static font files; no synthetic bold.

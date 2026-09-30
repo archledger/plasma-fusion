@@ -46,6 +46,9 @@ VARIANTS = {
         launcher=dict(radius=26, a=0.86), osd=dict(radius=30, a=0.88),
         # Popups.dc.html notification cards: radius 18, 0.90
         notification=dict(radius=18, a=0.90),
+        # QuickSettings.dc.html snap layouts flyout: radius 16, rgba(22,27,46,0.9), padding 12,
+        # border rgba(255,255,255,0.14) (plasmafusion-snap's Meta+Z flyout uses the prefix)
+        snaplayouts=dict(radius=16, a=0.90, edge_a=0.14),
         # Plasma tooltips (ToolTipArea + DefaultToolTip: icon, title, subtitle, Window colours):
         # Popups.dc.html rich tooltip ("Battery 82%"): padding 14, radius 16, rgba(22,27,46,0.9),
         # border rgba(255,255,255,0.12), box-shadow 0 18px 44px rgba(0,0,0,0.45)
@@ -82,6 +85,8 @@ VARIANTS = {
                    shadow=dict(dy=18, blur=44, color=INK, alpha=0.16)),
         launcher=dict(radius=26, a=0.86), osd=dict(radius=30, a=0.88),
         notification=dict(radius=18, a=0.90),
+        # QuickSettingsLight.dc.html snap layouts flyout: white 0.9, border rgba(20,24,39,0.14)
+        snaplayouts=dict(radius=16, a=0.90, edge_a=0.14),
         # PopupsLight.dc.html rich tooltip: rgba(255,255,255,0.9), border rgba(20,24,39,0.12),
         # radius 16, box-shadow 0 18px 44px rgba(20,24,39,0.16) (Window colours: dark text)
         tooltip=dict(fill=WHITE, a=0.90, edge=(INK, 0.12), radius=16,
@@ -187,12 +192,15 @@ def dialog_background(v, a):
     # to its own margins and QML reports a binding loop on leftInset (checked on the ThinkPad).
     insets_hint(doc, "", (0, 0, 0, 0))
     # Optional prefixes for shell pieces that draw their own surface with KSvg.FrameSvgItem
-    # (imagePath "dialogs/background", prefix "launcher" / "osd" / "notification").
+    # (imagePath "dialogs/background", prefix "launcher" / "osd" / "notification" /
+    # "snaplayouts").
     for pfx, key, m in (("launcher", "launcher", (18, 18, 18, 18)), ("osd", "osd", (14, 14, 20, 20)),
-                        ("notification", "notification", (14, 14, 14, 14))):
+                        ("notification", "notification", (14, 14, 14, 14)),
+                        ("snaplayouts", "snaplayouts", (12, 12, 12, 12))):
         q = v[key]
         aa = q["a"] if a < 1 and a == p["a"] else a
-        add_frame(doc, Frame(pfx, q["radius"], surface_layers(p["fill"], aa, p["edge"]), m, mask=True,
+        edge = (p["edge"][0], q["edge_a"]) if "edge_a" in q else p["edge"]
+        add_frame(doc, Frame(pfx, q["radius"], surface_layers(p["fill"], aa, edge), m, mask=True,
                              note=f"{pfx} surface"))
     s = p["shadow"]
     # The launcher prefix (radius 26) shares these KWin shadow tiles (the Fusion launcher and
@@ -426,13 +434,38 @@ def _tab_line(doc, pfx, side, paint, x, y, w, h):
 
 
 def menubaritem(v):
-    c = v["ctl"]
+    """Global menu titles in the top bar (stock appmenu MenuDelegate, window-list MenuButton).
+
+    Main / MainLight header: titles have padding 4px 8px, radius 6 and 2 px between them, so the
+    hover pill is 26 px tall inside the 34 px bar (y 4-29). The stock appmenu makes every title
+    as tall as the panel (Layout.fillHeight, CanFillArea) and places titles without spacing, so
+    the pill is drawn with 4 px of transparent space above and below it and 1 px at each side
+    (together the board's 2 px gap); the margins are the padding (8 px inside the pill).
+
+    Text: the delegates draw a hovered or open title in the colour scheme's Selection
+    foreground (white in both Fusion schemes; with a custom accent KDE picks the readable colour
+    for that accent). Dark: the board's white on a white .10 pill (about 14:1). Light: the
+    board's grey pill would give white on light grey (1.3:1), so the light pill is the accent
+    (Selection background), on which the Selection foreground is readable by definition,
+    darkened by the light boards' ink at .10 (hover) and .18 (open menu): white on it is
+    5.4:1 and 6.0:1.
+    """
     doc = Doc("widgets/menubaritem")
     stretch_hint(doc)
-    m = (4, 4, 8, 8)  # MainLight/Main header menu items: padding 4px 8px, radius 6
-    add_frame(doc, Frame("normal", 6, [Fill(0, RGBA(0, 0, 0, 0.0))], m, note="normal"))
-    add_frame(doc, Frame("hover", 6, [Fill(0, Scheme(TEXT, c["tb_hover"]))], m, note="hover"))
-    add_frame(doc, Frame("pressed", 6, [Fill(0, Scheme(TEXT, c["tb_hover"] + 0.04))], m, note="open menu"))
+    m = (4, 4, 9, 9)            # (t, b, l, r): 1 px side inset + the board's 8 px padding
+    ins = (4, 1, 4, 1)          # (t, r, b, l) transparent space around the pill
+    if v["id"].endswith("light"):
+        # Accent darkened with the light boards' ink, so thin 13 px strokes stay above 4.5:1
+        # after antialiasing too (white on #2f6fdf is 4.7:1 nominal, 4.3:1 measured).
+        hover = [Fill(0, Scheme(HL, 1.0)), Fill(0, RGBA(*INK, 0.10))]
+        pressed = [Fill(0, Scheme(HL, 1.0)), Fill(0, RGBA(*INK, 0.18))]
+    else:
+        c = v["ctl"]
+        hover = [Fill(0, Scheme(TEXT, c["tb_hover"]))]
+        pressed = [Fill(0, Scheme(TEXT, c["tb_hover"] + 0.04))]
+    add_frame(doc, Frame("normal", 6, [Fill(0, RGBA(0, 0, 0, 0.0))], m, insets=ins, note="normal"))
+    add_frame(doc, Frame("hover", 6, hover, m, insets=ins, note="hover"))
+    add_frame(doc, Frame("pressed", 6, pressed, m, insets=ins, note="open menu"))
     return doc.render()
 
 

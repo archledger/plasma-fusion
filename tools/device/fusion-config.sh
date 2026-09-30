@@ -32,6 +32,11 @@
 #   Global Theme       plasma-apply-lookandfeel -a org.plasmafusion.{dark,light}.desktop
 #                      [--resetLayout]; kdeglobals [KDE] DefaultDarkLookAndFeel,
 #                      DefaultLightLookAndFeel, AutomaticLookAndFeel
+#   Top bar pop-ups    plasmashellrc [PlasmaViews][Panel <top bar id>] floatingApplets 1 (stock
+#                      pop-ups float under the bar with rounded corners; read at shell start)
+#   Quick settings     Meta+N opens the quick-settings pop-up, only when the widget has no
+#                      shortcut yet and nothing else uses Meta+N (the dead entry of a widget
+#                      dropped by an earlier layout rebuild is removed first)
 #   Workspaces         four virtual desktops Work, Design, Media, Chat in one row
 #   Shortcuts          Meta+1..4 switch workspace (added to "Switch to Desktop 1..4", removed
 #                      from "activate task manager entry 1..4")
@@ -67,6 +72,11 @@ BLUR_NOISE=0
 BLUR_SATURATION=140
 TOOLTIP_DELAY=600
 NOTIFICATION_TIMEOUT=5000
+# Global shortcut for the quick-settings pop-up (org.plasmafusion.quicksettings): Qt key code
+# of Meta+N and its QKeySequence text. Meta+Alt+S is Plasma's screen-reader toggle and Meta+A
+# walks through activities, so the notification key of other desktops is used.
+QS_SHORTCUT=$((0x10000000 + 0x4e))
+QS_SHORTCUT_TEXT=Meta+N
 # Window switcher: KWin hands every window to org.plasmafusion.switcher (DesktopMode 0), which
 # opens on "This workspace" and filters the list itself; its "All workspaces" tab needs the
 # full list. Alt+Tab and Meta+Tab keep KWin's defaults (both "Walk Through Windows").
@@ -380,6 +390,99 @@ for (var i = 0; i < ps.length; i++) {
 print(fixed.length ? "set " + fixed.join(", ") : "as designed");'
 }
 
+# Ids of the full-width top panels (the Plasma Fusion top bar).
+top_panel_ids() {
+  plasmashell_eval '
+var ids = [], ps = panels();
+for (var i = 0; i < ps.length; i++) {
+    if (ps[i].location === "top" && ps[i].lengthMode === "fill") ids.push(ps[i].id);
+}
+print(ids.join(" "));' || true
+}
+
+# Stock pop-ups of a non-floating panel are attached to it with square corners; with
+# plasmashellrc [PlasmaViews][Panel <id>] floatingApplets=1 they float under the bar with every
+# corner rounded (Main and QuickSettings boards). Desktop scripting has no property for it and
+# plasmashell reads it when it creates the panel view, so it takes effect at the next shell
+# start. Returns 0 when a value was changed.
+ensure_floating_applets() {
+  local id changed=1 before
+  for id in $(top_panel_ids); do
+    before=$CHANGES
+    set_key plasmashellrc "PlasmaViews/Panel $id" floatingApplets 1
+    [ "$CHANGES" = "$before" ] || changed=0
+  done
+  return $changed
+}
+
+# A widget that plasmashell drops while rebuilding the layout (plasma-apply-lookandfeel
+# --resetLayout, --reset-layout here, or a Global Theme applied with its layout in System
+# Settings) keeps its global shortcut in kglobalaccel: the shell unloads the old containments
+# without the per-widget clean-up. Such an "activate widget N" entry of a widget that is no
+# longer in the layout file does nothing but keeps the key taken, so it is removed. Returns 0
+# when an entry was (or, in a dry run, would be) removed. $1 Qt key code
+release_dead_widget_key() {
+  local appletsrc=$CONFIG/plasma-org.kde.plasma.desktop-appletsrc holders wid released=1
+  [ -s "$appletsrc" ] || return 1
+  holders=$(bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutsByKey "(ai)(i)" 1 "$1" 0 2>/dev/null |
+    python3 -c '
+import json, sys
+# KGlobalShortcutInfo: action, action name, component, component name, context, ...
+for s in json.load(sys.stdin)["data"][0]:
+    if s[2] == "plasmashell" and s[0].startswith("activate widget "):
+        print(s[0][len("activate widget "):])' 2>/dev/null || true)
+  for wid in $holders; do
+    case $wid in '' | *[!0-9]*) continue ;; esac
+    grep -Eq "^\[Containments\]\[$wid\]|^\[Containments\]\[[0-9]+\]\[Applets\]\[$wid\]" "$appletsrc" && continue
+    note "shortcut plasmashell / activate widget $wid: $(keyname "$1") -> removed (widget $wid is no longer in the layout)"
+    CHANGES=$((CHANGES + 1))
+    released=0
+    [ "$DRY" = 1 ] || bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss plasmashell "activate widget $wid" >/dev/null || true
+  done
+  return $released
+}
+
+# Meta+N for the quick-settings pop-up, when the widget has no shortcut of its own yet and no
+# other component uses the key (a dead entry of a removed widget is cleared first).
+# fusion-restore.sh removes it again (recorded like the other shortcuts, with no previous key).
+ensure_quicksettings_shortcut() {
+  local found entry id cur free released
+  found=$(plasmashell_eval '
+var out = [], ps = panels();
+for (var i = 0; i < ps.length; i++) {
+    var ws = ps[i].widgets("org.plasmafusion.quicksettings");
+    for (var j = 0; j < ws.length; j++) out.push(ws[j].id + "=" + ws[j].globalShortcut);
+}
+print(out.join(" "));' || true)
+  [ -n "$found" ] || { note "quick settings: widget not in a panel (no shortcut set)"; return 0; }
+  for entry in $found; do
+    id=${entry%%=*} cur=${entry#*=}
+    if [ -n "$cur" ]; then
+      note "quick settings widget $id shortcut = $cur (kept)"
+      continue
+    fi
+    released=1
+    release_dead_widget_key "$QS_SHORTCUT" && released=0
+    free=$(bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutAvailable "(ai)s" 1 "$QS_SHORTCUT" plasmashell 2>/dev/null | awk '{print $2}' || true)
+    # A dry run removes nothing, so the key only counts as free after the removal it would do.
+    [ "$DRY" = 1 ] && [ "$released" = 0 ] && free=true
+    if [ "$free" != true ]; then
+      note "quick settings widget $id: $QS_SHORTCUT_TEXT is in use or could not be checked (no shortcut set)"
+      continue
+    fi
+    note "quick settings widget $id shortcut: <none> -> $QS_SHORTCUT_TEXT"
+    CHANGES=$((CHANGES + 1))
+    [ "$DRY" = 1 ] && continue
+    printf '%s\t%s\t%s\n' plasmashell "activate widget $id" "" >>"$BACKUP/shortcuts"
+    plasmashell_eval "
+var ps = panels();
+for (var i = 0; i < ps.length; i++) {
+    var w = ps[i].widgetById($id);
+    if (w) { w.globalShortcut = \"$QS_SHORTCUT_TEXT\"; }
+}" >/dev/null
+  done
+}
+
 # gtk.css that holds nothing but Plasma's own import (kde-gtk-config writes "@import
 # 'colors.css';"), comments and blank lines can be replaced; anything else is kept.
 gtk_css_is_plain() { # $1 file
@@ -472,13 +575,13 @@ keep_auto=()
 say "Global Theme"
 note "${current_lnf:-<default>} -> $LNF; layout: $([ "$reset" = 1 ] && echo rebuilt || echo kept)"
 CHANGES=$((CHANGES + 1))
+restart_why=
 if [ "$reset" = 0 ]; then
   note "run: plasma-apply-lookandfeel -a $LNF ${keep_auto[*]}"
   [ "$DRY" = 1 ] || apply_lnf -a "$LNF" "${keep_auto[@]}"
   if [ -n "$INSTALL" ] && [ "$shell_running" = 1 ]; then
     # Widgets that were just updated on disk are loaded again only by a new plasmashell.
-    note "restart plasmashell (load the installed widgets)"
-    [ "$DRY" = 1 ] || restart_plasmashell
+    restart_why="load the installed widgets"
   fi
 elif [ "$shell_running" = 1 ]; then
   # plasmashell reads the Global Theme's desktop type (the widget-only "Desktop") only when it
@@ -486,7 +589,6 @@ elif [ "$shell_running" = 1 ]; then
   note "run: plasma-apply-lookandfeel -a $LNF ${keep_auto[*]}"
   note "restart plasmashell"
   note "run: plasma-apply-lookandfeel -a $LNF --resetLayout ${keep_auto[*]}"
-  note "restart plasmashell (widgets created in a running shell load part of their settings only at start)"
   if [ "$DRY" = 0 ]; then
     apply_lnf -a "$LNF" "${keep_auto[@]}"
     restart_plasmashell
@@ -494,8 +596,8 @@ elif [ "$shell_running" = 1 ]; then
     sleep 2
     note "panels after rebuild: $(wait_panels 2)"
     sleep 3
-    restart_plasmashell
   fi
+  restart_why="widgets created in a running shell load part of their settings only at start"
 else
   # Without a running plasmashell the layout cannot be rebuilt live; removing the layout file
   # makes plasmashell build the Plasma Fusion layout when it next starts.
@@ -505,6 +607,17 @@ else
     apply_lnf -a "$LNF" --resetLayout "${keep_auto[@]}" || true
     rm -f "$CONFIG/plasma-org.kde.plasma.desktop-appletsrc"
   fi
+  note "note: run this again once plasmashell runs, for the top bar's floating pop-ups and the quick-settings shortcut"
+fi
+# Written before the (last) restart, which is what applies it.
+if has_name org.kde.plasmashell && fusion_layout_present; then
+  if ensure_floating_applets && [ -z "$restart_why" ]; then
+    restart_why="apply the top bar's floating pop-ups"
+  fi
+fi
+if [ -n "$restart_why" ]; then
+  note "restart plasmashell ($restart_why)"
+  [ "$DRY" = 1 ] || restart_plasmashell
 fi
 if [ "$DRY" = 0 ] && has_name org.kde.plasmashell && fusion_layout_present; then
   note "panel thickness: $(fix_panel_thickness)"
@@ -658,6 +771,13 @@ set_key plasmarc OSD kbdLayoutChangedEnabled true
 set_key plasmanotifyrc Notifications PopupPosition TopRight
 set_key plasmanotifyrc Notifications PopupTimeout "$NOTIFICATION_TIMEOUT"
 set_key krunnerrc General FreeFloating true
+# Keyboard layout badge (quick settings, lock screen): kxkbrc is left alone on purpose. The
+# badge shows the current layout's [Layout] DisplayNames entry when the user set one, else its
+# short name in capitals ("US" where the board draws its sample "EN"); writing kxkbrc Use or
+# LayoutList would replace the layouts KWin takes from the system (XKB_DEFAULT_LAYOUT).
+if has_name org.kde.plasmashell; then
+  ensure_quicksettings_shortcut
+fi
 
 # ---------- 6. lock screen ----------
 

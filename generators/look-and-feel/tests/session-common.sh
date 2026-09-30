@@ -1,10 +1,11 @@
 # shellcheck shell=bash
 # Test tooling (not installed), sourced by the scenarios inside a tools/vsession session.
 #
-# A virtual session is not started by startplasma, so ~/.config/kdedefaults (where a Global
-# Theme writes its values) is not in XDG_CONFIG_DIRS. The scenarios export it for everything
-# they start and restart plasmashell with it (as a login would); KWin was started without it,
-# so its keys are copied into the user files with merge-kdedefaults.py.
+# A Global Theme writes its values to ~/.config/kdedefaults, which startplasma puts first in
+# XDG_CONFIG_DIRS. tools/vsession/vsession.sh does the same for the whole session (KWin
+# included) since commit 0918220, so the export below only repeats it, and kwin_defaults()'s
+# merge-kdedefaults.py is a no-op there (kwriteconfig6 skips values the cascade already has);
+# both are kept for copies of the older vsession.sh, whose KWin started without kdedefaults.
 T=$HOME/pf-tools
 export XDG_CONFIG_DIRS=$HOME/.config/kdedefaults:/etc/xdg QT_FORCE_STDERR_LOGGING=1
 log() { echo "[$(date +%T)] $*"; }

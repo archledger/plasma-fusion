@@ -11,11 +11,11 @@ QtObject {
     // Fonts. Manrope for UI text, Space Grotesk for the clock and the user name.
     readonly property string uiFont: "Manrope"
     readonly property string displayFont: "Space Grotesk"
-    // Bold (700) and extra bold (800) text. Both fonts are variable fonts whose default
-    // instance is light, and Qt's FreeType engine synthesises bold on top of any weight of
-    // 700 or more below 64 px in that case, so Font.Bold would come out heavier than the
-    // real ExtraBold. Text therefore asks for the named instance by style name and keeps
-    // the weight at DemiBold (also the fallback for any other font).
+    // Bold (700) and extra bold (800) text asks for the named style and keeps the weight at
+    // DemiBold (also the fallback for any other font). Plasma Fusion installs one static file
+    // per weight, so the style name picks the real Bold / ExtraBold file; with a variable font
+    // (light default instance) Qt's FreeType engine would synthesise bold on top of any weight
+    // of 700 or more below 64 px, which the style name avoids as well.
     readonly property string bold: "Bold"
     readonly property string extraBold: "ExtraBold"
 
