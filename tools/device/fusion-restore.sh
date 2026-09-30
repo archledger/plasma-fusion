@@ -16,14 +16,20 @@
 # run and every later one (each run records only what it changed itself), puts every backed-up
 # configuration file back (plasmashellrc with it, which removes the top bar's floatingApplets
 # key; files that did not exist are removed, among them the lock-screen drop-in of
-# lockscreen-enable.sh), then reloads KWin and restarts plasmashell. The installed Plasma Fusion
-# packages stay installed.
+# lockscreen-enable.sh), then reloads KWin and restarts plasmashell. The login check
+# (docs/parts/gate.md) is removed with its env stub, notify unit and state unless the restored
+# backup had it installed; its log stays. The installed Plasma Fusion packages, the Global Theme
+# "My previous desktop" among them, stay installed.
 # Log out and back in afterwards so every application, the lock screen and the splash screen
 # use the restored settings.
 set -euo pipefail
 
 STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
+DATA=${XDG_DATA_HOME:-$HOME/.local/share}
+GATE_STUB_REL=plasma-workspace/env/plasma-fusion-gate.sh
+GATE_FILES=("$GATE_STUB_REL" systemd/user/plasma-fusion-gate-notify.service
+  systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-gate-notify.service)
 DRY=0 PICK=first-foreign BACKUP=
 while [ $# -gt 0 ]; do
   case $1 in
@@ -167,8 +173,41 @@ while read -r state path; do
   esac
 done <"$BACKUP/manifest"
 
+# 3b. The login check. Backups made before it existed do not list its files, so it goes whenever
+#     the restored state does not have its stub; its records are moot once the files are back.
+GATE_REMOVED=0
+if ! grep -qx "present $GATE_STUB_REL" "$BACKUP/manifest"; then
+  for path in "${GATE_FILES[@]}"; do
+    if [ -e "$CONFIG/$path" ] || [ -L "$CONFIG/$path" ]; then
+      note "remove ~/.config/$path (login check)"
+      run rm -f "${CONFIG:?}/$path"
+      GATE_REMOVED=1
+    fi
+  done
+  if [ -d "$DATA/plasma-fusion/gate" ]; then
+    note "remove $DATA/plasma-fusion/gate (login check)"
+    run rm -rf "${DATA:?}/plasma-fusion/gate"
+    GATE_REMOVED=1
+  fi
+  if [ -d "$STATE/gate" ]; then
+    note "remove $STATE/gate (the login check's records; gate.log stays)"
+    run rm -rf "${STATE:?}/gate"
+    GATE_REMOVED=1
+  fi
+  if [ "$DRY" = 0 ]; then
+    for d in plasma-workspace/env plasma-workspace systemd/user/xdg-desktop-autostart.target.wants; do
+      rmdir --ignore-fail-on-non-empty "$CONFIG/$d" 2>/dev/null || true
+    done
+    [ "$GATE_REMOVED" = 0 ] || printf '%s restore: login check removed by fusion-restore.sh (%s)\n' \
+      "$(date +%Y-%m-%dT%H:%M:%S%z)" "$BACKUP" >>"$STATE/gate.log" 2>/dev/null || true
+  fi
+fi
+
 # 4. Reload.
 if [ "$DRY" = 0 ]; then
+  if [ "$GATE_REMOVED" = 1 ] || grep -q "plasma-fusion-gate-notify.service" "$BACKUP/manifest"; then
+    systemctl --user daemon-reload 2>/dev/null || true
+  fi
   if grep -q "plasma-kwin_wayland.service.d/" "$BACKUP/manifest"; then
     rmdir --ignore-fail-on-non-empty "$CONFIG/systemd/user/plasma-kwin_wayland.service.d" 2>/dev/null || true
     # The lock-screen drop-in is read by systemd at the next login.

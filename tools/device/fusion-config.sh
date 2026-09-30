@@ -66,6 +66,16 @@
 #   Terminal, editor   konsolerc default profile "Plasma Fusion"; katerc/kwriterc colour theme
 #                      "Plasma Fusion Dark" (the boards draw a dark terminal and code window in
 #                      both variants)
+#   Previous look      only while it does not exist yet: the look from before Plasma Fusion (the
+#                      newest backup taken under another Global Theme) saved as the Global Theme
+#                      "My previous desktop", org.plasmafusion.previous.desktop
+#                      (tools/device/previous-theme.py)
+#   Login check        tools/device/gate/plasma-fusion-gate.sh as
+#                      ~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh, its env stub
+#                      ~/.config/plasma-workspace/env/plasma-fusion-gate.sh and
+#                      plasma-fusion-gate-notify.service; then records the installed Plasma
+#                      versions and lock-screen files as tested and turns back on what a login
+#                      switched off (docs/parts/gate.md)
 set -euo pipefail
 
 DARK=org.plasmafusion.dark.desktop
@@ -100,6 +110,11 @@ LOCKSHELL=org.plasmafusion.lockshell
 WALLPAPER=PlasmaFusion
 KONSOLE_PROFILE="Plasma Fusion.profile"
 EDITOR_THEME="Plasma Fusion Dark"
+PREVIOUS_LNF=org.plasmafusion.previous.desktop
+GATE_UNIT_NAME=plasma-fusion-gate-notify.service
+GATE_STUB_REL=plasma-workspace/env/plasma-fusion-gate.sh
+GATE_UNIT_REL=systemd/user/$GATE_UNIT_NAME
+GATE_WANTS_REL=systemd/user/xdg-desktop-autostart.target.wants/$GATE_UNIT_NAME
 
 DRY=0 VARIANT=dark AUTO=0 LAYOUT=auto HOT_CORNER=0 FONTS=0 INSTALL=
 usage() { sed -n '/^#   fusion-config.sh/,/^#   -h/p' "$0" | sed 's/^# \{0,1\}//'; }
@@ -221,6 +236,7 @@ BACKUP_FILES=(
   gtk-3.0/settings.ini gtk-4.0/settings.ini xsettingsd/xsettingsd.conf Trolltech.conf
   gtk-3.0/gtk.css gtk-4.0/gtk.css gtk-3.0/plasma-fusion.css gtk-4.0/plasma-fusion.css
   systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf
+  "$GATE_STUB_REL" "$GATE_UNIT_REL" "$GATE_WANTS_REL"
 )
 # Configuration files the build or the system templates would install are saved as well.
 if [ -n "$CONFIG_SRC" ]; then
@@ -601,9 +617,49 @@ PY
   done < <(find "$src" -type f -print0 | sort -z)
 }
 
+# ---------- 0. the look before Plasma Fusion ----------
+
+# Saved once, from the newest backup taken while another Global Theme was active (on a first run,
+# the backup just taken), so "My previous desktop" can be chosen in System Settings.
+# fusion-restore.sh stays the full undo; the package stays installed.
+save_previous_look() {
+  local pick='' b lnf opts=()
+  say "Previous look"
+  if [ -e "$DATA/plasma/look-and-feel/$PREVIOUS_LNF/metadata.json" ]; then
+    note "Global Theme \"My previous desktop\" ($PREVIOUS_LNF) exists (kept)"
+    return 0
+  fi
+  if [ ! -f "$HERE/previous-theme.py" ]; then
+    note "note: $HERE/previous-theme.py is missing; \"My previous desktop\" is not saved"
+    return 0
+  fi
+  [ "$DRY" = 1 ] && opts=(--dry-run)
+  shopt -s nullglob
+  for b in "$STATE"/backup-*/; do
+    lnf=$(sed -n 's/^lookandfeel=//p' "$b/info" 2>/dev/null || true)
+    case $lnf in org.plasmafusion.*) ;; *) pick=${b%/} ;; esac
+  done
+  shopt -u nullglob
+  lnf=$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)
+  if [ -n "$pick" ]; then
+    note "save the look of $pick as the Global Theme \"My previous desktop\" ($PREVIOUS_LNF)"
+  elif [ "$DRY" = 1 ] && [[ $lnf != org.plasmafusion.* ]]; then
+    note "save the current look as the Global Theme \"My previous desktop\" ($PREVIOUS_LNF)"
+    opts+=(--config-dir "$CONFIG" --lookandfeel "$lnf")
+  else
+    note "no backup from before Plasma Fusion: \"My previous desktop\" is not saved"
+    return 0
+  fi
+  [ -z "$pick" ] || opts+=(--backup "$pick")
+  CHANGES=$((CHANGES + 1))
+  python3 "$HERE/previous-theme.py" --data "$DATA" "${opts[@]}" | sed 's/^/  /' ||
+    note "warning: saving \"My previous desktop\" failed (nothing else is affected)"
+}
+
 # ---------- 1. Global Theme and layout ----------
 
 [ "$DRY" = 1 ] && say "Dry run: nothing is changed." || make_backup
+save_previous_look
 if [ -n "$INSTALL" ]; then
   install_build
 elif [ -n "$CONFIG_SRC" ]; then
@@ -904,6 +960,103 @@ if data_path "org.kde.syntax-highlighting/themes/$EDITOR_THEME.theme" >/dev/null
   done
 else
   note "note: editor colour theme $EDITOR_THEME is not installed"
+fi
+
+# ---------- 8. login check ----------
+
+# tools/device/gate/plasma-fusion-gate.sh runs at every login from an env stub (startplasma sources
+# ~/.config/plasma-workspace/env/*.sh before KWin starts). It falls back to Plasma's own lock screen
+# and the Aurorae title bars after a Plasma update until this script records the new versions, and
+# switches the Fusion-only parts off while another Global Theme is chosen. See docs/parts/gate.md.
+GATE_SRC=$HERE/gate/plasma-fusion-gate.sh
+GATE_ENGINE=$DATA/plasma-fusion/gate/plasma-fusion-gate.sh
+sh_quote() { local q="'\\''"; printf "'%s'" "${1//\'/$q}"; }
+gate_stub() {
+  cat <<EOF
+# Plasma Fusion login check. Installed by tools/device/fusion-config.sh, removed by
+# tools/device/fusion-restore.sh (docs/parts/gate.md in the Plasma Fusion sources).
+# startplasma sources every *.sh here in one /bin/sh and waits for it before KWin and plasmashell
+# start: the check runs as its own process with a time limit, its output and exit status are
+# dropped, and this file sets no variable or shell option and never exits.
+[ -r $(sh_quote "$GATE_ENGINE") ] &&
+  timeout -k 1 4 /bin/bash $(sh_quote "$GATE_ENGINE") login </dev/null >/dev/null 2>&1 || :
+EOF
+}
+gate_unit() {
+  cat <<EOF
+# Plasma Fusion login check: shows the notification the check queued at login, once the desktop
+# is up (ordered like systemd's own XDG autostart units). Installed by tools/device/fusion-config.sh,
+# removed by tools/device/fusion-restore.sh.
+[Unit]
+Description=Plasma Fusion login check notification
+After=graphical-session.target plasma-workspace.target
+PartOf=graphical-session.target
+ConditionPathExists=${STATE//%/%%}/gate/notify
+
+[Service]
+Type=exec
+ExecStart=/bin/bash "${GATE_ENGINE//%/%%}" notify
+Slice=app.slice
+TimeoutStopSec=5s
+
+[Install]
+WantedBy=xdg-desktop-autostart.target
+EOF
+}
+# Write a small text file when its content differs. Returns 0 when it was (or would be) written.
+install_text() { # $1 path, $2 content
+  if [ -f "$1" ] && [ "$(cat "$1")" = "$2" ]; then
+    note "$1 (unchanged)"
+    return 1
+  fi
+  note "write $1"
+  CHANGES=$((CHANGES + 1))
+  [ "$DRY" = 1 ] && return 0
+  mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$2" >"$1.tmp" && chmod 0644 "$1.tmp" && mv -f "$1.tmp" "$1"
+}
+
+say "Login check"
+if [ ! -f "$GATE_SRC" ]; then
+  note "note: $GATE_SRC is missing; the login check is not installed"
+else
+  unit_changed=0
+  if [ -f "$GATE_ENGINE" ] && cmp -s "$GATE_SRC" "$GATE_ENGINE"; then
+    note "$GATE_ENGINE (unchanged)"
+  else
+    note "install $GATE_ENGINE"
+    CHANGES=$((CHANGES + 1))
+    if [ "$DRY" = 0 ]; then
+      mkdir -p "$(dirname "$GATE_ENGINE")"
+      cp "$GATE_SRC" "$GATE_ENGINE.tmp" && chmod 0755 "$GATE_ENGINE.tmp" && mv -f "$GATE_ENGINE.tmp" "$GATE_ENGINE"
+    fi
+  fi
+  install_text "$CONFIG/$GATE_STUB_REL" "$(gate_stub)" || true
+  install_text "$CONFIG/$GATE_UNIT_REL" "$(gate_unit)" && unit_changed=1
+  if [ -L "$CONFIG/$GATE_WANTS_REL" ] && [ "$(readlink "$CONFIG/$GATE_WANTS_REL")" = "../$GATE_UNIT_NAME" ]; then
+    note "$CONFIG/$GATE_WANTS_REL (unchanged)"
+  else
+    note "enable $GATE_UNIT_NAME ($CONFIG/$GATE_WANTS_REL)"
+    CHANGES=$((CHANGES + 1))
+    unit_changed=1
+    if [ "$DRY" = 0 ]; then
+      mkdir -p "$(dirname "$CONFIG/$GATE_WANTS_REL")"
+      ln -sfn "../$GATE_UNIT_NAME" "$CONFIG/$GATE_WANTS_REL"
+    fi
+  fi
+  if [ "$unit_changed" = 1 ] && [ "$DRY" = 0 ]; then
+    systemctl --user daemon-reload 2>/dev/null ||
+      note "note: systemctl --user daemon-reload failed; the unit is read at the next login"
+  fi
+  # This run is the test of the installed Plasma: record it, and turn back on what a login switched
+  # off (the compiled decoration; the lock screen came back in section 6).
+  if [ "$DRY" = 1 ]; then
+    PF_GATE_TOOL=$HERE/fusion-config.sh bash "$GATE_SRC" deploy --dry-run || note "warning: the login check could not read the installed versions"
+  elif PF_GATE_TOOL=$HERE/fusion-config.sh bash "$GATE_ENGINE" deploy; then
+    bus call org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null 2>&1 || true
+  else
+    note "warning: the login check could not record the installed versions; the next login uses the safe fallback"
+  fi
 fi
 
 if [ "$DRY" = 1 ]; then

@@ -51,9 +51,7 @@ for p in "${ADDED[@]}"; do
     run rm -rf -- "$p"
   fi
 done
-for d in .local/share/wallpapers; do
-  for w in "$d"/PlasmaFusion*; do [ -e "$w" ] && run rm -rf -- "$w"; done
-done
+for w in .local/share/wallpapers/PlasmaFusion*; do [ -e "$w" ] && run rm -rf -- "$w"; done
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   if [ -d "$WORK/$p" ]; then

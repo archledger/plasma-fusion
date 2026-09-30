@@ -400,3 +400,14 @@ See `docs/parts/polish.md`.
   `fusion-config.sh` lands in a later backup than the pre-Fusion one the restore picks).
 - Splash: the title and status use the plain CSS weight on the static font files (they were
   drawn regular).
+
+## Login check and "My previous desktop" (2026-09-30)
+
+See `docs/parts/gate.md`. `fusion-config.sh` now also saves the look from before Plasma Fusion as
+the Global Theme "My previous desktop" (`org.plasmafusion.previous.desktop`, section 0, once) and
+installs the login check (section 8: `~/.config/plasma-workspace/env/plasma-fusion-gate.sh`,
+`plasma-fusion-gate-notify.service`), which after a Plasma update falls back to Plasma's own lock
+screen and the Aurorae title bars until `fusion-config.sh` records the new versions, and switches
+the lock screen, snap/attach scripts, snap outline and Fusion switcher off while another Global
+Theme is chosen (automatic light/dark switching with a Plasma Fusion theme as one of the two counts
+as Plasma Fusion). `fusion-restore.sh` removes the check; "My previous desktop" stays installed.

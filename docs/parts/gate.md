@@ -1,0 +1,363 @@
+# Login check (update safety) and switching back
+
+Status: built and tested on the ThinkPad in private sessions (gt-a, gt-ld) and against throw-away
+HOME trees, then reviewed and fixed (see Review); not installed in the real session (the lead
+deploys). Last edited 2026-09-30.
+
+Covers ADAPTIVE.md fixes 9 and 10, GAPS.md G14 and G15, test matrix M27
+(`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-adaptive/`).
+
+## What it is
+
+| Piece | What it does |
+|---|---|
+| Login check (`tools/device/gate/plasma-fusion-gate.sh`) | Runs at every login before KWin starts. After a Plasma, KWin, kscreenlocker, libplasma, KDecoration or Qt update, or when the lock-screen files changed, it uses Plasma's own lock screen and the Aurorae title bars until the new versions are checked, and queues one notification. While another Global Theme is chosen, it switches the Fusion-only parts off. |
+| "My previous desktop" (`org.plasmafusion.previous.desktop`) | A normal Global Theme with the look the computer had before Plasma Fusion, saved before the first `fusion-config.sh` apply. |
+| `fusion-config.sh` | Installs the check, records the installed versions as tested, turns back on what the check switched off, saves "My previous desktop". |
+| `fusion-restore.sh` | The full undo, now also of the check. |
+
+## Files
+
+| Path (repository) | Installed as | What |
+|---|---|---|
+| `tools/device/gate/plasma-fusion-gate.sh` | `~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh` | the check: `login`, `check`, `deploy [--dry-run]`, `notify`, `status` |
+| (written by `fusion-config.sh`, section 8) | `~/.config/plasma-workspace/env/plasma-fusion-gate.sh` | env stub startplasma sources at login |
+| (same) | `~/.config/systemd/user/plasma-fusion-gate-notify.service` + `xdg-desktop-autostart.target.wants/` link | shows the queued notification once the desktop is up |
+| `tools/device/previous-theme.py` | `~/.local/share/plasma/look-and-feel/org.plasmafusion.previous.desktop/` | "My previous desktop" generator |
+| `tools/device/tests/gate-unit.sh`, `gate-stub.sh`, `vsession/*` | not installed | tests (see Verification) |
+
+State, all under `~/.local/state/plasma-fusion/`: `gate.log` (one line per run plus details),
+`gate/tested` (the record `fusion-config.sh` writes: package versions, lock-screen hash and the
+path of the `fusion-config.sh` that wrote it), `gate/cache` (installed versions keyed by the
+rpm database's inode, size and time), `gate/off` (what the check switched off), `gate/saved/` (the
+lock-screen drop-in while it is aside), `gate/notify` (queued notification), `gate/notified`
+(the change already reported), `gate/status` (for other parts, see below).
+
+## When a login runs it (plasma-workspace 6.7.5, verified in the source)
+
+`startplasma-wayland.cpp` main: `runEnvironmentScripts()` first, then `setupPlasmaEnvironment()`
+(adds `~/.config/kdedefaults` to `XDG_CONFIG_DIRS`), `runStartupConfig()`, `syncDBusEnvironment()`,
+`importSystemdEnvrionment()`, then `startPlasmaSession()`, which calls systemd `Manager.Reload`
+(`reloadSystemd()`) and only then `StartUnit plasma-workspace-wayland.target` (KWin's
+`plasma-kwin_wayland.service`; `plasma-core.target` with plasmashell comes after KWin).
+
+`runEnvironmentScripts()` (`startplasma.cpp`) collects `plasma-workspace/env/*.sh` from every config
+directory, system ones first and `~/.config` last, each in name order, and runs ONE process:
+`/bin/sh /usr/libexec/plasma-sourceenv.sh FILE...`, which does `. $i >/dev/null` for each file and
+then `env -0`; startplasma imports that environment (minus `_`, `SHELL`, `SHLVL*`). It waits with
+`waitForFinished(-1)` and never looks at the exit status. So:
+
+- a slow or hanging script holds the whole login (black screen, no time limit);
+- `exit`, or an error under a `set -e` an earlier script left on, ends the shell before `env -0`,
+  and every variable all env scripts set is lost (SSH agent, Fedora's `XDG_*`), without an error;
+- output to stdout is discarded, stderr is captured and dropped;
+- variables a script sets stay in the environment of the whole session.
+
+The stub therefore only runs the check as its own process and never exits:
+
+```sh
+[ -r '/home/test/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' ] &&
+  timeout -k 1 4 /bin/bash '/home/test/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' login </dev/null >/dev/null 2>&1 || :
+```
+
+Worst case (a hung check) the login waits 5 s. The check itself runs no GUI or Qt program, makes
+no D-Bus or systemd call at login, reads the configuration with one `awk` run, edits files in place
+(one `awk` run per file, written next to the file and renamed over it, permissions kept) and always
+exits 0. A drop-in it moves aside counts for this login because startplasma reloads systemd before
+it starts KWin; `kwinrc` is read by KWin when it starts.
+
+## What the check decides
+
+| Part | "On" when | Needs |
+|---|---|---|
+| lock screen | `~/.config/systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf` exists | Fusion theme, tested versions, tested lock-screen files |
+| decoration | effective `kwinrc [org.kde.kdecoration2] library=org.plasmafusion.decoration` (user file or kdedefaults) | tested versions |
+| snap, attach | `kwinrc [Plugins] plasmafusion-snapEnabled` / `plasmafusion-attachEnabled` = true | Fusion theme |
+| outline | `kwinrc [Outline] QmlPath` contains `plasmafusion` | Fusion theme |
+| switcher | effective `kwinrc [TabBox]` or `[TabBoxAlternative] LayoutName=org.plasmafusion.switcher` | Fusion theme |
+
+"Fusion theme": `kdeglobals [KDE] LookAndFeelPackage` is `org.plasmafusion.dark.desktop` or
+`org.plasmafusion.light.desktop` ("My previous desktop" is not), or automatic light/dark switching
+(`AutomaticLookAndFeel=true`) names one of them as `DefaultLightLookAndFeel` or
+`DefaultDarkLookAndFeel`: startplasma picks the light or dark theme only after the env scripts ran
+(`setupPlasmaEnvironment` → `determineLookAndFeel`), so `LookAndFeelPackage` can still name the
+other one when the check runs. "Tested versions": the upstream
+version (`%{VERSION}`, not the release: a distribution rebuild keeps the interfaces) of
+`plasma-workspace kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative` equals the
+record; a missing or unreadable record, or rpm failing or taking over 3 s, counts as untested.
+"Tested lock-screen files": sha256 over the files and relative names of the installed
+`org.plasmafusion.lockshell` (user copy first, as kscreenlocker finds it) equals the record, and the
+package exists. Versions and the lock-screen hash are only looked at while the lock screen or the
+decoration is on (or held off by the check); `rpm -q` only runs after the rpm database changed.
+
+Switching off (recorded first in `gate/off`, then written):
+
+| Part | Change |
+|---|---|
+| lock screen | drop-in moved to `gate/saved/` (as `lockscreen-disable.sh` removes it), empty directory removed |
+| decoration | when `~/.config/kdedefaults` (the Global Theme) names `org.kde.kwin.aurorae.v2` with `__aurorae__svg__PlasmaFusion{Dark,Light}`: the user's `library` and `theme` keys are removed, so the title bars follow a light/dark switch startplasma makes after the check (with Follow sunset it writes only kdedefaults). Otherwise user `kwinrc` `library=org.kde.kwin.aurorae.v2`, `theme=__aurorae__svg__PlasmaFusion{Dark,Light}` (variant from the Global Theme, else the colour scheme's name or window colour); with `plasmafusionrc [Decoration] ButtonStyle=LeftCircles` the `-Left` theme and `ButtonsOnLeft=XIA`, `ButtonsOnRight=_` as the settings module does; Breeze if the Aurorae themes are missing |
+| snap, attach | the `[Plugins]` key removed (the scripts are `EnabledByDefault: false`) |
+| outline | `[Outline] QmlPath` removed (KWin's own outline) |
+| switcher | `LayoutName` removed, or set to KWin's default `thumbnail_grid` where kdedefaults still names the Fusion switcher (a Global Theme without a switcher of its own, such as Breeze, leaves it there); `DesktopMode=0` and `HighlightWindows=false` (fusion-config.sh's values for the Fusion switcher) removed |
+
+Turning back on happens when a part's needs hold again at a login, or when `fusion-config.sh` runs
+(`deploy`). A key is put back only while it still holds what the check wrote; anything changed
+since is left alone. The decoration is the exception: every Global Theme apply (also the automatic
+light/dark switch and the quick-settings Dark tile) removes the user's decoration keys, so the
+compiled decoration comes back whenever the title bars are still a Plasma Fusion Aurorae theme (and
+the plugin is installed), written to the user file unless kdedefaults already names it. The
+drop-in comes back only when it is not there already and the lock-screen package is installed.
+
+A part switched off because of the Global Theme is switched off once: if the user turns it on
+again under that theme (for example snap layouts under Breeze), it stays on. Parts held off because
+of an update are enforced at every login.
+
+Notification: when the check holds the lock screen or the decoration off because of an update,
+it writes `gate/notify` (summary "Safe mode after a Plasma change", body with the changed versions
+and what the session uses, and the `fusion-config.sh` that recorded the versions as the way back,
+or `tools/device/fusion-config.sh` when that file is gone). At login it only
+writes the file; `plasma-fusion-gate-notify.service` (`Type=exec`, `After=graphical-session.target
+plasma-workspace.target`, wanted by `xdg-desktop-autostart.target`, `ConditionPathExists` on that
+file: the same ordering systemd gives XDG autostart units) runs `plasma-fusion-gate.sh notify`,
+which waits for `org.freedesktop.Notifications` (plasmashell), sends it with `notify-send` (gdbus
+as fallback) and removes the file. The same change is reported once (`gate/notified`); a switch
+back to the tested versions clears both.
+
+`gate/status` (written only when it changes) tells other parts what is held off:
+
+```
+format=1
+lookandfeel=org.plasmafusion.dark.desktop
+versions=changed        # or tested
+held=lockscreen decoration
+```
+
+## fusion-config.sh and fusion-restore.sh
+
+`fusion-config.sh` (dry run prints all of it):
+
+- section 0, "Previous look": when `org.plasmafusion.previous.desktop` does not exist yet, runs
+  `previous-theme.py` on the newest backup taken while the Global Theme was not a Plasma Fusion one
+  (on a first run: the backup it just took);
+- section 8, "Login check": copies the check to `~/.local/share/plasma-fusion/gate/`, writes the
+  stub and the unit (absolute paths), links the unit into `xdg-desktop-autostart.target.wants`,
+  `systemctl --user daemon-reload` when the unit changed, then `plasma-fusion-gate.sh deploy`:
+  records the installed versions and lock-screen hash as tested, turns back on what a login switched
+  off, clears a queued notification, and KWin reconfigures;
+- the stub, the unit and the link are in the backup list, so a restore of a later backup puts them
+  back as they were. A second run reports them unchanged (0 changes from this section).
+
+`fusion-restore.sh`: when the restored backup does not have the stub (every backup from before the
+check existed, and the pre-Fusion one), it removes the stub, the unit and its link, the check
+itself and `gate/` (records, cache, saved drop-in), keeps `gate.log`, and reloads systemd.
+"My previous desktop" stays installed.
+
+## My previous desktop
+
+`previous-theme.py --backup BACKUP` (or `--config-dir DIR --lookandfeel ID`) writes a
+`Plasma/LookAndFeel` package, Name "My previous desktop", with the values that were in effect:
+the user's file, else the backup's `kdedefaults` (what the previous Global Theme wrote), else the
+previous Global Theme's own defaults, else the system config directories (on Fedora
+`/usr/share/kde-settings/kde-profile/default/xdg`, which is in the session's `XDG_CONFIG_DIRS`),
+else Plasma 6.7.5's built-in default. A `kdedefaults` directory is never used as a system
+directory: a Plasma session's `XDG_CONFIG_DIRS` starts with the live `~/.config/kdedefaults`
+(Plasma Fusion's values once it was applied), and `fusion-config.sh` takes that variable from
+plasmashell.
+
+| Package file | Keys |
+|---|---|
+| `contents/defaults` | kdeglobals `[KDE] widgetStyle`, `[General] ColorScheme`, `[Icons] Theme`, `[General] font fixed smallestReadableFont toolBarFont menuFont`, `[WM] activeFont`; plasmarc `[Theme] name`; kcminputrc `[Mouse] cursorTheme`; kwinrc `[org.kde.kdecoration2] library theme NoPlugin BorderSize`, `[WindowSwitcher] LayoutName` (from `[TabBox] LayoutName`); ksplashrc `[KSplash] Theme`; `[Wallpaper] Image` when the previous theme names one |
+| `contents/layouts/defaults` | kwinrc `ButtonsOnLeft`, `ButtonsOnRight`, `[Windows] BorderlessMaximizedWindows` |
+| `contents/previews/` | the previous theme's `preview.png` and `fullscreenpreview.jpg` |
+
+Upstream details this relies on (libklookandfeel 6.7.5 `klookandfeelmanager.cpp`):
+
+- The fonts are applied only when the package "provides" them, and `packageContents()` looks for
+  `font..menuFont` in `[kdeglobals][WM]` and `activeFont` in `[kdeglobals][General]` (the groups are
+  swapped against where `save()` reads them). The package therefore also carries
+  `[kdeglobals][WM] font=` as a marker; nothing ever writes it.
+- The border size: `fusion-config.sh` sets `BorderSizeAuto=false`, so the package names the size
+  the previous decoration asks for (Breeze: `None`, `breeze.json recommendedBorderSize`) unless the
+  user had set one.
+- Title-bar buttons are read from `layouts/defaults` and applied only with "Desktop and window
+  layout".
+- Every Global Theme other than Breeze falls back to `org.kde.breeze.desktop` for missing files
+  (`lookandfeel.cpp pathChanged`): the package has no layout script, so "Desktop and window layout"
+  rebuilds Plasma's default Breeze panel (as for any theme without one), and its splash entry is
+  Breeze's. It cannot give back the old panels; `fusion-restore.sh` can.
+
+Not restored by the package (a Global Theme cannot carry them): the panels and desktop widgets, the
+desktop wallpaper of the existing desktop (the package names the previous theme's wallpaper, the
+running desktop keeps its own), `BorderSizeAuto`, an accent colour, a "None" splash, colour edits
+not saved as a scheme, workspaces and shortcuts. `fusion-restore.sh` is the full undo.
+
+## Commands
+
+```
+~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh status   # record, switched-off parts, last runs
+~/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh check    # what the next login would do
+tools/device/fusion-config.sh                                    # after checking a Plasma update: record and turn back on
+plasma-apply-lookandfeel -a org.plasmafusion.previous.desktop    # My previous desktop
+```
+
+Test hooks (never set in a real session): `PF_GATE_FAKE_VERSIONS="kwin=6.8.0 kscreenlocker=6.8.0"`
+replaces installed versions in memory (never cached); `PF_GATE_RPM` names the rpm program.
+`fusion-config.sh` passes `PF_GATE_TOOL` (its own absolute path) to `deploy`, which stores it in the
+record for the notification.
+
+## Rollback
+
+`tools/device/fusion-restore.sh` (full undo, removes the check). To remove only the check: delete
+`~/.config/plasma-workspace/env/plasma-fusion-gate.sh`, `~/.config/systemd/user/plasma-fusion-gate-notify.service`
+and its link in `xdg-desktop-autostart.target.wants/`, `~/.local/share/plasma-fusion/gate/`, then
+`systemctl --user daemon-reload`; if `gate/off` lists parts, run `fusion-config.sh` first (it turns
+them back on). Removing "My previous desktop": delete
+`~/.local/share/plasma/look-and-feel/org.plasmafusion.previous.desktop` while another theme is active.
+
+## Verification (2026-09-30)
+
+All on the ThinkPad unless noted; evidence in
+`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/gate/`.
+
+- `bash -n` and `shellcheck -S warning` clean for every script; `previous-theme.py` compiles.
+- `tests/gate-unit.sh BASE [--real-rpm]` (throw-away HOMEs, fake rpm, KConfig's `kreadconfig6` as
+  the reader for hand-edited files): 69 pass, 1 skipped on the ThinkPad (the "plugin not installed"
+  case, the plugin is installed system-wide there), 71 pass on the laptop. Cases: (a) matching
+  versions change no config value and log "no change"; (b) faked KWin/kscreenlocker, Qt
+  (light, left circles), lock-screen files only: parts off, a second login changes nothing and
+  queues no second notification, the matching login gives every value back; deploy brings the
+  compiled decoration back after fusion-config.sh's theme apply removed its keys; a decoration the
+  user picked meanwhile is kept; (c) Breeze: parts off, a part the user turns on again stays on,
+  Fusion Dark again gives every value back; (i) comments, repeated groups, localised keys,
+  `key[$e]`, spaces around `=` and file permissions survive; (e) corrupt, binary or hostile record
+  (no command from it runs), missing record, corrupt records and cache, rpm hanging (3.1 s, falls
+  back), unreadable kwinrc, empty HOME, no HOME: always exit 0.
+- `tests/gate-stub.sh BASE`: the stub sourced through `/usr/libexec/plasma-sourceenv.sh` after
+  Fedora's own env scripts: exit 0, captured environment identical with and without the stub, the
+  check logged; a hanging check ends after 4.1 s with the environment captured and no process left;
+  a failing, noisy check and `set -e` left on by an earlier script do not lose the environment
+  (13/13).
+- Private sessions (tools/vsession, stage from a clean HEAD aaf13da snapshot plus these tools):
+  - gt-a phase 1: Breeze Dark with a user font, `fusion-config.sh --install` (dry run changes
+    nothing), "My previous desktop" written from the backup, check installed and deployed; a second
+    run reports the check unchanged; (a) matching login: config unchanged; (c) Breeze applied,
+    login: snap, attach, outline, switcher and lock screen off and KWin unloads snap after a
+    reconfigure; Fusion Dark again, login: all back, KWin loads snap; (d) listed by
+    `plasma-apply-lookandfeel --list`, applying it gives back colour scheme, icons, widget style,
+    the user's font, default menu and title fonts, cursor, Plasma style, Breeze decoration (KWin
+    loads `org.kde.breeze`) and splash; a login under it switches the Fusion-only parts off.
+  - login simulated between sessions with `tools/device/tests/vsession/login-sim.sh` (the system
+    env scripts and the stub through `plasma-sourceenv.sh`, private runtime directory) with
+    `kwin=6.8.0 kscreenlocker=6.8.0`: phase 2's new KWin starts with
+    `org.kde.kwin.aurorae.v2 / __aurorae__svg__PlasmaFusionDark`, the drop-in is aside, snap still
+    loads, the notification shows over the desktop (`05b-notification.png`) and is dequeued, a
+    second mismatching login changes nothing; after a matching login, phase 3's KWin loads
+    `org.plasmafusion.decoration` again with the drop-in back and no records; another login changes
+    nothing; `fusion-restore.sh` gives back exactly the seed's values (Breeze Dark, user font) and
+    removes the check, keeping its log and "My previous desktop".
+  - gt-ld: the lead's `scen-ld1.sh` unchanged with HEAD's tools as old and these as new: effective
+    fonts, cursor and theme identical to the lead's ld1 at all 8 steps; the check installed at the
+    upgrade, unchanged on reruns, kept by `restore --latest`, next login "no change".
+  - `systemd-analyze --user verify` of the generated unit (offline): clean. `coredumpctl`: none.
+- Timing (M27 / fix 9), ThinkPad, 21 runs each. With one other agent's session running (load
+  0.6): a login with the lock screen and the compiled decoration on, versions cached, median 15 ms
+  wall (bash start included) and 13 ms inside the check; first login after an rpm transaction
+  (runs `rpm -q`) 40 ms; a login that switches off 32 ms, one that turns back on 30 ms. With
+  another agent's performance session running: 23 / 20 ms, 59 ms, 50 ms, 41 ms. The stub adds
+  6-13 ms to startplasma's env-script step when nothing is on (11 interleaved runs with and
+  without it; Fedora's own env scripts take 55-80 ms). Always exits 0; a hung check is cut at 4-5 s.
+
+Not tested: the lock screen itself (the virtual sessions run KWin with `--no-lockscreen`; the
+drop-in's effect on `plasma-kwin_wayland.service` and startplasma's reload are verified from the
+source, not in a real login), the notify unit under a real systemd login (its command was run by
+hand in the session), a real Plasma update.
+
+## Review (2026-09-30)
+
+An adversarial review re-ran every test, read the code line by line and checked the claims
+against the 6.7.5 sources. Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/gate/review-*`.
+The builder's Verification section above is kept as it was; the numbers below are the review's.
+
+Found and fixed:
+
+| Severity | Finding | Fix |
+|---|---|---|
+| high | In some locales bash's `[A-Za-z]` misses ASCII letters (tr_TR: `i`). The record and cache names `kwin`, `libplasma`... failed the name check, so in a Turkish session every login read the record as unreadable: safe mode (Plasma's lock screen, Aurorae title bars) at every login, and `rpm -q` every time. | POSIX classes (`[[:alnum:]]`, `[[:digit:]]`); tests `l` (tr_TR, et_EE, de_DE). |
+| high | `previous-theme.py` used every `XDG_CONFIG_DIRS` entry as a "system" layer. `fusion-config.sh` takes that variable from plasmashell, and it starts with the live `~/.config/kdedefaults`, which holds Plasma Fusion's values once it was applied. On the real device (Plasma Fusion applied long before, package made later from the pre-Fusion backup) "My previous desktop" would have named Manrope for five fonts, the Fusion window switcher and Fusion's title-bar buttons (`review-previous-theme-real-backup.txt`). The builder's dry run was made without that variable, so it did not show. | `kdedefaults` directories are never a system layer; scenario check `(d0)` and the upgrade scenario count Plasma Fusion values in the package (0). |
+| medium | The RPM (`packaging/plasma-fusion.spec.in`) installs only `tools/device/*.sh`: a system-wide install gets neither the check nor "My previous desktop". | Not in this lane: see Needs (exact lines). |
+| low | The awk writer got its operations through `awk -v`, which turns backslashes into escape sequences: a restored value with a KConfig escape (`\s`, `\\`) lost its backslash, against "byte for byte". | Operations through `ENVIRON`; test `w`. |
+| low | Replacing a key that is the last line of its group dropped the new value into a second `[group]` at the end of the file (KConfig still read it). | Appended at the group's last line also when that line is the replaced key; test `w2`. |
+| low | Follow sunset: safe mode wrote the current variant's Aurorae theme into the user file; startplasma switches light/dark after the env scripts and writes only kdedefaults (`Mode::Defaults`), so a login that switched got the other variant's title bars. | When kdedefaults names the Fusion Aurorae theme the user's keys are removed instead (the -Left case still writes them); tests `b`, `b7`, `b8`. The first version of this fix would have put the compiled decoration back over a Breeze theme chosen during safe mode; the added test `b9` caught it and the relaxed restore now ignores removal records in its "still ours" test. |
+| low | Automatic light/dark: `LookAndFeelPackage` can name the other theme when the check runs (startplasma picks later). With a Plasma Fusion theme as one of the two, a login could switch the Fusion parts off for a session that then came up as Plasma Fusion. | Automatic switching with a Plasma Fusion default counts as Plasma Fusion; test `m`. |
+| low | The notification said "run tools/device/fusion-config.sh", which is no path on the device. | `deploy` records the calling `fusion-config.sh` (`PF_GATE_TOOL`), the notification names it (`~/...`), falling back to the old text when it is gone; test `b`. |
+| low | "shellcheck clean" was not true for the four vsession scenarios (SC2148, error: no shell). | `# shellcheck shell=bash` directives. |
+
+Re-verified with the fixed code (ThinkPad unless noted):
+
+- `bash -n`, `shellcheck -S warning` clean for every file in `tools/device` (scenarios included);
+  `previous-theme.py` compiles.
+- `tests/gate-unit.sh`: 96/96 on the laptop, 94/94 on the ThinkPad with `--real-rpm` (case b6, two
+  checks, skipped: the plugin is installed system-wide there). The new cases fail on the builder's engine (b, b8, l tr_TR, m, w, w2)
+  and b9 on the first fix. `tests/gate-stub.sh`: 13/13.
+- Private sessions from a clean snapshot of HEAD 31affe9 (stage built from it, these tools copied
+  over): rgt-a phase 1 (install, dry run, rerun, (a), (c), (d0), (d)), login with faked
+  kwin/kscreenlocker 6.8.0, phase 2 (Aurorae from kdedefaults, drop-in aside, notification shown
+  with the recorded path, second login no change), matching login, phase 3 (compiled decoration and
+  drop-in back, no records, fusion-restore.sh: every seed value back, cfg-0 = cfg-7): 43 PASS,
+  0 FAIL. The lead's `scen-ld1.sh` A/B: HEAD's tools as new (rgt-ld0) and these tools (rgt-ld) give
+  identical `state.txt` at all 8 steps; "My previous desktop" made at the upgrade has no Plasma
+  Fusion value; the check survives `restore --latest` and the next login reports no change.
+- Timing, ThinkPad, real rpm, with another agent's session running (load 0.9-1.3): match path
+  median 24 ms wall (max 29, n=31); first login after an rpm transaction 52 ms; switching off
+  46 ms; turning back on 45 ms (n=11 each). Builder's and reviewed engine interleaved: 24 vs 25 ms.
+  The stub costs about 8 ms in startplasma's env-script step (11 interleaved runs, 61 vs 53 ms). A
+  hung check ends after 4.1 s.
+
+Still open (not fixed):
+
+- As before: no real login (the drop-in's effect through startplasma's reload and the notify unit
+  under systemd are verified from the source), no real Plasma update.
+- With `ButtonStyle=LeftCircles`, safe mode still writes the variant's `-Left` theme into the user
+  file, so a login-time light/dark switch under Follow sunset keeps the other variant's title bars
+  for that session.
+- `deploy` (fusion-config.sh, live session) edits `kwinrc` without KConfig's lock file; a KWin
+  write in the same few milliseconds could be lost. It only writes when a record must be undone.
+- KDE Frameworks (Kirigami, KSvg) are not in the version list, by design of the task: their QML API
+  is kept stable within 6.x and they update monthly.
+- The dry run with `--install` shows the lock-screen hash of the package installed before the
+  copy, not of the build.
+
+## Needs from other parts
+
+- Lock screen (packages/lockscreen): `LockScreenUi.qml` imports `org.kde.plasma.private.sessions`,
+  `org.kde.plasma.private.keyboardindicator`, `org.kde.plasma.workspace.keyboardlayout`,
+  `org.kde.plasma.clock` and `org.kde.breeze.components` at the top; `MainBlock.qml`
+  `org.kde.breeze.components`, `org.kde.kscreenlocker`, `org.kde.config`; `MediaControls.qml`
+  `org.kde.plasma.private.mpris`; `StatusChip.qml` `org.kde.plasma.private.battery` and
+  `org.kde.plasma.workspace.components`; `NetworkIndicator.qml` `org.kde.plasma.networkmanagement`;
+  `LockNotifications.qml` `org.kde.notificationmanager`; `LockOsd.qml`
+  `org.kde.plasma.workspace.osd`; `Backdrop.qml` `Qt5Compat.GraphicalEffects`. A missing or changed
+  module fails the whole file that imports it. Move each private import into a leaf file loaded
+  through a `Loader { source: ... }` with a plain fallback, so only that piece disappears; keep the
+  core (`LockScreen.qml`, the password field, `org.kde.kscreenlocker`) on stable imports.
+- Settings module (packages/kcm-cpp): read `~/.local/state/plasma-fusion/gate/status`; while
+  `versions=changed` and `held` lists `decoration`, do not write
+  `library=org.plasmafusion.decoration` (use the Aurorae fallback the page already has, and say why);
+  the page re-applies the decoration when it opens today, which would undo the safe mode for this
+  session.
+- Look and feel (Global Themes): if the themes' `contents/defaults` name
+  `library=org.plasmafusion.decoration` (as kcm-cpp.md asks), an in-session theme apply (Follow
+  sunset, the Dark tile) during a safe-mode session removes the check's user keys and brings the
+  compiled decoration back until the next login. Either keep Aurorae in the themes, or have the
+  settings module / quick settings respect `gate/status` as above.
+- Packaging (`packaging/plasma-fusion.spec.in`, %install): the scripts loop installs only
+  `tools/device/*.sh`, so a system-wide install has neither the check nor "My previous desktop"
+  (`fusion-config.sh` then prints that `gate/plasma-fusion-gate.sh` and `previous-theme.py` are
+  missing). After the loop add
+  `install -D -m 0755 tools/device/gate/plasma-fusion-gate.sh "$dest/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh"`
+  and `install -m 0644 tools/device/previous-theme.py "$dest/plasma-fusion/tools/device/"`
+  (`fusion-config.sh` runs it with `python3`; `tools/device/tests/` stays out). `%files` already
+  covers `%{_datadir}/plasma-fusion/tools/`.
+- Lead: after a Plasma or Qt update, check the session (lock screen, decoration) and run
+  `fusion-config.sh` to record the new versions; until then the device stays in safe mode
+  (decision D17).
