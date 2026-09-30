@@ -247,3 +247,54 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-doc
 `review-light-launcher`, `review-dark-unpinned`, `review-light-unpinned`; `review-many-apps` before and
 after; `review-nothing-pinned`; `review-pill-and-ring-fix`; `review-dark-config`, `review-light-config`;
 full screenshots `review-*-full.png`).
+
+## Magnification rework (2026-09-30)
+
+Spec: EFFECTS.md section 4 (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-tablet/`), ADAPTIVE fix 7,
+BACKLOG M4.
+
+- **The panel never changes size while the pointer moves.** `relayout()` computes only the rest layout (slots,
+  rest x, widths, centres) and runs only when the tasks, pins, screen, insets or tile size change. The
+  applet's width follows the rest width.
+- **Magnification is arithmetic plus transforms.** For the pointer x in row coordinates, each task grows by
+  `(Z - T) * zoom * max(0, 1 - ((c - x) / R)^2)` (62 / 54 / 48 at T 48, gap 8). Every slot is shifted by the
+  growth to its left minus a share of the total growth proportional to its distance from Start, so Start and
+  Trash stay where they are and every gap gives up the same share, never below 3 px. Task items scale around
+  the icon's bottom centre and translate; buttons and separators only translate.
+- **Icons stay crisp and are rasterised once.** A task shows a plain icon at rest size, and while magnified a
+  second icon rendered at the magnified size (loaded after the first hover). The drop shadow (MultiEffect)
+  keeps its size, so it is rendered once and only transformed afterwards.
+- **One hover source.** The dock's HoverHandler knows the pointer position; the item under it (task or
+  button, in the magnified geometry, from 10 px above the icon) is computed with the magnification. Items no
+  longer track hover themselves: their state could stay behind when the pointer jumped off the panel, and
+  per-item hover gaps between magnified neighbours unmapped and remapped the name pill window many times a
+  second.
+- **The name pill** is placed when the hovered item changes (at its magnified position at that moment) and
+  stays mapped for 150 ms when the pointer moves between two items.
+- **Nothing runs at rest.** One update per event-loop pass while the pointer moves (Qt.callLater); a
+  FrameAnimation made the window render every frame while it ran, even with nothing changed.
+- **Touch and pen.** A touchscreen press turns magnification and the pill off until a mouse, touchpad or pen
+  hovers again; a pen that stops reporting for 600 ms counts as gone (Qt keeps a stylus hover after the pen
+  leaves range). The launcher or a menu opening clears the hover.
+- The start-up pulse runs at most three times and not at all with animations off.
+
+Measured in private sessions at 1920x1200, scale 4/3, a 10 s pointer sweep over the dock at 125 Hz, same
+stage apart from the dock (laptop `build/lead/dk/out/perf-dk-*`, script `dock-analyze.py`):
+
+| | old dock (n=4) | new dock |
+|---|---|---|
+| dock window resizes during the sweep | 288-313 | 0 |
+| plasmashell CPU, magnification on | 41.5 % (34.5-46.2) | 32.7-36.3 % |
+| plasmashell CPU, magnification off | (research: about 10-15 %) | 22.9 % |
+| KWin CPU | 19.0 % | 15.6-16.1 % |
+| plasmashell GPU | 4.7 % | 3.3-3.7 % |
+| frames after the pointer left | only the zoom-out and the system card's own bars | same |
+
+A perf profile of plasmashell during the sweep guided the fixes (name-pill window churn, then the
+FrameAnimation). The remaining cost is spread over Qt's per-event and per-frame work; the target in
+EFFECTS.md 4.6 (about 10 %) is not reached. Next candidates: the per-event cost with magnification off
+(22.9 %), and moving the per-frame work off the pointer-event path.
+
+Functional check (`build/lead/dk/scen-func.sh`, real EIS input): hover pill and magnification, the launcher
+and running-app menus, drag to reorder (the launcher order is saved), hover and pill on the fixed buttons,
+pill cleared on a slow exit and on a jump off the panel, magnification off, and a click launching the app.

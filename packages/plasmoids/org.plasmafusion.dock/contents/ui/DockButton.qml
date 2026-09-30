@@ -27,7 +27,9 @@ Item {
 
     default property alias content: face.data
     readonly property alias face: face
-    readonly property bool hovered: mouse.containsMouse
+    // Set by the dock, which tracks the pointer for the whole row (one hover source: an item's
+    // own hover state can stay behind when the pointer jumps off the panel).
+    property bool hovered: false
     readonly property bool pressed: mouse.pressed
 
     signal clicked()
@@ -76,7 +78,7 @@ Item {
             if (mouse.pressed) {
                 return button.pal.buttonPressed;
             }
-            return mouse.containsMouse ? button.pal.buttonHover : button.pal.buttonFill;
+            return button.hovered ? button.pal.buttonHover : button.pal.buttonFill;
         }
 
         Behavior on color {
@@ -124,7 +126,7 @@ Item {
         y: face.y - 10
         width: parent.width + 8
         height: parent.height - y
-        hoverEnabled: true
+        hoverEnabled: false
         acceptedButtons: button.acceptsMenu ? (Qt.LeftButton | Qt.RightButton) : Qt.LeftButton
         onClicked: mouse => {
             if (mouse.button === Qt.RightButton) {

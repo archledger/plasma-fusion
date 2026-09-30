@@ -45,11 +45,33 @@ PlasmoidItem {
     // ---- State ----
     property var taskVisible: []
     property var taskPinned: []
-    property var geo: ({ taskX: [], taskSize: [], restCenter: [], start: 0, search: 0, overview: 0,
-                         sep1: 0, sep2: -1, downloads: 0, trash: 0, width: 0, restWidth: 0, taskTile: 48 })
-    property real pointerGlobalX: NaN
+    // Rest geometry in row coordinates. It is computed only when the tasks, pins, screen, insets
+    // or tile size change, never while the pointer moves, so the panel keeps its size while the
+    // icons magnify (EFFECTS.md 4.1).
+    property var rest: ({ slots: [], taskX: [], taskW: [], taskC: [], start: 0, search: 0, overview: 0,
+                          sep1: 0, sep2: -1, downloads: 0, trash: 0, width: 0, taskTile: 48,
+                          firstTask: -1, lastTask: -1, cFirst: 0, cLast: 0, maxDc: 0, radius: 74 })
+    // Magnification of this frame: horizontal offset per fixed slot (EFFECTS.md 4.2). The task
+    // items get their growth and offset set directly by updateMagnification().
+    property var mag: ({ fixed: {} })
+    // Row of the task under the pointer (-1: none), from the magnified geometry.
+    property int hoverTaskRow: -1
+    // Pointer position in row coordinates (NaN: none): stored by the hover handler; one
+    // magnification update follows per event-loop pass (Qt.callLater), and nothing runs while the
+    // pointer rests. A FrameAnimation would make the window render every frame while it runs,
+    // even with nothing changed (measured: plasmashell 44 % instead of 23 % of a core for a
+    // pointer sweep with magnification off).
+    property real pendingX: NaN
+    property real pendingY: NaN
+    property real cursorX: NaN
+    property bool magDirty: false
     property bool pointerOverTasks: false
-    property real zoom: (Plasmoid.configuration.magnify && (pointerOverTasks || debugHover) && dragRow < 0) ? 1 : 0
+    // A touchscreen press turns magnification off until a mouse, touchpad or pen hovers again.
+    property bool touchSuppress: false
+    // The crisp magnified icons are loaded after the first hover, not at start.
+    property bool zoomIconsReady: false
+    property real zoom: (Plasmoid.configuration.magnify && !touchSuppress && (pointerOverTasks || debugHover)
+                         && dragRow < 0 && !launcherOpen && !menuOpen) ? 1 : 0
     property real leftInset: 0
     property real rightInset: 0
     // Distance from this item's edges to the first/last button so that the row starts 12 px
@@ -95,7 +117,7 @@ PlasmoidItem {
 
     Layout.fillWidth: false
     Layout.fillHeight: true
-    Layout.minimumWidth: Math.max(tile, Math.ceil(geo.width + padLeft + padRight))
+    Layout.minimumWidth: Math.max(tile, Math.ceil(rest.width + padLeft + padRight))
     Layout.preferredWidth: Layout.minimumWidth
     Layout.maximumWidth: Layout.minimumWidth
 
@@ -150,15 +172,15 @@ PlasmoidItem {
                 tasksModel.launcherList = Plasmoid.configuration.launchers;
             }
         }
-        function onDebugHoverIndexChanged(): void { root.relayout(); }
+        function onDebugHoverIndexChanged(): void { root.markMagnification(); }
         function onDebugPointerXChanged(): void {
             if (!root.debugPointer) {
                 root.hoveredItem = null;
             }
-            root.relayout();
+            root.markMagnification();
         }
         function onDebugActionChanged(): void { Qt.callLater(root.runDebugAction); }
-        function onMagnifiedSizeChanged(): void { root.relayout(); }
+        function onMagnifiedSizeChanged(): void { root.markMagnification(); }
     }
 
     Timer {
@@ -198,6 +220,9 @@ PlasmoidItem {
             taskVisible = visible;
             taskPinned = pinned;
         }
+        // Rows may have moved (a launcher became a starting app, an app closed): find the
+        // hovered task again from the pointer instead of keeping the old row.
+        setTaskHover(-1);
         relayout();
         if (!fallbacksApplied && n > 0) {
             fallbacksApplied = true;
@@ -241,7 +266,7 @@ PlasmoidItem {
         }
     }
 
-    // ---- Layout: rest geometry, then magnified sizes around the pointer ----
+    // ---- Layout: rest geometry (only on structural changes) ----
     function relayout(): void {
         const n = taskRepeater.count;
         const slots = [];
@@ -267,13 +292,13 @@ PlasmoidItem {
         push("downloads"); push("trash");
 
         // Too many apps for the screen: shrink the app icons (not the fixed buttons) so that
-        // Downloads and Trash stay reachable, keeping room for the magnified icons.
+        // Downloads and Trash stay reachable. Magnification needs no room of its own: the icons
+        // grow into the headroom and the gaps absorb their growth.
         const taskCount = slots.filter(s => s.kind === "task").length;
         let taskTile = tile;
         if (taskCount > 0) {
             const fixed = slots.reduce((sum, s) => sum + (s.kind === "task" ? 0 : s.w + gap), 0) - gap;
-            const growth = zoomSize > tile ? 2 * (zoomSize - tile) : 0;
-            const budget = screenWidth - 2 * screenMargin - 2 * sidePad - growth - fixed;
+            const budget = screenWidth - 2 * screenMargin - 2 * sidePad - fixed;
             const fit = Math.floor(budget / taskCount) - gap;
             if (fit < tile) {
                 taskTile = Math.max(minTaskTile, fit);
@@ -284,77 +309,233 @@ PlasmoidItem {
                 }
             }
         }
-        // Parabolic falloff 1 - (d/R)^2; with 56 px between icon centres R = 74 gives 62 / 54 / 48.
-        const falloffRadius = (taskTile + gap) / Math.sqrt(1 - 3 / 7);
 
+        const out = { slots: [], taskX: [], taskW: [], taskC: [], sep2: -1, taskTile: taskTile,
+                      firstTask: -1, lastTask: -1, cFirst: 0, cLast: 0, maxDc: 0,
+                      // Parabolic falloff 1 - (d/R)^2; with 56 px between icon centres R = 74
+                      // gives 62 / 54 / 48.
+                      radius: (taskTile + gap) / Math.sqrt(1 - 3 / 7) };
         let x = 0;
-        let firstTask = -1;
-        let lastTask = -1;
+        let prevC = NaN;
         for (const s of slots) {
-            s.rx = x;
-            x += s.w + gap;
+            const c = x + s.w / 2;
+            out.slots.push({ kind: s.kind, row: s.kind === "task" ? s.row : -1, c: c });
             if (s.kind === "task") {
-                if (firstTask < 0) {
-                    firstTask = s.rx;
-                }
-                lastTask = s.rx + s.w;
-            }
-        }
-        const restWidth = x - gap;
-
-        // Pointer position in rest coordinates. The row is centred on the dock, whose centre
-        // does not move when the panel grows, so this does not feed back into itself.
-        let cursor = NaN;
-        const forced = Plasmoid.configuration.debugHoverIndex;
-        if (forced >= 0) {
-            const s = slots.find(t => t.kind === "task" && t.row === forced);
-            if (s) {
-                cursor = s.rx + s.w / 2;
-            }
-        } else {
-            const globalX = debugPointer ? Plasmoid.configuration.debugPointerX : pointerGlobalX;
-            if (!isNaN(globalX)) {
-                const local = root.mapFromGlobal(globalX, 0).x;
-                cursor = local - (root.width / 2 + (padLeft - padRight) / 2) + restWidth / 2;
-            }
-        }
-        const over = (hoverHandler.hovered || debugPointer) && !isNaN(cursor) && firstTask >= 0
-            && cursor >= firstTask - gap / 2 && cursor <= lastTask + gap / 2;
-        if (over !== pointerOverTasks) {
-            pointerOverTasks = over;
-        }
-
-        const amplitude = (zoomSize - tile) * zoom;
-        const out = { taskX: [], taskSize: [], restCenter: [], sep2: -1, taskTile: taskTile };
-        x = 0;
-        for (const s of slots) {
-            let size = s.w;
-            if (s.kind === "task") {
-                if (amplitude > 0 && !isNaN(cursor)) {
-                    const d = (s.rx + s.w / 2 - cursor) / falloffRadius;
-                    size = Math.round(taskTile + amplitude * Math.max(0, 1 - d * d));
-                }
                 out.taskX[s.row] = x;
-                out.taskSize[s.row] = size;
-                out.restCenter[s.row] = s.rx + s.w / 2;
+                out.taskW[s.row] = s.w;
+                out.taskC[s.row] = c;
+                if (out.firstTask < 0) {
+                    out.firstTask = x;
+                }
+                out.lastTask = x + s.w;
             } else {
                 out[s.kind] = x;
             }
-            x += size + gap;
+            if (!isNaN(prevC)) {
+                out.maxDc = Math.max(out.maxDc, c - prevC);
+            }
+            prevC = c;
+            x += s.w + gap;
         }
         out.width = x - gap;
-        out.restWidth = restWidth;
-        if (JSON.stringify(out) !== JSON.stringify(geo)) {
-            geo = out;
+        out.cFirst = out.slots.length ? out.slots[0].c : 0;
+        out.cLast = out.slots.length ? out.slots[out.slots.length - 1].c : 0;
+        if (!sameRest(out, rest)) {
+            rest = out;
         }
-        if (debugPointer) {
-            Qt.callLater(pickDebugPointerItem);
+        markMagnification();
+    }
+
+    function sameList(a: var, b: var): bool {
+        if (!a || !b || a.length !== b.length) {
+            return false;
+        }
+        for (let i = 0; i < a.length; ++i) {
+            if (a[i] !== b[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function sameRest(a: var, b: var): bool {
+        if (!b || a.width !== b.width || a.taskTile !== b.taskTile || a.sep2 !== b.sep2 || a.slots.length !== b.slots.length) {
+            return false;
+        }
+        for (const k of ["start", "search", "overview", "sep1", "downloads", "trash"]) {
+            if (a[k] !== b[k]) {
+                return false;
+            }
+        }
+        return sameList(a.taskX, b.taskX) && sameList(a.taskW, b.taskW);
+    }
+
+    // ---- Magnification (per frame, arithmetic only; EFFECTS.md 4.2) ----
+    function markMagnification(): void {
+        if (!magDirty) {
+            magDirty = true;
+            Qt.callLater(updateMagnification);
         }
     }
 
-    // Geometry changes come from the panel layout; relayout after it has settled so the
-    // new preferred width never feeds back into the layout pass that produced it.
-    onZoomChanged: relayout()
+    // Growth of every task under the pointer, then offsets so that the growth pushes the icons
+    // apart like a Mac dock while Start and Trash stay where they are: every gap of the row gives
+    // up the same share (never below 3 px).
+    function updateMagnification(): void {
+        magDirty = false;
+        const r = rest;
+        let cursor = pendingX;
+        const forced = Plasmoid.configuration.debugHoverIndex;
+        if (forced >= 0 && r.taskC[forced] !== undefined) {
+            cursor = r.taskC[forced];
+        } else if (debugPointer) {
+            cursor = row0.mapFromGlobal(Plasmoid.configuration.debugPointerX, 0).x;
+        }
+        const over = (hoverHandler.hovered || debugPointer || forced >= 0) && !isNaN(cursor) && r.firstTask >= 0
+            && cursor >= r.firstTask - gap / 2 && cursor <= r.lastTask + gap / 2;
+        if (over !== pointerOverTasks) {
+            pointerOverTasks = over;
+        }
+        if (over) {
+            cursorX = cursor;
+            zoomIconsReady = true;
+        }
+
+        const amplitude = (zoomSize - r.taskTile) * zoom;
+        const n = r.slots.length;
+        const g = new Array(n).fill(0);
+        const offsets = new Array(n).fill(0);
+        if (amplitude > 0.01 && !isNaN(cursorX)) {
+            let total = 0;
+            for (let j = 0; j < n; ++j) {
+                const s = r.slots[j];
+                if (s.kind === "task") {
+                    const d = (s.c - cursorX) / r.radius;
+                    g[j] = amplitude * Math.max(0, 1 - d * d);
+                    total += g[j];
+                }
+            }
+            const span = r.cLast - r.cFirst;
+            // Gap floor: no gap below 3 px.
+            if (total > 0 && span > 0 && total * r.maxDc / span > gap - 3) {
+                const k = (gap - 3) * span / (total * r.maxDc);
+                for (let j = 0; j < n; ++j) {
+                    g[j] *= k;
+                }
+                total *= k;
+            }
+            let before = 0;
+            for (let j = 0; j < n; ++j) {
+                const s = r.slots[j];
+                offsets[j] = (span > 0 ? before + (s.kind === "task" ? g[j] / 2 : 0) - total * (s.c - r.cFirst) / span : 0);
+                if (s.kind === "task") {
+                    before += g[j];
+                }
+            }
+        } else if (zoom === 0 && !over) {
+            cursorX = NaN;
+        }
+
+        // Apply: task items directly, fixed slots through `mag`. Then find the slot under the
+        // pointer in the magnified geometry (the icon plus half of each neighbouring gap, from
+        // 10 px above the icon to the bottom of the panel), for tasks and buttons alike.
+        const fixed = {};
+        let hoverRow = -1;
+        let hoverKind = "";
+        const live = hoverHandler.hovered || debugPointer;
+        const pointer = live ? cursor : NaN;
+        const pointerY = hoverHandler.hovered ? pendingY : row0.height - bottomPad - tile / 2;
+        const restTop = row0.height - bottomPad - tile - 10;
+        for (let j = 0; j < n; ++j) {
+            const s = r.slots[j];
+            const w = s.kind === "task" ? r.taskW[s.row] : (s.kind === "sep1" || s.kind === "sep2" ? sepSlot : tile);
+            const hit = !isNaN(pointer) && Math.abs(pointer - (s.c + offsets[j])) <= (w + g[j]) / 2 + gap / 2
+                && pointerY >= restTop - g[j];
+            if (s.kind !== "task") {
+                fixed[s.kind] = offsets[j];
+                if (hit && s.kind !== "sep1" && s.kind !== "sep2") {
+                    hoverKind = s.kind;
+                }
+                continue;
+            }
+            const item = taskRepeater.itemAt(s.row) as TaskItem;
+            if (item) {
+                item.grow = g[j];
+                item.shift = offsets[j];
+            }
+            if (hit) {
+                hoverRow = s.row;
+            }
+        }
+        if (!sameOffsets(fixed, mag.fixed)) {
+            mag = { fixed: fixed };
+        }
+        setFixedHover(hoverKind);
+        setTaskHover(hoverRow);
+    }
+
+    function sameOffsets(a: var, b: var): bool {
+        for (const k of ["start", "search", "overview", "sep1", "sep2", "downloads", "trash"]) {
+            if ((a[k] ?? 0) !== (b[k] ?? 0)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // The fixed buttons by slot kind.
+    function fixedButton(kind: string): DockButton {
+        switch (kind) {
+        case "start": return startButton;
+        case "search": return searchButton;
+        case "overview": return overviewButton;
+        case "downloads": return downloadsButton;
+        case "trash": return trashButton;
+        }
+        return null;
+    }
+
+    property string hoverFixedKind: ""
+    function setFixedHover(kind: string): void {
+        if (kind === hoverFixedKind) {
+            return;
+        }
+        const previous = fixedButton(hoverFixedKind);
+        if (previous) {
+            previous.hovered = false;
+            if (hoveredItem === previous) {
+                hoveredItem = null;
+            }
+        }
+        hoverFixedKind = kind;
+        const button = fixedButton(kind);
+        if (button) {
+            button.hovered = true;
+            hoveredItem = button;
+        }
+    }
+
+    function setTaskHover(row: int): void {
+        if (row === hoverTaskRow) {
+            return;
+        }
+        const previous = hoverTaskRow >= 0 ? taskRepeater.itemAt(hoverTaskRow) as TaskItem : null;
+        if (previous) {
+            previous.hovered = false;
+        }
+        hoverTaskRow = row;
+        const item = row >= 0 ? taskRepeater.itemAt(row) as TaskItem : null;
+        if (item) {
+            item.hovered = true;
+            hoveredItem = item;
+        } else if (hoveredItem instanceof TaskItem) {
+            hoveredItem = null;
+        }
+    }
+
+    // The panel only changes size when the rest layout does; relayout after the panel layout
+    // has settled so the new width never feeds back into the pass that produced it.
+    onZoomChanged: updateMagnification()
     onWidthChanged: {
         Qt.callLater(relayout);
         insetTimer.restart();
@@ -362,22 +543,62 @@ PlasmoidItem {
     onHeightChanged: Qt.callLater(relayout)
     onPadLeftChanged: Qt.callLater(relayout)
     onPadRightChanged: Qt.callLater(relayout)
-    onZoomSizeChanged: Qt.callLater(relayout)
+    onZoomSizeChanged: markMagnification()
     onScreenWidthChanged: Qt.callLater(relayout)
+    // The launcher or a context menu opening ends the magnification (zoom binding) and the name
+    // pill (pillTarget); the hover state is cleared too so it cannot stay behind.
+    onLauncherOpenChanged: if (launcherOpen) clearHover()
+
+    function clearHover(): void {
+        pointerOverTasks = false;
+        setTaskHover(-1);
+        hoveredItem = null;
+        pendingX = NaN;
+        pendingY = NaN;
+        setFixedHover("");
+        markMagnification();
+    }
 
     HoverHandler {
         id: hoverHandler
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus | PointerDevice.Airbrush
         onPointChanged: {
-            if (hovered) {
-                root.pointerGlobalX = root.mapToGlobal(point.position.x, point.position.y).x;
-                root.relayout();
+            if (!hovered) {
+                return;
+            }
+            // Any hover from these devices ends a touch suppression.
+            root.touchSuppress = false;
+            const p = row0.mapFromItem(root, point.position.x, point.position.y);
+            root.pendingX = p.x;
+            root.pendingY = p.y;
+            root.markMagnification();
+            // A pen leaving range does not end a hover in Qt; a pen that stops reporting for a
+            // moment has left (EFFECTS.md 4.4).
+            if (point.device && point.device.type === PointerDevice.Stylus) {
+                stylusWatchdog.restart();
             }
         }
         onHoveredChanged: {
             if (!hovered) {
-                root.pointerOverTasks = false;
-                root.hoveredItem = null;
-                root.relayout();
+                stylusWatchdog.stop();
+                root.clearHover();
+            }
+        }
+    }
+
+    Timer {
+        id: stylusWatchdog
+        interval: 600
+        onTriggered: root.clearHover()
+    }
+
+    // A touchscreen press: no magnification and no name pill until the next real hover.
+    PointHandler {
+        acceptedDevices: PointerDevice.TouchScreen
+        onActiveChanged: {
+            if (active) {
+                root.touchSuppress = true;
+                root.clearHover();
             }
         }
     }
@@ -505,18 +726,6 @@ PlasmoidItem {
                                     arguments: ["Overview"], signature: "(s)" });
     }
 
-    // Testing hook (config key debugPointerX): the task under that screen x counts as hovered.
-    function pickDebugPointerItem(): void {
-        const x = row0.mapFromGlobal(Plasmoid.configuration.debugPointerX, 0).x;
-        let found = null;
-        for (let i = 0; i < taskRepeater.count; ++i) {
-            if (taskVisible[i] && x >= geo.taskX[i] - gap / 2 && x < geo.taskX[i] + geo.taskSize[i] + gap / 2) {
-                found = taskRepeater.itemAt(i);
-            }
-        }
-        hoveredItem = found;
-    }
-
     // Testing hook (config key debugAction): lets a scripted session open the menus and press
     // buttons without a pointer. The key is cleared after use.
     function runDebugAction(): void {
@@ -630,8 +839,8 @@ PlasmoidItem {
             if (!taskVisible[i] || !!taskPinned[i] !== !!taskPinned[row]) {
                 continue;
             }
-            const left = geo.taskX[i];
-            const size = geo.taskSize[i];
+            const left = rest.taskX[i];
+            const size = rest.taskW[i];
             if (x >= left - gap / 2 && x < left + size + gap / 2) {
                 target = i;
                 break;
@@ -847,7 +1056,7 @@ PlasmoidItem {
             }
             const x = row0.mapFromItem(taskDrop, drop.x, drop.y).x;
             for (let i = 0; i < taskRepeater.count; ++i) {
-                if (root.taskVisible[i] && x >= root.geo.taskX[i] && x < root.geo.taskX[i] + root.geo.taskSize[i]) {
+                if (root.taskVisible[i] && x >= root.rest.taskX[i] && x < root.rest.taskX[i] + root.rest.taskW[i]) {
                     tasksModel.requestOpenUrls(tasksModel.makeModelIndex(i), drop.urls);
                     drop.acceptProposedAction();
                     return;
@@ -859,13 +1068,14 @@ PlasmoidItem {
     // ---- Content ----
     Item {
         id: row0
-        x: Math.round((root.width - root.geo.width) / 2 + (root.padLeft - root.padRight) / 2)
-        width: root.geo.width
+        x: Math.round((root.width - root.rest.width) / 2 + (root.padLeft - root.padRight) / 2)
+        width: root.rest.width
         height: root.height
 
         DockButton {
             id: startButton
-            x: root.geo.start
+            x: root.rest.start
+            transform: Translate { x: root.mag.fixed.start ?? 0 }
             height: row0.height
             pal: dockPal
             bottomPad: root.bottomPad
@@ -875,7 +1085,6 @@ PlasmoidItem {
             showIndicator: root.launcherOpen
             onPressedChanged: if (pressed) launcherWasOpen = root.launcherRecentlyOpen()
             onClicked: root.toggleLauncher(clickFromPointer ? launcherWasOpen : undefined, "home")
-            onHoveredChanged: root.trackHover(startButton, hovered)
 
             FusionLogo {
                 anchors.centerIn: parent
@@ -885,7 +1094,8 @@ PlasmoidItem {
 
         DockButton {
             id: searchButton
-            x: root.geo.search
+            x: root.rest.search
+            transform: Translate { x: root.mag.fixed.search ?? 0 }
             height: row0.height
             pal: dockPal
             bottomPad: root.bottomPad
@@ -893,7 +1103,6 @@ PlasmoidItem {
             description: i18nc("@info:tooltip", "Search apps, files and settings")
             onPressedChanged: if (pressed) launcherWasOpen = root.launcherRecentlyOpen()
             onClicked: root.toggleSearch()
-            onHoveredChanged: root.trackHover(searchButton, hovered)
 
             Glyph {
                 anchors.centerIn: parent
@@ -905,14 +1114,14 @@ PlasmoidItem {
 
         DockButton {
             id: overviewButton
-            x: root.geo.overview
+            x: root.rest.overview
+            transform: Translate { x: root.mag.fixed.overview ?? 0 }
             height: row0.height
             pal: dockPal
             bottomPad: root.bottomPad
             text: i18nc("@action:button", "Overview")
             description: i18nc("@info:tooltip", "Show all windows and workspaces")
             onClicked: root.toggleOverview()
-            onHoveredChanged: root.trackHover(overviewButton, hovered)
 
             Glyph {
                 anchors.centerIn: parent
@@ -923,7 +1132,8 @@ PlasmoidItem {
         }
 
         Rectangle {
-            x: root.geo.sep1 + 4
+            x: root.rest.sep1 + 4
+            transform: Translate { x: root.mag.fixed.sep1 ?? 0 }
             y: row0.height - root.bottomPad - 6 - 36
             width: 1
             height: 36
@@ -938,8 +1148,10 @@ PlasmoidItem {
             delegate: TaskItem {
                 id: taskItem
                 pal: dockPal
-                x: root.geo.taskX[taskItem.index] ?? 0
-                iconSize: root.geo.taskSize[taskItem.index] ?? root.tile
+                x: root.rest.taskX[taskItem.index] ?? 0
+                iconSize: root.rest.taskW[taskItem.index] ?? root.tile
+                zoomSize: root.zoomSize
+                zoomReady: root.zoomIconsReady
                 height: row0.height
                 bottomPad: root.bottomPad
                 onActivated: modifiers => root.activateTask(taskItem.index, modifiers)
@@ -947,22 +1159,23 @@ PlasmoidItem {
                 onMenuRequested: root.showTaskMenu(taskItem)
                 onDragMoved: sceneX => root.reorderTo(taskItem.index, sceneX)
                 onDragFinished: root.finishReorder()
-                onHoveredChanged: root.trackHover(taskItem, hovered)
             }
         }
 
         Rectangle {
-            x: root.geo.sep2 + 4
+            x: root.rest.sep2 + 4
+            transform: Translate { x: root.mag.fixed.sep2 ?? 0 }
             y: row0.height - root.bottomPad - 6 - 36
             width: 1
             height: 36
             color: dockPal.separator
-            visible: root.geo.sep2 >= 0
+            visible: root.rest.sep2 >= 0
         }
 
         DockButton {
             id: downloadsButton
-            x: root.geo.downloads
+            x: root.rest.downloads
+            transform: Translate { x: root.mag.fixed.downloads ?? 0 }
             height: row0.height
             pal: dockPal
             bottomPad: root.bottomPad
@@ -971,7 +1184,6 @@ PlasmoidItem {
             description: i18nc("@info:tooltip", "Open the Downloads folder")
             onClicked: Qt.openUrlExternally(root.downloadsUrl)
             onMenuRequested: root.showDownloadsMenu()
-            onHoveredChanged: root.trackHover(downloadsButton, hovered)
 
             DownloadsStack {
                 anchors.fill: parent
@@ -981,7 +1193,8 @@ PlasmoidItem {
 
         DockButton {
             id: trashButton
-            x: root.geo.trash
+            x: root.rest.trash
+            transform: Translate { x: root.mag.fixed.trash ?? 0 }
             height: row0.height
             pal: dockPal
             bottomPad: root.bottomPad
@@ -990,7 +1203,6 @@ PlasmoidItem {
             description: i18nc("@info:tooltip", "Open the Trash; drop files here to move them to the Trash")
             onClicked: Qt.openUrlExternally("trash:/")
             onMenuRequested: root.showTrashMenu()
-            onHoveredChanged: root.trackHover(trashButton, hovered)
 
             Glyph {
                 anchors.centerIn: parent
@@ -1029,28 +1241,46 @@ PlasmoidItem {
         }
 
         // Where the name pill sits: its bottom edge 12 px above the hovered item (Main board).
+        // Placed when the hovered item changes, at the item's position and magnified size at
+        // that moment; it does not follow the magnification frame by frame (EFFECTS.md 4.4).
         Item {
             id: pillAnchor
             readonly property Item target: root.pillTarget
-            readonly property bool isTask: target instanceof TaskItem
-            x: target ? target.x : 0
-            y: target ? (isTask ? (target as TaskItem).iconTop : (target as DockButton).face.y) - 12 : 0
-            width: target ? target.width : 0
             height: 1
-            onXChanged: if (pill.item) (pill.item as NamePill).reposition()
-            onYChanged: if (pill.item) (pill.item as NamePill).reposition()
+            onTargetChanged: place()
+
+            function place(): void {
+                const t = target;
+                if (!t) {
+                    return;
+                }
+                if (t instanceof TaskItem) {
+                    const task = t as TaskItem;
+                    // The size the hovered icon grows to with the pointer where it is now.
+                    const r = root.rest;
+                    const c = r.taskC[task.index] ?? 0;
+                    const d = isNaN(root.cursorX) ? 0 : (c - root.cursorX) / r.radius;
+                    const full = root.zoom > 0 || root.pointerOverTasks
+                        ? (root.zoomSize - r.taskTile) * Math.max(0, 1 - d * d) : 0;
+                    const grow = Math.max(task.grow, full);
+                    x = task.x + task.shift - grow / 2;
+                    width = task.width + grow;
+                    y = task.iconTop - grow - 12;
+                } else {
+                    const button = t as DockButton;
+                    const shift = button.transform.length > 0 ? (button.transform[0] as Translate).x : 0;
+                    x = button.x + shift;
+                    width = button.width;
+                    y = button.face.y - 12;
+                }
+                if (pill.item) {
+                    (pill.item as NamePill).reposition();
+                }
+            }
         }
     }
 
-    function trackHover(item: Item, hovered: bool): void {
-        if (hovered) {
-            hoveredItem = item;
-        } else if (hoveredItem === item) {
-            hoveredItem = null;
-        }
-    }
-
-    readonly property Item pillTarget: {
+    readonly property Item wantedPillTarget: {
         if (debugHover) {
             const forced = taskRepeater.itemAt(Plasmoid.configuration.debugHoverIndex);
             return forced && forced.visible ? forced : null;
@@ -1062,6 +1292,22 @@ PlasmoidItem {
             return null;
         }
         return hoveredItem;
+    }
+    // The pill is its own window: moving between two items while still over the dock keeps it
+    // shown for 150 ms instead of unmapping and mapping the window again.
+    property Item pillTarget: null
+    onWantedPillTargetChanged: {
+        if (wantedPillTarget || !hoverHandler.hovered || menuOpen || dragRow >= 0) {
+            pillHideTimer.stop();
+            pillTarget = wantedPillTarget;
+        } else {
+            pillHideTimer.restart();
+        }
+    }
+    Timer {
+        id: pillHideTimer
+        interval: 150
+        onTriggered: root.pillTarget = root.wantedPillTarget
     }
     readonly property string pillText: {
         const t = pillTarget;
