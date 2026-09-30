@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="">
+    <!-- Enum entries are stored as the choice name ("fullscreen", "windowed"...), which the
+         script, quick settings and the settings module read and write. -->
+    <entry name="WindowMode" type="Enum">
+      <label>Apps in tablet mode: full screen (maximized, no title bar) or windowed (left as they are)</label>
+      <choices>
+        <choice name="fullscreen"/>
+        <choice name="windowed"/>
+      </choices>
+      <default>fullscreen</default>
+    </entry>
+    <entry name="DockHiding" type="Enum">
+      <label>The dock in tablet mode: hides over apps, or always visible</label>
+      <choices>
+        <choice name="dodgewindows"/>
+        <choice name="none"/>
+      </choices>
+      <default>dodgewindows</default>
+    </entry>
+    <entry name="EdgeLeft" type="Bool">
+      <label>In tablet mode, a swipe in from the left edge opens the launcher</label>
+      <default>false</default>
+    </entry>
+    <entry name="EdgeRight" type="Bool">
+      <label>In tablet mode, a swipe in from the right edge opens quick settings</label>
+      <default>false</default>
+    </entry>
+    <entry name="DisableWindowMove" type="Bool">
+      <label>In tablet mode, windows cannot be dragged</label>
+      <default>false</default>
+    </entry>
+    <entry name="InternalOutputs" type="String">
+      <label>Name prefixes of built-in screens (window rules apply only while one of them is the only screen)</label>
+      <default>eDP,LVDS,DSI</default>
+    </entry>
+  </group>
+</kcfg>

@@ -1,0 +1,22 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "In tablet mode, apps open full screen without title bars and the top bar and dock grow to touch size; everything goes back when the laptop is unfolded",
+        "EnabledByDefault": false,
+        "Icon": "input-tablet",
+        "Id": "plasmafusion-tablet",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Tablet Mode",
+        "Version": "1.0"
+    },
+    "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
+    "X-Plasma-API": "declarativescript",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

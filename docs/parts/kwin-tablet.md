@@ -1,0 +1,130 @@
+# Part: tablet-mode window and panel policy (`plasmafusion-tablet`, KWIN-1)
+
+Status: built and tested in private sessions on the ThinkPad (see "Verification"); not deployed. The
+lead built it directly (work package KWIN-1 of the 2026-09-30 one-pass plan). Last edited 2026-09-30.
+
+Spec: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-tablet/TABLET.md` sections 3.1-3.6 and
+4.2 with the review corrections, owner decision 2 (apps full screen without title bars, large dialogs
+too; the dock hides over apps). The single owner of window policy and panel geometry in tablet
+mode; plasmoids switch their own layouts from `FusionTablet`.
+
+## Files
+
+| File | What it is |
+|---|---|
+| `packages/kwin/scripts/plasmafusion-tablet/metadata.json` | KWin/Script, declarative, Id `plasmafusion-tablet`, not enabled by default |
+| `packages/kwin/scripts/plasmafusion-tablet/contents/ui/main.qml` | the script |
+| `packages/kwin/scripts/plasmafusion-tablet/contents/config/main.xml`, `contents/ui/config.ui` | settings (below) and their form in System Settings > Window Management > KWin Scripts |
+| `tools/build.d/81-kwin-tablet.sh` | installs it into the stage with a copy of `FusionTablet.qml` (`tools/build-lib/shared-qml.sh`) |
+
+`tools/device/fusion-config.sh` enables it (`kwinrc [Plugins] plasmafusion-tabletEnabled=true`, when the
+package is installed); the login gate switches it off while another Global Theme is in use;
+`fusion-restore.sh` gives the backed-up value back (DEVICE-1).
+
+## Settings (`kwinrc [Script-plasmafusion-tablet]`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `WindowMode` | `fullscreen` | `fullscreen`: apps maximized without title bars in tablet mode; `windowed`: windows left as they are (the compiled decoration gives touch-sized title bars) |
+| `DockHiding` | `dodgewindows` | the dock in tablet mode: `dodgewindows` (hides over apps) or `none` (always visible) |
+| `EdgeLeft`, `EdgeRight` | `false` | in tablet mode a swipe in from the left edge opens the launcher (`activateLauncherMenu`), from the right edge quick settings (its `openRequest` = `sheet:<ms>`) |
+| `DisableWindowMove` | `false` | windows cannot be dragged in tablet mode |
+| `InternalOutputs` | `eDP,LVDS,DSI` | name prefixes of built-in screens; window policy only while one of them is the only screen. Tests add `Virtual` (private sessions have virtual outputs only) |
+
+Quick settings and the settings module write `WindowMode` / `DockHiding` with `kwriteconfig6 --notify`
+and then invoke the shortcut "Plasma Fusion: Tablet Window Mode" (`org.kde.kglobalaccel
+/component/kwin invokeShortcut`), which re-reads them and applies them. No KWin reconfigure is
+needed.
+
+## Behaviour
+
+- **Posture**: `FusionTablet` (BASE-1) asks KWin's `org.kde.KWin.TabletModeManager` once and follows
+  its signals. The script does nothing until KWin has answered, so the Kirigami value (which can start
+  stale inside KWin, TABLET F3) never moves windows.
+- **Panels, at once on every change**: one `evaluateScript` call in plasmashell (TABLET 3.6): the top bar
+  `round(44 x text scale)` (the layout script's `textScale()`), the dock 96 and `DockHiding`; the stock
+  appmenu `compactView` in `[Appearance]`. The laptop height and hiding are saved once per panel in
+  its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave.
+  Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
+  start), the call is made again after 500 ms (one call for several panels).
+- **Window policy, after 300 ms of stable posture** (flip bouncing), only with `WindowMode=fullscreen`
+  and a built-in screen as the only screen: placement "Maximizing" and borderless maximized windows;
+  every eligible window (normal, maximizable, not full screen, minimized, skip-taskbar, transient or
+  modal, on the built-in screen) is maximized; tiled windows keep their tile and lose their title bar,
+  and keep following `tileChanged` (a new tile: no title bar; untiled: the title bar back). New windows
+  open maximized by placement; resizable dialogs and transients too (owner decision 2), fixed-size
+  dialogs stay centred and framed.
+- **Leave**: first, while borderless is still on, the windows this script maximized are
+  un-maximized (KWin puts back their laptop geometry); windows first opened in tablet mode, dialogs
+  included, get `setMaximize(false, false, rect)` with 70 % of the work area, centred (on the parent
+  for dialogs); tiles get their title bar back; then the options are restored, and windows still
+  maximized get their title bar back as `Workspace::slotReconfigure` does. Windows the user
+  un-maximized in tablet mode are not touched. Focus, stacking, desktop, activity and minimized state
+  never change.
+- **KWin reconfigure** reloads the options from kwinrc (also once about 0.2 s after every session
+  start): the script sets them again inside the change handler (synchronously, so KWin does not give
+  every maximized window its frame back); the reloaded values become the laptop values.
+- **External monitor**: `screensChanged` re-runs the policy check, so window policy leaves when a
+  second screen appears and comes back when it goes.
+- **Kill switch**: disabling the script (`kwriteconfig6 --file kwinrc --group Plugins --key
+  plasmafusion-tabletEnabled false`, then `qdbus6 org.kde.KWin /KWin reconfigure`) runs its leave step
+  first, so the windows and options come back.
+- **Idle**: no timers except the 300 ms debounce and the 500 ms panel coalescing, both single-shot.
+
+## Verification
+
+Private sessions on the ThinkPad (1920 x 1200 at 4/3), `build/kt/` (scenarios `scen-kt1.sh`,
+`scen-kt2.sh`, helper `pf-kt/kt.py`), the stage of HEAD plus this package installed with
+`fusion-config.sh --install`; `InternalOutputs` includes `Virtual` there. Final runs `kt-1` and
+`kt-2` (evidence `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KWIN-1/`):
+
+- T1: three windows at known geometries; tablet: all maximized without title bar, placement 9,
+  borderless on, stacking and focus unchanged; leave: every frame geometry exactly as before (0 px),
+  none without title bar or maximized, placement and borderless back, stacking and focus unchanged.
+- T14: panels 44/96 drawn 34-39 ms after the switch, 34/88 31-46 ms after leaving (budget 100 ms);
+  window policy follows after the 300 ms debounce, with KWin's 250 ms maximize animation.
+- T4: a KWin reconfigure in tablet mode keeps placement 9, borderless and the windows' state.
+- T3: plasmashell restarted in tablet mode: panels 44/96 within 5 ms of its name appearing (614 ms
+  after the start); in laptop mode 34/88; `tabletApplied` consistent.
+- T2: a window opened in tablet mode opens maximized without title bar; on leave it gets 70 % of the
+  work area, centred, with its title bar.
+- T17: KWrite's Open dialog (resizable) opens full screen without frame; after leave no window is
+  without title bar or maximized.
+- T18: two windows split left and right keep their tiles without title bars; on leave both get them
+  back.
+- Rotation in tablet mode (part of T19): maximized windows follow the portrait work area (within
+  the device grid's 0.25 px). The rotation lock itself belongs to quick settings (QS-1) and the hand
+  check H3.
+- 20 fold/unfold cycles with 5 windows: 0 px drift, focus and stacking unchanged, no window without
+  title bar; KWin's memory did not grow over 40 cycles (-76 kB over the second 20).
+- Script load: KWin VmRSS +4 kB with the script loaded (budget 4 MiB).
+- Kill switch in tablet mode: disabling the script gives the windows (title bars, not maximized),
+  placement and borderless back.
+- T16 (`kt-2`: the session starts with `[Input] TabletMode=on`, two windows open, then Plasma
+  Fusion is installed, which enables the script): panels 44/96 within a few ms of the install
+  finishing, both windows maximized without title bar, placement 9; after `TabletMode=off` the
+  panels 34/88 and no window without title bar. The windows came back within 1.25 px of their
+  frames from before the install (the install also changed the title bars from Breeze to Aurorae,
+  which moves a frame onto the device grid differently).
+- No core dumps with the final script. An earlier version switched the stock appmenu's
+  `compactView` in the panel script, as TABLET 3.6 said: that crashed plasmashell twice in these
+  sessions (SIGSEGV inside the scripting `writeConfig`, while the applet changed its representation
+  during a layout update; stacks in the evidence), and after the crash restart the saved laptop
+  height was the tablet one, so the top bar stayed 44 px in laptop mode. The panel script no longer
+  touches the appmenu, and it never saves the tablet height as the laptop height (checked with mock
+  panels, including a corrupted saved value).
+
+Not covered in private sessions (hand checks): the real hinge switch and accelerometer, touch
+gestures that need a physical screen size, the rotation lock (QS-1), and the window card's
+"Windowed" row (TOP/QS lanes).
+
+## Needs from other parts
+
+- QS-1: accept `openRequest` = `<mode>:<nonce>` (the launcher's form) with mode `sheet` (right edge);
+  DEVICE-1's Meta+N writes `notifications <ms>` today and should move to `notifications:<ms>` when
+  QS-1 lands. QS-1's "Full-screen apps" toggle writes `WindowMode` and invokes the shortcut.
+- The quick-settings keyboard policy (TABLET 3.3, `services/TabletPolicy.qml`) is QS-1's; the script does
+  not start or stop the on-screen keyboard.
+- DOCK-2: the tablet dock content fits a 96 px panel (the script sets the thickness).
+- TOP-1: a compact global menu in tablet mode (TABLET 4.3) must come from the top-bar widgets; the
+  panel script cannot switch the stock appmenu's `compactView` without crashing plasmashell 6.7.5.

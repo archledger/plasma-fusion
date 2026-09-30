@@ -1,0 +1,476 @@
+/*
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+*/
+
+import QtQuick
+import org.kde.kwin
+
+// Plasma Fusion tablet mode (TABLET.md 3 and 4.2): the single owner of window policy and panel
+// geometry while the device is folded.
+//
+// - Posture comes from KWin's own TabletModeManager (FusionTablet: one D-Bus read, then its
+//   signals). Nothing happens until KWin has answered, so a stale start value never moves windows.
+// - At once on every change: the panel script in plasmashell (top bar round(44 x text scale),
+//   dock 96 and its tablet hiding; the laptop values are kept in plasmashell's own config).
+// - After 300 ms of a stable posture: window policy. Apps open maximized and without title bars
+//   (placement "Maximizing", borderless maximized windows), eligible open windows are maximized,
+//   tiled windows lose their title bar. Only while a built-in screen is the only screen, and only
+//   with WindowMode = fullscreen.
+// - Leaving: windows this script maximized are restored (KWin gives back their laptop geometry);
+//   windows first opened in tablet mode get 70 % of the work area, centred; the options come back.
+//   Windows the user un-maximized in tablet mode are not touched.
+// - A KWin reconfigure reloads the options from kwinrc; they are set again at once (synchronously,
+//   so KWin does not give every maximized window its frame back).
+// - Disabling the script (the kill switch) leaves tablet mode for the windows first.
+//
+// Settings: kwinrc [Script-plasmafusion-tablet] (contents/config/main.xml). Other parts write
+// them with kwriteconfig6 --notify and then invoke the shortcut "Plasma Fusion: Tablet Window
+// Mode", which re-reads them. No timers run while idle.
+Item {
+    id: root
+
+    FusionTablet {
+        id: tabletState
+    }
+
+    // ---------------------------------------------------------------- settings
+
+    function setting(key, fallback) {
+        const value = KWin.readConfig(key, fallback);
+        if (typeof fallback === "boolean") {
+            return value === true || value === "true";
+        }
+        return value === undefined || value === null || String(value) === "" ? fallback : String(value);
+    }
+    function windowMode() {
+        return setting("WindowMode", "fullscreen") === "windowed" ? "windowed" : "fullscreen";
+    }
+    function dockHiding() {
+        return setting("DockHiding", "dodgewindows") === "none" ? "none" : "dodgewindows";
+    }
+
+    // ---------------------------------------------------------------- posture
+
+    // Tablet posture as KWin reports it; false until KWin has answered.
+    readonly property bool known: tabletState.fromKWin
+    readonly property bool tablet: known && tabletState.tablet
+
+    // Deferred: when KWin's first answer arrives, `known` and `tablet` change in the same turn;
+    // Qt.callLater runs once, after both are settled (a direct handler saw a stale `tablet` first).
+    onTabletChanged: Qt.callLater(postureChanged)
+    onKnownChanged: Qt.callLater(postureChanged)
+
+    function postureChanged() {
+        if (!known) {
+            return;
+        }
+        log("posture " + (tablet ? "tablet" : "laptop"));
+        applyPanels();
+        debounce.restart();
+    }
+
+    Timer {
+        id: debounce
+        interval: 300
+        onTriggered: root.sync()
+    }
+
+    function log(message) {
+        console.info("plasmafusion-tablet: " + message);
+    }
+
+    // ---------------------------------------------------------------- window policy
+
+    readonly property int placementMaximizing: 9 // KWin::PlacementPolicy::Maximizing
+
+    // State while window policy is applied.
+    property bool applied: false
+    property bool busy: false
+    property int laptopPlacement: -1
+    property bool laptopBorderless: false
+    property bool laptopMoveEnabled: true
+    property bool moveChanged: false
+    property var maximizedByUs: ({}) // internalId -> true: maximized by enter()
+    property var openedInTablet: ({}) // internalId -> true: opened (maximized) while applied
+    property var borderlessTiles: ({}) // internalId -> true: title bar removed from a tiled window
+    property var tileHandlers: ({}) // internalId -> [window, handler]
+
+    function key(w) {
+        return String(w.internalId);
+    }
+
+    function internalOutput(output) {
+        if (!output) {
+            return false;
+        }
+        const name = String(output.name);
+        const prefixes = setting("InternalOutputs", "eDP,LVDS,DSI").split(",");
+        for (let i = 0; i < prefixes.length; ++i) {
+            const p = prefixes[i].trim();
+            if (p !== "" && name.startsWith(p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Window policy only while a built-in screen is the only screen (TABLET 3.5): with an external
+    // monitor, tablet mode changes only the shell's sizes and touch behaviour.
+    function policyAllowed() {
+        const screens = Workspace.screens;
+        return windowMode() === "fullscreen" && screens.length === 1 && internalOutput(screens[0]);
+    }
+
+    function eligible(w) {
+        return w && !w.deleted && w.normalWindow && w.maximizable && !w.fullScreen && !w.minimized
+            && !w.skipTaskbar && !w.transient && !w.modal && internalOutput(w.output);
+    }
+
+    function sync() {
+        const want = tablet && policyAllowed();
+        if (want && !applied) {
+            enter();
+        } else if (!want && applied) {
+            leave();
+        }
+    }
+
+    function enter() {
+        busy = true;
+        laptopPlacement = Options.placement;
+        laptopBorderless = Options.borderlessMaximizedWindows;
+        Options.placement = placementMaximizing;
+        Options.borderlessMaximizedWindows = true;
+        moveChanged = setting("DisableWindowMove", false);
+        if (moveChanged) {
+            laptopMoveEnabled = Options.interactiveWindowMoveEnabled;
+            Options.interactiveWindowMoveEnabled = false;
+        }
+        applied = true;
+        const ws = Workspace.stackingOrder;
+        let maximized = 0, tiles = 0;
+        for (let i = 0; i < ws.length; ++i) {
+            const w = ws[i];
+            if (!eligible(w)) {
+                continue;
+            }
+            follow(w);
+            if (w.tile) {
+                if (!w.noBorder) {
+                    w.noBorder = true;
+                    borderlessTiles[key(w)] = true;
+                    tiles++;
+                }
+            } else if (w.maximizeMode !== 3) {
+                maximizedByUs[key(w)] = true;
+                w.setMaximize(true, true);
+                maximized++;
+            }
+        }
+        busy = false;
+        log("enter: placement " + laptopPlacement + " -> " + Options.placement + ", borderless " + laptopBorderless
+            + " -> true, maximized " + maximized + ", tiles without title bar " + tiles);
+    }
+
+    // 70 % of the work area, centred on the window's parent when it has one (dialogs), else on
+    // the output: for windows that never had a laptop geometry.
+    function restoreRect(w) {
+        const area = Workspace.clientArea(Workspace.MaximizeArea, w);
+        const width = Math.round(area.width * 0.7), height = Math.round(area.height * 0.7);
+        let cx = area.x + area.width / 2, cy = area.y + area.height / 2;
+        const parent = w.transient ? w.transientFor : null;
+        if (parent && !parent.deleted) {
+            const g = parent.frameGeometry;
+            cx = g.x + g.width / 2;
+            cy = g.y + g.height / 2;
+        }
+        const x = Math.round(Math.max(area.x, Math.min(cx - width / 2, area.x + area.width - width)));
+        const y = Math.round(Math.max(area.y, Math.min(cy - height / 2, area.y + area.height - height)));
+        return Qt.rect(x, y, width, height);
+    }
+
+    function leave() {
+        busy = true;
+        const ws = Workspace.stackingOrder;
+        let restored = 0, placed = 0, tiles = 0;
+        // Un-maximize first, while borderless is still on: KWin gives the title bar back on
+        // un-maximize only while the option is set.
+        for (let i = 0; i < ws.length; ++i) {
+            const w = ws[i];
+            if (!w || w.deleted) {
+                continue;
+            }
+            const k = key(w);
+            if (w.maximizeMode === 3 && maximizedByUs[k]) {
+                w.setMaximize(false, false);
+                restored++;
+            } else if (w.maximizeMode === 3 && openedInTablet[k]) {
+                w.setMaximize(false, false, restoreRect(w));
+                placed++;
+            }
+            if (borderlessTiles[k] && w.noBorder) {
+                w.noBorder = false;
+                tiles++;
+            }
+        }
+        unfollowAll();
+        Options.placement = laptopPlacement;
+        Options.borderlessMaximizedWindows = laptopBorderless;
+        if (moveChanged) {
+            Options.interactiveWindowMoveEnabled = laptopMoveEnabled;
+            moveChanged = false;
+        }
+        // Windows still maximized (the user maximized them in tablet mode) get their title bar
+        // back, as Workspace::slotReconfigure does when the option goes off.
+        if (!laptopBorderless) {
+            for (let i = 0; i < ws.length; ++i) {
+                const w = ws[i];
+                if (w && !w.deleted && w.maximizeMode === 3 && w.noBorder) {
+                    w.noBorder = false;
+                }
+            }
+        }
+        maximizedByUs = ({});
+        openedInTablet = ({});
+        borderlessTiles = ({});
+        applied = false;
+        busy = false;
+        log("leave: restored " + restored + ", placed " + placed + ", tiles with title bar " + tiles
+            + ", placement " + Options.placement + ", borderless " + Options.borderlessMaximizedWindows);
+    }
+
+    // Tiled windows follow their tile while window policy is applied: quick-tiling a borderless
+    // maximized window gives it its title bar back, so a tile gets noBorder again (TABLET 4.2).
+    function follow(w) {
+        const k = key(w);
+        if (tileHandlers[k]) {
+            return;
+        }
+        const handler = function () {
+            root.tileChanged(w);
+        };
+        w.tileChanged.connect(handler);
+        tileHandlers[k] = [w, handler];
+    }
+    function unfollowAll() {
+        for (const k in tileHandlers) {
+            const entry = tileHandlers[k];
+            if (entry[0] && !entry[0].deleted) {
+                entry[0].tileChanged.disconnect(entry[1]);
+            }
+        }
+        tileHandlers = ({});
+    }
+    function tileChanged(w) {
+        if (!applied || !w || w.deleted) {
+            return;
+        }
+        const k = key(w);
+        if (w.tile) {
+            if (!w.noBorder) {
+                w.noBorder = true;
+            }
+            borderlessTiles[k] = true;
+        } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
+            w.noBorder = false;
+            delete borderlessTiles[k];
+        }
+    }
+
+    Connections {
+        target: Workspace
+        function onWindowAdded(w) {
+            if (!w) {
+                return;
+            }
+            if (w.dock && String(w.resourceClass) === "plasmashell") {
+                panelsAppeared.restart();
+            }
+            if (!root.applied) {
+                return;
+            }
+            // Placement "Maximizing" opened it maximized (resizable dialogs and transients too,
+            // owner decision 2): it has no laptop geometry to go back to.
+            if (w.maximizeMode === 3) {
+                root.openedInTablet[root.key(w)] = true;
+            }
+            if (root.eligible(w)) {
+                root.follow(w);
+            }
+        }
+        function onWindowRemoved(w) {
+            if (!w) {
+                return;
+            }
+            const k = root.key(w);
+            delete root.maximizedByUs[k];
+            delete root.openedInTablet[k];
+            delete root.borderlessTiles[k];
+            delete root.tileHandlers[k];
+        }
+        function onScreensChanged() {
+            // An external monitor switches window policy off (or on again when it goes).
+            if (root.known) {
+                debounce.restart();
+            }
+        }
+    }
+
+    // A KWin reconfigure reloads the options from kwinrc (also once about 0.2 s after every session
+    // start): set the tablet values again at once, inside the change handler, so that
+    // Workspace::slotReconfigure finds the borderless option unchanged. The reloaded values are the
+    // user's laptop values.
+    Connections {
+        target: Options
+        function onPlacementChanged() {
+            if (root.applied && !root.busy && Options.placement !== root.placementMaximizing) {
+                root.laptopPlacement = Options.placement;
+                Options.placement = root.placementMaximizing;
+                root.log("placement set again after a reconfigure (laptop value " + root.laptopPlacement + ")");
+            }
+        }
+        function onBorderlessMaximizedWindowsChanged() {
+            if (root.applied && !root.busy && !Options.borderlessMaximizedWindows) {
+                root.laptopBorderless = false;
+                Options.borderlessMaximizedWindows = true;
+                root.log("borderless set again after a reconfigure");
+            }
+        }
+        function onInteractiveWindowMoveEnabledChanged() {
+            if (root.applied && !root.busy && root.moveChanged && Options.interactiveWindowMoveEnabled) {
+                root.laptopMoveEnabled = true;
+                Options.interactiveWindowMoveEnabled = false;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- panels
+
+    // The panel script (TABLET 3.6), run in plasmashell. Idempotent; never touches panels the user
+    // added. The tablet top bar height uses the layout script's text scale. The laptop height is
+    // saved once per panel and never as the tablet height (a plasmashell that restarted in tablet
+    // posture must not make the tablet size the laptop size). TABLET 3.6 also switched the stock
+    // appmenu's compactView here; that write crashed plasmashell 6.7.5 (the applet changes its
+    // representation inside the scripting writeConfig while its layout is updated), so the
+    // compact menu is left to the top-bar widgets.
+    function panelScript(isTablet, hiding) {
+        return "var TABLET = " + (isTablet ? "true" : "false") + ", DOCK_HIDING = \"" + hiding + "\", HEIGHT_DOCK = 96;\n"
+            + "function textScale() {\n"
+            + "    var pt = NaN, font = ConfigFile(\"kdeglobals\", \"General\").readEntry(\"font\");\n"
+            + "    if (font !== undefined && font !== null && String(font) !== \"\") pt = parseFloat(String(font).split(\",\")[1]);\n"
+            + "    var s = pt > 0 ? pt / 9.75 : gridUnit / 18;\n"
+            + "    return Math.max(0.85, Math.min(1.6, s));\n"
+            + "}\n"
+            + "var HEIGHT_TOP = Math.round(44 * textScale()), done = [];\n"
+            + "panels().forEach(function (p) {\n"
+            + "    var ws = p.widgets(), types = [];\n"
+            + "    for (var i = 0; i < ws.length; ++i) types.push(ws[i].type);\n"
+            + "    var isTop = types.indexOf(\"org.plasmafusion.quicksettings\") >= 0 || types.indexOf(\"org.plasmafusion.clockpill\") >= 0;\n"
+            + "    var isDock = types.indexOf(\"org.plasmafusion.dock\") >= 0;\n"
+            + "    if (!isTop && !isDock) return;\n"
+            + "    p.currentConfigGroup = [\"PlasmaFusion\"];\n"
+            + "    var applied = p.readConfig(\"tabletApplied\", false) === true || p.readConfig(\"tabletApplied\", \"\") === \"true\";\n"
+            + "    var h = isTop ? HEIGHT_TOP : HEIGHT_DOCK, laptop = isTop ? Math.round(34 * textScale()) : 88;\n"
+            + "    if (TABLET) {\n"
+            + "        if (!applied) {\n"
+            + "            p.writeConfig(\"laptopHeight\", p.height == h ? laptop : p.height);\n"
+            + "            p.writeConfig(\"laptopHiding\", p.hiding);\n"
+            + "            p.writeConfig(\"tabletApplied\", true);\n"
+            + "        }\n"
+            + "        if (p.height != h) p.height = h;\n"
+            + "        if (isDock && p.hiding != DOCK_HIDING) p.hiding = DOCK_HIDING;\n"
+            + "    } else if (applied) {\n"
+            + "        var saved = Number(p.readConfig(\"laptopHeight\", laptop));\n"
+            + "        p.height = saved > 0 && saved != h ? saved : laptop;\n"
+            + "        if (isDock) p.hiding = String(p.readConfig(\"laptopHiding\", \"dodgewindows\"));\n"
+            + "        p.writeConfig(\"tabletApplied\", false);\n"
+            + "    }\n"
+            + "    p.currentConfigGroup = [];\n"
+            + "    done.push((isTop ? \"top \" : \"dock \") + p.height + (isDock ? \" \" + p.hiding : \"\"));\n"
+            + "});\n"
+            + "print(done.join(\", \"));\n";
+    }
+
+    function applyPanels() {
+        if (!known) {
+            return;
+        }
+        panelCall.arguments = [panelScript(tablet, dockHiding())];
+        panelCall.call();
+    }
+
+    DBusCall {
+        id: panelCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+        onFinished: returnValue => root.log("panels: " + (returnValue.length > 0 ? returnValue[0] : ""))
+        onFailed: root.log("panels: plasmashell did not run the panel script (not running?)")
+    }
+
+    // A plasmashell (re)start brings its panels back with the last saved thickness: apply the
+    // posture once when its panel windows appear (several panels, one call).
+    Timer {
+        id: panelsAppeared
+        interval: 500
+        onTriggered: root.applyPanels()
+    }
+
+    // ---------------------------------------------------------------- shortcut and edges
+
+    // Other parts change WindowMode or DockHiding with kwriteconfig6 --notify, then invoke this.
+    ShortcutHandler {
+        name: "Plasma Fusion: Tablet Window Mode"
+        text: "Plasma Fusion: Apply Tablet Window Mode"
+        sequence: ""
+        onActivated: {
+            root.log("settings re-read: WindowMode " + root.windowMode() + ", DockHiding " + root.dockHiding());
+            root.applyPanels();
+            root.sync();
+        }
+    }
+
+    ScreenEdgeHandler {
+        edge: ScreenEdgeHandler.LeftEdge
+        mode: ScreenEdgeHandler.Touch
+        enabled: root.tablet && root.setting("EdgeLeft", false)
+        onActivated: launcherCall.call()
+    }
+    DBusCall {
+        id: launcherCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "activateLauncherMenu"
+    }
+
+    ScreenEdgeHandler {
+        edge: ScreenEdgeHandler.RightEdge
+        mode: ScreenEdgeHandler.Touch
+        enabled: root.tablet && root.setting("EdgeRight", false)
+        onActivated: {
+            // Quick settings opens on an openRequest "<mode>:<nonce>" (the launcher's form).
+            quickSettingsCall.arguments = ["panels().forEach(function (p) { p.widgets(\"org.plasmafusion.quicksettings\").forEach(function (w) {"
+                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"openRequest\", \"sheet:\" + Date.now()); }); });"];
+            quickSettingsCall.call();
+        }
+    }
+    DBusCall {
+        id: quickSettingsCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+    }
+
+    // ---------------------------------------------------------------- start and stop
+
+    Component.onDestruction: {
+        // Disabled (the kill switch) or KWin quits: laptop options and windows first.
+        if (applied) {
+            leave();
+        }
+    }
+}

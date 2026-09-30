@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PlasmaFusionTabletConfig</class>
+ <widget class="QWidget" name="PlasmaFusionTabletConfig">
+  <layout class="QFormLayout" name="formLayout">
+   <item row="0" column="0">
+    <widget class="QLabel" name="windowModeLabel">
+     <property name="text">
+      <string>Apps in tablet mode:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QComboBox" name="kcfg_WindowMode">
+     <item>
+      <property name="text">
+       <string>Full screen</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Windowed</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="dockHidingLabel">
+     <property name="text">
+      <string>Dock in tablet mode:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QComboBox" name="kcfg_DockHiding">
+     <item>
+      <property name="text">
+       <string>Hides over apps</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Always visible</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QCheckBox" name="kcfg_EdgeLeft">
+     <property name="text">
+      <string>Swipe in from the left edge opens the launcher</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QCheckBox" name="kcfg_EdgeRight">
+     <property name="text">
+      <string>Swipe in from the right edge opens quick settings</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QCheckBox" name="kcfg_DisableWindowMove">
+     <property name="text">
+      <string>Windows cannot be dragged in tablet mode</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
