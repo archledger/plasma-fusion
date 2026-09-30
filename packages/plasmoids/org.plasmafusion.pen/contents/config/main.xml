@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+  SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="showButton" type="String">
+      <label>When the top-bar button shows (a pen must exist): "tablet" (tablet posture), "always" or "never"</label>
+      <default>tablet</default>
+    </entry>
+    <entry name="actions" type="StringList">
+      <label>The tiles of the pen menu, in order: newnote, snip, markup, whiteboard, drawonscreen, settings</label>
+      <default>newnote,snip,markup,whiteboard,drawonscreen,settings</default>
+    </entry>
+    <entry name="garageAction" type="String">
+      <label>When the pen leaves its garage (only with the garage service): "menu", "newnote" or "none"</label>
+      <default>menu</default>
+    </entry>
+    <entry name="openRequest" type="String">
+      <label>Written by other shell parts through desktop scripting: "open:NONCE", "close:NONCE", "toggle:NONCE", "newnote:NONCE" or "settings:NONCE"</label>
+      <default></default>
+    </entry>
+    <entry name="forcePen" type="Bool">
+      <label>Test sessions only: act as if a pen existed (virtual sessions have no tablet devices)</label>
+      <default>false</default>
+    </entry>
+  </group>
+</kcfg>

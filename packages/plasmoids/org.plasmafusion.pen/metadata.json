@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Pen menu for the Plasma Fusion top bar: new note, snip, mark up, whiteboard and pen settings",
+        "EnabledByDefault": true,
+        "Icon": "draw-freehand",
+        "Id": "org.plasmafusion.pen",
+        "License": "GPL-2.0-or-later",
+        "Name": "Fusion Pen",
+        "Version": "1.0",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

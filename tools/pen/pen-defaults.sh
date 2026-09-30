@@ -21,8 +21,9 @@
 #     next login): it names the device and removes the left-handed option, which on a display pen
 #     mirrors the pen's position.
 # Every setting takes effect at once. Before changing anything it copies kcminputrc and the pen's
-# current output to ~/.local/state/plasma-fusion/pen-backup-<UTC timestamp>/; --restore puts them
-# back (the Xournal++ package stays installed).
+# current output, screen mapping and pressure curve to
+# ~/.local/state/plasma-fusion/pen-backup-<UTC timestamp>/; --restore puts them back (the Xournal++
+# package stays installed).
 set -euo pipefail
 
 DRY=0 INSTALL=1 RESTORE=
@@ -81,10 +82,11 @@ prop() { # $1 sysName, $2 property: prints the value without the type prefix
 
 # The pen: the first device with tabletTool=true (its sysName is e.g. event7).
 PEN='' PEN_NAME=''
-for d in $(busctl --user get-property "$KWIN" "$DEV_ROOT" org.kde.KWin.InputDeviceManager devicesSysNames | tr -d '"' | cut -d' ' -f3-); do
+for d in $(busctl --user get-property "$KWIN" "$DEV_ROOT" org.kde.KWin.InputDeviceManager devicesSysNames 2>/dev/null | tr -d '"' | cut -d' ' -f3-); do
   if [ "$(prop "$d" tabletTool)" = true ]; then PEN=$d; PEN_NAME=$(prop "$d" name); break; fi
 done
-[ -n "$PEN" ] || { say "No pen (tablet tool) is known to KWin: nothing to do."; exit 0; }
+# A restore works without the pen too (the keys; the device's own values need it).
+[ -n "$PEN" ] || [ -n "$RESTORE" ] || { say "No pen (tablet tool) is known to KWin: nothing to do."; exit 0; }
 
 # The built-in panel: a connected DRM connector named eDP*, LVDS* or DSI* (sysfs, so no Qt tool
 # has to run; the connector name without the card prefix is KWin's output name).
@@ -111,15 +113,49 @@ if [ -n "$RESTORE" ]; then
       kwriteconfig6 --notify --file kcminputrc "${args[@]}" --key "$key" "$value"
     fi
   done <"$RESTORE/keys"
+  # The click button and the one-pointer setting may have been changed since, from the pen menu's
+  # settings page (PEN.md 3.4): both go back to the backup's kcminputrc copy (deleted when it had
+  # none), with --notify so KWin drops a live rebind at once.
+  [ -n "$PEN_NAME" ] || PEN_NAME=$(cat "$RESTORE/pen-name" 2>/dev/null || echo "$LIBWACOM_DEVICE")
+  for spec in "ButtonRebinds/TabletTool/$PEN_NAME:$CLICK_CODE" "Tablet:SyncWithMouse"; do
+    gpath=${spec%:*} key=${spec##*:} args=()
+    IFS=/ read -r -a groups <<<"$gpath"
+    for g in "${groups[@]}"; do args+=(--group "$g"); done
+    old=
+    [ ! -f "$RESTORE/kcminputrc" ] || old=$(kreadconfig6 --file "$RESTORE/kcminputrc" "${args[@]}" --key "$key" 2>/dev/null || true)
+    cur=$(kreadconfig6 --file kcminputrc "${args[@]}" --key "$key" 2>/dev/null || true)
+    [ "$cur" != "$old" ] || continue
+    if [ -z "$old" ]; then
+      note "kcminputrc $gpath $key: delete"
+      kwriteconfig6 --notify --file kcminputrc "${args[@]}" --key "$key" --delete
+    else
+      note "kcminputrc $gpath $key: -> $old"
+      kwriteconfig6 --notify --file kcminputrc "${args[@]}" --key "$key" "$old"
+    fi
+  done
   if [ -f "$RESTORE/libwacom.absent" ]; then
     note "remove ~/.config/libwacom/$LIBWACOM_NAME (from the next login)"
     rm -f "$CONFIG/libwacom/$LIBWACOM_NAME"
   elif [ -f "$RESTORE/$LIBWACOM_NAME" ]; then
     cp "$RESTORE/$LIBWACOM_NAME" "$CONFIG/libwacom/$LIBWACOM_NAME"
   fi
+  if [ -z "$PEN" ]; then
+    say "Done (no pen known to KWin now: its screen and pressure settings were left as they are)."
+    exit 0
+  fi
   old_output=$(cat "$RESTORE/pen-output" 2>/dev/null || true)
   note "pen output: -> ${old_output:-<active screen>}"
   busctl --user set-property "$KWIN" "$DEV_ROOT/$PEN" "$DEV_IF" outputName s "$old_output"
+  # The pen menu's settings page can change these two as well (PEN.md 3.4); a backup from before
+  # they were recorded gets KWin's defaults (the pen on one screen, linear pressure).
+  old_map=$(cat "$RESTORE/pen-map" 2>/dev/null || echo false)
+  note "pen on all screens: -> $old_map"
+  busctl --user set-property "$KWIN" "$DEV_ROOT/$PEN" "$DEV_IF" mapToWorkspace b "$old_map"
+  if [ -f "$RESTORE/pen-pressure" ]; then old_curve=$(cat "$RESTORE/pen-pressure"); else old_curve="0,0;1,1;"; fi
+  if [ "$(prop "$PEN" pressureCurve)" != "$old_curve" ]; then
+    note "pressure curve: -> ${old_curve:-<default>}"
+    busctl --user set-property "$KWIN" "$DEV_ROOT/$PEN" "$DEV_IF" pressureCurve s "$old_curve"
+  fi
   say "Done. Xournal++ stays installed (sudo dnf remove xournalpp to remove it)."
   exit 0
 fi
@@ -131,6 +167,9 @@ if [ "$DRY" = 0 ]; then
   [ ! -f "$CONFIG/kcminputrc" ] || cp -a "$CONFIG/kcminputrc" "$BACKUP/kcminputrc"
   : >"$BACKUP/keys"
   prop "$PEN" outputName >"$BACKUP/pen-output"
+  prop "$PEN" mapToWorkspace >"$BACKUP/pen-map"
+  prop "$PEN" pressureCurve >"$BACKUP/pen-pressure"
+  printf '%s\n' "$PEN_NAME" >"$BACKUP/pen-name"
   say "backup: $BACKUP"
 fi
 
