@@ -89,7 +89,8 @@
 #   Window switcher    kwinrc [TabBox] DelayTime 120 (a quick Alt+Tab shows no switcher)
 #   KWin tablet        kwinrc [Plugins] plasmafusion-tabletEnabled
 #   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture (quick settings writes it
-#                      from then on)
+#                      from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
+#                      accent pop-up on a held physical key)
 #   Text rendering     greyscale antialiasing, slight hinting: ~/.config/fontconfig/fonts.conf and
 #                      kdeglobals [General] Xft* as System Settings > Fonts writes them (GTK too)
 #   Session env        ~/.config/plasma-workspace/env/plasma-fusion-session.sh, from the next
@@ -313,7 +314,7 @@ esac
 BACKUP_FILES=(
   kdeglobals kwinrc kglobalshortcutsrc plasmarc plasmanotifyrc plasmashellrc
   plasma-org.kde.plasma.desktop-appletsrc ksplashrc kcminputrc krunnerrc kscreenlockerrc
-  konsolerc katerc kwriterc plasmafusionrc
+  konsolerc katerc kwriterc plasmafusionrc plasmakeyboardrc
   gtk-3.0/settings.ini gtk-4.0/settings.ini xsettingsd/xsettingsd.conf Trolltech.conf
   gtk-3.0/gtk.css gtk-4.0/gtk.css gtk-3.0/plasma-fusion.css gtk-4.0/plasma-fusion.css
   systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf
@@ -1662,6 +1663,11 @@ if bus get-property org.kde.KWin /org/kde/KWin org.kde.KWin.TabletModeManager ta
 else
   managed_key kwinrc Wayland InputMethod "" "$OSK_DESKTOP"
 fi
+# plasma-keyboard (6.7 and later) shows an accent pop-up when a physical key is held 600 ms while
+# it runs, which turns a held key into a pop-up and broke password entry for users
+# (discussion.fedoraproject.org/t/194845). Off (TABLET2 P0); the on-screen keys keep their own
+# long-press accents.
+managed_key plasmakeyboardrc General diacriticsPopupEnabled false
 if [ "$DRY" = 0 ]; then
   bus call org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null
   # Loads scripts that are enabled but not running yet.

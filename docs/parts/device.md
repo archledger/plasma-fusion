@@ -140,7 +140,11 @@ free. With `--keep-shortcuts` quick settings keeps Meta+N, as before.
 - **Tablet KWin script**: `[Plugins] plasmafusion-tabletEnabled=true` when installed.
 - **On-screen keyboard** (T6): in laptop posture `kwinrc [Wayland] InputMethod=` (empty) unless the
   user chose another input method; in tablet posture left alone. Quick settings switches it with the
-  posture afterwards.
+  posture afterwards. `plasmakeyboardrc [General] diacriticsPopupEnabled=false` (TABLET2 P0):
+  plasma-keyboard 6.7 shows an accent pop-up when a physical key is held 600 ms while it runs,
+  which broke password entry for users (Fedora discussion 194845); the on-screen keys keep their
+  long-press accents. The file is in the backup (`fusion-restore.sh` removes it if it was absent;
+  private session `cfg1`: set, unchanged on a second run, removed by restore).
 - **Tooltips** (M8): `plasmarc [PlasmaToolTips] Delay=300`.
 - **Title bars**: every run applies the Global Theme (`plasma-apply-lookandfeel -a`), which removes
   the user's own `kwinrc [org.kde.kdecoration2] library` and `theme`, so the theme's Aurorae value
