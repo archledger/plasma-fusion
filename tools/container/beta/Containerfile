@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# PLASMA-68: build environment for the compiled Plasma Fusion parts against the Plasma 6.8
+# pre-release from the Fedora KDE SIG beta COPR (@kdesig/kde-beta), on Fedora 44.
+#   podman build -t localhost/plasma-fusion-build:f44-6.8beta tools/container/beta
+FROM registry.fedoraproject.org/fedora:44
+COPY kde-beta.repo /etc/yum.repos.d/kde-beta.repo
+RUN dnf -y --setopt=install_weak_deps=False upgrade --refresh \
+ && dnf -y --setopt=install_weak_deps=False install \
+      gcc-c++ cmake ninja-build extra-cmake-modules gettext rpm-build rpmdevtools \
+      kdecoration-devel kwin-devel libplasma-devel plasma-workspace-devel plasma-activities-devel \
+      qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel \
+      kf6-kcoreaddons-devel kf6-kconfig-devel kf6-kconfigwidgets-devel kf6-kcmutils-devel \
+      kf6-ki18n-devel kf6-kguiaddons-devel kf6-kglobalaccel-devel kf6-kwindowsystem-devel \
+      kf6-kiconthemes-devel kf6-kpackage-devel kf6-kcolorscheme-devel kf6-kirigami-devel \
+      kf6-kdbusaddons-devel kf6-knotifications-devel \
+      libepoxy-devel libdrm-devel vulkan-headers vulkan-loader-devel \
+ && rpm -q kwin-devel libplasma-devel plasma-workspace-devel kdecoration-devel qt6-qtbase-devel kf6-kcoreaddons-devel \
+ && dnf clean all

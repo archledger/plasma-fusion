@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# A Plasma test host for tools/vsession/cvsession.sh: the Plasma of the BASE build image (the
+# device's 6.7.5 from tools/container, or a pre-release from tools/container/beta), the apps and
+# services the scenarios use, and Plasma Fusion's compiled parts built against that Plasma.
+# Build context: a directory holding packages/{common,decoration-cpp,kcm-cpp,navigation-cpp} and
+# tools/container/test/install-parts.sh (tools/container/test/build.sh assembles it), e.g.
+#   tools/container/test/build.sh localhost/plasma-fusion-build:f44-6.8beta localhost/plasma-fusion-test:f44-6.8beta
+ARG BASE=localhost/plasma-fusion-build:f44-6.8beta
+FROM ${BASE}
+RUN dnf -y --setopt=install_weak_deps=False install \
+      plasma-workspace plasma-workspace-wayland plasma-desktop kwin kscreen kscreenlocker spectacle \
+      plasma-nm plasma-pa bluedevil powerdevil kdeplasma-addons ksystemstats plasma-systemmonitor \
+      plasma-keyboard xdg-desktop-portal-kde kactivitymanagerd kf6-kded plasma-breeze \
+      breeze-icon-theme plasma-workspace-wallpapers kde-settings-plasma plasma-integration \
+      konsole dolphin kwrite kcalc gwenview \
+      qt6-qttools mesa-dri-drivers mesa-libEGL mesa-libgbm libei python3-gobject dbus-daemon \
+      google-noto-sans-fonts google-noto-sans-mono-fonts libnotify procps-ng psmisc which findutils \
+      polkit python3-pillow \
+ && dnf clean all \
+ && useradd -m -u 1000 test
+COPY tools/container/test/install-parts.sh /usr/local/bin/install-parts.sh
+COPY packages /pf-src/packages
+RUN /usr/local/bin/install-parts.sh && rpm -q kwin plasma-workspace plasma-desktop libplasma

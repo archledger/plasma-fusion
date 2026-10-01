@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+# The Fedora KDE SIG pre-release COPR (Plasma, Frameworks and Gear betas), for tools/container/beta.
+[copr-kdesig-kde-beta]
+name=Copr repo for kde-beta owned by @kdesig
+baseurl=https://download.copr.fedorainfracloud.org/results/@kdesig/kde-beta/fedora-44-$basearch/
+type=rpm-md
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/@kdesig/kde-beta/pubkey.gpg
+repo_gpgcheck=0
+enabled=1
