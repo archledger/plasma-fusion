@@ -234,9 +234,10 @@ Item {
             "path": "/VirtualKeyboard",
             "iface": "org.freedesktop.DBus.Properties",
             "member": "Set",
-            "arguments": [new DBus.string("org.kde.kwin.VirtualKeyboard"), new DBus.string(name), new DBus.variant(new DBus.bool(value))],
+            // (a plain boolean in the variant: a DBus.bool inside one cannot be marshalled)
+            "arguments": [new DBus.string("org.kde.kwin.VirtualKeyboard"), new DBus.string(name), new DBus.variant(value)],
             "signature": "(ssv)"
-        }, () => policy.refreshOsk(), () => {});
+        }, () => policy.refreshOsk(), error => console.warn("quicksettings: on-screen keyboard " + name + " not set: " + error));
     }
     // Shows the keyboard now (also without a text field), or hides it (TABLET 4.3).
     function toggleOsk() {
