@@ -114,6 +114,20 @@ bool FusionTaskFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &s
         return false;
     }
 
+    // Plasma Fusion: never the on-screen keyboard's panel (a 0x0 utility window once it was shown;
+    // KWin's Overview drew it as a zero-size texture), pop-ups, OSDs, other zero-size windows or the
+    // shell's own surfaces (the launcher sheet and the other Fusion sheets are plasmashell windows).
+    if (window->isInputMethod() || window->isPopupWindow() || window->isOnScreenDisplay() || window->isAppletPopup()) {
+        return false;
+    }
+    if (window->frameGeometry().isEmpty()) {
+        return false;
+    }
+    const QString resourceClass = window->resourceClass();
+    if (resourceClass == QLatin1String("plasmashell") || resourceClass == QLatin1String("org.kde.plasmashell")) {
+        return false;
+    }
+
     return true;
 }
 

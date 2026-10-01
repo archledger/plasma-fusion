@@ -11,7 +11,9 @@
 #include <QQuickItem>
 #include <main.h>
 #include <tabletmodemanager.h>
+#include <core/output.h>
 #include <window.h>
+#include <workspace.h>
 
 using namespace std::chrono_literals;
 
@@ -121,6 +123,38 @@ void FusionNavigationState::updateWasInActiveTask(KWin::Window *window)
         newWasInActiveTask = !window->isDesktop();
     }
     setWasInActiveTask(newWasInActiveTask);
+}
+
+void FusionNavigationState::showDock()
+{
+    // The bottom touch border belongs to this effect in tablet posture, so KWin's own auto-hide edge
+    // of the dock no longer sees short swipes: show the dock the same way it would, after the return
+    // animation (the app is activated at its end).
+    const auto delay = m_effect ? m_effect->animationTime(450ms) : 450ms;
+    QTimer::singleShot(delay, this, &FusionNavigationState::revealDock);
+}
+
+void FusionNavigationState::revealDock()
+{
+    const auto windows = workspace()->windows();
+    int docks = 0;
+    int shown = 0;
+    for (Window *window : windows) {
+        if (!window->isDock()) {
+            continue;
+        }
+        ++docks;
+        if (!window->isHidden()) {
+            continue;
+        }
+        const LogicalOutput *output = window->output();
+        if (!output || window->frameGeometry().center().y() < output->geometry().center().y()) {
+            continue;
+        }
+        window->showOnScreenEdge();
+        ++shown;
+    }
+    qInfo("plasmafusion-navigation: showDock: %d dock window(s), %d shown", docks, shown);
 }
 
 qreal FusionNavigationState::touchXPosition() const

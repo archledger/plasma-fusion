@@ -82,6 +82,9 @@ public:
     bool wasInActiveTask() const;
     void setWasInActiveTask(bool wasInActiveTask);
     Q_INVOKABLE void updateWasInActiveTask(KWin::Window *window);
+    // Plasma Fusion: shows the hidden dock (a bottom panel) as KWin's own panel edge does, once the
+    // app the gesture returned to is active again (activating it makes the dock dodge away).
+    Q_INVOKABLE void showDock();
 
     qreal touchXPosition() const;
     qreal touchYPosition() const;
@@ -149,6 +152,7 @@ private Q_SLOTS:
 
 private:
     void invokeEffect();
+    void revealDock();
 
     bool m_gestureEnabled{false};
     bool m_tabletMode{false};

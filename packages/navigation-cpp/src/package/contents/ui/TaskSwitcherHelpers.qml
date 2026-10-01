@@ -190,7 +190,7 @@ QtObject {
         xAnim.stop();
     }
 
-    function getTaskIndexFromWindow(window: KWinComponents.Window): int {
+    function getTaskIndexFromWindow(window: var): int {
         for (let i = 0; i < taskSwitcher.tasksModel.rowCount(); i++) {
             const modelWindow = taskSwitcher.tasksModel.data(taskSwitcher.tasksModel.index(i, 0), Qt.DisplayRole);
             if (modelWindow == window) {

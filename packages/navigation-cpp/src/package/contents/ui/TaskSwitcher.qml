@@ -33,6 +33,9 @@ FocusScope {
     // Plasma Fusion: the cards keep clear of the tablet top bar (44 px, TABLET.md 4.3); there is no
     // navigation panel, and the dock hides while the switcher is open.
     readonly property real topMargin: 44
+    // A swipe up from the bottom edge shorter than the home threshold but at least this long shows
+    // the dock (shorter ones count as a tap).
+    readonly property real dockRevealMinimum: 16
     readonly property real bottomMargin: 0
     readonly property real leftMargin: 0
     readonly property real rightMargin: 0
@@ -364,6 +367,9 @@ FocusScope {
                 return;
             }
 
+            console.info("plasmafusion-navigation: gesture end, travel " + Math.round(Math.abs(root.state.touchYPosition))
+                         + " x " + Math.round(root.state.touchXPosition) + ", state " + root.taskSwitcherHelpers.gestureState
+                         + ", from an app " + root.state.wasInActiveTask + ", tasks " + taskList.count);
             if (taskList.count === 0) {
                 // dismiss the gesture if the task list is empty
                 root.taskSwitcherHelpers.close();
@@ -386,6 +392,13 @@ FocusScope {
                 } else if (root.state.wasInActiveTask) {
                     // if inside a app, return to it
                     returnToApp();
+                    // Plasma Fusion: a short swipe up from inside an app shows the dock (TABLET2 4).
+                    const travel = Math.abs(root.state.touchYPosition);
+                    if (travel >= root.dockRevealMinimum && Math.abs(root.state.touchXPosition) < travel) {
+                        // shown after the app is active again (activating it makes the dock dodge away);
+                        // the state outlives this view, which closes with the gesture
+                        root.state.showDock();
+                    }
                 } else {
                     // else dismiss the gesture
                     root.taskSwitcherHelpers.close();
