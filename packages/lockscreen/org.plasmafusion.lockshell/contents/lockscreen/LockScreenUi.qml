@@ -705,8 +705,7 @@ Item {
             }
             backdrop: backdrop
             metrics: lockScreenUi.metrics
-            virtualKeyboardAvailable: inputPanel.status === Loader.Ready
-                                      && (!Qt.platform.pluginName.includes("wayland") || Keyboards.KWinVirtualKeyboard.available)
+            virtualKeyboardAvailable: Qt.platform.pluginName.includes("wayland") && Keyboards.KWinVirtualKeyboard.available
             virtualKeyboardActive: inputPanel.keyboardActive
             onVirtualKeyboardToggled: {
                 // Otherwise the password field loses focus and virtual keyboard
@@ -724,16 +723,13 @@ Item {
             onInteracted: fadeoutTimer.running = false
         }
 
-        VirtualKeyboardLoader {
+        KeyboardShift {
             id: inputPanel
             objectName: "inputPanel"
-
-            z: 1
 
             screenRoot: lockScreenRoot
             mainStack: mainStack
             mainBlock: mainBlock
-            passwordField: mainBlock.mainPasswordBox
         }
 
         Loader {
