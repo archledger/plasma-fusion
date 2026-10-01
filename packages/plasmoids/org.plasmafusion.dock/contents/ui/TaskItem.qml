@@ -58,7 +58,11 @@ Item {
     readonly property bool calendarTile: ["korganizer", "org.kde.korganizer", "office-calendar", "org.gnome.Calendar",
                                           "gnome-calendar", "org.kde.merkuro.calendar", "org.kde.kalendar",
                                           "kalendar"].indexOf(iconName) !== -1 && !restTile.foreign
-    readonly property int badgeCount: entry !== null && entry.countVisible === true ? Math.max(0, Math.round(entry.count || 0)) : 0
+    // The app's notifications not seen yet (the dock's count, see main.qml); the badge shows the
+    // larger of it and the app's own Unity count.
+    property int notificationCount: 0
+    readonly property int unityCount: entry !== null && entry.countVisible === true ? Math.max(0, Math.round(entry.count || 0)) : 0
+    readonly property int badgeCount: Math.max(unityCount, notificationCount)
     readonly property real progress: entry !== null && entry.progressVisible === true ? Math.max(0, Math.min(1, entry.progress || 0)) : -1
     // Set by the dock, which knows from its magnification which icon is under the pointer; the
     // item's own MouseArea does not track hover (one hover pass per pointer event for the whole

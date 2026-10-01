@@ -451,3 +451,23 @@ the other half. Tests (6.7.5 container, sreq4): request from the home screen for
 Dolphin left; request over KWrite for KCalc (not in the dock) -> KWrite left, KCalc right (started by
 the launcher). The menus themselves were checked by screenshots; menu popups take no synthetic input in
 the test sessions (also for existing items), so the touch path is checked on the ThinkPad.
+
+## Notification badges and the app's notifications in its menu (owner request, 2026-10-01)
+
+Owner: "an application that has notifications in the dock can list the number of notifications that
+app has, or/and can expand to each app in tablet mode". Android's notification dots (with the number)
+and its long-press list of the app's notifications:
+- **Badge**: per app, the notifications in the history (`NotificationManager.Notifications`, the
+  model the Notification Centre shares: expired and dismissed ones included, jobs not, critical and
+  normal urgency) from its desktop entry that are newer than both the Notification Centre's last read
+  time (`lastRead`, reset when it opens) and the last time the app was in use (the dock notes the time
+  an app becomes and stops being the active task); the app in use shows none. The badge is the larger
+  of this and the app's own Unity count (`TaskItem.notificationCount`, `unityCount`, `badgeCount`).
+  Opening the app or the Notification Centre clears it. (A plasmashell restart forgets "last in use";
+  the read time still holds.)
+- **Menu (tablet posture)**: the newest three of them at the top of the app's long-press menu (summary
+  and body as plain text, 64 characters; a tap runs the default action, or opens the app when there is
+  none or it expired), then "Clear N Notifications" (closes them, closable ones, from the last row up).
+- Test (6.7.5 container, badge2): two notifications from KWrite while Konsole is active: "2" on the
+  KWrite icons; the menu lists both (newest first) and "Clear 2 Notifications"; after it, no badge.
+

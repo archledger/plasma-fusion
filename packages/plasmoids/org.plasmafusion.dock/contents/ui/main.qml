@@ -15,6 +15,7 @@ import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.plasma5support as P5Support
 import org.kde.plasma.workspace.dbus as DBus
 import org.kde.taskmanager as TaskManager
+import org.kde.notificationmanager as NotificationManager
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.private.kicker as Kicker
 
@@ -1052,6 +1053,7 @@ PlasmoidItem {
         if (name) {
             menu.addHeader(name);
         }
+        addNotificationItems(menu, item);
         if (tasksModel.data(index, atm.IsGroupParent) === true) {
             for (let j = 0; j < tasksModel.rowCount(index); ++j) {
                 const child = tasksModel.makeModelIndex(row, j);
@@ -1352,6 +1354,128 @@ PlasmoidItem {
         function onActiveTaskChanged(): void { root.updateActiveMaximized(); }
         function onDataChanged(): void { root.updateActiveMaximized(); }
     }
+    // ---- App notification badges (owner 2026-10-01; Android's notification dots, with the number):
+    // the notifications in the history from each app that are unread (the Notification Centre
+    // was not opened since they came) and newer than the last time the app was in use. Opening the
+    // app or the Notification Centre clears its badge. Tablet posture: the app's menu lists them.
+    NotificationManager.Notifications {
+        id: appNotifications
+        showExpired: true
+        showDismissed: true
+        showJobs: false
+        sortMode: NotificationManager.Notifications.SortByDate
+        groupMode: NotificationManager.Notifications.GroupDisabled
+        urgencies: NotificationManager.Notifications.CriticalUrgency | NotificationManager.Notifications.NormalUrgency
+        onDataChanged: Qt.callLater(root.recountNotifications)
+        // (shared with the Notification Centre, which resets it when it opens)
+        onLastReadChanged: Qt.callLater(root.recountNotifications)
+    }
+    property var notificationCounts: ({})   // iconName (desktop entry) -> count
+    property var notificationRows: ({})     // iconName -> rows in appNotifications, newest first
+    property var appLastSeen: ({})          // iconName -> ms: the app was active until then
+    property string lastActiveKey: ""
+    function activeAppKey(): string {
+        const active = tasksModel.activeTask;
+        return active && active.valid ? String(tasksModel.data(active, TaskManager.AbstractTasksModel.AppId) || "").replace(/\.desktop$/, "") : "";
+    }
+    Connections {
+        target: tasksModel
+        function onActiveTaskChanged(): void {
+            const key = root.activeAppKey();
+            const now = Date.now();
+            const seen = Object.assign({}, root.appLastSeen);
+            if (root.lastActiveKey !== "") {
+                seen[root.lastActiveKey] = now;
+            }
+            if (key !== "") {
+                seen[key] = now;
+            }
+            root.appLastSeen = seen;
+            root.lastActiveKey = key;
+            Qt.callLater(root.recountNotifications);
+        }
+    }
+    Instantiator {
+        id: notificationRowsReader
+        model: appNotifications
+        delegate: QtObject {
+            required property int index
+            required property string desktopEntry
+            required property var created
+            required property var updated
+            required property bool read
+        }
+        onObjectAdded: Qt.callLater(root.recountNotifications)
+        onObjectRemoved: Qt.callLater(root.recountNotifications)
+    }
+    function recountNotifications(): void {
+        const counts = {};
+        const rows = {};
+        const activeKey = activeAppKey();
+        const lastRead = appNotifications.lastRead;
+        const readUntil = lastRead && !isNaN(lastRead.getTime()) ? lastRead.getTime() : 0;
+        for (let i = 0; i < notificationRowsReader.count; ++i) {
+            const n = notificationRowsReader.objectAt(i);
+            const key = n ? String(n.desktopEntry || "") : "";
+            if (key === "" || n.read || key === activeKey) {
+                continue;
+            }
+            const when = n.updated && !isNaN(n.updated.getTime()) ? n.updated : n.created;
+            if (when && !isNaN(when.getTime()) && when.getTime() <= Math.max(readUntil, appLastSeen[key] || 0)) {
+                continue;
+            }
+            counts[key] = (counts[key] || 0) + 1;
+            (rows[key] = rows[key] || []).push(n.index);
+        }
+        notificationCounts = counts;
+        notificationRows = rows;
+    }
+    function plainText(text: string): string {
+        return String(text || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+            .replace(/\s+/g, " ").trim();
+    }
+    // The app's unseen notifications at the top of its menu (tablet posture): the newest three,
+    // then "Clear N Notifications".
+    function addNotificationItems(menu: DockMenu, item: TaskItem): void {
+        const rows = (notificationRows[item.iconName] || []).slice();
+        if (!tablet || rows.length === 0) {
+            return;
+        }
+        const roles = NotificationManager.Notifications;
+        for (const r of rows.slice(0, 3)) {
+            const index = appNotifications.index(r, 0);
+            const summary = plainText(appNotifications.data(index, roles.SummaryRole));
+            const body = plainText(appNotifications.data(index, roles.BodyRole));
+            let text = summary !== "" ? summary : body;
+            if (summary !== "" && body !== "") {
+                text += " \u2014 " + body;
+            }
+            if (text.length > 64) {
+                text = text.slice(0, 63) + "\u2026";
+            }
+            const canAct = appNotifications.data(index, roles.HasDefaultActionRole) === true
+                && appNotifications.data(index, roles.ExpiredRole) !== true;
+            const row = item.index;
+            menu.addAction(text, "preferences-desktop-notification-bell", () => {
+                if (canAct) {
+                    appNotifications.invokeDefaultAction(appNotifications.index(r, 0), roles.Close);
+                } else {
+                    root.activateTask(row, 0);
+                }
+            }, {});
+        }
+        menu.addAction(i18ncp("@action:inmenu", "Clear %1 Notification", "Clear %1 Notifications", rows.length), "edit-clear-all", () => {
+            // newest first in the list: close from the last row up, so that the rows stay valid
+            for (const r of rows.slice().sort((a, b) => b - a)) {
+                const index = appNotifications.index(r, 0);
+                if (appNotifications.data(index, roles.ClosableRole) !== false) {
+                    appNotifications.close(index);
+                }
+            }
+        }, {});
+        menu.addSeparator();
+    }
+
     // ---- Split from the dock (SPLIT.md item 1; Android's taskbar drag): an app's icon dragged up
     // and dropped on the left or right third of the screen goes into that half; the app in use
     // takes the other one (KWin's quick tiles, so the split divider and the snap pairs follow).
@@ -1686,6 +1810,7 @@ PlasmoidItem {
                 onSplitDragMoved: globalPos => root.splitDragMove(taskItem, globalPos)
                 onSplitDragFinished: cancelled => root.splitDragEnd(taskItem, cancelled)
                 onSplitArmed: armed => root.iconArmed = armed
+                notificationCount: root.notificationCounts[taskItem.iconName] ?? 0
             }
         }
 
