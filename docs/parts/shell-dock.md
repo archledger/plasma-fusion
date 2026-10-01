@@ -393,3 +393,7 @@ connects, was often lost (the long presses arrived); the scenario waits 0.8 s an
 
 Not covered here: M16/M17 (INT-1 matrix), the side-by-side against the dock board and light
 screenshots (INT-1), pen hover (hand check V7).
+
+- **Bottom strip height** (2026-10-01): config `tabletStripHeight` (default 20), written by the
+  plasmafusion-tablet KWin script with the strip snapped to whole device pixels (21 at 4/3;
+  docs/parts/kwin-tablet.md "Pixel grid").

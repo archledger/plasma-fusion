@@ -74,6 +74,12 @@
       <min>44</min>
       <max>64</max>
     </entry>
+    <entry name="tabletStripHeight" type="Int">
+      <label>Height of the tablet bottom strip: written by the plasmafusion-tablet KWin script, 20 px snapped to whole device pixels at the screen's scale (21 at 4/3)</label>
+      <default>20</default>
+      <min>16</min>
+      <max>32</max>
+    </entry>
     <entry name="homeIndicator" type="Bool">
       <label>Show the home indicator pill on the tablet bottom strip (the settings module's switch; the 20 px strip itself stays)</label>
       <default>true</default>

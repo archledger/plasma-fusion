@@ -405,15 +405,37 @@ Item {
     // appmenu's compactView here; that write crashed plasmashell 6.7.5 (the applet changes its
     // representation inside the scripting writeConfig while its layout is updated), so the
     // compact menu is left to the top-bar widgets.
+    // The built-in screen's scale (the tablet heights are snapped to its device pixels).
+    function internalScale() {
+        const screens = Workspace.screens;
+        for (let i = 0; i < screens.length; ++i) {
+            if (internalOutput(screens[i])) {
+                return screens[i].devicePixelRatio;
+            }
+        }
+        return screens.length > 0 ? screens[0].devicePixelRatio : 1;
+    }
+    // Pixel grid (research H-hidpi 3.6, owner OK 2026-10-01): the tablet top bar and dock get the
+    // smallest height at or above their size that is a whole number of device pixels at the screen's
+    // scale, so their edges are crisp: at 4/3 the top bar 44 -> 45 (60 px), the dock 80 -> 81 (108 px)
+    // and the dock's bottom strip 20 -> 21 (28 px; its config tabletStripHeight, as plasmashell's QML
+    // only sees Wayland's rounded integer scale); at 1.25, 1.5 or 2 the sizes stay. The laptop sizes
+    // are the boards' and stay as they are.
     function panelScript(isTablet, hiding) {
-        return "var TABLET = " + (isTablet ? "true" : "false") + ", DOCK_HIDING = \"" + hiding + "\", HEIGHT_DOCK = 80;\n"
+        return "var TABLET = " + (isTablet ? "true" : "false") + ", DOCK_HIDING = \"" + hiding + "\", SCALE = " + internalScale() + ";\n"
+            + "function snap(h) {\n"
+            + "    if (!(SCALE > 0)) return h;\n"
+            + "    for (var x = h; x < h + 6; ++x) { var d = x * SCALE; if (Math.abs(d - Math.round(d)) < 0.01) return x; }\n"
+            + "    return h;\n"
+            + "}\n"
+            + "var HEIGHT_DOCK = snap(80), STRIP = snap(20);\n"
             + "function textScale() {\n"
             + "    var pt = NaN, font = ConfigFile(\"kdeglobals\", \"General\").readEntry(\"font\");\n"
             + "    if (font !== undefined && font !== null && String(font) !== \"\") pt = parseFloat(String(font).split(\",\")[1]);\n"
             + "    var s = pt > 0 ? pt / 9.75 : gridUnit / 18;\n"
             + "    return Math.max(0.85, Math.min(1.6, s));\n"
             + "}\n"
-            + "var HEIGHT_TOP = Math.round(44 * textScale()), done = [];\n"
+            + "var HEIGHT_TOP = snap(Math.round(44 * textScale())), done = [];\n"
             + "panels().forEach(function (p) {\n"
             + "    var ws = p.widgets(), types = [];\n"
             + "    for (var i = 0; i < ws.length; ++i) types.push(ws[i].type);\n"
@@ -431,6 +453,10 @@ Item {
             + "        }\n"
             + "        if (p.height != h) p.height = h;\n"
             + "        if (isDock && p.hiding != DOCK_HIDING) p.hiding = DOCK_HIDING;\n"
+            + "        if (isDock) p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {\n"
+            + "            w.currentConfigGroup = [\"General\"];\n"
+            + "            if (Number(w.readConfig(\"tabletStripHeight\", 20)) != STRIP) w.writeConfig(\"tabletStripHeight\", STRIP);\n"
+            + "        });\n"
             + "    } else if (applied) {\n"
             + "        var saved = Number(p.readConfig(\"laptopHeight\", laptop));\n"
             + "        if (isDock && (saved == 88 || saved == 96)) saved = laptop;\n"

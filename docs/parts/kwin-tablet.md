@@ -176,3 +176,15 @@ stays visible and reserves its space, maximized apps end above it). The first de
 plasmashell starts is always written, so a value left by a session that ended in tent posture is
 cleared. Test (`build/n9/scen-n9.sh`, n9a): Konsole maximized 836 px tall; screen inverted:
 TentPosture true, dock `none`, Konsole 756 px; normal again: false, `dodgewindows`, 836 px.
+
+## Pixel grid for the tablet panels (2026-10-01)
+
+Research H-hidpi 3.6 (shell sizes on whole device pixels), owner OK. The panel script snaps the tablet
+heights to the smallest value at or above them that is a whole number of device pixels at the
+built-in screen's scale (`internalScale()`, KWin's `devicePixelRatio`): top bar 44 -> 45 (60 px at
+4/3), dock 80 -> 81 (108 px), and the dock's bottom strip 20 -> 21 (28 px), handed to the dock as its
+config `tabletStripHeight` because plasmashell's QML only sees Wayland's rounded integer scale (2).
+At 1.25, 1.5 and 2 the sizes stay; laptop sizes are unchanged. Result at 4/3 (session grid1): top 45,
+strip 879+21, a maximized app 45+834 = 1112 device px (was 44 + 836 = 58.67 and 1114.67); laptop
+34/72 restored. The drawn 1 px edge line of the bar was already crisp before (Qt snaps it); the change
+removes the fractional panel slot and puts the app area on whole pixels.

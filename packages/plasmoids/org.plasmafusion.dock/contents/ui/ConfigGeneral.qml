@@ -61,6 +61,8 @@ KCM.SimpleKCM {
     property bool cfg_tabletShowDownloadsTrashDefault
     property int cfg_powerTierDefault
     property bool cfg_homeIndicatorDefault
+    property int cfg_tabletStripHeight
+    property int cfg_tabletStripHeightDefault
 
     function saveConfig(): void {
         const config = Plasmoid.configuration;
@@ -76,6 +78,8 @@ KCM.SimpleKCM {
         cfg_powerTier = config.powerTier;
         // the settings module's switch
         cfg_homeIndicator = config.homeIndicator;
+        // written by the tablet KWin script
+        cfg_tabletStripHeight = config.tabletStripHeight;
     }
 
     Kirigami.FormLayout {

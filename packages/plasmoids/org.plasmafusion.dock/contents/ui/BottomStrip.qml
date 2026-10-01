@@ -25,7 +25,10 @@ Window {
     property bool showIndicator: true
     property rect screenGeometry
 
-    readonly property int stripHeight: 20
+    // 20 px snapped to whole device pixels at the screen's scale (21 at 4/3), so the app area above
+    // ends on a pixel edge (research H-hidpi 3.6). The plasmafusion-tablet KWin script writes it
+    // (dock config tabletStripHeight): plasmashell's QML only sees Wayland's rounded integer scale.
+    property int stripHeight: 20
 
     // The QScreen the dock is on (the containment gives its geometry).
     screen: {

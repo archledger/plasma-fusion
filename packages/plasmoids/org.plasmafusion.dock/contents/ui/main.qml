@@ -1351,6 +1351,7 @@ PlasmoidItem {
             motion: motion
             overApp: root.activeMaximized
             showIndicator: Plasmoid.configuration.homeIndicator
+            stripHeight: Plasmoid.configuration.tabletStripHeight
             screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
         }
     }
