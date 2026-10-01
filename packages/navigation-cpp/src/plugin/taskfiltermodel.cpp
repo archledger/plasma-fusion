@@ -53,9 +53,11 @@ void FusionTaskFilterModel::setScreenName(const QString &screen)
 {
     LogicalOutput *output = workspace()->findOutput(screen);
     if (m_output != output) {
+        // Plasma Fusion: Qt 6.11 deprecates invalidateFilter()
+        beginFilterChange();
         m_output = output;
+        endFilterChange(QSortFilterProxyModel::Direction::Rows);
         Q_EMIT screenNameChanged();
-        invalidateFilter();
     }
 }
 
