@@ -586,8 +586,24 @@ Item {
         dbusInterface: "org.kde.PlasmaShell"
         method: "evaluateScript"
         arguments: [EnsureTopBars.script]
-        onFinished: returnValue => console.info("plasmafusion-snap: " + String(returnValue.length > 0 ? returnValue[0] : "").trim())
+        onFinished: returnValue => {
+            const line = String(returnValue.length > 0 ? returnValue[0] : "").trim();
+            console.info("plasmafusion-snap: " + line);
+            // At session start plasmashell can answer before it has loaded its layout: ask again.
+            if (line.indexOf("not loaded yet") !== -1 && topBarsRetry.tries < 5) {
+                topBarsRetry.tries++;
+                topBarsRetry.restart();
+            } else {
+                topBarsRetry.tries = 0;
+            }
+        }
         onFailed: console.info("plasmafusion-snap: plasmashell did not run the top-bar check")
+    }
+    Timer {
+        id: topBarsRetry
+        property int tries: 0
+        interval: 3000
+        onTriggered: topBarsCall.call()
     }
     Connections {
         target: Workspace

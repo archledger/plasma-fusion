@@ -38,10 +38,28 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
     }
     var hasTop = {};
     var ps = panels();
+    // Only once plasmashell has loaded its layout: KWin runs this after its own start too, and a
+    // plasmashell that answered before loading its panels got a second top bar (ThinkPad,
+    // 2026-09-30). A top panel without a screen (not placed yet, or kept from a screen that went
+    // away) may still be placed by Plasma, so no bar is added while one exists.
+    if (ps.length === 0 || desktops().length === 0) {
+        print("top bars: skipped, the layout is not loaded yet");
+        return;
+    }
+    var unplaced = 0;
     for (var i = 0; i < ps.length; ++i) {
-        if (ps[i].location === "top") {
+        if (ps[i].location !== "top") {
+            continue;
+        }
+        if (ps[i].screen < 0 || ps[i].screen >= screenCount) {
+            unplaced++;
+        } else {
             hasTop[ps[i].screen] = true;
         }
+    }
+    if (unplaced > 0) {
+        print("top bars: skipped, " + unplaced + " top panel(s) without a screen");
+        return;
     }
     var added = 0;
     for (var sc = 0; sc < screenCount; ++sc) {
