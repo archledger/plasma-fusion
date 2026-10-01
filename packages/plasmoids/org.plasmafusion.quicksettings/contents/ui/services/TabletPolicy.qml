@@ -14,6 +14,8 @@ import org.kde.plasma.workspace.dbus as DBus
 //   (it pops an OSD each time, F13).
 // - The on-screen keyboard's state from KWin (org.kde.kwin.VirtualKeyboard on /VirtualKeyboard):
 //   `oskAvailable`, `oskVisible`; `toggleOsk()` shows it now or hides it.
+// - Gesture lock (TABLET2 G1): plasmafusionrc [Tablet] GestureLock; the navigation effect then holds
+//   back a swipe from the bottom edge unless it follows a held-back one within 1.5 s.
 // - Rotation lock (F14, T19): lock = the current rotation kept and auto-rotation never; unlock =
 //   auto-rotation in tablet mode and the normal rotation. Leaving tablet mode while locked turns
 //   the screen back to normal and keeps the lock. State in plasmafusionrc [Tablet] RotationLocked.
@@ -154,6 +156,37 @@ Item {
                 "arguments": []
             }, () => {}, () => {});
         });
+        applyOverview(want === "tablet");
+    }
+
+    // KWin's Overview (TABLET2 G1, decision 8): its three-finger touchscreen swipe is built in, a
+    // second app switcher next to the navigation effect's, so in tablet posture it is unloaded while
+    // the navigation effect runs, and loaded again on the laptop (unless kwinrc turns it off).
+    function kwinEffects(member: string, name: string, done) {
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.KWin",
+            "path": "/Effects",
+            "iface": "org.kde.kwin.Effects",
+            "member": member,
+            "arguments": [new DBus.string(name)],
+            "signature": "(s)"
+        }, reply => { if (done) done(reply.value === true); }, () => {});
+    }
+    function applyOverview(tabletPosture: bool) {
+        if (tabletPosture) {
+            kwinEffects("isEffectLoaded", "plasmafusion_navigation", loaded => {
+                if (loaded) {
+                    console.info("quicksettings: tablet posture: KWin Overview unloaded (the navigation effect switches apps)");
+                    kwinEffects("unloadEffect", "overview", null);
+                }
+            });
+        } else {
+            run("kreadconfig6 --file kwinrc --group Plugins --key overviewEnabled", (code, out) => {
+                if (out.trim() !== "false") {
+                    kwinEffects("loadEffect", "overview", null);
+                }
+            });
+        }
     }
 
     // ---- On-screen keyboard state (KWin)
@@ -218,6 +251,15 @@ Item {
                 "arguments": []
             }, () => policy.refreshOsk(), () => {});
         }
+    }
+
+    // ---- Gesture lock (TABLET2 G1): plasmafusionrc [Tablet] GestureLock, which the navigation
+    // effect follows live: a swipe from the bottom edge then needs a second swipe within 1.5 s.
+    property bool gestureLocked: false
+    function setGestureLocked(lock: bool) {
+        gestureLocked = lock;
+        console.info("quicksettings: gesture lock " + (lock ? "on" : "off"));
+        run("kwriteconfig6 --notify --file plasmafusionrc --group Tablet --key GestureLock " + (lock ? "true" : "false"));
     }
 
     // ---- Rotation lock
@@ -354,6 +396,9 @@ Item {
         });
         run("kreadconfig6 --file plasmafusionrc --group Tablet --key RotationLocked --default false", (code, out) => {
             policy.rotationLocked = out.trim() === "true";
+        });
+        run("kreadconfig6 --file plasmafusionrc --group Tablet --key GestureLock --default false", (code, out) => {
+            policy.gestureLocked = out.trim() === "true";
         });
         refreshOsk();
     }

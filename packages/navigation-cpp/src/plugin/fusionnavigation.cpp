@@ -7,9 +7,12 @@
 #include "fusionnavigation.h"
 
 #include <QCoreApplication>
+#include <QDBusConnection>
+#include <QDBusMessage>
 #include <QKeyEvent>
 #include <QMetaObject>
 #include <QQuickItem>
+#include <KSharedConfig>
 #include <config-kwin.h>
 #include <main.h>
 #include <tabletmodemanager.h>
@@ -49,6 +52,28 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
     m_effect = parent;
     // Plasma Fusion: a hardware key hides the on-screen keyboard (TABLET2 P0 K1).
     m_keyboardSpy = std::make_unique<FusionKeyboardSpy>();
+
+    // Plasma Fusion gesture lock (TABLET2 G1): plasmafusionrc [Tablet] GestureLock, followed live
+    // (quick settings writes it with --notify). A held-back swipe shows Plasma's OSD.
+    KSharedConfig::Ptr fusionConfig = KSharedConfig::openConfig(QStringLiteral("plasmafusionrc"));
+    m_border->setLocked(fusionConfig->group(QStringLiteral("Tablet")).readEntry("GestureLock", false));
+    m_configWatcher = KConfigWatcher::create(fusionConfig);
+    connect(m_configWatcher.data(), &KConfigWatcher::configChanged, this, [this](const KConfigGroup &group, const QByteArrayList &names) {
+        if (group.name() == QLatin1String("Tablet") && names.contains(QByteArrayLiteral("GestureLock"))) {
+            m_border->setLocked(group.readEntry("GestureLock", false));
+            qInfo("plasmafusion-navigation: gesture lock %s", m_border->locked() ? "on" : "off");
+        }
+    });
+    connect(m_border, &FusionTouchBorder::gestureBlocked, this, []() {
+        qInfo("plasmafusion-navigation: swipe held back by the gesture lock");
+        QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.plasmashell"),
+                                                              QStringLiteral("/org/kde/osdService"),
+                                                              QStringLiteral("org.kde.osdService"),
+                                                              QStringLiteral("showText"));
+        message << QStringLiteral("object-locked")
+                << i18nc("@info:osd the gesture lock held back a swipe from the bottom edge", "Gestures are locked: swipe again to go on");
+        QDBusConnection::sessionBus().send(message);
+    });
 
     // Connect signals
     connect(this, &FusionNavigationState::gestureEnabledChanged, this, &FusionNavigationState::refreshBorders);

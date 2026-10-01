@@ -144,7 +144,7 @@ ColumnLayout {
     }
 
     // ---------------------------------------------------------------- tablet row
-    // Four 44 px round toggles, 12 apart (TABLET 4.6); the label shows on a long press.
+    // 44 px round toggles, 12 apart (TABLET 4.6; gesture lock TABLET2 G1); the label shows on a long press.
     Row {
         id: tabletRow
         Layout.fillWidth: true
@@ -202,6 +202,35 @@ ColumnLayout {
             Accessible.checkable: true
             Accessible.checked: toggleOn
             onClicked: page.tabletPolicy.setWindowMode(toggleOn ? "windowed" : "fullscreen")
+        }
+        IconButton {
+            id: gestureToggle
+            objectName: "tabletRow-gestures"
+            pal: page.pal
+            size: 44
+            iconPath: Icons.swipeUp
+            toggleOn: page.tabletPolicy ? page.tabletPolicy.gestureLocked : false
+            text: toggleOn ? i18nc("@action:button", "Gestures locked: swipe twice") : i18nc("@action:button", "Gesture lock")
+            Accessible.role: Accessible.CheckBox
+            Accessible.checkable: true
+            Accessible.checked: toggleOn
+            onClicked: page.tabletPolicy.setGestureLocked(!toggleOn)
+
+            Rectangle {
+                visible: gestureToggle.toggleOn
+                x: parent.width - width - 2
+                y: 2
+                width: 16
+                height: 16
+                radius: 8
+                color: page.pal.accentText
+                LineIcon {
+                    anchors.centerIn: parent
+                    size: 11
+                    path: Icons.lock
+                    color: page.pal.accent
+                }
+            }
         }
         IconButton {
             objectName: "tabletRow-pen"

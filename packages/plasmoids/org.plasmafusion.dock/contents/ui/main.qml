@@ -774,10 +774,23 @@ PlasmoidItem {
                                     iface: "org.kde.krunner.App", member: "toggleDisplay" });
     }
 
-    function toggleOverview(): void {
+    function invokeKWinShortcut(name: string): void {
         DBus.SessionBus.asyncCall({ service: "org.kde.kglobalaccel", path: "/component/kwin",
                                     iface: "org.kde.kglobalaccel.Component", member: "invokeShortcut",
-                                    arguments: ["Overview"], signature: "(s)" });
+                                    arguments: [name], signature: "(s)" });
+    }
+    // Tablet posture (TABLET2 G1): the tablet app switcher of the navigation effect when it runs
+    // (quick settings unloads KWin's Overview there); otherwise, and on the laptop, KWin's Overview.
+    function toggleOverview(): void {
+        if (!tablet) {
+            invokeKWinShortcut("Overview");
+            return;
+        }
+        DBus.SessionBus.asyncCall({ service: "org.kde.KWin", path: "/Effects", iface: "org.kde.kwin.Effects",
+                                    member: "isEffectLoaded", arguments: [new DBus.string("plasmafusion_navigation")],
+                                    signature: "(s)" },
+                                  reply => root.invokeKWinShortcut(reply.value === true ? "Plasma Fusion App Switcher" : "Overview"),
+                                  () => root.invokeKWinShortcut("Overview"));
     }
 
     // Testing hook (config key debugAction): lets a scripted session open the menus and press

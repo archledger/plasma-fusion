@@ -30,6 +30,7 @@ target_link_libraries(fusionnavigationplugin PRIVATE
 
     Qt::Quick
     Qt::Core
+    Qt::DBus
 
     KWin::kwin
     Plasma::Activities

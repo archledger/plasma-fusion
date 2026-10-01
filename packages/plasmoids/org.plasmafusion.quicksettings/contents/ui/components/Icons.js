@@ -57,5 +57,7 @@ var check = "M5 12.5l4.5 4.5L19 7.5";
 // Tablet row and tile (TABLET 4.6).
 var rotate = "M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5";
 var fullscreen = "M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5";
+// A swipe up from the bottom edge (the gesture lock, TABLET2 G1).
+var swipeUp = "M12 16V5M7.5 9.5L12 5l4.5 4.5M6 20h12";
 var pen = "M4 20l4.2-1 11-11a2.1 2.1 0 0 0-3-3l-11 11zM14.5 6.5l3 3";
 var tablet = "M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2";

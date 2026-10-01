@@ -29,6 +29,10 @@ copyright lines. Plasma Fusion changes:
   corner shader (`shaders/thumbnail.frag`, a copy; layers only for cards within two of the current
   one), a bold title, 44 px round close buttons, the boards' dark dim (rgb 6, 8, 18);
 - idle under a KWin it was not built for (`KWIN_VERSION_STRING` against the running version).
+- gesture lock (TABLET2 G1): with `plasmafusionrc [Tablet] GestureLock=true` (quick settings' tablet row,
+  followed live through KConfigWatcher) a swipe from the bottom edge is held back unless it follows a
+  held-back one within 1.5 s (iOS's deferred system gestures); a held-back swipe shows Plasma's OSD
+  (`org.kde.osdService.showText`).
 
 ## Build
 

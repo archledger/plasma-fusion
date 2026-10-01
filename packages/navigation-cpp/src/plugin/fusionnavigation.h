@@ -19,6 +19,7 @@
 #include <QKeySequence>
 #include <QTimer>
 
+#include <KConfigWatcher>
 #include <KGlobalAccel>
 #include <KLocalizedString>
 
@@ -163,6 +164,7 @@ private:
     FusionTaskModel *m_taskModel{nullptr};
     KWin::QuickSceneEffect *m_effect{nullptr};
     std::unique_ptr<FusionKeyboardSpy> m_keyboardSpy;
+    KConfigWatcher::Ptr m_configWatcher;
 
     Status m_status = Status::Inactive;
     bool m_gestureInProgress = false;

@@ -20,6 +20,7 @@ BuildRequires:  ninja-build
 BuildRequires:  cmake(KWin) >= 6.7
 BuildRequires:  cmake(PlasmaActivities)
 BuildRequires:  cmake(Qt6Core)
+BuildRequires:  cmake(Qt6DBus)
 BuildRequires:  cmake(Qt6Gui)
 BuildRequires:  cmake(Qt6Quick)
 BuildRequires:  cmake(Qt6Qml)

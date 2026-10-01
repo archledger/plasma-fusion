@@ -502,3 +502,20 @@ user's `Battery` value 1 (sleep); laptop removes them; fold, unfold, fold 1 s ap
 tablet state; a user's `AC` 8 set in tablet posture survives the return to laptop. The press itself
 (screen off and locked, a second press wakes to the lock screen) is a hand check on the ThinkPad.
 Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/P0/power-button/`.
+
+## Gesture lock and Overview in tablet posture (TABLET2 G1, 2026-10-01)
+
+- **Gesture lock** tile in the tablet row (`tabletRow-gestures`, swipe-up icon with the lock badge while
+  on): `TabletPolicy.setGestureLocked()` writes `plasmafusionrc [Tablet] GestureLock` with `--notify`;
+  the navigation effect follows it live and holds back a swipe from the bottom edge unless it follows a
+  held-back one within 1.5 s, with Plasma's OSD "Gestures are locked: swipe again to go on". The research
+  asked for it (8+ iPad threads: the dock swipe cannot be turned off for games and drawing); the second
+  swipe keeps a way out without opening quick settings.
+- **Overview**: KWin's Overview has a built-in three-finger touchscreen swipe, a second app switcher next
+  to the navigation effect's. `applyOverview()` unloads it in tablet posture when the navigation effect is
+  loaded and loads it again on the laptop unless `kwinrc [Plugins] overviewEnabled=false`. The dock's
+  Overview button opens the tablet app switcher in tablet posture (the effect's "Plasma Fusion App
+  Switcher" action), KWin's Overview otherwise.
+- Private session g1b: Overview unloaded in tablet posture and back on the laptop; lock on: first swipe
+  held back (app stays, OSD), second swipe within 1.5 s goes home, a lone swipe 2 s later is held back;
+  lock off: home; the dock button activates `plasmafusion_navigation`.

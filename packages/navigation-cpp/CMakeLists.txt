@@ -25,7 +25,7 @@ include(FeatureSummary)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Quick Qml)
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core DBus Gui Quick Qml)
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS ConfigWidgets GlobalAccel I18n CoreAddons WindowSystem Package)
 find_package(KWin 6.7 REQUIRED COMPONENTS kwin)
 find_package(PlasmaActivities REQUIRED)
