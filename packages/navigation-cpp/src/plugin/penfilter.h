@@ -3,10 +3,12 @@
 
 #pragma once
 
+#include <QElapsedTimer>
 #include <QPointF>
 #include <QStringList>
 #include <QTimer>
 #include <chrono>
+#include <functional>
 #include <input.h>
 
 namespace KWin
@@ -39,6 +41,9 @@ public:
     void setDrawingApps(const QStringList &apps);
     // Press and hold for a right click.
     void setRightClickOnHold(bool enabled);
+    // A pen tap on the bottom zone (the home handle): the dock shows (research F-pen 4.14, so pen-only
+    // use can leave an app; the pen still never makes a navigation gesture).
+    void setBottomTapHandler(std::function<void()> handler);
 
     bool tabletToolTipEvent(TabletToolTipEvent *event) override;
     bool tabletToolAxisEvent(TabletToolAxisEvent *event) override;
@@ -49,6 +54,7 @@ public:
 private:
     bool exempt(const QPointF &pos) const;
     bool shellLongPress(const QPointF &pos) const;
+    bool inBottomZone(const QPointF &pos) const;
     void finish(std::chrono::microseconds time, InputDevice *device);
     void holdTimeout();
 
@@ -60,6 +66,11 @@ private:
     bool m_held = false;
     QPointF m_pressPos;
     QTimer m_holdTimer;
+    // A press on the bottom zone that may become a tap.
+    bool m_bottomTap = false;
+    QPointF m_bottomPos;
+    QElapsedTimer m_bottomTime;
+    std::function<void()> m_bottomTapHandler;
 };
 
 } // namespace KWin

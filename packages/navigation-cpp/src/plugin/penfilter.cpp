@@ -104,13 +104,24 @@ void FusionPenFilter::setRightClickOnHold(bool enabled)
     }
 }
 
-bool FusionPenFilter::exempt(const QPointF &pos) const
+void FusionPenFilter::setBottomTapHandler(std::function<void()> handler)
+{
+    m_bottomTapHandler = std::move(handler);
+}
+
+bool FusionPenFilter::inBottomZone(const QPointF &pos) const
 {
     if (LogicalOutput *output = workspace()->outputAt(pos)) {
         const RectF geometry = output->geometryF();
-        if (pos.y() >= geometry.y() + geometry.height() - s_bottomZone) {
-            return true;
-        }
+        return pos.y() >= geometry.y() + geometry.height() - s_bottomZone;
+    }
+    return false;
+}
+
+bool FusionPenFilter::exempt(const QPointF &pos) const
+{
+    if (inBottomZone(pos)) {
+        return true;
     }
     if (Window *window = input()->findToplevel(pos)) {
         const QString windowClass = window->resourceClass().toLower();
@@ -179,6 +190,11 @@ void FusionPenFilter::holdTimeout()
 bool FusionPenFilter::tabletToolTipEvent(TabletToolTipEvent *event)
 {
     if (event->type == TabletToolTipEvent::Press) {
+        m_bottomTap = m_active && !m_converting && inBottomZone(event->position);
+        if (m_bottomTap) {
+            m_bottomPos = event->position;
+            m_bottomTime.start();
+        }
         if (!m_active || m_converting || exempt(event->position)) {
             return false;
         }
@@ -193,6 +209,14 @@ bool FusionPenFilter::tabletToolTipEvent(TabletToolTipEvent *event)
         return true;
     }
     if (!m_converting) {
+        // A quick tap on the bottom zone shows the dock; the event still goes where it went.
+        if (m_bottomTap) {
+            m_bottomTap = false;
+            if (m_bottomTime.elapsed() < 400 && QLineF(m_bottomPos, event->position).length() <= s_holdSlop && m_bottomTapHandler) {
+                qInfo("plasmafusion-navigation: pen tap on the home handle: dock");
+                m_bottomTapHandler();
+            }
+        }
         return false;
     }
     finish(event->timestamp, event->device);
@@ -202,6 +226,9 @@ bool FusionPenFilter::tabletToolTipEvent(TabletToolTipEvent *event)
 bool FusionPenFilter::tabletToolAxisEvent(TabletToolAxisEvent *event)
 {
     if (!m_converting) {
+        if (m_bottomTap && QLineF(m_bottomPos, event->position).length() > s_holdSlop) {
+            m_bottomTap = false; // a stroke, not a tap
+        }
         return false;
     }
     if (m_held) {

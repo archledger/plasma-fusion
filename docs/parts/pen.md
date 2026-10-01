@@ -226,3 +226,13 @@ stays a finger for the whole hold (`FusionPenFilter::shellLongPress`). The right
 the touch had been cancelled, opened nothing there (a pen hold on a home-screen tile showed no menu
 while a finger hold did; found in the PLASMA-68 container runs, same on Plasma 6.7.5 and 6.8). Apps
 keep the right click (Dolphin's menu opens as before).
+
+## Pen tap on the home handle (2026-10-01)
+
+Research F-pen 4.14: the pen never makes a navigation gesture (strokes on the bottom 24 px reach the
+app or the bottom strip unchanged), but pen-only use must be able to leave an app. A quick pen tap on
+the bottom zone (under 400 ms, within 10 px) now shows the dock, as a short finger flick does
+(`FusionPenFilter::setBottomTapHandler` -> `FusionNavigationState::revealDock`; log "pen tap on the
+home handle: dock"). From the dock, the home and app buttons work with the pen. Tested with the test
+pen in the 6.7.5 and 6.7.91 containers (pt675, pt68): the stroke from the bottom edge changes nothing,
+the tap shows the hidden dock over a maximized app.

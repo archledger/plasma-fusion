@@ -108,6 +108,9 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
     // Plasma Fusion: the pen like a finger in tablet posture (TABLET2 PEN-2), and the test pen of
     // private test sessions (PLASMA_FUSION_TEST_PEN=1 only).
     m_penFilter = std::make_unique<FusionPenFilter>();
+    m_penFilter->setBottomTapHandler([this]() {
+        revealDock();
+    });
     updatePen();
     if (qEnvironmentVariableIsSet("PLASMA_FUSION_TEST_PEN")) {
         m_testPen = std::make_unique<FusionTestPen>();
