@@ -24,6 +24,12 @@ import org.kde.kirigami as Kirigami
 // barrel button) opens the app's menu: add to or remove from page 1, its actions. A swipe down
 // (96 px or 800 px/s; the pages follow the finger) opens the launcher's search with the keyboard
 // (TABLET2 H2, iPadOS and Android).
+//
+// Edit mode (TABLET2 H2; research A-ipad: visible Done, undo, deterministic placement): a long press
+// on empty space, or "Edit Home Screen" in an app's menu. Page 1's tiles get a little smaller and
+// carry a remove badge; a tile dragged onto another takes its place (the pinned list's
+// order); the A-Z pages show "+" on apps not on page 1. Each change can be undone for 5 s. "Done"
+// (56 px, right of the page dots), a tap on empty space, Escape or leaving tablet posture ends it.
 Item {
     id: home
 
@@ -59,6 +65,76 @@ Item {
     readonly property int pageCount: 1 + Math.ceil(allCount / Math.max(1, perPage))
     readonly property alias currentPage: pages.currentIndex
     property real dragDown: 0
+
+    // ---- Edit mode
+    property bool editing: false
+    property int dragFrom: -1
+    property int dropTo: -1
+    property point ghostPos: Qt.point(0, 0)
+    property var ghostSource
+    property string ghostName: ""
+    // {kind: "remove", id, index} | {kind: "add", id} | {kind: "move", from, to}
+    property var undoAction: null
+    function startEditing(): void {
+        editing = true;
+        home.forceActiveFocus();
+    }
+    function stopEditing(): void {
+        editing = false;
+        dragFrom = -1;
+        dropTo = -1;
+        undoAction = null;
+    }
+    // (the model's `favorites` list reads empty from QML: the tile passes its favoriteId)
+    function removeAt(row: int, id: string): void {
+        if (id !== "") {
+            favoritesModel.removeFavorite(id);
+            remember({ "kind": "remove", "id": id, "index": row });
+        }
+    }
+    function addToHome(entry): void {
+        const id = entry && entry.favoriteId ? String(entry.favoriteId) : "";
+        if (id !== "" && !favoritesModel.isFavorite(id)) {
+            favoritesModel.addFavorite(id, -1);
+            remember({ "kind": "add", "id": id });
+        }
+    }
+    function move(from: int, to: int): void {
+        if (from >= 0 && to >= 0 && from !== to) {
+            favoritesModel.moveRow(from, to);
+            remember({ "kind": "move", "from": from, "to": to });
+        }
+    }
+    function remember(action): void {
+        undoAction = action;
+        undoTimer.restart();
+    }
+    function undo(): void {
+        const a = undoAction;
+        undoAction = null;
+        if (!a) {
+            return;
+        }
+        if (a.kind === "remove") {
+            favoritesModel.addFavorite(a.id, a.index);
+        } else if (a.kind === "add") {
+            favoritesModel.removeFavorite(a.id);
+        } else if (a.kind === "move") {
+            favoritesModel.moveRow(a.to, a.from);
+        }
+    }
+    Timer {
+        id: undoTimer
+        interval: 5000
+        onTriggered: home.undoAction = null
+    }
+    Keys.onEscapePressed: event => {
+        if (editing) {
+            stopEditing();
+        } else {
+            event.accepted = false;
+        }
+    }
 
     // The launcher (in the dock) opens on an openRequest "<mode>:<nonce>[:<argument>]".
     function openSearch(): void {
@@ -130,6 +206,8 @@ Item {
         highlightRangeMode: ListView.StrictlyEnforceRange
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.HorizontalFlick
+        // edit mode: tile drags, not page flicks (the dots still change pages)
+        interactive: !home.editing
         highlightMoveDuration: home.motion.surface
         cacheBuffer: 0
         clip: true
@@ -146,6 +224,17 @@ Item {
             readonly property int count: first ? home.firstColumns * home.firstRows : home.perPage
             width: pages.width
             height: pages.height
+
+            // Empty space (tiles take their own presses): a long press starts edit mode, a tap
+            // ends it.
+            TapHandler {
+                onLongPressed: home.startEditing()
+                onTapped: {
+                    if (home.editing) {
+                        home.stopEditing();
+                    }
+                }
+            }
 
             GridView {
                 id: grid
@@ -177,6 +266,7 @@ Item {
         anchors.fill: parent
         z: 100
         DragHandler {
+            enabled: !home.editing
             acceptedDevices: PointerDevice.TouchScreen
             target: null
             xAxis.enabled: false
@@ -215,12 +305,25 @@ Item {
         visible: home.pageCount > 1
         Repeater {
             model: home.pageCount
-            delegate: Item {
+            // AbstractButtons (not TapHandlers): they take the press, so the page's empty-space tap
+            // (which ends edit mode) does not fire with them.
+            delegate: T.AbstractButton {
                 id: dotCell
                 required property int index
                 width: dot.width
                 height: 8
-                Rectangle {
+                padding: 0
+                Accessible.role: Accessible.PageTab
+                Accessible.name: i18nc("@action:button %1 page number", "Page %1", dotCell.index + 1)
+                onClicked: pages.currentIndex = dotCell.index
+                // a 44 px target around the 8 px dot
+                containmentMask: QtObject {
+                    function contains(point: point): bool {
+                        return point.x >= -18 && point.x < dotCell.width + 18 && point.y >= -18 && point.y < dotCell.height + 18;
+                    }
+                }
+                contentItem: Item {}
+                background: Rectangle {
                     id: dot
                     width: dotCell.index === pages.currentIndex ? 20 : 8
                     height: 8
@@ -234,14 +337,61 @@ Item {
                         }
                     }
                 }
-                TapHandler {
-                    margin: 18
-                    gesturePolicy: TapHandler.ReleaseWithinBounds
-                    onTapped: pages.currentIndex = dotCell.index
-                }
-                Accessible.role: Accessible.PageTab
-                Accessible.name: i18nc("@action:button %1 page number", "Page %1", dotCell.index + 1)
             }
+        }
+    }
+
+    // ---- Edit mode chrome: the dragged tile's ghost, Undo and Done (56 px pills at the right end of
+    // the page dots' row, which is free on every page; at the top right they covered an app or a card).
+    FusionIconTile {
+        visible: home.dragFrom >= 0
+        z: 200
+        size: 80
+        x: home.ghostPos.x - 40
+        y: home.ghostPos.y - 40
+        source: home.ghostSource
+        iconName: home.ghostName
+    }
+    Row {
+        visible: home.editing
+        z: 150
+        anchors.right: parent.right
+        anchors.rightMargin: 24
+        y: dots.y + 4 - 28
+        spacing: 12
+        EditPill {
+            visible: home.undoAction !== null
+            text: i18nc("@action:button", "Undo")
+            onClicked: home.undo()
+        }
+        EditPill {
+            text: i18nc("@action:button leave the home screen's edit mode", "Done")
+            accent: true
+            onClicked: home.stopEditing()
+        }
+    }
+    component EditPill: T.AbstractButton {
+        id: pill
+        property bool accent: false
+        implicitWidth: Math.max(96, pillLabel.implicitWidth + 40)
+        implicitHeight: 56
+        Accessible.role: Accessible.Button
+        Accessible.name: text
+        contentItem: Text {
+            id: pillLabel
+            text: pill.text
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            color: "#ffffff"
+            font.pixelSize: home.metrics.font(15)
+            font.weight: Font.DemiBold
+            textFormat: Text.PlainText
+        }
+        background: Rectangle {
+            radius: height / 2
+            color: pill.accent ? (pill.down ? "#2559b8" : "#2f6fe0") : (pill.down ? Qt.rgba(12 / 255, 15 / 255, 28 / 255, 0.85) : Qt.rgba(12 / 255, 15 / 255, 28 / 255, 0.7))
+            border.width: pill.accent ? 0 : 1
+            border.color: Qt.rgba(1, 1, 1, 0.25)
         }
     }
 
@@ -260,13 +410,49 @@ Item {
         Accessible.name: text
 
         readonly property var source: pageView.index === 0 ? home.favoritesModel : home.allModel
+        readonly property bool pinnedPage: pageView.index === 0
+        readonly property bool addable: home.editing && !pinnedPage && !!tile.model.favoriteId
+                                        && !home.favoritesModel.isFavorite(String(tile.model.favoriteId))
         onClicked: {
+            if (home.editing) {
+                return;
+            }
             if (source) {
                 launchZoom.play(icon, tile.model.decoration || "application-x-executable", home.iconNameFor(tile.model));
                 source.trigger(tile.sourceRow, "", null);
             }
         }
-        onPressAndHold: actionMenu.openFor(source, tile.sourceRow, tile.model, tile, width / 2, height / 2)
+        onPressAndHold: {
+            if (!home.editing) {
+                actionMenu.openFor(source, tile.sourceRow, tile.model, tile, width / 2, height / 2);
+            }
+        }
+        // Edit mode, page 1: drag onto another tile to move there.
+        DragHandler {
+            enabled: home.editing && tile.pinnedPage
+            target: null
+            dragThreshold: 8
+            onActiveChanged: {
+                if (active) {
+                    home.dragFrom = tile.sourceRow;
+                    home.ghostSource = tile.model.decoration || "application-x-executable";
+                    home.ghostName = home.iconNameFor(tile.model);
+                } else if (home.dragFrom >= 0) {
+                    home.move(home.dragFrom, home.dropTo);
+                    home.dragFrom = -1;
+                    home.dropTo = -1;
+                }
+            }
+            onCentroidChanged: {
+                if (!active) {
+                    return;
+                }
+                const p = tile.mapToItem(home, centroid.position.x, centroid.position.y);
+                home.ghostPos = p;
+                const g = tile.mapToItem(tile.pageView, centroid.position.x, centroid.position.y);
+                home.dropTo = tile.pageView.indexAt(g.x, g.y);
+            }
+        }
         TapHandler {
             acceptedButtons: Qt.RightButton
             onTapped: (eventPoint, button) => actionMenu.openFor(tile.source, tile.sourceRow, tile.model, tile, eventPoint.position.x, eventPoint.position.y)
@@ -274,7 +460,11 @@ Item {
 
         background: Item {}
         contentItem: Item {
-            scale: tile.down ? 0.94 : 1
+            // Edit mode: page 1's tiles a little smaller (a static cue: no endless jiggle, which
+            // would keep the GPU drawing), the drop target smaller still.
+            scale: tile.down && !home.editing ? 0.94
+                 : home.editing && tile.pinnedPage ? (home.dropTo === tile.index && home.dragFrom !== tile.index ? 0.84 : 0.92) : 1
+            opacity: home.dragFrom === tile.sourceRow && tile.pinnedPage ? 0.3 : 1
             Behavior on scale {
                 enabled: home.motion.animate
                 NumberAnimation {
@@ -296,6 +486,51 @@ Item {
                 size: 72
                 source: tile.model.decoration || "application-x-executable"
                 iconName: home.iconNameFor(tile.model)
+            }
+            // Edit mode: remove (page 1) or add to page 1 (A-Z pages); 26 px drawn, 44 px target.
+            T.AbstractButton {
+                visible: (home.editing && tile.pinnedPage) || tile.addable
+                x: icon.x - 22 + 4
+                y: icon.y - 22 + 4
+                width: 44
+                height: 44
+                text: tile.pinnedPage ? i18nc("@action:button %1 app name", "Remove %1 from the home screen", tile.text)
+                                      : i18nc("@action:button %1 app name", "Add %1 to the home screen", tile.text)
+                Accessible.name: text
+                onClicked: {
+                    if (tile.pinnedPage) {
+                        home.removeAt(tile.sourceRow, String(tile.model.favoriteId || ""));
+                    } else {
+                        home.addToHome(tile.model);
+                    }
+                }
+                contentItem: Item {}
+                background: Item {
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 26
+                        height: 26
+                        radius: 13
+                        color: tile.pinnedPage ? "#3a4157" : "#2f6fe0"
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.5)
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 12
+                            height: 2
+                            radius: 1
+                            color: "#ffffff"
+                        }
+                        Rectangle {
+                            visible: !tile.pinnedPage
+                            anchors.centerIn: parent
+                            width: 2
+                            height: 12
+                            radius: 1
+                            color: "#ffffff"
+                        }
+                    }
+                }
             }
             Text {
                 id: label

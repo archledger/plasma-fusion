@@ -45,6 +45,7 @@ Owner decision "iPad-style" (TABLET2 section 3.2): pages of apps over the wallpa
 | Long press, right click, pen barrel button | the app's menu: Add to / Remove from Home Screen (the pinned list), then the app's own actions (jump list, Edit Application, Hide Application...) |
 | Swipe down (TABLET2 H2) | 96 px or 800 px/s, touch (and a pen, which acts as a finger in tablet posture): the launcher sheet opens with its search field focused, so the on-screen keyboard comes up (iPadOS, Android). The pages follow the finger (half the distance, up to 120 px, fading to 50 %) and spring back. The request is the launcher's `openRequest` `search:<nonce>`, written by desktop scripting over D-Bus (`evaluateScript`). A drag layer above the tiles holds a passive grab until 16 px, so taps, long presses and page flicks still reach the tiles |
 | Input passthrough | presses on page 1's cards reach the cards (`containmentMask` of the home layer) |
+| Edit mode (TABLET2 H2) | a long press on empty space, or "Edit Home Screen" in an app's menu. Page 1's tiles get a little smaller (0.92; a static cue: an endless jiggle would keep the GPU drawing, and the motion lint forbids it) and carry a 26 px remove badge (44 px target); a tile dragged onto another takes its place (`moveRow` on the pinned list; a ghost follows the finger, the target dips to 0.84); the A-Z pages show "+" on apps not on page 1 (`addFavorite`). Every change can be undone for 5 s (Undo pill: `addFavorite(id, index)`, `removeFavorite`, `moveRow` back). Done (56 px, right of the page dots, where nothing else sits on any page), a tap on empty space, Escape or leaving tablet posture ends it. While editing the cards are dimmed to 25 % and take no presses, page flicks pause (the dots still change pages) and the swipe-down search is off. The dots and pills are `AbstractButton`s: they take the press, so the page's empty-space tap (which ends edit mode) does not fire with them |
 
 The cards' rectangle is read from the containment's applet containers when tablet posture starts
 and for 10 s after (the layout manager places them asynchronously); there is no timer on an idle
@@ -79,5 +80,13 @@ page flicks and taps unchanged.
 
 ## Open (TABLET2 H1/H2 remainder)
 
-- Edit mode (arrange page 1 by drag, jiggle), folders, a widget stack per page.
+- Folders, a widget stack per page; dragging an app across pages.
 - App Library page with search at the end.
+
+Edit mode tests (`build/he/scen-he2.sh`, he7; evidence
+`artifacts/plasma-fusion/2026-10-01-tablet2/H1/edit`): long press on an empty cell enters it (badges,
+cards dimmed, Done); Done leaves it; the Firefox badge removes Firefox and shows Undo; Undo puts it
+back in place; the second page dot opens the A-Z page with "+" on unpinned apps; "+" on Akregator adds
+it; after Done Akregator is last on page 1. he1: a drag from Discover's tile to Maps' cell moved
+Discover there (with Undo). The model's `favorites` list reads empty from QML, so tiles pass their own
+`favoriteId`.

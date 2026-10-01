@@ -77,9 +77,14 @@ Item {
             }
         }
 
-        if (actions.length === 0) {
-            return;
+        if (actions.length > 0) {
+            actions.push({ type: "separator" });
         }
+        actions.push({
+            text: i18nc("@action:inmenu", "Edit Home Screen"),
+            icon: "edit-entry",
+            actionId: "_fusion_edit_home",
+        });
 
         targetModel = model;
         targetIndex = index;
@@ -93,6 +98,10 @@ Item {
         const favorites = home.favoritesModel;
         const actionId = String(action.actionId || "");
 
+        if (actionId === "_fusion_edit_home") {
+            home.startEditing();
+            return;
+        }
         if (actionId === "_fusion_pin") {
             favorites.addFavorite(favoriteId);
             return;

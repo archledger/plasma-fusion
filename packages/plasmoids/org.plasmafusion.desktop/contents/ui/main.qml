@@ -347,8 +347,10 @@ ContainmentItem {
         ContainmentLayoutManager.AppletsLayout {
             id: appletsLayout
             anchors.fill: parent
-            // Plasma Fusion: on the tablet home screen the cards are page 1's widgets
-            opacity: root.tabletHome && homeLoader.item && homeLoader.item.currentPage !== 0 ? 0 : 1
+            // Plasma Fusion: on the tablet home screen the cards are page 1's widgets (dimmed while
+            // the home screen is edited: they are not part of it)
+            opacity: !root.tabletHome || !homeLoader.item ? 1
+                   : homeLoader.item.currentPage !== 0 ? 0 : homeLoader.item.editing ? 0.25 : 1
             visible: opacity > 0
             Behavior on opacity {
                 enabled: motion.animate
@@ -528,6 +530,9 @@ ContainmentItem {
                     function contains(point: point): bool {
                         const r = root.cardsRect;
                         const onPage1 = homeLoader.item ? homeLoader.item.currentPage === 0 : true;
+                        if (homeLoader.item && homeLoader.item.editing) {
+                            return true;
+                        }
                         return !(onPage1 && r.width > 0 && point.x >= r.x && point.x < r.x + r.width
                                  && point.y >= r.y && point.y < r.y + r.height);
                     }
