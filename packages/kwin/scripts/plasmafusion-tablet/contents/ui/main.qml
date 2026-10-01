@@ -27,11 +27,20 @@ import org.kde.kwin
 // Settings: kwinrc [Script-plasmafusion-tablet] (contents/config/main.xml). Other parts write
 // them with kwriteconfig6 --notify and then invoke the shortcut "Plasma Fusion: Tablet Window
 // Mode", which re-reads them. No timers run while idle.
+//
+// Split view (TABLET2 M1, SplitDivider.qml): while the policy is applied and the active window is
+// quick-tiled left or right with another window on the other side, a handle on the split resizes
+// both (snaps to 1/3, 1/2, 2/3; portrait 1/2; into the outer 12 % it ends the split).
 Item {
     id: root
 
     FusionTablet {
         id: tabletState
+    }
+
+    // Two apps side by side: the handle on the split (TABLET2 M1).
+    SplitDivider {
+        script: root
     }
 
     // ---------------------------------------------------------------- settings

@@ -140,3 +140,27 @@ its title bar, Dolphin still full screen, Konsole full screen again after the ne
 - TOP-1/TOP-2: a compact global menu in tablet mode (TABLET 4.3) comes from the top bar's width budget
   (the clock pill), which switches the stock appmenu only where Plasma 6.7.5 does not crash
   (`docs/parts/shell-topbar.md`, TOP-2).
+
+## Split view divider (TABLET2 M1, 2026-10-01)
+
+`contents/ui/SplitDivider.qml`. Two apps side by side (the window card's Split left / Split right, or
+KWin's quick tiles) get a handle on the split, as on iPadOS:
+
+- Shown while the window policy is applied (tablet posture, built-in screen only) and the active
+  window is quick-tiled left or right with another visible window tiled on the other side (the
+  topmost one in the stacking order, same output and desktop).
+- A 48 x 128 px touch target centred on the split (the left tile's right edge) and on the work
+  area's height, drawing a 6 x 64 px white pill (8 x 80 while dragged). It is an internal KWin window
+  (KWin's internal-window filter gives it touch), created by an `Instantiator` (with an Item as visual
+  parent the script's windows are never shown), titled `plasmafusion-split-divider` and marked
+  skip-taskbar, -switcher and -pager when KWin adds it (KWin lists it as a normal window otherwise).
+- Dragging resizes live, at most every 50 ms, within 20-80 %: `Tile.resizeByPixels` on the left
+  quick tile; KWin's quick-tile root moves the shared split, so the right window follows.
+- On release it snaps to 1/3, 1/2 or 2/3 of the work area (portrait: 1/2), skipping a split that
+  would make either window narrower than its minimum size (`Window.minSize`). Released in the outer
+  12 % it ends the split: the window on that side is minimized (not closed) and the other maximized.
+
+Test (private session, 1920x1200 at 4/3, `build/m1/scen-m1a.sh`, m1f; evidence
+`artifacts/plasma-fusion/2026-10-01-tablet2/M1/`): Konsole tiled left and Dolphin right (711 | 711 px);
+a drag to 69 % snaps to 2/3 (951 | 471), to 28 % to 1/3 (471 | 951), to 97 % minimizes Dolphin and
+maximizes Konsole (1440 x 836); the handle window is skip-taskbar and skip-switcher.
