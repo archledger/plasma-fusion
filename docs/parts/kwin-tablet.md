@@ -164,3 +164,15 @@ Test (private session, 1920x1200 at 4/3, `build/m1/scen-m1a.sh`, m1f; evidence
 `artifacts/plasma-fusion/2026-10-01-tablet2/M1/`): Konsole tiled left and Dolphin right (711 | 711 px);
 a drag to 69 % snaps to 2/3 (951 | 471), to 28 % to 1/3 (471 | 951), to 97 % minimizes Dolphin and
 maximizes Konsole (1440 x 836); the handle window is skip-taskbar and skip-switcher.
+
+## Tent posture keeps the dock visible (TABLET2 N2/N9, 2026-10-01)
+
+In tent posture the display is upside down and its logical bottom edge rests on the table, so no
+bottom swipe can bring the dock. Scripts cannot see an output's rotation, plasmashell can: the dock
+(`tentPosture`: tablet posture and `Screen.orientation` inverted landscape) writes the runtime key
+`kwinrc [Script-plasmafusion-tablet] TentPosture` after the rotation has been stable for 1 s, and
+invokes "Plasma Fusion: Tablet Window Mode"; while it is true `dockHiding()` returns `none` (the dock
+stays visible and reserves its space, maximized apps end above it). The first decision after
+plasmashell starts is always written, so a value left by a session that ended in tent posture is
+cleared. Test (`build/n9/scen-n9.sh`, n9a): Konsole maximized 836 px tall; screen inverted:
+TentPosture true, dock `none`, Konsole 756 px; normal again: false, `dodgewindows`, 836 px.

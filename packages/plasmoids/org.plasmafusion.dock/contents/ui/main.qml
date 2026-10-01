@@ -1180,6 +1180,29 @@ PlasmoidItem {
         }
     }
 
+    // ---- Tent posture (TABLET2 N2/N9): tablet posture with the screen upside down puts the
+    // bottom edge on the table, where no swipe can start. The tablet script keeps the dock visible
+    // while kwinrc [Script-plasmafusion-tablet] TentPosture is true; written after the rotation has
+    // been stable for 1 s, then the script re-reads its settings (its shortcut).
+    readonly property bool tentPosture: root.tablet && Screen.orientation === Qt.InvertedLandscapeOrientation
+    // -1 until the first write: a value left by a session that ended in tent posture is cleared.
+    property int tentWritten: -1
+    onTentPostureChanged: tentTimer.restart()
+    Timer {
+        id: tentTimer
+        interval: 1000
+        onTriggered: {
+            if ((root.tentPosture ? 1 : 0) === root.tentWritten) {
+                return;
+            }
+            root.tentWritten = root.tentPosture ? 1 : 0;
+            console.info("dock: tent posture " + root.tentPosture);
+            executable.run("kwriteconfig6 --notify --file kwinrc --group Script-plasmafusion-tablet --key TentPosture --type bool "
+                           + (root.tentPosture ? "true" : "false")
+                           + " && gdbus call --session --dest org.kde.kglobalaccel --object-path /component/kwin"
+                           + " --method org.kde.kglobalaccel.Component.invokeShortcut 'Plasma Fusion: Tablet Window Mode' >/dev/null");
+        }
+    }
     function shellQuote(text: string): string {
         return "'" + String(text).replace(/'/g, "'\\''") + "'";
     }
@@ -1658,5 +1681,7 @@ PlasmoidItem {
         launcherApplet = findLauncherApplet();
         insetTimer.start();
         relayout();
+        // tent posture: the first decision is always written (clears a stale value)
+        tentTimer.restart();
     }
 }

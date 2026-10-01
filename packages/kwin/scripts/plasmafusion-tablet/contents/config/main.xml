@@ -27,6 +27,10 @@
       </choices>
       <default>dodgewindows</default>
     </entry>
+    <entry name="TentPosture" type="Bool">
+      <label>Runtime state written by the dock: tablet posture with the built-in screen upside down (tent), whose bottom edge rests on the table; the dock then stays visible (TABLET2 N2/N9)</label>
+      <default>false</default>
+    </entry>
     <entry name="EdgeLeft" type="Bool">
       <label>In tablet mode, a swipe in from the left edge opens the launcher</label>
       <default>false</default>

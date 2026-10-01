@@ -56,6 +56,11 @@ Item {
         return setting("WindowMode", "fullscreen") === "windowed" ? "windowed" : "fullscreen";
     }
     function dockHiding() {
+        // Tent posture (TABLET2 N2/N9, the dock writes TentPosture): the bottom edge rests on the
+        // table, so the bottom swipe cannot bring the dock; it stays visible.
+        if (setting("TentPosture", false)) {
+            return "none";
+        }
         return setting("DockHiding", "dodgewindows") === "none" ? "none" : "dodgewindows";
     }
 
