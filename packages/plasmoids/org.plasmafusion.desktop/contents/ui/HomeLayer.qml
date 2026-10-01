@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
+import org.kde.plasma.plasmoid
 import org.kde.plasma.private.kicker as Kicker
 import org.kde.plasma.workspace.dbus as DBus
 import org.kde.kirigami as Kirigami
@@ -27,7 +28,9 @@ import org.kde.kirigami as Kirigami
 // Edit mode (TABLET2 H2; research A-ipad: visible Done, undo, deterministic placement): a long press
 // on empty space, or "Edit Home Screen" in an app's menu. Page 1's tiles get a little smaller and
 // carry a remove badge; a tile dragged onto another takes its place (the pinned list's
-// order); the A-Z pages show "+" on apps not on page 1. Each change can be undone for 5 s. "Done"
+// order), dragged onto a page dot it moves to that page (its last place; a full page passes its last
+// app on); the A-Z pages show "+" on apps not on the home pages. Pins that do not fit on page 1
+// continue on further pages before the A-Z pages. Each change can be undone for 5 s. "Done"
 // (56 px, right of the page dots), a tap on empty space, Escape or leaving tablet posture ends it.
 Item {
     id: home
@@ -53,7 +56,9 @@ Item {
     readonly property bool widgetsAtTop: widgetRect.height > 0 && !widgetsAtRight && widgetRect.y + widgetRect.height < height / 2
     readonly property int firstColumns: widgetsAtRight ? Math.max(1, Math.floor((widgetRect.x - 48 - 24) / cellWidth)) : columns
     readonly property real firstTop: widgetsAtTop ? widgetRect.y + widgetRect.height + 16 : gridTop
-    readonly property int firstRows: Math.max(1, Math.floor((gridTop + gridHeight - firstTop) / cellHeight))
+    // (exactly `rows` unless the widgets sit above the grid: the ratio below dips by one for a frame
+    // while the height animates, before cellHeight follows)
+    readonly property int firstRows: widgetsAtTop ? Math.max(1, Math.floor((gridTop + gridHeight - firstTop) / cellHeight)) : rows
 
     readonly property var favoritesModel: rootModel.favoritesModel
     readonly property var allModel: {
@@ -61,7 +66,118 @@ Item {
         return model && model.description === "KICKER_ALL_MODEL" ? model : null;
     }
     readonly property int allCount: allModel ? allModel.count : 0
-    readonly property int pageCount: 1 + Math.ceil(allCount / Math.max(1, perPage))
+    // Home pages (TABLET2 section 7; iPadOS): the pins in order, page by page, then the A-Z pages.
+    // How many pins each page holds is kept (containment config homePageSizes, "7,2"), so an app
+    // moved to another page does not pull its neighbours across; empty: page 1 fills first. A page
+    // holds at most its capacity (the rest moves on to the next page, so a rotation or a bigger
+    // widget area never hides an app); new pins fill the last page's room, then new pages.
+    readonly property int firstSlots: firstColumns * firstRows
+    readonly property int favoritesCount: favoritesModel ? favoritesModel.count : 0
+    readonly property var storedSizes: String(Plasmoid.configuration.homePageSizes || "").split(",")
+        .filter(s => s.trim() !== "").map(s => Math.max(0, parseInt(s, 10) || 0))
+    readonly property var pageTakes: layoutPages(storedSizes, favoritesCount, firstSlots, perPage)
+    readonly property int pinnedPages: pageTakes.length
+    readonly property int pageCount: pinnedPages + Math.ceil(allCount / Math.max(1, perPage))
+    function capacity(page: int): int {
+        return page <= 0 ? firstSlots : perPage;
+    }
+    function layoutPages(sizes: var, count: int, first: int, per: int): var {
+        const takes = [];
+        let remaining = count;
+        let carry = 0;
+        for (let i = 0; i < sizes.length && remaining > 0; ++i) {
+            const cap = i === 0 ? first : per;
+            const want = sizes[i] + carry;
+            const take = Math.min(want, cap, remaining);
+            carry = want > cap ? want - cap : 0;
+            remaining -= take;
+            if (take > 0 || takes.length === 0) {
+                takes.push(take);
+            }
+        }
+        if (remaining > 0 && takes.length > 0) {
+            const last = takes.length - 1;
+            const add = Math.min(Math.max(0, (last === 0 ? first : per) - takes[last]), remaining);
+            takes[last] += add;
+            remaining -= add;
+        }
+        while (remaining > 0) {
+            const take = Math.min(takes.length === 0 ? first : per, remaining);
+            takes.push(take);
+            remaining -= take;
+        }
+        return takes.length > 0 ? takes : [0];
+    }
+    function pageStart(page: int): int {
+        if (page >= pinnedPages) {
+            return (page - pinnedPages) * perPage;
+        }
+        let start = 0;
+        for (let i = 0; i < page; ++i) {
+            start += pageTakes[i];
+        }
+        return start;
+    }
+    function pageSize(page: int): int {
+        return page < pinnedPages ? pageTakes[page] : perPage;
+    }
+    function pageOf(row: int): int {
+        let end = 0;
+        for (let i = 0; i < pinnedPages; ++i) {
+            end += pageTakes[i];
+            if (row < end) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    // The pages as rows: an int model would reset the view to page 1 whenever the count changes (an
+    // app added from an A-Z page that opens a new home page); rows inserted or removed before the
+    // current page keep the view where it is. Home pages change at their end, A-Z pages at the end.
+    ListModel {
+        id: pageModel
+    }
+    property int modelPinned: 0
+    property int modelAll: 0
+    function syncPages(): void {
+        const all = Math.ceil(allCount / Math.max(1, perPage));
+        // an A-Z page in view stays in view (a home page inserted at its index would take its place)
+        const allIndex = pageModel.count > 0 ? pages.currentIndex - modelPinned : -1;
+        while (modelPinned < pinnedPages) {
+            pageModel.insert(modelPinned, { "page": 0 });
+            ++modelPinned;
+        }
+        while (modelPinned > pinnedPages) {
+            pageModel.remove(modelPinned - 1);
+            --modelPinned;
+        }
+        while (modelAll < all) {
+            pageModel.append({ "page": 0 });
+            ++modelAll;
+        }
+        while (modelAll > all) {
+            pageModel.remove(pageModel.count - 1);
+            --modelAll;
+        }
+        if (allIndex >= 0 && allIndex < modelAll) {
+            pages.forceLayout(); // (the view applies model changes at its next layout)
+            if (pages.currentIndex !== modelPinned + allIndex) {
+                pages.positionViewAtIndex(modelPinned + allIndex, ListView.Beginning);
+                pages.currentIndex = modelPinned + allIndex;
+            }
+        }
+    }
+    // once per event loop pass, with settled values (both change together)
+    onPinnedPagesChanged: Qt.callLater(syncPages)
+    onPageCountChanged: Qt.callLater(syncPages)
+    Component.onCompleted: syncPages()
+    function storeSizes(sizes: var): void {
+        const s = sizes.slice();
+        while (s.length > 1 && s[s.length - 1] <= 0) {
+            s.pop();
+        }
+        Plasmoid.configuration.homePageSizes = s.map(n => Math.max(0, n)).join(",");
+    }
     readonly property alias currentPage: pages.currentIndex
     property real dragDown: 0
 
@@ -69,10 +185,13 @@ Item {
     property bool editing: false
     property int dragFrom: -1
     property int dropTo: -1
+    // A dragged tile over a page dot (a pinned page): dropped there, it moves to that page.
+    property int dropPage: -1
     property point ghostPos: Qt.point(0, 0)
     property var ghostSource
     property string ghostName: ""
-    // {kind: "remove", id, index} | {kind: "add", id} | {kind: "move", from, to}
+    // {kind: "remove", id, index, sizes} | {kind: "add", id} | {kind: "move", from, to}
+    // | {kind: "pagemove", from, to, sizes}
     property var undoAction: null
     function startEditing(): void {
         editing = true;
@@ -82,13 +201,21 @@ Item {
         editing = false;
         dragFrom = -1;
         dropTo = -1;
+        dropPage = -1;
         undoAction = null;
     }
     // (the model's `favorites` list reads empty from QML: the tile passes its favoriteId)
     function removeAt(row: int, id: string): void {
         if (id !== "") {
+            const before = pageTakes.slice();
+            const page = pageOf(row);
             favoritesModel.removeFavorite(id);
-            remember({ "kind": "remove", "id": id, "index": row });
+            if (page >= 0) {
+                const s = before.slice();
+                s[page] -= 1;
+                storeSizes(s);
+            }
+            remember({ "kind": "remove", "id": id, "index": row, "sizes": before });
         }
     }
     function addToHome(entry): void {
@@ -104,6 +231,37 @@ Item {
             remember({ "kind": "move", "from": from, "to": to });
         }
     }
+    // To the last place of a pinned page; on a full page its last app moves on to the next one.
+    function moveToPage(from: int, page: int): void {
+        const fromPage = pageOf(from);
+        if (page < 0 || page >= pinnedPages || fromPage < 0 || fromPage === page) {
+            return;
+        }
+        const before = pageTakes.slice();
+        const s = before.slice();
+        s[fromPage] -= 1;
+        s[page] += 1;
+        let start = 0;
+        for (let i = 0; i < page; ++i) {
+            start += s[i];
+        }
+        const to = Math.min(start + Math.min(s[page], capacity(page)) - 1, favoritesCount - 1);
+        if (to !== from) {
+            favoritesModel.moveRow(from, to);
+        }
+        storeSizes(layoutPages(s, favoritesCount, firstSlots, perPage));
+        remember({ "kind": "pagemove", "from": from, "to": to, "sizes": before });
+        pages.currentIndex = page;
+    }
+    // The pinned page whose dot is under `p` (home coordinates), or -1.
+    function dotAt(p: point): int {
+        if (!dots.visible) {
+            return -1;
+        }
+        const q = dots.mapFromItem(home, p.x, p.y);
+        const cell = q.y >= 0 && q.y < dots.height ? dots.childAt(q.x, q.y) : null;
+        return cell && typeof cell.index === "number" && cell.index < pinnedPages ? cell.index : -1;
+    }
     function remember(action): void {
         undoAction = action;
         undoTimer.restart();
@@ -116,10 +274,17 @@ Item {
         }
         if (a.kind === "remove") {
             favoritesModel.addFavorite(a.id, a.index);
+            storeSizes(a.sizes);
         } else if (a.kind === "add") {
             favoritesModel.removeFavorite(a.id);
         } else if (a.kind === "move") {
             favoritesModel.moveRow(a.to, a.from);
+        } else if (a.kind === "pagemove") {
+            if (a.to !== a.from) {
+                favoritesModel.moveRow(a.to, a.from);
+            }
+            storeSizes(a.sizes);
+            pages.currentIndex = Math.min(pageOf(a.from), pinnedPages - 1);
         }
     }
     Timer {
@@ -210,7 +375,7 @@ Item {
         highlightMoveDuration: home.motion.surface
         cacheBuffer: 0
         clip: true
-        model: home.pageCount
+        model: pageModel
         Accessible.role: Accessible.PageTabList
         Accessible.name: i18nc("@label", "Home screen pages")
 
@@ -218,9 +383,10 @@ Item {
             id: pageItem
             required property int index
             readonly property bool first: index === 0
+            readonly property bool pinned: index < home.pinnedPages
             readonly property int pageColumns: first ? home.firstColumns : home.columns
-            readonly property int start: first ? 0 : (index - 1) * home.perPage
-            readonly property int count: first ? home.firstColumns * home.firstRows : home.perPage
+            readonly property int start: home.pageStart(index)
+            readonly property int count: home.pageSize(index)
             width: pages.width
             height: pages.height
 
@@ -238,6 +404,7 @@ Item {
             GridView {
                 id: grid
                 readonly property int index: pageItem.index
+                readonly property bool pinned: pageItem.pinned
                 readonly property int start: pageItem.start
                 x: 48
                 y: pageItem.first ? home.firstTop : home.gridTop
@@ -248,8 +415,14 @@ Item {
                 interactive: false
                 Accessible.role: Accessible.List
                 model: KItemModels.KSortFilterProxyModel {
-                    sourceModel: pageItem.first ? home.favoritesModel : home.allModel
-                    filterRowCallback: (row, parent) => row >= pageItem.start && row < pageItem.start + pageItem.count
+                    sourceModel: pageItem.pinned ? home.favoritesModel : home.allModel
+                    // A new callback whenever the page's slice changes: the proxy filters again only
+                    // when its callback changes.
+                    filterRowCallback: {
+                        const start = pageItem.start;
+                        const end = start + pageItem.count;
+                        return (row, parent) => row >= start && row < end;
+                    }
                 }
                 delegate: HomeTile {
                     pageView: grid
@@ -299,8 +472,8 @@ Item {
     Row {
         id: dots
         anchors.horizontalCenter: parent.horizontalCenter
-        y: home.height - home.dockReserve - home.dotsHeight + 14
-        spacing: 10
+        y: home.height - home.dockReserve - home.dotsHeight + 14 - 18
+        spacing: 0
         visible: home.pageCount > 1
         Repeater {
             model: home.pageCount
@@ -309,25 +482,25 @@ Item {
             delegate: T.AbstractButton {
                 id: dotCell
                 required property int index
-                width: dot.width
-                height: 8
+                // The target is the cell: the dot's pitch wide (dot + 10), 44 px tall. (A
+                // containmentMask cannot reach past an item's bounds since Qt 6.8.)
+                width: dot.width + 10
+                height: 44
                 padding: 0
                 Accessible.role: Accessible.PageTab
                 Accessible.name: i18nc("@action:button %1 page number", "Page %1", dotCell.index + 1)
                 onClicked: pages.currentIndex = dotCell.index
-                // a 44 px target around the 8 px dot
-                containmentMask: QtObject {
-                    function contains(point: point): bool {
-                        return point.x >= -18 && point.x < dotCell.width + 18 && point.y >= -18 && point.y < dotCell.height + 18;
-                    }
-                }
                 contentItem: Item {}
-                background: Rectangle {
+                background: Item {}
+                Rectangle {
                     id: dot
-                    width: dotCell.index === pages.currentIndex ? 20 : 8
-                    height: 8
-                    radius: 4
-                    color: Qt.rgba(1, 1, 1, dotCell.index === pages.currentIndex ? 0.9 : 0.4)
+                    anchors.centerIn: parent
+                    // the current page, and in edit mode the pinned page a dragged tile would go to
+                    readonly property bool target: home.dropPage === dotCell.index
+                    width: dotCell.index === pages.currentIndex || target ? 20 : 8
+                    height: target ? 12 : 8
+                    radius: height / 2
+                    color: target ? "#2f6fe0" : Qt.rgba(1, 1, 1, dotCell.index === pages.currentIndex ? 0.9 : 0.4)
                     Behavior on width {
                         enabled: home.motion.animate
                         NumberAnimation {
@@ -356,7 +529,7 @@ Item {
         z: 150
         anchors.right: parent.right
         anchors.rightMargin: 24
-        y: dots.y + 4 - 28
+        y: dots.y + 18 + 4 - 28
         spacing: 12
         EditPill {
             visible: home.undoAction !== null
@@ -408,8 +581,8 @@ Item {
         Accessible.role: Accessible.Button
         Accessible.name: text
 
-        readonly property var source: pageView.index === 0 ? home.favoritesModel : home.allModel
-        readonly property bool pinnedPage: pageView.index === 0
+        readonly property var source: pageView.pinned ? home.favoritesModel : home.allModel
+        readonly property bool pinnedPage: pageView.pinned
         readonly property bool addable: home.editing && !pinnedPage && !!tile.model.favoriteId
                                         && !home.favoritesModel.isFavorite(String(tile.model.favoriteId))
         onClicked: {
@@ -437,9 +610,14 @@ Item {
                     home.ghostSource = tile.model.decoration || "application-x-executable";
                     home.ghostName = home.iconNameFor(tile.model);
                 } else if (home.dragFrom >= 0) {
-                    home.move(home.dragFrom, home.dropTo);
+                    if (home.dropPage >= 0) {
+                        home.moveToPage(home.dragFrom, home.dropPage);
+                    } else {
+                        home.move(home.dragFrom, home.dropTo);
+                    }
                     home.dragFrom = -1;
                     home.dropTo = -1;
+                    home.dropPage = -1;
                 }
             }
             onCentroidChanged: {
@@ -448,8 +626,10 @@ Item {
                 }
                 const p = tile.mapToItem(home, centroid.position.x, centroid.position.y);
                 home.ghostPos = p;
+                home.dropPage = home.dotAt(p);
                 const g = tile.mapToItem(tile.pageView, centroid.position.x, centroid.position.y);
-                home.dropTo = tile.pageView.indexAt(g.x, g.y);
+                const local = tile.pageView.indexAt(g.x, g.y);
+                home.dropTo = home.dropPage < 0 && local >= 0 ? tile.pageView.start + local : -1;
             }
         }
         TapHandler {
@@ -462,7 +642,7 @@ Item {
             // Edit mode: page 1's tiles a little smaller (a static cue: no endless jiggle, which
             // would keep the GPU drawing), the drop target smaller still.
             scale: tile.down && !home.editing ? 0.94
-                 : home.editing && tile.pinnedPage ? (home.dropTo === tile.index && home.dragFrom !== tile.index ? 0.84 : 0.92) : 1
+                 : home.editing && tile.pinnedPage ? (home.dropTo === tile.sourceRow && home.dragFrom !== tile.sourceRow ? 0.84 : 0.92) : 1
             opacity: home.dragFrom === tile.sourceRow && tile.pinnedPage ? 0.3 : 1
             Behavior on scale {
                 enabled: home.motion.animate

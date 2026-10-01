@@ -139,5 +139,9 @@
       <label>Use type-ahead to select desktop icons in Folder View.</label>
       <default>false</default>
     </entry>
+    <entry name="homePageSizes" type="String">
+      <label>Tablet home screen: how many pinned apps each home page holds, comma separated (empty: page 1 fills first). Kept when an app moves between pages.</label>
+      <default></default>
+    </entry>
   </group>
 </kcfg>
