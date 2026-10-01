@@ -36,6 +36,31 @@ FocusScope {
     // A swipe up from the bottom edge shorter than the home threshold but at least this long shows
     // the dock (shorter ones count as a tap).
     readonly property real dockRevealMinimum: 16
+    // Plasma Fusion (TABLET2 N1): a fast upward flick from inside an app goes home only past this
+    // travel, so a quick short swipe shows the dock (16-72 px) instead of leaving the app; the slow
+    // drag threshold is TaskSwitcherHelpers.heightThreshold.
+    readonly property real homeFlickMinimum: 72
+
+    // Visual commit cue in place of Plasma Mobile's 10 ms vibration (TABLET2 N1, research C 14):
+    // the cards swell 3.5 % and settle when releasing would open the switcher.
+    property real commitPulse: 0
+    SequentialAnimation {
+        id: commitPulseAnimation
+        NumberAnimation {
+            target: root
+            property: "commitPulse"
+            to: 0.035
+            duration: Kirigami.Units.shortDuration
+            easing.type: Easing.OutQuad
+        }
+        NumberAnimation {
+            target: root
+            property: "commitPulse"
+            to: 0
+            duration: Kirigami.Units.longDuration
+            easing.type: Easing.OutBack
+        }
+    }
     readonly property real bottomMargin: 0
     readonly property real leftMargin: 0
     readonly property real rightMargin: 0
@@ -246,10 +271,14 @@ FocusScope {
                 } else if (-root.state.yVelocity > Math.abs(root.state.xVelocity) * xyVelocityRatio || (root.taskSwitcherHelpers.reachedHeightThreshold && root.taskSwitcherHelpers.notHomeScreenState)) {
                     // upwards flick or if the touch is above heightThreshold
                     if (root.taskSwitcherHelpers.notHomeScreenState) {
-                        // if in app or task switcher, go home
-                        root.setTaskDrawerState(TaskSwitcherHelpers.GestureStates.Home);
-                        if (root.taskSwitcherHelpers.reachedHeightThreshold) {
-                            taskList.setTaskOffsetValue(root.taskSwitcherHelpers.taskOffsetValue);
+                        // if in app or task switcher, go home (Plasma Fusion: a flick only past
+                        // homeFlickMinimum; shorter ones keep the state, so a quick short swipe
+                        // shows the dock)
+                        if (unmodifiedYposition > root.homeFlickMinimum || root.taskSwitcherHelpers.reachedHeightThreshold) {
+                            root.setTaskDrawerState(TaskSwitcherHelpers.GestureStates.Home);
+                            if (root.taskSwitcherHelpers.reachedHeightThreshold) {
+                                taskList.setTaskOffsetValue(root.taskSwitcherHelpers.taskOffsetValue);
+                            }
                         }
                     } else if (unmodifiedYposition > root.taskSwitcherHelpers.undoYThreshold) {
                         // else, keep the task switcher in view
@@ -439,6 +468,11 @@ FocusScope {
             if (!taskSwitcherHelpers.hasVibrated) {
                 // Haptic feedback when the task scrub mode engages
                 taskSwitcherHelpers.hasVibrated = true;
+            }
+            // Plasma Fusion: no vibration motor; the cards pulse instead (each time the switcher
+            // becomes the outcome during a gesture)
+            if (state.gestureInProgress) {
+                commitPulseAnimation.restart();
             }
 
         }

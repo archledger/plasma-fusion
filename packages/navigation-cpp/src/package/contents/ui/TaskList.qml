@@ -136,12 +136,21 @@ MouseArea {
         baseTaskOffset = value;
     }
 
-    transform: Scale {
-        origin.x: root.width / 2
-        origin.y: root.height / 2
-        xScale: root.taskSwitcherHelpers.currentScale
-        yScale: root.taskSwitcherHelpers.currentScale
-    }
+    transform: [
+        Scale {
+            origin.x: root.width / 2
+            origin.y: root.height / 2
+            xScale: root.taskSwitcherHelpers.currentScale
+            yScale: root.taskSwitcherHelpers.currentScale
+        },
+        // Plasma Fusion: the switcher's commit cue (TaskSwitcher.commitPulse)
+        Scale {
+            origin.x: root.width / 2
+            origin.y: root.height / 2
+            xScale: 1 + root.taskSwitcher.commitPulse
+            yScale: 1 + root.taskSwitcher.commitPulse
+        }
+    ]
 
     onClicked: {
         // if tapped on the background, then hide

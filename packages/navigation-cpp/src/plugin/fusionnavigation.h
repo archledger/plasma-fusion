@@ -11,6 +11,7 @@
 #include <effect/quickeffect.h>
 #include <window.h>
 
+#include <memory>
 #include <span>
 
 #include <QAction>
@@ -21,6 +22,7 @@
 #include <KGlobalAccel>
 #include <KLocalizedString>
 
+#include "keyboardspy.h"
 #include "touchborder.h"
 #include "taskfiltermodel.h"
 #include "taskmodel.h"
@@ -160,6 +162,7 @@ private:
     FusionTouchBorder *m_border{nullptr};
     FusionTaskModel *m_taskModel{nullptr};
     KWin::QuickSceneEffect *m_effect{nullptr};
+    std::unique_ptr<FusionKeyboardSpy> m_keyboardSpy;
 
     Status m_status = Status::Inactive;
     bool m_gestureInProgress = false;

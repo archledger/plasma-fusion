@@ -37,6 +37,8 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
     m_border = new FusionTouchBorder{m_effectState};
     m_taskModel = new FusionTaskModel{parent};
     m_effect = parent;
+    // Plasma Fusion: a hardware key hides the on-screen keyboard (TABLET2 P0 K1).
+    m_keyboardSpy = std::make_unique<FusionKeyboardSpy>();
 
     // Connect signals
     connect(this, &FusionNavigationState::gestureEnabledChanged, this, &FusionNavigationState::refreshBorders);

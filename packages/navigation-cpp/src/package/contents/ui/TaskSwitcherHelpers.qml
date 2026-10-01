@@ -67,7 +67,11 @@ QtObject {
     readonly property real undoYThreshold: openedYPosition / 2
 
     // the height threshold where if the yPosition is above this value the task switch will return home
-    readonly property real heightThreshold: windowHeight * 0.55
+    // Plasma Fusion (TABLET2 N1): capped at 260 px. Plasma Mobile's 55 % of the height (471 px in
+    // landscape on the ThinkPad) was "almost unusable" in landscape (research C); iOS and Android
+    // commit home after a short drag. In landscape the switcher band is undoYThreshold (85 px) to
+    // 252 px.
+    readonly property real heightThreshold: Math.min(260, windowHeight * 0.55)
 
     // whether the switcher is opened or not
     readonly property bool taskDrawerOpened: state.status == Nav.FusionNavigationState.Active

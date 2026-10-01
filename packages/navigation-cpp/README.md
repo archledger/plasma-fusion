@@ -17,7 +17,14 @@ copyright lines. Plasma Fusion changes:
 - the gestures follow KWin's tablet mode (`TabletModeManager`) instead of Plasma Mobile's shell settings;
 - removed the Plasma Mobile shell dependencies (navigation panel, gesture panel, haptics, shell D-Bus state,
   panel constants);
-- the toggle shortcut has no default key.
+- the toggle shortcut has no default key;
+- a short swipe up (16 px or more, below home) over an app shows the dock; the switcher leaves out
+  input-method panels, pop-ups, OSDs, zero-size windows and plasmashell's surfaces;
+- gesture numbers (TABLET2 N1, from the research on the share): a fast upward flick from an app goes
+  home only past 72 px, a slow drag past min(260 px, 55 % of the height) (Plasma Mobile: any flick,
+  and 55 %); the cards pulse (3.5 %, Kirigami durations) where Plasma Mobile vibrates;
+- a key press on a hardware keyboard hides the on-screen keyboard (`FusionKeyboardSpy`, a KWin input
+  event spy; KWin 6.7.5 keeps it shown).
 
 ## Build
 
