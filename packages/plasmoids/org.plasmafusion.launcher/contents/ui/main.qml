@@ -427,6 +427,9 @@ PlasmoidItem {
         sheetWindow.visible = true;
         sheetWindow.requestActivate();
         sheet.forceActiveFocus();
+        if (mode === "search") {
+            sheet.focusSearch(argument || "");
+        }
         if (animated) {
             sheetAnimation.closing = false;
             // popupIn (200 ms), not surface (250): with the window's first frame the open stays

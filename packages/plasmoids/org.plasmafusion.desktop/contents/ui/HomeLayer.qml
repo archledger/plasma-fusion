@@ -10,6 +10,7 @@ import QtQuick.Effects
 import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.private.kicker as Kicker
+import org.kde.plasma.workspace.dbus as DBus
 
 // The home screen in tablet posture (TABLET2 H1, owner decision "iPad-style"): pages of apps in the
 // desktop window, under the apps, in place of Folder View (whose rubber band was the owner's pen
@@ -19,7 +20,9 @@ import org.kde.plasma.private.kicker as Kicker
 // page 1 the columns stop before the widget area (the containment's cards, `widgetRect`), which
 // fades out on the other pages. 72 px icons in 120 px tall cells, labels white over the wallpaper,
 // page dots, the dock's 128 px kept clear. A tap launches; a long press (or a right click, a pen's
-// barrel button) opens the app's menu: add to or remove from page 1, its actions.
+// barrel button) opens the app's menu: add to or remove from page 1, its actions. A swipe down
+// (96 px or 800 px/s; the pages follow the finger) opens the launcher's search with the keyboard
+// (TABLET2 H2, iPadOS and Android).
 Item {
     id: home
 
@@ -54,6 +57,18 @@ Item {
     readonly property int allCount: allModel ? allModel.count : 0
     readonly property int pageCount: 1 + Math.ceil(allCount / Math.max(1, perPage))
     readonly property alias currentPage: pages.currentIndex
+    property real dragDown: 0
+
+    // The launcher (in the dock) opens on an openRequest "<mode>:<nonce>[:<argument>]".
+    function openSearch(): void {
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.plasmashell", "path": "/PlasmaShell", "iface": "org.kde.PlasmaShell",
+            "member": "evaluateScript",
+            "arguments": [new DBus.string("panels().forEach(function (p) { p.widgets(\"org.plasmafusion.launcher\").forEach(function (w) {"
+                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"openRequest\", \"search:\" + Date.now()); }); });")],
+            "signature": "(s)"
+        }, () => {}, () => {});
+    }
 
     // The models the launcher uses (a second instance; KActivities keeps the pins in sync).
     Kicker.RootModel {
@@ -96,7 +111,10 @@ Item {
     ListView {
         id: pages
         objectName: "homePages"
-        anchors.fill: parent
+        width: parent.width
+        height: parent.height
+        y: Math.min(120, home.dragDown * 0.5)
+        opacity: 1 - Math.min(0.5, home.dragDown / 400)
         orientation: ListView.Horizontal
         snapMode: ListView.SnapOneItem
         highlightRangeMode: ListView.StrictlyEnforceRange
@@ -140,6 +158,42 @@ Item {
                 }
             }
         }
+    }
+
+    // Swipe down: in a layer above the tiles, so the handler sees the touch first and holds only a
+    // passive grab until the threshold; taps, long presses and page flicks still reach the tiles
+    // and the pages (as in the launcher sheet).
+    Item {
+        anchors.fill: parent
+        z: 100
+        DragHandler {
+            acceptedDevices: PointerDevice.TouchScreen
+            target: null
+            xAxis.enabled: false
+            dragThreshold: 16
+            onTranslationChanged: {
+                if (active) {
+                    home.dragDown = Math.max(0, translation.y);
+                }
+            }
+            onActiveChanged: {
+                if (active) {
+                    return;
+                }
+                if (home.dragDown >= 96 || centroid.velocity.y >= 800) {
+                    home.openSearch();
+                }
+                dragBack.start();
+            }
+        }
+    }
+    NumberAnimation {
+        id: dragBack
+        target: home
+        property: "dragDown"
+        to: 0
+        duration: home.motion.popupOut
+        easing.type: home.motion.standardEasing
     }
 
     // Page dots: 8 x 8, the current one 20 x 8, 10 apart, above the dock; tappable (44 px rows).

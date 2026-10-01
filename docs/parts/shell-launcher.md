@@ -330,7 +330,8 @@ Work package LAUNCH-2 of the one-pass plan (TABLET 4.5), built by the lead direc
   posture starts or on first use, then kept; the icon delegates exist only while it is shown.
 - **`TabletSheet.qml`**: the Tinted backdrop (`FusionBackdrop`, the wallpaper's static blurred copy); a
   search pill (560 x 48, narrower where the session buttons need the room; at the grid's left edge in
-  portrait), not focused on open; four 44 px session buttons right-aligned to the grid; the page title;
+  portrait), not focused on open (except for an `openRequest` `search:`, which the home screen's swipe
+  down sends: then the field is focused and the keyboard comes up, TABLET2 H2); four 44 px session buttons right-aligned to the grid; the page title;
   pages of 128 x 120 cells with 72 px `FusionIconTile`s and 13 px labels (7 columns, 5 in portrait or on
   a narrow screen, 4 below 700 px; rows from the height above the dock's 128 px reserve, at most 7),
   page 1 the pins, then all apps (one `KSortFilterProxyModel` slice per page); page dots (tappable);

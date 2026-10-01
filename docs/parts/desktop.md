@@ -43,6 +43,7 @@ Owner decision "iPad-style" (TABLET2 section 3.2): pages of apps over the wallpa
 | Swipe | horizontal flick, one page per swipe (`SnapOneItem`, `Motion.surface`) |
 | Tap | launches the app |
 | Long press, right click, pen barrel button | the app's menu: Add to / Remove from Home Screen (the pinned list), then the app's own actions (jump list, Edit Application, Hide Application...) |
+| Swipe down (TABLET2 H2) | 96 px or 800 px/s, touch (and a pen, which acts as a finger in tablet posture): the launcher sheet opens with its search field focused, so the on-screen keyboard comes up (iPadOS, Android). The pages follow the finger (half the distance, up to 120 px, fading to 50 %) and spring back. The request is the launcher's `openRequest` `search:<nonce>`, written by desktop scripting over D-Bus (`evaluateScript`). A drag layer above the tiles holds a passive grab until 16 px, so taps, long presses and page flicks still reach the tiles |
 | Input passthrough | presses on page 1's cards reach the cards (`containmentMask` of the home layer) |
 
 The cards' rectangle is read from the containment's applet containers when tablet posture starts
@@ -69,10 +70,14 @@ home screen.
 laptop posture Folder View with cards and no QML errors; tablet posture page 1 with the pinned apps
 in 5 columns beside the cards, page 2 after a swipe with apps A to Z in 6 columns, a tap on the first
 tile of page 2 started Akregator, laptop posture again Folder View. Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/H1/`.
+`/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/H1/`. `scen-home2.sh`: the installer
+built the layout with the fork, long press and right click open the menu (Firefox's jump list
+included), the login check's dry run with plasma-desktop 6.8.0 switches the containment and words
+the notification. `scen-home3.sh` (H2): a 70 px drag does nothing, a 300 px swipe down opens the
+sheet with the search focused and the keyboard visible (KWin `VirtualKeyboard` visible and active),
+page flicks and taps unchanged.
 
 ## Open (TABLET2 H1/H2 remainder)
 
 - Edit mode (arrange page 1 by drag, jiggle), folders, a widget stack per page.
-- Swipe down on the home screen for search (the launcher sheet with its search field).
 - App Library page with search at the end.

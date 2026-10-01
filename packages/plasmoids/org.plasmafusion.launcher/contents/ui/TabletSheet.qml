@@ -69,6 +69,14 @@ FocusScope {
         sheet.forceActiveFocus();
     }
 
+    // Opened for a search (the home screen's swipe down, TABLET2 H2): the field takes the focus, so
+    // the on-screen keyboard comes up as on iPadOS and Android.
+    function focusSearch(text: string): void {
+        search.text = text;
+        search.cursorPosition = text.length;
+        search.forceActiveFocus();
+    }
+
     Keys.onEscapePressed: {
         if (searching) {
             search.text = "";
