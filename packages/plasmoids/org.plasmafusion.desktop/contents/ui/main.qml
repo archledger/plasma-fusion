@@ -453,7 +453,8 @@ ContainmentItem {
                        + Math.round(root.screenGeometry.width) + "x" + Math.round(root.screenGeometry.height)
             fallbackConfigKey: (root.tabletHome ? "ItemGeometriesTablet" : "ItemGeometries")
                                + (root.availableScreenRect.width > root.availableScreenRect.height ? "Horizontal" : "Vertical")
-            onConfigKeyChanged: arrangeTimer.restart()
+            // (the timer does not exist yet when the first key is set, at start-up)
+            onConfigKeyChanged: if (arrangeTimer) arrangeTimer.restart()
 
             Binding on containment {
                 value: Plasmoid
