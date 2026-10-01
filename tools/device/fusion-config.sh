@@ -1670,7 +1670,13 @@ managed_key kwinrc Plugins sheetEnabled true true
 # enabled effect: it is loaded below.
 NAV_EFFECT=0
 if package_dir kwin/effects plasmafusion_navigation >/dev/null; then
-  managed_key kwinrc Plugins plasmafusion_navigationEnabled true true
+  if grep -q '^navigation[[:space:]]' "$STATE/gate/off" 2>/dev/null; then
+    # The login check switched it off after a Plasma update, not the user: its own step below
+    # (section "Login check") turns it back on; the effect is loaded there.
+    note "kwinrc [Plugins] plasmafusion_navigationEnabled: switched off by the login check (turned back on below)"
+  else
+    managed_key kwinrc Plugins plasmafusion_navigationEnabled true true
+  fi
   NAV_EFFECT=1
 else
   note "note: the tablet navigation effect is not installed (plasma-fusion-navigation); tablet posture keeps KWin's edges"
@@ -2032,6 +2038,11 @@ else
     PF_GATE_TOOL=$HERE/fusion-config.sh bash "$GATE_SRC" deploy --dry-run || note "warning: the login check could not read the installed versions"
   elif PF_GATE_TOOL=$HERE/fusion-config.sh bash "$GATE_ENGINE" deploy; then
     bus call org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null 2>&1 || true
+    # A navigation effect the login check had switched off is on again: KWin's reconfigure does not
+    # load a newly enabled effect (PLASMA-68 upgrade test: enabled, not loaded until the next login).
+    if [ "$NAV_EFFECT" = 1 ] && [ "$(kreadconfig6 --file kwinrc --group Plugins --key plasmafusion_navigationEnabled)" = true ]; then
+      bus call org.kde.KWin /Effects org.kde.kwin.Effects loadEffect s plasmafusion_navigation >/dev/null 2>&1 || true
+    fi
   else
     note "warning: the login check could not record the installed versions; the next login uses the safe fallback"
   fi
