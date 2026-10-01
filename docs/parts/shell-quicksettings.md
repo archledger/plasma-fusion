@@ -90,8 +90,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     Display (brightness, Night Light, light/dark pairing), Media (MPRIS),
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
                                     TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
-                                    tablet-mode setting, full-screen apps; QS-1; power button
-                                    per posture, TABLET2 P0)
+                                    tablet-mode setting, full-screen apps; QS-1; posture
+                                    settings: power button, touch edge, TABLET2 P0/N1)
 tools/build.d/71-quicksettings.sh   copies the package to $STAGE/.local/share/plasma/plasmoids/
 ```
 
@@ -477,16 +477,25 @@ In tablet posture there is no lid, and the X13 Yoga's power button opened Plasma
 Phones and tablets turn the screen off and lock it (research B, item 14: convention, no complaint
 data); PowerDevil 6.7.5 ships the same pair as its defaults for touch devices, but picks them only
 from the posture at its start (`ProfileDefaults::defaultPowerButtonAction(isMobile)`).
-`TabletPolicy.applyPowerButton()` follows the posture instead:
+`TabletPolicy.applyPostureSettings()` follows the posture instead:
 
 - Tablet posture: for each PowerDevil profile (AC, Battery, LowBattery) where the user has no value,
   `powerdevilrc [<profile>][SuspendAndShutdown] PowerButtonAction=128` (toggle the screen on and off)
   and `[<profile>][Display] LockBeforeTurnOffDisplay=true`; what was written is recorded in
-  `plasmafusionrc [Tablet] PowerButtonWritten`.
+  `plasmafusionrc [Tablet] PostureWritten`.
 - Laptop posture: the recorded keys are removed where they still hold those values (Plasma's
   logout prompt is back); a value the user set meanwhile stays.
 - One `bash -c` run per posture change under a `flock`, then PowerDevil's `refreshStatus`.
   fusion-config backs up `powerdevilrc` (rollback).
+- The same run sets the bottom touch zone (TABLET2 N1): `kwinrc [ScreenEdges] TouchTarget=20` in
+  tablet posture (KWin's 8 px is 1.6 mm on the ThinkPad; iOS about 19, GNOME 20, Android 26 px),
+  removed in laptop posture. KWin keeps every touch that starts in a touch edge, and in laptop
+  posture an auto-hidden dock reserves the bottom edge too, so laptop taps keep KWin's 8 px.
+  KWin applies the value live (`KConfigWatcher`, `recreateEdges()`); only the navigation effect's
+  bottom edge takes touch in tablet posture (all `[TouchEdges]` actions are None). Private sessions
+  `e8`/`e20` (navigation effect, Konsole, tablet): a swipe up starting 15 px above the bottom does
+  nothing with 8 px and goes home with 20 px; `pb3`: the key follows the posture with the power
+  button keys. Evidence: `.../2026-10-01-tablet2/N1/touch-zone/`.
 
 Private session `pb1` (PowerDevil not running there; keys only): tablet writes 5 keys and keeps the
 user's `Battery` value 1 (sleep); laptop removes them; fold, unfold, fold 1 s apart ends in the

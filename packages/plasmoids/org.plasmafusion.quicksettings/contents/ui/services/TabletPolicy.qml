@@ -17,12 +17,16 @@ import org.kde.plasma.workspace.dbus as DBus
 // - Rotation lock (F14, T19): lock = the current rotation kept and auto-rotation never; unlock =
 //   auto-rotation in tablet mode and the normal rotation. Leaving tablet mode while locked turns
 //   the screen back to normal and keeps the lock. State in plasmafusionrc [Tablet] RotationLocked.
-// - Power button (TABLET2 P0): in tablet posture a press turns the screen off and locks it first,
-//   as on a phone or tablet: PowerDevil's own defaults for touch devices (powerdevilrc
-//   [<profile>][SuspendAndShutdown] PowerButtonAction 128 "toggle screen on/off",
-//   [<profile>][Display] LockBeforeTurnOffDisplay true). Written per profile only where the user has
-//   no value, recorded in plasmafusionrc [Tablet] PowerButtonWritten and removed again in laptop
-//   posture (Plasma's logout prompt), unless the user changed them meanwhile.
+// - Posture settings (TABLET2 P0, N1), written in tablet posture only where the user has no value,
+//   recorded in plasmafusionrc [Tablet] PostureWritten and removed again in laptop posture unless
+//   the user changed them meanwhile:
+//   - Power button: a press turns the screen off and locks it first, as on a phone or tablet:
+//     PowerDevil's own defaults for touch devices (powerdevilrc [<profile>][SuspendAndShutdown]
+//     PowerButtonAction 128 "toggle screen on/off", [<profile>][Display] LockBeforeTurnOffDisplay
+//     true); the laptop keeps Plasma's logout prompt.
+//   - Touch edge: kwinrc [ScreenEdges] TouchTarget 20 (KWin's 8 px is 1.6 mm; iOS ~19, GNOME 20,
+//     Android 26 px). KWin keeps every touch that starts in the zone, so in laptop posture, where an
+//     auto-hidden dock also reserves the bottom edge, its 8 px stay.
 // - Tablet mode setting (3.2): kwinrc [Input] TabletMode auto / on / off.
 // - Full-screen apps (4.2, 4.9): the tablet script's global WindowMode, fullscreen / windowed,
 //   written and applied through its shortcut.
@@ -94,16 +98,16 @@ Item {
     onKeyboardPolicyChanged: Qt.callLater(applyKeyboard)
     onPostureKnownChanged: {
         Qt.callLater(applyKeyboard);
-        Qt.callLater(applyPowerButton);
+        Qt.callLater(applyPostureSettings);
     }
 
-    // ---- Power button
+    // ---- Posture settings (power button, touch edge)
     // One shell run per posture change, under a lock: a quick fold and unfold cannot interleave two
     // runs' reads and writes (private session pb1: fold, unfold, fold 1 s apart).
-    readonly property string powerButtonScript: [
-        "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/plasma-fusion-power-button.lock\" && flock 9",
+    readonly property string postureScript: [
+        "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/plasma-fusion-posture.lock\" && flock 9",
         "f=powerdevilrc; r=plasmafusionrc",
-        "rec=$(kreadconfig6 --file $r --group Tablet --key PowerButtonWritten)",
+        "rec=$(kreadconfig6 --file $r --group Tablet --key PostureWritten)",
         "if [ \"$1\" = tablet ]; then",
         "  for p in AC Battery LowBattery; do",
         "    if [ -z \"$(kreadconfig6 --file $f --group $p --group SuspendAndShutdown --key PowerButtonAction)\" ]; then",
@@ -111,7 +115,9 @@ Item {
         "    if [ -z \"$(kreadconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay)\" ]; then",
         "      kwriteconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay true; rec=\"$rec $p/lock\"; fi",
         "  done",
-        "  kwriteconfig6 --file $r --group Tablet --key PowerButtonWritten \"$(echo $rec)\"",
+        "  if [ -z \"$(kreadconfig6 --file kwinrc --group ScreenEdges --key TouchTarget)\" ]; then",
+        "    kwriteconfig6 --notify --file kwinrc --group ScreenEdges --key TouchTarget 20; rec=\"$rec edge\"; fi",
+        "  kwriteconfig6 --file $r --group Tablet --key PostureWritten \"$(echo $rec)\"",
         "else",
         "  for e in $rec; do p=${e%/*}",
         "    case $e in",
@@ -119,24 +125,26 @@ Item {
         "      kwriteconfig6 --file $f --group $p --group SuspendAndShutdown --key PowerButtonAction --delete ;;",
         "    */lock) [ \"$(kreadconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay)\" = true ] &&",
         "      kwriteconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay --delete ;;",
+        "    edge) [ \"$(kreadconfig6 --file kwinrc --group ScreenEdges --key TouchTarget)\" = 20 ] &&",
+        "      kwriteconfig6 --notify --file kwinrc --group ScreenEdges --key TouchTarget --delete ;;",
         "    esac",
         "  done",
-        "  [ -z \"$rec\" ] || kwriteconfig6 --file $r --group Tablet --key PowerButtonWritten --delete",
+        "  [ -z \"$rec\" ] || kwriteconfig6 --file $r --group Tablet --key PostureWritten --delete",
         "fi",
         "echo \"$1: $(echo $rec)\""
     ].join("\n")
-    property string powerButtonPosture: ""
-    function applyPowerButton() {
+    property string postureApplied: ""
+    function applyPostureSettings() {
         if (!postureKnown) {
             return;
         }
         const want = tablet ? "tablet" : "laptop";
-        if (want === powerButtonPosture) {
+        if (want === postureApplied) {
             return;
         }
-        powerButtonPosture = want;
-        run("bash -c " + quote(powerButtonScript) + " power-button " + want, (code, out) => {
-            console.info("quicksettings: power button " + out.trim() + " (exit " + code + ")");
+        postureApplied = want;
+        run("bash -c " + quote(postureScript) + " posture-settings " + want, (code, out) => {
+            console.info("quicksettings: posture settings " + out.trim() + " (exit " + code + ")");
             // PowerDevil reads its profiles again (it may not run in a test session).
             DBus.SessionBus.asyncCall({
                 "service": "org.kde.Solid.PowerManagement",
@@ -269,7 +277,7 @@ Item {
     // landscape and the next tablet session starts in landscape).
     onTabletChanged: {
         Qt.callLater(applyKeyboard);
-        Qt.callLater(applyPowerButton);
+        Qt.callLater(applyPostureSettings);
         if (!tablet && rotationLocked) {
             withOutput((name, rotation) => {
                 if (name !== "" && rotation !== 1) {
