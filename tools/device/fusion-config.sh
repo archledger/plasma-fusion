@@ -75,7 +75,9 @@
 #                      kscreenlockerrc [Greeter] wallpaper PlasmaFusion
 #   Tooltips           plasmarc [PlasmaToolTips] Delay 300
 #   OSD                plasmarc [OSD] Enabled, kbdLayoutChangedEnabled
-#   Notifications      plasmanotifyrc [Notifications] PopupPosition TopRight, PopupTimeout 5000
+#   Notifications      plasmanotifyrc [Notifications] PopupPosition TopRight, PopupTimeout 5000;
+#                      [Jobs] PermanentPopups false (file-copy progress pop-ups close after the
+#                      timeout; the progress stays in the notification list; research D-desktop)
 #   KRunner            krunnerrc [General] FreeFloating true (centred, as the dock's Search)
 #   Desktop (in place) an existing Plasma Fusion layout: the "Desktop" containment becomes Folder
 #                      View (desktop icons) with the Plasma Fusion keys, portrait card positions,
@@ -1748,6 +1750,9 @@ managed_key plasmarc OSD Enabled true true
 managed_key plasmarc OSD kbdLayoutChangedEnabled true true
 managed_key plasmanotifyrc Notifications PopupPosition TopRight TopRight
 managed_key plasmanotifyrc Notifications PopupTimeout "$NOTIFICATION_TIMEOUT" "$NOTIFICATION_TIMEOUT"
+# File-copy and other job pop-ups close after the timeout instead of staying until the job ends
+# (research D-desktop, complaint 15); their progress stays in the notification history.
+managed_key plasmanotifyrc Jobs PermanentPopups false
 managed_key krunnerrc General FreeFloating true true
 # Keyboard layout badge (quick settings, lock screen): kxkbrc is left alone on purpose. The
 # badge shows the current layout's [Layout] DisplayNames entry when the user set one, else its

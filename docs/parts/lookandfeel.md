@@ -217,7 +217,9 @@ What it sets, in order (all idempotent; a second run reports only the theme re-a
    per workspace and screen UUID.
 5. plasmarc [PlasmaToolTips] Delay=600; [OSD] Enabled=true, kbdLayoutChangedEnabled=true (plasmarc
    is ShellCorona's config, shellcorona.cpp:108); plasmanotifyrc [Notifications]
-   PopupPosition=TopRight, PopupTimeout=5000 (notificationsettings.kcfg); krunnerrc [General]
+   PopupPosition=TopRight, PopupTimeout=5000 (notificationsettings.kcfg), [Jobs] PermanentPopups=false
+   (file-copy pop-ups close after the timeout, progress stays in the history; 2026-10-01, research
+   D-desktop complaint 15; only where unset, a user's own value is kept); krunnerrc [General]
    FreeFloating=true (KRunner centred, for the dock's Search button). Written with
    `kwriteconfig6 --notify`.
 6. Lock screen: `tools/device/lockscreen-enable.sh` (the lock-screen part's drop-in, from the next
