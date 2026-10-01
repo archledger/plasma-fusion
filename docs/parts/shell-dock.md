@@ -319,9 +319,18 @@ built by the lead directly.
   (LAUNCH-2's sheet) follows the finger (progress = dy / 240; opens at 0.3 or 800 px/s). A long
   press of 500 ms opens the icon's menu (`pressAndHoldInterval`); press feedback 0.94 and 80 %.
   Reorder by touch stays the sideways drag (the menu cannot hand a moving finger back to the icon).
-- **Home indicator** (`HomeIndicator.qml`, TABLET P2): a 120 x 5 pill 8 px above the bottom, its own
-  `Dock` window without input or focus, shown in tablet posture while the active window is
-  maximized (not full screen), with a `toggle` fade; static afterwards.
+- **Bottom strip and home indicator** (`BottomStrip.qml`, TABLET2 N1; replaces TABLET P2's floating
+  `HomeIndicator.qml`): in tablet posture a 20 px layer-shell band along the bottom edge of the dock's
+  screen (scope `dock`, bottom layer, exclusive zone 20, no input or focus). KWin ends maximized apps
+  above it (work area 1440 x 836 instead of 856 at 1440 x 900 with the 44 px top bar), so no app control
+  sits in the 20 px touch zone of the navigation gestures, where KWin keeps every touch (before, the
+  pill crossed LibreOffice's status bar and its taps there were lost, private session hd2t). Over a
+  maximized app (not full screen) it takes the top bar's solid fill (#090c18 dark, #fafbff light)
+  with the 120 x 5 pill 8 px above the bottom; otherwise it is transparent (the dock covers it). It
+  exists for the whole tablet posture, so the work area does not change while apps open and close.
+  The settings module's home indicator switch (dock config `homeIndicator`, now declared and read; it
+  had no effect before) hides the pill; the strip stays. Private sessions st2/st3: tablet 836 px,
+  laptop back to 866, strip a `Dock` window, pill on/off.
 - **First tablet use** (`GestureCard.qml`, TABLET 5): a centred card with the three gestures and a 44 px
   "Got it"; dismissing it writes `plasmafusionrc [Tablet] GestureCardShown=true` (read once at start).
 - **Desktop shortcuts** (BACKLOG M3): "Add to Desktop" in the icon's menu makes a symlink in

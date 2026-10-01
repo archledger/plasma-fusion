@@ -38,6 +38,7 @@ KCM.SimpleKCM {
     property int cfg_tabletTile
     property bool cfg_tabletShowDownloadsTrash
     property int cfg_powerTier
+    property bool cfg_homeIndicator
 
     // The dialog also passes every key's default value as cfg_<key>Default.
     property var cfg_launchersDefault
@@ -59,6 +60,7 @@ KCM.SimpleKCM {
     property int cfg_tabletTileDefault
     property bool cfg_tabletShowDownloadsTrashDefault
     property int cfg_powerTierDefault
+    property bool cfg_homeIndicatorDefault
 
     function saveConfig(): void {
         const config = Plasmoid.configuration;
@@ -72,6 +74,8 @@ KCM.SimpleKCM {
         cfg_tabletShowDownloadsTrash = config.tabletShowDownloadsTrash;
         // written by the power tiers service while the dialog may be open
         cfg_powerTier = config.powerTier;
+        // the settings module's switch
+        cfg_homeIndicator = config.homeIndicator;
     }
 
     Kirigami.FormLayout {

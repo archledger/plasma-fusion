@@ -1299,11 +1299,14 @@ PlasmoidItem {
         function onActiveTaskChanged(): void { root.updateActiveMaximized(); }
         function onDataChanged(): void { root.updateActiveMaximized(); }
     }
+    // Tablet posture: the bottom strip (20 px reserved band with the home indicator over an app).
     Loader {
-        active: root.tablet && root.activeMaximized
-        sourceComponent: HomeIndicator {
+        active: root.tablet
+        sourceComponent: BottomStrip {
             pal: dockPal
             motion: motion
+            overApp: root.activeMaximized
+            showIndicator: Plasmoid.configuration.homeIndicator
             screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
         }
     }
