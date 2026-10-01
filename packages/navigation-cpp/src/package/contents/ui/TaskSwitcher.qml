@@ -28,6 +28,26 @@ FocusScope {
 
     property Nav.FusionNavigationState state
     readonly property QtObject effect: KWinComponents.SceneView.effect
+
+    // Plasma Fusion: home also closes a shell sheet (the launcher, the Notification Centre, quick
+    // settings): they close themselves when they lose the focus, and with no app to minimise
+    // nothing else takes it. The desktop of the active window's screen takes it.
+    function dismissShellSheet(): void {
+        const active = KWinComponents.Workspace.activeWindow;
+        // (the shell's desktop windows have the class "plasmashell", its other windows "org.kde.plasmashell")
+        const shell = active && (active.resourceClass === "plasmashell" || active.resourceClass === "org.kde.plasmashell"
+                                 || active.desktopFileName === "org.kde.plasmashell");
+        if (!shell || active.dock || active.desktopWindow) {
+            return;
+        }
+        for (const w of KWinComponents.Workspace.stackingOrder) {
+            if (w.desktopWindow && w.output === active.output) {
+                console.info("plasmafusion-navigation: home closes the shell sheet");
+                KWinComponents.Workspace.activeWindow = w;
+                return;
+            }
+        }
+    }
     readonly property QtObject targetScreen: KWinComponents.SceneView.screen
 
     // Plasma Fusion: the cards keep clear of the tablet top bar (44 px, TABLET.md 4.3); there is no
@@ -400,9 +420,16 @@ FocusScope {
                          + " x " + Math.round(root.state.touchXPosition) + ", state " + root.taskSwitcherHelpers.gestureState
                          + ", from an app " + root.state.wasInActiveTask + ", tasks " + taskList.count);
             if (taskList.count === 0) {
-                // dismiss the gesture if the task list is empty
+                // dismiss the gesture if the task list is empty (Plasma Fusion: and nothing else
+                // below runs: it would open a task that does not exist); an upward swipe still goes
+                // home, closing a shell sheet such as the launcher
                 root.taskSwitcherHelpers.close();
-            } if (root.taskSwitcherHelpers.isInTaskScrubMode) {
+                if (Math.abs(root.state.touchYPosition) >= root.dockRevealMinimum) {
+                    root.dismissShellSheet();
+                }
+                return;
+            }
+            if (root.taskSwitcherHelpers.isInTaskScrubMode) {
                 // TODO! do we want to handle upwards flick to dismiss in task scrub mode?
                 let unmodifiedYposition = Math.abs(root.state.touchYPosition)
                 root.backgroundColorOpacity = 1;
@@ -443,6 +470,7 @@ FocusScope {
                 root.taskSwitcherHelpers.open();
             } else if (root.taskSwitcherHelpers.gestureState == TaskSwitcherHelpers.GestureStates.Home) {
                 root.taskSwitcherHelpers.close();
+                root.dismissShellSheet();
             }
         }
 

@@ -244,7 +244,10 @@ QtObject {
 
         animateGoToTaskIndex(index, duration);
         openAppAnim.restart();
-        KWinComponents.Workspace.activeWindow = taskList.getTaskAt(index).window;
+        const task = taskList.getTaskAt(index);
+        if (task) {
+            KWinComponents.Workspace.activeWindow = task.window;
+        }
     }
 
     // get the xPosition where the task will be centered on the screen

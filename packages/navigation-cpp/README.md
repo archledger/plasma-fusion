@@ -41,3 +41,17 @@ copyright lines. Plasma Fusion changes:
 
 `tools/build-rpm.sh` builds it in the Plasma Fusion build container on the test device and fetches a staged
 install (`stage/`) and the RPM.
+
+## Home closes a shell sheet (2026-10-01)
+
+Seen on the owner's ThinkPad: with no app open, the launcher sheet open, three swipes up did
+nothing, and each logged "TaskSwitcherHelpers.qml:247: TypeError: Cannot read property 'window' of
+null". `onGestureInProgressChanged` read `if (taskList.count === 0) { close(); } if (...)` (Plasma
+Mobile's code, no `else`), so with no tasks it went on and opened a task that does not exist; it
+now returns after closing, and `openApp` skips a missing task. Shell sheets (launcher, Notification
+Centre, quick settings) close themselves when they lose the focus; with no app to minimise nothing
+took it. A home gesture (and, with no app open, any upward swipe past 16 px) now gives the focus to
+the desktop window of that screen when a shell window other than a dock or the desktop is active
+(`dismissShellSheet`; the shell's other windows have the class "org.kde.plasmashell"; log "home
+closes the shell sheet"). Test (6.7.5 container, hsheet3): launcher opened with no app and over
+KWrite, home gesture: the sheet closed both times, no TypeError.
