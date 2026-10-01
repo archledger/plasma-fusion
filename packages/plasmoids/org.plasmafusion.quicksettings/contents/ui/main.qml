@@ -345,6 +345,7 @@ PlasmoidItem {
         notificationsApart: root.notificationsApart
         onPenRequested: root.openPenMenu()
         onCloseRequested: root.setPopupOpen(false)
+        onNotificationCentreRequested: root.openNotificationCentre()
     }
     Binding {
         target: backend.pal

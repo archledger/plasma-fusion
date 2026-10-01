@@ -45,6 +45,8 @@ Item {
 
     // Asks the owner to close the pop-up (after launching something).
     signal closeRequested()
+    // the controls sheet's "Notifications" switch (tablet posture, notifications apart)
+    signal notificationCentreRequested()
 
     readonly property FusionPalette pal: FusionPalette {
         dark: {

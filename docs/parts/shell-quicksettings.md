@@ -582,3 +582,16 @@ See `docs/parts/charge-limit.md`: a "Charge limit" tile (limit on/off; chevron: 
 100 % once, no limit, Battery settings), `services/ChargeLimit.qml`, set through `pkexec` and the
 `org.plasmafusion.charge-limit` polkit action; hidden without the system helper or a battery stop
 threshold.
+
+## Notification control and the sheet switch (2026-10-01)
+
+Research E-phone 4.2/4.3. A long press on a card in the Notification Centre reads the app's own
+settings (plasmanotifyrc [Applications][<desktop entry>] ShowPopups and ShowInHistory, the keys of
+System Settings > Notifications) and offers "No Pop-ups from X" / "Show Pop-ups from X" and "Don't
+Keep Notifications from X" / "Keep Notifications from X" (turning one back on removes the key:
+Plasma's default), plus "Notification Settings…". `components/SheetSwitch.qml` is the
+"Notifications | Controls" switch: on top of the Notification Centre (as before) and now also on top
+of the controls sheet in tablet posture while notifications have their own sheet (main page only),
+so either sheet reaches the other without closing (backend signal notificationCentreRequested).
+Tested in the 6.7.5 container (nc1-nc3): menu read and toggle (key false, label flips), switch both
+ways.

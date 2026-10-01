@@ -4,6 +4,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import org.kde.plasma.plasma5support as P5Support
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.notificationmanager as NotificationManager
@@ -168,18 +169,47 @@ FocusScope {
         onTriggered: centre.now = Date.now()
     }
 
-    // ---- Per-app pop-ups (Plasma's own setting, plasmanotifyrc [Applications][<desktop entry>]
-    // ShowPopups, the one the notification settings page writes).
-    function popupsOff(desktopEntry: string): void {
+    // ---- Per-app pop-ups and history (Plasma's own settings, plasmanotifyrc
+    // [Applications][<desktop entry>] ShowPopups and ShowInHistory, the ones the notification
+    // settings page writes; research E-phone 4.3: control reachable from the notification itself).
+    // Turning one back on removes the key (Plasma's default: on).
+    function setAppKey(desktopEntry: string, key: string, on: bool): void {
         if (!/^[A-Za-z0-9._-]+$/.test(desktopEntry)) {
             return;
         }
         backend.run("kwriteconfig6 --file plasmanotifyrc --group Applications --group " + desktopEntry
-                    + " --key ShowPopups --type bool false --notify");
+                    + " --key " + key + (on ? " --delete" : " --type bool false") + " --notify");
+        console.info("quicksettings: notifications from " + desktopEntry + ": " + key + " " + (on ? "on" : "off"));
     }
     property int menuRow: -1
     property string menuEntry: ""
     property string menuApp: ""
+    property bool menuPopupsOn: true
+    property bool menuHistoryOn: true
+    property point menuAt: Qt.point(0, 0)
+    // Reads the app's two settings, then opens the menu with the matching actions.
+    function openCardMenu(): void {
+        if (!/^[A-Za-z0-9._-]+$/.test(menuEntry)) {
+            menuPopupsOn = true;
+            menuHistoryOn = true;
+            cardMenu.open(menuAt.x, menuAt.y);
+            return;
+        }
+        const read = "kreadconfig6 --file plasmanotifyrc --group Applications --group " + menuEntry + " --key ";
+        settingsReader.connectSource(read + "ShowPopups --default true; " + read + "ShowInHistory --default true # " + Date.now());
+    }
+    P5Support.DataSource {
+        id: settingsReader
+        engine: "executable"
+        connectedSources: []
+        onNewData: (sourceName, data) => {
+            disconnectSource(sourceName);
+            const lines = String(data["stdout"] || "").trim().split("\n");
+            centre.menuPopupsOn = lines[0] !== "false";
+            centre.menuHistoryOn = lines.length < 2 || lines[1] !== "false";
+            cardMenu.open(centre.menuAt.x, centre.menuAt.y);
+        }
+    }
     PlasmaExtras.Menu {
         id: cardMenu
         placement: PlasmaExtras.Menu.BottomPosedLeftAlignedPopup
@@ -189,10 +219,18 @@ FocusScope {
             }
         }
         PlasmaExtras.MenuItem {
-            text: i18nc("@action:inmenu %1 application name", "No Pop-ups from %1", centre.menuApp)
-            icon: "notifications-disabled"
+            text: centre.menuPopupsOn ? i18nc("@action:inmenu %1 application name", "No Pop-ups from %1", centre.menuApp)
+                                      : i18nc("@action:inmenu %1 application name", "Show Pop-ups from %1", centre.menuApp)
+            icon: centre.menuPopupsOn ? "notifications-disabled" : "notifications"
             visible: centre.menuEntry !== ""
-            onClicked: centre.popupsOff(centre.menuEntry)
+            onClicked: centre.setAppKey(centre.menuEntry, "ShowPopups", !centre.menuPopupsOn)
+        }
+        PlasmaExtras.MenuItem {
+            text: centre.menuHistoryOn ? i18nc("@action:inmenu %1 application name", "Don't Keep Notifications from %1", centre.menuApp)
+                                       : i18nc("@action:inmenu %1 application name", "Keep Notifications from %1", centre.menuApp)
+            icon: centre.menuHistoryOn ? "edit-clear-history" : "view-history"
+            visible: centre.menuEntry !== ""
+            onClicked: centre.setAppKey(centre.menuEntry, "ShowInHistory", !centre.menuHistoryOn)
         }
         PlasmaExtras.MenuItem {
             text: i18nc("@action:inmenu", "Notification Settings…")
@@ -280,56 +318,15 @@ FocusScope {
         opacity: Math.min(1, centre.progress * 1.4) * (1 - Math.min(1, centre.dragY / 300))
 
         // ---- Segment: Notifications | Controls (the two sheets, E-phone 4.2 sideways switch)
-        Rectangle {
+        SheetSwitch {
             id: segment
             anchors.horizontalCenter: parent.horizontalCenter
             y: 16
-            width: 2 * 132 + 8
-            height: 44
-            radius: 22
-            color: centre.pal.dark ? Qt.rgba(12 / 255, 15 / 255, 28 / 255, 0.72) : Qt.rgba(1, 1, 1, 0.78)
-            border.width: 1
-            border.color: centre.cardEdge
-            Rectangle {
-                x: 4
-                y: 4
-                width: 132
-                height: 36
-                radius: 18
-                color: centre.pal.dark ? "#2a3150" : "#e2e8f5"
-            }
-            Row {
-                x: 4
-                y: 4
-                Repeater {
-                    model: [i18nc("@action:button tablet sheet switch", "Notifications"),
-                            i18nc("@action:button tablet sheet switch", "Controls")]
-                    delegate: T.AbstractButton {
-                        id: segmentButton
-                        required property int index
-                        required property string modelData
-                        width: 132
-                        height: 36
-                        text: modelData
-                        Accessible.role: Accessible.PageTab
-                        Accessible.name: modelData
-                        Accessible.selected: index === 0
-                        contentItem: Text {
-                            text: segmentButton.modelData
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            color: segmentButton.index === 0 ? centre.pal.text : centre.pal.secondary
-                            font.pixelSize: centre.metrics.font(14)
-                            font.weight: Font.DemiBold
-                        }
-                        onClicked: {
-                            if (segmentButton.index === 1) {
-                                centre.controlsRequested();
-                            }
-                        }
-                    }
-                }
-            }
+            pal: centre.pal
+            metrics: centre.metrics
+            edge: centre.cardEdge
+            current: 0
+            onControlsRequested: centre.controlsRequested()
         }
 
         // ---- The clock column (landscape) or header (portrait)
@@ -485,7 +482,8 @@ FocusScope {
                                 centre.menuEntry = String(row.model.desktopEntry || "");
                                 centre.menuApp = String(row.model.applicationName || "");
                                 cardMenu.visualParent = card;
-                                cardMenu.open(point.position.x, point.position.y);
+                                centre.menuAt = Qt.point(point.position.x, point.position.y);
+                                centre.openCardMenu();
                             }
                         }
                     }

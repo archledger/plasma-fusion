@@ -160,6 +160,17 @@ Item {
             width: content.width - content.innerLeft - content.innerRight
             spacing: content.metrics.px(14)
 
+            // "Notifications | Controls" (tablet posture, notifications on their own sheet): the
+            // way back to the Notification Centre without closing (research E-phone 4.2).
+            SheetSwitch {
+                Layout.alignment: Qt.AlignHCenter
+                visible: content.tablet && content.backend.notificationsApart && content.backend.page === "main"
+                pal: content.pal
+                metrics: content.metrics
+                current: 1
+                onNotificationsRequested: content.backend.notificationCentreRequested()
+            }
+
             // ---------------------------------------------------------------- pages
             Item {
                 id: pageArea
