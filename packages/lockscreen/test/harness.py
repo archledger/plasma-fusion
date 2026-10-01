@@ -436,6 +436,20 @@ def tablet(app, out, view, root, lock_root, w, h):
     def check(name, ok, detail):
         res["checks"].append({"check": name, "pass": bool(ok), "detail": detail})
 
+    def step_idle():
+        # TABLET2 L1: idle in tablet posture = "Swipe up to unlock" near the bottom over a handle.
+        hint, handle = item("unlockHint"), item("unlockHandle")
+        text = hint.property("text") if hint else None
+        check("idle hint says swipe up", text == "Swipe up to unlock", text)
+        hb = hint.mapToScene(QPointF(0, hint.height())).y() if hint else 0
+        check("idle hint near the bottom (ends 40-120 px above it)", hint is not None and 40 <= h - hb <= 120,
+              rect(hint) if hint else None)
+        check("idle handle 120 x 5 at the bottom", handle is not None and handle.isVisible() and handle.width() == 120
+              and h - handle.mapToScene(QPointF(0, 0)).y() <= 20, rect(handle) if handle else None)
+        check("prompt hidden while idle", not lock_root.property("uiVisible"), lock_root.property("uiVisible"))
+        view.grabWindow().save(os.path.join(out, "tablet-idle.png"))
+        step_prompt()
+
     def step_prompt():
         lock_root.setProperty("uiVisible", True)
         QTimer.singleShot(1500, step_measure)
@@ -489,7 +503,7 @@ def tablet(app, out, view, root, lock_root, w, h):
         view.close()
         app.quit()
 
-    QTimer.singleShot(1200, step_prompt)
+    QTimer.singleShot(1200, step_idle)
     app.exec()
 
 

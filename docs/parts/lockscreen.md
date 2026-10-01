@@ -436,3 +436,35 @@ while `pfinput` is connected, so the scenarios wait 1 s after connecting (`sleep
 Offscreen harness (`test/run.sh OUT`): all states render, no QML warnings; qmllint warnings
 unchanged (19). Hand check H8 on the ThinkPad remains, now expected to pass. Evidence:
 `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/P0/`.
+
+## Tablet posture: swipe up to unlock (TABLET2 L1, 2026-10-01)
+
+Owner decision "phone-style lock screen" (TABLET2 section 0/3.5) and research round 2 (E-phone 4.3:
+lock-screen actions need a deliberate gesture after iOS pocket-trigger complaints; notification
+privacy). Laptop posture is unchanged.
+
+- **Idle** (tablet posture): the big clock and date, the notification cards (app, count and time only;
+  titles stay opt-in, `showNotificationSummaries` false, bodies never shown), media and status at the
+  bottom corners, and **"Swipe up to unlock"** near the bottom (44 px above it) over a 120 x 5 home-pill
+  handle, as on a phone.
+- **A finger or pen tap** only nudges the hint (scale 1.06 and back, Motion press/toggle); it no
+  longer raises the prompt and the on-screen keyboard (P0 did that on any tap), so touches in a bag
+  stay harmless. Taps on the media buttons still work.
+- **A swipe up** (96 px or 800 px/s; touch or pen; anywhere) shows the prompt; the clock and the hint
+  follow the finger while it moves. The on-screen keyboard is requested when the prompt is 30 % in: a
+  request while the field is still hidden got no keyboard from KWin (session l1a).
+- **Hardware keys** show the prompt as before (no on-screen keyboard); biometrics are unaffected; the
+  password field's own tap still asks for the keyboard (P0).
+- **Pointer moves** count in tablet posture only when the pointer travels more than 8 px: Qt
+  synthesises mouse moves around a touch (ignored for 600 ms around touch presses and releases), and
+  KWin sends a pointer event at the screen centre when an input device is added (session l1d: the
+  prompt came up before every test gesture). A mouse used in tablet posture still shows the prompt.
+
+Tests: the offscreen harness's `tablet` scenario now checks the idle state first (hint text, 40-120 px
+above the bottom, handle 120 x 5 at the bottom, prompt hidden; `tablet-idle.png`): 13/13 at 1440x900
+and 900x1440. Private locked sessions (`build/l1/scen-l1.sh`, l1e/l1f; evidence
+`artifacts/plasma-fusion/2026-10-01-tablet2/L1/`): tap and a 40 px swipe keep the idle screen and no
+keyboard; a 260 px swipe shows the prompt with the keyboard (KWin `VirtualKeyboard.visible` true);
+Escape blanks the screen as before; after waking, a hardware key shows the prompt with the typed
+character and no keyboard; laptop posture: a click shows the prompt. **H8 hand check update**: in
+tablet posture swipe up first, then type on the on-screen keyboard.

@@ -243,10 +243,27 @@ Item {
         // the PAM messages are announced from it (announce()).
         Accessible.role: Accessible.Pane
         Accessible.name: i18nd("plasma_shell_org.plasmafusion.lockshell", "Lock screen")
-        Accessible.description: i18nd("plasma_shell_org.plasmafusion.lockshell", "Press any key or click to unlock")
+        Accessible.description: tabletState.tablet
+            ? i18nd("plasma_shell_org.plasmafusion.lockshell", "Swipe up or press any key to unlock")
+            : i18nd("plasma_shell_org.plasmafusion.lockshell", "Press any key or click to unlock")
 
         property bool uiVisible: false
         property bool seenPositionChange: false
+        // Tablet posture (TABLET2 L1): how far the current swipe has lifted the idle screen, and when
+        // the last finger or pen press began (a touch press only wakes the screen).
+        property real swipeLift: 0
+        property real touchPressAt: 0
+        // The last pointer position (tablet posture: a move must travel to count, see onPositionChanged).
+        property point lastPointer: Qt.point(-1, -1)
+        // The swipe asked for the keyboard: requested once the prompt is in (a hidden field gets no
+        // keyboard from KWin, l1a).
+        property bool keyboardOnPrompt: false
+        onPromptFactorChanged: {
+            if (keyboardOnPrompt && promptFactor >= 0.3) {
+                keyboardOnPrompt = false;
+                Qt.callLater(lockScreenUi.focusPasswordAndShowKeyboard);
+            }
+        }
         // A finger does not hover, so in tablet posture typed text or the on-screen keyboard alone
         // keep the prompt up.
         property bool blockUI: (containsMouse || tabletState.tablet) && (mainStack.depth > 1 || mainBlock.mainPasswordBox.text.length > 0 || inputPanel.keyboardActive)
@@ -272,19 +289,72 @@ Item {
         hoverEnabled: true
         cursorShape: uiVisible ? Qt.ArrowCursor : Qt.BlankCursor
         drag.filterChildren: true
-        onPressed: uiVisible = true;
-        // In tablet posture the first finger or pen tap shows the prompt with the keyboard. Handlers
-        // see a press before their item, so the prompt is still hidden here; taps on controls stay
-        // with the controls.
+        onPressed: {
+            // Tablet posture (TABLET2 L1, phone-style): a finger or pen press on the idle screen
+            // only nudges the "Swipe up to unlock" hint, so taps in a bag do not raise the prompt
+            // and the keyboard; the swipe below shows them. A mouse press shows the prompt as before.
+            if (tabletState.tablet && !uiVisible && Date.now() - touchPressAt < 500) {
+                hintNudge.restart();
+                return;
+            }
+            uiVisible = true;
+        }
+        // Handlers see a press before their item, so the press time is known in onPressed; taps on
+        // controls (media, notification cards) stay with the controls.
         PointHandler {
+            id: touchPoint
             acceptedDevices: PointerDevice.TouchScreen | PointerDevice.Stylus
-            onActiveChanged: {
-                if (active && tabletState.tablet && !lockScreenRoot.uiVisible) {
-                    Qt.callLater(lockScreenUi.focusPasswordAndShowKeyboard);
+            // press and release: Qt synthesises mouse moves around a touch (see onPositionChanged)
+            onActiveChanged: lockScreenRoot.touchPressAt = Date.now()
+        }
+        // Swipe up (96 px or 800 px/s) in tablet posture: the prompt with the on-screen keyboard.
+        DragHandler {
+            id: unlockSwipe
+            enabled: tabletState.tablet && !lockScreenRoot.uiVisible
+            acceptedDevices: PointerDevice.TouchScreen | PointerDevice.Stylus
+            target: null
+            xAxis.enabled: false
+            dragThreshold: 12
+            onTranslationChanged: {
+                if (active) {
+                    lockScreenRoot.swipeLift = Math.max(0, -translation.y);
                 }
             }
+            onActiveChanged: {
+                if (active) {
+                    return;
+                }
+                const dy = centroid.position.y - centroid.pressPosition.y;
+                if (-dy >= 96 || centroid.velocity.y <= -800) {
+                    lockScreenRoot.keyboardOnPrompt = true;
+                    lockScreenRoot.uiVisible = true;
+                } else {
+                    hintNudge.restart();
+                }
+                liftBack.restart();
+            }
         }
-        onPositionChanged: {
+        NumberAnimation {
+            id: liftBack
+            target: lockScreenRoot
+            property: "swipeLift"
+            to: 0
+            duration: motion.popupOut
+            easing.type: motion.exitEasing
+        }
+        onPositionChanged: mouse => {
+            // In tablet posture the mouse moves Qt synthesises around a touch are not the pointer
+            // moving, and neither is a pointer event that does not travel: KWin sends one at the
+            // screen centre when an input device is added (l1d: every test client did it, and the
+            // prompt came up before the swipe). A mouse in tablet posture still shows the prompt.
+            if (tabletState.tablet) {
+                const last = lastPointer;
+                lastPointer = Qt.point(mouse.x, mouse.y);
+                if (touchPoint.active || Date.now() - touchPressAt < 600
+                        || last.x < 0 || Math.abs(mouse.x - last.x) + Math.abs(mouse.y - last.y) <= 8) {
+                    return;
+                }
+            }
             uiVisible = seenPositionChange;
             seenPositionChange = true;
         }
@@ -385,6 +455,7 @@ Item {
             id: bigClock
             anchors.horizontalCenter: parent.horizontalCenter
             y: Math.round(lockScreenRoot.height * 92 / PfStyle.boardHeight) - 12 * lockScreenRoot.promptFactor
+               - 0.3 * lockScreenRoot.swipeLift
             metrics: lockScreenUi.metrics
             sizeScale: lockScreenUi.boardScale
             dateTime: timeSource.dateTime
@@ -392,15 +463,52 @@ Item {
             visible: opacity > 0
         }
 
-        // Idle: "Press any key or click to unlock" (Lock board, 430 px from the top).
+        // Idle: "Press any key or click to unlock" (Lock board, 430 px from the top). Tablet posture
+        // (TABLET2 L1): "Swipe up to unlock" near the bottom over a home-pill handle, as on a phone;
+        // it follows the swipe and fades, and a tap nudges it.
         UnlockHint {
+            id: unlockHint
+            objectName: "unlockHint"
             anchors.horizontalCenter: parent.horizontalCenter
-            y: Math.round(lockScreenRoot.height * 430 / PfStyle.boardHeight)
+            y: tabletState.tablet
+               ? lockScreenRoot.height - height - 44 - 0.5 * lockScreenRoot.swipeLift
+               : Math.round(lockScreenRoot.height * 430 / PfStyle.boardHeight)
             backdrop: backdrop
             metrics: lockScreenUi.metrics
-            text: i18nd("plasma_shell_org.plasmafusion.lockshell", "Press any key or click to unlock")
-            opacity: 1 - lockScreenRoot.promptFactor
+            text: tabletState.tablet
+                  ? i18nd("plasma_shell_org.plasmafusion.lockshell", "Swipe up to unlock")
+                  : i18nd("plasma_shell_org.plasmafusion.lockshell", "Press any key or click to unlock")
+            opacity: (1 - lockScreenRoot.promptFactor) * (1 - Math.min(1, lockScreenRoot.swipeLift / 160))
             visible: opacity > 0
+        }
+        SequentialAnimation {
+            id: hintNudge
+            NumberAnimation {
+                target: unlockHint
+                property: "scale"
+                to: 1.06
+                duration: motion.press
+                easing.type: motion.standardEasing
+            }
+            NumberAnimation {
+                target: unlockHint
+                property: "scale"
+                to: 1
+                duration: motion.toggle
+                easing.type: motion.standardEasing
+            }
+        }
+        Rectangle {
+            // the home-pill handle under the hint (tablet posture, idle)
+            objectName: "unlockHandle"
+            visible: tabletState.tablet && opacity > 0
+            opacity: unlockHint.opacity
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: lockScreenRoot.height - 14 - 0.5 * lockScreenRoot.swipeLift
+            width: 120
+            height: 5
+            radius: 2.5
+            color: Qt.rgba(1, 1, 1, 0.85)
         }
 
         // Prompt: small clock top left (Login board).
