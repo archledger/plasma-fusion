@@ -87,6 +87,14 @@ Item {
             }
         }
     }
+    // The active window tiled after it was activated (the window card, the dock's split drag and
+    // the quick-tile keys activate first, then tile): look again.
+    Connections {
+        target: Workspace.activeWindow
+        function onTileChanged() {
+            divider.refresh();
+        }
+    }
     Connections {
         target: Workspace
         function onWindowActivated() {
@@ -147,6 +155,26 @@ Item {
         if (Math.abs(delta) >= 1) {
             leftTile.resizeByPixels(delta, Qt.RightEdge);
         }
+    }
+    // Double tap (SPLIT.md item 3; Android, One UI): the two apps change sides; the split stays
+    // where it is (moved to the middle first when an app would not fit its new side).
+    function swap(): void {
+        if (!paired) {
+            return;
+        }
+        const left = leftWindow, right = rightWindow;
+        const lTile = left.tile, rTile = right.tile;
+        if (!lTile || !rTile) {
+            return;
+        }
+        const f = (splitX - area.x) / area.width;
+        if (right.minSize.width > f * area.width - 8 || left.minSize.width > (1 - f) * area.width - 8) {
+            moveSplitTo(area.x + 0.5 * area.width);
+        }
+        lTile.manage(right);
+        rTile.manage(left);
+        Workspace.activeWindow = right;
+        script.log("split divider: swapped, " + right.resourceClass + " left, " + left.resourceClass + " right");
     }
     function fits(fraction: real): bool {
         const leftWidth = fraction * area.width;
@@ -218,6 +246,9 @@ Item {
                     border.color: Qt.rgba(0, 0, 0, 0.25)
                 }
 
+                TapHandler {
+                    onDoubleTapped: divider.swap()
+                }
                 DragHandler {
                     target: null
                     xAxis.enabled: true

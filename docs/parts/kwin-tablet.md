@@ -195,3 +195,17 @@ Scale changes at run time (Display Configuration, `kscreen-doctor ... scale`) ke
 (2026-10-01): before, a scale change in tablet posture left 45/81/21 at every scale (the dock at
 112.8 logical px at 1.25/1.5/1.75); now 44/80/20 at 1, 1.25, 1.5, 1.75 and 2, 45/81/21 at 4/3,
 laptop 34/72 unchanged (session st-fix).
+
+## Split divider: swap, and showing up after a split (2026-10-01, SPLIT.md item 3)
+
+- **Double tap swaps the two apps** (Android, One UI): `swap()` moves each window into the other's
+  quick tile (`Tile.manage`); the split stays where it is (moved to the middle first when an app
+  would not fit its new side, `minSize`); the app that comes to the left is activated. Log "split
+  divider: swapped, <left> left, <right> right".
+- **The handle appears as soon as the split exists.** `refresh()` ran on window activation, but every
+  split path activates the window first and tiles it a moment later (the window card, the dock's split
+  drag, the quick-tile keys), so the handle came only at the next focus change. It now also refreshes
+  when the active window's tile changes.
+- Test (6.7.5 and 6.7.91 containers, swap6/swap68; `InternalOutputs=eDP,LVDS,DSI,Virtual` so the
+  virtual output counts as built in): KWrite quick-tiled left, Konsole right -> handle shown; double
+  tap on it -> Konsole 6+711 (left), KWrite 723+711 (right).
