@@ -17,6 +17,12 @@ import org.kde.layershell 1.0 as LayerShell
 Window {
     id: strip
 
+    // A top-level surface, not a transient of the dock's panel: Qt makes a Window declared inside
+    // an item a transient of that item's window, and Plasma keeps a dodging or auto-hiding panel
+    // shown while a transient of it is visible (PanelView::restoreAutoHide), so the always-shown
+    // strip kept the dock over every app in tablet posture.
+    transientParent: null
+
     required property DockPalette pal
     required property Motion motion
     // A maximized app is active: solid band with the pill.
