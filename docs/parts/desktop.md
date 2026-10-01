@@ -98,3 +98,22 @@ back in place; the second page dot opens the A-Z page with "+" on unpinned apps;
 it; after Done Akregator is last on page 1. he1: a drag from Discover's tile to Maps' cell moved
 Discover there (with Undo). The model's `favorites` list reads empty from QML, so tiles pass their own
 `favoriteId`.
+
+## Widgets on the tablet home screen (2026-10-01, owner: "the placement of the widgets needs adjustment, in whatever orientation")
+
+The cards are the containment's applets, placed by Plasma's layout manager and saved per screen
+size (`ItemGeometries-WxH`): in tablet posture they stayed where the laptop desktop had them, and in
+portrait (900 x 1440) they kept a landscape-shaped place in the top right corner (and the system card
+hid itself there). Now the tablet home screen has its own saved layout per size and orientation
+(`ItemGeometriesTablet-WxH`; fallback key `ItemGeometriesTablet{Horizontal,Vertical}`), so the
+laptop desktop's layout (the same 1440 x 900 key in landscape) is never touched. The first time a
+tablet layout is used, the cards are arranged (`arrangeTabletCards`): landscape, a column 24 px from
+the right edge (more columns leftwards if they do not fit); portrait, a row across the top from the
+grid's 48 px left edge (more rows if they do not fit); 24 px from the top, 16 px apart, the dock's
+128 px and the page dots kept clear, each card keeping its size. The containers animate x and y, so
+the layout manager assigns the space 500 ms later (`positionItem`, then `save`). The key is then
+listed in `tabletCardsArranged`, so moves in edit mode stay the user's. The system card no longer
+hides in tablet portrait (it has room in the row); it still gives way where it would reach the dock.
+Test (6.7.5 container, cardsP5 1200x1920 and cardsL5 1920x1200 at 4/3): portrait, weather, calendar
+and system in a row at the top, the apps below; landscape, the column at the right, 5 app columns;
+leaving tablet posture restores the laptop positions exactly (scripting geometry before = after).

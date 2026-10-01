@@ -111,6 +111,95 @@ ContainmentItem {
             }
         }
     }
+    // The first time a tablet layout is used (per screen size and orientation), the widgets are
+    // placed beside page 1's apps: in landscape a column 24 px from the right edge (more columns
+    // leftwards when they do not fit), in portrait a row across the top from the grid's 48 px left
+    // edge (more rows when they do not fit), 24 px from the top, the dock's 128 px and the page dots
+    // kept clear, 16 px between them, each keeping its size. Later moves are the user's (edit
+    // mode) and the layout manager saves them under the same key.
+    Timer {
+        id: arrangeTimer
+        // after the layout manager has loaded the new key (it waits 100 ms)
+        interval: 600
+        onTriggered: root.arrangeTabletCards()
+    }
+    function arrangeTabletCards(): void {
+        const layout = fullRepresentationItem ? fullRepresentationItem.appletsLayout : null;
+        if (!tabletHome || !layout || layout.width <= 0 || layout.height <= 0) {
+            return;
+        }
+        const key = layout.configKey;
+        const done = Array.from(Plasmoid.configuration.tabletCardsArranged || []).map(String);
+        if (done.indexOf(key) >= 0) {
+            return;
+        }
+        const cards = [];
+        for (const child of layout.children) {
+            if (child && child.applet !== undefined && child.applet !== null && child.width > 0 && child.height > 0) {
+                cards.push(child);
+            }
+        }
+        cards.sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+        const W = layout.width, H = layout.height, portrait = H > W;
+        // (the left edge of page 1's grid in portrait; in landscape 24 px from the right edge, as
+        // the desktop's own layout places them, so that page 1 keeps its app columns)
+        const side = portrait ? 48 : 24, top = 24, gap = 16, bottom = H - 128 - 36;
+        let x = portrait ? side : W - side, y = top, line = 0;
+        for (const card of cards) {
+            if (portrait) {
+                if (x + card.width > W - side && x > side) {
+                    x = side;
+                    y += line + gap;
+                    line = 0;
+                }
+                layout.releaseSpace(card);
+                card.x = x;
+                card.y = y;
+                x += card.width + gap;
+                line = Math.max(line, card.height);
+            } else {
+                if (y + card.height > bottom && y > top) {
+                    x -= line + gap;
+                    y = top;
+                    line = 0;
+                }
+                layout.releaseSpace(card);
+                card.x = x - card.width;
+                card.y = y;
+                y += card.height + gap;
+                line = Math.max(line, card.width);
+            }
+        }
+        // The containers animate x and y (a Behavior): they reach the new place a moment later, and
+        // the layout manager reads their position when it assigns the space.
+        arrangeFinish.cards = cards;
+        arrangeFinish.key = key;
+        arrangeFinish.note = cards.length + (portrait ? " in a row at the top" : " in a column at the right");
+        arrangeFinish.restart();
+    }
+    Timer {
+        id: arrangeFinish
+        property var cards: []
+        property string key: ""
+        property string note: ""
+        interval: 500
+        onTriggered: {
+            const layout = root.fullRepresentationItem ? root.fullRepresentationItem.appletsLayout : null;
+            if (!layout || layout.configKey !== key) {
+                return;
+            }
+            for (const card of cards) {
+                layout.positionItem(card);
+            }
+            layout.save();
+            const done = Array.from(Plasmoid.configuration.tabletCardsArranged || []).map(String);
+            Plasmoid.configuration.tabletCardsArranged = done.concat([key]);
+            console.info("desktop: tablet widgets arranged for " + key + ": " + note);
+            cards = [];
+            Qt.callLater(root.updateCardsRect);
+        }
+    }
+
     property bool isPopup: (Plasmoid.location !== PlasmaCore.Types.Floating)
     property bool useListViewMode: isPopup && Plasmoid.configuration.viewMode === 0
 
@@ -358,8 +447,13 @@ ContainmentItem {
             }
             relayoutLock: width !== root.availableScreenRect.width || height !== root.availableScreenRect.height
             // NOTE: use root.availableScreenRect and not own width and height as they are updated not atomically
-            configKey: "ItemGeometries-" + Math.round(root.screenGeometry.width) + "x" + Math.round(root.screenGeometry.height)
-            fallbackConfigKey: root.availableScreenRect.width > root.availableScreenRect.height ? "ItemGeometriesHorizontal" : "ItemGeometriesVertical"
+            // Plasma Fusion: the tablet home screen keeps its own widget layout per screen size and
+            // orientation, so the laptop desktop's layout (same size in landscape) stays as it was.
+            configKey: (root.tabletHome ? "ItemGeometriesTablet-" : "ItemGeometries-")
+                       + Math.round(root.screenGeometry.width) + "x" + Math.round(root.screenGeometry.height)
+            fallbackConfigKey: (root.tabletHome ? "ItemGeometriesTablet" : "ItemGeometries")
+                               + (root.availableScreenRect.width > root.availableScreenRect.height ? "Horizontal" : "Vertical")
+            onConfigKeyChanged: arrangeTimer.restart()
 
             Binding on containment {
                 value: Plasmoid

@@ -52,7 +52,9 @@ PlasmoidItem {
     readonly property int dockArea: tabletState.tablet ? 112 : 104
     readonly property rect room: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 0, 0)
     readonly property bool overBudget: cardBottom > 0 && room.height > 0 && cardBottom > room.y + room.height - dockArea - 16 + 1
-    readonly property bool hiddenByLayout: m.portrait || overBudget
+    // (tablet posture: the home screen arranges the widgets in a row across the top in portrait,
+    // where the card has room, so there it gives way only when it would reach the dock's area)
+    readonly property bool hiddenByLayout: (m.portrait && !tabletState.tablet) || overBudget
     onHiddenByLayoutChanged: console.info("systemcard: " + (hiddenByLayout ? "hidden" : "shown") + " (portrait " + m.portrait
                                           + ", bottom " + Math.round(cardBottom) + ", room to "
                                           + Math.round(room.y + room.height - dockArea - 16) + ")")

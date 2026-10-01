@@ -139,6 +139,10 @@
       <label>Use type-ahead to select desktop icons in Folder View.</label>
       <default>false</default>
     </entry>
+    <entry name="tabletCardsArranged" type="StringList">
+      <label>Tablet home screen: the widget layouts (one per screen size and orientation, ItemGeometriesTablet-WxH) already arranged once; later changes are the user's.</label>
+      <default></default>
+    </entry>
     <entry name="homePageSizes" type="String">
       <label>Tablet home screen: how many pinned apps each home page holds, comma separated (empty: page 1 fills first). Kept when an app moves between pages.</label>
       <default></default>
