@@ -7,7 +7,7 @@
 
 Name:           plasma-fusion-navigation
 Version:        0.1
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Plasma Fusion tablet navigation gestures for KWin
 
 License:        GPL-2.0-or-later
@@ -63,6 +63,12 @@ KWin's own edges. Derived from Plasma Mobile's task switcher.
 %{_qt6_qmldir}/org/plasmafusion/navigation/
 
 %changelog
+* Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-2
+- Take Plasma Mobile 6.8's gesture velocity fix (the filter starts again with
+  every gesture)
+- A pen press and hold over the shell opens the shell's own menus
+- A quick pen tap on the home handle shows the dock
+
 * Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-1
 - First build: Plasma Mobile 6.7.5 task switcher renamed and ported to Plasma Fusion,
   with the dock on a short swipe, retuned gesture distances, a hardware-key rule for
