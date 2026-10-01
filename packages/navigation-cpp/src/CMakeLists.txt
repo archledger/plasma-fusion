@@ -14,6 +14,8 @@ ecm_add_qml_module(fusionnavigationplugin
 target_sources(fusionnavigationplugin PRIVATE
     plugin/fusionnavigation.cpp
     plugin/keyboardspy.cpp
+    plugin/penfilter.cpp
+    plugin/testpen.cpp
     plugin/touchborder.cpp
     plugin/taskfiltermodel.cpp
     plugin/taskmodel.cpp)

@@ -59,6 +59,10 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
     m_border->setLocked(fusionConfig->group(QStringLiteral("Tablet")).readEntry("GestureLock", false));
     m_configWatcher = KConfigWatcher::create(fusionConfig);
     connect(m_configWatcher.data(), &KConfigWatcher::configChanged, this, [this](const KConfigGroup &group, const QByteArrayList &names) {
+        if (group.name() == QLatin1String("Pen")) {
+            KSharedConfig::openConfig(QStringLiteral("plasmafusionrc"))->reparseConfiguration();
+            updatePen();
+        }
         if (group.name() == QLatin1String("Tablet") && names.contains(QByteArrayLiteral("GestureLock"))) {
             m_border->setLocked(group.readEntry("GestureLock", false));
             qInfo("plasmafusion-navigation: gesture lock %s", m_border->locked() ? "on" : "off");
@@ -95,11 +99,35 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
             if (m_tabletMode != tabletMode) {
                 m_tabletMode = tabletMode;
                 Q_EMIT tabletModeChanged();
+                updatePen();
             }
         });
     }
 
+    // Plasma Fusion: the pen like a finger in tablet posture (TABLET2 PEN-2), and the test pen of
+    // private test sessions (PLASMA_FUSION_TEST_PEN=1 only).
+    m_penFilter = std::make_unique<FusionPenFilter>();
+    updatePen();
+    if (qEnvironmentVariableIsSet("PLASMA_FUSION_TEST_PEN")) {
+        m_testPen = std::make_unique<FusionTestPen>();
+    }
+
     refreshBorders();
+}
+
+void FusionNavigationState::updatePen()
+{
+    if (!m_penFilter) {
+        return;
+    }
+    const KConfigGroup pen = KSharedConfig::openConfig(QStringLiteral("plasmafusionrc"))->group(QStringLiteral("Pen"));
+    const bool finger = pen.readEntry("TabletPen", QStringLiteral("finger")) != QLatin1String("pen");
+    m_penFilter->setDrawingApps(pen.readEntry("DrawingApps", FusionPenFilter::defaultDrawingApps()));
+    const bool active = m_tabletMode && finger;
+    if (active != m_penFilter->isActive()) {
+        m_penFilter->setActive(active);
+        qInfo("plasmafusion-navigation: pen %s", active ? "like a finger (tablet posture)" : "like a mouse");
+    }
 }
 
 bool FusionNavigationState::gestureEnabled() const

@@ -24,6 +24,8 @@
 #include <KLocalizedString>
 
 #include "keyboardspy.h"
+#include "penfilter.h"
+#include "testpen.h"
 #include "touchborder.h"
 #include "taskfiltermodel.h"
 #include "taskmodel.h"
@@ -156,6 +158,7 @@ private Q_SLOTS:
 private:
     void invokeEffect();
     void revealDock();
+    void updatePen();
 
     bool m_gestureEnabled{false};
     bool m_tabletMode{false};
@@ -165,6 +168,8 @@ private:
     KWin::QuickSceneEffect *m_effect{nullptr};
     std::unique_ptr<FusionKeyboardSpy> m_keyboardSpy;
     KConfigWatcher::Ptr m_configWatcher;
+    std::unique_ptr<FusionPenFilter> m_penFilter;
+    std::unique_ptr<FusionTestPen> m_testPen;
 
     Status m_status = Status::Inactive;
     bool m_gestureInProgress = false;

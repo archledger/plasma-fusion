@@ -50,6 +50,8 @@ Column {
     readonly property string penName: device.name.length > 0 ? device.name : "Wacom HID 534D Pen"
     property string clickValue: ""
     property string syncValue: ""
+    // plasmafusionrc [Pen] TabletPen: finger (default) or pen (TABLET2 PEN-2)
+    property string tabletPenValue: "finger"
 
     readonly property var curves: ({ "soft": "0,0.4;0.6,1;", "linear": "0,0;1,1;", "firm": "0.4,0;1,0.6;" })
     readonly property string curveId: {
@@ -84,10 +86,12 @@ Column {
     readonly property string rebindGroup: "--group ButtonRebinds --group TabletTool --group " + q(penName)
     readonly property string readClick: "kreadconfig6 --file kcminputrc " + rebindGroup + " --key 331"
     readonly property string readSync: "kreadconfig6 --file kcminputrc --group Tablet --key SyncWithMouse"
+    readonly property string readTabletPen: "kreadconfig6 --file plasmafusionrc --group Pen --key TabletPen --default finger"
 
     function reload(): void {
         exec.run(readClick);
         exec.run(readSync);
+        exec.run(readTabletPen);
         device.refresh();
     }
     Connections {
@@ -97,6 +101,8 @@ Column {
                 page.clickValue = stdout.trim();
             } else if (command.endsWith(page.readSync)) {
                 page.syncValue = stdout.trim();
+            } else if (command.endsWith(page.readTabletPen)) {
+                page.tabletPenValue = stdout.trim() === "pen" ? "pen" : "finger";
             }
         }
     }
@@ -115,6 +121,10 @@ Column {
             return;
         }
         exec.run(cmd + "; " + readClick);
+    }
+    // The navigation effect follows it live (KConfigWatcher).
+    function setTabletPen(id: string): void {
+        exec.run("kwriteconfig6 --notify --file plasmafusionrc --group Pen --key TabletPen " + (id === "pen" ? "pen" : "finger") + "; " + readTabletPen);
     }
     function setSync(on: bool): void {
         exec.run("kwriteconfig6 --notify --file kcminputrc --group Tablet --key SyncWithMouse " + (on ? "true" : "false") + "; " + readSync);
@@ -261,6 +271,25 @@ Column {
         onExpandedChanged: Qt.callLater(page.rowsChanged)
         hint: i18nc("@info", "Erases in drawing apps")
         enabled: false
+    }
+
+    // TABLET2 PEN-2: in tablet posture the pen scrolls and taps like a finger (iPadOS, Android,
+    // Windows); drawing apps keep the pen; "like a mouse" keeps drags selecting, as on the laptop.
+    SettingRow {
+        metrics: page.metrics
+        tint: page.tint
+        ink: page.ink
+        label: i18nc("@label how the pen acts in tablet posture", "In tablet posture")
+        key: "tabletpen"
+        onExpandedChanged: Qt.callLater(page.rowsChanged)
+        hint: i18nc("@info", "Drawing apps always get the pen")
+        current: page.tabletPenValue
+        choices: [
+            { "id": "finger", "text": i18nc("@item the pen in tablet posture", "Like a finger: drags scroll") },
+            { "id": "pen", "text": i18nc("@item the pen in tablet posture", "Like a mouse: drags select") }
+        ]
+        value: page.tabletPenValue === "pen" ? choices[1].text : choices[0].text
+        onPicked: id => page.setTabletPen(id)
     }
 
     SectionTitle { text: i18nc("@title:group", "Pressure") }

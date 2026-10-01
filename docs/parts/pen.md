@@ -163,3 +163,37 @@ Hand checks for DEPLOY-1 (PEN.md 6.2): V1-V7 with a real pen, the widget on the 
 first-frame time.
 
 Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/PEN-1/`.
+
+## Pen like a finger in tablet posture (TABLET2 PEN-2, 2026-10-01)
+
+The owner found pen drags in tablet posture turning into invisible selection boxes or text
+selection. Research round 2 (F-pen, section 0, from source code) explains it: on Linux a pen tip is a
+left mouse button for every app that does not take tablet input (Qt turns unhandled tablet events
+into mouse events), so a drag selects text or starts a rubber band; Qt Quick's ScrollView ignores
+pen drags and Kirigami makes scroll bars non-interactive in tablet mode, so many pages cannot be
+scrolled by pen at all. iPadOS, Android and Windows (since 1709) make the pen scroll like a finger
+outside drawing surfaces.
+
+- `FusionPenFilter` (navigation effect, `penfilter.cpp`): a KWin input filter ordered after the lock
+  screen. In tablet posture, while the pen tip is down, it feeds KWin's own touch path
+  (`TouchInputRedirection::processDown/Motion/Up`) instead of tablet events, so focus, activation,
+  popups and each app's touch scrolling work as for a finger, and the on-screen keyboard follows as
+  for touch.
+- Exempt (the pen stays a pen): drawing apps (window class or desktop file name in
+  `plasmafusionrc [Pen] DrawingApps`; default Xournal++, Rnote, Krita, Inkscape, GIMP, MyPaint,
+  KolourPaint), presses in the bottom 24 px (the pen never starts a shell gesture), laptop posture,
+  and `plasmafusionrc [Pen] TabletPen=pen`.
+- Setting: the pen settings page, "In tablet posture: Like a finger: drags scroll / Like a mouse:
+  drags select"; the effect follows it live.
+- Test tooling: with `PLASMA_FUSION_TEST_PEN=1` in KWin's environment (private test sessions only)
+  the plugin adds a virtual pen (`testpen.cpp`, an `InputDevice` whose events take the libinput
+  pen's path through KWin) driven from D-Bus (`org.kde.KWin /org/plasmafusion/TestPen`
+  `proximity/tip/move`).
+- Private session pen9 (Dolphin with 300 files): laptop posture, a pen drag on a file starts a drag
+  and drop (mouse); tablet posture, the same drag scrolls the view (top row file-000 -> file-036
+  after the fling); a pen tap opens a file like a finger tap; a pen stroke from the bottom zone
+  leaves the app in place; "like a mouse" switches back live.
+- Not done yet (research SHOULD): press-and-hold right-click for the pen in tablet posture, a hover
+  dot, a pen tap on the home handle revealing the dock. Hand checks with the owner's pen: F1-F8 of the
+  research (scroll in Dolphin, System Settings, Firefox, Chrome; drawing apps keep pressure; taps
+  without rubber bands; barrel button = context menu; palm rejection; after suspend).

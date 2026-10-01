@@ -33,6 +33,9 @@ copyright lines. Plasma Fusion changes:
   followed live through KConfigWatcher) a swipe from the bottom edge is held back unless it follows a
   held-back one within 1.5 s (iOS's deferred system gestures); a held-back swipe shows Plasma's OSD
   (`org.kde.osdService.showText`).
+- the pen like a finger in tablet posture (TABLET2 PEN-2, `FusionPenFilter`; drawing apps exempt;
+  `plasmafusionrc [Pen] TabletPen`), and a test-only virtual pen (`FusionTestPen`, only with
+  `PLASMA_FUSION_TEST_PEN=1`) for private test sessions.
 
 ## Build
 
