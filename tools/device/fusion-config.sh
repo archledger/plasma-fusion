@@ -314,7 +314,7 @@ esac
 BACKUP_FILES=(
   kdeglobals kwinrc kglobalshortcutsrc plasmarc plasmanotifyrc plasmashellrc
   plasma-org.kde.plasma.desktop-appletsrc ksplashrc kcminputrc krunnerrc kscreenlockerrc
-  konsolerc katerc kwriterc plasmafusionrc plasmakeyboardrc
+  konsolerc katerc kwriterc plasmafusionrc plasmakeyboardrc powerdevilrc
   gtk-3.0/settings.ini gtk-4.0/settings.ini xsettingsd/xsettingsd.conf Trolltech.conf
   gtk-3.0/gtk.css gtk-4.0/gtk.css gtk-3.0/plasma-fusion.css gtk-4.0/plasma-fusion.css
   systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf

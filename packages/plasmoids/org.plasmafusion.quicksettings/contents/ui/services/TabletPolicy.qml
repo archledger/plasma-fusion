@@ -17,6 +17,12 @@ import org.kde.plasma.workspace.dbus as DBus
 // - Rotation lock (F14, T19): lock = the current rotation kept and auto-rotation never; unlock =
 //   auto-rotation in tablet mode and the normal rotation. Leaving tablet mode while locked turns
 //   the screen back to normal and keeps the lock. State in plasmafusionrc [Tablet] RotationLocked.
+// - Power button (TABLET2 P0): in tablet posture a press turns the screen off and locks it first,
+//   as on a phone or tablet: PowerDevil's own defaults for touch devices (powerdevilrc
+//   [<profile>][SuspendAndShutdown] PowerButtonAction 128 "toggle screen on/off",
+//   [<profile>][Display] LockBeforeTurnOffDisplay true). Written per profile only where the user has
+//   no value, recorded in plasmafusionrc [Tablet] PowerButtonWritten and removed again in laptop
+//   posture (Plasma's logout prompt), unless the user changed them meanwhile.
 // - Tablet mode setting (3.2): kwinrc [Input] TabletMode auto / on / off.
 // - Full-screen apps (4.2, 4.9): the tablet script's global WindowMode, fullscreen / windowed,
 //   written and applied through its shortcut.
@@ -86,7 +92,61 @@ Item {
         run("kwriteconfig6 --notify --file kwinrc --group Wayland --key InputMethod " + quote(want));
     }
     onKeyboardPolicyChanged: Qt.callLater(applyKeyboard)
-    onPostureKnownChanged: Qt.callLater(applyKeyboard)
+    onPostureKnownChanged: {
+        Qt.callLater(applyKeyboard);
+        Qt.callLater(applyPowerButton);
+    }
+
+    // ---- Power button
+    // One shell run per posture change, under a lock: a quick fold and unfold cannot interleave two
+    // runs' reads and writes (private session pb1: fold, unfold, fold 1 s apart).
+    readonly property string powerButtonScript: [
+        "exec 9>\"${XDG_RUNTIME_DIR:-/tmp}/plasma-fusion-power-button.lock\" && flock 9",
+        "f=powerdevilrc; r=plasmafusionrc",
+        "rec=$(kreadconfig6 --file $r --group Tablet --key PowerButtonWritten)",
+        "if [ \"$1\" = tablet ]; then",
+        "  for p in AC Battery LowBattery; do",
+        "    if [ -z \"$(kreadconfig6 --file $f --group $p --group SuspendAndShutdown --key PowerButtonAction)\" ]; then",
+        "      kwriteconfig6 --file $f --group $p --group SuspendAndShutdown --key PowerButtonAction 128; rec=\"$rec $p/button\"; fi",
+        "    if [ -z \"$(kreadconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay)\" ]; then",
+        "      kwriteconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay true; rec=\"$rec $p/lock\"; fi",
+        "  done",
+        "  kwriteconfig6 --file $r --group Tablet --key PowerButtonWritten \"$(echo $rec)\"",
+        "else",
+        "  for e in $rec; do p=${e%/*}",
+        "    case $e in",
+        "    */button) [ \"$(kreadconfig6 --file $f --group $p --group SuspendAndShutdown --key PowerButtonAction)\" = 128 ] &&",
+        "      kwriteconfig6 --file $f --group $p --group SuspendAndShutdown --key PowerButtonAction --delete ;;",
+        "    */lock) [ \"$(kreadconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay)\" = true ] &&",
+        "      kwriteconfig6 --file $f --group $p --group Display --key LockBeforeTurnOffDisplay --delete ;;",
+        "    esac",
+        "  done",
+        "  [ -z \"$rec\" ] || kwriteconfig6 --file $r --group Tablet --key PowerButtonWritten --delete",
+        "fi",
+        "echo \"$1: $(echo $rec)\""
+    ].join("\n")
+    property string powerButtonPosture: ""
+    function applyPowerButton() {
+        if (!postureKnown) {
+            return;
+        }
+        const want = tablet ? "tablet" : "laptop";
+        if (want === powerButtonPosture) {
+            return;
+        }
+        powerButtonPosture = want;
+        run("bash -c " + quote(powerButtonScript) + " power-button " + want, (code, out) => {
+            console.info("quicksettings: power button " + out.trim() + " (exit " + code + ")");
+            // PowerDevil reads its profiles again (it may not run in a test session).
+            DBus.SessionBus.asyncCall({
+                "service": "org.kde.Solid.PowerManagement",
+                "path": "/org/kde/Solid/PowerManagement",
+                "iface": "org.kde.Solid.PowerManagement",
+                "member": "refreshStatus",
+                "arguments": []
+            }, () => {}, () => {});
+        });
+    }
 
     // ---- On-screen keyboard state (KWin)
     property bool oskAvailable: false
@@ -209,6 +269,7 @@ Item {
     // landscape and the next tablet session starts in landscape).
     onTabletChanged: {
         Qt.callLater(applyKeyboard);
+        Qt.callLater(applyPowerButton);
         if (!tablet && rotationLocked) {
             withOutput((name, rotation) => {
                 if (name !== "" && rotation !== 1) {

@@ -90,7 +90,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     Display (brightness, Night Light, light/dark pairing), Media (MPRIS),
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
                                     TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
-                                    tablet-mode setting, full-screen apps; QS-1)
+                                    tablet-mode setting, full-screen apps; QS-1; power button
+                                    per posture, TABLET2 P0)
 tools/build.d/71-quicksettings.sh   copies the package to $STAGE/.local/share/plasma/plasmoids/
 ```
 
@@ -470,3 +471,25 @@ the lead directly.
 - Not in QS-1: a swipe up on the sheet to close it (Esc, a tap outside and the pill close it), the icon
   inside the slider bars (the icons stay beside them), the stretch QS-2.
 
+## Power button in tablet posture (TABLET2 P0, 2026-09-30)
+
+In tablet posture there is no lid, and the X13 Yoga's power button opened Plasma's logout prompt.
+Phones and tablets turn the screen off and lock it (research B, item 14: convention, no complaint
+data); PowerDevil 6.7.5 ships the same pair as its defaults for touch devices, but picks them only
+from the posture at its start (`ProfileDefaults::defaultPowerButtonAction(isMobile)`).
+`TabletPolicy.applyPowerButton()` follows the posture instead:
+
+- Tablet posture: for each PowerDevil profile (AC, Battery, LowBattery) where the user has no value,
+  `powerdevilrc [<profile>][SuspendAndShutdown] PowerButtonAction=128` (toggle the screen on and off)
+  and `[<profile>][Display] LockBeforeTurnOffDisplay=true`; what was written is recorded in
+  `plasmafusionrc [Tablet] PowerButtonWritten`.
+- Laptop posture: the recorded keys are removed where they still hold those values (Plasma's
+  logout prompt is back); a value the user set meanwhile stays.
+- One `bash -c` run per posture change under a `flock`, then PowerDevil's `refreshStatus`.
+  fusion-config backs up `powerdevilrc` (rollback).
+
+Private session `pb1` (PowerDevil not running there; keys only): tablet writes 5 keys and keeps the
+user's `Battery` value 1 (sleep); laptop removes them; fold, unfold, fold 1 s apart ends in the
+tablet state; a user's `AC` 8 set in tablet posture survives the return to laptop. The press itself
+(screen off and locked, a second press wakes to the lock screen) is a hand check on the ThinkPad.
+Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/P0/power-button/`.
