@@ -7,7 +7,7 @@
 
 Name:           plasma-fusion-navigation
 Version:        0.1
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        Plasma Fusion tablet navigation gestures for KWin
 
 License:        GPL-2.0-or-later
@@ -63,6 +63,10 @@ KWin's own edges. Derived from Plasma Mobile's task switcher.
 %{_qt6_qmldir}/org/plasmafusion/navigation/
 
 %changelog
+* Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-4
+- The home gesture closes an open shell sheet (launcher, Notification Centre)
+- No error and no stray app activation for a gesture with no app open
+
 * Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-3
 - A dock revealed over an app hides again on the next touch outside it or once an
   app opened from it is active
