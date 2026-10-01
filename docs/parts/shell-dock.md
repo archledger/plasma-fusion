@@ -414,3 +414,22 @@ screen edge reserved, as Plasma's own hide request does in KWin; log "revealed d
 On the home screen nothing overlaps, so the dock stays. Tested in the 6.7.5 and 6.7.91 containers
 (dodge5, dodge68): app opened -> hidden; tap in the app -> hidden; short swipe -> shown; tap in the
 app -> hidden; reveal + tap a dock app -> that app active, hidden; home gesture -> shown.
+
+## Split from the dock (SPLIT.md item 1, 2026-10-01)
+
+Android's taskbar drag and iPadOS's dock drag. In tablet posture: hold an app's icon for 300 ms (it
+lifts to 1.12; the dock's swipe-up to the launcher steps aside), then drag it up out of the dock. The
+direction is decided after 24 px: upwards (up to about 63 degrees off vertical) a split drag, mostly
+sideways a reorder; the menu waits for 650 ms (500 on the laptop). During the drag a full-screen
+overlay (`SplitDropOverlay.qml`: layer-shell, scope "on-screen-display", input-transparent, so the
+dock keeps the touch) shows both halves of the work area (accent 8 %, the target 28 % with a full
+edge, radius 14) and the icon above the finger. Released over the left or right third: the app in
+use (unless it is the dragged app or nothing is open) takes the other half first (KWin's "Window
+Quick Tile Left/Right" through kglobalaccel), then the dragged app is activated or started
+(`activateTask`) and, once it is the active window (up to 10 s), quick-tiled to the drop side. The
+middle third does nothing. Quick tiles, so the split divider, its snaps and the "fill the other half"
+picker work as for any split. Log "dock: split: <app> to the <side>". A quick swipe up on the dock
+still opens the launcher; on the laptop an upward mouse drag is still Kickoff's launcher drag.
+Test (6.7.5 container, 1920x1200 at 4/3, split6/split7): KWrite maximized, dock revealed, Dolphin's
+icon held 0.45 s and dragged to the left third: Dolphin 6,51 711x823 (left, active), KWrite 723,51
+711x822 (right); the revealed dock hid again (navigation 0.1-3).

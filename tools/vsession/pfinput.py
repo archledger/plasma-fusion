@@ -101,7 +101,7 @@ KEYS.update({"f11": 87, "f12": 88, "minus": 12, "equal": 13, "backspace": 14, "l
              "menu": 127, "mute": 113, "volumedown": 114, "volumeup": 115})
 
 ARGS = sys.argv[1:]
-TOUCH_CMDS = (["tap"], ["hold"], ["swipe"], ["hswipe"], ["mswipe"])
+TOUCH_CMDS = (["tap"], ["hold"], ["swipe"], ["hswipe"], ["hdrag"], ["mswipe"])
 WANT_TOUCH = os.environ.get("PFINPUT_TOUCH") == "1" or any(c.split()[:1] in TOUCH_CMDS for c in ARGS)
 CHARS = {"-": "minus", "=": "equal", "[": "leftbrace", "]": "rightbrace", ";": "semicolon", "'": "apostrophe",
          "`": "grave", "\\": "backslash", ",": "comma", ".": "period", "/": "slash"}
@@ -366,6 +366,24 @@ try:
                     ei.ei_touch_motion(t, x1 + (x2 - x1) * i / 20, y1 + (y2 - y1) * i / 20); frame(d)
                     time.sleep(0.016)
                 hold(hs)
+                ei.ei_touch_up(t); frame(d)
+                ei.ei_touch_unref(t)
+        elif a[0] == "hdrag":
+            # touch down, hold still PRE s, move to x2,y2 in 20 steps, hold POST s, up (a drag that
+            # starts with a long press, e.g. a dock icon lifted for a split)
+            x1, y1, x2, y2, pre, post = map(float, a[1:7])
+            d = state["touch"]
+            if not d:
+                print("no touch device", file=sys.stderr)
+            else:
+                start(d)
+                t = ei.ei_device_touch_new(d)
+                ei.ei_touch_down(t, x1, y1); frame(d)
+                hold(pre)
+                for i in range(1, 21):
+                    ei.ei_touch_motion(t, x1 + (x2 - x1) * i / 20, y1 + (y2 - y1) * i / 20); frame(d)
+                    time.sleep(0.02)
+                hold(post)
                 ei.ei_touch_up(t); frame(d)
                 ei.ei_touch_unref(t)
         elif a[0] == "mswipe":

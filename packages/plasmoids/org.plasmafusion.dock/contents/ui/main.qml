@@ -1290,6 +1290,7 @@ PlasmoidItem {
         // more or the finger moved up at 800 px/s or faster.
         DragHandler {
             id: swipeUp
+            enabled: !root.iconArmed
             acceptedDevices: PointerDevice.TouchScreen
             target: null
             xAxis.enabled: false
@@ -1343,6 +1344,128 @@ PlasmoidItem {
         function onActiveTaskChanged(): void { root.updateActiveMaximized(); }
         function onDataChanged(): void { root.updateActiveMaximized(); }
     }
+    // ---- Split from the dock (SPLIT.md item 1; Android's taskbar drag): an app's icon dragged up
+    // and dropped on the left or right third of the screen goes into that half; the app in use
+    // takes the other one (KWin's quick tiles, so the split divider and the snap pairs follow).
+    property var splitDrag: null      // {row, icon, finger}
+    // An icon held for a split drag: the swipe-up to the launcher steps aside.
+    property bool iconArmed: false
+    property var splitPlan: null      // {side, appId, step: "other" | "app", other}
+    readonly property rect screenRect: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
+    function splitDragMove(item: Item, globalPos: point): void {
+        const local = Qt.point(globalPos.x - screenRect.x, globalPos.y - screenRect.y);
+        if (!splitDrag) {
+            console.info("dock: split drag starts: " + item.iconName);
+        }
+        splitDrag = { "row": item.index, "icon": item.model.decoration, "finger": local };
+    }
+    function splitDragEnd(item: Item, cancelled: bool): void {
+        const side = splitOverlay.item ? splitOverlay.item.side : "";
+        const row = splitDrag ? splitDrag.row : -1;
+        splitDrag = null;
+        if (cancelled || side === "" || row < 0) {
+            console.info("dock: split drag ends without a split" + (cancelled ? " (cancelled)" : ""));
+            return;
+        }
+        startSplit(row, side);
+    }
+    // (then `done` once kglobalaccel replied)
+    function invokeKWinShortcutThen(name: string, done): void {
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.kglobalaccel",
+            "path": "/component/kwin",
+            "iface": "org.kde.kglobalaccel.Component",
+            "member": "invokeShortcut",
+            "arguments": [name]
+        }, () => { if (done) done(); }, error => console.warn("dock: " + name + " failed: " + error));
+    }
+    function tileShortcut(side: string): string {
+        return side === "left" ? "Window Quick Tile Left" : "Window Quick Tile Right";
+    }
+    function startSplit(row: int, side: string): void {
+        const atm = TaskManager.AbstractTasksModel;
+        const index = tasksModel.makeModelIndex(row);
+        const appId = String(tasksModel.data(index, atm.AppId) || "");
+        const active = tasksModel.activeTask;
+        const activeApp = active && active.valid ? String(tasksModel.data(active, atm.AppId) || "") : "";
+        // The app in use takes the other half first (it is the active window), unless it is the
+        // dragged app itself or nothing is open (the home screen: the "fill the other half" picker
+        // then offers the other half).
+        const other = activeApp !== "" && activeApp !== appId && tasksModel.data(active, atm.IsWindow) === true
+            && tasksModel.data(active, atm.IsMinimized) !== true;
+        console.info("dock: split: " + appId + " to the " + side + (other ? ", " + activeApp + " to the other half" : ""));
+        splitPlan = { "side": side, "appId": appId, "row": row };
+        splitTimeout.restart();
+        if (other) {
+            invokeKWinShortcutThen(tileShortcut(side === "left" ? "right" : "left"), () => splitBringApp.restart());
+        } else {
+            splitBringApp.restart();
+        }
+    }
+    // After the app in use has moved (KWin acts on the shortcut a moment after the reply).
+    Timer {
+        id: splitBringApp
+        interval: 150
+        onTriggered: {
+            if (!root.splitPlan) {
+                return;
+            }
+            const atm = TaskManager.AbstractTasksModel;
+            const active = tasksModel.activeTask;
+            if (active && active.valid && String(tasksModel.data(active, atm.AppId) || "") === root.splitPlan.appId) {
+                root.splitActiveIsApp();
+            } else {
+                root.activateTask(root.splitPlan.row, 0);
+            }
+        }
+    }
+    function splitActiveIsApp(): void {
+        if (!splitPlan) {
+            return;
+        }
+        const side = splitPlan.side;
+        splitPlan = null;
+        splitTimeout.stop();
+        invokeKWinShortcutThen(tileShortcut(side), null);
+    }
+    Connections {
+        target: tasksModel
+        enabled: root.splitPlan !== null && !splitBringApp.running
+        function onActiveTaskChanged(): void {
+            const atm = TaskManager.AbstractTasksModel;
+            const active = tasksModel.activeTask;
+            if (active && active.valid && tasksModel.data(active, atm.IsWindow) === true
+                    && String(tasksModel.data(active, atm.AppId) || "") === root.splitPlan.appId) {
+                root.splitActiveIsApp();
+            }
+        }
+    }
+    Timer {
+        id: splitTimeout
+        interval: 10000
+        onTriggered: {
+            if (root.splitPlan) {
+                console.info("dock: split dropped: " + root.splitPlan.appId + " did not become active");
+                root.splitPlan = null;
+            }
+        }
+    }
+    Loader {
+        id: splitOverlay
+        active: root.tablet && root.splitDrag !== null
+        sourceComponent: SplitDropOverlay {
+            pal: dockPal
+            motion: motion
+            screenGeometry: root.screenRect
+            finger: root.splitDrag ? root.splitDrag.finger : Qt.point(0, 0)
+            iconSource: root.splitDrag ? root.splitDrag.icon : ""
+            topInset: Plasmoid.containment ? Plasmoid.containment.availableScreenRect.y : 0
+            bottomInset: Plasmoid.containment ? root.screenRect.height - Plasmoid.containment.availableScreenRect.y
+                                                - Plasmoid.containment.availableScreenRect.height : 0
+            visible: true
+        }
+    }
+
     // Tablet posture: the bottom strip (20 px reserved band with the home indicator over an app).
     Loader {
         active: root.tablet
@@ -1507,6 +1630,9 @@ PlasmoidItem {
                 onDragMoved: sceneX => root.reorderTo(taskItem.index, sceneX)
                 onDragFinished: root.finishReorder()
                 onDesktopDrag: active => root.desktopDrag(taskItem, active)
+                onSplitDragMoved: globalPos => root.splitDragMove(taskItem, globalPos)
+                onSplitDragFinished: cancelled => root.splitDragEnd(taskItem, cancelled)
+                onSplitArmed: armed => root.iconArmed = armed
             }
         }
 

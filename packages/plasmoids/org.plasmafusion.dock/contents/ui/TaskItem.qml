@@ -78,6 +78,13 @@ Item {
     // A drag upwards (48 px) with a mouse, touchpad or pen: the dock drags the app's launcher,
     // for a desktop shortcut (BACKLOG M3); false when the drag ends.
     signal desktopDrag(bool active)
+    // Tablet posture: the icon dragged up out of the dock to split the screen (SPLIT.md item 1),
+    // with the finger in global coordinates.
+    signal splitDragMoved(point globalPos)
+    signal splitDragFinished(bool cancelled)
+    // Held still for 300 ms (tablet posture): the icon lifts and a drag up starts a split; the
+    // dock's swipe-up (the launcher) steps aside meanwhile.
+    signal splitArmed(bool armed)
 
     // shown: false for a row the dock leaves out (tablet recents beyond the limit, TABLET2 N2)
     property bool shown: true
@@ -117,8 +124,9 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: task.height - task.bottomPad - height
         // Press feedback: 0.94 and 80 % opacity (TABLET 4.4).
-        readonly property bool held: mouse.pressed && !mouse.dragging
-        property real pressScale: held ? 0.94 : 1
+        readonly property bool held: mouse.pressed && !mouse.dragging && !mouse.armed
+        // lifted while armed for a split drag (iPadOS: the icon rises before it can be dragged)
+        property real pressScale: mouse.armed ? 1.12 : held ? 0.94 : 1
         Behavior on pressScale {
             enabled: task.motion.animate
             NumberAnimation { duration: task.motion.pressScale; easing.type: task.motion.standardEasing }
@@ -347,7 +355,23 @@ Item {
 
         property point pressPoint
         property bool dragging: false
+        property bool splitting: false
+        property bool armed: false
         property bool suppressClick: false
+        onArmedChanged: task.splitArmed(armed)
+        function disarm() {
+            holdArm.stop();
+            armed = false;
+        }
+        Timer {
+            id: holdArm
+            interval: 300
+            onTriggered: {
+                if (mouse.pressed && !mouse.dragging && task.tablet) {
+                    mouse.armed = true;
+                }
+            }
+        }
 
         // Reach into the gaps next to the icon so that the pointer is always over one item: the
         // rest size plus half the gap on each side, widened by the icon's growth so that the
@@ -358,16 +382,22 @@ Item {
         height: parent.height - y
         hoverEnabled: false
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-        // A long press opens the menu (touch, TABLET 4.4; also the mouse).
-        pressAndHoldInterval: 500
+        // A long press opens the menu (touch, TABLET 4.4; also the mouse); in tablet posture a
+        // little later, so that a drag can start after the 300 ms lift.
+        pressAndHoldInterval: task.tablet ? 650 : 500
 
         onPressed: mouse => {
             pressPoint = Qt.point(mouse.x, mouse.y);
             dragging = false;
+            splitting = false;
             suppressClick = false;
+            disarm();
+            if (task.tablet && mouse.button === Qt.LeftButton) {
+                holdArm.restart();
+            }
         }
         onPressAndHold: mouse => {
-            if (!dragging && mouse.button === Qt.LeftButton) {
+            if (!dragging && !splitting && mouse.button === Qt.LeftButton) {
                 suppressClick = true;
                 task.menuRequested();
             }
@@ -377,7 +407,30 @@ Item {
                 return;
             }
             const dx = mouse.x - pressPoint.x;
-            if (!dragging && Math.abs(dx) > Qt.styleHints.startDragDistance) {
+            const dy = mouse.y - pressPoint.y;
+            // moved before the lift: a swipe or a reorder, not a split
+            if (!armed && Math.hypot(dx, dy) > 10) {
+                holdArm.stop();
+            }
+            // Tablet posture, after the lift: decided after 24 px, upwards (up to ~63 degrees off
+            // vertical) a split drag, mostly sideways a reorder.
+            if (armed && !dragging && !splitting) {
+                if (Math.hypot(dx, dy) < 24) {
+                    return;
+                }
+                if (dy < 0 && -dy >= Math.abs(dx) * 0.5) {
+                    splitting = true;
+                    suppressClick = true;
+                } else {
+                    dragging = true;
+                }
+            }
+            if (splitting) {
+                task.splitDragMoved(mapToGlobal(mouse.x, mouse.y));
+                return;
+            }
+            if (!dragging && !armed && Math.abs(dx) > Qt.styleHints.startDragDistance
+                    && !(task.tablet && dy < 0 && Math.abs(dy) > Math.abs(dx))) {
                 dragging = true;
             }
             if (dragging) {
@@ -385,6 +438,13 @@ Item {
             }
         }
         onReleased: mouse => {
+            disarm();
+            if (splitting) {
+                splitting = false;
+                suppressClick = true;
+                task.splitDragFinished(false);
+                return;
+            }
             if (dragging) {
                 dragging = false;
                 suppressClick = true;
@@ -392,6 +452,11 @@ Item {
             }
         }
         onCanceled: {
+            disarm();
+            if (splitting) {
+                splitting = false;
+                task.splitDragFinished(true);
+            }
             if (dragging) {
                 dragging = false;
                 task.dragFinished();
@@ -400,6 +465,8 @@ Item {
         // Upwards: a drag of the launcher (Kickoff's way, a pointer handler that takes the point
         // from this mouse area once it has moved 48 px up; sideways stays the reorder above).
         DragHandler {
+            // (tablet posture: an upward drag splits the screen instead)
+            enabled: !task.tablet
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
             target: null
             xAxis.enabled: false
