@@ -1,0 +1,29 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Devin Lin",
+                "Email": "devin@kde.org"
+            },
+            {
+                "Name": "Luis Büchi",
+                "Email": "luis.buechi@kdemail.net"
+            },
+            {
+                "Name": "Wisbendji Fimerlus",
+                "Email": "archledger236@gmail.com"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "Plasma Fusion tablet navigation: swipe up from the bottom edge to go home, swipe up and hold for the app switcher, swipe along the bottom for the previous app.",
+        "EnabledByDefault": false,
+        "Icon": "preferences-system-windows",
+        "Id": "plasmafusion_navigation",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Navigation"
+    },
+    "X-KDE-Ordering": 60,
+    "X-KWin-Border-Activate": true,
+    "X-Plasma-API": "declarativescript"
+}

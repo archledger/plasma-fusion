@@ -1,4 +1,5 @@
-# Build environment for the compiled Plasma Fusion parts (window decoration, settings module).
+# Build environment for the compiled Plasma Fusion parts (window decoration, settings module,
+# navigation effect).
 # Pinned to the Plasma, Frameworks and Qt versions of the test device so the plugins load there.
 #
 #   podman build -t localhost/plasma-fusion-build:f44-6.7.5 tools/container
@@ -14,4 +15,5 @@ RUN dnf -y --setopt=install_weak_deps=False install \
       kf6-ki18n-devel kf6-kguiaddons-devel kf6-kglobalaccel-devel kf6-kwindowsystem-devel \
       kf6-kiconthemes-devel kf6-kpackage-devel kf6-kcolorscheme-devel kf6-kirigami-devel \
       kf6-kdbusaddons-devel kf6-knotifications-devel \
+      "plasma-activities-devel-${PLASMA}" libepoxy-devel libdrm-devel vulkan-headers vulkan-loader-devel \
  && dnf clean all
