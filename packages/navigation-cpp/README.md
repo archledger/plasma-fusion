@@ -25,6 +25,10 @@ copyright lines. Plasma Fusion changes:
   and 55 %); the cards pulse (3.5 %, Kirigami durations) where Plasma Mobile vibrates;
 - a key press on a hardware keyboard hides the on-screen keyboard (`FusionKeyboardSpy`, a KWin input
   event spy; KWin 6.7.5 keeps it shown).
+- Fusion look for the cards: previews with radius 18 and a 1 px edge through the window switcher's
+  corner shader (`shaders/thumbnail.frag`, a copy; layers only for cards within two of the current
+  one), a bold title, 44 px round close buttons, the boards' dark dim (rgb 6, 8, 18);
+- idle under a KWin it was not built for (`KWIN_VERSION_STRING` against the running version).
 
 ## Build
 

@@ -494,7 +494,8 @@ FocusScope {
 
         opacity: container.opacity
         color: {
-            return Qt.rgba(0, 0, 0, 0.6 * root.taskSwitcherHelpers.closingFactor * root.backgroundColorOpacity);
+            // Plasma Fusion: the switcher boards' dark dim (rgb 6, 8, 18) in place of black
+            return Qt.rgba(6 / 255, 8 / 255, 18 / 255, 0.6 * root.taskSwitcherHelpers.closingFactor * root.backgroundColorOpacity);
         }
     }
 

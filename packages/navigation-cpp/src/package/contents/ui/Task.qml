@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Templates as T
 
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
@@ -180,24 +181,46 @@ Item {
                     Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                     Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                     Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: Kirigami.Units.smallSpacing
                     source: delegate.window.icon
                 }
 
+                // Plasma Fusion: the switcher boards' title (bold, the board's light text)
                 PlasmaComponents.Label {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
                     elide: Text.ElideRight
                     text: delegate.window.caption
-                    color: "white"
+                    font.weight: Font.Bold
+                    color: "#e8ebf4"
                 }
 
-                PlasmaComponents.ToolButton {
+                // Plasma Fusion: a 44 px touch target with a round 30 px fill (TABLET 4.5)
+                T.AbstractButton {
+                    id: closeButton
                     Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: 44
+                    implicitHeight: 44
                     z: 99
-                    icon.name: "window-close"
-                    Accessible.name: i18n("Close %1", delegate.window.caption)
-                    icon.width: Kirigami.Units.iconSizes.smallMedium
-                    icon.height: Kirigami.Units.iconSizes.smallMedium
+                    text: i18n("Close %1", delegate.window.caption)
+                    Accessible.name: text
+                    background: Rectangle {
+                        anchors.centerIn: parent
+                        width: 30
+                        height: 30
+                        radius: 15
+                        color: Qt.rgba(1, 1, 1, closeButton.down ? 0.24 : closeButton.hovered ? 0.18 : 0.12)
+                    }
+                    contentItem: Item {
+                        Kirigami.Icon {
+                            anchors.centerIn: parent
+                            width: Kirigami.Units.iconSizes.small
+                            height: Kirigami.Units.iconSizes.small
+                            source: "window-close-symbolic"
+                            color: "#e8ebf4"
+                            isMask: true
+                        }
+                    }
                     onClicked: {
                         delegate.taskSwitcherHelpers.lastClosedTask = delegate.currentIndex;
                         delegate.closeApp()
@@ -213,9 +236,10 @@ Item {
                 Layout.maximumWidth: delegate.taskSwitcherHelpers.previewWidth
                 Layout.maximumHeight: delegate.taskSwitcherHelpers.previewHeight
 
-                radius: Kirigami.Units.largeSpacing
-                color: Qt.rgba(0, 0, 0, 0.2)
-                clip: true
+                // Plasma Fusion: the window cards' radius 18 and 1 px edge (KWIN-2 switcher boards); a
+                // clip alone keeps square corners, so the preview is drawn through the boards' shader.
+                radius: 18
+                color: Qt.rgba(27 / 255, 32 / 255, 49 / 255, 0.6)
 
                 // scale animation on press
                 property real zoomScale: control.pressed ? 0.95 : 1
@@ -236,6 +260,14 @@ Item {
                 Item {
                     id: item
                     anchors.fill: appView
+                    // one offscreen layer per card near the current one (about 3 MB each at
+                    // 1920 x 1200); cards further away are off screen
+                    layer.enabled: Math.abs(delegate.currentIndex - delegate.taskSwitcher.state.currentTaskIndex) <= 2
+                    layer.effect: ShaderEffect {
+                        readonly property real radius: appView.radius
+                        readonly property size boxSize: Qt.size(width, height)
+                        fragmentShader: Qt.resolvedUrl("shaders/thumbnail.frag.qsb")
+                    }
 
                     KWinComponents.WindowThumbnail {
                         id: thumbSource
@@ -247,6 +279,14 @@ Item {
                         anchors.fill: item
                         color: Qt.rgba(0, 0, 0, delegate.darken)
                     }
+                }
+
+                Rectangle {
+                    anchors.fill: appView
+                    radius: appView.radius
+                    color: "transparent"
+                    border.width: 1
+                    border.color: Qt.rgba(1, 1, 1, 0.10)
                 }
             }
         }
