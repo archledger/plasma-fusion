@@ -215,6 +215,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
+KEYS_TOOL=$HOME/.local/libexec/plasma-fusion/plasma-fusion-keyboard-keys
 BACKUP=
 CHANGES=0
 
@@ -1700,6 +1701,20 @@ fi
 # (discussion.fedoraproject.org/t/194845). Off (TABLET2 P0); the on-screen keys keep their own
 # long-press accents.
 managed_key plasmakeyboardrc General diacriticsPopupEnabled false
+# Esc, Tab and arrow keys on the on-screen keyboard (research E-phone 4.3 MUST; docs/parts/keyboard.md):
+# layouts built from plasma-keyboard's installed ones in ~/.local/share/plasma/keyboard/layouts, built
+# again at login when plasma-keyboard changes; "plasma-fusion-keyboard-keys remove" turns them off for
+# good (this run then keeps them off).
+if [ -d /usr/share/plasma/keyboard/layouts ] && [ -x "$KEYS_TOOL" ]; then
+  if [ "$DRY" = 1 ]; then
+    note "$("$KEYS_TOOL" refresh --dry-run 2>&1 || true) $("$KEYS_TOOL" status 2>&1)"
+  else
+    "$KEYS_TOOL" refresh >/dev/null 2>&1 || note "warning: the on-screen keyboard's terminal keys could not be built"
+    note "$("$KEYS_TOOL" status 2>&1)"
+  fi
+else
+  note "on-screen keyboard keys: plasma-keyboard or $KEYS_TOOL not installed"
+fi
 if [ "$DRY" = 0 ]; then
   bus call org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null
   # Loads scripts that are enabled but not running yet.
@@ -1976,6 +1991,13 @@ gate_stub() {
 # dropped, and this file sets no variable or shell option and never exits.
 [ -r $(sh_quote "$GATE_ENGINE") ] &&
   timeout -k 1 4 /bin/bash $(sh_quote "$GATE_ENGINE") login </dev/null >/dev/null 2>&1 || :
+# The on-screen keyboard's terminal keys follow plasma-keyboard updates (docs/parts/keyboard.md); the
+# tool runs only when the rpm database changed since its record (a few ms otherwise).
+[ -x $(sh_quote "$KEYS_TOOL") ] &&
+  { [ ! -e $(sh_quote "$STATE/keyboard-keys") ] ||
+    [ /usr/lib/sysimage/rpm/rpmdb.sqlite -nt $(sh_quote "$STATE/keyboard-keys") ] ||
+    [ /var/lib/rpm/rpmdb.sqlite -nt $(sh_quote "$STATE/keyboard-keys") ]; } &&
+  timeout -k 1 3 $(sh_quote "$KEYS_TOOL") refresh </dev/null >/dev/null 2>&1 || :
 EOF
 }
 gate_unit() {

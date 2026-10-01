@@ -183,6 +183,16 @@ if [ "$old_im" != "$cur_im" ]; then
   fi
 fi
 
+# 1e. The on-screen keyboard's terminal keys: Plasma Fusion's layouts out of the data directory, so
+#     plasma-keyboard reads its own again (only a directory the tool built; docs/parts/keyboard.md).
+if [ -e "$HOME/.local/share/plasma/keyboard/layouts/.plasma-fusion" ] &&
+  [ -x "$HOME/.local/libexec/plasma-fusion/plasma-fusion-keyboard-keys" ]; then
+  note "on-screen keyboard: plasma-keyboard's own layouts again"
+  run "$HOME/.local/libexec/plasma-fusion/plasma-fusion-keyboard-keys" remove || true
+  # not "removed on request": a later fusion-config.sh run builds them again
+  run rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/keyboard-keys"
+fi
+
 # 2. Workspaces: remove the ones fusion-config.sh created, give the others their old names.
 echo "Workspaces"
 for b in "${LATER[@]}" "$BACKUP"; do

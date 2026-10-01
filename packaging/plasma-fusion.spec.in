@@ -216,6 +216,7 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.serv
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
+test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
 test -s %{buildroot}%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 test -s %{buildroot}%{_datadir}/plasma-fusion/pen/templates/Note.xopp
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh
@@ -304,6 +305,8 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 # The battery charge limit of the quick settings (pkexec, polkit action org.plasmafusion.charge-limit)
 %{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
 %{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
+# Esc, Tab and arrows on the on-screen keyboard (the layouts are built in the user's data directory)
+%{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
 
 %changelog
 * @CHANGELOG_DATE@ Wisbendji Fimerlus <archledger236@gmail.com> - @VERSION@-@RELEASE@
