@@ -214,7 +214,7 @@ Item {
                 id: notifications
                 Layout.fillWidth: true
                 spacing: content.metrics.px(10)
-                visible: content.backend.page === "main" && content.backend.notif.available
+                visible: content.backend.page === "main" && content.backend.notif.available && !content.backend.notificationsApart
                          && (content.backend.notif.count > 0 || content.backend.showEmptyNotifications)
 
                 RowLayout {

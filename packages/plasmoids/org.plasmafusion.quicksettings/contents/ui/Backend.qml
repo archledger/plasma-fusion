@@ -27,6 +27,9 @@ Item {
     property string page: "main"
     // The pop-up was opened from the bell: show the notification list even when empty.
     property bool showEmptyNotifications: false
+    // Tablet posture with the Notification Centre apart from the controls (TABLET2 S1): the sheet
+    // shows no notification list.
+    property bool notificationsApart: false
     // Tablet posture (FusionTablet) and whether it can change by itself; the screen's name.
     property bool tablet: false
     property bool postureKnown: true
@@ -344,6 +347,7 @@ Item {
         readonly property var s: notifLoader.item
         readonly property bool available: s ? s.serverValid : false
         readonly property bool active: s ? s.dndActive : false
+        readonly property string untilText: s ? s.dndUntilText : ""
         readonly property string subtitle: {
             if (!active) {
                 return i18nc("@info:status Do not disturb", "Off");

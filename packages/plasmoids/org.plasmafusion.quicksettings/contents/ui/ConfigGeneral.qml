@@ -22,6 +22,7 @@ KCM.SimpleKCM {
     // Every key of main.xml needs a cfg_ property here, or the settings dialog warns.
     property string cfg_startPage: "main"
     property string cfg_keyboardPolicy: "tablet"
+    property string cfg_tabletNotifications: "apart"
     property string cfg_openRequest: ""
     property string cfg_debugAction: ""
 
@@ -95,6 +96,19 @@ KCM.SimpleKCM {
             ]
             Component.onCompleted: currentIndex = Math.max(0, model.findIndex(entry => entry.value === page.cfg_keyboardPolicy))
             onActivated: page.cfg_keyboardPolicy = currentValue
+        }
+        QQC2.ComboBox {
+            id: tabletNotificationsBox
+            Kirigami.FormData.label: i18nc("@label:listbox", "Notifications in tablet mode:")
+            Accessible.name: i18nc("@label:listbox", "Notifications in tablet mode")
+            textRole: "text"
+            valueRole: "value"
+            model: [
+                { value: "apart", text: i18nc("@item:inlistbox tablet notifications", "Own sheet (bell and clock pull-down)") },
+                { value: "together", text: i18nc("@item:inlistbox tablet notifications", "With the quick settings") }
+            ]
+            Component.onCompleted: currentIndex = Math.max(0, model.findIndex(entry => entry.value === page.cfg_tabletNotifications))
+            onActivated: page.cfg_tabletNotifications = currentValue
         }
 
         Item { Kirigami.FormData.isSection: true }

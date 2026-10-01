@@ -499,3 +499,9 @@ built by the lead directly.
 - No plasmashell crash in the final runs (the probe runs' seven core dumps were removed); no QML
   warnings from the two widgets.
 
+## TABLET2 S1 (2026-10-01): clock pill pull-down in tablet posture
+
+In tablet posture a pull-down on the clock pill opens the Notification Centre when the quick settings
+widget in the same bar keeps notifications apart (`openNotificationCentre()` on it returns true;
+docs/parts/shell-quicksettings.md, TABLET2 S1); otherwise, and on the laptop, it opens the calendar as
+before. A tap opens the calendar in every posture.

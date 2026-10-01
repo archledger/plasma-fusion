@@ -157,6 +157,24 @@ PlasmoidItem {
         }
     ]
 
+    // The quick settings widget in the same bar opens its Notification Centre (TABLET2 S1); false
+    // when it is not there or keeps notifications with the quick settings.
+    function openNotificationCentre(): bool {
+        const layout = root.layoutCell ? root.layoutCell.parent : null;
+        if (!layout) {
+            return false;
+        }
+        for (const child of layout.children) {
+            // qmllint disable missing-property
+            const applet = child.applet;
+            if (applet?.plasmoid?.pluginName === "org.plasmafusion.quicksettings" && typeof applet.openNotificationCentre === "function") {
+                return applet.openNotificationCentre();
+            }
+            // qmllint enable missing-property
+        }
+        return false;
+    }
+
     // The item the panel's layout positions (the applet container), watched for moves.
     property Item layoutCell: null
     function findLayoutCell(): Item {
@@ -561,6 +579,12 @@ PlasmoidItem {
                         root.prepareCalendar();
                     }
                     if (active && dy > 0 && !root.popupOpen) {
+                        // Tablet posture: the Notification Centre (TABLET2 S1, the quick settings
+                        // widget in the same bar decides); else the calendar. A tap still opens it.
+                        if (tabletState.tablet && root.openNotificationCentre()) {
+                            console.info("clockpill: pull-down opens the notification centre");
+                            return;
+                        }
                         console.info("clockpill: pull-down opens the calendar");
                         root.setPopupOpen(true);
                     }

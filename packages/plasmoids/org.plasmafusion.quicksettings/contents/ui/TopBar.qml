@@ -126,6 +126,8 @@ Item {
             }
             PlasmaCore.ToolTipArea {
                 anchors.fill: parent
+                // Touch synthesises hover: no tooltips in tablet posture (TABLET2 S1).
+                active: !bar.tablet
                 mainText: bar.backend.kbd.longName || bar.backend.kbd.label
                 subText: bar.backend.kbd.count > 1 ? i18nc("@info:tooltip", "Click to switch to the next layout") : ""
             }
@@ -326,7 +328,7 @@ Item {
             PlasmaCore.ToolTipArea {
                 id: pillToolTip
                 anchors.fill: parent
-                active: !bar.popupOpen
+                active: !bar.popupOpen && !bar.tablet
                 mainText: i18nc("@info:tooltip", "Quick settings")
                 subText: {
                     const lines = [];
@@ -425,7 +427,7 @@ Item {
             }
             PlasmaCore.ToolTipArea {
                 anchors.fill: parent
-                active: !bar.popupOpen
+                active: !bar.popupOpen && !bar.tablet
                 mainText: i18nc("@info:tooltip", "Notifications")
                 subText: {
                     if (bar.backend.dnd.active) {
@@ -497,6 +499,7 @@ Item {
         }
         PlasmaCore.ToolTipArea {
             anchors.fill: parent
+            active: !iconButton.pal.tablet
             mainText: iconButton.text
         }
     }

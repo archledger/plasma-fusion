@@ -519,3 +519,59 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/P0/powe
 - Private session g1b: Overview unloaded in tablet posture and back on the laptop; lock on: first swipe
   held back (app stays, OSD), second swipe within 1.5 s goes home, a lone swipe 2 s later is held back;
   lock off: home; the dock button activates `plasmafusion_navigation`.
+
+## TABLET2 S1 (2026-10-01): Notification Centre in tablet posture
+
+Research round 2 (E-phone 4.2/4.3, A-ipad section 5) and the owner's iPad-style decision: in tablet
+posture the notifications get their own sheet, apart from the controls, with a setting to keep them
+together (the forced split is itself a known complaint).
+
+- **Routing** (tablet posture, `tabletNotifications` = `apart`, the default): the bell (tap or pull-down),
+  a pull-down on the clock pill (the clock pill calls `openNotificationCentre()` on the quick settings
+  widget in the same bar; a tap still opens the calendar) and `openRequest notifications:` (Meta+N) open
+  the **Notification Centre**; the status pill opens the controls sheet without the notification list
+  (`Backend.notificationsApart`). `together`: everything as on the laptop. Setting page: "Notifications
+  in tablet mode: Own sheet / With the quick settings". The laptop is unchanged.
+- **Window** (`NotificationCentre.qml`): full screen, frameless, normal layer, no style background (the
+  launcher sheet's pattern), so the top bar stays above it and works; built on first use, then kept.
+  It closes itself when another window becomes active, but not while its own card menu is open (it
+  takes the activation back when the menu closes).
+- **Content** (`NotificationCentreContent.qml`): the Tinted backdrop; landscape = the clock (64 px
+  light), the date and a Do Not Disturb chip (tap: off) in a column on the left (28 %, at most 400 px),
+  the list on the right (at most 760 px) — never a narrow centred column (A-ipad, MacRumors 2023);
+  portrait = one column with the clock above. A **Notifications | Controls** segment (44 px) at the top.
+  Cards are the quick settings' `NotificationCard` on a **solid** surface (#1b2031 / #ffffff; E-phone
+  4.2 MUST), newest first, with their actions. **Clear all** (44 px pill in the list's corner) hides
+  the list for 5 s with **Notifications cleared · Undo**; the clear happens then or when the sheet
+  closes. An app with **4 or more** notifications shows as one stack (its newest card, two edges
+  behind it, "N more from App"); a tap opens the stack until the sheet closes. **Long press** on a card:
+  "No Pop-ups from App" (writes Plasma's own `plasmanotifyrc [Applications][<desktop entry>]
+  ShowPopups=false --notify`, the key the notification settings page writes) and "Notification
+  Settings…". A sideways swipe on a card dismisses it (the card's own handler). On the zones outside
+  the list (clock column, the strip above the list, the right margin) a swipe up (96 px or 800 px/s)
+  closes and a sideways swipe (96 px, 2:1) switches to the controls; a tap on empty space or Escape
+  closes; invoking a notification closes. Buttons are `AbstractButton`s, which take the press, so the
+  backdrop's tap-to-close never fires with them (stacked TapHandlers all fire in Qt).
+- **Switching to the controls** waits until the centre's window is gone and 200 ms more: opened at
+  once, the controls sheet lost its activation as KWin activated the next window and closed, or drew
+  its first frame about 5 s late (sessions s1d-s1h).
+- **Top bar**: no tooltips in tablet posture (touch synthesises hover; the bell's tooltip covered the
+  sheet).
+- **NotificationCard**: `surface`/`edge` colours (translucent in the frosted sheet, solid in the
+  centre); every model read goes through `entry?.` — a removed row's card read a null model while it
+  was torn down (10 TypeErrors per dismissed notification, also in the laptop sheet's hidden list).
+
+Tests (private sessions, 1920x1200 at 4/3, `build/s1/scen-s1b.sh`, `scen-s1h.sh`; evidence
+`artifacts/plasma-fusion/2026-10-01-tablet2/S1/`): bell opens the centre (first frame 68 ms; later
+16-50 ms); the Konsole stack of 4 opens on "3 more"; long press shows the menu and the centre stays
+when it closes; a sideways swipe dismisses the Dolphin card; Clear all → undo bar → Undo brings the
+list back; Clear all → after 5 s "No notifications"; swipe up on the clock column closes; the clock
+pill's pull-down opens the centre; the Controls segment, the status pill while the centre is open and a
+sideways swipe on the clock column each open the controls (first frame 84 ms, then 5-11 ms); the
+status pill's sheet has no notification list; portrait one column; laptop posture: the bell opens the
+combined sheet as before; no QML errors.
+
+Not done (queued): pull zones of 56 px at the top corners (the 44 px bar is the pull zone; the bar's
+empty spacers have no pull), burst cooldown for repeated pop-ups (Plasma's notification server),
+the clipboard tile, the position of Plasma's own notification pop-ups in tablet posture (one appeared
+beside the dock in s1j).

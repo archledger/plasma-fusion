@@ -141,6 +141,12 @@ PlasmoidItem {
         setPopupOpen(!popupOpen);
     }
     function setPopupOpen(open: bool) {
+        if (open && centreOpen) {
+            // after the Notification Centre's window is gone (see onHidden)
+            centre.controlsNext = true;
+            closeNotificationCentre(false);
+            return;
+        }
         if (open) {
             if (!popupOpen && openStarted === 0) {
                 openStarted = Date.now();
@@ -237,6 +243,9 @@ PlasmoidItem {
             setPopupOpen(true);
             break;
         case "notifications":
+            if (openNotificationCentre()) {
+                break;
+            }
             backend.showEmptyNotifications = true;
             setPopupOpen(true);
             break;
@@ -333,6 +342,7 @@ PlasmoidItem {
         screenName: String(root.Screen.name || "")
         barCompact: tabletState.tablet || root.budgetLevel >= 2
         penPresent: root.penPresent
+        notificationsApart: root.notificationsApart
         onPenRequested: root.openPenMenu()
         onCloseRequested: root.setPopupOpen(false)
     }
@@ -369,10 +379,23 @@ PlasmoidItem {
             root.openOnPress = !root.popupOpen;
         }
         onBellClicked: {
+            if (root.notificationsApart) {
+                if (root.centreOpen) {
+                    root.closeNotificationCentre(false);
+                } else {
+                    root.openNotificationCentre();
+                }
+                return;
+            }
             backend.showEmptyNotifications = root.openOnPress;
             root.setPopupOpen(root.openOnPress);
         }
         onPulled: fromBell => {
+            if (fromBell && root.notificationsApart) {
+                console.info("quicksettings: pull-down on the bell opens the notification centre");
+                root.openNotificationCentre();
+                return;
+            }
             if (!root.popupOpen) {
                 console.info("quicksettings: pull-down opens the sheet");
                 backend.showEmptyNotifications = fromBell;
@@ -382,6 +405,76 @@ PlasmoidItem {
     }
     HoverHandler {
         onHoveredChanged: if (hovered) root.contentWanted = true
+    }
+
+    // ---- The Notification Centre (tablet posture, TABLET2 S1): the bell, a pull-down on the bell
+    // or on the clock pill (the clock pill calls openNotificationCentre()) and Meta+N open it; the
+    // status pill opens the controls without the list. kcfg tabletNotifications "together" keeps
+    // one sheet as on the laptop.
+    readonly property bool notificationsApart: tabletState.tablet && Plasmoid.configuration.tabletNotifications !== "together"
+    property bool centreOpen: false
+    function openNotificationCentre(): bool {
+        if (!notificationsApart || !backend.notif.available) {
+            return false;
+        }
+        if (popupOpen) {
+            setPopupOpen(false);
+        }
+        const screen = Plasmoid.containment ? Plasmoid.containment.screenGeometry : null;
+        if (screen && screen.width > 0) {
+            centre.area = Qt.rect(screen.x, screen.y, screen.width, screen.height);
+        }
+        const window = root.Window.window;
+        centre.topBar = window ? window.height : 44;
+        centre.screenNumber = Plasmoid.containment ? Plasmoid.containment.screen : 0;
+        centre.wanted = true;
+        centre.openStarted = Date.now();
+        centreOpen = true;
+        console.info("quicksettings: notification centre opens");
+        return true;
+    }
+    function closeNotificationCentre(immediate: bool): void {
+        if (!centreOpen) {
+            return;
+        }
+        centreOpen = false;
+        backend.notif.markRead();
+        if (immediate && centre.content) {
+            centre.content.snapClosed();
+        }
+    }
+    onNotificationsApartChanged: {
+        if (!notificationsApart) {
+            closeNotificationCentre(true);
+        }
+    }
+    NotificationCentre {
+        id: centre
+        backend: root.qsBackend
+        open: root.centreOpen
+        onCloseRequested: root.closeNotificationCentre(false)
+        onDeactivated: root.closeNotificationCentre(true)
+        // The controls open once the sheet's window is gone and KWin has activated the next window
+        // (200 ms): opened earlier, the pop-up lost the activation at once and closed (s1h D1, F1).
+        property bool controlsNext: false
+        onControlsRequested: {
+            controlsNext = true;
+            root.closeNotificationCentre(false);
+        }
+        onHidden: {
+            if (controlsNext) {
+                controlsNext = false;
+                controlsTimer.restart();
+            }
+        }
+    }
+    Timer {
+        id: controlsTimer
+        interval: 200
+        onTriggered: {
+            backend.showEmptyNotifications = false;
+            root.setPopupOpen(true);
+        }
     }
 
     // Invisible item the pop-up is placed under (see placeAnchor()).

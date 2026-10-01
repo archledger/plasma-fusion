@@ -30,14 +30,17 @@ Rectangle {
     signal closeClicked()
     signal killJobClicked()
 
+    // The row's data. While a removed row's card is torn down, `model` and this property read as
+    // null, so every use is optional (`entry?.`).
+    readonly property var entry: model || ({})
     // org.kde.notificationmanager Notifications enums
-    readonly property bool isJob: model.type === 2
-    readonly property bool jobRunning: isJob && model.jobState !== 0
-    readonly property var actionNames: model.actionNames || []
-    readonly property var actionLabels: model.actionLabels || []
-    readonly property bool primaryAction: model.urgency === 4 || model.timeout === 0
+    readonly property bool isJob: entry?.type === 2
+    readonly property bool jobRunning: isJob && entry?.jobState !== 0
+    readonly property var actionNames: entry?.actionNames || []
+    readonly property var actionLabels: entry?.actionLabels || []
+    readonly property bool primaryAction: entry?.urgency === 4 || entry?.timeout === 0
     readonly property bool hovered: cardHover.hovered
-    readonly property bool closable: !jobRunning && model.closable !== false
+    readonly property bool closable: !jobRunning && entry?.closable !== false
     readonly property bool showClose: closable && (pal.touch || hovered || closeButton.activeFocus)
     // Keyboard focus is on one of this card's buttons (the list scrolls it into view).
     readonly property bool focusInside: {
@@ -82,12 +85,16 @@ Rectangle {
 
     implicitHeight: column.implicitHeight + 2 * column.anchors.margins
     Accessible.role: Accessible.ListItem
-    Accessible.name: model.summary || model.applicationName || ""
-    Accessible.description: model.applicationName || ""
+    Accessible.name: entry?.summary || entry?.applicationName || ""
+    Accessible.description: entry?.applicationName || ""
+    // The card's fill and border: translucent in the frosted sheet, solid in the tablet
+    // Notification Centre (TABLET2 S1, text on a solid surface).
+    property color surface: pal.overlay(0.06)
+    property color edge: pal.overlay(0.08)
     radius: 18
-    color: pal.overlay(0.06)
+    color: surface
     border.width: 1
-    border.color: pal.overlay(0.08)
+    border.color: edge
 
     HoverHandler {
         id: cardHover
@@ -156,7 +163,7 @@ Rectangle {
         onFinished: card.closeClicked()
     }
     TapHandler {
-        enabled: !!card.model.hasDefaultAction
+        enabled: !!card.entry?.hasDefaultAction
         onTapped: card.actionInvoked("default")
     }
 
@@ -178,13 +185,13 @@ Rectangle {
             Kirigami.Icon {
                 Layout.preferredWidth: card.metrics.px(22)
                 Layout.preferredHeight: card.metrics.px(22)
-                source: card.model.applicationIconName || card.model.iconName || "preferences-desktop-notification-bell"
+                source: card.entry?.applicationIconName || card.entry?.iconName || "preferences-desktop-notification-bell"
             }
             FText {
                 Layout.fillWidth: true
                 pal: card.pal
                 metrics: card.metrics
-                text: card.model.applicationName || ""
+                text: card.entry?.applicationName || ""
                 color: card.pal.secondary
                 px: 11.5
                 font.weight: Font.ExtraBold
@@ -205,7 +212,7 @@ Rectangle {
                     visible: card.pal.touch || !card.showClose
                     pal: card.pal
                     metrics: card.metrics
-                    text: card.relativeTime(card.model.created, card.model.updated)
+                    text: card.relativeTime(card.entry?.created, card.entry?.updated)
                     color: card.pal.tertiary
                     px: 11.5
                 }
@@ -232,7 +239,7 @@ Rectangle {
             pal: card.pal
             metrics: card.metrics
             visible: text.length > 0
-            text: card.model.summary || ""
+            text: card.entry?.summary || ""
             px: 13.5
             font.weight: Font.ExtraBold
             wrapMode: Text.Wrap
@@ -243,7 +250,7 @@ Rectangle {
             pal: card.pal
             metrics: card.metrics
             visible: !card.isJob && text.length > 0
-            text: card.cleanBody(card.model.body)
+            text: card.cleanBody(card.entry?.body)
             textFormat: Text.StyledText
             color: card.pal.body
             linkColor: card.pal.link
@@ -265,7 +272,7 @@ Rectangle {
                 radius: 3
                 color: card.pal.overlay(0.14)
                 Rectangle {
-                    width: parent.width * Math.max(0, Math.min(100, card.model.percentage || 0)) / 100
+                    width: parent.width * Math.max(0, Math.min(100, card.entry?.percentage || 0)) / 100
                     height: parent.height
                     radius: 3
                     color: card.pal.accentSoft
@@ -274,12 +281,12 @@ Rectangle {
             FText {
                 pal: card.pal
                 metrics: card.metrics
-                text: i18nc("@info job progress", "%1%", card.model.percentage || 0)
+                text: i18nc("@info job progress", "%1%", card.entry?.percentage || 0)
                 color: card.pal.secondary
                 px: 11.5
             }
             TextButton {
-                visible: card.jobRunning && !!card.model.killable
+                visible: card.jobRunning && !!card.entry?.killable
                 pal: card.pal
                 metrics: card.metrics
                 fontSize: 12
