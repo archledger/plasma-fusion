@@ -46,6 +46,8 @@ Requires:       fonts-filesystem
 Requires:       kde-filesystem
 # tools/device/*.sh and tools/system/*.sh
 Requires:       python3
+# pkexec for the charge-limit helper
+Requires:       polkit
 Requires:       /usr/bin/kreadconfig6
 Requires:       /usr/bin/kwriteconfig6
 Requires:       /usr/bin/busctl
@@ -116,6 +118,8 @@ copy_tree plasma-fusion/pen plasma-fusion/pen
 copy_tree plasma-fusion/powerfx plasma-fusion/powerfx
 # The LibreOffice scale guard's desktop entry (HIDPI-1; fusion-config.sh installs it per user)
 copy_tree plasma-fusion/compat plasma-fusion/compat
+# The charge-limit helper's polkit action (the helper itself goes to libexec below)
+copy_tree polkit-1/actions polkit-1/actions
 # The power-tiers service itself: the unit's ExecSearchPath ends in /usr/libexec/plasma-fusion.
 mkdir -p %{buildroot}%{_libexecdir}/plasma-fusion
 cp -a _stage/.local/libexec/plasma-fusion/. %{buildroot}%{_libexecdir}/plasma-fusion/
@@ -211,6 +215,8 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
+test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
+test -s %{buildroot}%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 test -s %{buildroot}%{_datadir}/plasma-fusion/pen/templates/Note.xopp
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/pen/pen-defaults.sh
@@ -295,6 +301,9 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 %dir %{_libexecdir}/plasma-fusion
 %{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
 %{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
+# The battery charge limit of the quick settings (pkexec, polkit action org.plasmafusion.charge-limit)
+%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
+%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 
 %changelog
 * @CHANGELOG_DATE@ Wisbendji Fimerlus <archledger236@gmail.com> - @VERSION@-@RELEASE@

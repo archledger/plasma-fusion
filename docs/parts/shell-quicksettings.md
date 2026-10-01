@@ -575,3 +575,10 @@ Not done (queued): pull zones of 56 px at the top corners (the 44 px bar is the 
 empty spacers have no pull), burst cooldown for repeated pop-ups (Plasma's notification server),
 the clipboard tile, the position of Plasma's own notification pop-ups in tablet posture (one appeared
 beside the dock in s1j).
+
+## Charge limit tile (2026-10-01)
+
+See `docs/parts/charge-limit.md`: a "Charge limit" tile (limit on/off; chevron: 80 %, 90 %, charge to
+100 % once, no limit, Battery settings), `services/ChargeLimit.qml`, set through `pkexec` and the
+`org.plasmafusion.charge-limit` polkit action; hidden without the system helper or a battery stop
+threshold.

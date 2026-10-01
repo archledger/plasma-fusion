@@ -82,6 +82,31 @@ Item {
     Loader { id: sessionLoader; asynchronous: true; source: "services/Session.qml" }
     Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
+    Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
+    Binding {
+        target: chargeLoader.item
+        property: "batteryKnown"
+        value: backend.battery.present
+        when: chargeLoader.item !== null
+    }
+    Binding {
+        target: chargeLoader.item
+        property: "batteryPercent"
+        value: backend.battery.percent
+        when: chargeLoader.item !== null
+    }
+    Binding {
+        target: chargeLoader.item
+        property: "pluggedIn"
+        value: backend.battery.pluggedIn
+        when: chargeLoader.item !== null
+    }
+    Binding {
+        target: chargeLoader.item
+        property: "batteryFull"
+        value: backend.battery.full
+        when: chargeLoader.item !== null
+    }
     readonly property var tabletPolicy: tabletLoader.item
     Binding {
         target: tabletLoader.item
@@ -268,6 +293,47 @@ Item {
         readonly property bool pluggedIn: s ? s.pluggedIn : false
         readonly property bool full: s ? s.full : false
         readonly property real remainingMsec: s ? s.remainingMsec : 0
+        function openSettings() {
+            backend.openSettings("kcm_powerdevilprofilesconfig", []);
+        }
+    }
+
+    // ------------------------------------------------------------------ charge limit
+    readonly property var charge: QtObject {
+        readonly property var s: chargeLoader.item
+        readonly property bool present: s ? s.present : false
+        readonly property bool limited: s ? s.limited : false
+        readonly property int limit: s ? s.limit : 100
+        readonly property int preferred: s ? s.preferred : 80
+        readonly property bool fullOnce: s ? s.restoreLimit > 0 : false
+        readonly property bool busy: s ? s.busy : false
+        readonly property string subtitle: {
+            if (fullOnce) {
+                return i18nc("@info:status battery charge limit", "Charging to 100 % once");
+            }
+            return limited ? i18nc("@info:status battery charge limit, %1 percent", "Stops at %1 %", limit)
+                           : i18nc("@info:status battery charge limit", "Off");
+        }
+        function toggle() {
+            if (s) {
+                s.toggle();
+            }
+        }
+        function setLimit(value: int) {
+            if (s) {
+                s.setLimitAndForget(value);
+            }
+        }
+        function fullChargeOnce() {
+            if (s) {
+                s.fullChargeOnce();
+            }
+        }
+        function refresh() {
+            if (s) {
+                s.refresh();
+            }
+        }
         function openSettings() {
             backend.openSettings("kcm_powerdevilprofilesconfig", []);
         }

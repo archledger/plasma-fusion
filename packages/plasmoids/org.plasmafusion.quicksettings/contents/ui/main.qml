@@ -530,6 +530,10 @@ PlasmoidItem {
         id: policyRefresh
         interval: 250
         onTriggered: {
+            if (root.popupOpen) {
+                // the charge limit can change in Energy Saving too
+                backend.charge.refresh();
+            }
             if (root.popupOpen && backend.tabletPolicy) {
                 backend.tabletPolicy.refresh();
                 if (root.tablet) {

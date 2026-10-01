@@ -36,6 +36,7 @@ ColumnLayout {
     readonly property var tabletPolicy: backend.tabletPolicy
     // The Do Not Disturb durations are shown (the tile's chevron).
     property bool dndChoicesOpen: false
+    property bool chargeChoicesOpen: false
 
     spacing: metrics.px(14)
 
@@ -447,6 +448,27 @@ ColumnLayout {
             checked: page.backend.darkStyle.checked
             onToggled: page.backend.darkStyle.toggle()
         }
+        // Battery charge limit (research D-desktop "Add"): a click turns the limit (80 % or the last
+        // one picked) on or off; the chevron offers 80 %, 90 %, "Charge to 100 % once" (while
+        // plugged in) and no limit. Shown where the system helper is installed and the battery has
+        // a stop threshold (services/ChargeLimit.qml).
+        Tile {
+            objectName: "tile-chargelimit"
+            Layout.fillWidth: true
+            visible: page.backend.charge.present
+            pal: page.pal
+            metrics: page.metrics
+            title: i18nc("@title tile", "Charge limit")
+            subtitle: page.backend.charge.subtitle
+            iconPath: Icons.batteryOutline
+            checked: page.backend.charge.limited || page.backend.charge.fullOnce
+            available: !page.backend.charge.busy
+            hasDetails: true
+            detailsText: i18nc("@action:button", "Charge limit choices")
+            toolTip: i18nc("@info:tooltip", "Click to limit charging to keep the battery healthy")
+            onToggled: page.backend.charge.toggle()
+            onDetailsRequested: page.chargeChoicesOpen = !page.chargeChoicesOpen
+        }
         // Tablet mode Auto / On / Off (TABLET 3.2): shown where the posture can change by itself,
         // or when it is not automatic.
         Tile {
@@ -504,6 +526,56 @@ ColumnLayout {
                         page.backend.dnd.toggle();
                     }
                     page.dndChoicesOpen = false;
+                }
+            }
+        }
+    }
+
+    // Charge limit choices.
+    Flow {
+        Layout.fillWidth: true
+        visible: page.chargeChoicesOpen && page.backend.charge.present
+        spacing: page.metrics.px(8)
+
+        Repeater {
+            model: {
+                const items = [
+                    { "id": "80", "text": i18nc("@action:button charge limit", "Stop at 80 %") },
+                    { "id": "90", "text": i18nc("@action:button charge limit", "Stop at 90 %") }
+                ];
+                if (page.backend.charge.limited && page.backend.battery.pluggedIn) {
+                    items.push({ "id": "once", "text": i18nc("@action:button charge limit", "Charge to 100 % once") });
+                }
+                items.push({ "id": "off", "text": i18nc("@action:button charge limit", "No limit") });
+                items.push({ "id": "settings", "text": i18nc("@action:button", "Battery settings…") });
+                return items;
+            }
+            delegate: TextButton {
+                required property var modelData
+                objectName: "charge-" + modelData.id
+                pal: page.pal
+                metrics: page.metrics
+                radius: height / 2
+                implicitHeight: page.pal.touch ? 44 : page.metrics.px(30)
+                fontSize: 12.5
+                text: modelData.text
+                onClicked: {
+                    switch (modelData.id) {
+                    case "80":
+                    case "90":
+                        page.backend.charge.setLimit(Number(modelData.id));
+                        break;
+                    case "once":
+                        page.backend.charge.fullChargeOnce();
+                        break;
+                    case "off":
+                        page.backend.charge.setLimit(100);
+                        break;
+                    default:
+                        page.backend.charge.openSettings();
+                        break;
+                    }
+                    page.chargeChoicesOpen = false;
                 }
             }
         }
