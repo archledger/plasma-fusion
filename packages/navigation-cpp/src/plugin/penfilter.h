@@ -48,6 +48,7 @@ public:
 
 private:
     bool exempt(const QPointF &pos) const;
+    bool shellLongPress(const QPointF &pos) const;
     void finish(std::chrono::microseconds time, InputDevice *device);
     void holdTimeout();
 

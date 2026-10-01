@@ -217,3 +217,12 @@ tap opens the file, a hold in Konsole opens Konsole's menu, with the setting off
 private session has a pointer device only while the test input client is connected, and without one
 the seat offers no pointer, so the scenario keeps one connected (as the hardware's touchpad and
 TrackPoint always are).
+
+## Press and hold over the Plasma shell (2026-10-01)
+
+Over plasmashell's windows (home screen, dock, launcher, top bar, widgets) the pen's press and hold
+does not turn into a right click: those surfaces open their menus on a touch long press, so the pen
+stays a finger for the whole hold (`FusionPenFilter::shellLongPress`). The right click, injected after
+the touch had been cancelled, opened nothing there (a pen hold on a home-screen tile showed no menu
+while a finger hold did; found in the PLASMA-68 container runs, same on Plasma 6.7.5 and 6.8). Apps
+keep the right click (Dolphin's menu opens as before).

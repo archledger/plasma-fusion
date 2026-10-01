@@ -124,6 +124,19 @@ bool FusionPenFilter::exempt(const QPointF &pos) const
     return false;
 }
 
+// The Plasma shell's surfaces (home screen, dock, launcher, top bar, widgets) open their menus on a
+// touch long press, as with a finger. Over them the pen stays a finger for the whole hold: the right
+// click that stands in for a long press in other apps arrived after the touch was cancelled and
+// opened nothing there (PLASMA-68: a pen hold on a home-screen tile showed no menu, a finger hold did).
+bool FusionPenFilter::shellLongPress(const QPointF &pos) const
+{
+    if (Window *window = input()->findToplevel(pos)) {
+        return window->resourceClass().compare(QLatin1String("plasmashell"), Qt::CaseInsensitive) == 0
+            || window->desktopFileName() == QLatin1String("org.kde.plasmashell");
+    }
+    return false;
+}
+
 void FusionPenFilter::finish(std::chrono::microseconds time, InputDevice *device)
 {
     m_holdTimer.stop();
@@ -174,7 +187,7 @@ bool FusionPenFilter::tabletToolTipEvent(TabletToolTipEvent *event)
         m_pressPos = event->position;
         input()->touch()->processDown(s_penTouchId, event->position, event->timestamp, event->device);
         input()->touch()->frame();
-        if (m_rightClickOnHold) {
+        if (m_rightClickOnHold && !shellLongPress(event->position)) {
             m_holdTimer.start();
         }
         return true;
