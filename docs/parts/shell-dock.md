@@ -397,3 +397,20 @@ screenshots (INT-1), pen hover (hand check V7).
 - **Bottom strip height** (2026-10-01): config `tabletStripHeight` (default 20), written by the
   plasmafusion-tablet KWin script with the strip snapped to whole device pixels (21 at 4/3;
   docs/parts/kwin-tablet.md "Pixel grid").
+
+## Dodging over apps in tablet posture (fixed 2026-10-01)
+
+Owner report: the dock stayed over every app in tablet posture. Plasma keeps a dodging or
+auto-hiding panel shown while a transient window of it is visible (`PanelView::restoreAutoHide`),
+and Qt makes a `Window` declared inside an item a transient of that item's window: the always-shown
+bottom strip (`BottomStrip.qml`, a layer-shell `Window` loaded inside the dock) was such a transient,
+so the dock never dodged. The strip now sets `transientParent: null` (a top-level surface).
+
+A dock the navigation effect reveals over an app (short swipe up, pen tap on the home handle) is
+never entered by the pointer, so Plasma's re-hide on pointer leave never came. The effect now hides
+it again (`FusionDockRehide`, navigation-cpp): on the next touch or click outside the dock, or once an
+app activated from it is active, if an app window still overlaps the dock (hidden and its bottom
+screen edge reserved, as Plasma's own hide request does in KWin; log "revealed dock hidden again").
+On the home screen nothing overlaps, so the dock stays. Tested in the 6.7.5 and 6.7.91 containers
+(dodge5, dodge68): app opened -> hidden; tap in the app -> hidden; short swipe -> shown; tap in the
+app -> hidden; reveal + tap a dock app -> that app active, hidden; home gesture -> shown.

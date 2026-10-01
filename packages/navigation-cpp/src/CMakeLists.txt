@@ -12,6 +12,7 @@ ecm_add_qml_module(fusionnavigationplugin
 )
 
 target_sources(fusionnavigationplugin PRIVATE
+    plugin/dockrehide.cpp
     plugin/fusionnavigation.cpp
     plugin/keyboardspy.cpp
     plugin/penfilter.cpp

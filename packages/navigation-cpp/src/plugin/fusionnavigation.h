@@ -24,6 +24,7 @@
 #include <KLocalizedString>
 
 #include "keyboardspy.h"
+#include "dockrehide.h"
 #include "penfilter.h"
 #include "testpen.h"
 #include "touchborder.h"
@@ -169,6 +170,7 @@ private:
     std::unique_ptr<FusionKeyboardSpy> m_keyboardSpy;
     KConfigWatcher::Ptr m_configWatcher;
     std::unique_ptr<FusionPenFilter> m_penFilter;
+    std::unique_ptr<FusionDockRehide> m_dockRehide;
     std::unique_ptr<FusionTestPen> m_testPen;
 
     Status m_status = Status::Inactive;

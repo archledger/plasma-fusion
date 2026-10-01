@@ -107,6 +107,7 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
 
     // Plasma Fusion: the pen like a finger in tablet posture (TABLET2 PEN-2), and the test pen of
     // private test sessions (PLASMA_FUSION_TEST_PEN=1 only).
+    m_dockRehide = std::make_unique<FusionDockRehide>();
     m_penFilter = std::make_unique<FusionPenFilter>();
     m_penFilter->setBottomTapHandler([this]() {
         revealDock();
@@ -215,6 +216,7 @@ void FusionNavigationState::revealDock()
     const auto windows = workspace()->windows();
     int docks = 0;
     int shown = 0;
+    QList<Window *> revealed;
     for (Window *window : windows) {
         if (!window->isDock()) {
             continue;
@@ -228,9 +230,13 @@ void FusionNavigationState::revealDock()
             continue;
         }
         window->showOnScreenEdge();
+        revealed.append(window);
         ++shown;
     }
     qInfo("plasmafusion-navigation: showDock: %d dock window(s), %d shown", docks, shown);
+    if (m_dockRehide && !revealed.isEmpty()) {
+        m_dockRehide->revealed(revealed);
+    }
 }
 
 qreal FusionNavigationState::touchXPosition() const
