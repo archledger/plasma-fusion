@@ -74,6 +74,10 @@
       <min>44</min>
       <max>64</max>
     </entry>
+    <entry name="splitRequest" type="String">
+      <label>Other shell parts ask the dock to split the screen: "left|right:nonce:app-id.desktop". The dock moves the app in use to the other half, starts or activates the app (kstart when the dock does not have it) and tiles it when it is active.</label>
+      <default></default>
+    </entry>
     <entry name="tabletStripHeight" type="Int">
       <label>Height of the tablet bottom strip: written by the plasmafusion-tablet KWin script, 20 px snapped to whole device pixels at the screen's scale (21 at 4/3)</label>
       <default>20</default>

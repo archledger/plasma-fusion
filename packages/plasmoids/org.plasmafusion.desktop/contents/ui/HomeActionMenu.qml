@@ -56,6 +56,17 @@ Item {
         const id = entry && entry.favoriteId ? String(entry.favoriteId) : "";
         const actions = [];
 
+        // Split (SPLIT.md item 2; Android: long press > Split): the dock opens the app in that half
+        // and moves the app in use to the other one (the "fill the other half" picker offers it).
+        const appId = home.splitAppId(id);
+        if (appId !== "") {
+            actions.push({ text: i18nc("@action:inmenu open the app in the left half", "Split Left"), icon: "view-split-left-right",
+                           actionId: "_fusion_split_left" });
+            actions.push({ text: i18nc("@action:inmenu open the app in the right half", "Split Right"), icon: "view-split-left-right",
+                           actionId: "_fusion_split_right" });
+            actions.push({ type: "separator" });
+        }
+
         if (id.length > 0 && favorites) {
             const pinned = favorites.isFavorite(id);
             actions.push({
@@ -100,6 +111,10 @@ Item {
 
         if (actionId === "_fusion_edit_home") {
             home.startEditing();
+            return;
+        }
+        if (actionId === "_fusion_split_left" || actionId === "_fusion_split_right") {
+            home.requestSplit(actionId === "_fusion_split_left" ? "left" : "right", home.splitAppId(favoriteId));
             return;
         }
         if (actionId === "_fusion_pin") {

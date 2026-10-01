@@ -1066,6 +1066,14 @@ PlasmoidItem {
         } else if (tasksModel.data(index, atm.CanLaunchNewInstance) !== false) {
             menu.addAction(i18nc("@action:inmenu", "New Window"), "window-new-symbolic", () => tasksModel.requestNewInstance(index), {});
         }
+        // Tablet posture (SPLIT.md item 2, Android's "Split" in the app menu): the app opens in that
+        // half and the app in use takes the other one, as with the dock's split drag.
+        if (tablet && !item.isStartup) {
+            menu.addAction(i18nc("@action:inmenu open the app in the left half", "Split Left"), "view-split-left-right",
+                           () => root.startSplit(row, "left"), {});
+            menu.addAction(i18nc("@action:inmenu open the app in the right half", "Split Right"), "view-split-left-right",
+                           () => root.startSplit(row, "right"), {});
+        }
         if (!item.isLauncher && !item.isStartup) {
             const minimized = tasksModel.data(index, atm.IsMinimized) === true;
             menu.addAction(minimized ? i18nc("@action:inmenu", "Restore") : i18nc("@action:inmenu", "Minimize"),
@@ -1370,6 +1378,43 @@ PlasmoidItem {
         startSplit(row, side);
     }
     // (then `done` once kglobalaccel replied)
+    P5Support.DataSource {
+        id: splitLauncher
+        engine: "executable"
+        onNewData: (source, data) => disconnectSource(source)
+    }
+    // A split asked for by the home screen or the launcher: an app the dock has (running or
+    // pinned) goes the dock's own way; any other app is started here once the app in use moved.
+    function startSplitForApp(appId: string, side: string): void {
+        const atm = TaskManager.AbstractTasksModel;
+        for (let r = 0; r < tasksModel.count; ++r) {
+            if (String(tasksModel.data(tasksModel.makeModelIndex(r), atm.AppId) || "") === appId) {
+                startSplit(r, side);
+                return;
+            }
+        }
+        const active = tasksModel.activeTask;
+        const activeApp = active && active.valid ? String(tasksModel.data(active, atm.AppId) || "") : "";
+        const other = activeApp !== "" && activeApp !== appId && tasksModel.data(active, atm.IsWindow) === true
+            && tasksModel.data(active, atm.IsMinimized) !== true;
+        console.info("dock: split request: " + appId + " (not in the dock) to the " + side + (other ? ", " + activeApp + " to the other half" : ""));
+        splitPlan = { "side": side, "appId": appId, "row": -1 };
+        splitTimeout.restart();
+        if (other) {
+            invokeKWinShortcutThen(tileShortcut(side === "left" ? "right" : "left"), () => splitBringApp.restart());
+        } else {
+            splitBringApp.restart();
+        }
+    }
+    Connections {
+        target: Plasmoid.configuration
+        function onSplitRequestChanged(): void {
+            const parts = String(Plasmoid.configuration.splitRequest || "").split(":");
+            if (parts.length >= 3 && (parts[0] === "left" || parts[0] === "right") && parts[2] !== "") {
+                root.startSplitForApp(parts.slice(2).join(":"), parts[0]);
+            }
+        }
+    }
     function invokeKWinShortcutThen(name: string, done): void {
         DBus.SessionBus.asyncCall({
             "service": "org.kde.kglobalaccel",
@@ -1394,6 +1439,7 @@ PlasmoidItem {
         const other = activeApp !== "" && activeApp !== appId && tasksModel.data(active, atm.IsWindow) === true
             && tasksModel.data(active, atm.IsMinimized) !== true;
         console.info("dock: split: " + appId + " to the " + side + (other ? ", " + activeApp + " to the other half" : ""));
+        // (row -1: another part starts the app, the dock only waits for it)
         splitPlan = { "side": side, "appId": appId, "row": row };
         splitTimeout.restart();
         if (other) {
@@ -1414,8 +1460,15 @@ PlasmoidItem {
             const active = tasksModel.activeTask;
             if (active && active.valid && String(tasksModel.data(active, atm.AppId) || "") === root.splitPlan.appId) {
                 root.splitActiveIsApp();
-            } else {
+            } else if (root.splitPlan.row >= 0) {
                 root.activateTask(root.splitPlan.row, 0);
+            } else {
+                // not in the dock: the launcher starts it (as a tap in its sheet does); without the
+                // Plasma Fusion launcher, kstart (KDE's launcher tool) by its desktop file
+                const launcher = root.findLauncherApplet();
+                if (!(launcher && typeof launcher["launchApp"] === "function" && launcher["launchApp"](root.splitPlan.appId))) {
+                    splitLauncher.connectSource("kstart --application " + root.splitPlan.appId.replace(/\.desktop$/, "").replace(/[^A-Za-z0-9._-]/g, ""));
+                }
             }
         }
     }

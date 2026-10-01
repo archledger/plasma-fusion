@@ -111,6 +111,71 @@ PlasmoidItem {
         }
     }
 
+    // Starts an installed app by its desktop file id ("org.kde.kcalc.desktop") the way a tap in the
+    // sheet does (in plasmashell, so it needs no session manager). The dock's split uses it for apps
+    // the dock does not have. The index is built for the call only.
+    Instantiator {
+        id: appIndex
+        active: false
+        model: root.allAppsModel()
+        delegate: QtObject {
+            required property string favoriteId
+            required property int index
+        }
+    }
+    // An app's desktop file id for a split ("" for anything else).
+    function splitAppId(favoriteId: string): string {
+        const id = Launcher.appId(favoriteId);
+        return /^[A-Za-z0-9._-]+\.desktop$/.test(id) ? id : "";
+    }
+    // The dock in this panel splits the screen; the sheet closes first, so that the app under it is
+    // active again and takes the other half.
+    function requestSplit(side: string, appId: string): void {
+        if (appId === "") {
+            return;
+        }
+        console.info("launcher: split request: " + appId + " to the " + side);
+        closeSheet();
+        splitAfterClose.side = side;
+        splitAfterClose.appId = appId;
+        splitAfterClose.restart();
+    }
+    Timer {
+        id: splitAfterClose
+        property string side: ""
+        property string appId: ""
+        interval: 250
+        onTriggered: {
+            const layout = root.parent ? root.parent.parent : null;
+            for (const child of layout ? layout.children : []) {
+                const applet = child ? child["applet"] : null;
+                if (applet && applet["plasmoid"] && applet["plasmoid"].pluginName === "org.plasmafusion.dock"
+                        && typeof applet["startSplitForApp"] === "function") {
+                    applet["startSplitForApp"](appId, side);
+                    return;
+                }
+            }
+            console.warn("launcher: split request: no Plasma Fusion dock in this panel");
+        }
+    }
+    function launchApp(appId: string): bool {
+        const model = allAppsModel();
+        if (!model || appId === "") {
+            return false;
+        }
+        appIndex.active = true;
+        let row = -1;
+        for (let i = 0; i < appIndex.count; ++i) {
+            const entry = appIndex.objectAt(i);
+            if (entry && Launcher.appId(entry.favoriteId) === appId) {
+                row = entry.index;
+                break;
+            }
+        }
+        appIndex.active = false;
+        return row >= 0 && model.trigger(row, "", null);
+    }
+
     function rebuildChips() {
         const found = [];
         const seen = {};

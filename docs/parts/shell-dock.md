@@ -433,3 +433,21 @@ still opens the launcher; on the laptop an upward mouse drag is still Kickoff's 
 Test (6.7.5 container, 1920x1200 at 4/3, split6/split7): KWrite maximized, dock revealed, Dolphin's
 icon held 0.45 s and dragged to the left third: Dolphin 6,51 711x823 (left, active), KWrite 723,51
 711x822 (right); the revealed dock hid again (navigation 0.1-3).
+
+## "Split Left / Split Right" in the app menus (SPLIT.md item 2, 2026-10-01)
+
+Android's long press > Split. In tablet posture the dock's menu, the home screen's app menu and the
+launcher sheet's app menu offer "Split Left" and "Split Right":
+- dock: `startSplit(row, side)`, the same as the split drag;
+- home screen: `HomeLayer.requestSplit` writes the dock's `splitRequest` ("left|right:nonce:app.desktop")
+  through desktop scripting; the dock answers with `startSplitForApp`;
+- launcher sheet: closes the sheet (the app under it is active again), then calls the dock in the
+  same panel directly (`startSplitForApp`).
+`startSplitForApp`: an app the dock has (running or pinned) goes `startSplit`'s way; any other app is
+started by the launcher applet (`launchApp(appId)`: its all-apps model, as a tap in the sheet; no
+session manager needed), else by `kstart --application`. The app in use takes the other half first.
+With nothing open (the home screen), only the app is tiled and the "fill the other half" picker offers
+the other half. Tests (6.7.5 container, sreq4): request from the home screen for Dolphin (pinned) ->
+Dolphin left; request over KWrite for KCalc (not in the dock) -> KWrite left, KCalc right (started by
+the launcher). The menus themselves were checked by screenshots; menu popups take no synthetic input in
+the test sessions (also for existing items), so the touch path is checked on the ThinkPad.

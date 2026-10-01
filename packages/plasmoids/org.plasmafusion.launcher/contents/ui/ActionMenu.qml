@@ -55,6 +55,17 @@ Item {
         const id = entry && entry.favoriteId ? String(entry.favoriteId) : "";
         const actions = [];
 
+        // Split (SPLIT.md item 2; Android: long press > Split), tablet posture: the dock opens the
+        // app in that half and moves the app under the sheet to the other one.
+        const splitId = launcher.tablet && entry && entry.favoriteId ? launcher.splitAppId(String(entry.favoriteId)) : "";
+        if (splitId !== "") {
+            actions.push({ text: i18nc("@action:inmenu open the app in the left half", "Split Left"), icon: "view-split-left-right",
+                           actionId: "_fusion_split_left", actionArgument: splitId });
+            actions.push({ text: i18nc("@action:inmenu open the app in the right half", "Split Right"), icon: "view-split-left-right",
+                           actionId: "_fusion_split_right", actionArgument: splitId });
+            actions.push({ type: "separator" });
+        }
+
         if (id.length > 0 && favorites) {
             const pinned = favorites.isFavorite(id);
             actions.push({
@@ -99,6 +110,10 @@ Item {
         const favorites = launcher.favoritesModel;
         const actionId = String(action.actionId || "");
 
+        if (actionId === "_fusion_split_left" || actionId === "_fusion_split_right") {
+            launcher.requestSplit(actionId === "_fusion_split_left" ? "left" : "right", String(action.actionArgument || ""));
+            return;
+        }
         if (actionId === "_fusion_pin") {
             favorites.addFavorite(favoriteId);
             return;

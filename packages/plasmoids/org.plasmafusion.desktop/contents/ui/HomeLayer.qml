@@ -300,6 +300,26 @@ Item {
         }
     }
 
+    // An app's desktop file id for a split ("" for anything else): "applications:x.desktop" -> "x.desktop".
+    function splitAppId(favoriteId: string): string {
+        const id = String(favoriteId || "").replace(/^applications:/, "");
+        return /^[A-Za-z0-9._-]+\.desktop$/.test(id) ? id : "";
+    }
+    // The dock splits the screen on a splitRequest "<left|right>:<nonce>:<app>.desktop".
+    function requestSplit(side: string, appId: string): void {
+        if (appId === "" || (side !== "left" && side !== "right")) {
+            return;
+        }
+        console.info("home: split request: " + appId + " to the " + side);
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.plasmashell", "path": "/PlasmaShell", "iface": "org.kde.PlasmaShell",
+            "member": "evaluateScript",
+            "arguments": [new DBus.string("panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {"
+                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"splitRequest\", \"" + side + ":\" + Date.now() + \":" + appId + "\"); }); });")],
+            "signature": "(s)"
+        }, () => {}, error => console.warn("home: split request failed: " + error));
+    }
+
     // The launcher (in the dock) opens on an openRequest "<mode>:<nonce>[:<argument>]".
     function openSearch(): void {
         DBus.SessionBus.asyncCall({
