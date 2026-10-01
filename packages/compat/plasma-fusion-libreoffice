@@ -1,0 +1,67 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion's LibreOffice scale guard (HIDPI-1). fusion-config.sh links it as
+# ~/.local/bin/libreoffice, which comes first in the session's PATH, so every start (menus, the
+# dock, opening a file) passes here and then runs the real libreoffice.
+#
+# LibreOffice's Qt backends (kf6, qt6) on Wayland draw a window at twice its size on a screen at
+# exactly 100 % once it has been on a fractionally scaled one (tdf#141578; Plasma Fusion private
+# sessions hd3 and hd5 with LibreOffice 26.2.6, Qt 6.11.2, KWin 6.7.5: 4/3 to 1.25, 1.5 and 1.05
+# stay right, 4/3 to 1.0 is twice too big; started at 1.0 it is right). Only while a screen at
+# 100 % sits next to a scaled one, LibreOffice starts through XWayland (QT_QPA_PLATFORM=xcb), where
+# KWin's own scaling of X11 apps gives every screen the right size. Nothing changes with one
+# screen or equal scales, with QT_QPA_PLATFORM or a non-Qt SAL_USE_VCLPLUGIN already set, for
+# headless and conversion runs, or without a Wayland display. Remove it when LibreOffice fixes
+# the bug (re-run build/hidpi scenario hd5).
+set -u
+
+self=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
+real=
+IFS=: read -r -a dirs <<<"${PATH:-}"
+for d in "${dirs[@]}" /usr/bin; do
+  c=$d/libreoffice
+  [ -n "$d" ] && [ -x "$c" ] || continue
+  [ "$(readlink -f "$c" 2>/dev/null)" = "$self" ] && continue
+  [ "$(readlink -f "$c" 2>/dev/null)" = "$(readlink -f "$0" 2>/dev/null)" ] && continue
+  real=$c
+  break
+done
+if [ -z "$real" ]; then
+  echo "plasma-fusion: no libreoffice found in PATH" >&2
+  exit 127
+fi
+
+# A screen at exactly 100 % next to a scaled one, from KScreen (about 30 ms).
+mixed_with_unscaled() {
+  [ -n "${WAYLAND_DISPLAY:-}" ] && command -v kscreen-doctor >/dev/null 2>&1 || return 1
+  SCALES=$(timeout 2 kscreen-doctor -j 2>/dev/null | python3 -c '
+import json, sys
+try:
+    outputs = json.load(sys.stdin)["outputs"]
+except Exception:
+    sys.exit(1)
+print(" ".join("%s=%g" % (o.get("name", "?"), float(o.get("scale", 1))) for o in outputs if o.get("enabled") and o.get("connected", True)))
+') || return 1
+  local s one=0 other=0
+  for s in $SCALES; do
+    case ${s#*=} in 1) one=1 ;; *) other=1 ;; esac
+  done
+  [ "$one" = 1 ] && [ "$other" = 1 ]
+}
+
+guard=1
+for a in "$@"; do
+  case $a in --headless | --convert-to | --cat | --print-to-file | --terminate_after_init) guard=0 ;; esac
+done
+[ -z "${QT_QPA_PLATFORM:-}" ] || guard=0
+case ${SAL_USE_VCLPLUGIN:-} in '' | kf6 | qt6 | kf5 | qt5) ;; *) guard=0 ;; esac
+
+if [ "$guard" = 1 ] && mixed_with_unscaled; then
+  export QT_QPA_PLATFORM=xcb
+  state=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
+  mkdir -p "$state" 2>/dev/null &&
+    printf '%s libreoffice through XWayland (screens: %s)\n' "$(date -Is)" "$SCALES" >>"$state/compat.log" 2>/dev/null
+fi
+exec "$real" "$@"

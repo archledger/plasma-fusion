@@ -98,6 +98,8 @@
 #                      login: GTK_USE_PORTAL=1 (GTK file dialogs through the portal: KDE's) and
 #                      QSG_DISTANCEFIELD_ANTIALIASING=gray (greyscale Qt Quick text)
 #   Power tiers        plasma-fusion-powerfx.service installed, enabled and started
+#   LibreOffice        ~/.local/bin/libreoffice -> plasma-fusion-libreoffice (XWayland only while a screen
+#                      at 100 % sits next to a scaled one, tdf#141578) and the hidden soffice.desktop
 #   Terminal, editor   konsolerc default profile "Plasma Fusion"; katerc/kwriterc colour theme
 #                      "Plasma Fusion Dark" (the boards draw a dark terminal and code window in
 #                      both variants)
@@ -325,7 +327,9 @@ BACKUP_FILES=(
   systemd/user/plasma-fusion-pen-garage.service "$SESSION_WANTS_REL/plasma-fusion-pen-garage.service"
 )
 # Files below $HOME outside ~/.config (restored or removed the same way).
-BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" .local/libexec/plasma-fusion)
+LO_GUARD_REL=.local/bin/libreoffice
+LO_ENTRY_REL=.local/share/applications/soffice.desktop
+BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL")
 # Configuration files the build or the system templates would install are saved as well.
 if [ -n "$CONFIG_SRC" ]; then
   while IFS= read -r -d '' f; do
@@ -1846,6 +1850,42 @@ install_text "$CONFIG/$SESSION_ENV_REL" "$(session_env)" && note "from the next 
 
 say "Power tiers"
 install_user_service plasma-fusion-powerfx.service powerfx
+
+# ---------- 7d2. per-app compatibility (HIDPI-1) ----------
+
+# LibreOffice's scale guard: ~/.local/bin/libreoffice, first in the session's PATH, links to
+# plasma-fusion-libreoffice, which starts LibreOffice through XWayland only while a screen at 100 %
+# sits next to a scaled one (LibreOffice's Qt backends draw twice too big there, tdf#141578), and
+# the hidden soffice.desktop names those XWayland windows. Only with LibreOffice installed; a
+# ~/.local/bin/libreoffice that is not Plasma Fusion's is left alone.
+if [ -x /usr/bin/libreoffice ]; then
+  say "LibreOffice scale guard"
+  lo_guard=
+  for d in "$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion; do
+    [ -x "$d/plasma-fusion-libreoffice" ] && { lo_guard=$d/plasma-fusion-libreoffice; break; }
+  done
+  lo_link=$HOME/$LO_GUARD_REL
+  if [ -z "$lo_guard" ]; then
+    note "note: plasma-fusion-libreoffice is not installed yet; run this again after installing it"
+  elif [ -e "$lo_link" ] && ! { [ -L "$lo_link" ] && [[ $(readlink "$lo_link") == */plasma-fusion-libreoffice ]]; }; then
+    note "note: ~/$LO_GUARD_REL is not Plasma Fusion's; the scale guard is left out"
+  elif [ "$(readlink "$lo_link" 2>/dev/null)" = "$lo_guard" ]; then
+    note "~/$LO_GUARD_REL -> $lo_guard (unchanged)"
+  else
+    note "~/$LO_GUARD_REL -> $lo_guard"
+    CHANGES=$((CHANGES + 1))
+    [ "$DRY" = 1 ] || { mkdir -p "${lo_link%/*}" && ln -sfn "$lo_guard" "$lo_link"; }
+  fi
+  if lo_entry=$(data_path plasma-fusion/compat/soffice.desktop); then
+    if cmp -s "$lo_entry" "$HOME/$LO_ENTRY_REL"; then
+      note "~/$LO_ENTRY_REL (unchanged)"
+    else
+      note "~/$LO_ENTRY_REL from $lo_entry"
+      CHANGES=$((CHANGES + 1))
+      [ "$DRY" = 1 ] || install -D -m 0644 "$lo_entry" "$HOME/$LO_ENTRY_REL"
+    fi
+  fi
+fi
 
 # ---------- 7e. pen (--pen) ----------
 

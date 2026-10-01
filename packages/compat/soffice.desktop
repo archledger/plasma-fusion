@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=LibreOffice
+Comment=LibreOffice windows started through XWayland by Plasma Fusion's scale guard
+Icon=libreoffice-startcenter
+Exec=libreoffice %U
+NoDisplay=true
+StartupWMClass=soffice.bin
+X-PlasmaFusion-Part=compat

@@ -114,6 +114,8 @@ copy_tree plasma-fusion/backgrounds plasma-fusion/backgrounds
 # Xournal++ templates of the pen menu; the power-tiers unit where fusion-config.sh looks for it
 copy_tree plasma-fusion/pen plasma-fusion/pen
 copy_tree plasma-fusion/powerfx plasma-fusion/powerfx
+# The LibreOffice scale guard's desktop entry (HIDPI-1; fusion-config.sh installs it per user)
+copy_tree plasma-fusion/compat plasma-fusion/compat
 # The power-tiers service itself: the unit's ExecSearchPath ends in /usr/libexec/plasma-fusion.
 mkdir -p %{buildroot}%{_libexecdir}/plasma-fusion
 cp -a _stage/.local/libexec/plasma-fusion/. %{buildroot}%{_libexecdir}/plasma-fusion/
@@ -282,6 +284,7 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 %{_datadir}/plasma-fusion/backgrounds/
 %{_datadir}/plasma-fusion/pen/
 %{_datadir}/plasma-fusion/powerfx/
+%{_datadir}/plasma-fusion/compat/
 %{_datadir}/plasma-fusion/config/
 %{_datadir}/plasma-fusion/plymouth/
 %{_datadir}/plasma-fusion/tools/
