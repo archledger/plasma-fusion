@@ -290,8 +290,13 @@ Item {
             console.info("clockpill: width budget: the global menu stays compact until plasmashell starts again"
                          + " (Plasma 6.7.5 crashes when its compact view goes back after a menu change)");
         }
-        const tries = hasMenu && fullAllowed ? [true, false] : [false];
-        const menuState = full => !hasMenu ? "keep" : full ? "full" : "compact";
+        // The active window has no menu (a shell sheet, the desktop): the full view hides itself
+        // and the estimate is 0, so "full" always fits; switching then would flip the menu at
+        // every focus change between an app and a sheet (each switch a rebuild and a config
+        // write). Its view stays as it is; only the level follows.
+        const menuIdle = hasMenu && menuModel === null;
+        const tries = menuIdle ? [!menuCompact] : hasMenu && fullAllowed ? [true, false] : [false];
+        const menuState = full => !hasMenu || menuIdle ? "keep" : full ? "full" : "compact";
         for (const menuFull of tries) {
             for (let at = minLevel; at <= (menuFull ? minLevel : maxLevel); ++at) {
                 const m = measure(at, menuFull);
