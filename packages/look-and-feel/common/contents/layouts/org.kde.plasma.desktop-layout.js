@@ -273,8 +273,9 @@ for (var sc = 1; sc < screenCount; ++sc) {
 
 /* ---------- desktop ---------- */
 
-// The desktop is a Folder View (the Global Theme's defaults name org.kde.plasma.folder) showing
-// ~/Desktop in the left column, as BACKLOG M1 decided: sorted by hand (sortMode -1), in columns
+// The desktop is the Plasma Fusion desktop (the Global Theme's defaults name org.plasmafusion.desktop:
+// Folder View with the tablet home screen, TABLET2 H1; plain org.kde.plasma.folder is accepted too)
+// showing ~/Desktop in the left column, as BACKLOG M1 decided: sorted by hand (sortMode -1), in columns
 // from the top left, 48 px icons, no folder pop-ups or tooltips, selection markers and type-ahead.
 // Thumbnails only from thumbnailers that are installed.
 var FOLDER_KEYS = { url: "desktop:/", sortMode: -1, arrangement: 1, alignment: 0, iconSize: 2, popups: false,
@@ -425,7 +426,7 @@ for (var j = 0; j < desktopsArray.length; j++) {
     desktop.wallpaperPlugin = "org.kde.image";
     // The wallpaper is left unset on purpose: Plasma then shows the Global Theme's default
     // (PlasmaFusion), and its light or dark image follows the Plasma style.
-    if (desktop.type !== "org.kde.plasma.folder") {
+    if (desktop.type !== "org.plasmafusion.desktop" && desktop.type !== "org.kde.plasma.folder") {
         print("Plasma Fusion layout: desktop " + desktop.id + " is " + desktop.type
               + "; restart plasmashell after applying the theme, then reset the layout");
     }

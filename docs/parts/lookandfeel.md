@@ -86,7 +86,7 @@ existing panels.
 | Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity adaptive` (solid next to a maximized window, decision 5) | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu` (`allScreens=false`: the menu of that screen's window), panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.kde.plasma.systemtray`, `org.plasmafusion.pen` (when installed), `org.plasmafusion.quicksettings` |
 | Top bars on the other screens | as above | app name, appmenu (`allScreens=false`), clock pill; no tray, quick settings or dock (decision 8) |
 | Dock | `location bottom`, `height 72` (the dock plate; the Plasma style keeps the 16 px headroom above it in the panel window. 88 with the headroom frame until INT-1), `floating true`, `lengthMode fit`, `alignment center`, `hiding dodgewindows`, `opacity translucent` | `org.plasmafusion.launcher` with `[General] buttonStyle=hidden` when the app-name widget holds the top-left corner (the dock finds it in its own panel for Start; Meta finds it in any panel), then `org.plasmafusion.dock` (else Kickoff when there is no Fusion launcher, and `org.kde.plasma.icontasks`) |
-| Desktop | Folder View (`org.kde.plasma.folder`, BACKLOG M1): `url desktop:/`, `arrangement 1` (columns), `alignment 0` (from the left), `iconSize 2`, `sortMode -1` (free placement), `popups false`, `toolTips false`, `selectionMarkers true`, `useTypeAhead true`, previews for the installed image/SVG/PDF/office/video thumbnailers; `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | the weather, calendar and system cards, see below |
+| Desktop | The Plasma Fusion desktop (`org.plasmafusion.desktop`, `docs/parts/desktop.md`: Folder View on the laptop, the home screen in tablet posture; plain `org.kde.plasma.folder` is accepted, BACKLOG M1): `url desktop:/`, `arrangement 1` (columns), `alignment 0` (from the left), `iconSize 2`, `sortMode -1` (free placement), `popups false`, `toolTips false`, `selectionMarkers true`, `useTypeAhead true`, previews for the installed image/SVG/PDF/office/video thumbnailers; `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | the weather, calendar and system cards, see below |
 
 System tray: when the quick-settings widget is installed, `[General] hiddenItems` =
 `org.kde.plasma.networkmanagement, org.kde.plasma.volume, org.kde.plasma.battery,
@@ -419,7 +419,8 @@ live session gets these changes through DEVICE-1's in-place migration.
 
 - `contents/defaults` (both themes): `[kwinrc][org.kde.kdecoration2] library=org.plasmafusion.decoration`,
   `theme=` (the compiled title bars; where the plugin is missing the login check picks the matching
-  Aurorae theme, `docs/parts/gate.md`), and the desktop containment `org.kde.plasma.folder`.
+  Aurorae theme, `docs/parts/gate.md`), and the desktop containment `org.plasmafusion.desktop`
+  (TABLET2 H1; `org.kde.plasma.folder` before).
 - Layout script: Folder View desktop with the keys above; a top bar on every screen (decision 8; the
   primary one with tray, pen and quick settings, the others with app name, appmenu and clock pill);
   every appmenu for its own screen; top bars `adaptive`; the five passive tray items hidden (no

@@ -80,7 +80,8 @@ plasmashell is stopped (it writes the layout file when it quits), the files are 
 
 | Change | Only when |
 |---|---|
-| desktop containment `org.kde.desktopcontainment` becomes `org.kde.plasma.folder` (desktop icons, BACKLOG M1; the same package, so applets and their `ItemGeometries*` keys stay) | the plugin is still `org.kde.desktopcontainment` |
+| desktop containment `org.kde.desktopcontainment` or `org.kde.plasma.folder` becomes `org.plasmafusion.desktop` (Folder View with the tablet home screen, TABLET2 H1, `docs/parts/desktop.md`; Folder View's keys, so applets and their `ItemGeometries*` keys stay); without that package `org.kde.desktopcontainment` becomes `org.kde.plasma.folder` (desktop icons, BACKLOG M1), and a desktop naming the missing package becomes `org.kde.plasma.folder` | the plugin is another of the three |
+| the `[General]` keys below | the plugin was `org.kde.desktopcontainment` (a Folder View keeps its own) |
 | `[General]` `url=desktop:/ sortMode=-1 arrangement=1 alignment=0 iconSize=2 popups=false toolTips=false selectionMarkers=true useTypeAhead=true previewPlugins=` (the installed ones of imagethumbnail, jpegthumbnail, svgthumbnail, gsthumbnail, opendocumentthumbnail, ffmpegthumbs) | per key, when the key is not set |
 | portrait card positions `ItemGeometries-<H>x<W>` and `ItemGeometriesVertical`: the first two cards side by side under the bar, right-aligned on the 16 px grid, the rest under the right one (the CPU/memory card hides itself in portrait, CARD-2) | neither key exists; sizes from the landscape positions; screen size from the shell |
 | top bar `plasmashellrc [PlasmaViews][Panel <id>] panelOpacity` 2 (translucent) becomes 0 (adaptive: solid next to maximized windows, decision 5) | it is still 2 |

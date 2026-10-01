@@ -1,0 +1,26 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Sebastian Kügler",
+                "Email": "sebas@kde.org"
+            },
+            {
+                "Name": "Wisbendji Fimerlus",
+                "Email": "archledger236@gmail.com"
+            }
+        ],
+        "BugReportUrl": "https://bugs.kde.org/enter_bug.cgi?product=plasmashell&component=Desktop%20Containment",
+        "Category": "Containments",
+        "Description": "Folder View on the laptop, a home screen with app pages in tablet posture",
+        "EnabledByDefault": true,
+        "Icon": "user-desktop",
+        "Id": "org.plasmafusion.desktop",
+        "License": "GPL-2.0+",
+        "Name": "Plasma Fusion Desktop",
+        "Website": ""
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-ContainmentType": "Desktop"
+}

@@ -184,12 +184,31 @@ def walk(objs):
         yield from walk(o.children)
 
 
+def upstream_files(path):
+    """Files a forked upstream package lists in its UPSTREAM-FILES manifest (one path per line,
+    relative to the manifest; # comments). They keep upstream's code and are linted upstream; the
+    package's own files and the upstream files it changes for Plasma Fusion stay unlisted."""
+    path = pathlib.Path(path).resolve()
+    for parent in path.parents:
+        manifest = parent / "UPSTREAM-FILES"
+        if manifest.is_file():
+            listed = set()
+            for line in manifest.read_text(encoding="utf-8").splitlines():
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    listed.add((parent / line).resolve())
+            return path in listed
+        if parent.name == "packages":
+            break
+    return False
+
+
 def qml_files(paths, exclude=()):
     for p in paths:
         p = pathlib.Path(p)
         files = [p] if p.is_file() else sorted(p.rglob("*.qml"))
         for f in files:
-            if f.suffix == ".qml" and not any(part in exclude for part in f.parts):
+            if f.suffix == ".qml" and not any(part in exclude for part in f.parts) and not upstream_files(f):
                 yield f
 
 

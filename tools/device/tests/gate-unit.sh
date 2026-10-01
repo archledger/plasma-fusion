@@ -49,6 +49,7 @@ EOF
 chmod +x "$BASE/fake-rpm"
 cat >"$BASE/versions" <<'EOF'
 plasma-workspace=6.7.5
+plasma-desktop=6.7.5
 kwin=6.7.5
 kscreenlocker=6.7.5
 libplasma=6.7.5
@@ -61,12 +62,14 @@ H=
 FAKE=
 TOOL=
 RPM=$BASE/fake-rpm
-# The compiled decoration as the check looks for it (a test machine may not have it installed).
+# The compiled decoration as the check looks for it; the system's plugin directories are left out
+# (PF_GATE_SYSTEM_PLUGINS), so an installed plasma-fusion-decoration does not change the cases.
 PLUGINS=$BASE/plugins
 mkdir -p "$PLUGINS/org.kde.kdecoration3" && : >"$PLUGINS/org.kde.kdecoration3/org.plasmafusion.decoration.so"
 gate() { # MODE... in the current HOME $H
   env -i HOME="$H" PATH=/usr/bin:/bin XDG_RUNTIME_DIR="$BASE/run" XDG_CONFIG_DIRS=/etc/xdg \
     XDG_DATA_DIRS=/usr/local/share:/usr/share LANG="${GATE_LANG:-C.UTF-8}" PF_GATE_RPM="$RPM" QT_PLUGIN_PATH="$PLUGINS" \
+    PF_GATE_SYSTEM_PLUGINS= \
     ${FAKE:+PF_GATE_FAKE_VERSIONS="$FAKE"} ${TOOL:+PF_GATE_TOOL="$TOOL"} bash "$ENGINE" "$@"
 }
 kw() { # FILE GROUP KEY VALUE|--delete, user file of $H
@@ -129,7 +132,13 @@ make_home() {
     kw kwinrc "$g" HighlightWindows false
   done
   kw plasmafusionrc Decoration ButtonStyle RightGlyphs
+  # The layout file with the Plasma Fusion desktop and a panel, and the desktop package.
+  mkdir -p "$H/.local/share/plasma/plasmoids/org.plasmafusion.desktop"
+  printf '{"KPlugin": {"Id": "org.plasmafusion.desktop"}}\n' >"$H/.local/share/plasma/plasmoids/org.plasmafusion.desktop/metadata.json"
+  printf '[ActionPlugins][0]\nRightButton;NoModifier=org.kde.contextmenu\n\n[Containments][1]\nactivityId=a\nformfactor=0\nimmutability=1\nlastScreen=0\nlocation=0\nplugin=org.plasmafusion.desktop\nwallpaperplugin=org.kde.image\n\n[Containments][1][General]\nurl=desktop:/\n\n[Containments][2]\nformfactor=2\nplugin=org.kde.panel\n' \
+    >"$H/.config/plasma-org.kde.plasma.desktop-appletsrc"
 }
+APPLETSRC=plasma-org.kde.plasma.desktop-appletsrc
 DROPIN_REL=systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf
 
 echo "== engine $ENGINE"
@@ -320,6 +329,40 @@ FAKE=
 gate login
 check "b10: and back on" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = true ]
 
+# ---------- (b11) the Plasma Fusion desktop: plasma-desktop updates, a missing package ----------
+make_home "$BASE/b11"
+gate deploy >/dev/null 2>&1
+orig=$(sums)
+FAKE="plasma-desktop=6.8.0"
+gate login
+check "b11: plasma-desktop update: Folder View" [ "$(get $APPLETSRC 'Containments][1' plugin)" = org.kde.plasma.folder ]
+check "b11: the desktop's keys stay" [ "$(get $APPLETSRC 'Containments][1][General' url)" = desktop:/ ]
+check "b11: the panel untouched" [ "$(get $APPLETSRC 'Containments][2' plugin)" = org.kde.panel ]
+check "b11: KConfig reads the plugin" [ "$(kreadconfig6 --file "$H/.config/$APPLETSRC" --group Containments --group 1 --key plugin)" = org.kde.plasma.folder ]
+check "b11: notification names it" grep -q 'Folder View instead of the tablet home screen' "$H/.local/state/plasma-fusion/gate/notify"
+FAKE=
+gate login
+check "b11: matching login: the Plasma Fusion desktop again" [ "$(sums)" = "$orig" ]
+rm -rf "$H/.local/share/plasma/plasmoids/org.plasmafusion.desktop"
+rm -f "$H/.local/state/plasma-fusion/gate/notify"
+gate login
+check "b11: package missing: Folder View" [ "$(get $APPLETSRC 'Containments][1' plugin)" = org.kde.plasma.folder ]
+check "b11: no notification for a missing package" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
+gate login
+check "b11: still missing: stays Folder View, record kept" grep -q '^desktop' "$H/.local/state/plasma-fusion/gate/off"
+mkdir -p "$H/.local/share/plasma/plasmoids/org.plasmafusion.desktop"
+printf '{"KPlugin": {"Id": "org.plasmafusion.desktop"}}\n' >"$H/.local/share/plasma/plasmoids/org.plasmafusion.desktop/metadata.json"
+gate login
+check "b11: package back: the Plasma Fusion desktop again" [ "$(sums)" = "$orig" ]
+# The user picks Folder View in Desktop and Wallpaper while it is held off: left as it is.
+FAKE="plasma-desktop=6.8.0"
+gate login
+kwriteconfig6 --file "$H/.config/$APPLETSRC" --group Containments --group 1 --key plugin org.kde.desktopcontainment
+FAKE=
+gate login
+check "b11: the user's choice since then stays" [ "$(get $APPLETSRC 'Containments][1' plugin)" = org.kde.desktopcontainment ]
+check "b11: record cleared" bash -c '! grep -q "^desktop" "$1" 2>/dev/null' _ "$H/.local/state/plasma-fusion/gate/off"
+
 # ---------- (c) another Global Theme ----------
 make_home "$BASE/c"
 gate deploy >/dev/null 2>&1
@@ -341,6 +384,7 @@ check "c: DesktopMode back to default" [ "$(get kwinrc TabBox DesktopMode)" = "<
 check "c: lock-screen drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
 check "c: sheet effect untouched" [ "$(get kwinrc Plugins sheetEnabled)" = true ]
 check "c: navigation effect off" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
+check "c: desktop Folder View" [ "$(get $APPLETSRC 'Containments][1' plugin)" = org.kde.plasma.folder ]
 check "c: no notification for a theme switch" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
 # The user turns snap layouts on again under Breeze: left on at the next logins.
 kw kwinrc Plugins plasmafusion-snapEnabled true

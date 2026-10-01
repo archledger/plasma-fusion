@@ -149,6 +149,8 @@ QS_SHORTCUT=$((META + 0x41))
 QS_SHORTCUT_TEXT=Meta+A
 # Pen menu widget (org.plasmafusion.pen), with --pen.
 PEN_WIDGET=org.plasmafusion.pen
+# The desktop containment (TABLET2 H1); the layout migration names it when it is installed.
+DESKTOP_CONTAINMENT=org.plasmafusion.desktop
 PEN_SHORTCUT=$((META + SHIFT + 0x57))
 PEN_SHORTCUT_TEXT=Meta+Shift+W
 # Meta+N: a kglobalaccel service component (a desktop file in ~/.local/share/kglobalaccel/, the way
@@ -818,10 +820,10 @@ if (best !== null) { var g = screenGeometry(best.screen); print(Math.round(g.wid
 migrate_layout() {
   local out rc=0
   out=$(python3 - "$CONFIG" "$DRY" "${1:-}" "$(installed_previews)" "$(package_dir plasma/plasmoids "$PEN_WIDGET" >/dev/null && echo 1 || echo 0)" \
-    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" <<'PY'
+    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" <<'PY'
 import re, subprocess, sys
 
-config, dry, size, previews, pen_installed, folder_keys, tray_hide = sys.argv[1:8]
+config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed = sys.argv[1:9]
 dry = dry == "1"
 APPLETSRC = "plasma-org.kde.plasma.desktop-appletsrc"
 
@@ -882,14 +884,20 @@ conts = {g[1]: kv for g, kv in rc.items() if len(g) == 2 and g[0] == "Containmen
 CARDS = ("org.plasmafusion.weathercard", "org.plasmafusion.calendarcard", "org.plasmafusion.systemcard",
          "org.kde.plasma.weather", "org.kde.plasma.calendar", "org.kde.plasma.systemmonitor")
 
-# 1. Desktop: Folder View with the Fusion keys (the "Desktop" containment has no icons).
-desktops = [c for c, kv in conts.items() if kv.get("plugin") in ("org.kde.desktopcontainment", "org.kde.plasma.folder")]
+# 1. Desktop: the Plasma Fusion desktop (Folder View with the tablet home screen, TABLET2 H1) when it
+# is installed, else Folder View. Both read Folder View's keys, so icons, cards and wallpaper stay.
+# The "Desktop" containment (no icons) also gets the Fusion keys; a Folder View keeps its own.
+target = "org.plasmafusion.desktop" if desktop_installed == "1" else "org.kde.plasma.folder"
+desktops = [c for c, kv in conts.items() if kv.get("plugin") in ("org.kde.desktopcontainment", "org.kde.plasma.folder", "org.plasmafusion.desktop")]
 for c in sorted(desktops, key=int):
     kv = conts[c]
-    if kv.get("plugin") != "org.kde.desktopcontainment":
-        note("desktop %s: %s (unchanged)" % (c, kv.get("plugin")))
+    plugin = kv.get("plugin")
+    if plugin == target:
+        note("desktop %s: %s (unchanged)" % (c, plugin))
         continue
-    write(APPLETSRC, ["Containments", c], "plugin", "org.kde.plasma.folder", kv.get("plugin"))
+    write(APPLETSRC, ["Containments", c], "plugin", target, plugin)
+    if plugin != "org.kde.desktopcontainment":
+        continue
     general = rc.get(("Containments", c, "General"), {})
     wanted = [kv2.split("=", 1) for kv2 in folder_keys.split()]
     if previews:

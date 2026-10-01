@@ -20,13 +20,17 @@
 #
 # 1. Plasma updates. While the Plasma Fusion lock screen (the kwin_wayland drop-in of
 #    lockscreen-enable.sh), the compiled decoration (kwinrc [org.kde.kdecoration2]
-#    library=org.plasmafusion.decoration) or the tablet navigation effect (kwinrc [Plugins]
-#    plasmafusion_navigationEnabled, built against KWin's internal classes) is on, the installed
+#    library=org.plasmafusion.decoration), the tablet navigation effect (kwinrc [Plugins]
+#    plasmafusion_navigationEnabled, built against KWin's internal classes) or the Plasma Fusion
+#    desktop (a desktop containment plugin=org.plasmafusion.desktop in the layout file, a fork of
+#    plasma-desktop's Folder View QML) is on, the installed
 #    versions of PACKAGES (rpm, cached by the rpm database's size and time) and the lock-screen
 #    package files (sha256) are compared with what fusion-config.sh recorded as tested. On a
 #    difference, or without a readable record, the drop-in is moved aside (stock lock screen), the
 #    decoration becomes the Plasma Fusion Aurorae theme of the current variant (-Left and its button
-#    lists for ButtonStyle=LeftCircles), the navigation effect is switched off and one notification
+#    lists for ButtonStyle=LeftCircles), the navigation effect is switched off, the desktop becomes
+#    Plasma's Folder View (org.kde.plasma.folder: the same keys, so icons and cards stay) and one
+#    notification
 #    is queued for after the desktop is up. The next login with matching versions, or the next
 #    fusion-config.sh run, turns them back on.
 # 2. Switching back. While the Global Theme (kdeglobals [KDE] LookAndFeelPackage) is not Plasma
@@ -36,12 +40,14 @@
 #    on-screen keyboard policy's kwinrc [Wayland] InputMethod value (so Fedora's default keyboard
 #    returns) and the plasma-fusion-powerfx and plasma-fusion-pen-garage user services (their
 #    graphical-session.target.wants links; startplasma reloads systemd after this check, so they do
-#    not start at this login) are switched off, once: a part the user turns on again is left on. A
+#    not start at this login) and the Plasma Fusion desktop (Folder View instead) are switched off,
+#    once: a part the user turns on again is left on. A
 #    Plasma Fusion theme turns them back on at the next login.
-# 3. A missing decoration plugin. While the compiled decoration is named (by the user or by the
-#    Global Theme's defaults) but not installed, the title bars become the matching Plasma Fusion
-#    Aurorae theme at login, without a notification; they switch back at the first login after the
-#    plugin is installed again.
+# 3. A missing decoration plugin or desktop package. While the compiled decoration is named (by the
+#    user or by the Global Theme's defaults) but not installed, the title bars become the matching
+#    Plasma Fusion Aurorae theme at login, without a notification; while a desktop names
+#    org.plasmafusion.desktop and that package is missing, it becomes Folder View. Both switch back
+#    at the first login after the plugin or package is installed again.
 #
 # Every change is recorded first (~/.local/state/plasma-fusion/gate/off) and undone only while the
 # value is still the one written here. With matching versions and a Fusion theme nothing changes.
@@ -51,7 +57,7 @@
 # Test hooks (never set in a real session): PF_GATE_FAKE_VERSIONS="kwin=6.8.0 kscreenlocker=6.8.0"
 # replaces installed versions in memory (never cached); PF_GATE_RPM names the rpm program.
 
-PACKAGES=(plasma-workspace kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative)
+PACKAGES=(plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative)
 # Upstream version only: a distribution rebuild (-2.fc44) keeps the interfaces Fusion uses.
 QUERY_FORMAT='%{NAME}=%{VERSION}\n'
 FORMAT=1
@@ -63,7 +69,11 @@ AURORAE=org.kde.kwin.aurorae.v2
 BREEZE_DECO=org.kde.breeze
 SWITCHER=org.plasmafusion.switcher
 KWIN_SWITCHER=thumbnail_grid
-PARTS=(lockscreen decoration navigation snap attach outline switcher tablet inputmethod powerfx pengarage)
+# The Plasma Fusion desktop and what it falls back to (the plasmashell layout file's containments).
+DESKTOP=org.plasmafusion.desktop
+FOLDER=org.kde.plasma.folder
+APPLETSRC=plasma-org.kde.plasma.desktop-appletsrc
+PARTS=(lockscreen decoration navigation desktop snap attach outline switcher tablet inputmethod powerfx pengarage)
 # The on-screen keyboard values the Fusion keyboard policy writes (quick settings, fusion-config.sh):
 # empty (keyboard off in laptop posture) and plasma-keyboard. Any other input method is the user's.
 OSK=/usr/share/applications/org.kde.plasma.keyboard.desktop
@@ -159,8 +169,20 @@ FNR == 1 { grp = "" }
   emit(k, "=" v)
 }'
 
+# The top-level containment groups of the user's layout file ("Containments][N", as the awk below
+# names a [Containments][N] header); their plugin keys are read with the others.
+DESK_GROUPS=()
 load_ini() {
-  local d dirs n=0 seen=: f l args=() lbl spec st
+  local d dirs n=0 seen=: f l args=() lbl spec st g want=$WANT
+  if [ -f "$CONFIG/$APPLETSRC" ]; then
+    while IFS= read -r g; do
+      g=${g%$'\r'}
+      [[ $g =~ ^\[Containments\]\[[[:digit:]]+\]$ ]] || continue
+      g=${g#[}
+      DESK_GROUPS+=("${g%]}")
+      want+=$'\n'"${g%]}|plugin"
+    done < <(LC_ALL=C grep -E '^\[Containments\]\[[0-9]+\]' "$CONFIG/$APPLETSRC" 2>/dev/null)
+  fi
   IFS=: read -r -a dirs <<<"${XDG_CONFIG_DIRS:-/etc/xdg}"
   for d in "${dirs[@]}"; do
     d=${d%/}
@@ -176,10 +198,11 @@ load_ini() {
       [ -r "${LAYER_DIR[$l]}/$f" ] && [ -f "${LAYER_DIR[$l]}/$f" ] && args+=("L=$l|$f" "${LAYER_DIR[$l]}/$f")
     done
   done
+  [ ${#DESK_GROUPS[@]} -eq 0 ] || args+=("L=u|$APPLETSRC" "$CONFIG/$APPLETSRC")
   [ ${#args[@]} -gt 0 ] || return 0
   while IFS=$'\t' read -r lbl spec st; do
     INI["$lbl|$spec"]=$st
-  done < <(LC_ALL=C awk -v want="$WANT" "$INI_AWK" "${args[@]}" 2>/dev/null)
+  done < <(LC_ALL=C awk -v want="$want" "$INI_AWK" "${args[@]}" 2>/dev/null)
 }
 
 # ustate FILE GROUP KEY: REPLY = the user file's state ("-": absent or deleted).
@@ -272,7 +295,7 @@ ini_edit() { # FILE OPS... (each "group<TAB>key<TAB>state")
 RECS=()
 RECS_CHANGED=0
 valid_part() {
-  case $1 in lockscreen | decoration | navigation | snap | attach | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
+  case $1 in lockscreen | decoration | navigation | desktop | snap | attach | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
   return 1
 }
 load_recs() {
@@ -361,16 +384,27 @@ aurorae_installed() { # THEME
   for d in "${dirs[@]}"; do [ -n "$d" ] && [ -d "$d/aurorae/themes/$1" ] && return 0; done
   return 1
 }
+# PF_GATE_SYSTEM_PLUGINS (tests only) replaces the system plugin directories.
 cpp_deco_installed() {
-  local d dirs
+  local d dirs sys
   IFS=: read -r -a dirs <<<"${QT_PLUGIN_PATH:-}"
-  for d in "${dirs[@]}" /usr/lib64/qt6/plugins /usr/lib/qt6/plugins /usr/lib/x86_64-linux-gnu/qt6/plugins; do
+  IFS=: read -r -a sys <<<"${PF_GATE_SYSTEM_PLUGINS-/usr/lib64/qt6/plugins:/usr/lib/qt6/plugins:/usr/lib/x86_64-linux-gnu/qt6/plugins}"
+  for d in "${dirs[@]}" "${sys[@]}"; do
     [ -n "$d" ] && [ -f "$d/org.kde.kdecoration3/$CPP_DECO.so" ] && return 0
   done
   return 1
 }
 
+desktop_installed() {
+  local d dirs
+  [ -f "$DATA/plasma/plasmoids/$DESKTOP/metadata.json" ] && return 0
+  IFS=: read -r -a dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in "${dirs[@]}"; do [ -n "$d" ] && [ -f "$d/plasma/plasmoids/$DESKTOP/metadata.json" ] && return 0; done
+  return 1
+}
+
 part_on() {
+  local g
   case $1 in
     lockscreen) [ -f "$DROPIN" ] ;;
     decoration) eff kwinrc org.kde.kdecoration2 library && [ "$REPLY" = "$CPP_DECO" ] ;;
@@ -382,6 +416,9 @@ part_on() {
         { eff kwinrc TabBoxAlternative LayoutName && [ "$REPLY" = "$SWITCHER" ]; } ;;
     tablet) eff kwinrc Plugins plasmafusion-tabletEnabled && [ "$REPLY" = true ] ;;
     navigation) eff kwinrc Plugins plasmafusion_navigationEnabled && [ "$REPLY" = true ] ;;
+    desktop)
+      for g in "${DESK_GROUPS[@]}"; do ustate "$APPLETSRC" "$g" plugin && [ "$REPLY" = "=$DESKTOP" ] && return 0; done
+      return 1 ;;
     # Only the values the Fusion keyboard policy writes; the user file only (the system's value is
     # Fedora's default).
     inputmethod) ustate kwinrc Wayland InputMethod && case $REPLY in = | "=$OSK") return 0 ;; esac; return 1 ;;
@@ -451,6 +488,13 @@ off_tablet() {
 off_navigation() {
   set_rec navigation "$1" kwinrc Plugins plasmafusion_navigationEnabled =false
   DID+=("navigation effect plasmafusion_navigation off")
+}
+off_desktop() {
+  local g
+  for g in "${DESK_GROUPS[@]}"; do
+    ustate "$APPLETSRC" "$g" plugin && [ "$REPLY" = "=$DESKTOP" ] && set_rec desktop "$1" "$APPLETSRC" "$g" plugin "=$FOLDER"
+  done
+  DID+=("desktop: Folder View instead of $DESKTOP")
 }
 off_inputmethod() {
   set_rec inputmethod "$1" kwinrc Wayland InputMethod -
@@ -799,6 +843,7 @@ queue_notification() {
       lockscreen) what+=("Plasma's own lock screen") ;;
       decoration) what+=("the Aurorae title bars") ;;
       navigation) what+=("KWin's own edges instead of the tablet gestures") ;;
+      desktop) what+=("Folder View instead of the tablet home screen") ;;
     esac
   done
   [ ${#what[@]} -gt 0 ] || return 0
@@ -812,11 +857,11 @@ queue_notification() {
   how=tools/device/fusion-config.sh
   [ -n "$TESTED_TOOL" ] && [ -f "$TESTED_TOOL" ] && how=$TESTED_TOOL
   [[ $how == "$HOME"/* ]] && how="~${how#"$HOME"}"
-  case ${#what[@]} in
-    1) j=${what[0]} ;;
-    2) j="${what[0]} and ${what[1]}" ;;
-    *) j="${what[0]}, ${what[1]} and ${what[2]}" ;;
-  esac
+  j=${what[-1]}
+  if [ ${#what[@]} -gt 1 ]; then
+    printf -v d '%s, ' "${what[@]:0:${#what[@]}-1}"
+    j="${d%, } and $j"
+  fi
   body+="This session uses $j. To check and switch back, run $how."
   if [ "$DRY" = 1 ]; then say "  would queue a notification: $body"; return 0; fi
   [ -d "$GATE" ] || mkdir -p "$GATE" 2>/dev/null
@@ -844,7 +889,7 @@ evaluate() { # the decision for every part; deploy only turns parts back on
   if [ "$MODE" = deploy ]; then
     UPDATE_OK=1 LOCK_OK=1
   else
-    for p in lockscreen decoration navigation; do part_on "$p" || rec_has "$p" && risky=1; done
+    for p in lockscreen decoration navigation desktop; do part_on "$p" || rec_has "$p" && risky=1; done
     [ "$risky" = 1 ] && check_versions
     { [ -f "$DROPIN" ] || rec_has lockscreen; } && check_lock
   fi
@@ -852,13 +897,14 @@ evaluate() { # the decision for every part; deploy only turns parts back on
     need_upd=0 need_theme=0
     case $p in
       lockscreen) [ "${LOCK_OK:-1}" = 1 ] || need_upd=1 ;;
-      decoration | navigation) [ "${UPDATE_OK:-1}" = 1 ] || need_upd=1 ;;
+      decoration | navigation | desktop) [ "${UPDATE_OK:-1}" = 1 ] || need_upd=1 ;;
     esac
     [ "$p" != decoration ] && [ "$FUSION" = 0 ] && need_theme=1
     # The compiled decoration named (by the user or by the Global Theme's defaults) but not
     # installed: KWin would fall back to its built-in default, so the matching Aurorae theme is
     # chosen instead, without a notification. While the plugin is missing the record stays, and the
     # compiled title bars come back at the first login after it is installed again.
+    # The same for the desktop: a containment naming a missing package would show an error.
     missing=0
     if [ "$p" = decoration ] && [ "$need_upd" = 0 ] && [ "$MODE" != deploy ] && ! cpp_deco_installed; then
       if part_on decoration; then
@@ -867,9 +913,16 @@ evaluate() { # the decision for every part; deploy only turns parts back on
         say "  decoration: $CPP_DECO is still not installed; the title bars stay Aurorae"
         continue
       fi
+    elif [ "$p" = desktop ] && [ "$need_upd" = 0 ] && [ "$MODE" != deploy ] && ! desktop_installed; then
+      if part_on desktop; then
+        missing=1
+      elif rec_has desktop; then
+        say "  desktop: $DESKTOP is still not installed; the desktop stays Folder View"
+        continue
+      fi
     fi
     if [ "$missing" = 1 ]; then
-      off_decoration missing
+      "off_$p" missing
     elif [ "$need_upd" = 1 ]; then
       if part_on "$p"; then
         "off_$p" update

@@ -84,7 +84,7 @@ for (var i = 0; i < ps.length; ++i) {
 var ds = desktops();
 for (var i = 0; i < ds.length; ++i) {
     var d = ds[i];
-    if (d.type !== "org.kde.plasma.folder") {
+    if (d.type !== "org.kde.plasma.folder" && d.type !== "org.plasmafusion.desktop") {
         continue;
     }
     d.currentConfigGroup = ["General"];
@@ -261,7 +261,7 @@ var count = 0;
 var ds = desktops();
 for (var i = 0; i < ds.length; ++i) {
     var d = ds[i];
-    if (d.type !== "org.kde.plasma.folder") {
+    if (d.type !== "org.kde.plasma.folder" && d.type !== "org.plasmafusion.desktop") {
         continue;
     }
     d.currentConfigGroup = ["General"];

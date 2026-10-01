@@ -1,0 +1,19 @@
+# Files kept as in plasma-desktop v6.7.5 containments/desktop/package (Folder View); the linters
+# skip them (tools/checks/qmlscan.py); small Plasma Fusion fixes in them are marked "Plasma Fusion".
+# main.qml and HomeLayer.qml are Plasma Fusion code and are linted.
+contents/config/config.qml
+contents/ui/ActionButton.qml
+contents/ui/BackButtonItem.qml
+contents/ui/CompactRepresentation.qml
+contents/ui/ConfigFilter.qml
+contents/ui/ConfigIcons.qml
+contents/ui/ConfigLocation.qml
+contents/ui/ConfigOverlay.qml
+contents/ui/FolderItemActionButton.qml
+contents/ui/FolderItemDelegate.qml
+contents/ui/FolderItemPreviewPluginsDialog.qml
+contents/ui/FolderViewDialog.qml
+contents/ui/FolderViewDropArea.qml
+contents/ui/FolderViewLayer.qml
+contents/ui/FolderView.qml
+contents/ui/RenameEditor.qml

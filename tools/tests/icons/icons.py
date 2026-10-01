@@ -155,7 +155,7 @@ def icon_desktop(state):
     """The desktop containment that shows the icons: Folder View with the test files, else screen 0."""
     best = None
     for d in state["plasma"]["desktops"]:
-        if d["type"] == "org.kde.plasma.folder" and "positions" in d["general"]:
+        if d["type"] in ("org.kde.plasma.folder", "org.plasmafusion.desktop") and "positions" in d["general"]:
             return d
         if d["screen"] == 0 and best is None:
             best = d

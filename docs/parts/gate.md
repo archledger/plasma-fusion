@@ -73,6 +73,7 @@ it starts KWin; `kwinrc` is read by KWin when it starts.
 | lock screen | `~/.config/systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf` exists | Fusion theme, tested versions, tested lock-screen files |
 | decoration | effective `kwinrc [org.kde.kdecoration2] library=org.plasmafusion.decoration` (user file or kdedefaults) | tested versions |
 | navigation (TABLET2 N1) | effective `kwinrc [Plugins] plasmafusion_navigationEnabled=true` (the compiled tablet navigation effect, built against KWin's internal classes) | Fusion theme, tested versions |
+| desktop (TABLET2 H1) | a top-level `[Containments][N]` group of the user's `plasma-org.kde.plasma.desktop-appletsrc` has `plugin=org.plasmafusion.desktop` (the Folder View fork, `docs/parts/desktop.md`) | Fusion theme, tested versions, the package installed |
 | snap, attach | `kwinrc [Plugins] plasmafusion-snapEnabled` / `plasmafusion-attachEnabled` = true | Fusion theme |
 | outline | `kwinrc [Outline] QmlPath` contains `plasmafusion` | Fusion theme |
 | switcher | effective `kwinrc [TabBox]` or `[TabBoxAlternative] LayoutName=org.plasmafusion.switcher` | Fusion theme |
@@ -87,7 +88,7 @@ it starts KWin; `kwinrc` is read by KWin when it starts.
 (`setupPlasmaEnvironment` → `determineLookAndFeel`), so `LookAndFeelPackage` can still name the
 other one when the check runs. "Tested versions": the upstream
 version (`%{VERSION}`, not the release: a distribution rebuild keeps the interfaces) of
-`plasma-workspace kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative` equals the
+`plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative` equals the
 record; a missing or unreadable record, or rpm failing or taking over 3 s, counts as untested.
 "Tested lock-screen files": sha256 over the files and relative names of the installed
 `org.plasmafusion.lockshell` (user copy first, as kscreenlocker finds it) equals the record, and the
@@ -105,6 +106,7 @@ Switching off (recorded first in `gate/off`, then written):
 | switcher | `LayoutName` removed, or set to KWin's default `thumbnail_grid` where kdedefaults still names the Fusion switcher (a Global Theme without a switcher of its own, such as Breeze, leaves it there); `DesktopMode=0` and `HighlightWindows=false` (fusion-config.sh's values for the Fusion switcher) removed |
 | tablet | `plasmafusion-tabletEnabled=false` written (not removed: the script's EnabledByDefault is not the check's to know) |
 | navigation | `plasmafusion_navigationEnabled=false` written; the notification says the session uses "KWin's own edges instead of the tablet gestures". The plugin also checks at start that the running KWin is the one it was built for (`KWIN_VERSION_STRING` against the application version) and otherwise stays idle, for the case where a later fusion-config.sh run turned it back on before the package was rebuilt |
+| desktop | each such containment's `plugin` becomes `org.kde.plasma.folder` (stock Folder View reads the same keys: icons, cards, wallpaper stay); the notification says "Folder View instead of the tablet home screen". A missing package does the same without a notification, and the record stays while it is missing |
 | inputmethod | the user key removed, so Fedora's default keyboard (`/usr/share/kde-settings/kde-profile/default/xdg/kwinrc`) returns; another input method the user chose is never touched |
 | powerfx, pengarage | the wants link moved to `gate/saved/` (record kind `link`, checked against the one allowed path); the service does not start at this login because startplasma reloads the systemd user manager after the check. It comes back only while the unit file is still installed |
 
@@ -392,3 +394,26 @@ screen and decoration, notification, restored), `b10` (only the effect on: a KWi
 Qt Quick 6.12 update switch it off, matching logins turn it back on), `c` (another Global Theme):
 128 passed; the 3 `p` failures (plugin-missing cases) fail the same way without this change on a
 machine with plasma-fusion-decoration installed (the laptop since its 314c89a deploy).
+
+## Desktop containment (TABLET2 H1, 2026-10-01)
+
+The Plasma Fusion desktop (`org.plasmafusion.desktop`) is a copy of plasma-desktop 6.7.5's Folder
+View QML; it imports plasma-desktop's private `org.kde.private.desktopcontainment.folder` plugin and
+plasma-workspace's containment layout manager, so it is version-checked too: `plasma-desktop` joins
+`PACKAGES`, and `desktop` joins `PARTS`. The containment groups of the layout file are found with one
+`grep` and their `plugin` keys read in the same `awk` run as the other keys (user file only); the
+records are ordinary key records with the group `Containments][N`, so the generic restore puts the
+plugin back while it is still `org.kde.plasma.folder`, and leaves a containment the user changed
+since (for example to Desktop in Desktop and Wallpaper). The check runs before plasmashell starts, so
+the edit is not overwritten by plasmashell's own layout save. A missing package switches the desktop
+to Folder View without a notification (like a missing decoration plugin), and back once it is
+installed. The notification now joins any number of parts ("A, B, C and D").
+
+Tests (`gate-unit.sh` `b11`): a plasma-desktop 6.8.0 update switches the desktop to Folder View
+(its `[General]` keys and the panel untouched, KConfig reads the new value, notification text), a
+matching login restores the file exactly; a removed package switches without a notification and
+keeps the record while missing, a reinstalled one restores the file exactly; a containment the
+user changed while held off is left as it is and the record cleared. `c` also checks the desktop
+under another Global Theme. The cases no longer depend on the machine: `PF_GATE_SYSTEM_PLUGINS`
+(tests only) replaces the system plugin directories, so the `p` cases pass on a machine with
+plasma-fusion-decoration installed. Run 2026-10-01: 144 passed, 0 failed.

@@ -143,7 +143,7 @@ var ds = desktops();
 for (var i = 0; i < ds.length; ++i) {
     var d = ds[i];
     out.push("desktop " + d.id + " " + d.type);
-    if (d.type === "org.kde.plasma.folder") out.push("  folder " + keys(d, ["filterMode", "filterPattern", "iconSize", "positions"]));
+    if (d.type === "org.kde.plasma.folder" || d.type === "org.plasmafusion.desktop") out.push("  folder " + keys(d, ["filterMode", "filterPattern", "iconSize", "positions"]));
     var ws = d.widgets();
     for (var j = 0; j < ws.length; ++j) if (ws[j].type === "org.plasmafusion.systemcard") out.push("  systemcard " + keys(ws[j], ["glass"]));
 }
@@ -202,7 +202,7 @@ positions() {
   evaljs - <<'JS'
 var ds = desktops();
 for (var i = 0; i < ds.length; ++i) {
-    if (ds[i].type !== "org.kde.plasma.folder") continue;
+    if (ds[i].type !== "org.kde.plasma.folder" && ds[i].type !== "org.plasmafusion.desktop") continue;
     ds[i].currentConfigGroup = ["General"];
     print(ds[i].readConfig("positions", ""));
     break;
@@ -237,7 +237,7 @@ JS
 fkey() {
   evaljs - <<JS
 var ds = desktops(), v = "<none>";
-for (var i = 0; i < ds.length; ++i) if (ds[i].type === "org.kde.plasma.folder") { ds[i].currentConfigGroup = ["General"]; v = String(ds[i].readConfig("$1", "")); break; }
+for (var i = 0; i < ds.length; ++i) if (ds[i].type === "org.kde.plasma.folder" || ds[i].type === "org.plasmafusion.desktop") { ds[i].currentConfigGroup = ["General"]; v = String(ds[i].readConfig("$1", "")); break; }
 print(v);
 JS
 }

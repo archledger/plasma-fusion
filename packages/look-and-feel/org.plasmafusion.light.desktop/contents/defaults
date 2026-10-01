@@ -42,6 +42,7 @@ Theme=org.plasmafusion.dark.desktop
 [Wallpaper]
 Image=PlasmaFusion
 
-# Folder View: desktop icons from ~/Desktop (BACKLOG M1); the layout script sets its keys.
+# The Plasma Fusion desktop: Folder View with desktop icons from ~/Desktop (BACKLOG M1), the home
+# screen in tablet posture (TABLET2 H1); the layout script sets its keys.
 [Desktop][org.kde.plasma.desktop]
-Containment=org.kde.plasma.folder
+Containment=org.plasmafusion.desktop
