@@ -123,7 +123,7 @@ GridView {
 
     function labelFor(entry): string {
         if (designLabels && entry && entry.favoriteId) {
-            const label = Launcher.designLabels[entry.favoriteId];
+            const label = Launcher.designLabels[Launcher.appId(entry.favoriteId)];
             if (label) {
                 return label;
             }

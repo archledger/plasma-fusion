@@ -163,6 +163,13 @@ const searchRunners = [
     "krunner_charrunner", "krunner_katesessions", "krunner_konsoleprofiles",
 ];
 
+// An app id without the "applications:" scheme: Plasma 6.8's Kicker gives application entries
+// "applications:org.kde.dolphin.desktop" where 6.7 gave "org.kde.dolphin.desktop" (pinned entries
+// always had the scheme), while the configured pins and design labels use the plain desktop id.
+function appId(id) {
+    return String(id || "").replace(/^applications:/, "");
+}
+
 // The icon theme name of an app entry (its desktop file name), for FusionIconTile's coverage
 // check: "applications:org.kde.dolphin.desktop" -> "org.kde.dolphin".
 function iconNameFor(entry) {

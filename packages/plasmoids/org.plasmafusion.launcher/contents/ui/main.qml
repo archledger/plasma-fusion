@@ -161,11 +161,13 @@ PlasmoidItem {
         if (Plasmoid.configuration.favoritesPortedToKAstats || !favoritesModel) {
             return;
         }
+        // Keyed by the plain desktop id (Launcher.appId), valued with the id in the model's own
+        // form, which is the form to pin with (Plasma 6.7 and 6.8 differ).
         const installed = {};
         for (let i = 0; i < installedReader.count; ++i) {
             const entry = installedReader.objectAt(i);
             if (entry && entry.favoriteId) {
-                installed[entry.favoriteId] = true;
+                installed[Launcher.appId(entry.favoriteId)] = String(entry.favoriteId);
             }
         }
         if (Object.keys(installed).length === 0) {
@@ -177,20 +179,28 @@ PlasmoidItem {
         }
         // The current pins (read before the flag below deactivates the readers). A pinned app
         // counts as installed even when the menu does not list it.
+        // current: the pins as the model names them; currentKeys: the same as plain desktop ids.
         const current = [];
         for (let i = 0; i < pinnedReader.count; ++i) {
             const entry = pinnedReader.objectAt(i);
             current.push(entry ? String(entry.favoriteId) : "");
         }
+        const currentKeys = current.map(id => Launcher.appId(id));
+        const pinnedAs = id => {
+            const row = currentKeys.indexOf(Launcher.appId(id));
+            return row >= 0 ? current[row] : (installed[Launcher.appId(id)] || id);
+        };
         const ids = [];
         const duplicates = [];
         for (const slot of Launcher.pinnedSlots(Plasmoid.configuration.favorites)) {
-            const pick = slot.find(id => id.indexOf("preferred://") === 0 || installed[id] || current.indexOf(id) >= 0);
+            const pick = slot.find(id => id.indexOf("preferred://") === 0 || installed[Launcher.appId(id)]
+                                         || currentKeys.indexOf(Launcher.appId(id)) >= 0);
             if (pick) {
-                ids.push(pick);
+                ids.push(pinnedAs(pick));
                 // Another app for the same slot would show a second tile for the same role
                 // (Fedora pins Kontact next to KMail, GNOME Files next to Dolphin).
-                duplicates.push(...slot.filter(id => id !== pick && current.indexOf(id) >= 0));
+                duplicates.push(...slot.filter(id => Launcher.appId(id) !== Launcher.appId(pick)
+                                                     && currentKeys.indexOf(Launcher.appId(id)) >= 0).map(pinnedAs));
             }
         }
         Plasmoid.configuration.favoritesPortedToKAstats = true;
