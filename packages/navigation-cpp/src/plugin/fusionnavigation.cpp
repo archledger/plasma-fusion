@@ -14,6 +14,7 @@
 #include <QQuickItem>
 #include <KSharedConfig>
 #include <config-kwin.h>
+#include <inputmethod.h>
 #include <main.h>
 #include <tabletmodemanager.h>
 #include <core/output.h>
@@ -464,5 +465,10 @@ void FusionNavigationState::invokeEffect()
     setInitialTaskIndex(currentTaskIndex()); // TODO! this is only until the crashing bug is fixed and recency sorting is in
     m_effect->setRunning(true);
     setDBusState(true);
+    // Going home or to the switcher leaves the app: its on-screen keyboard goes too, as on iPadOS
+    // and Android (it stayed over the home screen and was still up at the next lock, session smk1).
+    if (InputMethod *inputMethod = kwinApp()->inputMethod(); inputMethod && inputMethod->isVisible()) {
+        inputMethod->hide();
+    }
 }
 }

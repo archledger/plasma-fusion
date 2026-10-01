@@ -265,8 +265,12 @@ Item {
             }
         }
         // A finger does not hover, so in tablet posture typed text or the on-screen keyboard alone
-        // keep the prompt up.
-        property bool blockUI: (containsMouse || tabletState.tablet) && (mainStack.depth > 1 || mainBlock.mainPasswordBox.text.length > 0 || inputPanel.keyboardActive)
+        // keep the prompt up; the keyboard only once the prompt is up (TABLET2 L1: a keyboard left
+        // from before the lock, or one KWin raises for the focused field after a touch, does not
+        // open the prompt; it is hidden while idle, below).
+        property bool blockUI: (containsMouse || tabletState.tablet)
+            && (mainStack.depth > 1 || mainBlock.mainPasswordBox.text.length > 0
+                || (inputPanel.keyboardActive && (!tabletState.tablet || uiVisible)))
 
         // 0 = idle (Lock board), 1 = prompt shown (Login board); animated (BACKLOG S1): the
         // prompt comes in over 300 ms, decelerating, and goes in 200 ms; both follow Plasma's
@@ -437,7 +441,20 @@ Item {
             easing.bezierCurve: motion.decelerate
         }
 
-        Component.onCompleted: launchAnimation.start();
+        Component.onCompleted: {
+            launchAnimation.start();
+            if (tabletState.tablet) {
+                lockScreenUi.hideKeyboard();
+            }
+        }
+        Connections {
+            target: inputPanel
+            function onKeyboardActiveChanged() {
+                if (tabletState.tablet && inputPanel.keyboardActive && !lockScreenRoot.uiVisible && !lockScreenRoot.keyboardOnPrompt) {
+                    lockScreenUi.hideKeyboard();
+                }
+            }
+        }
 
         Backdrop {
             id: backdrop
