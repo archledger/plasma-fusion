@@ -131,15 +131,22 @@ KWin.TabBoxSwitcher {
             windowsById = map;
         }
 
-        function windowFor(id) {
+        // rebuildNow: for callers outside bindings (refresh()).
+        function windowFor(id, rebuildNow) {
             const key = keyOf(id);
             if (key.length === 0) {
                 return null;
             }
             let w = windowsById[key];
-            if (w === undefined) {
+            if (w === undefined && rebuildNow) {
                 rebuildWindowMap();
                 w = windowsById[key];
+            } else if (w === undefined) {
+                // A window opened since the map was built: rebuild the map after this evaluation.
+                // The cards' info bindings call this and depend on windowsById, so rebuilding here
+                // (it reads Workspace.windows, which has no change signal) looped them; the new map
+                // re-evaluates the cards with the window found.
+                Qt.callLater(rebuildWindowMap);
             }
             return w === undefined ? null : w;
         }
@@ -192,7 +199,7 @@ KWin.TabBoxSwitcher {
                 if (!row) {
                     continue;
                 }
-                const onHere = isOnDesktop(windowFor(row.windowId), desktop);
+                const onHere = isOnDesktop(windowFor(row.windowId, true), desktop);
                 if (!onHere) {
                     others = true;
                 }
