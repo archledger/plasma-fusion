@@ -80,7 +80,9 @@ Item {
     // for a desktop shortcut (BACKLOG M3); false when the drag ends.
     signal desktopDrag(bool active)
 
-    visible: resolvable
+    // shown: false for a row the dock leaves out (tablet recents beyond the limit, TABLET2 N2)
+    property bool shown: true
+    visible: resolvable && shown
     width: Math.round(iconSize)
     activeFocusOnTab: visible
     transform: Translate { x: task.shift; y: -bounce.lift }

@@ -172,7 +172,10 @@ PlasmoidItem {
 
         groupMode: TaskManager.TasksModel.GroupApplications
         groupInline: false
-        sortMode: TaskManager.TasksModel.SortManual
+        // Tablet posture (TABLET2 N2): the apps that are not pinned in strict recency, the latest
+        // first (libtaskmanager keeps pinned apps in their pinned order before them); rescan()
+        // shows the first tabletRecents of them. The laptop keeps them in the order they started.
+        sortMode: root.tablet ? TaskManager.TasksModel.SortLastActivated : TaskManager.TasksModel.SortManual
         separateLaunchers: true
         launchInPlace: true
         hideActivatedLaunchers: true
@@ -216,6 +219,7 @@ PlasmoidItem {
             root.markMagnification();
         }
         function onDebugActionChanged(): void { Qt.callLater(root.runDebugAction); }
+        function onTabletRecentsChanged(): void { root.scheduleRescan(); }
         function onMagnifiedSizeChanged(): void { root.markMagnification(); }
     }
 
@@ -246,11 +250,19 @@ PlasmoidItem {
         const n = tasksModel.count;
         const visible = [];
         const pinned = [];
+        let recents = 0;
         for (let i = 0; i < n; ++i) {
             const isLauncher = role(i, TaskManager.AbstractTasksModel.IsLauncher) === true;
             const url = role(i, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon);
-            visible.push(!isMissingLauncher(i));
-            pinned.push(isLauncher || (url ? tasksModel.launcherPosition(url) !== -1 : false));
+            const isPinned = isLauncher || (url ? tasksModel.launcherPosition(url) !== -1 : false);
+            let shown = !isMissingLauncher(i);
+            // Tablet posture: only the most recent apps that are not pinned (the rows come in
+            // recency order there); the App Switcher has the rest.
+            if (shown && !isPinned && tablet && ++recents > Plasmoid.configuration.tabletRecents) {
+                shown = false;
+            }
+            visible.push(shown);
+            pinned.push(isPinned);
         }
         if (JSON.stringify(visible) !== JSON.stringify(taskVisible) || JSON.stringify(pinned) !== JSON.stringify(taskPinned)) {
             taskVisible = visible;
@@ -589,6 +601,8 @@ PlasmoidItem {
     onScreenWidthChanged: Qt.callLater(relayout)
     onTabletChanged: {
         clearHover();
+        // the recents limit applies in tablet posture only (rescan() relays out too)
+        scheduleRescan();
         Qt.callLater(relayout);
         maybeShowGestureCard();
     }
@@ -1422,6 +1436,7 @@ PlasmoidItem {
                 entry: root.launcherEntries[taskItem.iconName] ?? null
                 monthText: root.todayMonth
                 dayText: root.todayDay
+                shown: root.taskVisible[taskItem.index] ?? true
                 x: root.rest.taskX[taskItem.index] ?? 0
                 iconSize: root.rest.taskW[taskItem.index] ?? root.tile
                 zoomSize: root.zoomSize

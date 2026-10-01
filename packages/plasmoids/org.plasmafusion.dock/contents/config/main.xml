@@ -74,6 +74,12 @@
       <min>44</min>
       <max>64</max>
     </entry>
+    <entry name="tabletRecents" type="Int">
+      <label>Recent apps after the pinned ones in tablet posture, most recently used first (TABLET2 N2: iPadOS shows three; 0 shows none)</label>
+      <default>3</default>
+      <min>0</min>
+      <max>3</max>
+    </entry>
     <entry name="tabletShowDownloadsTrash" type="Bool">
       <label>Show Downloads and Trash in tablet posture (landscape only)</label>
       <default>true</default>

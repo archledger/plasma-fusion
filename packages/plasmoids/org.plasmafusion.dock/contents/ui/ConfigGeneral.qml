@@ -18,6 +18,7 @@ KCM.SimpleKCM {
     property alias cfg_magnifiedSize: magnifiedSize.value
     property alias cfg_showTooltips: showTooltips.checked
     property alias cfg_colorVariant: colorVariant.currentIndex
+    property alias cfg_tabletRecents: tabletRecents.value
     property alias cfg_searchAction: searchAction.currentIndex
     property alias cfg_showOnlyCurrentDesktop: currentDesktop.checked
     property alias cfg_showOnlyCurrentActivity: currentActivity.checked
@@ -34,6 +35,9 @@ KCM.SimpleKCM {
     property string cfg_debugAction
     property int cfg_debugPointerX
     property int cfg_debugHoverIndex
+    property int cfg_tabletTile
+    property bool cfg_tabletShowDownloadsTrash
+    property int cfg_powerTier
 
     // The dialog also passes every key's default value as cfg_<key>Default.
     property var cfg_launchersDefault
@@ -51,6 +55,10 @@ KCM.SimpleKCM {
     property string cfg_debugActionDefault
     property int cfg_debugPointerXDefault
     property int cfg_debugHoverIndexDefault
+    property int cfg_tabletRecentsDefault
+    property int cfg_tabletTileDefault
+    property bool cfg_tabletShowDownloadsTrashDefault
+    property int cfg_powerTierDefault
 
     function saveConfig(): void {
         const config = Plasmoid.configuration;
@@ -60,6 +68,10 @@ KCM.SimpleKCM {
         cfg_debugAction = config.debugAction;
         cfg_debugPointerX = config.debugPointerX;
         cfg_debugHoverIndex = config.debugHoverIndex;
+        cfg_tabletTile = config.tabletTile;
+        cfg_tabletShowDownloadsTrash = config.tabletShowDownloadsTrash;
+        // written by the power tiers service while the dialog may be open
+        cfg_powerTier = config.powerTier;
     }
 
     Kirigami.FormLayout {
@@ -87,6 +99,19 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: showTooltips
             text: i18nc("@option:check", "Show app names above the hovered icon")
+        }
+
+        RowLayout {
+            Kirigami.FormData.label: i18nc("@label:spinbox", "Recent apps in tablet posture:")
+            QQC2.SpinBox {
+                id: tabletRecents
+                Accessible.name: i18nc("@label:spinbox", "Recent apps in tablet posture")
+                from: 0
+                to: 3
+            }
+            QQC2.Label {
+                text: i18nc("@label after the spin box", "after the pinned apps, most recently used first")
+            }
         }
 
         QQC2.ComboBox {
