@@ -193,6 +193,23 @@ names at HEAD; STYLE-1's coverage work adds more) with the icon loader's dash fa
 (`google-chrome-canary` finds the `google-chrome` tile). Bind `foreign: false` while another icon theme
 is active. An icon given as a file path or a `QIcon` without `iconName` counts as foreign.
 
+## FusionLaunchZoom (TABLET2 M1, 2026-10-01)
+
+The app-open zoom in tablet posture: `play(iconItem, source, iconName)` takes the tapped
+`FusionIconTile`'s global rectangle and screen, then a card in the tile's board neutral (#1b2031 dark,
+#f4f6fb light) with the app's icon grows from the tile to the whole screen (Motion `surface` x 1.2,
+decelerating; the icon grows to 128 px). The card's window is a normal-layer, frameless, non-focus
+`PlasmaCore.Dialog` without background, so the panels stay above it and the app's window, which KWin
+opens on top, covers it: no "app is ready" signal is needed. It fades out (`popupOut`) and unloads
+after 4 s or on a tap; a full-screen window costs about 37 MiB of GPU memory only while it exists.
+Reduced motion: nothing is shown. Used by the home screen (tiles), the dock (starting a pinned app in
+tablet posture) and the launcher sheet (tiles). Each play logs `launch zoom: <icon> from x,y size`.
+
+Test (private session, `build/m1/scen-m1z.sh`, m1x/m1y; evidence `artifacts/plasma-fusion/2026-10-01-tablet2/M1/zoom`):
+Discover tapped on the home screen: the splash with its icon fills the screen under the top bar, then
+Discover's window opens over it; KCalc and Konsole (fast starts) appear at once over it; the splash
+window is not in the dock's task list.
+
 ## FusionMetrics changes
 
 - `property bool tablet: Kirigami.Settings.tabletMode`, and `touch` is now `tablet ||

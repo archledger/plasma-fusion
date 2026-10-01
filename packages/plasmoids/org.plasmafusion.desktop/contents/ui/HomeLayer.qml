@@ -11,6 +11,7 @@ import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.private.kicker as Kicker
 import org.kde.plasma.workspace.dbus as DBus
+import org.kde.kirigami as Kirigami
 
 // The home screen in tablet posture (TABLET2 H1, owner decision "iPad-style"): pages of apps in the
 // desktop window, under the apps, in place of Folder View (whose rubber band was the owner's pen
@@ -106,6 +107,15 @@ Item {
     HomeActionMenu {
         id: actionMenu
         home: home
+    }
+
+    // The app-open zoom (TABLET2 M1).
+    FusionLaunchZoom {
+        id: launchZoom
+        dark: {
+            const c = Kirigami.Theme.backgroundColor;
+            return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
+        }
     }
 
     ListView {
@@ -252,6 +262,7 @@ Item {
         readonly property var source: pageView.index === 0 ? home.favoritesModel : home.allModel
         onClicked: {
             if (source) {
+                launchZoom.play(icon, tile.model.decoration || "application-x-executable", home.iconNameFor(tile.model));
                 source.trigger(tile.sourceRow, "", null);
             }
         }

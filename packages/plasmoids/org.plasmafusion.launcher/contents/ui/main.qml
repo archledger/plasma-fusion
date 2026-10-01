@@ -10,6 +10,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.private.kicker as Kicker
 import org.kde.plasma.workspace.dbus as DBus
+import org.kde.kirigami as Kirigami
 
 import "../code/launcher.js" as Launcher
 
@@ -664,6 +665,18 @@ PlasmoidItem {
         id: backdrop
         visible: false
         onClicked: root.close()
+    }
+
+    // The app-open zoom from the tablet sheet's tiles (TABLET2 M1).
+    FusionLaunchZoom {
+        id: launchZoom
+        dark: {
+            const c = Kirigami.Theme.backgroundColor;
+            return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
+        }
+    }
+    function playLaunchZoom(item, source, name) {
+        launchZoom.play(item, source, name);
     }
 
     ActionMenu {

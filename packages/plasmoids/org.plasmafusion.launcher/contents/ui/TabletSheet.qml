@@ -463,6 +463,9 @@ FocusScope {
 
         onClicked: {
             const source = pageView.index === 0 ? tile.owner.favoritesModel : tile.owner.allModel;
+            if (source) {
+                tile.owner.launcher.playLaunchZoom(icon, tile.model.decoration || "application-x-executable", Launcher.iconNameFor(tile.model));
+            }
             if (source && source.trigger(tile.sourceRow, "", null)) {
                 tile.owner.launcher.close();
             }

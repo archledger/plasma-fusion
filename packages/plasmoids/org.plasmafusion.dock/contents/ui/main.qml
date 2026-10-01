@@ -34,6 +34,14 @@ PlasmoidItem {
     Motion {
         id: motion
     }
+    // The app-open zoom in tablet posture (TABLET2 M1).
+    FusionLaunchZoom {
+        id: launchZoom
+        dark: {
+            const c = Kirigami.Theme.backgroundColor;
+            return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
+        }
+    }
     FusionAccent {
         id: tint
     }
@@ -1459,7 +1467,13 @@ PlasmoidItem {
                 zoomReady: root.zoomIconsReady
                 height: row0.height
                 bottomPad: root.bottomPad
-                onActivated: modifiers => root.activateTask(taskItem.index, modifiers)
+                onActivated: modifiers => {
+                    // Tablet posture: starting a pinned app zooms from its tile (TABLET2 M1).
+                    if (root.tablet && taskItem.isLauncher) {
+                        launchZoom.play(taskItem.iconItem, taskItem.model.decoration, taskItem.iconName);
+                    }
+                    root.activateTask(taskItem.index, modifiers);
+                }
                 onNewInstanceRequested: tasksModel.requestNewInstance(tasksModel.makeModelIndex(taskItem.index))
                 onMenuRequested: root.showTaskMenu(taskItem)
                 onDragMoved: sceneX => root.reorderTo(taskItem.index, sceneX)
