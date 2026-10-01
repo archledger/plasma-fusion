@@ -494,11 +494,19 @@ KCM.SimpleKCM {
                 ToggleRow {
                     Layout.fillWidth: true
                     pal: fusionPalette
-                    last: true
                     text: i18nc("@option:check", "Lighter at 10 % battery")
                     checked: kcm.lighterOnCritical
                     note: i18nc("@info", "Solid glass and no dock magnification until the battery recovers.")
                     onToggleRequested: kcm.lighterOnCritical = !kcm.lighterOnCritical
+                }
+                ToggleRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    last: true
+                    text: i18nc("@option:check", "Search inside file contents")
+                    checked: kcm.fileContentIndexing
+                    note: i18nc("@info", "Lets search find words inside documents. Indexing already pauses on battery; turn it off to save power while charging. File names stay searchable.")
+                    onToggleRequested: kcm.fileContentIndexing = !kcm.fileContentIndexing
                 }
             }
 

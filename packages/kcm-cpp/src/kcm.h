@@ -52,7 +52,9 @@ class QDBusServiceWatcher;
       Desktop icons   Folder View [General] filterMode=1 with the pattern "/", which matches no
                       file name (positions are kept), and iconSize.
       File drag       kdeglobals [KDE] DndBehavior (AlwaysAsk / MoveIfSameDevice).
-      Battery         plasmafusionrc [Power] LighterOnCritical.
+      Battery         plasmafusionrc [Power] LighterOnCritical; file contents in search:
+                      baloofilerc [General] "only basic indexing" (the key System Settings >
+                      File Search writes), then Baloo's updateConfig over D-Bus.
       Tablet          kwinrc [Input] TabletMode, [Script-plasmafusion-tablet] WindowMode,
                       DockHiding, EdgeLeft, EdgeRight (then the "Plasma Fusion: Tablet Window
                       Mode" shortcut), the quick-settings widgets' keyboardPolicy and the docks'
@@ -99,6 +101,7 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(int iconSize READ iconSize WRITE setIconSize NOTIFY stateChanged)
     Q_PROPERTY(int dndBehavior READ dndBehavior WRITE setDndBehavior NOTIFY stateChanged)
     Q_PROPERTY(bool lighterOnCritical READ lighterOnCritical WRITE setLighterOnCritical NOTIFY stateChanged)
+    Q_PROPERTY(bool fileContentIndexing READ fileContentIndexing WRITE setFileContentIndexing NOTIFY stateChanged)
     Q_PROPERTY(int tabletMode READ tabletMode WRITE setTabletMode NOTIFY stateChanged)
     Q_PROPERTY(int tabletApps READ tabletApps WRITE setTabletApps NOTIFY stateChanged)
     Q_PROPERTY(int tabletDock READ tabletDock WRITE setTabletDock NOTIFY stateChanged)
@@ -193,6 +196,8 @@ public:
     void setDndBehavior(int value);
     bool lighterOnCritical() const;
     void setLighterOnCritical(bool value);
+    bool fileContentIndexing() const;
+    void setFileContentIndexing(bool value);
     int tabletMode() const;
     void setTabletMode(int value);
     int tabletApps() const;
@@ -277,6 +282,7 @@ private:
         bool everyScreen = true;
         int dndBehavior = DndAsk;
         bool lighterOnCritical = true;
+        bool fileContentIndexing = true;
         int tabletMode = TabletAuto;
         int tabletApps = AppsFullScreen;
         int tabletDock = DockHideOverApps;
@@ -326,6 +332,7 @@ private:
     void applyReduceMotion(bool on);
     void applyDndBehavior(int behavior);
     void applyLighterOnCritical(bool on);
+    void applyFileContentIndexing(bool on);
     void applyTabletConfig(const State &before, const State &after);
     bool applyMagnify(bool on);
     bool applyMagnifiedSize(int size);

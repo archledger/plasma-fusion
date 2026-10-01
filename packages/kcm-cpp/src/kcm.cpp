@@ -115,7 +115,8 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
     return style == other.style && sameAccent(other) && buttonStyle == other.buttonStyle && fusionDecoration == other.fusionDecoration
         && magnify == other.magnify && globalMenu == other.globalMenu && hotCorner == other.hotCorner && snapTrigger == other.snapTrigger
         && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen
-        && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical && tabletMode == other.tabletMode
+        && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical
+        && fileContentIndexing == other.fileContentIndexing && tabletMode == other.tabletMode
         && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight
         && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
         && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
@@ -502,6 +503,16 @@ void PlasmaFusionKcm::setLighterOnCritical(bool value)
     setField(&State::lighterOnCritical, value);
 }
 
+bool PlasmaFusionKcm::fileContentIndexing() const
+{
+    return m_current.fileContentIndexing;
+}
+
+void PlasmaFusionKcm::setFileContentIndexing(bool value)
+{
+    setField(&State::fileContentIndexing, value);
+}
+
 int PlasmaFusionKcm::tabletMode() const
 {
     return m_current.tabletMode;
@@ -849,6 +860,10 @@ void PlasmaFusionKcm::loadConfigState(State &state) const
     state.glass = glassFromName(KConfigGroup(fusion, u"Effects"_s).readEntry("Glass", QString()));
     state.everyScreen = KConfigGroup(fusion, u"TopBar"_s).readEntry("EveryScreen", true);
     state.lighterOnCritical = KConfigGroup(fusion, u"Power"_s).readEntry("LighterOnCritical", true);
+    // File contents in search: Baloo's own key (System Settings > File Search), on by default.
+    const KSharedConfig::Ptr baloo = KSharedConfig::openConfig(u"baloofilerc"_s, KConfig::NoGlobals);
+    baloo->reparseConfiguration();
+    state.fileContentIndexing = !KConfigGroup(baloo, u"General"_s).readEntry("only basic indexing", false);
 
     // Tablet (KWin)
     const QString tabletMode = KConfigGroup(kwin, u"Input"_s).readEntry("TabletMode", QString());
@@ -875,6 +890,7 @@ void PlasmaFusionKcm::copyConfigState(const State &from, State &to) const
     to.everyScreen = from.everyScreen;
     to.dndBehavior = from.dndBehavior;
     to.lighterOnCritical = from.lighterOnCritical;
+    to.fileContentIndexing = from.fileContentIndexing;
     to.tabletMode = from.tabletMode;
     to.tabletApps = from.tabletApps;
     to.tabletDock = from.tabletDock;
@@ -1106,6 +1122,9 @@ void PlasmaFusionKcm::save()
     }
     if (after.lighterOnCritical != before.lighterOnCritical) {
         applyLighterOnCritical(after.lighterOnCritical);
+    }
+    if (after.fileContentIndexing != before.fileContentIndexing) {
+        applyFileContentIndexing(after.fileContentIndexing);
     }
     applyTabletConfig(before, after);
 
@@ -1486,6 +1505,19 @@ void PlasmaFusionKcm::applyLighterOnCritical(bool on)
     fusion->reparseConfiguration();
     KConfigGroup(fusion, u"Power"_s).writeEntry("LighterOnCritical", on, KConfig::Notify);
     fusion->sync();
+}
+
+// Baloo's own key, then its file indexer reads its configuration again: what System Settings >
+// File Search does (Baloo::IndexerConfig::refresh). Baloo pauses content indexing on battery by
+// itself, so this mostly saves power while charging; file names stay searchable either way.
+void PlasmaFusionKcm::applyFileContentIndexing(bool on)
+{
+    KSharedConfig::Ptr baloo = KSharedConfig::openConfig(u"baloofilerc"_s, KConfig::NoGlobals);
+    baloo->reparseConfiguration();
+    KConfigGroup(baloo, u"General"_s).writeEntry("only basic indexing", !on);
+    baloo->sync();
+    QDBusConnection::sessionBus().asyncCall(
+        QDBusMessage::createMethodCall(u"org.kde.baloo"_s, u"/"_s, u"org.kde.baloo.main"_s, u"updateConfig"_s));
 }
 
 // TABLET.md 3.2 and 4.15: kwinrc with a notification (KWin's KConfigWatcher reparses it), then the

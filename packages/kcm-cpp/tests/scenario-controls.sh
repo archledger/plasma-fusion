@@ -252,18 +252,22 @@ kcm <<'K'
 waitshell
 set dndBehavior 1
 set lighterOnCritical false
+set fileContentIndexing false
 save
 K
 check "drag: move" "$(ck kdeglobals KDE DndBehavior)" MoveIfSameDevice
 check "battery off" "$(ck plasmafusionrc Power LighterOnCritical)" false
+check "file contents not indexed" "$(ck baloofilerc General 'only basic indexing')" true
 kcm <<'K'
 waitshell
 set dndBehavior 0
 set lighterOnCritical true
+set fileContentIndexing true
 save
 K
 check "drag: ask (key removed)" "$(ck kdeglobals KDE DndBehavior)" ""
 check "battery on" "$(ck plasmafusionrc Power LighterOnCritical)" true
+check "file contents indexed" "$(ck baloofilerc General 'only basic indexing')" false
 
 # 9. Tablet section.
 kcm <<'K'

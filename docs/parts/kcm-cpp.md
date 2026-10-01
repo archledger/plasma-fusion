@@ -516,3 +516,13 @@ kept is `SolidNextToWindows=true` and Solid gives back `adaptive` (the test expe
 started with (the integration runs start with `TabletMode=off`, the lane's with automatic). No
 change in the module.
 
+## Search inside file contents (1.0.0-6, 2026-10-01)
+
+Battery section: "Search inside file contents" (Apply/Reset like every row). It is Baloo's own key,
+`baloofilerc [General] only basic indexing`, the one System Settings > File Search writes; after
+writing it the module calls `org.kde.baloo / org.kde.baloo.main updateConfig`, as that page does
+(`Baloo::IndexerConfig::refresh`). On by default (owner: keep content indexing, let the user turn it
+off). Baloo already stops content indexing on battery (baloo `FileIndexScheduler::powerManagementStatusChanged`),
+so the switch mostly saves power while charging; file names stay searchable. Search keywords: file
+search, file contents, indexing, baloo. Test: `scenario-controls.sh` now 98 checks (off writes `true`,
+on writes `false`), all PASS.

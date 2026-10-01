@@ -6,7 +6,7 @@
 
 Name:           plasma-fusion-settings
 Version:        1.0.0
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        Plasma Fusion page for System Settings
 License:        GPL-2.0-or-later AND CC-BY-SA-4.0
 Source0:        %{name}-%{version}.tar.gz
@@ -73,6 +73,10 @@ echo "QML time stamp: $SOURCE_DATE_EPOCH"
 %{_kf6_datadir}/icons/hicolor/scalable/apps/plasmafusion-logo.svg
 
 %changelog
+* Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0.0-6
+- Add "Search inside file contents" to the Battery section (Baloo's own setting,
+  applied as System Settings > File Search does)
+
 * Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 1.0.0-5
 - Desktop icons settings also apply to the Plasma Fusion desktop
   (org.plasmafusion.desktop), the desktop with the tablet home screen
