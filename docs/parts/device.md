@@ -302,3 +302,13 @@ Open items:
 ## Needs from other parts
 
 (See the report; kept in sync.)
+
+## Measuring the glass's battery cost (tools/device/power-ab.sh, 2026-10-01)
+
+Research D-desktop found no data on the battery cost of blur; E-phone ranks battery life first. In the
+Plasma session, on battery, run `tools/device/power-ab.sh [MINUTES=10] [BLOCKS=8]` and leave the
+machine alone: KWin's blur effect alternates on and off per block (nothing else changes), sleep and
+screen-off are inhibited (kde-inhibit), battery power is sampled every 10 s (power_now, or current x
+voltage), and the effect is restored at the end. `summary.txt`: mean watts with and without blur
+(each block's first minute skipped) and the difference. Plugging in stops the run. Test mode:
+`PF_POWER_AB_FAKE=DIR` (a fake power_supply tree; the effect is not touched).
