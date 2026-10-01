@@ -5,6 +5,9 @@
 
 import QtQuick
 import QtQuick.Window
+// KWin 6.8 names its window class "Window" in org.kde.kwin (uncreatable), which shadows
+// QtQuick's Window after the unqualified import below; create QtQuick's by its own name.
+import QtQuick.Window as QtQuickWindow
 import org.kde.kirigami as Kirigami
 import org.kde.kwin
 
@@ -15,7 +18,7 @@ import org.kde.kwin
 //
 // Contract (KWin 6.7 src/outline.cpp): the root is a Window, the context property "outline"
 // has geometry, visualParentGeometry, unifiedGeometry and active.
-Window {
+QtQuickWindow.Window {
     id: window
 
     readonly property int gap: 6

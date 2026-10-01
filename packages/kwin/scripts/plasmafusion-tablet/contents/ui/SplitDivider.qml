@@ -5,6 +5,9 @@
 
 import QtQuick
 import QtQuick.Window
+// KWin 6.8 names its window class "Window" in org.kde.kwin (uncreatable), which shadows
+// QtQuick's Window after the unqualified import below; create QtQuick's by its own name.
+import QtQuick.Window as QtQuickWindow
 import org.kde.kwin
 
 // Two apps side by side in tablet posture (TABLET2 M1): a handle on the split between a window
@@ -186,7 +189,7 @@ Item {
 
     Instantiator {
         active: divider.shown
-        delegate: Window {
+        delegate: QtQuickWindow.Window {
             id: handle
             // KWin lists it as a normal window whatever the type; onWindowAdded marks it
             // skip-taskbar, -switcher and -pager by this title (the dock, Alt+Tab, the policy)

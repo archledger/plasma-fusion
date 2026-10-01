@@ -7,6 +7,9 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Window
+// KWin 6.8 names its window class "Window" in org.kde.kwin (uncreatable), which shadows
+// QtQuick's Window after the unqualified import below; create QtQuick's by its own name.
+import QtQuick.Window as QtQuickWindow
 import org.kde.kwin
 
 // "Pick a window for this side" (TabsSnap board, "Fill the other half"): covers the empty
@@ -15,7 +18,7 @@ import org.kde.kwin
 // workspace as cards. In tablet posture the cards are wider and taller (TABLET 4.10). A popup:
 // Esc, a click elsewhere or any focus change dismisses it; it also closes itself after a minute
 // without input. The heading and the card captions follow the user's text size.
-Window {
+QtQuickWindow.Window {
     id: picker
 
     readonly property FusionPalette pal: palette_
