@@ -66,4 +66,6 @@ KWin's own edges. Derived from Plasma Mobile's task switcher.
 * Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-1
 - First build: Plasma Mobile 6.7.5 task switcher renamed and ported to Plasma Fusion,
   with the dock on a short swipe, retuned gesture distances, a hardware-key rule for
-  the on-screen keyboard, the Plasma Fusion card look and a KWin version guard
+  the on-screen keyboard, the Plasma Fusion card look and a KWin version guard;
+  a gesture lock; the pen acts like a finger in tablet posture, with press and
+  hold for a right click

@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <QPointF>
 #include <QStringList>
+#include <QTimer>
 #include <chrono>
 #include <input.h>
 
@@ -18,6 +20,12 @@ namespace KWin
 // KWin's own touch path instead, so focus, activation, popups and each app's touch scrolling work as
 // for a finger. Exempt: drawing apps (they keep pressure and tilt), presses in the bottom gesture zone
 // (the pen never starts a shell gesture), and laptop posture or the "like a mouse" setting.
+//
+// Press and hold (TABLET2 PEN-2 follow-up, as Windows Ink): a finger's long press opens no context
+// menu in QtWidgets and XWayland apps, so with the pen as a finger they had none. When the tip rests
+// 500 ms within 10 px, the emulated touch is cancelled, the rest of the stroke is swallowed, and a
+// right click is sent at the press point when the pen lifts, as with Windows Ink
+// (plasmafusionrc [Pen] TabletPenHold, default true).
 class FusionPenFilter : public InputEventFilter
 {
 public:
@@ -29,6 +37,8 @@ public:
     bool isActive() const;
     // Window classes or desktop file names that keep the pen as a pen.
     void setDrawingApps(const QStringList &apps);
+    // Press and hold for a right click.
+    void setRightClickOnHold(bool enabled);
 
     bool tabletToolTipEvent(TabletToolTipEvent *event) override;
     bool tabletToolAxisEvent(TabletToolAxisEvent *event) override;
@@ -39,10 +49,16 @@ public:
 private:
     bool exempt(const QPointF &pos) const;
     void finish(std::chrono::microseconds time, InputDevice *device);
+    void holdTimeout();
 
     bool m_active = false;
     bool m_converting = false;
     QStringList m_drawingApps;
+    bool m_rightClickOnHold = true;
+    // The stroke became a right click: its motion and release are swallowed.
+    bool m_held = false;
+    QPointF m_pressPos;
+    QTimer m_holdTimer;
 };
 
 } // namespace KWin

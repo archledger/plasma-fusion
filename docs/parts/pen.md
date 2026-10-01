@@ -197,3 +197,23 @@ outside drawing surfaces.
   dot, a pen tap on the home handle revealing the dock. Hand checks with the owner's pen: F1-F8 of the
   research (scroll in Dolphin, System Settings, Firefox, Chrome; drawing apps keep pressure; taps
   without rubber bands; barrel button = context menu; palm rejection; after suspend).
+
+## Press and hold = right click (TABLET2 PEN-2 follow-up, 2026-10-01)
+
+With the pen acting as a finger in tablet posture, QtWidgets and XWayland apps had no context menus
+by pen (a finger's long press opens none there). As with Windows Ink: when the tip rests 500 ms within
+10 px (research: 500-600 ms, 10 px), `FusionPenFilter` cancels the emulated touch (no tap, no drag),
+swallows the rest of the stroke and, when the pen lifts, sends a right click at the press point:
+pointer motion, button press, each with a `wl_pointer.frame`, and the release 80 ms later (Qt opens a
+context menu on the press and grabs the pop-up with it; a release sent together made KWin dismiss the
+menu). Drawing apps, the bottom gesture zone and laptop posture are unaffected. Setting: pen settings
+page "Press and hold: Right click (menu) / Nothing" (shown while the pen acts as a finger),
+`plasmafusionrc [Pen] TabletPenHold` (default true), read live. Each hold logs
+`plasmafusion-navigation: pen press and hold: right click at x,y`.
+
+Test (`build/penhold/scen-hold.sh`, ph1; evidence `artifacts/plasma-fusion/2026-10-01-tablet2/PEN-2/hold`):
+a hold on Dolphin's file view opens its context menu on lift, a hold drifting 40 px opens none, a quick
+tap opens the file, a hold in Konsole opens Konsole's menu, with the setting off nothing happens. The
+private session has a pointer device only while the test input client is connected, and without one
+the seat offers no pointer, so the scenario keeps one connected (as the hardware's touchpad and
+TrackPoint always are).

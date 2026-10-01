@@ -5,7 +5,11 @@
 
 #include <core/output.h>
 #include <input_event.h>
+#include <pointer_input.h>
 #include <touch_input.h>
+
+#include <QLineF>
+#include <linux/input-event-codes.h>
 #include <window.h>
 #include <workspace.h>
 
@@ -18,19 +22,32 @@ namespace KWin
 static constexpr qint32 s_penTouchId = 0x7f50;
 // The pen stays a pen this close to the bottom edge: the navigation gestures' zone (20 px) and a margin.
 static constexpr qreal s_bottomZone = 24;
+// Press and hold: the time and the travel allowed (research: long press 500-600 ms, 10 px).
+static constexpr auto s_holdTime = 500ms;
+static constexpr qreal s_holdSlop = 10;
+
+static std::chrono::microseconds now()
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch());
+}
 
 FusionPenFilter::FusionPenFilter()
     : InputEventFilter(InputFilterOrder::ScreenEdge)
     , m_drawingApps(defaultDrawingApps())
 {
     input()->installInputEventFilter(this);
+    m_holdTimer.setSingleShot(true);
+    m_holdTimer.setInterval(s_holdTime);
+    QObject::connect(&m_holdTimer, &QTimer::timeout, [this]() {
+        holdTimeout();
+    });
 }
 
 FusionPenFilter::~FusionPenFilter()
 {
     if (input()) {
         if (m_converting) {
-            finish(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()), nullptr);
+            finish(now(), nullptr);
         }
         input()->uninstallInputEventFilter(this);
     }
@@ -58,7 +75,7 @@ QStringList FusionPenFilter::defaultDrawingApps()
 void FusionPenFilter::setActive(bool active)
 {
     if (!active && m_converting) {
-        finish(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()), nullptr);
+        finish(now(), nullptr);
     }
     m_active = active;
 }
@@ -76,6 +93,14 @@ void FusionPenFilter::setDrawingApps(const QStringList &apps)
         if (!name.isEmpty()) {
             m_drawingApps.append(name);
         }
+    }
+}
+
+void FusionPenFilter::setRightClickOnHold(bool enabled)
+{
+    m_rightClickOnHold = enabled;
+    if (!enabled) {
+        m_holdTimer.stop();
     }
 }
 
@@ -101,9 +126,41 @@ bool FusionPenFilter::exempt(const QPointF &pos) const
 
 void FusionPenFilter::finish(std::chrono::microseconds time, InputDevice *device)
 {
+    m_holdTimer.stop();
     m_converting = false;
+    if (m_held) {
+        // The touch was cancelled when the hold was recognised; the right click comes on lift, as
+        // with Windows Ink.
+        m_held = false;
+        qInfo("plasmafusion-navigation: pen press and hold: right click at %.0f,%.0f", m_pressPos.x(), m_pressPos.y());
+        // Each step ends with a frame (clients act on wl_pointer.frame). The release follows 80 ms
+        // later: Qt opens a context menu on the press and grabs the pop-up with that press, and a
+        // release sent with it made KWin dismiss the menu at once (session ph1; a real click holds
+        // the button about as long).
+        input()->pointer()->processMotionAbsolute(m_pressPos, time);
+        input()->pointer()->processFrame();
+        input()->pointer()->processButton(BTN_RIGHT, PointerButtonState::Pressed, time);
+        input()->pointer()->processFrame();
+        QTimer::singleShot(80ms, []() {
+            if (input()) {
+                input()->pointer()->processButton(BTN_RIGHT, PointerButtonState::Released, now());
+                input()->pointer()->processFrame();
+            }
+        });
+        return;
+    }
     input()->touch()->processUp(s_penTouchId, time, device);
     input()->touch()->frame();
+}
+
+void FusionPenFilter::holdTimeout()
+{
+    if (!m_converting || m_held) {
+        return;
+    }
+    m_held = true;
+    // the app sees the touch cancelled: no tap, no drag; the right click follows on lift
+    input()->touch()->cancel();
 }
 
 bool FusionPenFilter::tabletToolTipEvent(TabletToolTipEvent *event)
@@ -113,8 +170,13 @@ bool FusionPenFilter::tabletToolTipEvent(TabletToolTipEvent *event)
             return false;
         }
         m_converting = true;
+        m_held = false;
+        m_pressPos = event->position;
         input()->touch()->processDown(s_penTouchId, event->position, event->timestamp, event->device);
         input()->touch()->frame();
+        if (m_rightClickOnHold) {
+            m_holdTimer.start();
+        }
         return true;
     }
     if (!m_converting) {
@@ -128,6 +190,12 @@ bool FusionPenFilter::tabletToolAxisEvent(TabletToolAxisEvent *event)
 {
     if (!m_converting) {
         return false;
+    }
+    if (m_held) {
+        return true;
+    }
+    if (m_holdTimer.isActive() && QLineF(m_pressPos, event->position).length() > s_holdSlop) {
+        m_holdTimer.stop();
     }
     input()->touch()->processMotion(s_penTouchId, event->position, event->timestamp, event->device);
     input()->touch()->frame();

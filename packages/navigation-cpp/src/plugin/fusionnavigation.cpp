@@ -123,6 +123,7 @@ void FusionNavigationState::updatePen()
     const KConfigGroup pen = KSharedConfig::openConfig(QStringLiteral("plasmafusionrc"))->group(QStringLiteral("Pen"));
     const bool finger = pen.readEntry("TabletPen", QStringLiteral("finger")) != QLatin1String("pen");
     m_penFilter->setDrawingApps(pen.readEntry("DrawingApps", FusionPenFilter::defaultDrawingApps()));
+    m_penFilter->setRightClickOnHold(pen.readEntry("TabletPenHold", true));
     const bool active = m_tabletMode && finger;
     if (active != m_penFilter->isActive()) {
         m_penFilter->setActive(active);

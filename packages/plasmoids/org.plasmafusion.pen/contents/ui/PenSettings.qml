@@ -52,6 +52,7 @@ Column {
     property string syncValue: ""
     // plasmafusionrc [Pen] TabletPen: finger (default) or pen (TABLET2 PEN-2)
     property string tabletPenValue: "finger"
+    property bool tabletHoldValue: true
 
     readonly property var curves: ({ "soft": "0,0.4;0.6,1;", "linear": "0,0;1,1;", "firm": "0.4,0;1,0.6;" })
     readonly property string curveId: {
@@ -87,11 +88,13 @@ Column {
     readonly property string readClick: "kreadconfig6 --file kcminputrc " + rebindGroup + " --key 331"
     readonly property string readSync: "kreadconfig6 --file kcminputrc --group Tablet --key SyncWithMouse"
     readonly property string readTabletPen: "kreadconfig6 --file plasmafusionrc --group Pen --key TabletPen --default finger"
+    readonly property string readTabletHold: "kreadconfig6 --file plasmafusionrc --group Pen --key TabletPenHold --default true"
 
     function reload(): void {
         exec.run(readClick);
         exec.run(readSync);
         exec.run(readTabletPen);
+        exec.run(readTabletHold);
         device.refresh();
     }
     Connections {
@@ -103,6 +106,8 @@ Column {
                 page.syncValue = stdout.trim();
             } else if (command.endsWith(page.readTabletPen)) {
                 page.tabletPenValue = stdout.trim() === "pen" ? "pen" : "finger";
+            } else if (command.endsWith(page.readTabletHold)) {
+                page.tabletHoldValue = stdout.trim() !== "false";
             }
         }
     }
@@ -125,6 +130,9 @@ Column {
     // The navigation effect follows it live (KConfigWatcher).
     function setTabletPen(id: string): void {
         exec.run("kwriteconfig6 --notify --file plasmafusionrc --group Pen --key TabletPen " + (id === "pen" ? "pen" : "finger") + "; " + readTabletPen);
+    }
+    function setTabletHold(on: bool): void {
+        exec.run("kwriteconfig6 --notify --file plasmafusionrc --group Pen --key TabletPenHold --type bool " + (on ? "true" : "false") + "; " + readTabletHold);
     }
     function setSync(on: bool): void {
         exec.run("kwriteconfig6 --notify --file kcminputrc --group Tablet --key SyncWithMouse " + (on ? "true" : "false") + "; " + readSync);
@@ -290,6 +298,24 @@ Column {
         ]
         value: page.tabletPenValue === "pen" ? choices[1].text : choices[0].text
         onPicked: id => page.setTabletPen(id)
+    }
+    // Press and hold = right click while the pen is a finger (as Windows Ink).
+    SettingRow {
+        metrics: page.metrics
+        tint: page.tint
+        ink: page.ink
+        visible: page.tabletPenValue === "finger"
+        label: i18nc("@label pen in tablet posture", "Press and hold")
+        key: "tablethold"
+        onExpandedChanged: Qt.callLater(page.rowsChanged)
+        hint: i18nc("@info", "Hold the pen still for half a second")
+        current: page.tabletHoldValue ? "menu" : "off"
+        choices: [
+            { "id": "menu", "text": i18nc("@item pen press and hold", "Right click (menu)") },
+            { "id": "off", "text": i18nc("@item pen press and hold", "Nothing") }
+        ]
+        value: page.tabletHoldValue ? choices[0].text : choices[1].text
+        onPicked: id => page.setTabletHold(id === "menu")
     }
 
     SectionTitle { text: i18nc("@title:group", "Pressure") }
