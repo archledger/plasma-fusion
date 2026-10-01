@@ -178,6 +178,7 @@ private:
     int m_initialTaskIndex;
 
     void clearVelocityFilter();
+    void resetGestureState();
     void calculateFilteredVelocity(qreal primaryPosition, qreal orthogonalPosition);
     qint64 getElapsedTimeSinceStart();
 
@@ -186,13 +187,17 @@ private:
     qreal m_flickVelocityThreshold = 0.5 * 0.5; // squared because total velocity is kept as a square
     qreal m_filterTimeConstant = 0.03; // time constant of velocity filter
 
-    qreal m_touchXPosition;
-    qreal m_touchYPosition;
+    qreal m_touchXPosition = 0;
+    qreal m_touchYPosition = 0;
+    // the previous event's positions, for the per-frame deltas (members, not function statics:
+    // Plasma Mobile 6.8, plasma-mobile 73c5b4fd and its velocity fix)
+    qreal m_previousPrimaryDelta = 0;
+    qreal m_previousOrthogonalDelta = 0;
     qreal m_xVelocity = 0;
     qreal m_yVelocity = 0;
     // Using the square of velocity for the total (2-axis) because we just need it
     // for one threshold comparison and we skip having to calculate the square root
-    qreal m_totalSquaredVelocity;
+    qreal m_totalSquaredVelocity = 0;
 
     // Positions of the task switcher effect itself
     qreal m_xPosition = 0;

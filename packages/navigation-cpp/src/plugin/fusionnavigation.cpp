@@ -346,15 +346,15 @@ void FusionNavigationState::restartDoubleClickTimer()
     m_doubleClickTimer->restart();
 }
 
+// Plasma Fusion: as Plasma Mobile 6.8 (6.7.91): the first event of a gesture starts from its own
+// position (it started from 0, so the second event saw the whole travel as one frame: a velocity
+// spike that could turn a slow drag into a flick), and the previous positions are members.
 void FusionNavigationState::calculateFilteredVelocity(qreal primaryDelta, qreal orthogonalDelta)
 {
-    static qreal prevPrimaryDelta = 0;
-    static qreal prevOrthogonalDelta = 0;
-
     qint64 frameTime = 0;
     if (!m_frameTimer.isValid()) {
-        prevPrimaryDelta = 0;
-        prevOrthogonalDelta = 0;
+        m_previousPrimaryDelta = primaryDelta;
+        m_previousOrthogonalDelta = orthogonalDelta;
         m_frameTimer.start();
         return;
     }
@@ -364,10 +364,10 @@ void FusionNavigationState::calculateFilteredVelocity(qreal primaryDelta, qreal 
         return;
     }
 
-    qreal framePrimaryDelta = primaryDelta - prevPrimaryDelta;
-    qreal frameOrthogonalDelta = orthogonalDelta - prevOrthogonalDelta;
-    prevPrimaryDelta = primaryDelta;
-    prevOrthogonalDelta = orthogonalDelta;
+    qreal framePrimaryDelta = primaryDelta - m_previousPrimaryDelta;
+    qreal frameOrthogonalDelta = orthogonalDelta - m_previousOrthogonalDelta;
+    m_previousPrimaryDelta = primaryDelta;
+    m_previousOrthogonalDelta = orthogonalDelta;
 
     // Implements an exponentially weighted moving average (EWMA) filter (= exponential smoothing)
     // Smoothing factor is approximated each event to achieve a chosen filter time constant
@@ -376,6 +376,25 @@ void FusionNavigationState::calculateFilteredVelocity(qreal primaryDelta, qreal 
     m_xVelocity = m_xVelocity + smoothingFactor * (frameOrthogonalDelta / frameTime - m_xVelocity);
     m_totalSquaredVelocity = m_yVelocity * m_yVelocity + m_xVelocity * m_xVelocity;
     Q_EMIT velocityChanged();
+}
+
+// Plasma Fusion: as Plasma Mobile 6.8: each gesture starts with no velocity left from the last one.
+void FusionNavigationState::clearVelocityFilter()
+{
+    m_frameTimer.invalidate();
+    m_previousPrimaryDelta = 0;
+    m_previousOrthogonalDelta = 0;
+    m_xVelocity = 0;
+    m_yVelocity = 0;
+    m_totalSquaredVelocity = 0;
+    Q_EMIT velocityChanged();
+}
+
+void FusionNavigationState::resetGestureState()
+{
+    m_touchXPosition = 0;
+    m_touchYPosition = 0;
+    clearVelocityFilter();
 }
 
 void FusionNavigationState::processTouchPositionChanged(qreal primaryDelta, qreal orthogonalDelta)
@@ -414,6 +433,7 @@ void FusionNavigationState::activate()
         return;
     }
 
+    resetGestureState();
     m_effectState->setInProgress(false);
     invokeEffect();
 }
@@ -462,6 +482,10 @@ void FusionNavigationState::invokeEffect()
     if (!m_effect) {
         return;
     }
+    // Plasma Fusion: as Plasma Mobile 6.8: a new gesture during the 200 ms close of the last one
+    // must not be ended by that close, and starts with a clean velocity filter.
+    m_shutdownTimer->stop();
+    resetGestureState();
     setInitialTaskIndex(currentTaskIndex()); // TODO! this is only until the crashing bug is fixed and recency sorting is in
     m_effect->setRunning(true);
     setDBusState(true);
