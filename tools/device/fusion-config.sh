@@ -87,7 +87,8 @@
 #                      bottom move to Meta+Alt+Up/Down); Meta+Tab Overview; Meta+Alt+1..9 dock apps;
 #                      every other holder of these keys loses them
 #   Window switcher    kwinrc [TabBox] DelayTime 120 (a quick Alt+Tab shows no switcher)
-#   KWin tablet        kwinrc [Plugins] plasmafusion-tabletEnabled
+#   KWin tablet        kwinrc [Plugins] plasmafusion-tabletEnabled; plasmafusion_navigationEnabled
+#                      (the compiled tablet navigation effect, when its package is installed)
 #   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture (quick settings writes it
 #                      from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
 #                      accent pop-up on a held physical key)
@@ -1649,6 +1650,17 @@ for script in "${KWIN_SCRIPTS[@]}"; do
 done
 # Modal dialogs slide out of their parent (the attach script places them under its title bar).
 managed_key kwinrc Plugins sheetEnabled true true
+# Tablet navigation (TABLET2 N1): the compiled effect of the plasma-fusion-navigation package. It
+# acts only in tablet posture; the login check switches it off after a KWin or Qt update, and the
+# plugin stays idle under a KWin it was not built for. KWin's reconfigure does not load a newly
+# enabled effect: it is loaded below.
+NAV_EFFECT=0
+if package_dir kwin/effects plasmafusion_navigation >/dev/null; then
+  managed_key kwinrc Plugins plasmafusion_navigationEnabled true true
+  NAV_EFFECT=1
+else
+  note "note: the tablet navigation effect is not installed (plasma-fusion-navigation); tablet posture keeps KWin's edges"
+fi
 # Snap-zone preview drawn by plasmafusion-snap's outline (KWin resolves the path in the data
 # directories; it loads it the next time it shows an outline after a restart of KWin).
 if data_path "$OUTLINE_QML" >/dev/null; then
@@ -1675,6 +1687,9 @@ if [ "$DRY" = 0 ]; then
   for effect in blur overview; do
     bus call org.kde.KWin /Effects org.kde.kwin.Effects reconfigureEffect s "$effect" >/dev/null 2>&1 || true
   done
+  if [ "$NAV_EFFECT" = 1 ] && [ "$(kreadconfig6 --file kwinrc --group Plugins --key plasmafusion_navigationEnabled)" = true ]; then
+    bus call org.kde.KWin /Effects org.kde.kwin.Effects loadEffect s plasmafusion_navigation >/dev/null 2>&1 || true
+  fi
 fi
 
 # Tiling: padding on every screen and workspace, set live through a one-shot KWin script

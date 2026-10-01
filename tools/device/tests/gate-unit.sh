@@ -121,6 +121,7 @@ make_home() {
   kw kwinrc Plugins plasmafusion-snapEnabled true
   kw kwinrc Plugins plasmafusion-attachEnabled true
   kw kwinrc Plugins sheetEnabled true
+  kw kwinrc Plugins plasmafusion_navigationEnabled true
   kw kwinrc Outline QmlPath kwin/scripts/plasmafusion-snap/contents/outline/outline.qml
   for g in TabBox TabBoxAlternative; do
     kw kwinrc "$g" LayoutName org.plasmafusion.switcher
@@ -169,6 +170,8 @@ check "b: decoration theme PlasmaFusionDark" [ "$(keff kwinrc org.kde.kdecoratio
 # follow a light/dark switch startplasma makes after the check (Follow sunset).
 check "b: user decoration keys removed (kdedefaults gives the Aurorae theme)" [ "$(get kwinrc org.kde.kdecoration2 library)/$(get kwinrc org.kde.kdecoration2 theme)" = "<absent>/<absent>" ]
 check "b: Fusion-only parts untouched (snap on)" [ "$(get kwinrc Plugins plasmafusion-snapEnabled)" = true ]
+check "b: navigation effect off (built against KWin's internals)" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
+check "b: notification names the gestures" grep -q "KWin's own edges instead of the tablet gestures" "$H/.local/state/plasma-fusion/gate/notify"
 check "b: notification queued" grep -q 'kwin 6.7.5 → 6.8.0, kscreenlocker 6.7.5 → 6.8.0' "$H/.local/state/plasma-fusion/gate/notify"
 check "b: notification names the recorded fusion-config.sh" grep -qF "run ~/deploy/tools/device/fusion-config.sh." "$H/.local/state/plasma-fusion/gate/notify"
 check "b: status says changed" grep -q '^versions=changed' "$H/.local/state/plasma-fusion/gate/status"
@@ -296,6 +299,27 @@ gate login
 check "b9: Breeze chosen during safe mode stays" [ "$(keff kwinrc org.kde.kdecoration2 library)" = org.kde.breeze ]
 check "b9: decoration record cleared" bash -c '! grep -q "^decoration" "$1" 2>/dev/null' _ "$H/.local/state/plasma-fusion/gate/off"
 
+# ---------- (b10) only the navigation effect depends on the versions ----------
+make_home "$BASE/b10"
+kw kwinrc org.kde.kdecoration2 library --delete
+kw kwinrc org.kde.kdecoration2 theme --delete
+rm -f "$H/.config/$DROPIN_REL"
+gate deploy >/dev/null 2>&1
+orig=$(sums)
+FAKE="kwin=6.7.6"
+gate login
+check "b10: KWin update alone: navigation effect off" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
+check "b10: notification queued" grep -q 'kwin 6.7.5 → 6.7.6' "$H/.local/state/plasma-fusion/gate/notify"
+FAKE=
+gate login
+check "b10: matching login: back on" [ "$(sums)" = "$orig" ]
+FAKE="qt6-qtdeclarative=6.12.0"
+gate login
+check "b10: Qt Quick update: navigation effect off" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
+FAKE=
+gate login
+check "b10: and back on" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = true ]
+
 # ---------- (c) another Global Theme ----------
 make_home "$BASE/c"
 gate deploy >/dev/null 2>&1
@@ -316,6 +340,7 @@ check "c: alternative switcher key removed" [ "$(get kwinrc TabBoxAlternative La
 check "c: DesktopMode back to default" [ "$(get kwinrc TabBox DesktopMode)" = "<absent>" ]
 check "c: lock-screen drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
 check "c: sheet effect untouched" [ "$(get kwinrc Plugins sheetEnabled)" = true ]
+check "c: navigation effect off" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
 check "c: no notification for a theme switch" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
 # The user turns snap layouts on again under Breeze: left on at the next logins.
 kw kwinrc Plugins plasmafusion-snapEnabled true

@@ -72,6 +72,7 @@ it starts KWin; `kwinrc` is read by KWin when it starts.
 |---|---|---|
 | lock screen | `~/.config/systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf` exists | Fusion theme, tested versions, tested lock-screen files |
 | decoration | effective `kwinrc [org.kde.kdecoration2] library=org.plasmafusion.decoration` (user file or kdedefaults) | tested versions |
+| navigation (TABLET2 N1) | effective `kwinrc [Plugins] plasmafusion_navigationEnabled=true` (the compiled tablet navigation effect, built against KWin's internal classes) | Fusion theme, tested versions |
 | snap, attach | `kwinrc [Plugins] plasmafusion-snapEnabled` / `plasmafusion-attachEnabled` = true | Fusion theme |
 | outline | `kwinrc [Outline] QmlPath` contains `plasmafusion` | Fusion theme |
 | switcher | effective `kwinrc [TabBox]` or `[TabBoxAlternative] LayoutName=org.plasmafusion.switcher` | Fusion theme |
@@ -103,6 +104,7 @@ Switching off (recorded first in `gate/off`, then written):
 | outline | `[Outline] QmlPath` removed (KWin's own outline) |
 | switcher | `LayoutName` removed, or set to KWin's default `thumbnail_grid` where kdedefaults still names the Fusion switcher (a Global Theme without a switcher of its own, such as Breeze, leaves it there); `DesktopMode=0` and `HighlightWindows=false` (fusion-config.sh's values for the Fusion switcher) removed |
 | tablet | `plasmafusion-tabletEnabled=false` written (not removed: the script's EnabledByDefault is not the check's to know) |
+| navigation | `plasmafusion_navigationEnabled=false` written; the notification says the session uses "KWin's own edges instead of the tablet gestures". The plugin also checks at start that the running KWin is the one it was built for (`KWIN_VERSION_STRING` against the application version) and otherwise stays idle, for the case where a later fusion-config.sh run turned it back on before the package was rebuilt |
 | inputmethod | the user key removed, so Fedora's default keyboard (`/usr/share/kde-settings/kde-profile/default/xdg/kwinrc`) returns; another input method the user chose is never touched |
 | powerfx, pengarage | the wants link moved to `gate/saved/` (record kind `link`, checked against the one allowed path); the service does not start at this login because startplasma reloads the systemd user manager after the check. It comes back only while the unit file is still installed |
 
@@ -377,3 +379,16 @@ Still open (not fixed):
 - Lead: after a Plasma or Qt update, check the session (lock screen, decoration) and run
   `fusion-config.sh` to record the new versions; until then the device stays in safe mode
   (decision D17).
+
+## Navigation effect (TABLET2 N1, 2026-10-01)
+
+The tablet navigation effect (`packages/navigation-cpp`, RPM plasma-fusion-navigation) uses KWin's
+internal classes, which have no binary compatibility between releases, so it is a version-checked
+part like the compiled decoration: `navigation` joins `PARTS`, the `[Plugins]` key joins `WANT`, a
+login with the effect on checks the versions (also without the lock screen or the decoration), and a
+difference writes `plasmafusion_navigationEnabled=false` and names it in the notification (three
+parts are joined "A, B and C"). Tests (`tools/device/tests/gate-unit.sh`): `b` (off with the lock
+screen and decoration, notification, restored), `b10` (only the effect on: a KWin 6.7.6 update and a
+Qt Quick 6.12 update switch it off, matching logins turn it back on), `c` (another Global Theme):
+128 passed; the 3 `p` failures (plugin-missing cases) fail the same way without this change on a
+machine with plasma-fusion-decoration installed (the laptop since its 314c89a deploy).

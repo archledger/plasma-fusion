@@ -6,9 +6,11 @@
 
 #include "fusionnavigation.h"
 
+#include <QCoreApplication>
 #include <QKeyEvent>
 #include <QMetaObject>
 #include <QQuickItem>
+#include <config-kwin.h>
 #include <main.h>
 #include <tabletmodemanager.h>
 #include <core/output.h>
@@ -33,6 +35,14 @@ FusionNavigationState::FusionNavigationState(QObject *parent)
 
 void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
 {
+    // Plasma Fusion: the plugin uses KWin's internal classes, which keep no binary compatibility
+    // between releases. Built for another KWin, it stays idle (no touch border, no key spy, no task
+    // model); the login check switches the effect off after a KWin update before KWin starts.
+    if (QCoreApplication::applicationVersion() != KWIN_VERSION_STRING) {
+        qWarning("plasmafusion-navigation: built for KWin %s, running %s: the effect stays idle",
+                 KWIN_VERSION_STRING.data(), qPrintable(QCoreApplication::applicationVersion()));
+        return;
+    }
     m_effectState = new FusionTouchBorderState(parent);
     m_border = new FusionTouchBorder{m_effectState};
     m_taskModel = new FusionTaskModel{parent};
@@ -85,6 +95,9 @@ void FusionNavigationState::setGestureEnabled(bool gestureEnabled)
 
 void FusionNavigationState::refreshBorders()
 {
+    if (!m_border) {
+        return;
+    }
     if (m_gestureEnabled) {
         m_border->setBorders({ElectricBorder::ElectricBottom});
     } else {
@@ -129,6 +142,9 @@ void FusionNavigationState::updateWasInActiveTask(KWin::Window *window)
 
 void FusionNavigationState::showDock()
 {
+    if (!m_effect) {
+        return;
+    }
     // The bottom touch border belongs to this effect in tablet posture, so KWin's own auto-hide edge
     // of the dock no longer sees short swipes: show the dock the same way it would, after the return
     // animation (the app is activated at its end).
@@ -339,7 +355,7 @@ void FusionNavigationState::toggle()
 
 void FusionNavigationState::activate()
 {
-    if (effects->isScreenLocked()) {
+    if (!m_effect || effects->isScreenLocked()) {
         return;
     }
 
@@ -388,6 +404,9 @@ void FusionNavigationState::setDBusState(bool active)
 
 void FusionNavigationState::invokeEffect()
 {
+    if (!m_effect) {
+        return;
+    }
     setInitialTaskIndex(currentTaskIndex()); // TODO! this is only until the crashing bug is fixed and recency sorting is in
     m_effect->setRunning(true);
     setDBusState(true);

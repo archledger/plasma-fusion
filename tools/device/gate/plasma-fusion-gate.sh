@@ -19,17 +19,20 @@
 # systemd user manager, so a drop-in moved aside here already counts for this login).
 #
 # 1. Plasma updates. While the Plasma Fusion lock screen (the kwin_wayland drop-in of
-#    lockscreen-enable.sh) or the compiled decoration (kwinrc [org.kde.kdecoration2]
-#    library=org.plasmafusion.decoration) is on, the installed versions of PACKAGES (rpm, cached by
-#    the rpm database's size and time) and the lock-screen package files (sha256) are compared with
-#    what fusion-config.sh recorded as tested. On a difference, or without a readable record, the
-#    drop-in is moved aside (stock lock screen), the decoration becomes the Plasma Fusion Aurorae
-#    theme of the current variant (-Left and its button lists for ButtonStyle=LeftCircles) and one
-#    notification is queued for after the desktop is up. The next login with matching versions, or
-#    the next fusion-config.sh run, turns them back on.
+#    lockscreen-enable.sh), the compiled decoration (kwinrc [org.kde.kdecoration2]
+#    library=org.plasmafusion.decoration) or the tablet navigation effect (kwinrc [Plugins]
+#    plasmafusion_navigationEnabled, built against KWin's internal classes) is on, the installed
+#    versions of PACKAGES (rpm, cached by the rpm database's size and time) and the lock-screen
+#    package files (sha256) are compared with what fusion-config.sh recorded as tested. On a
+#    difference, or without a readable record, the drop-in is moved aside (stock lock screen), the
+#    decoration becomes the Plasma Fusion Aurorae theme of the current variant (-Left and its button
+#    lists for ButtonStyle=LeftCircles), the navigation effect is switched off and one notification
+#    is queued for after the desktop is up. The next login with matching versions, or the next
+#    fusion-config.sh run, turns them back on.
 # 2. Switching back. While the Global Theme (kdeglobals [KDE] LookAndFeelPackage) is not Plasma
 #    Fusion Dark or Light, the lock-screen drop-in, the plasmafusion-snap, plasmafusion-attach and
-#    plasmafusion-tablet KWin scripts, kwinrc [Outline] QmlPath, the Fusion window switcher, the
+#    plasmafusion-tablet KWin scripts, the navigation effect, kwinrc [Outline] QmlPath, the Fusion
+#    window switcher, the
 #    on-screen keyboard policy's kwinrc [Wayland] InputMethod value (so Fedora's default keyboard
 #    returns) and the plasma-fusion-powerfx and plasma-fusion-pen-garage user services (their
 #    graphical-session.target.wants links; startplasma reloads systemd after this check, so they do
@@ -60,7 +63,7 @@ AURORAE=org.kde.kwin.aurorae.v2
 BREEZE_DECO=org.kde.breeze
 SWITCHER=org.plasmafusion.switcher
 KWIN_SWITCHER=thumbnail_grid
-PARTS=(lockscreen decoration snap attach outline switcher tablet inputmethod powerfx pengarage)
+PARTS=(lockscreen decoration navigation snap attach outline switcher tablet inputmethod powerfx pengarage)
 # The on-screen keyboard values the Fusion keyboard policy writes (quick settings, fusion-config.sh):
 # empty (keyboard off in laptop posture) and plasma-keyboard. Any other input method is the user's.
 OSK=/usr/share/applications/org.kde.plasma.keyboard.desktop
@@ -113,6 +116,7 @@ org.kde.kdecoration2|ButtonsOnRight
 Plugins|plasmafusion-snapEnabled
 Plugins|plasmafusion-attachEnabled
 Plugins|plasmafusion-tabletEnabled
+Plugins|plasmafusion_navigationEnabled
 Wayland|InputMethod
 Outline|QmlPath
 TabBox|LayoutName
@@ -268,7 +272,7 @@ ini_edit() { # FILE OPS... (each "group<TAB>key<TAB>state")
 RECS=()
 RECS_CHANGED=0
 valid_part() {
-  case $1 in lockscreen | decoration | snap | attach | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
+  case $1 in lockscreen | decoration | navigation | snap | attach | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
   return 1
 }
 load_recs() {
@@ -377,6 +381,7 @@ part_on() {
       { eff kwinrc TabBox LayoutName && [ "$REPLY" = "$SWITCHER" ]; } ||
         { eff kwinrc TabBoxAlternative LayoutName && [ "$REPLY" = "$SWITCHER" ]; } ;;
     tablet) eff kwinrc Plugins plasmafusion-tabletEnabled && [ "$REPLY" = true ] ;;
+    navigation) eff kwinrc Plugins plasmafusion_navigationEnabled && [ "$REPLY" = true ] ;;
     # Only the values the Fusion keyboard policy writes; the user file only (the system's value is
     # Fedora's default).
     inputmethod) ustate kwinrc Wayland InputMethod && case $REPLY in = | "=$OSK") return 0 ;; esac; return 1 ;;
@@ -442,6 +447,10 @@ off_tablet() {
   # Written as false, not removed: the script's EnabledByDefault is not this check's to know.
   set_rec tablet "$1" kwinrc Plugins plasmafusion-tabletEnabled =false
   DID+=("KWin script plasmafusion-tablet off")
+}
+off_navigation() {
+  set_rec navigation "$1" kwinrc Plugins plasmafusion_navigationEnabled =false
+  DID+=("navigation effect plasmafusion_navigation off")
 }
 off_inputmethod() {
   set_rec inputmethod "$1" kwinrc Wayland InputMethod -
@@ -789,6 +798,7 @@ queue_notification() {
     case $d in
       lockscreen) what+=("Plasma's own lock screen") ;;
       decoration) what+=("the Aurorae title bars") ;;
+      navigation) what+=("KWin's own edges instead of the tablet gestures") ;;
     esac
   done
   [ ${#what[@]} -gt 0 ] || return 0
@@ -802,7 +812,12 @@ queue_notification() {
   how=tools/device/fusion-config.sh
   [ -n "$TESTED_TOOL" ] && [ -f "$TESTED_TOOL" ] && how=$TESTED_TOOL
   [[ $how == "$HOME"/* ]] && how="~${how#"$HOME"}"
-  body+="This session uses ${what[0]}${what[1]:+ and ${what[1]}}. To check and switch back, run $how."
+  case ${#what[@]} in
+    1) j=${what[0]} ;;
+    2) j="${what[0]} and ${what[1]}" ;;
+    *) j="${what[0]}, ${what[1]} and ${what[2]}" ;;
+  esac
+  body+="This session uses $j. To check and switch back, run $how."
   if [ "$DRY" = 1 ]; then say "  would queue a notification: $body"; return 0; fi
   [ -d "$GATE" ] || mkdir -p "$GATE" 2>/dev/null
   printf 'Safe mode after a Plasma change\n%s\n' "$body" >"$GATE/notify.tmp" && mv -f "$GATE/notify.tmp" "$GATE/notify" &&
@@ -829,7 +844,7 @@ evaluate() { # the decision for every part; deploy only turns parts back on
   if [ "$MODE" = deploy ]; then
     UPDATE_OK=1 LOCK_OK=1
   else
-    for p in lockscreen decoration; do part_on "$p" || rec_has "$p" && risky=1; done
+    for p in lockscreen decoration navigation; do part_on "$p" || rec_has "$p" && risky=1; done
     [ "$risky" = 1 ] && check_versions
     { [ -f "$DROPIN" ] || rec_has lockscreen; } && check_lock
   fi
@@ -837,7 +852,7 @@ evaluate() { # the decision for every part; deploy only turns parts back on
     need_upd=0 need_theme=0
     case $p in
       lockscreen) [ "${LOCK_OK:-1}" = 1 ] || need_upd=1 ;;
-      decoration) [ "${UPDATE_OK:-1}" = 1 ] || need_upd=1 ;;
+      decoration | navigation) [ "${UPDATE_OK:-1}" = 1 ] || need_upd=1 ;;
     esac
     [ "$p" != decoration ] && [ "$FUSION" = 0 ] && need_theme=1
     # The compiled decoration named (by the user or by the Global Theme's defaults) but not
