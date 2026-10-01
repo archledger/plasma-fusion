@@ -210,6 +210,7 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 # templates, the login check, the top-bar script of the Global Themes, the font fallback.
 test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
+test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
 test -s %{buildroot}%{_datadir}/plasma-fusion/pen/templates/Note.xopp
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/pen/pen-defaults.sh
@@ -293,6 +294,7 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 # The power-tiers service (started per user by fusion-config.sh; nothing is enabled by the package)
 %dir %{_libexecdir}/plasma-fusion
 %{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
+%{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
 
 %changelog
 * @CHANGELOG_DATE@ Wisbendji Fimerlus <archledger236@gmail.com> - @VERSION@-@RELEASE@
