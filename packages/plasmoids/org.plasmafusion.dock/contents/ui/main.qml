@@ -1785,6 +1785,7 @@ PlasmoidItem {
                 motion: motion
                 tablet: root.tablet
                 pulseCycles: root.pulseCycles
+                gap: root.gap
                 entry: root.launcherEntries[taskItem.iconName] ?? null
                 monthText: root.todayMonth
                 dayText: root.todayDay

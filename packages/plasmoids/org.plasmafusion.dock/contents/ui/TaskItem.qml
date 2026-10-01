@@ -37,6 +37,8 @@ Item {
     property bool zoomReady: false
     // Start-up pulse cycles (3, or fewer on battery: the dock's powerTier).
     property int pulseCycles: 3
+    // The dock's gap between icons (12 in tablet posture, 8 on the laptop).
+    property real gap: 8
     // Unity LauncherEntry state of this app ({count, countVisible, progress, progressVisible,
     // urgent}) or null.
     property var entry: null
@@ -380,9 +382,11 @@ Item {
         // Reach into the gaps next to the icon so that the pointer is always over one item: the
         // rest size plus half the gap on each side, widened by the icon's growth so that the
         // magnified neighbours never leave a gap without an item between them.
-        x: -4 - task.grow / 2
+        // (half the gap on each side: a long press in a gap reached the panel, which then went into
+        // its edit mode, in tablet posture where the gap is 12 px)
+        x: -task.gap / 2 - task.grow / 2
         y: iconBox.y - 10 - task.grow
-        width: parent.width + 8 + task.grow
+        width: parent.width + task.gap + task.grow
         height: parent.height - y
         hoverEnabled: false
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton

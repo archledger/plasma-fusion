@@ -471,3 +471,9 @@ and its long-press list of the app's notifications:
 - Test (6.7.5 container, badge2): two notifications from KWrite while Konsole is active: "2" on the
   KWrite icons; the menu lists both (newest first) and "Clear 2 Notifications"; after it, no badge.
 
+## The gaps between icons (2026-10-01)
+
+Each icon's touch area reached 4 px into the gap on each side (half the laptop's 8 px gap); the tablet
+gap is 12 px, so a long press in the middle of a gap reached the panel, which went into its edit mode.
+The area now takes half the dock's gap on each side (`TaskItem.gap`). Test (gap1): a long press in a
+tablet gap opens the neighbouring app's menu.
