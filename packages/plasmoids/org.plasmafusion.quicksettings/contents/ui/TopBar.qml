@@ -367,10 +367,15 @@ Item {
         // ---- Notifications bell
         T.AbstractButton {
             id: bellButton
+            // The drawn button, and in tablet posture the strip up to the board's end: the bell's
+            // target runs on to the screen corner (E-phone 4.2: 56 px at the edges; a corner target).
+            readonly property real core: bar.tablet ? Math.max(44, bar.rowHeight) : bar.metrics.px(30)
+            readonly property real corner: bar.tablet ? row.spacing + bar.endPadding : 0
             anchors.verticalCenter: parent.verticalCenter
             visible: bar.backend.notif.available
-            implicitWidth: bar.tablet ? Math.max(44, bar.rowHeight) : bar.metrics.px(30)
+            implicitWidth: core + corner
             implicitHeight: bar.hitHeight
+            rightPadding: corner
             focusPolicy: Qt.TabFocus
             hoverEnabled: true
             text: bar.backend.notif.unread > 0
@@ -391,7 +396,8 @@ Item {
             background: Item {
                 Rectangle {
                     id: bellCircle
-                    anchors.centerIn: parent
+                    x: (bellButton.core - width) / 2
+                    anchors.verticalCenter: parent.verticalCenter
                     width: bar.tablet ? bar.rowHeight : parent.width
                     height: bar.rowHeight
                     radius: height / 2
@@ -440,8 +446,10 @@ Item {
             }
         }
 
-        // The board's distance to the screen edge behind the panel's own margin.
+        // The board's distance to the screen edge behind the panel's own margin (part of the
+        // bell's target in tablet posture).
         Item {
+            visible: !bar.tablet || !bellButton.visible
             width: bar.endPadding
             height: 1
         }

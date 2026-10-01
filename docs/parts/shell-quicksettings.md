@@ -595,3 +595,16 @@ of the controls sheet in tablet posture while notifications have their own sheet
 so either sheet reaches the other without closing (backend signal notificationCentreRequested).
 Tested in the 6.7.5 container (nc1-nc3): menu read and toggle (key false, label flips), switch both
 ways.
+
+## The bell as a corner target (2026-10-01)
+
+Research E-phone 4.2 (edge accuracy 11-12 mm: targets at screen edges at least 56 px). In tablet
+posture the bell button also covers the row spacing and the board's end padding after it
+(`bellButton.corner`, drawn part `bellButton.core`, `rightPadding: corner`), so its tap and pull-down
+target is 60 px wide and runs on to the screen's top right corner (the panel containment keeps its own
+last 4 px). Nothing moves on screen. A containmentMask cannot do this: since Qt 6.8, delivery skips an
+item whose children stay inside its bounds before asking its mask (`effectivelyClipsEventHandlingChildren`),
+so a mask can only shrink a target. Tested in the 6.7.5 and 6.7.91 containers (cor3, cor68): taps at
+x 1397/1430/1435 and y 2/22/40 and a pull from the corner open the Notification Centre; the bar is
+pixel-identical in both postures. "Clear all" (about 90 x 44) and the home screen's "Done" (96 x 56)
+already met the target; a card's close button (44 x 44) is not at a screen edge.
