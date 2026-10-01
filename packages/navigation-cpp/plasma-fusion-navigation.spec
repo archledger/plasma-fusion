@@ -39,10 +39,11 @@ Enhances:       kwin
 
 %description
 Plasma Fusion's tablet navigation: in tablet posture, swipe up from the bottom
-edge to go home, swipe up and hold for the app switcher (one card per app,
-swipe a card up to close it), or swipe along the bottom edge for the previous
-app. The app follows the finger. Laptop posture keeps KWin's own edges.
-Derived from Plasma Mobile's task switcher.
+edge to go home, swipe up a little to show the dock, swipe up and hold for the
+app switcher (one card per app, swipe a card up to close it), or swipe along
+the bottom edge for the previous app. The app follows the finger. A key press
+on a hardware keyboard hides the on-screen keyboard. Laptop posture keeps
+KWin's own edges. Derived from Plasma Mobile's task switcher.
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -62,4 +63,6 @@ Derived from Plasma Mobile's task switcher.
 
 %changelog
 * Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-1
-- First build: Plasma Mobile 6.7.5 task switcher renamed and ported to Plasma Fusion
+- First build: Plasma Mobile 6.7.5 task switcher renamed and ported to Plasma Fusion,
+  with the dock on a short swipe, retuned gesture distances, a hardware-key rule for
+  the on-screen keyboard, the Plasma Fusion card look and a KWin version guard

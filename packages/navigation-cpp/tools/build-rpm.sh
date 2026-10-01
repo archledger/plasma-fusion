@@ -10,7 +10,8 @@
 # Copies this package to ~/.local/state/plasma-fusion/navigation-cpp/src on $PF_HOST (default
 # thinkpad-fedora; PF_REMOTE overrides the directory below HOME), runs tools/container-build.sh in
 # localhost/plasma-fusion-build:f44-6.7.5 (nice 10, 6 jobs, no network), and fetches the staged install
-# (stage/) and the RPM into OUT_DIR (default build/nav/out). Nothing is installed. CLEAN=1
+# (stage/) and the RPM into OUT_DIR (default build/nav/out), then runs rpmlint with
+# plasma-fusion-navigation.rpmlintrc when rpmlint is installed. Nothing is installed. CLEAN=1
 # rebuilds from scratch. PF_SSH_OPTS (default "-o ConnectTimeout=40") adds ssh options; the
 # caller serialises container builds (the team's build lock).
 set -euo pipefail
@@ -29,4 +30,8 @@ ssh -o BatchMode=yes "${SSH_OPTS[@]}" "$HOST" "podman image exists $IMAGE && cd 
 mkdir -p "$OUT"
 rsync -a --delete -e "ssh ${SSH_OPTS[*]}" "$HOST:$REMOTE/stage/" "$OUT/stage/"
 [ "${RPM:-1}" = 0 ] || rsync -a -e "ssh ${SSH_OPTS[*]}" "$HOST:$REMOTE/rpmbuild/RPMS/x86_64/" "$OUT/rpm/"
+# rpmlint (when installed here) with the package's filters; an error fails the build.
+if [ "${RPM:-1}" != 0 ] && command -v rpmlint >/dev/null; then
+  rpmlint -r "$PKG/plasma-fusion-navigation.rpmlintrc" "$OUT"/rpm/plasma-fusion-navigation-[0-9]*.rpm
+fi
 echo "results in $OUT"

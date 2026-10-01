@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# rpmlint filters for plasma-fusion-navigation, each with its reason (as packaging/plasma-fusion.rpmlintrc).
+
+# There is no public upstream web site: the sources come from the Plasma Fusion repository.
+addFilter(r"no-url-tag")
+
+# The GPL text is the licence as published (with the FSF's postal address).
+addFilter(r"incorrect-fsf-address /usr/share/licenses/plasma-fusion-navigation/GPL-2.0-or-later.txt")
