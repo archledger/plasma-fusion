@@ -6,7 +6,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.private.kicker as Kicker
@@ -472,7 +471,7 @@ Item {
                     easing.type: home.motion.standardEasing
                 }
             }
-            RectangularShadow {
+            FusionShadow {
                 anchors.fill: icon
                 offset.y: 3
                 blur: 8

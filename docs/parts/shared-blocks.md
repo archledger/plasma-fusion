@@ -13,6 +13,7 @@ app icons, and the build checks durations and accessible names.
 | `packages/common/FusionAccent.qml` | accent colours from the colour scheme | decision 3 |
 | `packages/common/FusionBackdrop.qml` | the "Tinted" glass material: a cached, blurred wallpaper plus a tint | EFFECTS 3.1, TABLET 4.1 |
 | `packages/common/FusionIconTile.qml` | an app icon with a neutral Fusion tile behind icons that have no Fusion tile | ADAPTIVE 5.4, fix 27 |
+| `packages/common/FusionShadow.qml` (+ `shaders/fusionshadow.frag`) | the soft drop shadow of a rounded box, one small shader; replaces QtQuick.Effects RectangularShadow | STRESS-1, 2026-10-01 |
 | `tools/build-lib/shared-qml.sh` | copies the blocks a package uses into it at build time | |
 | `tools/checks/motion-lint.sh` | literal durations, endless loops, animations without a duration | EFFECTS 6.2 |
 | `tools/checks/a11y-lint.py` | interactive items without an accessible name | GAPS G25 |
@@ -33,7 +34,8 @@ bash "$ROOT/tools/build-lib/shared-qml.sh" install SRC DEST      # copies the bl
 `.qml` or `.js` file under SRC uses: an object declaration (`Motion {`), a typed property (`property
 FusionTablet tabletState`), a cast (`as FusionAccent`) or the file name in a string
 (`"FusionBackdrop.qml"`). Comments and other strings do not count. Blocks that blocks use are added
-too. With `FusionIconTile.qml` it also writes `FusionIconNames.js` (below). `shared-qml.sh list SRC`
+too. With `FusionIconTile.qml` it also writes `FusionIconNames.js` (below); with `FusionShadow.qml` it
+adds `shaders/fusionshadow.frag.qsb` (compiled with qsb when installed, else the repository's copy). `shared-qml.sh list SRC`
 prints what a package gets. `check` stops the build when a package has its own file named like a
 block (a lane that wants a variant names it differently), and a failed scan stops `install`. The destination is one QML folder of the staged package, the same one as
 before: `contents/ui` (top bar, launcher, dock, cards, switcher, snap script), `contents/ui/components`
@@ -192,6 +194,24 @@ their shared `RectangularShadow` under it), no layer, no effect: four rectangles
 names at HEAD; STYLE-1's coverage work adds more) with the icon loader's dash fallback
 (`google-chrome-canary` finds the `google-chrome` tile). Bind `foreign: false` while another icon theme
 is active. An icon given as a file path or a `QIcon` without `iconName` counts as foreign.
+
+## FusionShadow (STRESS-1, 2026-10-01)
+
+The soft drop shadow under tiles, knobs and dock icons: an Item that fills the shadowed item, with
+`offset`, `blur` (falloff width outside the box, px), `spread` (grows the box, px) and `radius`
+(corner radius), drawn by one `ShaderEffect` (`shaders/fusionshadow.frag`: the rounded-box signed
+distance, alpha 1 inside and `(1 - smoothstep(0, blur, d))^2` outside). Used by the launcher's
+AppTile and TabletSheet tiles, the tablet home screen's tiles, the dock's TaskItem and the quick
+settings' FusionSlider knob, in place of QtQuick.Effects' `RectangularShadow`.
+
+Why: Qt 6.11.2's `RectangularShadow` keeps about 6 KiB for every destroyed instance. A plain Qt
+window that creates and destroys 200 of them 300 times grew from 168 to 335 MiB, while Rectangle,
+ShaderEffect and MultiEffect stayed flat (evidence and a draft Qt report:
+`artifacts/plasma-fusion/2026-10-01-tablet2/STRESS-1/qt-rectangularshadow/`). The tablet home
+screen rebuilds its pages on every rotation, so plasmashell grew 0.4 MiB per rotation (300
+rotations: 357 -> 494 MiB) and per posture flip. With FusionShadow the same runs stay flat after the
+first rotations' warm-up; screenshots of the home screen, launcher, dock and controls match the old
+ones (mean difference below 1.2 of 255 per channel).
 
 ## FusionLaunchZoom (TABLET2 M1, 2026-10-01)
 

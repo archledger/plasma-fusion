@@ -6,7 +6,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import org.kde.plasma.components as PC3
 
 import "../code/launcher.js" as Launcher
@@ -14,7 +13,7 @@ import "../code/launcher.js" as Launcher
 // App tile of the launcher grids: 84 px tall, radius 14, 52 px icon with a soft drop shadow, 12 px name.
 // The height, the name and its gap follow the user's text size; the icon keeps its size. The icon
 // is a FusionIconTile (apps outside the Fusion icon theme get the neutral tile, ADAPTIVE fix 27)
-// over one RectangularShadow (no per-tile shader layer, BACKLOG S2). Dragging a tile (mouse, touchpad
+// over one FusionShadow (no per-tile shader layer, BACKLOG S2). Dragging a tile (mouse, touchpad
 // or pen) starts a system drag of its desktop file: onto the desktop it becomes a link (M3), onto
 // the pinned grid it reorders the pins (GAPS C7).
 Item {
@@ -60,7 +59,7 @@ Item {
     }
 
     // Drop shadow 0 3 6 rgba(0,0,0,0.3) under the tile shape (radius 0.234 x size, as the dock).
-    RectangularShadow {
+    FusionShadow {
         anchors.fill: icon
         offset.y: 3
         blur: 6

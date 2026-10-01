@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Templates as T
 
 // Slider of the Quick Settings board: 8 px track, accent fill, 20 px white knob (28 px in touch
@@ -110,7 +109,7 @@ T.Slider {
         width: slider.bar ? 0 : slider.knobSize
         height: slider.bar ? 0 : slider.knobSize
 
-        RectangularShadow {
+        FusionShadow {
             anchors.fill: knob
             offset.y: 2
             blur: 6

@@ -6,7 +6,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.private.sessions as Sessions
@@ -480,7 +479,7 @@ FocusScope {
             color: tile.down || tile.hovered ? tile.owner.pal.tileHover : "transparent"
         }
         contentItem: Item {
-            RectangularShadow {
+            FusionShadow {
                 anchors.fill: icon
                 offset.y: 3
                 blur: 6

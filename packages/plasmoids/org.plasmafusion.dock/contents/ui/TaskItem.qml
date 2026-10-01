@@ -6,7 +6,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Shapes
 
 // One app in the dock: its tile (the Fusion icon, or any other icon on a neutral Fusion tile,
@@ -135,7 +134,7 @@ Item {
         // filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)) in the boards, under the tile shape (the
         // Fusion tiles and the neutral tile share radius 0.234 x size): one signed-distance
         // shader, no layer and no blur pass per item.
-        RectangularShadow {
+        FusionShadow {
             anchors.fill: parent
             radius: 0.234 * width
             offset.y: 3

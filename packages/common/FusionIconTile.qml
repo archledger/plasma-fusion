@@ -18,7 +18,7 @@
     generators/icons/names.py, with the icon loader's dash fallback: "google-chrome-canary"
     finds the "google-chrome" tile). Bind `foreign: false` while another icon theme is active.
     No shadow here: the dock and the launcher put their shared shadow under the tile
-    (RectangularShadow, radius 0.234 x size). Plain rectangles, no layer, no effect.
+    (FusionShadow, radius 0.234 x size). Plain rectangles, no layer, no effect.
 
     Tile anatomy (AppIcon board, 64-unit tile, art_tiles.py): radius 15, a 4-unit lip under a
     60-unit base, a 9 % white sheen on the top 28 units, a 1-unit 14 % white edge. The neutral

@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # The shared QML blocks in packages/common/ (FusionMetrics, Motion, FusionTablet, FusionBackdrop,
-# FusionAccent, FusionIconTile) for the tools/build.d scripts that stage QML packages. A package
-# never carries its own copy of a block; the build copies each block the package uses.
+# FusionAccent, FusionIconTile, FusionShadow, ...) for the tools/build.d scripts that stage QML
+# packages. A package never carries its own copy of a block; the build copies each block the
+# package uses.
 #
 #   shared-qml.sh check SRC LABEL
 #       Fail when the package source SRC holds a file named like a shared block (or
@@ -12,7 +13,10 @@
 #   shared-qml.sh install SRC DEST
 #       Copy FusionMetrics.qml (always, as before) and every other block that the .qml/.js files
 #       under SRC use into DEST (one QML directory of the staged package), including blocks that
-#       those blocks use. With FusionIconTile.qml it also writes FusionIconNames.js there.
+#       those blocks use. With FusionIconTile.qml it also writes FusionIconNames.js there; with
+#       FusionShadow.qml it adds shaders/fusionshadow.frag.qsb (compiled from
+#       packages/common/shaders/fusionshadow.frag when Qt's qsb is installed, else the compiled
+#       file kept in the repository).
 #   shared-qml.sh list SRC
 #       Print the blocks SRC uses, one file name per line (FusionMetrics.qml first).
 #   shared-qml.sh names OUTFILE
@@ -175,6 +179,23 @@ with open(sys.argv[2], "w", encoding="utf-8") as f:
 PY
 }
 
+# install_shadow_shader DIR: FusionShadow's compiled shader into DIR, compiled from its source
+# when qsb is installed (so the staged file always matches the source).
+install_shadow_shader() {
+  local dir=$1 qsb candidate
+  mkdir -p "$dir"
+  qsb=$(command -v qsb || true)
+  for candidate in /usr/lib64/qt6/bin/qsb /usr/lib/qt6/bin/qsb; do
+    [ -n "$qsb" ] || { [ -x "$candidate" ] && qsb=$candidate; }
+  done
+  if [ -n "$qsb" ]; then
+    "$qsb" --qt6 -o "$dir/fusionshadow.frag.qsb" "$COMMON/shaders/fusionshadow.frag"
+  else
+    install -m 0644 "$COMMON/shaders/fusionshadow.frag.qsb" "$dir/fusionshadow.frag.qsb"
+  fi
+  chmod 0644 "$dir/fusionshadow.frag.qsb"
+}
+
 cmd=${1:-}
 case "$cmd" in
   check)
@@ -198,6 +219,9 @@ case "$cmd" in
       if [ "$f" = FusionIconTile.qml ]; then
         write_names "$dest/$NAMES_JS"
         chmod 0644 "$dest/$NAMES_JS"
+      fi
+      if [ "$f" = FusionShadow.qml ]; then
+        install_shadow_shader "$dest/shaders"
       fi
     done
     ;;
