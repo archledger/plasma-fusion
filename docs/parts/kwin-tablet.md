@@ -188,3 +188,10 @@ At 1.25, 1.5 and 2 the sizes stay; laptop sizes are unchanged. Result at 4/3 (se
 strip 879+21, a maximized app 45+834 = 1112 device px (was 44 + 836 = 58.67 and 1114.67); laptop
 34/72 restored. The drawn 1 px edge line of the bar was already crisp before (Qt snaps it); the change
 removes the fractional panel slot and puts the app area on whole pixels.
+
+Scale changes at run time (Display Configuration, `kscreen-doctor ... scale`) keep the screen list, so
+`onScreensChanged` does not run: each screen's `scaleChanged` (an `Instantiator` over
+`Workspace.screens`) restarts a 400 ms timer that applies the panels again. Found by STRESS-1
+(2026-10-01): before, a scale change in tablet posture left 45/81/21 at every scale (the dock at
+112.8 logical px at 1.25/1.5/1.75); now 44/80/20 at 1, 1.25, 1.5, 1.75 and 2, 45/81/21 at 4/3,
+laptop 34/72 unchanged (session st-fix).

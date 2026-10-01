@@ -496,6 +496,28 @@ Item {
         onTriggered: root.applyPanels()
     }
 
+    // A scale change (Display Configuration, kscreen-doctor) keeps the screen list, so
+    // onScreensChanged does not run: snap the panel heights to the new device pixels (STRESS-1:
+    // 4/3 -> 1.5 in tablet posture had left the 45 px top bar at 67.5 device px).
+    Instantiator {
+        model: Workspace.screens
+        delegate: Connections {
+            required property var modelData
+            target: modelData
+            function onScaleChanged() {
+                scaleSettled.restart();
+            }
+        }
+    }
+    Timer {
+        id: scaleSettled
+        interval: 400
+        onTriggered: {
+            root.log("screen scale " + root.internalScale().toFixed(4) + ": panels again");
+            root.applyPanels();
+        }
+    }
+
     // ---------------------------------------------------------------- shortcut and edges
 
     // Other parts change WindowMode or DockHiding with kwriteconfig6 --notify, then invoke this.
