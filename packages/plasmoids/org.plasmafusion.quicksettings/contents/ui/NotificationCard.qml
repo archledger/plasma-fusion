@@ -296,19 +296,21 @@ Rectangle {
 
             Repeater {
                 model: card.actionNames.length
+                // The buttons can outlive the card by a moment when the notification list is
+                // rebuilt (the sheet opening): their own pal and metrics stay valid, `card` does not.
                 delegate: TextButton {
                     required property int index
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
                     pal: card.pal
                     metrics: card.metrics
-                    implicitHeight: card.pal.touch ? Math.max(44, card.metrics.px(32)) : card.metrics.px(32)
-                    radius: card.pal.touch ? 12 : 10
+                    implicitHeight: pal.touch ? Math.max(44, metrics.px(32)) : metrics.px(32)
+                    radius: pal.touch ? 12 : 10
                     fontSize: 12.5
-                    primary: index === 0 && card.primaryAction
+                    primary: index === 0 && (card?.primaryAction ?? false)
                     fontWeight: primary ? Font.ExtraBold : Font.Bold
-                    text: card.actionLabels[index] || card.actionNames[index]
-                    onClicked: card.actionInvoked(card.actionNames[index])
+                    text: card ? (card.actionLabels[index] || card.actionNames[index]) : ""
+                    onClicked: card?.actionInvoked(card.actionNames[index])
                 }
             }
         }
