@@ -333,6 +333,13 @@ built by the lead directly.
   laptop back to 866, strip a `Dock` window, pill on/off.
 - **First tablet use** (`GestureCard.qml`, TABLET 5): a centred card with the three gestures and a 44 px
   "Got it"; dismissing it writes `plasmafusionrc [Tablet] GestureCardShown=true` (read once at start).
+  TABLET2 (2026-10-01): five rows for today's gestures (swipe up = home, pause halfway = app
+  switcher; a short swipe shows the dock over an app; along the bottom edge = previous app; pull down
+  at the clock = notifications, at the battery = controls; swipe down on the home screen = search),
+  without the three-finger Overview (off in tablet posture since G1). The card has a version
+  (`gestureCardVersion` 2): it shows while `GestureCardVersion` is lower, so everyone who dismissed
+  the first card sees the new gestures once; dismissing writes both keys. Tests suppress it with
+  `GestureCardVersion 99`.
 - **Desktop shortcuts** (BACKLOG M3): "Add to Desktop" in the icon's menu makes a symlink in
   `~/Desktop` (trusted: no "untrusted program" prompt); a pinned icon dragged 48 px upwards (mouse,
   touchpad or pen; a vertical `DragHandler` inside the icon's mouse area) starts a real drag of its

@@ -31,6 +31,7 @@ info "after disabling $O2: $(tr '\n' ';' <"$OUT/outputs-1.txt")"
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
 info "fusion-config rc=$?"
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true
+kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99
 pfv_restart_shell 12
 qdbus org.kde.KWin /KWin reconfigure; sleep 3
 B0=$(bars); info "one output: $B0"

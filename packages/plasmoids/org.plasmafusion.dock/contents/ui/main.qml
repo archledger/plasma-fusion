@@ -1354,15 +1354,18 @@ PlasmoidItem {
             screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
         }
     }
-    // Shown once, the first time tablet mode turns on (plasmafusionrc [Tablet] GestureCardShown).
+    // Shown once, the first time tablet mode turns on (plasmafusionrc [Tablet] GestureCardShown),
+    // and once more for each new set of gestures: GestureCardVersion below the card's version
+    // (TABLET2: home, switcher, previous app, the two pull-downs, home search) shows it again.
     property bool gestureCardShown: true
+    readonly property int gestureCardVersion: 2
     property bool gestureCardOpen: false
     P5Support.DataSource {
         id: rcReader
         engine: "executable"
-        connectedSources: ["kreadconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown --default false"]
+        connectedSources: ["kreadconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion --default 0"]
         onNewData: (sourceName, data) => {
-            root.gestureCardShown = String(data["stdout"] || "").trim() === "true";
+            root.gestureCardShown = Number(String(data["stdout"] || "").trim()) >= root.gestureCardVersion;
             disconnectSource(sourceName);
             root.maybeShowGestureCard();
         }
@@ -1375,7 +1378,8 @@ PlasmoidItem {
     function dismissGestureCard(): void {
         gestureCardOpen = false;
         gestureCardShown = true;
-        executable.run("kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true");
+        executable.run("kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true"
+                       + " && kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion " + gestureCardVersion);
     }
     Loader {
         active: root.gestureCardOpen

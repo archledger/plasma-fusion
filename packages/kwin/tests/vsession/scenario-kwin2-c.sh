@@ -23,6 +23,7 @@ place() {
 bash "$HOME/pf-tools/device/fusion-config.sh" --light --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
 info "fusion-config --light rc=$?"
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true
+kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99
 pfv_restart_shell 12
 qdbus org.kde.KWin /KWin reconfigure; sleep 3
 dolphin >/dev/null 2>&1 &

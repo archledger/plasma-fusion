@@ -8,7 +8,8 @@ import QtQuick.Templates as T
 import org.kde.plasma.core as PlasmaCore
 
 // The first time tablet mode turns on (TABLET 5, P2): one card, centred on the screen, with the
-// three gestures and a "Got it" button. The dock writes plasmafusionrc [Tablet]
+// gestures (TABLET2: home and the app switcher, the dock, the previous app, the two pull-downs,
+// home search; KWin's three-finger Overview is off in tablet posture) and a "Got it" button. The dock writes plasmafusionrc [Tablet]
 // GestureCardShown=true when it is dismissed, so it never comes back.
 PlasmaCore.Dialog {
     id: card
@@ -54,9 +55,11 @@ PlasmaCore.Dialog {
 
             Repeater {
                 model: [
-                    { "path": "M6 20h12M12 16V4M8 8l4-4 4 4", "text": i18nc("@info", "Swipe up from the bottom to show the dock") },
-                    { "path": "M6 4h12M12 8v12M8 16l4 4 4-4", "text": i18nc("@info", "Pull down on the top bar for controls") },
-                    { "path": "M7 18v-8M12 18V6M17 18v-8M9 5l3-3 3 3", "text": i18nc("@info", "Three fingers up for all windows") }
+                    { "path": "M6 20h12M12 16V4M8 8l4-4 4 4", "text": i18nc("@info", "Swipe up from the bottom to go home; pause halfway to see your apps") },
+                    { "path": "M6 20h12M9 14l3-3 3 3", "text": i18nc("@info", "A short swipe up shows the dock over an app") },
+                    { "path": "M4 18h16M8 14l-4 4 4 4M16 14l4 4-4 4", "text": i18nc("@info", "Swipe along the bottom edge for the previous app") },
+                    { "path": "M6 4h12M12 8v12M8 16l4 4 4-4", "text": i18nc("@info", "Pull down at the clock for notifications, at the battery for controls") },
+                    { "path": "M11 4a6 6 0 1 0 0 12a6 6 0 0 0 0-12M15.5 15.5L20 20", "text": i18nc("@info", "Swipe down on the home screen to search") }
                 ]
                 Row {
                     id: gestureRow

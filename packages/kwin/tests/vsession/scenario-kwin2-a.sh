@@ -73,6 +73,7 @@ bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/
 info "fusion-config rc=$?"
 kwriteconfig6 --file kwinrc --group Script-plasmafusion-tablet --key InternalOutputs "eDP,LVDS,DSI,Virtual"
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true
+kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99
 pfv_restart_shell 12
 qdbus org.kde.KWin /KWin reconfigure; sleep 3
 konsole -e bash -c 'while :; do date +%T.%N; sleep 0.2; done' >/dev/null 2>&1 &
