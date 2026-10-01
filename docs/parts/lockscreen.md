@@ -392,3 +392,47 @@ Every PAM prompt and message path is as it was; `/etc/pam.d` was not touched.
 Not covered here (DEPLOY-1 hand check H8, a ship blocker): unlocking by typing on the real
 on-screen keyboard in tablet posture, by fingerprint and by face; Orca reading the announcements.
 Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/LOCK-1/`.
+
+## On-screen keyboard in tablet posture (TABLET2 P0, 2026-09-30)
+
+DEPLOY-1 hand check H8 (unlocking by typing on the on-screen keyboard in tablet posture) could not
+pass on Plasma 6.7.5. KWin hides the on-screen keyboard when the screen locks and shows it again
+only when a text field asks for it after touch or pen input (`VirtualKeyboardMode` "non-mouse
+input"). After locking with a key (Meta+L, the power button) the password field already has the
+focus, so a finger tap never asked again. The stock keyboard button on the lock screen only moves
+the layout on Wayland; it never asks KWin. Plasma 6.8 changes this upstream; until then:
+
+- `LockScreenUi.qml`: `showKeyboard()` calls `forceActivate` on KWin's `org.kde.kwin.VirtualKeyboard`
+  (`org.kde.plasma.workspace.dbus`, Wayland only, and only while KWin has an input method;
+  Plasma Fusion sets one only in tablet posture). `forceActivate` shows the keyboard whatever the
+  last input was, so only touch and pen call it: a `PointHandler` (touch screen and stylus) on the
+  full-screen item, for the first tap while the prompt is hidden in tablet posture, which focuses
+  the field and shows the keyboard; and the password field's new `touched()` signal. A mouse click
+  shows the prompt without the keyboard. The keyboard button now shows or hides KWin's keyboard,
+  and Escape hides it (`hideKeyboard()`, KWin's `active` property).
+- In tablet posture the prompt stays up while text is typed or the keyboard is shown (`blockUI` no
+  longer needs a hovering pointer, which a finger is not), and a lifted finger no longer counts
+  as the pointer leaving (`onExited`).
+
+### Verification
+
+Private Wayland sessions on the ThinkPad (1920 × 1200 at 4/3, `PFV_LOCK=1`, the real 6.7.5 greeter,
+KWin started with `PLASMA_DEFAULT_SHELL=org.plasmafusion.lockshell`, emulated touch through EIS,
+nothing typed), in tablet posture, locked after a key press:
+
+| | before (`lk10-old`) | after (`lk11`, `lk12`; `lk10-new` ran a first version) |
+|---|---|---|
+| first finger tap on the background | prompt, no keyboard | prompt and keyboard |
+| second tap | no keyboard | keyboard stays |
+| mouse click | | prompt, no keyboard |
+| finger on the password field | | keyboard |
+| 12 s with the keyboard shown | | prompt and keyboard stay |
+| Escape | | keyboard hidden (the locker turns the screen off) |
+| finger on the keyboard button | | keyboard |
+| laptop posture, finger tap | | prompt, no keyboard (no input method) |
+
+Emulated touch reaches the greeter only once its seat has touch: the test touchscreen exists only
+while `pfinput` is connected, so the scenarios wait 1 s after connecting (`sleep 1` before `tap`).
+Offscreen harness (`test/run.sh OUT`): all states render, no QML warnings; qmllint warnings
+unchanged (19). Hand check H8 on the ThinkPad remains, now expected to pass. Evidence:
+`/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/P0/`.

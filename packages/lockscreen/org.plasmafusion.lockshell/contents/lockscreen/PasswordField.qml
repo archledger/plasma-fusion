@@ -36,6 +36,18 @@ T.TextField {
     Accessible.name: placeholderText
     Accessible.passwordEdit: true
 
+    // A finger or pen on the field (TABLET2 P0): the lock screen asks KWin for the on-screen
+    // keyboard, which a mouse click must not bring up.
+    signal touched()
+    PointHandler {
+        acceptedDevices: PointerDevice.TouchScreen | PointerDevice.Stylus
+        onActiveChanged: {
+            if (active) {
+                field.touched();
+            }
+        }
+    }
+
     Text {
         anchors.fill: parent
         verticalAlignment: Text.AlignVCenter

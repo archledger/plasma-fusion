@@ -13,6 +13,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.clock as PlasmaClock
 import org.kde.plasma.private.keyboardindicator as KeyboardIndicator
 import org.kde.plasma.workspace.keyboardlayout as Keyboards
+import org.kde.plasma.workspace.dbus as DBus
 
 import org.kde.plasma.private.sessions
 import org.kde.breeze.components
@@ -90,6 +91,44 @@ Item {
     // Tablet posture from KWin (TABLET 4.13): touch-sized controls and the prompt higher up.
     FusionTablet {
         id: tabletState
+    }
+
+    // The on-screen keyboard (TABLET2 P0). On Wayland, Plasma 6.7.5's keyboard toggle on the lock screen
+    // only moves the layout, and KWin shows its keyboard only when a text field asks for it after touch
+    // or pen input. After locking with a key (Meta+L) the password field already has the focus, so a
+    // finger tap brought no keyboard (private sessions lk10-old and lk10-new). Ask KWin directly. Its
+    // forceActivate shows the keyboard whatever the last input was, so only touch and pen call it here
+    // (the keyboard button aside), and in laptop posture Plasma Fusion runs no input method at all.
+    function showKeyboard(): void {
+        if (!Qt.platform.pluginName.includes("wayland") || !Keyboards.KWinVirtualKeyboard.available) {
+            return;
+        }
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.KWin",
+            "path": "/VirtualKeyboard",
+            "iface": "org.kde.kwin.VirtualKeyboard",
+            "member": "forceActivate",
+            "arguments": []
+        });
+    }
+    function hideKeyboard(): void {
+        if (Qt.platform.pluginName.includes("wayland")) {
+            Keyboards.KWinVirtualKeyboard.active = false;
+        } else if (inputPanel.keyboardActive) {
+            inputPanel.showHide();
+        }
+    }
+    function focusPasswordAndShowKeyboard(): void {
+        mainBlock.mainPasswordBox.forceActiveFocus();
+        showKeyboard();
+    }
+    Connections {
+        target: mainBlock.mainPasswordBox
+        function onTouched(): void {
+            if (tabletState.tablet) {
+                lockScreenUi.showKeyboard();
+            }
+        }
     }
 
     Motion {
@@ -208,7 +247,9 @@ Item {
 
         property bool uiVisible: false
         property bool seenPositionChange: false
-        property bool blockUI: containsMouse && (mainStack.depth > 1 || mainBlock.mainPasswordBox.text.length > 0 || inputPanel.keyboardActive)
+        // A finger does not hover, so in tablet posture typed text or the on-screen keyboard alone
+        // keep the prompt up.
+        property bool blockUI: (containsMouse || tabletState.tablet) && (mainStack.depth > 1 || mainBlock.mainPasswordBox.text.length > 0 || inputPanel.keyboardActive)
 
         // 0 = idle (Lock board), 1 = prompt shown (Login board); animated (BACKLOG S1): the
         // prompt comes in over 300 ms, decelerating, and goes in 200 ms; both follow Plasma's
@@ -232,6 +273,17 @@ Item {
         cursorShape: uiVisible ? Qt.ArrowCursor : Qt.BlankCursor
         drag.filterChildren: true
         onPressed: uiVisible = true;
+        // In tablet posture the first finger or pen tap shows the prompt with the keyboard. Handlers
+        // see a press before their item, so the prompt is still hidden here; taps on controls stay
+        // with the controls.
+        PointHandler {
+            acceptedDevices: PointerDevice.TouchScreen | PointerDevice.Stylus
+            onActiveChanged: {
+                if (active && tabletState.tablet && !lockScreenRoot.uiVisible) {
+                    Qt.callLater(lockScreenUi.focusPasswordAndShowKeyboard);
+                }
+            }
+        }
         onPositionChanged: {
             uiVisible = seenPositionChange;
             seenPositionChange = true;
@@ -259,16 +311,18 @@ Item {
             }
         }
         onExited: {
-            uiVisible = false;
+            // A finger lifting off counts as leaving the area: in tablet posture only the timeout hides
+            // the prompt, or a tap would show it for the length of the touch.
+            if (!tabletState.tablet) {
+                uiVisible = false;
+            }
         }
         Keys.onEscapePressed: {
             // If the escape key is pressed, kscreenlocker will turn off the screen.
             // We do not want to show the password prompt in this case.
             if (uiVisible) {
                 uiVisible = false;
-                if (inputPanel.keyboardActive) {
-                    inputPanel.showHide();
-                }
+                lockScreenUi.hideKeyboard();
                 lockScreenUi.lockRoot.clearPassword();
             }
         }
@@ -533,7 +587,14 @@ Item {
                 // Otherwise the password field loses focus and virtual keyboard
                 // keystrokes get eaten
                 mainBlock.mainPasswordBox.forceActiveFocus();
-                inputPanel.showHide();
+                if (!Qt.platform.pluginName.includes("wayland")) {
+                    inputPanel.showHide();
+                } else if (inputPanel.keyboardActive) {
+                    // KWin owns the keyboard on Wayland (see showKeyboard()).
+                    lockScreenUi.hideKeyboard();
+                } else {
+                    lockScreenUi.showKeyboard();
+                }
             }
             onInteracted: fadeoutTimer.running = false
         }
