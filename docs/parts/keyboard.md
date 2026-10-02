@@ -31,6 +31,13 @@ in Konsole `cat -v` shows `^[`, a tab and `^[[D ^[[B ^[[A ^[[C` (6.7.5 and 6.7.9
   record (about 2 ms otherwise); a plasma-keyboard update rebuilds the copy from the new file.
 - `fusion-restore.sh` removes the layouts and the record (a later install builds them again).
 
+## Checks
+
+`tools/build.d/88-keyboard-keys.sh`: compile and `packages/keyboard/tests/patch_test.py` (the row
+becomes Esc, Tab and the arrows at its indent, the symbols go to the long-press lists; a page without
+the row is left alone; 32 KiB of spaces or tabs is turned down within a second; standard library
+only). `fuzz/keyboard_keys_fuzzer.py` patches arbitrary text (docs/parts/ci.md, "Fuzzing").
+
 ## Not here (upstream plasma-keyboard)
 
 Ctrl and Alt (keysyms are sent with no modifiers and letters are committed as text, so a modifier key

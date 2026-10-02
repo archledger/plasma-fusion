@@ -3,10 +3,11 @@
 #
 # Fuzzes how the keyboard keys tool (packages/keyboard/plasma-fusion-keyboard-keys) patches
 # plasma-keyboard's symbols.qml, a file another package installs (docs/parts/ci.md, "Fuzzing"). An
-# input is the file's text. Checked: no exception and no runaway regular expression (libFuzzer's
-# -timeout); either the reason the page was left alone, or a page with each of Esc, Tab and the four
-# arrows once more than before, the row's trademark key once less, the semicolon key kept and two
-# more long-press lists.
+# input is the file's text. Checked: no exception and no input slower than libFuzzer's -timeout (a
+# pattern that backtracks exponentially; inputs stay below 4 KiB, too short for a quadratic one,
+# which packages/keyboard/tests/patch_test.py times); either the reason the page was left alone, or
+# a page with each of Esc, Tab and the four arrows once more than before, the row's trademark key
+# once less, the semicolon key kept and two more long-press lists.
 #   python3 fuzz/keyboard_keys_fuzzer.py [libFuzzer options] [corpus directory...]
 import sys
 
