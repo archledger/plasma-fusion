@@ -20,9 +20,7 @@
       inherit (nixpkgs) lib;
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
-      # The VERSION file is the release's version; trees without it build as 0.1.0.
-      version = if builtins.pathExists ./VERSION then lib.trim (builtins.readFile ./VERSION) else "0.1.0";
-      packagesFor = pkgs: import ./packaging/nix/plasma-fusion.nix { inherit pkgs version; src = self; };
+      packagesFor = pkgs: import ./packaging/nix/plasma-fusion.nix { inherit pkgs; src = self; };
     in
     {
       packages = forAllSystems (pkgs:
