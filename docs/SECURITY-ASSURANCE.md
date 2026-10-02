@@ -36,10 +36,14 @@ the session or run before the desktop starts; those are what this case is about.
 - **No network traffic of its own, no telemetry.** Plasma Fusion's code opens no network
   connections. The weather card asks Plasma's own weather engine, and only after you pick a
   location (`packages/plasmoids/org.plasmafusion.weathercard/contents/ui/main.qml`).
-- **After a Plasma update, KDE's own parts take over.** After an update of Plasma, KWin,
-  kscreenlocker, libplasma, KDecoration or Qt, the login check switches the version-bound parts
-  (lock screen, compiled decoration, tablet gestures, desktop) back to KDE's own until the new
-  versions are tested ([`parts/gate.md`](parts/gate.md)).
+- **On Fedora, after a Plasma update, the version-bound parts step aside.** After an update of
+  Plasma, KWin, kscreenlocker, libplasma, KDecoration or Qt, the login check switches the
+  version-bound parts off until the new versions are tested: KDE's own lock screen and Folder View
+  desktop come back, the tablet gestures are off, and the compiled decoration is replaced by the
+  Plasma Fusion Aurorae theme, which has no compiled plugin ([`parts/gate.md`](parts/gate.md)).
+  The check reads the versions with `rpm` and Fedora's package names. Without `rpm` it records no
+  versions, so it does not notice an update and switches nothing off; support for pacman, dpkg
+  and Nix is roadmap item 3 ([`ROADMAP.md`](ROADMAP.md)).
 
 ### You cannot expect
 
@@ -188,8 +192,8 @@ Each boundary, what crosses it, and how it is guarded.
   input. They are small C++ plugins built on KDE's and Qt's libraries
   ([`ARCHITECTURE.md`](ARCHITECTURE.md), "Compiled parts"). The navigation effect stays idle when
   the running KWin is not the version it was built against
-  (`packages/navigation-cpp/src/plugin/fusionnavigation.cpp`), and the login check turns the
-  version-bound parts off after a KWin update (section 3.3).
+  (`packages/navigation-cpp/src/plugin/fusionnavigation.cpp`), and on Fedora the login check
+  turns the version-bound parts off after a KWin update (sections 1 and 3.3).
 
 ### 3.9 CI and the supply chain
 
@@ -216,7 +220,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | Principle | Where |
 |---|---|
 | Economy of mechanism | The only part that runs as root in normal use is an 84-line shell script with two commands (`packages/power/charge-limit/plasma-fusion-charge-limit`). Everything else is themes, QML and small user services that Plasma loads in its usual places ([`ARCHITECTURE.md`](ARCHITECTURE.md)). |
-| Fail-safe defaults | After an update the login check falls back to KDE's own lock screen and decoration (`plasma-fusion-gate.sh`); a missing or unreadable version record counts as untested ([`parts/gate.md`](parts/gate.md)). The polkit action denies remote and inactive sessions. Lock screen notification text is off by default. A QML error in the lock screen falls back to kscreenlocker's own. |
+| Fail-safe defaults | After an update the login check falls back to KDE's own lock screen and desktop and to the Plasma Fusion Aurorae decoration, which has no compiled plugin (`plasma-fusion-gate.sh`); a missing or unreadable version record counts as untested ([`parts/gate.md`](parts/gate.md)). This holds where `rpm` reports the versions (Fedora); without `rpm` the check does not notice updates yet (section 1). The polkit action denies remote and inactive sessions. Lock screen notification text is off by default. A QML error in the lock screen falls back to kscreenlocker's own. |
 | Complete mediation | Every charge-limit change goes through pkexec and polkit, and the helper checks root and its argument itself on every call. |
 | Open design | All code and all security measures are public in this repository; nothing depends on secrecy. |
 | Separation of privilege | Reading the charge limit needs no privilege; writing needs pkexec ([`parts/charge-limit.md`](parts/charge-limit.md)). The greeter tool writes `/etc/plasmalogin.conf` as root but the greeter's home as the greeter user (`tools/system/greeter-apply.sh`). |
@@ -312,6 +316,8 @@ Widget files named here without a path are under
   Python puts the current directory first on its module path, so a `json.py` or an `xml/`
   package in the directory the tool was started from would be imported as root. Until `-I` is
   added, start these tools from a directory that no other user can write to.
+- The login check finds the installed versions only with `rpm`. On a system without `rpm` it
+  does not notice a Plasma, KWin or Qt update and leaves the version-bound parts on (section 1).
 - The C++ plugins are not fuzzed and no test runs them under AddressSanitizer or
   UndefinedBehaviorSanitizer.
 - Commits, tags and packages are not signed; the CI's RPMs are kept for 14 days as unsigned

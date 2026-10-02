@@ -137,7 +137,8 @@ and writes only below `$STAGE` (default `stage/home`), in the paths the naming t
 - **Login check.** At every login startplasma sources
   `~/.config/plasma-workspace/env/plasma-fusion-gate.sh`, which runs the check as its own process
   with a time limit. The check compares the installed Plasma, KWin, kscreenlocker, libplasma,
-  KDecoration and Qt versions with the ones recorded as tested; after an update it switches the
+  KDecoration and Qt versions (read with `rpm`, so for now on Fedora only) with the ones recorded
+  as tested; after an update it switches the
   version-bound parts off (lock screen, compiled decoration, navigation effect, desktop
   containment) and queues a notification, which `plasma-fusion-gate-notify.service` shows once the
   desktop is up. `fusion-config.sh` records the new versions and turns the parts back on
