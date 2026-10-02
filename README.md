@@ -61,6 +61,19 @@ scheme, keep your panel layout, `--dry-run` to see every change first). To undo 
 tools/device/fusion-restore.sh                       # back to the state before Plasma Fusion
 ```
 
+To update later, get the new sources, build again and run the install again, then log out and
+back in:
+
+```sh
+git pull
+tools/build.sh
+tools/device/fusion-config.sh --install stage/home
+```
+
+Each run takes a new backup first. Settings you changed yourself are kept. When the configuration
+version changes, `~/.local/state/plasma-fusion/config-changes` lists the settings that were
+changed and the ones that were kept ([`docs/parts/device.md`](docs/parts/device.md)).
+
 How the parts fit together is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 RPMs for Fedora: `packaging/build-rpm.sh` builds the `plasma-fusion` package; the compiled
