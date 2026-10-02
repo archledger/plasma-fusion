@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Coding style (docs/parts/ci.md, "Coding style"), with the tools Fedora 44 packages: ruff over
-# the Python code (ruff.toml), and KDE's clang-format style (.clang-format) over the C++ lines that
-# a pull request or a push to main changes (git clang-format), so that existing files are not
-# reformatted in one go.
+# the Python code (ruff.toml), KDE's clang-format style (.clang-format) over the C++ lines that a
+# pull request or a push to main changes (git clang-format), so that existing files are not
+# reformatted in one go, and ShellCheck over the shell scripts (tools/checks/shellcheck.sh).
 
 name: style
 
@@ -75,3 +75,22 @@ jobs:
             echo "::error::Changed C++ lines differ from .clang-format (KDE style). Run: git clang-format ${BASE}"
             exit 1
           fi
+
+  shell:
+    name: "Shell (ShellCheck)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git and ShellCheck (checkout runs inside the container)
+        run: dnf install -y -q git ShellCheck
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: ShellCheck over the shell scripts
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tools/checks/shellcheck.sh

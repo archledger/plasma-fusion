@@ -11,7 +11,7 @@ do when one of them speaks up. Set up 2026-10-01 (CI) and 2026-10-02 (automation
 | `reuse` | push, pull request | REUSE 3.3 compliance (`reuse lint`) |
 | `build` | push, pull request | fedora:44: lint self-tests, the login-check unit tests, the noarch RPM (`packaging/build-rpm.sh`, `%check`, rpmlint), RPM as an artifact |
 | `compiled` | changes to the compiled parts, weekly | navigation effect, decoration, settings module: `dnf builddep`, cmake with `CXXFLAGS=-Werror -Wno-error=deprecated-declarations` (a compiler warning fails the build, a deprecation stays a warning), ctest (see "Dynamic analysis" for the tests), against Fedora 44's Plasma (**stable**) and against KDE's Plasma beta packages (**beta**, the `@kdesig/kde-beta` Copr; may fail without failing the run: an early warning for the next Plasma release) |
-| `style` | push, pull request | Python: `ruff check` with `ruff.toml`; C++: `git clang-format` over the C++ lines the change touches, against `.clang-format` (KDE's style). See "Coding style" |
+| `style` | push, pull request | Python: `ruff check` with `ruff.toml`; C++: `git clang-format` over the C++ lines the change touches, against `.clang-format` (KDE's style); shell: ShellCheck at severity warning (`tools/checks/shellcheck.sh`). See "Coding style" |
 | `sanitizers` | changes to the compiled parts, weekly | the three compiled parts built with AddressSanitizer and UndefinedBehaviorSanitizer and their tests run, so that a memory error, a leak or undefined behaviour fails the job (`tools/sanitizers/run.sh`). See "Dynamic analysis" |
 | `workflow-audit` | changes to workflows | zizmor (security) and actionlint (correctness) over the workflows |
 | `codeql` | push, pull request, weekly | CodeQL over the workflows, the C++ parts (without building), the shell's JavaScript and the Python tools; results in the Security tab |
@@ -28,8 +28,11 @@ reason).
 
 ## Coding style
 
-Both checks use tools that Fedora 44 packages (`ruff`, `git-clang-format`) and run in the `style`
-workflow on every pull request and push to `main`.
+The checks use tools that Fedora 44 packages (`ruff`, `git-clang-format`, `ShellCheck`) and run in
+the `style` workflow on every pull request and push to `main`. They cover Python, C++ and shell.
+QML, the language with the most files (232 tracked `.qml` files, against 149 `.sh`, 105 `.py` and
+36 `.cpp`/`.h` when the shell check was added, 2026-10-02), has no style check yet: see **QML**
+below.
 
 **Python** follows the rules in `ruff.toml`, which are the rules the code already followed when the
 check was added (2026-10-02): pyflakes (`F`) and pycodestyle's errors `E4`, `E7` and `E9` (the codes
@@ -65,6 +68,31 @@ reformatting of the two parts in one commit can follow once their open work is m
   for `wip/split-pair` merged onto it (its navigation changes follow the style), a finding for a
   badly formatted line added to the decoration or to the settings module (only that line is
   reported), and no check of a changed JSON file.
+
+**Shell** scripts pass ShellCheck at severity `warning` (errors and warnings; the `info` and
+`style` notes are not enforced): `tools/checks/shellcheck.sh` checks every tracked `*.sh` file and
+every file without a suffix that starts with a `sh` or `bash` `#!` line, following sourced files
+(`-x`). A file that is only sourced names its shell with `# shellcheck shell=bash`; a warning that
+does not apply is disabled on its line or for the file with `# shellcheck disable=SCxxxx` and the
+reason in a comment. Layout (indentation, `set -euo pipefail` in scripts that run on their own)
+follows the surrounding scripts; no formatter is enforced.
+
+- Excluded for now, for the same reason and with the same list as `ruff.toml`: `packages/appicons/`,
+  `packages/kwin/`, `packages/navigation-cpp/`, `packages/power/`, `packages/powerfx/`,
+  `tools/device/`, `tools/system/`. On 2026-10-02 those paths held 37 scripts with 13 findings in 8
+  files (7 sourced files without a shell, 4 `~` in quotes, 2 unused variables). The scripts the open
+  branches add or change outside them pass.
+- Run it: `tools/checks/shellcheck.sh` in the top directory (`--list` prints the scripts).
+- Checked on 2026-10-02 with ShellCheck 0.11.0: 114 scripts, no finding.
+
+**QML** has no enforced style yet. The QML follows the surrounding code (4-space indentation, no
+tabs: on 2026-10-02, 306 of the 34136 indented lines of the tracked QML were not on a 4-space
+step, most of them continuation lines). Before the parts, `tools/build.sh` runs the project's own
+QML checks over `packages/`, `tools/checks/motion-lint.sh` (durations from the Motion tokens) and
+`tools/checks/a11y-lint.py` (a name for every control), which are rules for motion and
+accessibility, not a style guide. Qt's formatter `qmlformat` (6.11.2) would change 138 of the 204
+QML files outside the excluded paths (2026-10-02), so enforcing it needs one reformatting commit
+first, after the open branches are merged.
 
 ## Dynamic analysis
 
