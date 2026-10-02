@@ -28,7 +28,8 @@ plasma-fusion-fieldlog status          # after install, from ~/.local/libexec/pl
 writes `~/.config/systemd/user/plasma-fusion-fieldlog.service` from the template next to it (with
 `--share`: `Environment=PF_FIELDLOG_SHARE=DIR`), then `systemctl --user daemon-reload`, `enable`
 and `restart` of that unit only. It starts with every Plasma session (`WantedBy` and `PartOf`
-`graphical-session.target`). `remove` stops and disables it and deletes the unit and the copy; the
+`graphical-session.target`), just before KWin and plasmashell, and stops after them (see "The
+unit"). `remove` stops and disables it and deletes the unit and the copy; the
 recorded state stays. `digest [DATE]` writes and prints a day's digest (`today`, `yesterday` or
 `YYYY-MM-DD`; default today). `systemctl --user reload plasma-fusion-fieldlog` (SIGHUP) rewrites
 today's digest at once.
@@ -191,7 +192,12 @@ contain the crashed program's command line, as coredumpctl prints it, and stay l
 units in `packages/`, with `Environment=PATH=/usr/local/bin:/usr/bin` (without it `ExecSearchPath=`
 becomes the service's whole PATH, systemd.exec(5), and `coredumpctl`, `journalctl` and `systemctl`
 are not found; the tool also falls back to `/usr/bin/NAME` when a program is not on PATH),
-`KillMode=mixed` (SIGTERM to the tool, which writes its counts, the digest and
+`Before=plasma-kwin_wayland.service plasma-plasmashell.service` (units stop in the reverse of their
+start order, so at logout the recorder stops after KWin and plasmashell and still records a hang
+or crash while they stop, as on 2026-09-29 at 19:51 EDT, when plasmashell was aborted 40 s after
+the session ended at a reboot and no core dump was stored, only user journal lines; `After=graphical-session.target`
+would then be an ordering cycle, since the session targets come after both; checked against the
+laptop's user manager, 2026-10-02), `KillMode=mixed` (SIGTERM to the tool, which writes its counts, the digest and
 stops journalctl), `Restart=on-failure`, `background.slice`, `Nice=10`, `IOSchedulingClass=idle`,
 `MemoryMax=64M`, and the hardening that works in a user unit without a user namespace:
 `NoNewPrivileges`, `LockPersonality`, `RestrictRealtime`, `RestrictSUIDSGID`, `RestrictNamespaces`,

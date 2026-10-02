@@ -788,6 +788,18 @@ class UnitFile(unittest.TestCase):
         self.assertEqual(len(paths), 1, svc)
         self.assertIn("/usr/bin", paths[0].split(":"))
 
+    def test_stops_after_plasmashell_and_kwin(self):
+        # Stop order is the reverse of the start order: before KWin and plasmashell at the start, so
+        # after them at logout (a plasmashell hang at its stop was missed, review of 2026-10-02).
+        # After= on the session targets would then be an ordering cycle (they come after both).
+        unit = unit_section("Unit")
+        before = " ".join(v for k, v in unit if k == "Before").split()
+        after = " ".join(v for k, v in unit if k == "After").split()
+        self.assertIn("plasma-plasmashell.service", before)
+        self.assertIn("plasma-kwin_wayland.service", before)
+        for t in ("graphical-session.target", "plasma-workspace.target", "plasma-core.target"):
+            self.assertNotIn(t, after)
+
     def test_tool_falls_back_to_usr_bin(self):
         old = os.environ["PATH"]
         os.environ["PATH"] = str(BASE / "libexec-only")

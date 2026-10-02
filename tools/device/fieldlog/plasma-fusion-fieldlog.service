@@ -10,7 +10,9 @@
 [Unit]
 Description=Plasma Fusion field log
 PartOf=graphical-session.target
-After=graphical-session.target plasma-workspace.target
+# Ordered before KWin and plasmashell, so that at logout it stops after them and still records a
+# hang or crash while they stop. (So not After=graphical-session.target, which comes after them.)
+Before=plasma-kwin_wayland.service plasma-plasmashell.service
 ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
 
 [Service]
