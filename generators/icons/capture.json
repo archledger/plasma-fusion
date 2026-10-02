@@ -355,6 +355,730 @@
 "Type": "Scalable"
 }
 },
+"hicolor_dirs": {
+"128x128/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 128,
+"Type": "Threshold"
+},
+"128x128/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 128,
+"Type": "Threshold"
+},
+"16x16/actions": {
+"Context": "Actions",
+"Scale": 1,
+"Size": 16,
+"Type": "Threshold"
+},
+"16x16/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 16,
+"Type": "Threshold"
+},
+"16x16/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 16,
+"Type": "Threshold"
+},
+"192x192/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 192,
+"Type": "Threshold"
+},
+"22x22/actions": {
+"Context": "Actions",
+"Scale": 1,
+"Size": 22,
+"Type": "Threshold"
+},
+"22x22/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 22,
+"Type": "Threshold"
+},
+"22x22/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 22,
+"Type": "Threshold"
+},
+"24x24/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 24,
+"Type": "Threshold"
+},
+"24x24/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 24,
+"Type": "Threshold"
+},
+"32x32/actions": {
+"Context": "Actions",
+"Scale": 1,
+"Size": 32,
+"Type": "Threshold"
+},
+"32x32/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 32,
+"Type": "Threshold"
+},
+"32x32/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 32,
+"Type": "Threshold"
+},
+"36x36/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 36,
+"Type": "Threshold"
+},
+"48x48/actions": {
+"Context": "Actions",
+"Scale": 1,
+"Size": 48,
+"Type": "Threshold"
+},
+"48x48/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 48,
+"Type": "Threshold"
+},
+"48x48/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 48,
+"Type": "Threshold"
+},
+"64x64/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 64,
+"Type": "Threshold"
+},
+"64x64/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 64,
+"Type": "Threshold"
+},
+"72x72/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 72,
+"Type": "Threshold"
+},
+"96x96/status": {
+"Context": "Status",
+"Scale": 1,
+"Size": 96,
+"Type": "Threshold"
+},
+"scalable/actions": {
+"Context": "Actions",
+"MaxSize": 256,
+"MinSize": 1,
+"Scale": 1,
+"Size": 128,
+"Type": "Scalable"
+},
+"scalable/apps": {
+"Context": "Applications",
+"MaxSize": 256,
+"MinSize": 1,
+"Scale": 1,
+"Size": 128,
+"Type": "Scalable"
+},
+"scalable/emblems": {
+"Context": "Emblems",
+"MaxSize": 256,
+"MinSize": 1,
+"Scale": 1,
+"Size": 128,
+"Type": "Scalable"
+},
+"scalable/status": {
+"Context": "Status",
+"MaxSize": 256,
+"MinSize": 1,
+"Scale": 1,
+"Size": 128,
+"Type": "Scalable"
+},
+"symbolic/apps": {
+"Context": "Applications",
+"MaxSize": 512,
+"MinSize": 8,
+"Scale": 1,
+"Size": 16,
+"Type": "Scalable"
+}
+},
+"hicolor_links": [
+[
+"128x128/apps",
+"kopete-offline.png"
+],
+[
+"128x128/status",
+"qbittorrent-tray.png"
+],
+[
+"16x16/actions",
+"document-properties-key.png"
+],
+[
+"16x16/actions",
+"minuet-clap-symbolic.svg"
+],
+[
+"16x16/actions",
+"minuet-sing-symbolic.svg"
+],
+[
+"16x16/apps",
+"evolution-mail.png"
+],
+[
+"16x16/apps",
+"evolution-memos.png"
+],
+[
+"16x16/apps",
+"evolution-tasks.png"
+],
+[
+"16x16/apps",
+"kopete-offline.png"
+],
+[
+"16x16/apps",
+"soundkonverter-replaygain.png"
+],
+[
+"16x16/status",
+"org.kde.CrowTranslate-tray-dark.png"
+],
+[
+"16x16/status",
+"org.kde.CrowTranslate-tray-light.png"
+],
+[
+"16x16/status",
+"org.remmina.Remmina-status.svg"
+],
+[
+"16x16/status",
+"qbittorrent-tray.png"
+],
+[
+"192x192/status",
+"qbittorrent-tray.png"
+],
+[
+"22x22/actions",
+"document-properties-key.png"
+],
+[
+"22x22/actions",
+"minuet-clap-symbolic.svg"
+],
+[
+"22x22/actions",
+"minuet-sing-symbolic.svg"
+],
+[
+"22x22/apps",
+"evolution-mail.png"
+],
+[
+"22x22/apps",
+"evolution-memos.png"
+],
+[
+"22x22/apps",
+"evolution-tasks.png"
+],
+[
+"22x22/apps",
+"kopete-offline.png"
+],
+[
+"22x22/apps",
+"soundkonverter-replaygain.png"
+],
+[
+"22x22/status",
+"org.kde.CrowTranslate-tray-dark.png"
+],
+[
+"22x22/status",
+"org.kde.CrowTranslate-tray-light.png"
+],
+[
+"22x22/status",
+"org.remmina.Remmina-status.svg"
+],
+[
+"22x22/status",
+"qbittorrent-tray.png"
+],
+[
+"24x24/apps",
+"evolution-mail.png"
+],
+[
+"24x24/apps",
+"evolution-memos.png"
+],
+[
+"24x24/apps",
+"evolution-tasks.png"
+],
+[
+"24x24/status",
+"org.kde.CrowTranslate-tray-dark.png"
+],
+[
+"24x24/status",
+"org.kde.CrowTranslate-tray-light.png"
+],
+[
+"24x24/status",
+"org.remmina.Remmina-status.svg"
+],
+[
+"24x24/status",
+"qbittorrent-tray.png"
+],
+[
+"32x32/actions",
+"document-properties-key.png"
+],
+[
+"32x32/apps",
+"evolution-mail.png"
+],
+[
+"32x32/apps",
+"evolution-memos.png"
+],
+[
+"32x32/apps",
+"evolution-tasks.png"
+],
+[
+"32x32/apps",
+"kopete-offline.png"
+],
+[
+"32x32/apps",
+"soundkonverter-replaygain.png"
+],
+[
+"32x32/status",
+"org.remmina.Remmina-status.svg"
+],
+[
+"32x32/status",
+"qbittorrent-tray.png"
+],
+[
+"36x36/status",
+"qbittorrent-tray.png"
+],
+[
+"48x48/actions",
+"document-properties-key.png"
+],
+[
+"48x48/apps",
+"evolution-mail.png"
+],
+[
+"48x48/apps",
+"evolution-memos.png"
+],
+[
+"48x48/apps",
+"evolution-tasks.png"
+],
+[
+"48x48/apps",
+"kopete-offline.png"
+],
+[
+"48x48/apps",
+"soundkonverter-replaygain.png"
+],
+[
+"48x48/status",
+"org.remmina.Remmina-status.svg"
+],
+[
+"48x48/status",
+"qbittorrent-tray.png"
+],
+[
+"64x64/apps",
+"kopete-offline.png"
+],
+[
+"64x64/apps",
+"soundkonverter-replaygain.png"
+],
+[
+"64x64/status",
+"org.remmina.Remmina-status.svg"
+],
+[
+"64x64/status",
+"qbittorrent-tray.png"
+],
+[
+"72x72/status",
+"qbittorrent-tray.png"
+],
+[
+"96x96/status",
+"qbittorrent-tray.png"
+],
+[
+"scalable/actions",
+"document-properties-key.svgz"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-camera-photo-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-connect-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-disconnect-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-document-save-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-document-send-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-duplicate-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-dynres-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-fit-window-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-fullscreen-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-go-bottom-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-keyboard-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-multi-monitor-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-pan-down-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-pan-up-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-password-conceal-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-password-reveal-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-pin-down-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-pin-up-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-preferences-system-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-reconnect-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-scale-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-switch-page-symbolic.svg"
+],
+[
+"scalable/actions",
+"org.remmina.Remmina-system-run-symbolic.svg"
+],
+[
+"scalable/actions",
+"video-television-encrypted.svg"
+],
+[
+"scalable/apps",
+"com.github.wwmm.easyeffects-off-symbolic.svg"
+],
+[
+"scalable/apps",
+"com.github.wwmm.easyeffects-symbolic.svg"
+],
+[
+"scalable/apps",
+"darktable-1.svg"
+],
+[
+"scalable/apps",
+"darktable-2.svg"
+],
+[
+"scalable/apps",
+"darktable-3.svg"
+],
+[
+"scalable/apps",
+"kasts-tray-dark.svg"
+],
+[
+"scalable/apps",
+"kasts-tray-light.svg"
+],
+[
+"scalable/apps",
+"kopete-offline.svgz"
+],
+[
+"scalable/apps",
+"labplot-MQTT.svg"
+],
+[
+"scalable/apps",
+"labplot-back.svg"
+],
+[
+"scalable/apps",
+"labplot-forward.svg"
+],
+[
+"scalable/apps",
+"labplot-json-array.svg"
+],
+[
+"scalable/apps",
+"labplot-json-object.svg"
+],
+[
+"scalable/apps",
+"labplot-kaggle.svg"
+],
+[
+"scalable/apps",
+"labplot-maximize.svg"
+],
+[
+"scalable/apps",
+"labplot-minimize.svg"
+],
+[
+"scalable/apps",
+"labplot-zoom.svg"
+],
+[
+"scalable/apps",
+"org.gnome.DiskUtility-symbolic.svg"
+],
+[
+"scalable/apps",
+"org.gnome.Evolution-alarm-notify.svg"
+],
+[
+"scalable/apps",
+"org.remmina.Remmina-symbolic.svg"
+],
+[
+"scalable/apps",
+"parley-parley.svgz"
+],
+[
+"scalable/apps",
+"parley-simple.svgz"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-rdp-ssh-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-rdp-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-sftp-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-spice-ssh-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-spice-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-ssh-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-status-green.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-status-grey.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-status-red.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-tool-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-vnc-ssh-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-vnc-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-www-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-x2go-ssh-symbolic.svg"
+],
+[
+"scalable/emblems",
+"org.remmina.Remmina-x2go-symbolic.svg"
+],
+[
+"scalable/status",
+"org.kde.CrowTranslate-tray-dark.svg"
+],
+[
+"scalable/status",
+"org.kde.CrowTranslate-tray-light.svg"
+],
+[
+"scalable/status",
+"qbittorrent-tray-dark.svg"
+],
+[
+"scalable/status",
+"qbittorrent-tray-light.svg"
+],
+[
+"scalable/status",
+"qbittorrent-tray.svg"
+],
+[
+"symbolic/apps",
+"blender-symbolic.svg"
+],
+[
+"symbolic/apps",
+"com.github.johnfactotum.Foliate-symbolic.svg"
+],
+[
+"symbolic/apps",
+"com.github.tchx84.Flatseal-symbolic.svg"
+],
+[
+"symbolic/apps",
+"com.usebottles.bottles-symbolic.svg"
+],
+[
+"symbolic/apps",
+"libreoffice-base-symbolic.svg"
+],
+[
+"symbolic/apps",
+"libreoffice-calc-symbolic.svg"
+],
+[
+"symbolic/apps",
+"libreoffice-draw-symbolic.svg"
+],
+[
+"symbolic/apps",
+"libreoffice-impress-symbolic.svg"
+],
+[
+"symbolic/apps",
+"libreoffice-math-symbolic.svg"
+],
+[
+"symbolic/apps",
+"libreoffice-writer-symbolic.svg"
+],
+[
+"symbolic/apps",
+"org.gnome.Boxes-symbolic.svg"
+],
+[
+"symbolic/apps",
+"org.gnome.Meld-symbolic.svg"
+],
+[
+"symbolic/apps",
+"org.inkscape.Inkscape-symbolic.svg"
+]
+],
 "links": [
 [
 "actions/16",
@@ -4550,6 +5274,10 @@
 ],
 [
 "apps/16",
+"kdeconnect-symbolic"
+],
+[
+"apps/16",
 "krfb-symbolic"
 ],
 [
@@ -4566,7 +5294,15 @@
 ],
 [
 "apps/22",
+"kdeconnect-symbolic"
+],
+[
+"apps/22",
 "kget-symbolic"
+],
+[
+"apps/22",
+"kgpg-symbolic"
 ],
 [
 "apps/22",
@@ -4599,6 +5335,10 @@
 [
 "apps/32",
 "akregator-symbolic"
+],
+[
+"apps/32",
+"kdeconnect-symbolic"
 ],
 [
 "apps/32",

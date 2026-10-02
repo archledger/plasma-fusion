@@ -9,6 +9,11 @@
 # this package; the spec's check section verifies on the build host that every link resolves.
 addFilter(r"dangling-relative-symlink /usr/share/icons/PlasmaFusion(-Dark)?/\S+ (\.\./)+breeze(-dark)?/")
 
+# Names that only apps install (tray states, an app's own toolbar or -symbolic icons) are handed
+# back to the app's hicolor icons the same way, ../hicolor/...; those links resolve only while the
+# app is installed (the icon loader skips them otherwise; docs/parts/icons.md, "Capture").
+addFilter(r"dangling-relative-symlink /usr/share/icons/PlasmaFusion(-Dark)?/hicolor/\S+ (\.\./)+hicolor/")
+
 # There is no public upstream web site or download location: the sources come from the
 # Plasma Fusion repository's working tree (packaging/build-rpm.sh makes the tarball).
 addFilter(r"no-url-tag")

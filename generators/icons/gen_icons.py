@@ -17,6 +17,8 @@ Layout of each theme:
   places/16, places/22, devices/16, devices/22 (+ @2x/@3x)              monochrome small sizes
   */symbolic                                                           NAME-symbolic and symbolic names
   breeze/<dir>/   names handed back to Breeze (capture.json), as links into /usr/share/icons
+  hicolor/<dir>/  names handed back to the apps' own hicolor icons (capture.json), as links into
+                  /usr/share/icons/hicolor that dangle while the app is not installed
   designed-apps.txt  the app icon names drawn with an app's own designed tile (names.DESIGNED; read
                   by plasma-fusion-app-icons, which leaves them alone) - not a lookup dir
 Every lookup directory holds relative symlinks into art/ or glyphs/ (or copies with --copies).
@@ -554,6 +556,11 @@ def write_theme(root, theme, variant, reg, copies):
             os.symlink(os.path.basename(meta['base']), os.path.join(base, 'breeze', d))
     for d, n in cap['links']:
         os.symlink(os.path.join(breeze, d, n + '.svg'), os.path.join(base, 'breeze', d, n + '.svg'))
+    for d, meta in sorted(cap.get('hicolor_dirs', {}).items()):
+        mirror_dirs['hicolor/' + d] = dict(meta)
+        os.makedirs(os.path.join(base, 'hicolor', d))
+    for d, fn in cap.get('hicolor_links', []):
+        os.symlink(os.path.join('/usr/share/icons/hicolor', d, fn), os.path.join(base, 'hicolor', d, fn))
     with open(os.path.join(base, 'index.theme'), 'w', encoding='utf-8') as f:
         f.write(index_theme(variant, list(DIRS), mirror_dirs))
     with open(os.path.join(base, 'LICENSE'), 'w', encoding='utf-8') as f:

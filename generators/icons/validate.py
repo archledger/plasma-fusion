@@ -10,7 +10,8 @@ For every drawing in art/ and glyphs/ of both themes:
   * no QtSvg warning may be printed while parsing or rendering;
   * symbolic drawings are passed through the same <style id="current-color-scheme"> replacement
     KIconLoader applies, and every opaque pixel must take the injected palette colours.
-It also checks that every name in every lookup directory resolves (no dangling links) and
+It also checks that every name in every lookup directory resolves (no dangling links; the
+hand-back links into Breeze and into the apps' hicolor icons are left to make_capture.py) and
 that index.theme lists every lookup directory. With --sheets it writes contact sheets.
 """
 import argparse
@@ -142,8 +143,8 @@ def main():
             for fn in os.listdir(full):
                 names += 1
                 p = os.path.join(full, fn)
-                if d.startswith('breeze/'):
-                    continue  # links into the system Breeze theme, checked by make_capture.py
+                if d.startswith('breeze/') or d.startswith('hicolor/'):
+                    continue  # links into Breeze (checked by make_capture.py) and into apps' hicolor icons
                 if not os.path.exists(p):
                     problems.append(f'{theme}/{d}/{fn}: dangling link')
         print(f'{theme}: {names} names in {len(listed)} directories')

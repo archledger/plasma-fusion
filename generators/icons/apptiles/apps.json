@@ -199,7 +199,8 @@
   "batch": "common-a",
   "tile": "joplin",
   "icons": [
-   "net.cozic.joplin_desktop"
+   "net.cozic.joplin_desktop",
+   "joplin"
   ]
  },
  {
@@ -208,7 +209,8 @@
   "batch": "common-a",
   "tile": "logseq",
   "icons": [
-   "com.logseq.Logseq"
+   "com.logseq.Logseq",
+   "logseq"
   ]
  },
  {
@@ -306,7 +308,8 @@
   "batch": "common-a",
   "tile": "teams-for-linux",
   "icons": [
-   "com.github.IsmaelMartinez.teams_for_linux"
+   "com.github.IsmaelMartinez.teams_for_linux",
+   "teams-for-linux"
   ]
  },
  {
@@ -434,7 +437,8 @@
   "batch": "common-b",
   "tile": "openshot",
   "icons": [
-   "org.openshot.OpenShot"
+   "org.openshot.OpenShot",
+   "openshot-qt"
   ]
  },
  {
@@ -443,7 +447,8 @@
   "batch": "common-b",
   "tile": "ardour",
   "icons": [
-   "org.ardour.Ardour"
+   "org.ardour.Ardour",
+   "ardour8"
   ]
  },
  {
@@ -452,7 +457,8 @@
   "batch": "common-b",
   "tile": "lmms",
   "icons": [
-   "io.lmms.LMMS"
+   "io.lmms.LMMS",
+   "lmms"
   ]
  },
  {
@@ -531,7 +537,8 @@
   "batch": "common-b",
   "tile": "pinta",
   "icons": [
-   "com.github.PintaProject.Pinta"
+   "com.github.PintaProject.Pinta",
+   "pinta"
   ]
  },
  {
@@ -617,7 +624,8 @@
   "batch": "common-c",
   "tile": "github-desktop",
   "icons": [
-   "io.github.shiftey.Desktop"
+   "io.github.shiftey.Desktop",
+   "github-desktop"
   ]
  },
  {
@@ -635,7 +643,8 @@
   "batch": "common-c",
   "tile": "dbeaver",
   "icons": [
-   "io.dbeaver.DBeaverCommunity"
+   "io.dbeaver.DBeaverCommunity",
+   "dbeaver"
   ]
  },
  {
@@ -712,7 +721,8 @@
   "batch": "common-c",
   "tile": "heroic",
   "icons": [
-   "com.heroicgameslauncher.hgl"
+   "com.heroicgameslauncher.hgl",
+   "heroic"
   ]
  },
  {
@@ -861,7 +871,8 @@
   "batch": "common-d",
   "tile": "bitwarden",
   "icons": [
-   "com.bitwarden.desktop"
+   "com.bitwarden.desktop",
+   "bitwarden"
   ]
  },
  {
@@ -880,7 +891,8 @@
   "tile": "protonvpn",
   "icons": [
    "com.protonvpn.www",
-   "proton-vpn-gnome-desktop"
+   "proton-vpn-gnome-desktop",
+   "proton-vpn-logo"
   ]
  },
  {
@@ -899,7 +911,8 @@
   "batch": "common-d",
   "tile": "nextcloud",
   "icons": [
-   "com.nextcloud.desktopclient.nextcloud"
+   "com.nextcloud.desktopclient.nextcloud",
+   "Nextcloud"
   ]
  },
  {
@@ -983,7 +996,8 @@
   "batch": "development",
   "tile": "heaptrack",
   "icons": [
-   "org.kde.heaptrack"
+   "org.kde.heaptrack",
+   "heaptrack"
   ]
  },
  {
@@ -1062,7 +1076,8 @@
   "tile": "kexi",
   "icons": [
    "org.kde.kexi",
-   "kexi"
+   "kexi",
+   "kexi-3.2"
   ]
  },
  {
@@ -1091,7 +1106,8 @@
   "batch": "development",
   "tile": "kommit",
   "icons": [
-   "org.kde.kommit"
+   "org.kde.kommit",
+   "kommit"
   ]
  },
  {
@@ -1140,7 +1156,8 @@
   "batch": "development",
   "tile": "massif-visualizer",
   "icons": [
-   "org.kde.massif_visualizer"
+   "org.kde.massif_visualizer",
+   "massif-visualizer"
   ]
  },
  {
@@ -1217,7 +1234,8 @@
   "batch": "education",
   "tile": "kbibtex",
   "icons": [
-   "org.kde.kbibtex"
+   "org.kde.kbibtex",
+   "kbibtex"
   ]
  },
  {
@@ -1266,7 +1284,8 @@
   "batch": "education",
   "tile": "klettres",
   "icons": [
-   "org.kde.klettres"
+   "org.kde.klettres",
+   "klettres"
   ]
  },
  {
@@ -1295,7 +1314,8 @@
   "batch": "education",
   "tile": "ktechlab",
   "icons": [
-   "org.kde.ktechlab"
+   "org.kde.ktechlab",
+   "ktechlab"
   ]
  },
  {
@@ -1314,7 +1334,8 @@
   "batch": "education",
   "tile": "kturtle",
   "icons": [
-   "org.kde.kturtle"
+   "org.kde.kturtle",
+   "kturtle"
   ]
  },
  {
@@ -1373,7 +1394,8 @@
   "batch": "education",
   "tile": "rkward",
   "icons": [
-   "org.kde.rkward"
+   "org.kde.rkward",
+   "rkward"
   ]
  },
  {
@@ -1402,7 +1424,8 @@
   "batch": "education",
   "tile": "kwordquiz",
   "icons": [
-   "org.kde.kwordquiz"
+   "org.kde.kwordquiz",
+   "kwordquiz"
   ]
  },
  {
@@ -1411,7 +1434,8 @@
   "batch": "games-a",
   "tile": "atlantik",
   "icons": [
-   "org.kde.atlantik"
+   "org.kde.atlantik",
+   "atlantik"
   ]
  },
  {
@@ -1490,7 +1514,8 @@
   "batch": "games-a",
   "tile": "kbounce",
   "icons": [
-   "org.kde.kbounce"
+   "org.kde.kbounce",
+   "kbounce"
   ]
  },
  {
@@ -1499,7 +1524,8 @@
   "batch": "games-a",
   "tile": "kbrickbuster",
   "icons": [
-   "org.kde.kbrickbuster"
+   "org.kde.kbrickbuster",
+   "kbrickbuster"
   ]
  },
  {
@@ -1518,7 +1544,8 @@
   "batch": "games-a",
   "tile": "kgoldrunner",
   "icons": [
-   "org.kde.kgoldrunner"
+   "org.kde.kgoldrunner",
+   "kgoldrunner"
   ]
  },
  {
@@ -1527,7 +1554,8 @@
   "batch": "games-a",
   "tile": "kigo",
   "icons": [
-   "org.kde.kigo"
+   "org.kde.kigo",
+   "kigo"
   ]
  },
  {
@@ -1576,7 +1604,8 @@
   "batch": "games-a",
   "tile": "kollision",
   "icons": [
-   "org.kde.kollision"
+   "org.kde.kollision",
+   "kollision"
   ]
  },
  {
@@ -1585,7 +1614,8 @@
   "batch": "games-a",
   "tile": "kreversi",
   "icons": [
-   "org.kde.kreversi"
+   "org.kde.kreversi",
+   "kreversi"
   ]
  },
  {
@@ -1604,7 +1634,8 @@
   "batch": "games-a",
   "tile": "ksnakeduel",
   "icons": [
-   "org.kde.ksnakeduel"
+   "org.kde.ksnakeduel",
+   "ksnakeduel"
   ]
  },
  {
@@ -1613,7 +1644,8 @@
   "batch": "games-a",
   "tile": "kspaceduel",
   "icons": [
-   "org.kde.kspaceduel"
+   "org.kde.kspaceduel",
+   "kspaceduel"
   ]
  },
  {
@@ -1622,7 +1654,8 @@
   "batch": "games-a",
   "tile": "ksquares",
   "icons": [
-   "org.kde.ksquares"
+   "org.kde.ksquares",
+   "ksquares"
   ]
  },
  {
@@ -1641,7 +1674,8 @@
   "batch": "games-b",
   "tile": "gcompris",
   "icons": [
-   "org.kde.gcompris"
+   "org.kde.gcompris",
+   "gcompris-qt"
   ]
  },
  {
@@ -1690,7 +1724,8 @@
   "batch": "games-b",
   "tile": "killbots",
   "icons": [
-   "org.kde.killbots"
+   "org.kde.killbots",
+   "killbots"
   ]
  },
  {
@@ -1709,7 +1744,8 @@
   "batch": "games-b",
   "tile": "klickety",
   "icons": [
-   "org.kde.klickety"
+   "org.kde.klickety",
+   "klickety"
   ]
  },
  {
@@ -1718,7 +1754,8 @@
   "batch": "games-b",
   "tile": "kmines",
   "icons": [
-   "org.kde.kmines"
+   "org.kde.kmines",
+   "kmines"
   ]
  },
  {
@@ -1727,7 +1764,8 @@
   "batch": "games-b",
   "tile": "knetwalk",
   "icons": [
-   "org.kde.knetwalk"
+   "org.kde.knetwalk",
+   "knetwalk"
   ]
  },
  {
@@ -1746,7 +1784,8 @@
   "batch": "games-b",
   "tile": "konquest",
   "icons": [
-   "org.kde.konquest"
+   "org.kde.konquest",
+   "konquest"
   ]
  },
  {
@@ -1765,7 +1804,8 @@
   "batch": "games-b",
   "tile": "ksame",
   "icons": [
-   "org.kde.ksame"
+   "org.kde.ksame",
+   "ksame"
   ]
  },
  {
@@ -1784,7 +1824,8 @@
   "batch": "games-b",
   "tile": "ksudoku",
   "icons": [
-   "org.kde.ksudoku"
+   "org.kde.ksudoku",
+   "ksudoku"
   ]
  },
  {
@@ -1793,7 +1834,8 @@
   "batch": "games-b",
   "tile": "ktuberling",
   "icons": [
-   "org.kde.ktuberling"
+   "org.kde.ktuberling",
+   "ktuberling"
   ]
  },
  {
@@ -1802,7 +1844,8 @@
   "batch": "games-b",
   "tile": "kubrick",
   "icons": [
-   "org.kde.kubrick"
+   "org.kde.kubrick",
+   "kubrick"
   ]
  },
  {
@@ -1811,7 +1854,8 @@
   "batch": "games-b",
   "tile": "lskat",
   "icons": [
-   "org.kde.lskat"
+   "org.kde.lskat",
+   "lskat"
   ]
  },
  {
@@ -1820,7 +1864,8 @@
   "batch": "games-b",
   "tile": "knavalbattle",
   "icons": [
-   "org.kde.knavalbattle"
+   "org.kde.knavalbattle",
+   "knavalbattle"
   ]
  },
  {
@@ -1829,7 +1874,8 @@
   "batch": "games-b",
   "tile": "palapeli",
   "icons": [
-   "org.kde.palapeli"
+   "org.kde.palapeli",
+   "palapeli"
   ]
  },
  {
@@ -1838,7 +1884,8 @@
   "batch": "games-b",
   "tile": "picmi",
   "icons": [
-   "org.kde.picmi"
+   "org.kde.picmi",
+   "picmi"
   ]
  },
  {
@@ -1984,7 +2031,8 @@
   "batch": "graphics-media",
   "tile": "kgeotag",
   "icons": [
-   "org.kde.kgeotag"
+   "org.kde.kgeotag",
+   "kgeotag"
   ]
  },
  {
@@ -1993,7 +2041,8 @@
   "batch": "graphics-media",
   "tile": "kid3",
   "icons": [
-   "org.kde.kid3"
+   "org.kde.kid3",
+   "kid3"
   ]
  },
  {
@@ -2002,7 +2051,8 @@
   "batch": "graphics-media",
   "tile": "kid3",
   "icons": [
-   "org.kde.kid3_qt"
+   "org.kde.kid3_qt",
+   "kid3-qt"
   ]
  },
  {
@@ -2050,7 +2100,8 @@
   "batch": "graphics-media",
   "tile": "krita",
   "icons": [
-   "org.kde.krita"
+   "org.kde.krita",
+   "krita"
   ]
  },
  {
@@ -2281,7 +2332,8 @@
   "batch": "office-network-1",
   "tile": "ghostwriter",
   "icons": [
-   "org.kde.ghostwriter"
+   "org.kde.ghostwriter",
+   "ghostwriter"
   ]
  },
  {
@@ -2310,7 +2362,8 @@
   "batch": "office-network-1",
   "tile": "kaichat",
   "icons": [
-   "org.kde.kaichat"
+   "org.kde.kaichat",
+   "kaichat"
   ]
  },
  {
@@ -2338,7 +2391,8 @@
   "batch": "office-network-1",
   "tile": "kasts",
   "icons": [
-   "org.kde.kasts"
+   "org.kde.kasts",
+   "kasts"
   ]
  },
  {
@@ -2347,7 +2401,8 @@
   "batch": "office-network-1",
   "tile": "kdeconnect",
   "icons": [
-   "org.kde.kdeconnect"
+   "org.kde.kdeconnect",
+   "kdeconnect"
   ]
  },
  {
@@ -2394,6 +2449,7 @@
   "batch": "office-network-1",
   "tile": "round1:kmail",
   "icons": [
+   "kmail",
    "org.kde.kmail2"
   ]
  },
@@ -2551,7 +2607,8 @@
   "batch": "office-network-2",
   "tile": "onlinequoteseditor",
   "icons": [
-   "org.kde.onlinequoteseditor6"
+   "org.kde.onlinequoteseditor6",
+   "onlinequoteseditor6"
   ]
  },
  {
@@ -2560,7 +2617,8 @@
   "batch": "office-network-2",
   "tile": "plasma-dialer",
   "icons": [
-   "org.kde.plasma.dialer"
+   "org.kde.plasma.dialer",
+   "dialer"
   ]
  },
  {
@@ -2588,7 +2646,8 @@
   "batch": "office-network-2",
   "tile": "pix",
   "icons": [
-   "org.kde.pix"
+   "org.kde.pix",
+   "pix"
   ]
  },
  {
@@ -2626,7 +2685,8 @@
   "batch": "office-network-2",
   "tile": "ruqola",
   "icons": [
-   "org.kde.ruqola"
+   "org.kde.ruqola",
+   "ruqola"
   ]
  },
  {
@@ -2635,7 +2695,8 @@
   "batch": "office-network-2",
   "tile": "sieveeditor",
   "icons": [
-   "org.kde.sieveeditor"
+   "org.kde.sieveeditor",
+   "sieveeditor"
   ]
  },
  {
@@ -2663,7 +2724,8 @@
   "batch": "office-network-2",
   "tile": "tellico",
   "icons": [
-   "org.kde.tellico"
+   "org.kde.tellico",
+   "tellico"
   ]
  },
  {
@@ -2681,7 +2743,8 @@
   "batch": "office-network-2",
   "tile": "trojita",
   "icons": [
-   "org.kde.trojita"
+   "org.kde.trojita",
+   "trojita"
   ]
  },
  {
@@ -2690,7 +2753,6 @@
   "batch": "system-utility-1",
   "tile": "accountwizard",
   "icons": [
-   "kmail",
    "org.kde.accountwizard"
   ]
  },
@@ -2700,7 +2762,8 @@
   "batch": "system-utility-1",
   "tile": "arca",
   "icons": [
-   "org.kde.arca"
+   "org.kde.arca",
+   "arca"
   ]
  },
  {
@@ -2738,7 +2801,8 @@
   "batch": "system-utility-1",
   "tile": "board:software",
   "icons": [
-   "org.kde.discover"
+   "org.kde.discover",
+   "plasmadiscover"
   ]
  },
  {
@@ -2796,7 +2860,8 @@
   "tile": "index",
   "icons": [
    "system-file-manager",
-   "org.kde.index"
+   "org.kde.index",
+   "index"
   ]
  },
  {
@@ -2853,7 +2918,8 @@
   "batch": "system-utility-1",
   "tile": "kbackup",
   "icons": [
-   "org.kde.kbackup"
+   "org.kde.kbackup",
+   "kbackup"
   ]
  },
  {
@@ -2903,7 +2969,8 @@
   "batch": "system-utility-1",
   "tile": "kdf",
   "icons": [
-   "org.kde.kdf"
+   "org.kde.kdf",
+   "kdf"
   ]
  },
  {
@@ -2950,7 +3017,8 @@
   "batch": "system-utility-1",
   "tile": "kgpg",
   "icons": [
-   "org.kde.kgpg"
+   "org.kde.kgpg",
+   "kgpg"
   ]
  },
  {
@@ -3040,7 +3108,9 @@
   "batch": "system-utility-2",
   "tile": "krusader",
   "icons": [
-   "org.kde.krusader"
+   "org.kde.krusader",
+   "krusader_root",
+   "krusader_user"
   ]
  },
  {
@@ -3069,7 +3139,8 @@
   "batch": "system-utility-2",
   "tile": "kwalletmanager",
   "icons": [
-   "org.kde.kwalletmanager5"
+   "org.kde.kwalletmanager5",
+   "kwalletmanager"
   ]
  },
  {
@@ -3166,7 +3237,8 @@
   "batch": "system-utility-2",
   "tile": "station",
   "icons": [
-   "org.kde.station"
+   "org.kde.station",
+   "station"
   ]
  },
  {

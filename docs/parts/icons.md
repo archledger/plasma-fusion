@@ -16,8 +16,8 @@ active colour scheme (`FollowsColorScheme=true`).
 
 | Family | Drawings | Names per theme | Source |
 |---|---|---|---|
-| App tiles | 18 tiles + Fusion logo tile + logo mark, and 3 derived tiles (Archive, Document Viewer, Camera; STYLE-1) | 694 (with the per-app tiles) + 284 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
-| Per-app tiles | 326 tiles, one per app, in the board's tile construction (2026-10-02 redesign, "Per-app tiles" below) | 531 of the 694 | `apptiles/` |
+| App tiles | 18 tiles + Fusion logo tile + logo mark, and 3 derived tiles (Archive, Document Viewer, Camera; STYLE-1) | 766 (with the per-app tiles) + 285 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
+| Per-app tiles | 326 tiles, one per app, in the board's tile construction (2026-10-02 redesign, "Per-app tiles" below) | 602 of the 766 | `apptiles/` |
 | Places | 27 folders (the board's 10 + 17 derived symbols), 10 colour tints, 2 trash cans | 67 (coloured, 16 px, 22 px, `-symbolic`) | FileIcons.dc.html `folder()` |
 | Devices | 12 board devices + 8 derived (laptop, speaker, microphone, webcam, gamepad, touchpad, tablet, scanner) | 59 (+ 64 `-symbolic`) | FileIcons.dc.html `devices[]` |
 | File types | 820 pages: page + coloured extension tag, one per (kind, extension) | 1358 MIME icon names + 18 `-symbolic` | FileIcons.dc.html `file()` |
@@ -26,8 +26,8 @@ active colour scheme (`FollowsColorScheme=true`).
 | Categories | menu categories (applications-*) | 26 | derived line icons |
 | Emblems | the link badge `emblem-symbolic-link` at 16 and 22 px (pixel grid) and scalable (STYLE-1) | 1 (in `emblems/16`, `emblems/22`, `emblems/scalable`, and `@2x`/`@3x`) | derived |
 
-In total 1230 coloured and 308 symbolic drawings answer 3818 icon names per theme; 575 further
-names are handed back to Breeze (see "Lookup rules" below). About 3.6 MB per theme (apparent size;
+In total 1230 coloured and 308 symbolic drawings answer 3891 icon names per theme; 577 further
+names are handed back to Breeze and 87 to apps' own hicolor icons (see "Lookup rules" below). About 3.6 MB per theme (apparent size;
 the per-app tiles are 0.57 MB of it); each theme holds its own copy of the coloured art, so either
 one works without the other.
 
@@ -78,7 +78,8 @@ python3 generators/icons/gen_icons.py --out DIR [--copies]   # direct; --copies 
 Install per user: copy both directories to `~/.local/share/icons/` **with symlinks preserved**
 (`rsync -a` or `cp -a`). Every lookup name is a relative link inside its own theme (into `art/` or
 `glyphs/`); the `breeze/` hand-back links are absolute links into `/usr/share/icons/breeze` or
-`breeze-dark`. The themes do not depend on each other. The SMB share cannot hold symlinks:
+`breeze-dark`, the `hicolor/` ones into `/usr/share/icons/hicolor` (they dangle while their app is
+not installed). The themes do not depend on each other. The SMB share cannot hold symlinks:
 `--copies` exists only for transport, because it leaves out the Breeze hand-back links (System
 Settings would then show the Settings tile for its `preferences-system-*` pages); install a build
 made without `--copies`.
@@ -130,7 +131,11 @@ inside our theme before asking Breeze (`a-b-c` -> `a-b` -> `a`, `x-symbolic` -> 
   `image-missing`, `audio-on`, `input-touchpad-on/off`, `printer-error`, `document-edit-*`,
   `zoom-in-*`. They appear in `breeze/<dir>/` as exact-name links into `/usr/share/icons/breeze`
   (`breeze-dark` for the dark theme), with Breeze's own size metadata, so System Settings and
-  the OSDs keep Breeze's icons. 211 captured names deliberately keep our drawing
+  the OSDs keep Breeze's icons. Names that only apps install (tray states such as
+  `qbittorrent-tray`, an app's toolbar or `-symbolic` icons) appear in `hicolor/<dir>/` as links to
+  the files the apps install in `/usr/share/icons/hicolor`; while an app is not installed its links
+  dangle, and the icon loader skips a dangling link (checked with `kiconfinder6`), so the name
+  falls back as before and nothing asks for it. 211 captured names deliberately keep our drawing
   (folder-*, drive-*, weather-*, unknown MIME types, ...).
 * `org.gnome.Settings` is not mapped (it only runs under GNOME and its panel icons would fall back
   to our tile).
@@ -193,7 +198,7 @@ Plasma Fusion names for glyphs that have no standard name: `plasmafusion-logo`,
 | `make_textpaths.py` | fonts or the character set change | PySide6, `fonts/` |
 | `make_mimetable.py` | shared-mime-info changes (Fedora update) | `/usr/share/mime/packages` |
 | `make_outlines.py` | any symbolic glyph changes (the build stops with "run make_outlines.py" otherwise) | PySide6 |
-| `make_capture.py [--extra names.txt]` | names change, breeze-icon-theme updates (built from 6.30.0), or new hicolor apps appear | installed Breeze/hicolor; `--extra` takes a name list from the device |
+| `make_capture.py [--extra names.txt] [--hicolor-files paths.txt]` | names change, breeze-icon-theme updates (built from 6.30.0), or new hicolor apps appear | installed Breeze/hicolor; `--extra` takes a name list from the device, `--hicolor-files` the hicolor paths of apps not installed here (`dnf repoquery -l` of their packages, `find /usr/share/icons/hicolor` on the device) |
 
 `validate.py ICONS [--sheets DIR]` and `compare_boards.py ICONS RENDERS OUT` are the checks below.
 
@@ -451,20 +456,36 @@ entries in Fedora 44, Flathub ids, common distribution names). `names.py` then:
   get their tiles;
 * `kontact` is claimed by Kontact and PIM Data Exporter; Kontact keeps it.
 
-`names.DESIGNED` (550 names: the per-app names and the board-mapped apps' names) is written into
+The names were checked against the `Icon=` names apps really use: the desktop entries on the
+laptop and the ThinkPad, and the app icons each app's Fedora package installs in hicolor
+(`dnf repoquery -l`). 59 KDE apps gained the short name their desktop entry uses (`krita`, `kmines`,
+`plasmadiscover`, `kdeconnect`, `heaptrack`, ...), `kmail` went from the Account Wizard (which
+borrows it) to KMail, and 13 common apps gained their native package names (`bitwarden`,
+`proton-vpn-logo`, `ardour8`, `lmms`, `pinta`, `Nextcloud`, ...). Icons a package installs among
+its app icons for its own use (`labplot-*`, `parley-*`, `akregator_empty`, `skrooge-black`) are not
+app names. `keepassxc` stays out: KeePassXC's tray icons (`keepassxc-locked`,
+`keepassxc-monochrome-*`) would fall back to the tile; the Flatpak id has it.
+
+`names.DESIGNED` (622 names: the per-app names and the board-mapped apps' names) is written into
 each theme as `designed-apps.txt` and into `FusionIconNames.js` as `designed()`: familiar app
 icons skip these names, and `FusionIconTile.familiar` is false for them (so the dock's date stays on
 KOrganizer's calendar tile with familiar icons on).
 
-**Capture.** `make_capture.py` was rerun with the ThinkPad's icon inventory: 492 more Breeze names
-are handed back, all app-specific action icons that the new short app names would otherwise answer
-by the dash fallback (`labplot-*` 252, `kdenlive-*` 92, `virtualbox-*` 32, `minuet-*` 24,
-`kmouth-*` 20, VS Code's `code` against Breeze's `code-block`, `code-class`, ...). Ten captured names
-exist only in hicolor (`libreoffice-*-symbolic`, `com.github.tchx84.Flatseal-symbolic`, three GNOME
-names) and get the coloured tile where a monochrome icon is asked for: a known limitation, since a
-hand-back link into hicolor would dangle while the app is not installed.
+**Capture.** `make_capture.py` was rerun with the ThinkPad's icon inventory and the hicolor paths
+of the apps' Fedora packages and of the ThinkPad: 205 more Breeze names (496 links, one per size
+directory) are handed back, all app-specific action icons that the new short app names would
+otherwise answer by the dash fallback (`labplot-*` 102, `kdenlive-*` 38, VS Code's `code` against
+Breeze's `code-block`, `code-class`, ... 12, `kruler-*` 9, `minuet-*`, `virtualbox-*`, `kmouth-*` 8
+each), and 87 names only apps install are handed back to their hicolor icons (new, see "Lookup
+rules"): tray states (`qbittorrent-tray*`, `kasts-tray-*`, `org.kde.CrowTranslate-tray-*`,
+Evolution's alarm notifier), Remmina's 40 toolbar icons, `-symbolic` icons (LibreOffice, Inkscape,
+Meld, Blender, Flatseal, Bottles, ...), `labplot-*` and `parley-*` extras.
+No captured name is left without a file.
 
 Checks: `validate.py` passes (3076 drawings, both themes); two builds are byte-identical; a sample
 of 40 names rendered from the built theme at 128 and 32 px (Chrome and its dash variants, Firefox
 and `firefox-esr`, KMail, Thunderbird, VS Code, VSCodium, Vivaldi, Steam, Discord, Telegram,
-Kdenlive, Krita, the board-mapped apps, LibreOffice, Rhythmbox, KPatience) shows each app's tile.
+Kdenlive, Krita, the board-mapped apps, LibreOffice, Rhythmbox, KPatience) shows each app's tile;
+`kiconfinder6` on the built theme finds `kmail`, `org.kde.kmail2`, `krita`, `firefox` and
+`google-chrome-stable` as tiles, `libreoffice-calc-symbolic` as LibreOffice's own icon, `debug-run`
+and `code-block` in Breeze.

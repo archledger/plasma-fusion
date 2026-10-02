@@ -150,9 +150,10 @@ if [ -s not-copied.txt ]; then
   exit 1
 fi
 
-# The icon themes hand some names back to Breeze with absolute links (right for a per-user
-# install in ~/.local/share). Here they become relative links to ../breeze and ../breeze-dark,
-# which resolve inside whatever root the package is installed to.
+# The icon themes hand some names back to Breeze and to apps' own hicolor icons with absolute
+# links (right for a per-user install in ~/.local/share). Here they become relative links to
+# ../breeze, ../breeze-dark and ../hicolor, which resolve inside whatever root the package is
+# installed to.
 find "$dest/icons" -type l -lname '/usr/share/icons/*' -print0 |
   while IFS= read -r -d '' link; do
     ln -sfn "$(realpath -m -s --relative-to="$(dirname "${link#%{buildroot}}")" "$(readlink "$link")")" "$link"
@@ -192,10 +193,11 @@ find %{buildroot}%{_libexecdir}/plasma-fusion -type f -exec chmod 0755 {} +
 %check
 # Every symbolic link must resolve, inside the package or (the Breeze hand-back links) in
 # breeze-icon-theme, a requirement that is installed on the build host too: look at the
-# buildroot with Breeze's two themes linked in for the moment.
+# buildroot with Breeze's two themes linked in for the moment. The links into hicolor name the
+# icons of apps that need not be installed (they resolve once the app is).
 ln -s /usr/share/icons/breeze %{buildroot}%{_datadir}/icons/breeze
 ln -s /usr/share/icons/breeze-dark %{buildroot}%{_datadir}/icons/breeze-dark
-find %{buildroot} -xtype l >broken-links.txt
+find %{buildroot} -xtype l -not -path '%{buildroot}%{_datadir}/icons/PlasmaFusion*/hicolor/*' >broken-links.txt
 rm %{buildroot}%{_datadir}/icons/breeze %{buildroot}%{_datadir}/icons/breeze-dark
 find %{buildroot} -type l -lname '/*' >absolute-links.txt
 if [ -s absolute-links.txt ] || [ -s broken-links.txt ]; then
