@@ -21,10 +21,11 @@ boards are pictured in [`design/`](design/README.md), with their canvas sources 
 
 ## Status
 
-Experimental. Built for and tested on Fedora 44 KDE (Plasma 6.7.5, KDE Frameworks 6.30,
-Qt 6.11) on a ThinkPad X13 Yoga Gen 4 convertible and an ASUS Zenbook laptop. Other
-distributions and Plasma versions are not tested. Everything it changes can be undone with
-`tools/device/fusion-restore.sh`.
+Experimental; the first release, 0.2.0, is being prepared. Developed on Fedora 44 KDE (Plasma
+6.7.5, KDE Frameworks 6.30, Qt 6.11) on a ThinkPad X13 Yoga Gen 4 convertible and an ASUS Zenbook
+laptop; packaged for Fedora, Arch, Ubuntu 26.10, KDE neon, Debian testing and NixOS, and tested on
+each in a virtual machine before a release. It needs Plasma 6.7. Everything it changes for your
+account can be undone (`plasma-fusion restore`).
 
 ## What it contains
 
@@ -41,9 +42,35 @@ distributions and Plasma versions are not tested. Everything it changes can be u
 
 Each part is described in `docs/parts/`; the overall plan and decisions are in `docs/PLAN.md`.
 
-## Quick start
+## Install
 
-You need Fedora 44 KDE (Plasma 6.7) and a few minutes. Apart from the build's Python modules,
+In a terminal of your Plasma session (as yourself; it asks for sudo for the packages):
+
+```sh
+curl -fsSL https://github.com/archledger/plasma-fusion/releases/latest/download/install.sh | sh
+```
+
+It finds your system's channel, shows what it will do and asks once, installs the packages, then
+applies Plasma Fusion to your account (a backup is taken first). Log out and back in once.
+`... | sh -s -- --dry-run` shows the plan without changing anything; `update`, `uninstall` and
+`status` work the same way. How to check the script's signature first, and what it does on each
+system, is in [`docs/parts/installer.md`](docs/parts/installer.md).
+
+| System | Channel |
+|---|---|
+| Fedora 44, 45 | Copr `archledger/plasma-fusion` |
+| Arch and derivatives | AUR `plasma-fusion` |
+| Kubuntu / Ubuntu 26.10 | PPA `ppa:archledger/plasma-fusion` |
+| KDE neon, Debian testing | the release's `.deb` packages |
+| NixOS (unstable) | the flake or module ([`docs/parts/nixos.md`](docs/parts/nixos.md)) |
+
+Afterwards, per account: `plasma-fusion setup` (other users), `plasma-fusion update` (after a
+package update; a notice tells you), `plasma-fusion status`, `plasma-fusion restore` (your desktop
+as it was before).
+
+## From the sources
+
+For development, or to try the current state: Fedora 44 KDE (Plasma 6.7) and a few minutes. Apart from the build's Python modules,
 everything happens in your own account, and a backup is taken first.
 
 ```sh
@@ -76,10 +103,10 @@ changed and the ones that were kept ([`docs/parts/device.md`](docs/parts/device.
 
 How the parts fit together is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-RPMs for Fedora: `packaging/build-rpm.sh` builds the `plasma-fusion` package; the compiled
-parts (`packages/navigation-cpp`, `packages/decoration-cpp`, `packages/kcm-cpp`: the tablet
-gestures, the compiled window decoration and the settings module, which the quick start leaves
-out) have their own spec files and container builds.
+The packages (one version, four packages on every channel: the shared part and the compiled
+decoration, settings page and tablet gestures, which the source install leaves out) are built
+from `packaging/`: [`docs/parts/system.md`](docs/parts/system.md). Releasing is in
+[`docs/RELEASING.md`](docs/RELEASING.md), the changes per version in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Contributing
 

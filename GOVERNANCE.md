@@ -40,10 +40,14 @@ through reviewed pull requests with the required checks.
 
 ## Releases
 
-There are no releases and no version tags yet (checked 2026-10-02). Until the first release the
-supported version is `main` and the packages built from it ([`SECURITY.md`](SECURITY.md)). Before
-the first release the maintainer will decide how releases and tags are signed, and will publish
-the public key and the steps to check a signature in this repository.
+There are no releases and no version tags yet (checked 2026-10-02); the first, 0.2.0, is being
+prepared. Until it is out the supported version is `main` and the packages built from it
+([`SECURITY.md`](SECURITY.md)). Releases are signed `vX.Y.Z` tags; their files are listed in a
+`SHA256SUMS` signed with the same key, F350 5339 8E3C 80FE 2089 1B82 C10B 8492 BD7F 30C6
+([`.github/release-signing-key.asc`](.github/release-signing-key.asc)), which the installer pins and
+the AUR package names. How to check a signature is in
+[`docs/parts/installer.md`](docs/parts/installer.md); how a release is made, in
+[`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## Continuity
 
