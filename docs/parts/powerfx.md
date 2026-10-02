@@ -51,7 +51,8 @@ The unit finds the script with `ExecSearchPath=%h/.local/libexec/plasma-fusion:/
 the system package (`/usr/lib/plasma-fusion` on distributions without `/usr/libexec`, such as Arch;
 2026-10-02); the user's copy wins. `fusion-config.sh` and `fusion-restore.sh` search the same four
 directories for the helper programs. `ExecSearchPath` also becomes the process's `PATH`; the
-script appends `/usr/local/bin:/usr/bin:/bin`.
+script appends `/usr/local/bin:/usr/bin:/bin:/run/current-system/sw/bin:/run/wrappers/bin` (the last
+two: NixOS's system profile and setuid wrappers, where `/usr/bin` holds only `env`).
 
 Installing enables nothing. Turn on: `systemctl --user enable --now plasma-fusion-powerfx.service`.
 
@@ -74,7 +75,10 @@ plasma-workspace.target` (plasma-workspace.target orders after plasmashell and K
 the service stops, and gives the values back, while both still run: the stop measured 254 ms);
 `ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE` (another desktop would otherwise get KWin's blur
 switched in its files; checked against the manager's environment in o1pw-unit2); `Type=exec`;
-`ExecStopPost=-plasma-fusion-powerfx --apply full`; `ExecReload=/usr/bin/kill -HUP $MAINPID`;
+`ExecStopPost=-plasma-fusion-powerfx --apply full`; `ExecReload=/bin/sh -c 'kill -HUP "$MAINPID"'`
+(the shell's own kill: NixOS has no `/usr/bin/kill`; systemd passes `MAINPID` in the environment;
+2026-10-02, a systemd 259 container with `/usr/bin/kill` moved away reloaded twice, the script
+found in `/usr/lib/plasma-fusion`);
 `KillMode=mixed` (SIGTERM to the script only: it finishes a change in progress, then stops its
 monitors); `Restart=on-failure`, `RestartSec=5`; `Slice=background.slice`, `Nice=10`,
 `MemoryMax=32M`, `NoNewPrivileges=yes`, `SyslogIdentifier=plasma-fusion-powerfx`.

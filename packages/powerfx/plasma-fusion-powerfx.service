@@ -20,7 +20,8 @@ Type=exec
 # The user's own copy (fusion-config.sh --install) first, then the system package's.
 ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion
 ExecStart=plasma-fusion-powerfx
-ExecReload=/usr/bin/kill -HUP $MAINPID
+# The shell's own kill: /usr/bin/kill is not on every system (NixOS).
+ExecReload=/bin/sh -c 'kill -HUP "$MAINPID"'
 ExecStopPost=-plasma-fusion-powerfx --apply full
 # SIGTERM to the script only: it finishes a change in progress and stops its monitors itself.
 KillMode=mixed

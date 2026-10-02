@@ -42,8 +42,9 @@
 # or has not loaded its layout: the running service sets them when it is back); 1 error; 2 usage.
 set -u
 export LC_ALL=C.UTF-8 # "." in numbers; UTF-8 so the Qt tools do not warn
-# The unit finds this script through ExecSearchPath, which also becomes its PATH.
-PATH=${PATH:+$PATH:}/usr/local/bin:/usr/bin:/bin
+# The unit finds this script through ExecSearchPath, which also becomes its PATH; NixOS keeps the
+# programs in the system profile and its setuid wrappers.
+PATH=${PATH:+$PATH:}/usr/local/bin:/usr/bin:/bin:/run/current-system/sw/bin:/run/wrappers/bin
 
 ME=plasma-fusion-powerfx
 CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
