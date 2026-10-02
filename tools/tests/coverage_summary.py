@@ -23,9 +23,14 @@ compiled parts' build-rpm.sh and container-build.sh); neither tools/build.sh nor
 them (MAINT_RE). Everything else is product code: what tools/build.sh runs and what the packages
 install. Within product code, the build and lint scripts (BUILD_RE) run whenever the build
 runs, so the summary also gives the product figures without them.
+
+Python and JavaScript inside a shell script's heredoc (python3 - <<'PY', or a heredoc named JS)
+has no file: coverage.py and node cannot report it, and kcov does not count heredoc lines. It is
+counted apart, as not measured (embedded_blocks).
 """
 
 import argparse
+import ast
 import datetime
 import json
 import os
@@ -42,6 +47,8 @@ MAINT_RE = re.compile(r"^generators/icons/(make_[a-z_]+|coverage_report)\.py$|^g
                       r"|^packages/[a-z-]+/(tools/)?(build-rpm|container-build)\.sh$")
 BUILD_RE = re.compile(r"^tools/(build\.sh$|build\.d/|build-lib/|checks/)|^generators/[a-z-]+/build\.sh$")
 KINDS = ("product", "maintainer", "tests")
+# A heredoc operator (not <<<), its optional "-", its quote and its delimiter word.
+HEREDOC_RE = re.compile(r"(?<!<)<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
 
 
 def tracked_files(root):
@@ -99,23 +106,25 @@ def area(rel):
     return parts[0] if len(parts) > 1 else "(top)"
 
 
-def code_line_numbers(path):
+def code_line_numbers(path=None, text=None):
     """Line numbers of the non-blank lines that are not only a comment (// or /* */): the code
-    lines of a JavaScript or QML file."""
+    lines of a JavaScript or QML file (or of TEXT)."""
+    if text is None:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
     lines, block = set(), False
-    with open(path, encoding="utf-8", errors="replace") as f:
-        for number, line in enumerate(f, 1):
-            s = line.strip()
-            if block:
-                if "*/" in s:
-                    block = False
-                continue
-            if not s or s.startswith("//"):
-                continue
-            if s.startswith("/*"):
-                block = "*/" not in s
-                continue
-            lines.add(number)
+    for number, line in enumerate(text.split("\n"), 1):
+        s = line.strip()
+        if block:
+            if "*/" in s:
+                block = False
+            continue
+        if not s or s.startswith("//"):
+            continue
+        if s.startswith("/*"):
+            block = "*/" not in s
+            continue
+        lines.add(number)
     return lines
 
 
@@ -137,6 +146,74 @@ def upstream_files(root, files):
                 if line:
                     kept.add(os.path.normpath(os.path.join(base, line)))
     return kept
+
+
+def embedded_blocks(path):
+    """The Python and JavaScript a shell script passes to an interpreter in a heredoc: Python when
+    the command before the operator is `python3 -` (also over continued lines), JavaScript when the
+    delimiter is JS. Returns (language, first line, text) for each; an operator inside a quoted
+    string, in a comment or without its closing delimiter is not a heredoc."""
+    with open(path, encoding="utf-8", errors="replace") as f:
+        lines = f.read().split("\n")
+    blocks, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        m = HEREDOC_RE.search(line)
+        i += 1
+        before = line[:m.start()] if m else ""
+        if not m or before.lstrip().startswith("#") or before.count('"') % 2 or before.count("'") % 2:
+            continue
+        head, j = before, i - 1
+        while j > 0 and lines[j - 1].rstrip().endswith("\\"):
+            j -= 1
+            head = lines[j] + " " + head
+        strip, word = m.group(1), m.group(3)
+        end = i
+        while end < len(lines) and (lines[end].lstrip("\t") if strip else lines[end]) != word:
+            end += 1
+        if end == len(lines):
+            continue
+        lang = "python" if re.search(r"\bpython3?\s+-(\s|$)", head) else "js" if word == "JS" else None
+        if lang:
+            blocks.append((lang, i + 1, "\n".join(lines[i:end])))
+        i = end + 1
+    return blocks
+
+
+def python_statements(text):
+    """Statements in TEXT as coverage.py counts them (its parser; ast when coverage.py is not
+    installed); None when it does not parse."""
+    try:
+        from coverage.parser import PythonParser
+        parser = PythonParser(text=text)
+        parser.parse_source()
+        return len(parser.statements)
+    except ImportError:
+        pass
+    except Exception:  # coverage.py's parser raises its own NotPython for a syntax error
+        return None
+    try:
+        return len({n.lineno for n in ast.walk(ast.parse(text)) if isinstance(n, ast.stmt)})
+    except SyntaxError:
+        return None
+
+
+def embedded_results(root, files):
+    """Per shell file with embedded code: Python statements and JavaScript code lines, and the
+    number of blocks of each."""
+    res = {}
+    for rel in files:
+        r = {"python": 0, "python_blocks": 0, "js": 0, "js_blocks": 0, "unparsed_blocks": 0}
+        for lang, _, text in embedded_blocks(os.path.join(root, rel)):
+            n = python_statements(text) if lang == "python" else len(code_line_numbers(text=text))
+            if n is None:
+                r["unparsed_blocks"] += 1
+                continue
+            r[lang] += n
+            r[lang + "_blocks"] += 1
+        if r["python_blocks"] or r["js_blocks"] or r["unparsed_blocks"]:
+            res[rel] = r
+    return res
 
 
 def python_results(root, out, files):
@@ -381,6 +458,31 @@ def main():
         if unrun:
             md += ["", f"{names[lang][0]} files counted with every code line not run:", ""]
             md += [f"- `{rel}` ({r['total']} code lines): {r['note']}" for rel, r in unrun]
+
+    # Python and JavaScript in heredocs of the shell scripts: in none of the figures above.
+    emb = embedded_results(root, by_lang.get("shell", []))
+    if emb:
+        tot = {w: {"python": 0, "python_blocks": 0, "js": 0, "js_blocks": 0, "unparsed_blocks": 0} for w in KINDS}
+        for rel, r in emb.items():
+            for k in tot[kind(rel)]:
+                tot[kind(rel)][k] += r[k]
+        md += ["", "## Code inside shell scripts (not measured)", "",
+               "Python passed to `python3 -` in a heredoc and JavaScript in a heredoc named JS have no file, so "
+               "coverage.py and node cannot report them, and kcov does not count heredoc lines. They are in "
+               "none of the figures above.", "",
+               "| Group | Python statements (blocks) | JavaScript code lines (blocks) |", "|---|---|---|"]
+        md += [f"| {w} | {tot[w]['python']:,} ({tot[w]['python_blocks']}) | {tot[w]['js']:,} ({tot[w]['js_blocks']}) |"
+               for w in KINDS]
+        prod = sorted(((rel, r) for rel, r in emb.items() if kind(rel) == "product"),
+                      key=lambda kv: -(kv[1]["python"] + kv[1]["js"]))
+        if prod:
+            md += ["", "| Product file | Python statements (blocks) | JavaScript code lines (blocks) |", "|---|---|---|"]
+            md += [f"| `{rel}` | {r['python']:,} ({r['python_blocks']}) | {r['js']:,} ({r['js_blocks']}) |"
+                   for rel, r in prod]
+        unparsed = sum(t["unparsed_blocks"] for t in tot.values())
+        if unparsed:
+            md += ["", f"{unparsed} Python block(s) did not parse and are not counted."]
+        summary["embedded"] = {"totals": tot, "files": emb}
 
     gaps = []
     for lang, res in results.items():
