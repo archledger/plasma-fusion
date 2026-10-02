@@ -209,9 +209,12 @@ Each boundary, what crosses it, and how it is guarded.
 - The `main` branch cannot be deleted or force-pushed; other people's changes need a pull request,
   a code owner's approval after the last push and three passing checks (DCO and attribution, REUSE,
   the RPM build) ([`parts/ci.md`](parts/ci.md), "Repository settings").
-- The build fetches nothing but the distribution's packages named in the spec file
-  (`packaging/plasma-fusion.spec.in`, `.github/workflows/build.yml`); the installed code downloads
-  nothing.
+- The shipped RPM build (`.github/workflows/build.yml`) runs in Fedora's `fedora:44` container
+  and installs only Fedora packages: the spec file's build requirements
+  (`packaging/plasma-fusion.spec.in`) and the check tools. The weekly `compiled` workflow's beta
+  jobs and the local test image in `tools/container/beta` also use the KDE SIG's
+  `@kdesig/kde-beta` Copr; they test against the next Plasma, and nothing built there is
+  published. The installed code downloads nothing.
 
 ## 4. Secure design principles applied
 
@@ -246,7 +249,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | CWE-200, CWE-359 | Private information shown on the lock screen | Notification titles off and text never shown (`config.xml`); no notification watcher at all when the cards are off. |
 | CWE-549 | Unmasked password | Lock screen and boot splash show bullets; the lock screen reveals the password only where KDE's permission allows it. |
 | CWE-798 | Hard-coded credentials | None in the code; secret scanning and push protection on the repository. |
-| CWE-829, CWE-1357 | Untrusted or unreliable third-party components | Actions pinned by hash, audited by zizmor, updated by Dependabot after a cooldown; the build uses the distribution's packages only. |
+| CWE-829, CWE-1357 | Untrusted or unreliable third-party components | Actions pinned by hash, audited by zizmor, updated by Dependabot after a cooldown; the shipped RPM build installs only Fedora's packages (the weekly beta test jobs also use the KDE SIG's Copr and publish nothing; section 3.9). |
 | CWE-1104 | Unmaintained third-party components | Dependabot for actions; the `plasma-watch` workflow opens an issue when Fedora 44 ships a newer Plasma or Qt than the tested one ([`parts/ci.md`](parts/ci.md)). |
 | CWE-787, CWE-416, CWE-134 | Memory safety and format strings in C++ | The C++ parts are small and use Qt's containers and strings; their RPMs are built with Fedora's hardened flags (section 7); CodeQL scans the C++ code. Not yet fuzzed (section 8). |
 
