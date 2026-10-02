@@ -429,6 +429,16 @@ desktop_installed() {
   for d in "${dirs[@]}"; do [ -n "$d" ] && [ -f "$d/plasma/plasmoids/$DESKTOP/metadata.json" ] && return 0; done
   return 1
 }
+# True when VALUE is plasma-keyboard's desktop file as the keyboard policy names it: in /usr/share
+# or another system data directory (XDG_DATA_DIRS, where the policy looks), never the user's own.
+osk_policy_value() { # VALUE
+  local d dirs
+  IFS=: read -r -a dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in /usr/share "${dirs[@]}"; do
+    [[ $d == /* ]] && [ "$1" = "$d/applications/$OSK" ] && return 0
+  done
+  return 1
+}
 
 part_on() {
   local g
@@ -448,7 +458,7 @@ part_on() {
       return 1 ;;
     # Only the values the Fusion keyboard policy writes; the user file only (the system's value is
     # Fedora's default).
-    inputmethod) ustate kwinrc Wayland InputMethod && case $REPLY in = | =/*/applications/"$OSK") return 0 ;; esac; return 1 ;;
+    inputmethod) ustate kwinrc Wayland InputMethod && { [ "$REPLY" = = ] || osk_policy_value "${REPLY#=}"; } ;;
     powerfx | pengarage) [ -L "$CONFIG/$WANTS_REL/${UNIT[$1]}" ] || [ -e "$CONFIG/$WANTS_REL/${UNIT[$1]}" ] ;;
     *) return 1 ;;
   esac

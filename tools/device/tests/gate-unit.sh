@@ -85,9 +85,10 @@ FAKEBIN=
 # (PF_GATE_SYSTEM_PLUGINS), so an installed plasma-fusion-decoration does not change the cases.
 PLUGINS=$BASE/plugins
 mkdir -p "$PLUGINS/org.kde.kdecoration3" && : >"$PLUGINS/org.kde.kdecoration3/org.plasmafusion.decoration.so"
+XDGDATA= # system data directories other than the empty one (a case sets them)
 gate() { # MODE... in the current HOME $H
   env -i HOME="$H" PATH="${FAKEBIN:+$FAKEBIN:}$SYSBIN" XDG_RUNTIME_DIR="$BASE/run" XDG_CONFIG_DIRS="$BASE/xdg-config" \
-    XDG_DATA_DIRS="$BASE/xdg-data" LANG="${GATE_LANG:-C.UTF-8}" PF_GATE_RPM="$RPM" QT_PLUGIN_PATH="$PLUGINS" \
+    XDG_DATA_DIRS="${XDGDATA:-$BASE/xdg-data}" LANG="${GATE_LANG:-C.UTF-8}" PF_GATE_RPM="$RPM" QT_PLUGIN_PATH="$PLUGINS" \
     PF_GATE_SYSTEM_PLUGINS= PF_GATE_ROOT="$ROOT" \
     ${FAKE:+PF_GATE_FAKE_VERSIONS="$FAKE"} ${TOOL:+PF_GATE_TOOL="$TOOL"} bash "$ENGINE" "$@"
 }
@@ -477,16 +478,26 @@ kw kdeglobals KDE LookAndFeelPackage org.plasmafusion.dark.desktop
 gate login
 check "t4: uninstalled unit: link not put back" [ ! -L "$H/.config/$WANTS/plasma-fusion-powerfx.service" ]
 check "t4: InputMethod back as the policy left it" [ "$(get kwinrc Wayland InputMethod)" = /usr/share/applications/org.kde.plasma.keyboard.desktop ]
-# plasma-keyboard in another system data directory (NixOS) is the policy's value too.
+# plasma-keyboard in another system data directory in XDG_DATA_DIRS (the NixOS system profile) is
+# the policy's value too.
 make_home "$BASE/t4b"
-kw kwinrc Wayland InputMethod /run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
+XDGDATA=$BASE/xdg-data:$BASE/nixos-sw/share
+kw kwinrc Wayland InputMethod "$BASE/nixos-sw/share/applications/org.kde.plasma.keyboard.desktop"
 gate deploy >/dev/null 2>&1
 kw kdeglobals KDE LookAndFeelPackage org.kde.breeze.desktop
 gate login
 check "t4b: NixOS plasma-keyboard value removed under Breeze" [ "$(get kwinrc Wayland InputMethod)" = "<absent>" ]
 kw kdeglobals KDE LookAndFeelPackage org.plasmafusion.dark.desktop
 gate login
-check "t4b: and back" [ "$(get kwinrc Wayland InputMethod)" = /run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop ]
+check "t4b: and back" [ "$(get kwinrc Wayland InputMethod)" = "$BASE/nixos-sw/share/applications/org.kde.plasma.keyboard.desktop" ]
+XDGDATA=
+# The user's own copy of plasma-keyboard (the policy never names it) stays.
+make_home "$BASE/t4c"
+kw kwinrc Wayland InputMethod "$H/.local/share/applications/org.kde.plasma.keyboard.desktop"
+gate deploy >/dev/null 2>&1
+kw kdeglobals KDE LookAndFeelPackage org.kde.breeze.desktop
+gate login
+check "t4c: the user's own plasma-keyboard copy stays under Breeze" [ "$(get kwinrc Wayland InputMethod)" = "$H/.local/share/applications/org.kde.plasma.keyboard.desktop" ]
 # A record naming another path is ignored (no file outside the wants link is ever moved).
 make_home "$BASE/t5"
 gate deploy >/dev/null 2>&1
