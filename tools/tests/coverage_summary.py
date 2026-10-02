@@ -182,20 +182,19 @@ def embedded_blocks(path):
 
 def python_statements(text):
     """Statements in TEXT as coverage.py counts them (its parser; ast when coverage.py is not
-    installed); None when it does not parse."""
+    installed); None when TEXT is not valid Python (coverage.py's parser only tokenizes, so it
+    would count a syntax error)."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return None
     try:
         from coverage.parser import PythonParser
-        parser = PythonParser(text=text)
-        parser.parse_source()
-        return len(parser.statements)
     except ImportError:
-        pass
-    except Exception:  # coverage.py's parser raises its own NotPython for a syntax error
-        return None
-    try:
-        return len({n.lineno for n in ast.walk(ast.parse(text)) if isinstance(n, ast.stmt)})
-    except SyntaxError:
-        return None
+        return len({n.lineno for n in ast.walk(tree) if isinstance(n, ast.stmt)})
+    parser = PythonParser(text=text)
+    parser.parse_source()
+    return len(parser.statements)
 
 
 def embedded_results(root, files):
