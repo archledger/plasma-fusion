@@ -137,8 +137,10 @@ reads `metadata.json` directly (no sycoca step).
 `aurorae`, `plasma5support` (all >= 6.7), `breeze-icon-theme >= 6.30`, `fonts-filesystem`,
 `kde-filesystem`, `python3`, `polkit`, `/usr/bin/{kreadconfig6,kwriteconfig6,busctl,setpriv}` (the
 scripts), Pillow and rsvg-convert or PySide6 (app icons). **Recommends**: the decoration and
-settings parts of the same build, `xournalpp` (the pen menu's tiles). **Suggests**: the navigation
-part, `python3-pyside6`, `kate`, `marknote`, `konsole`, `plasma-login-manager`. Each compiled part
+settings parts of the same build. **Suggests**: the navigation part, `xournalpp` (the pen menu's
+tiles; as a weak dependency it would bring TeX Live, about 300 MB, so `setup --pen` installs it
+without its own weak dependencies), `python3-pyside6`, `kate`, `marknote`, `konsole`,
+`plasma-login-manager`. Each compiled part
 requires `plasma-fusion` of the same version and release, and KDecoration or KWin >= 6.7.
 
 **rpmlint**: no errors with the justified filters of `packaging/plasma-fusion.rpmlintrc`:

@@ -104,8 +104,10 @@ Suggests:       kate
 Suggests:       marknote
 Suggests:       konsole
 Suggests:       plasma-login-manager
-# The pen menu's note, whiteboard and mark-up tiles open Xournal++.
-Recommends:     xournalpp
+# The pen menu's note, whiteboard and mark-up tiles open Xournal++. Suggested only: as a weak
+# dependency it brings its own (TeX Live, about 300 MB); plasma-fusion setup --pen installs it
+# without them.
+Suggests:       xournalpp
 
 %description
 Plasma Fusion is a desktop for KDE Plasma 6 built from the Plasma Fusion

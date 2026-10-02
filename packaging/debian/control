@@ -57,8 +57,8 @@ Depends: ${misc:Depends},
          python3-pil,
          systemd,
          librsvg2-bin | python3-pyside6.qtsvg
-Recommends: plasma-fusion-decoration, plasma-fusion-settings, libnotify-bin, xournalpp
-Suggests: plasma-fusion-navigation, kate, konsole, python3-pyside6.qtsvg
+Recommends: plasma-fusion-decoration, plasma-fusion-settings, libnotify-bin
+Suggests: plasma-fusion-navigation, xournalpp, kate, konsole, python3-pyside6.qtsvg
 Description: Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
  Plasma Fusion is a desktop for KDE Plasma 6 in a dark and a light variant:
  Global Themes with the desktop layout and splash screen, color schemes, Plasma
