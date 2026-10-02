@@ -37,26 +37,37 @@ are welcome in GitHub Discussions; the way decisions are made is in
 
 ### In the year
 
-5. **A first release.** Version tags, release notes and signed release artifacts. How they are
-   signed is still to be decided ([`GOVERNANCE.md`](../GOVERNANCE.md), "Releases").
-6. **A second maintainer** with merge, release and admin rights
-   ([`GOVERNANCE.md`](../GOVERNANCE.md), "Continuity").
-7. **Each Plasma release** after 6.8: build the compiled parts against KDE's beta packages, test,
+5. **Each Plasma release** after 6.8: build the compiled parts against KDE's beta packages, test,
    fix, then move the tested versions.
-8. **Tablet typing.** Ctrl and Alt keys and cursor movement by dragging on the space bar for the
+6. **Tablet typing.** Ctrl and Alt keys and cursor movement by dragging on the space bar for the
    on-screen keyboard, to be proposed to KDE's plasma-keyboard first. Esc, Tab and the arrow keys
    are already there ([`docs/parts/keyboard.md`](parts/keyboard.md)).
-9. **Pen.** A hover dot while the pen is near the screen in tablet posture (deferred: it needs a
-   permanent KWin overlay effect, which costs GPU time).
-10. **Battery.** An overnight idle-power measurement on battery, glass on against solid, to decide
-    the glass default on data (`tools/device/power-ab.sh` is ready).
-11. **Login screen and boot splash elsewhere.** Login screen styling for SDDM next to
-    plasma-login-manager, and the boot splash installer for mkinitcpio and initramfs-tools next to
-    dracut.
-12. **Home screen.** Folders and widget stacks, if pinned apps outgrow one page. Deferred: of the
-    home screen items, they have the least evidence that users need them.
-13. **Upstream.** Send fixes found here to KDE where they belong, such as GTK font sizes that
-    follow fractional Qt font sizes (kde-gtk-config).
+7. **Battery.** An overnight idle-power measurement on battery, glass on against solid, to decide
+   the glass default on data (`tools/device/power-ab.sh` is ready).
+8. **Login screen and boot splash elsewhere.** Login screen styling for SDDM next to
+   plasma-login-manager, and the boot splash installer for mkinitcpio and initramfs-tools next to
+   dracut.
+9. **Upstream.** Send fixes found here to KDE where they belong, such as GTK font sizes that
+   follow fractional Qt font sizes (kde-gtk-config).
+
+## Not decided yet
+
+The maintainer has not decided these. This file will move them to "Planned" or "Not planned" once
+they are decided.
+
+- **A first release:** when it comes, the version scheme, release notes, and how version tags and
+  release artifacts are signed ([`GOVERNANCE.md`](../GOVERNANCE.md), "Releases").
+- **A second maintainer:** who it is, and when they get merge, release and admin rights
+  ([`GOVERNANCE.md`](../GOVERNANCE.md), "Continuity").
+
+## Deferred
+
+Wanted, but put off for the reason given. They may come back later.
+
+- **Pen:** a hover dot while the pen is near the screen in tablet posture. It needs a permanent
+  KWin overlay effect, which costs GPU time.
+- **Home screen:** folders and widget stacks. Of the home screen items, they have the least
+  evidence that users need them; worth another look if pinned apps outgrow one page.
 
 ## Not planned
 
@@ -73,8 +84,9 @@ works, or the platform does not allow them:
   snapping keeps improving instead;
 - always-on display, one-handed mode, haptics, swipe-back from any edge, multi-page controls and
   handwriting-to-text, for now;
-- a port to Plasma 6.6 or older (Debian 13, NixOS 26.05): the compiled parts and many widgets
-  need Plasma 6.7 interfaces;
+- a port to Plasma 6.6 or older (Debian 13, NixOS 26.05), unless the maintainer decides
+  otherwise: the compiled parts and several widgets need Plasma 6.7 interfaces, so NixOS 26.05
+  would need a backport of those widgets' QML and would run without the compiled parts;
 - changes to the PAM stack, or switching Fedora's login manager to apply the look;
 - a different layout for the login screen: the greeter's layout is compiled into
   plasma-login-manager, so Plasma Fusion styles it only.
