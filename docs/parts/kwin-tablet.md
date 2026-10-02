@@ -54,7 +54,12 @@ needed.
   modal, on the built-in screen) is maximized; tiled windows keep their tile and lose their title bar,
   and keep following `tileChanged` (a new tile: no title bar; untiled: the title bar back). New windows
   open maximized by placement; resizable dialogs and transients too (owner decision 2), fixed-size
-  dialogs stay centred and framed.
+  dialogs stay centred and framed. Placement skips a window that comes with its own position (an X11
+  app with position hints, such as Chrome restoring its last window): 200 ms after it appears, an
+  eligible window that is neither maximized nor tiled and can grow to the work area is maximized like
+  the windows at enter ("maximized on open" in the log) and gets its own geometry back on leave
+  (ThinkPad private session 2026-10-02: xmessage -geometry 600x400+0+0 maximized, 600x450 in
+  laptop posture, maximized again; KWrite still maximized by placement alone).
 - **Leave**: first, while borderless is still on, the windows this script maximized are
   un-maximized (KWin puts back their laptop geometry); windows first opened in tablet mode, dialogs
   included, get `setMaximize(false, false, rect)` with 70 % of the work area, centred (on the parent

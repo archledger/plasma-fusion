@@ -141,6 +141,36 @@ Item {
             && !w.skipTaskbar && !w.transient && !w.modal && internalOutput(w.output);
     }
 
+    // Whether the window may grow to the work area (placement "Maximizing" asks the same).
+    function fitsMaximized(w) {
+        const area = Workspace.clientArea(Workspace.MaximizeArea, w);
+        return w.maxSize.width >= area.width && w.maxSize.height >= area.height;
+    }
+
+    // Placement "Maximizing" skips a window that comes with its own position (an X11 app with
+    // position hints, e.g. Chrome restoring its last window: the owner's screencast of 2026-10-02
+    // showed it opening at 743x606 in tablet posture). Such a window is maximized here like the
+    // windows open when tablet posture starts, and gets its own geometry back in laptop posture.
+    // Checked 200 ms after it appears: a Wayland window that placement maximized reports it once
+    // the app has confirmed the new size.
+    property var openedWindows: []
+    Timer {
+        id: openedCheck
+        interval: 200
+        onTriggered: {
+            const list = root.openedWindows;
+            root.openedWindows = [];
+            for (let i = 0; i < list.length; ++i) {
+                const w = list[i];
+                if (root.applied && root.eligible(w) && w.maximizeMode !== 3 && !w.tile && root.fitsMaximized(w)) {
+                    root.maximizedByUs[root.key(w)] = true;
+                    w.setMaximize(true, true);
+                    root.log("maximized on open: " + w.resourceClass);
+                }
+            }
+        }
+    }
+
     function sync() {
         const want = tablet && policyAllowed();
         if (want && !applied) {
@@ -348,6 +378,8 @@ Item {
             }
             if (root.eligible(w)) {
                 root.follow(w);
+                root.openedWindows.push(w);
+                openedCheck.restart();
             }
         }
         function onWindowRemoved(w) {
