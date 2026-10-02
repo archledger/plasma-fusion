@@ -177,6 +177,38 @@ class Classify(unittest.TestCase):
         (self.proc / "4242" / "comm").write_text("bash\n")
         self.assertEqual(fl.classify(r)[0], "app")
 
+    def test_dev_dirs(self):
+        # 2026-09-15 on the laptop: npu-parity-probe from ~/tmp-agent/... in an SSH login's scope
+        # and plugin-batching from ~/archledger-gp/artifacts/... with a cleared environment were
+        # classed other and app (review of 2026-10-02).
+        h = "/home/someone"  # the tests' HOME is under build/, itself a development path
+        ssh = app_record()
+        ssh.update({"COREDUMP_EXE": f"{h}/tmp-agent/npu-phase0/npu-parity-probe", "COREDUMP_CMDLINE": "./npu-parity-probe",
+                    "COREDUMP_CGROUP": f"/user.slice/user-{UID}.slice/session-c12.scope", "COREDUMP_ENVIRON": "SHELL=/bin/bash"})
+        art = app_record()
+        art.update({"COREDUMP_EXE": f"{h}/archledger-gp/artifacts/intel-npu-stack/x/plugin-batching",
+                    "COREDUMP_CMDLINE": "plugin-batching", "COREDUMP_ENVIRON": "PATH=/usr/bin"})
+        keep, keep_home = os.environ.pop("PF_FIELDLOG_DEV_DIRS", None), os.environ["HOME"]
+        os.environ["HOME"] = h
+        try:
+            cls, reason, _ = fl.classify(ssh)
+            self.assertEqual(cls, "tooling")
+            self.assertIn("~/tmp-agent/npu-phase0/npu-parity-probe", reason)
+            self.assertEqual(fl.classify(art)[0], "app")
+            os.environ["PF_FIELDLOG_DEV_DIRS"] = "~/tmp-*:~/archledger-gp/artifacts/"
+            self.assertEqual(fl.classify(art)[0], "tooling")
+            os.environ["PF_FIELDLOG_DEV_DIRS"] = ""
+            self.assertEqual(fl.classify(ssh)[0], "other")
+            os.environ["PF_FIELDLOG_DEV_DIRS"] = "~/tmp-*"
+            for path, dev in ((f"{h}/tmpfiles/x", False), (f"{h}/tmp-a", False), (f"{h}/tmp-a/b", True),
+                              (f"{h}/x/tmp-a/b", False)):
+                self.assertEqual(bool(fl.dev_path(path)), dev, path)
+        finally:
+            os.environ["HOME"] = keep_home
+            os.environ.pop("PF_FIELDLOG_DEV_DIRS", None)
+            if keep is not None:
+                os.environ["PF_FIELDLOG_DEV_DIRS"] = keep
+
     def test_other(self):
         r = app_record()
         r.update({"COREDUMP_EXE": "/usr/libexec/someservice", "COREDUMP_CGROUP": "/system.slice/someservice.service"})

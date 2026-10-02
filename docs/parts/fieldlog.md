@@ -91,7 +91,7 @@ as seen and the recorder goes on. The first rule that matches decides:
 | Class | Rule |
 |---|---|
 | tooling | the cgroup is a container's (`libpod`, docker, `machine.slice`, ...) or the environment has `container=` |
-| tooling | the executable, an interpreter's script (relative scripts resolved against the crash's working directory) or the absolute `argv[0]` lies in a development directory: a `build`, `build-*`, `_build`, `scratch`, `scratchpad`, `test(s)`, `testing`, `fixtures`, `.claude` or `worktrees` path component, a cargo `target/debug` or `target/release`, `/tmp/claude-*`, `/var/tmp/pfv-*` |
+| tooling | the executable, an interpreter's script (relative scripts resolved against the crash's working directory) or the absolute `argv[0]` lies in a development directory: a `build`, `build-*`, `_build`, `scratch`, `scratchpad`, `test(s)`, `testing`, `fixtures`, `.claude` or `worktrees` path component, a cargo `target/debug` or `target/release`, `/tmp/claude-*`, `/var/tmp/pfv-*`, or a folder of `PF_FIELDLOG_DEV_DIRS` (colon separated, shell patterns per path component, `~` for the home folder; default `~/tmp-*`) |
 | tooling | `XDG_RUNTIME_DIR` is not `/run/user/UID` (a private test session) |
 | session | the cgroup is the session's `user@UID.service/session.slice` or a `plasma-*.service` unit of the user manager (`background.slice/plasma-xembedsniproxy.service`, the Plasma Fusion units) |
 | tooling | an agent marker in its environment: `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `AI_AGENT`, `OPENCODE`, `CODEX_SANDBOX`, `CODEX_SANDBOX_NETWORK_DISABLED`, `GEMINI_CLI`, `CURSOR_AGENT` (more with `PF_FIELDLOG_MARKERS`) |
@@ -333,6 +333,13 @@ The tests:
 - Suspend times are approximate (to the next wake-up of the loop, at most a minute).
 - A crash whose journal record cannot be read (another user's, without `wheel`) is classed by its
   executable name only.
+- A coding agent that works over SSH leaves no marker in a crashed program's environment and no
+  agent process in its cgroup (the SSH login's `session-N.scope`): its test crashes are classed
+  "other" (or "app", from a terminal tab whose agent has gone) unless their path gives them away.
+  Of the laptop's dump records (checked 2026-10-02): 37 probes from an agent's `~/tmp-NAME/`
+  (2026-09-15), tooling with the default `~/tmp-*`, and 39 test programs from
+  `~/archledger-gp/artifacts/` (2026-09-07 to 09-25; 28 "other", 10 "app" without the setting);
+  for such folders set `PF_FIELDLOG_DEV_DIRS` in the unit.
 - Sustained CPU and memory jumps are seen at minute resolution.
 - The global `noise` counts depend on Qt's message text; a Plasma update that rewords a warning makes
   a new row.

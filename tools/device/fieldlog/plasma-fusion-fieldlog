@@ -48,11 +48,12 @@
 # Settings (environment): PF_FIELDLOG_SHARE, PF_FIELDLOG_MAX_MB, PF_FIELDLOG_KEEP_DAYS,
 # PF_FIELDLOG_MARKERS (more marker names, comma separated), PF_FIELDLOG_SINCE (first run only: record
 # core dumps from this time, YYYY-MM-DD[THH:MM] local or @EPOCH; default the start of today),
-# PF_FIELDLOG_GATE_LOG (default $XDG_STATE_HOME/plasma-fusion/gate.log). For tests:
+# PF_FIELDLOG_GATE_LOG (default $XDG_STATE_HOME/plasma-fusion/gate.log), PF_FIELDLOG_DEV_DIRS (more
+# development folders, colon separated, shell patterns, ~ for home; default ~/tmp-*). For tests:
 # PF_FIELDLOG_INTERVAL (60 s), PF_FIELDLOG_RUN_SECONDS, PF_FIELDLOG_PROC, PF_FIELDLOG_SYS,
 # PF_FIELDLOG_CGROUP_ROOT.
-import collections, datetime, errno, fcntl, json, os, pathlib, re, select, shlex, shutil, signal, subprocess
-import sys, threading, time
+import collections, datetime, errno, fcntl, fnmatch, json, os, pathlib, re, select, shlex, shutil, signal
+import subprocess, sys, threading, time
 
 VERSION = 1
 NAME = "plasma-fusion-fieldlog"
@@ -98,6 +99,7 @@ INTERPRETER = re.compile(r"^(?:(?:ba|da|z|k|fi)?sh|python[\d.]*|perl[\d.]*|node|
 DEV_SEGMENTS = {"build", "_build", "builddir", "scratch", "scratchpad", "test", "tests", "testing",
                 "fixtures", ".claude", "worktrees"}
 DEV_PATH = re.compile(r"/target/(?:debug|release)/|^/tmp/claude-|^/var/tmp/pfv-")
+DEFAULT_DEV_DIRS = "~/tmp-*"  # scratch folders in the home folder (an agent's ~/tmp-NAME over SSH)
 CONTAINER = re.compile(r"libpod|/docker[-/]|containerd|/machine\.slice/|/lxc[./]|podman")
 
 
@@ -117,15 +119,34 @@ def markers_in(env):
     return sorted(k for k in env_names(env) if k in AGENT_ENV)
 
 
+def dev_dirs():
+    """PF_FIELDLOG_DEV_DIRS: more development folders, colon separated, shell patterns per path
+    component, ~ for the home folder (default ~/tmp-*; empty: none)."""
+    raw = os.environ.get("PF_FIELDLOG_DEV_DIRS")
+    out = []
+    for p in (DEFAULT_DEV_DIRS if raw is None else raw).split(":"):
+        p = p.strip().rstrip("/")
+        if p.startswith("~"):
+            p = home().rstrip("/") + p[1:]
+        if p.startswith("/"):
+            out.append(p)
+    return out
+
+
 def dev_path(path):
     """The development directory a path lies in (build/, scratch, tests, a cargo target dir, an
-    agent's scratchpad or worktree, a private test session), or None."""
+    agent's scratchpad or worktree, a private test session, PF_FIELDLOG_DEV_DIRS), or None."""
     if not path or not path.startswith("/"):
         return None
     if DEV_PATH.search(path):
         return path
-    for seg in path.split("/")[:-1]:
+    parts = path.split("/")
+    for seg in parts[:-1]:
         if seg in DEV_SEGMENTS or seg.startswith(("build-", "build.")):
+            return path
+    for pat in dev_dirs():
+        n = pat.count("/") + 1
+        if len(parts) > n and fnmatch.fnmatchcase("/".join(parts[:n]), pat):
             return path
     return None
 
