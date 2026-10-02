@@ -6,8 +6,9 @@
 # starting from the corpus the weekly batch run keeps as artifacts. A crash or a failed property
 # fails the check and its input is kept as an artifact. The actions clone the repository themselves
 # (no checkout step) and run in their own containers. OSS-Fuzz builds Python fuzzers only with a
-# sanitizer named (address or undefined); address is its default, and the fuzzed tools are pure
-# Python.
+# sanitizer named (address or undefined): undefined, because the fuzzed tools are pure Python and
+# AddressSanitizer, preloaded into an interpreter not built with it, finds nothing more there and
+# runs a fifth to two thirds as many inputs.
 
 name: cflite-pr
 
@@ -43,7 +44,7 @@ jobs:
         uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           language: python
-          sanitizer: address
+          sanitizer: undefined
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run the fuzzers
@@ -51,7 +52,7 @@ jobs:
         uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           language: python
-          sanitizer: address
+          sanitizer: undefined
           mode: code-change
           fuzz-seconds: 300
           github-token: ${{ secrets.GITHUB_TOKEN }}

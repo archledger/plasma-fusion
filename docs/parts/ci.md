@@ -50,14 +50,17 @@ desktop", and a name with line breaks added lines to its defaults (on the old co
 finds the first from an empty corpus within seconds). Local runs of 150 s each on the fixed code
 (laptop, atheris 3.1.0, Python 3.14) found nothing further: 1.2 million inputs for the icons, 363
 thousand for "My previous desktop", 15 million for the keyboard. The ClusterFuzzLite builds run
-slower (Python 3.11 with AddressSanitizer preloaded: about 700, 430 and 10 000 inputs a second).
+slower (Python 3.11 with the sanitizer's runtime preloaded; 30 s from the seeds on the laptop:
+about 5 300, 1 500 and 30 000 inputs a second).
 
 ClusterFuzzLite (`.clusterfuzzlite/`): `project.yaml` (`language: python`), a `Dockerfile` on
 OSS-Fuzz's `base-builder-python` pinned by digest, and `build.sh`, which makes each
 `fuzz/*_fuzzer.py` a PyInstaller package (`compile_python_fuzzer`) that ships the tool named in the
 fuzzer's `TOOL` line as data at the same path (found below `sys._MEIPASS`), with the modules the
 tool imports passed as hidden imports, next to the seed corpus and the dictionary. The workflows
-use AddressSanitizer, which OSS-Fuzz requires for Python (address or undefined). The corpus lives
+use UndefinedBehaviorSanitizer: OSS-Fuzz builds Python fuzzers only with address or undefined, and
+with an interpreter built with neither, AddressSanitizer finds nothing more in pure Python and ran
+a fifth to two thirds as many inputs (about 1 100, 380 and 22 000 a second). The corpus lives
 in the workflow artifacts (no storage repository); there is no corpus pruning or coverage job.
 
 Run a fuzzer locally (scratch on disk under `build/`; new inputs go to the first directory, never
@@ -75,14 +78,16 @@ takes `build/` along otherwise), then OSS-Fuzz's checks of the result and one fu
 
     podman build -f .clusterfuzzlite/Dockerfile -t plasma-fusion-cflite .
     mkdir -p build/fuzzing/out
-    podman run --rm -e FUZZING_LANGUAGE=python -e SANITIZER=address -e FUZZING_ENGINE=libfuzzer \
+    podman run --rm -e FUZZING_LANGUAGE=python -e SANITIZER=undefined -e FUZZING_ENGINE=libfuzzer \
       -e ARCHITECTURE=x86_64 -v "$PWD/build/fuzzing/out:/out:Z" plasma-fusion-cflite compile
-    podman run --rm -e FUZZING_LANGUAGE=python -e SANITIZER=address -e FUZZING_ENGINE=libfuzzer \
+    podman run --rm -e FUZZING_LANGUAGE=python -e SANITIZER=undefined -e FUZZING_ENGINE=libfuzzer \
       -e ARCHITECTURE=x86_64 -v "$PWD/build/fuzzing/out:/out:Z" gcr.io/oss-fuzz-base/base-runner test_all.py
     podman run --rm ... gcr.io/oss-fuzz-base/base-runner run_fuzzer app_icons_fuzzer -max_total_time=60
 
-Done on 2026-10-02 with the pinned builder and base-runner `sha256:5a37678b9610…`: the three
-packages build (about 30 MB each), pass `test_all.py` and run from their seed corpora.
+Done on 2026-10-02 with the pinned builder and base-runner `sha256:5a37678b9610…`, with address and
+with undefined: the three packages build (about 30 MB each), pass `test_all.py` and run from their
+seed corpora; with a property broken on purpose the undefined build stops at the first failing
+input ("Uncaught Python exception", exit code 77).
 
 The base image's digest is not updated by Dependabot (it watches the actions only); to move it:
 `skopeo inspect --format '{{.Digest}}' docker://gcr.io/oss-fuzz-base/base-builder-python:latest`.

@@ -5,7 +5,8 @@
 # fuzz/ run on main for 30 minutes in all (batch mode). The corpus they build up is kept as an
 # artifact, which the next batch run and the pull request runs (cflite-pr) start from. A crash or a
 # failed property fails the run and its input is kept as an artifact. The actions clone the
-# repository themselves (no checkout step) and run in their own containers.
+# repository themselves (no checkout step) and run in their own containers; the sanitizer is the
+# pull request runs' (cflite-pr.yml says why).
 
 name: cflite-batch
 
@@ -35,14 +36,14 @@ jobs:
         uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           language: python
-          sanitizer: address
+          sanitizer: undefined
 
       - name: Run the fuzzers
         id: run
         uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           language: python
-          sanitizer: address
+          sanitizer: undefined
           mode: batch
           fuzz-seconds: 1800
           github-token: ${{ secrets.GITHUB_TOKEN }}
