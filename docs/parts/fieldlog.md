@@ -33,12 +33,13 @@ plasma-fusion-fieldlog status          # after install, from ~/.local/libexec/pl
 `enable` and `restart` of that unit only. A setting not given keeps the value of the unit installed
 before, so a reinstall after an update keeps the share copy; `--no-share` turns it off. Install
 prints the settings it wrote and which it kept. `digest` and `status` run by hand take the share
-from the installed unit too, so a digest written by hand also goes to the share. It starts with every Plasma session (`WantedBy` and `PartOf`
-`graphical-session.target`), just before KWin and plasmashell, and stops after them (see "The
-unit"). `remove` stops and disables it and deletes the unit and the copy; the
-recorded state stays. `digest [DATE]` writes and prints a day's digest (`today`, `yesterday` or
-`YYYY-MM-DD`; default today). `systemctl --user reload plasma-fusion-fieldlog` (SIGHUP) rewrites
-today's digest at once.
+from the installed unit too, so a digest written by hand also goes to the share.
+
+The service starts with every Plasma session (`WantedBy` and `PartOf` `graphical-session.target`),
+just before KWin and plasmashell, and stops after them (see "The unit"). `remove` stops and
+disables it and deletes the unit and the copy; the recorded state stays. `digest [DATE]` writes and
+prints a day's digest (`today`, `yesterday` or `YYYY-MM-DD`; default today). `systemctl --user
+reload plasma-fusion-fieldlog` (SIGHUP) rewrites today's digest at once.
 
 ## Files
 
@@ -57,20 +58,20 @@ State in `${XDG_STATE_HOME:-~/.local/state}/plasma-fusion/fieldlog/` (private to
 Kept: 30 days (`PF_FIELDLOG_KEEP_DAYS`) and 100 MiB (`PF_FIELDLOG_MAX_MB`); over the size the oldest
 memory snapshots go first, then saved crash texts, then old events and digests, never today's
 events. Core files are never touched. When an event cannot be written (disk full), it is lost and
-the recorder goes on; once writing works again a `fieldlog-error` says how many were lost, and a line
-that a failed write cut short is ended first, so it does not swallow the next. With
-`PF_FIELDLOG_SHARE` a copy of each digest goes to
-`DIR/digest-YYYY-MM-DD-HOST.md` (from a thread, so a hanging network mount does not stop the
-recorder).
+the recorder goes on; once writing works again a `fieldlog-error` says how many were lost, and a
+line that a failed write cut short is ended first, so it does not swallow the next. With
+`PF_FIELDLOG_SHARE` a copy of each digest goes to `DIR/digest-YYYY-MM-DD-HOST.md` (from a thread,
+so a hanging network mount does not stop the recorder; at the stop the copies get 10 s together).
 
 ## What it records
 
 Event kinds: `crash`, `restart`, `gone`, `login`, `logout`, `suspend`, `screen`, `lid`, `posture`,
 `unit-failed`, `unit-exit`, `unit-restart`, `pf-error`, `pf-warning`, `gate`, `noise`, `resources`,
-`memsnap`, `cpu-high`, `cpu-high-end`, `self`, `late`, `fieldlog-start`, `fieldlog-stop`, `fieldlog-error`.
-An event with a key is written once a day; its repeats are counted in memory and written as one
-line with `"repeat": true`, the count of repeats and the first and last time, every hour and when the
-service stops (a killed service loses at most an hour of repeat counts, never a first occurrence).
+`memsnap`, `cpu-high`, `cpu-high-end`, `self`, `late`, `fieldlog-start`, `fieldlog-stop`,
+`fieldlog-error`. An event with a key is written once a day; its repeats are counted in memory and
+written as one line with `"repeat": true`, the count of repeats and the first and last time, every
+hour and when the service stops (a killed service loses at most an hour of repeat counts, never a
+first occurrence).
 Session, app and other crashes and memory snapshots are written with `fsync`.
 
 An event goes to the day it happened, also when it is seen later: a crash just before midnight that
@@ -142,11 +143,11 @@ One `journalctl --user -f -a -o json --output-fields=...`. It goes on after the 
 the same run after the line before journalctl stopped, at a start after the cursor saved in
 `state.json`, at most 3 days back (older: the last 3 days); the first run starts from now. So
 what happened while the recorder was stopped (a hang at logout, a night) is read at the next start;
-about 6 s of CPU for 3 days of this laptop's user journal (206,000 lines). A journalctl that exits
-or cannot start is started again after 5 s, 10 s, ... up to 5 minutes. Lines are filtered on their
-bytes before they are parsed (the
-programs below and "plasma(-)fusion"); about 72,000 user journal lines a day on the laptop, most of
-them container output, never reach the JSON parser.
+journalctl takes about 6 s of CPU for 3 days of this laptop's user journal (206,000 lines). A
+journalctl that exits or cannot start is started again after 5 s, 10 s, ... up to 5 minutes. Lines
+are filtered on their bytes before they are parsed (the programs below and "plasma(-)fusion");
+about 72,000 user journal lines a day on the laptop, most of them container output, never reach
+the JSON parser.
 
 - `pf-error` / `pf-warning`: warnings and errors (priority 4 or less; a JavaScript `TypeError`,
   `ReferenceError`, `SyntaxError` or `RangeError` counts as an error) of plasmashell, KWin, the
@@ -213,13 +214,13 @@ are not found; the tool also falls back to `/usr/bin/NAME` when a program is not
 `Before=plasma-kwin_wayland.service plasma-plasmashell.service` (units stop in the reverse of their
 start order, so at logout the recorder stops after KWin and plasmashell and still records a hang
 or crash while they stop, as on 2026-09-29 at 19:51 EDT, when plasmashell was aborted 40 s after
-the session ended at a reboot and no core dump was stored, only user journal lines; `After=graphical-session.target`
-would then be an ordering cycle, since the session targets come after both; checked against the
-laptop's user manager, 2026-10-02), `KillMode=mixed` (SIGTERM to the tool, which writes its counts, the digest and
-stops journalctl), `Restart=on-failure`, `background.slice`, `Nice=10`, `IOSchedulingClass=idle`,
-`MemoryMax=64M`, and the hardening that works in a user unit without a user namespace:
-`NoNewPrivileges`, `LockPersonality`, `RestrictRealtime`, `RestrictSUIDSGID`, `RestrictNamespaces`,
-`MemoryDenyWriteExecute`, `SystemCallArchitectures=native`, `SystemCallFilter=@system-service`,
+the session ended at a reboot and no core dump was stored, only user journal lines;
+`After=graphical-session.target` would then be an ordering cycle, since the session targets come
+after both; checked against the laptop's user manager, 2026-10-02), `KillMode=mixed` (SIGTERM to
+the tool, which writes its counts, the digest and stops journalctl), `Restart=on-failure`,
+`background.slice`, `Nice=10`, `IOSchedulingClass=idle`, `MemoryMax=64M`, and the hardening that
+works in a user unit without a user namespace: `NoNewPrivileges`, `LockPersonality`,
+`RestrictRealtime`, `RestrictSUIDSGID`, `RestrictNamespaces`, `MemoryDenyWriteExecute`, `SystemCallArchitectures=native`, `SystemCallFilter=@system-service`,
 `RestrictAddressFamilies=AF_UNIX`, `UMask=0077`. Tested with transient units on the laptop
 (2026-10-02, systemd 259): with `PrivateTmp=yes` the user manager adds `PrivateUsers=yes`; then the
 process's groups are `nobody` (no `wheel`, so no system journal) and other processes' `environ`
@@ -247,9 +248,27 @@ saved) took 5.1 s of CPU in a transient user unit with the service's limits and 
 file cache (reclaimed; exit 0, the same classes as without the limits). Later starts go on from the
 state and read only new dumps.
 
+After the review fixes (2026-10-02, 13:51-14:01 EDT): 10 minutes as a transient user unit with every
+`[Service]` line of the unit template (`ExecSearchPath=`, `Environment=PATH=`, `MemoryMax=64M`, the
+hardening; tool from a scratch folder, scratch state seeded with a journal cursor 3 h back and the
+day's dumps), cgroup sampled every 5 s:
+
+| | CPU | memory |
+|---|---|---|
+| start: 12 dump records and 3 h of user journal read back (30,348 lines) | 7.7 s in the first 15 s | cgroup at the 64 MiB limit (journal file cache), 15 MiB of it swapped |
+| the 530 s after the first minute | 0.26 s, **0.049 %** of a core | tool RSS 11.8-13.3 MiB (peak 21.5), journalctl 34.6-41.3 MiB |
+| the whole run (systemd's count) | 8.07 s in 600 s | peak 64 MiB, swap peak 14.9 MiB |
+
+Reading the journal back costs CPU at each start after a stop, at `Nice=10` and idle I/O: outside a
+unit 3 h take 1.4 s (journalctl 0.94 s, the tool 0.43 s) and the 12 dump records 0.57 s; in the unit
+the limit makes the kernel reclaim and swap, so a start with 3 h cold took 4.4-7.7 s, with 14 h
+whose journal was still cached 2.0 s (42 MiB, no swap), with 3 days 10.7 s (64 MiB, 17 MiB swap).
+A `MemoryMax=160M` changed nothing (the cache filled it; 5.6 s).
+
 ## Verification (2026-10-02)
 
-- Tests: 19 PASS (`fieldlog_test.py`, about 10 s).
+- Tests: 19 PASS (`fieldlog_test.py`, about 10 s) when built; 37 PASS (about 37 s) after the review
+  fixes, each new test failing on the version before its fix.
 - The 10-minute run recorded: the start (plasmashell 1062963, KWin 2888, outputs, lid), the 12
   tooling crashes of the day in two lines and two repeat lines (python3 `approved_pick.py` from a
   scratchpad 2x at 07:44 EDT, bash `rpm-crash` from a build directory 10x at 11:21-11:38), two login
@@ -270,6 +289,37 @@ state and read only new dumps.
 - The service's hardening was checked with transient user units: `PrivateTmp=yes` dropped the
   groups to `nobody` and denied other processes' `environ`; the options in the unit kept
   `coredumpctl`, `journalctl --user`, `systemctl --user` and `environ` working.
+
+### Review fixes (2026-10-02)
+
+Two reviews on the laptop's real data found twelve problems; all are fixed on `wip/fieldlog`:
+
+- The unit's `ExecSearchPath=` became the service's whole PATH, so the installed service found no
+  `coredumpctl`, `journalctl` or `systemctl`, recorded nothing and, retrying journalctl without a
+  pause, used about 65 % of a core. Fixed by `Environment=PATH=`, a `/usr/bin` fallback in the tool
+  and a back-off after a failed start.
+- A dump record with array-encoded fields made the recorder exit at every start; after journalctl
+  died the follow restarted from a cursor up to 10 minutes old (lines counted twice); a full disk
+  stopped the recorder and its cut line swallowed the next event.
+- Problems at logout or overnight were lost (the recorder stopped before plasmashell and KWin, and
+  read the journal back only 12 h), and events that reached a day late never reached its digest or
+  share copy.
+- Plasma Fusion's own D-Bus watcher warnings were counted as noise (1,039 on 2026-10-02, digest: 0
+  Plasma Fusion warnings); failed units were shown under their first result; the resources table
+  counted restarts as hours; development programs run over SSH from `~/tmp-*` were "other"; a
+  reinstall without `--share` turned the share copy off.
+
+Checked after the fixes on the laptop: the 10-minute unit run above, with the unit's PATH, recorded
+the 12 tooling dumps of the day, 201 D-Bus watcher warnings in 3 kinds as Plasma Fusion warnings
+(read back from 10:52 EDT), 3 login check runs, the posture and screen changes, a plasmashell
+restart at 13:58 (a clean `systemctl` stop and start in the real session, not by these tests; no
+core dump), no `fieldlog-error`, and the share copy. A 60 s run without `Environment=PATH=` (the
+broken case) recorded the same through the tool's fallback. All 415 dump records of the laptop
+classed with the old and the new code: the only changes are the 37 `~/tmp-*` probes (other to
+tooling) and, with `~/archledger-gp/artifacts` in `PF_FIELDLOG_DEV_DIRS`, its 38 test programs (28
+other, 10 app to tooling); no session or app crash changed class. The new unit order was checked
+for cycles against the user manager's loaded units (none; plasmashell, KWin and
+`graphical-session.target` now start after the field log and stop before it).
 
 ## How the digest is read
 
@@ -332,7 +382,27 @@ The tests:
   `PF_FIELDLOG_INTERVAL=0.5`, `PF_FIELDLOG_RUN_SECONDS`): 12 tooling, 1 session and 1 app crash,
   two saved crash texts, a restart, a memory snapshot, a DPMS change, the gate run, the digest and
   its share copy, `status`; no `systemctl` call that changes anything;
-- `install --share` and `remove` with a fake `systemctl`.
+- `install --share` and `remove` with a fake `systemctl`; a reinstall keeps the share and the
+  development folders, `--no-share` drops the share, a digest by hand reaches the share.
+
+Added after the review of 2026-10-02 (each fails on the version before its fix):
+
+- the unit sets a PATH with `/usr/bin` next to `ExecSearchPath=`, and is ordered before KWin and
+  plasmashell without `After=` on the session targets; the tool falls back to `/usr/bin/NAME`;
+- `run` with a journalctl that cannot start (at most 2 tries in 4 s, under 2 s of CPU) and with
+  one that dies after 4 of 10 lines (the second gets `--after-cursor` of the fourth, every line
+  counted once); the journalctl arguments at the first start, after a start that read nothing,
+  after a line read, with a saved cursor 2 and 5 days old;
+- array-encoded fields: a dump record with an ESC in its environment and a non-UTF-8 command line,
+  a journal line with array fields, a dump record whose handling fails (noted, marked as seen);
+- late days: a KWin crash of the evening before read at the next start, a crash seen 2 s after
+  midnight in a made-up time zone (that day's digest and share copy, its last hour's resources,
+  the line in the new day's digest), 6,000 lines of the day before read back (its digest written
+  at most twice);
+- a full disk (3 events lost, counted, the recorder goes on) and a line cut by a failed write;
+- failed units per result and the hourly list check; resource hours with two partial rows of one
+  hour; a real D-Bus watcher line of 2026-10-02 as a Plasma Fusion warning; development folders
+  (`~/tmp-*` by default, `PF_FIELDLOG_DEV_DIRS`).
 
 ## Limits
 
@@ -347,5 +417,7 @@ The tests:
   `~/archledger-gp/artifacts/` (2026-09-07 to 09-25; 28 "other", 10 "app" without the setting);
   for such folders set `PF_FIELDLOG_DEV_DIRS` (`install --dev-dirs`).
 - Sustained CPU and memory jumps are seen at minute resolution.
+- A recorder that is killed (not stopped) saved its journal cursor up to 10 minutes before: its next
+  start reads those lines again and counts their repeats twice (first occurrences stay single).
 - The global `noise` counts depend on Qt's message text; a Plasma update that rewords a warning makes
   a new row.
