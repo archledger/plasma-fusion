@@ -2070,6 +2070,8 @@ Type=exec
 ExecStart=$(gate_bash) "${GATE_ENGINE//%/%%}" notify
 Slice=app.slice
 TimeoutStopSec=5s
+NoNewPrivileges=yes
+MemoryMax=64M
 
 [Install]
 WantedBy=xdg-desktop-autostart.target
