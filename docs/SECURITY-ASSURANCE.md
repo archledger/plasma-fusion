@@ -22,7 +22,8 @@ the session or run before the desktop starts; those are what this case is about.
   three things run as root: the charge-limit helper (through pkexec, section 3.1), and the two
   optional installers for the login greeter's look and the boot splash, which you start yourself
   with `sudo` (sections 3.4, 3.5). The packages have no install scripts, no setuid files and no
-  system services (`packaging/plasma-fusion.spec.in`).
+  system services (`packaging/fedora/plasma-fusion.spec`, `packaging/arch/PKGBUILD`,
+  `packaging/debian/`; the Arch package adds a pacman hook that only prints).
 - **The lock screen does not decide who gets in.** The Plasma Fusion lock screen is QML that
   kscreenlocker's greeter loads; the password is checked by kscreenlocker and PAM, unchanged from
   Plasma 6.7.5. If the QML fails to load, kscreenlocker's built-in lock screen is used
@@ -212,7 +213,7 @@ Each boundary, what crosses it, and how it is guarded.
   the RPM build) ([`parts/ci.md`](parts/ci.md), "Repository settings").
 - The shipped RPM build (`.github/workflows/build.yml`) runs in Fedora's `fedora:44` container
   and installs only Fedora packages: the spec file's build requirements
-  (`packaging/plasma-fusion.spec.in`) and the check tools. The weekly `compiled` workflow's beta
+  (`packaging/fedora/plasma-fusion.spec`) and the check tools. The weekly `compiled` workflow's beta
   jobs and the local test image in `tools/container/beta` also use the KDE SIG's
   `@kdesig/kde-beta` Copr; they test against the next Plasma, and nothing built there is
   published. The installed code downloads nothing.

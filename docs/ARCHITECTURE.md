@@ -28,8 +28,8 @@ stage/home/                      a HOME tree: .local/share, .local/libexec, .con
         |
         +--> per user:   tools/device/fusion-config.sh --install stage/home
         |                (backup, copy into ~/.local, configure the session, login check)
-        +--> system:     packaging/build-rpm.sh -> plasma-fusion RPM (/usr/share, /usr/libexec)
-                         then each user runs fusion-config.sh from /usr/share/plasma-fusion/tools
+        +--> system:     packaging/ -> four packages per channel (Copr, AUR, PPA, .debs, Nix),
+                         installed by scripts/install.sh; each user runs plasma-fusion setup
 
 packages/{decoration,kcm,navigation}-cpp/  (C++, CMake)  -> their own RPMs, against KDE's libraries
 tools/system/  (run as root)   login greeter styling, boot splash install
@@ -101,11 +101,14 @@ and writes only below `$STAGE` (default `stage/home`), in the paths the naming t
   Theme, panels, shortcuts, fonts, KWin scripts, user services, the login check). It records a
   configuration version and only changes keys the user has not changed since
   ([`parts/device.md`](parts/device.md)). `tools/device/fusion-restore.sh` puts a backup back.
-- **System package:** `packaging/build-rpm.sh` runs the same build inside `rpmbuild` and installs
-  the stage under `/usr/share` and `/usr/libexec/plasma-fusion`, with the polkit action. Each user
-  still runs `fusion-config.sh` once ([`parts/system.md`](parts/system.md)).
-- **Compiled parts:** their own RPMs (`plasma-fusion-decoration`, `plasma-fusion-settings`,
-  `plasma-fusion-navigation`), installed into Qt's plugin directories.
+- **Packages:** one version (`VERSION`) and one source tarball; every channel (the Fedora spec, the
+  Arch PKGBUILD, the Debian packaging, the Nix packages) runs the same build and installs the stage
+  with `packaging/install-tree.sh` under `/usr/share` and the helper directory, with the polkit
+  action and the `plasma-fusion` command. The compiled parts (`plasma-fusion-decoration`,
+  `plasma-fusion-settings`, `plasma-fusion-navigation`) come from the same source, installed into
+  Qt's plugin directories. `scripts/install.sh` picks the channel; each user runs
+  `plasma-fusion setup` once ([`parts/system.md`](parts/system.md),
+  [`parts/installer.md`](parts/installer.md)).
 - **As root, optional:** `tools/system/greeter-apply.sh` styles the plasma-login-manager greeter
   ([`parts/system.md`](parts/system.md)); `tools/system/plymouth-install.sh` installs and selects the
   boot splash ([`parts/plymouth.md`](parts/plymouth.md)). Each has an undo script next to it.

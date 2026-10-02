@@ -31,7 +31,8 @@ podman run --rm --security-opt label=disable -v "$PWD:$PWD:ro" -v "$PWD/build:/o
 ```
 
 `--deps PART` installs what a part needs (the tools, the build requirements of
-`packaging/plasma-fusion.spec.in`, and for `cpp:PACKAGE` the part's spec through `dnf builddep`).
+`packaging/fedora/plasma-fusion.spec` without the compiled parts, and for `cpp:PACKAGE` the spec
+with them, through `dnf builddep`).
 The parts are `scripts` (Python, shell and JavaScript in one pass, about 4 minutes) and
 `cpp:decoration-cpp`, `cpp:kcm-cpp`, `cpp:navigation-cpp` (a build with `--coverage`, from under
 a minute to about 4 minutes each, plus the installation). Results go to `build/coverage` unless
@@ -76,7 +77,7 @@ Details that change the numbers:
   (programs run by hand to regenerate committed tables, fonts and previews:
   `generators/icons/make_*.py`, `coverage_report.py`, `generators/fonts/make_static.py`,
   `generators/look-and-feel/previews.py`; and the package build scripts: `packaging/build-rpm.sh`,
-  which the build workflow also runs, and the compiled parts' `build-rpm.sh` and
+  which the build workflow also runs, and the compiled parts' `build-remote.sh` and
   `container-build.sh`), and **test tooling** (everything below a `tests/`, `test/` or
   `vsession/` directory, `tools/tests/`, `tools/vsession/`, `tools/container/`, and the checking
   aids a person runs by hand to compare built output with the design boards or to measure it:

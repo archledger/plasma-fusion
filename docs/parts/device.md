@@ -24,10 +24,28 @@ EFFECTS 8.3 (install side). The login check itself is described in `gate.md`; th
 ## fusion-config.sh
 
 ```
-fusion-config.sh [--install DIR] [--dry-run] [--light|--auto] [--reset-layout|--keep-layout]
-                 [--hot-corner] [--fonts] [--pen [--pen-garage]] [--screens]
-                 [--shortcuts|--keep-shortcuts]
+fusion-config.sh [--install DIR] [--dry-run] [--light|--dark] [--auto|--no-auto]
+                 [--reset-layout|--keep-layout] [--hot-corner] [--fonts] [--pen [--pen-garage]]
+                 [--screens] [--shortcuts|--keep-shortcuts]
 ```
+
+With a package it runs as `plasma-fusion setup [options]`, and `plasma-fusion update` (no options)
+after a package update. Without `--light`/`--dark` and `--auto`/`--no-auto`, a home already on
+Plasma Fusion keeps its variant (the current Global Theme) and its automatic light/dark switching;
+any other home gets Dark without switching. It records the package version it applied
+(`~/.local/state/plasma-fusion/setup-version`; gate.md, "Package updates with new settings").
+
+The command (`tools/plasma-fusion`, installed as `/usr/bin/plasma-fusion`) finds the package next
+to itself (`../share/plasma-fusion`), so the same script serves `/usr` and a Nix store path:
+
+| Command | What |
+|---|---|
+| `plasma-fusion setup [OPTIONS]` | `fusion-config.sh OPTIONS` in the session |
+| `plasma-fusion update` | `fusion-config.sh` without options (keeps the user's choices) |
+| `plasma-fusion status` | version, each compiled part and what it was built against (a part built against another KWin than the running one is named), the tested Plasma series, the version this account was set up with, per-user copies that hide the package, the login check's status |
+| `plasma-fusion restore [OPTIONS]` | `fusion-restore.sh` (by default the state before Plasma Fusion; `--latest`, `--list`) |
+| `plasma-fusion drop-user-copy` | moves the per-user copies of the package's files (`items.txt`, from an earlier `--install`) and `~/.local/libexec/plasma-fusion` to `~/.local/state/plasma-fusion/user-copy-<UTC>/` and prints how to put them back; Plasma prefers `~/.local/share`, so without this a package update would not show |
+| `plasma-fusion version` | the package version |
 
 The order of a run: backup, "My previous desktop", install, Global Theme, **layout migration**
 (inside the plasmashell restart the run needs anyway), fonts and cursor (first run only), workspaces,

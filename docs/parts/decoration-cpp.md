@@ -48,10 +48,9 @@ the reviewed Aurorae part (docs/parts/decoration.md), value for value.
 | `src/glyphs.{h,cpp}` | the board's symbolic glyphs (24-unit SVG paths, small SVG path parser) |
 | `src/fusionconfig.{h,cpp}` | reads `plasmafusionrc`, `kwinrc [Plugins]`, `kdeglobals [KDE] AnimationDurationFactor`; `snapHold()` / `snapHover()` |
 | `src/tabletmode.{h,cpp}` | KWin's tablet mode over D-Bus, never blocking: one watcher per process (asynchronous `Properties.Get` at start, then the `tabletModeChanged` signal) |
-| `plasma-fusion-decoration.spec` | RPM spec (`%cmake`, `BUILD_TESTING=OFF`) |
 | `LICENSES/GPL-2.0-or-later.txt` | licence text |
-| `tools/build-rpm.sh` | laptop side: copies the package to the ThinkPad, builds plugin + tests + RPM in the container, fetches `build/cx/out/{bin,rpm}`; `PF_REMOTE` picks another work tree below the test user's HOME (a reviewer's build does not overwrite the builder's) |
-| `tools/container-build.sh` | runs inside `localhost/plasma-fusion-build:f44-6.7.5` (cmake/ninja -j6 under nice 10, rpmbuild) |
+| `tools/build-remote.sh` | laptop side (development): copies the package to the ThinkPad, builds plugin + tests in the container, fetches `build/cx/out/bin`; the package is built by `packaging/build-rpm.sh --compiled` (system.md); `PF_REMOTE` picks another work tree below the test user's HOME (a reviewer's build does not overwrite the builder's) |
+| `tools/container-build.sh` | runs inside `localhost/plasma-fusion-build:f44-6.7.5` (cmake/ninja -j6 under nice 10) |
 | `tools/run-preview.sh` | runs `tests/pfdeco-preview` on the ThinkPad (offscreen, private D-Bus) for dark and light |
 | `tools/sheet.py` | title-bar contact sheets (board first) from preview or session screenshots |
 | `tests/preview.cpp` | `pfdeco-preview`: loads the real plugin through its factory with a mock KDecoration3 bridge, renders scenes, runs checks (not installed) |
@@ -63,13 +62,13 @@ the reviewed Aurorae part (docs/parts/decoration.md), value for value.
 ## Build
 
 ```
-packages/decoration-cpp/tools/build-rpm.sh            # CLEAN=1 for a from-scratch build
+packages/decoration-cpp/tools/build-remote.sh         # CLEAN=1 for a from-scratch build
 #  -> build/cx/out/bin/org.plasmafusion.decoration.so, build/cx/out/bin/pfdeco-preview
-#  -> build/cx/out/rpm/plasma-fusion-decoration-1.0-3.fc44.x86_64.rpm (+ debuginfo, debugsource)
-# review build: CLEAN=1 PF_REMOTE=.local/state/plasma-fusion/rcx/decoration-cpp tools/build-rpm.sh build/rcx/out
+# the package: packaging/build-rpm.sh --compiled (plasma-fusion-decoration with the others)
+# review build: CLEAN=1 PF_REMOTE=.local/state/plasma-fusion/rcx/decoration-cpp tools/build-remote.sh build/rcx/out
 # DECO-1 build (under the team's build lock):
 #   build/lead/vslot.sh --build env CLEAN=1 PF_REMOTE=.local/state/plasma-fusion/o1dc/decoration-cpp \
-#     packages/decoration-cpp/tools/build-rpm.sh build/o1dc/out
+#     packages/decoration-cpp/tools/build-remote.sh build/o1dc/out
 #   build/lead/vslot.sh env PF_REMOTE=.local/state/plasma-fusion/o1dc/decoration-cpp \
 #     packages/decoration-cpp/tools/run-preview.sh build/o1dc/out/preview
 ```
@@ -219,7 +218,7 @@ preview) the height is unknown and the normal values apply.
 
 ## Verification
 
-Offline: `tools/run-preview.sh` (after `tools/build-rpm.sh`) runs `pfdeco-preview` on the ThinkPad
+Offline: `tools/run-preview.sh` (after `tools/build-remote.sh`) runs `pfdeco-preview` on the ThinkPad
 under `dbus-run-session`, offscreen, with scratch config under
 `~test/.local/state/plasma-fusion/decoration-cpp/preview-config-*` (the user's own config is never
 read or written). It loads the real plugin, draws 22 scenes per scheme and scale over the Main /

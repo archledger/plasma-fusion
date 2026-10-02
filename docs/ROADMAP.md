@@ -9,7 +9,8 @@ are welcome in GitHub Discussions; the way decisions are made is in
 
 - Experimental. Built for and tested on Fedora 44 KDE with Plasma 6.7.5, KDE Frameworks 6.30 and
   Qt 6.11, on two machines: a convertible (ThinkPad X13 Yoga Gen 4) and a laptop (ASUS Zenbook).
-- No releases yet. Users build from `main` ([`README.md`](../README.md), "Quick start").
+- No releases yet; the first, 0.2.0, is being prepared ([`RELEASING.md`](RELEASING.md)). Until
+  then users build from `main` ([`README.md`](../README.md), "From the sources").
 - One maintainer.
 
 ## Planned

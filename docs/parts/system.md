@@ -1,58 +1,81 @@
-# Part: system-wide package and login greeter
+# Part: system-wide packages and login greeter
 
-Phase 2, root on the ThinkPad. Three pieces:
+Three pieces:
 
-1. **`plasma-fusion` RPM** (noarch): everything of Plasma Fusion that all users can share, installed
-   under `/usr/share`, built on the laptop with `rpmbuild` from the output of `tools/build.sh`.
+1. **The packages** (one source, one version, four packages on every channel): `plasma-fusion`,
+   everything of Plasma Fusion that all users can share (themes, widgets, icons, fonts, KWin
+   scripts, the helpers, the setup tools and the `plasma-fusion` command), and the compiled parts
+   `plasma-fusion-decoration`, `plasma-fusion-settings` and `plasma-fusion-navigation`. Fedora
+   (Copr), Arch (AUR), Ubuntu (PPA), KDE neon and Debian testing (release `.deb`s) and NixOS (flake
+   or module) build them from the same files; the installer (docs/parts/installer.md) picks the
+   channel.
 2. **Login greeter styling** (`tools/system/greeter-apply.sh`, `greeter-restore.sh`): Plasma Fusion
    Dark for the plasma-login-manager 6.7.5 greeter, the way System Settings' "Apply Plasma
    Settings…" would do it, plus the greeter wallpaper.
 3. **Kate and Marknote** installed with dnf for the design's Code and Notes slots.
 
-Owned files: `packaging/` (spec template, build script, rpmlint filters, licence texts),
-`tools/system/greeter-apply.sh`, `tools/system/greeter-restore.sh`, this file. The per-user step
-stays `tools/device/fusion-config.sh` (not owned here; see "Needs from other parts").
+Owned files: `packaging/` (version, source tarball, the shared install script, the Fedora spec,
+the PKGBUILD, the Debian packaging, the Nix packages, rpmlint filters, licence texts),
+`.packit.yaml`, `tools/plasma-fusion`, `tools/system/greeter-apply.sh`,
+`tools/system/greeter-restore.sh`, this file. The per-user step is `plasma-fusion setup`
+(`tools/device/fusion-config.sh`; not owned here).
 
-## 1. The RPM
+## 0. One version, one source, one install script
+
+| File | What |
+|---|---|
+| `VERSION` | the only version (`0.2.0`); `packaging/check-version.sh` checks that the spec, the PKGBUILD and the Debian changelog agree (build workflow, Packit) |
+| `packaging/version.sh [--rpm\|--deb\|--plain]` | the version of a commit: `X.Y.Z` at the tag `vX.Y.Z`; before it `X.Y.Z~N.gitHASH` (N commits in all), after it `X.Y.Z^N.gitHASH` (rpm) or `X.Y.Z+N.gitHASH` (dpkg) with N commits since the tag. A snapshot sorts above the release before it and below the one it leads to |
+| `packaging/make-source.sh [--ref REF\|--worktree]` | `plasma-fusion-X.Y.Z.tar.gz`: `git archive` of a tag (the release asset every channel builds from) or the working tree (test builds); sorted, owners 0, the commit's time, `gzip -n`: the same commit gives the same bytes |
+| `packaging/install-tree.sh` | installs the shared part into a package root for every channel: what `tools/build.sh` staged, the Plymouth theme (as the source `plymouth-install.sh` installs, or on NixOS as a theme), the per-user templates, the setup tools, `plasma-fusion` in `bin/`, `version`, `tested-plasma.txt`, `items.txt` and the documentation. `--libexecdir` (Arch: `/usr/lib`) and `--system-share` (NixOS: the system profile) set the paths the charge limit's polkit action and tile, the on-screen keyboard's desktop file and the icon names handed back to Breeze and hicolor use; every replacement must find its text. It fails when the build staged anything it does not install |
+| `packaging/tested-plasma.txt` | the Plasma series this version was tested with (`6.7`); the login check records no other series as tested (gate.md) |
+| `packaging/fedora/plasma-fusion.spec` | the Fedora spec Copr builds (`.packit.yaml`) |
+| `packaging/arch/PKGBUILD` | the AUR package (split: `plasma-fusion` any, the compiled parts x86_64), from the signed tag; a pacman hook names the compiled part due for a rebuild after a kwin or kdecoration upgrade |
+| `packaging/debian/`, `packaging/build-deb.sh` | one source package, four binaries; `--target ubuntu:SERIES` (PPA, `X.Y.Z-0ppa1~SERIES1`), `neon`, `debian:testing` (`X.Y.Z-1~TARGET1`) or `plain` (`X.Y.Z-1`, the shared part for other Debian-family systems); `--source` makes the unsigned source package for Launchpad. The navigation package depends on the KWin series it was built against (`kwin-wayland (>= built, << next minor~)`) |
+| `packaging/nix/`, `flake.nix` | the Nix packages and the NixOS module (nixos.md) |
+| `packaging/stamp-installer.sh` | the release's installer (installer.md) |
+
+Each compiled part installs `share/plasma-fusion/built-against/<part>` (the KWin or KDecoration and
+Qt it was built with); `plasma-fusion status` compares it with the running KWin. The CI workflow
+`packages` builds, lints, installs and checks every channel in a container of its system
+(`tools/tests/packages/`); ci.md.
+
+## 1. The RPMs
 
 ### Build
 
 ```
-packaging/build-rpm.sh [--topdir DIR] [--no-lint]      # default DIR: build/rpmbuild (git-ignored)
+packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: build/rpmbuild (git-ignored)
 ```
 
-* Version `0.1.0`; Release `<number of commits>.git<short revision>`, plus `.dirty<UTC yyyymmddHHMM>`
-  when the working tree differs from that revision (each dirty test build sorts newer than the one
-  before; a new commit raises the commit count). Example: `0.1.0-6.git913b0c8.dirty202609292204.fc44`.
+* `packaging/fedora/plasma-fusion.spec` with this tree's version (`packaging/version.sh --rpm`) and
+  Release `1`, plus `.dirty<UTC yyyymmddHHMM>` when the working tree differs from the revision
+  (each dirty test build sorts newer than the one before). Example:
+  `0.2.0~281.gitcde5bb0-1.fc44`. A snapshot gets its own changelog entry.
+* Without `--compiled` it builds the shared part only (`rpmbuild --without compiled`; the build
+  workflow does this); with it all four packages (KWin, KDecoration and KDE Frameworks development
+  packages needed: `dnf builddep packaging/fedora/plasma-fusion.spec`).
 * The source tarball is the working tree as it is (tracked plus untracked, not git-ignored files;
   `git ls-files --cached --others --exclude-standard`), stable order, owners 0, the revision's
   commit time as mtime. git is only read (`--no-optional-locks`: no index refresh).
-* `packaging/plasma-fusion.spec.in` gets version, release, revision and changelog date filled in
-  and is written to `<topdir>/SPECS/plasma-fusion.spec`; `rpmbuild -ba` then builds SRPM and RPM,
-  and rpmlint checks spec, SRPM and RPM with `packaging/plasma-fusion.rpmlintrc`.
 * Repeatable: `SOURCE_DATE_EPOCH` is the revision's commit time, rpm takes it as the package's
   build time (`use_source_date_epoch_as_buildtime`) and clamps the files' times to it, and the
-  build host is recorded as `reproducible`. Two builds of one committed revision in the same
-  directory give bit-for-bit identical source and binary RPMs (checked 2026-10-02, see
-  docs/parts/ci.md). Built in another directory, the payload stays the same, but the source RPM's
-  header keeps the expanded spec, which names rpmbuild's top directory, and the binary RPM's header
-  records the source RPM's digest.
+  build host is recorded as `reproducible`.
 * `%build` runs `tools/build.sh` into `_stage/` (no display, `QT_QPA_PLATFORM=offscreen`, session
-  variables removed). BuildRequires: `python3`, `python3-pillow`, `python3-pyside6` (the imports of
-  the generators the build runs; the GTK CSS check uses PyGObject only when present).
-* `%install` copies `_stage/.local/share/<dir>` to `/usr/share/<dir>` with `cp -a` (links kept)
-  and `_stage/.local/libexec/plasma-fusion` to `/usr/libexec/plasma-fusion`, sets 0755/0644
-  (scripts in `tools/` and the programs in libexec 0755). It then compares the staged file lists
-  with what it copied and fails when the build staged anything without a copy line (a new part
-  writing to a new directory below `.local/share` or `.local/libexec`, or anything outside
-  `.local/share`, `.local/libexec` and `.config`), so nothing is dropped without a word.
+  variables removed) and the Plymouth generator; with the compiled parts, the three CMake builds
+  (the settings page's QML gets a time stamp derived from its sources, kcm-cpp.md).
+* `%install` runs `packaging/install-tree.sh` and `cmake --install` of the three parts; the effect's
+  QML files get times derived from their content (navigation-cpp README).
 * `%check`: every naming-table package has its `metadata.json` (the pen menu, the desktop cards,
   the two layout templates and the tablet script included), all four icon/cursor themes their
   `index.theme`, the login background exists, and what the per-user step takes from the package
-  is there (power-tiers unit and program, pen templates, login check, pen defaults, the Global
-  Themes' `ensure-topbars.js`, the font fallback, the switcher's shader, the snap script's
-  `ensureTopBars.js`); no absolute links; no link is dangling (Breeze's two themes are linked
-  into the buildroot for the moment of the check).
+  is there (power-tiers unit and the five helpers, pen templates, login check, pen defaults, the
+  Global Themes' `ensure-topbars.js`, the font fallback, the switcher's shader, the snap script's
+  `ensureTopBars.js`, the command and its version files, each compiled part's record); no absolute
+  links; no link is dangling (Breeze's two themes are linked into the buildroot for the moment of
+  the check).
+* The shared part holds no compiled code but is built per architecture with the compiled parts:
+  rpm builds noarch subpackages of an arched package, not the other way round.
 
 ### Contents (`rpm -qpl`, 12 000+ entries, 10 MB)
 
@@ -78,6 +101,9 @@ packaging/build-rpm.sh [--topdir DIR] [--no-lint]      # default DIR: build/rpmb
 | `/usr/share/plasma-fusion/config/` | the build's `.config`: `gtk-{3,4}.0/{gtk.css,plasma-fusion.css}`, `fontconfig/conf.d/60-plasma-fusion-fallback.conf`, `systemd/user/plasma-fusion-powerfx.service` | templates for the per-user step only (the user unit is installed from `plasma-fusion/powerfx/` instead); the package writes nothing into a home directory |
 | `/usr/share/plasma-fusion/tools/{device,system,pen}/*.sh`, `tools/device/gate/plasma-fusion-gate.sh`, `tools/device/previous-theme.py` | `tools/device`, `tools/system`, `tools/pen` | shebangs become `/usr/bin/bash` (Fedora's brp-mangle-shebangs); the login check and "My previous desktop" generator sit where `fusion-config.sh` expects them |
 | `/usr/share/plasma-fusion/docs/` | `README.md`, `docs/PLAN.md`, `docs/parts/*.md` | `%doc` |
+| `/usr/bin/plasma-fusion` | `tools/plasma-fusion` | `setup`, `update`, `status`, `restore`, `drop-user-copy`, `version` (device.md) |
+| `/usr/share/plasma-fusion/{version,tested-plasma.txt,items.txt}` | `VERSION`, `packaging/tested-plasma.txt`, install-tree.sh | the version, the tested Plasma series (login check), the package's top-level entries (`drop-user-copy`) |
+| `/usr/share/plasma-fusion/built-against/{decoration,settings,navigation}` | the compiled parts' CMake | one per installed compiled part |
 | `/usr/share/licenses/plasma-fusion/{GPL-2.0-or-later,CC-BY-SA-4.0}.txt` | `packaging/LICENSES/` | `%license` |
 
 Not in the RPM: per-user files (`~/.config/gtk-*`, the lock-screen systemd drop-in, kdeglobals and
@@ -107,33 +133,39 @@ each carry their own); following the icons part ("No icon cache is shipped") the
 themes get no `icon-theme.cache`, so there is no cache that could go stale after an update. KPackage
 reads `metadata.json` directly (no sycoca step).
 
-**Requires**: `plasma-workspace`, `plasma-desktop`, `libplasma`, `kwin`, `aurorae`, `plasma5support`
-(all >= 6.7), `breeze-icon-theme >= 6.30`, `fonts-filesystem`, `kde-filesystem`, `python3`,
-`/usr/bin/{kreadconfig6,kwriteconfig6,busctl,setpriv}` (the scripts). **Suggests**: `kate`,
-`marknote`, `konsole`, `plasma-login-manager`. **Recommends**: `xournalpp` (the pen menu's tiles).
+**Requires** (`plasma-fusion`): `plasma-workspace`, `plasma-desktop`, `libplasma`, `kwin`,
+`aurorae`, `plasma5support` (all >= 6.7), `breeze-icon-theme >= 6.30`, `fonts-filesystem`,
+`kde-filesystem`, `python3`, `polkit`, `/usr/bin/{kreadconfig6,kwriteconfig6,busctl,setpriv}` (the
+scripts), Pillow and rsvg-convert or PySide6 (app icons). **Recommends**: the decoration and
+settings parts of the same build, `xournalpp` (the pen menu's tiles). **Suggests**: the navigation
+part, `python3-pyside6`, `kate`, `marknote`, `konsole`, `plasma-login-manager`. Each compiled part
+requires `plasma-fusion` of the same version and release, and KDecoration or KWin >= 6.7.
 
-**rpmlint**: `0 errors, 0 warnings` with four justified filters (`packaging/plasma-fusion.rpmlintrc`):
-`dangling-relative-symlink` for the Breeze hand-back links (target in a required package; `%check`
-proves they resolve), `no-url-tag` and `invalid-url Source0` (no public upstream; the tarball comes
-from the working tree), `incorrect-fsf-address` (the GPL text as published), `spelling-error 'usr'`
-(paths in `%description`). Unfiltered, rpmlint reports exactly these: 1 658 dangling-relative-symlink,
-2 no-url-tag (RPM, SRPM), 2 invalid-url (spec), 1 incorrect-fsf-address, 1 spelling-error (SRPM).
+**rpmlint**: no errors with the justified filters of `packaging/plasma-fusion.rpmlintrc`:
+`dangling-relative-symlink` for the Breeze and hicolor hand-back links (targets in a required
+package or an app's own; `%check` proves the Breeze ones resolve), `dangling-symlink` for the Flatpak
+ones, `no-binary` for the shared part (arched only because of the compiled subpackages),
+`incorrect-fsf-address` (the GPL text as published, in each package), `spelling-error 'usr'` (paths
+in `%description`). The warnings left: no manual page for `plasma-fusion`, no documentation in the
+decoration and settings packages, the two font files the Plymouth theme carries again, and a
+desktop file without its own binary (System Settings runs the module).
 
 ### Install, upgrade, remove (root)
 
 ```
-dnf install ./plasma-fusion-0.1.0-<release>.noarch.rpm     # also upgrades an older build
+dnf install ./plasma-fusion*-0.2.0*.rpm                    # also upgrades an older build
 rpm -V plasma-fusion                                        # verify (no output = clean)
 dnf remove plasma-fusion                                    # rollback (run greeter-restore.sh first
                                                             # when the greeter uses Plasma Fusion)
 ```
 
 Per-user copies in `~/.local/share` win over `/usr/share` (XDG data order), so installing the
-package does not change a session that already has the per-user build (the ThinkPad's real session).
+package does not change a session that already has the per-user build: `plasma-fusion status` warns
+about them and `plasma-fusion drop-user-copy` moves them aside (device.md).
 
-Each user then runs, inside their Plasma session: `/usr/share/plasma-fusion/tools/device/fusion-config.sh`
-(no `--install`). As packaged today it misses four things for a system-wide install; see
-"Needs from other parts" for the patch.
+Each user then runs, inside their Plasma session, `plasma-fusion setup` (after later updates
+`plasma-fusion update`; a login notice says when). Most people use the installer instead
+(installer.md), which picks the channel and runs that step.
 
 ### Rebuilt Fedora packages
 

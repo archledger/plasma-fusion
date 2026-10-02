@@ -161,6 +161,28 @@ versions=changed        # or tested
 held=lockscreen decoration
 ```
 
+### An untested Plasma series
+
+A package ships `tested-plasma.txt` (the Plasma series this Plasma Fusion version was tested with,
+`packaging/tested-plasma.txt`); `fusion-config.sh` passes it to `deploy` as `PF_GATE_TESTED`. When
+the installed KWin belongs to another series (6.8.0; a 6.7.80 or 6.7.90 beta counts as 6.8),
+`deploy` records the versions with `untested-series=6.8` and says so; every login then treats them as
+changed: the parts of rule 1 stay off, the log says "Plasma 6.8 is not among the series this
+Plasma Fusion version was tested with", and the notification reads "This Plasma Fusion version was
+not tested with Plasma 6.8. This session uses ... until a Plasma Fusion update that supports Plasma
+6.8." (no "run fusion-config.sh", which would not help). A version tested with 6.8 lists it, and its
+`deploy` records the same versions without the marker. Without a list (a checkout without
+`packaging/`) every series is recorded as tested, as before. Unit tests: cases `u1` to `u5`.
+
+### Package updates with new settings
+
+`fusion-config.sh` records the version it applied in `~/.local/state/plasma-fusion/setup-version`.
+At login the check compares it with the package's `plasma-fusion/version` (the first in
+`XDG_DATA_DIRS`); when they differ and nothing else is queued, it queues one notification per
+version, "Plasma Fusion X is installed: run plasma-fusion update in a terminal to apply its settings
+(your own choices are kept)" (`gate/update-notified`). A safe-mode notification comes first; the
+update notice follows at the next login. Unit tests: case `v`.
+
 ## fusion-config.sh and fusion-restore.sh
 
 `fusion-config.sh` (dry run prints all of it):

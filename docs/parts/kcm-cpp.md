@@ -83,8 +83,7 @@ the service; a change of magnification writes `UserDockMagnify` instead of the d
 | `src/ui/ChoiceRow.qml`, `ActionRow.qml` | a label with a segmented control (side by side, stacked in a narrow window), an action with its explanation and button |
 | `packages/common/FusionMetrics.qml` (shared, not this part's) | compiled into the module's resources next to `main.qml` (`src/CMakeLists.txt`; `common/` in the source tarball): board text through `m.font()`, text-holding heights through `m.px()`, so the page follows the user's font size (identical at the default font) |
 | `icons/plasmafusion-logo.svg` | the logo mark (three discs), installed as hicolor `apps/plasmafusion-logo` (CC-BY-SA-4.0) |
-| `plasma-fusion-settings.spec` | RPM spec (Fedora 44, `%cmake_kf6`) |
-| `build-rpm.sh`, `container-build.sh` | build in the container on the ThinkPad, fetch RPMs and an unpacked root |
+| `build-remote.sh`, `container-build.sh` | development: build in the container on the ThinkPad and fetch the installed tree (`root/`) for test sessions; the package is built by `packaging/build-rpm.sh --compiled` (system.md) |
 | `LICENSES/` | GPL-2.0-or-later (code), CC-BY-SA-4.0 (icon) |
 | `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh` |
 | `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and drives the module with random commands, saving included, in a scratch HOME with stand-ins for the programs it starts. The `compiled` and `sanitizers` workflows run both (docs/parts/ci.md, "Dynamic analysis") |
@@ -92,7 +91,7 @@ the service; a change of magnification writes `UserDockMagnify` instead of the d
 ## Build
 
 ```
-packages/kcm-cpp/build-rpm.sh [OUTDIR]          # default OUTDIR build/kcm-cpp
+packages/kcm-cpp/build-remote.sh [OUTDIR]       # default OUTDIR build/kcm-cpp
 ```
 
 It packs `CMakeLists.txt src icons LICENSES` and `common/FusionMetrics.qml` (from

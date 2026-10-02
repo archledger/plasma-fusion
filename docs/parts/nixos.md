@@ -18,11 +18,13 @@ do not support (`find_package(KWin 6.7)`; 6.7-only QML interfaces), so until a N
 | `packaging/nix/plasma-fusion.nix` | `{ pkgs, src, version }` → `plasma-fusion` (the shared part), `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation` |
 | `packaging/nix/module.nix` | `programs.plasma-fusion = { enable; src; compiledParts; plymouth; }` |
 
-The shared package is the noarch RPM's payload laid out under `$out/share` and
-`$out/libexec/plasma-fusion`, with the Fedora paths replaced where a file names them: the charge
-limit's polkit action and the quick settings tile name the helper's store path (pkexec matches the
-action's `exec.path`), the icon names handed back to Breeze and hicolor point into
-`/run/current-system/sw/share/icons`, and the Plymouth theme names its store path. The per-user
+The shared package is installed by `packaging/install-tree.sh`, as on every channel
+(system.md): the same files under `$out/share`, `$out/libexec/plasma-fusion` and
+`$out/bin/plasma-fusion`, with the paths set for NixOS: the charge limit's polkit action and the
+quick settings tile name the helper's store path (pkexec matches the action's `exec.path`), the
+icon names handed back to Breeze and hicolor and the on-screen keyboard's desktop file point into
+`/run/current-system/sw/share`, and the Plymouth theme names its store path. All four packages take
+their version from `VERSION`. The per-user
 templates (`share/plasma-fusion/config`) and the setup scripts (`share/plasma-fusion/tools`) come
 along; `fusion-config.sh` finds the templates through `XDG_DATA_DIRS`, and the helpers through
 `/run/current-system/sw/libexec/plasma-fusion` (`environment.pathsToLink`). The user services'
@@ -78,14 +80,10 @@ in
 ```
 
 Then `sudo nixos-rebuild switch`, and as each user, inside the Plasma session (it takes a backup
-first and prints the undo command):
-
-```
-/run/current-system/sw/share/plasma-fusion/tools/device/fusion-config.sh
-```
+first and prints the undo command): `plasma-fusion setup`.
 
 Log out and in once. To update, move `rev` to a newer commit and rebuild; to remove, undo the
-per-user step with `fusion-restore.sh <backup>`, drop the import and rebuild (or boot the previous
+per-user step with `plasma-fusion restore`, drop the import and rebuild (or boot the previous
 generation).
 
 ## Not covered yet
