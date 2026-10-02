@@ -459,8 +459,9 @@ def main():
             md += ["", f"{names[lang][0]} files counted with every code line not run:", ""]
             md += [f"- `{rel}` ({r['total']} code lines): {r['note']}" for rel, r in unrun]
 
-    # Python and JavaScript in heredocs of the shell scripts: in none of the figures above.
-    emb = embedded_results(root, by_lang.get("shell", []))
+    # Python and JavaScript in heredocs of the shell scripts: in none of the figures above. Only
+    # where the scripts were measured (not in a run of compiled parts alone).
+    emb = embedded_results(root, by_lang.get("shell", [])) if "shell" in results else {}
     if emb:
         tot = {w: {"python": 0, "python_blocks": 0, "js": 0, "js_blocks": 0, "unparsed_blocks": 0} for w in KINDS}
         for rel, r in emb.items():
