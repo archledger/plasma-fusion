@@ -752,12 +752,19 @@ load_tested() {
 }
 
 use_db() { DB=$1; read -r -a PACKAGES <<<"${DB_PACKAGES[$1]}"; }
-# db_tool DB: REPLY = the program that reads that database (return 1: not installed).
+# db_tool DB: REPLY = the program that reads that database (return 1: not installed, or a pacman or
+# dpkg database without packages, as Fedora's own pacman and dpkg packages leave it).
 db_tool() {
+  local pkgs
   case $1 in
     rpm) REPLY=${PF_GATE_RPM:-rpm} ;;
-    pacman) REPLY=pacman ;;
-    dpkg) REPLY=dpkg-query ;;
+    pacman)
+      pkgs=("$SYSROOT"/var/lib/pacman/local/*/)
+      [ -d "${pkgs[0]-}" ] || return 1
+      REPLY=pacman ;;
+    dpkg)
+      [ -s "$SYSROOT/var/lib/dpkg/status" ] || return 1
+      REPLY=dpkg-query ;;
     nix)
       [ -e "$NIX_SW" ] || return 1
       REPLY=nix-store
@@ -816,7 +823,7 @@ read_cache() {
 # CUR from the first package database that knows one of its packages: VERS_STATE ok, with DB,
 # PACKAGES and STAMP that database's. A database that does not answer within 3 s ends the search;
 # one whose tool cannot run (timeout's 125-127) or dies of a signal is passed over. VERS_ASKED
-# names the databases asked ("rpm", "rpm and pacman"; empty: none is installed).
+# names the databases asked ("rpm", "rpm and pacman"; empty: none is installed or has packages).
 query_versions() {
   local db prog out rc line n v p vs sorted asked=()
   declare -A got=()

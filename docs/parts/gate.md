@@ -440,7 +440,9 @@ off.
 
 The versions now come from the first package database that knows one of the packages (a foreign
 package manager installed next to the system's, such as pacman or dpkg on Fedora, knows none of
-them and is skipped):
+them and is skipped). pacman and dpkg are asked only when their database has packages: Fedora's own
+pacman and dpkg packages leave `/var/lib/pacman/local` without package directories and
+`/var/lib/dpkg/status` empty, so on Fedora they are not run and a reason names rpm alone.
 
 | Database | Query | Package names | Version kept | Cache stamp |
 |---|---|---|---|---|
@@ -495,7 +497,9 @@ longer needs to be skipped where the compiled decoration is installed). New case
   switches off.
 - `v4` no database: `deploy` fails and records nothing; logins switch off with the reason, one
   notification; `v4b` a record made with rpm and no database later; `v4c` the earlier check's
-  `no-rpm` record.
+  `no-rpm` record; `v4d` Fedora with empty pacman and dpkg databases and an rpm that reports
+  nothing: pacman and dpkg are not run, the notification says "(rpm could not report the installed
+  versions)" as before these backends.
 - `v5` an rpm that knows none of the packages (next to pacman) does not answer; `v5b` neither does
   one that exits 127 or crashes; `v6` a record from rpm against versions from pacman.
 - `v7` the engine of a95f707 records and logs in (fake rpm, the machine's rpm database stamp), then

@@ -877,6 +877,23 @@ RPM='' ROOT=$BASE/root-none
 gate login
 check "v4b: database gone: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
 check "v4b: database gone: notification says why" grep -q 'cannot tell which Plasma it was checked with (no package database' "$S/notify"
+# v4d: Fedora with Fedora's own pacman and dpkg packages (databases without packages), and rpm
+# reporting nothing: pacman and dpkg are not asked, and the reason names rpm alone.
+make_home "$BASE/v4d"
+S=$H/.local/state/plasma-fusion/gate
+ROOT=$BASE/root-fedora
+mkdir -p "$ROOT/var/lib/pacman/local" "$ROOT/var/lib/dpkg" "$ROOT/usr/lib/sysimage/rpm"
+echo 9 >"$ROOT/var/lib/pacman/local/ALPM_DB_VERSION"
+: >"$ROOT/var/lib/dpkg/status"
+: >"$ROOT/usr/lib/sysimage/rpm/rpmdb.sqlite"
+RPM=$BASE/fake-rpm FAKEBIN=$FB/pacman:$FB/dpkg
+gate deploy >/dev/null 2>&1
+np=$(wc -l <"$FB/pacman/calls") nd=$(wc -l <"$FB/dpkg/calls")
+RPM=$FB/rpm-empty/rpm
+rm -f "$S/cache"
+gate login
+check "v4d: empty pacman and dpkg databases: not asked" [ "$(wc -l <"$FB/pacman/calls") $(wc -l <"$FB/dpkg/calls")" = "$np $nd" ]
+check "v4d: the reason names rpm alone" grep -q 'cannot tell which Plasma it was checked with (rpm could not report the installed versions)' "$S/notify"
 # v4c: a record of the earlier check on a system without rpm (every version "no-rpm").
 make_home "$BASE/v4c"
 S=$H/.local/state/plasma-fusion/gate
