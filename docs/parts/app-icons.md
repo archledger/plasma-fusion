@@ -50,7 +50,9 @@ fusion-config.sh, `/usr/libexec/plasma-fusion/` by the package):
    app icons gets a file under that name (what other programs look up); each app without a design
    also gets one under `plasmafusion_app.<desktop id>` with `_` for `-` (what the shell looks up; no
    dash, so the icon loader's dash fallback cannot answer it with another icon). File paths and
-   generic Breeze names get only the per-app file, so the generic name keeps its meaning.
+   generic Breeze names get only the per-app file, so the generic name keeps its meaning. A name
+   whose file would not fit in a file name (255 bytes; a desktop id below Wine's nested start menu
+   can be longer) is left out: that app keeps its own icon on the neutral tile.
 4. Writes the marker icon `plasmafusion-familiar` (kept for older shells), records what it built from which file and
    mtime (`~/.local/state/plasma-fusion/app-icons.json`) and sends KIconLoader's `iconChanged`.
 
@@ -102,7 +104,8 @@ hands back get a per-app tile only; dropping a familiar icon puts the theme's li
 the backup is the newest file; standard library only),
 `packages/appicons/tests/parse_test.py` (what the tool reads from other programs' files: a desktop
 entry's first value of a key wins, other groups and hidden entries are left out; plasmafusionrc and
-`designed-apps.txt` with bytes that are not UTF-8 are read, not a crash; standard library only),
+`designed-apps.txt` with bytes that are not UTF-8 are read, not a crash; a desktop id too long for
+a file name gets no per-app tile and stops nothing; standard library only),
 `packages/appicons/tests/compose_test.py`
 (a square and a rounded square become the tile; a one-colour circle gets a light tile in its hue; a
 three-colour logo the neutral tile; a wide shape a plate).

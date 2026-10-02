@@ -143,6 +143,16 @@ def app_tile_name(did):
     return "plasmafusion_app." + did.replace("-", "_")
 
 
+def fits(name):
+    """Whether an icon's file and the temporary file it is written through fit in a file name (255
+    bytes). A desktop id below nested application directories (Wine's start menu) can be longer:
+    that app keeps its own icon on the neutral tile."""
+    try:
+        return len(os.fsencode(name + ".svg.tmp")) <= 255
+    except UnicodeError:
+        return False
+
+
 def icon_bases():
     bases = [DATA / "icons", HOME / ".icons"] + [b / "icons" for b in FLATPAK] + [b / "icons" for b in SYSTEM_DATA]
     return [b for b in bases if b.is_dir()]
@@ -233,14 +243,14 @@ def wanted():
     handed_back = handed_back_names()
     out = {}
     for name in sorted(desktop_icons()):
-        if name in skip or name in handed_back:
+        if name in skip or name in handed_back or not fits(name):
             continue
         src = find_original(name, bases)
         if src:
             out[name] = {"src": str(src), "mtime": int(src.stat().st_mtime)}
     for did, icon in desktop_entries():
         did = did[:-len(".desktop")] if did.endswith(".desktop") else did   # the shell's app id
-        if did in skip or icon in skip:
+        if did in skip or icon in skip or not fits(app_tile_name(did)):
             continue
         src = find_any(icon, bases)
         if src:

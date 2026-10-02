@@ -3,7 +3,8 @@
 #
 # What the familiar icon tool reads from files other programs write: desktop entries (the first
 # value of a key wins, other groups and hidden entries are left out), plasmafusionrc and the theme's
-# designed-apps.txt with bytes that are not UTF-8 (read, not a crash). Standard library only.
+# designed-apps.txt with bytes that are not UTF-8 (read, not a crash), and desktop ids too long for
+# an icon file name (no per-app tile, the other apps keep theirs). Standard library only.
 # Usage: python3 parse_test.py <path to plasma-fusion-app-icons>
 import importlib.machinery, importlib.util, os, pathlib, sys, tempfile
 
@@ -54,8 +55,31 @@ with tempfile.TemporaryDirectory() as d:
     except ValueError as e:
         fails.append(f"designed_names() failed on a Latin-1 line: {e!r}")
 
+    # A desktop id below nested application directories (Wine's start menu) can be longer than a
+    # file name: that app gets no per-app tile, the others keep theirs.
+    (d / "config/plasmafusionrc").write_text("[Icons]\nAppIcons=familiar\n")
+    (root / "designed-apps.txt").write_text("org.kde.kate\n")
+    apps = d / "data/applications"
+    deep = apps / "wine/Programs" / ("A Vendor With A Long Name " * 4) / ("A Program With A Long Name " * 4)
+    deep.mkdir(parents=True)
+    (deep / "Uninstall.desktop").write_text("[Desktop Entry]\nType=Application\nName=Uninstall\nIcon=foo\n")
+    (apps / "foo.desktop").write_text("[Desktop Entry]\nType=Application\nName=Foo\nIcon=foo\n")
+    (d / "data/icons/hicolor/scalable/apps").mkdir(parents=True)
+    (d / "data/icons/hicolor/scalable/apps/foo.svg").write_text("<svg/>")
+    long_id = str((deep / "Uninstall.desktop").relative_to(apps)).replace("/", "-")[:-len(".desktop")]
+    if len(tool.app_tile_name(long_id) + ".svg") <= 255:
+        fails.append("the long desktop id of the test is not too long")
+    want = tool.wanted()
+    if sorted(want) != ["foo", "plasmafusion_app.foo"]:
+        fails.append(f"wanted() {sorted(want)}, expected foo and plasmafusion_app.foo only")
+    for name in want:
+        try:
+            tool.write_icon(tool.THEMES[0], name, tool.MARK + "<svg/>")
+        except OSError as e:
+            fails.append(f"write_icon({name[:40]}...) failed: {e}")
+
     for f in fails:
         print("app-icons parse test:", f, file=sys.stderr)
     if fails:
         sys.exit(1)
-    print("app-icons parse test: desktop entries, plasmafusionrc and designed-apps.txt read")
+    print("app-icons parse test: desktop entries, plasmafusionrc and designed-apps.txt read; long ids left out")
