@@ -12,9 +12,13 @@
 # pfstat.py snapshots every session process around each step (stats.jsonl), pfinput marks the
 # input times (marks.jsonl), winmon.js logs window mapping and the dock windows' geometry changes
 # through dbus-monitor (dbusmon.log).
-# Options from ~/pf-perf.env (written by run.sh): PF_DOCK_MAGNIFY=off turns the dock's
-# magnification off after the install (the E12 reference); PFSTAT_SUDO=1 lets pfstat.py read
-# KWin's GPU counters with sudo -n (KWin's /proc entries are private).
+# Options from ~/pf-perf.env (written by run.sh): PF_ARM=stock measures Fedora's stock Plasma
+# instead (no install, an empty HOME; the sweep crosses the stock panel's task icons, x +10..+420,
+# and "quick settings" is the system tray's expander, 150 px from the panel's right end, as in the
+# perf-measure study); PF_APP_ICONS=familiar draws the familiar app icons after the install;
+# PF_DOCK_MAGNIFY=off turns the dock's magnification off after the install (the
+# E12 reference); PFSTAT_SUDO=1 lets pfstat.py read KWin's GPU counters with sudo -n (KWin's /proc
+# entries are private).
 # shellcheck shell=bash
 exec 2>&1
 [ -f "$HOME/pf-perf.env" ] && . "$HOME/pf-perf.env"
@@ -23,17 +27,25 @@ T=$HOME/pf-tools/tests
 P() { python3 "$PFV/pfinput.py" "$@" >>"$OUT/pfinput.log" 2>&1; }
 S() { python3 "$T/perf/pfstat.py" "$1"; }
 M() { python3 -c 'import json,time,sys; open(sys.argv[1],"a").write(json.dumps({"mark":sys.argv[2],"epoch":time.time(),"mono":time.monotonic()})+"\n")' "$PFINPUT_MARKS" "$1"; }
-echo "arm=fusion kwin=$KWIN_PID" >"$OUT/arm.txt"
+ARM=${PF_ARM:-fusion}
+echo "arm=$ARM kwin=$KWIN_PID" >"$OUT/arm.txt"
 M begin
-bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fusion-config.log" 2>&1
-echo "fusion-config rc=$?" >>"$OUT/fusion-config.log"
+if [ "$ARM" = fusion ]; then
+  bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fusion-config.log" 2>&1
+  echo "fusion-config rc=$?" >>"$OUT/fusion-config.log"
+  # Familiar app icons (PF_APP_ICONS=familiar): what the user service draws at login, drawn here
+  # before the fresh plasmashell (a private session has no systemd user manager).
+  if [ "${PF_APP_ICONS:-designs}" = familiar ]; then
+    "$HOME/.local/libexec/plasma-fusion/plasma-fusion-app-icons" refresh >>"$OUT/arm.txt" 2>&1
+  fi
+fi
 # A fresh plasmashell (what a new login gives) and a KWin reconfigure.
 kquitapp6 plasmashell >/dev/null 2>&1; sleep 2
 M shell-start
 plasmashell >>"$OUT/plasmashell2.log" 2>&1 &
 wait_for_name org.kde.plasmashell
 M shell-on-bus
-if [ "${PF_DOCK_MAGNIFY:-}" = off ]; then
+if [ "$ARM" = fusion ] && [ "${PF_DOCK_MAGNIFY:-}" = off ]; then
   sleep 3
   evaljs - >>"$OUT/arm.txt" 2>&1 <<'JS'
 panels().forEach(function (p) { p.widgets("org.plasmafusion.dock").forEach(function (w) {
@@ -50,15 +62,20 @@ sleep 20
 # Pointer targets from the live layout: the dock's middle line (its window includes the
 # floating margin and the headroom for magnified icons) and the status pill at the top right.
 python3 "$T/lib/pfkwin.py" windows >"$OUT/windows-start.json" 2>>"$OUT/errors.log"
-read -r W H SWX1 SWX2 SWY QSX QSY < <(python3 - "$OUT/windows-start.json" <<'PY'
+read -r W H SWX1 SWX2 SWY QSX QSY < <(python3 - "$OUT/windows-start.json" "$ARM" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 o = d["outputs"][0]["geo"]
 docks = [w["geo"] for w in d["windows"] if w["dock"]]
 bottom = max(docks, key=lambda g: g["y"]) if docks else {"x": 300, "y": o["h"] - 104, "w": 840, "h": 104}
 top = min(docks, key=lambda g: g["y"]) if docks else {"x": 0, "y": 0, "w": o["w"], "h": 34}
-print(o["w"], o["h"], int(bottom["x"] + 10), int(bottom["x"] + bottom["w"] - 10), int(bottom["y"] + bottom["h"] / 2),
-      int(top["x"] + top["w"] - 88), int(top["y"] + top["h"] / 2))
+if sys.argv[2] == "stock":
+    # one panel at the bottom: its task icons and the system tray's expander
+    mid = int(bottom["y"] + bottom["h"] / 2)
+    print(o["w"], o["h"], int(bottom["x"] + 10), int(bottom["x"] + 420), mid, int(bottom["x"] + bottom["w"] - 150), mid)
+else:
+    print(o["w"], o["h"], int(bottom["x"] + 10), int(bottom["x"] + bottom["w"] - 10), int(bottom["y"] + bottom["h"] / 2),
+          int(top["x"] + top["w"] - 88), int(top["y"] + top["h"] / 2))
 PY
 )
 echo "screen=${W}x$H sweep=$SWX1..$SWX2 y=$SWY qs=$QSX,$QSY" >>"$OUT/arm.txt"
@@ -79,6 +96,8 @@ done
 for i in 1 2 3; do
   S "qs$i-0"; P "mark qs$i" "click $QSX $QSY" 'sleep 1.5' "mark qs$i-close" 'key esc' 'sleep 1.5'; S "qs$i-1"
 done
+# Outside the measured windows: the quick settings target once more, for the record.
+P "click $QSX $QSY" 'sleep 1.2'; shot qs-check; P 'key esc' 'sleep 1'
 P "move $MX $MY"
 # 5. Alt+Tab with two windows open, switcher held 1.2 s, 3 times (one pfinput process presses and
 #    releases Alt: KWin 6.7.5 crashes when an input client exits holding a key)

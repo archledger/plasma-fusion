@@ -28,6 +28,11 @@
 #                     --baseline is given
 #   --kwin-gpu        read KWin's GPU counters with sudo -n (read-only; KWin's /proc entries are
 #                     private) for the E13 row "KWin GPU per frame" of the launcher
+#   --app-icons familiar  draw the familiar app icons after the install (default designs: the
+#                     designed tiles the baseline was measured with)
+#   --arm stock       measure Fedora's stock Plasma in the same sessions (no install, empty HOME;
+#                     scen-perf.sh PF_ARM): no gate, the runs are kept for analyze_ab.py, which
+#                     prints the stock/Fusion table of runs of both arms
 #
 # Each run ends with KWrite maximized over the desktop cards and 30 s more idle (EFFECTS.md X3:
 # the covered row); the dock windows' geometry changes during the sweep are counted (winmon.js).
@@ -43,7 +48,7 @@ ROOT=$(cd "$HERE/../../.." && pwd)
 # shellcheck source=tools/tests/lib/common.sh
 source "$HERE/../lib/common.sh"
 STAGE=$ROOT/stage/home; RUNS=3; NAME=perf; WORK=$ROOT/build/tests/perf; SIZE=1920x1200; SCALE=1.333333
-BASELINE=$HERE/baseline.json; SAVE=0; LABEL=; STRICT=(); QUIET=600; MAGNIFY=on; KWIN_GPU=0; BASE_SET=0
+BASELINE=$HERE/baseline.json; SAVE=0; LABEL=; STRICT=(); QUIET=600; MAGNIFY=on; KWIN_GPU=0; BASE_SET=0; ARM=fusion; APPICONS=designs
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage) STAGE=$2; shift 2 ;;
@@ -55,6 +60,8 @@ while [ $# -gt 0 ]; do
     --baseline) BASELINE=$2; BASE_SET=1; shift 2 ;;
     --dock-magnify) MAGNIFY=$2; shift 2 ;;
     --kwin-gpu) KWIN_GPU=1; shift ;;
+    --arm) ARM=$2; shift 2 ;;
+    --app-icons) APPICONS=$2; shift 2 ;;
     --save-baseline) SAVE=1; shift ;;
     --label) LABEL=$2; shift 2 ;;
     --strict-budget) STRICT=(--strict-budget); shift ;;
@@ -66,6 +73,8 @@ done
 [ -d "$STAGE/.local/share/plasma" ] || { echo "no built HOME tree at $STAGE (run tools/build.sh)" >&2; exit 2; }
 [[ "$NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "bad session name $NAME" >&2; exit 2; }
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "bad --runs $RUNS" >&2; exit 2; }
+case "$ARM" in fusion|stock) ;; *) echo "bad --arm $ARM" >&2; exit 2 ;; esac
+case "$APPICONS" in designs|familiar) ;; *) echo "bad --app-icons $APPICONS" >&2; exit 2 ;; esac
 case "$MAGNIFY" in on) ;; off) [ "$BASE_SET" = 1 ] || BASELINE= ;; *) echo "bad --dock-magnify $MAGNIFY" >&2; exit 2 ;; esac
 slot_prefix exclusive || exit 2
 [ -n "$LABEL" ] || LABEL=$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -81,6 +90,8 @@ printf 'KWIN_LOG_PERFORMANCE_DATA=1\nQT_LOGGING_RULES=kwin_scripting.debug=true\
 rm -f "$WORK/seed/pf-perf.env"
 [ "$MAGNIFY" = off ] && echo "PF_DOCK_MAGNIFY=off" >>"$WORK/seed/pf-perf.env"
 [ "$KWIN_GPU" = 1 ] && echo "PFSTAT_SUDO=1" >>"$WORK/seed/pf-perf.env"
+[ "$ARM" = stock ] && echo "PF_ARM=stock" >>"$WORK/seed/pf-perf.env"
+[ "$APPICONS" = familiar ] && echo "PF_APP_ICONS=familiar" >>"$WORK/seed/pf-perf.env"
 T0=$(hssh 'date +%s') || { echo "host $HOST not reachable" >&2; exit 2; }
 # shellcheck disable=SC2046  # one name per run
 if session_in_use $(for i in $(seq 1 "$RUNS"); do echo "$NAME-$i"; done); then
@@ -126,6 +137,10 @@ for i in $(seq 1 "$RUNS"); do
 done | python3 -c 'import json,sys; print(json.dumps([d for l in sys.stdin for d in json.loads(l)]))' >"$RES/coredumps.json"
 echo "core dumps of these sessions: $(cat "$RES/coredumps.json")"
 echo
+if [ "$ARM" = stock ]; then
+  echo "stock arm: no gate; runs in $RES/runs (tools/tests/perf/analyze_ab.py RUN_DIR... compares the arms)"
+  exit 0
+fi
 # A new baseline is not compared with the old one (it may be for another geometry).
 CMP=$BASELINE; [ "$SAVE" = 1 ] && CMP=
 [ "$MAGNIFY" = off ] && LABEL="$LABEL (dock magnification off)"

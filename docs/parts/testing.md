@@ -118,7 +118,14 @@ With a larger UI font the cells grow, the drags miss and the run stops with "pat
 Options: `--stage DIR`, `--runs N` (default 3), `--name NAME` (default `perf`), `--work DIR`,
 `--size`/`--scale` (default 1920x1200 at 1.333333, the ThinkPad panel at 4/3), `--baseline FILE`
 (default `tools/tests/perf/baseline.json`), `--save-baseline`, `--label TEXT` (default the short
-commit), `--strict-budget`, `--quiet-wait SEC`.
+commit), `--strict-budget`, `--quiet-wait SEC`, `--app-icons familiar` (draw the familiar app icons
+after the install; default `designs`, what the baseline was measured with), `--arm stock` (Fedora's
+stock Plasma in the same session and scenario: no install, an empty HOME; the sweep crosses the
+stock panel's task icons, x +10..+420, and "quick settings" is the system tray's expander, 150 px
+from the panel's right end; no gate, the runs are kept). Stock against Fusion: run single sessions
+of each arm in turn (stock, Fusion, stock, ...) under `vslot.sh --exclusive`, then
+`tools/tests/perf/analyze_ab.py RUN_DIR...` prints the per-arm table. After the measured steps the
+scenario opens quick settings once more for a screenshot (`qs-check.png`) of the target.
 
 Each run is one session (the perf-measure method): `fusion-config.sh --install`, a fresh
 plasmashell, KWin reconfigure, 30 s settle; idle 30 s with the pointer mid-screen; a 10 s dock
