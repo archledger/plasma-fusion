@@ -195,13 +195,9 @@ QtObject {
     }
 
     function getTaskIndexFromWindow(window: var): int {
-        for (let i = 0; i < taskSwitcher.tasksModel.rowCount(); i++) {
-            const modelWindow = taskSwitcher.tasksModel.data(taskSwitcher.tasksModel.index(i, 0), Qt.DisplayRole);
-            if (modelWindow == window) {
-                return i;
-            }
-        }
-        return 0;
+        // Plasma Fusion: also the card of a split pair that shows this window
+        const row = taskSwitcher.tasksModel.rowOf(window);
+        return row >= 0 ? row : 0;
     }
 
     function getTaskIndexFromXPosition(): int {
@@ -246,7 +242,9 @@ QtObject {
         openAppAnim.restart();
         const task = taskList.getTaskAt(index);
         if (task) {
-            KWinComponents.Workspace.activeWindow = task.window;
+            // Plasma Fusion: a split pair comes back as the pair (picked, a sideways swipe, or
+            // back from a gesture that went nowhere)
+            task.raiseApp();
         }
     }
 

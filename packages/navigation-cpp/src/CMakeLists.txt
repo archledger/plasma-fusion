@@ -16,6 +16,7 @@ target_sources(fusionnavigationplugin PRIVATE
     plugin/fusionnavigation.cpp
     plugin/keyboardspy.cpp
     plugin/penfilter.cpp
+    plugin/splitside.cpp
     plugin/testpen.cpp
     plugin/touchborder.cpp
     plugin/taskfiltermodel.cpp

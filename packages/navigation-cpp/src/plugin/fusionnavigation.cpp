@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "fusionnavigation.h"
+#include "splitside.h"
 
 #include <QCoreApplication>
 #include <QDBusConnection>
@@ -117,7 +118,55 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
         m_testPen = std::make_unique<FusionTestPen>();
     }
 
+    // Plasma Fusion: a split pair the switcher minimized comes back as a pair (SPLIT.md item 4).
+    connect(workspace(), &Workspace::windowActivated, this, &FusionNavigationState::restorePartner);
+
     refreshBorders();
+}
+
+void FusionNavigationState::rememberPair(KWin::Window *window, KWin::Window *partner)
+{
+    if (!window || !partner || window == partner) {
+        return;
+    }
+    m_minimizedPairs.removeIf([window, partner](const auto &pair) {
+        return !pair.first || !pair.second || pair.first == window || pair.second == window || pair.first == partner || pair.second == partner;
+    });
+    m_minimizedPairs.emplaceBack(window, partner);
+}
+
+// One app of a remembered pair is active again: the other one comes back into its half, under it,
+// while both are still tiled side by side on the same screen and desktop. Each pair is used once.
+void FusionNavigationState::restorePartner(Window *window)
+{
+    if (!window || m_minimizedPairs.isEmpty()) {
+        return;
+    }
+    Window *partner = nullptr;
+    for (auto it = m_minimizedPairs.begin(); it != m_minimizedPairs.end();) {
+        Window *a = it->first;
+        Window *b = it->second;
+        if (!a || !b || a->isDeleted() || b->isDeleted()) {
+            it = m_minimizedPairs.erase(it);
+        } else if (a == window || b == window) {
+            partner = a == window ? b : a;
+            it = m_minimizedPairs.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (!partner || !partner->isMinimized() || partner->output() != window->output() || !partner->isOnCurrentDesktop()) {
+        return;
+    }
+    const FusionSplitSide side = fusionSplitSide(window);
+    const FusionSplitSide partnerSide = fusionSplitSide(partner);
+    if (side == FusionSplitSide::None || partnerSide == FusionSplitSide::None || side == partnerSide) {
+        return;
+    }
+    partner->setMinimized(false);
+    workspace()->raiseWindow(partner);
+    workspace()->raiseWindow(window);
+    qInfo("plasmafusion-navigation: split pair back: %s with %s", qPrintable(window->resourceClass()), qPrintable(partner->resourceClass()));
 }
 
 void FusionNavigationState::updatePen()

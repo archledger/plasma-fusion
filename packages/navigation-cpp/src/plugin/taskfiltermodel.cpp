@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "taskfiltermodel.h"
+#include "splitside.h"
 
 // KWin
 #include <activities.h>
@@ -24,6 +25,8 @@ FusionTaskFilterModel::FusionTaskFilterModel(QObject *parent)
     // Don't auto-sort, because this model is loaded at runtime during the task switcher
     // -> We don't want to re-sort while the task switcher is open
     setDynamicSortFilter(false);
+
+    connect(workspace(), &Workspace::windowRemoved, this, &FusionTaskFilterModel::handleWindowRemoved);
 }
 
 FusionTaskModel *FusionTaskFilterModel::windowModel() const
@@ -37,6 +40,7 @@ void FusionTaskFilterModel::setWindowModel(FusionTaskModel *taskModel)
         return;
     }
     m_taskModel = taskModel;
+    updatePairs();
     setSourceModel(m_taskModel);
     Q_EMIT windowModelChanged();
 
@@ -56,32 +60,64 @@ void FusionTaskFilterModel::setScreenName(const QString &screen)
         // Plasma Fusion: Qt 6.11 deprecates invalidateFilter()
         beginFilterChange();
         m_output = output;
+        updatePairs();
         endFilterChange(QSortFilterProxyModel::Direction::Rows);
         Q_EMIT screenNameChanged();
     }
 }
 
-bool FusionTaskFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
+QHash<int, QByteArray> FusionTaskFilterModel::roleNames() const
 {
-    if (!m_taskModel) {
-        return false;
+    QHash<int, QByteArray> names = QSortFilterProxyModel::roleNames();
+    names.insert(FusionTaskModel::PartnerRole, QByteArrayLiteral("partner"));
+    return names;
+}
+
+QVariant FusionTaskFilterModel::data(const QModelIndex &index, int role) const
+{
+    if (role == FusionTaskModel::PartnerRole) {
+        Window *window = qvariant_cast<Window *>(QSortFilterProxyModel::data(index, FusionTaskModel::WindowRole));
+        return QVariant::fromValue(m_partners.value(window));
     }
-    const QModelIndex index = m_taskModel->index(sourceRow, 0, sourceParent);
-    if (!index.isValid()) {
-        return false;
+    return QSortFilterProxyModel::data(index, role);
+}
+
+int FusionTaskFilterModel::rowOf(Window *window) const
+{
+    if (!window) {
+        return -1;
     }
-    const QVariant data = index.data();
-    if (!data.isValid()) {
-        // an invalid QVariant is valid data
-        return true;
+    for (int row = 0; row < rowCount(); ++row) {
+        Window *task = qvariant_cast<Window *>(data(index(row, 0), FusionTaskModel::WindowRole));
+        if (task && (task == window || m_partners.value(task) == window)) {
+            return row;
+        }
+    }
+    return -1;
+}
+
+void FusionTaskFilterModel::closeTask(Window *window)
+{
+    if (!window) {
+        return;
+    }
+    Window *partner = m_partners.value(window);
+    for (Window *app : {window, partner}) {
+        if (app && !app->isDeleted()) {
+            m_closing.insert(app);
+            app->closeWindow();
+        }
+    }
+}
+
+// Plasma Fusion: the window filter of Plasma Mobile's model, for the list and for the split pairs.
+bool FusionTaskFilterModel::isTask(Window *window) const
+{
+    if (!window || window->isDeleted() || !window->isClient()) {
+        return false;
     }
 
-    Window *window = qvariant_cast<Window *>(data);
-    if (!window || !window->isClient()) {
-        return false;
-    }
-
-#if KWIN_BUILD_ACTIVITIES 
+#if KWIN_BUILD_ACTIVITIES
     // Filter by same activity
     auto activity = Workspace::self()->activities()->current();
     if (!window->isOnActivity(activity)) {
@@ -131,6 +167,103 @@ bool FusionTaskFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &s
     }
 
     return true;
+}
+
+bool FusionTaskFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
+{
+    if (!m_taskModel) {
+        return false;
+    }
+    const QModelIndex index = m_taskModel->index(sourceRow, 0, sourceParent);
+    if (!index.isValid()) {
+        return false;
+    }
+    const QVariant data = index.data();
+    if (!data.isValid()) {
+        // an invalid QVariant is valid data
+        return true;
+    }
+
+    Window *window = qvariant_cast<Window *>(data);
+    return isTask(window) && !m_hidden.contains(window);
+}
+
+// Plasma Fusion (SPLIT.md item 4): two apps side by side are one card, as Android's Overview shows
+// a split pair. The topmost task tiled to the left and the topmost tiled to the right of this
+// screen form the pair (minimized or not: the switcher minimizes every app when it opens, and going
+// home leaves them so); the more recently used of the two stands for it in the list (the higher one
+// when both came up at once), the other is left out. Found once, when the switcher opens.
+void FusionTaskFilterModel::updatePairs()
+{
+    m_partners.clear();
+    m_hidden.clear();
+    if (!m_taskModel || !m_output) {
+        return;
+    }
+    Window *left = nullptr;
+    Window *right = nullptr;
+    Window *higher = nullptr;
+    const QList<Window *> &order = workspace()->stackingOrder();
+    for (auto it = order.crbegin(); it != order.crend() && !(left && right); ++it) {
+        Window *window = *it;
+        if (!window->isNormalWindow() || !isTask(window)) {
+            continue;
+        }
+        const FusionSplitSide side = fusionSplitSide(window);
+        if (side == FusionSplitSide::Left && !left) {
+            left = window;
+        } else if (side == FusionSplitSide::Right && !right) {
+            right = window;
+        } else {
+            continue;
+        }
+        if (!higher) {
+            higher = window;
+        }
+    }
+    if (!left || !right) {
+        return;
+    }
+    m_partners.insert(left, right);
+    m_partners.insert(right, left);
+    const qint64 leftUsed = lastActivated(left);
+    const qint64 rightUsed = lastActivated(right);
+    Window *shown = leftUsed == rightUsed ? higher : (leftUsed > rightUsed ? left : right);
+    m_hidden.insert(shown == left ? right : left);
+}
+
+qint64 FusionTaskFilterModel::lastActivated(Window *window) const
+{
+    for (int row = 0; row < m_taskModel->rowCount(); ++row) {
+        const QModelIndex index = m_taskModel->index(row, 0);
+        if (qvariant_cast<Window *>(index.data(FusionTaskModel::WindowRole)) == window) {
+            return qvariant_cast<qint64>(index.data(FusionTaskModel::LastActivatedRole));
+        }
+    }
+    return 0;
+}
+
+// An app of a pair went away while the switcher is open. Closed together from the pair's card: the
+// card goes with them. Otherwise the other app stays, now on its own card.
+void FusionTaskFilterModel::handleWindowRemoved(Window *window)
+{
+    m_closing.remove(window);
+    Window *partner = m_partners.take(window);
+    if (!partner) {
+        return;
+    }
+    m_partners.remove(partner);
+    m_hidden.remove(window);
+    const bool partnerHidden = m_hidden.remove(partner);
+    if (m_closing.contains(partner)) {
+        return;
+    }
+    if (partnerHidden) {
+        beginFilterChange();
+        endFilterChange(QSortFilterProxyModel::Direction::Rows);
+    } else if (const int row = rowOf(partner); row >= 0) {
+        Q_EMIT dataChanged(index(row, 0), index(row, 0), {FusionTaskModel::PartnerRole});
+    }
 }
 
 bool FusionTaskFilterModel::lessThan(const QModelIndex &left, const QModelIndex &right) const

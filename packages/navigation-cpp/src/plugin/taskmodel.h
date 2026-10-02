@@ -28,7 +28,9 @@ public:
         OutputRole,
         DesktopRole,
         ActivityRole,
-        LastActivatedRole
+        LastActivatedRole,
+        // Plasma Fusion: the other app of a split pair (FusionTaskFilterModel serves it)
+        PartnerRole
     };
 
     explicit FusionTaskModel(QObject *parent = nullptr);

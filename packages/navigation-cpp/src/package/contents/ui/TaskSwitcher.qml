@@ -625,6 +625,7 @@ FocusScope {
                     id: iconDelegate
 
                     required property QtObject window
+                    required property QtObject partner
                     required property int index
 
                     readonly property bool isCenteredIcon: iconDelegate.index === root.state.currentTaskIndex;
@@ -632,6 +633,16 @@ FocusScope {
                     Layout.preferredWidth: isCenteredIcon ? Kirigami.Units.iconSizes.huge : Kirigami.Units.iconSizes.large
                     Layout.alignment: Qt.AlignVCenter
                     source: iconDelegate.window.icon
+
+                    // Plasma Fusion: the other app of a split pair, small in the corner
+                    Kirigami.Icon {
+                        visible: iconDelegate.partner !== null
+                        anchors.right: iconDelegate.right
+                        anchors.bottom: iconDelegate.bottom
+                        width: Math.round(iconDelegate.width / 2)
+                        height: width
+                        source: iconDelegate.partner ? iconDelegate.partner.icon : ""
+                    }
                 }
             }
         }

@@ -17,6 +17,7 @@
 #include <QAction>
 #include <QElapsedTimer>
 #include <QKeySequence>
+#include <QPointer>
 #include <QTimer>
 
 #include <KConfigWatcher>
@@ -91,6 +92,10 @@ public:
     // Plasma Fusion: shows the hidden dock (a bottom panel) as KWin's own panel edge does, once the
     // app the gesture returned to is active again (activating it makes the dock dodge away).
     Q_INVOKABLE void showDock();
+    // Plasma Fusion (SPLIT.md item 4): the switcher minimized a split pair (it opened, or the home
+    // gesture). When one of the two is activated again (the dock, a notification), the other comes
+    // back into its half.
+    Q_INVOKABLE void rememberPair(KWin::Window *window, KWin::Window *partner);
 
     qreal touchXPosition() const;
     qreal touchYPosition() const;
@@ -160,6 +165,7 @@ private:
     void invokeEffect();
     void revealDock();
     void updatePen();
+    void restorePartner(Window *window);
 
     bool m_gestureEnabled{false};
     bool m_tabletMode{false};
@@ -172,6 +178,8 @@ private:
     std::unique_ptr<FusionPenFilter> m_penFilter;
     std::unique_ptr<FusionDockRehide> m_dockRehide;
     std::unique_ptr<FusionTestPen> m_testPen;
+    // split pairs the switcher minimized (rememberPair)
+    QList<std::pair<QPointer<Window>, QPointer<Window>>> m_minimizedPairs;
 
     Status m_status = Status::Inactive;
     bool m_gestureInProgress = false;
