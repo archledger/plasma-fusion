@@ -61,19 +61,47 @@ FLATPAK = [DATA / "flatpak/exports/share", pathlib.Path("/var/lib/flatpak/export
 NEUTRAL = "#eef1f8"
 
 
+# The files below are written by other programs (KConfig, packages, Flatpak, the theme); the pure
+# functions next to the readers parse their text.
+
+def parse_mode(text):
+    """plasmafusionrc's [Icons] AppIcons: "familiar" (also for an unknown value) or "designs"; the
+    first AppIcons= line of the group counts."""
+    group = None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            group = line
+        elif group == "[Icons]" and line.startswith("AppIcons="):
+            value = line.split("=", 1)[1].strip().lower()
+            return value if value in ("familiar", "designs") else "familiar"
+    return "familiar"
+
+
 def mode():
     try:
-        group = None
-        for line in (CONFIG / "plasmafusionrc").read_text().splitlines():
-            line = line.strip()
-            if line.startswith("["):
-                group = line
-            elif group == "[Icons]" and line.startswith("AppIcons="):
-                value = line.split("=", 1)[1].strip().lower()
-                return value if value in ("familiar", "designs") else "familiar"
+        return parse_mode((CONFIG / "plasmafusionrc").read_text())
     except OSError:
-        pass
-    return "familiar"
+        return "familiar"
+
+
+def parse_desktop_entry(text):
+    """The keys and values of a desktop file's [Desktop Entry] group (the first value of a key wins)."""
+    entry, values = False, {}
+    for line in text.splitlines():
+        if line.startswith("["):
+            entry = line.strip() == "[Desktop Entry]"
+        elif entry and "=" in line:
+            k, v = line.split("=", 1)
+            values.setdefault(k.strip(), v.strip())
+    return values
+
+
+def visible_icon(values):
+    """The Icon= value of a visible application (Type=Application, not NoDisplay or Hidden), else None."""
+    if values.get("Type") != "Application" or values.get("NoDisplay") == "true" or values.get("Hidden") == "true":
+        return None
+    return values.get("Icon") or None
 
 
 def desktop_entries():
@@ -88,20 +116,12 @@ def desktop_entries():
             if did in seen:
                 continue
             seen.add(did)
-            entry, values = False, {}
             try:
-                for line in path.read_text(errors="replace").splitlines():
-                    if line.startswith("["):
-                        entry = line.strip() == "[Desktop Entry]"
-                    elif entry and "=" in line:
-                        k, v = line.split("=", 1)
-                        values.setdefault(k.strip(), v.strip())
+                icon = visible_icon(parse_desktop_entry(path.read_text(errors="replace")))
             except OSError:
                 continue
-            if values.get("Type") != "Application" or values.get("NoDisplay") == "true" or values.get("Hidden") == "true":
-                continue
-            if values.get("Icon"):
-                entries.append((did, values["Icon"]))
+            if icon:
+                entries.append((did, icon))
     return entries
 
 
