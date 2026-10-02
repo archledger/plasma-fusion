@@ -220,7 +220,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | Complete mediation | Every charge-limit change goes through pkexec and polkit, and the helper checks root and its argument itself on every call. |
 | Open design | All code and all security measures are public in this repository; nothing depends on secrecy. |
 | Separation of privilege | Reading the charge limit needs no privilege; writing needs pkexec ([`parts/charge-limit.md`](parts/charge-limit.md)). The greeter tool writes `/etc/plasmalogin.conf` as root but the greeter's home as the greeter user (`tools/system/greeter-apply.sh`). |
-| Least privilege | The per-user install needs no root. The helper is one program for one action. User services run with `NoNewPrivileges=yes`. The greeter tool drops to the greeter user and to a file's owner to read it. CI tokens are read-only unless a job needs more. |
+| Least privilege | The per-user install needs no root. The helper is one program for one action. The power tiers and app icons services run with `NoNewPrivileges=yes`. The greeter tool drops to the greeter user and to a file's owner to read it. CI tokens are read-only unless a job needs more. |
 | Least common mechanism | Plasma Fusion adds no daemon shared between users and no system service; per-user state stays in each HOME ([`ARCHITECTURE.md`](ARCHITECTURE.md), "Where state lives"). |
 | Psychological acceptability | Safe defaults need no setup; every change can be previewed (`--dry-run`) and undone (`fusion-restore.sh`, `greeter-restore.sh`, `plymouth-uninstall.sh`); the login check explains itself in a notification. |
 | Limited attack surface | No network code, no listening sockets, no setuid files; the root parts run only when called. |
@@ -237,7 +237,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | CWE-250, CWE-269 | Unnecessary or badly managed privilege | Section 4, least privilege; the polkit action is bound to one program by `exec.path`. |
 | CWE-862 | Missing authorization | Writing the charge limit needs polkit's `allow_active` and root in the helper. |
 | CWE-377 | Insecure temporary files | `mktemp -d` with mode 0700 in the root tools; the login check writes its temporary file next to the target in the user's own directory and renames it. |
-| CWE-400 | Resource exhaustion | Time limits on the login check (4 s), on child processes in the app icons service and on the settings module's tools; memory limits on the user services; a 1 MiB limit on the display file the greeter tool reads. |
+| CWE-400 | Resource exhaustion | Time limits on the login check (4 s), on child processes in the app icons service and on the settings module's tools; memory limits on the power tiers and app icons services; a 1 MiB limit on the display file the greeter tool reads. |
 | CWE-426 | Untrusted search path | The helper is called by absolute path and started by pkexec with a minimal environment; the boot splash installer draws the greeting with `python3 -I`; the greeter tool runs the KDE tools with `env -i` and a fixed `PATH`. Not yet everywhere: two Python calls in the root tools have no `-I` and import from the current directory (section 7). |
 | CWE-200, CWE-359 | Private information shown on the lock screen | Notification titles off and text never shown (`config.xml`); no notification watcher at all when the cards are off. |
 | CWE-549 | Unmasked password | Lock screen and boot splash show bullets; the lock screen reveals the password only where KDE's permission allows it. |
@@ -271,8 +271,8 @@ Widget files named here without a path are under
 ### In place
 
 - polkit action limited to one program and the active local session (section 3.1).
-- User services: `NoNewPrivileges=yes`, memory limits, `Nice=10`, the background slice, idle I/O
-  for the icons service (section 3.6).
+- The power tiers and app icons services: `NoNewPrivileges=yes`, memory limits, `Nice=10`, the
+  background slice, idle I/O for the icons service (section 3.6).
 - Root tools: dropping to the greeter user or the file's owner with `setpriv --no-new-privs`,
   cleared environments for the KDE tools, isolated Python (`-I`) for the boot splash greeting,
   private temporary directories, dry-run modes, backups before every change and undo scripts
@@ -291,8 +291,10 @@ Widget files named here without a path are under
 
 ### Missing (known gaps)
 
-- The user services have no systemd sandboxing beyond `NoNewPrivileges` and the limits
-  (`ProtectSystem`, `ProtectHome`, `PrivateTmp`, `SystemCallFilter` and similar are not set).
+- The power tiers and app icons services have no systemd sandboxing beyond `NoNewPrivileges` and
+  the limits (`ProtectSystem`, `ProtectHome`, `PrivateTmp`, `SystemCallFilter` and similar are not
+  set). The login check's notification unit, `plasma-fusion-gate-notify.service`, which
+  `tools/device/fusion-config.sh` writes, has neither `NoNewPrivileges` nor a memory limit.
 - The app icons service parses SVG files from any installed package with QtSvg or rsvg-convert in a
   child process that has time and memory limits but no sandbox.
 - Widgets build shell command lines for Plasma's executable engine; safety rests on the typing,
