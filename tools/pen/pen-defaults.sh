@@ -217,8 +217,10 @@ if [ "$PEN_NAME" = "$LIBWACOM_DEVICE" ]; then
 fi
 
 if [ "$INSTALL" = 1 ]; then
-  if rpm -q xournalpp >/dev/null 2>&1; then
+  if rpm -q xournalpp >/dev/null 2>&1 || command -v xournalpp >/dev/null; then
     note "Xournal++ installed (unchanged)"
+  elif ! command -v dnf >/dev/null; then
+    note "Xournal++ is not installed: install it with your package manager (the pen menu's notes and whiteboard)"
   else
     note "install Xournal++ (sudo dnf install --setopt=install_weak_deps=False xournalpp)"
     # Without weak dependencies: its optional LaTeX tool would pull in about 260 MB of TeX Live.

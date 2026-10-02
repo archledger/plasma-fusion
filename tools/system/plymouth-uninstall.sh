@@ -44,6 +44,11 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+# The counterpart of plymouth-install.sh: dracut and dnf (Fedora) only.
+if ! command -v dracut >/dev/null || ! command -v lsinitrd >/dev/null || ! command -v dnf >/dev/null; then
+  echo "plymouth-uninstall: this tool needs dracut and dnf (Fedora), as plymouth-install.sh. Nothing was changed." >&2
+  exit 3
+fi
 if [ "$DRY" = 0 ] && [ "$(id -u)" != 0 ]; then
   echo "plymouth-uninstall: run as root (sudo)" >&2; exit 1
 fi

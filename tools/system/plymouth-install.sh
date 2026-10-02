@@ -75,6 +75,16 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+# dracut builds the initramfs and dnf installs the script plugin: Fedora (and its relatives) only.
+# NixOS uses the module's plymouth option; elsewhere the theme is for the distribution's own
+# tools.
+if ! command -v dracut >/dev/null || ! command -v lsinitrd >/dev/null || ! command -v dnf >/dev/null; then
+  echo "plymouth-install: this tool needs dracut and dnf (Fedora)." >&2
+  [ ! -e /etc/NIXOS ] || echo "  On NixOS: programs.plasma-fusion.plymouth = true (docs/parts/nixos.md)." >&2
+  echo "  The theme itself is in /usr/share/plasma-fusion/plymouth/plasma-fusion for your distribution's" >&2
+  echo "  Plymouth tools. Nothing was changed." >&2
+  exit 3
+fi
 PACKAGED=/usr/share/plasma-fusion/plymouth/$NAME
 [ -n "$SRC" ] || { [ -d "$PACKAGED" ] && SRC=$PACKAGED; } || usage 2
 [ -f "$SRC/$NAME.plymouth" ] && [ -f "$SRC/$NAME.script" ] || {
