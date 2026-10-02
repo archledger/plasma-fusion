@@ -1114,11 +1114,14 @@ install_build() {
   fi
 }
 
-# Copy per-user configuration files (GTK stylesheets) into ~/.config. $1 source directory
+# Copy per-user configuration files (GTK stylesheets) into ~/.config. User units are left to
+# install_user_service, which takes them with their program from the build or package it installs
+# (a system package's template here can be older than the user's build). $1 source directory
 install_config() {
   local src=$1 f dest
   while IFS= read -r -d '' f; do
     f=${f#"$src/"}
+    case $f in systemd/user/*.service) continue ;; esac
     dest=$CONFIG/$f
     if [ -e "$dest" ] && cmp -s "$src/$f" "$dest"; then
       note "$dest (unchanged)"
