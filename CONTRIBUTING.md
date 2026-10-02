@@ -18,13 +18,13 @@ Plasma Fusion is maintained by one person. Bug reports, fixes and ideas are welc
 3. Keep the change to one subject, in the style of the surrounding code and comments.
 4. Run the checks that cover it:
    - `tools/build.sh` (every part, with its built-in checks) and `tools/checks/tests/run.sh`;
-   - the part's own tests (for example `tools/device/tests/gate-unit.sh`,
-     `packages/common/tests/icontile.sh`, `packages/appicons/tests/*.py`), listed on its page;
-   - new behaviour needs a test that would fail without it;
    - the coding style: `ruff check` for Python (`ruff.toml`), `git clang-format --diff main` for
      C++ (KDE's style, `.clang-format`) and `tools/checks/shellcheck.sh` for shell scripts; QML has
      no style tool yet and follows the surrounding code (4-space indentation). docs/parts/ci.md,
-     "Coding style", says what they check.
+     "Coding style", says what they check;
+   - the part's own tests (for example `tools/device/tests/gate-unit.sh`,
+     `packages/common/tests/icontile.sh`, `packages/appicons/tests/*.py`), listed on its page;
+   - new behaviour needs a test that would fail without it.
 5. Give every new file an SPDX header or a `REUSE.toml` entry (`reuse lint` must pass).
 6. Open a pull request against `main`. It needs the checks `DCO and attribution`,
    `REUSE compliance` and `plasma-fusion RPM (Fedora 44)` and one approval.
