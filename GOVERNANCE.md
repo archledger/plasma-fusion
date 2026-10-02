@@ -26,7 +26,7 @@ maintainer accepts or declines it and says why.
 
 | Role | Who today | Responsibilities |
 |---|---|---|
-| Maintainer | Wisbendji Fimerlus ([@archledger](https://github.com/archledger)) | Decides what goes in and what the project does next. Reviews and merges pull requests. Triages issues and Discussions. Keeps `main` building and the checks green. Handles the `plasma-update` issues, Dependabot pull requests and code scanning alerts ([`docs/parts/ci.md`](docs/parts/ci.md), "When something speaks up"). Keeps the documentation current. Enforces the [code of conduct](CODE_OF_CONDUCT.md). |
+| Maintainer | Wisbendji Fimerlus ([@archledger](https://github.com/archledger)) | Decides what goes in and what the project does next. Reviews and merges pull requests. Triages issues and Discussions. Keeps `main` building and the checks green. Handles the `plasma-update` issues, Dependabot pull requests and code scanning alerts ([`docs/parts/ci.md`](docs/parts/ci.md), "When something speaks up"). Keeps the documentation current. Enforces the [code of conduct](CODE_OF_CONDUCT.md); conduct reports go to the address in it, and today the maintainer is the only person who reads them. |
 | Security contact | the maintainer | Reads private vulnerability reports, answers within a week, fixes, publishes advisories and credits reporters ([`SECURITY.md`](SECURITY.md)). |
 | Reviewer (code owner) | the maintainer ([`.github/CODEOWNERS`](.github/CODEOWNERS)) | Approves pull requests. The ruleset on `main` needs one code owner's approval after the last push ([`docs/parts/ci.md`](docs/parts/ci.md), "Repository settings"). |
 | Release manager | the maintainer | There are no releases yet (see "Releases" below). |
