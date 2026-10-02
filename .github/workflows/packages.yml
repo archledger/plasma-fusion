@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The release channels from one source tarball (docs/RELEASING.md): the Fedora RPMs with the compiled
+# parts, the Arch PKGBUILD, the Debian packages for Debian testing, Ubuntu 26.10 (the PPA's series)
+# and KDE neon, each built, linted, installed and checked in a container of that system; and the
+# installer's tests (fake systems and a fake signed release, under dash and bash). Weekly too, so
+# that a Plasma or Qt update in one of the systems shows up here.
+
+name: packages
+
+on:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "scripts/install.sh"
+      - "tools/plasma-fusion"
+      - "tools/tests/installer/**"
+      - "tools/tests/packages/**"
+      - "VERSION"
+      - ".packit.yaml"
+      - ".github/workflows/packages.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "packaging/**"
+      - "scripts/install.sh"
+      - "tools/plasma-fusion"
+      - "tools/tests/installer/**"
+      - "tools/tests/packages/**"
+      - "VERSION"
+      - ".packit.yaml"
+      - ".github/workflows/packages.yml"
+  schedule:
+    - cron: "10 6 * * 2" # Tuesdays 06:10 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    name: installer (dash, bash, busybox)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Shells and checks
+        run: sudo apt-get install -y -qq dash busybox shellcheck >/dev/null
+      - name: Lint and parse
+        run: |
+          set -euo pipefail
+          shellcheck -s sh -S warning scripts/install.sh
+          dash -n scripts/install.sh
+          busybox sh -n scripts/install.sh
+      - name: Tests (fake systems, fake signed release)
+        run: tools/tests/installer/run.sh "$RUNNER_TEMP/installer-tests"
+
+  fedora:
+    name: Fedora 44 RPMs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git (checkout runs inside the container)
+        run: dnf install -y -q git
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Build, check, install
+        run: tools/tests/packages/fedora.sh "$RUNNER_TEMP/rpmbuild"
+
+  arch:
+    name: Arch PKGBUILD
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    container: docker.io/library/archlinux:latest
+    steps:
+      - name: Install git (checkout runs inside the container)
+        run: pacman -Sy --noconfirm --needed git >/dev/null
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Source tarball of this commit
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          packaging/make-source.sh --top plasma-fusion --output "$RUNNER_TEMP/src"
+      - name: makepkg, namcap, install
+        run: tools/tests/packages/arch.sh "$RUNNER_TEMP/src/plasma-fusion-$(cat VERSION).tar.gz" "$RUNNER_TEMP/pkg"
+
+  deb:
+    name: "${{ matrix.name }} .debs"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    container:
+      image: ${{ matrix.image }}
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian testing
+            image: docker.io/library/debian:testing
+            target: debian:testing
+          - name: Ubuntu 26.10
+            image: docker.io/library/ubuntu:26.10
+            target: ubuntu:stonking
+          - name: KDE neon
+            image: invent-registry.kde.org/neon/docker-images/plasma:user
+            target: neon
+    steps:
+      - name: Install git (checkout runs inside the container)
+        run: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git ca-certificates >/dev/null
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Source tarball of this commit
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          packaging/make-source.sh --output "$RUNNER_TEMP/src"
+      - name: Build, lint, install
+        env:
+          TARGET: ${{ matrix.target }}
+        run: tools/tests/packages/deb.sh "$TARGET" "$RUNNER_TEMP/src/plasma-fusion-$(cat VERSION).tar.gz" "$RUNNER_TEMP/debs"
