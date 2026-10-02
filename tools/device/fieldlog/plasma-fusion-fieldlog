@@ -1076,11 +1076,15 @@ class FieldLog:
             return
         g = self.state.setdefault("gate", {})
         off = g.get("offset", 0)
+        since = self.since()
         if g.get("inode") != st.st_ino or st.st_size < off:
+            # A new or shortened log (the check keeps its last 2000 lines): read it from the start,
+            # but only the runs after the last one recorded.
+            if g.get("inode") is not None:
+                since = max(since, float(g.get("last_ts", 0)) + 0.5)
             off = 0
         if st.st_size == off:
             return
-        since = self.since()
         try:
             with open(path, "rb") as f:
                 f.seek(off)
@@ -1100,10 +1104,12 @@ class FieldLog:
                 continue
             if cur and cur[0] >= since:
                 self.emit_gate(*cur)
+                g["last_ts"] = cur[0]
             text = re.sub(r"\s*\(\d+ ms\)$", "", m.group(3))
             cur = [ts, [], text]
         if cur and cur[0] >= since:
             self.emit_gate(*cur)
+            g["last_ts"] = cur[0]
         g.update(offset=off + end, inode=st.st_ino)
 
     def emit_gate(self, ts, details, text):

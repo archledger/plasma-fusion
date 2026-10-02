@@ -346,6 +346,35 @@ class Journal(unittest.TestCase):
         self.assertIn("launcher: first results for", ring)
 
 
+class GateLog(unittest.TestCase):
+    def test_runs_counted_once_across_a_trim(self):
+        state = fresh_dir("gate-state")
+        os.environ["XDG_STATE_HOME"] = str(state)
+        gate = state / "plasma-fusion" / "gate.log"
+        gate.parent.mkdir(parents=True)
+        os.environ.pop("PF_FIELDLOG_GATE_LOG", None)
+        a = ("2026-10-02T09:00:14-0400 login: theme=org.plasmafusion.dark.desktop versions=tested lock=tested; "
+             "no change (31 ms)\n")
+        b = "2026-10-02T10:00:14-0400 deploy: nothing to turn back on (92 ms)\n"
+        c = ("2026-10-02T11:00:14-0400 login: theme=org.plasmafusion.dark.desktop versions=changed; switched off "
+             "the navigation effect (40 ms)\n2026-10-02T11:00:14-0400   kwinrc plasmafusion_navigationEnabled=false\n")
+        gate.write_text(a + b)
+        f = fl.FieldLog()
+        f.state["since"] = 0
+        f.poll_gate()
+        tmp = gate.with_name("gate.log.tmp")  # the check trims its log with tail and mv: a new file
+        tmp.write_text(a + b + c)
+        os.replace(tmp, gate)
+        f.poll_gate()
+        f.poll_gate()
+        f.log.flush()
+        runs = [g for g in fl.aggregate(fl.read_events("2026-10-02", f.sdir)) if g["kind"] == "gate"]
+        self.assertEqual(sum(g["count"] for g in runs), 3)
+        changed = [g for g in runs if "versions=changed" in g["text"]][0]
+        self.assertEqual(changed["details"], ["kwinrc plasmafusion_navigationEnabled=false"])
+        self.assertNotIn("ms)", changed["text"])
+
+
 class Digest(unittest.TestCase):
     def test_digest(self):
         d = fresh_dir("digest")

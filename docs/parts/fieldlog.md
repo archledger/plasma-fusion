@@ -206,7 +206,7 @@ state and read only new dumps.
 
 ## Verification (2026-10-02)
 
-- Tests: 18 PASS (`fieldlog_test.py`, about 10 s).
+- Tests: 19 PASS (`fieldlog_test.py`, about 10 s).
 - The 10-minute run recorded: the start (plasmashell 1062963, KWin 2888, outputs, lid), the 12
   tooling crashes of the day in two lines and two repeat lines (python3 `approved_pick.py` from a
   scratchpad 2x at 07:44 EDT, bash `rpm-crash` from a build directory 10x at 11:21-11:38), two login
@@ -282,6 +282,7 @@ The tests:
   failures and dumps, logins; window titles, notification texts and the launcher's typed text never
   reach a file;
 - the digest (order, counts, frames, restarts, resources, tooling last); retention by age and size;
+  login check runs counted once when the check trims its log;
 - `run` for 8 s with a fake `coredumpctl`, `journalctl` and `systemctl` on PATH, a fake `/proc` and
   `/sys` (`PF_FIELDLOG_PROC`, `PF_FIELDLOG_SYS`, `PF_FIELDLOG_CGROUP_ROOT`,
   `PF_FIELDLOG_INTERVAL=0.5`, `PF_FIELDLOG_RUN_SECONDS`): 12 tooling, 1 session and 1 app crash,
