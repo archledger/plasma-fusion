@@ -26,6 +26,7 @@ check() { local d=$1; shift; if "$@"; then PASS=$((PASS + 1)); echo "PASS $d"; e
 
 # The stub exactly as fusion-config.sh writes it, for an engine path.
 eval "$(sed -n '/^sh_quote() /p' "$DEVICE/fusion-config.sh")"
+eval "$(sed -n '/^gate_bash() /p' "$DEVICE/fusion-config.sh")"
 eval "$(sed -n '/^gate_stub() {/,/^}/p' "$DEVICE/fusion-config.sh")"
 make_stub() { # ENGINE OUT
   # read by gate_stub (from fusion-config.sh); the keyboard keys tool is not installed here
@@ -58,6 +59,15 @@ check "the captured environment is unchanged by the stub" [ "$with" = "$without"
 check "earlier scripts' variables still captured (XDG_CONFIG_DIRS, GDK_CORE_DEVICE_EVENTS)" \
   bash -c 'grep -q "^XDG_CONFIG_DIRS=" <<<"$1" && grep -q "^GDK_CORE_DEVICE_EVENTS=1" <<<"$1"' _ "$with"
 check "the check ran and logged" grep -q " login: " "$H/.local/state/plasma-fusion/gate.log"
+check "the stub starts /bin/bash where there is one" grep -q 'timeout -k 1 4 /bin/bash ' "$STUB"
+# Without /bin/bash (NixOS) the stub starts bash through /usr/bin/env.
+gate_bash() { echo "/usr/bin/env bash"; }
+make_stub "$H/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh" "$BASE/stub-env.sh"
+eval "$(sed -n '/^gate_bash() /p' "$DEVICE/fusion-config.sh")"
+n=$(grep -c ' login: ' "$H/.local/state/plasma-fusion/gate.log")
+out=$(login_env "${SYSTEM[@]}" "$BASE/stub-env.sh")
+check "through /usr/bin/env: /bin/sh exits 0 and the environment is unchanged" [ "$out" = "$without" ]
+check "through /usr/bin/env: the check ran" [ "$(grep -c ' login: ' "$H/.local/state/plasma-fusion/gate.log")" -gt "$n" ]
 echo "sourcing all env scripts with the stub: $ms ms"
 for _ in 1 2 3 4 5 6 7 8 9 10 11; do
   t=${EPOCHREALTIME/[.,]/}; login_env "${SYSTEM[@]}" "$STUB" >/dev/null; a+=($(((${EPOCHREALTIME/[.,]/} - t) / 1000)))

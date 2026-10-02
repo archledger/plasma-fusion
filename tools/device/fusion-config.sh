@@ -2025,7 +2025,8 @@ fi
 GATE_SRC=$HERE/gate/plasma-fusion-gate.sh
 GATE_ENGINE=$DATA/plasma-fusion/gate/plasma-fusion-gate.sh
 sh_quote() { local q="'\\''"; printf "'%s'" "${1//\'/$q}"; }
-# The stub and the unit start bash through /usr/bin/env: NixOS has no /bin/bash.
+# bash for the stub and the unit: /bin/bash, or through /usr/bin/env where there is none (NixOS).
+gate_bash() { if [ -x /bin/bash ]; then echo /bin/bash; else echo "/usr/bin/env bash"; fi; }
 gate_stub() {
   cat <<EOF
 # Plasma Fusion login check. Installed by tools/device/fusion-config.sh, removed by
@@ -2034,7 +2035,7 @@ gate_stub() {
 # start: the check runs as its own process with a time limit, its output and exit status are
 # dropped, and this file sets no variable or shell option and never exits.
 [ -r $(sh_quote "$GATE_ENGINE") ] &&
-  timeout -k 1 4 /usr/bin/env bash $(sh_quote "$GATE_ENGINE") login </dev/null >/dev/null 2>&1 || :
+  timeout -k 1 4 $(gate_bash) $(sh_quote "$GATE_ENGINE") login </dev/null >/dev/null 2>&1 || :
 # The on-screen keyboard's terminal keys follow plasma-keyboard updates (docs/parts/keyboard.md); the
 # tool runs only when a package database (rpm, pacman, dpkg, the Nix profiles) changed since its
 # record (a few ms otherwise).
@@ -2061,7 +2062,7 @@ ConditionPathExists=${STATE//%/%%}/gate/notify
 
 [Service]
 Type=exec
-ExecStart=/usr/bin/env bash "${GATE_ENGINE//%/%%}" notify
+ExecStart=$(gate_bash) "${GATE_ENGINE//%/%%}" notify
 Slice=app.slice
 TimeoutStopSec=5s
 
