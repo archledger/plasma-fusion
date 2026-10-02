@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Unit tests of the login check (tools/device/gate/plasma-fusion-gate.sh) against throw-away HOME
-# trees. Test tooling only, not installed. Never touches the caller's HOME, session or systemd:
-# every run is `env -i` with a HOME, XDG_RUNTIME_DIR and fake rpm below BASE.
+# trees, and of what the "My previous desktop" generator reads (tests/previous_theme_test.py). Test
+# tooling only, not installed. Never touches the caller's HOME, session or systemd: every run is
+# `env -i` with a HOME, XDG_RUNTIME_DIR and fake rpm below BASE.
 #
 #   gate-unit.sh BASE [--real-rpm]
 #
@@ -634,6 +635,11 @@ check "e5: empty HOME: exit 0" [ $? = 0 ]
 check "e5: empty HOME: no config written" [ ! -e "$H/.config" ]
 env -i PATH=/usr/bin:/bin bash "$ENGINE" login
 check "e6: no HOME at all: exit 0" [ $? = 0 ]
+
+# ---------- (g) "My previous desktop": what previous-theme.py reads from other programs' files ----------
+mkdir -p "$BASE/g"
+check "g: previous-theme.py reads KConfig text, Global Theme defaults and metadata.json (previous_theme_test.py)" \
+  env -i PATH=/usr/bin:/bin HOME="$BASE/g" TMPDIR="$BASE/g" python3 "$HERE/previous_theme_test.py" "$HERE/../previous-theme.py"
 
 # ---------- (e) timing ----------
 make_home "$BASE/t"

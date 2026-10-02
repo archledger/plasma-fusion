@@ -252,6 +252,29 @@ def build(look):
     return d, lay
 
 
+def one_line(text):
+    """text with its line breaks as spaces: a name or path in a comment must not end the comment."""
+    return " ".join(text.splitlines())
+
+
+def package_name(text, default):
+    """The name in a Global Theme's metadata.json (KPlugin Name, on one line), or default when the
+    file has none: not JSON, not an object, no Name or an empty one."""
+    try:
+        meta = json.loads(text)
+    except (ValueError, RecursionError):
+        return default
+    plugin = meta.get("KPlugin") if isinstance(meta, dict) else None
+    name = plugin.get("Name") if isinstance(plugin, dict) else None
+    return (one_line(name) if isinstance(name, str) else "").strip() or default
+
+
+def defaults_comment(name, today, origin):
+    """The comment at the top of the package's defaults files."""
+    return ("# My previous desktop: the look in effect before Plasma Fusion (%s), saved on %s by\n"
+            "# tools/device/previous-theme.py from %s." % (one_line(name), today, one_line(origin)))
+
+
 def render(entries, comment):
     groups = {}
     for header, key, value, _src in entries:
@@ -296,8 +319,8 @@ def main():
     prev_name = look.lookandfeel
     if look.package:
         try:
-            meta = json.load(open(os.path.join(look.package, "metadata.json"), encoding="utf-8"))
-            prev_name = meta.get("KPlugin", {}).get("Name", prev_name)
+            with open(os.path.join(look.package, "metadata.json"), encoding="utf-8") as fh:
+                prev_name = package_name(fh.read(), prev_name)
         except (OSError, ValueError):
             pass
     for header, key, value, src in defaults + layout:
@@ -311,8 +334,7 @@ def main():
         return 0
 
     today = datetime.date.today().isoformat()
-    comment = ("# My previous desktop: the look in effect before Plasma Fusion (%s), saved on %s by\n"
-               "# tools/device/previous-theme.py from %s." % (prev_name, today, origin))
+    comment = defaults_comment(prev_name, today, origin)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="." + PKG_ID + ".", dir=os.path.dirname(dest))
     try:

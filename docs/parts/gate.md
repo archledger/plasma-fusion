@@ -190,6 +190,12 @@ plasmashell.
 | `contents/layouts/defaults` | kwinrc `ButtonsOnLeft`, `ButtonsOnRight`, `[Windows] BorderlessMaximizedWindows` |
 | `contents/previews/` | the previous theme's `preview.png` and `fullscreenpreview.jpg` |
 
+The comment at the top of both defaults files names the previous theme (its `metadata.json`
+`KPlugin` `Name`, on one line, so a name with line breaks cannot add keys) and the backup; a
+`metadata.json` that is not an object, or has no usable name, gives the theme's id instead
+(2026-10-02: such a file stopped the generator before). `tests/previous_theme_test.py`, run by
+`tests/gate-unit.sh` (case `g`), covers this and the KConfig parsing.
+
 Upstream details this relies on (libklookandfeel 6.7.5 `klookandfeelmanager.cpp`):
 
 - The fonts are applied only when the package "provides" them, and `packageContents()` looks for
