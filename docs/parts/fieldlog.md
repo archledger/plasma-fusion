@@ -148,7 +148,14 @@ them container output, never reach the JSON parser.
   text contains `plasmafusion`, `plasma-fusion` or `PlasmaFusion` (the `org.plasmafusion.*`
   plasmoids and modules, the `plasmafusion-*` KWin scripts, the theme). Keyed by process, file and
   line (`org.plasmafusion.dock/contents/ui/main.qml:88`, "user copy" for `~/.local`, else
-  "system") and the normalised text.
+  "system") and the normalised text. Also the warnings of Qt category
+  `org.kde.plasma.workspace.dbus`, which name no file: Plasma's DBus QML module, used on the laptop
+  by Plasma Fusion's QML only (checked 2026-10-02 in `/usr/share/plasma`, the Qt QML modules and
+  `~/.local/share/plasma`); its `DBus.SignalWatcher` warns `No signal handler for "dbus<signal>"`
+  for a watched signal without a handler (2026-10-02: 1,039 lines from the launcher's
+  `TabletSheet.qml`, which watches `org.kde.kwin.VirtualKeyboard`). Their "where" is
+  `DBus.SignalWatcher (org.kde.plasma.workspace.dbus)`; a third-party plasmoid that uses the module
+  would be counted here too.
 - The Plasma Fusion tools (`plasma-fusion-*` journal identifiers or user units: app icons, power
   tiers): their stderr comes at info priority, so lines with `Traceback`, `...Error`, `error`,
   `failed` (not "failed 0"), `warning:`, `cannot` or `denied` count too. The charge limit's helper

@@ -1463,6 +1463,11 @@ COUNTED = {"plasmashell", "kwin_wayland"}
 ERRWORDS = re.compile(r"Traceback|\b\w*Error\b|\berror\b|\bfailed\b(?!\s+0\b)|\bwarning:|\bcannot\b|\bdenied\b",
                       re.I)
 WHERE = re.compile(r"^((?:file://|qrc:)?\S+?\.(?:qml|js|mjs)):(\d+)(?::\d+)?:?\s*")
+# Qt categories whose warnings are Plasma Fusion's although the line names no file: Plasma's DBus QML
+# module (org.kde.plasma.workspace.dbus) is used on the laptop by Plasma Fusion's QML only (checked
+# 2026-10-02: /usr/share/plasma, the Qt QML modules and ~/.local/share/plasma); its SignalWatcher
+# warns 'No signal handler for "dbus<signal>"' for a watched signal without a handler.
+PF_CATEGORIES = {"org.kde.plasma.workspace.dbus": "DBus.SignalWatcher"}
 
 
 def short_qml(path):
@@ -1537,14 +1542,18 @@ def handle_journal_line(fl, line):
         return
     if PF.search(code_file) or PF.search(msg):
         emit_pf(log, ts, comm, prio, msg, (code_file, d.get("CODE_LINE")))
+    elif cat in PF_CATEGORIES:
+        emit_pf(log, ts, comm, prio, msg, None, where=f"{PF_CATEGORIES[cat]} ({cat})")
     elif comm in COUNTED:
         text = normalise(msg)
         log.emit("noise", key=f"{comm}|{cat}|{text}", ts=ts, comm=comm, cat=cat, prio=prio, text=text)
 
 
-def emit_pf(log, ts, comm, prio, msg, code):
-    m = WHERE.match(msg)
-    if m:
+def emit_pf(log, ts, comm, prio, msg, code, where=None):
+    m = WHERE.match(msg) if where is None else None
+    if where is not None:
+        rest = msg
+    elif m:
         where, rest = f"{short_qml(m.group(1))}:{m.group(2)}", msg[m.end():]
     elif code and code[0]:
         where, rest = short_qml(code[0]) + (f":{code[1]}" if code[1] else ""), msg

@@ -359,8 +359,12 @@ class Journal(unittest.TestCase):
         err = kinds["pf-error"]
         self.assertEqual(err[0]["where"], "org.plasmafusion.dock/contents/ui/main.qml:88")
         self.assertIn("TypeError", err[0]["text"])
-        noise = {g["text"]: g["count"] for g in kinds["noise"]}
-        self.assertEqual(noise['No signal handler for "dbusactiveChanged"'], 3)
+        # Plasma Fusion's DBus.SignalWatcher warnings name no file, only the Qt category; they were
+        # counted as noise and the digest said 0 Plasma Fusion warnings (review of 2026-10-02).
+        dbus = {g["text"]: g for g in w if g["where"] == "DBus.SignalWatcher (org.kde.plasma.workspace.dbus)"}
+        self.assertEqual(dbus['No signal handler for "dbusactiveChanged"']["count"], 3)
+        self.assertNotIn("No signal handler", " ".join(g["text"] for g in kinds["noise"]))
+        self.assertIn("Notification replaced", " ".join(g["text"] for g in kinds["noise"]))
         self.assertEqual(kinds["posture"][0]["posture"], "tablet")
         self.assertEqual(kinds["screen"][0]["field"], "screens changed")
         self.assertEqual(kinds["unit-failed"][0]["unit"], "plasma-fusion-app-icons.service")
@@ -376,6 +380,22 @@ class Journal(unittest.TestCase):
         ring = " ".join(r[5] for r in f.ring)
         self.assertNotIn("chro", ring)
         self.assertIn("launcher: first results for", ring)
+
+    def test_real_dbus_watcher_line(self):
+        # A line of the laptop's user journal of 2026-10-02 (TabletSheet.qml of the launcher watches
+        # org.kde.kwin.VirtualKeyboard), as journalctl -o json prints the fields the tool asks for.
+        state = fresh_dir("dbus-state")
+        os.environ["XDG_STATE_HOME"] = str(state)
+        f = fl.FieldLog()
+        line = (b'{"__CURSOR":"s=1;i=1;t=65ce0a6ea6e5a","__REALTIME_TIMESTAMP":"1790962852446682","_COMM":"plasmashell",'
+                b'"SYSLOG_IDENTIFIER":"plasmashell","PRIORITY":"4","MESSAGE":"No signal handler for '
+                b'\\"dbusactiveClientSupportsTextInputChanged\\"","QT_CATEGORY":"org.kde.plasma.workspace.dbus"}')
+        fl.handle_journal_line(f, line)
+        f.log.flush()
+        text = fl.build_digest("2026-10-02", f.sdir)
+        self.assertIn("| Plasma Fusion errors / warnings | 0 / 1 (1 kinds) |", text)
+        self.assertIn('| 1 | 17:40 | warning | `DBus.SignalWatcher (org.kde.plasma.workspace.dbus)` | '
+                      'No signal handler for "dbusactiveClientSupportsTextInputChanged" |', text)
 
     def test_failed_units_by_result(self):
         # 2026-09-27 on the laptop: kded6 failed once with exit-code, then with core-dump; the table
