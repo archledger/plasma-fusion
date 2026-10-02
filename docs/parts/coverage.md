@@ -2,7 +2,7 @@
 
 How much of the code the automated tests run, per language; what they do not run and why; what
 it would take to reach 80 %; which bug fixes got a regression test; and the policy for tests.
-Measured 2026-10-02. Python, shell and JavaScript at ee8d9d2 (this branch; its product code is
+Measured 2026-10-02. Python, shell and JavaScript at c610efd (this branch; its product code is
 that of 37a4d82), in a fresh fedora:44 container set up with `--deps`, as the workflow does. The
 compiled parts at 223520d: the decoration in such a container, the settings module and the
 navigation effect in the build container of `tools/container/Containerfile` (Plasma 6.7.5) with
@@ -91,10 +91,10 @@ Details that change the numbers:
   hooks. `coverage.sh` puts a wrapper named `env` first in `PATH` that keeps the hooks' variables
   for `env -i` children and is the real `env` otherwise.
 - Tracing makes bash slower, so checks that wait a fixed time can fail under kcov, and the weekly
-  summary will often list them as failed. In the three fresh fedora:44 runs for this page, on a
+  summary will often list them as failed. In the four fresh fedora:44 runs for this page, on a
   shared machine with load averages from about 4 to 19, `offline.sh` failed "service: bash plus
   three gdbus monitor processes" (counted 1.5 s after the start) every time (78 of 79 pass; an
-  earlier run passed it), and `gate-unit.sh` failed "timing: median under 50 ms" in two of them
+  earlier run passed it), and `gate-unit.sh` failed "timing: median under 50 ms" in three of them
   (136 of 137 pass). The build workflow runs `gate-unit.sh` without tracing; no other workflow
   runs `offline.sh`.
 - Python passed to `python3 -` in a heredoc, and JavaScript in a heredoc named JS, has no file:
@@ -122,13 +122,13 @@ Details that change the numbers:
 
 | Language | Product code | Maintainer tools | Test tooling | All |
 |---|---|---|---|---|
-| Python, statements | 87.8 % (5,990 of 6,819) | 0.0 % (0 of 693) | 7.5 % (424 of 5,632) | 48.8 % (6,414 of 13,144) |
+| Python, statements | 87.8 % (5,990 of 6,819) | 0.0 % (0 of 693) | 7.5 % (424 of 5,630) | 48.8 % (6,414 of 13,142) |
 | Shell, lines | 31.4 % (1,167 of 3,714) | 0.0 % (0 of 142) | 12.0 % (604 of 5,015) | 20.0 % (1,771 of 8,871) |
 | JavaScript, code lines | 14.2 % (176 of 1,242) | - | 84.0 % (326 of 388) | 30.8 % (502 of 1,630) |
 | C++, lines | 35.2 % (1,226 of 3,479) | - | - | 35.2 % (1,226 of 3,479) |
 | QML | not measured: 212 files, about 31,800 code lines (16 files, about 3,200 lines, kept from plasma-desktop's Folder View: `UPSTREAM-FILES`) | - | not measured: 20 files, about 850 code lines | not measured: 232 files, about 32,600 code lines |
 
-The test tooling column includes `tools/tests/coverage_summary.py` (371 statements) and
+The test tooling column includes `tools/tests/coverage_summary.py` (369 statements) and
 `tools/tests/coverage.sh` (91 lines), which the measurement itself does not run.
 
 Over the four measured languages, product code: 8,559 of 15,254 statements or lines run (56.1 %;
