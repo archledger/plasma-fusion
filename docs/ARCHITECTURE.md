@@ -138,11 +138,10 @@ and writes only below `$STAGE` (default `stage/home`), in the paths the naming t
   `~/.config/plasma-workspace/env/plasma-fusion-gate.sh`, which runs the check as its own process
   with a time limit. The check compares the installed Plasma, KWin, kscreenlocker, libplasma,
   KDecoration and Qt versions (read with `rpm`, so for now on Fedora only) with the ones recorded
-  as tested; after an update it switches the
-  version-bound parts off (lock screen, compiled decoration, navigation effect, desktop
-  containment) and queues a notification, which `plasma-fusion-gate-notify.service` shows once the
-  desktop is up. `fusion-config.sh` records the new versions and turns the parts back on
-  ([`parts/gate.md`](parts/gate.md)).
+  as tested; after an update it switches the version-bound parts off (lock screen, compiled
+  decoration, navigation effect, desktop containment) and queues a notification, which
+  `plasma-fusion-gate-notify.service` shows once the desktop is up. `fusion-config.sh` records
+  the new versions and turns the parts back on ([`parts/gate.md`](parts/gate.md)).
 - **Power tiers.** `plasma-fusion-powerfx` listens to UPower and power-profiles-daemon on D-Bus and
   makes the desktop lighter at low battery; it gives every value back when the battery recovers or
   the service stops ([`parts/powerfx.md`](parts/powerfx.md)).
