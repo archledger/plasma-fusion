@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# The maintainer reviews every change (ruleset 'main' requires a code owner's approval on pull
+# requests; docs/parts/ci.md).
+* @archledger

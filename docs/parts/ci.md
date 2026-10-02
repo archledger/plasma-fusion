@@ -34,7 +34,8 @@ reason).
   Scorecard's results.
 - Private vulnerability reporting: on; `SECURITY.md` says how to report.
 - Ruleset `main`: the branch cannot be deleted or force-pushed; changes come through pull requests
-  with one approval and the checks `DCO and attribution`, `REUSE compliance` and
+  with one approval from a code owner (`.github/CODEOWNERS`), given after the last push, on a branch
+  up to date with `main`, and the checks `DCO and attribution`, `REUSE compliance` and
   `plasma-fusion RPM (Fedora 44)` passing. Repository admins bypass it: the maintainer pushes to
   `main` directly, as before, and a deliberate history fix stays possible (as on 2026-10-02).
   Dependabot and outside contributions go through reviewed pull requests.
