@@ -14,10 +14,15 @@ statements not run.
 The file list is the repository's tracked files (git ls-files), so a file no test starts counts
 with all of its statements. Test tooling: everything below a tests/, test/ or vsession/
 directory, tools/tests/, tools/vsession/, tools/container/, generators/icons/vsession-*, and the
-checking aids whose headers call them test tooling or verification (TEST_RE). Maintainer tools:
-the programs run by hand to regenerate committed tables and files or to build packages in a
-container, which neither the build nor the package runs (MAINT_RE). Everything else is product
-code: what tools/build.sh runs and what the packages install.
+checking aids a person runs by hand to compare built output with the design boards or to measure
+it (TEST_RE): generators/cursors/sheet.py, generators/icons/compare_boards.py, the decoration's
+tools/shadow-alpha.py, tools/sheet.py and tools/run-preview.sh, and tools/device/power-ab.sh.
+Maintainer tools: the programs run by hand to regenerate committed tables and files, and the
+package build scripts (packaging/build-rpm.sh, which the build workflow also runs, and the
+compiled parts' build-rpm.sh and container-build.sh); neither tools/build.sh nor the package runs
+them (MAINT_RE). Everything else is product code: what tools/build.sh runs and what the packages
+install. Within product code, the build and lint scripts (BUILD_RE) run whenever the build
+runs, so the summary also gives the product figures without them.
 """
 
 import argparse
@@ -33,8 +38,9 @@ TEST_RE = re.compile(r"(^|/)(tests?|vsession)/|^tools/(tests|vsession|container)
                      r"|^packages/decoration-cpp/tools/(shadow-alpha\.py|sheet\.py|run-preview\.sh)$"
                      r"|^tools/device/power-ab\.sh$")
 MAINT_RE = re.compile(r"^generators/icons/(make_[a-z_]+|coverage_report)\.py$|^generators/fonts/make_static\.py$"
-                      r"|^generators/look-and-feel/previews\.py$"
+                      r"|^generators/look-and-feel/previews\.py$|^packaging/build-rpm\.sh$"
                       r"|^packages/[a-z-]+/(tools/)?(build-rpm|container-build)\.sh$")
+BUILD_RE = re.compile(r"^tools/(build\.sh$|build\.d/|build-lib/|checks/)|^generators/[a-z-]+/build\.sh$")
 KINDS = ("product", "maintainer", "tests")
 
 
@@ -298,6 +304,22 @@ def main():
     qml_lines = sum(code_lines(os.path.join(root, f)) for f in qml)
     md.append(f"| QML | {names['qml'][1]} | not measured ({len(qml)} files, about {qml_lines:,} code lines) | | | |")
     summary["languages"]["qml"] = {"files": len(qml), "approx_code_lines": qml_lines}
+
+    # Product code without the build and lint scripts (BUILD_RE), which run whenever the build runs.
+    build_rows = []
+    for lang in ("python", "shell", "js", "cpp"):
+        if lang not in results:
+            continue
+        res = results[lang]
+        rest = [f for f in by_lang.get(lang, []) if kind(f) == "product" and not BUILD_RE.search(f)]
+        c, t, n = totals(res, rest, "product")
+        if (c, t) != tuple(summary["languages"][lang]["totals"]["product"][k] for k in ("covered", "total")):
+            build_rows.append(f"- {names[lang][0]}: {cell(c, t)}")
+        summary["languages"][lang]["totals"]["product_without_build"] = {"covered": c, "total": t, "files": n}
+    if build_rows:
+        md += ["", "Product code without the build and lint scripts, which run whenever the build "
+               "runs (`tools/build.sh`, `tools/build.d/`, `tools/build-lib/`, `tools/checks/`, "
+               "`generators/*/build.sh`):", ""] + build_rows
 
     if tests:
         md += ["", "## Tests run", "", "| Test | Exit status | Seconds |", "|---|---|---|"]
