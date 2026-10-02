@@ -36,7 +36,30 @@ tile out.
 
 ## Install
 
-In the system configuration, for example `/etc/nixos/plasma-fusion.nix` imported from
+With flakes, add the input and the module (pin a tag once releases exist):
+
+```nix
+{
+  inputs.plasma-fusion.url = "github:archledger/plasma-fusion";
+  inputs.plasma-fusion.inputs.nixpkgs.follows = "nixpkgs";
+
+  outputs = { nixpkgs, plasma-fusion, ... }: {
+    nixosConfigurations.<host> = nixpkgs.lib.nixosSystem {
+      modules = [
+        ./configuration.nix
+        plasma-fusion.nixosModules.default
+        { programs.plasma-fusion.enable = true; }
+      ];
+    };
+  };
+}
+```
+
+`flake.nix` also offers the packages (`packages.<system>.{plasma-fusion, plasma-fusion-decoration,
+plasma-fusion-settings, plasma-fusion-navigation}`), and `nix flake check` builds them. Its own
+`nixpkgs` input follows nixos-unstable; with `follows` the system's nixpkgs is used instead.
+
+Without flakes, in the system configuration, for example `/etc/nixos/plasma-fusion.nix` imported from
 `configuration.nix`, with the source pinned to a commit:
 
 ```nix
@@ -70,4 +93,3 @@ generation).
 - The boot splash (`plymouth = true`) is built but not tried on a real NixOS boot.
 - The login greeter styling (`tools/system/greeter-apply.sh`) assumes plasma-login-manager; NixOS
   uses SDDM.
-- A flake (`nix run`, `nixosModules.default`) for the release.
