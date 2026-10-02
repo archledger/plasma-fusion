@@ -123,6 +123,22 @@ def code_lines(path):
     return len(code_line_numbers(path))
 
 
+def upstream_files(root, files):
+    """Files kept unchanged from an upstream project, as listed in an UPSTREAM-FILES file (one
+    path per line, relative to the file's directory; # starts a comment)."""
+    kept = set()
+    for rel in files:
+        if os.path.basename(rel) != "UPSTREAM-FILES":
+            continue
+        base = os.path.dirname(rel)
+        with open(os.path.join(root, rel), encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    kept.add(os.path.normpath(os.path.join(base, line)))
+    return kept
+
+
 def python_results(root, out, files):
     rc = os.path.join(out, "python", "coveragerc")
     if not os.path.exists(rc):
@@ -234,8 +250,8 @@ def main():
     a = ap.parse_args()
     root, out = os.path.realpath(a.root), os.path.realpath(a.out)
 
-    by_lang = {}
-    for rel in tracked_files(root):
+    by_lang, all_files = {}, tracked_files(root)
+    for rel in all_files:
         lang = language(root, rel)
         if lang:
             by_lang.setdefault(lang, []).append(rel)
@@ -280,7 +296,7 @@ def main():
              "cpp": version(["gcovr", "--version"])}
     names = {"python": ("Python", "coverage.py, statements"), "shell": ("Shell (bash)", "kcov, lines"),
              "js": ("JavaScript", "node --experimental-test-coverage, code lines"),
-             "cpp": ("C++", "gcov + gcovr, lines"), "qml": ("QML", "no usable tool (docs/parts/coverage.md)")}
+             "cpp": ("C++", "gcov + gcovr, lines"), "qml": ("QML", "not measured (docs/parts/coverage.md)")}
 
     md = ["# Statement coverage", "",
           f"Commit {git('rev-parse', '--short=7', 'HEAD')}, measured {when} by tools/tests/coverage.sh "
@@ -300,10 +316,22 @@ def main():
         summary["languages"][lang] = {
             "totals": {w: {"covered": c, "total": t, "files": n} for w, (c, t, n) in row.items()},
             "files": {rel: res[rel] for rel in files if rel in res}}
-    qml = by_lang.get("qml", [])
-    qml_lines = sum(code_lines(os.path.join(root, f)) for f in qml)
-    md.append(f"| QML | {names['qml'][1]} | not measured ({len(qml)} files, about {qml_lines:,} code lines) | | | |")
-    summary["languages"]["qml"] = {"files": len(qml), "approx_code_lines": qml_lines}
+    # QML: files and code lines per group; product files kept unchanged from upstream (UPSTREAM-FILES).
+    kept = upstream_files(root, all_files)
+    qml = {w: {"files": 0, "approx_code_lines": 0} for w in KINDS + ("all", "upstream")}
+    for rel in by_lang.get("qml", []):
+        n = code_lines(os.path.join(root, rel))
+        for w in (kind(rel), "all") + (("upstream",) if rel in kept and kind(rel) == "product" else ()):
+            qml[w]["files"] += 1
+            qml[w]["approx_code_lines"] += n
+
+    def qcell(w):
+        n, lines = qml[w]["files"], qml[w]["approx_code_lines"]
+        return f"{n} files, about {lines:,} code lines" if n else "-"
+    product = qcell("product") + (f"; {qml['upstream']['files']} of them ({qml['upstream']['approx_code_lines']:,} "
+                                  "lines) kept from upstream" if qml["upstream"]["files"] else "")
+    md.append(f"| QML | {names['qml'][1]} | {product} | {qcell('maintainer')} | {qcell('tests')} | {qcell('all')} |")
+    summary["languages"]["qml"] = qml
 
     # Product code without the build and lint scripts (BUILD_RE), which run whenever the build runs.
     build_rows = []
