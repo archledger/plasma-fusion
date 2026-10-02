@@ -52,6 +52,7 @@ path = [
     "generators/icons/apptiles/apps.json",
     "tools/tests/perf/baseline.json",
     "tools/tests/perf/budget.json",
+    "fuzz/corpus/**",
 ]
 SPDX-FileCopyrightText = "2026 Wisbendji Fimerlus <archledger236@gmail.com>"
 SPDX-License-Identifier = "CC0-1.0"

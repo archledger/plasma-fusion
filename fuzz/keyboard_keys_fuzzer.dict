@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# libFuzzer dictionary of fuzz/keyboard_keys_fuzzer.py: the key blocks of plasma-keyboard's
+# symbols.qml that the tool looks for.
+"Key {"
+"}"
+"key: "
+"text: "
+"0x2122"
+"0x00AE"
+"0x201C"
+"0x201D"
+"Qt.Key_guillemotleft"
+"Qt.Key_guillemotright"
+"Qt.Key_Semicolon"
+"Qt.Key_section"
+"Qt.Key_QuoteDbl"
+"'\xe2\x84\xa2'"
+"'\xc2\xae'"
+"'\xc2\xab'"
+"'\xc2\xbb'"
+"'\xe2\x80\x9c'"
+"'\xe2\x80\x9d'"
+"\"\xc2\xa7\""
+"'\"'"
+"\";\""

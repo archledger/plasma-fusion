@@ -1,0 +1,7 @@
+wine/Programs/A Vendor/A Program/Uninstall.desktop
+[Desktop Entry]
+Type=Application
+Name=Uninstall
+Icon=/home/user/.local/share/icons/hicolor/48x48/apps/0A1B_uninstall.0.png
+NoDisplay=false
+Hidden=false

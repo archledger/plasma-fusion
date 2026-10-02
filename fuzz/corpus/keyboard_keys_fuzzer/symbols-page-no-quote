@@ -1,0 +1,42 @@
+KeyboardLayout {
+    KeyboardRow {
+                Key {
+                    key: Qt.Key_section
+                    text: "§"
+                }
+                Key {
+                    key:  Qt.Key_Apostrophe
+                    text: '"'
+                }
+    }
+    KeyboardRow {
+                Key {
+                    key: 0x2122
+                    text: '™'
+                }
+                Key {
+                    key: 0x00AE
+                    text: '®'
+                }
+                Key {
+                    key: Qt.Key_guillemotleft
+                    text: '«'
+                }
+                Key {
+                    key: Qt.Key_guillemotright
+                    text: '»'
+                }
+                Key {
+                    key: Qt.Key_Semicolon
+                    text: ";"
+                }
+                Key {
+                    key: 0x201C
+                    text: '“'
+                }
+                Key {
+                    key: 0x201D
+                    text: '”'
+                }
+    }
+}

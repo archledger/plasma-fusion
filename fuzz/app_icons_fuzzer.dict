@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# libFuzzer dictionary of fuzz/app_icons_fuzzer.py: desktop entry and plasmafusionrc tokens.
+"[Desktop Entry]"
+"[Desktop Action new]"
+"Type=Application"
+"Type=Link"
+"NoDisplay=true"
+"Hidden=true"
+"Icon="
+"Icon=/"
+".desktop"
+".svg"
+".png"
+"="
+"\x0a"
+"\x0d"
+"[Icons]"
+"AppIcons="
+"AppIcons=designs"
+"AppIcons=familiar"

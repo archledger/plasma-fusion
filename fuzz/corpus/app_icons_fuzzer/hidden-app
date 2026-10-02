@@ -1,0 +1,7 @@
+org.example.Hidden.desktop
+[Desktop Entry]
+Type=Application
+Icon=org.example.Hidden
+NoDisplay=true
+[Desktop Entry]
+NoDisplay=false

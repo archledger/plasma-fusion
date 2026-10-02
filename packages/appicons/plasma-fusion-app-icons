@@ -63,7 +63,8 @@ NEUTRAL = "#eef1f8"
 
 # The files below are written by other programs (KConfig, packages, Flatpak, the theme): they are
 # read with bytes that are not UTF-8 replaced (a hand-edited Latin-1 line must not stop the tool),
-# and the pure functions next to the readers parse their text.
+# and the pure functions next to the readers parse their text (fuzz/app_icons_fuzzer.py runs them,
+# app_tile_name and fits on arbitrary input).
 
 def parse_mode(text):
     """plasmafusionrc's [Icons] AppIcons: "familiar" (also for an unknown value) or "designs"; the

@@ -79,7 +79,9 @@ def parse_kconfig(path):
 
 def parse_kconfig_text(text):
     """The text of a KConfig file (written by Plasma, the user or another Global Theme) ->
-    {(group, key): value}, as parse_kconfig; a later value of a key wins, None marks a deleted key."""
+    {(group, key): value}, as parse_kconfig; a later value of a key wins, None marks a deleted key.
+    fuzz/previous_theme_fuzzer.py runs it, package_defaults, build, render and package_name on
+    arbitrary files."""
     out = {}
     group = ""
     for raw in text.splitlines():

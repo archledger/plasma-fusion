@@ -1,0 +1,13 @@
+org.kde.konsole.desktop
+[Desktop Entry]
+Type=Application
+Name=Konsole
+Name[de]=Konsole
+Exec=konsole
+Icon=utilities-terminal
+Categories=Qt;KDE;System;TerminalEmulator;
+
+[Desktop Action NewWindow]
+Name=New Window
+Icon=window-new
+Exec=konsole

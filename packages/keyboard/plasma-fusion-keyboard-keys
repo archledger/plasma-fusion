@@ -54,7 +54,8 @@ def version():
 
 def patch_symbols(text):
     """plasma-keyboard's symbols.qml with the second page's row of rare symbols turned into Esc, Tab
-    and the arrows, the symbols moved to the long-press lists: (text, "") or (None, the reason)."""
+    and the arrows, the symbols moved to the long-press lists: (text, "") or (None, the reason).
+    fuzz/keyboard_keys_fuzzer.py runs it on arbitrary text."""
     def keys(m):
         i = m.group("indent")
         def key(code, label, extra=""):
