@@ -227,6 +227,12 @@ Item {
         function dbusenabledChanged() {
             policy.refreshOsk();
         }
+        // KWin's other signals on this interface; without a handler the watcher logs a warning for
+        // each (about a thousand a day in tablet use, field log 2026-10-02).
+        function dbusactiveClientSupportsTextInputChanged() {
+        }
+        function dbusmodeChanged() {
+        }
     }
     function setOskProperty(name: string, value: bool) {
         DBus.SessionBus.asyncCall({

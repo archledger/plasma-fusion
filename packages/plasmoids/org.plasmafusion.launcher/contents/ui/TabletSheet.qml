@@ -125,6 +125,16 @@ FocusScope {
         function dbusvisibleChanged() {
             sheet.refreshOsk();
         }
+        // KWin's other signals on this interface; without a handler the watcher logs a warning for
+        // each (about a thousand a day in tablet use, field log 2026-10-02).
+        function dbusactiveChanged() {
+        }
+        function dbusactiveClientSupportsTextInputChanged() {
+        }
+        function dbusavailableChanged() {
+        }
+        function dbusmodeChanged() {
+        }
     }
     readonly property real keyboardTop: {
         // qmllint disable missing-property
