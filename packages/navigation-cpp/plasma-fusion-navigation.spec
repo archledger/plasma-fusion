@@ -7,7 +7,7 @@
 
 Name:           plasma-fusion-navigation
 Version:        0.1
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        Plasma Fusion tablet navigation gestures for KWin
 
 License:        GPL-2.0-or-later
@@ -55,6 +55,17 @@ KWin's own edges. Derived from Plasma Mobile's task switcher.
 
 %install
 %cmake_install
+# Qt's QML disk cache (~/.cache/kwin/qmlcache) reuses a compiled file while the source's time stamp
+# is unchanged, and rpm clamps every time stamp to the %%changelog date: two releases built on one
+# day ship equal times, and KWin kept running the previous release's effect QML after an update
+# (TaskSwitcherHelpers.qml of an earlier release still ran under 0.1-4 on 2026-10-02). Each QML/JS file gets
+# a time derived from its content instead, before the clamp date so rpm keeps it: the same file
+# gives the same time (reproducible), any change a new one.
+find %{buildroot}%{_datadir}/kwin/effects/plasmafusion_navigation %{buildroot}%{_qt6_qmldir}/org/plasmafusion/navigation \
+  -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 |
+  while IFS= read -r -d '' f; do
+    touch -h -d "@$(( ${SOURCE_DATE_EPOCH:-1700000000} - 1 - 0x$(sha256sum "$f" | cut -c1-6) ))" "$f"
+  done
 
 %files
 %license LICENSES/GPL-2.0-or-later.txt
@@ -63,6 +74,10 @@ KWin's own edges. Derived from Plasma Mobile's task switcher.
 %{_qt6_qmldir}/org/plasmafusion/navigation/
 
 %changelog
+* Fri Oct 02 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-5
+- Give each QML file a time stamp from its content, so an update replaces the
+  effect code that KWin's QML cache kept from an earlier release of the same day
+
 * Thu Oct 01 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-4
 - The home gesture closes an open shell sheet (launcher, Notification Centre)
 - No error and no stray app activation for a gesture with no app open
