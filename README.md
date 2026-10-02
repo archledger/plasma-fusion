@@ -58,6 +58,11 @@ RPMs for Fedora: `packaging/build-rpm.sh` builds the `plasma-fusion` package; th
 parts (`packages/navigation-cpp`, `packages/decoration-cpp`, `packages/kcm-cpp`) have their
 own spec files and container builds.
 
+## Contributing
+
+Bug reports, fixes and ideas are welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md). Security
+problems go privately, as [`SECURITY.md`](SECURITY.md) explains.
+
 ## Licence
 
 Plasma Fusion follows KDE's licensing policy:

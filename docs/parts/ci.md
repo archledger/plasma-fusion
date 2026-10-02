@@ -39,7 +39,10 @@ reason).
   `main` directly, as before, and a deliberate history fix stays possible (as on 2026-10-02).
   Dependabot and outside contributions go through reviewed pull requests.
 - Discussions: on (questions and ideas; issues stay for defects).
-- Social preview: the dark desktop board (`design/previews/Main.webp`, cropped to 1280x640).
+- Social preview: the dark desktop board (`design/previews/Main.webp` scaled to 1024x640 and
+  centred on 1280x640, each side filled with the board's edge colour row by row).
+- OpenSSF Best Practices badge: to be registered by the maintainer at bestpractices.dev (answers
+  prepared on the shared project memory, `artifacts/plasma-fusion/2026-10-02-github/BESTPRACTICES.md`).
 
 ## When something speaks up
 
