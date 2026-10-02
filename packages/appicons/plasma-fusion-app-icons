@@ -351,11 +351,11 @@ MARKER_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" vi
 def write_icon(theme, name, svg):
     path = theme_file(theme, name)
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and not ours(path):
+    if os.path.lexists(path) and not ours(path):
         dest = BACKUP / theme / path.name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        if not dest.exists():
-            shutil.copy2(path, dest)
+        if not os.path.lexists(dest):
+            shutil.copy2(path, dest, follow_symlinks=False)   # a link (app names link to the theme's art/) stays a link
     tmp = path.with_suffix(".svg.tmp")
     tmp.write_text(svg)
     tmp.replace(path)
@@ -366,7 +366,7 @@ def drop_icon(theme, name):
     if path.exists() and ours(path):
         path.unlink()
     saved = BACKUP / theme / (name + ".svg")
-    if saved.exists():
+    if os.path.lexists(saved):
         shutil.move(str(saved), str(path))
 
 
