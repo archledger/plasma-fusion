@@ -116,7 +116,8 @@ and a count.
 ### Plasma Fusion errors
 
 One `journalctl --user -f -a -o json --output-fields=...` (after the saved cursor when it is less
-than 12 h old, else from now). Lines are filtered on their bytes before they are parsed (the
+than 12 h old, else from now; a journalctl that exits or cannot start is started again after 5 s,
+10 s, ... up to 5 minutes). Lines are filtered on their bytes before they are parsed (the
 programs below and "plasma(-)fusion"); about 72,000 user journal lines a day on the laptop, most of
 them container output, never reach the JSON parser.
 

@@ -511,32 +511,45 @@ def fake_proc(root, pid, comm, utime, start, anon_kib, rss_kib):
     (p / "fdinfo" / "12").write_text("pos:\t0\ndrm-driver:\ti915\ndrm-client-id:\t77\ndrm-total-system0:\t120 MiB\n")
 
 
+def fake_setup(d, recs=(), journal=(), journalctl=FAKE_JOURNALCTL, seconds=8, interval=0.5):
+    """A run directory with fake coredumpctl, journalctl and systemctl, /proc, /sys and cgroups; the
+    environment for "run" in it."""
+    bin_, proc, sys_, cg, share = d / "bin", d / "proc", d / "sys", d / "cg", d / "share"
+    for p in (bin_, proc, cg, sys_ / "class/drm/card0-eDP-1", d / "home"):
+        p.mkdir(parents=True)
+    write_exe(bin_ / "coredumpctl", FAKE_COREDUMPCTL)
+    write_exe(bin_ / "journalctl", journalctl)
+    write_exe(bin_ / "systemctl", FAKE_SYSTEMCTL)
+    dumps = d / "dumps.jsonl"
+    dumps.write_text("".join(json.dumps(r) + "\n" for r in recs))
+    jpath = d / "journal.jsonl"
+    jpath.write_bytes(b"".join(l + b"\n" for l in journal))
+    for f, v in (("status", "connected"), ("enabled", "enabled"), ("dpms", "On")):
+        (sys_ / "class/drm/card0-eDP-1" / f).write_text(v + "\n")
+    fake_proc(proc, 5001, "plasmashell", 100, 1000, 150000, 210000)
+    fake_proc(proc, 5002, "kwin_wayland", 500, 900, 25000, 70000)
+    return dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", HOME=str(d / "home"), XDG_STATE_HOME=str(d / "state"),
+                PF_FIELDLOG_PROC=str(proc), PF_FIELDLOG_SYS=str(sys_), PF_FIELDLOG_CGROUP_ROOT=str(cg),
+                PF_FIELDLOG_INTERVAL=str(interval), PF_FIELDLOG_RUN_SECONDS=str(seconds), PF_FIELDLOG_SINCE="2026-10-02",
+                PF_FIELDLOG_SHARE=str(share), PF_FIELDLOG_GATE_LOG=str(d / "gate.log"), TZ="UTC",
+                FAKE_DUMPS=str(dumps), FAKE_JOURNAL=str(jpath), FAKE_LOG=str(d / "calls.log"))
+
+
+def all_events(d):
+    out = []
+    for p in sorted((d / "state/plasma-fusion/fieldlog").glob("events-*.jsonl")):
+        out += fl.read_events(p.name[7:17], p.parent)
+    return out
+
+
 class Run(unittest.TestCase):
     def test_run_with_fakes(self):
         d = fresh_dir("run")
-        bin_, proc, sys_, cg, share = d / "bin", d / "proc", d / "sys", d / "cg", d / "share"
-        for p in (bin_, proc, cg, sys_ / "class/drm/card0-eDP-1", d / "home"):
-            p.mkdir(parents=True)
-        write_exe(bin_ / "coredumpctl", FAKE_COREDUMPCTL)
-        write_exe(bin_ / "journalctl", FAKE_JOURNALCTL)
-        write_exe(bin_ / "systemctl", FAKE_SYSTEMCTL)
-        dumps = d / "dumps.jsonl"
-        recs = fixtures() + [session_record(), app_record()]
-        dumps.write_text("".join(json.dumps(r) + "\n" for r in recs))
-        journal = d / "journal.jsonl"
-        journal.write_bytes(b"\n".join(journal_lines(str(d / "home"))) + b"\n")
-        for f, v in (("status", "connected"), ("enabled", "enabled"), ("dpms", "On")):
-            (sys_ / "class/drm/card0-eDP-1" / f).write_text(v + "\n")
+        env = fake_setup(d, fixtures() + [session_record(), app_record()], journal_lines(str(d / "home")))
+        proc, sys_, share = d / "proc", d / "sys", d / "share"
         (d / "gate.log").write_text("2026-10-02T09:00:14-0400 login: theme=org.plasmafusion.dark.desktop versions=changed; "
                                     "lock screen: stock until the next tested login (31 ms)\n"
                                     "2026-10-02T09:00:14-0400   moved aside plasma-fusion-lockscreen.conf\n")
-        fake_proc(proc, 5001, "plasmashell", 100, 1000, 150000, 210000)
-        fake_proc(proc, 5002, "kwin_wayland", 500, 900, 25000, 70000)
-        env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", HOME=str(d / "home"), XDG_STATE_HOME=str(d / "state"),
-                   PF_FIELDLOG_PROC=str(proc), PF_FIELDLOG_SYS=str(sys_), PF_FIELDLOG_CGROUP_ROOT=str(cg),
-                   PF_FIELDLOG_INTERVAL="0.5", PF_FIELDLOG_RUN_SECONDS="8", PF_FIELDLOG_SINCE="2026-10-02",
-                   PF_FIELDLOG_SHARE=str(share), PF_FIELDLOG_GATE_LOG=str(d / "gate.log"), TZ="UTC",
-                   FAKE_DUMPS=str(dumps), FAKE_JOURNAL=str(journal), FAKE_LOG=str(d / "calls.log"))
         p = subprocess.Popen([sys.executable, str(TOOL), "run"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             time.sleep(2.5)
@@ -590,6 +603,22 @@ class Run(unittest.TestCase):
         calls = (d / "calls.log").read_text()
         for verb in ("restart", "enable", "start ", "stop", "daemon-reload"):
             self.assertNotIn(f"systemctl --user {verb}", calls.replace("--no-pager ", ""))
+
+    def test_journalctl_that_cannot_start_is_retried_slowly(self):
+        # Popen raises (here: the program's interpreter is missing); this used to be retried at once,
+        # in a loop, at 65 % of a core (review of 2026-10-02).
+        d = fresh_dir("run-nojournal")
+        env = fake_setup(d, journalctl="#!/nonexistent/interpreter\n", seconds=4, interval=1)
+        before = os.times()
+        r = subprocess.run([sys.executable, str(TOOL), "run"], env=env, capture_output=True, timeout=30)
+        after = os.times()
+        self.assertEqual(r.returncode, 0, r.stderr.decode())
+        cpu = after.children_user + after.children_system - before.children_user - before.children_system
+        starts = sum(g["count"] for g in fl.aggregate(all_events(d))
+                     if g["kind"] == "fieldlog-error" and g.get("key") == "journalctl-start")
+        self.assertGreaterEqual(starts, 1)
+        self.assertLessEqual(starts, 2)
+        self.assertLess(cpu, 2.0)
 
 
 def unit_section(name):

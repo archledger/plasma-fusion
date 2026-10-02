@@ -903,7 +903,11 @@ class FieldLog:
             self.journal = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.DEVNULL,
                                             stderr=subprocess.DEVNULL)
         except OSError as e:
+            # Not found, or no memory or processes left: try again later, with the same back-off as
+            # a journalctl that exits.
             self.journal = None
+            self.jfails += 1
+            self.jrestart_at = time.monotonic() + min(300, 5 * self.jfails)
             self.log.emit("fieldlog-error", key="journalctl-start", text=f"journalctl: {e}")
             return
         os.set_blocking(self.journal.stdout.fileno(), False)
