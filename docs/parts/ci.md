@@ -17,7 +17,7 @@ do when one of them speaks up. Set up 2026-10-01 (CI) and 2026-10-02 (automation
 | `scorecard` | push to `main`, weekly, branch-protection changes | OpenSSF Scorecard: findings in the Security tab, published score for the README badge |
 | `labeler` | pull requests | labels by the parts a pull request changes (`.github/labeler.yml`: icons, shell, kwin, settings, theme, boot, system, packaging, design, docs, ci) |
 | `cflite-pr` | pull requests that change a fuzzed tool, `fuzz/` or `.clusterfuzzlite/` | ClusterFuzzLite: the fuzzers (below) for 5 minutes in all against the change; a crash fails the check |
-| `cflite-batch` | Sundays 02:40 UTC, by hand | ClusterFuzzLite: the fuzzers for 30 minutes in all on `main`; builds up the corpus the pull request runs start from |
+| `cflite-batch` | Sundays 02:40 UTC and by hand; pruning Sundays 04:40 UTC | ClusterFuzzLite: the fuzzers for 30 minutes in all on `main`, building up the corpus the pull request runs start from; the 04:40 run prunes that corpus |
 
 Every action is pinned to a commit hash with its version in a comment; every job starts with a
 read-only token and widens only what it needs (`issues: write` for the watcher's issue,
@@ -61,7 +61,12 @@ tool imports passed as hidden imports, next to the seed corpus and the dictionar
 use UndefinedBehaviorSanitizer: OSS-Fuzz builds Python fuzzers only with address or undefined, and
 with an interpreter built with neither, AddressSanitizer finds nothing more in pure Python and ran
 a fifth to two thirds as many inputs (about 1 100, 380 and 22 000 a second). The corpus lives
-in the workflow artifacts (no storage repository); there is no corpus pruning or coverage job.
+in the workflow artifacts (`cifuzz-corpus-<fuzzer>`, no storage repository): each batch run adds
+every new input to it, so two hours after the weekly batch run `cflite-batch` runs again in prune
+mode (ClusterFuzzLite asks for pruning where batch fuzzing runs), and libFuzzer's merge keeps the
+inputs that add coverage (the local runs' corpora: 652 files to 47, 742 to 98, 463 to 4). It is
+a run of its own because one run cannot store two artifacts of the same name. There is no coverage
+job.
 
 Run a fuzzer locally (scratch on disk under `build/`; new inputs go to the first directory, never
 the seed directory):

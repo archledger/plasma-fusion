@@ -4,15 +4,18 @@
 # ClusterFuzzLite batch fuzzing (docs/parts/ci.md, "Fuzzing"): weekly and by hand, the fuzzers in
 # fuzz/ run on main for 30 minutes in all (batch mode). The corpus they build up is kept as an
 # artifact, which the next batch run and the pull request runs (cflite-pr) start from. A crash or a
-# failed property fails the run and its input is kept as an artifact. The actions clone the
-# repository themselves (no checkout step) and run in their own containers; the sanitizer is the
-# pull request runs' (cflite-pr.yml says why).
+# failed property fails the run and its input is kept as an artifact. Two hours after the weekly
+# run, a run of its own prunes that corpus to the inputs that add coverage (prune mode, libFuzzer's
+# merge), as ClusterFuzzLite asks where batch fuzzing runs; one run cannot keep two artifacts of the
+# same name. The actions clone the repository themselves (no checkout step) and run in their own
+# containers; the sanitizer is the pull request runs' (cflite-pr.yml says why).
 
 name: cflite-batch
 
 on:
   schedule:
-    - cron: "40 2 * * 0" # Sundays 02:40 UTC
+    - cron: "40 2 * * 0" # Sundays 02:40 UTC: fuzzing
+    - cron: "40 4 * * 0" # Sundays 04:40 UTC: pruning the corpus
   workflow_dispatch:
 
 permissions:
@@ -25,6 +28,7 @@ concurrency:
 jobs:
   fuzz:
     name: "ClusterFuzzLite (batch)"
+    if: github.event.schedule != '40 4 * * 0'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -46,4 +50,30 @@ jobs:
           sanitizer: undefined
           mode: batch
           fuzz-seconds: 1800
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  prune:
+    name: "ClusterFuzzLite (corpus pruning)"
+    if: github.event.schedule == '40 4 * * 0'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read # the batch run's corpus artifacts
+      contents: read
+    steps:
+      - name: Build the fuzzers
+        id: build
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: python
+          sanitizer: undefined
+
+      - name: Prune the corpus
+        id: prune
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: python
+          sanitizer: undefined
+          mode: prune
+          fuzz-seconds: 600
           github-token: ${{ secrets.GITHUB_TOKEN }}
