@@ -56,7 +56,13 @@ unit's `ExecSearchPath` lists all four and `/usr/local/libexec/plasma-fusion/`):
    whose file would not fit in a file name (255 bytes; a desktop id below Wine's nested start menu
    can be longer) is left out: that app keeps its own icon on the neutral tile.
 4. Writes the marker icon `plasmafusion-familiar` (kept for older shells), records what it built from which file and
-   mtime (`~/.local/state/plasma-fusion/app-icons.json`) and sends KIconLoader's `iconChanged`.
+   mtime (`~/.local/state/plasma-fusion/app-icons.json`) and sends KIconLoader's `iconChanged`
+   (`busctl`).
+
+`ExecSearchPath` also becomes the service's `PATH`, so the tool appends
+`/usr/local/bin:/usr/bin:/bin:/run/current-system/sw/bin:/run/wrappers/bin` at start, as powerfx
+does. Before 2026-10-02 the service found neither `busctl` nor `rsvg-convert`: `iconChanged` was
+never sent from the service, and without PySide6 it drew nothing.
 
 A per-user icon file the tool would replace is kept in `~/.local/state/plasma-fusion/app-icons-backup`
 and put back by `remove`. Only files carrying the tool's marker comment are ever deleted. The backup

@@ -46,6 +46,11 @@
 # Record: ~/.local/state/plasma-fusion/app-icons.json (what was built from which file and mtime).
 import base64, colorsys, fcntl, io, json, math, os, pathlib, shutil, signal, subprocess, sys, time
 
+# The unit finds this program through ExecSearchPath, which also becomes its PATH: busctl and
+# rsvg-convert come from the system's own directories (on NixOS the system profile).
+os.environ["PATH"] = ":".join(p for p in (os.environ.get("PATH", ""),
+                                          "/usr/local/bin:/usr/bin:/bin:/run/current-system/sw/bin:/run/wrappers/bin") if p)
+
 VERSION = 1
 HOME = pathlib.Path.home()
 DATA = pathlib.Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
