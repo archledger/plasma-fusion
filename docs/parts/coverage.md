@@ -101,15 +101,15 @@ Details that change the numbers:
   coverage.py and node cannot report it, and kcov does not count heredoc lines. It is in no
   denominator. The summary counts it apart ("Code inside shell scripts (not measured)"): in
   product code, 468 Python statements in 20 blocks and 96 JavaScript code lines in 2 blocks. Of
-  the Python, 268 statements are in five blocks of `tools/device/fusion-config.sh` and 8 in
-  `tools/system/plymouth-install.sh`, which no test runs; the other 192 are in the build and lint
+  the Python, 269 statements are in five blocks of `tools/device/fusion-config.sh` and 8 in
+  `tools/system/plymouth-install.sh`, which no test runs; the other 191 are in the build and lint
   scripts, which the build runs. Of the JavaScript, 80 lines are the power tiers widget script
   (`SHELL_JS` in `packages/powerfx/plasma-fusion-powerfx`) and 16 the tiling script in
-  `fusion-config.sh`. Counted as product code, Python would be between 82.2 % (5,990 of 7,287,
-  no block counted as run) and 84.8 % (6,182 of 7,287, every block of the build and lint
-  scripts counted as run in full), and JavaScript between 13.2 % (176 of 1,338) and 19.1 % (256
-  of 1,338, the widget script counted as run in full). Code passed with `python3 -c` is not
-  counted at all.
+  `fusion-config.sh`. Counted as product code (measured at `46fe2e4`), Python would be between
+  85.5 % (7,724 of 9,037, no block counted as run) and 87.6 % (7,915 of 9,037, every block of the
+  build and lint scripts counted as run in full), and JavaScript between 13.1 % (176 of 1,339) and
+  19.1 % (256 of 1,339, the widget script counted as run in full). Code passed with `python3 -c`
+  is not counted at all.
 - The weather card's test used to build `weather.js` into a `new Function()`, which V8 cannot map
   to a file; it now loads it with `vm.runInThisContext` under the file's URL (223520d). The power
   tiers widget script (`SHELL_JS` in `packages/powerfx/plasma-fusion-powerfx`) is still built that
@@ -120,70 +120,31 @@ Details that change the numbers:
 
 ## Results (2026-10-02)
 
+Measured by the `coverage` workflow at `46fe2e4` (run 37058719980), after the day's merges: the
+field log and its tests, the fuzzers, and the random tests of the decoration and the settings
+module. The first measurement, at `1944181` before those merges, had Python at 87.8 % (5,990 of
+6,819), shell at 31.4 % and C++ at 35.2 %; the settings module had no test then.
+
 | Language | Product code | Maintainer tools | Test tooling | All |
 |---|---|---|---|---|
-| Python, statements | 87.8 % (5,990 of 6,819) | 0.0 % (0 of 693) | 7.5 % (424 of 5,630) | 48.8 % (6,414 of 13,142) |
-| Shell, lines | 31.4 % (1,167 of 3,714) | 0.0 % (0 of 142) | 12.0 % (604 of 5,015) | 20.0 % (1,771 of 8,871) |
-| JavaScript, code lines | 14.2 % (176 of 1,242) | - | 84.0 % (326 of 388) | 30.8 % (502 of 1,630) |
-| C++, lines | 35.2 % (1,226 of 3,479) | - | - | 35.2 % (1,226 of 3,479) |
-| QML | not measured: 212 files, about 31,800 code lines (16 files, about 3,200 lines, kept from plasma-desktop's Folder View: `UPSTREAM-FILES`) | - | not measured: 20 files, about 850 code lines | not measured: 232 files, about 32,600 code lines |
+| Python, statements | 90.1 % (7,724 of 8,569) | 0.0 % (0 of 694) | 19.1 % (1,275 of 6,677) | 56.5 % (8,999 of 15,940) |
+| Shell, lines | 32.2 % (1,259 of 3,911) | 0.0 % (0 of 142) | 15.5 % (859 of 5,528) | 22.1 % (2,118 of 9,581) |
+| JavaScript, code lines | 14.2 % (176 of 1,243) | - | 84.0 % (326 of 388) | 30.8 % (502 of 1,631) |
+| C++, lines | 50.9 % (1,890 of 3,710) | - | - | 50.9 % (1,890 of 3,710) |
+| QML | not measured: 212 files, about 31,900 code lines (16 files, about 3,200 lines, kept from plasma-desktop's Folder View: `UPSTREAM-FILES`) | - | not measured: 20 files, about 850 code lines | not measured: 232 files, about 32,700 code lines |
 
-The test tooling column includes `tools/tests/coverage_summary.py` (369 statements) and
-`tools/tests/coverage.sh` (91 lines), which the measurement itself does not run.
+The test tooling column includes `tools/tests/coverage_summary.py` and `tools/tests/coverage.sh`,
+which the measurement itself does not run, and the fuzzers (`fuzz/`), which run in their own
+workflows.
 
-Over the four measured languages, product code: 8,559 of 15,254 statements or lines run (56.1 %;
+Over the four measured languages, product code: 11,049 of 17,433 statements or lines run (63.4 %;
 the units differ per tool, so this is a rough figure). Product code includes the build and lint
-scripts, which run whenever the build runs: without them, shell is at 22.3 % (728 of 3,263) and
-Python at 87.5 % (5,718 of 6,536). With the maintainer tools counted as product code, Python is
-at 79.7 % (5,990 of 7,512); with the hand-run Python checking aids counted as well (514
-statements, none run), at 74.6 % (5,990 of 8,026). The QML is the largest body of code, about
-twice the product code of the four measured languages together, and no test measures it yet.
-
-### Python, product code by area
-
-| Area | Files | Statements | Run | % |
-|---|---|---|---|---|
-| generators/icons | 31 | 3,111 | 3,011 | 96.8 % |
-| generators/plasma-style | 2 | 755 | 736 | 97.5 % |
-| generators/plymouth | 2 | 618 | 569 | 92.1 % |
-| packages/appicons | 1 | 467 | 268 | 57.4 % |
-| generators/cursors | 3 | 335 | 307 | 91.6 % |
-| packages/color-schemes | 1 | 320 | 290 | 90.6 % |
-| tools/checks | 2 | 283 | 272 | 96.1 % |
-| generators/decoration | 1 | 247 | 244 | 98.8 % |
-| tools/device | 1 | 239 | 0 | 0.0 % |
-| generators/wallpapers | 1 | 231 | 219 | 94.8 % |
-| packages/keyboard | 1 | 128 | 0 | 0.0 % |
-| generators/look-and-feel | 1 | 53 | 52 | 98.1 % |
-| packages/gtk | 1 | 32 | 22 | 68.8 % |
-
-### Shell, product code by area
-
-| Area | Files | Lines | Run | % |
-|---|---|---|---|---|
-| tools/device | 7 | 2,215 | 537 | 24.2 % |
-| tools/system | 4 | 586 | 0 | 0.0 % |
-| tools/build.d | 21 | 365 | 364 | 99.7 % |
-| packages/powerfx | 1 | 262 | 191 | 72.9 % |
-| tools/pen | 1 | 122 | 0 | 0.0 % |
-| tools/build-lib | 1 | 46 | 40 | 87.0 % |
-| packages/power | 1 | 40 | 0 | 0.0 % |
-| packages/compat | 1 | 38 | 0 | 0.0 % |
-| tools (build.sh) | 1 | 23 | 18 | 78.3 % |
-| tools/checks | 1 | 11 | 11 | 100.0 % |
-| generators/plymouth | 1 | 6 | 6 | 100.0 % |
-
-In `tools/device`: `fusion-config.sh` 0 of 1,119, `fusion-restore.sh` 0 of 203,
-`gate/plasma-fusion-gate.sh` 537 of 687 (78.2 %), the profile backup and lock screen scripts 0 of
-206.
-
-### JavaScript, product code by area
-
-| Area | Files | Code lines | Run | % |
-|---|---|---|---|---|
-| packages/look-and-feel | 5 | 539 | 0 | 0.0 % |
-| packages/plasmoids | 6 | 519 | 176 | 33.9 % |
-| packages/kwin | 1 | 184 | 0 | 0.0 % |
+scripts, which run whenever the build runs: without them, shell is at 23.7 % (816 of 3,441) and
+Python at 89.9 % (7,452 of 8,286). With the maintainer tools counted as product code, Python is
+at 83.4 % (7,724 of 9,263); with the hand-run Python checking aids counted as well (514
+statements, none run), at 79.0 % (7,724 of 9,777). The field log is at 85.3 % (1,443 of 1,691)
+under its own tests. The QML is the largest body of code, about twice the product code of the
+four measured languages together, and no test measures it yet.
 
 `weather.js` is the only product file a node test loads: 176 of 191 code lines (92.1 %).
 
@@ -191,9 +152,9 @@ In `tools/device`: `fusion-config.sh` 0 of 1,119, `fusion-restore.sh` 0 of 203,
 
 | Part | Lines | Run | % | Test |
 |---|---|---|---|---|
-| decoration-cpp (`src/`) | 1,359 | 1,226 | 90.2 % | `pfdeco-preview`, dark and light |
-| kcm-cpp (`src/`) | 1,345 | 0 | 0.0 % | none runs without a Plasma session |
-| navigation-cpp (`src/`) | 775 | 0 | 0.0 % | none runs without KWin |
+| decoration-cpp (`src/`) | 1,359 | 1,273 | 93.7 % | `pfdeco-preview`, dark and light, and its random scenes (`pfdeco-fuzz`) |
+| kcm-cpp (`src/`) | 1,355 | 617 | 45.5 % | `kcmctl-load` and the random configuration test `kcmctl-fuzz` (default size) |
+| navigation-cpp (`src/`) | 996 | 0 | 0.0 % | none runs without KWin |
 
 ### QML
 
@@ -225,7 +186,7 @@ to it as well:
 - **The per-user installer and its undo** (`fusion-config.sh`, `fusion-restore.sh`,
   `previous-theme.py`, `pen-defaults.sh`, `backup-profile.sh`, `restore-profile.sh`,
   `lockscreen-enable.sh` and `-disable.sh`; 1,650 shell lines and 239 Python statements, plus
-  268 Python statements in `fusion-config.sh`'s heredocs that are not counted). They
+  269 Python statements in `fusion-config.sh`'s heredocs that are not counted). They
   change a live Plasma session through `kreadconfig6`, `kwriteconfig6`, `busctl`,
   `plasma-apply-*` and plasmashell's scripting. The private-session suites run
   `fusion-config.sh` (`tools/tests/icons`, `tools/tests/matrix`, `tools/tests/perf`, the gate
@@ -258,17 +219,17 @@ to it as well:
 
 Per language, product code. A day is a working day of one person.
 
-- **Python** (87.8 %, above 80 %; 82.2 to 84.8 % with the Python in heredocs counted). To keep it
+- **Python** (90.1 %, above 80 %; the Python in heredocs is not counted, see above). To keep it
   there as code grows: a test for `previous-theme.py` with a throw-away HOME, like `gate-unit.sh`
   (about 1 day); a test for `plasma-fusion-keyboard-keys` against a copy of plasma-keyboard's layout
   files (half a day); the app icon tool's watch loop (inotify on the application directories) over
   temporary directories (1 day). Counting the maintainer tools, a job that runs them and compares
   their output with the committed tables (`capture.json`, `outlines.json`, `glyphs.json`,
   `mimetable.json`) would cover them and check that the tables are current (1 to 2 days).
-- **Shell** (31.4 %; 80 % needs 2,972 of 3,714 lines, 1,805 more). A unit harness for
+- **Shell** (32.2 %; 80 % needs 3,129 of 3,911 lines, 1,870 more). A unit harness for
   `fusion-config.sh` and `fusion-restore.sh` like `gate-unit.sh`: a throw-away HOME and stubs for
   `busctl` (plasmashell's scripting), `plasma-apply-*` and `kwriteconfig6` that record their calls
-  (about 3 to 5 days for about 75 % of those 1,322 lines; it would also run the 268 Python
+  (about 3 to 5 days for about 75 % of those 1,322 lines; it would also run the 269 Python
   statements in `fusion-config.sh`'s heredocs, which only moving them into files lets coverage.py
   count); the `tools/system` scripts in a container with stubs for `plymouth-set-default-theme` and
   `dracut` (2 days, about 450 of 586 lines); the pen, profile, lock screen, charge limit and
@@ -276,19 +237,18 @@ Per language, product code. A day is a working day of one person.
   gate engine from 78 % to 90 % (half a day). In all about 7 to 10 days. A quicker but partial step:
   run the private-session suites in the Plasma test containers with kcov's `BASH_ENV` hook, since
   they already run `fusion-config.sh --install`.
-- **JavaScript** (14.2 %; 80 % needs 994 of 1,242 code lines, 818 more). Node tests with a fake
+- **JavaScript** (14.2 %; 80 % needs 995 of 1,243 code lines, 819 more). Node tests with a fake
   scripting runtime for the layout scripts (`packages/powerfx/tests/fake-shell.js` already fakes
   desktops and panels): about 450 of their 526 lines, 2 days; unit tests for `launcher.js` and
   `formats.js`: about 180 lines, 1 day; the attach KWin script against a fake `workspace`: about 150
   lines, 1 day; the icon tables and `FolderTools.js` (kept from plasma-desktop, by its copyright
   line; it reads `Kirigami.Units`, so it needs a stub): about 100 lines, half a day. Each test must
   load its file under its URL, as the weather test now does.
-- **C++** (35.2 %; 80 % needs 2,784 of 3,479 lines, 1,558 more). The decoration is at 90.2 %, but
-  only this measurement and `packages/decoration-cpp/tools/run-preview.sh` (by hand, on the
-  ThinkPad) run `pfdeco-preview`: registering it with `ctest` would let the `compiled` workflow
-  run it on every change to the decoration (half a day). The settings module: `kcmctl` offscreen
-  in CI with a throw-away HOME and a stand-in for plasmashell's D-Bus scripting, covering load,
-  save, defaults and every property (3 to 5 days, about 65 to 75 % of its 1,345 lines). The
+- **C++** (50.9 %; 80 % needs 2,968 of 3,710 lines, 1,078 more). The decoration is at 93.7 %, with
+  its preview checks and random scenes registered with `ctest` (the `compiled` and `sanitizers`
+  workflows run them). The settings module is at 45.5 % with `kcmctl-load` and `kcmctl-fuzz`; its
+  shell scripts (`shell.cpp`) need a stand-in for plasmashell's D-Bus scripting to be reached
+  (2 to 3 days, to about 70 %). The
   navigation effect: `kwin-devel` 6.7.5 ships no test files (`rpm -ql kwin-devel`), so either the
   private-session scenarios run in the Plasma test containers with a `--coverage` build (gcov
   writes its data when KWin exits cleanly), or the parts that do not need KWin are split out and

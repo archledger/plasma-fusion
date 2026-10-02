@@ -152,7 +152,8 @@ def upstream_files(root, files):
 
 def embedded_blocks(path):
     """The Python and JavaScript a shell script passes to an interpreter in a heredoc: Python when
-    the command before the operator is `python3 -` (also over continued lines), JavaScript when the
+    the command before the operator is `python3 -`, with or without options such as `-I` (also over
+    continued lines), JavaScript when the
     delimiter is JS. Returns (language, first line, text) for each; an operator inside a quoted
     string, in a comment or without its closing delimiter is not a heredoc."""
     with open(path, encoding="utf-8", errors="replace") as f:
@@ -175,7 +176,7 @@ def embedded_blocks(path):
             end += 1
         if end == len(lines):
             continue
-        lang = "python" if re.search(r"\bpython3?\s+-(\s|$)", head) else "js" if word == "JS" else None
+        lang = "python" if re.search(r"\bpython3?(\s+-[A-Za-z]+)*\s+-(\s|$)", head) else "js" if word == "JS" else None
         if lang:
             blocks.append((lang, i + 1, "\n".join(lines[i:end])))
         i = end + 1
