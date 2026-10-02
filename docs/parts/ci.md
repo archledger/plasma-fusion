@@ -172,14 +172,16 @@ run the default seed; the weekly and manual runs of the `sanitizers` workflow ta
 | Part | Tests | Lines | Branches |
 |---|---|---|---|
 | decoration | the preview checks | 1235 of 1370 (90.1 %) | 608 of 825 (73.7 %) |
-| decoration | the preview checks and `pfdeco-fuzz` | 1281 of 1370 (93.5 %) | 658 of 825 (79.8 %) |
+| decoration | the preview checks and `pfdeco-fuzz` (200 scenes, seed 1) | 1282 of 1370 (93.6 %) | 658 of 825 (79.8 %) |
 | settings module | `kcmctl-load` | 315 of 1374 (22.9 %) | 82 of 940 (8.7 %) |
-| settings module | `kcmctl-load` and `kcmctl-fuzz` | 744 of 1374 (54.1 %) | 339 of 940 (36.1 %) |
+| settings module | `kcmctl-load` and `kcmctl-fuzz` (25 rounds, seed 1) | 632 of 1374 (46.0 %) | 284 of 940 (30.2 %) |
+| settings module | `kcmctl-load` and `kcmctl-fuzz` (100 rounds, seed 20261002: the weekly size) | 811 of 1374 (59.0 %) | 401 of 940 (42.7 %) |
 
-What the tests do not reach: in the settings module, `src/shell.cpp` (the Plasma shell scripts for
-the dock, the top bars, the desktop and the layout reset) stays at 49 of 405 lines, because no
-Plasma shell answers on the tests' private bus; a stand-in `org.kde.plasmashell` for kcmctl would
-reach it. The navigation effect has no tests (`packages/navigation-cpp/` has open work).
+What the tests do not reach: in the settings module, `src/kcm.cpp` reaches 588 of 961 lines with
+the default run (755 at the weekly size), but `src/shell.cpp` (the Plasma shell scripts for the
+dock, the top bars, the desktop and the layout reset) only 40 of 405 (52), because no Plasma shell
+answers on the tests' private bus; a stand-in `org.kde.plasmashell` for kcmctl would reach it. The
+navigation effect has no tests (`packages/navigation-cpp/` has open work).
 
 Run it locally in a Fedora 44 container (the source tree can stay read-only):
 
@@ -199,12 +201,14 @@ matching report (UndefinedBehaviorSanitizer for the overflows, AddressSanitizer 
 free, LeakSanitizer for the leak).
 
 The random tests, the same day: with the default seed, `pfdeco-fuzz` (200 scenes) and
-`kcmctl-fuzz` (25 rounds) pass with no sanitizer report. Two errors planted where only inputs the
-fixed tests never use reach them (not committed) were each found by the random test alone: a heap
-overflow in the decoration's `createButtons()` for an `ExcludeFromCapture` button failed
-`pfdeco-fuzz` in scene 1 with an UndefinedBehaviorSanitizer report while both preview tests passed,
-and a heap overflow in the settings module's `loadConfigState()` for `[Input] TabletMode=off` failed
-`kcmctl-fuzz` in round 2 while `kcmctl-load` passed.
+`kcmctl-fuzz` (25 rounds) pass with no sanitizer report, and so does a run of the weekly size with
+seed 20261002 (1000 scenes in 119 s; 100 rounds in 92 s, with 50 saves among their 993 commands).
+Two errors planted
+where only inputs the fixed tests never use reach them (not committed) were each found by the
+random test alone, with an UndefinedBehaviorSanitizer report: a heap overflow in the decoration's
+`createButtons()` for an `ExcludeFromCapture` button failed `pfdeco-fuzz` while both preview tests
+passed, and a heap overflow in the settings module's `loadConfigState()` for
+`[Input] TabletMode=off` failed `kcmctl-fuzz` while `kcmctl-load` passed.
 
 ## Warnings, build flags, debug information, repeatability, hardening
 
