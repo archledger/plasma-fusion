@@ -37,6 +37,10 @@ if [ "$count" -eq 0 ]; then
   exit 1
 fi
 
+# The part's tests must all be there: a test whose requirement is missing is left out by CMake,
+# and ctest would pass without it.
+"$here/../tests/ctest-required.sh" "$src" "$build"
+
 export QT_QPA_PLATFORM=offscreen
 # Stop at the first error of either sanitizer; LeakSanitizer runs at exit.
 export ASAN_OPTIONS=halt_on_error=1:abort_on_error=1:detect_leaks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1

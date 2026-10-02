@@ -19,6 +19,7 @@ on:
       - "packages/decoration-cpp/**"
       - "packages/kcm-cpp/**"
       - "packages/color-schemes/*.colors"
+      - "tools/tests/ctest-required.sh"
       - ".github/workflows/compiled.yml"
   push:
     branches: ["main"]
@@ -27,6 +28,7 @@ on:
       - "packages/decoration-cpp/**"
       - "packages/kcm-cpp/**"
       - "packages/color-schemes/*.colors"
+      - "tools/tests/ctest-required.sh"
       - ".github/workflows/compiled.yml"
   # Weekly, so that a Plasma update in Fedora 44 is noticed without a change here.
   schedule:
@@ -86,4 +88,5 @@ jobs:
           cmake -S "packages/$PACKAGE" -B "$RUNNER_TEMP/build" -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           cmake --build "$RUNNER_TEMP/build"
+          tools/tests/ctest-required.sh "packages/$PACKAGE" "$RUNNER_TEMP/build"
           ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure

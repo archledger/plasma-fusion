@@ -16,6 +16,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/sanitizers/**"
+      - "tools/tests/ctest-required.sh"
       - ".github/workflows/sanitizers.yml"
   push:
     branches: ["main"]
@@ -25,6 +26,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/sanitizers/**"
+      - "tools/tests/ctest-required.sh"
       - ".github/workflows/sanitizers.yml"
   # Weekly, so that a library update in Fedora 44 is checked without a change here.
   schedule:
