@@ -17,6 +17,8 @@ Layout of each theme:
   places/16, places/22, devices/16, devices/22 (+ @2x/@3x)              monochrome small sizes
   */symbolic                                                           NAME-symbolic and symbolic names
   breeze/<dir>/   names handed back to Breeze (capture.json), as links into /usr/share/icons
+  designed-apps.txt  the app icon names drawn with an app's own designed tile (names.DESIGNED; read
+                  by plasma-fusion-app-icons, which leaves them alone) - not a lookup dir
 Every lookup directory holds relative symlinks into art/ or glyphs/ (or copies with --copies).
 """
 import argparse
@@ -31,6 +33,7 @@ sys.path.insert(0, HERE)
 import art_files  # noqa: E402
 import art_symbolic as sym  # noqa: E402
 import art_tiles  # noqa: E402
+import apptiles  # noqa: E402
 import names  # noqa: E402
 
 THEMES = {'PlasmaFusion': 'light', 'PlasmaFusion-Dark': 'dark'}
@@ -150,14 +153,20 @@ def build_registry():
         claim(n)
         reg.link('apps/symbolic', n, 'art', 'logo-mark')
     for key, app_names in names.APPS.items():
-        art_id = reg.add_art('tile-' + key, art_tiles.tile_svg(key))
-        gid = board_glyph(reg, names.APP_SYMBOLIC[key])
+        if not app_names:
+            continue
+        if key.startswith('app-'):  # a per-app tile (apptiles/)
+            art_id = reg.add_art('tile-' + key, apptiles.tile_svg(key[4:]))
+        else:
+            art_id = reg.add_art('tile-' + key, art_tiles.tile_svg(key))
+        symbol = names.APP_SYMBOLIC.get(key)
+        gid = board_glyph(reg, symbol) if symbol else None
         for n in app_names:
             claim(n)
             reg.link('apps/scalable', n, 'art', art_id)
-            if gid is None:
+            if symbol == '@logo':
                 reg.link('apps/symbolic', n + '-symbolic', 'art', 'logo-mark')
-            else:
+            elif gid is not None:
                 reg.link('apps/symbolic', n + '-symbolic', 'glyph', gid)
 
     # ---- places (coloured >= 24 px, monochrome 16/22 px and -symbolic)
@@ -549,6 +558,8 @@ def write_theme(root, theme, variant, reg, copies):
         f.write(index_theme(variant, list(DIRS), mirror_dirs))
     with open(os.path.join(base, 'LICENSE'), 'w', encoding='utf-8') as f:
         f.write(LICENSE_TEXT)
+    with open(os.path.join(base, 'designed-apps.txt'), 'w', encoding='utf-8') as f:
+        f.write(''.join(n + '\n' for n in names.DESIGNED))
     return base
 
 

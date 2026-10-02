@@ -18,8 +18,11 @@
 # Mode: plasmafusionrc [Icons] AppIcons = familiar (default) or designs; "refresh" in designs mode
 # removes the familiar icons.
 #
-# For each visible application (desktop entries in the data directories and Flatpak's exports), its
-# Icon= name is looked up the way Plasma would find it without Plasma Fusion: Breeze, then hicolor,
+# Apps with a designed tile of their own (the 2026-10-02 redesign: the theme's designed-apps.txt) keep
+# it; a familiar icon built for such a name earlier is dropped.
+#
+# For each other visible application (desktop entries in the data directories and Flatpak's exports),
+# its Icon= name is looked up the way Plasma would find it without Plasma Fusion: Breeze, then hicolor,
 # then the pixmaps directory. The original is rendered with QtSvg (what Plasma renders with), its
 # drawn area is measured (without PySide6: rsvg-convert and Pillow), and a 64-unit Fusion tile is
 # written as
@@ -34,7 +37,8 @@
 # Tile (AppIcon board): radius 15, a 4-unit lip under a 60-unit base, a 9 % white sheen on the top
 # 28 units, a 1-unit 14 % white edge. The glyph is an embedded PNG at 4x (QtSvg draws <image> with
 # data URIs; it does not clip, so masks are applied to the PNG). A per-user file the tool replaces is
-# kept in ~/.local/state/plasma-fusion/app-icons-backup and put back by "remove".
+# kept in ~/.local/state/plasma-fusion/app-icons-backup and put back by "remove" (unless something
+# else, e.g. a newer per-user copy of the theme, has replaced the familiar icon since).
 # The marker icon "plasmafusion-familiar" tells the shell's FusionIconTile that app icons are tiles.
 # Record: ~/.local/state/plasma-fusion/app-icons.json (what was built from which file and mtime).
 import base64, colorsys, fcntl, io, json, math, os, pathlib, shutil, signal, subprocess, sys, time
@@ -126,11 +130,27 @@ def find_original(name, bases):
     return None
 
 
+def theme_roots():
+    return [b / "icons" / THEMES[0] for b in [DATA] + SYSTEM_DATA]
+
+
+def designed_names():
+    """The app icon names the theme draws with an app's own designed tile (designed-apps.txt of the
+    first Plasma Fusion theme found: the per-user copy, then the system one)."""
+    for root in theme_roots():
+        try:
+            return set((root / "designed-apps.txt").read_text().split())
+        except OSError:
+            continue
+    return set()
+
+
 def wanted():
     bases = icon_bases()
+    skip = designed_names() | {MARKER}
     out = {}
     for name in sorted(desktop_icons()):
-        if name == MARKER:
+        if name in skip:
             continue
         src = find_original(name, bases)
         if src:
@@ -352,10 +372,12 @@ def write_icon(theme, name, svg):
     path = theme_file(theme, name)
     path.parent.mkdir(parents=True, exist_ok=True)
     if os.path.lexists(path) and not ours(path):
+        # The file the familiar icon hides (newer than any earlier backup: a redeployed theme).
         dest = BACKUP / theme / path.name
         dest.parent.mkdir(parents=True, exist_ok=True)
-        if not os.path.lexists(dest):
-            shutil.copy2(path, dest, follow_symlinks=False)   # a link (app names link to the theme's art/) stays a link
+        if os.path.lexists(dest):
+            dest.unlink()
+        shutil.copy2(path, dest, follow_symlinks=False)   # a link (app names link to the theme's art/) stays a link
     tmp = path.with_suffix(".svg.tmp")
     tmp.write_text(svg)
     tmp.replace(path)
@@ -363,9 +385,14 @@ def write_icon(theme, name, svg):
 
 def drop_icon(theme, name):
     path = theme_file(theme, name)
-    if path.exists() and ours(path):
-        path.unlink()
     saved = BACKUP / theme / (name + ".svg")
+    if os.path.lexists(path) and not ours(path):
+        # Replaced since (a redeployed theme): that file stays, the backup is out of date.
+        if os.path.lexists(saved):
+            saved.unlink()
+        return
+    if os.path.lexists(path):
+        path.unlink()
     if os.path.lexists(saved):
         shutil.move(str(saved), str(path))
 
@@ -401,7 +428,7 @@ def refresh(force, dry):
     want = wanted()
     have = rec.get("icons", {}) if rec.get("version") == VERSION and rec.get("mode") == "familiar" else {}
     todo = [n for n in want if force or n not in have or have[n].get("src") != want[n]["src"]
-            or have[n].get("mtime") != want[n]["mtime"] or not theme_file(THEMES[-1], n).exists()]
+            or have[n].get("mtime") != want[n]["mtime"] or not ours(theme_file(THEMES[-1], n))]
     gone = [n for n in have if n not in want]
     marker_missing = not theme_file(THEMES[-1], MARKER).exists()
     if not todo and not gone and not marker_missing:
@@ -447,7 +474,9 @@ class Wake(Exception):
 
 
 def watch_paths():
-    paths = [b / "applications" for b in [DATA] + FLATPAK + SYSTEM_DATA]
+    # The application directories, the theme roots (designed-apps.txt changes with the theme) and,
+    # last, plasmafusionrc.
+    paths = [b / "applications" for b in [DATA] + FLATPAK + SYSTEM_DATA] + theme_roots()
     return paths + [CONFIG / "plasmafusionrc"]
 
 
@@ -507,8 +536,8 @@ def watch():
                 last = signature()
                 subprocess.run([sys.executable, os.path.abspath(__file__), "refresh"], timeout=600)
             if notify:
-                # The application directories and the config directory (plasmafusionrc); a
-                # directory created later is picked up by the 10-minute check.
+                # The application directories, the theme roots and the config directory
+                # (plasmafusionrc); a directory created later is picked up by the 10-minute check.
                 notify.arm([pathlib.Path(p) for p, _ in sig[:-1]] + [CONFIG])
                 notify.wait(600)
             else:

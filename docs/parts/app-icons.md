@@ -5,6 +5,9 @@ the dock, the home screen, the launcher, the task switcher and the apps' own win
 row of tiles. Owner decision 2026-10-01 after the design comparison (ICONS-BLEND.md on the shared
 project memory: designed tiles, icons as installed, harmonized originals, familiar tiles).
 
+Since 2026-10-02 the 336 apps with a designed tile of their own (docs/parts/icons.md, "Per-app
+tiles") keep it in both modes; familiar icons are drawn for the other apps only.
+
 ## What a familiar icon is
 
 A 64-unit Fusion tile (the AppIcon board's: radius 15, a 4-unit lip under a 60-unit base, a 9 %
@@ -30,7 +33,10 @@ criticised for making icons hard to tell apart), and redrawing or recolouring th
 fusion-config.sh, `/usr/libexec/plasma-fusion/` by the package):
 
 1. Reads the visible desktop entries (data directories, Flatpak exports; the first file of a
-   desktop id wins; NoDisplay/Hidden skipped) and their `Icon=` names.
+   desktop id wins; NoDisplay/Hidden skipped) and their `Icon=` names, leaving out the names the
+   theme draws with a designed tile (`designed-apps.txt` in the per-user copy of the
+   `PlasmaFusion` theme, else the system one). A familiar icon built earlier for such a name is
+   dropped.
 2. Finds each original as Plasma would without Plasma Fusion: Breeze (48, 64, 32, scalable, ...),
    then hicolor (scalable, then the largest), then `pixmaps`.
 3. Renders it with QtSvg (PySide6; what Plasma draws icons with) or rsvg-convert, measures the drawn
@@ -41,10 +47,14 @@ fusion-config.sh, `/usr/libexec/plasma-fusion/` by the package):
    mtime (`~/.local/state/plasma-fusion/app-icons.json`) and sends KIconLoader's `iconChanged`.
 
 A per-user icon file the tool would replace is kept in `~/.local/state/plasma-fusion/app-icons-backup`
-and put back by `remove`. Only files carrying the tool's marker comment are ever deleted.
+and put back by `remove`. Only files carrying the tool's marker comment are ever deleted. The backup
+is always the newest file a familiar icon hides, and when something else (a redeployed per-user copy
+of the theme) has replaced a familiar icon since, that file stays and the out-of-date backup is
+discarded; such a name is built again at the next refresh.
 
 `plasma-fusion-app-icons.service` (user unit, enabled by fusion-config.sh) runs `watch`: a refresh
-at login, then it sleeps on inotify watches of the application directories and ~/.config (every
+at login, then it sleeps on inotify watches of the application directories, the Plasma Fusion
+theme roots (a theme update changes `designed-apps.txt`) and ~/.config (every
 30 s a few stat calls where inotify is unavailable; a directory created later is picked up within
 10 minutes). When an application directory's or plasmafusionrc's time changed (an rpm transaction,
 a Flatpak install, a mode change) it waits 3 s for the burst to settle and runs `refresh` in a child
@@ -60,6 +70,7 @@ icon exists (about 4 s after the install); a mode change shows in the shell afte
 
 `FusionIconTile` (dock, launcher, home screen) draws its neutral tile behind icons the designed
 tiles do not cover; it looks the marker icon up for those and draws no neutral tile while it exists.
+Its `familiar` is false for designed names (`FusionIconNames.designed()`), whatever the mode.
 
 ## Commands
 
@@ -73,7 +84,10 @@ removes the familiar icons. fusion-restore.sh stops the service and runs `remove
 
 ## Checks
 
-`tools/build.d/89-app-icons.sh`: compile, the unit's key lines, `packages/appicons/tests/compose_test.py`
+`tools/build.d/89-app-icons.sh`: compile, the unit's key lines, `packages/appicons/tests/designed_test.py`
+(a designed name gets no familiar icon; dropping a familiar icon puts the theme's link back, keeps a
+link that replaced it since, and the backup is the newest file; standard library only),
+`packages/appicons/tests/compose_test.py`
 (a square and a rounded square become the tile; a one-colour circle gets a light tile in its hue; a
 three-colour logo the neutral tile; a wide shape a plate).
 

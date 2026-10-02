@@ -284,3 +284,68 @@ CATEGORIES = {
     'flask': ['applications-science'],
     'computer': ['applications-system'],
 }
+
+# ------------------------------------------------------------------ per-app tiles
+# The 2026-10-02 redesign (apptiles/): every listed app gets its own tile, keyed "app-<key>". Its
+# icon names leave the generic category lists above (which keep the apps without one); an app that
+# uses a board tile as it is adds its names to that tile's list. The -symbolic twin of a per-app
+# name keeps the symbol of the category the name was in, if it was in one.
+import apptiles as _apptiles  # noqa: E402
+
+_CATEGORY_OF = {_n: _k for _k, _ns in APPS.items() for _n in _ns}
+# Generic names a few apps use as their Icon= (Plasma Camera: camera-photo, KUserFeedback Console:
+# system-search, Vakzination: applications-development, KDebugSettings: debug-run, Kirigami
+# Gallery: preferences-desktop-theme, Welcome Center: start-here-kde-plasma). They mean an action,
+# a settings page or the launcher elsewhere, so they keep that drawing; the apps' own ids still get
+# their tiles.
+_GENERIC = {'camera-photo', 'system-search', 'applications-development', 'debug-run',
+            'preferences-desktop-theme', 'start-here-kde-plasma'}
+for _ns in list(_apptiles.APP_NAMES.values()) + list(_apptiles.BOARD_NAMES.values()):
+    _ns[:] = [_n for _n in _ns if _n not in _GENERIC]
+_PER_APP = {_n for _ns in _apptiles.APP_NAMES.values() for _n in _ns}
+# Other names of the same apps still in the category lists: dash variants ("google-chrome-stable"
+# -> "google-chrome"), a plain name that ends a per-app reverse-DNS id ("vivaldi" ->
+# "com.vivaldi.Vivaldi"), and the aliases below. They move to the app's tile, so the exact name the
+# loader finds first is the app's own tile.
+_ALIASES = {'org.kde.kmail': 'kmail', 'net.thunderbird.Thunderbird': 'thunderbird', 'rhythmbox': 'rhythmbox',
+            'vscode': 'vscode', 'visual-studio-code': 'vscode', 'code-oss': 'vscode', 'vscodium': 'vscodium'}
+_APP_OF = {_n: _k for _k, _ns in _apptiles.APP_NAMES.items() for _n in _ns}
+_TAIL = {_n.rsplit('.', 1)[-1].lower(): _k for _n, _k in _APP_OF.items() if _n.count('.') >= 2}
+
+
+def _moves_to(name):
+    if name in _ALIASES:
+        return _ALIASES[name]
+    for _p, _k in _APP_OF.items():
+        if '.' not in _p and name.startswith(_p + '-'):
+            return _k
+    if '.' not in name:
+        return _TAIL.get(name.lower())
+    return None
+
+
+ALIAS_MOVES = []
+for _k in list(APPS):
+    _keep = []
+    for _n in APPS[_k]:
+        if _n in _PER_APP:
+            continue
+        _dest = _moves_to(_n)
+        if _dest:
+            _apptiles.APP_NAMES[_dest].append(_n)
+            _PER_APP.add(_n)
+            ALIAS_MOVES.append((_n, _k, _dest))
+        else:
+            _keep.append(_n)
+    APPS[_k] = _keep
+for _k, _ns in _apptiles.BOARD_NAMES.items():
+    APPS[_k] += [_n for _n in _ns if _n not in _CATEGORY_OF and _n not in APPS[_k]]
+for _k, _ns in _apptiles.APP_NAMES.items():
+    APPS['app-' + _k] = list(_ns)
+    _cats = [_CATEGORY_OF[_n] for _n in _ns if _n in _CATEGORY_OF]
+    APP_SYMBOLIC['app-' + _k] = APP_SYMBOLIC[_cats[0]] if _cats else None
+# The names drawn with an app's own designed tile: the per-app tiles and the apps whose design is a
+# board tile (Konsole: terminal). Familiar app icons (packages/appicons) leave these names alone;
+# every theme carries the list as designed-apps.txt, and FusionIconNames.js as designed().
+DESIGNED = sorted({_n for _k in _apptiles.APP_NAMES for _n in APPS['app-' + _k]}
+                  | {_n for _k, _ns in _apptiles.BOARD_NAMES.items() for _n in _ns if _n in APPS[_k]})

@@ -61,7 +61,7 @@ Item {
                                          "gnome-calendar", "org.kde.merkuro.calendar", "org.kde.kalendar",
                                          "kalendar"].indexOf(iconName) !== -1
     // Today's date goes over the designed calendar tile only: not over an app's own icon (a foreign
-    // one, or any with familiar app icons on).
+    // one, or a familiar app icon; KOrganizer keeps its designed tile in both modes).
     readonly property bool calendarTile: calendarApp && !restTile.foreign && !restTile.familiar
     // The app's notifications not seen yet (the dock's count, see main.qml); the badge shows the
     // larger of it and the app's own Unity count.

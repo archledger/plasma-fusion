@@ -9,8 +9,9 @@
 #   $STAGE/.local/share/plasma-fusion/appicons/plasma-fusion-app-icons.service
 #                                                                 its user unit, where fusion-config.sh
 #                                                                 looks for it to enable it
-# Checks: python3 compile, the unit's key lines, and a dry run of the tool's composition on one
-# synthetic icon of each kind when Pillow and rsvg-convert or PySide6 are present.
+# Checks: python3 compile, the unit's key lines, designed names and backups (designed_test.py), and
+# a dry run of the tool's composition on one synthetic icon of each kind when Pillow and
+# rsvg-convert or PySide6 are present.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
@@ -26,6 +27,7 @@ for line in 'ExecStart=plasma-fusion-app-icons watch' \
   'PartOf=graphical-session.target' 'WantedBy=graphical-session.target'; do
   grep -qxF "$line" "$UNIT" || { echo "app-icons: $UNIT lacks '$line'" >&2; exit 1; }
 done
+python3 "$SRC/tests/designed_test.py" "$TOOL"
 if python3 -c 'import PIL' 2>/dev/null; then
   python3 "$SRC/tests/compose_test.py" "$TOOL"
 fi

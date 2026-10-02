@@ -16,7 +16,8 @@ active colour scheme (`FollowsColorScheme=true`).
 
 | Family | Drawings | Names per theme | Source |
 |---|---|---|---|
-| App tiles | 18 tiles + Fusion logo tile + logo mark, and 3 derived tiles (Archive, Document Viewer, Camera; STYLE-1) | 267 + 269 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
+| App tiles | 18 tiles + Fusion logo tile + logo mark, and 3 derived tiles (Archive, Document Viewer, Camera; STYLE-1) | 694 (with the per-app tiles) + 284 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
+| Per-app tiles | 326 tiles, one per app, in the board's tile construction (2026-10-02 redesign, "Per-app tiles" below) | 531 of the 694 | `apptiles/` |
 | Places | 27 folders (the board's 10 + 17 derived symbols), 10 colour tints, 2 trash cans | 67 (coloured, 16 px, 22 px, `-symbolic`) | FileIcons.dc.html `folder()` |
 | Devices | 12 board devices + 8 derived (laptop, speaker, microphone, webcam, gamepad, touchpad, tablet, scanner) | 59 (+ 64 `-symbolic`) | FileIcons.dc.html `devices[]` |
 | File types | 820 pages: page + coloured extension tag, one per (kind, extension) | 1358 MIME icon names + 18 `-symbolic` | FileIcons.dc.html `file()` |
@@ -25,9 +26,10 @@ active colour scheme (`FollowsColorScheme=true`).
 | Categories | menu categories (applications-*) | 26 | derived line icons |
 | Emblems | the link badge `emblem-symbolic-link` at 16 and 22 px (pixel grid) and scalable (STYLE-1) | 1 (in `emblems/16`, `emblems/22`, `emblems/scalable`, and `@2x`/`@3x`) | derived |
 
-In total 904 coloured and 308 symbolic drawings answer 3376 icon names per theme; 372 further
-names are handed back to Breeze (see "Lookup rules" below). About 5.1 MB per theme; each theme
-holds its own copy of the coloured art, so either one works without the other.
+In total 1230 coloured and 308 symbolic drawings answer 3818 icon names per theme; 575 further
+names are handed back to Breeze (see "Lookup rules" below). About 3.6 MB per theme (apparent size;
+the per-app tiles are 0.57 MB of it); each theme holds its own copy of the coloured art, so either
+one works without the other.
 
 Tiles follow the board exactly: 64 x 64 tile, radius 15, 4-unit lip, 9 % sheen, 1-unit
 14 % white edge, glyph layers g1/g2/s1/g3. Text (the calendar's `SEP` / `28`, file-type tags,
@@ -41,6 +43,8 @@ generators/icons/
   gen_icons.py        builds both themes (Python standard library only); used by the build
   names.py            which drawing answers which icon name (apps, places, devices, actions, categories)
   art_tiles.py        app tiles and logo (AppIcon board)
+  apptiles/           per-app tiles: kit.py (tile drawing), b_*.py (the design batches), apps.json
+                      (the apps and their icon names)
   art_files.py        file types, folders, trash, devices (FileIcons board)
   art_symbolic.py     24-grid symbolic glyphs, status families, colour roles and default palettes
   svgkit.py           path helpers (rr/ci/el/gear ported from the boards), SVG writer
@@ -392,3 +396,75 @@ The owner chose to keep every app's own icon, blended with Plasma Fusion, over t
 stay in the themes; `plasma-fusion-app-icons` (docs/parts/app-icons.md) draws each installed app's
 own icon onto a Fusion tile in `~/.local/share/icons/PlasmaFusion{,-Dark}/apps/scalable`, which the
 icon loader finds first. `plasmafusionrc [Icons] AppIcons=designs` brings the designed tiles back.
+Since the per-app tiles (below), the tool leaves the apps that have one alone: familiar icons
+remain only for apps without a design of their own.
+
+## Per-app tiles (2026-10-02)
+
+The owner preferred the design board's tiles (`design/previews/Main.webp`) to the familiar icons,
+provided people still recognise their apps, and approved a per-app redesign: every app in Fedora
+44's KDE catalogue (237: the apps.kde.org apps packaged for Fedora plus the installed core apps)
+and 99 of the most common Linux apps (browsers, office, chat, media, games, development, system
+tools), 336 apps in all. Design material on the shared project memory:
+`artifacts/plasma-fusion/2026-10-02-icons/` (style guide, per-batch sheets with each original next
+to its tile, review notes).
+
+**Style.** The board's tile construction, unchanged: 64 units, radius 15, 4-unit lip, 9 % sheen on
+the top 28 units, 1-unit 14 % white edge, glyph layers `g1` (fill), `g2` (even-odd fill), `s1`
+(stroke), `g3` (even-odd fill) and `x` (small details drawn last). Per app:
+
+* the base is the app's identity colour mapped to the board palette (saturated mid tones, the lip
+  about 25 % darker; a light base only for marks that are several colours on white, like Chrome);
+* the glyph keeps the silhouette and the signature colours of the app's own mark, simplified to
+  1-3 shapes, white first, light tints of the base second, accents from the board's palette only,
+  strokes at least 2.4 units, no detail under about 3 units (legible at 32 px), flat, no text
+  except a mark that is a letter;
+* apps whose own icon is a generic Breeze glyph get the board's category language plus the app's
+  distinctive element, so no two apps look the same; families (LibreOffice, KDE PIM, the games)
+  share a motif and keep their own colours;
+* where a board tile already is the app's icon, the app uses it (Konsole: terminal, KCalc:
+  calculator, Discover: software, NeoChat: chat, Spectacle: screenshot, System Monitor:
+  monitor, KOrganizer: calendar, Plasma Camera: camera, KWeather: weather).
+
+Third-party marks are drawn as flat, simplified versions of the brand marks so users find their
+apps; the marks remain the trademarks of their owners, and no wordmarks are drawn.
+
+**Sheen seam.** A glyph layer in the base colour (a cut-out that "erases" part of the glyph) used
+to cover the sheen above it, leaving a visible step at unit 28. `apptiles/kit.py` paints such
+layers with a gradient that carries the sheen (`url(#pf-sheen)`), so cut-outs match the tile at
+every height (114 tiles).
+
+**Names.** `apps.json` lists each app's id and the `Icon=` names that lead to it (its desktop
+entries in Fedora 44, Flathub ids, common distribution names). `names.py` then:
+
+* gives each per-app tile its key `app-<tile>` in `APPS`; the `-symbolic` twin is the category's
+  line icon when one of the app's names was in a category before (Chrome: the browser globe),
+  otherwise there is none;
+* moves other names of the same app out of the category lists (dash variants such as
+  `google-chrome-stable`, a plain name that ends an app's reverse-DNS id such as `vivaldi`, and a
+  short alias list: `org.kde.kmail`, `net.thunderbird.Thunderbird`, `rhythmbox`, `vscode`,
+  `visual-studio-code`, `code-oss`, `vscodium`), so the exact name the loader finds first is the
+  app's own tile (`names.ALIAS_MOVES`, 15 names);
+* keeps generic names that a few apps use as their `Icon=` with their own meaning:
+  `camera-photo`, `system-search`, `applications-development`, `debug-run`,
+  `preferences-desktop-theme`, `start-here-kde-plasma` (Kickoff's own icon); those apps' ids still
+  get their tiles;
+* `kontact` is claimed by Kontact and PIM Data Exporter; Kontact keeps it.
+
+`names.DESIGNED` (550 names: the per-app names and the board-mapped apps' names) is written into
+each theme as `designed-apps.txt` and into `FusionIconNames.js` as `designed()`: familiar app
+icons skip these names, and `FusionIconTile.familiar` is false for them (so the dock's date stays on
+KOrganizer's calendar tile with familiar icons on).
+
+**Capture.** `make_capture.py` was rerun with the ThinkPad's icon inventory: 492 more Breeze names
+are handed back, all app-specific action icons that the new short app names would otherwise answer
+by the dash fallback (`labplot-*` 252, `kdenlive-*` 92, `virtualbox-*` 32, `minuet-*` 24,
+`kmouth-*` 20, VS Code's `code` against Breeze's `code-block`, `code-class`, ...). Ten captured names
+exist only in hicolor (`libreoffice-*-symbolic`, `com.github.tchx84.Flatseal-symbolic`, three GNOME
+names) and get the coloured tile where a monochrome icon is asked for: a known limitation, since a
+hand-back link into hicolor would dangle while the app is not installed.
+
+Checks: `validate.py` passes (3076 drawings, both themes); two builds are byte-identical; a sample
+of 40 names rendered from the built theme at 128 and 32 px (Chrome and its dash variants, Firefox
+and `firefox-esr`, KMail, Thunderbird, VS Code, VSCodium, Vivaldi, Steam, Discord, Telegram,
+Kdenlive, Krita, the board-mapped apps, LibreOffice, Rhythmbox, KPatience) shows each app's tile.

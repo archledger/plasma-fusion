@@ -39,6 +39,7 @@ path = [
     "packages/plasmoids/org.plasmafusion.desktop/UPSTREAM-FILES",
     "generators/icons/capture.json",
     "generators/icons/mimetable.json",
+    "generators/icons/apptiles/apps.json",
     "tools/tests/perf/baseline.json",
     "tools/tests/perf/budget.json",
 ]
