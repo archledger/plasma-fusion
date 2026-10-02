@@ -791,6 +791,16 @@ check "v2: dpkg: notification names it" grep -q 'kwin 6.7.4 → 6.8.0' "$S/notif
 dpkg_status 6.7.4
 gate login
 check "v2: dpkg: downgrade back: the lock screen is back" [ -f "$H/.config/$DROPIN_REL" ]
+# v2b: binaries of one source at different versions (kwin-common held back): every version once,
+# in version order, whatever order dpkg lists them in.
+printf '%s\n' 'installed kwin=4:6.3.6-1' 'installed kwin=4:6.7.4-2' >>"$FB/dpkg/lines"
+gate deploy >/dev/null 2>&1
+check "v2b: dpkg: mixed binary versions all recorded" grep -qx 'pkg kwin=6.3.6,6.7.4' "$S/tested"
+lines=$(cat "$FB/dpkg/lines")
+tac <<<"$lines" >"$FB/dpkg/lines"
+gate deploy >/dev/null 2>&1
+check "v2b: dpkg: listed the other way round: the same record" grep -qx 'pkg kwin=6.3.6,6.7.4' "$S/tested"
+dpkg_status 6.7.4
 
 # v3: Nix (NixOS): store names in the system profile's closure; kwin-x11 is not kwin; nix-store
 # from the system profile when it is not in PATH.

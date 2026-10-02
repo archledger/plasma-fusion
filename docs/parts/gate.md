@@ -450,7 +450,10 @@ them and is skipped):
 | Nix (NixOS) | `nix-store --query --requisites /run/current-system/sw` (`nix-store` from PATH, else from the system profile) | store names `qtbase`, `qtdeclarative`; the name ends before the first `-digit`, so `kwin-x11-6.6.6` is not `kwin` | the store name's version (`kwin-6.6.6-dev` gives 6.6.6) | `readlink /run/current-system/sw` |
 
 The other six names (`plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration`)
-are the same everywhere. A database that does not answer within 3 s ends the search.
+are the same everywhere. A package listed more than once (Debian binaries of one source package,
+Nix outputs) keeps each version once, in version order, whatever order the database lists them in
+(`kwin=6.3.6,6.7.4` while `kwin-common` is held back). A database that does not answer within 3 s
+ends the search.
 
 When no database answers, the versions are unknown: `deploy` records nothing (exit 1, "could not
 read the installed versions: no package database (rpm, pacman, dpkg or Nix) was found" or "... with
@@ -482,7 +485,7 @@ longer needs to be skipped where the compiled decoration is installed). New case
   hanging pacman is cut at 3 s and falls back.
 - `v2` dpkg: source names and versions (`plasma-desktop` from a binNMU, `qt6-base=6.11.2+dfsg`, a
   `config-files` kwin 6.3.6 ignored); cached until the status file is replaced; upgrade and
-  downgrade.
+  downgrade; `v2b` kwin binaries at 6.7.4 and 6.3.6 give `kwin=6.3.6,6.7.4` in either order.
 - `v3` Nix: a system profile in a store below `PF_GATE_ROOT`, `nix-store` only in the profile;
   `kwin-x11` and the `-dev` output do not count; cached per profile; a switch to 6.7.5 switches off,
   a rollback turns back on.

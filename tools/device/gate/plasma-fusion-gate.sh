@@ -817,7 +817,7 @@ read_cache() {
 # PACKAGES and STAMP that database's. A database that does not answer within 3 s ends the search.
 # VERS_ASKED names the databases asked ("rpm", "rpm and pacman"; empty: none is installed).
 query_versions() {
-  local db prog out rc line n v p asked=()
+  local db prog out rc line n v p vs sorted asked=()
   declare -A got=()
   VERS_STATE=unknown VERS_ASKED='' STAMP=''
   for db in "${DBS[@]}"; do
@@ -859,11 +859,20 @@ query_versions() {
           v=${line#"$n"-}; v=${v%%-*} ;;
       esac
       [[ $n =~ $NAME_RE ]] && [[ " ${PACKAGES[*]} " == *" $n "* ]] || continue
-      if [ -n "${got[$n]-}" ] && [[ ,${got[$n]}, != *",$v,"* ]]; then got[$n]+=",$v"; else got[$n]=$v; fi
+      if [ -z "${got[$n]-}" ]; then got[$n]=$v; elif [[ ,${got[$n]}, != *",$v,"* ]]; then got[$n]+=",$v"; fi
     done <<<"$out"
     # A database that knows none of them belongs to another package manager: ask the next.
     [ ${#got[@]} -gt 0 ] || continue
-    for p in "${PACKAGES[@]}"; do CUR[$p]=${got[$p]:-absent}; done
+    for p in "${PACKAGES[@]}"; do
+      v=${got[$p]:-absent}
+      # Several versions (Debian binaries of one source at different versions): in version order,
+      # so the order the database lists them in does not count.
+      if [[ $v == *,* ]]; then
+        IFS=, read -r -a vs <<<"$v"
+        sorted=$(printf '%s\n' "${vs[@]}" | LC_ALL=C sort -V) && [ -n "$sorted" ] && v=${sorted//$'\n'/,}
+      fi
+      CUR[$p]=$v
+    done
     VERS_STATE=ok
     return 0
   done
