@@ -47,5 +47,5 @@ export ASAN_OPTIONS=halt_on_error=1:abort_on_error=1:detect_leaks=1:detect_stack
 export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
 export LSAN_OPTIONS=suppressions=$here/lsan.supp:print_suppressions=0
 tests=$(ctest --test-dir "$build" -N | sed -n 's/^Total Tests: //p')
-echo "ctest: ${tests:-0} tests"
+echo "ctest: ${tests:-0} tests; random tests: PF_FUZZ_SEED=${PF_FUZZ_SEED:-default} PF_FUZZ_COUNT=${PF_FUZZ_COUNT:-default}"
 ctest --test-dir "$build" --output-on-failure --no-tests=ignore

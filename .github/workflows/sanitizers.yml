@@ -4,7 +4,9 @@
 # The compiled parts (navigation effect, window decoration, settings module) built with
 # AddressSanitizer and UndefinedBehaviorSanitizer against Fedora 44's Plasma, and their tests
 # (ctest) run so that a memory error, a leak or undefined behaviour fails the job
-# (tools/sanitizers/run.sh, which also runs locally in a Fedora 44 container).
+# (tools/sanitizers/run.sh, which also runs locally in a Fedora 44 container). The tests include
+# random scenes and rounds (pfdeco-fuzz, kcmctl-fuzz) with a fixed seed on pull requests and a new
+# seed every week.
 
 name: sanitizers
 
@@ -50,6 +52,12 @@ jobs:
       fail-fast: false
       matrix:
         package: [navigation-cpp, decoration-cpp, kcm-cpp]
+        # Random scenes (decoration) and rounds (settings module) of the weekly and manual runs.
+        include:
+          - package: decoration-cpp
+            weekly: 1000
+          - package: kcm-cpp
+            weekly: 100
     steps:
       - name: Install git, builddep, the sanitizer runtimes and D-Bus (checkout runs inside the container)
         run: dnf install -y -q git dnf-plugins-core rpm-build binutils libasan libubsan dbus-daemon
@@ -69,4 +77,14 @@ jobs:
       - name: Build and test with the sanitizers
         env:
           PACKAGE: ${{ matrix.package }}
-        run: tools/sanitizers/run.sh "packages/$PACKAGE" "$RUNNER_TEMP/build"
+          EVENT: ${{ github.event_name }}
+          WEEKLY: ${{ matrix.weekly }}
+        run: |
+          set -euo pipefail
+          # Pull requests and pushes repeat the random tests' default seed. The weekly and manual
+          # runs take a new seed and run more of them; the log names the seed to repeat a failure.
+          if [ "$EVENT" = schedule ] || [ "$EVENT" = workflow_dispatch ]; then
+            now=$(date +%s)
+            export PF_FUZZ_SEED=$((now % 1000000)) PF_FUZZ_COUNT=$WEEKLY
+          fi
+          tools/sanitizers/run.sh "packages/$PACKAGE" "$RUNNER_TEMP/build"
