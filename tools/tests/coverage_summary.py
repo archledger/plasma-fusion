@@ -13,7 +13,8 @@ statements not run.
 
 The file list is the repository's tracked files (git ls-files), so a file no test starts counts
 with all of its statements. Test tooling: everything below a tests/, test/ or vsession/
-directory, tools/tests/, tools/vsession/, tools/container/, generators/icons/vsession-*, and the
+directory, tools/tests/, tools/vsession/, tools/container/, generators/icons/vsession-*, the
+fuzzers and their ClusterFuzzLite build (fuzz/, .clusterfuzzlite/), and the
 checking aids a person runs by hand to compare built output with the design boards or to measure
 it (TEST_RE): generators/cursors/sheet.py, generators/icons/compare_boards.py, the decoration's
 tools/shadow-alpha.py, tools/sheet.py and tools/run-preview.sh, and tools/device/power-ab.sh.
@@ -39,6 +40,7 @@ import subprocess
 import sys
 
 TEST_RE = re.compile(r"(^|/)(tests?|vsession)/|^tools/(tests|vsession|container)/|^generators/icons/vsession-"
+                     r"|^fuzz/|^\.clusterfuzzlite/"
                      r"|^generators/cursors/sheet\.py$|^generators/icons/compare_boards\.py$"
                      r"|^packages/decoration-cpp/tools/(shadow-alpha\.py|sheet\.py|run-preview\.sh)$"
                      r"|^tools/device/power-ab\.sh$")

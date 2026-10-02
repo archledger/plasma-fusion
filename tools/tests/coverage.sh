@@ -24,6 +24,8 @@
 #   tools/checks/tests/run.sh           the lints' self-tests
 #   tools/device/tests/gate-unit.sh     the login check's unit tests
 #   packages/powerfx/tests/offline.sh   the power tiers service against mock D-Bus services
+#   tools/device/fieldlog/tests/fieldlog_test.py   the field log against recorded crash records and
+#                                       fake journal, coredumpctl and systemctl
 #   generators/cursors/tests/test_cursors.py, generators/decoration/tests/check_aurorae.py,
 #   generators/plasma-style/tests/validate.py, generators/icons/validate.py
 #                                       the offline checks of the generated themes
@@ -159,6 +161,8 @@ EOF
   run_test plasma-style python3 "$ROOT/generators/plasma-style/tests/validate.py" \
     "$stage/.local/share/plasma/desktoptheme/plasma-fusion-dark" "$stage/.local/share/plasma/desktoptheme/plasma-fusion-light"
   run_test icon-themes python3 "$ROOT/generators/icons/validate.py" "$stage/.local/share/icons"
+  mkdir -p "$OUT/work/fieldlog"
+  run_test fieldlog env PF_FIELDLOG_TEST_DIR="$OUT/work/fieldlog" python3 "$ROOT/tools/device/fieldlog/tests/fieldlog_test.py"
   # JavaScript: node's own coverage (V8) over the unit tests, as lcov.
   local js=()
   mapfile -t js < <(cd "$ROOT" && find packages -path '*/tests/*.test.js' | sort)
