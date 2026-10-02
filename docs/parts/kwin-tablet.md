@@ -214,3 +214,24 @@ laptop 34/72 unchanged (session st-fix).
 - Test (6.7.5 and 6.7.91 containers, swap6/swap68; `InternalOutputs=eDP,LVDS,DSI,Virtual` so the
   virtual output counts as built in): KWrite quick-tiled left, Konsole right -> handle shown; double
   tap on it -> Konsole 6+711 (left), KWrite 723+711 (right).
+
+## A split pair in the app switcher (2026-10-02, SPLIT.md item 4)
+
+The navigation effect (`packages/navigation-cpp`, 0.1-7; details in its README) shows the two apps
+of a split as one card, as Android's Overview does. It pairs them with this script's test (the
+topmost window tiled to the left and the topmost tiled to the right; `splitside.cpp` is the C++
+copy of `isLeft`/`isRight`), also while they are minimized. The card shows both in their split
+ratio; picking it, a sideways swipe to it and a gesture that returns to it bring both back into
+their tiles, so this script's handle comes back with them; closing it closes both. After the home
+gesture, activating either app again (the dock, a notification) restores the other into its half.
+An app alone in a tile picked from its own card fills the screen. Test: 6.7.5 container, sessions
+pair5 and lone2 (evidence `artifacts/plasma-fusion/2026-10-01-tablet2/split-pair/`).
+
+## Keeping the dock over apps (SPLIT.md item 6)
+
+The option is the settings module's "Dock in tablet mode: Hide over apps / Always show"
+(`DockHiding` above; `docs/parts/kcm-cpp.md`), default "Hide over apps". Test (6.7.5 container,
+session dock1, the keys written as the settings module writes them, then the shortcut): KWrite
+full screen 45+834 with the dock hidden; "Always show": the dock shown and KWrite 45+753, still
+shown after a tap in the app and after a short swipe up; KWrite and Konsole split above it
+(742 px tall); "Hide over apps" again: the dock hidden, the tiles 822 px tall.

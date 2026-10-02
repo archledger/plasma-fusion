@@ -7,7 +7,7 @@
 
 Name:           plasma-fusion-navigation
 Version:        0.1
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        Plasma Fusion tablet navigation gestures for KWin
 
 License:        GPL-2.0-or-later
@@ -45,10 +45,11 @@ Enhances:       kwin
 %description
 Plasma Fusion's tablet navigation: in tablet posture, swipe up from the bottom
 edge to go home, swipe up a little to show the dock, swipe up and hold for the
-app switcher (one card per app, swipe a card up to close it), or swipe along
-the bottom edge for the previous app. The app follows the finger. A key press
-on a hardware keyboard hides the on-screen keyboard. Laptop posture keeps
-KWin's own edges. Derived from Plasma Mobile's task switcher.
+app switcher (one card per app or split pair, swipe a card up to close it),
+or swipe along the bottom edge for the previous app. The app follows the
+finger. A key press on a hardware keyboard hides the on-screen keyboard.
+Laptop posture keeps KWin's own edges. Derived from Plasma Mobile's task
+switcher.
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -78,6 +79,14 @@ find %{buildroot}%{_datadir}/kwin/effects/plasmafusion_navigation %{buildroot}%{
 %{_qt6_qmldir}/org/plasmafusion/navigation/
 
 %changelog
+* Fri Oct 02 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-7
+- Two apps side by side are one card in the app switcher, both shown in their
+  split; picking, closing or swiping to the card acts on both
+- A split pair left by going home comes back together, also from the dock
+- An app alone picked in the switcher fills the screen, also one that was in a
+  split
+- After going home the switcher leads with the app used last again
+
 * Fri Oct 02 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-6
 - An app picked in the task switcher keeps its half of a split, and the app in
   the other half comes up with it

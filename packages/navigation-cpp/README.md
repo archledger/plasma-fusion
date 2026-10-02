@@ -36,6 +36,7 @@ copyright lines. Plasma Fusion changes:
 - the pen like a finger in tablet posture (TABLET2 PEN-2, `FusionPenFilter`; drawing apps exempt;
   `plasmafusionrc [Pen] TabletPen`), and a test-only virtual pen (`FusionTestPen`, only with
   `PLASMA_FUSION_TEST_PEN=1`) for private test sessions.
+- a split pair (two apps side by side) is one card, and comes back as a pair (below).
 
 ## Build
 
@@ -55,3 +56,39 @@ the desktop window of that screen when a shell window other than a dock or the d
 (`dismissShellSheet`; the shell's other windows have the class "org.kde.plasmashell"; log "home
 closes the shell sheet"). Test (6.7.5 container, hsheet3): launcher opened with no app and over
 KWrite, home gesture: the sheet closed both times, no TypeError.
+
+## Split pairs in the app switcher (2026-10-02, SPLIT.md item 4)
+
+As in Android's Overview, two apps side by side (quick-tiled left and right: the window card's
+Split left / Split right, the dock's split drag, the quick-tile keys) are one card:
+
+- `FusionTaskFilterModel` pairs the topmost task tiled to the left with the topmost tiled to the
+  right of the screen when the switcher opens (the tablet script's split divider test:
+  `splitside.cpp`; minimized apps keep their tile, and the switcher minimizes every app when it
+  opens). The more recently used one stands for the pair in the list (the higher one when both
+  came up at once); the other is left out and given to the card as the `partner` role.
+- The card (`Task.qml`) shows both previews in their split ratio with a gap for the divider, each
+  app's icon and name above its half, and one close button. Picking it, a sideways swipe to it, or
+  a gesture that returns to it brings up both apps in their tiles (`raiseApp`), the card's app on
+  top with the focus; swiping it up or its close button closes both (`closeTask`). In scrub mode
+  the pair's other app is a small badge on the card's icon.
+- Picking the card of an app alone maximizes it, also an app left alone in a tile (Android: an
+  app outside a pair fills the screen). 0.1-6 kept such an app in its half; its partner lookup
+  skipped minimized windows, so the other half never came back from the switcher.
+- Going home and back: the pairs the switcher minimized are remembered (`rememberPair`); when one
+  of the two is activated again from anywhere (the dock, a notification, Alt+Tab), the other is
+  restored into its half under it while both are still tiled side by side (log "split pair
+  back"). Each pair is used once.
+- An app of the pair that quits while the switcher is open: the other one gets its own card.
+- The switcher minimizes the apps oldest first. Minimizing the active app first made KWin
+  activate the app behind it, which then counted as the last used one, so after going home the
+  switcher led with the app that had been behind.
+
+Test (6.7.5 container, 1440 x 900 logical; sessions pair5, lone2, evidence
+`artifacts/plasma-fusion/2026-10-01-tablet2/split-pair/`): Dolphin maximized, KWrite tiled left,
+Konsole right. Switcher: 2 cards, the pair as one (screenshot P9-switcher). Picked: both back in
+their tiles, Konsole active. Home, then KWrite activated (as the dock does) and, again, KWrite
+tapped in the dock: Konsole back in its half both times. Sideways to Dolphin and back: the pair
+again. A short swipe up: the pair again. Pair card swiped up: both closed, Dolphin left. Konsole
+quitting with the switcher open: KWrite on its own card. KWrite alone in its tile, picked:
+maximized. No QML errors from the effect. Builds without warnings against KWin 6.7.5 and 6.7.91.
