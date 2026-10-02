@@ -7,7 +7,7 @@
 #   ninja -C build
 #
 # BUILD_TESTING=ON (the default) also builds tests/pfdeco-preview, an offline renderer that loads the
-# built plugin with a mock bridge (not installed).
+# built plugin with a mock bridge (not installed), and registers its checks with ctest.
 cmake_minimum_required(VERSION 3.22)
 project(plasma-fusion-decoration VERSION 1.0.0 LANGUAGES CXX)
 
