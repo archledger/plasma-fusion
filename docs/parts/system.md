@@ -128,6 +128,16 @@ Each user then runs, inside their Plasma session: `/usr/share/plasma-fusion/tool
 (no `--install`). As packaged today it misses four things for a system-wide install; see
 "Needs from other parts" for the patch.
 
+### Rebuilt Fedora packages
+
+`packaging/patches/` holds patches to Fedora packages that Plasma Fusion needs before upstream ships
+them, each directory with a build script and a README (what, why, rebuild, when to drop). They are
+not part of the plasma-fusion RPM; a machine installs them separately.
+
+| Package | Release | Why | Test (ThinkPad private sessions, plasmashell under gdb, 2026-10-02) |
+|---|---|---|---|
+| plasma-workspace | `6.7.5-1.fc44.pf1` | the global menu's Search crashed plasmashell after the active app rebuilt a submenu (KDE, unfixed on master 19e67e2); the top bar shows Search only with this build (`menuSearch`, docs/parts/shell-topbar.md) | stock applet: the bug report's reproducer, a window switch with stale results and the typing sequence crash (3 of 3, twice); rebuilt applet: 0 crashes in 9 sequences with results shown each time, a result activated with Return |
+
 ## 2. The login greeter (plasma-login-manager 6.7.5)
 
 Sources read: `plasma-login-manager` v6.7.5 from invent.kde.org (`build/sy/src/`), KConfig v6.30.0

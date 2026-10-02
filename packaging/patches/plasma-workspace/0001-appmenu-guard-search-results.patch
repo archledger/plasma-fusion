@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Wisbendji Fimerlus <archledger236@gmail.com>
+Date: Fri, 2 Oct 2026 13:16:04 -0400
+Subject: [PATCH 1/2] applets/appmenu: guard the search results against deleted
+ actions
+
+The search keeps the matching actions of the imported menu in
+m_currentSearchActions. When the application rebuilds a submenu
+(Google Chrome does for History and Profiles), DBusMenuImporter deletes
+the old actions, and the next key typed in the search field passes
+those pointers to QWidget::removeAction(), which crashes plasmashell.
+Pressing Return could also trigger a deleted action.
+
+Hold the results in QPointers and skip the ones that are gone.
+
+Signed-off-by: Wisbendji Fimerlus <archledger236@gmail.com>
+---
+ applets/appmenu/appmenumodel.cpp | 16 +++++++++++-----
+ applets/appmenu/appmenumodel.h   |  3 ++-
+ 2 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/applets/appmenu/appmenumodel.cpp b/applets/appmenu/appmenumodel.cpp
+index 4130ac5..3a3678d 100644
+--- a/applets/appmenu/appmenumodel.cpp
++++ b/applets/appmenu/appmenumodel.cpp
+@@ -99,8 +99,11 @@ AppMenuModel::AppMenuModel(QObject *parent)
+             insertSearchActionsIntoMenu(searchBar->text());
+         });
+         connect(searchBar, &QLineEdit::returnPressed, this, [this]() mutable {
+-            if (!m_currentSearchActions.empty()) {
+-                m_currentSearchActions.constFirst()->trigger();
++            for (const auto &action : std::as_const(m_currentSearchActions)) {
++                if (action) {
++                    action->trigger();
++                    break;
++                }
+             }
+         });
+         connect(this, &AppMenuModel::modelNeedsUpdate, searchBar, [this, searchBar]() mutable {
+@@ -180,10 +183,13 @@ int AppMenuModel::rowCount(const QModelIndex &parent) const
+ 
+ void AppMenuModel::removeSearchActionsFromMenu()
+ {
+-    for (auto action : std::as_const(m_currentSearchActions)) {
+-        m_searchAction->menu()->removeAction(action);
++    QMenu *menu = m_searchAction ? m_searchAction->menu() : nullptr;
++    for (const auto &action : std::as_const(m_currentSearchActions)) {
++        if (action && menu) {
++            menu->removeAction(action);
++        }
+     }
+-    m_currentSearchActions = QList<QAction *>();
++    m_currentSearchActions.clear();
+ }
+ 
+ void AppMenuModel::insertSearchActionsIntoMenu(const QString &filter)
+diff --git a/applets/appmenu/appmenumodel.h b/applets/appmenu/appmenumodel.h
+index b0f97b4..a121311 100644
+--- a/applets/appmenu/appmenumodel.h
++++ b/applets/appmenu/appmenumodel.h
+@@ -90,7 +90,8 @@ private:
+     std::unique_ptr<QMenu> m_searchMenu;
+     QPointer<QMenu> m_menu;
+     QPointer<QAction> m_searchAction;
+-    QList<QAction *> m_currentSearchActions;
++    // Actions of the imported menu: the importer deletes them when the application rebuilds a menu
++    QList<QPointer<QAction>> m_currentSearchActions;
+ 
+     void removeSearchActionsFromMenu();
+     void insertSearchActionsIntoMenu(const QString &filter = QString());
+-- 
+2.55.0
+

@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Wisbendji Fimerlus <archledger236@gmail.com>
+Date: Fri, 2 Oct 2026 13:16:04 -0400
+Subject: [PATCH 2/2] applets/appmenu: name the search action appmenu-guarded
+ (Plasma Fusion)
+
+Downstream only. Plasma Fusion's top bar hides the global menu's Search
+entry while it is named "appmenu" (the unfixed applet); this build
+carries the fix from the previous patch, so the entry stays visible.
+Drop this patch together with the previous one.
+
+Signed-off-by: Wisbendji Fimerlus <archledger236@gmail.com>
+---
+ applets/appmenu/appmenumodel.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/applets/appmenu/appmenumodel.cpp b/applets/appmenu/appmenumodel.cpp
+index 3a3678d..9c087b2 100644
+--- a/applets/appmenu/appmenumodel.cpp
++++ b/applets/appmenu/appmenumodel.cpp
+@@ -83,7 +83,8 @@ AppMenuModel::AppMenuModel(QObject *parent)
+     if (KWindowSystem::isPlatformWayland()) {
+         m_searchAction = new QAction(this);
+         m_searchAction->setText(i18n("Search"));
+-        m_searchAction->setObjectName(QStringLiteral("appmenu"));
++        // Plasma Fusion: tells its top bar that the search results are guarded (drop with the fix).
++        m_searchAction->setObjectName(QStringLiteral("appmenu-guarded"));
+ 
+         m_searchMenu.reset(new QMenu);
+         auto searchAction = new QWidgetAction(this);
+-- 
+2.55.0
+

@@ -50,7 +50,7 @@
       <default>centre</default>
     </entry>
     <entry name="menuSearch" type="Bool">
-      <label>Show the Search entry of the global menu. Off by default: in Plasma 6.7.5 typing in it can crash plasmashell when the active app rebuilds a submenu (Google Chrome's History does), because the stock applet keeps pointers to the app's menu items that are already deleted (docs/parts/shell-topbar.md). Turn it on once plasma-workspace carries the fix.</label>
+      <label>Show the Search entry of the global menu. Off by default: in Plasma 6.7.5 typing in it can crash plasmashell when the active app rebuilds a submenu (Google Chrome's History does), because the stock applet keeps pointers to the app's menu items that are already deleted (docs/parts/shell-topbar.md). The rebuilt plasma-workspace of packaging/patches/plasma-workspace carries the fix and shows the entry whatever this key says.</label>
       <default>false</default>
     </entry>
     <entry name="menuCompacted" type="Bool">

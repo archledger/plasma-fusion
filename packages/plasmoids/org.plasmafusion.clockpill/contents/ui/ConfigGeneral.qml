@@ -150,7 +150,7 @@ KCM.SimpleKCM {
             Kirigami.FormData.label: i18nc("@title:group", "Global menu:")
             text: i18nc("@option:check", "Show the Search entry")
             QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.text: i18nc("@info:tooltip", "Off by default: in Plasma 6.7.5 typing in it can crash the shell when the app changes its menus")
+            QQC2.ToolTip.text: i18nc("@info:tooltip", "Off by default: in Plasma 6.7.5 typing in it can crash the shell when the app changes its menus. Shown anyway where plasma-workspace carries the fix.")
         }
 
         RowLayout {

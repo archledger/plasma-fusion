@@ -50,8 +50,8 @@ import org.kde.ksvg as KSvg
 // a deleted one to QWidget::removeAction: plasmashell crashes (ThinkPad, 2026-10-01; reproduced
 // with a stock panel). Hiding the action hides the stock button; arrowing right past the last
 // menu would still open it (the stock applet does not check visibility), so the budget moves on
-// to the first menu then. Turn it on again once plasma-workspace carries the fix
-// (docs/parts/shell-topbar.md).
+// to the first menu then. The rebuilt plasma-workspace of packaging/patches/plasma-workspace carries
+// the fix and names the action "appmenu-guarded", which is left alone (docs/parts/shell-topbar.md).
 //
 // The level is computed in one go, never by trying: every widget of the bar that takes part
 // has `budgetLevel` (written here) and `budgetSaving(level)`, the width it gives up at that
@@ -152,9 +152,10 @@ Item {
             required property int index
             required property string activeMenu
             required property var activeActions
-            // The stock Search entry: AppMenuModel's search action, named "appmenu" (imported menu
-            // items have no name). Hidden unless menuSearch is on; the stock button and the width
-            // estimate below follow the action's visibility.
+            // The stock Search entry without the fix: AppMenuModel's search action, named "appmenu"
+            // (imported menu items have no name; the fixed build's is "appmenu-guarded"). Hidden
+            // unless menuSearch is on; the stock button and the width estimate below follow the
+            // action's visibility.
             readonly property bool searchEntry: activeActions?.objectName === "appmenu"
             function applySearchGuard(): void {
                 if (searchEntry && activeActions.visible !== budget.menuSearch) {
