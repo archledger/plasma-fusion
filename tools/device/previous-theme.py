@@ -69,11 +69,18 @@ FUSION_IDS = ("org.plasmafusion.dark.desktop", "org.plasmafusion.light.desktop")
 
 def parse_kconfig(path):
     """KConfig file -> {(group, key): value}; group is the raw header text ("A][B" when nested)."""
-    out = {}
     try:
-        text = open(path, encoding="utf-8", errors="replace").read()
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
     except OSError:
-        return out
+        return {}
+    return parse_kconfig_text(text)
+
+
+def parse_kconfig_text(text):
+    """The text of a KConfig file (written by Plasma, the user or another Global Theme) ->
+    {(group, key): value}, as parse_kconfig; a later value of a key wins, None marks a deleted key."""
+    out = {}
     group = ""
     for raw in text.splitlines():
         line = raw.strip()
@@ -126,6 +133,19 @@ def config_dirs(skip):
     return dirs
 
 
+def package_defaults(parsed):
+    """A Global Theme's contents/defaults, parsed -> {(file, group, key): value}; its groups are
+    "file][group" ("" for the file of a plain group, such as [Wallpaper])."""
+    out = {}
+    for (g, k), v in parsed.items():
+        parts = g.split("][")
+        if len(parts) == 2:
+            out[(parts[0], parts[1], k)] = v
+        elif len(parts) == 1:
+            out[("", parts[0], k)] = v
+    return out
+
+
 class Look:
     def __init__(self, config_dir, lookandfeel, data):
         self.config_dir = config_dir
@@ -145,12 +165,7 @@ class Look:
                 break
         self.pkg_defaults = {}
         if self.package:
-            for (g, k), v in parse_kconfig(os.path.join(self.package, "contents/defaults")).items():
-                parts = g.split("][")
-                if len(parts) == 2:
-                    self.pkg_defaults[(parts[0], parts[1], k)] = v
-                elif len(parts) == 1:
-                    self.pkg_defaults[("", parts[0], k)] = v
+            self.pkg_defaults = package_defaults(parse_kconfig(os.path.join(self.package, "contents/defaults")))
 
     def _user(self, f):
         if f not in self.user:
