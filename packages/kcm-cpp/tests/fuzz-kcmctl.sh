@@ -43,7 +43,9 @@ EOF
   chmod +x "$work/bin/$tool"
 done
 
-# REPLY = one of the arguments (no subshell, so the generator's sequence stays the same).
+# Everything that draws from RANDOM runs in this shell: bash seeds a subshell's RANDOM anew, so a
+# pipeline or a $(...) would make a run differ from the next one with the same seed.
+# REPLY = one of the arguments.
 pick() {
   local i=$((RANDOM % $# + 1))
   REPLY=${!i}
@@ -58,11 +60,16 @@ value() {
     pick "$@"
   fi
 }
+# The lines of the file being written.
+lines=()
+group() {
+  lines+=("[$1]")
+}
 # A key line KEY=VALUE, left out one time in six.
 entry() {
   if ((RANDOM % 6 != 0)); then
     value "${@:2}"
-    printf '%s=%s\n' "$1" "$REPLY"
+    lines+=("$1=$REPLY")
   fi
 }
 # One time in four, a broken or unusual line.
@@ -71,84 +78,80 @@ garbage() {
     # shellcheck disable=SC2016 # [$i] is KConfig's mark for an immutable key or group
     pick '[Unclosed' '=novalue' 'NoEquals' 'Key[$i]=locked' '[KDE][$i]' '[]' 'Key[de]=localized' \
       $'Bytes=\x01\x02\x7f\xff' "Long$long=x" ' Spaces = around '
-    printf '%s\n' "$REPLY"
+    lines+=("$REPLY")
   fi
 }
-# FILE written from the lines on stdin, or (one time in eight) removed.
-write() {
+# FILE gets the lines collected so far, or (one time in eight) is removed.
+flush() {
   if ((RANDOM % 8 == 0)); then
     rm -f "$1"
-    cat >/dev/null
   else
-    cat >"$1"
+    printf '%s\n' "${lines[@]}" >"$1"
   fi
+  lines=()
 }
 
 write_config() {
   local c=$work/config
-  {
-    garbage
-    echo '[KDE]'
-    entry LookAndFeelPackage org.plasmafusion.dark.desktop org.plasmafusion.light.desktop org.kde.breezedark.desktop
-    entry AutomaticLookAndFeel true false
-    entry DefaultLightLookAndFeel org.plasmafusion.light.desktop org.kde.breeze.desktop
-    entry DefaultDarkLookAndFeel org.plasmafusion.dark.desktop org.kde.breezedark.desktop
-    entry AnimationDurationFactor 0 0.5 1 2
-    entry DndBehavior AlwaysAsk MoveIfSameDevice
-    garbage
-    echo '[General]'
-    entry AccentColor 47,111,223 '#2f6fdf' 255,255,255 0,0,0,0
-    entry LastUsedCustomAccentColor 47,111,223 200,40,40
-    entry accentColorFromWallpaper true false
-    entry ColorScheme PlasmaFusionDark PlasmaFusionLight PlasmaFusionHighContrast BreezeDark
-    echo '[Colors:Window]'
-    entry BackgroundNormal 27,32,49 240,242,247 '#ffffff'
-    garbage
-  } | write "$c/kdeglobals"
-  {
-    echo '[org.kde.kdecoration2]'
-    entry library org.plasmafusion.decoration org.kde.kwin.aurorae.v2 org.kde.breeze
-    entry theme __aurorae__svg__PlasmaFusionDark __aurorae__svg__PlasmaFusionLight-Left __aurorae__svg__PlasmaFusionDark-Left
-    entry ButtonsOnLeft M MS ''
-    entry ButtonsOnRight IAX HIAX ''
-    garbage
-    echo '[Effect-overview]'
-    entry BorderActivate 7 9 7,9 3
-    echo '[Input]'
-    entry TabletMode auto on off
-    echo '[Script-plasmafusion-tablet]'
-    entry WindowMode fullscreen windowed
-    entry DockHiding overApps none
-    entry EdgeLeft true false
-    entry EdgeRight true false
-    echo '[Plugins]'
-    entry blurEnabled true false
-    entry plasmafusion-snapEnabled true false
-    garbage
-  } | write "$c/kwinrc"
-  {
-    echo '[Decoration]'
-    entry ButtonStyle RightGlyphs LeftCircles ShowOnHover
-    entry SnapLayoutsOnHover true false
-    echo '[Effects]'
-    entry Glass Full Reduced Solid solid
-    echo '[TopBar]'
-    entry EveryScreen true false
-    entry SolidNextToWindows true false
-    garbage
-    echo '[Power]'
-    entry LighterOnCritical true false
-    entry Tier critical low full
-    entry UserGlass Full Solid
-    entry UserDockMagnify true false
-    echo '[Motion]'
-    entry PreviousAnimationDurationFactor 1 0.5
-    garbage
-  } | write "$c/plasmafusionrc"
-  {
-    echo '[General]'
-    entry 'only basic indexing' true false
-  } | write "$c/baloofilerc"
+  garbage
+  group 'KDE'
+  entry LookAndFeelPackage org.plasmafusion.dark.desktop org.plasmafusion.light.desktop org.kde.breezedark.desktop
+  entry AutomaticLookAndFeel true false
+  entry DefaultLightLookAndFeel org.plasmafusion.light.desktop org.kde.breeze.desktop
+  entry DefaultDarkLookAndFeel org.plasmafusion.dark.desktop org.kde.breezedark.desktop
+  entry AnimationDurationFactor 0 0.5 1 2
+  entry DndBehavior AlwaysAsk MoveIfSameDevice
+  garbage
+  group 'General'
+  entry AccentColor 47,111,223 '#2f6fdf' 255,255,255 0,0,0,0
+  entry LastUsedCustomAccentColor 47,111,223 200,40,40
+  entry accentColorFromWallpaper true false
+  entry ColorScheme PlasmaFusionDark PlasmaFusionLight PlasmaFusionHighContrast BreezeDark
+  group 'Colors:Window'
+  entry BackgroundNormal 27,32,49 240,242,247 '#ffffff'
+  garbage
+  flush "$c/kdeglobals"
+  group 'org.kde.kdecoration2'
+  entry library org.plasmafusion.decoration org.kde.kwin.aurorae.v2 org.kde.breeze
+  entry theme __aurorae__svg__PlasmaFusionDark __aurorae__svg__PlasmaFusionLight-Left __aurorae__svg__PlasmaFusionDark-Left
+  entry ButtonsOnLeft M MS ''
+  entry ButtonsOnRight IAX HIAX ''
+  garbage
+  group 'Effect-overview'
+  entry BorderActivate 7 9 7,9 3
+  group 'Input'
+  entry TabletMode auto on off
+  group 'Script-plasmafusion-tablet'
+  entry WindowMode fullscreen windowed
+  entry DockHiding overApps none
+  entry EdgeLeft true false
+  entry EdgeRight true false
+  group 'Plugins'
+  entry blurEnabled true false
+  entry plasmafusion-snapEnabled true false
+  garbage
+  flush "$c/kwinrc"
+  group 'Decoration'
+  entry ButtonStyle RightGlyphs LeftCircles ShowOnHover
+  entry SnapLayoutsOnHover true false
+  group 'Effects'
+  entry Glass Full Reduced Solid solid
+  group 'TopBar'
+  entry EveryScreen true false
+  entry SolidNextToWindows true false
+  garbage
+  group 'Power'
+  entry LighterOnCritical true false
+  entry Tier critical low full
+  entry UserGlass Full Solid
+  entry UserDockMagnify true false
+  group 'Motion'
+  entry PreviousAnimationDurationFactor 1 0.5
+  garbage
+  flush "$c/plasmafusionrc"
+  group 'General'
+  entry 'only basic indexing' true false
+  flush "$c/baloofilerc"
 
   # What the module looks for in the data directories: the high-contrast scheme and the
   # previous-desktop theme (restorePreviousDesktop needs it).
