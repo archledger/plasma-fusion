@@ -22,6 +22,10 @@ taking part follows the [code of conduct](CODE_OF_CONDUCT.md); how decisions are
    behaviour changes.
 4. Run the checks that cover it:
    - `tools/build.sh` (every part, with its built-in checks) and `tools/checks/tests/run.sh`;
+   - the coding style: `ruff check` for Python (`ruff.toml`), `git clang-format --diff main` for
+     C++ (KDE's style, `.clang-format`) and `tools/checks/shellcheck.sh` for shell scripts; QML has
+     no style tool yet and follows the surrounding code (4-space indentation). docs/parts/ci.md,
+     "Coding style", says what they check;
    - the part's own tests (for example `tools/device/tests/gate-unit.sh`,
      `packages/common/tests/icontile.sh`, `packages/appicons/tests/*.py`), listed on its page;
    - new behaviour needs a test that would fail without it.

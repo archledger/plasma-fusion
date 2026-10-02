@@ -17,7 +17,7 @@ import os
 import re
 import sys
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication, QPainterPath, QPainterPathStroker
 
 HERE = os.path.dirname(os.path.abspath(__file__))

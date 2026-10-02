@@ -129,8 +129,8 @@ def analyze(run):
     r["sweep_frames"] = frames_in(F, M["sweep0"]["mono"], M["sweep1"]["mono"])
     r["sweep_noise_syscpu"], r["sweep_load1"] = sys_noise(s0, s1)
     shell = lambda tag: tag.startswith(("plasmashell|", "org.kde.plasmashell|"))
-    kwin_internal = lambda tag: tag.startswith("kwin_wayland|") or tag.startswith("|") or "tabbox" in tag.lower() or tag.startswith("org.kde.kwin")
-    for name, n, pred in (("launcher", 3, shell), ("qs", 3, shell), ("alttab", 3, lambda t: not t.startswith(("plasmashell|", "org.kde.plasmashell|", "org.kde.konsole|", "org.kde.kwrite|", "spectacle")))):
+    switcher = lambda t: not t.startswith(("plasmashell|", "org.kde.plasmashell|", "org.kde.konsole|", "org.kde.kwrite|", "spectacle"))
+    for name, n, pred in (("launcher", 3, shell), ("qs", 3, shell), ("alttab", 3, switcher)):
         lat, cpu_s, cpu_k, fr = [], [], [], []
         for i in range(1, n + 1):
             lat.append(latency(M, A, f"{name}{i}", pred))
@@ -143,7 +143,7 @@ def analyze(run):
         # mapped, and the end of the opening animation (last frame before a 100 ms pause)
         ff, settle = [], []
         for i in range(1, n + 1):
-            m = M[f"{name}{i}"]; off = m["epoch"] - m["mono"]
+            m = M[f"{name}{i}"]
             if lat[i - 1] is None:
                 ff.append(None); settle.append(None); continue
             t_map = m["mono"] + lat[i - 1] / 1000.0

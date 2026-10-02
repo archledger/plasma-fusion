@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 # Test tooling (not installed). Edge cases for the window decoration, sourced by
 # tools/vsession/vsession.sh (seed from make-seed.sh): e1 a small dialog, e2 the dialog squeezed
 # below the corner sizes (140x150), e3 BorderSizeAuto=true (Aurorae then uses Normal borders).

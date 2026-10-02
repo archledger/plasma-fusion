@@ -4,7 +4,8 @@
 # The compiled parts (navigation effect, window decoration, settings module) against the KWin,
 # KDecoration and KDE Frameworks that Fedora 44 ships: build requirements from each spec
 # (dnf builddep), configure, build and the parts' tests. A Plasma update in Fedora that breaks one
-# of them shows up here.
+# of them shows up here. Compiler warnings fail the build (CXXFLAGS=-Werror on top of KDE's warning
+# flags), except deprecation warnings, which stay warnings.
 #
 # The same build against KDE's Plasma beta packages for Fedora (the @kdesig/kde-beta Copr) warns
 # early when the next Plasma release breaks a part. It may fail without failing the run.
@@ -17,6 +18,8 @@ on:
       - "packages/navigation-cpp/**"
       - "packages/decoration-cpp/**"
       - "packages/kcm-cpp/**"
+      - "packages/color-schemes/*.colors"
+      - "tools/tests/ctest-required.sh"
       - ".github/workflows/compiled.yml"
   push:
     branches: ["main"]
@@ -24,6 +27,8 @@ on:
       - "packages/navigation-cpp/**"
       - "packages/decoration-cpp/**"
       - "packages/kcm-cpp/**"
+      - "packages/color-schemes/*.colors"
+      - "tools/tests/ctest-required.sh"
       - ".github/workflows/compiled.yml"
   # Weekly, so that a Plasma update in Fedora 44 is noticed without a change here.
   schedule:
@@ -50,8 +55,8 @@ jobs:
         package: [navigation-cpp, decoration-cpp, kcm-cpp]
         plasma: [stable, beta]
     steps:
-      - name: Install git and builddep (checkout runs inside the container)
-        run: dnf install -y -q git dnf-plugins-core rpm-build
+      - name: Install git, builddep and D-Bus for the tests (checkout runs inside the container)
+        run: dnf install -y -q git dnf-plugins-core rpm-build dbus-daemon
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,9 +81,12 @@ jobs:
         env:
           PACKAGE: ${{ matrix.package }}
           QT_QPA_PLATFORM: offscreen
+          # CMake takes CXXFLAGS over and adds KDE's warning flags (-Wall -Wextra -pedantic and more).
+          CXXFLAGS: -Werror -Wno-error=deprecated-declarations
         run: |
           set -euo pipefail
           cmake -S "packages/$PACKAGE" -B "$RUNNER_TEMP/build" -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
           cmake --build "$RUNNER_TEMP/build"
+          tools/tests/ctest-required.sh "packages/$PACKAGE" "$RUNNER_TEMP/build"
           ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure

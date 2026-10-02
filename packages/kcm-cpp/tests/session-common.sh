@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Test tooling (not installed). Sourced by the scenarios in this directory inside a virtual
 # session (tools/vsession/vsession.sh): installs and applies Plasma Fusion from the seed, and

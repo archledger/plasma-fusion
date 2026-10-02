@@ -21,9 +21,10 @@ meta = json.load(open(sys.argv[1]))
 assert meta["KPackageStructure"] == "Plasma/Applet", "not a Plasma/Applet package"
 assert meta["KPlugin"]["Id"] == sys.argv[2], "plugin id does not match the directory"
 PY
-  for xml in "$src"/contents/config/main.xml; do
-    [ -f "$xml" ] && python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$xml"
-  done
+  xml="$src/contents/config/main.xml"
+  if [ -f "$xml" ]; then
+    python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$xml"
+  fi
 
   bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" "topbar: $id"
 

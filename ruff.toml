@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# Python style check: ruff (Fedora package `ruff`), run as `ruff check` from the top directory and
+# by .github/workflows/style.yml. The rules are the ones the code already follows: pyflakes (F)
+# and pycodestyle's errors E4, E7 and E9 (ruff's classic default set; the code's `# noqa` comments
+# name codes from these groups), and lines of at most 160 characters, the limit of the C++ style
+# (.clang-format). See docs/parts/ci.md, "Coding style".
+
+line-length = 160
+
+# Python scripts without the .py suffix.
+extend-include = [
+    "packages/appicons/plasma-fusion-app-icons",
+    "packages/keyboard/plasma-fusion-keyboard-keys",
+]
+
+# Not checked for now: other branches have open changes to these paths, and a style fix here
+# would collide with them. Remove a line once that work is merged and its files pass.
+extend-exclude = [
+    "packages/appicons/**",
+    "packages/keyboard/plasma-fusion-keyboard-keys",
+    "packages/kwin/**",
+    "packages/navigation-cpp/**",
+    "packages/power/**",
+    "packages/powerfx/**",
+    # tools/device/fieldlog/plasma-fusion-fieldlog (the field log) is a Python script without a
+    # suffix: add it to extend-include when this line goes.
+    "tools/device/**",
+    "tools/system/**",
+]
+
+[lint]
+select = ["E4", "E7", "E9", "E501", "F"]
+# Left out because the code uses these forms on purpose:
+ignore = [
+    "E401", # several modules on one import line (import json, os, sys)
+    "E701", # a short statement after a colon on the same line (if not ok: continue)
+    "E702", # several short statements on one line, separated by semicolons
+    "E731", # a lambda assigned to a name
+    "E741", # the variable names l, I and O
+]
+
+[lint.per-file-ignores]
+# The app tile batches take their drawing kit with `from kit import *` and hold SVG path data
+# on one line per shape.
+"generators/icons/apptiles/b_*.py" = ["E501", "F405"]
+# SVG path data, one line per shape.
+"generators/icons/art_files.py" = ["E501"]
+# The contrast table and its Markdown header, one line per row.
+"packages/color-schemes/check_contrast.py" = ["E501"]

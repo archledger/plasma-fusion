@@ -63,9 +63,12 @@ changelog_date=$(LC_ALL=C date -u -d "@$epoch" '+%a %b %d %Y')
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@RELEASE@/$RELEASE/g" -e "s/@GITREV@/$rev/g" -e "s/@CHANGELOG_DATE@/$changelog_date/g" \
   "$ROOT/packaging/$NAME.spec.in" >"$TOPDIR/SPECS/$NAME.spec"
 
-# No session for the generators (they render offscreen).
+# No session for the generators (they render offscreen). The package's build time is the
+# revision's commit time and its build host a fixed name, so that two builds of one revision give
+# identical packages (rpm clamps the files' times to the same time already).
 env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY -u DBUS_SESSION_BUS_ADDRESS \
-  rpmbuild --define "_topdir $TOPDIR" -ba "$TOPDIR/SPECS/$NAME.spec"
+  rpmbuild --define "_topdir $TOPDIR" --define "use_source_date_epoch_as_buildtime 1" \
+  --define "_buildhost reproducible" -ba "$TOPDIR/SPECS/$NAME.spec"
 
 rpm_file=$(ls "$TOPDIR/RPMS/noarch/$NAME-$VERSION-$RELEASE".*.noarch.rpm)
 srpm_file=$(ls "$TOPDIR/SRPMS/$NAME-$VERSION-$RELEASE".*.src.rpm)

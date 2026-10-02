@@ -1,5 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
+# mine() prints one PID per line; kill takes each as an argument on purpose.
+# shellcheck disable=SC2046
 #
 # Icon theme check in a private Plasma session (tools/vsession). Seed HOME: the icons stage plus a
 # kdeglobals that names the theme (and a colour scheme), for example:

@@ -30,6 +30,13 @@ packaging/build-rpm.sh [--topdir DIR] [--no-lint]      # default DIR: build/rpmb
 * `packaging/plasma-fusion.spec.in` gets version, release, revision and changelog date filled in
   and is written to `<topdir>/SPECS/plasma-fusion.spec`; `rpmbuild -ba` then builds SRPM and RPM,
   and rpmlint checks spec, SRPM and RPM with `packaging/plasma-fusion.rpmlintrc`.
+* Repeatable: `SOURCE_DATE_EPOCH` is the revision's commit time, rpm takes it as the package's
+  build time (`use_source_date_epoch_as_buildtime`) and clamps the files' times to it, and the
+  build host is recorded as `reproducible`. Two builds of one committed revision in the same
+  directory give bit-for-bit identical source and binary RPMs (checked 2026-10-02, see
+  docs/parts/ci.md). Built in another directory, the payload stays the same, but the source RPM's
+  header keeps the expanded spec, which names rpmbuild's top directory, and the binary RPM's header
+  records the source RPM's digest.
 * `%build` runs `tools/build.sh` into `_stage/` (no display, `QT_QPA_PLATFORM=offscreen`, session
   variables removed). BuildRequires: `python3`, `python3-pillow`, `python3-pyside6` (the imports of
   the generators the build runs; the GTK CSS check uses PyGObject only when present).

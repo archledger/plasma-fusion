@@ -16,8 +16,9 @@
 #                            widgets print their touch targets as PFTARGET lines; check.py reads them)
 import json, os, subprocess, sys, time
 
-USAGE = "mx.py state LABEL | geo | outputs | targets on|off"
 from gi.repository import Gio, GLib
+
+USAGE = "mx.py state LABEL | geo | outputs | targets on|off"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "lib"))

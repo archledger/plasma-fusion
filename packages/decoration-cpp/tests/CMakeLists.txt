@@ -18,3 +18,36 @@ target_link_libraries(pfdeco-preview
 )
 target_compile_definitions(pfdeco-preview PRIVATE PFDECO_PLUGIN="$<TARGET_FILE:plasmafusiondecoration>")
 add_dependencies(pfdeco-preview plasmafusiondecoration)
+
+# The preview's checks as tests (ctest), dark and light, and its random scenes, through
+# run-checks.sh. They need the colour schemes of the repository (packages/color-schemes) and
+# dbus-run-session; without them (a source tarball, a system without D-Bus) the tests are left out
+# (tools/tests/ctest-required.sh makes CI fail then).
+set(PF_SCHEMES "${CMAKE_CURRENT_SOURCE_DIR}/../../color-schemes")
+find_program(DBUS_RUN_SESSION dbus-run-session)
+if(EXISTS "${PF_SCHEMES}/PlasmaFusionDark.colors" AND EXISTS "${PF_SCHEMES}/PlasmaFusionLight.colors" AND DBUS_RUN_SESSION)
+    foreach(scheme Dark Light)
+        if(scheme STREQUAL "Dark")
+            set(other Light)
+        else()
+            set(other Dark)
+        endif()
+        string(TOLOWER "${scheme}" name)
+        add_test(NAME pfdeco-preview-${name}
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-checks.sh"
+                         $<TARGET_FILE:pfdeco-preview> $<TARGET_FILE:plasmafusiondecoration>
+                         "${CMAKE_CURRENT_BINARY_DIR}/preview-${name}" ${name}
+                         "${PF_SCHEMES}/PlasmaFusion${scheme}.colors" "${PF_SCHEMES}/PlasmaFusion${other}.colors"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/../../../fonts/manrope/static")
+        set_tests_properties(pfdeco-preview-${name} PROPERTIES TIMEOUT 600)
+    endforeach()
+    # Random scenes (pfdeco-preview --fuzz): PF_FUZZ_COUNT and PF_FUZZ_SEED in the environment of
+    # ctest change their number (default 200) and seed (default 1).
+    add_test(NAME pfdeco-fuzz
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-checks.sh"
+                     $<TARGET_FILE:pfdeco-preview> $<TARGET_FILE:plasmafusiondecoration>
+                     "${CMAKE_CURRENT_BINARY_DIR}/preview-fuzz" fuzz
+                     "${PF_SCHEMES}/PlasmaFusionDark.colors" "${PF_SCHEMES}/PlasmaFusionLight.colors"
+                     "${CMAKE_CURRENT_SOURCE_DIR}/../../../fonts/manrope/static" --fuzz)
+    set_tests_properties(pfdeco-fuzz PROPERTIES TIMEOUT 1800)
+endif()

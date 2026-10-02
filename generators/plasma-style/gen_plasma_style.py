@@ -809,7 +809,6 @@ def toolbar(v):
 
 
 def pager(v):
-    c = v["ctl"]
     doc = Doc("widgets/pager")
     stretch_hint(doc)
     add_frame(doc, Frame("normal", 6, [Fill(0, Scheme(TEXT, 0.06)), Ring(0, 1, Scheme(TEXT, 0.14))], None, note="desktop"))

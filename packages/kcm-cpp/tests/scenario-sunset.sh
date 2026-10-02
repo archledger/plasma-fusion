@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Test tooling (not installed). "Follow sunset" after "Left · circles": when Plasma's automatic
 # switching applies the other Global Theme, that theme brings its own window decoration; the

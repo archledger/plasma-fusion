@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Test tooling (not installed). The window-button choice with the Plasma Fusion decoration
 # (org.plasmafusion.decoration) installed: seed from make-seed.sh with DECO_PLUGIN_DIR. Starts

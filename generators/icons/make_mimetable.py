@@ -234,7 +234,9 @@ def main():
             elif media == 'message':
                 cat = 'text'
             elif media == 'text':
-                cat = 'code' if re.search(r'src|hdr|script|source|python|java|perl|ruby|lua|rust|go$|csharp|php|sql|tcl|qml|kotlin|scala|haskell|lisp|pascal|fortran|makefile|patch|diff|x-c', t) else 'text'
+                code = re.search(r'src|hdr|script|source|python|java|perl|ruby|lua|rust|go$|csharp|php|sql|tcl|qml|kotlin|scala|haskell|'
+                                 r'lisp|pascal|fortran|makefile|patch|diff|x-c', t)
+                cat = 'code' if code else 'text'
             elif 'application/zip' in anc or 'application/x-archive' in anc or re.search(r'compress|zip|tar|archive|x-7z|rar|lz|zstd|xz|bzip|gzip', t):
                 cat = 'archive'
             elif 'text/plain' in anc or 'application/xml' in anc:

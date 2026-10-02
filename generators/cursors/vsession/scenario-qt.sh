@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 # vsession scenario (sourced by tools/vsession/vsession.sh): KWin SVG cursors through Qt's
 # cursor-shape-v1 requests, the cursor settings tool and a live switch to the light theme.
 # The seed HOME holds the staged themes, .config/kcminputrc and pfv-cursor-test/ (this folder).

@@ -8,7 +8,9 @@
 import gzip, os, re, sys
 BREEZE = "/usr/share/plasma/desktoptheme/default"
 OURS = sys.argv[1]
-junk = re.compile(r'^(path|rect|g|defs|layer|use|stop|linear|radial|filter|fe|mask\d|clip|text|tspan|svg|metadata|namedview|circle|ellipse|sodipodi|base|grid|guide|Checkerboard|msc|st$|sb$|sl$|sr$|shadow-bottomright-9|shadow-topright-0|shadow-topleft-2|shadow-bottomleft-9|shadow-bottomright-2)')
+junk = re.compile(r'^(path|rect|g|defs|layer|use|stop|linear|radial|filter|fe|mask\d|clip|text|tspan|svg|metadata|namedview|'
+                  r'circle|ellipse|sodipodi|base|grid|guide|Checkerboard|msc|st$|sb$|sl$|sr$|'
+                  r'shadow-bottomright-9|shadow-topright-0|shadow-topleft-2|shadow-bottomleft-9|shadow-bottomright-2)')
 def ids(path):
     data = open(path, 'rb').read()
     if data[:2] == b'\x1f\x8b': data = gzip.decompress(data)

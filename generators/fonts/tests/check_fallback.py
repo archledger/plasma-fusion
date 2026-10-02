@@ -17,7 +17,7 @@ import subprocess
 import sys
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-from PySide6.QtCore import QPointF, QRectF, Qt  # noqa: E402
+from PySide6.QtCore import QRectF, Qt  # noqa: E402
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QImage, QPainter, QTextLayout  # noqa: E402
 
 SAMPLES = [

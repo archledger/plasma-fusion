@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Foundation parts inside the whole Plasma Fusion desktop (test only). Seed: make-seed.sh --all.
 # Every part is built into the seed and applied with tools/device/fusion-config.sh inside the

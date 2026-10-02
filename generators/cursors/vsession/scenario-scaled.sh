@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 # vsession scenario: the test device runs its panel at scale 4/3 (docs/PLAN.md). Set the virtual
 # output to 4/3, then shoot every Qt::CursorShape (KWin renders the SVG cursors at device pixel
 # ratio 4/3) and the GTK 3 names (GTK 3 loads the Xcursor files at size 24 x 2 with buffer scale 2).

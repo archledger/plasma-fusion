@@ -1,0 +1,90 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The compiled parts (navigation effect, window decoration, settings module) built with
+# AddressSanitizer and UndefinedBehaviorSanitizer against Fedora 44's Plasma, and their tests
+# (ctest) run so that a memory error, a leak or undefined behaviour fails the job
+# (tools/sanitizers/run.sh, which also runs locally in a Fedora 44 container). The tests include
+# random scenes and rounds (pfdeco-fuzz, kcmctl-fuzz) with a fixed seed on pull requests and a new
+# seed every week.
+
+name: sanitizers
+
+on:
+  pull_request:
+    paths:
+      - "packages/navigation-cpp/**"
+      - "packages/decoration-cpp/**"
+      - "packages/kcm-cpp/**"
+      - "packages/color-schemes/*.colors"
+      - "tools/sanitizers/**"
+      - "tools/tests/ctest-required.sh"
+      - ".github/workflows/sanitizers.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "packages/navigation-cpp/**"
+      - "packages/decoration-cpp/**"
+      - "packages/kcm-cpp/**"
+      - "packages/color-schemes/*.colors"
+      - "tools/sanitizers/**"
+      - "tools/tests/ctest-required.sh"
+      - ".github/workflows/sanitizers.yml"
+  # Weekly, so that a library update in Fedora 44 is checked without a change here.
+  schedule:
+    - cron: "10 6 * * 3" # Wednesdays 06:10 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanitizers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  asan-ubsan:
+    name: "${{ matrix.package }} (ASan and UBSan, Fedora 44)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container: registry.fedoraproject.org/fedora:44
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [navigation-cpp, decoration-cpp, kcm-cpp]
+        # Random scenes (decoration) and rounds (settings module) of the weekly and manual runs.
+        include:
+          - package: decoration-cpp
+            weekly: 1000
+          - package: kcm-cpp
+            weekly: 100
+    steps:
+      - name: Install git, builddep, the sanitizer runtimes and D-Bus (checkout runs inside the container)
+        run: dnf install -y -q git dnf-plugins-core rpm-build binutils libasan libubsan dbus-daemon
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the build requirements from the spec
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          cd "packages/$PACKAGE"
+          dnf builddep -y -q ./*.spec
+
+      - name: Build and test with the sanitizers
+        env:
+          PACKAGE: ${{ matrix.package }}
+          EVENT: ${{ github.event_name }}
+          WEEKLY: ${{ matrix.weekly }}
+        run: |
+          set -euo pipefail
+          # Pull requests and pushes repeat the random tests' default seed. The weekly and manual
+          # runs take a new seed and run more of them; the log names the seed to repeat a failure.
+          if [ "$EVENT" = schedule ] || [ "$EVENT" = workflow_dispatch ]; then
+            now=$(date +%s)
+            export PF_FUZZ_SEED=$((now % 1000000)) PF_FUZZ_COUNT=$WEEKLY
+          fi
+          tools/sanitizers/run.sh "packages/$PACKAGE" "$RUNNER_TEMP/build"

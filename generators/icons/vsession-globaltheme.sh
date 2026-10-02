@@ -1,5 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
+# mine() prints one PID per line; kill takes each as an argument on purpose.
+# shellcheck disable=SC2046
 #
 # Icons in context: applies the Plasma Fusion Dark Global Theme inside a private session, with
 # ~/.config/kdedefaults in XDG_CONFIG_DIRS as startplasma sets it, then shows the desktop, the

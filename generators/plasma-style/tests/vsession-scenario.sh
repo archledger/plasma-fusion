@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Plasma style scenario for tools/vsession (sourced inside the private session; test use only).
 # Seed with make-seed.sh. Builds a 34 px top bar and an 88 px floating dock with stock widgets,
@@ -55,7 +56,7 @@ print("IDS " + clk.id + " " + tray.id + " " + rt.id + " " + pt.id + " " + dt.id 
 JS
 )
 echo "layout: $LAYOUT"
-read -r _ CLK TRAY RT PT DT TOPID DOCKID <<<"$(echo "$LAYOUT" | grep -o 'IDS.*')"
+read -r _ CLK TRAY RT PT DT TOPID _ <<<"$(echo "$LAYOUT" | grep -o 'IDS.*')"
 sleep 2
 # restart the shell: widget configs are read fresh and QML warnings go to a log we keep
 kquitapp6 plasmashell; sleep 2
