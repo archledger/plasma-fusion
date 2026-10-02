@@ -7,12 +7,22 @@
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
+const vm = require("vm");
+const { pathToFileURL } = require("url");
 
+// weather.js runs as a script of its own named by its file URL, so V8's coverage (node --test
+// --experimental-test-coverage, tools/tests/coverage.sh) maps it to the file. The QML-only
+// ".pragma library" line becomes spaces of the same length, which keeps every offset; the
+// library's top-level names become globals of this test.
 const file = path.join(__dirname, "..", "contents", "code", "weather.js");
-const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library\s*$/m, "");
-const W = new Function(code + "\nreturn { isSafeSource, weatherSource, searchText, parseValidate, parseIons," +
-                       " hasWeather, displayUnit, degrees, forecastDay, highLow, sentenceCase, glyphFor, shortPlace," +
-                       " regionalIon, Celsius, Fahrenheit, Kelvin };")();
+const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
+vm.runInThisContext(code, { filename: pathToFileURL(file).href });
+const W = Object.fromEntries(["isSafeSource", "weatherSource", "searchText", "parseValidate", "parseIons",
+                              "hasWeather", "displayUnit", "degrees", "forecastDay", "highLow", "sentenceCase",
+                              "glyphFor", "shortPlace", "regionalIon", "Celsius", "Fahrenheit", "Kelvin"]
+                             .map((name) => [name, globalThis[name]]));
+for (const [name, value] of Object.entries(W))
+    assert.notStrictEqual(value, undefined, `weather.js does not define ${name}`);
 
 // Sources the ions would crash on or misread are never accepted.
 assert.strictEqual(W.isSafeSource("bbcukmet|weather|London, Greater London, GB|2643743"), true);
