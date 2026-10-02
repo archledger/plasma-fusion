@@ -511,6 +511,20 @@ class Digest(unittest.TestCase):
         self.assertNotIn("rpm-crash", text[:tooling])
 
 
+    def test_resource_hours_with_restarts(self):
+        # Two runs in the 12:00 hour wrote two partial rows; the column said 2 hours (review of
+        # 2026-10-02).
+        d = fresh_dir("digest-hours")
+        log = fl.EventLog(d)
+        t = 1790956805
+        for ts, hour, n, rss, partial in ((t, "16:00", 3, [200, 205, 210], True), (t + 600, "16:00", 2, [220, 222, 224], True),
+                                          (t + 3600, "17:00", 60, [230, 240, 250], None)):
+            log.emit("resources", ts=ts, coalesce=False, proc="plasmashell", hour=hour, n=n, rss=rss,
+                     anon=[100, 110, 120], cpu=[1.0, 2.0], partial=partial)
+        text = fl.build_digest("2026-10-02", d)
+        self.assertIn("| plasmashell | 2 | 200 / 238 / 250 |", text)
+
+
 class Retention(unittest.TestCase):
     def test_age_and_size(self):
         d = fresh_dir("retention")

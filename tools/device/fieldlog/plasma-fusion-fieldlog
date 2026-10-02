@@ -1839,7 +1839,8 @@ def build_digest(day, sdir=None):
             cpus = [(g["cpu"][0], g.get("n", 0)) for g in rs if g.get("cpu") and g["cpu"][0] is not None]
             cmean = sum(c * k for c, k in cpus) / (sum(k for _, k in cpus) or 1)
             cmax = max((g["cpu"][1] for g in rs if g.get("cpu")), default=0)
-            L.append(f"| {proc} | {len(rs)} | {rss[0]:.0f} / {rss[1]:.0f} / {rss[2]:.0f} | "
+            hours = len({g.get("hour") for g in rs})  # a stop writes the hour so far: rows can share one
+            L.append(f"| {proc} | {hours} | {rss[0]:.0f} / {rss[1]:.0f} / {rss[2]:.0f} | "
                      f"{anon[0]:.0f} / {anon[1]:.0f} / {anon[2]:.0f} | {cmean:.2f} / {cmax:.1f} |")
         L.append("")
         peak = max(res, key=lambda g: g["anon"][2])
