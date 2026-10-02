@@ -289,8 +289,8 @@ Widget files named here without a path are under
   `-fstack-clash-protection`, `-fcf-protection`, `-Werror=format-security`, position-independent
   executables, and `-z relro -z now` (`rpm --eval '%{optflags}'` and `'%{build_ldflags}'` on
   Fedora 44).
-- The navigation effect's version check and the login check keep a mismatched compiled plugin
-  from running against a newer KWin (section 3.8).
+- The navigation effect's version check, and on Fedora the login check, keep a mismatched
+  compiled plugin from running against a newer KWin (section 3.8).
 - The root tools, the charge-limit helper, `fusion-config.sh` and `fusion-restore.sh` stop on the
   first error (`set -euo pipefail`), as do 63 of the 82 tracked scripts with a bash shebang. Three
   installed helpers do not: the login check must always finish and exit 0 so a login is never
