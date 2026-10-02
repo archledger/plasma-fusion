@@ -25,6 +25,12 @@ SPDX-FileCopyrightText = [
 ]
 SPDX-License-Identifier = "GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL"
 
+# The code of conduct: the Contributor Covenant 2.1 with the project's contact filled in
+[[annotations]]
+path = "CODE_OF_CONDUCT.md"
+SPDX-FileCopyrightText = "Contributor Covenant authors <https://www.contributor-covenant.org>"
+SPDX-License-Identifier = "CC-BY-4.0"
+
 # Artwork: design boards, generated wallpapers, previews, the launcher logo, icon glyph data
 [[annotations]]
 path = [
