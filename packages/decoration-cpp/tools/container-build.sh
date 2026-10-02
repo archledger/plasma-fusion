@@ -20,10 +20,15 @@ nice -n 10 ninja -C build -j"$JOBS" 2>&1 | tee build-ninja.log
 VERSION=$(sed -n 's/^Version:[[:space:]]*//p' src/plasma-fusion-decoration.spec)
 rm -rf rpmbuild
 mkdir -p rpmbuild/SOURCES
+# Fixed order, owner and times in the tarball; Fedora's rpm takes SOURCE_DATE_EPOCH from the spec's
+# changelog, and the package's build time is that time and its build host a fixed name, so two
+# builds of one spec give identical packages.
 tar -czf "rpmbuild/SOURCES/plasma-fusion-decoration-$VERSION.tar.gz" \
+  --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
   --exclude='src/build' --exclude='src/tools/__pycache__' \
   --transform "s,^src,plasma-fusion-decoration-$VERSION," src
 nice -n 10 rpmbuild --define "_topdir /work/rpmbuild" --define "_smp_mflags -j$JOBS" \
+  --define "use_source_date_epoch_as_buildtime 1" --define "_buildhost reproducible" \
   -bb src/plasma-fusion-decoration.spec >rpmbuild.log 2>&1 || { tail -60 rpmbuild.log; exit 1; }
 ls -l rpmbuild/RPMS/x86_64/
 rpm -qlp rpmbuild/RPMS/x86_64/plasma-fusion-decoration-"$VERSION"-*.x86_64.rpm
