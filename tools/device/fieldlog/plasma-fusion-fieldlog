@@ -1,0 +1,1945 @@
+#!/usr/bin/python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion field log: records the problems Plasma Fusion meets in daily use and keeps them apart
+# from the noise of development (docs/parts/fieldlog.md in the Plasma Fusion sources).
+#
+#   plasma-fusion-fieldlog run                 record until stopped (plasma-fusion-fieldlog.service)
+#   plasma-fusion-fieldlog digest [DATE]       write and print the digest of DATE (YYYY-MM-DD, today,
+#                                              yesterday; default today)
+#   plasma-fusion-fieldlog status              what is recorded today, the service, the state
+#   plasma-fusion-fieldlog install [--share DIR]
+#                                              copy this tool to ~/.local/libexec/plasma-fusion/,
+#                                              write ~/.config/systemd/user/plasma-fusion-fieldlog.service
+#                                              from the template next to it, enable and start it
+#   plasma-fusion-fieldlog remove              stop, disable and remove the unit and the copy (the
+#                                              recorded state stays)
+#
+# What "run" records, one JSON event per line in events-YYYY-MM-DD.jsonl (local day):
+#   - crashes: coredumpctl --json=short every minute (and a few seconds after the journal shows a
+#     core dump), each new dump's journal record read once; classes session (Plasma and Plasma Fusion
+#     components, anything in the session's session.slice), app (app.slice), other (outside the
+#     session) and tooling (a coding agent's marker in the environment or in a process sharing the
+#     cgroup, a build/scratch/test path, a container cgroup, a private test session). Session and app
+#     crashes get "coredumpctl info" saved in crashes/ at once (core files rotate). Core files are
+#     never touched.
+#   - session events: plasmashell and kwin_wayland restarts (the session's processes, selected by
+#     their cgroup under user@UID.service), logins and logouts, suspend and resume (the boot-time
+#     clock against the monotonic clock), screen and lid changes (sysfs, and the plasmafusion-snap KWin
+#     script), posture changes (the plasmafusion-tablet KWin script), failed or crashed plasma-* user
+#     units.
+#   - Plasma Fusion errors: QML/JavaScript errors and warnings whose file or text belongs to Plasma
+#     Fusion, the Plasma Fusion tools' warnings, the login check's runs (its gate.log); other
+#     plasmashell and KWin warnings only as counts per normalised text.
+#   - resources: plasmashell and kwin_wayland RSS, RssAnon and CPU every minute; hourly min, mean,
+#     max; a memory snapshot (memsnap/) on a jump of 60 MiB within a minute; an event for 60 % of a
+#     core or more for two minutes.
+# Repeats of an event are counted, not written again: the first is written at once, the count of
+# the repeats every hour and at the end. The day's digest (digest-YYYY-MM-DD.md) is written
+# every hour, at the end of the day and when the service stops; with PF_FIELDLOG_SHARE a copy goes to
+# that directory as digest-YYYY-MM-DD-HOST.md. 30 days and PF_FIELDLOG_MAX_MB (100) MiB are kept.
+#
+# Privacy: local files only. Environments are read for the names of agent markers and nothing else
+# is kept of them; window titles, notification texts and clipboard contents are not recorded (keyed
+# values and long quoted strings are cut out of every kept line; other programs' lines are kept only
+# as normalised counts).
+#
+# Settings (environment): PF_FIELDLOG_SHARE, PF_FIELDLOG_MAX_MB, PF_FIELDLOG_KEEP_DAYS,
+# PF_FIELDLOG_MARKERS (more marker names, comma separated), PF_FIELDLOG_SINCE (first run only: record
+# core dumps from this time, YYYY-MM-DD[THH:MM] local or @EPOCH; default the start of today),
+# PF_FIELDLOG_GATE_LOG (default $XDG_STATE_HOME/plasma-fusion/gate.log). For tests:
+# PF_FIELDLOG_INTERVAL (60 s), PF_FIELDLOG_RUN_SECONDS, PF_FIELDLOG_PROC, PF_FIELDLOG_SYS,
+# PF_FIELDLOG_CGROUP_ROOT.
+import collections, datetime, fcntl, json, os, pathlib, re, select, shlex, shutil, signal, subprocess
+import sys, threading, time
+
+VERSION = 1
+NAME = "plasma-fusion-fieldlog"
+UNIT = NAME + ".service"
+UID = os.getuid()
+CLK_TCK = os.sysconf("SC_CLK_TCK")
+COREDUMP_MSGID = "fc2e22bc6ee647b6b90729ab34a250b1"
+MSG_STARTED = "39f53479d3a045ac8e11786248231fbf"
+MSG_STOPPED = "9d1aaa27d60140bd96365438aad20286"
+MSG_PROCESS_EXIT = "98e322203f7a4ed290d09fe03c09fe15"
+MSG_FAILURE_RESULT = "d9b373ed55a64feb8242e02dbe79a49c"
+MSG_RESTART_SCHEDULED = "5eb03494b6584870a536b337290809b3"
+
+PROC = os.environ.get("PF_FIELDLOG_PROC") or "/proc"
+SYSFS = os.environ.get("PF_FIELDLOG_SYS") or "/sys"
+CGROOT = os.environ.get("PF_FIELDLOG_CGROUP_ROOT") or "/sys/fs/cgroup"
+INTERVAL = float(os.environ.get("PF_FIELDLOG_INTERVAL") or 60)
+FLUSH_S = 10 * INTERVAL
+KEEP_DAYS = int(os.environ.get("PF_FIELDLOG_KEEP_DAYS") or 30)
+MAX_MB = float(os.environ.get("PF_FIELDLOG_MAX_MB") or 100)
+DAY_LINE_CAP = 20000          # lines per day file before only crashes and session events are kept
+MEMSNAP_JUMP_MIB = 60
+MEMSNAP_GAP_S = 600
+MEMSNAP_PER_DAY = 12
+HOT_PCT = 60
+HOT_S = 120
+
+# ---------------------------------------------------------------------------------- classification
+
+AGENT_ENV = {"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "AI_AGENT", "OPENCODE", "CODEX_SANDBOX",
+             "CODEX_SANDBOX_NETWORK_DISABLED", "GEMINI_CLI", "CURSOR_AGENT"}
+AGENT_ENV |= {m.strip() for m in (os.environ.get("PF_FIELDLOG_MARKERS") or "").split(",") if m.strip()}
+AGENT_COMMS = {"claude", "opencode", "codex", "gemini", "aider", "cursor-agent"}
+SESSION_EXES = {"plasmashell", "kwin_wayland", "kwin_x11", "ksmserver", "kded6", "kscreenlocker_greet",
+                "xdg-desktop-portal-kde", "kglobalacceld", "krunner", "plasma_session",
+                "startplasma-wayland", "ksplashqml", "Xwayland", "ksmserver-logout-greeter", "xembedsniproxy",
+                "gmenudbusmenuproxy", "kaccess", "plasma-keyboard"}
+# Plasma's own units in the user manager (plasma-xembedsniproxy.service in background.slice, ...).
+PLASMA_UNIT = re.compile(r"/user@\d+\.service/(?:session|background|app)\.slice/(plasma-[^/]+\.service)")
+INTERPRETER = re.compile(r"^(?:(?:ba|da|z|k|fi)?sh|python[\d.]*|perl[\d.]*|node|ruby[\d.]*|lua[\d.]*"
+                         r"|qml|qmlscene|qmltestrunner|gjs|env)$")
+DEV_SEGMENTS = {"build", "_build", "builddir", "scratch", "scratchpad", "test", "tests", "testing",
+                "fixtures", ".claude", "worktrees"}
+DEV_PATH = re.compile(r"/target/(?:debug|release)/|^/tmp/claude-|^/var/tmp/pfv-")
+CONTAINER = re.compile(r"libpod|/docker[-/]|containerd|/machine\.slice/|/lxc[./]|podman")
+
+
+def env_names(env):
+    """Variable names of an environment block (NUL or newline separated); values are dropped."""
+    if isinstance(env, (bytes, bytearray)):
+        env = env.decode("utf-8", "replace")
+    out = {}
+    for item in re.split(r"[\0\n]", env or ""):
+        k, sep, v = item.partition("=")
+        if sep and k:
+            out[k] = v
+    return out
+
+
+def markers_in(env):
+    return sorted(k for k in env_names(env) if k in AGENT_ENV)
+
+
+def dev_path(path):
+    """The development directory a path lies in (build/, scratch, tests, a cargo target dir, an
+    agent's scratchpad or worktree, a private test session), or None."""
+    if not path or not path.startswith("/"):
+        return None
+    if DEV_PATH.search(path):
+        return path
+    for seg in path.split("/")[:-1]:
+        if seg in DEV_SEGMENTS or seg.startswith(("build-", "build.")):
+            return path
+    return None
+
+
+def split_cmdline(cmd):
+    try:
+        return shlex.split(cmd or "")
+    except ValueError:
+        return (cmd or "").split()
+
+
+def script_of(argv):
+    """The script an interpreter runs: its first argument that is not an option."""
+    if not argv or not INTERPRETER.match(os.path.basename(argv[0])):
+        return None
+    skip = False
+    for a in argv[1:]:
+        if skip:
+            skip = False
+            continue
+        if a in ("-c", "-m", "-e", "--eval"):
+            return None
+        if a in ("-W", "-X", "-u", "-O", "--import", "-r"):
+            skip = a in ("-W", "-X", "--import", "-r")
+            continue
+        if a.startswith("-"):
+            continue
+        return a
+    return None
+
+
+def cgroup_mate_marker(cgroup):
+    """A running process in the same cgroup that is a coding agent or carries an agent marker."""
+    if not cgroup:
+        return None
+    try:
+        pids = pathlib.Path(CGROOT + cgroup, "cgroup.procs").read_text().split()
+    except OSError:
+        return None
+    for pid in pids[:256]:
+        comm = read_text(f"{PROC}/{pid}/comm").strip()
+        if comm in AGENT_COMMS:
+            return f"{comm} ({pid})"
+        try:
+            with open(f"{PROC}/{pid}/environ", "rb") as f:
+                names = markers_in(f.read())
+        except OSError:
+            continue
+        if names:
+            return f"{comm or '?'} ({pid}) with {names[0]}"
+    return None
+
+
+def classify(rec, uid=None):
+    """(class, reason, marker names) of a core dump's journal record."""
+    uid = UID if uid is None else uid
+    exe = rec.get("COREDUMP_EXE") or ""
+    cgroup = rec.get("COREDUMP_CGROUP") or ""
+    cwd = rec.get("COREDUMP_CWD") or ""
+    env = env_names(rec.get("COREDUMP_ENVIRON") or "")
+    dump_uid = int(rec.get("COREDUMP_UID") or uid)
+    argv = split_cmdline(rec.get("COREDUMP_CMDLINE"))
+    markers = sorted(k for k in env if k in AGENT_ENV)
+    name = os.path.basename(exe)
+    script = script_of(argv)
+    if script and not script.startswith("/") and cwd.startswith("/"):
+        script = os.path.normpath(os.path.join(cwd, script))
+    argv0 = argv[0] if argv and argv[0].startswith("/") else None
+    pf_tool = any(os.path.basename(p or "").startswith("plasma-fusion") for p in (exe, script))
+
+    m = CONTAINER.search(cgroup)
+    if m or "container" in env:
+        return "tooling", f"container ({m.group(0) if m else 'container= in its environment'})", markers
+    for what, p in (("executable", exe), ("script", script), ("command", argv0)):
+        d = dev_path(p)
+        if d:
+            return "tooling", f"{what} in a development directory ({short(d)})", markers
+    rt = env.get("XDG_RUNTIME_DIR")
+    if rt and rt != f"/run/user/{dump_uid}":
+        return "tooling", f"private session (XDG_RUNTIME_DIR={short(rt)})", markers
+    # Started by the user manager for the session: an agent marker there came through the manager's
+    # environment, not from a terminal, so it does not make the crash a development one.
+    other_uid = f" (uid {dump_uid})" if dump_uid != uid else ""
+    if re.search(rf"/user@{dump_uid}\.service/session\.slice/", cgroup):
+        return "session", "the session's session.slice" + other_uid, markers
+    m = PLASMA_UNIT.search(cgroup)
+    if m:
+        return "session", f"Plasma unit {m.group(1)}" + other_uid, markers
+    if markers:
+        return "tooling", f"agent marker in its environment ({', '.join(markers)})", markers
+    mate = cgroup_mate_marker(cgroup)
+    if mate:
+        return "tooling", f"its cgroup is shared with {mate}", markers
+    if name in SESSION_EXES or pf_tool or name.startswith("drkonqi"):
+        return "session", f"Plasma component ({name if not pf_tool else os.path.basename(script or exe)})", markers
+    if "/app.slice/" in cgroup:
+        return "app", "app.slice", markers
+    return "other", f"outside the session ({short_cgroup(cgroup) or 'no cgroup'})", markers
+
+
+SKIP_FRAMES = {"raise", "abort", "gsignal", "kill", "pthread_kill", "__pthread_kill_implementation",
+               "__pthread_kill_internal", "__GI_raise", "__GI_abort", "__restore_rt"}
+# Qt's and glibc's abort paths: the frame under them says where.
+FATAL = re.compile(r"qAbort|qt_message|QMessageLogger5fatal|QMessageLogger::fatal|qt_assert|__assert_fail"
+                   r"|__libc_message|__fortify_fail|__stack_chk_fail|__malloc_assert|malloc_printerr")
+FRAME = re.compile(r"^\s*#\d+\s+0x[0-9a-fA-F]+\s+(.*?)\s+\((.*)\)\s*$")
+
+
+def top_frames(message, n=6):
+    """The crashing thread's first frames as "function (module)", without the signal handler."""
+    frames, on = [], False
+    for line in (message or "").splitlines():
+        if not on:
+            on = line.strip().startswith("Stack trace of thread")
+            continue
+        m = FRAME.match(line)
+        if not m:
+            if frames:
+                break
+            continue
+        func, where = m.group(1), m.group(2)
+        mod = os.path.basename(where.split(" + ")[0])
+        frames.append((func, mod))
+    cut = 0
+    for i, (func, mod) in enumerate(frames[:8]):
+        if func == "__restore_rt" or "KCrash" in func or "defaultCrashHandler" in func:
+            cut = i + 1
+    frames = frames[cut:]
+    # After the crash handler: the signal trampoline, unnamed when libc has no symbols.
+    while cut and frames and frames[0][0] == "n/a" and frames[0][1].startswith("libc.so"):
+        frames.pop(0)
+    while frames and (frames[0][0] in SKIP_FRAMES or FATAL.search(frames[0][0])):
+        frames.pop(0)
+    return [f"{func} ({mod})" for func, mod in frames[:n]]
+
+
+def signature(exe, signal_name, frames):
+    parts = [os.path.basename(exe or "?"), signal_name or "?"]
+    parts += [re.sub(r"\.(?:isra|lto_priv|constprop|part|cold)\.\d+", "", f) for f in frames[:3]]
+    return " | ".join(parts)
+
+# ------------------------------------------------------------------------------ text and privacy
+
+
+def home():
+    return os.environ.get("HOME") or str(pathlib.Path.home())
+
+
+def short(path):
+    h = home()
+    if path and h and h != "/" and (path == h or path.startswith(h + "/")):
+        return "~" + path[len(h):]
+    return path
+
+
+def short_cgroup(cg):
+    m = re.search(r"/user@\d+\.service(/.*)$", cg or "")
+    return m.group(1).lstrip("/") if m else (cg or "")
+
+
+# Keyed values that can hold a window title, a notification or clipboard text: "key=value" always,
+# "key: value" for captions and window titles, "key: 'quoted'" for the others (so "QML Text: Binding
+# loop ..." stays readable).
+SENSITIVE = re.compile(r"(?i)\b(?:(caption|windowtitle|title|summary|body|text|clipboard|subject|mimedata|selection"
+                       r"|password|token|secret)(\s*=\s*)(\"[^\"]*\"|'[^']*'|[^,;)\]}\s]*)"
+                       r"|(caption|windowtitle)(\s*:\s*)(\"[^\"]*\"|'[^']*'|[^,;)\]}]*)"
+                       r"|(title|summary|body|text|clipboard|subject|selection)(\s*:\s*)(\"[^\"]*\"|'[^']*'))")
+
+
+def _redact(m):
+    for i in (1, 4, 7):
+        if m.group(i):
+            return m.group(i) + m.group(i + 1) + "<redacted>"
+    return m.group(0)
+DQUOTED = re.compile(r"\"([^\"\n]*)\"|\u201c([^\u201d\n]*)\u201d")
+SQUOTED = re.compile(r"(?<![A-Za-z])'([^'\n]*)'(?![A-Za-z])")
+
+
+def scrub(s, quotes="long", limit=400):
+    """A line as it may be kept: home shortened, keyed values (title, summary, body, ...) cut out,
+    quoted strings cut out when they contain spaces or are long ("long") or always ("all")."""
+    if not isinstance(s, str):
+        s = text_of(s)
+    h = home()
+    if h and h != "/":
+        s = s.replace(h, "~")
+    s = SENSITIVE.sub(_redact, s)
+
+    def cut(m):
+        whole = m.group(0)
+        inner = whole[1:-1]
+        if quotes == "all" or len(inner) > 48 or re.search(r"\s", inner):
+            return whole[0] + "\u2026" + whole[-1]
+        return whole
+
+    s = DQUOTED.sub(cut, s)
+    s = SQUOTED.sub(cut, s)
+    s = " ".join(s.split())
+    return s[:limit]
+
+
+def normalise(s, quotes="long"):
+    s = scrub(s, quotes=quotes, limit=1000)
+    s = re.sub(r"0x[0-9a-fA-F]+|\d+", lambda m: "0x\u2026" if m.group(0)[:2] == "0x" else "N", s)
+    return s[:200]
+
+
+def text_of(v):
+    if v is None:
+        return ""
+    if isinstance(v, list):
+        try:
+            return bytes(v).decode("utf-8", "replace")
+        except (TypeError, ValueError):
+            return ""
+    return str(v)
+
+
+def read_text(path, limit=None):
+    try:
+        with open(path, "r", errors="replace") as f:
+            return f.read(limit) if limit else f.read()
+    except OSError:
+        return ""
+
+# ------------------------------------------------------------------------------------------ time
+
+
+def iso(ts):
+    return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_iso(s):
+    try:
+        return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+    except (ValueError, AttributeError):
+        return 0.0
+
+
+def local_day(ts):
+    return time.strftime("%Y-%m-%d", time.localtime(ts))
+
+
+def local_hm(ts):
+    return time.strftime("%H:%M", time.localtime(ts))
+
+
+def day_start(day):
+    return time.mktime(time.strptime(day, "%Y-%m-%d"))
+
+
+def compact(ts):
+    return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def parse_since(s, now):
+    s = (s or "").strip()
+    if not s:
+        return day_start(local_day(now))
+    if s.startswith("@"):
+        return float(s[1:])
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+        try:
+            return time.mktime(time.strptime(s, fmt))
+        except ValueError:
+            pass
+    raise SystemExit(f"{NAME}: PF_FIELDLOG_SINCE: not a time: {s}")
+
+
+def duration(s):
+    s = int(s)
+    if s < 120:
+        return f"{s} s"
+    if s < 7200:
+        return f"{s // 60} min"
+    return f"{s // 3600} h {s % 3600 // 60} min"
+
+# ----------------------------------------------------------------------------------------- state
+
+
+def state_dir():
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(home(), ".local/state")
+    return pathlib.Path(base, "plasma-fusion", "fieldlog")
+
+
+def write_atomic(path, data, mode=0o600):
+    path = pathlib.Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with open(tmp, "w") as f:
+        f.write(data)
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
+def load_json(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+class EventLog:
+    """events-DAY.jsonl writer. An event with a key is written once per day; its repeats are
+    counted and written as one line with the count of repeats (and first/last) at flush()."""
+
+    def __init__(self, sdir):
+        self.sdir = pathlib.Path(sdir)
+        self.seen = {}
+        self.pending = {}
+        self.lines = {}
+        self.flooded = set()
+
+    def path(self, day):
+        return self.sdir / f"events-{day}.jsonl"
+
+    def _seen(self, day):
+        s = self.seen.get(day)
+        if s is None:
+            s, n = set(), 0
+            try:
+                with open(self.path(day)) as f:
+                    for line in f:
+                        n += 1
+                        try:
+                            r = json.loads(line)
+                        except ValueError:
+                            continue
+                        if "key" in r:
+                            s.add((r.get("kind"), r["key"]))
+            except OSError:
+                pass
+            self.seen[day] = s
+            self.lines[day] = n
+            if len(self.seen) > 8:
+                for d in sorted(self.seen)[:-8]:
+                    self.seen.pop(d, None)
+        return s
+
+    def _write(self, day, rec, sync=False):
+        n = self.lines.get(day, 0)
+        if n >= DAY_LINE_CAP and rec.get("kind") not in IMPORTANT:
+            if day not in self.flooded:
+                self.flooded.add(day)
+                rec = {"t": rec.get("t"), "kind": "flood", "count": 1,
+                       "text": f"more than {DAY_LINE_CAP} lines; only crashes and session events are kept"}
+            else:
+                return
+        self.sdir.mkdir(parents=True, exist_ok=True)
+        with open(self.path(day), "a") as f:
+            f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
+            f.flush()
+            if sync:
+                os.fsync(f.fileno())
+        self.lines[day] = n + 1
+
+    def emit(self, kind, key=None, ts=None, coalesce=True, sync=False, **fields):
+        ts = time.time() if ts is None else ts
+        day = local_day(ts)
+        if key is not None and coalesce:
+            seen = self._seen(day)
+            if (kind, key) in seen:
+                p = self.pending.get((day, kind, key))
+                if p is None:
+                    p = self.pending[(day, kind, key)] = {"kind": kind, "key": key, "count": 0,
+                                                          "first": iso(ts), "repeat": True}
+                p["count"] += 1
+                p["first"] = min(p["first"], iso(ts))
+                p["last"] = max(p.get("last", ""), iso(ts))
+                return False
+            seen.add((kind, key))
+        else:
+            self._seen(day)
+        rec = {"t": iso(ts), "kind": kind}
+        if key is not None:
+            rec["key"] = key
+        rec["count"] = 1
+        rec.update({k: v for k, v in fields.items() if v is not None})
+        self._write(day, rec, sync=sync)
+        return True
+
+    def flush(self):
+        for (day, kind, key), p in sorted(self.pending.items()):
+            rec = dict(p)
+            rec["t"] = rec["last"]
+            ordered = {"t": rec.pop("t"), "kind": rec.pop("kind"), "key": rec.pop("key")}
+            ordered.update(rec)
+            self._write(day, ordered)
+        self.pending.clear()
+
+
+IMPORTANT = {"crash", "restart", "gone", "login", "logout", "suspend", "unit-failed", "unit-exit",
+             "memsnap", "cpu-high", "cpu-high-end", "fieldlog-start", "fieldlog-stop", "resources"}
+
+
+def read_events(day, sdir=None):
+    out = []
+    try:
+        with open(pathlib.Path(sdir or state_dir(), f"events-{day}.jsonl")) as f:
+            for line in f:
+                try:
+                    out.append(json.loads(line))
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+    return out
+
+# ------------------------------------------------------------------------------------- processes
+
+
+def proc_stat(pid, root=None):
+    """(utime + stime ticks, start time ticks) of a process, or None."""
+    s = read_text(f"{root or PROC}/{pid}/stat")
+    i = s.rfind(")")
+    if i < 0:
+        return None
+    f = s[i + 2:].split()
+    try:
+        return int(f[11]) + int(f[12]), int(f[19])
+    except (IndexError, ValueError):
+        return None
+
+
+def proc_mem(pid, root=None):
+    """VmRSS, RssAnon, RssFile, RssShmem, VmSwap in KiB."""
+    out = {}
+    for line in read_text(f"{root or PROC}/{pid}/status").splitlines():
+        k, _, v = line.partition(":")
+        if k in ("VmRSS", "RssAnon", "RssFile", "RssShmem", "VmSwap"):
+            try:
+                out[k] = int(v.split()[0])
+            except (IndexError, ValueError):
+                pass
+    return out
+
+
+def proc_cgroup(pid):
+    for line in read_text(f"{PROC}/{pid}/cgroup").splitlines():
+        if line.startswith("0::"):
+            return line[3:]
+    return ""
+
+
+def session_pid(name, strict=False):
+    """The logged-in session's process NAME: own uid, cgroup under user@UID.service, not in a
+    container; one in session.slice first, and only such one when STRICT (once the session has shown
+    its own, a copy started from a terminal or a test is not taken for it)."""
+    best = None
+    try:
+        entries = os.listdir(PROC)
+    except OSError:
+        return None
+    for d in entries:
+        if not d.isdigit():
+            continue
+        if read_text(f"{PROC}/{d}/comm").strip() != name:
+            continue
+        try:
+            if os.stat(f"{PROC}/{d}").st_uid != UID:
+                continue
+        except OSError:
+            continue
+        cg = proc_cgroup(d)
+        if f"/user@{UID}.service/" not in cg or CONTAINER.search(cg):
+            continue
+        if "/session.slice/" in cg:
+            return int(d)
+        best = best or int(d)
+    return None if strict else best
+
+
+class Watched:
+    """One session process: restarts, minute samples, hourly aggregates, jumps, sustained CPU."""
+
+    def __init__(self, name):
+        self.name = name
+        self.pid = None
+        self.start = None
+        self.ticks = None
+        self.mono = None
+        self.rss = None
+        self.anon = None
+        self.prev = None
+        self.strict = False
+        self.hour = None
+        self.agg = None
+        self.hot_s = 0.0
+        self.hot_sum = 0.0
+        self.hot_max = 0.0
+        self.hot_n = 0
+        self.hot_since = None
+        self.hot_logged = False
+        self.last_snap = -1e9
+
+    def locate(self, log, now, rescan=False):
+        st = proc_stat(self.pid) if self.pid else None
+        if st and st[1] == self.start and not rescan:
+            return
+        pid = session_pid(self.name, strict=self.strict)
+        if pid is not None and "/session.slice/" in proc_cgroup(pid):
+            self.strict = True
+        if pid is not None and pid == self.pid and st and st[1] == self.start:
+            return
+        if pid is None:
+            if self.pid:
+                log.emit("gone", key=f"{self.name}|{self.pid}", ts=now, proc=self.name, pid=self.pid)
+                self.prev = (self.pid, self.start)
+            self.pid = self.start = self.ticks = self.mono = None
+            return
+        st = proc_stat(pid)
+        start = st[1] if st else None
+        prev = (self.pid, self.start) if self.pid else self.prev
+        if prev and prev != (pid, start):
+            log.emit("restart", key=f"{self.name}|{prev[0]}|{pid}", ts=now, proc=self.name,
+                     old_pid=prev[0], new_pid=pid)
+        self.prev = None
+        self.pid, self.start = pid, start
+        self.ticks = self.mono = None
+        self.hot_s = 0.0
+        self.hot_logged = False
+
+    def sample(self, log, now, mono, fieldlog):
+        self.locate(log, now)
+        if not self.pid:
+            return
+        st = proc_stat(self.pid)
+        mem = proc_mem(self.pid)
+        if not st or "VmRSS" not in mem:
+            return
+        rss, anon = mem["VmRSS"] / 1024, mem.get("RssAnon", 0) / 1024
+        cpu = None
+        if self.ticks is not None and mono > self.mono:
+            cpu = (st[0] - self.ticks) / CLK_TCK / (mono - self.mono) * 100
+        hour = time.strftime("%Y-%m-%d %H", time.localtime(now))
+        if self.hour != hour:
+            self.flush_hour(log, now)
+            self.hour = hour
+        a = self.agg = self.agg or {"t0": now, "n": 0, "rss": [rss, 0, rss], "anon": [anon, 0, anon],
+                                    "cpu": [0, 0], "cn": 0}
+        a["n"] += 1
+        for k, v in (("rss", rss), ("anon", anon)):
+            a[k][0] = min(a[k][0], v)
+            a[k][1] += v
+            a[k][2] = max(a[k][2], v)
+        if cpu is not None:
+            a["cpu"][0] += cpu
+            a["cpu"][1] = max(a["cpu"][1], cpu)
+            a["cn"] += 1
+        if (self.anon is not None and self.mono is not None and mono - self.mono <= 1.5 * INTERVAL + 5
+                and max(anon - self.anon, rss - self.rss) >= MEMSNAP_JUMP_MIB
+                and mono - self.last_snap >= MEMSNAP_GAP_S):
+            self.last_snap = mono
+            fieldlog.memsnap(self, now, mono - self.mono, self.anon, anon, self.rss, rss)
+        if cpu is not None:
+            self.track_cpu(log, now, cpu, mono - self.mono)
+        self.ticks, self.mono, self.rss, self.anon = st[0], mono, rss, anon
+
+    def track_cpu(self, log, now, cpu, dt):
+        if cpu >= HOT_PCT:
+            if self.hot_s == 0:
+                self.hot_since = now - dt
+                self.hot_sum = self.hot_max = 0.0
+                self.hot_n = 0
+            self.hot_s += dt
+            self.hot_sum += cpu
+            self.hot_n += 1
+            self.hot_max = max(self.hot_max, cpu)
+            if self.hot_s >= HOT_S - 1 and not self.hot_logged:
+                self.hot_logged = True
+                log.emit("cpu-high", ts=now, coalesce=False, proc=self.name, pid=self.pid,
+                         since=iso(self.hot_since), cpu=round(self.hot_sum / self.hot_n, 1))
+        else:
+            if self.hot_logged:
+                log.emit("cpu-high-end", ts=now, coalesce=False, proc=self.name, pid=self.pid,
+                         since=iso(self.hot_since), seconds=round(self.hot_s),
+                         mean=round(self.hot_sum / self.hot_n, 1), max=round(self.hot_max, 1))
+            self.hot_s = 0.0
+            self.hot_logged = False
+
+    def flush_hour(self, log, now, partial=False):
+        a = self.agg
+        if a and a["n"]:
+            log.emit("resources", ts=a["t0"], coalesce=False, proc=self.name, hour=self.hour[11:] + ":00", n=a["n"],
+                     rss=[round(a["rss"][0]), round(a["rss"][1] / a["n"]), round(a["rss"][2])],
+                     anon=[round(a["anon"][0]), round(a["anon"][1] / a["n"]), round(a["anon"][2])],
+                     cpu=[round(a["cpu"][0] / a["cn"], 2) if a["cn"] else None, round(a["cpu"][1], 1)],
+                     partial=True if partial else None)
+        self.agg = None
+
+
+def smaps_groups(pid):
+    """Anonymous and resident KiB per mapping kind (file, [heap], memfd, anonymous >= 1 MiB, ...)."""
+    groups = collections.defaultdict(lambda: [0, 0, 0])
+    key = None
+    h = home()
+    with open(f"{PROC}/{pid}/smaps", errors="replace") as f:
+        for line in f:
+            if re.match(r"^[0-9a-f]+-[0-9a-f]+ ", line):
+                parts = line.split(None, 5)
+                lo, hi = (int(x, 16) for x in parts[0].split("-"))
+                name = parts[5].strip() if len(parts) > 5 else ""
+                name = re.sub(r" \(deleted\)$", "", name)
+                if not name:
+                    name = "anonymous >= 1 MiB" if hi - lo >= 1 << 20 else "anonymous < 1 MiB"
+                elif h and name.startswith(h + "/"):
+                    rel = name[len(h) + 1:].split("/")
+                    name = "~/" + "/".join(rel[:2]) + ("/\u2026" if len(rel) > 2 else "")
+                elif name.startswith("/memfd:"):
+                    name = "memfd:" + re.sub(r"\d+", "N", name[7:])
+                key = name
+                groups[key][2] += 1
+            elif key and line.startswith("Rss:"):
+                groups[key][1] += int(line.split()[1])
+            elif key and line.startswith("Anonymous:"):
+                groups[key][0] += int(line.split()[1])
+    return groups
+
+
+def drm_clients(pid):
+    out = {}
+    try:
+        fds = os.listdir(f"{PROC}/{pid}/fdinfo")
+    except OSError as e:
+        return None, str(e)
+    for fd in fds:
+        t = read_text(f"{PROC}/{pid}/fdinfo/{fd}")
+        if "drm-driver" not in t:
+            continue
+        keep = [l.strip() for l in t.splitlines()
+                if re.match(r"drm-(driver|client-id|pdev|total|resident|shared|active|purgeable|engine)", l)]
+        cid = next((l for l in keep if l.startswith("drm-client-id")), fd)
+        out[cid] = " ".join(" ".join(l.split()) for l in keep)
+    return out, None
+
+# ---------------------------------------------------------------------------------- the recorder
+
+
+class FieldLog:
+    def __init__(self):
+        self.sdir = state_dir()
+        for sub in ("", "crashes", "memsnap"):
+            (self.sdir / sub).mkdir(parents=True, exist_ok=True)
+        self.log = EventLog(self.sdir)
+        self.state_path = self.sdir / "state.json"
+        self.state = load_json(self.state_path, {})
+        self.first_run = not self.state
+        self.watched = [Watched("plasmashell"), Watched("kwin_wayland")]
+        self.ring = collections.deque(maxlen=400)
+        self.journal = None
+        self.jbuf = b""
+        self.jlast = b""
+        self.jrestart_at = 0.0
+        self.jfails = 0
+        self.stop = False
+        self.write_digest_now = False
+        self.poll_at = 0.0
+        self.screens = None
+        self.boot_off = None
+        self.boot_mono = None
+        self.snaps_today = {}
+        self.self_ticks = None
+        self.self_mono = None
+
+    # -- state
+    def save_state(self):
+        if self.jlast:
+            m = re.search(rb'"__CURSOR":"([^"]+)"', self.jlast)
+            if m:
+                self.state["cursor"] = m.group(1).decode()
+        try:
+            write_atomic(self.state_path, json.dumps(self.state, indent=1, sort_keys=True))
+        except OSError as e:
+            print(f"{NAME}: cannot save the state: {e}", file=sys.stderr)
+
+    def since(self):
+        """Where the first run starts recording (PF_FIELDLOG_SINCE, default the start of that day);
+        later runs go on from their state."""
+        if "since" not in self.state:
+            self.state["since"] = parse_since(os.environ.get("PF_FIELDLOG_SINCE"), time.time())
+        return float(self.state["since"])
+
+    # -- core dumps
+    def poll_coredumps(self):
+        if "last_dump_us" not in self.state:
+            self.state["last_dump_us"] = int(self.since() * 1e6)
+        last = int(self.state["last_dump_us"])
+        seen = set(self.state.get("seen_dumps", []))
+        try:
+            r = subprocess.run(["coredumpctl", "--no-pager", "--json=short", "list",
+                                f"--since=@{max(0, last // 1000000 - 1)}"],
+                               capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            self.log.emit("fieldlog-error", key="coredumpctl", text=f"coredumpctl: {e}")
+            return
+        out = r.stdout.strip()
+        if r.returncode != 0 and not out.startswith("["):
+            if "No coredumps found" not in r.stderr:
+                self.log.emit("fieldlog-error", key="coredumpctl-rc",
+                              text=f"coredumpctl exit {r.returncode}: {scrub(r.stderr.strip())[:200]}")
+            return
+        try:
+            entries = json.loads(out or "[]")
+        except ValueError:
+            self.log.emit("fieldlog-error", key="coredumpctl-json", text="coredumpctl printed no JSON")
+            return
+        new = 0
+        for e in sorted(entries, key=lambda e: e.get("time") or 0):
+            t, pid = int(e.get("time") or 0), int(e.get("pid") or 0)
+            tk = f"{t}:{pid}"
+            if t < last or tk in seen:
+                continue
+            self.record_crash(e)
+            new += 1
+            seen.add(tk)
+            self.state["last_dump_us"] = max(int(self.state["last_dump_us"]), t)
+        if new:
+            keep_after = int(self.state["last_dump_us"]) - 2 * 86400 * 10**6
+            self.state["seen_dumps"] = sorted((s for s in seen if int(s.split(":")[0]) >= keep_after),
+                                              key=lambda s: int(s.split(":")[0]))[-500:]
+            self.save_state()
+
+    def dump_record(self, e):
+        t, pid = int(e.get("time") or 0), int(e.get("pid") or 0)
+        sec = t // 1000000
+        try:
+            r = subprocess.run(["journalctl", "--no-pager", "-a", "-o", "json",
+                                f"--since=@{sec - 2}", f"--until=@{sec + 3}",
+                                f"MESSAGE_ID={COREDUMP_MSGID}", f"COREDUMP_PID={pid}"],
+                               capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        best = None
+        for line in r.stdout.splitlines():
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if best is None or str(d.get("__REALTIME_TIMESTAMP")) == str(t):
+                best = d
+        return best
+
+    def record_crash(self, e):
+        rec = self.dump_record(e)
+        exe = (rec or {}).get("COREDUMP_EXE") or e.get("exe") or "?"
+        if rec is None:
+            rec = {"COREDUMP_EXE": exe, "COREDUMP_UID": e.get("uid")}
+            cls, reason, markers = classify(rec)
+            reason += "; no journal record readable"
+        else:
+            cls, reason, markers = classify(rec)
+        crash_event(self.log, e, rec, cls, reason, markers, self.sdir, save=cls in ("session", "app"))
+        if cls == "session":
+            for w in self.watched:
+                if os.path.basename(exe) == w.name:
+                    w.locate(self.log, time.time(), rescan=True)
+
+    # -- journal
+    def start_journal(self):
+        fields = ("MESSAGE,PRIORITY,_COMM,SYSLOG_IDENTIFIER,_PID,CODE_FILE,CODE_LINE,QT_CATEGORY,"
+                  "MESSAGE_ID,USER_UNIT,UNIT_RESULT,EXIT_CODE,EXIT_STATUS,_SYSTEMD_USER_UNIT")
+        args = ["journalctl", "--user", "-f", "-a", "-o", "json", "--no-pager", "--output-fields=" + fields]
+        cur = self.state.get("cursor")
+        m = re.search(r"(?:^|;)t=([0-9a-f]+)", cur or "")
+        if cur and m and time.time() - int(m.group(1), 16) / 1e6 < 12 * 3600:
+            args.append("--after-cursor=" + cur)
+        else:
+            args += ["-n", "0"]
+        try:
+            self.journal = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.DEVNULL,
+                                            stderr=subprocess.DEVNULL)
+        except OSError as e:
+            self.journal = None
+            self.log.emit("fieldlog-error", key="journalctl-start", text=f"journalctl: {e}")
+            return
+        os.set_blocking(self.journal.stdout.fileno(), False)
+        self.jbuf = b""
+
+    def journal_closed(self):
+        rc = self.journal.poll() if self.journal else None
+        self.reap_journal()
+        self.jfails += 1
+        self.log.emit("fieldlog-error", key="journalctl-exit", text=f"journalctl stopped (exit {rc})")
+        self.jrestart_at = time.monotonic() + min(300, 5 * self.jfails)
+
+    def reap_journal(self):
+        """Stops journalctl; once waited for, its CPU time counts in os.times()'s children."""
+        j, self.journal = self.journal, None
+        if not j:
+            return
+        try:
+            j.terminate()
+            j.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                j.kill()
+                j.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        try:
+            j.stdout.close()
+        except OSError:
+            pass
+
+    def read_journal(self):
+        """Handles what journalctl has written: "data", "empty" (nothing waiting) or "eof"."""
+        try:
+            data = os.read(self.journal.stdout.fileno(), 1 << 16)
+        except BlockingIOError:
+            return "empty"
+        except OSError:
+            data = b""
+        if not data:
+            return "eof"
+        self.jfails = 0
+        self.jbuf += data
+        if len(self.jbuf) > 8 << 20 and b"\n" not in self.jbuf:
+            self.jbuf = b""
+        *lines, self.jbuf = self.jbuf.split(b"\n")
+        for line in lines:
+            if line:
+                self.jlast = line
+                handle_journal_line(self, line)
+        return "data"
+
+    # -- memory snapshot
+    def memsnap(self, w, now, dt, anon0, anon1, rss0, rss1):
+        day = local_day(now)
+        n = self.snaps_today.get(day, 0)
+        if n >= MEMSNAP_PER_DAY:
+            return
+        self.snaps_today[day] = n + 1
+        path = self.sdir / "memsnap" / f"{compact(now)}-{w.name}.txt"
+        out = [f"{w.name} {w.pid}: RssAnon {anon0:.0f} -> {anon1:.0f} MiB, VmRSS {rss0:.0f} -> {rss1:.0f} MiB "
+               f"within {dt:.0f} s, at {iso(now)} ({time.strftime('%H:%M:%S %Z', time.localtime(now))})", ""]
+        mem = proc_mem(w.pid)
+        out.append("status: " + ", ".join(f"{k} {v // 1024} MiB" for k, v in mem.items()))
+        out.append("")
+        try:
+            groups = smaps_groups(w.pid)
+            out.append("smaps by mapping (KiB): anonymous, resident, maps")
+            top = sorted(groups.items(), key=lambda kv: -max(kv[1][0], kv[1][1]))[:16]
+            for k, (a, r, c) in top:
+                if max(a, r) >= 1024:
+                    out.append(f"{a:10d} {r:10d} {c:6d}  {k}")
+        except OSError as e:
+            out.append(f"smaps not readable ({e.strerror}; KWin has a file capability, so only its "
+                       "status is readable)")
+        out.append("")
+        drm, err = drm_clients(w.pid)
+        if drm is None:
+            out.append(f"drm fdinfo not readable ({err})")
+        else:
+            out.append("drm clients (fdinfo):")
+            out += [f"  {v}" for v in sorted(drm.values())[:8]] or ["  none"]
+        out.append("")
+        out.append("journal, last minute (plasmashell, kwin_wayland; normalised, quoted text cut):")
+        mono = time.monotonic()
+        for m, t, comm, prio, cat, text in self.ring:
+            if mono - m <= 60:
+                out.append(f"  {local_hm(t)}:{time.strftime('%S', time.localtime(t))} {comm} <{prio}> {cat or '-'}: {text}")
+        try:
+            write_atomic(path, "\n".join(out) + "\n")
+        except OSError:
+            return
+        self.log.emit("memsnap", ts=now, coalesce=False, sync=True, proc=w.name, pid=w.pid,
+                      anon=[round(anon0), round(anon1)], rss=[round(rss0), round(rss1)],
+                      file=str(path.relative_to(self.sdir)))
+
+    # -- sysfs
+    def poll_screens(self, now):
+        cur = {}
+        drm = pathlib.Path(SYSFS, "class/drm")
+        try:
+            conns = sorted(p for p in drm.iterdir() if re.match(r"card\d+-", p.name))
+        except OSError:
+            conns = []
+        for p in conns:
+            name = p.name.split("-", 1)[1]
+            for f in ("status", "enabled", "dpms"):
+                v = read_text(p / f).strip()
+                if v:
+                    cur[f"{name} {f}"] = v
+        for lid in sorted(pathlib.Path(PROC, "acpi/button/lid").glob("*/state")):
+            v = read_text(lid).split(":")[-1].strip()
+            if v:
+                cur["lid"] = v
+        if self.screens is not None:
+            for k in sorted(set(cur) | set(self.screens)):
+                a, b = self.screens.get(k), cur.get(k)
+                if a != b:
+                    if k == "lid":
+                        self.log.emit("lid", ts=now, coalesce=False, old=a, new=b)
+                    else:
+                        conn, field = k.split(" ")
+                        self.log.emit("screen", key=f"{k}|{a}|{b}", ts=now, connector=conn, field=field,
+                                      old=a, new=b)
+        self.screens = cur
+
+    def check_suspend(self, now):
+        try:
+            off = time.clock_gettime(time.CLOCK_BOOTTIME) - time.monotonic()
+        except (AttributeError, OSError):
+            return
+        mono = time.monotonic()
+        if self.boot_off is not None and off - self.boot_off > 5:
+            slept = off - self.boot_off
+            awake = mono - self.boot_mono
+            self.log.emit("suspend", ts=now, coalesce=False, seconds=round(slept),
+                          start=iso(now - awake - slept), resumed=iso(now - awake))
+        self.boot_off, self.boot_mono = off, mono
+
+    # -- systemd
+    def systemctl(self, *args):
+        try:
+            r = subprocess.run(["systemctl", "--user", "--no-pager", *args], capture_output=True,
+                               text=True, timeout=20, stdin=subprocess.DEVNULL)
+            return r.stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+
+    def check_units(self, now):
+        out = self.systemctl("list-units", "--state=failed", "--plain", "--no-legend", "plasma-*")
+        for line in out.splitlines():
+            unit = line.split()[0] if line.split() else ""
+            if unit.startswith("plasma-") and unit != UNIT:
+                self.log.emit("unit-failed", key=unit, ts=now, unit=unit, result="failed", source="list")
+
+    def check_login(self, now):
+        out = self.systemctl("show", "-p", "ActiveEnterTimestamp", "--timestamp=unix", "graphical-session.target")
+        m = re.search(r"ActiveEnterTimestamp=@(\d+)", out)
+        if m:
+            self.note_login(float(m.group(1)), "graphical-session.target")
+
+    def note_login(self, ts, source):
+        if abs(ts - float(self.state.get("last_login", 0))) < 10:
+            return
+        since = self.since()
+        self.state["last_login"] = ts
+        if ts >= since - 1:
+            self.log.emit("login", key=str(int(ts)), ts=ts, source=source)
+
+    # -- gate log
+    def poll_gate(self):
+        path = os.environ.get("PF_FIELDLOG_GATE_LOG") or str(self.sdir.parent / "gate.log")
+        try:
+            st = os.stat(path)
+        except OSError:
+            return
+        g = self.state.setdefault("gate", {})
+        off = g.get("offset", 0)
+        if g.get("inode") != st.st_ino or st.st_size < off:
+            off = 0
+        if st.st_size == off:
+            return
+        since = self.since()
+        try:
+            with open(path, "rb") as f:
+                f.seek(off)
+                data = f.read(1 << 20)
+        except OSError:
+            return
+        end = data.rfind(b"\n") + 1
+        cur = None
+        for line in data[:end].decode("utf-8", "replace").splitlines():
+            m = re.match(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d{4}) (\s*)(.*)$", line)
+            if not m:
+                continue
+            ts = datetime.datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S%z").timestamp()
+            if m.group(2):
+                if cur is not None:
+                    cur[1].append(scrub(m.group(3), limit=200))
+                continue
+            if cur and cur[0] >= since:
+                self.emit_gate(*cur)
+            text = re.sub(r"\s*\(\d+ ms\)$", "", m.group(3))
+            cur = [ts, [], text]
+        if cur and cur[0] >= since:
+            self.emit_gate(*cur)
+        g.update(offset=off + end, inode=st.st_ino)
+
+    def emit_gate(self, ts, details, text):
+        self.log.emit("gate", key=normalise(text), ts=ts, text=scrub(text, limit=300),
+                      details=details[:10] or None)
+
+    # -- own overhead
+    def overhead(self, now, mono):
+        """This process, the children it waited for and the running journalctl: CPU since the last
+        call (percent of one core) and RSS."""
+        st = proc_stat("self", root="/proc")
+        j = proc_stat(self.journal.pid, root="/proc") if self.journal else None
+        t = os.times()
+        children = int((t.children_user + t.children_system) * CLK_TCK)
+        total = (st[0] if st else 0) + children + (j[0] if j else 0)
+        rss = proc_mem("self", root="/proc").get("VmRSS", 0) / 1024
+        jrss = proc_mem(self.journal.pid, root="/proc").get("VmRSS", 0) / 1024 if self.journal else 0
+        if self.self_ticks is not None and mono - self.self_mono >= 1:
+            pct = (total - self.self_ticks) / CLK_TCK / (mono - self.self_mono) * 100
+            self.log.emit("self", ts=now, coalesce=False, cpu=round(pct, 3), rss=round(rss, 1),
+                          journalctl_rss=round(jrss, 1), seconds=round(mono - self.self_mono))
+            self.state["overhead"] = {"t": iso(now), "cpu": round(pct, 3), "rss": round(rss, 1),
+                                      "journalctl_rss": round(jrss, 1)}
+        self.self_ticks, self.self_mono = total, mono
+
+    # -- digest
+    def write_digest(self, day):
+        try:
+            write_digest(day, self.sdir, copy_async=True)
+        except OSError as e:
+            self.log.emit("fieldlog-error", key="digest", text=f"digest: {e}")
+
+    # -- main loop
+    def run(self):
+        lockf = open(self.sdir / "run.lock", "w")
+        try:
+            fcntl.flock(lockf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            print(f"{NAME}: already running for {self.sdir}", file=sys.stderr)
+            return 1
+        rfd, wfd = os.pipe()
+        os.set_blocking(rfd, False)
+        os.set_blocking(wfd, False)
+        signal.set_wakeup_fd(wfd)
+
+        def on_signal(signum, frame):
+            if signum == signal.SIGHUP:
+                self.write_digest_now = True
+            else:
+                self.stop = True
+
+        for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            signal.signal(s, on_signal)
+
+        now, mono = time.time(), time.monotonic()
+        limit = float(os.environ.get("PF_FIELDLOG_RUN_SECONDS") or 0)
+        end_at = mono + limit if limit > 0 else None
+        cleanup(self.sdir, local_day(now))
+        for w in self.watched:
+            w.sample(self.log, now, mono, self)  # the first sample is the base of the first CPU value
+        self.poll_screens(now)
+        self.check_suspend(now)
+        self.log.emit("fieldlog-start", ts=now, coalesce=False, sync=True, version=VERSION,
+                      pids={w.name: w.pid for w in self.watched},
+                      screens={k: v for k, v in (self.screens or {}).items() if not k.endswith("dpms")} or None,
+                      first=True if self.first_run else None)
+        self.poll_coredumps()
+        self.check_login(now)
+        self.check_units(now)
+        self.poll_gate()
+        self.start_journal()
+        self.overhead(now, mono)
+        day, hour = local_day(now), time.strftime("%H", time.localtime(now))
+        next_sample = mono + INTERVAL
+        next_flush = mono + FLUSH_S
+        reason = "stopped"
+        try:
+            while not self.stop:
+                mono = time.monotonic()
+                if end_at and mono >= end_at:
+                    reason = "time limit"
+                    break
+                dues = [next_sample, next_flush] + ([self.poll_at] if self.poll_at else [])
+                if self.journal is None:
+                    dues.append(self.jrestart_at)
+                if end_at:
+                    dues.append(end_at)
+                timeout = max(0.0, min(dues) - mono)
+                fds = [rfd] + ([self.journal.stdout] if self.journal else [])
+                try:
+                    ready, _, _ = select.select(fds, [], [], timeout)
+                except InterruptedError:
+                    ready = []
+                if rfd in ready:
+                    try:
+                        os.read(rfd, 512)
+                    except OSError:
+                        pass
+                if self.journal and self.journal.stdout in ready:
+                    if self.read_journal() == "eof":
+                        self.journal_closed()
+                now, mono = time.time(), time.monotonic()
+                self.check_suspend(now)
+                if self.journal is None and mono >= self.jrestart_at:
+                    self.start_journal()
+                if self.poll_at and mono >= self.poll_at:
+                    self.poll_at = 0.0
+                    self.poll_coredumps()
+                if mono >= next_sample:
+                    next_sample = mono + INTERVAL
+                    for w in self.watched:
+                        w.sample(self.log, now, mono, self)
+                    self.poll_screens(now)
+                    self.poll_coredumps()
+                    self.poll_gate()
+                if mono >= next_flush:
+                    next_flush = mono + FLUSH_S
+                    self.save_state()
+                nday, nhour = local_day(now), time.strftime("%H", time.localtime(now))
+                if nhour != hour or nday != day:
+                    hour = nhour
+                    self.overhead(now, mono)
+                    self.check_units(now)
+                    self.log.flush()
+                    self.write_digest(day)
+                    if nday != day:
+                        cleanup(self.sdir, nday)
+                        day = nday
+                    self.save_state()
+                if self.write_digest_now:
+                    self.write_digest_now = False
+                    self.log.flush()
+                    self.write_digest(day)
+        finally:
+            if self.journal:
+                # What is still in the pipe belongs to this run.
+                try:
+                    while self.read_journal() == "data":
+                        pass
+                except (OSError, ValueError):
+                    pass
+            now, mono = time.time(), time.monotonic()
+            for w in self.watched:
+                w.flush_hour(self.log, now, partial=True)
+            self.overhead(now, mono)
+            self.reap_journal()
+            self.log.emit("fieldlog-stop", ts=now, coalesce=False, reason=reason)
+            self.log.flush()
+            self.save_state()
+            try:
+                path, _ = write_digest(local_day(now), self.sdir, copy_async=True, wait=10)
+            except OSError as e:
+                print(f"{NAME}: digest: {e}", file=sys.stderr)
+        return 0
+
+
+def crash_event(log, e, rec, cls, reason, markers, sdir, save):
+    pid = int(rec.get("COREDUMP_PID") or e.get("pid") or 0)
+    t_us = int(rec.get("COREDUMP_TIMESTAMP") or e.get("time") or 0)
+    ts = t_us / 1e6 if t_us else time.time()
+    exe = rec.get("COREDUMP_EXE") or e.get("exe") or "?"
+    signame = rec.get("COREDUMP_SIGNAL_NAME") or (f"signal {e.get('sig')}" if e.get("sig") else None)
+    frames = top_frames(text_of(rec.get("MESSAGE")))
+    argv = split_cmdline(rec.get("COREDUMP_CMDLINE"))
+    script = script_of(argv)
+    cmd = " ".join(short(a) for a in ([argv[0], script] if script else argv[:1]))[:200] or None
+    pkg = rec.get("COREDUMP_PACKAGE_NAME")
+    if pkg and rec.get("COREDUMP_PACKAGE_VERSION"):
+        pkg += "-" + rec["COREDUMP_PACKAGE_VERSION"]
+    sig = signature(exe, signame, frames)
+    fields = dict(cls=cls, reason=reason, exe=short(exe), comm=rec.get("COREDUMP_COMM"), pid=pid,
+                  uid=int(rec.get("COREDUMP_UID") or e.get("uid") or -1), signal=signame, package=pkg,
+                  unit=rec.get("COREDUMP_USER_UNIT") or rec.get("COREDUMP_UNIT"),
+                  cgroup=short_cgroup(rec.get("COREDUMP_CGROUP") or "") or None, cmd=cmd, top=frames or None,
+                  sig=sig, core=e.get("corefile"), markers=markers or None,
+                  dump=f"{e.get('time')}:{e.get('pid')}")
+    if save:
+        name = re.sub(r"[^A-Za-z0-9_.+-]", "_", os.path.basename(exe))[:40]
+        path = pathlib.Path(sdir, "crashes", f"{compact(ts)}-{name}-{pid}.txt")
+        sec = int(e.get("time") or t_us) // 1000000
+        try:
+            r = subprocess.run(["coredumpctl", "--no-pager", "info", f"--since=@{sec - 2}",
+                                f"--until=@{sec + 3}", str(pid)], capture_output=True, text=True,
+                               timeout=60, stdin=subprocess.DEVNULL)
+            body = r.stdout or r.stderr
+        except (OSError, subprocess.TimeoutExpired) as ex:
+            body = f"coredumpctl info failed: {ex}\n"
+        try:
+            write_atomic(path, f"# {NAME} {VERSION}: class {cls} ({reason})\n{body}")
+            fields["file"] = str(path.relative_to(sdir))
+        except OSError:
+            pass
+    if cls == "tooling":
+        tool_key = f"{os.path.basename(exe)}|{signame}|{reason.split(' (')[0]}|{os.path.basename(script or '')}"
+        log.emit("crash", key=tool_key, ts=ts, **fields)
+    else:
+        log.emit("crash", key=fields["dump"], ts=ts, sync=True, **fields)
+
+
+PREFILTER = re.compile(rb'"_COMM":"(?:plasmashell|kwin_wayland|kwin_x11|systemd|kscreenlocker_g|systemsettings'
+                       rb'|kcmshell6|ksmserver|kded6|krunner)"|[Pp]lasma-?[Ff]usion|' + COREDUMP_MSGID.encode())
+PF = re.compile(r"plasma-?fusion", re.I)
+QT_COMMS = {"plasmashell", "kwin_wayland", "kwin_x11", "kscreenlocker_g", "systemsettings", "kcmshell6",
+            "ksmserver", "kded6", "krunner"}
+COUNTED = {"plasmashell", "kwin_wayland"}
+# The Plasma Fusion tools log to stderr, so their problems come at info priority: these words make a
+# line one ("failed 0" in a count and "warning level" in a battery state do not).
+ERRWORDS = re.compile(r"Traceback|\b\w*Error\b|\berror\b|\bfailed\b(?!\s+0\b)|\bwarning:|\bcannot\b|\bdenied\b",
+                      re.I)
+WHERE = re.compile(r"^((?:file://|qrc:)?\S+?\.(?:qml|js|mjs)):(\d+)(?::\d+)?:?\s*")
+
+
+def short_qml(path):
+    path = short(re.sub(r"^file://", "", path or ""))
+    return re.sub(r"^.*?/(?:plasmoids|scripts|effects|look-and-feel|shells|wallpapers|kcms|qml)/", "", path)
+
+
+def handle_journal_line(fl, line):
+    if not PREFILTER.search(line):
+        return
+    try:
+        d = json.loads(line)
+    except ValueError:
+        return
+    ts = int(d.get("__REALTIME_TIMESTAMP") or 0) / 1e6 or time.time()
+    comm = d.get("_COMM") or ""
+    ident = d.get("SYSLOG_IDENTIFIER") or comm
+    msg = text_of(d.get("MESSAGE"))
+    mid = d.get("MESSAGE_ID")
+    try:
+        prio = int(d.get("PRIORITY") or 6)
+    except ValueError:
+        prio = 6
+    log = fl.log
+    if ident == NAME or d.get("_SYSTEMD_USER_UNIT") == UNIT:
+        return
+    if mid == COREDUMP_MSGID:
+        fl.poll_at = fl.poll_at or time.monotonic() + 3
+        return
+    if comm == "systemd" and d.get("USER_UNIT"):
+        unit = d["USER_UNIT"]
+        if unit == "graphical-session.target":
+            if mid == MSG_STARTED:
+                fl.note_login(ts, "journal")
+            elif mid == MSG_STOPPED:
+                log.emit("logout", key=str(int(ts)), ts=ts)
+        elif unit.startswith("plasma-") and unit != UNIT:
+            if mid == MSG_FAILURE_RESULT:
+                log.emit("unit-failed", key=unit, ts=ts, unit=unit, result=d.get("UNIT_RESULT"), source="journal")
+            elif mid == MSG_PROCESS_EXIT:
+                code, status = d.get("EXIT_CODE"), d.get("EXIT_STATUS")
+                if code == "dumped":
+                    fl.poll_at = fl.poll_at or time.monotonic() + 3
+                if code == "dumped" or (code == "exited" and status not in ("0", None)) or (
+                        code == "killed" and status not in ("TERM", "INT", "HUP", "KILL", "PIPE")):
+                    log.emit("unit-exit", key=f"{unit}|{code}|{status}", ts=ts, unit=unit, code=code, status=status)
+            elif mid == MSG_RESTART_SCHEDULED:
+                log.emit("unit-restart", key=unit, ts=ts, unit=unit)
+        return
+    pf_tool = ident.startswith("plasma-fusion") or (d.get("_SYSTEMD_USER_UNIT") or "").startswith("plasma-fusion")
+    if pf_tool:
+        if ident.startswith("plasma-fusion-gate"):
+            log.emit("gate", key=normalise(msg), ts=ts, text=scrub(msg, limit=300), prio=prio)
+        elif prio <= 4 or ERRWORDS.search(msg):
+            emit_pf(log, ts, ident, prio, msg, None)
+        return
+    if comm not in QT_COMMS:
+        return
+    code_file = text_of(d.get("CODE_FILE"))
+    cat = d.get("QT_CATEGORY")
+    if comm in COUNTED:
+        fl.ring.append((time.monotonic(), ts, comm, prio, cat, normalise(msg, quotes="all")[:180]))
+    m = re.match(r"^plasmafusion-tablet: posture (\w+)", msg)
+    if m:
+        log.emit("posture", ts=ts, coalesce=False, posture=m.group(1))
+        return
+    if msg.startswith("plasmafusion-snap: screens changed"):
+        log.emit("screen", key="kwin|screens changed", ts=ts, connector="kwin", field="screens changed")
+        return
+    if prio > 4:
+        return
+    if PF.search(code_file) or PF.search(msg):
+        emit_pf(log, ts, comm, prio, msg, (code_file, d.get("CODE_LINE")))
+    elif comm in COUNTED:
+        text = normalise(msg)
+        log.emit("noise", key=f"{comm}|{cat}|{text}", ts=ts, comm=comm, cat=cat, prio=prio, text=text)
+
+
+def emit_pf(log, ts, comm, prio, msg, code):
+    m = WHERE.match(msg)
+    if m:
+        where, rest = f"{short_qml(m.group(1))}:{m.group(2)}", msg[m.end():]
+    elif code and code[0]:
+        where, rest = short_qml(code[0]) + (f":{code[1]}" if code[1] else ""), msg
+    else:
+        where, rest = comm, msg
+    src = None
+    path = (m.group(1) if m else (code[0] if code else "")) or ""
+    if path:
+        src = "user copy" if "/.local/" in path else "system"
+    kind = "pf-error" if prio <= 3 or re.search(r"\b(?:TypeError|ReferenceError|SyntaxError|RangeError)\b", rest) \
+        else "pf-warning"
+    log.emit(kind, key=f"{comm}|{where}|{normalise(rest)}", ts=ts, comm=comm, prio=prio, where=where,
+             src=src, text=scrub(rest, limit=300))
+
+# ------------------------------------------------------------------------------- retention
+
+
+def cleanup(sdir, today):
+    sdir = pathlib.Path(sdir)
+    cutoff = time.strftime("%Y-%m-%d", time.localtime(day_start(today) - KEEP_DAYS * 86400))
+    files = []
+    for p in sdir.iterdir() if sdir.exists() else []:
+        m = re.match(r"^(?:events|digest)-(\d{4}-\d\d-\d\d)\.(?:jsonl|md)$", p.name)
+        if m:
+            files.append((m.group(1), 2, p))
+    for sub, rank in (("memsnap", 0), ("crashes", 1)):
+        for p in (sdir / sub).glob("*") if (sdir / sub).exists() else []:
+            m = re.match(r"^(\d{4})(\d\d)(\d\d)T", p.name)
+            if m:
+                files.append((f"{m.group(1)}-{m.group(2)}-{m.group(3)}", rank, p))
+    keep = []
+    for day, rank, p in files:
+        if day < cutoff:
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        else:
+            keep.append((day, rank, p))
+    sizes = {p: (p.stat().st_size if p.exists() else 0) for _, _, p in keep}
+    total = sum(sizes.values())
+    cap = MAX_MB * 1024 * 1024
+    if total <= cap:
+        return
+    for day, rank, p in sorted(keep, key=lambda x: (x[1], x[0], x[2].name)):
+        if total <= 0.9 * cap:
+            break
+        if day == today and p.name.startswith("events-"):
+            continue
+        try:
+            p.unlink()
+            total -= sizes[p]
+        except OSError:
+            pass
+
+# ------------------------------------------------------------------------------------- digest
+
+
+def aggregate(events):
+    """Events grouped by (kind, key): the first line's fields, the total count, first and last."""
+    groups, order = {}, []
+    for i, r in enumerate(events):
+        k = (r.get("kind"), r.get("key", f"#{i}"))
+        g = groups.get(k)
+        if g is None:
+            if r.get("repeat"):
+                g = {"kind": r.get("kind"), "key": r.get("key"), "count": 0}
+            else:
+                g = dict(r)
+                g["count"] = 0
+            g["first"] = r.get("first") or r.get("t")
+            g["last"] = r.get("last") or r.get("t")
+            groups[k] = g
+            order.append(k)
+        g["count"] += int(r.get("count") or 1)
+        g["first"] = min(g["first"] or "~", r.get("first") or r.get("t") or "~")
+        g["last"] = max(g["last"] or "", r.get("last") or r.get("t") or "")
+    return [groups[k] for k in order]
+
+
+def demangler(names):
+    names = sorted({n for n in names if n.startswith("_Z")})
+    out = {}
+    if not names or not shutil.which("c++filt"):
+        return out
+    try:
+        r = subprocess.run(["c++filt"], input="\n".join(names) + "\n", capture_output=True, text=True, timeout=20)
+        for a, b in zip(names, r.stdout.splitlines()):
+            out[a] = b
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return out
+
+
+def frame_text(f, dm):
+    m = re.match(r"^(.*) \((.*)\)$", f)
+    func, mod = (m.group(1), m.group(2)) if m else (f, "")
+    func = dm.get(func, func)
+    if len(func) > 110:
+        func = func[:107] + "..."
+    return f"`{func}` {mod}".strip()
+
+
+def md(s):
+    return str(s if s is not None else "").replace("|", "\\|").replace("\n", " ")
+
+
+def hm(t):
+    ts = parse_iso(t or "")
+    return local_hm(ts) if ts else "?"
+
+
+def span(g):
+    a, b = hm(g.get("first")), hm(g.get("last"))
+    return a if a == b else f"{a}-{b}"
+
+
+def build_digest(day, sdir=None):
+    sdir = pathlib.Path(sdir or state_dir())
+    events = read_events(day, sdir)
+    groups = aggregate(events)
+    by = collections.defaultdict(list)
+    for g in groups:
+        by[g["kind"]].append(g)
+    crashes = collections.defaultdict(list)
+    for g in by["crash"]:
+        crashes[g.get("cls", "other")].append(g)
+    dm = demangler([f.rsplit(" (", 1)[0] for g in by["crash"] for f in (g.get("top") or [])])
+    host = os.uname().nodename
+    zone = time.strftime("%Z, UTC%z", time.localtime(day_start(day) + 43200))
+    L = [f"# Plasma Fusion field log, {day} ({host})", ""]
+    starts = by["fieldlog-start"]
+    if starts:
+        rec = (f"Recorded {hm(min(g['t'] for g in starts))}-{hm(max(e.get('t', '') for e in events))} by {NAME} "
+               f"{VERSION} ({len(starts)} start{'s' if len(starts) != 1 else ''})")
+    else:
+        rec = f"{NAME} {VERSION} did not run this day; its crashes come from the core dump list"
+    L.append(f"Times are local ({zone}). {rec}; events: `{short(str(sdir / f'events-{day}.jsonl'))}`.")
+    L.append("")
+
+    def n(kind, cls=None):
+        gs = crashes[cls] if cls else by[kind]
+        return sum(g["count"] for g in gs)
+
+    restarts = collections.Counter(g.get("proc") for g in by["restart"] for _ in range(g["count"]))
+    pf = by["pf-error"] + by["pf-warning"]
+    failed = by["unit-failed"] + by["unit-exit"]
+    L += ["| | |", "|---|---|",
+          f"| Session crashes (Plasma, Plasma Fusion) | **{n('crash', 'session')}** |",
+          f"| App crashes | {n('crash', 'app')} |",
+          f"| Other crashes (outside the session) | {n('crash', 'other')} |",
+          f"| Plasma Fusion errors / warnings | {sum(g['count'] for g in by['pf-error'])} / "
+          f"{sum(g['count'] for g in by['pf-warning'])} ({len(pf)} kinds) |",
+          f"| plasmashell / KWin restarts | {restarts.get('plasmashell', 0)} / {restarts.get('kwin_wayland', 0)} |",
+          f"| Failed or crashed Plasma units | {sum(g['count'] for g in failed)} |",
+          f"| Memory snapshots / sustained CPU | {n('memsnap')} / {n('cpu-high')} |",
+          f"| Development crashes (tooling, listed last) | {n('crash', 'tooling')} |", ""]
+
+    def crash_section(title, cls, note=None):
+        L.append(f"## {title}")
+        L.append("")
+        if note:
+            L.extend([note, ""])
+        gs = crashes[cls]
+        if not gs:
+            L.extend(["None.", ""])
+            return
+        sigs = collections.OrderedDict()
+        for g in sorted(gs, key=lambda g: g.get("first") or ""):
+            sigs.setdefault(g.get("sig") or g.get("exe"), []).append(g)
+        for sig, items in sigs.items():
+            g0 = items[0]
+            count = sum(g["count"] for g in items)
+            hms = collections.Counter(hm(g.get("first")) for g in items)
+            times = ", ".join(f"{t} ({c}x)" if c > 1 else t for t, c in sorted(hms.items())[:8])
+            if len(hms) > 8:
+                times = f"{min(hms)}-{max(hms)}"
+            L.append(f"### {os.path.basename(g0.get('exe') or '?')}, {g0.get('signal') or '?'}"
+                     f"{' (' + g0['package'] + ')' if g0.get('package') else ''}: {count}x at {times}")
+            L.append("")
+            L.append(f"- Where: {md(g0.get('cgroup') or g0.get('unit') or '?')}; class {cls}: {md(g0.get('reason'))}")
+            if g0.get("cmd"):
+                L.append(f"- Command: `{md(g0['cmd'])}`")
+            files = [g["file"] for g in items if g.get("file")]
+            if files:
+                L.append("- Saved: " + ", ".join(f"`crashes/{os.path.basename(f)}`" for f in files[:6]))
+            cores = sorted({g.get("core") for g in items if g.get("core")})
+            if cores:
+                L.append(f"- Core file: {', '.join(cores)} (when the crash was recorded)")
+            if g0.get("markers"):
+                L.append(f"- Agent markers in its environment: {', '.join(g0['markers'])}")
+            near = [r for r in by["restart"] if r.get("proc") == os.path.basename(g0.get("exe") or "")
+                    and any(0 <= parse_iso(r.get("first")) - parse_iso(g.get("first")) <= 180 for g in items)]
+            for r in near:
+                L.append(f"- Restarted: {r['proc']} {r.get('old_pid')} -> {r.get('new_pid')} at {hm(r.get('first'))}")
+            if g0.get("top"):
+                L.append("- Top frames (crashing thread):")
+                L.extend(f"  {i + 1}. {frame_text(f, dm)}" for i, f in enumerate(g0["top"][:5]))
+            L.append("")
+
+    crash_section("Session crashes", "session")
+    crash_section("App crashes", "app")
+    crash_section("Other crashes", "other", "Outside the session: system services, SSH logins, other users.")
+
+    L += ["## Plasma Fusion errors and warnings", ""]
+    if pf:
+        L += ["| count | time | level | where | message |", "|---:|---|---|---|---|"]
+        for g in sorted(pf, key=lambda g: (-g["count"], g.get("first") or "")):
+            level = "error" if g["kind"] == "pf-error" else "warning"
+            src = f" ({g['src']})" if g.get("src") else ""
+            L.append(f"| {g['count']} | {span(g)} | {level} | `{md(g.get('where'))}`{src} | {md(g.get('text'))} |")
+        L.append("")
+    else:
+        L += ["None.", ""]
+
+    if by["gate"]:
+        L += ["## Login check (gate)", "", "| count | time | run |", "|---:|---|---|"]
+        for g in by["gate"]:
+            det = "; ".join(g.get("details") or [])
+            L.append(f"| {g['count']} | {span(g)} | {md(g.get('text'))}{(' (' + md(det) + ')') if det else ''} |")
+        L.append("")
+
+    L += ["## Session events", ""]
+    logins = sorted(hm(g.get("first")) for g in by["login"])
+    L.append(f"- Logins: {len(logins)}" + (f" ({', '.join(logins)})" if logins else "")
+             + f"; logouts: {sum(g['count'] for g in by['logout'])}")
+    for proc, label in (("plasmashell", "plasmashell"), ("kwin_wayland", "KWin")):
+        rs = sorted((g for g in by["restart"] if g.get("proc") == proc), key=lambda g: g.get("first") or "")
+        gone = [g for g in by["gone"] if g.get("proc") == proc]
+        line = f"- {label} restarts: {sum(g['count'] for g in rs)}"
+        if rs:
+            parts = []
+            for g in rs[:10]:
+                t = parse_iso(g.get("first"))
+                after = [c for c in crashes["session"] if os.path.basename(c.get("exe") or "") == proc
+                         and 0 <= t - parse_iso(c.get("first")) <= 180]
+                parts.append(f"{hm(g.get('first'))} {g.get('old_pid')} -> {g.get('new_pid')}"
+                             + (" after its crash" if after else ""))
+            line += " (" + "; ".join(parts) + ")"
+        if gone:
+            line += f"; not running at {', '.join(hm(g.get('first')) for g in gone[:5])}"
+        L.append(line)
+    sus = [g for g in by["suspend"]]
+    if sus:
+        total = sum(g.get("seconds", 0) for g in sus)
+        longest = max(sus, key=lambda g: g.get("seconds", 0))
+        L.append(f"- Suspended: {len(sus)} times, {duration(total)} in all (longest {duration(longest.get('seconds', 0))}, "
+                 f"resumed {hm(longest.get('resumed'))})")
+    else:
+        L.append("- Suspended: 0 times")
+    scr = [g for g in by["screen"]]
+    if scr:
+        L.append("- Screens: " + "; ".join(
+            f"{g.get('connector')} {g.get('field')}" + (f" {g.get('old')} -> {g.get('new')}" if g.get("new") else "")
+            + f" {g['count']}x" for g in scr[:12]))
+    if by["lid"]:
+        L.append("- Lid: " + ", ".join(f"{g.get('new')} {hm(g.get('first'))}" for g in by["lid"][:12]))
+    if by["posture"]:
+        L.append("- Posture: " + ", ".join(f"{g.get('posture')} {hm(g.get('first'))}" for g in by["posture"][:12]))
+    L.append("")
+
+    L += ["## Failed units", ""]
+    if failed or by["unit-restart"]:
+        L += ["| count | time | unit | result |", "|---:|---|---|---|"]
+        for g in failed:
+            res = g.get("result") or f"{g.get('code')} {g.get('status')}"
+            L.append(f"| {g['count']} | {span(g)} | {md(g.get('unit'))} | {md(res)} |")
+        for g in by["unit-restart"]:
+            L.append(f"| {g['count']} | {span(g)} | {md(g.get('unit'))} | restart scheduled |")
+        L.append("")
+    else:
+        L += ["None.", ""]
+
+    L += ["## Resources", ""]
+    res = by["resources"]
+    if res:
+        L += ["| process | hours | RSS MiB min / mean / max | RssAnon MiB min / mean / max | CPU % mean / max |",
+              "|---|---:|---|---|---|"]
+        for proc in ("plasmashell", "kwin_wayland"):
+            rs = [g for g in res if g.get("proc") == proc]
+            if not rs:
+                continue
+            nsum = sum(g.get("n", 0) for g in rs) or 1
+            rss = (min(g["rss"][0] for g in rs), sum(g["rss"][1] * g.get("n", 0) for g in rs) / nsum, max(g["rss"][2] for g in rs))
+            anon = (min(g["anon"][0] for g in rs), sum(g["anon"][1] * g.get("n", 0) for g in rs) / nsum, max(g["anon"][2] for g in rs))
+            cpus = [(g["cpu"][0], g.get("n", 0)) for g in rs if g.get("cpu") and g["cpu"][0] is not None]
+            cmean = sum(c * k for c, k in cpus) / (sum(k for _, k in cpus) or 1)
+            cmax = max((g["cpu"][1] for g in rs if g.get("cpu")), default=0)
+            L.append(f"| {proc} | {len(rs)} | {rss[0]:.0f} / {rss[1]:.0f} / {rss[2]:.0f} | "
+                     f"{anon[0]:.0f} / {anon[1]:.0f} / {anon[2]:.0f} | {cmean:.2f} / {cmax:.1f} |")
+        L.append("")
+        peak = max(res, key=lambda g: g["anon"][2])
+        L.append(f"Highest RssAnon: {peak.get('proc')} {peak['anon'][2]} MiB in the hour from {peak.get('hour')}.")
+        L.append("")
+    else:
+        L += ["No samples.", ""]
+    if by["memsnap"]:
+        L.append("Memory snapshots:")
+        for g in by["memsnap"]:
+            L.append(f"- {hm(g.get('first'))} {g.get('proc')} {g.get('pid')}: RssAnon {g['anon'][0]} -> {g['anon'][1]} MiB, "
+                     f"RSS {g['rss'][0]} -> {g['rss'][1]} MiB: `{g.get('file')}`")
+        L.append("")
+    if by["cpu-high"] or by["cpu-high-end"]:
+        L.append("Sustained CPU (60 % of a core or more for 2 minutes):")
+        for g in by["cpu-high-end"] or by["cpu-high"]:
+            if g["kind"] == "cpu-high-end":
+                L.append(f"- {hm(g.get('since'))} {g.get('proc')}: {duration(g.get('seconds', 0))}, mean {g.get('mean')} %, max {g.get('max')} %")
+            else:
+                L.append(f"- {hm(g.get('since'))} {g.get('proc')}: {g.get('cpu')} % (still running at the last record)")
+        L.append("")
+    own = by["self"]
+    if own:
+        cpu = [g["cpu"] for g in own if g.get("cpu") is not None]
+        L.append(f"Field log overhead: CPU mean {sum(cpu) / max(1, len(cpu)):.3f} % of a core, RSS max "
+                 f"{max(g.get('rss', 0) for g in own):.1f} MiB (journalctl {max(g.get('journalctl_rss', 0) for g in own):.1f} MiB).")
+        L.append("")
+
+    noise = sorted(by["noise"], key=lambda g: -g["count"])
+    L += ["## Other plasmashell and KWin warnings", ""]
+    if noise:
+        L.append(f"Counted by normalised text (numbers as N, long quoted text cut); {len(noise)} kinds, "
+                 f"{sum(g['count'] for g in noise)} lines; the 20 most frequent:")
+        L += ["", "| count | process | category | text |", "|---:|---|---|---|"]
+        for g in noise[:20]:
+            L.append(f"| {g['count']} | {g.get('comm')} | {md(g.get('cat'))} | {md(g.get('text'))} |")
+        L.append("")
+    else:
+        L += ["None.", ""]
+
+    errs = by["fieldlog-error"] + by["flood"]
+    if errs:
+        L += ["## Field log problems", ""]
+        L += [f"- {g['count']}x {md(g.get('text'))} ({span(g)})" for g in errs]
+        L.append("")
+
+    L += ["## Development crashes (tooling)", "",
+          "Not problems of daily use: crashes from coding-agent terminals, build, scratch and test "
+          "directories, containers and private test sessions.", ""]
+    tools = crashes["tooling"]
+    if tools:
+        L += ["| count | time | executable | signal | why | command |", "|---:|---|---|---|---|---|"]
+        for g in sorted(tools, key=lambda g: g.get("first") or ""):
+            L.append(f"| {g['count']} | {span(g)} | {md(os.path.basename(g.get('exe') or '?'))} | {md(g.get('signal'))} | "
+                     f"{md(g.get('reason'))} | `{md(g.get('cmd'))}` |")
+        L.append("")
+    else:
+        L += ["None.", ""]
+    return "\n".join(L).rstrip() + "\n"
+
+
+def copy_to_share(path, day):
+    share = os.environ.get("PF_FIELDLOG_SHARE")
+    if not share:
+        return None
+    dest = pathlib.Path(share, f"digest-{day}-{os.uname().nodename}.md")
+
+    def work():
+        try:
+            pathlib.Path(share).mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
+            shutil.copyfile(path, tmp)
+            os.replace(tmp, dest)
+        except OSError as e:
+            print(f"{NAME}: copy to {share}: {e}", file=sys.stderr)
+
+    return dest, work
+
+
+def write_digest(day, sdir=None, copy_async=False, wait=None):
+    sdir = pathlib.Path(sdir or state_dir())
+    text = build_digest(day, sdir)
+    path = sdir / f"digest-{day}.md"
+    sdir.mkdir(parents=True, exist_ok=True)
+    write_atomic(path, text)
+    c = copy_to_share(path, day)
+    if c:
+        if copy_async:
+            # A share on a network mount that hangs must not stop the recorder.
+            th = threading.Thread(target=c[1], daemon=True)
+            th.start()
+            if wait:
+                th.join(wait)
+        else:
+            c[1]()
+    return path, text
+
+
+# ------------------------------------------------------------------------------------- commands
+
+
+def cmd_digest(args):
+    arg = args[0] if args else "today"
+    now = time.time()
+    if arg == "today":
+        day = local_day(now)
+    elif arg == "yesterday":
+        day = local_day(now - 86400)
+    elif re.match(r"^\d{4}-\d\d-\d\d$", arg):
+        day = arg
+    else:
+        print(f"{NAME} digest: not a date: {arg}", file=sys.stderr)
+        return 2
+    path, text = write_digest(day)
+    sys.stdout.write(text)
+    print(f"\n(written to {short(str(path))})", file=sys.stderr)
+    return 0
+
+
+def cmd_status(args):
+    sdir = state_dir()
+    print("Plasma Fusion field log")
+    active = ""
+    if shutil.which("systemctl"):
+        try:
+            active = subprocess.run(["systemctl", "--user", "is-active", UNIT], capture_output=True,
+                                    text=True, timeout=10).stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    print(f"  service:  {UNIT} {active or 'unknown'}")
+    files = [p for p in sdir.rglob("*") if p.is_file()] if sdir.exists() else []
+    size = sum(p.stat().st_size for p in files)
+    print(f"  state:    {short(str(sdir))} ({len(files)} files, {size / 1048576:.1f} MiB)")
+    day = local_day(time.time())
+    groups = aggregate(read_events(day, sdir))
+    cls = collections.Counter()
+    kinds = collections.Counter()
+    for g in groups:
+        kinds[g["kind"]] += g["count"]
+        if g["kind"] == "crash":
+            cls[g.get("cls")] += g["count"]
+    print(f"  today:    crashes session {cls['session']}, app {cls['app']}, other {cls['other']}, "
+          f"tooling {cls['tooling']}; Plasma Fusion errors {kinds['pf-error']}, warnings {kinds['pf-warning']}; "
+          f"restarts {kinds['restart']}; failed units {kinds['unit-failed'] + kinds['unit-exit']}; "
+          f"memsnaps {kinds['memsnap']}")
+    real = [g for g in groups if g["kind"] == "crash" and g.get("cls") != "tooling"]
+    if real:
+        g = real[-1]
+        print(f"  last crash: {hm(g.get('first'))} {os.path.basename(g.get('exe') or '?')} {g.get('signal')} "
+              f"({g.get('cls')}){'; ' + g['file'] if g.get('file') else ''}")
+    st = load_json(sdir / "state.json", {})
+    if st.get("overhead"):
+        o = st["overhead"]
+        print(f"  overhead: CPU {o.get('cpu')} % of a core, RSS {o.get('rss')} MiB, journalctl "
+              f"{o.get('journalctl_rss')} MiB (at {hm(o.get('t'))})")
+    dg = sdir / f"digest-{day}.md"
+    if dg.exists():
+        print(f"  digest:   {short(str(dg))} (written {time.strftime('%H:%M', time.localtime(dg.stat().st_mtime))})")
+    if os.environ.get("PF_FIELDLOG_SHARE"):
+        print(f"  share:    {os.environ['PF_FIELDLOG_SHARE']}")
+    return 0
+
+
+def libexec_dir():
+    return pathlib.Path(home(), ".local/libexec/plasma-fusion")
+
+
+def unit_path():
+    return pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or os.path.join(home(), ".config"),
+                        "systemd/user", UNIT)
+
+
+def systemctl_user(*args, check=False):
+    r = subprocess.run(["systemctl", "--user", *args], stdin=subprocess.DEVNULL)
+    if check and r.returncode != 0:
+        raise SystemExit(f"{NAME}: systemctl --user {' '.join(args)} failed ({r.returncode})")
+    return r.returncode
+
+
+def cmd_install(args):
+    share = None
+    if args[:1] == ["--share"] and len(args) == 2:
+        share = os.path.abspath(args[1])
+    elif args:
+        print(f"usage: {NAME} install [--share DIR]", file=sys.stderr)
+        return 2
+    here = pathlib.Path(__file__).resolve().parent
+    template = here / UNIT
+    if not template.is_file():
+        print(f"{NAME}: {UNIT} is not next to this script; run install from the Plasma Fusion sources "
+              "(tools/device/fieldlog/)", file=sys.stderr)
+        return 1
+    unit = template.read_text()
+    if share:
+        if re.search(r"[\s\"'\\%$]", share):
+            print(f"{NAME}: the share path must not contain spaces, quotes, % or $", file=sys.stderr)
+            return 2
+        unit = re.sub(r"^#\s*Environment=PF_FIELDLOG_SHARE=.*$", f"Environment=PF_FIELDLOG_SHARE={share}",
+                      unit, flags=re.M)
+    lib = libexec_dir()
+    lib.mkdir(parents=True, exist_ok=True)
+    dest = lib / NAME
+    tmp = lib / f".{NAME}.{os.getpid()}.tmp"
+    shutil.copyfile(pathlib.Path(__file__).resolve(), tmp)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, dest)
+    up = unit_path()
+    up.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(up, unit, mode=0o644)
+    systemctl_user("daemon-reload", check=True)
+    systemctl_user("enable", UNIT, check=True)
+    systemctl_user("restart", UNIT, check=True)
+    print(f"installed {short(str(dest))} and {short(str(up))}; {UNIT} enabled and started")
+    print(f"state: {short(str(state_dir()))}" + (f"; digests copied to {share}" if share else ""))
+    return 0
+
+
+def cmd_remove(args):
+    systemctl_user("disable", "--now", UNIT)
+    up = unit_path()
+    removed = []
+    if up.exists():
+        up.unlink()
+        removed.append(short(str(up)))
+    dest = libexec_dir() / NAME
+    if dest.exists() and "Plasma Fusion field log" not in read_text(dest, 4096):
+        print(f"{NAME}: {dest} is not this tool; left in place", file=sys.stderr)
+    elif dest.exists():
+        dest.unlink()
+        removed.append(short(str(dest)))
+    systemctl_user("daemon-reload")
+    print("removed " + (", ".join(removed) if removed else "nothing") + f"; the state stays in {short(str(state_dir()))}")
+    return 0
+
+
+def main(argv):
+    cmd, args = (argv[0], argv[1:]) if argv else ("", [])
+    if cmd == "run" and not args:
+        return FieldLog().run()
+    if cmd == "digest" and len(args) <= 1:
+        return cmd_digest(args)
+    if cmd == "status" and not args:
+        return cmd_status(args)
+    if cmd == "install":
+        return cmd_install(args)
+    if cmd == "remove" and not args:
+        return cmd_remove(args)
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__ or "", end="")
+        with open(__file__) as f:
+            for line in f.read().split("\nimport ", 1)[0].splitlines()[4:]:
+                print(line[2:] if line.startswith("# ") else line.lstrip("#"))
+        return 0
+    print(f"usage: {NAME} run | digest [DATE] | status | install [--share DIR] | remove | --help", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

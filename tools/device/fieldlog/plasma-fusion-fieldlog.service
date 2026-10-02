@@ -1,0 +1,50 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion field log: records crashes, session restarts, Plasma Fusion QML errors and the memory
+# and CPU of plasmashell and KWin in daily use, apart from development noise (docs/parts/fieldlog.md
+# in the Plasma Fusion sources). Installed by
+#   tools/device/fieldlog/plasma-fusion-fieldlog install [--share DIR]
+# which copies the tool to ~/.local/libexec/plasma-fusion/ and enables this unit; "remove" takes both
+# away and keeps the recorded state (~/.local/state/plasma-fusion/fieldlog/).
+[Unit]
+Description=Plasma Fusion field log
+PartOf=graphical-session.target
+After=graphical-session.target plasma-workspace.target
+ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
+
+[Service]
+Type=simple
+# The user's own copy first, then a system package's.
+ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion
+ExecStart=plasma-fusion-fieldlog run
+ExecReload=/usr/bin/kill -HUP $MAINPID
+# SIGTERM to the tool only: it writes the counts it holds and the day's digest, then stops journalctl.
+KillMode=mixed
+TimeoutStopSec=20s
+Restart=on-failure
+RestartSec=30
+Slice=background.slice
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=64M
+# Hardening that works in a user unit without a user namespace. PrivateTmp, ProtectSystem and
+# ProtectHome would make the user manager add PrivateUsers=yes, which hides the wheel group (the
+# system journal) and other processes' environments (the check for a coding agent sharing a crashed
+# process's cgroup); tested on Fedora 44, systemd 259, 2026-10-02.
+NoNewPrivileges=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+RestrictAddressFamilies=AF_UNIX
+UMask=0077
+SyslogIdentifier=plasma-fusion-fieldlog
+# A copy of each day's digest goes to PF_FIELDLOG_SHARE when it is set (install --share DIR).
+#Environment=PF_FIELDLOG_SHARE=
+
+[Install]
+WantedBy=graphical-session.target
