@@ -17,7 +17,9 @@ rm -rf "$work" && mkdir -p "$work"
 cp "$ROOT/packaging/arch/PKGBUILD" "$TARBALL" "$work/"
 version=$(sed -n 's/^pkgver=//p' "$work/PKGBUILD")
 # The tarball's top directory must be plasma-fusion/, as the git source would be.
-sed -i -e "s|^source=.*|source=(\"plasma-fusion::file://$work/${TARBALL##*/}\")|" -e '/^validpgpkeys=/d' "$work/PKGBUILD"
+# A plain file name: with "plasma-fusion::" makepkg would name the tarball itself plasma-fusion,
+# the name of the directory it unpacks to.
+sed -i -e "s|^source=.*|source=(\"${TARBALL##*/}\")|" -e '/^validpgpkeys=/d' "$work/PKGBUILD"
 [ "$(tar -tzf "$TARBALL" | head -n 1 | cut -d/ -f1)" = plasma-fusion ] || { echo "the tarball's top directory must be plasma-fusion" >&2; exit 1; }
 chown -R builder: "$work"
 cd "$work"
