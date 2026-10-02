@@ -14,8 +14,9 @@
 # Safe over plain SSH: no Qt or KDE program is started without the session's display. The display
 # (WAYLAND_DISPLAY and friends) is taken from the running plasmashell of this user's own session
 # bus (/run/user/UID/bus unless DBUS_SESSION_BUS_ADDRESS names another); without one, kscreen.json
-# says why it is missing. The Plasma version comes from rpm (plasmashell --version offscreen as the
-# fallback).
+# says why it is missing. The Plasma version comes from the package database (rpm, pacman, dpkg) or,
+# on NixOS, from plasmashell's store path; plasmashell itself is never started (in Plasma 6.7.5
+# `plasmashell --version` builds the shell and crashes offscreen).
 set -euo pipefail
 DEST=${1:-$HOME/.local/state/plasma-fusion/profile-backups}
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
@@ -91,7 +92,7 @@ else
 fi
 rm -f "$WORK/kscreen.err"
 # Plasma's version from the package database (rpm, pacman, dpkg; upstream version only), else from
-# plasmashell itself.
+# the Nix store path plasmashell resolves to (.../plasma-workspace-6.7.5/bin/plasmashell).
 plasma=$(rpm -q --qf '%{VERSION}\n' plasma-workspace 2>/dev/null | head -n 1) || plasma=
 case $plasma in '' | *"not installed"*)
   if plasma=$(pacman -Q plasma-workspace 2>/dev/null) && [ -n "$plasma" ]; then
@@ -99,7 +100,12 @@ case $plasma in '' | *"not installed"*)
   elif plasma=$(dpkg-query -W -f '${db:Status-Status} ${Version}' plasma-workspace 2>/dev/null) && [[ $plasma == "installed "* ]]; then
     plasma=${plasma#installed }; plasma=${plasma#*:}; plasma=${plasma%-*}
   else
-    plasma=$(QT_QPA_PLATFORM=offscreen timeout 15 plasmashell --version 2>/dev/null) || plasma=
+    plasma=$(readlink -f "$(command -v plasmashell 2>/dev/null || true)" 2>/dev/null || true)
+    if [[ $plasma =~ ^/nix/store/[a-z0-9]+-plasma-workspace-([0-9][0-9.]*)/ ]]; then
+      plasma=${BASH_REMATCH[1]}
+    else
+      plasma=
+    fi
   fi ;;
 esac
 {
