@@ -456,6 +456,9 @@ class EventLog:
         self.pending = {}
         self.lines = {}
         self.flooded = set()
+        # Earlier days written to after they ended (a crash seen after midnight, a stop's problems read
+        # at the next start): day -> counts of the notable events, for their digests and a note.
+        self.late = {}
 
     def path(self, day):
         return self.sdir / f"events-{day}.jsonl"
@@ -499,6 +502,11 @@ class EventLog:
             if sync:
                 os.fsync(f.fileno())
         self.lines[day] = n + 1
+        if day < local_day(time.time()):
+            counts = self.late.setdefault(day, collections.Counter())
+            what = late_label(rec)
+            if what:
+                counts[what] += int(rec.get("count") or 1)
 
     def emit(self, kind, key=None, ts=None, coalesce=True, sync=False, **fields):
         ts = time.time() if ts is None else ts
@@ -536,7 +544,19 @@ class EventLog:
 
 
 IMPORTANT = {"crash", "restart", "gone", "login", "logout", "suspend", "unit-failed", "unit-exit",
-             "memsnap", "cpu-high", "cpu-high-end", "fieldlog-start", "fieldlog-stop", "resources"}
+             "memsnap", "cpu-high", "cpu-high-end", "fieldlog-start", "fieldlog-stop", "resources", "late"}
+
+
+def late_label(rec):
+    """What a late event is in the note of today's digest, or None when it is not worth one."""
+    kind = rec.get("kind")
+    if kind == "crash" and rec.get("cls") in ("session", "app", "other"):
+        return f"{rec['cls']} crash"
+    if kind in ("unit-failed", "unit-exit"):
+        return "failed unit"
+    if kind == "pf-error":
+        return "Plasma Fusion error"
+    return None
 
 
 def read_events(day, sdir=None):
@@ -723,6 +743,13 @@ class Watched:
                          mean=round(self.hot_sum / self.hot_n, 1), max=round(self.hot_max, 1))
             self.hot_s = 0.0
             self.hot_logged = False
+
+    def close_hour(self, log, now):
+        """Writes the aggregate of a clock hour that has ended (at midnight: before that day's
+        digest, not with the next sample)."""
+        if self.hour and self.hour != time.strftime("%Y-%m-%d %H", time.localtime(now)):
+            self.flush_hour(log, now)
+            self.hour = None
 
     def flush_hour(self, log, now, partial=False):
         a = self.agg
@@ -1187,11 +1214,21 @@ class FieldLog:
         self.self_ticks, self.self_mono = total, mono
 
     # -- digest
-    def write_digest(self, day):
+    def write_digest(self, day, wait=None):
         try:
-            write_digest(day, self.sdir, copy_async=True)
+            write_digest(day, self.sdir, copy_async=True, wait=wait)
         except OSError as e:
             self.log.emit("fieldlog-error", key="digest", text=f"digest: {e}")
+
+    def handle_late(self, wait=None):
+        """Rewrites the digests (and share copies) of earlier days that got events after they ended,
+        and notes the notable ones in today's events for today's digest. Returns those days."""
+        late, self.log.late = self.log.late, {}
+        for day, counts in sorted(late.items()):
+            self.write_digest(day, wait=wait)
+            for what, n in sorted(counts.items()):
+                self.log.emit("late", key=f"{day}|{what}", coalesce=False, day=day, what=what, count=n)
+        return set(late)
 
     # -- main loop
     def run(self):
@@ -1282,17 +1319,25 @@ class FieldLog:
                 nday, nhour = local_day(now), time.strftime("%H", time.localtime(now))
                 if nhour != hour or nday != day:
                     hour = nhour
+                    for w in self.watched:
+                        w.close_hour(self.log, now)
                     self.overhead(now, mono)
                     self.check_units(now)
+                    if nday != day:
+                        self.poll_coredumps()  # a crash just before midnight belongs to the day that ended
                     self.log.flush()
-                    self.write_digest(day)
+                    if day not in self.handle_late():
+                        self.write_digest(day)
                     if nday != day:
                         cleanup(self.sdir, nday)
                         day = nday
                     self.save_state()
+                elif self.log.late:
+                    self.handle_late()
                 if self.write_digest_now:
                     self.write_digest_now = False
                     self.log.flush()
+                    self.handle_late()
                     self.write_digest(day)
         finally:
             if self.journal:
@@ -1310,10 +1355,16 @@ class FieldLog:
             self.log.emit("fieldlog-stop", ts=now, coalesce=False, reason=reason)
             self.log.flush()
             self.save_state()
+            self.handle_late()
             try:
-                path, _ = write_digest(local_day(now), self.sdir, copy_async=True, wait=10)
+                write_digest(local_day(now), self.sdir, copy_async=True)
             except OSError as e:
                 print(f"{NAME}: digest: {e}", file=sys.stderr)
+            # The share copies run in threads (a hanging network mount must not stop the recorder):
+            # give them 10 s together before the process ends.
+            deadline = time.monotonic() + 10
+            for th in COPIES:
+                th.join(max(0.0, deadline - time.monotonic()))
         return 0
 
 
@@ -1609,6 +1660,12 @@ def build_digest(day, sdir=None):
           f"| Failed or crashed Plasma units | {sum(g['count'] for g in failed)} |",
           f"| Memory snapshots / sustained CPU | {n('memsnap')} / {n('cpu-high')} |",
           f"| Development crashes (tooling, listed last) | {n('crash', 'tooling')} |", ""]
+    late = collections.defaultdict(collections.Counter)
+    for g in by["late"]:
+        late[g.get("day")][g.get("what")] += g["count"]
+    if late:
+        L += ["Recorded after their day had ended (in that day's digest, written again): " + "; ".join(
+            f"{d}: " + ", ".join(f"{w} {c}x" for w, c in sorted(late[d].items())) for d in sorted(late)) + ".", ""]
 
     def crash_section(title, cls, note=None):
         L.append(f"## {title}")
@@ -1811,7 +1868,7 @@ def copy_to_share(path, day):
     def work():
         try:
             pathlib.Path(share).mkdir(parents=True, exist_ok=True)
-            tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
+            tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{threading.get_ident()}.tmp")
             shutil.copyfile(path, tmp)
             os.replace(tmp, dest)
         except OSError as e:
@@ -1832,11 +1889,15 @@ def write_digest(day, sdir=None, copy_async=False, wait=None):
             # A share on a network mount that hangs must not stop the recorder.
             th = threading.Thread(target=c[1], daemon=True)
             th.start()
+            COPIES[:] = [t for t in COPIES if t.is_alive()] + [th]
             if wait:
                 th.join(wait)
         else:
             c[1]()
     return path, text
+
+
+COPIES = []  # share copy threads of this process, waited for at the end of "run"
 
 
 # ------------------------------------------------------------------------------------- commands

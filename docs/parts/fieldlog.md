@@ -41,7 +41,7 @@ State in `${XDG_STATE_HOME:-~/.local/state}/plasma-fusion/fieldlog/` (private to
 | File | What |
 |---|---|
 | `events-YYYY-MM-DD.jsonl` | one JSON event per line, by local day; a crash goes to the day it happened |
-| `digest-YYYY-MM-DD.md` | the day's digest (every hour, at midnight for the day that ended, when the service stops) |
+| `digest-YYYY-MM-DD.md` | the day's digest (every hour, at midnight for the day that ended, when the service stops, and again within a minute when events reach an earlier day late) |
 | `crashes/<UTC time>-<exe>-<pid>.txt` | `coredumpctl info` (all threads) of each session and app crash, saved when the crash is seen, because core files rotate |
 | `memsnap/<UTC time>-<process>.txt` | memory snapshots |
 | `state.json` | the last core dump handled, the journal cursor, the login check log's offset, the last overhead |
@@ -57,11 +57,19 @@ recorder).
 
 Event kinds: `crash`, `restart`, `gone`, `login`, `logout`, `suspend`, `screen`, `lid`, `posture`,
 `unit-failed`, `unit-exit`, `unit-restart`, `pf-error`, `pf-warning`, `gate`, `noise`, `resources`,
-`memsnap`, `cpu-high`, `cpu-high-end`, `self`, `fieldlog-start`, `fieldlog-stop`, `fieldlog-error`.
+`memsnap`, `cpu-high`, `cpu-high-end`, `self`, `late`, `fieldlog-start`, `fieldlog-stop`, `fieldlog-error`.
 An event with a key is written once a day; its repeats are counted in memory and written as one
 line with `"repeat": true`, the count of repeats and the first and last time, every hour and when the
 service stops (a killed service loses at most an hour of repeat counts, never a first occurrence).
 Session, app and other crashes and memory snapshots are written with `fsync`.
+
+An event goes to the day it happened, also when it is seen later: a crash just before midnight that
+coredumpctl lists a few seconds after it, or what happened while the recorder was stopped (a hang
+at logout, read from the journal at the next start). Such an earlier day's digest and share copy are
+written again within a minute, and a `late` event in today's events puts a line under today's table
+("Recorded after their day had ended ...: 2026-10-01: session crash 1x") for session, app and other
+crashes, failed units and Plasma Fusion errors. At midnight the last hour's resources and a core
+dump check go to the day that ended before its digest is written.
 
 ### Crashes
 
@@ -244,7 +252,8 @@ state and read only new dumps.
 `digest-YYYY-MM-DD.md`, newest first in the share. From the top:
 
 1. **The table.** Session crashes in bold; when it is 0 and the Plasma Fusion error count did not
-   grow, the day was clean. Tooling crashes are only a count here.
+   grow, the day was clean. Tooling crashes are only a count here. A line under it names earlier
+   days that got crashes, failed units or Plasma Fusion errors late; read those days' digests again.
 2. **Session crashes**, grouped by signature: process, signal, package and version, how many and
    when, the cgroup and the rule that classed it, the saved `crashes/` file(s), the core file's
    state at the time, any agent marker names, the restart that followed and the top five frames

@@ -486,8 +486,10 @@ class Retention(unittest.TestCase):
 
 
 FAKE_COREDUMPCTL = r'''#!/usr/bin/python3
-import json, os, sys
+import json, os, sys, time
+# REVEAL: the dumps are listed only from that time on (a slow core dump).
 recs = [json.loads(l) for l in open(os.environ["FAKE_DUMPS"]) if l.strip()]
+recs = recs if time.time() >= float(os.environ.get("REVEAL") or 0) else []
 a = sys.argv[1:]
 open(os.environ["FAKE_LOG"], "a").write("coredumpctl " + " ".join(a) + "\n")
 since = next((int(x.split("@")[1]) for x in a if x.startswith("--since=@")), 0)
@@ -711,6 +713,57 @@ class Run(unittest.TestCase):
         self.assertGreaterEqual(starts, 1)
         self.assertLessEqual(starts, 2)
         self.assertLess(cpu, 2.0)
+
+
+SESSION_ROW = "| Session crashes (Plasma, Plasma Fusion) | **1** |"
+
+
+class LateDays(unittest.TestCase):
+    """Events that reach a day after it ended: its digest and share copy are written again, and
+    today's digest says so (review of 2026-10-02: they were written once, at midnight)."""
+
+    def test_crash_read_at_the_next_start(self):
+        # KWin crashed at 22:30 yesterday, after the recorder had stopped; the next start reads it.
+        d = fresh_dir("late-nextstart")
+        now = time.time()
+        yday = fl.local_day(now - 86400)
+        t = int(fl.day_start(yday) + 22.5 * 3600)
+        rec = session_record(pid=3001, t=t)
+        rec.update(COREDUMP_EXE="/usr/bin/kwin_wayland", COREDUMP_COMM="kwin_wayland")
+        env = fake_setup(d, [rec], seconds=3)
+        env["PF_FIELDLOG_SINCE"] = f"@{t - 3600}"
+        r = subprocess.run([sys.executable, str(TOOL), "run"], env=env, capture_output=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr.decode())
+        sdir = d / "state/plasma-fusion/fieldlog"
+        host = os.uname().nodename
+        for p in (sdir / f"digest-{yday}.md", d / "share" / f"digest-{yday}-{host}.md"):
+            self.assertIn(SESSION_ROW, p.read_text(), p)
+        today = (sdir / f"digest-{fl.local_day(time.time())}.md").read_text()
+        self.assertIn(f"Recorded after their day had ended (in that day's digest, written again): {yday}: "
+                      "session crash 1x.", today)
+
+    def test_crash_seen_after_midnight(self):
+        # Local midnight 4 s after the start (a made-up time zone); a plasmashell crash at 23:59:58 is
+        # listed by coredumpctl only from 00:00:02.
+        d = fresh_dir("late-midnight")
+        now = time.time()
+        east = (86400 - 4 - int(now) % 86400) % 86400
+        tz = (f"FAKE-{east // 3600:02d}:{east % 3600 // 60:02d}:{east % 60:02d}" if east <= 12 * 3600 else
+              f"FAKE+{(86400 - east) // 3600:02d}:{(86400 - east) % 3600 // 60:02d}:{(86400 - east) % 60:02d}")
+        midnight = int(now) + 4
+        old = time.strftime("%Y-%m-%d", time.gmtime(midnight - 1 + (east if east <= 12 * 3600 else east - 86400)))
+        env = fake_setup(d, [session_record(pid=3002, t=midnight - 2)], seconds=9, interval=1)
+        env.update(TZ=tz, REVEAL=str(midnight + 2), PF_FIELDLOG_SINCE=f"@{midnight - 3600}")
+        r = subprocess.run([sys.executable, str(TOOL), "run"], env=env, capture_output=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr.decode())
+        sdir = d / "state/plasma-fusion/fieldlog"
+        host = os.uname().nodename
+        for p in (sdir / f"digest-{old}.md", d / "share" / f"digest-{old}-{host}.md"):
+            text = p.read_text()
+            self.assertIn(SESSION_ROW, text, p)
+            self.assertIn("| plasmashell | 1 |", text, p)  # the 23:00 samples, before the digest
+        new = sorted(sdir.glob("digest-*.md"))[-1].read_text()
+        self.assertIn(f"{old}: session crash 1x.", new)
 
 
 def unit_section(name):
