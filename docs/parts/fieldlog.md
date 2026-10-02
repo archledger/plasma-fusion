@@ -218,7 +218,7 @@ the session ended at a reboot and no core dump was stored, only user journal lin
 `After=graphical-session.target` would then be an ordering cycle, since the session targets come
 after both; checked against the laptop's user manager, 2026-10-02), `KillMode=mixed` (SIGTERM to
 the tool, which writes its counts, the digest and stops journalctl), `Restart=on-failure`,
-`background.slice`, `Nice=10`, `IOSchedulingClass=idle`, `MemoryMax=64M`, and the hardening that
+`background.slice`, `Nice=10`, `IOSchedulingClass=idle`, `MemoryMax=96M` with `MemorySwapMax=0` (below), and the hardening that
 works in a user unit without a user namespace: `NoNewPrivileges`, `LockPersonality`,
 `RestrictRealtime`, `RestrictSUIDSGID`, `RestrictNamespaces`, `MemoryDenyWriteExecute`, `SystemCallArchitectures=native`, `SystemCallFilter=@system-service`,
 `RestrictAddressFamilies=AF_UNIX`, `UMask=0077`. Tested with transient units on the laptop
@@ -264,6 +264,13 @@ unit 3 h take 1.4 s (journalctl 0.94 s, the tool 0.43 s) and the 12 dump records
 the limit makes the kernel reclaim and swap, so a start with 3 h cold took 4.4-7.7 s, with 14 h
 whose journal was still cached 2.0 s (42 MiB, no swap), with 3 days 10.7 s (64 MiB, 17 MiB swap).
 A `MemoryMax=160M` changed nothing (the cache filled it; 5.6 s).
+
+The limit counts the journal file cache, and with swap allowed the kernel swapped the tool's own
+memory out to keep within it. So the installed unit has `MemoryMax=96M` and `MemorySwapMax=0`: the
+cache is dropped instead. On the laptop (2026-10-02, a start reading the day back from midnight):
+64M with swap took 3.9 s of CPU and swapped 14.9 MiB; 96M without swap 0.43 s in the first 90 s,
+nothing swapped, the cgroup at 96 MiB of which 14.9 MiB the tool's own and 76 MiB inactive journal
+cache, no OOM event.
 
 ## Verification (2026-10-02)
 

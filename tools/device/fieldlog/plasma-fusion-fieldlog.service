@@ -32,7 +32,11 @@ RestartSec=30
 Slice=background.slice
 Nice=10
 IOSchedulingClass=idle
-MemoryMax=64M
+# The limit also counts the journal files journalctl reads; without swap the kernel drops that cache
+# instead of swapping the tool out (64M with swap: 15 MiB swapped, 3.9 s CPU at start; 96M without:
+# none swapped, 0.43 s; the tool itself about 15 MiB; laptop, 2026-10-02).
+MemoryMax=96M
+MemorySwapMax=0
 # Hardening that works in a user unit without a user namespace. PrivateTmp, ProtectSystem and
 # ProtectHome would make the user manager add PrivateUsers=yes, which hides the wheel group (the
 # system journal) and other processes' environments (the check for a coding agent sharing a crashed
