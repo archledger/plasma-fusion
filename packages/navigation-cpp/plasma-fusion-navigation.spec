@@ -7,7 +7,7 @@
 
 Name:           plasma-fusion-navigation
 Version:        0.1
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        Plasma Fusion tablet navigation gestures for KWin
 
 License:        GPL-2.0-or-later
@@ -74,6 +74,10 @@ find %{buildroot}%{_datadir}/kwin/effects/plasmafusion_navigation %{buildroot}%{
 %{_qt6_qmldir}/org/plasmafusion/navigation/
 
 %changelog
+* Fri Oct 02 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-6
+- An app picked in the task switcher keeps its half of a split, and the app in
+  the other half comes up with it
+
 * Fri Oct 02 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-5
 - Give each QML file a time stamp from its content, so an update replaces the
   effect code that KWin's QML cache kept from an earlier release of the same day

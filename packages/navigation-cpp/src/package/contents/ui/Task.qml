@@ -49,9 +49,38 @@ Item {
     }
 
     function activateApp(): void {
-        // Plasma Fusion: apps run maximized in tablet posture (Plasma Mobile without convergence mode).
-        delegate.window.setMaximize(true, true);
+        const w = delegate.window;
+        if (w.tile) {
+            // Plasma Fusion: an app in a split keeps its half, and the app in the other half comes
+            // up with it (owner's screencast 2026-10-02: picking one half maximized it).
+            const partner = splitPartner(w);
+            if (partner) {
+                KWinComponents.Workspace.activeWindow = partner;
+            }
+        } else {
+            // Plasma Fusion: apps run maximized in tablet posture (Plasma Mobile without convergence mode).
+            w.setMaximize(true, true);
+        }
         delegate.taskSwitcherHelpers.openApp(model.index);
+    }
+
+    // The topmost visible window tiled on the other side of the same screen (the tablet script's
+    // split divider pairs them the same way).
+    function splitPartner(w): var {
+        const g = w.tile.relativeGeometry;
+        const left = g.x < 0.01 && g.width < 0.99;
+        const order = KWinComponents.Workspace.stackingOrder;
+        for (let i = order.length - 1; i >= 0; --i) {
+            const o = order[i];
+            if (o === w || o.deleted || !o.normalWindow || o.minimized || o.output !== w.output || !o.tile) {
+                continue;
+            }
+            const og = o.tile.relativeGeometry;
+            if (og.height > 0.99 && (left ? og.x > 0.01 && og.x + og.width > 0.99 : og.x < 0.01 && og.width < 0.99)) {
+                return o;
+            }
+        }
+        return null;
     }
 
     function minimizeApp(): void {
