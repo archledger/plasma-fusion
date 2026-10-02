@@ -41,7 +41,12 @@ user_copies() {
   local item
   [ -f "$PF/items.txt" ] || return 0
   while IFS= read -r item; do
-    [ -n "$item" ] && [ -e "$DATA/$item" ] && printf '%s\n' "$item"
+    [ -n "$item" ] && [ -e "$DATA/$item" ] || continue
+    # The app icons service draws apps' own icons on tiles into ~/.local/share/icons/PlasmaFusion
+    # and -Dark, a layer on top of the package's themes: only a copy with its own index.theme (an
+    # earlier per-user install) hides the package's.
+    case $item in icons/*) [ -f "$DATA/$item/index.theme" ] || continue ;; esac
+    printf '%s\n' "$item"
   done <"$PF/items.txt"
   [ -d "$HOME/.local/libexec/plasma-fusion" ] && printf '%s\n' ../libexec/plasma-fusion
   return 0
@@ -119,6 +124,7 @@ drop_user_copy() {
     n=$((n + 1))
   done < <(user_copies)
   echo "moved $n per-user copies to $dest"
+  echo "(the app icons service draws the apps' own icons again at the next login)"
   echo "to put them back: cp -a $dest/share/. $DATA/ (and log out and in)"
   echo "log out and in once so Plasma uses the package's files"
 }
