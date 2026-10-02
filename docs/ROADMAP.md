@@ -33,7 +33,10 @@ are welcome in GitHub Discussions; the way decisions are made is in
 4. **OpenSSF Best Practices silver.** Style checks in CI, test coverage measurement, fuzzing of the
    parsers in the Python tools (under way), and the project documents: governance, code of conduct,
    architecture, this roadmap, the security assurance case
-   ([`SECURITY-ASSURANCE.md`](SECURITY-ASSURANCE.md)).
+   ([`SECURITY-ASSURANCE.md`](SECURITY-ASSURANCE.md)). Also a known documentation defect:
+   [`PLAN.md`](PLAN.md) and 27 of the part pages in [`docs/parts/`](parts/) cite paths on the
+   maintainer's private share, which other readers cannot open. Those references are to be
+   replaced with public text or removed.
 
 ### In the year
 
