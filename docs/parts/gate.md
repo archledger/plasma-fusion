@@ -29,7 +29,8 @@ Covers ADAPTIVE.md fixes 9 and 10, GAPS.md G14 and G15, test matrix M27
 State, all under `~/.local/state/plasma-fusion/`: `gate.log` (one line per run plus details),
 `gate/tested` (the record `fusion-config.sh` writes: package versions, lock-screen hash and the
 path of the `fusion-config.sh` that wrote it), `gate/cache` (installed versions keyed by the
-rpm database's inode, size and time), `gate/off` (what the check switched off), `gate/saved/` (the
+package database's stamp: the rpm database's inode, size and time on Fedora), `gate/off` (what
+the check switched off), `gate/saved/` (the
 lock-screen drop-in while it is aside), `gate/notify` (queued notification), `gate/notified`
 (the change already reported), `gate/status` (for other parts, see below).
 
@@ -89,7 +90,9 @@ it starts KWin; `kwinrc` is read by KWin when it starts.
 other one when the check runs. "Tested versions": the upstream
 version (`%{VERSION}`, not the release: a distribution rebuild keeps the interfaces) of
 `plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative` equals the
-record; a missing or unreadable record, or rpm failing or taking over 3 s, counts as untested.
+record (on other distributions the same packages under their names there, see "Other
+distributions" below); a missing or unreadable record, or no package database reporting the
+versions (rpm failing or taking over 3 s on Fedora), counts as untested.
 "Tested lock-screen files": sha256 over the files and relative names of the installed
 `org.plasmafusion.lockshell` (user copy first, as kscreenlocker finds it) equals the record, and the
 package exists. Versions and the lock-screen hash are only looked at while the lock screen or the
@@ -227,7 +230,8 @@ plasma-apply-lookandfeel -a org.plasmafusion.previous.desktop    # My previous d
 ```
 
 Test hooks (never set in a real session): `PF_GATE_FAKE_VERSIONS="kwin=6.8.0 kscreenlocker=6.8.0"`
-replaces installed versions in memory (never cached); `PF_GATE_RPM` names the rpm program.
+replaces installed versions in memory (never cached); `PF_GATE_RPM` names the rpm program;
+`PF_GATE_ROOT` is put in front of the package databases' paths and the Nix system profile.
 `fusion-config.sh` passes `PF_GATE_TOOL` (its own absolute path) to `deploy`, which stores it in the
 record for the notification.
 
@@ -423,3 +427,65 @@ user changed while held off is left as it is and the record cleared. `c` also ch
 under another Global Theme. The cases no longer depend on the machine: `PF_GATE_SYSTEM_PLUGINS`
 (tests only) replaces the system plugin directories, so the `p` cases pass on a machine with
 plasma-fusion-decoration installed. Run 2026-10-01: 144 passed, 0 failed.
+
+## Other distributions (2026-10-02)
+
+Plan: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-02-other-distros/INSTALL-OTHER-DISTROS.md`
+section 5, P2. Before this the check read versions only with rpm; without rpm it recorded every
+version as `no-rpm`, so on Arch, Debian or NixOS it always "matched" and never switched anything
+off.
+
+The versions now come from the first package database that knows one of the packages (a foreign
+package manager installed next to the system's, such as pacman or dpkg on Fedora, knows none of
+them and is skipped):
+
+| Database | Query | Package names | Version kept | Cache stamp |
+|---|---|---|---|---|
+| rpm (Fedora) | `rpm -q --qf '%{NAME}=%{VERSION}\n'` | `qt6-qtbase`, `qt6-qtdeclarative` | `%{VERSION}` | inode, size and time of `rpmdb.sqlite` (+ `-wal`), as before |
+| pacman (Arch) | `pacman -Q` | `qt6-base`, `qt6-declarative` | without epoch and pkgrel | `/var/lib/pacman/local` (a directory per package, replaced at every upgrade) |
+| dpkg (Debian) | `dpkg-query -W -f '${db:Status-Status} ${source:Package}=${source:Version}\n'` over all packages | source packages `qt6-base`, `qt6-declarative` (the binary names change between releases: `kwin-wayland`, `libkscreenlocker6`...) | without epoch and Debian revision (`6.11.2+dfsg`); removed packages that kept their configuration files do not count | `/var/lib/dpkg/status` (rewritten and renamed over by every dpkg run) |
+| Nix (NixOS) | `nix-store --query --requisites /run/current-system/sw` (`nix-store` from PATH, else from the system profile) | store names `qtbase`, `qtdeclarative`; the name ends before the first `-digit`, so `kwin-x11-6.6.6` is not `kwin` | the store name's version (`kwin-6.6.6-dev` gives 6.6.6) | `readlink /run/current-system/sw` |
+
+The other six names (`plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration`)
+are the same everywhere. A database that does not answer within 3 s ends the search.
+
+When no database answers, the versions are unknown: `deploy` records nothing (exit 1, "could not
+read the installed versions: no package database (rpm, pacman, dpkg or Nix) was found" or "... with
+rpm"), and a login switches the version-bound parts off with the notification ("Plasma Fusion cannot
+tell which Plasma it was checked with (...)"), once per change as before.
+
+Records and caches stay readable both ways. A record or cache written from rpm is byte for byte
+what the earlier check wrote (no `db=` line; the cache key `list=` unchanged), so a Fedora machine
+that recorded with the earlier check sees "no change" at its first login with this one and keeps
+its cache (test `v7`). The other databases add `db=pacman|dpkg|nix` (the earlier check ignores the
+line). A record from one database is not compared with versions from another ("it was recorded with
+rpm, the versions now come from pacman"), and a record of the earlier check on a system without rpm
+(`no-rpm` values) counts as untested ("it was recorded without a package database"); in both cases
+the next `fusion-config.sh` run records the versions again.
+
+Tests (`tools/device/tests/gate-unit.sh`) no longer depend on the machine: PATH holds the machine's
+programs without `rpm`, `pacman`, `dpkg-query` and `nix-store` (fakes go in front per case), the
+package databases are below `PF_GATE_ROOT`, and `XDG_DATA_DIRS` and `XDG_CONFIG_DIRS` are empty
+directories (an installed plasma-fusion package's `org.plasmafusion.desktop` failed `b11`; `b6` no
+longer needs to be skipped where the compiled decoration is installed). New cases:
+
+- `v1` pacman: record `db=pacman`, `kwin=6.7.5` from `1:6.7.5-2`, `qt6-base`; a matching login
+  changes nothing and a second one does not run pacman (cache); an upgrade (new directory in
+  `local/`) switches off and names `kwin 6.7.5 → 6.8.0`; `deploy` records it and turns back on; a
+  hanging pacman is cut at 3 s and falls back.
+- `v2` dpkg: source names and versions (`plasma-desktop` from a binNMU, `qt6-base=6.11.2+dfsg`, a
+  `config-files` kwin 6.3.6 ignored); cached until the status file is replaced; upgrade and
+  downgrade.
+- `v3` Nix: a system profile in a store below `PF_GATE_ROOT`, `nix-store` only in the profile;
+  `kwin-x11` and the `-dev` output do not count; cached per profile; a switch to 6.7.5 switches off,
+  a rollback turns back on.
+- `v4` no database: `deploy` fails and records nothing; logins switch off with the reason, one
+  notification; `v4b` a record made with rpm and no database later; `v4c` the earlier check's
+  `no-rpm` record.
+- `v5` an rpm that knows none of the packages (next to pacman) does not answer; `v6` a record from
+  rpm against versions from pacman.
+- `v7` the engine of a95f707 records and logs in (fake rpm, the machine's rpm database stamp), then
+  this one: "no change", record and cache unchanged, rpm not run.
+
+Run 2026-10-02 on the laptop (plasma-fusion and plasma-fusion-decoration installed, pacman,
+dpkg and nix-store present): 199 passed, 0 failed, nothing skipped.

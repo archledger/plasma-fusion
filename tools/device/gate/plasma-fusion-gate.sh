@@ -24,9 +24,10 @@
 #    plasmafusion_navigationEnabled, built against KWin's internal classes) or the Plasma Fusion
 #    desktop (a desktop containment plugin=org.plasmafusion.desktop in the layout file, a fork of
 #    plasma-desktop's Folder View QML) is on, the installed
-#    versions of PACKAGES (rpm, cached by the rpm database's size and time) and the lock-screen
-#    package files (sha256) are compared with what fusion-config.sh recorded as tested. On a
-#    difference, or without a readable record, the drop-in is moved aside (stock lock screen), the
+#    versions of PACKAGES (from the package database: rpm, pacman, dpkg or the Nix store; cached by
+#    the database's size and time) and the lock-screen package files (sha256) are compared with what
+#    fusion-config.sh recorded as tested. On a difference, without a readable record, or when no
+#    package database reports the versions, the drop-in is moved aside (stock lock screen), the
 #    decoration becomes the Plasma Fusion Aurorae theme of the current variant (-Left and its button
 #    lists for ButtonStyle=LeftCircles), the navigation effect is switched off, the desktop becomes
 #    Plasma's Folder View (org.kde.plasma.folder: the same keys, so icons and cards stay) and one
@@ -55,11 +56,36 @@
 # limits its run time). Log: ~/.local/state/plasma-fusion/gate.log.
 #
 # Test hooks (never set in a real session): PF_GATE_FAKE_VERSIONS="kwin=6.8.0 kscreenlocker=6.8.0"
-# replaces installed versions in memory (never cached); PF_GATE_RPM names the rpm program.
+# replaces installed versions in memory (never cached); PF_GATE_RPM names the rpm program;
+# PF_GATE_ROOT is put in front of the package databases' paths and the Nix system profile.
 
-PACKAGES=(plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative)
-# Upstream version only: a distribution rebuild (-2.fc44) keeps the interfaces Fusion uses.
+# The package databases, in this order: the first that knows one of its packages answers (a foreign
+# package manager installed next to the system's has none of them). Each names the packages its own
+# way, in the same order. Versions are upstream only: a distribution rebuild (-2.fc44, pkgrel,
+# Debian revision, epoch) keeps the interfaces Fusion uses.
+#   rpm     rpm -q (Fedora)
+#   pacman  pacman -Q (Arch)
+#   dpkg    source packages (Debian): the binary names change between releases
+#   nix     the store path names in the closure of the NixOS system profile
+DBS=(rpm pacman dpkg nix)
+declare -A DB_PACKAGES=(
+  [rpm]="plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative"
+  [pacman]="plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-base qt6-declarative"
+  [dpkg]="plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-base qt6-declarative"
+  [nix]="plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qtbase qtdeclarative"
+)
+declare -A DB_NAME=([rpm]=rpm [pacman]=pacman [dpkg]=dpkg [nix]=Nix)
+# rpm's query format; with the package names it keys the cache (the other databases use their name).
 QUERY_FORMAT='%{NAME}=%{VERSION}\n'
+# Every binary package with its state and source package (the binary names differ between releases).
+# shellcheck disable=SC2016 # dpkg-query's own ${field} syntax
+DPKG_FORMAT='${db:Status-Status} ${source:Package}=${source:Version}\n'
+SYSROOT=${PF_GATE_ROOT:-}
+NIX_SW=$SYSROOT/run/current-system/sw
+# The database the versions come from; rpm until one answers (records and caches without a db=
+# line come from rpm, the only database before).
+DB=rpm
+read -r -a PACKAGES <<<"${DB_PACKAGES[rpm]}"
 FORMAT=1
 DARK=org.plasmafusion.dark.desktop
 LIGHT=org.plasmafusion.light.desktop
@@ -700,7 +726,7 @@ do_writes() {
 # ---------- versions ----------
 
 declare -A TESTED=() CUR=()
-TESTED_STATE=missing TESTED_LOCK='' TESTED_TOOL='' VERS_STATE='' VERS_FAKED=0
+TESTED_STATE=missing TESTED_LOCK='' TESTED_TOOL='' TESTED_DB=rpm VERS_STATE='' VERS_FAKED=0 VERS_ASKED='' STAMP=''
 load_tested() {
   local line fmt='' end='' p
   [ -f "$GATE/tested" ] || { TESTED_STATE=missing; return; }
@@ -708,6 +734,8 @@ load_tested() {
   while IFS= read -r line || [ -n "$line" ]; do
     case $line in
       format=*) fmt=${line#format=} ;;
+      db=*)
+        case ${line#db=} in rpm | pacman | dpkg | nix) TESTED_DB=${line#db=} ;; *) return ;; esac ;;
       "pkg "*=*)
         p=${line#pkg }
         [[ ${p%%=*} =~ $NAME_RE ]] || return
@@ -718,66 +746,139 @@ load_tested() {
     esac
   done <"$GATE/tested"
   [ "$fmt" = "$FORMAT" ] && [ "$end" = 1 ] && [ ${#TESTED[@]} -gt 0 ] && [ -n "$TESTED_LOCK" ] && TESTED_STATE=ok
+  # An earlier check on a system without rpm recorded every version as "no-rpm".
+  for p in "${TESTED[@]}"; do [ "$p" != no-rpm ] || TESTED_STATE=nodb; done
 }
 
-rpmdb_stamp() {
+use_db() { DB=$1; read -r -a PACKAGES <<<"${DB_PACKAGES[$1]}"; }
+# db_tool DB: REPLY = the program that reads that database (return 1: not installed).
+db_tool() {
+  case $1 in
+    rpm) REPLY=${PF_GATE_RPM:-rpm} ;;
+    pacman) REPLY=pacman ;;
+    dpkg) REPLY=dpkg-query ;;
+    nix)
+      [ -e "$NIX_SW" ] || return 1
+      REPLY=nix-store
+      command -v "$REPLY" >/dev/null 2>&1 || REPLY=$NIX_SW/bin/nix-store ;;
+  esac
+  command -v "$REPLY" >/dev/null 2>&1
+}
+# db_stamp DB: REPLY = what every transaction of that database changes (empty: not cached).
+db_stamp() {
   local f
   REPLY=
-  for f in /usr/lib/sysimage/rpm/rpmdb.sqlite /var/lib/rpm/rpmdb.sqlite /var/lib/rpm/Packages; do
-    if [ -e "$f" ]; then
-      REPLY=$(stat -L -c '%i:%s:%Y' "$f" "$f-wal" 2>/dev/null)
-      REPLY=${REPLY//$'\n'/,}
-      return 0
-    fi
-  done
+  case $1 in
+    rpm)
+      for f in "$SYSROOT"/usr/lib/sysimage/rpm/rpmdb.sqlite "$SYSROOT"/var/lib/rpm/rpmdb.sqlite "$SYSROOT"/var/lib/rpm/Packages; do
+        if [ -e "$f" ]; then
+          REPLY=$(stat -L -c '%i:%s:%Y' "$f" "$f-wal" 2>/dev/null)
+          REPLY=${REPLY//$'\n'/,}
+          return 0
+        fi
+      done ;;
+    # One directory per installed package, replaced when it is upgraded or reinstalled.
+    pacman) f=$SYSROOT/var/lib/pacman/local; [ -d "$f" ] && REPLY=$(stat -L -c '%i:%s:%Y' "$f" 2>/dev/null) ;;
+    # Written anew and renamed over by every dpkg run.
+    dpkg) f=$SYSROOT/var/lib/dpkg/status; [ -f "$f" ] && REPLY=$(stat -L -c '%i:%s:%Y' "$f" 2>/dev/null) ;;
+    # The system profile's package set: a new store path whenever a switch changes a package.
+    nix) REPLY=$(readlink "$NIX_SW" 2>/dev/null) ;;
+  esac
+  return 0
 }
-read_cache() { # STAMP
-  local line stamp='' list='' end='' p
-  [ -n "$1" ] && [ -f "$GATE/cache" ] || return 1
+# REPLY = the cache's key besides the stamp: the package names and how they were asked.
+cache_list() {
+  if [ "$DB" = rpm ]; then REPLY="${PACKAGES[*]} $QUERY_FORMAT"; else REPLY="${PACKAGES[*]} $DB"; fi
+}
+read_cache() {
+  local line stamp='' list='' end='' db=rpm p
+  [ -f "$GATE/cache" ] || return 1
   declare -A got=()
   while IFS= read -r line || [ -n "$line" ]; do
     case $line in
+      db=*) db=${line#db=} ;;
       stamp=*) stamp=${line#stamp=} ;;
       list=*) list=${line#list=} ;;
       "pkg "*=*) p=${line#pkg }; [[ ${p%%=*} =~ $NAME_RE ]] || return 1; got[${p%%=*}]=${p#*=} ;;
       end=1) end=1 ;;
     esac
   done <"$GATE/cache"
-  [ "$stamp" = "$1" ] && [ "$list" = "${PACKAGES[*]} $QUERY_FORMAT" ] && [ "$end" = 1 ] || return 1
+  case $db in rpm | pacman | dpkg | nix) ;; *) return 1 ;; esac
+  use_db "$db"
+  db_stamp "$db"
+  [ -n "$REPLY" ] && [ "$stamp" = "$REPLY" ] && [ "$end" = 1 ] || return 1
+  cache_list
+  [ "$list" = "$REPLY" ] || return 1
   for p in "${PACKAGES[@]}"; do [ -n "${got[$p]-}" ] || return 1; CUR[$p]=${got[$p]}; done
   return 0
 }
-query_rpm() {
-  local rpm=${PF_GATE_RPM:-rpm} out rc line n v p
+# CUR from the first package database that knows one of its packages: VERS_STATE ok, with DB,
+# PACKAGES and STAMP that database's. A database that does not answer within 3 s ends the search.
+# VERS_ASKED names the databases asked ("rpm", "rpm and pacman"; empty: none is installed).
+query_versions() {
+  local db prog out rc line n v p asked=()
   declare -A got=()
-  if ! command -v "$rpm" >/dev/null 2>&1; then
-    for p in "${PACKAGES[@]}"; do CUR[$p]=no-rpm; done
+  VERS_STATE=unknown VERS_ASKED='' STAMP=''
+  for db in "${DBS[@]}"; do
+    db_tool "$db" || continue
+    prog=$REPLY
+    use_db "$db"
+    asked+=("${DB_NAME[$db]}")
+    printf -v VERS_ASKED '%s, ' "${asked[@]}"
+    VERS_ASKED=${VERS_ASKED%, }
+    [ ${#asked[@]} -lt 2 ] || VERS_ASKED="${VERS_ASKED%, *} and ${asked[-1]}"
+    # Taken before the query: a transaction during it makes the cache stale, never wrong.
+    db_stamp "$db"
+    STAMP=$REPLY
+    case $db in
+      rpm) out=$(LC_ALL=C timeout 3 "$prog" -q --qf "$QUERY_FORMAT" "${PACKAGES[@]}" 2>/dev/null) ;;
+      pacman) out=$(LC_ALL=C timeout 3 "$prog" -Q "${PACKAGES[@]}" 2>/dev/null) ;;
+      dpkg) out=$(LC_ALL=C timeout 3 "$prog" -W -f "$DPKG_FORMAT" 2>/dev/null) ;;
+      nix) out=$(LC_ALL=C timeout 3 "$prog" --query --requisites "$NIX_SW" 2>/dev/null) ;;
+    esac
+    rc=$?
+    [ "$rc" -lt 124 ] || return 1
+    got=()
+    while IFS= read -r line; do
+      case $db in
+        rpm) [[ $line == *=* ]] || continue; n=${line%%=*} v=${line#*=} ;;
+        # name epoch:version-pkgrel
+        pacman) [[ $line == *" "* ]] || continue; n=${line%% *} v=${line#* }; v=${v#*:}; v=${v%-*} ;;
+        # status source=epoch:version-revision; a removed package can keep its configuration files
+        dpkg)
+          case $line in "not-installed "* | "config-files "* | "half-installed "*) continue ;; esac
+          line=${line#* }
+          [[ $line == *=* ]] || continue
+          n=${line%%=*} v=${line#*=}; v=${v#*:}; [[ $v != *-* ]] || v=${v%-*} ;;
+        # /nix/store/HASH-name-version[-output]: the name ends before the first "-digit"
+        nix)
+          line=${line##*/}; line=${line#*-}
+          n=${line%%-[0-9]*}
+          [ "$n" != "$line" ] || continue
+          v=${line#"$n"-}; v=${v%%-*} ;;
+      esac
+      [[ $n =~ $NAME_RE ]] && [[ " ${PACKAGES[*]} " == *" $n "* ]] || continue
+      if [ -n "${got[$n]-}" ] && [[ ,${got[$n]}, != *",$v,"* ]]; then got[$n]+=",$v"; else got[$n]=$v; fi
+    done <<<"$out"
+    # A database that knows none of them belongs to another package manager: ask the next.
+    [ ${#got[@]} -gt 0 ] || continue
+    for p in "${PACKAGES[@]}"; do CUR[$p]=${got[$p]:-absent}; done
     VERS_STATE=ok
     return 0
-  fi
-  out=$(LC_ALL=C timeout 3 "$rpm" -q --qf "$QUERY_FORMAT" "${PACKAGES[@]}" 2>/dev/null)
-  rc=$?
-  [ "$rc" -lt 124 ] || { VERS_STATE=unknown; return 1; }
-  while IFS= read -r line; do
-    [[ $line == *=* ]] || continue
-    n=${line%%=*} v=${line#*=}
-    [[ $n =~ $NAME_RE ]] || continue
-    if [ -n "${got[$n]-}" ] && [[ ,${got[$n]}, != *",$v,"* ]]; then got[$n]+=",$v"; else got[$n]=$v; fi
-  done <<<"$out"
-  [ ${#got[@]} -gt 0 ] || { VERS_STATE=unknown; return 1; }
-  for p in "${PACKAGES[@]}"; do CUR[$p]=${got[$p]:-absent}; done
-  VERS_STATE=ok
+  done
+  return 1
 }
 current_versions() {
-  local stamp kv p
+  local kv p
   [ -n "$VERS_STATE" ] && return 0
-  rpmdb_stamp
-  stamp=$REPLY
-  if [ "$MODE" != deploy ] && read_cache "$stamp"; then
+  if [ "$MODE" != deploy ] && read_cache; then
     VERS_STATE=ok
-  elif query_rpm && [ -n "$stamp" ] && [ "$DRY" = 0 ]; then
+  elif query_versions && [ -n "$STAMP" ] && [ "$DRY" = 0 ]; then
+    cache_list
     [ -d "$GATE" ] || mkdir -p "$GATE" 2>/dev/null
-    { printf 'format=%s\nstamp=%s\nlist=%s\n' "$FORMAT" "$stamp" "${PACKAGES[*]} $QUERY_FORMAT"
+    { printf 'format=%s\n' "$FORMAT"
+      [ "$DB" = rpm ] || printf 'db=%s\n' "$DB"
+      printf 'stamp=%s\nlist=%s\n' "$STAMP" "$REPLY"
       for p in "${PACKAGES[@]}"; do printf 'pkg %s=%s\n' "$p" "${CUR[$p]}"; done
       printf 'end=1\n'; } >"$GATE/cache.tmp" 2>/dev/null && mv -f "$GATE/cache.tmp" "$GATE/cache"
   fi
@@ -786,6 +887,11 @@ current_versions() {
     CUR[${kv%%=*}]=${kv#*=}
     VERS_FAKED=1
   done
+}
+# REPLY = why the installed versions are unknown.
+vers_why() {
+  if [ -n "$VERS_ASKED" ]; then REPLY="$VERS_ASKED could not report the installed versions"
+  else REPLY="no package database (rpm, pacman, dpkg or Nix) was found"; fi
 }
 
 # UPDATE_OK: installed versions equal the tested ones; LOCK_OK: also the lock-screen files.
@@ -801,10 +907,15 @@ check_versions() {
   case $TESTED_STATE in
     missing) UPDATE_OK=0; RECORD="there is no record of it" ;;
     corrupt) UPDATE_OK=0; RECORD="its record is unreadable" ;;
+    nodb) UPDATE_OK=0; RECORD="it was recorded without a package database" ;;
   esac
   if [ "$VERS_STATE" != ok ]; then
     UPDATE_OK=0
-    RECORD="${RECORD:+$RECORD; }rpm could not report the installed versions"
+    vers_why
+    RECORD="${RECORD:+$RECORD; }$REPLY"
+  elif [ "$TESTED_STATE" = ok ] && [ "$TESTED_DB" != "$DB" ]; then
+    UPDATE_OK=0
+    RECORD="it was recorded with ${DB_NAME[$TESTED_DB]}, the versions now come from ${DB_NAME[$DB]}"
   elif [ "$TESTED_STATE" = ok ]; then
     for p in "${PACKAGES[@]}"; do
       [ "${TESTED[$p]-}" = "${CUR[$p]}" ] && continue
@@ -1030,7 +1141,12 @@ run_deploy() {
   current_versions
   [ "$VERS_FAKED" = 0 ] || say "note: PF_GATE_FAKE_VERSIONS is set; recording the fake versions"
   if [ "$VERS_STATE" != ok ]; then
-    echo "  login check: could not read the installed versions with rpm; the tested record stays as it was" >&2
+    if [ -n "$VERS_ASKED" ]; then
+      echo "  login check: could not read the installed versions with $VERS_ASKED; the tested record stays as it was" >&2
+    else
+      vers_why
+      echo "  login check: could not read the installed versions: $REPLY; the tested record stays as it was" >&2
+    fi
     rc=1
   fi
   if lockshell_dir; then lockshell_hash "$REPLY"; lock=$REPLY; fi
@@ -1041,6 +1157,7 @@ run_deploy() {
       mkdir -p "$GATE" || return 1
       { printf 'format=%s\n' "$FORMAT"
         printf 'created=%(%Y-%m-%dT%H:%M:%S%z)T\n' -1
+        [ "$DB" = rpm ] || printf 'db=%s\n' "$DB"
         for p in "${PACKAGES[@]}"; do printf 'pkg %s=%s\n' "$p" "${CUR[$p]}"; done
         printf 'lockshell-hash=%s\n' "$lock"
         # Named in the notification as the way back (fusion-config.sh passes its own path).

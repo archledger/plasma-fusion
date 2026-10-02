@@ -5,12 +5,15 @@
 # Unit tests of the login check (tools/device/gate/plasma-fusion-gate.sh) against throw-away HOME
 # trees, and of what the "My previous desktop" generator reads (tests/previous_theme_test.py). Test
 # tooling only, not installed. Never touches the caller's HOME, session or systemd: every run is
-# `env -i` with a HOME, XDG_RUNTIME_DIR and fake rpm below BASE.
+# `env -i` with a HOME, XDG_RUNTIME_DIR, package databases and fake package tools below BASE.
+# Nothing the machine has installed counts: PATH holds its programs without rpm, pacman,
+# dpkg-query and nix-store, the package databases are below PF_GATE_ROOT, and the system data,
+# configuration and plugin directories are empty ones.
 #
 #   gate-unit.sh BASE [--real-rpm]
 #
 # BASE must be a scratch directory on disk (not /tmp); it is emptied first. --real-rpm uses the
-# machine's rpm for the timing runs (the other cases always use a fake rpm).
+# machine's rpm and rpm database for the timing runs (the other cases always use fakes).
 set -u
 BASE=${1:?scratch directory}
 # The cases change directory, so a relative BASE is made absolute first.
@@ -34,10 +37,21 @@ check() { # DESCRIPTION COMMAND...
   if "$@"; then ok "$d"; else bad "$d"; fi
 }
 
-# Fake rpm: answers -q --qf '%{NAME}=%{VERSION}\n' from $BASE/versions.
+# The machine's programs without its package tools (the cases add fakes in front).
+SYSBIN=$BASE/sysbin
+mkdir -p "$SYSBIN"
+[ /bin -ef /usr/bin ] || find /bin -maxdepth 1 -mindepth 1 \( -type f -o -type l \) -exec ln -s -t "$SYSBIN" {} +
+find /usr/bin -maxdepth 1 -mindepth 1 \( -type f -o -type l \) -exec ln -sf -t "$SYSBIN" {} +
+rm -f "$SYSBIN/rpm" "$SYSBIN/pacman" "$SYSBIN/dpkg-query" "$SYSBIN/nix-store"
+# Empty system data and configuration directories; an rpm database below ROOT (for its stamp).
+mkdir -p "$BASE/xdg-data" "$BASE/xdg-config" "$BASE/root/usr/lib/sysimage/rpm"
+: >"$BASE/root/usr/lib/sysimage/rpm/rpmdb.sqlite"
+
+# Fake rpm: answers -q --qf '%{NAME}=%{VERSION}\n' from $BASE/versions; logs each call.
 cat >"$BASE/fake-rpm" <<'EOF'
 #!/bin/bash
 v=$(dirname "$0")/versions
+echo "$*" >>"$(dirname "$0")/rpm-calls"
 [ -f "$(dirname "$0")/rpm-hang" ] && sleep 30
 shift 3
 rc=0
@@ -63,14 +77,18 @@ H=
 FAKE=
 TOOL=
 RPM=$BASE/fake-rpm
+# The package databases' root (PF_GATE_ROOT) and directories of fake package tools put in front
+# of PATH (the backend cases set them).
+ROOT=$BASE/root
+FAKEBIN=
 # The compiled decoration as the check looks for it; the system's plugin directories are left out
 # (PF_GATE_SYSTEM_PLUGINS), so an installed plasma-fusion-decoration does not change the cases.
 PLUGINS=$BASE/plugins
 mkdir -p "$PLUGINS/org.kde.kdecoration3" && : >"$PLUGINS/org.kde.kdecoration3/org.plasmafusion.decoration.so"
 gate() { # MODE... in the current HOME $H
-  env -i HOME="$H" PATH=/usr/bin:/bin XDG_RUNTIME_DIR="$BASE/run" XDG_CONFIG_DIRS=/etc/xdg \
-    XDG_DATA_DIRS=/usr/local/share:/usr/share LANG="${GATE_LANG:-C.UTF-8}" PF_GATE_RPM="$RPM" QT_PLUGIN_PATH="$PLUGINS" \
-    PF_GATE_SYSTEM_PLUGINS= \
+  env -i HOME="$H" PATH="${FAKEBIN:+$FAKEBIN:}$SYSBIN" XDG_RUNTIME_DIR="$BASE/run" XDG_CONFIG_DIRS="$BASE/xdg-config" \
+    XDG_DATA_DIRS="$BASE/xdg-data" LANG="${GATE_LANG:-C.UTF-8}" PF_GATE_RPM="$RPM" QT_PLUGIN_PATH="$PLUGINS" \
+    PF_GATE_SYSTEM_PLUGINS= PF_GATE_ROOT="$ROOT" \
     ${FAKE:+PF_GATE_FAKE_VERSIONS="$FAKE"} ${TOOL:+PF_GATE_TOOL="$TOOL"} bash "$ENGINE" "$@"
 }
 kw() { # FILE GROUP KEY VALUE|--delete, user file of $H
@@ -94,7 +112,7 @@ sums() {
 }
 kread() { kreadconfig6 --file "$H/.config/$1" --group "$2" --key "$3"; } # KConfig's own reading
 # The value in effect, as the session reads it (user file over ~/.config/kdedefaults).
-keff() { XDG_CONFIG_HOME="$H/.config" XDG_CONFIG_DIRS="$H/.config/kdedefaults:/etc/xdg" kreadconfig6 --file "$1" --group "$2" --key "$3"; }
+keff() { XDG_CONFIG_HOME="$H/.config" XDG_CONFIG_DIRS="$H/.config/kdedefaults:$BASE/xdg-config" kreadconfig6 --file "$1" --group "$2" --key "$3"; }
 
 # A HOME configured the way fusion-config.sh leaves it, with the compiled decoration chosen in the
 # settings module. $1 directory, $2 variant (Dark/Light)
@@ -247,10 +265,6 @@ check "b5: user's own decoration kept" [ "$(get kwinrc org.kde.kdecoration2 libr
 check "b5: lock screen back" [ -f "$H/.config/$DROPIN_REL" ]
 
 # b6: the compiled decoration is no longer installed when versions match again: stays Aurorae
-# (only where it is not installed system-wide, which the check always looks at too)
-if [ -e /usr/lib64/qt6/plugins/org.kde.kdecoration3/org.plasmafusion.decoration.so ]; then
-  echo "SKIP b6: org.plasmafusion.decoration.so is installed system-wide here"
-else
 make_home "$BASE/b6"
 gate deploy >/dev/null 2>&1
 FAKE="kwin=6.8.0"
@@ -261,7 +275,6 @@ gate login
 mv "$PLUGINS.off" "$PLUGINS"
 check "b6: without the plugin the title bars stay Aurorae" [ "$(keff kwinrc org.kde.kdecoration2 library)" = org.kde.kwin.aurorae.v2 ]
 check "b6: lock screen back" [ -f "$H/.config/$DROPIN_REL" ]
-fi
 
 # b7: a Global Theme that names the compiled decoration in kdedefaults (no user key): the check
 # writes the Aurorae theme to the user file and a matching login removes it again.
@@ -641,9 +654,247 @@ mkdir -p "$BASE/g"
 check "g: previous-theme.py reads KConfig text, Global Theme defaults and metadata.json (previous_theme_test.py)" \
   env -i PATH=/usr/bin:/bin HOME="$BASE/g" TMPDIR="$BASE/g" python3 "$HERE/previous_theme_test.py" "$HERE/../previous-theme.py"
 
+# ---------- (v) package databases: pacman, dpkg, Nix, none ----------
+# Each from a fake tool and a database below its own ROOT; rpm is not installed (RPM empty, not in
+# SYSBIN). A transaction changes what the stamp reads: the pacman directory's time, a new dpkg
+# status file, a new Nix system profile.
+FB=$BASE/fake
+mkdir -p "$FB/pacman" "$FB/dpkg" "$FB/rpm-empty"
+cat >"$FB/pacman/pacman" <<'EOF'
+#!/bin/bash
+# pacman -Q NAME...: "name version" lines from ./versions; exit 1 when one is missing.
+d=$(dirname "$0")
+echo "$*" >>"$d/calls"
+[ -f "$d/hang" ] && sleep 30
+[ "$1" = -Q ] || exit 2
+shift
+rc=0
+for p in "$@"; do
+  line=$(grep -m1 "^$p " "$d/versions")
+  if [ -n "$line" ]; then echo "$line"; else echo "error: package '$p' was not found" >&2; rc=1; fi
+done
+exit $rc
+EOF
+cat >"$FB/dpkg/dpkg-query" <<'EOF'
+#!/bin/bash
+# dpkg-query -W -f FORMAT: ./lines, for the state and source format the check asks for.
+d=$(dirname "$0")
+echo "$*" >>"$d/calls"
+[ "$1" = -W ] && [ "$2" = -f ] && [ "$3" = '${db:Status-Status} ${source:Package}=${source:Version}\n' ] || exit 2
+cat "$d/lines"
+EOF
+cat >"$FB/nix-store" <<'EOF'
+#!/bin/bash
+# nix-store --query --requisites PROFILE: the closure listed in the profile's store path.
+echo "$*" >>"$PF_GATE_ROOT/nix-calls"
+[ "$1" = --query ] && [ "$2" = --requisites ] || exit 2
+sp=$(readlink -f "$3") || exit 1
+cat "$sp/closure"
+EOF
+chmod +x "$FB/pacman/pacman" "$FB/dpkg/dpkg-query" "$FB/nix-store"
+cp "$BASE/fake-rpm" "$FB/rpm-empty/rpm" && : >"$FB/rpm-empty/versions"
+pacman_versions() { # KWIN-VERSION
+  printf '%s\n' 'plasma-workspace 6.7.5-1' 'plasma-desktop 6.7.5-1' "kwin 1:$1-2" 'kscreenlocker 6.7.5-1' \
+    'libplasma 6.7.5-1' 'kdecoration 6.7.5-1' 'qt6-base 6.11.2-3' 'qt6-declarative 6.11.2-1' >"$FB/pacman/versions"
+}
+dpkg_status() { # KWIN-VERSION: what dpkg-query reports, and a new status file (a dpkg run)
+  printf '%s\n' 'installed bash=5.3-1' 'installed plasma-workspace=4:6.7.4-2' 'installed plasma-workspace=4:6.7.4-2' \
+    'installed plasma-desktop=4:6.7.4-1' "installed kwin=4:$1-2" 'config-files kwin=4:6.3.6-1' \
+    'installed kscreenlocker=6.7.4-1' 'installed libplasma=6.7.4-2' 'installed kdecoration=4:6.7.4-1' \
+    'installed qt6-base=6.11.2+dfsg-5' 'installed qt6-declarative=6.11.2+dfsg-3' 'not-installed kwin-x11=' >"$FB/dpkg/lines"
+  mkdir -p "$ROOT/var/lib/dpkg"
+  echo "$1" >"$ROOT/var/lib/dpkg/status.new" && mv -f "$ROOT/var/lib/dpkg/status.new" "$ROOT/var/lib/dpkg/status"
+}
+nix_system() { # N PLASMA-VERSION: system profile N, current, with that Plasma in its closure
+  local sp n
+  sp=$ROOT/nix/store/$(printf '%032d' "$1")-system-path
+  mkdir -p "$sp/bin" "$ROOT/run" "$ROOT/nix/store/$(printf '%032d' "$1")-nixos-system"
+  cp "$FB/nix-store" "$sp/bin/nix-store"
+  for n in glibc-2.42-47 "kwin-$2" "kwin-$2-dev" kwin-x11-6.5.0 "plasma-workspace-$2" "plasma-desktop-$2" \
+    "kscreenlocker-$2" "libplasma-$2" "kdecoration-$2" qtbase-6.11.2 qtdeclarative-6.11.2 source system-path; do
+    echo "/nix/store/$(printf '%s' "$n" | sha256sum | cut -c1-32)-$n"
+  done >"$sp/closure"
+  ln -sfn "$sp" "$ROOT/nix/store/$(printf '%032d' "$1")-nixos-system/sw"
+  ln -sfn "$ROOT/nix/store/$(printf '%032d' "$1")-nixos-system" "$ROOT/run/current-system"
+}
+
+# v1: pacman (Arch): epoch and pkgrel dropped, Arch's Qt names, cached until the database changes.
+make_home "$BASE/v1"
+S=$H/.local/state/plasma-fusion/gate
+RPM='' FAKEBIN=$FB/pacman ROOT=$BASE/root-pacman
+mkdir -p "$ROOT/var/lib/pacman/local/kwin-6.7.5-2"
+pacman_versions 6.7.5
+gate deploy >"$BASE/v1.deploy.log" 2>&1
+check "v1: pacman: deploy records the database" grep -qx 'db=pacman' "$S/tested"
+check "v1: pacman: upstream version (epoch and pkgrel dropped)" grep -qx 'pkg kwin=6.7.5' "$S/tested"
+check "v1: pacman: Arch's Qt package names" grep -qx 'pkg qt6-base=6.11.2' "$S/tested"
+before=$(sums)
+gate login
+check "v1: pacman: matching login changes nothing" [ "$(sums)" = "$before" ]
+check "v1: pacman: log 'no change'" grep -q 'versions=tested lock=tested; no change' "$H/.local/state/plasma-fusion/gate.log"
+check "v1: pacman: cache names the database" grep -qx 'db=pacman' "$S/cache"
+n=$(wc -l <"$FB/pacman/calls")
+gate login
+check "v1: pacman: database unchanged: pacman not run" [ "$(wc -l <"$FB/pacman/calls")" = "$n" ]
+pacman_versions 6.8.0
+mv "$ROOT/var/lib/pacman/local/kwin-6.7.5-2" "$ROOT/var/lib/pacman/local/kwin-6.8.0-2"
+touch -d "@$((EPOCHSECONDS + 60))" "$ROOT/var/lib/pacman/local"
+gate login
+check "v1: pacman: kwin upgrade: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v1: pacman: notification names it" grep -q 'kwin 6.7.5 → 6.8.0' "$S/notify"
+gate deploy >/dev/null 2>&1
+check "v1: pacman: deploy records the new version" grep -qx 'pkg kwin=6.8.0' "$S/tested"
+check "v1: pacman: and the lock screen is back" [ -f "$H/.config/$DROPIN_REL" ]
+: >"$FB/pacman/hang"
+rm -f "$S/cache"
+t=${EPOCHREALTIME/[.,]/}
+gate login
+rc=$?
+t=$(((${EPOCHREALTIME/[.,]/} - t) / 1000))
+rm -f "$FB/pacman/hang"
+check "v1: hanging pacman: exit 0 ($rc)" [ "$rc" = 0 ]
+check "v1: hanging pacman: bounded (${t} ms < 4500)" [ "$t" -lt 4500 ]
+check "v1: hanging pacman: falls back" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v1: hanging pacman: the log says so" grep -q 'pacman could not report the installed versions' "$H/.local/state/plasma-fusion/gate.log"
+
+# v2: dpkg (Debian): source packages and versions, epoch and revision dropped, configuration files
+# of a removed package ignored.
+make_home "$BASE/v2"
+S=$H/.local/state/plasma-fusion/gate
+RPM='' FAKEBIN=$FB/dpkg ROOT=$BASE/root-dpkg
+dpkg_status 6.7.4
+gate deploy >/dev/null 2>&1
+check "v2: dpkg: deploy records the database" grep -qx 'db=dpkg' "$S/tested"
+check "v2: dpkg: kwin from its source package, a removed one's configuration ignored" grep -qx 'pkg kwin=6.7.4' "$S/tested"
+check "v2: dpkg: a binNMU binary gives its source version" grep -qx 'pkg plasma-desktop=6.7.4' "$S/tested"
+check "v2: dpkg: Debian's upstream version of Qt" grep -qx 'pkg qt6-base=6.11.2+dfsg' "$S/tested"
+before=$(sums)
+gate login
+check "v2: dpkg: matching login changes nothing" [ "$(sums)" = "$before" ]
+n=$(wc -l <"$FB/dpkg/calls")
+gate login
+check "v2: dpkg: status unchanged: dpkg-query not run" [ "$(wc -l <"$FB/dpkg/calls")" = "$n" ]
+dpkg_status 6.8.0
+gate login
+check "v2: dpkg: kwin upgrade: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v2: dpkg: notification names it" grep -q 'kwin 6.7.4 → 6.8.0' "$S/notify"
+dpkg_status 6.7.4
+gate login
+check "v2: dpkg: downgrade back: the lock screen is back" [ -f "$H/.config/$DROPIN_REL" ]
+
+# v3: Nix (NixOS): store names in the system profile's closure; kwin-x11 is not kwin; nix-store
+# from the system profile when it is not in PATH.
+make_home "$BASE/v3"
+S=$H/.local/state/plasma-fusion/gate
+RPM='' FAKEBIN='' ROOT=$BASE/root-nix
+nix_system 1 6.6.6
+gate deploy >/dev/null 2>&1
+check "v3: Nix: deploy records the database" grep -qx 'db=nix' "$S/tested"
+check "v3: Nix: kwin from its store name (not kwin-x11, not the dev output)" grep -qx 'pkg kwin=6.6.6' "$S/tested"
+check "v3: Nix: Qt from qtbase" grep -qx 'pkg qtbase=6.11.2' "$S/tested"
+before=$(sums)
+gate login
+check "v3: Nix: matching login changes nothing" [ "$(sums)" = "$before" ]
+n=$(wc -l <"$ROOT/nix-calls")
+gate login
+check "v3: Nix: same system profile: nix-store not run" [ "$(wc -l <"$ROOT/nix-calls")" = "$n" ]
+nix_system 2 6.7.5
+gate login
+check "v3: Nix: a switch to Plasma 6.7.5: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v3: Nix: notification names it" grep -q 'kwin 6.6.6 → 6.7.5' "$S/notify"
+nix_system 1 6.6.6
+gate login
+check "v3: Nix: rollback: the lock screen is back" [ -f "$H/.config/$DROPIN_REL" ]
+
+# v4: no package database: never recorded as tested, the version-bound parts stay off.
+make_home "$BASE/v4"
+S=$H/.local/state/plasma-fusion/gate
+RPM='' FAKEBIN='' ROOT=$BASE/root-none
+mkdir -p "$ROOT"
+gate deploy >"$BASE/v4.deploy.log" 2>&1
+check "v4: no database: deploy fails" [ $? != 0 ]
+check "v4: no database: nothing recorded as tested" [ ! -e "$S/tested" ]
+check "v4: no database: deploy says why" grep -q 'no package database (rpm, pacman, dpkg or Nix) was found' "$BASE/v4.deploy.log"
+gate login
+check "v4: no database: login exits 0" [ $? = 0 ]
+check "v4: no database: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v4: no database: Aurorae title bars" [ "$(keff kwinrc org.kde.kdecoration2 library)" = org.kde.kwin.aurorae.v2 ]
+check "v4: no database: notification says why" grep -q 'no package database (rpm, pacman, dpkg or Nix) was found' "$S/notify"
+rm -f "$S/notify"
+gate login
+check "v4: no database: no second notification" [ ! -e "$S/notify" ]
+# v4b: recorded with rpm, then no database answers.
+make_home "$BASE/v4b"
+S=$H/.local/state/plasma-fusion/gate
+RPM=$BASE/fake-rpm FAKEBIN='' ROOT=$BASE/root
+gate deploy >/dev/null 2>&1
+RPM='' ROOT=$BASE/root-none
+gate login
+check "v4b: database gone: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v4b: database gone: notification says why" grep -q 'cannot tell which Plasma it was checked with (no package database' "$S/notify"
+# v4c: a record of the earlier check on a system without rpm (every version "no-rpm").
+make_home "$BASE/v4c"
+S=$H/.local/state/plasma-fusion/gate
+RPM='' FAKEBIN=$FB/pacman ROOT=$BASE/root-pacman
+gate deploy >/dev/null 2>&1
+lock=$(sed -n 's/^lockshell-hash=//p' "$S/tested")
+{ printf 'format=1\ncreated=2026-10-01T10:00:00+0000\n'
+  for p in plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative; do echo "pkg $p=no-rpm"; done
+  printf 'lockshell-hash=%s\nend=1\n' "$lock"; } >"$S/tested"
+gate login
+check "v4c: 'no-rpm' record: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v4c: 'no-rpm' record: notification says why" grep -q 'it was recorded without a package database' "$S/notify"
+gate deploy >/dev/null 2>&1
+gate login
+check "v4c: recorded again with pacman: lock screen back" [ -f "$H/.config/$DROPIN_REL" ]
+
+# v5: an rpm that knows none of the packages (installed next to pacman) does not answer.
+make_home "$BASE/v5"
+S=$H/.local/state/plasma-fusion/gate
+RPM=$FB/rpm-empty/rpm FAKEBIN=$FB/pacman ROOT=$BASE/root-pacman
+gate deploy >/dev/null 2>&1
+check "v5: foreign rpm: pacman answers" grep -qx 'db=pacman' "$S/tested"
+# v6: recorded with rpm, the versions now come from pacman: not comparable.
+make_home "$BASE/v6"
+S=$H/.local/state/plasma-fusion/gate
+RPM=$BASE/fake-rpm FAKEBIN='' ROOT=$BASE/root
+gate deploy >/dev/null 2>&1
+RPM='' FAKEBIN=$FB/pacman ROOT=$BASE/root-pacman
+gate login
+check "v6: another database: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v6: another database: notification says why" grep -q 'it was recorded with rpm, the versions now come from pacman' "$S/notify"
+
+# v7: Fedora, recorded by the engine before the package database backends: the first login with
+# this one changes nothing and keeps using the cache (both read the machine's rpm database stamp).
+OLD_ENGINE=$BASE/engine-a95f707.sh
+if git -C "$REPO" show a95f707:tools/device/gate/plasma-fusion-gate.sh >"$OLD_ENGINE" 2>/dev/null; then
+  make_home "$BASE/v7"
+  S=$H/.local/state/plasma-fusion/gate
+  RPM=$BASE/fake-rpm FAKEBIN='' ROOT=''
+  NEW_ENGINE=$ENGINE ENGINE=$OLD_ENGINE
+  gate deploy >/dev/null 2>&1
+  gate login
+  ENGINE=$NEW_ENGINE
+  before=$(sums) tested=$(cat "$S/tested") cache=$(cat "$S/cache" 2>/dev/null) n=$(wc -l <"$BASE/rpm-calls")
+  gate login
+  check "v7: old record: login 'no change'" bash -c '[[ $(tail -n 1 "$1") == *"versions=tested lock=tested; no change"* ]]' _ "$H/.local/state/plasma-fusion/gate.log"
+  check "v7: old record: no config change" [ "$(sums)" = "$before" ]
+  check "v7: old record kept as it was" [ "$(cat "$S/tested")" = "$tested" ]
+  if [ -n "$cache" ]; then
+    check "v7: old cache still used (rpm not run)" [ "$(wc -l <"$BASE/rpm-calls")" = "$n" ]
+    check "v7: old cache kept as it was" [ "$(cat "$S/cache")" = "$cache" ]
+  else
+    echo "SKIP v7 cache: no rpm database on this machine (neither engine caches)"
+  fi
+else
+  echo "SKIP v7: a95f707 is not in this repository"
+fi
+RPM=$BASE/fake-rpm FAKEBIN='' ROOT=$BASE/root
+
 # ---------- (e) timing ----------
 make_home "$BASE/t"
-[ "$REAL_RPM" = 1 ] && RPM=rpm
+FAKEBIN='' RPM=$BASE/fake-rpm ROOT=$BASE/root
+if [ "$REAL_RPM" = 1 ]; then RPM=$(command -v rpm) ROOT=; fi
 gate deploy >/dev/null 2>&1
 gate login # fills the cache
 times=()
@@ -653,7 +904,7 @@ for _ in $(seq 1 21); do
   times+=($(((${EPOCHREALTIME/[.,]/} - t) / 1000)))
 done
 mapfile -t sorted < <(printf '%s\n' "${times[@]}" | sort -n)
-echo "timing (match path, drop-in and compiled decoration on, $([ "$RPM" = rpm ] && echo real || echo fake) rpm, cached): median ${sorted[10]} ms, max ${sorted[20]} ms (wall time incl. env -i and bash start)"
+echo "timing (match path, drop-in and compiled decoration on, $([ "$REAL_RPM" = 1 ] && echo real || echo fake) rpm, cached): median ${sorted[10]} ms, max ${sorted[20]} ms (wall time incl. env -i and bash start)"
 check "timing: median under 50 ms" [ "${sorted[10]}" -lt 50 ]
 rm -f "$H/.local/state/plasma-fusion/gate/cache"
 t=${EPOCHREALTIME/[.,]/}
