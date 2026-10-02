@@ -4,8 +4,16 @@ A KDE Plasma 6 desktop built from the Plasma Fusion design concept: ideas from m
 GNOME and Windows 11 on top of Plasma's Global Theme structure, in a dark and a light scheme,
 with a tablet posture for convertibles.
 
-`design/boards/` holds the design canvas sources (one `.dc.html` file per board). They are
-the reference for every colour, size and drawing used here.
+<table>
+<tr>
+<td><a href="design/previews/Main.webp"><img src="design/previews/Main.webp" width="420" alt="Plasma Fusion desktop, dark"></a></td>
+<td><a href="design/previews/MainLight.webp"><img src="design/previews/MainLight.webp" width="420" alt="Plasma Fusion desktop, light"></a></td>
+</tr>
+</table>
+
+These are design boards, the reference for every colour, size and drawing used here. All 25
+boards are pictured in [`design/`](design/README.md), with their canvas sources in
+`design/boards/`.
 
 ## Status
 
