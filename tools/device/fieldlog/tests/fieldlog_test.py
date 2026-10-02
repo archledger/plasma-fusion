@@ -377,6 +377,28 @@ class Journal(unittest.TestCase):
         self.assertNotIn("chro", ring)
         self.assertIn("launcher: first results for", ring)
 
+    def test_failed_units_by_result(self):
+        # 2026-09-27 on the laptop: kded6 failed once with exit-code, then with core-dump; the table
+        # showed every failure under the first result (review of 2026-10-02).
+        state = fresh_dir("units-state")
+        os.environ["XDG_STATE_HOME"] = str(state)
+        f = fl.FieldLog()
+        for ts, result in ((1790956900, "exit-code"), (1790957000, "core-dump"), (1790957100, "core-dump")):
+            fl.handle_journal_line(f, jline("systemd", f"plasma-kded6.service: Failed with result '{result}'.", ts=ts,
+                                            USER_UNIT="plasma-kded6.service", MESSAGE_ID=fl.MSG_FAILURE_RESULT,
+                                            UNIT_RESULT=result))
+        f.systemctl = lambda *a: ("plasma-kded6.service loaded failed failed KDE Daemon 6\n"
+                                  "plasma-polkit-agent.service loaded failed failed KDE PolicyKit Agent\n")
+        f.check_units(1790957200)
+        f.check_units(1790960800)  # an hour later: still failed, not counted again
+        f.log.flush()
+        text = fl.build_digest("2026-10-02", f.sdir)
+        self.assertIn("| 1 | 16:01 | plasma-kded6.service | exit-code |", text)
+        self.assertIn("| 2 | 16:03-16:05 | plasma-kded6.service | core-dump |", text)
+        self.assertIn("| 1 | 16:06 | plasma-polkit-agent.service | still failed |", text)
+        self.assertNotIn("plasma-kded6.service | still failed", text)
+        self.assertIn("| Failed or crashed Plasma units | 4 |", text)
+
     def test_journalctl_arguments_after_a_restart(self):
         # The follow goes on after the last line read, not after the last saved cursor (up to
         # 10 minutes older), and reads up to 3 days back (review of 2026-10-02).

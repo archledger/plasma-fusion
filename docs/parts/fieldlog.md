@@ -124,9 +124,11 @@ and a count.
   changed" lines.
 - **Posture**: the `plasmafusion-tablet` KWin script's "posture tablet|laptop" lines.
 - **Units**: user manager messages for `plasma-*` units (Plasma's and Plasma Fusion's): failed with a
-  result, the main process dumped core, exited non-zero or was killed by a signal other than
+  result (counted per unit and result: `exit-code`, `core-dump`, `signal`, `timeout`, ...), the main
+  process dumped core, exited non-zero or was killed by a signal other than
   TERM/INT/HUP/KILL/PIPE, restart scheduled; and `systemctl --user list-units --state=failed
-  'plasma-*'` at start and every hour.
+  'plasma-*'` a minute after the start (once the journal has been read back) and every hour: a
+  failed unit that the journal did not show that day is listed once, as "still failed".
 
 ### Plasma Fusion errors
 

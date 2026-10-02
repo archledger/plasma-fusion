@@ -1158,11 +1158,16 @@ class FieldLog:
             return ""
 
     def check_units(self, now):
+        """Failed plasma-* units the journal did not show this day (one that failed while the recorder
+        was stopped and the journal was not read back so far): one event per unit and day."""
         out = self.systemctl("list-units", "--state=failed", "--plain", "--no-legend", "plasma-*")
+        seen = self.log._seen(local_day(now))
+        known = {key.split("|")[0] for kind, key in seen if kind == "unit-failed"}
         for line in out.splitlines():
             unit = line.split()[0] if line.split() else ""
-            if unit.startswith("plasma-") and unit != UNIT:
-                self.log.emit("unit-failed", key=unit, ts=now, unit=unit, result="failed", source="list")
+            if unit.startswith("plasma-") and unit != UNIT and unit not in known:
+                self.log.emit("unit-failed", key=f"{unit}|still failed", ts=now, unit=unit, result="still failed",
+                              source="list")
 
     def check_login(self, now):
         out = self.systemctl("show", "-p", "ActiveEnterTimestamp", "--timestamp=unix", "graphical-session.target")
@@ -1301,12 +1306,12 @@ class FieldLog:
                           first=True if self.first_run else None)
             self.poll_coredumps()
             self.check_login(now)
-            self.check_units(now)
             self.poll_gate()
             self.start_journal()
             self.overhead(now, mono)
             day, hour = local_day(now), time.strftime("%H", time.localtime(now))
             next_sample = mono + INTERVAL
+            units_checked = False  # at the first sample: after the journal read back its failures
             next_flush = mono + FLUSH_S
             while not self.stop:
                 mono = time.monotonic()
@@ -1346,6 +1351,9 @@ class FieldLog:
                     self.poll_screens(now)
                     self.poll_coredumps()
                     self.poll_gate()
+                    if not units_checked:
+                        units_checked = True
+                        self.check_units(now)
                 if mono >= next_flush:
                     next_flush = mono + FLUSH_S
                     self.save_state()
@@ -1493,7 +1501,8 @@ def handle_journal_line(fl, line):
                 log.emit("logout", key=str(int(ts)), ts=ts)
         elif unit.startswith("plasma-") and unit != UNIT:
             if mid == MSG_FAILURE_RESULT:
-                log.emit("unit-failed", key=unit, ts=ts, unit=unit, result=d.get("UNIT_RESULT"), source="journal")
+                result = d.get("UNIT_RESULT")
+                log.emit("unit-failed", key=f"{unit}|{result}", ts=ts, unit=unit, result=result, source="journal")
             elif mid == MSG_PROCESS_EXIT:
                 code, status = d.get("EXIT_CODE"), d.get("EXIT_STATUS")
                 if code == "dumped":
