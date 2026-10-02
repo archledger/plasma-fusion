@@ -93,8 +93,8 @@ public:
     // app the gesture returned to is active again (activating it makes the dock dodge away).
     Q_INVOKABLE void showDock();
     // Plasma Fusion (SPLIT.md item 4): the switcher minimized a split pair (it opened, or the home
-    // gesture). It is one card the next time, and when one of the two is activated again (the
-    // dock, a notification), the other comes back into its half.
+    // gesture). It is one card the next time, and in tablet posture, when one of the two is
+    // activated again (the dock, a notification), the other comes back into its half.
     Q_INVOKABLE void rememberPair(KWin::Window *window, KWin::Window *partner);
 
     qreal touchXPosition() const;
@@ -165,7 +165,7 @@ private:
     void invokeEffect();
     void revealDock();
     void updatePen();
-    void restorePartner(Window *window);
+    void restorePartner();
 
     bool m_gestureEnabled{false};
     bool m_tabletMode{false};
@@ -178,8 +178,11 @@ private:
     std::unique_ptr<FusionPenFilter> m_penFilter;
     std::unique_ptr<FusionDockRehide> m_dockRehide;
     std::unique_ptr<FusionTestPen> m_testPen;
-    // split pairs the switcher minimized (rememberPair)
+    // split pairs the switcher minimized in tablet posture (rememberPair), and the app activated
+    // last while there are such pairs (restorePartner)
     QList<std::pair<QPointer<Window>, QPointer<Window>>> m_minimizedPairs;
+    QPointer<Window> m_restoreWindow;
+    QTimer m_restoreTimer;
 
     Status m_status = Status::Inactive;
     bool m_gestureInProgress = false;

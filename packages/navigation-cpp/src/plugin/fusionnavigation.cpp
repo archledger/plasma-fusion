@@ -102,6 +102,11 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
                 m_tabletMode = tabletMode;
                 Q_EMIT tabletModeChanged();
                 updatePen();
+                if (!tabletMode) {
+                    // a split pair from tablet posture does not come back in laptop posture
+                    m_minimizedPairs.clear();
+                    m_restoreTimer.stop();
+                }
             }
         });
     }
@@ -119,7 +124,16 @@ void FusionNavigationState::init(KWin::QuickSceneEffect *parent)
     }
 
     // Plasma Fusion: a split pair the switcher minimized comes back as a pair (SPLIT.md item 4).
-    connect(workspace(), &Workspace::windowActivated, this, &FusionNavigationState::restorePartner);
+    // A moment after the activation: the dock's split drag activates the app, then tiles it.
+    m_restoreTimer.setSingleShot(true);
+    m_restoreTimer.setInterval(300ms);
+    connect(&m_restoreTimer, &QTimer::timeout, this, &FusionNavigationState::restorePartner);
+    connect(workspace(), &Workspace::windowActivated, this, [this](Window *window) {
+        if (m_tabletMode && window && !m_minimizedPairs.isEmpty()) {
+            m_restoreWindow = window;
+            m_restoreTimer.start();
+        }
+    });
 
     refreshBorders();
 }
@@ -133,18 +147,24 @@ void FusionNavigationState::rememberPair(KWin::Window *window, KWin::Window *par
     if (m_taskModel) {
         m_taskModel->rememberSplitPair(window, partner);
     }
+    if (!m_tabletMode) {
+        return;
+    }
     m_minimizedPairs.removeIf([window, partner](const auto &pair) {
         return !pair.first || !pair.second || pair.first == window || pair.second == window || pair.first == partner || pair.second == partner;
     });
     m_minimizedPairs.emplaceBack(window, partner);
 }
 
-// One app of a remembered pair is active again: the other one comes back into its half, under it,
-// while the two are still that pair, side by side on the same screen and desktop. Each pair is
-// used once.
-void FusionNavigationState::restorePartner(Window *window)
+// One app of a remembered pair is active again (in tablet posture): the other one comes back into
+// its half, under it, while both are still tiled side by side on the same screen and desktop and
+// no other app is shown in that half (the dock's split drag puts the app in use there). Each pair
+// is used once.
+void FusionNavigationState::restorePartner()
 {
-    if (!window || m_minimizedPairs.isEmpty()) {
+    Window *window = m_restoreWindow;
+    m_restoreWindow.clear();
+    if (!m_tabletMode || !window || window->isDeleted()) {
         return;
     }
     Window *partner = nullptr;
@@ -160,9 +180,19 @@ void FusionNavigationState::restorePartner(Window *window)
             ++it;
         }
     }
-    if (!partner || !partner->isMinimized() || !window->isOnCurrentDesktop() || !partner->isOnCurrentDesktop() || !m_taskModel
-        || m_taskModel->splitPair(window) != partner) {
+    if (!partner || window != workspace()->activeWindow() || !partner->isMinimized() || !window->isOnCurrentDesktop()
+        || !partner->isOnCurrentDesktop() || !m_taskModel || m_taskModel->splitPair(window) != partner) {
         return;
+    }
+    const FusionSplitSide partnerSide = fusionSplitSide(partner);
+    for (Window *other : workspace()->stackingOrder()) {
+        if (other != window && other != partner && !other->isDeleted() && other->isClient() && other->isNormalWindow()
+            && !other->isMinimized() && other->output() == window->output() && other->isOnCurrentDesktop()
+            && fusionSplitSide(other) == partnerSide) {
+            qInfo("plasmafusion-navigation: split pair not back: %s holds the half of %s", qPrintable(other->resourceClass()),
+                  qPrintable(partner->resourceClass()));
+            return;
+        }
     }
     partner->setMinimized(false);
     workspace()->raiseWindow(partner);
