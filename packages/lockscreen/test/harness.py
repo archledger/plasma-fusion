@@ -23,7 +23,7 @@ import json
 
 from PySide6.QtCore import QObject, QTimer, QUrl, Slot, QLocale, QSize, Qt, QByteArray
 from PySide6.QtGui import QGuiApplication, QFontDatabase, QImage, QPainter, QIcon
-from PySide6.QtQml import QQmlComponent, QQmlPropertyMap, QQmlProperty
+from PySide6.QtQml import QQmlComponent, QQmlPropertyMap
 from PySide6.QtQuick import QQuickView, QQuickItem
 from PySide6.QtSvg import QSvgRenderer
 

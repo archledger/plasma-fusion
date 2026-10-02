@@ -13,7 +13,7 @@ success) so GTK keeps strokes and state colours when it recolours -symbolic icon
 import json
 import os
 
-from svgkit import Svg, ci, fmt, rr
+from svgkit import Svg, ci, fmt
 
 _OUTLINES = None
 

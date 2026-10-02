@@ -27,7 +27,6 @@ Reads PlasmaFusionDark.colors and PlasmaFusionLight.colors from DIR (default: th
 With --markdown it prints the tables used in docs/parts/foundation.md. The exit status is 1 when
 a board colour is missing or a pair falls below its minimum.
 """
-import math
 import os
 import sys
 

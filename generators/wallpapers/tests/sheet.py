@@ -5,9 +5,9 @@
 from PIL import Image, ImageDraw, ImageFont
 import glob, json
 import os
+import sys
 F=os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../fonts/manrope/Manrope[wght].ttf')
 f=ImageFont.truetype(F,16); f.set_variation_by_axes([700])
-import sys
 # usage: sheet.py STAGE_HOME OUT.png
 STAGE=sys.argv[1].rstrip('/')
 base=STAGE+'/.local/share/wallpapers/'
