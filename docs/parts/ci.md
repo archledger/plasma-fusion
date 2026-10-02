@@ -79,9 +79,10 @@ the code's `# noqa` comments name), and lines of at most 160 characters, as in t
   (`extend-exclude` in `ruff.toml`; remove a line once that work is merged). Checked without the
   exclusions on 2026-10-02, the only findings were two unused imports in
   `packages/kwin/tests/offscreen/keytest.py`, on `main`, `wip/fuzzing` and `wip/portability` alike.
-  `wip/fieldlog` adds one more: a 192-character line in
-  `tools/device/fieldlog/tests/fieldlog_test.py`; and its `tools/device/fieldlog/plasma-fusion-fieldlog`
-  is a Python script without a suffix, which ruff checks only once it is in `extend-include`.
+  The field log (`tools/device/fieldlog/`, from `wip/fieldlog`, on `main` since 2026-10-02) adds
+  one more: a 192-character line in `tools/device/fieldlog/tests/fieldlog_test.py`; and
+  `tools/device/fieldlog/plasma-fusion-fieldlog` is a Python script without a suffix, which ruff
+  checks only once it is in `extend-include`.
 - Run it: `ruff check` in the top directory; `ruff check --fix` removes unused imports.
 
 **C++** follows KDE's clang-format style: `.clang-format` is `kde-modules/clang-format.cmake` of
@@ -111,11 +112,12 @@ follows the surrounding scripts; no formatter is enforced.
 
 - Excluded for now, for the same reason and with the same list as `ruff.toml`: `packages/appicons/`,
   `packages/kwin/`, `packages/navigation-cpp/`, `packages/power/`, `packages/powerfx/`,
-  `tools/device/`, `tools/system/`. On 2026-10-02 those paths held 37 scripts with 13 findings in 8
-  files (7 sourced files without a shell, 4 `~` in quotes, 2 unused variables). The scripts the open
-  branches add or change outside them pass.
+  `tools/device/`, `tools/system/`. At `37a4d82` (2026-10-02) those paths held 37 scripts with 13
+  findings in 8 files (7 sourced files without a shell, 4 `~` in quotes, 2 unused variables). The
+  scripts the open branches add or change outside them pass.
 - Run it: `tools/checks/shellcheck.sh` in the top directory (`--list` prints the scripts).
-- Checked on 2026-10-02 with ShellCheck 0.11.0: 115 scripts, no finding.
+- Checked on 2026-10-02 with ShellCheck 0.11.0 when the check was added: 115 scripts, and 117
+  with `main` at `569de20` merged in, no finding.
 
 **QML** has no enforced style yet. The QML follows the surrounding code (4-space indentation, no
 tabs: on 2026-10-02, 306 of the 34136 indented lines of the tracked QML were not on a 4-space
@@ -250,9 +252,10 @@ Checked on 2026-10-02 in Fedora 44 containers.
   directory, was the same file each time (`RelWithDebInfo`: sha256 `c280f4dd...`; Fedora's
   `%optflags`: `a05c4f46...`; the same GNU build ID each time). Fedora 44's rpm takes
   `SOURCE_DATE_EPOCH` from the spec's changelog, but by default does not use it as the build time
-  (`use_source_date_epoch_as_buildtime` is 0) and records the build container's host name. The container scripts
-  (`packages/kcm-cpp/container-build.sh`, `packages/decoration-cpp/tools/container-build.sh`) now
-  set both, and the decoration's source tarball has a fixed order, owner and time. Built twice from
+  (`use_source_date_epoch_as_buildtime` is 0) and records the build container's host name. The
+  container scripts (`packages/kcm-cpp/container-build.sh`,
+  `packages/decoration-cpp/tools/container-build.sh`) now set both, and the decoration's source
+  tarball has a fixed order, owner and time. Built twice from
   `35fe9e0` in `localhost/plasma-fusion-build:f44-6.7.5`, from two host directories (both mounted
   at `/work`, as `build-rpm.sh` does): every package came out identical, `plasma-fusion-settings`
   1.0.0-6 (binary `860b8c27...`, debuginfo, debugsource, source RPM `e25ff306...`) and

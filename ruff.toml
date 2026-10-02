@@ -24,7 +24,7 @@ extend-exclude = [
     "packages/navigation-cpp/**",
     "packages/power/**",
     "packages/powerfx/**",
-    # wip/fieldlog adds tools/device/fieldlog/plasma-fusion-fieldlog, a Python script without a
+    # tools/device/fieldlog/plasma-fusion-fieldlog (the field log) is a Python script without a
     # suffix: add it to extend-include when this line goes.
     "tools/device/**",
     "tools/system/**",
