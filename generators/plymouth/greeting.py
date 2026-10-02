@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Draw the boot splash greeting ("Welcome back, <name>") as one PNG per scale factor.
 
-    greeting.py LAYOUT_JSON OUTDIR [--name NAME]...
+    python3 greeting.py LAYOUT_JSON OUTDIR [--name NAME]...
 
 The boot splash cannot draw this line itself: early boot has no fonts to speak of, and the name
 is only known on the machine. gen_plymouth.py writes LAYOUT_JSON (font file, size, colour, the

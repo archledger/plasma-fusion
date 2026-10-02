@@ -829,8 +829,7 @@ def build(out, meta_path=None):
     with open(os.path.join(gdir, "layout.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump(glayout, f, ensure_ascii=False, separators=(",", ":"))
         f.write("\n")
-    shutil.copyfile(os.path.join(HERE, "greeting.py"), os.path.join(gdir, "greeting.py"))
-    os.chmod(os.path.join(gdir, "greeting.py"), 0o755)
+    shutil.copyfile(os.path.join(HERE, "greeting.py"), os.path.join(gdir, "greeting.py"))  # run as python3 greeting.py
     shutil.copyfile(os.path.join(ROOT, GREETING_FONT), os.path.join(gdir, glayout["font"]))
     shutil.copyfile(os.path.join(ROOT, GREETING_LICENSE), os.path.join(gdir, "OFL-SpaceGrotesk.txt"))
     for entry in glayout["scales"]:
