@@ -19,7 +19,8 @@ do when one of them speaks up. Set up 2026-10-01 (CI) and 2026-10-02 (automation
 | `cflite-pr` | pull requests that change a fuzzed tool, `fuzz/` or `.clusterfuzzlite/` | ClusterFuzzLite: the fuzzers (below) for 5 minutes in all against the change; a crash fails the check |
 | `cflite-batch` | Sundays 02:40 UTC and by hand; pruning Sundays 04:40 UTC | ClusterFuzzLite: the fuzzers for 30 minutes in all on `main`, building up the corpus the pull request runs start from; the 04:40 run prunes that corpus |
 
-Every action is pinned to a commit hash with its version in a comment; every job starts with a
+Every action is pinned to a commit hash with its version in a comment (the ClusterFuzzLite actions
+still run container images by a moving tag: "Fuzzing", below); every job starts with a
 read-only token and widens only what it needs (`issues: write` for the watcher's issue,
 `pull-requests: write` for the labeler, `security-events`/`id-token` for Scorecard, `actions: read`
 for ClusterFuzzLite's corpus artifacts). The labeler
@@ -67,6 +68,22 @@ mode (ClusterFuzzLite asks for pruning where batch fuzzing runs), and libFuzzer'
 inputs that add coverage (the local runs' corpora: 652 files to 47, 742 to 98, 463 to 4). It is
 a run of its own because one run cannot store two artifacts of the same name. There is no coverage
 job.
+
+What the fuzzing trusts, and why its jobs keep `contents: read` and `actions: read` and no secrets
+(no storage-repository token, no `security-events: write`, no SARIF upload):
+
+- The actions are pinned to the v1 commit, but that commit runs
+  `gcr.io/oss-fuzz-base/clusterfuzzlite-build-fuzzers:v1` and `clusterfuzzlite-run-fuzzers:v1`,
+  images Google rebuilds often (both twice on 2026-10-02 alone). Pinning them would mean
+  `uses: docker://…@sha256:…` with the inputs passed as environment variables, which Dependabot
+  does not update; left as it is.
+- ClusterFuzzLite clones the repository with the job's token in the remote's address and builds the
+  image from that clone, `.git/config` included, so a pull request's own `build.sh` and fuzzers can
+  read the token.
+- Each run takes a fuzzer's corpus from the first unexpired artifact of that name GitHub lists for
+  the whole repository, whichever run stored it, a fork pull request's included (first-time
+  contributors' runs wait for approval, returning ones do not), and unpacks it without a path
+  filter. The corpus is untrusted input.
 
 Run a fuzzer locally (scratch on disk under `build/`; new inputs go to the first directory, never
 the seed directory):
