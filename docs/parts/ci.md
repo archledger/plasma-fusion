@@ -41,8 +41,9 @@ reason).
 - Discussions: on (questions and ideas; issues stay for defects).
 - Social preview: the dark desktop board (`design/previews/Main.webp` scaled to 1024x640 and
   centred on 1280x640, each side filled with the board's edge colour row by row).
-- OpenSSF Best Practices badge: to be registered by the maintainer at bestpractices.dev (answers
-  prepared on the shared project memory, `artifacts/plasma-fusion/2026-10-02-github/BESTPRACTICES.md`).
+- OpenSSF Best Practices badge: passing, project 15168 (https://www.bestpractices.dev/projects/15168,
+  registered 2026-10-02). Open items there: tagged releases (version tags, semantic versions,
+  release notes: N/A until releases exist), broader automated tests, dynamic analysis (fuzzing).
 
 ## When something speaks up
 
