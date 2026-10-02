@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Names the theme draws with a designed tile (designed-apps.txt) get no familiar icon, and the
+# Names the theme draws with a designed tile (designed-apps.txt) get no familiar icon; every other app
+# also gets a per-app tile under its desktop id (path icons and generic Breeze names only there); the
 # backup of the file a familiar icon hides follows a redeployed theme: dropping the familiar icon
 # puts the newest file back, or keeps a file that replaced it since. Standard library only.
 # Usage: python3 designed_test.py <path to plasma-fusion-app-icons>
@@ -35,10 +36,24 @@ with tempfile.TemporaryDirectory() as d:
             f"[Desktop Entry]\nType=Application\nName={did}\nIcon={icon}\n")
         (data / "icons/hicolor/scalable/apps" / (icon + ".svg")).write_text("<svg/>")
 
+    # an app whose icon is a file path, and one naming a Breeze icon outside apps/ (Emoji Selector)
+    (d / "art").mkdir()
+    (d / "art/bar.png").write_text("png")
+    (data / "applications/bar-app.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nName=bar\nIcon=" + str(d / "art/bar.png") + "\n")
+    (data / "icons/breeze/preferences/32").mkdir(parents=True)
+    (data / "icons/breeze/preferences/32/preferences-desktop-emoticons.svg").write_text("<svg/>")
+    (data / "applications/org.kde.plasma.emojier.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nName=Emoji\nIcon=preferences-desktop-emoticons\n")
+
     fails = []
     want = tool.wanted()
-    if sorted(want) != ["foo"]:
-        fails.append(f"wanted() {sorted(want)}, expected ['foo'] (org.kde.kate is designed)")
+    expected = ["foo", "plasmafusion_app.bar_app", "plasmafusion_app.foo", "plasmafusion_app.org.kde.plasma.emojier"]
+    if sorted(want) != expected:
+        fails.append(f"wanted() {sorted(want)}, expected {expected} (org.kde.kate is designed; the path icon and "
+                     "the generic Breeze name get a per-app tile only)")
+    elif want["plasmafusion_app.bar_app"]["src"] != str((d / "art/bar.png").resolve()):
+        fails.append("the per-app tile of a path icon does not use that file")
 
     path = tool.theme_file(theme, "foo")
     saved = tool.BACKUP / theme / "foo.svg"

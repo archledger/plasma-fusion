@@ -39,7 +39,10 @@
 # data URIs; it does not clip, so masks are applied to the PNG). A per-user file the tool replaces is
 # kept in ~/.local/state/plasma-fusion/app-icons-backup and put back by "remove" (unless something
 # else, e.g. a newer per-user copy of the theme, has replaced the familiar icon since).
-# The marker icon "plasmafusion-familiar" tells the shell's FusionIconTile that app icons are tiles.
+# Each app also gets its tile under app_tile_name(desktop id), "plasmafusion_app.<id with _ for ->",
+# which the shell's FusionIconTile looks up (so an icon given as a file path or a generic icon name
+# gets a tile too, without taking over that name). The marker icon "plasmafusion-familiar" is kept for
+# older shells.
 # Record: ~/.local/state/plasma-fusion/app-icons.json (what was built from which file and mtime).
 import base64, colorsys, fcntl, io, json, math, os, pathlib, shutil, signal, subprocess, sys, time
 
@@ -73,9 +76,9 @@ def mode():
     return "familiar"
 
 
-def desktop_icons():
-    """Icon name -> desktop ids of the visible applications (the first file of an id wins)."""
-    seen, icons = set(), {}
+def desktop_entries():
+    """(desktop id, Icon= value) of the visible applications (the first file of an id wins)."""
+    seen, entries = set(), []
     for base in [DATA] + FLATPAK + SYSTEM_DATA:
         root = base / "applications"
         if not root.is_dir():
@@ -97,11 +100,26 @@ def desktop_icons():
                 continue
             if values.get("Type") != "Application" or values.get("NoDisplay") == "true" or values.get("Hidden") == "true":
                 continue
-            icon = values.get("Icon", "")
-            if not icon or "/" in icon or icon.endswith((".png", ".svg", ".xpm")):
-                continue
-            icons.setdefault(icon, []).append(did)
+            if values.get("Icon"):
+                entries.append((did, values["Icon"]))
+    return entries
+
+
+def desktop_icons():
+    """Icon name -> desktop ids of the visible applications (names only, not file paths)."""
+    icons = {}
+    for did, icon in desktop_entries():
+        if "/" in icon or icon.endswith((".png", ".svg", ".xpm")):
+            continue
+        icons.setdefault(icon, []).append(did)
     return icons
+
+
+def app_tile_name(did):
+    """The per-app familiar tile's icon name: "plasmafusion_app." and the desktop id with "_" for "-"
+    (no dash, so the icon loader's dash fallback cannot answer it with another icon). The shell's
+    FusionIconTile looks this name up for an app's desktop id."""
+    return "plasmafusion_app." + did.replace("-", "_")
 
 
 def icon_bases():
@@ -130,6 +148,30 @@ def find_original(name, bases):
     return None
 
 
+BREEZE_OTHER_DIRS = [c + "/" + s for c in ("preferences", "actions", "devices", "places", "status", "categories")
+                     for s in ("48", "64", "32", "scalable", "24", "22")]
+
+
+def find_any(icon, bases):
+    """The original for a per-app tile: a file path as it is, an app icon, or any Breeze icon (Emoji
+    Selector: preferences-desktop-emoticons)."""
+    if icon.startswith("/"):
+        for ext in ("", ".svg", ".png", ".xpm"):
+            if os.path.isfile(icon + ext):
+                return pathlib.Path(os.path.realpath(icon + ext))
+        return None
+    found = find_original(icon, bases)
+    if found:
+        return found
+    for base in bases:
+        for sub in BREEZE_OTHER_DIRS:
+            for ext in (".svg", ".svgz", ".png"):
+                p = base / "breeze" / sub / (icon + ext)
+                if p.is_file():
+                    return pathlib.Path(os.path.realpath(p))
+    return None
+
+
 def theme_roots():
     return [b / "icons" / THEMES[0] for b in [DATA] + SYSTEM_DATA]
 
@@ -146,6 +188,9 @@ def designed_names():
 
 
 def wanted():
+    """Icon name -> original. Per Icon= name found among app icons (what other programs look up),
+    and per app under app_tile_name(desktop id) (what the shell looks up; also for icons given as
+    file paths and for generic icon names, which are never written under their own name)."""
     bases = icon_bases()
     skip = designed_names() | {MARKER}
     out = {}
@@ -155,6 +200,13 @@ def wanted():
         src = find_original(name, bases)
         if src:
             out[name] = {"src": str(src), "mtime": int(src.stat().st_mtime)}
+    for did, icon in desktop_entries():
+        did = did[:-len(".desktop")] if did.endswith(".desktop") else did   # the shell's app id
+        if did in skip or icon in skip:
+            continue
+        src = find_any(icon, bases)
+        if src:
+            out[app_tile_name(did)] = {"src": str(src), "mtime": int(src.stat().st_mtime)}
     return out
 
 

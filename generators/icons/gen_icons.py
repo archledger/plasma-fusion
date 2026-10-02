@@ -19,6 +19,7 @@ Layout of each theme:
   breeze/<dir>/   names handed back to Breeze (capture.json), as links into /usr/share/icons
   hicolor/<dir>/  names handed back to the apps' own hicolor icons (capture.json), as links into
                   /usr/share/icons/hicolor that dangle while the app is not installed
+  flatpak/<dir>/  the same for system-wide Flatpak apps (/var/lib/flatpak/exports/share/icons/hicolor)
   designed-apps.txt  the app icon names drawn with an app's own designed tile (names.DESIGNED; read
                   by plasma-fusion-app-icons, which leaves them alone) - not a lookup dir
 Every lookup directory holds relative symlinks into art/ or glyphs/ (or copies with --copies).
@@ -41,6 +42,8 @@ import names  # noqa: E402
 THEMES = {'PlasmaFusion': 'light', 'PlasmaFusion-Dark': 'dark'}
 INHERITS = {'light': 'breeze,hicolor', 'dark': 'breeze-dark,hicolor'}
 BREEZE_DIR = {'light': '/usr/share/icons/breeze', 'dark': '/usr/share/icons/breeze-dark'}
+# Names only apps install, handed back to the apps' own icons (make_capture.py): theme dir -> tree.
+HICOLOR_TREES = {'hicolor': '/usr/share/icons/hicolor', 'flatpak': '/var/lib/flatpak/exports/share/icons/hicolor'}
 TITLE = {'light': 'Plasma Fusion', 'dark': 'Plasma Fusion Dark'}
 COMMENT = {
     'light': 'Rounded tiles and line icons for the Plasma Fusion desktop, for light colour schemes',
@@ -556,11 +559,12 @@ def write_theme(root, theme, variant, reg, copies):
             os.symlink(os.path.basename(meta['base']), os.path.join(base, 'breeze', d))
     for d, n in cap['links']:
         os.symlink(os.path.join(breeze, d, n + '.svg'), os.path.join(base, 'breeze', d, n + '.svg'))
-    for d, meta in sorted(cap.get('hicolor_dirs', {}).items()):
-        mirror_dirs['hicolor/' + d] = dict(meta)
-        os.makedirs(os.path.join(base, 'hicolor', d))
-    for d, fn in cap.get('hicolor_links', []):
-        os.symlink(os.path.join('/usr/share/icons/hicolor', d, fn), os.path.join(base, 'hicolor', d, fn))
+    for tree, target in HICOLOR_TREES.items():
+        for d, meta in sorted(cap.get(tree + '_dirs', {}).items()):
+            mirror_dirs[tree + '/' + d] = dict(meta)
+            os.makedirs(os.path.join(base, tree, d))
+        for d, fn in cap.get(tree + '_links', []):
+            os.symlink(os.path.join(target, d, fn), os.path.join(base, tree, d, fn))
     with open(os.path.join(base, 'index.theme'), 'w', encoding='utf-8') as f:
         f.write(index_theme(variant, list(DIRS), mirror_dirs))
     with open(os.path.join(base, 'LICENSE'), 'w', encoding='utf-8') as f:

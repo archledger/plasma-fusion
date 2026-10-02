@@ -13,6 +13,9 @@ addFilter(r"dangling-relative-symlink /usr/share/icons/PlasmaFusion(-Dark)?/\S+ 
 # back to the app's hicolor icons the same way, ../hicolor/...; those links resolve only while the
 # app is installed (the icon loader skips them otherwise; docs/parts/icons.md, "Capture").
 addFilter(r"dangling-relative-symlink /usr/share/icons/PlasmaFusion(-Dark)?/hicolor/\S+ (\.\./)+hicolor/")
+# System-wide Flatpak apps export their icons to /var/lib/flatpak/exports/share/icons/hicolor; the
+# names only they install are handed back there with absolute links (outside the package's tree).
+addFilter(r"dangling-symlink /usr/share/icons/PlasmaFusion(-Dark)?/flatpak/\S+ /var/lib/flatpak/exports/share/icons/hicolor/")
 
 # There is no public upstream web site or download location: the sources come from the
 # Plasma Fusion repository's working tree (packaging/build-rpm.sh makes the tarball).

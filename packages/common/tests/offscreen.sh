@@ -67,7 +67,7 @@ PY
 run() {  # LABEL SCALE CONFIG [ENV=VALUE...]
   local label=$1 scale=$2 cfg=$3; shift 3
   env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u KDE_KIRIGAMI_TABLET_MODE \
-    dbus-run-session -- env QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR="$scale" QT_FORCE_STDERR_LOGGING=1 \
+    dbus-run-session --config-file="$ROOT/packages/lockscreen/test/session-bus.conf" -- env QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR="$scale" QT_FORCE_STDERR_LOGGING=1 \
     QT_QUICK_CONTROLS_STYLE=org.kde.desktop QML_DISABLE_DISK_CACHE=1 \
     XDG_CONFIG_HOME="$OUT/cfg/$cfg" XDG_CACHE_HOME="$OUT/cache" "$@" \
     timeout 60 "$QML" "$OUT/ui/Probe.qml" -- "file://$OUT/wall" "$OUT" "$label" >"$OUT/$label.log" 2>&1 || true

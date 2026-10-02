@@ -168,7 +168,6 @@ Item {
             size: iconBox.width
             source: task.model.decoration
             iconName: task.iconName
-            askFamiliar: task.calendarApp
             visible: !zoomLoader.item || task.grow <= 0.5
         }
 

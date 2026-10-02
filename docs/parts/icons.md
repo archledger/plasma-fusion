@@ -135,7 +135,9 @@ inside our theme before asking Breeze (`a-b-c` -> `a-b` -> `a`, `x-symbolic` -> 
   `qbittorrent-tray`, an app's toolbar or `-symbolic` icons) appear in `hicolor/<dir>/` as links to
   the files the apps install in `/usr/share/icons/hicolor`; while an app is not installed its links
   dangle, and the icon loader skips a dangling link (checked with `kiconfinder6`), so the name
-  falls back as before and nothing asks for it. 211 captured names deliberately keep our drawing
+  falls back as before and nothing asks for it. System-wide Flatpak apps get the same in
+  `flatpak/<dir>/`, absolute links into `/var/lib/flatpak/exports/share/icons/hicolor` (LocalSend's
+  tray icon, Whatsie's `-symbolic`). 211 captured names deliberately keep our drawing
   (folder-*, drive-*, weather-*, unknown MIME types, ...).
 * `org.gnome.Settings` is not mapped (it only runs under GNOME and its panel icons would fall back
   to our tile).

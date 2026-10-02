@@ -355,6 +355,32 @@
 "Type": "Scalable"
 }
 },
+"flatpak_dirs": {
+"32x32/apps": {
+"Context": "Applications",
+"Scale": 1,
+"Size": 32,
+"Type": "Threshold"
+},
+"symbolic/apps": {
+"Context": "Applications",
+"MaxSize": 512,
+"MinSize": 8,
+"Scale": 1,
+"Size": 16,
+"Type": "Scalable"
+}
+},
+"flatpak_links": [
+[
+"32x32/apps",
+"org.localsend.localsend_app-tray.png"
+],
+[
+"symbolic/apps",
+"com.ktechpit.whatsie-symbolic.svg"
+]
+],
 "hicolor_dirs": {
 "128x128/apps": {
 "Context": "Applications",

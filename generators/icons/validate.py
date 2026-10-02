@@ -143,7 +143,7 @@ def main():
             for fn in os.listdir(full):
                 names += 1
                 p = os.path.join(full, fn)
-                if d.startswith('breeze/') or d.startswith('hicolor/'):
+                if d.startswith(('breeze/', 'hicolor/', 'flatpak/')):
                     continue  # links into Breeze (checked by make_capture.py) and into apps' hicolor icons
                 if not os.path.exists(p):
                     problems.append(f'{theme}/{d}/{fn}: dangling link')

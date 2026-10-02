@@ -20,7 +20,8 @@ icons, its -symbolic icon) are handed back the same way, with links into /usr/sh
 at the paths the apps install them. Such a link dangles while its app is not installed; the icon
 loader then skips it (as if it were not there), and nothing asks for the name. --hicolor-files
 takes those paths for apps that are not installed here (e.g. dnf repoquery -l of the apps'
-packages).
+packages). System-wide Flatpak apps export theirs to /var/lib/flatpak/exports/share/icons/hicolor;
+those are handed back to that tree the same way (flatpak/<dir>/ in the theme).
 
     python3 make_capture.py [--extra NAMES.txt] [--hicolor-files PATHS.txt] [--report REPORT.txt]
 """
@@ -34,6 +35,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+# Trees of app-installed icons that captured names are handed back to: capture.json key prefix -> root.
+HICOLOR_TREES = {'hicolor': '/usr/share/icons/hicolor', 'flatpak': '/var/lib/flatpak/exports/share/icons/hicolor'}
 MEDIA_TYPES = {'text', 'application', 'image', 'audio', 'inode', 'video', 'message', 'model',
                'multipart', 'x-content', 'x-epoc'}
 # Captured names in these families keep our drawing (the fallback is what we want).
@@ -133,27 +136,30 @@ def main():
     breeze_meta = read_index(args.breeze)
     hicolor = scan_theme(args.hicolor) if os.path.isdir(args.hicolor) else {}
     hicolor_meta = read_index(args.hicolor) if os.path.isdir(args.hicolor) else {}
-    hfiles = {}      # name -> {(hicolor dir, file name)}: installed here or listed with --hicolor-files
-    for d in hicolor_meta:
-        full = os.path.join(args.hicolor, d)
-        if os.path.isdir(full):
-            for fn in os.listdir(full):
-                base, ext = os.path.splitext(fn)
-                if ext in ('.svg', '.svgz', '.png'):
-                    hfiles.setdefault(base, set()).add((d, fn))
+    # name -> {(tree, hicolor dir, file name)}: installed here or listed with --hicolor-files
+    hfiles = {}
+    for tree, root in HICOLOR_TREES.items():
+        for d in hicolor_meta:
+            full = os.path.join(root, d)
+            if os.path.isdir(full):
+                for fn in os.listdir(full):
+                    base, ext = os.path.splitext(fn)
+                    if ext in ('.svg', '.svgz', '.png'):
+                        hfiles.setdefault(base, set()).add((tree, d, fn))
     for path in args.hicolor_files:
         with open(path, encoding='utf-8') as f:
             for line in f:
-                m = re.fullmatch(r'/usr/share/icons/hicolor/(.+)/([^/]+)\.(svg|svgz|png)', line.strip())
-                if m and m.group(1) in hicolor_meta:
-                    hfiles.setdefault(m.group(2), set()).add((m.group(1), m.group(2) + '.' + m.group(3)))
+                for tree, root in HICOLOR_TREES.items():
+                    m = re.fullmatch(re.escape(root) + r'/(.+)/([^/]+)\.(svg|svgz|png)', line.strip())
+                    if m and m.group(1) in hicolor_meta:
+                        hfiles.setdefault(m.group(2), set()).add((tree, m.group(1), m.group(2) + '.' + m.group(3)))
     universe = set(breeze) | set(hicolor) | set(hfiles)
     for path in args.extra:
         with open(path, encoding='utf-8') as f:
             universe |= {line.strip() for line in f if line.strip() and not line.startswith('#')}
 
     mirror = {}      # breeze dir -> set(names)
-    hmirror = {}     # hicolor dir -> set(file names)
+    hmirror = {}     # (tree, hicolor dir) -> set(file names)
     kept = []        # (name, captured by) - our drawing is intended
     unresolved = []  # captured names Breeze does not have (hicolor or requested-only)
     for n in sorted(universe):
@@ -173,8 +179,8 @@ def main():
             for d in breeze[n]:
                 mirror.setdefault(d, set()).add(n)
         elif n in hfiles:
-            for d, fn in hfiles[n]:
-                hmirror.setdefault(d, set()).add(fn)
+            for tree, d, fn in hfiles[n]:
+                hmirror.setdefault((tree, d), set()).add(fn)
         else:
             unresolved.append((n, p))
 
@@ -191,15 +197,18 @@ def main():
         if m and m.group(1) in dirs:
             dirs[d] = dict(meta, base=m.group(1))
     links = sorted((d, n) for d, ns in mirror.items() if d in dirs and 'base' not in dirs[d] for n in ns)
-    hdirs = {d: dict(hicolor_meta[d]) for d in sorted(hmirror)}
-    hlinks = sorted((d, fn) for d, fns in hmirror.items() for fn in fns)
+    out = {'breeze_version_note': 'generated from the installed breeze-icon-theme; rerun after updates',
+           'dirs': dirs, 'links': links}
+    for tree in HICOLOR_TREES:
+        out[tree + '_dirs'] = {d: dict(hicolor_meta[d]) for (t, d) in sorted(hmirror) if t == tree}
+        out[tree + '_links'] = sorted((d, fn) for (t, d), fns in hmirror.items() if t == tree for fn in fns)
+    hlinks = [(t, d, fn) for (t, d), fns in sorted(hmirror.items()) for fn in sorted(fns)]
+    hdirs = sorted(hmirror)
     with open(os.path.join(HERE, 'capture.json'), 'w', encoding='utf-8') as f:
-        json.dump({'breeze_version_note': 'generated from the installed breeze-icon-theme; rerun after updates',
-                   'dirs': dirs, 'links': links, 'hicolor_dirs': hdirs, 'hicolor_links': hlinks},
-                  f, indent=0, sort_keys=True)
+        json.dump(out, f, indent=0, sort_keys=True)
         f.write('\n')
     print(f'{len(set(n for _, n in links))} names handed back to Breeze in {len(dirs)} directories, '
-          f'{len({os.path.splitext(fn)[0] for _, fn in hlinks})} to the apps\' hicolor icons in {len(hdirs)} '
+          f'{len({os.path.splitext(fn)[0] for _, _, fn in hlinks})} to the apps\' hicolor icons in {len(hdirs)} '
           f'directories, {len(kept)} captured names keep our drawing, {len(unresolved)} captured names '
           f'found nowhere')
     if args.report:
@@ -208,8 +217,8 @@ def main():
             for d, n in links:
                 f.write(f'mirror {d}/{n} <- {chain(n, ours)}\n')
             f.write('\n# handed back to the apps\' hicolor icons\n')
-            for d, fn in hlinks:
-                f.write(f'hicolor {d}/{fn} <- {chain(os.path.splitext(fn)[0], ours)}\n')
+            for t, d, fn in hlinks:
+                f.write(f'{t} {d}/{fn} <- {chain(os.path.splitext(fn)[0], ours)}\n')
             f.write('\n# kept with our drawing\n')
             for n, p in kept:
                 f.write(f'keep {n} <- {p}\n')

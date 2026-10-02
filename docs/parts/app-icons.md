@@ -38,12 +38,18 @@ fusion-config.sh, `/usr/libexec/plasma-fusion/` by the package):
    `PlasmaFusion` theme, else the system one). A familiar icon built earlier for such a name is
    dropped.
 2. Finds each original as Plasma would without Plasma Fusion: Breeze (48, 64, 32, scalable, ...),
-   then hicolor (scalable, then the largest), then `pixmaps`.
+   then hicolor (scalable, then the largest), then `pixmaps`. For the per-app tile (below) also an
+   `Icon=` that is a file path, and any Breeze icon outside the app folders (Emoji Selector names
+   `preferences-desktop-emoticons`).
 3. Renders it with QtSvg (PySide6; what Plasma draws icons with) or rsvg-convert, measures the drawn
    box and its cover, picks the kind and the tile colour, and writes
    `apps/scalable/<name>.svg` in both Fusion themes of `~/.local/share/icons`: the artwork as an
-   embedded PNG at 4x (256 px for a 64-unit tile), about 30 KiB per icon.
-4. Writes the marker icon `plasmafusion-familiar`, records what it built from which file and
+   embedded PNG at 4x (256 px for a 64-unit tile), about 30 KiB per icon. Each Icon= name found among
+   app icons gets a file under that name (what other programs look up); each app without a design
+   also gets one under `plasmafusion_app.<desktop id>` with `_` for `-` (what the shell looks up; no
+   dash, so the icon loader's dash fallback cannot answer it with another icon). File paths and
+   generic Breeze names get only the per-app file, so the generic name keeps its meaning.
+4. Writes the marker icon `plasmafusion-familiar` (kept for older shells), records what it built from which file and
    mtime (`~/.local/state/plasma-fusion/app-icons.json`) and sends KIconLoader's `iconChanged`.
 
 A per-user icon file the tool would replace is kept in `~/.local/state/plasma-fusion/app-icons-backup`
@@ -68,9 +74,13 @@ installed app is looked up for the first time when it shows up, by then usually 
 icon exists (about 4 s after the install); a mode change shows in the shell after
 `systemctl --user restart plasma-plasmashell.service` or the next login, in apps when they start again.
 
-`FusionIconTile` (dock, launcher, home screen) draws its neutral tile behind icons the designed
-tiles do not cover; it looks the marker icon up for those and draws no neutral tile while it exists.
-Its `familiar` is false for designed names (`FusionIconNames.designed()`), whatever the mode.
+`FusionIconTile` (dock, launcher, home screen, window cards) looks an app up by its desktop id:
+an id with a designed tile (`FusionIconNames.designed()`) shows that tile, whatever icon the desktop
+entry names (KDebugSettings names `debug-run`, which the theme keeps for the action); otherwise the
+per-app familiar tile when the tool made one (`familiar`); otherwise the app's own icon on the
+neutral tile. Both lookups are hidden `Kirigami.Icon` probes, so with another icon theme active
+nothing resolves and the tile behaves as before. `packages/common/tests/icontile.sh` checks the three
+cases under PlasmaFusion and Breeze (offscreen, private bus without service activation).
 
 ## Commands
 
@@ -85,8 +95,9 @@ removes the familiar icons. fusion-restore.sh stops the service and runs `remove
 ## Checks
 
 `tools/build.d/89-app-icons.sh`: compile, the unit's key lines, `packages/appicons/tests/designed_test.py`
-(a designed name gets no familiar icon; dropping a familiar icon puts the theme's link back, keeps a
-link that replaced it since, and the backup is the newest file; standard library only),
+(a designed name gets no familiar icon; a file-path icon and a generic Breeze name get a per-app tile
+only; dropping a familiar icon puts the theme's link back, keeps a link that replaced it since, and
+the backup is the newest file; standard library only),
 `packages/appicons/tests/compose_test.py`
 (a square and a rounded square become the tile; a one-colour circle gets a light tile in its hue; a
 three-colour logo the neutral tile; a wide shape a plate).

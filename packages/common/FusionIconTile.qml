@@ -5,9 +5,11 @@
     An app icon as the dock and the launcher show it (ADAPTIVE.md 5.4 and fix 27): an icon that
     the Plasma Fusion icon theme draws as a Fusion tile is shown as it is; any other app's icon
     (a Breeze or third-party icon) is drawn on a neutral Fusion tile, so the row stays a row of
-    tiles. With familiar app icons on (packages/appicons) every app icon is a tile and none gets the
-    neutral tile; apps with a designed tile of their own keep it in both modes. A drop-in for
-    Kirigami.Icon in DOCK-2 and LAUNCH-1:
+    tiles. An app whose desktop id (`iconName`) has a designed tile shows that tile, whatever icon
+    its desktop entry names (KDebugSettings names debug-run, which the theme keeps for the action).
+    With familiar app icons on (packages/appicons) an app without a design shows its familiar tile
+    (its own icon drawn on a Fusion tile, looked up by desktop id), and only an app without one gets
+    the neutral tile. A drop-in for Kirigami.Icon in DOCK-2 and LAUNCH-1:
 
       FusionIconTile {
           size: 48                    // the tile's size; the icon inside follows
@@ -40,17 +42,16 @@ Item {
     property var source
     // The icon's theme name, for the coverage check; taken from `source` when it is a name.
     property string iconName: typeof source === "string" ? source : ""
-    // Draw the neutral tile behind the icon (true for icons without a Fusion tile). With familiar
-    // app icons on (packages/appicons: every app's own icon generated as a Fusion tile, marked by
-    // the "plasmafusion-familiar" icon), no app icon needs it.
+    // Draw the neutral tile behind the icon (true for icons without a Fusion tile).
     property bool foreign: iconName !== "" && !FusionIconNames.covers(iconName) && !familiar
-    // Whether this icon is a familiar app icon: familiar app icons are on and the name has no
-    // designed tile of its own (those are left alone, FusionIconNames.designed). The marker is
-    // looked up for names the designed tiles do not cover, and for any name while `askFamiliar` is
-    // set (a host that draws over a designed tile, like the dock's date on the calendar tile).
-    property bool askFamiliar: false
+    // The app's designed tile, by desktop id: shown when the name resolves (the Fusion icon theme
+    // is active).
+    readonly property bool designed: iconName !== "" && FusionIconNames.designed(iconName)
+    readonly property bool ownTile: designed && ownProbe.status === Kirigami.Icon.Ready
+    // The app's familiar tile (packages/appicons writes one per app without a design, under this
+    // name: no dash, so the icon loader's dash fallback cannot answer it with another icon).
+    readonly property string familiarName: "plasmafusion_app." + iconName.replace(/-/g, "_")
     readonly property bool familiar: familiarProbe.status === Kirigami.Icon.Ready
-                                     && !FusionIconNames.designed(iconName)
     // Tile size in logical px (the dock's 48, the launcher's 60/72).
     property real size: 48
     // Size of a foreign icon inside the tile: 42 of 64 units, centred on the 60-unit base.
@@ -107,15 +108,22 @@ Item {
         border.color: Qt.rgba(1, 1, 1, 0.14)
     }
 
-    // Loads the marker icon when needed (see `familiar`); draws nothing.
+    // Look the app's own tiles up (see `ownTile` and `familiar`); draw nothing.
+    Kirigami.Icon {
+        id: ownProbe
+        visible: false
+        width: 1
+        height: 1
+        fallback: ""
+        source: tile.designed ? tile.iconName : ""
+    }
     Kirigami.Icon {
         id: familiarProbe
         visible: false
         width: 1
         height: 1
         fallback: ""
-        source: tile.iconName !== "" && (tile.askFamiliar || !FusionIconNames.covers(tile.iconName))
-                ? "plasmafusion-familiar" : ""
+        source: tile.iconName !== "" && !tile.designed ? tile.familiarName : ""
     }
 
     Kirigami.Icon {
@@ -125,7 +133,7 @@ Item {
         height: glyphSize
         x: tile.snap((tile.width - width) / 2)
         y: tile.snap(((tile.foreign ? 60 * tile.unit : tile.height) - height) / 2)
-        source: tile.source
+        source: tile.ownTile ? tile.iconName : tile.familiar ? tile.familiarName : tile.source
         // Accessibility belongs to the button that holds the tile.
         Accessible.ignored: true
     }

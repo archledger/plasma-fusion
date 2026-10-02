@@ -193,13 +193,15 @@ find %{buildroot}%{_libexecdir}/plasma-fusion -type f -exec chmod 0755 {} +
 %check
 # Every symbolic link must resolve, inside the package or (the Breeze hand-back links) in
 # breeze-icon-theme, a requirement that is installed on the build host too: look at the
-# buildroot with Breeze's two themes linked in for the moment. The links into hicolor name the
-# icons of apps that need not be installed (they resolve once the app is).
+# buildroot with Breeze's two themes linked in for the moment. The links into hicolor and into
+# Flatpak's exported icons name the icons of apps that need not be installed (they resolve once the
+# app is); the Flatpak ones stay absolute (/var/lib/flatpak is outside the package's tree).
 ln -s /usr/share/icons/breeze %{buildroot}%{_datadir}/icons/breeze
 ln -s /usr/share/icons/breeze-dark %{buildroot}%{_datadir}/icons/breeze-dark
-find %{buildroot} -xtype l -not -path '%{buildroot}%{_datadir}/icons/PlasmaFusion*/hicolor/*' >broken-links.txt
+find %{buildroot} -xtype l -not -path '%{buildroot}%{_datadir}/icons/PlasmaFusion*/hicolor/*' \
+  -not -path '%{buildroot}%{_datadir}/icons/PlasmaFusion*/flatpak/*' >broken-links.txt
 rm %{buildroot}%{_datadir}/icons/breeze %{buildroot}%{_datadir}/icons/breeze-dark
-find %{buildroot} -type l -lname '/*' >absolute-links.txt
+find %{buildroot} -type l -lname '/*' -not -lname '/var/lib/flatpak/exports/share/icons/hicolor/*' >absolute-links.txt
 if [ -s absolute-links.txt ] || [ -s broken-links.txt ]; then
   cat absolute-links.txt broken-links.txt >&2
   exit 1
