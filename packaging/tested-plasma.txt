@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# The Plasma series this Plasma Fusion version was tested with, one per line (major.minor). Every
+# package ships it; the login check records no other series as tested (docs/parts/gate.md), so on
+# an untested Plasma the parts that depend on Plasma internals stay off until an update. Add a
+# series after testing it; packaging/tested-versions.txt has the exact versions of the test
+# machines (Fedora 44).
+6.7

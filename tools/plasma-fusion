@@ -1,0 +1,149 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# plasma-fusion: the per-user commands of an installed Plasma Fusion package (docs/parts/system.md).
+#
+#   plasma-fusion setup [OPTIONS]    apply Plasma Fusion to this account; run it in your Plasma
+#                                    session (OPTIONS: see plasma-fusion setup --help)
+#   plasma-fusion update             apply this version's settings again after a package update,
+#                                    keeping your light, dark or automatic choice and your own
+#                                    settings (setup without options)
+#   plasma-fusion status             version, installed parts, tested Plasma series, login check
+#   plasma-fusion restore [OPTIONS]  undo setup from a backup (--list shows them; see --help)
+#   plasma-fusion drop-user-copy     move a per-user copy in ~/.local that hides the package aside
+#   plasma-fusion version
+#
+# The package's files are found next to this command (../share/plasma-fusion), so the same script
+# serves /usr/bin and a Nix store path.
+set -euo pipefail
+SELF=$(readlink -f "$0")
+SHARE=$(cd "$(dirname "$SELF")/../share" 2>/dev/null && pwd) || SHARE=
+PF=$SHARE/plasma-fusion
+if [ ! -f "$PF/version" ]; then
+  # Not next to a package (a checkout's tools/): the first data directory that has one.
+  IFS=: read -r -a dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in "${dirs[@]}"; do
+    [ -f "$d/plasma-fusion/version" ] && { SHARE=$d PF=$d/plasma-fusion; break; }
+  done
+fi
+[ -f "$PF/version" ] || { echo "plasma-fusion: no installed Plasma Fusion package found" >&2; exit 1; }
+VERSION=$(cat "$PF/version")
+TOOLS=$PF/tools/device
+DATA=${XDG_DATA_HOME:-$HOME/.local/share}
+STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
+
+usage() { sed -n '/^#   plasma-fusion setup/,/^#   plasma-fusion version/p' "$SELF" | sed 's/^# \{0,1\}//'; }
+
+# Top-level files and directories of the package below share/ (items.txt) that also exist in the
+# user's data directory: a copy from a per-user install, which Plasma prefers to the package's.
+user_copies() {
+  local item
+  [ -f "$PF/items.txt" ] || return 0
+  while IFS= read -r item; do
+    [ -n "$item" ] && [ -e "$DATA/$item" ] && printf '%s\n' "$item"
+  done <"$PF/items.txt"
+  [ -d "$HOME/.local/libexec/plasma-fusion" ] && printf '%s\n' ../libexec/plasma-fusion
+  return 0
+}
+
+in_session() {
+  [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && return 0
+  echo "plasma-fusion: run this in a terminal inside your Plasma session" >&2
+  exit 1
+}
+
+warn_user_copies() {
+  local n
+  n=$(user_copies | wc -l)
+  [ "$n" = 0 ] && return 0
+  echo "note: $n per-user copies in $DATA hide this package's files (an earlier per-user install);"
+  echo "      package updates do not show until 'plasma-fusion drop-user-copy' moves them aside"
+}
+
+# The record a compiled part installs (next to this package, or in another data directory: on
+# NixOS each part is its own store path, linked into the system profile).
+built_record() {
+  local d
+  IFS=: read -r -a dirs <<<"$SHARE:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in "${dirs[@]}"; do
+    [ -f "$d/plasma-fusion/built-against/$1" ] && { echo "$d/plasma-fusion/built-against/$1"; return 0; }
+  done
+  return 1
+}
+
+status() {
+  local p f series kwin built
+  echo "Plasma Fusion $VERSION ($PF)"
+  for p in decoration settings navigation; do
+    if f=$(built_record "$p"); then
+      built=$(tr '\n' ' ' <"$f" | sed 's/ $//')
+      echo "  $p: installed, built against $built"
+    else
+      echo "  $p: not installed"
+    fi
+  done
+  series=$(grep -v '^[[:space:]]*#' "$PF/tested-plasma.txt" 2>/dev/null | tr -s '[:space:]' ' ' | sed 's/^ //;s/ $//')
+  echo "  tested with Plasma: ${series:-?}"
+  kwin=$(kwin_wayland --version 2>/dev/null | awk '{print $2}' || true)
+  [ -z "$kwin" ] || echo "  running KWin: $kwin"
+  for p in decoration navigation; do
+    f=$(built_record "$p") && [ -n "$kwin" ] || continue
+    built=$(sed -n 's/^kwin=//p;s/^kdecoration=//p' "$f" | head -1)
+    [ -z "$built" ] || [ "$built" = "$kwin" ] ||
+      echo "  note: the $p part was built against $built, KWin is $kwin: update or rebuild that package"
+  done
+  if [ -f "$STATE/setup-version" ]; then
+    echo "  set up for this account: $(cat "$STATE/setup-version")"
+    [ "$(cat "$STATE/setup-version")" = "$VERSION" ] || echo "  note: run 'plasma-fusion update' to apply this version's settings"
+  else
+    echo "  set up for this account: no (run 'plasma-fusion setup' in your Plasma session)"
+  fi
+  warn_user_copies
+  if [ -x "$DATA/plasma-fusion/gate/plasma-fusion-gate.sh" ]; then
+    bash "$DATA/plasma-fusion/gate/plasma-fusion-gate.sh" status | sed -n '1,40p'
+  fi
+}
+
+drop_user_copy() {
+  local dest item n=0
+  if [ -z "$(user_copies)" ]; then
+    echo "no per-user copy hides the package"
+    return 0
+  fi
+  dest=$STATE/user-copy-$(date -u +%Y%m%dT%H%M%SZ)
+  mkdir -p "$dest"
+  while IFS= read -r item; do
+    mkdir -p "$dest/share/$(dirname "$item")"
+    mv -- "$DATA/$item" "$dest/share/$item"
+    n=$((n + 1))
+  done < <(user_copies)
+  echo "moved $n per-user copies to $dest"
+  echo "to put them back: cp -a $dest/share/. $DATA/ (and log out and in)"
+  echo "log out and in once so Plasma uses the package's files"
+}
+
+cmd=${1:-}
+[ $# -eq 0 ] || shift
+case $cmd in
+  setup)
+    case ${1:-} in -h|--help) exec bash "$TOOLS/fusion-config.sh" --help ;; esac
+    in_session
+    warn_user_copies
+    exec bash "$TOOLS/fusion-config.sh" "$@" ;;
+  update)
+    [ $# -eq 0 ] || { echo "plasma-fusion update takes no options (use setup)" >&2; exit 2; }
+    in_session
+    warn_user_copies
+    exec bash "$TOOLS/fusion-config.sh" ;;
+  restore)
+    case ${1:-} in -h|--help|--list) exec bash "$TOOLS/fusion-restore.sh" "$@" ;; esac
+    in_session
+    exec bash "$TOOLS/fusion-restore.sh" "$@" ;;
+  status) status ;;
+  drop-user-copy) drop_user_copy ;;
+  version|--version) echo "$VERSION" ;;
+  -h|--help|help) usage ;;
+  '') usage >&2; exit 2 ;;
+  *) echo "plasma-fusion: unknown command '$cmd'" >&2; usage >&2; exit 2 ;;
+esac
