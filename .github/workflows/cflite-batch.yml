@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# ClusterFuzzLite batch fuzzing (docs/parts/ci.md, "Fuzzing"): weekly and by hand, the fuzzers in
+# fuzz/ run on main for 30 minutes in all (batch mode). The corpus they build up is kept as an
+# artifact, which the next batch run and the pull request runs (cflite-pr) start from. A crash or a
+# failed property fails the run and its input is kept as an artifact. The actions clone the
+# repository themselves (no checkout step) and run in their own containers.
+
+name: cflite-batch
+
+on:
+  schedule:
+    - cron: "40 2 * * 0" # Sundays 02:40 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cflite-batch
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    name: "ClusterFuzzLite (batch)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      actions: read # the earlier runs' corpus artifacts
+      contents: read
+    steps:
+      - name: Build the fuzzers
+        id: build
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: python
+          sanitizer: address
+
+      - name: Run the fuzzers
+        id: run
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: python
+          sanitizer: address
+          mode: batch
+          fuzz-seconds: 1800
+          github-token: ${{ secrets.GITHUB_TOKEN }}

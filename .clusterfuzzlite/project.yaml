@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# ClusterFuzzLite project (docs/parts/ci.md, "Fuzzing"): the fuzzers in fuzz/ are Python (atheris).
+language: python
