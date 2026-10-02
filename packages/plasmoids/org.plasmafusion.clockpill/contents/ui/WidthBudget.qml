@@ -48,10 +48,11 @@ import org.kde.ksvg as KSvg
 // found; when the app rebuilds a submenu (Google Chrome's History and Profiles do, with new item
 // ids) the menu importer deletes those items, and the next key typed in the Search field passes
 // a deleted one to QWidget::removeAction: plasmashell crashes (ThinkPad, 2026-10-01; reproduced
-// with a stock panel). Hiding the action hides the stock button; arrowing right past the last
-// menu would still open it (the stock applet does not check visibility), so the budget moves on
-// to the first menu then. The rebuilt plasma-workspace of packaging/patches/plasma-workspace carries
-// the fix and names the action "appmenu-guarded", which is left alone (docs/parts/shell-topbar.md).
+// with a stock panel; KDE bug 526561). Hiding the action hides the stock button; arrowing right
+// past the last menu would still open it (the stock applet does not check visibility), so the
+// budget moves on to the first menu then. The rebuilt plasma-workspace of
+// packaging/patches/plasma-workspace carries the fix and names the action "appmenu-guarded",
+// which is left alone (docs/parts/shell-topbar.md).
 //
 // The level is computed in one go, never by trying: every widget of the bar that takes part
 // has `budgetLevel` (written here) and `budgetSaving(level)`, the width it gives up at that

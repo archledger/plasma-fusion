@@ -9,7 +9,7 @@ replace Fedora's on the machines that install them; nothing else in Plasma Fusio
 
 | Patch | What | Upstream |
 |---|---|---|
-| `0001-appmenu-guard-search-results.patch` | The global menu's Search keeps the matching actions of the app's menu. When the app rebuilds a submenu (Google Chrome's History and Profiles do), the menu importer deletes them, and the next key typed in the field crashes plasmashell. The patch holds the results in `QPointer`s and skips deleted ones. | To be sent to KDE (the same patch); bug and merge request links go here |
+| `0001-appmenu-guard-search-results.patch` | The global menu's Search keeps the matching actions of the app's menu. When the app rebuilds a submenu (Google Chrome's History and Profiles do), the menu importer deletes them, and the next key typed in the field crashes plasmashell. The patch holds the results in `QPointer`s and skips deleted ones. | KDE [bug 526561](https://bugs.kde.org/show_bug.cgi?id=526561) (filed 2026-10-02 with the steps and the backtrace; the patch itself was not attached) |
 | `0002-appmenu-mark-guarded-search.patch` | Plasma Fusion only: names the Search action `appmenu-guarded` instead of `appmenu`. The top bar hides the entry while it is named `appmenu` (the unfixed applet, docs/parts/shell-topbar.md `menuSearch`), so this build shows it again, and a Fedora update that replaces it hides it again. | Never |
 
 ## Build
