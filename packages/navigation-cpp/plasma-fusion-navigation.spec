@@ -81,8 +81,10 @@ find %{buildroot}%{_datadir}/kwin/effects/plasmafusion_navigation %{buildroot}%{
 %changelog
 * Fri Oct 02 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.1-7
 - Two apps side by side are one card in the app switcher, both shown in their
-  split; picking, closing or swiping to the card acts on both
-- A split pair left by going home comes back together, also from the dock
+  split, for every split on the screen; picking, closing or swiping to the card
+  acts on both
+- A split pair left by going home comes back together in tablet posture, also
+  from the dock, unless another app now holds the other half
 - An app alone picked in the switcher fills the screen, also one that was in a
   split
 - After going home the switcher leads with the app used last again

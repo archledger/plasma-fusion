@@ -62,24 +62,39 @@ KWrite, home gesture: the sheet closed both times, no TypeError.
 As in Android's Overview, two apps side by side (quick-tiled left and right: the window card's
 Split left / Split right, the dock's split drag, the quick-tile keys) are one card:
 
-- `FusionTaskFilterModel` pairs the topmost task tiled to the left with the topmost tiled to the
-  right of the screen when the switcher opens (the tablet script's split divider test:
-  `splitside.cpp`; minimized apps keep their tile, and the switcher minimizes every app when it
-  opens). The more recently used one stands for the pair in the list (the higher one when both
-  came up at once); the other is left out and given to the card as the `partner` role.
+- `FusionTaskFilterModel` finds the pairs when the switcher opens, before it minimizes the apps.
+  First the apps shown, layer by layer: the topmost app and the app seen in the other half of its
+  split (tiled on the other side and not covered by an app above it: `fusionVisiblePartner` in
+  `splitside.cpp`, with the tablet script's split divider test for the sides), then the same
+  under them, so an older split under a newer one is a second pair card. Then the pairs
+  `FusionTaskModel` remembers, when both apps are shown or both minimized: the split seen when an
+  app was activated or tiled (a split with an app opened between its halves), and the pairs the
+  switcher minimized as one card. Minimized apps keep their tiles, so tiles alone would pair apps
+  that were never side by side; a remembered pair ends when one app closes or leaves its side,
+  or when the switcher shows them on cards of their own. The more recently used app stands for
+  the pair in the list (the higher one when both came up at once); the other is left out and
+  given to the card as the `partner` role.
 - The card (`Task.qml`) shows both previews in their split ratio with a gap for the divider, each
   app's icon and name above its half, and one close button. Picking it, a sideways swipe to it, or
   a gesture that returns to it brings up both apps in their tiles (`raiseApp`), the card's app on
   top with the focus; swiping it up or its close button closes both (`closeTask`). In scrub mode
   the pair's other app is a small badge on the card's icon.
 - Picking the card of an app alone maximizes it, also an app left alone in a tile (Android: an
-  app outside a pair fills the screen). 0.1-6 kept such an app in its half; its partner lookup
-  skipped minimized windows, so the other half never came back from the switcher.
-- Going home and back: the pairs the switcher minimized are remembered (`rememberPair`); when one
-  of the two is activated again from anywhere (the dock, a notification, Alt+Tab), the other is
-  restored into its half under it while both are still tiled side by side (log "split pair
-  back"). Each pair is used once.
-- An app of the pair that quits while the switcher is open: the other one gets its own card.
+  app outside a pair fills the screen), once the app is shown again (maximized while still
+  minimized, a tiled app made KWin's maximize effect throw a TypeError). 0.1-6 kept such an app
+  in its half; its partner lookup skipped minimized windows, so the other half never came back
+  from the switcher.
+- Going home and back, in tablet posture: the pairs the switcher minimized are remembered
+  (`rememberPair`); when one of the two is activated again from anywhere (the dock, a
+  notification, Alt+Tab), the other is restored into its half under it 300 ms later, while both
+  are still that pair, side by side, and no other app is shown in that half (log "split pair
+  back"; "split pair not back" when an app holds the half). The wait lets the dock's split drag,
+  which activates the app and then tiles it, land first: KWrite of a pair that went home, dragged
+  next to Dolphin, stays next to Dolphin. Each pair is used once; leaving tablet posture drops
+  them.
+- An app of the pair that quits while the switcher is open: the other one gets its own card. When
+  the pair's card is closed and the app it left out stays open (it asks to save its work), that
+  app gets its own card after 3 s, as a card whose app does not close comes back.
 - The switcher minimizes the apps oldest first. Minimizing the active app first made KWin
   activate the app behind it, which then counted as the last used one, so after going home the
   switcher led with the app that had been behind.
@@ -92,3 +107,18 @@ tapped in the dock: Konsole back in its half both times. Sideways to Dolphin and
 again. A short swipe up: the pair again. Pair card swiped up: both closed, Dolphin left. Konsole
 quitting with the switcher open: KWrite on its own card. KWrite alone in its tile, picked:
 maximized. No QML errors from the effect. Builds without warnings against KWin 6.7.5 and 6.7.91.
+
+Review fixes (6.7.5 container, 14 sessions fx-*, evidence `split-pair/review-fix/` next to the
+above; the switcher opened by its shortcut, as the hold gesture was unreliable on the loaded
+laptop): KWrite|Konsole gone home, Dolphin alone in the left half: cards Dolphin and
+KWrite+Konsole, Dolphin picked fills the screen (fx-phantom). Two splits, on top of each other or
+one gone home first: two pair cards, the older one picked comes back in its tiles (fx-twopairs,
+fx-twopairs2). Dolphin opened over a split and Konsole raised over it: still one pair card; then
+Gwenview tiled left over it all next to the visible Konsole: Gwenview+Konsole, KWrite alone
+(fx-covered). The dock's split steps after going home put KWrite next to Dolphin and Konsole stays
+minimized (fx-dockover); KWrite activated and tiled right at once: Konsole stays minimized
+(fx-fromhome); home, Dolphin opened, KWrite activated: Konsole back over Dolphin, and the pair is
+one card again from home (fx-back). Laptop posture: KWrite activated, Konsole stays minimized
+(fx-laptop). Pair card closed with unsaved text in the app it left out: that KWrite gets its own
+card again after 3 s (fx-refuse-hidden; fx-refuse-shown unchanged). fx-pair, fx-lone,
+fx-hiddenquits and fx-single as before; KWin's maximize TypeError is gone (0 in all 14 logs).

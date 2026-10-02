@@ -218,14 +218,17 @@ laptop 34/72 unchanged (session st-fix).
 ## A split pair in the app switcher (2026-10-02, SPLIT.md item 4)
 
 The navigation effect (`packages/navigation-cpp`, 0.1-7; details in its README) shows the two apps
-of a split as one card, as Android's Overview does. It pairs them with this script's test (the
-topmost window tiled to the left and the topmost tiled to the right; `splitside.cpp` is the C++
-copy of `isLeft`/`isRight`), also while they are minimized. The card shows both in their split
-ratio; picking it, a sideways swipe to it and a gesture that returns to it bring both back into
-their tiles, so this script's handle comes back with them; closing it closes both. After the home
-gesture, activating either app again (the dock, a notification) restores the other into its half.
-An app alone in a tile picked from its own card fills the screen. Test: 6.7.5 container, sessions
-pair5 and lone2 (evidence `artifacts/plasma-fusion/2026-10-01-tablet2/split-pair/`).
+of a split as one card, as Android's Overview does. Its sides are this script's test
+(`splitside.cpp` is the C++ copy of `isLeft`/`isRight`); the pairs are the apps seen side by side,
+layer by layer (every split on the screen, also one under another app), and among minimized apps
+only the pairs the switcher minimized as one card (minimized apps keep their tiles). The card
+shows both in their split ratio; picking it, a sideways swipe to it and a gesture that returns to
+it bring both back into their tiles, so this script's handle comes back with them; closing it
+closes both. After the home gesture, activating either app again in tablet posture (the dock, a
+notification) restores the other into its half, unless another app is shown there (the dock's
+split drag). An app alone in a tile picked from its own card fills the screen. Test: 6.7.5
+container, sessions pair5 and lone2, and the review fixes' fx-* sessions (evidence
+`artifacts/plasma-fusion/2026-10-01-tablet2/split-pair/`).
 
 ## Keeping the dock over apps (SPLIT.md item 6)
 
