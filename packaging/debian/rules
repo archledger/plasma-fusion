@@ -1,0 +1,61 @@
+#!/usr/bin/make -f
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion: the shared part (tools/build.sh, packaging/install-tree.sh) and the three compiled
+# parts (CMake) from one source; see docs/parts/system.md.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export QT_QPA_PLATFORM = offscreen
+unexport DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS
+CMAKE_FLAGS = -DBUILD_TESTING=OFF -DKDE_INSTALL_USE_QT_SYS_PATHS=ON
+# The KWin the navigation effect is built against: this series only (it uses KWin's own API).
+KWIN_VERSION := $(shell dpkg-query -W -f '$${Version}' kwin-dev)
+KWIN_SERIES := $(shell echo '$(KWIN_VERSION)' | sed -E 's/^([0-9]+:)?([0-9]+)\.([0-9]+).*/\2 \3/' | awk '{print $$1 "." $$2+1}')
+KWIN_EPOCH := $(shell echo '$(KWIN_VERSION)' | sed -nE 's/^([0-9]+:).*/\1/p')
+
+%:
+	dh $@ --buildsystem=cmake+ninja
+
+override_dh_auto_configure:
+	dh_auto_configure --sourcedirectory=packages/decoration-cpp --builddirectory=_build/decoration -- $(CMAKE_FLAGS)
+	dh_auto_configure --sourcedirectory=packages/navigation-cpp --builddirectory=_build/navigation -- $(CMAKE_FLAGS)
+	# rcc stamps the settings page's QML with SOURCE_DATE_EPOCH and Qt's QML disk cache reuses a
+	# compiled file whose stamp is unchanged: derive the stamp from the sources (docs/parts/kcm-cpp.md).
+	stamp=$$(( 1700000000 + 0x$$(cd packages/kcm-cpp && cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/*.json src/ui/*.qml ../common/*.qml | sha256sum | cut -c1-6) )); \
+	  echo $$stamp >_kcm-stamp; \
+	  SOURCE_DATE_EPOCH=$$stamp dh_auto_configure --sourcedirectory=packages/kcm-cpp --builddirectory=_build/settings -- $(CMAKE_FLAGS)
+
+override_dh_auto_build:
+	STAGE=$(CURDIR)/_stage bash tools/build.sh
+	bash generators/plymouth/build.sh $(CURDIR)/_plymouth/plasma-fusion
+	dh_auto_build --builddirectory=_build/decoration
+	dh_auto_build --builddirectory=_build/navigation
+	SOURCE_DATE_EPOCH=$$(cat _kcm-stamp) QT_RCC_SOURCE_DATE_OVERRIDE=$$(cat _kcm-stamp) dh_auto_build --builddirectory=_build/settings
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion \
+	  --destdir $(CURDIR)/debian/plasma-fusion --prefix /usr --libexecdir /usr/libexec
+	mkdir -p debian/plasma-fusion/usr/share/plasma-fusion/built-against
+	DESTDIR=$(CURDIR)/debian/plasma-fusion-decoration cmake --install _build/decoration
+	DESTDIR=$(CURDIR)/debian/plasma-fusion-settings cmake --install _build/settings
+	DESTDIR=$(CURDIR)/debian/plasma-fusion-navigation cmake --install _build/navigation
+	# Every icon link resolves in the package or in the installed Breeze (hicolor and Flatpak names
+	# are those of apps that need not be installed).
+	ln -s /usr/share/icons/breeze debian/plasma-fusion/usr/share/icons/breeze
+	ln -s /usr/share/icons/breeze-dark debian/plasma-fusion/usr/share/icons/breeze-dark
+	find debian/plasma-fusion -xtype l -not -path '*/icons/PlasmaFusion*/hicolor/*' \
+	  -not -path '*/icons/PlasmaFusion*/flatpak/*' >_broken-links
+	rm debian/plasma-fusion/usr/share/icons/breeze debian/plasma-fusion/usr/share/icons/breeze-dark
+	if [ -s _broken-links ]; then echo "broken links:" >&2; head -50 _broken-links >&2; exit 1; fi
+	# Qt's QML disk cache reuses a compiled file while the source's time stamp is unchanged: each
+	# QML/JS file of the effect gets a time derived from its content (docs/parts/navigation-cpp.md).
+	find debian/plasma-fusion-navigation -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 | \
+	  while IFS= read -r -d '' f; do \
+	    touch -h -d "@$$(( $(SOURCE_DATE_EPOCH) - 1 - 0x$$(sha256sum "$$f" | cut -c1-6) ))" "$$f"; \
+	  done
+
+override_dh_gencontrol:
+	dh_gencontrol -- '-Vkwin:Depends=kwin-wayland (>= $(KWIN_VERSION)), kwin-wayland (<< $(KWIN_EPOCH)$(KWIN_SERIES)~)'

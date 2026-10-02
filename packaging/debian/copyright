@@ -1,0 +1,68 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Plasma Fusion
+Upstream-Contact: Wisbendji Fimerlus <archledger236@gmail.com>
+Source: https://github.com/archledger/plasma-fusion
+Comment: Each file names its copyright holders and licence in its SPDX header or in REUSE.toml of
+ the source (REUSE 3.3); the licence texts are in LICENSES/. This file groups them.
+
+Files: *
+Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+License: GPL-2.0-or-later
+
+Files: packages/navigation-cpp/*
+       packages/plasmoids/org.plasmafusion.desktop/*
+       packages/lockscreen/org.plasmafusion.lockshell/contents/lockscreen/*
+       packages/look-and-feel/common/contents/logout/*
+Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+           KDE contributors (Plasma Mobile, plasma-desktop's Folder View, kscreenlocker's greeter,
+           the logout screen), named in each file's SPDX header
+License: GPL-2.0-or-later
+Comment: A few of these files are LGPL-2.0-or-later (their SPDX headers say so).
+
+Files: docs/* README.md SECURITY.md CONTRIBUTING.md GOVERNANCE.md design/*
+       generators/wallpapers/svg/* packages/look-and-feel/*/contents/previews/*
+Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+License: CC-BY-SA-4.0
+Comment: The rendered artwork (icons, cursors, wallpapers, window decorations, backgrounds) is
+ CC-BY-SA-4.0 too; the generators that draw it are GPL-2.0-or-later.
+
+Files: fonts/manrope/*
+Copyright: 2018 The Manrope Project Authors <https://github.com/googlefonts/manrope>
+License: OFL-1.1
+
+Files: fonts/spacegrotesk/*
+Copyright: 2020 The Space Grotesk Project Authors <https://github.com/floriankarsten/space-grotesk>
+License: OFL-1.1
+
+Files: packaging/patches/plasma-workspace/*
+Copyright: 2016 Kai Uwe Broulik <kde@privat.broulik.de>
+           2016 Chinmoy Ranjan Pradhan <chinmoyrp65@gmail.com>
+           2026 Wisbendji Fimerlus <archledger236@gmail.com>
+License: GPL-2.0-only or GPL-3.0-only or LicenseRef-KDE-Accepted-GPL
+Comment: Patches for Fedora's plasma-workspace; not built into these packages.
+
+License: GPL-2.0-or-later
+ This program is free software; you can redistribute it and/or modify it under the terms of the
+ GNU General Public License as published by the Free Software Foundation; either version 2 of the
+ License, or (at your option) any later version.
+ .
+ On Debian systems, the complete text of the GNU General Public License version 2 can be found in
+ /usr/share/common-licenses/GPL-2.
+
+License: LGPL-2.0-or-later
+ On Debian systems, the complete text of the GNU Library General Public License version 2 can be
+ found in /usr/share/common-licenses/LGPL-2.
+
+License: GPL-2.0-only or GPL-3.0-only or LicenseRef-KDE-Accepted-GPL
+ On Debian systems, the complete texts of the GNU General Public License versions 2 and 3 can be
+ found in /usr/share/common-licenses/GPL-2 and GPL-3; KDE e.V.'s acceptance text is in
+ LICENSES/LicenseRef-KDE-Accepted-GPL.txt of the source.
+
+License: CC-BY-SA-4.0
+ Creative Commons Attribution-ShareAlike 4.0 International. The complete text is in
+ LICENSES/CC-BY-SA-4.0.txt of the source and
+ https://creativecommons.org/licenses/by-sa/4.0/legalcode.
+
+License: OFL-1.1
+ SIL Open Font License, Version 1.1. The complete text is installed with the fonts as
+ /usr/share/fonts/plasma-fusion/OFL-Manrope.txt and OFL-SpaceGrotesk.txt.

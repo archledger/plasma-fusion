@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The compiled Plasma Fusion parts are built against one KWin and KDecoration: say so after an
+# upgrade of either (AUR helpers do not rebuild on dependency updates).
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = kwin
+Target = kdecoration
+
+[Action]
+Description = Checking whether Plasma Fusion needs a rebuild...
+When = PostTransaction
+Exec = /usr/share/libalpm/scripts/plasma-fusion-rebuild

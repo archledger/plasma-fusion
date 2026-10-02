@@ -1,0 +1,101 @@
+Source: plasma-fusion
+Section: kde
+Priority: optional
+Maintainer: Wisbendji Fimerlus <archledger236@gmail.com>
+Rules-Requires-Root: no
+Build-Depends: debhelper-compat (= 13),
+               cmake,
+               ninja-build,
+               g++,
+               extra-cmake-modules,
+               pkgconf,
+               python3,
+               python3-pil,
+               python3-numpy,
+               python3-pyside6.qtcore,
+               python3-pyside6.qtgui,
+               python3-pyside6.qtsvg,
+               librsvg2-bin,
+               libxml2-utils,
+               desktop-file-utils,
+               qt6-shader-baker,
+               breeze-icon-theme,
+               qt6-base-dev,
+               qt6-base-private-dev,
+               qt6-declarative-dev,
+               qt6-declarative-private-dev,
+               kwin-dev (>= 4:6.7),
+               libkdecorations3-dev (>= 4:6.7),
+               libplasmaactivities-dev | plasma-activities-dev,
+               libkf6config-dev,
+               libkf6configwidgets-dev,
+               libkf6coreaddons-dev,
+               libkf6colorscheme-dev,
+               libkf6globalaccel-dev,
+               libkf6i18n-dev,
+               libkf6windowsystem-dev,
+               libkf6package-dev,
+               libkf6kcmutils-dev,
+               libepoxy-dev,
+               libdrm-dev,
+               libvulkan-dev
+Standards-Version: 4.7.2
+Homepage: https://github.com/archledger/plasma-fusion
+Vcs-Git: https://github.com/archledger/plasma-fusion.git
+Vcs-Browser: https://github.com/archledger/plasma-fusion
+
+Package: plasma-fusion
+Architecture: all
+Depends: ${misc:Depends},
+         plasma-workspace (>= 4:6.7),
+         plasma-desktop (>= 4:6.7),
+         kwin-wayland (>= 4:6.7),
+         breeze-icon-theme,
+         libkf6config-bin,
+         pkexec,
+         python3,
+         python3-pil,
+         systemd,
+         librsvg2-bin | python3-pyside6.qtsvg
+Recommends: plasma-fusion-decoration, plasma-fusion-settings, libnotify-bin, xournalpp
+Suggests: plasma-fusion-navigation, kate, konsole, python3-pyside6.qtsvg
+Description: Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
+ Plasma Fusion is a desktop for KDE Plasma 6 in a dark and a light variant:
+ Global Themes with the desktop layout and splash screen, color schemes, Plasma
+ styles, icon and cursor themes, window decorations, wallpapers, a top bar,
+ launcher, dock and quick-settings widgets, a window switcher and KWin scripts,
+ a lock-screen shell, Konsole and Kate color themes and the Manrope and Space
+ Grotesk fonts.
+ .
+ Each user then runs "plasma-fusion setup" inside their Plasma session, and
+ "plasma-fusion update" after later updates.
+
+Package: plasma-fusion-decoration
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version})
+Enhances: kwin-wayland
+Description: Plasma Fusion window decoration for KWin
+ The Plasma Fusion window decoration: a tall title bar with the app icon and a
+ left-aligned title, round buttons, rounded corners with the window content
+ clipped, a thin light edge and soft shadows. In tablet mode the title bar and
+ its buttons grow to touch size.
+
+Package: plasma-fusion-settings
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version}),
+         systemsettings, qml6-module-org-kde-kirigami, qml6-module-org-kde-kcmutils
+Description: Plasma Fusion settings page for System Settings
+ The Appearance page of the Plasma Fusion desktop as a System Settings module:
+ light, dark or automatic style, the accent color, the window-button layout,
+ dock magnification, the global menu, snap layouts, the glass level, high
+ contrast, reduced motion, tablet mode and two ways to start over.
+
+Package: plasma-fusion-navigation
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version}), ${kwin:Depends}
+Enhances: kwin-wayland
+Description: Plasma Fusion tablet navigation gestures (KWin effect)
+ In tablet posture: swipe up from the bottom edge to go home, swipe up a little
+ for the dock, swipe up and hold for the app switcher, or swipe along the bottom
+ edge for the previous app. Built against one KWin release series; it is
+ rebuilt for each.

@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# pacman hook (plasma-fusion-rebuild.hook): name the Plasma Fusion parts built against another
+# KWin or KDecoration than the one now installed. Prints only; always exits 0.
+upstream() { pacman -Q "$1" 2>/dev/null | awk '{print $2}' | sed 's/^[0-9]*://; s/-[^-]*$//'; }
+for pair in decoration:kdecoration navigation:kwin; do
+  part=${pair%%:*} pkg=${pair#*:}
+  f=/usr/share/plasma-fusion/built-against/$part
+  [ -f "$f" ] || continue
+  built=$(sed -n "s/^$pkg=//p" "$f" | head -n 1)
+  now=$(upstream "$pkg")
+  if [ -n "$built" ] && [ -n "$now" ] && [ "$built" != "$now" ]; then
+    echo "plasma-fusion-$part was built against $pkg $built, $now is installed:"
+    echo "  rebuild plasma-fusion (for example yay -S --rebuild plasma-fusion); until then the"
+    echo "  Plasma Fusion login check keeps the parts that depend on it off"
+  fi
+done
+exit 0
