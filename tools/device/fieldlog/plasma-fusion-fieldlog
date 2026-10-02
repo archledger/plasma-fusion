@@ -74,6 +74,7 @@ FLUSH_S = 10 * INTERVAL
 KEEP_DAYS = int(os.environ.get("PF_FIELDLOG_KEEP_DAYS") or 30)
 MAX_MB = float(os.environ.get("PF_FIELDLOG_MAX_MB") or 100)
 DAY_LINE_CAP = 20000          # lines per day file before only crashes and session events are kept
+REPLAY_S = 3 * 86400          # how far back the journal is read again after a stop
 MEMSNAP_JUMP_MIB = 60
 MEMSNAP_GAP_S = 600
 MEMSNAP_PER_DAY = 12
@@ -795,6 +796,7 @@ class FieldLog:
         self.journal = None
         self.jbuf = b""
         self.jlast = b""
+        self.jsince = None
         self.jrestart_at = 0.0
         self.jfails = 0
         self.stop = False
@@ -808,11 +810,15 @@ class FieldLog:
         self.self_mono = None
 
     # -- state
+    def journal_cursor(self):
+        """The cursor of the last journal line read in this run, else the saved one."""
+        m = re.search(rb'"__CURSOR":"([^"]+)"', self.jlast) if self.jlast else None
+        return m.group(1).decode() if m else self.state.get("cursor")
+
     def save_state(self):
-        if self.jlast:
-            m = re.search(rb'"__CURSOR":"([^"]+)"', self.jlast)
-            if m:
-                self.state["cursor"] = m.group(1).decode()
+        cur = self.journal_cursor()
+        if cur:
+            self.state["cursor"] = cur
         try:
             write_atomic(self.state_path, json.dumps(self.state, indent=1, sort_keys=True))
         except OSError as e:
@@ -915,12 +921,20 @@ class FieldLog:
         fields = ("MESSAGE,PRIORITY,_COMM,SYSLOG_IDENTIFIER,_PID,CODE_FILE,CODE_LINE,QT_CATEGORY,"
                   "MESSAGE_ID,USER_UNIT,UNIT_RESULT,EXIT_CODE,EXIT_STATUS,_SYSTEMD_USER_UNIT")
         args = [tool("journalctl"), "--user", "-f", "-a", "-o", "json", "--no-pager", "--output-fields=" + fields]
-        cur = self.state.get("cursor")
+        # Go on after the last line read (in this run, else the saved cursor), at most REPLAY_S back:
+        # what happened while the recorder was stopped (at logout, overnight) is read at the next start.
+        now = time.time()
+        cur = self.journal_cursor()
         m = re.search(r"(?:^|;)t=([0-9a-f]+)", cur or "")
-        if cur and m and time.time() - int(m.group(1), 16) / 1e6 < 12 * 3600:
+        if cur and m and now - int(m.group(1), 16) / 1e6 < REPLAY_S:
             args.append("--after-cursor=" + cur)
+        elif cur and m:
+            args.append(f"--since=@{int(now - REPLAY_S)}")
+        elif self.jsince:
+            args.append(f"--since=@{int(self.jsince)}")  # an earlier journalctl of this run read nothing
         else:
-            args += ["-n", "0"]
+            args += ["-n", "0"]  # the first run starts now
+        self.jsince = self.jsince or now
         try:
             self.journal = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.DEVNULL,
                                             stderr=subprocess.DEVNULL)
@@ -1417,7 +1431,7 @@ def handle_journal_line(fl, line):
         return
     code_file = text_of(d.get("CODE_FILE"))
     cat = d.get("QT_CATEGORY")
-    if comm in COUNTED:
+    if comm in COUNTED and abs(time.time() - ts) < 120:  # not lines read again after a stop
         fl.ring.append((time.monotonic(), ts, comm, prio, cat, normalise(msg, quotes="all")[:180]))
     m = re.match(r"^plasmafusion-tablet: posture (\w+)", msg)
     if m:

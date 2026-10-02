@@ -341,9 +341,55 @@ class Journal(unittest.TestCase):
         everything = "".join(p.read_text() for p in f.sdir.glob("*.jsonl"))
         for private in ("chro", "Dinner", "Private Browsing", "web page", "bad thing"):
             self.assertNotIn(private, everything)
+        self.assertEqual(len(f.ring), 0)  # lines of 2026-10-02 16:00 UTC: read again, not the last minute
+        fl.handle_journal_line(f, jline("plasmashell", 'launcher: first results for "chro" after 12 ms', prio=6,
+                                        ts=int(time.time()), QT_CATEGORY="qml"))
         ring = " ".join(r[5] for r in f.ring)
         self.assertNotIn("chro", ring)
         self.assertIn("launcher: first results for", ring)
+
+    def test_journalctl_arguments_after_a_restart(self):
+        # The follow goes on after the last line read, not after the last saved cursor (up to
+        # 10 minutes older), and reads up to 3 days back (review of 2026-10-02).
+        d = fresh_dir("journal-args")
+        env = fake_setup(d)
+        keep = {k: os.environ.get(k) for k in ("PATH", "FAKE_LOG", "FAKE_JOURNAL", "FAKE_DUMPS", "XDG_STATE_HOME")}
+        log = d / "calls.log"
+        try:
+            for k in keep:
+                os.environ[k] = env[k]
+            f = fl.FieldLog()
+
+            def start():
+                n = len(log.read_text().splitlines()) if log.exists() else 0
+                f.start_journal()
+                for _ in range(100):
+                    lines = log.read_text().splitlines() if log.exists() else []
+                    if len(lines) > n:
+                        break
+                    time.sleep(0.05)
+                f.reap_journal()
+                return lines[-1].split()[1:]
+
+            now = int(time.time())
+            self.assertEqual(start()[-2:], ["-n", "0"])
+            self.assertEqual(start()[-1], f"--since=@{int(f.jsince)}")  # the first one read nothing
+            f.state["cursor"] = c0 = f"s=1;i=5;t={(now - 2 * 86400) * 10**6:x}"
+            self.assertEqual(start()[-1], "--after-cursor=" + c0)
+            f.jlast = jline("plasmashell", "x", ts=now - 60)
+            self.assertEqual(start()[-1], f"--after-cursor=s=1;i=1;t={(now - 60) * 10**6:x}")
+            f.save_state()
+            self.assertEqual(f.state["cursor"], f"s=1;i=1;t={(now - 60) * 10**6:x}")
+            f.jlast, f.state["cursor"] = b"", f"s=1;i=5;t={(now - 5 * 86400) * 10**6:x}"
+            arg = start()[-1]
+            self.assertTrue(arg.startswith("--since=@"), arg)
+            self.assertLessEqual(abs(int(arg[9:]) - (now - 3 * 86400)), 5)
+        finally:
+            for k, v in keep.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
 
 
 class GateLog(unittest.TestCase):
@@ -478,6 +524,35 @@ for l in open(os.environ["FAKE_DUMPS"]):
         print(json.dumps(r))
 '''
 
+# A journalctl -f that honours --after-cursor; the first one started writes FAKE_FIRST_N lines and
+# exits (as if killed).
+FAKE_JOURNALCTL_DIES = r'''#!/usr/bin/python3
+import os, signal, sys, time
+a = sys.argv[1:]
+log = os.environ["FAKE_LOG"]
+open(log, "a").write("journalctl " + " ".join(a) + "\n")
+if "-f" not in a:
+    sys.exit(0)
+signal.signal(signal.SIGTERM, lambda *x: sys.exit(0))
+lines = open(os.environ["FAKE_JOURNAL"], "rb").read().splitlines()
+after = next((x.split("=", 1)[1] for x in a if x.startswith("--after-cursor=")), None)
+if after:
+    i = next(i for i, l in enumerate(lines) if ('"__CURSOR":"%s"' % after).encode() in l)
+    lines = lines[i + 1:]
+first = not os.path.exists(log + ".started")
+open(log + ".started", "a").close()
+n = int(os.environ.get("FAKE_FIRST_N") or 0)
+if first and n:
+    lines = lines[:n]
+for l in lines:
+    sys.stdout.buffer.write(l + b"\n")
+sys.stdout.flush()
+if first and n:
+    sys.exit(0)
+while True:
+    time.sleep(1)
+'''
+
 FAKE_SYSTEMCTL = r'''#!/usr/bin/python3
 import os, sys, time
 a = sys.argv[1:]
@@ -603,6 +678,23 @@ class Run(unittest.TestCase):
         calls = (d / "calls.log").read_text()
         for verb in ("restart", "enable", "start ", "stop", "daemon-reload"):
             self.assertNotIn(f"systemctl --user {verb}", calls.replace("--no-pager ", ""))
+
+    def test_journalctl_that_dies_is_followed_on_without_counting_twice(self):
+        # The first journalctl writes 4 of 10 lines and dies; the second gets --after-cursor of the
+        # fourth (no state was saved in between: FLUSH_S is 20 s here) and writes the other 6.
+        d = fresh_dir("run-jdies")
+        now = int(time.time())
+        lines = [jline("plasmashell", 'Binding loop detected for property "width"', ts=now - 100 + i,
+                       QT_CATEGORY="qt.qml.binding") for i in range(10)]
+        env = fake_setup(d, journal=lines, journalctl=FAKE_JOURNALCTL_DIES, seconds=8, interval=2)
+        r = subprocess.run([sys.executable, str(TOOL), "run"], env=dict(env, FAKE_FIRST_N="4"), capture_output=True,
+                           timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr.decode())
+        starts = [l for l in (d / "calls.log").read_text().splitlines() if l.startswith("journalctl ") and " -f " in l]
+        self.assertEqual(len(starts), 2, starts)
+        self.assertIn(f"--after-cursor=s=1;i=1;t={(now - 97) * 10**6:x}", starts[1])
+        noise = [g for g in fl.aggregate(all_events(d)) if g["kind"] == "noise"]
+        self.assertEqual([g["count"] for g in noise], [10])
 
     def test_journalctl_that_cannot_start_is_retried_slowly(self):
         # Popen raises (here: the program's interpreter is missing); this used to be retried at once,

@@ -118,9 +118,13 @@ and a count.
 
 ### Plasma Fusion errors
 
-One `journalctl --user -f -a -o json --output-fields=...` (after the saved cursor when it is less
-than 12 h old, else from now; a journalctl that exits or cannot start is started again after 5 s,
-10 s, ... up to 5 minutes). Lines are filtered on their bytes before they are parsed (the
+One `journalctl --user -f -a -o json --output-fields=...`. It goes on after the last line read: in
+the same run after the line before journalctl stopped, at a start after the cursor saved in
+`state.json`, at most 3 days back (older: the last 3 days); the first run starts from now. So
+what happened while the recorder was stopped (a hang at logout, a night) is read at the next start;
+about 6 s of CPU for 3 days of this laptop's user journal (206,000 lines). A journalctl that exits
+or cannot start is started again after 5 s, 10 s, ... up to 5 minutes. Lines are filtered on their
+bytes before they are parsed (the
 programs below and "plasma(-)fusion"); about 72,000 user journal lines a day on the laptop, most of
 them container output, never reach the JSON parser.
 
