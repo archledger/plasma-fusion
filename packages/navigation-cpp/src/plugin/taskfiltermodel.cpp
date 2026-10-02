@@ -14,6 +14,8 @@
 #include <virtualdesktops.h>
 #include <workspace.h>
 
+#include <QTimer>
+
 namespace KWin
 {
 
@@ -271,6 +273,17 @@ void FusionTaskFilterModel::handleWindowRemoved(Window *window)
     m_hidden.remove(window);
     const bool partnerHidden = m_hidden.remove(partner);
     if (m_closing.contains(partner)) {
+        if (partnerHidden) {
+            // The other app was closed too. It gets its own card only if it is still open after
+            // the time a card gives its app (Task.qml uncloseTimer: an app asking to save its
+            // work), so it does not flash up while it closes.
+            QTimer::singleShot(3000, this, [this, partner = QPointer<Window>(partner)]() {
+                if (partner && !partner->isDeleted() && m_closing.remove(partner)) {
+                    beginFilterChange();
+                    endFilterChange(QSortFilterProxyModel::Direction::Rows);
+                }
+            });
+        }
         return;
     }
     if (partnerHidden) {
