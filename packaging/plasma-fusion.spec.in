@@ -130,7 +130,7 @@ copy_tree plasma-fusion/appicons plasma-fusion/appicons
 copy_tree plasma-fusion/compat plasma-fusion/compat
 # The charge-limit helper's polkit action (the helper itself goes to libexec below)
 copy_tree polkit-1/actions polkit-1/actions
-# The power-tiers service itself: the unit's ExecSearchPath ends in /usr/libexec/plasma-fusion.
+# The power-tiers service itself: the unit's ExecSearchPath includes /usr/libexec/plasma-fusion.
 mkdir -p %{buildroot}%{_libexecdir}/plasma-fusion
 cp -a _stage/.local/libexec/plasma-fusion/. %{buildroot}%{_libexecdir}/plasma-fusion/
 

@@ -219,8 +219,10 @@ CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
 # Plasma Fusion's helper programs: the user's copy (--install) first, then a system package's
-# (/usr/lib/plasma-fusion where the distribution has no /usr/libexec, such as Arch).
-HELPER_DIRS=("$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion /usr/lib/plasma-fusion)
+# (/usr/lib/plasma-fusion where the distribution has no /usr/libexec, such as Arch; the system
+# profile on NixOS).
+HELPER_DIRS=("$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion /usr/lib/plasma-fusion
+  /run/current-system/sw/libexec/plasma-fusion)
 helper_path() { # $1 program name: prints the first installed copy
   local d
   for d in "${HELPER_DIRS[@]}"; do

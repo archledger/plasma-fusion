@@ -13,8 +13,9 @@
 #                                                               looks for it (the build being
 #                                                               installed or /usr/share) to enable it
 # The unit finds the script in ~/.local/libexec/plasma-fusion, /usr/local/libexec/plasma-fusion,
-# /usr/libexec/plasma-fusion or /usr/lib/plasma-fusion (ExecSearchPath). Installing enables
-# nothing: fusion-config.sh does.
+# /usr/libexec/plasma-fusion, /usr/lib/plasma-fusion or NixOS's
+# /run/current-system/sw/libexec/plasma-fusion (ExecSearchPath). Installing enables nothing:
+# fusion-config.sh does.
 # Checks: bash -n, shellcheck -S warning (when installed), the unit's key lines, and with node the
 # widget script's unit test (packages/powerfx/tests/widgets.test.js).
 set -euo pipefail
@@ -29,7 +30,7 @@ if command -v shellcheck >/dev/null 2>&1; then
   shellcheck -S warning "$SCRIPT"
 fi
 for line in 'ExecStart=plasma-fusion-powerfx' 'ExecStopPost=-plasma-fusion-powerfx --apply full' \
-  'ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion' \
+  'ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion:/run/current-system/sw/libexec/plasma-fusion' \
   'PartOf=graphical-session.target' 'WantedBy=graphical-session.target'; do
   grep -qxF "$line" "$UNIT" || { echo "powerfx: $UNIT lacks '$line'" >&2; exit 1; }
 done

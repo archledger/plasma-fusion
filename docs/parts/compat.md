@@ -33,7 +33,8 @@ all "huge on the 100 % screen next to a scaled one"; the known workaround is XWa
 
 - `packages/compat/plasma-fusion-libreoffice`, staged to `.local/libexec/plasma-fusion/` (RPM:
   `/usr/libexec/plasma-fusion/`; fusion-config.sh takes the first of `~/.local/libexec`,
-  `/usr/local/libexec`, `/usr/libexec` and `/usr/lib`, each `/plasma-fusion`). fusion-config.sh
+  `/usr/local/libexec`, `/usr/libexec`, `/usr/lib` and NixOS's `/run/current-system/sw/libexec`,
+  each `/plasma-fusion`). fusion-config.sh
   links `~/.local/bin/libreoffice` to it (first in
   the session's PATH, so menus, the dock and opening files all pass through it) and copies
   `soffice.desktop` (hidden) to `~/.local/share/applications/`, only when LibreOffice itself is in

@@ -29,7 +29,8 @@ in Konsole `cat -v` shows `^[`, a tab and `^[[D ^[[B ^[[A ^[[C` (6.7.5 and 6.7.9
 - `plasma-fusion-keyboard-keys install | refresh | remove | status` (`/usr/libexec/plasma-fusion/`,
   per user in `~/.local/libexec/plasma-fusion/`). Record: `~/.local/state/plasma-fusion/keyboard-keys`.
   `fusion-config.sh` (and the stub it writes) and `fusion-restore.sh` use the first copy of
-  `~/.local/libexec`, `/usr/local/libexec`, `/usr/libexec` and `/usr/lib` (each `/plasma-fusion`), so
+  `~/.local/libexec`, `/usr/local/libexec`, `/usr/libexec`, `/usr/lib` and NixOS's
+  `/run/current-system/sw/libexec` (each `/plasma-fusion`), so
   a system-wide install gets the keys too (before 2026-10-02 only the user's copy counted).
 - `fusion-config.sh --install` runs `refresh` (builds on first run; keeps a user's `remove`).
 - Login: the env stub of the login check runs `refresh` only when a package database (the rpm

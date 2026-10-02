@@ -46,11 +46,12 @@ and stays off when critical ends.
 | (the same unit) | `.local/share/plasma-fusion/powerfx/plasma-fusion-powerfx.service` | where `fusion-config.sh` (`install_user_service`) looks for the unit in the build being installed and in `/usr/share`; without this copy a staged install placed the unit but did not enable it (found at PKG-1) |
 | `packages/powerfx/tests/*` | not staged | tests (below) |
 
-The unit finds the script with `ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion`
+The unit finds the script with `ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion:/run/current-system/sw/libexec/plasma-fusion`
 (systemd 250+; verified with systemd 259 in o1pw-unit2), so one unit file serves a per-user copy and
 the system package (`/usr/lib/plasma-fusion` on distributions without `/usr/libexec`, such as Arch;
-2026-10-02); the user's copy wins. `fusion-config.sh` and `fusion-restore.sh` search the same four
-directories for the helper programs. `ExecSearchPath` also becomes the process's `PATH`; the
+NixOS's system profile, where a package's `libexec` appears; 2026-10-02); the user's copy wins.
+`fusion-config.sh` and `fusion-restore.sh` search the same five directories for the helper
+programs. `ExecSearchPath` also becomes the process's `PATH`; the
 script appends `/usr/local/bin:/usr/bin:/bin:/run/current-system/sw/bin:/run/wrappers/bin` (the last
 two: NixOS's system profile and setuid wrappers, where `/usr/bin` holds only `env`).
 

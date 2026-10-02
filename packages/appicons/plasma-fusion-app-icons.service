@@ -14,7 +14,7 @@ ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
 [Service]
 Type=exec
 # The user's own copy (fusion-config.sh --install) first, then the system package's.
-ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion
+ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion:/run/current-system/sw/libexec/plasma-fusion
 ExecStart=plasma-fusion-app-icons watch
 # The shell's own kill: /usr/bin/kill is not on every system (NixOS).
 ExecReload=/bin/sh -c 'kill -HUP "$MAINPID"'

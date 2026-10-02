@@ -57,7 +57,8 @@ bus() { busctl --user "$@"; }
 bus_json() { busctl --user --json=short "$@"; }
 # Plasma Fusion's helper programs, found as fusion-config.sh finds them: the user's copy first,
 # then a system package's.
-HELPER_DIRS=("$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion /usr/lib/plasma-fusion)
+HELPER_DIRS=("$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion /usr/lib/plasma-fusion
+  /run/current-system/sw/libexec/plasma-fusion)
 helper_path() { # $1 program name: prints the first installed copy
   local d
   for d in "${HELPER_DIRS[@]}"; do

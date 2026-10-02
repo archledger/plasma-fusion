@@ -31,8 +31,8 @@ criticised for making icons hard to tell apart), and redrawing or recolouring th
 
 `packages/appicons/plasma-fusion-app-icons` (installed in `~/.local/libexec/plasma-fusion/` by
 fusion-config.sh, `/usr/libexec/plasma-fusion/` by the package, `/usr/lib/plasma-fusion/` where a
-distribution has no `/usr/libexec`; the unit's `ExecSearchPath` lists all three and
-`/usr/local/libexec/plasma-fusion/`):
+distribution has no `/usr/libexec`, `/run/current-system/sw/libexec/plasma-fusion/` on NixOS; the
+unit's `ExecSearchPath` lists all four and `/usr/local/libexec/plasma-fusion/`):
 
 1. Reads the visible desktop entries (data directories, Flatpak exports; the first file of a
    desktop id wins; NoDisplay/Hidden skipped) and their `Icon=` names, leaving out the names the

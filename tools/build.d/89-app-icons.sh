@@ -23,7 +23,7 @@ import sys
 compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")
 PY
 for line in 'ExecStart=plasma-fusion-app-icons watch' \
-  'ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion' \
+  'ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion:/usr/lib/plasma-fusion:/run/current-system/sw/libexec/plasma-fusion' \
   'PartOf=graphical-session.target' 'WantedBy=graphical-session.target'; do
   grep -qxF "$line" "$UNIT" || { echo "app-icons: $UNIT lacks '$line'" >&2; exit 1; }
 done
