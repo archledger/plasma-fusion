@@ -3300,5 +3300,714 @@
   "icons": [
    "org.kde.xwaylandvideobridge"
   ]
+ },
+ {
+  "id": "org.gnome.Nautilus",
+  "name": "Files",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-files",
+  "icons": [
+   "org.gnome.Nautilus",
+   "org.gnome.Nautilus"
+  ]
+ },
+ {
+  "id": "org.gnome.Calculator",
+  "name": "Calculator",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-calculator",
+  "icons": [
+   "org.gnome.Calculator",
+   "org.gnome.Calculator"
+  ]
+ },
+ {
+  "id": "org.gnome.Calendar",
+  "name": "Calendar",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-calendar",
+  "icons": [
+   "org.gnome.Calendar",
+   "org.gnome.Calendar"
+  ]
+ },
+ {
+  "id": "org.gnome.Characters",
+  "name": "Characters",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-characters",
+  "icons": [
+   "org.gnome.Characters",
+   "org.gnome.Characters"
+  ]
+ },
+ {
+  "id": "org.gnome.clocks",
+  "name": "Clocks",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-clocks",
+  "icons": [
+   "org.gnome.clocks",
+   "org.gnome.clocks"
+  ]
+ },
+ {
+  "id": "org.gnome.Contacts",
+  "name": "Contacts",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-contacts",
+  "icons": [
+   "org.gnome.Contacts",
+   "org.gnome.Contacts"
+  ]
+ },
+ {
+  "id": "org.gnome.Connections",
+  "name": "Connections",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-connections",
+  "icons": [
+   "org.gnome.Connections",
+   "org.gnome.Connections"
+  ]
+ },
+ {
+  "id": "org.gnome.baobab",
+  "name": "Disk Usage Analyzer",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-disk-usage",
+  "icons": [
+   "org.gnome.baobab",
+   "org.gnome.baobab"
+  ]
+ },
+ {
+  "id": "org.gnome.font-viewer",
+  "name": "Fonts",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-fonts",
+  "icons": [
+   "org.gnome.font-viewer",
+   "org.gnome.font-viewer"
+  ]
+ },
+ {
+  "id": "org.gnome.Logs",
+  "name": "Logs",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-logs",
+  "icons": [
+   "org.gnome.Logs",
+   "org.gnome.Logs"
+  ]
+ },
+ {
+  "id": "org.gnome.Yelp",
+  "name": "Help",
+  "batch": "r3-gnome-a",
+  "tile": "gnome-help",
+  "icons": [
+   "org.gnome.Yelp",
+   "org.gnome.Yelp"
+  ]
+ },
+ {
+  "id": "org.gnome.Loupe",
+  "name": "Image Viewer",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-loupe",
+  "icons": [
+   "org.gnome.Loupe",
+   "org.gnome.Loupe"
+  ]
+ },
+ {
+  "id": "org.gnome.Maps",
+  "name": "Maps",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-maps",
+  "icons": [
+   "org.gnome.Maps",
+   "org.gnome.Maps"
+  ]
+ },
+ {
+  "id": "org.gnome.Papers",
+  "name": "Document Viewer",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-papers",
+  "icons": [
+   "org.gnome.Papers",
+   "org.gnome.Papers"
+  ]
+ },
+ {
+  "id": "org.gnome.Ptyxis",
+  "name": "Terminal",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-ptyxis",
+  "icons": [
+   "org.gnome.Ptyxis",
+   "org.gnome.Ptyxis"
+  ]
+ },
+ {
+  "id": "org.gnome.Settings",
+  "name": "Settings",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-settings",
+  "icons": [
+   "org.gnome.Settings",
+   "org.gnome.Settings"
+  ]
+ },
+ {
+  "id": "org.gnome.Showtime",
+  "name": "Video Player",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-showtime",
+  "icons": [
+   "org.gnome.Showtime",
+   "org.gnome.Showtime"
+  ]
+ },
+ {
+  "id": "org.gnome.SimpleScan",
+  "name": "Document Scanner",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-simple-scan",
+  "icons": [
+   "org.gnome.SimpleScan",
+   "org.gnome.SimpleScan"
+  ]
+ },
+ {
+  "id": "org.gnome.Snapshot",
+  "name": "Camera",
+  "batch": "r3-gnome-b",
+  "tile": "gnome-snapshot",
+  "icons": [
+   "org.gnome.Snapshot",
+   "org.gnome.Snapshot"
+  ]
+ },
+ {
+  "id": "org.gnome.Software",
+  "name": "Software",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-software",
+  "icons": [
+   "org.gnome.Software",
+   "org.gnome.Software"
+  ]
+ },
+ {
+  "id": "org.gnome.SystemMonitor",
+  "name": "System Monitor",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-system-monitor",
+  "icons": [
+   "org.gnome.SystemMonitor",
+   "org.gnome.SystemMonitor",
+   "gnome-system-monitor-kde"
+  ]
+ },
+ {
+  "id": "org.gnome.TextEditor",
+  "name": "Text Editor",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-text-editor",
+  "icons": [
+   "org.gnome.TextEditor",
+   "org.gnome.TextEditor"
+  ]
+ },
+ {
+  "id": "org.gnome.Tour",
+  "name": "Tour",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-tour",
+  "icons": [
+   "org.gnome.Tour",
+   "org.gnome.Tour"
+  ]
+ },
+ {
+  "id": "org.gnome.Weather",
+  "name": "Weather",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-weather",
+  "icons": [
+   "org.gnome.Weather",
+   "org.gnome.Weather"
+  ]
+ },
+ {
+  "id": "org.gnome.Decibels",
+  "name": "Audio Player",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-decibels",
+  "icons": [
+   "org.gnome.Decibels",
+   "org.gnome.Decibels"
+  ]
+ },
+ {
+  "id": "org.gnome.SoundRecorder",
+  "name": "Sound Recorder",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-sound-recorder",
+  "icons": [
+   "org.gnome.SoundRecorder",
+   "org.gnome.SoundRecorder"
+  ]
+ },
+ {
+  "id": "org.gnome.ColorProfileViewer",
+  "name": "Color Profile Viewer",
+  "batch": "r3-gnome-c",
+  "tile": "gnome-color-profile-viewer",
+  "icons": [
+   "gnome-color-manager",
+   "org.gnome.ColorProfileViewer"
+  ]
+ },
+ {
+  "id": "firewall-config",
+  "name": "Firewall",
+  "batch": "r3-fedora-system",
+  "tile": "firewall-config",
+  "icons": [
+   "firewall-config",
+   "firewall-config"
+  ]
+ },
+ {
+  "id": "org.fedoraproject.MediaWriter",
+  "name": "Fedora Media Writer",
+  "batch": "r3-fedora-system",
+  "tile": "fedora-mediawriter",
+  "icons": [
+   "org.fedoraproject.MediaWriter",
+   "org.fedoraproject.MediaWriter"
+  ]
+ },
+ {
+  "id": "org.freedesktop.GnomeAbrt",
+  "name": "Problem Reporting",
+  "batch": "r3-fedora-system",
+  "tile": "abrt",
+  "icons": [
+   "org.freedesktop.GnomeAbrt",
+   "org.freedesktop.GnomeAbrt"
+  ]
+ },
+ {
+  "id": "org.freedesktop.MalcontentControl",
+  "name": "Parental Controls",
+  "batch": "r3-fedora-system",
+  "tile": "malcontent",
+  "icons": [
+   "org.freedesktop.MalcontentControl",
+   "org.freedesktop.MalcontentControl"
+  ]
+ },
+ {
+  "id": "im-chooser",
+  "name": "Input Method Selector",
+  "batch": "r3-fedora-system",
+  "tile": "im-chooser",
+  "icons": [
+   "im-chooser",
+   "im-chooser"
+  ]
+ },
+ {
+  "id": "setroubleshoot",
+  "name": "SELinux Troubleshooter",
+  "batch": "r3-fedora-system",
+  "tile": "setroubleshoot",
+  "icons": [
+   "setroubleshoot_icon",
+   "setroubleshoot"
+  ]
+ },
+ {
+  "id": "rygel-preferences",
+  "name": "Rygel Preferences",
+  "batch": "r3-fedora-system",
+  "tile": "rygel",
+  "icons": [
+   "rygel",
+   "rygel-preferences"
+  ]
+ },
+ {
+  "id": "remote-viewer",
+  "name": "Remote Viewer",
+  "batch": "r3-fedora-system",
+  "tile": "remote-viewer",
+  "icons": [
+   "virt-viewer",
+   "remote-viewer"
+  ]
+ },
+ {
+  "id": "htop",
+  "name": "Htop",
+  "batch": "r3-fedora-system",
+  "tile": "htop",
+  "icons": [
+   "htop",
+   "htop"
+  ]
+ },
+ {
+  "id": "org.kde.drkonqi.coredump.gui",
+  "name": "Crashed Processes Viewer",
+  "batch": "r3-fedora-system",
+  "tile": "drkonqi-coredump",
+  "icons": [
+   "org.kde.drkonqi.coredump.gui"
+  ]
+ },
+ {
+  "id": "org.kde.plasma.emojier",
+  "name": "Emoji Selector",
+  "batch": "r3-fedora-system",
+  "tile": "emojier",
+  "icons": [
+   "org.kde.plasma.emojier"
+  ]
+ },
+ {
+  "id": "org.kde.akonadiimportwizard",
+  "name": "KMail Import Wizard",
+  "batch": "r3-fedora-system",
+  "tile": "importwizard",
+  "icons": [
+   "kontact-import-wizard",
+   "org.kde.akonadiimportwizard"
+  ]
+ },
+ {
+  "id": "org.kde.ktnef",
+  "name": "KTnef",
+  "batch": "r3-fedora-system",
+  "tile": "ktnef",
+  "icons": [
+   "ktnef",
+   "org.kde.ktnef"
+  ]
+ },
+ {
+  "id": "org.kde.kwatchgnupg",
+  "name": "GnuPG Log Viewer",
+  "batch": "r3-fedora-system",
+  "tile": "kwatchgnupg",
+  "icons": [
+   "org.kde.kwatchgnupg",
+   "org.kde.kwatchgnupg"
+  ]
+ },
+ {
+  "id": "wine-wineboot",
+  "name": "Wine",
+  "batch": "r3-wine",
+  "tile": "wine",
+  "icons": [
+   "wine",
+   "wine-oleview",
+   "wine-wineboot"
+  ]
+ },
+ {
+  "id": "wine-winecfg",
+  "name": "Wine Configuration",
+  "batch": "r3-wine",
+  "tile": "wine-winecfg",
+  "icons": [
+   "winecfg",
+   "wine-winecfg"
+  ]
+ },
+ {
+  "id": "wine-notepad",
+  "name": "Notepad",
+  "batch": "r3-wine",
+  "tile": "wine-notepad",
+  "icons": [
+   "notepad",
+   "wine-notepad"
+  ]
+ },
+ {
+  "id": "wine-regedit",
+  "name": "Regedit",
+  "batch": "r3-wine",
+  "tile": "wine-regedit",
+  "icons": [
+   "regedit",
+   "wine-regedit"
+  ]
+ },
+ {
+  "id": "wine-uninstaller",
+  "name": "Wine Software Uninstaller",
+  "batch": "r3-wine",
+  "tile": "wine-uninstaller",
+  "icons": [
+   "msiexec",
+   "wine-uninstaller"
+  ]
+ },
+ {
+  "id": "wine-winefile",
+  "name": "Wine File",
+  "batch": "r3-wine",
+  "tile": "wine-winefile",
+  "icons": [
+   "winefile",
+   "wine-winefile"
+  ]
+ },
+ {
+  "id": "wine-winemine",
+  "name": "WineMine",
+  "batch": "r3-wine",
+  "tile": "wine-winemine",
+  "icons": [
+   "winemine",
+   "wine-winemine"
+  ]
+ },
+ {
+  "id": "wine-winhelp",
+  "name": "Wine Help",
+  "batch": "r3-wine",
+  "tile": "wine-winhelp",
+  "icons": [
+   "winhelp",
+   "wine-winhelp"
+  ]
+ },
+ {
+  "id": "wine-wordpad",
+  "name": "Wine Wordpad",
+  "batch": "r3-wine",
+  "tile": "wine-wordpad",
+  "icons": [
+   "wordpad",
+   "wine-wordpad"
+  ]
+ },
+ {
+  "id": "windows11-home",
+  "name": "Windows 11 Home",
+  "batch": "r3-wine",
+  "tile": "windows11-home",
+  "icons": [
+   "windows11-home"
+  ]
+ },
+ {
+  "id": "chatgpt",
+  "name": "ChatGPT",
+  "batch": "r3-user-apps",
+  "tile": "chatgpt",
+  "icons": [
+   "chatgpt",
+   "chatgpt"
+  ]
+ },
+ {
+  "id": "ai.opencode.desktop",
+  "name": "OpenCode",
+  "batch": "r3-user-apps",
+  "tile": "opencode",
+  "icons": [
+   "ai.opencode.desktop",
+   "ai.opencode.desktop"
+  ]
+ },
+ {
+  "id": "io.github.archledger.Irlume",
+  "name": "Irlume",
+  "batch": "r3-user-apps",
+  "tile": "irlume",
+  "icons": [
+   "io.github.archledger.Irlume",
+   "io.github.archledger.Irlume"
+  ]
+ },
+ {
+  "id": "dev.lizardbyte.app.Sunshine",
+  "name": "Sunshine",
+  "batch": "r3-user-apps",
+  "tile": "sunshine",
+  "icons": [
+   "dev.lizardbyte.app.Sunshine",
+   "dev.lizardbyte.app.Sunshine"
+  ]
+ },
+ {
+  "id": "it.mijorus.gearlever",
+  "name": "Gear Lever",
+  "batch": "r3-user-apps",
+  "tile": "gear-lever",
+  "icons": [
+   "it.mijorus.gearlever",
+   "it.mijorus.gearlever"
+  ]
+ },
+ {
+  "id": "Paseo",
+  "name": "Paseo",
+  "batch": "r3-user-apps",
+  "tile": "paseo",
+  "icons": [
+   "Paseo",
+   "Paseo"
+  ]
+ },
+ {
+  "id": "zcode",
+  "name": "ZCode",
+  "batch": "r3-user-apps",
+  "tile": "zcode",
+  "icons": [
+   "zcode",
+   "zcode"
+  ]
+ },
+ {
+  "id": "shadow_pc",
+  "name": "Shadow PC",
+  "batch": "r3-user-apps",
+  "tile": "shadow-pc",
+  "icons": [
+   "shadow_pc"
+  ]
+ },
+ {
+  "id": "com.github.xournalpp.xournalpp",
+  "name": "Xournal++",
+  "batch": "r3-user-apps",
+  "tile": "xournalpp",
+  "icons": [
+   "com.github.xournalpp.xournalpp",
+   "com.github.xournalpp.xournalpp",
+   "xournalpp"
+  ]
+ },
+ {
+  "id": "qt6-designer",
+  "name": "Qt6 Designer",
+  "batch": "r3-user-apps",
+  "tile": "qt-designer",
+  "icons": [
+   "designer-qt6",
+   "qt6-designer"
+  ]
+ },
+ {
+  "id": "qt6-linguist",
+  "name": "Qt6 Linguist",
+  "batch": "r3-user-apps",
+  "tile": "qt-linguist",
+  "icons": [
+   "linguist-qt6",
+   "qt6-linguist"
+  ]
+ },
+ {
+  "id": "com.mitchellh.ghostty",
+  "name": "Ghostty",
+  "batch": "r3-candidates",
+  "tile": "ghostty",
+  "icons": [
+   "com.mitchellh.ghostty",
+   "ghostty"
+  ]
+ },
+ {
+  "id": "org.wezfurlong.wezterm",
+  "name": "WezTerm",
+  "batch": "r3-candidates",
+  "tile": "wezterm",
+  "icons": [
+   "org.wezfurlong.wezterm",
+   "wezterm"
+  ]
+ },
+ {
+  "id": "dev.zed.Zed",
+  "name": "Zed",
+  "batch": "r3-candidates",
+  "tile": "zed",
+  "icons": [
+   "dev.zed.Zed",
+   "zed",
+   "dev.zed.Zed-Preview"
+  ]
+ },
+ {
+  "id": "org.gnu.emacs",
+  "name": "Emacs",
+  "batch": "r3-candidates",
+  "tile": "emacs",
+  "icons": [
+   "org.gnu.emacs",
+   "emacs"
+  ]
+ },
+ {
+  "id": "io.neovim.nvim",
+  "name": "Neovim",
+  "batch": "r3-candidates",
+  "tile": "neovim",
+  "icons": [
+   "io.neovim.nvim",
+   "nvim"
+  ]
+ },
+ {
+  "id": "org.wireshark.Wireshark",
+  "name": "Wireshark",
+  "batch": "r3-candidates",
+  "tile": "wireshark",
+  "icons": [
+   "org.wireshark.Wireshark",
+   "wireshark"
+  ]
+ },
+ {
+  "id": "docker-desktop",
+  "name": "Docker Desktop",
+  "batch": "r3-candidates",
+  "tile": "docker-desktop",
+  "icons": [
+   "docker-desktop"
+  ]
+ },
+ {
+  "id": "com.onepassword.OnePassword",
+  "name": "1Password",
+  "batch": "r3-candidates",
+  "tile": "onepassword",
+  "icons": [
+   "com.onepassword.OnePassword",
+   "1password"
+  ]
+ },
+ {
+  "id": "me.proton.Mail",
+  "name": "Proton Mail",
+  "batch": "r3-candidates",
+  "tile": "proton-mail",
+  "icons": [
+   "me.proton.Mail",
+   "proton-mail"
+  ]
  }
 ]

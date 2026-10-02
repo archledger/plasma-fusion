@@ -31,7 +31,7 @@ distributions and Plasma versions are not tested. Everything it changes can be u
   Notification Centre, desktop cards
 - Tablet posture: full-screen apps, home screen with app pages, gestures from the bottom edge,
   split screen, on-screen keyboard keys, pen menu
-- App icons: 336 KDE and common Linux apps redrawn as Plasma Fusion tiles that keep each app's
+- App icons: 407 KDE, GNOME and common Linux apps redrawn as Plasma Fusion tiles that keep each app's
   own mark; every other installed app's own icon placed on a Plasma Fusion tile
 - A settings module, a lock screen, power tiers for battery life
 

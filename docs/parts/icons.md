@@ -16,8 +16,8 @@ active colour scheme (`FollowsColorScheme=true`).
 
 | Family | Drawings | Names per theme | Source |
 |---|---|---|---|
-| App tiles | 18 tiles + Fusion logo tile + logo mark, and 3 derived tiles (Archive, Document Viewer, Camera; STYLE-1) | 766 (with the per-app tiles) + 285 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
-| Per-app tiles | 326 tiles, one per app, in the board's tile construction (2026-10-02 redesign, "Per-app tiles" below) | 602 of the 766 | `apptiles/` |
+| App tiles | 18 tiles + Fusion logo tile + logo mark, and 3 derived tiles (Archive, Document Viewer, Camera; STYLE-1) | 844 (with the per-app tiles) + 289 `-symbolic` twins | AppIcon.dc.html `renderVals()` ported 1:1; `-symbolic` twins use the one-colour app symbols of the Launcher/Main boards' icon table |
+| Per-app tiles | 397 tiles, one per app, in the board's tile construction (2026-10-02 redesign and its round 3, "Per-app tiles" below) | 702 of the 844 | `apptiles/` |
 | Places | 27 folders (the board's 10 + 17 derived symbols), 10 colour tints, 2 trash cans | 67 (coloured, 16 px, 22 px, `-symbolic`) | FileIcons.dc.html `folder()` |
 | Devices | 12 board devices + 8 derived (laptop, speaker, microphone, webcam, gamepad, touchpad, tablet, scanner) | 59 (+ 64 `-symbolic`) | FileIcons.dc.html `devices[]` |
 | File types | 820 pages: page + coloured extension tag, one per (kind, extension) | 1358 MIME icon names + 18 `-symbolic` | FileIcons.dc.html `file()` |
@@ -26,9 +26,9 @@ active colour scheme (`FollowsColorScheme=true`).
 | Categories | menu categories (applications-*) | 26 | derived line icons |
 | Emblems | the link badge `emblem-symbolic-link` at 16 and 22 px (pixel grid) and scalable (STYLE-1) | 1 (in `emblems/16`, `emblems/22`, `emblems/scalable`, and `@2x`/`@3x`) | derived |
 
-In total 1230 coloured and 308 symbolic drawings answer 3891 icon names per theme; 577 further
-names are handed back to Breeze and 87 to apps' own hicolor icons (see "Lookup rules" below). About 3.6 MB per theme (apparent size;
-the per-app tiles are 0.57 MB of it); each theme holds its own copy of the coloured art, so either
+In total 1301 coloured and 308 symbolic drawings answer 3973 icon names per theme; 578 further
+names are handed back to Breeze and 150 to apps' own icons (147 hicolor, 3 Flatpak; see "Lookup
+rules" below). About 3.8 MB per theme (apparent size; the per-app tiles are 0.73 MB of it); each theme holds its own copy of the coloured art, so either
 one works without the other.
 
 Tiles follow the board exactly: 64 x 64 tile, radius 15, 4-unit lip, 9 % sheen, 1-unit
@@ -468,7 +468,7 @@ its app icons for its own use (`labplot-*`, `parley-*`, `akregator_empty`, `skro
 app names. `keepassxc` stays out: KeePassXC's tray icons (`keepassxc-locked`,
 `keepassxc-monochrome-*`) would fall back to the tile; the Flatpak id has it.
 
-`names.DESIGNED` (622 names: the per-app names and the board-mapped apps' names) is written into
+`names.DESIGNED` (722 names since round 3: the per-app names and the board-mapped apps' names) is written into
 each theme as `designed-apps.txt` and into `FusionIconNames.js` as `designed()`: familiar app
 icons skip these names, and `FusionIconTile.familiar` is false for them (so the dock's date stays on
 KOrganizer's calendar tile with familiar icons on).
@@ -491,3 +491,38 @@ Kdenlive, Krita, the board-mapped apps, LibreOffice, Rhythmbox, KPatience) shows
 `kiconfinder6` on the built theme finds `kmail`, `org.kde.kmail2`, `krita`, `firefox` and
 `google-chrome-stable` as tiles, `libreoffice-calc-symbolic` as LibreOffice's own icon, `debug-run`
 and `code-block` in Breeze.
+
+### Round 3 (2026-10-02)
+
+After the redesign the owner asked for every app on both machines to have a designed tile, so that
+familiar icons only cover apps installed later. 71 more apps, approved by the owner as designed
+(canvas boards "Round 3: ..." in the icon canvas; material and review in `build/icons3` on the
+laptop: STYLE.md with the round-3 rules, REVIEW.md, batches):
+
+* the visible apps without a design on the laptop and the ThinkPad (65 desktop entries): the GNOME
+  apps (Files, Calculator, Calendar, Characters, Clocks, Contacts, Connections, Disk Usage Analyzer,
+  Fonts, Logs, Help, Image Viewer, Maps, Document Viewer, Terminal (Ptyxis), Settings, Video
+  Player, Document Scanner, Camera, Software, System Monitor, Text Editor, Tour, Weather, Audio
+  Player, Sound Recorder, Color Profile Viewer), Fedora and KDE system tools (Firewall, Media
+  Writer, Problem Reporting, Parental Controls, Input Method Selector, SELinux Troubleshooter,
+  Rygel, Remote Viewer, htop, Crashed Processes Viewer, Emoji Selector, KMail Import Wizard, KTnef,
+  GnuPG Log Viewer), Wine's tools (one family: each tool's object with Wine's glass) and the
+  owner's Windows 11 launcher, and the owner's own apps (ChatGPT, OpenCode, Irlume, Sunshine, Gear
+  Lever, Paseo, ZCode, Shadow PC, Xournal++, Qt Designer, Qt Linguist);
+* the candidates named in round 2: Ghostty, WezTerm, Zed, Emacs, Neovim, Wireshark, Docker
+  Desktop, 1Password, Proton Mail (Ghostty and Docker Desktop drawn from their known marks, with no
+  original at hand).
+
+Rule added for round 3: one app, one look. No app reuses a board tile another app already stands
+for, so a GNOME app and its KDE counterpart (Files and Dolphin, Calculator and KCalc, Ptyxis and
+Konsole, Software and Discover) are told apart at a glance. The reviewer compared the 71 new tiles
+with each other and with the 326 approved ones at 32 px and recoloured 9 that came too close (Text
+Editor amber, Notepad pink, Crashed Processes Viewer orange, Ptyxis blue, ...). Generic names stay
+with their meaning: Emoji Selector, Crashed Processes Viewer, KMail Import Wizard and the Windows 11
+launcher name generic icons, so their tiles are filed under their desktop ids only (the shell looks
+tiles up by desktop id). `nautilus` moved from the files category to GNOME Files. The capture was
+rerun: GNOME Settings' panel icons (`org.gnome.Settings-*-symbolic`) and the other `-symbolic`
+icons of the new apps are handed back to their hicolor files.
+
+Checks: `validate.py` passes (3218 drawings, both themes); two builds are byte-identical; 32 names
+rendered from the built theme (GNOME apps, Wine, the owner's apps, the candidates) show their tiles.

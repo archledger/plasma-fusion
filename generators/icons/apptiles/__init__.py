@@ -21,8 +21,10 @@ from apptiles import kit
 
 _HERE = pathlib.Path(__file__).resolve().parent
 _BATCHES = ['b_common_a', 'b_common_b', 'b_common_c', 'b_common_d', 'b_development', 'b_education',
-            'b_games_a', 'b_games_b', 'b_graphics_media', 'b_office_network_1', 'b_office_network_2',
-            'b_system_utility_1', 'b_system_utility_2']
+            'b_games_a', 'b_games_b', 'b_graphics_media', 'b_office_network_1',
+            'b_office_network_2', 'b_system_utility_1', 'b_system_utility_2', 'b_r3_gnome_a',
+            'b_r3_gnome_b', 'b_r3_gnome_c', 'b_r3_fedora_system', 'b_r3_wine', 'b_r3_user_apps',
+            'b_r3_candidates']
 
 TILES = {}
 ROUND1 = importlib.import_module('apptiles.b_round1').NEW

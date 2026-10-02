@@ -295,11 +295,12 @@ import apptiles as _apptiles  # noqa: E402
 _CATEGORY_OF = {_n: _k for _k, _ns in APPS.items() for _n in _ns}
 # Generic names a few apps use as their Icon= (Plasma Camera: camera-photo, KUserFeedback Console:
 # system-search, Vakzination: applications-development, KDebugSettings: debug-run, Kirigami
-# Gallery: preferences-desktop-theme, Welcome Center: start-here-kde-plasma). They mean an action,
-# a settings page or the launcher elsewhere, so they keep that drawing; the apps' own ids still get
-# their tiles.
+# Gallery: preferences-desktop-theme, Welcome Center: start-here-kde-plasma, KMail Import Wizard:
+# kontact-import-wizard, a Breeze action in KMail's menus). They mean an action, a settings page or
+# the launcher elsewhere, so they keep that drawing; the apps' own ids still get their tiles (the
+# shell looks tiles up by desktop id).
 _GENERIC = {'camera-photo', 'system-search', 'applications-development', 'debug-run',
-            'preferences-desktop-theme', 'start-here-kde-plasma'}
+            'preferences-desktop-theme', 'start-here-kde-plasma', 'kontact-import-wizard'}
 for _ns in list(_apptiles.APP_NAMES.values()) + list(_apptiles.BOARD_NAMES.values()):
     _ns[:] = [_n for _n in _ns if _n not in _GENERIC]
 _PER_APP = {_n for _ns in _apptiles.APP_NAMES.values() for _n in _ns}
