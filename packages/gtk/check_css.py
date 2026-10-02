@@ -18,7 +18,8 @@ def main(argv):
         import gi
         gi.require_version('Gtk', ver)
         from gi.repository import GLib, Gtk
-    except (ImportError, ValueError) as e:
+    except (ImportError, ValueError, AttributeError) as e:
+        # AttributeError: a 'gi' namespace directory left by another package, without PyGObject
         print('GTK %s not available (%s): check skipped' % (ver, e))
         return 2
     errors = []

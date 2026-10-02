@@ -18,6 +18,10 @@ BuildRequires:  extra-cmake-modules
 BuildRequires:  gcc-c++
 BuildRequires:  ninja-build
 BuildRequires:  cmake(KWin) >= 6.7
+# KWinConfig.cmake looks for epoxy, libdrm and Vulkan, which kwin-devel does not pull in.
+BuildRequires:  pkgconfig(epoxy)
+BuildRequires:  pkgconfig(libdrm)
+BuildRequires:  pkgconfig(vulkan)
 BuildRequires:  cmake(PlasmaActivities)
 BuildRequires:  cmake(Qt6Core)
 BuildRequires:  cmake(Qt6DBus)

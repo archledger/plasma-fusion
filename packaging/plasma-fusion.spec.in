@@ -23,13 +23,16 @@ Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 
 # tools/build.sh renders the artwork: Pillow for the wallpapers and the decoration,
-# PySide6 (QtSvg, offscreen) for the wallpaper check and the cursors.
+# PySide6 (QtSvg, offscreen) for the wallpaper check and the cursors, NumPy for the boot splash.
 BuildRequires:  bash
 BuildRequires:  coreutils
 BuildRequires:  findutils
 BuildRequires:  python3
+BuildRequires:  python3-numpy
 BuildRequires:  python3-pillow
 BuildRequires:  python3-pyside6
+# %check resolves the icon themes' links into Breeze against the installed Breeze.
+BuildRequires:  breeze-icon-theme >= 6.30
 
 # Plasma 6.7 packages the themes plug into (Global Theme, Plasma style, shells, KWin
 # switcher/scripts, Aurorae v2 decoration).
