@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Offscreen check of the styles with KSvg + Plasma Components 3 on the build host (no display).
 #
 #   run-harness.sh THEMES_DIR dark|light OUT.png

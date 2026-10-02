@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Build environment for the compiled Plasma Fusion parts (window decoration, settings module,
 # navigation effect).
 # Pinned to the Plasma, Frameworks and Qt versions of the test device so the plugins load there.

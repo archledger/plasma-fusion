@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Test tooling (not installed). Build a HOME tree for a virtual session that shows the
 # Plasma Fusion window decoration with real apps.
 #

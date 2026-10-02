@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Plasmoid org.plasmafusion.launcher (centred start menu). Copies the hand-written package into
 # the staged HOME: $STAGE/.local/share/plasma/plasmoids/org.plasmafusion.launcher, with copies of
 # the shared QML blocks it uses (packages/common/*.qml, tools/build-lib/shared-qml.sh) in contents/ui.

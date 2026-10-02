@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # shellcheck shell=bash
 # Test scenario for tools/vsession (sourced inside the virtual session; not installed); seed from
 # make-seed.sh. Dry run, then fusion-config.sh --install (dark, layout rebuilt), a plasmashell

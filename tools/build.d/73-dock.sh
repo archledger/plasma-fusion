@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Plasma Fusion dock plasmoid (org.plasmafusion.dock): copies the QML package into the HOME tree.
 # Installed like kpackagetool6 -t Plasma/Applet -i would, at
 #   $STAGE/.local/share/plasma/plasmoids/org.plasmafusion.dock/

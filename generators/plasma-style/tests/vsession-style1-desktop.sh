@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # STYLE-1 desktop scenario for tools/vsession (sourced inside a private session; test use only).
 # Seed: make-style1-seed.sh. Logical 1440x900 (1920x1200 with PFV_SCALE=1.3333333).
 # Plasma Fusion Dark with the Global Theme layout, the desktop switched to Folder View (BACKLOG M1

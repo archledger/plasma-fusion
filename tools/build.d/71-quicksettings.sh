@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Plasmoid org.plasmafusion.quicksettings (status pill, quick settings pop-up, notification
 # list) into $STAGE/.local/share/plasma/plasmoids/, with copies of the shared QML blocks it uses
 # (packages/common/*.qml, tools/build-lib/shared-qml.sh) in contents/ui/components (every file of

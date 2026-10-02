@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Test tooling (not installed): emulate startplasma's XDG_CONFIG_DIRS=~/.config/kdedefaults layer inside a
 # virtual session that was not started by startplasma. For every key in kdedefaults/<file>
 # that ~/.config/<file> does not set, write it with kwriteconfig6 (lower priority, like the

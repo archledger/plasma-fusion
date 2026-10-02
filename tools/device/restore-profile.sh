@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Put back a profile snapshot made by backup-profile.sh, then restart the shell.
 #
 #   restore-profile.sh TARBALL [--dry-run]

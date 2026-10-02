@@ -52,12 +52,14 @@ SHADOW_DY = 2 * NOMINAL / 24
 SHADOW_SIGMA = 1.5 * NOMINAL / 24
 SHADOW_OPACITY = 0.35
 
+# REUSE-IgnoreStart
 SVG_HEAD = ('<svg xmlns="http://www.w3.org/2000/svg" width="{canvas}" height="{canvas}" '
             'viewBox="{origin} {origin} {canvas} {canvas}">\n'
             '<!-- Plasma Fusion cursors. SPDX-License-Identifier: CC-BY-SA-4.0 -->\n'
             '<filter id="shadow" x="{origin}" y="{origin}" width="{canvas}" height="{canvas}" '
             'filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">'
             '<feGaussianBlur stdDeviation="{sigma}"/></filter>\n')
+# REUSE-IgnoreEnd
 
 
 def colour(value, theme):

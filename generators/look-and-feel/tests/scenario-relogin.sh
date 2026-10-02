@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # shellcheck shell=bash
 # Test scenario for tools/vsession, run with SEED '-' after scenario-full.sh (same HOME, a new
 # session = the next login): layout at login, a second dark run (idempotent), a layout reset run

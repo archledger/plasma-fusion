@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # STYLE-1 accent-colour scenario for tools/vsession (sourced inside a private session; test use only).
 # Seed: make-style1-seed.sh. Does an AccentColor change recolour Plasma-style accents without a
 # shell restart? The PC3 test pop-up (switch, check box, slider, tabs, list highlight) with the

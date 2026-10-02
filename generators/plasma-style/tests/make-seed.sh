@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Build a private-HOME seed for tools/vsession/remote.sh (test use only).
 #
 #   make-seed.sh STAGE_HOME SEED_DIR

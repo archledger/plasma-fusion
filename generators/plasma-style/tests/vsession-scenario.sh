@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Plasma style scenario for tools/vsession (sourced inside the private session; test use only).
 # Seed with make-seed.sh. Builds a 34 px top bar and an 88 px floating dock with stock widgets,
 # then screenshots pop-ups, the tray, the calendar, a notification, tooltips and the OSD in

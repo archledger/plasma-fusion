@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Test tooling (not installed). Build every part into SEED_DIR/pf-stage (the tree
 # fusion-config.sh --install copies into the session HOME), plus the device scripts and the
 # test helpers in SEED_DIR/pf-tools, and a gtk-3.0/gtk.css with a rule of its own (the install

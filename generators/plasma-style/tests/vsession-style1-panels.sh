@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # STYLE-1 panel-frame scenario for tools/vsession (sourced inside a private session; test use only).
 # Seed: make-style1-seed.sh with a plain build (PLAIN_THEMES). Logical 1440x900.
 # Phase H (the style as staged, --south-frame headroom): the Fusion layout at rest, then a user

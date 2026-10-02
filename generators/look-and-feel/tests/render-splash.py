@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Test tooling (not installed): render a built splash offscreen on the build machine.
 #   QT_QPA_PLATFORM=offscreen FONTCONFIG_FILE=<conf with fonts/> render-splash.py Splash.qml STAGE OUT.png [ms]
 import sys

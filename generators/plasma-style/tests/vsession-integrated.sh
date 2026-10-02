@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Integrated Plasma style scenario for tools/vsession (sourced inside the private session; test
 # use only). Seed with make-integrated-seed.sh. Applies Plasma Fusion Dark with the Global Theme
 # layout (tools/device/fusion-config.sh), adds two test widgets to the top bar, then opens the

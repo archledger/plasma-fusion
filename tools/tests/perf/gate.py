@@ -299,12 +299,14 @@ def main():
     if noisy_worse:
         print("worse than the baseline only in runs that overlapped another session (re-run on a quiet host): "
               + ", ".join(noisy_worse))
+    # REUSE-IgnoreStart
     result = {"_spdx": "SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>; "
                        "SPDX-License-Identifier: GPL-2.0-or-later", "geometry": a.geometry, "label": a.label,
               "runs": len(per_run), "clean_runs": len(clean),
               "date": __import__("time").strftime("%Y-%m-%dT%H:%M:%S%z"), "metrics": agg, "per_run": per_run,
               "budget_fail": budget_fail, "regressions": regressions, "noisy_worse": noisy_worse,
               "missing": missing, "packages": packages}
+    # REUSE-IgnoreEnd
     if a.host and os.path.exists(a.host):
         result["host"] = [json.loads(line) for line in open(a.host) if line.strip()]
     if a.save:

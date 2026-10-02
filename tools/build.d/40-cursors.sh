@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Cursor themes PlasmaFusion-cursors (dark fill, white outline; the default) and
 # PlasmaFusion-Light-cursors (white fill, #1b2031 outline) -> $STAGE/.local/share/icons/.
 # Each theme has KWin SVG cursors (cursors_scalable/) and Xcursor files (cursors/) rendered with

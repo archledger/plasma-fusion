@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 """Cut static weight instances from the variable Manrope and Space Grotesk fonts.
 
 Qt synthesises bold on top of variable fonts for heavy weights, and Space Grotesk's variable

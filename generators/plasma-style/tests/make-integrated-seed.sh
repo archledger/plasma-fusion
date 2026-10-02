@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Build a private-HOME seed with every Plasma Fusion part for tools/vsession/remote.sh
 # (test use only). The Global Theme layout is applied inside the session by
 # tools/device/fusion-config.sh, so the Plasma style is seen together with the real top bar,

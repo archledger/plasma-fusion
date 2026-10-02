@@ -325,11 +325,13 @@ def decoration_svg(scheme):
 
 
 def svg_doc(w, h, body, style=None):
+    # REUSE-IgnoreStart
     head = ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<!-- SPDX-FileCopyrightText: 2026 %s <%s> -->\n'
             '<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->\n'
             '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
             'version="1.1" width="%s" height="%s" viewBox="0 0 %s %s">\n' % (AUTHOR, EMAIL, w, h, w, h))
+    # REUSE-IgnoreEnd
     if style:
         head += '<style type="text/css" id="current-color-scheme">%s</style>\n' % style
     return head + body + "\n</svg>\n"
@@ -493,9 +495,11 @@ def rc_text(theme):
         ("PaddingLeft", PAD["left"]), ("PaddingTop", PAD["top"]),
         ("PaddingRight", PAD["right"]), ("PaddingBottom", PAD["bottom"]),
     ]
+    # REUSE-IgnoreStart
     lines = ["# SPDX-FileCopyrightText: 2026 %s <%s>" % (AUTHOR, EMAIL),
              "# SPDX-License-Identifier: CC-BY-SA-4.0",
              "[General]"]
+    # REUSE-IgnoreEnd
     lines += ["%s=%s" % kv for kv in general]
     lines += ["", "[Layout]"]
     lines += ["%s=%s" % kv for kv in layout]

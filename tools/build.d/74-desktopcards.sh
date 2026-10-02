@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Desktop card plasmoids org.plasmafusion.weathercard, org.plasmafusion.calendarcard and
 # org.plasmafusion.systemcard (Main board, "Plasma desktop widgets"), copied into the staged HOME
 # as kpackagetool6 -t Plasma/Applet -i would install them:

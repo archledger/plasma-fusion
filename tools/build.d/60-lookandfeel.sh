@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Global Themes org.plasmafusion.dark.desktop and org.plasmafusion.light.desktop: defaults,
 # desktop layout (with ensure-topbars.js), splash screen, log-out screen and previews, into
 # $STAGE/.local/share/plasma/look-and-feel/, and the "Add Panel" layout templates for the top bar

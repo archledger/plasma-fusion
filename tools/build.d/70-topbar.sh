@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Top bar plasmoids org.plasmafusion.appname (logo button + active application name) and
 # org.plasmafusion.clockpill (workspace dots + date + time + calendar pop-up), copied into the
 # staged HOME as kpackagetool6 -t Plasma/Applet -i would install them:

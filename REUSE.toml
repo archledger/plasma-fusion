@@ -1,0 +1,88 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# Licensing of files that cannot carry a header (data, images, fonts, compiled shaders) or that are
+# licensed as a group (documentation, design boards). A header in a file itself takes precedence.
+# Conventions (KDE's licensing policy): code GPL-2.0-or-later, artwork and documentation
+# CC-BY-SA-4.0, metadata and plain data CC0-1.0; bundled fonts keep their authors' OFL-1.1.
+version = 1
+SPDX-PackageName = "Plasma Fusion"
+SPDX-PackageSupplier = "Wisbendji Fimerlus <archledger236@gmail.com>"
+
+# Documentation
+[[annotations]]
+path = ["README.md", "docs/**", "packages/navigation-cpp/README.md"]
+SPDX-FileCopyrightText = "2026 Wisbendji Fimerlus <archledger236@gmail.com>"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# Artwork: design boards, generated wallpapers, previews, the launcher logo, icon glyph data
+[[annotations]]
+path = [
+    "design/**",
+    "generators/wallpapers/svg/**",
+    "packages/look-and-feel/*/contents/previews/**",
+    "packages/plasmoids/org.plasmafusion.launcher/contents/icons/fusion-logo.svg",
+    "generators/icons/glyphs.json",
+    "generators/icons/outlines.json",
+]
+SPDX-FileCopyrightText = "2026 Wisbendji Fimerlus <archledger236@gmail.com>"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# Metadata, configuration defaults and plain data
+[[annotations]]
+path = [
+    ".gitignore",
+    "**/metadata.json",
+    "packages/look-and-feel/**/defaults",
+    "packages/compat/soffice.desktop",
+    "packages/lockscreen/test/imports/**/qmldir",
+    "packages/plasmoids/org.plasmafusion.desktop/UPSTREAM-FILES",
+    "generators/icons/capture.json",
+    "generators/icons/mimetable.json",
+    "tools/tests/perf/baseline.json",
+    "tools/tests/perf/budget.json",
+]
+SPDX-FileCopyrightText = "2026 Wisbendji Fimerlus <archledger236@gmail.com>"
+SPDX-License-Identifier = "CC0-1.0"
+
+# Code without comment syntax: compiled shaders (from the .frag files next to them), Qt Designer
+# forms, KConfigXT schemas
+[[annotations]]
+path = [
+    "**/*.qsb",
+    "packages/kwin/scripts/*/contents/ui/config.ui",
+    "packages/plasmoids/org.plasmafusion.launcher/contents/config/main.xml",
+    "packages/plasmoids/org.plasmafusion.quicksettings/contents/config/main.xml",
+    "generators/plasma-style/tests/pstest-plasmoid/contents/config/main.xml",
+]
+SPDX-FileCopyrightText = "2026 Wisbendji Fimerlus <archledger236@gmail.com>"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+# The Folder View settings schema of plasma-desktop v6.7.5, with Plasma Fusion's tablet entries
+[[annotations]]
+path = "packages/plasmoids/org.plasmafusion.desktop/contents/config/main.xml"
+SPDX-FileCopyrightText = [
+    "The plasma-desktop authors <https://invent.kde.org/plasma/plasma-desktop>",
+    "2026 Wisbendji Fimerlus <archledger236@gmail.com>",
+]
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+# KTextEditor colour themes: JSON whose "license" field holds the tag as text
+[[annotations]]
+path = "packages/ktexteditor/*.theme"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Wisbendji Fimerlus <archledger236@gmail.com>"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+# Bundled fonts (SIL Open Font License 1.1; the OFL.txt next to each font is its licence text)
+[[annotations]]
+path = "fonts/manrope/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2018 The Manrope Project Authors <https://github.com/googlefonts/manrope>"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "fonts/spacegrotesk/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 The Space Grotesk Project Authors <https://github.com/floriankarsten/space-grotesk>"
+SPDX-License-Identifier = "OFL-1.1"

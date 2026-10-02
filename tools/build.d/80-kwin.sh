@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # KWin packages: window switcher org.plasmafusion.switcher and the KWin scripts
 # plasmafusion-snap (Meta+Z snap layouts, fill the other half, snap-zone outline) and
 # plasmafusion-attach (modal dialogs attached to their window). Installed like

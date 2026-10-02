@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Dock scenario for tools/vsession (test use only; seed with make-seed.sh): 88 px dock with stock
 # icontasks, Konsole running and Dolphin active, screenshots in dark and light.
 exec 2>&1

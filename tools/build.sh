@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Build every part into a HOME tree (default: stage/home), ready to copy to a user's HOME.
 #
 #   tools/build.sh [PART...]     build all parts, or only the named ones (e.g. "icons plasma-style")

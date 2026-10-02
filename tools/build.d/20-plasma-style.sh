@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Plasma styles plasma-fusion-dark and plasma-fusion-light
 # -> $STAGE/.local/share/plasma/desktoptheme/plasma-fusion-{dark,light}/
 # Panel frame switches (see generators/plasma-style/gen_plasma_style.py and docs/parts/plasma-style.md):

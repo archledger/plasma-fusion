@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Emulated pointer and keyboard input for a private KWin session (tools/vsession), through
 # KWin's EIS D-Bus interface (org.kde.KWin.EIS.RemoteDesktop) and libei. Test tool only.
 #

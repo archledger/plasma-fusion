@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Seed for the STYLE-1 scenarios (vsession-style1-*.sh; test use only): a stage HOME built with every
 # part, the device tools, the test widgets, and optionally a second Plasma style build to switch to
 # inside the session (PLAIN_THEMES: a directory holding plasma-fusion-dark/ and plasma-fusion-light/

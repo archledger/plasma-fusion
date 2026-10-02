@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Laptop side: seed a virtual session's HOME on the ThinkPad, run a scenario, fetch the results.
 #
 #   remote.sh NAME SCENARIO [SEED_HOME_DIR|-] [WIDTHxHEIGHT] [TIMEOUT]

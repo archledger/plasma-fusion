@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Foundation: colour schemes, fonts, wallpapers, startup backgrounds, Konsole and Kate/KWrite
 # themes and the GTK additions, into the HOME tree $STAGE:
 #   .local/share/color-schemes/PlasmaFusion{Dark,Light,HighContrast}.colors

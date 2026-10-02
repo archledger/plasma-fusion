@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # Run an isolated, headless Plasma session on this machine and execute a scenario in it.
 #
 #   vsession.sh NAME SCENARIO [WIDTHxHEIGHT] [TIMEOUT_SECONDS]
