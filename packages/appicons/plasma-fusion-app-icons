@@ -187,15 +187,32 @@ def designed_names():
     return set()
 
 
+def handed_back_names():
+    """Names the theme hands back to Breeze or to apps' own icons (its breeze/, hicolor/ and flatpak/
+    folders: generator's capture list). A familiar icon under such a name would take it over (KMail's
+    Import Wizard names kontact-import-wizard, a Breeze action in KMail's menus)."""
+    for root in theme_roots():
+        if (root / "index.theme").is_file():
+            names = set()
+            for sub in ("breeze", "hicolor", "flatpak"):
+                base = root / sub
+                if base.is_dir():
+                    for dirpath, _dirs, files in os.walk(base):
+                        names.update(os.path.splitext(f)[0] for f in files)
+            return names
+    return set()
+
+
 def wanted():
     """Icon name -> original. Per Icon= name found among app icons (what other programs look up),
     and per app under app_tile_name(desktop id) (what the shell looks up; also for icons given as
     file paths and for generic icon names, which are never written under their own name)."""
     bases = icon_bases()
     skip = designed_names() | {MARKER}
+    handed_back = handed_back_names()
     out = {}
     for name in sorted(desktop_icons()):
-        if name in skip:
+        if name in skip or name in handed_back:
             continue
         src = find_original(name, bases)
         if src:

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Names the theme draws with a designed tile (designed-apps.txt) get no familiar icon; every other app
-# also gets a per-app tile under its desktop id (path icons and generic Breeze names only there); the
+# also gets a per-app tile under its desktop id (path icons, generic Breeze names and names the theme
+# hands back to Breeze only there); the
 # backup of the file a familiar icon hides follows a redeployed theme: dropping the familiar icon
 # puts the newest file back, or keeps a file that replaced it since. Standard library only.
 # Usage: python3 designed_test.py <path to plasma-fusion-app-icons>
@@ -46,12 +47,21 @@ with tempfile.TemporaryDirectory() as d:
     (data / "applications/org.kde.plasma.emojier.desktop").write_text(
         "[Desktop Entry]\nType=Application\nName=Emoji\nIcon=preferences-desktop-emoticons\n")
 
+    # an app naming an icon the theme hands back to Breeze (KMail Import Wizard: kontact-import-wizard)
+    (root / "index.theme").write_text("[Icon Theme]\nName=Test\n")
+    (root / "breeze/actions/16").mkdir(parents=True)
+    os.symlink("/usr/share/icons/breeze/actions/16/kontact-import-wizard.svg", root / "breeze/actions/16/kontact-import-wizard.svg")
+    (data / "icons/hicolor/scalable/apps/kontact-import-wizard.svg").write_text("<svg/>")
+    (data / "applications/org.kde.akonadiimportwizard.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nName=Import\nIcon=kontact-import-wizard\n")
+
     fails = []
     want = tool.wanted()
-    expected = ["foo", "plasmafusion_app.bar_app", "plasmafusion_app.foo", "plasmafusion_app.org.kde.plasma.emojier"]
+    expected = ["foo", "plasmafusion_app.bar_app", "plasmafusion_app.foo", "plasmafusion_app.org.kde.akonadiimportwizard",
+                "plasmafusion_app.org.kde.plasma.emojier"]
     if sorted(want) != expected:
-        fails.append(f"wanted() {sorted(want)}, expected {expected} (org.kde.kate is designed; the path icon and "
-                     "the generic Breeze name get a per-app tile only)")
+        fails.append(f"wanted() {sorted(want)}, expected {expected} (org.kde.kate is designed; the path icon, "
+                     "the generic Breeze name and the handed-back name get a per-app tile only)")
     elif want["plasmafusion_app.bar_app"]["src"] != str((d / "art/bar.png").resolve()):
         fails.append("the per-app tile of a path icon does not use that file")
 

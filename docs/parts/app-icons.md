@@ -35,8 +35,10 @@ fusion-config.sh, `/usr/libexec/plasma-fusion/` by the package):
 1. Reads the visible desktop entries (data directories, Flatpak exports; the first file of a
    desktop id wins; NoDisplay/Hidden skipped) and their `Icon=` names, leaving out the names the
    theme draws with a designed tile (`designed-apps.txt` in the per-user copy of the
-   `PlasmaFusion` theme, else the system one). A familiar icon built earlier for such a name is
-   dropped.
+   `PlasmaFusion` theme, else the system one), and the names the theme hands back to Breeze or to
+   apps' own icons (its `breeze/`, `hicolor/` and `flatpak/` folders; KMail's Import Wizard names
+   `kontact-import-wizard`, a Breeze action in KMail's menus). A familiar icon built earlier for such
+   a name is dropped.
 2. Finds each original as Plasma would without Plasma Fusion: Breeze (48, 64, 32, scalable, ...),
    then hicolor (scalable, then the largest), then `pixmaps`. For the per-app tile (below) also an
    `Icon=` that is a file path, and any Breeze icon outside the app folders (Emoji Selector names
@@ -95,8 +97,8 @@ removes the familiar icons. fusion-restore.sh stops the service and runs `remove
 ## Checks
 
 `tools/build.d/89-app-icons.sh`: compile, the unit's key lines, `packages/appicons/tests/designed_test.py`
-(a designed name gets no familiar icon; a file-path icon and a generic Breeze name get a per-app tile
-only; dropping a familiar icon puts the theme's link back, keeps a link that replaced it since, and
+(a designed name gets no familiar icon; a file-path icon, a generic Breeze name and a name the theme
+hands back get a per-app tile only; dropping a familiar icon puts the theme's link back, keeps a link that replaced it since, and
 the backup is the newest file; standard library only),
 `packages/appicons/tests/compose_test.py`
 (a square and a rounded square become the tile; a one-colour circle gets a light tile in its hue; a
