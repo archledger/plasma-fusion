@@ -79,12 +79,14 @@ Item {
     }
 
     function activateApp(): void {
+        delegate.taskSwitcherHelpers.openApp(model.index);
         if (!delegate.pairedApp()) {
             // Plasma Fusion: apps run maximized in tablet posture (Plasma Mobile without convergence
-            // mode); one app alone fills the screen, also one that was in a split.
+            // mode); one app alone fills the screen, also one that was in a split. Once openApp
+            // has shown it again: maximized while minimized, a tiled app made KWin's maximize
+            // effect throw a TypeError.
             delegate.window.setMaximize(true, true);
         }
-        delegate.taskSwitcherHelpers.openApp(model.index);
     }
 
     // Brings the card's app up with the focus; a pair keeps its split and both apps come up.
