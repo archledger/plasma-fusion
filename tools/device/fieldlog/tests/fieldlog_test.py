@@ -11,12 +11,12 @@
 #
 # Scratch goes to build/fieldlog-tests/ of the checkout (PF_FIELDLOG_TEST_DIR overrides), never /tmp;
 # nothing touches the real session, the real systemctl or the owner's state directory.
-import importlib.machinery, importlib.util, json, os, pathlib, shutil, signal, subprocess, sys, tempfile
-import threading, time, unittest
+import importlib.machinery, importlib.util, json, os, pathlib, shutil, subprocess, sys, tempfile, time, unittest
 
+sys.dont_write_bytecode = True  # no __pycache__ next to the tool
 HERE = pathlib.Path(__file__).resolve().parent
 TOOL = HERE.parent / "plasma-fusion-fieldlog"
-REPO = HERE.parents[2]
+REPO = HERE.parents[3]
 SCRATCH = pathlib.Path(os.environ.get("PF_FIELDLOG_TEST_DIR") or REPO / "build" / "fieldlog-tests")
 FIXTURE = HERE / "fixtures" / "coredumps-2026-10-02.jsonl"
 UID = os.getuid()
