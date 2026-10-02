@@ -495,4 +495,19 @@ longer needs to be skipped where the compiled decoration is installed). New case
   this one: "no change", record and cache unchanged, rpm not run.
 
 Run 2026-10-02 on the laptop (plasma-fusion and plasma-fusion-decoration installed, pacman,
-dpkg and nix-store present): 199 passed, 0 failed, nothing skipped.
+dpkg and nix-store present): 201 passed, 0 failed, nothing skipped (with `t4b`, the keyboard
+policy's value from the NixOS profile). The same file against a95f707's engine: the `v` cases fail
+(33), the rest pass.
+
+In containers (`archlinux:latest` and `debian:sid`, 2026-10-02; the engine with a throw-away HOME
+with the lock screen, the compiled decoration and the Plasma Fusion desktop on): Arch with the eight
+packages in pacman's database (`pacman -S --dbonly -dd`, real `pacman -Q`: Plasma 6.7.5, Qt 6.11.2),
+Debian sid with one binary package of each source package (`dpkg -i --force-depends`, real
+`dpkg-query`, Debian's `mawk`: Plasma 6.7.4, `qt6-base=6.11.2+dfsg`; no `libplasma` binary was
+found, recorded `absent`). Each: `deploy` records the versions with `db=`, a matching login changes
+nothing, a second one answers from the cache with the package tool out of PATH, kwin edited to
+6.99.0 in the database switches the lock screen, the title bars and the desktop off with the
+notification `kwin 6.7.5 → 6.99.0` (`6.7.4` on sid), the tested version again turns them back on
+(files as before), and without the package tool in PATH a login switches off with "no package
+database (rpm, pacman, dpkg or Nix) was found" and `deploy` fails and keeps the record: 17 of 17
+checks on each. Containers removed.
