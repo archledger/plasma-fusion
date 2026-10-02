@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Virtual-session scenario (tools/vsession/remote.sh kw-N THIS SEED): window switcher.
 # Opens four windows, then Alt+Tab (this workspace), A (all workspaces), Q (close window).

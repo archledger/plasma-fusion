@@ -173,16 +173,13 @@ the code's `# noqa` comments name), and lines of at most 160 characters, as in t
 - Per file: the app tile batches (`generators/icons/apptiles/b_*.py`) import their drawing kit with
   `*` (`F405`) and keep SVG path data on one line per shape (`E501`), as do
   `generators/icons/art_files.py` and the contrast table of `packages/color-schemes/check_contrast.py`.
-- Excluded for now, because open branches change these files and a style fix would collide with
-  them: `packages/appicons/`, `packages/keyboard/plasma-fusion-keyboard-keys`, `packages/kwin/`,
-  `packages/navigation-cpp/`, `packages/power/`, `packages/powerfx/`, `tools/device/`, `tools/system/`
-  (`extend-exclude` in `ruff.toml`; remove a line once that work is merged). Checked without the
-  exclusions on 2026-10-02, the only findings were two unused imports in
-  `packages/kwin/tests/offscreen/keytest.py`, on `main`, `wip/fuzzing` and `wip/portability` alike.
-  The field log (`tools/device/fieldlog/`, from `wip/fieldlog`, on `main` since 2026-10-02) adds
-  one more: a 192-character line in `tools/device/fieldlog/tests/fieldlog_test.py`; and
-  `tools/device/fieldlog/plasma-fusion-fieldlog` is a Python script without a suffix, which ruff
-  checks only once it is in `extend-include`.
+- The whole tree is checked since 2026-10-02. Until then the paths with open work on other
+  branches were left out (`packages/appicons/`, `packages/kwin/`, `packages/navigation-cpp/`,
+  `packages/power/`, `packages/powerfx/`, `tools/device/`, `tools/system/`); once that work was
+  merged they gave three findings, fixed: two unused imports in
+  `packages/kwin/tests/offscreen/keytest.py` and a 192-character line in
+  `tools/device/fieldlog/tests/fieldlog_test.py`. The field log's script
+  (`tools/device/fieldlog/plasma-fusion-fieldlog`, no suffix) is in `extend-include`.
 - Run it: `ruff check` in the top directory; `ruff check --fix` removes unused imports.
 
 **C++** follows KDE's clang-format style: `.clang-format` is `kde-modules/clang-format.cmake` of
@@ -210,11 +207,10 @@ does not apply is disabled on its line or for the file with `# shellcheck disabl
 reason in a comment. Layout (indentation, `set -euo pipefail` in scripts that run on their own)
 follows the surrounding scripts; no formatter is enforced.
 
-- Excluded for now, for the same reason and with the same list as `ruff.toml`: `packages/appicons/`,
-  `packages/kwin/`, `packages/navigation-cpp/`, `packages/power/`, `packages/powerfx/`,
-  `tools/device/`, `tools/system/`. At `37a4d82` (2026-10-02) those paths held 37 scripts with 13
-  findings in 8 files (7 sourced files without a shell, 4 `~` in quotes, 2 unused variables). The
-  scripts the open branches add or change outside them pass.
+- The whole tree is checked since 2026-10-02 (156 scripts). The paths with open work on other
+  branches were left out until that work was merged; they then gave 9 findings, fixed: 7 sourced
+  test scenarios without a shell directive and 2 unused variables, all in
+  `packages/kwin/tests/vsession/`.
 - Run it: `tools/checks/shellcheck.sh` in the top directory (`--list` prints the scripts).
 - Checked on 2026-10-02 with ShellCheck 0.11.0 when the check was added: 115 scripts, and 117
   with `main` at `569de20` merged in, no finding.
@@ -225,8 +221,8 @@ step, most of them continuation lines). Before the parts, `tools/build.sh` runs 
 QML checks over `packages/`, `tools/checks/motion-lint.sh` (durations from the Motion tokens) and
 `tools/checks/a11y-lint.py` (a name for every control), which are rules for motion and
 accessibility, not a style guide. Qt's formatter `qmlformat` (6.11.2) would change 138 of the 204
-QML files outside the excluded paths (2026-10-02), so enforcing it needs one reformatting commit
-first, after the open branches are merged.
+QML files outside the paths then excluded (2026-10-02), so enforcing it needs one reformatting
+commit first.
 
 ## Dynamic analysis
 

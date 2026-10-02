@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # KWIN-2 private-session scenario B (test tooling; ADAPTIVE M23, owner decision 8): a second
 # output that appears after login gets its top bar. The session has two virtual outputs; the

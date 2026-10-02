@@ -71,12 +71,11 @@ brought in line when it is changed (checked 2026-10-02):
 - C++: all five C++ files of the settings module (`packages/kcm-cpp/`) and four files of the
   navigation effect (`packages/navigation-cpp/src/plugin/`) differ from KDE's clang-format; the
   window decoration (`packages/decoration-cpp/`) matches it.
-- Bash: `tools/build.d/70-topbar.sh` (SC2043) has ShellCheck warnings. The power service (`packages/powerfx/plasma-fusion-powerfx`) and the
-  LibreOffice launcher (`packages/compat/plasma-fusion-libreoffice`) use `set -u` only, without
-  a comment that says why. 16 test, measurement and test-session tools also run without
-  `set -euo pipefail`.
-- Test scenarios that a test runner sources (`*.sh` files without a shebang) are left out of the
-  ShellCheck rule.
+- Bash: every script passes ShellCheck (`tools/checks/shellcheck.sh`, in CI); test scenarios that a
+  test runner sources name their shell with `# shellcheck shell=bash`. The power service
+  (`packages/powerfx/plasma-fusion-powerfx`) and the LibreOffice launcher
+  (`packages/compat/plasma-fusion-libreoffice`) use `set -u` only, without a comment that says
+  why. 16 test, measurement and test-session tools also run without `set -euo pipefail`.
 
 ## Commits
 

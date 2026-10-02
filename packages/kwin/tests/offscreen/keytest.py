@@ -9,7 +9,7 @@ switcher object) right after the switcher is shown, before any frame, reaches th
 PACKAGES_KWIN_DIR defaults to packages/kwin of this checkout (test use only).
 """
 import os, sys
-from PySide6.QtCore import QObject, QTimer, QUrl, Slot, QEvent, Qt, QCoreApplication
+from PySide6.QtCore import QTimer, QUrl, QEvent, Qt, QCoreApplication
 from PySide6.QtGui import QGuiApplication, QKeyEvent
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow

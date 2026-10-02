@@ -13,21 +13,7 @@ line-length = 160
 extend-include = [
     "packages/appicons/plasma-fusion-app-icons",
     "packages/keyboard/plasma-fusion-keyboard-keys",
-]
-
-# Not checked for now: other branches have open changes to these paths, and a style fix here
-# would collide with them. Remove a line once that work is merged and its files pass.
-extend-exclude = [
-    "packages/appicons/**",
-    "packages/keyboard/plasma-fusion-keyboard-keys",
-    "packages/kwin/**",
-    "packages/navigation-cpp/**",
-    "packages/power/**",
-    "packages/powerfx/**",
-    # tools/device/fieldlog/plasma-fusion-fieldlog (the field log) is a Python script without a
-    # suffix: add it to extend-include when this line goes.
-    "tools/device/**",
-    "tools/system/**",
+    "tools/device/fieldlog/plasma-fusion-fieldlog",
 ]
 
 [lint]

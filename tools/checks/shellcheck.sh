@@ -11,14 +11,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-# Not checked for now: other branches have open changes to these paths, and a fix here would
-# collide with them (the same list as extend-exclude in ruff.toml). Remove a line once that work is
-# merged and its scripts pass.
-excluded='^(packages/(appicons|kwin|navigation-cpp|power|powerfx)/|tools/(device|system)/)'
-
 scripts=()
 while IFS= read -r -d '' file; do
-  [[ $file =~ $excluded ]] && continue
   case ${file##*/} in
     *.sh) ;;
     *.*) continue ;;

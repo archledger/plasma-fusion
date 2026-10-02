@@ -53,7 +53,8 @@ def session_record(uid=UID, pid=2078, t=1790956800):
         "#1  0x00007fa456c20e8e raise (libc.so.6 + 0x19e8e)",
         "#2  0x00007fa45a4c10d4 _ZN6KCrash19defaultCrashHandlerEi (libKF6Crash.so.6 + 0x50d4)",
         "#3  0x00007fa456c20fb0 __restore_rt (libc.so.6 + 0x19fb0)",
-        "#4  0x00007fa459a9b4cf _ZN9QtPrivate19sequential_erase_ifI5QListIP7QObjectEZNS_16sequential_eraseIS4_P7QWidgetEEDaRT_RKT0_EUlRKS8_E_EEDaS9_RSA_.isra.0 (libQt6Widgets.so.6 + 0x9b4cf)",
+        "#4  0x00007fa459a9b4cf _ZN9QtPrivate19sequential_erase_ifI5QListIP7QObjectEZNS_16sequential_eraseIS4_P7QWidgetEE"
+        "DaRT_RKT0_EUlRKS8_E_EEDaS9_RSA_.isra.0 (libQt6Widgets.so.6 + 0x9b4cf)",
         "#5  0x00007fa459aa3f2a _ZN7QWidget12removeActionEP7QAction (libQt6Widgets.so.6 + 0xa3f2a)",
         "#6  0x00007fa441738fca _ZN12AppMenuModel27removeSearchActionsFromMenuEv (org.kde.plasma.appmenu.so + 0xffca)",
         "#7  0x00007fa457381db7 _Z10doActivateILb0EEvP7QObjectiPPv (libQt6Core.so.6 + 0x181db7)",

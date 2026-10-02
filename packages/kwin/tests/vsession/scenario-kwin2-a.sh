@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # KWIN-2 private-session scenario A (test tooling; PLAN "KWIN-2", ADAPTIVE 5.7/5.8, fix 24,
 # TABLET 4.10): the Meta+Z flyout under the real maximize button for the compiled decoration
@@ -104,7 +105,7 @@ pfinput 'keydown alt' 'key tab' 'sleep 5.5' 'keyup alt' &
 p=$!
 sleep 1.2; K windows >"$OUT/win-sw.json"; shot sw-1; sleep 0.8; shot sw-2; wait $p; sleep 1
 info "after Alt+Tab: active $(active) (before: kwrite; MRU was kwrite, dolphin, konsole)"
-read -r CX CY CW <<<"$(python3 - "$OUT/win-sw.json" <<'PY'
+read -r CX CY _ <<<"$(python3 - "$OUT/win-sw.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 c = [w for w in d["windows"] if w["caption"] == "Window switcher"]

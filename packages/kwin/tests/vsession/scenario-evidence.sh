@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Virtual-session scenario (tools/vsession/remote.sh kw-N THIS SEED): evidence run on the Plasma
 # Fusion desktop. Applies the Global Theme that matches the seed's colour scheme, then shows the

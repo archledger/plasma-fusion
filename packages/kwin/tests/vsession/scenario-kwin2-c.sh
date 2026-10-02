@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # KWIN-2 private-session scenario C (test tooling; ADAPTIVE M13, GAPS G13): Plasma Fusion Light at
 # 1920x1080 @1: the switcher's neutral dark dim, the flyout and the fill picker in Light.
@@ -8,7 +9,6 @@ export OUT
 set -x
 CHK=$OUT/checks.txt
 KLOG=$OUT/kwin.log
-PLOG=$OUT/plasmashell.log
 pass() { echo "PASS $*" >>"$CHK"; }
 fail() { echo "FAIL $*" >>"$CHK"; }
 info() { echo "INFO $*" >>"$CHK"; }

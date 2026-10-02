@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Virtual-session scenario (tools/vsession/remote.sh NAME THIS SEED): edge cases on the Plasma
 # Fusion desktop. Switcher with no windows, with many windows (grid scrolls) and a long workspace
