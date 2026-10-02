@@ -204,8 +204,10 @@ fetch_sums() {
     die "SHA256SUMS.asc is missing: every Plasma Fusion release is signed, so the download may have been tampered with. Nothing was installed."
   mkdir -p "$TMP/gnupg" && chmod 700 "$TMP/gnupg"
   printf '%s\n' "$KEY_ASC" | GNUPGHOME=$TMP/gnupg gpg --batch --import >/dev/null 2>&1 || die "could not import the pinned release key."
+  # VALIDSIG's last field is the primary key's fingerprint, the first the signing (sub)key's: a
+  # signature by any subkey of the pinned key counts, nothing else does.
   GNUPGHOME=$TMP/gnupg gpg --batch --status-fd 1 --verify "$TMP/SHA256SUMS.asc" "$TMP/SHA256SUMS" 2>/dev/null |
-    grep -q "^\[GNUPG:\] VALIDSIG $KEY_FP " ||
+    awk -v fp="$KEY_FP" '$1 == "[GNUPG:]" && $2 == "VALIDSIG" && $NF == fp { ok = 1 } END { exit !ok }' ||
     die "SHA256SUMS is not signed by the Plasma Fusion release key $KEY_FP; refusing to install."
   say "release checksums: signature verified (key $KEY_FP)"
 }

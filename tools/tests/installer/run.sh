@@ -82,6 +82,11 @@ gpg --batch --passphrase '' --quick-gen-key 'Other key <other@example.invalid>' 
 TEST_FP=$(gpg --list-keys --with-colons test@example.invalid | awk -F: '/^fpr/ {print $10; exit}')
 OTHER_FP=$(gpg --list-keys --with-colons other@example.invalid | awk -F: '/^fpr/ {print $10; exit}')
 gpg --armor --export "$TEST_FP" >"$BASE/test-key.asc"
+# A key whose primary key only certifies and whose subkey signs (gpg then signs with the subkey).
+gpg --batch --passphrase '' --quick-gen-key 'Subkey test <sub@example.invalid>' ed25519 cert never 2>/dev/null
+SUB_PRIMARY=$(gpg --list-keys --with-colons sub@example.invalid | awk -F: '/^fpr/ {print $10; exit}')
+gpg --batch --passphrase '' --quick-add-key "$SUB_PRIMARY" ed25519 sign never 2>/dev/null
+gpg --armor --export "$SUB_PRIMARY" >"$BASE/sub-key.asc"
 V=0.2.0
 make_release() { # DIR [SIGNING_FP]: the .deb sets of the release
   local d=$1 f
@@ -102,6 +107,7 @@ make_release "$BASE/rel-otherkey" "$OTHER_FP"
 make_release "$BASE/rel-tampered" "$TEST_FP"
 echo "changed" >>"$BASE/rel-tampered/plasma-fusion-decoration_${V}-1~neon1_amd64.deb"
 make_release "$BASE/rel-sumsedit" "$TEST_FP"
+make_release "$BASE/rel-subkey" "$SUB_PRIMARY"
 sed -i '1s/^./0/' "$BASE/rel-sumsedit/SHA256SUMS"
 
 # ---------- the cases ----------
@@ -127,7 +133,7 @@ run() {
     FAKE_UID="${UID_FAKE:-1000}" FAKE_PF_VERSION=$V GNUPGHOME="$BASE/no-such-keyring" \
     ${SESSION:+XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null XDG_RUNTIME_DIR=$CASE} \
     ${DEV:+PLASMA_FUSION_DEV=1 PLASMA_FUSION_DEV_VERSION=$V PLASMA_FUSION_DEV_ROOT=$CASE/root} \
-    ${DEV:+PLASMA_FUSION_DEV_KEY=$BASE/test-key.asc PLASMA_FUSION_DEV_KEY_FP=$TEST_FP} \
+    ${DEV:+PLASMA_FUSION_DEV_KEY=${KEYFILE:-$BASE/test-key.asc} PLASMA_FUSION_DEV_KEY_FP=${KEYFP:-$TEST_FP}} \
     ${RELEASE:+PLASMA_FUSION_DEV_RELEASE_BASE=file://$RELEASE} ${EXTRA_ENV:-} \
     setsid --wait "$sh" "${SCRIPT:-$INSTALLER}" "$@" 2>&1 </dev/null)
   RC=$?
@@ -294,6 +300,10 @@ for SHNAME in "${shells[@]}"; do
   expect "a tampered package fails its checksum" [ "$RC" = 1 ]
   expect "  saying so" has_out "checksum mismatch"
   expect "  nothing installed" bash -c '! grep -q "^apt-get install" <<<"$0"' "$LOG"
+  KEYFILE=$BASE/sub-key.asc KEYFP=$SUB_PRIMARY RELEASE=$BASE/rel-subkey run "$sh" $DEB -- --yes
+  expect "a signature by a subkey of the pinned key is accepted" has_log "apt-get install -y"
+  KEYFILE=$BASE/sub-key.asc KEYFP=$SUB_PRIMARY RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
+  expect "  and the pinned key's fingerprint is what counts" [ "$RC" = 1 ]
   RELEASE=$BASE/rel-unsigned run "$sh" $DEB -- --yes --insecure-no-sig
   expect "--insecure-no-sig installs on checksums alone" has_log "apt-get install -y"
   VERSIONS="$P675 plasma-fusion=0.3.0" RELEASE=$BASE/rel-good run "$sh" $DEB -- update --yes
