@@ -61,6 +61,20 @@ repository, it is the exact rule; the build and CI run the checks listed in
   section 6).
 - **Commit messages:** see below.
 
+These rules apply to new and changed code. Some existing code does not meet them yet and is
+brought in line when it is changed (checked 2026-10-02):
+
+- C++: all five C++ files of the settings module (`packages/kcm-cpp/`) and four files of the
+  navigation effect (`packages/navigation-cpp/src/plugin/`) differ from KDE's clang-format; the
+  window decoration (`packages/decoration-cpp/`) matches it.
+- Bash: `tools/device/fusion-config.sh` (SC2088) and `tools/build.d/70-topbar.sh` (SC2043) have
+  ShellCheck warnings. The power service (`packages/powerfx/plasma-fusion-powerfx`) and the
+  LibreOffice launcher (`packages/compat/plasma-fusion-libreoffice`) use `set -u` only, without
+  a comment that says why. 16 test, measurement and test-session tools also run without
+  `set -euo pipefail`.
+- Test scenarios that a test runner sources (`*.sh` files without a shebang) are left out of the
+  ShellCheck rule.
+
 ## Commits
 
 Every commit is signed off under the [Developer Certificate of Origin](https://developercertificate.org/):
