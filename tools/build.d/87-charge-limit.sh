@@ -22,6 +22,7 @@ fi
 if command -v xmllint >/dev/null 2>&1; then
   xmllint --noout "$SRC/org.plasmafusion.charge-limit.policy"
 fi
+bash "$SRC/tests/args_test.sh" "$SRC/plasma-fusion-charge-limit"
 grep -q '<annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/plasma-fusion/plasma-fusion-charge-limit</annotate>' \
   "$SRC/org.plasmafusion.charge-limit.policy" || { echo "charge-limit: exec.path annotation missing" >&2; exit 1; }
 
