@@ -1,0 +1,557 @@
+#!/usr/bin/python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Familiar app icons: every installed app's own icon on a Plasma Fusion tile (owner decision
+# 2026-10-01; design: artifacts/plasma-fusion/2026-10-01-tablet2/ICONS-BLEND.md).
+#
+#   plasma-fusion-app-icons refresh [--force] [--dry-run]   (re)build what changed since the last run
+#   plasma-fusion-app-icons watch                          refresh now, then whenever apps change
+#   plasma-fusion-app-icons remove                         back to the Plasma Fusion designed tiles
+#   plasma-fusion-app-icons status
+#
+# plasma-fusion-app-icons.service runs "watch" in the Plasma session: it waits for changes in the
+# application directories and plasmafusionrc (inotify; every 30 s a few stat calls without it), and
+# when their times changed runs "refresh" as a child process, so Qt is loaded only while icons are
+# drawn. SIGHUP (systemctl --user reload) refreshes at once.
+#
+# Mode: plasmafusionrc [Icons] AppIcons = familiar (default) or designs; "refresh" in designs mode
+# removes the familiar icons.
+#
+# For each visible application (desktop entries in the data directories and Flatpak's exports), its
+# Icon= name is looked up the way Plasma would find it without Plasma Fusion: Breeze, then hicolor,
+# then the pixmaps directory. The original is rendered with QtSvg (what Plasma renders with), its
+# drawn area is measured (without PySide6: rsvg-convert and Pillow), and a 64-unit Fusion tile is
+# written as
+# ~/.local/share/icons/{PlasmaFusion,PlasmaFusion-Dark}/apps/scalable/<name>.svg, which the icon
+# loader finds before the system copy of the theme:
+#   - an original that already is a tile (a square, cover >= 0.96, or a rounded square, cover >= 0.88
+#     with one colour along its four sides; aspect 0.95-1.05) becomes the tile: the tile's corners,
+#     gaps filled with its side colour, a darker band for the 4-unit lip, the sheen and the edge;
+#   - any other original keeps its shape, larger, on a tile in its own main colour at 90 %
+#     lightness (several hues, or none: #eef1f8); keylines square 66 %, round 76 %, wide 76 % of
+#     the width, tall 74 % of the height.
+# Tile (AppIcon board): radius 15, a 4-unit lip under a 60-unit base, a 9 % white sheen on the top
+# 28 units, a 1-unit 14 % white edge. The glyph is an embedded PNG at 4x (QtSvg draws <image> with
+# data URIs; it does not clip, so masks are applied to the PNG). A per-user file the tool replaces is
+# kept in ~/.local/state/plasma-fusion/app-icons-backup and put back by "remove".
+# The marker icon "plasmafusion-familiar" tells the shell's FusionIconTile that app icons are tiles.
+# Record: ~/.local/state/plasma-fusion/app-icons.json (what was built from which file and mtime).
+import base64, colorsys, fcntl, io, json, math, os, pathlib, shutil, signal, subprocess, sys, time
+
+VERSION = 1
+HOME = pathlib.Path.home()
+DATA = pathlib.Path(os.environ.get("XDG_DATA_HOME") or HOME / ".local/share")
+CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
+STATE = pathlib.Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local/state") / "plasma-fusion"
+RECORD = STATE / "app-icons.json"
+BACKUP = STATE / "app-icons-backup"
+THEMES = ["PlasmaFusion", "PlasmaFusion-Dark"]
+MARK = "<!-- plasma-fusion-app-icons -->"
+MARKER = "plasmafusion-familiar"
+SYSTEM_DATA = [pathlib.Path(p) for p in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":") if p]
+FLATPAK = [DATA / "flatpak/exports/share", pathlib.Path("/var/lib/flatpak/exports/share")]
+NEUTRAL = "#eef1f8"
+
+
+def mode():
+    try:
+        group = None
+        for line in (CONFIG / "plasmafusionrc").read_text().splitlines():
+            line = line.strip()
+            if line.startswith("["):
+                group = line
+            elif group == "[Icons]" and line.startswith("AppIcons="):
+                value = line.split("=", 1)[1].strip().lower()
+                return value if value in ("familiar", "designs") else "familiar"
+    except OSError:
+        pass
+    return "familiar"
+
+
+def desktop_icons():
+    """Icon name -> desktop ids of the visible applications (the first file of an id wins)."""
+    seen, icons = set(), {}
+    for base in [DATA] + FLATPAK + SYSTEM_DATA:
+        root = base / "applications"
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.desktop")):
+            did = str(path.relative_to(root)).replace("/", "-")
+            if did in seen:
+                continue
+            seen.add(did)
+            entry, values = False, {}
+            try:
+                for line in path.read_text(errors="replace").splitlines():
+                    if line.startswith("["):
+                        entry = line.strip() == "[Desktop Entry]"
+                    elif entry and "=" in line:
+                        k, v = line.split("=", 1)
+                        values.setdefault(k.strip(), v.strip())
+            except OSError:
+                continue
+            if values.get("Type") != "Application" or values.get("NoDisplay") == "true" or values.get("Hidden") == "true":
+                continue
+            icon = values.get("Icon", "")
+            if not icon or "/" in icon or icon.endswith((".png", ".svg", ".xpm")):
+                continue
+            icons.setdefault(icon, []).append(did)
+    return icons
+
+
+def icon_bases():
+    bases = [DATA / "icons", HOME / ".icons"] + [b / "icons" for b in FLATPAK] + [b / "icons" for b in SYSTEM_DATA]
+    return [b for b in bases if b.is_dir()]
+
+
+BREEZE_DIRS = ["apps/48", "apps/64", "apps/32", "apps/scalable", "apps/24", "apps/22", "apps/16"]
+HICOLOR_DIRS = ["scalable/apps", "512x512/apps", "256x256/apps", "192x192/apps", "128x128/apps",
+                "96x96/apps", "64x64/apps", "48x48/apps", "32x32/apps", "24x24/apps", "16x16/apps"]
+
+
+def find_original(name, bases):
+    for theme, dirs in (("breeze", BREEZE_DIRS), ("hicolor", HICOLOR_DIRS)):
+        for base in bases:
+            for sub in dirs:
+                for ext in (".svg", ".svgz", ".png"):
+                    p = base / theme / sub / (name + ext)
+                    if p.is_file():
+                        return pathlib.Path(os.path.realpath(p))
+    for base in SYSTEM_DATA:
+        for ext in (".svg", ".png", ".xpm"):
+            p = base / "pixmaps" / (name + ext)
+            if p.is_file():
+                return pathlib.Path(os.path.realpath(p))
+    return None
+
+
+def wanted():
+    bases = icon_bases()
+    out = {}
+    for name in sorted(desktop_icons()):
+        if name == MARKER:
+            continue
+        src = find_original(name, bases)
+        if src:
+            out[name] = {"src": str(src), "mtime": int(src.stat().st_mtime)}
+    return out
+
+
+def load_record():
+    try:
+        return json.loads(RECORD.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_record(rec):
+    STATE.mkdir(parents=True, exist_ok=True)
+    tmp = RECORD.with_suffix(".tmp")
+    tmp.write_text(json.dumps(rec, indent=1, sort_keys=True))
+    tmp.replace(RECORD)
+
+
+def theme_file(theme, name):
+    return DATA / "icons" / theme / "apps/scalable" / (name + ".svg")
+
+
+def ours(path):
+    try:
+        with open(path, "r", errors="replace") as f:
+            return MARK in f.read(4096)
+    except OSError:
+        return False
+
+
+# ---- drawing -------------------------------------------------------------------------------
+
+class Painter:
+    """Renders an original icon: QtSvg (what Plasma draws icons with) when PySide6 is installed,
+    else rsvg-convert; Pillow for bitmaps and the rest."""
+    def __init__(self):
+        from PIL import Image
+        self.Image = Image
+        try:
+            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+            from PySide6.QtCore import QRectF, Qt
+            from PySide6.QtGui import QGuiApplication, QImage, QPainter
+            from PySide6.QtSvg import QSvgRenderer
+            self.QRectF, self.Qt, self.QImage, self.QPainter, self.QSvgRenderer = QRectF, Qt, QImage, QPainter, QSvgRenderer
+            self.app = QGuiApplication.instance() or QGuiApplication([sys.argv[0]])
+            self.qt = True
+        except ImportError:
+            if not shutil.which("rsvg-convert"):
+                raise ImportError("neither PySide6 nor rsvg-convert is installed")
+            self.qt = False
+
+    def centred(self, im, size):
+        Image = self.Image
+        scale = size / max(im.size)
+        if scale != 1:
+            im = im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))), Image.LANCZOS)
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        canvas.paste(im, ((size - im.width) // 2, (size - im.height) // 2), im)
+        return canvas
+
+    def render(self, path, size=512):
+        """The original as a PIL RGBA image, size x size, aspect kept, centred."""
+        Image = self.Image
+        if path.suffix in (".svg", ".svgz") and not self.qt:
+            try:
+                out = subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size), "-a", "-f", "png", str(path)],
+                                     capture_output=True, timeout=20)
+            except (OSError, subprocess.TimeoutExpired):
+                return None
+            if out.returncode != 0 or not out.stdout:
+                return None
+            return self.centred(Image.open(io.BytesIO(out.stdout)).convert("RGBA"), size)
+        if path.suffix in (".svg", ".svgz"):
+            r = self.QSvgRenderer(str(path))
+            if not r.isValid():
+                return None
+            vb = r.viewBoxF()
+            w, h = (vb.width(), vb.height()) if vb.width() > 0 and vb.height() > 0 else (1.0, 1.0)
+            k = size / max(w, h)
+            img = self.QImage(size, size, self.QImage.Format_RGBA8888_Premultiplied)
+            img.fill(self.Qt.transparent)
+            p = self.QPainter(img)
+            p.setRenderHint(self.QPainter.Antialiasing)
+            p.setRenderHint(self.QPainter.SmoothPixmapTransform)
+            r.render(p, self.QRectF((size - w * k) / 2, (size - h * k) / 2, w * k, h * k))
+            p.end()
+            img = img.convertToFormat(self.QImage.Format_RGBA8888)
+            return Image.frombuffer("RGBA", (size, size), bytes(img.constBits()), "raw", "RGBA", img.bytesPerLine(), 1).copy()
+        try:
+            im = Image.open(path).convert("RGBA")
+        except OSError:
+            return None
+        return self.centred(im, size)
+
+
+def measure(im):
+    a = im.getchannel("A").point(lambda v: 255 if v > 24 else 0)
+    box = a.getbbox()
+    if not box:
+        return None
+    crop = im.crop(box)
+    w, h = crop.size
+    cover = a.crop(box).histogram()[255] / float(w * h)
+    ar = w / h
+    shape = "wide" if ar > 1.15 else "tall" if ar < 0.87 else "round" if cover < 0.83 else "square"
+    return crop, shape, cover, ar
+
+
+def plate_colour(crop):
+    small = crop.resize((48, max(1, round(48 * crop.height / crop.width))))
+    hs = []
+    data = small.get_flattened_data() if hasattr(small, "get_flattened_data") else small.getdata()
+    for r, g, b, a in data:
+        if a < 200:
+            continue
+        h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        if s > 0.35 and 0.15 < l < 0.85:
+            hs.append((h, s))
+    if not hs:
+        return NEUTRAL
+    spread = max(h for h, _ in hs) - min(h for h, _ in hs)
+    if spread > 0.45:
+        return NEUTRAL      # several hues (a multi-colour logo): the light neutral tile
+    x = sum(math.cos(2 * math.pi * h) * s for h, s in hs)
+    y = sum(math.sin(2 * math.pi * h) * s for h, s in hs)
+    hue = (math.atan2(y, x) / (2 * math.pi)) % 1
+    sat = min(0.85, sum(s for _, s in hs) / len(hs) + 0.15)
+    r, g, b = colorsys.hls_to_rgb(hue, 0.90, sat)
+    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def darker(hexcol, f):
+    r, g, b = (int(hexcol[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % (round(r * f), round(g * f), round(b * f))
+
+
+def png_b64(im):
+    buf = io.BytesIO()
+    im.save(buf, "PNG", optimize=True)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+SHEEN = '<path d="M0,15 A15,15 0 0 1 15,0 H49 A15,15 0 0 1 64,15 V28 H0 Z" fill="#ffffff" fill-opacity="0.09"/>'
+EDGE = '<rect x="0.5" y="0.5" width="63" height="63" rx="14.5" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1"/>'
+
+
+def side_colour(im, need_opaque=True):
+    """The colour along the middle of the four sides, 4 % inside the drawn box, when all four are
+    opaque and alike (a rounded square), else None."""
+    w, h = im.size
+    pts = [(w // 2, round(h * 0.04)), (w // 2, h - 1 - round(h * 0.04)),
+           (round(w * 0.04), h // 2), (w - 1 - round(w * 0.04), h // 2)]
+    px = [im.getpixel(p) for p in pts]
+    if need_opaque and any(c[3] < 230 for c in px):
+        return None
+    px = [c for c in px if c[3] >= 230] or px
+    avg = [sum(c[i] for c in px) / len(px) for i in range(3)]
+    if need_opaque and any(sum(abs(c[i] - avg[i]) for i in range(3)) > 120 for c in px):
+        return None
+    return "#%02x%02x%02x" % tuple(round(v) for v in avg)
+
+
+# The lip over a full-tile artwork: the band between the 60-unit base and the 64-unit tile.
+LIP_BAND = ('<path d="M0,45 A15,15 0 0 0 15,60 H49 A15,15 0 0 0 64,45 V49 A15,15 0 0 1 49,64 H15 '
+            'A15,15 0 0 1 0,49 Z" fill="#000000" fill-opacity="0.18"/>')
+
+
+def compose(painter, src):
+    im = painter.render(pathlib.Path(src))
+    if im is None:
+        return None, None
+    m = measure(im)
+    if not m:
+        return None, None
+    crop, shape, cover, ar = m
+    Image = painter.Image
+    from PIL import ImageChops, ImageDraw
+    head = ('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+            'width="64" height="64" viewBox="0 0 64 64">' + MARK)
+    edge = side_colour(crop)
+    if 0.95 <= ar <= 1.05 and (cover >= 0.96 or (cover >= 0.88 and edge)):
+        # The original is the tile (a square or a rounded square): drawn over the whole tile, its
+        # corners rounded to the tile's, gaps filled with the colour along its sides; the lip is a
+        # darker band over its bottom 4 units, so the artwork keeps its proportions.
+        S = 256
+        art = crop.resize((S, S), Image.LANCZOS)
+        mask = Image.new("L", art.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, S - 1, S - 1), radius=15 * 4, fill=255)
+        art.putalpha(ImageChops.multiply(art.getchannel("A"), mask))
+        fill = edge or side_colour(art, need_opaque=False) or NEUTRAL
+        body = (f'<rect width="64" height="64" rx="15" fill="{fill}"/>'
+                f'<image x="0" y="0" width="64" height="64" xlink:href="data:image/png;base64,{png_b64(art)}"/>'
+                + LIP_BAND)
+        return head + body + SHEEN + EDGE + "</svg>", {"kind": "tile", "plate": fill}
+    plate = plate_colour(crop)
+    k = {"square": 0.66, "round": 0.76, "wide": 0.76, "tall": 0.74}[shape]
+    if shape == "wide":
+        w = 64 * k; h = w * crop.height / crop.width
+    elif shape == "tall":
+        h = 64 * k; w = h * crop.width / crop.height
+    else:
+        side = 64 * k; mx = max(crop.size); w = side * crop.width / mx; h = side * crop.height / mx
+    glyph = crop.resize((max(1, round(w * 4)), max(1, round(h * 4))), Image.LANCZOS)
+    x, y = (64 - w) / 2, (60 - h) / 2
+    body = (f'<rect width="64" height="64" rx="15" fill="{darker(plate, 0.82)}"/>'
+            f'<rect width="64" height="60" rx="15" fill="{plate}"/>'
+            f'<image x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" xlink:href="data:image/png;base64,{png_b64(glyph)}"/>')
+    return head + body + SHEEN + EDGE + "</svg>", {"kind": "plate", "plate": plate}
+
+
+MARKER_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">' + MARK +
+              '<rect width="16" height="16" fill="none"/></svg>')
+
+
+def write_icon(theme, name, svg):
+    path = theme_file(theme, name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and not ours(path):
+        dest = BACKUP / theme / path.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if not dest.exists():
+            shutil.copy2(path, dest)
+    tmp = path.with_suffix(".svg.tmp")
+    tmp.write_text(svg)
+    tmp.replace(path)
+
+
+def drop_icon(theme, name):
+    path = theme_file(theme, name)
+    if path.exists() and ours(path):
+        path.unlink()
+    saved = BACKUP / theme / (name + ".svg")
+    if saved.exists():
+        shutil.move(str(saved), str(path))
+
+
+def icons_changed():
+    """Tell running KDE programs to look their icons up again (what System Settings sends when the
+    icon theme changes: KIconLoader's iconChanged signal)."""
+    try:
+        subprocess.run(["busctl", "--user", "emit", "/KIconLoader", "org.kde.KIconLoader", "iconChanged", "i", "0"],
+                       timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def remove_all(rec, dry):
+    names = sorted(rec.get("icons", {}))
+    if dry:
+        print(f"would remove {len(names)} familiar icon(s)")
+        return 0
+    for name in names + [MARKER]:
+        for theme in THEMES:
+            drop_icon(theme, name)
+    save_record({"version": VERSION, "mode": "designs", "icons": {}})
+    icons_changed()
+    print(f"removed {len(names)} familiar icon(s): the Plasma Fusion designed tiles are back")
+    return 0
+
+
+def refresh(force, dry):
+    rec = load_record()
+    if mode() == "designs":
+        return remove_all(rec, dry) if rec.get("icons") else (print("designs mode: nothing to do") or 0)
+    want = wanted()
+    have = rec.get("icons", {}) if rec.get("version") == VERSION and rec.get("mode") == "familiar" else {}
+    todo = [n for n in want if force or n not in have or have[n].get("src") != want[n]["src"]
+            or have[n].get("mtime") != want[n]["mtime"] or not theme_file(THEMES[-1], n).exists()]
+    gone = [n for n in have if n not in want]
+    marker_missing = not theme_file(THEMES[-1], MARKER).exists()
+    if not todo and not gone and not marker_missing:
+        print(f"familiar app icons: {len(want)} up to date")
+        return 0
+    if dry:
+        print(f"would build {len(todo)}, remove {len(gone)} of {len(want)} familiar icon(s)")
+        return 0
+    try:
+        painter = Painter()
+    except ImportError as e:
+        print(f"familiar app icons need python3-pillow and python3-pyside6 or rsvg-convert ({e}); nothing changed",
+              file=sys.stderr)
+        return 1
+    icons = {n: have[n] for n in have if n in want and n not in todo}
+    failed = []
+    for name in todo:
+        try:
+            svg, info = compose(painter, want[name]["src"])
+        except Exception as e:  # one broken icon file must not stop the others
+            svg, info = None, None
+            print(f"  {name}: {e}", file=sys.stderr)
+        if not svg:
+            failed.append(name)
+            continue
+        for theme in THEMES:
+            write_icon(theme, name, svg)
+        icons[name] = dict(want[name], **info)
+    for name in gone:
+        for theme in THEMES:
+            drop_icon(theme, name)
+    for theme in THEMES:
+        write_icon(theme, MARKER, MARKER_SVG)
+    save_record({"version": VERSION, "mode": "familiar", "icons": icons, "failed": failed})
+    icons_changed()
+    print(f"familiar app icons: built {len(todo) - len(failed)}, removed {len(gone)}, failed {len(failed)}"
+          f" ({', '.join(failed[:8])}{'...' if len(failed) > 8 else ''}); {len(icons)} in all")
+    return 0
+
+
+class Wake(Exception):
+    pass
+
+
+def watch_paths():
+    paths = [b / "applications" for b in [DATA] + FLATPAK + SYSTEM_DATA]
+    return paths + [CONFIG / "plasmafusionrc"]
+
+
+def signature():
+    sig = []
+    for p in watch_paths():
+        try:
+            sig.append((str(p), p.stat().st_mtime_ns))
+        except OSError:
+            sig.append((str(p), None))
+    return sig
+
+
+class Inotify:
+    """Change events for a few directories (inotify through libc), or None where unavailable."""
+    MASK = 0x2 | 0x4 | 0x8 | 0x40 | 0x80 | 0x100 | 0x200 | 0x400 | 0x800   # modify, attrib, close-write,
+    # moved from/to, create, delete, delete/move self
+
+    def __init__(self):
+        import ctypes
+        self.libc = ctypes.CDLL(None, use_errno=True)
+        self.fd = self.libc.inotify_init1(os.O_CLOEXEC | os.O_NONBLOCK)
+        if self.fd < 0:
+            raise OSError(ctypes.get_errno(), "inotify_init1")
+
+    def arm(self, dirs):
+        for d in dirs:
+            if d.is_dir():
+                self.libc.inotify_add_watch(self.fd, os.fsencode(d), self.MASK)
+
+    def wait(self, timeout):
+        import select
+        ready, _, _ = select.select([self.fd], [], [], timeout)
+        if ready:
+            try:
+                while os.read(self.fd, 65536):
+                    pass
+            except BlockingIOError:
+                pass
+
+
+def watch():
+    def wake(signum, frame):
+        raise Wake()
+    signal.signal(signal.SIGHUP, wake)
+    try:
+        notify = Inotify()
+    except (OSError, AttributeError):
+        notify = None
+    last = None
+    while True:
+        try:
+            sig = signature()
+            if sig != last:
+                # Changes come in bursts (an rpm transaction, a Flatpak update): settle first.
+                time.sleep(3 if last is not None else 0)
+                last = signature()
+                subprocess.run([sys.executable, os.path.abspath(__file__), "refresh"], timeout=600)
+            if notify:
+                # The application directories and the config directory (plasmafusionrc); a
+                # directory created later is picked up by the 10-minute check.
+                notify.arm([pathlib.Path(p) for p, _ in sig[:-1]] + [CONFIG])
+                notify.wait(600)
+            else:
+                time.sleep(30)
+        except Wake:
+            last = None
+        except subprocess.TimeoutExpired:
+            print("refresh took over 10 minutes; trying again later", file=sys.stderr)
+            last = signature()
+
+
+def status():
+    rec = load_record()
+    icons = rec.get("icons", {})
+    kinds = {}
+    for v in icons.values():
+        kinds[v.get("kind")] = kinds.get(v.get("kind"), 0) + 1
+    print(f"mode {mode()}; recorded {rec.get('mode', 'none')}: {len(icons)} familiar icon(s) "
+          f"({kinds.get('tile', 0)} tiles of their own, {kinds.get('plate', 0)} on a tinted tile), "
+          f"{len(rec.get('failed', []))} failed")
+    return 0
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__ or open(__file__).read().split("\nimport ")[0])
+        return 0
+    cmd, opts = argv[0], set(argv[1:])
+    if cmd == "status":
+        return status()
+    if cmd == "watch":
+        sys.stdout.reconfigure(line_buffering=True)
+        return watch()
+    STATE.mkdir(parents=True, exist_ok=True)
+    with open(STATE / "app-icons.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if cmd == "refresh":
+            return refresh("--force" in opts, "--dry-run" in opts)
+        if cmd == "remove":
+            return remove_all(load_record(), "--dry-run" in opts)
+    print(f"unknown command {cmd}", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

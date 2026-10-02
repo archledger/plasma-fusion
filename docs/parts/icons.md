@@ -384,3 +384,11 @@ icon (never a grey plate); the dock and the launcher draw those on the neutral F
 KDE Connect, Filelight / Disk Usage Analyzer, Help Center, Info Center, KolourPaint, Kleopatra.
 
 Checks: `validate.py` passes (2424 drawings, both themes); two builds are byte-identical.
+
+## Familiar app icons (2026-10-01)
+
+The owner chose to keep every app's own icon, blended with Plasma Fusion, over the designed tiles
+(design canvas and comparison: ICONS-BLEND.md on the shared project memory). The designed tiles
+stay in the themes; `plasma-fusion-app-icons` (docs/parts/app-icons.md) draws each installed app's
+own icon onto a Fusion tile in `~/.local/share/icons/PlasmaFusion{,-Dark}/apps/scalable`, which the
+icon loader finds first. `plasmafusionrc [Icons] AppIcons=designs` brings the designed tiles back.

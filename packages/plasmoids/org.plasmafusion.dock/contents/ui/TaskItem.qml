@@ -57,9 +57,12 @@ Item {
     // The theme icon's name: apps name their icon after their desktop id, which is AppId (without
     // the ".desktop" some entries carry).
     readonly property string iconName: String(model.AppId ?? "").replace(/\.desktop$/, "")
-    readonly property bool calendarTile: ["korganizer", "org.kde.korganizer", "office-calendar", "org.gnome.Calendar",
-                                          "gnome-calendar", "org.kde.merkuro.calendar", "org.kde.kalendar",
-                                          "kalendar"].indexOf(iconName) !== -1 && !restTile.foreign
+    readonly property bool calendarApp: ["korganizer", "org.kde.korganizer", "office-calendar", "org.gnome.Calendar",
+                                         "gnome-calendar", "org.kde.merkuro.calendar", "org.kde.kalendar",
+                                         "kalendar"].indexOf(iconName) !== -1
+    // Today's date goes over the designed calendar tile only: not over an app's own icon (a foreign
+    // one, or any with familiar app icons on).
+    readonly property bool calendarTile: calendarApp && !restTile.foreign && !restTile.familiar
     // The app's notifications not seen yet (the dock's count, see main.qml); the badge shows the
     // larger of it and the app's own Unity count.
     property int notificationCount: 0
@@ -165,6 +168,7 @@ Item {
             size: iconBox.width
             source: task.model.decoration
             iconName: task.iconName
+            askFamiliar: task.calendarApp
             visible: !zoomLoader.item || task.grow <= 0.5
         }
 

@@ -5,7 +5,8 @@
     An app icon as the dock and the launcher show it (ADAPTIVE.md 5.4 and fix 27): an icon that
     the Plasma Fusion icon theme draws as a Fusion tile is shown as it is; any other app's icon
     (a Breeze or third-party icon) is drawn on a neutral Fusion tile, so the row stays a row of
-    tiles. A drop-in for Kirigami.Icon in DOCK-2 and LAUNCH-1:
+    tiles. With familiar app icons on (packages/appicons) every app icon is a tile and none gets the
+    neutral tile. A drop-in for Kirigami.Icon in DOCK-2 and LAUNCH-1:
 
       FusionIconTile {
           size: 48                    // the tile's size; the icon inside follows
@@ -38,8 +39,15 @@ Item {
     property var source
     // The icon's theme name, for the coverage check; taken from `source` when it is a name.
     property string iconName: typeof source === "string" ? source : ""
-    // Draw the neutral tile behind the icon (true for icons without a Fusion tile).
-    property bool foreign: iconName !== "" && !FusionIconNames.covers(iconName)
+    // Draw the neutral tile behind the icon (true for icons without a Fusion tile). With familiar
+    // app icons on (packages/appicons: every app's own icon generated as a Fusion tile, marked by
+    // the "plasmafusion-familiar" icon), no app icon needs it.
+    property bool foreign: iconName !== "" && !FusionIconNames.covers(iconName) && !familiar
+    // Whether familiar app icons are on. Looked up for names the designed tiles do not cover, and
+    // for any name while `askFamiliar` is set (a host that draws over a designed tile, like the
+    // dock's date on the calendar tile).
+    property bool askFamiliar: false
+    readonly property bool familiar: familiarProbe.status === Kirigami.Icon.Ready
     // Tile size in logical px (the dock's 48, the launcher's 60/72).
     property real size: 48
     // Size of a foreign icon inside the tile: 42 of 64 units, centred on the 60-unit base.
@@ -94,6 +102,17 @@ Item {
         color: "transparent"
         border.width: tile.unit
         border.color: Qt.rgba(1, 1, 1, 0.14)
+    }
+
+    // Loads the marker icon when needed (see `familiar`); draws nothing.
+    Kirigami.Icon {
+        id: familiarProbe
+        visible: false
+        width: 1
+        height: 1
+        fallback: ""
+        source: tile.iconName !== "" && (tile.askFamiliar || !FusionIconNames.covers(tile.iconName))
+                ? "plasmafusion-familiar" : ""
     }
 
     Kirigami.Icon {

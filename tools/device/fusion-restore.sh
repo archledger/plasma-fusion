@@ -193,6 +193,15 @@ if [ -e "$HOME/.local/share/plasma/keyboard/layouts/.plasma-fusion" ] &&
   run rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/keyboard-keys"
 fi
 
+# 1f. Familiar app icons: the drawn icons out of ~/.local/share/icons (any of the user's own icons
+#     they replaced come back; docs/parts/app-icons.md). The service was stopped above.
+if [ -e "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/app-icons.json" ] &&
+  [ -x "$HOME/.local/libexec/plasma-fusion/plasma-fusion-app-icons" ]; then
+  note "app icons: the familiar icons removed"
+  run "$HOME/.local/libexec/plasma-fusion/plasma-fusion-app-icons" remove || true
+  run rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/app-icons.json"
+fi
+
 # 2. Workspaces: remove the ones fusion-config.sh created, give the others their old names.
 echo "Workspaces"
 for b in "${LATER[@]}" "$BACKUP"; do

@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion familiar app icons: every installed app's own icon on a Plasma Fusion tile, kept up
+# to date as apps are installed, updated and removed (docs/parts/app-icons.md in the Plasma Fusion
+# sources). fusion-config.sh enables it. Back to the designed tiles: plasmafusionrc [Icons]
+# AppIcons=designs, then systemctl --user reload plasma-fusion-app-icons.service.
+[Unit]
+Description=Plasma Fusion familiar app icons
+PartOf=graphical-session.target
+After=graphical-session.target plasma-workspace.target
+ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
+
+[Service]
+Type=exec
+# The user's own copy (fusion-config.sh --install) first, then the system package's.
+ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion
+ExecStart=plasma-fusion-app-icons watch
+ExecReload=/usr/bin/kill -HUP $MAINPID
+TimeoutStopSec=10s
+Restart=on-failure
+RestartSec=30
+Slice=background.slice
+Nice=10
+IOSchedulingClass=idle
+# The watcher stays small; a refresh draws in a child process (QtSvg) and exits.
+MemoryMax=512M
+NoNewPrivileges=yes
+SyslogIdentifier=plasma-fusion-app-icons
+
+[Install]
+WantedBy=graphical-session.target

@@ -100,6 +100,8 @@
 #                      login: GTK_USE_PORTAL=1 (GTK file dialogs through the portal: KDE's) and
 #                      QSG_DISTANCEFIELD_ANTIALIASING=gray (greyscale Qt Quick text)
 #   Power tiers        plasma-fusion-powerfx.service installed, enabled and started
+#   App icons          plasma-fusion-app-icons.service installed, enabled and started: every app's
+#                      own icon on a Fusion tile in ~/.local/share/icons/PlasmaFusion{,-Dark}
 #   LibreOffice        ~/.local/bin/libreoffice -> plasma-fusion-libreoffice (XWayland only while a screen
 #                      at 100 % sits next to a scaled one, tdf#141578) and the hidden soffice.desktop
 #   Terminal, editor   konsolerc default profile "Plasma Fusion"; katerc/kwriterc colour theme
@@ -330,6 +332,7 @@ BACKUP_FILES=(
   fontconfig/fonts.conf "$SESSION_ENV_REL"
   systemd/user/plasma-fusion-powerfx.service "$SESSION_WANTS_REL/plasma-fusion-powerfx.service"
   systemd/user/plasma-fusion-pen-garage.service "$SESSION_WANTS_REL/plasma-fusion-pen-garage.service"
+  systemd/user/plasma-fusion-app-icons.service "$SESSION_WANTS_REL/plasma-fusion-app-icons.service"
 )
 # Files below $HOME outside ~/.config (restored or removed the same way).
 LO_GUARD_REL=.local/bin/libreoffice
@@ -1884,6 +1887,14 @@ install_text "$CONFIG/$SESSION_ENV_REL" "$(session_env)" && note "from the next 
 
 say "Power tiers"
 install_user_service plasma-fusion-powerfx.service powerfx
+
+# ---------- 7d1. familiar app icons ----------
+
+# Every installed app's own icon on a Plasma Fusion tile (docs/parts/app-icons.md), drawn into
+# ~/.local/share/icons/PlasmaFusion{,-Dark} and kept up to date by the service as apps change.
+# plasmafusionrc [Icons] AppIcons=designs keeps the designed tiles (the service then removes them).
+say "App icons"
+install_user_service plasma-fusion-app-icons.service appicons
 
 # ---------- 7d2. per-app compatibility (HIDPI-1) ----------
 

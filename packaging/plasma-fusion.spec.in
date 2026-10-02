@@ -52,6 +52,11 @@ Requires:       /usr/bin/kreadconfig6
 Requires:       /usr/bin/kwriteconfig6
 Requires:       /usr/bin/busctl
 Requires:       /usr/bin/setpriv
+# plasma-fusion-app-icons draws each app's own icon on a Fusion tile: Pillow, and QtSvg (what Plasma
+# draws icons with) through PySide6 when installed, else rsvg-convert.
+Requires:       python3-pillow
+Requires:       (librsvg2-tools or python3-pyside6)
+Suggests:       python3-pyside6
 # The design's Code and Notes apps, the terminal whose theme is included, the login screen
 # styled by tools/system/greeter-apply.sh.
 Suggests:       kate
@@ -116,6 +121,8 @@ copy_tree plasma-fusion/backgrounds plasma-fusion/backgrounds
 # Xournal++ templates of the pen menu; the power-tiers unit where fusion-config.sh looks for it
 copy_tree plasma-fusion/pen plasma-fusion/pen
 copy_tree plasma-fusion/powerfx plasma-fusion/powerfx
+# The familiar app icons unit (fusion-config.sh enables it per user; the tool goes to libexec)
+copy_tree plasma-fusion/appicons plasma-fusion/appicons
 # The LibreOffice scale guard's desktop entry (HIDPI-1; fusion-config.sh installs it per user)
 copy_tree plasma-fusion/compat plasma-fusion/compat
 # The charge-limit helper's polkit action (the helper itself goes to libexec below)
@@ -213,10 +220,12 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 # What the per-user step takes from the package: the power-tiers unit and program, the pen
 # templates, the login check, the top-bar script of the Global Themes, the font fallback.
 test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
+test -s %{buildroot}%{_datadir}/plasma-fusion/appicons/plasma-fusion-app-icons.service
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
 test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
+test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-app-icons
 test -s %{buildroot}%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 test -s %{buildroot}%{_datadir}/plasma-fusion/pen/templates/Note.xopp
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh
@@ -293,6 +302,7 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 %{_datadir}/plasma-fusion/backgrounds/
 %{_datadir}/plasma-fusion/pen/
 %{_datadir}/plasma-fusion/powerfx/
+%{_datadir}/plasma-fusion/appicons/
 %{_datadir}/plasma-fusion/compat/
 %{_datadir}/plasma-fusion/config/
 %{_datadir}/plasma-fusion/plymouth/
@@ -307,6 +317,7 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 %{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 # Esc, Tab and arrows on the on-screen keyboard (the layouts are built in the user's data directory)
 %{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
+%{_libexecdir}/plasma-fusion/plasma-fusion-app-icons
 
 %changelog
 * @CHANGELOG_DATE@ Wisbendji Fimerlus <archledger236@gmail.com> - @VERSION@-@RELEASE@
