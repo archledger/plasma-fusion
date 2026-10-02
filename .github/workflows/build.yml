@@ -30,7 +30,7 @@ jobs:
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Install git and the RPM tools (checkout runs inside the container)
-        run: dnf install -y -q git rpm-build rpmlint
+        run: dnf install -y -q git rpm-build rpmlint dnf-plugins-core
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,15 +42,18 @@ jobs:
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          mapfile -t deps < <(sed -n 's/^BuildRequires:[[:space:]]*//p' packaging/plasma-fusion.spec.in)
-          dnf install -y -q "${deps[@]}" \
-            nodejs ShellCheck desktop-file-utils kf6-kconfig glib2 python3-gobject gtk3 gtk4
+          # The shared part's build requirements (the compiled parts build in compiled.yml).
+          dnf builddep -y -q --without compiled packaging/fedora/plasma-fusion.spec
+          dnf install -y -q nodejs ShellCheck desktop-file-utils kf6-kconfig glib2 python3-gobject gtk3 gtk4
 
       - name: Lint self-tests
         run: tools/checks/tests/run.sh
 
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
+
+      - name: One version everywhere (VERSION, spec, PKGBUILD, Debian changelog)
+        run: packaging/check-version.sh
 
       - name: Build the RPM (tools/build.sh, %check, rpmlint)
         run: packaging/build-rpm.sh --topdir "$GITHUB_WORKSPACE/build/rpmbuild"
@@ -61,6 +64,6 @@ jobs:
           name: plasma-fusion-rpm
           # build/ is git-ignored, so the tree stays clean for the package release.
           path: |
-            build/rpmbuild/RPMS/noarch/*.rpm
+            build/rpmbuild/RPMS/*/*.rpm
             build/rpmbuild/SRPMS/*.rpm
           retention-days: 14

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # The compiled parts (navigation effect, window decoration, settings module) against the KWin,
-# KDecoration and KDE Frameworks that Fedora 44 ships: build requirements from each spec
-# (dnf builddep), configure, build and the parts' tests. A Plasma update in Fedora that breaks one
+# KDecoration and KDE Frameworks that Fedora 44 ships: build requirements from the spec
+# (dnf builddep packaging/fedora/plasma-fusion.spec), configure, build and the parts' tests. A Plasma update in Fedora that breaks one
 # of them shows up here. Compiler warnings fail the build (CXXFLAGS=-Werror on top of KDE's warning
 # flags), except deprecation warnings, which stay warnings.
 #
@@ -20,6 +20,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
+      - "packaging/fedora/plasma-fusion.spec"
       - ".github/workflows/compiled.yml"
   push:
     branches: ["main"]
@@ -29,6 +30,7 @@ on:
       - "packages/kcm-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
+      - "packaging/fedora/plasma-fusion.spec"
       - ".github/workflows/compiled.yml"
   # Weekly, so that a Plasma update in Fedora 44 is noticed without a change here.
   schedule:
@@ -70,12 +72,7 @@ jobs:
           dnf repoquery -q --qf '%{name} %{version}\n' kwin-devel libplasma-devel | sort -u
 
       - name: Install the build requirements from the spec
-        env:
-          PACKAGE: ${{ matrix.package }}
-        run: |
-          set -euo pipefail
-          cd "packages/$PACKAGE"
-          dnf builddep -y -q ./*.spec
+        run: dnf builddep -y -q packaging/fedora/plasma-fusion.spec
 
       - name: Configure, build and test
         env:

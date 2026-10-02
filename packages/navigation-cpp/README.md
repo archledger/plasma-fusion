@@ -40,7 +40,7 @@ copyright lines. Plasma Fusion changes:
 
 ## Build
 
-`tools/build-rpm.sh` builds it in the Plasma Fusion build container on the test device and fetches a staged
+`tools/build-remote.sh` builds it in the Plasma Fusion build container on the test device and fetches a staged
 install (`stage/`) and the RPM.
 
 ## Home closes a shell sheet (2026-10-01)

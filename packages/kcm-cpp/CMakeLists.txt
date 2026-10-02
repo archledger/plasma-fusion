@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Plasma Fusion settings module (System Settings > Appearance & Style > Plasma Fusion).
-# Built for Plasma 6.7.5, KDE Frameworks 6.30 and Qt 6.11 (Fedora 44); see plasma-fusion-settings.spec.
+# Built for Plasma 6.7.5, KDE Frameworks 6.30 and Qt 6.11 (Fedora 44); packaged by packaging/fedora/plasma-fusion.spec.
 cmake_minimum_required(VERSION 3.22)
 project(plasma-fusion-settings VERSION 1.0.0 LANGUAGES CXX)
 

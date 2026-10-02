@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# Packit: build the Plasma Fusion RPMs in the Copr project archledger/plasma-fusion from signed
+# release tags (docs/RELEASING.md). One spec, one source archive (git archive of the tag), four
+# packages: plasma-fusion and the decoration, settings and navigation parts.
+specfile_path: packaging/fedora/plasma-fusion.spec
+upstream_package_name: plasma-fusion
+downstream_package_name: plasma-fusion
+# Tags are v-prefixed (v0.2.0); without this the RPM Version keeps the "v".
+upstream_tag_template: "v{version}"
+# Only release tags are versions: Packit takes the newest tag, and anchored with re.match a tag that
+# does not start with vN.N.N is never a candidate.
+upstream_tag_include: 'v\d+\.\d+\.\d+$'
+
+actions:
+  # The checked-out spec's version for pull request builds (git describe would keep the last
+  # release's), and a check that VERSION, the spec, the PKGBUILD and the Debian changelog agree.
+  get-current-version:
+    - grep -oP '^Version:\s+\K\S+' packaging/fedora/plasma-fusion.spec
+  post-upstream-clone:
+    - packaging/check-version.sh
+
+jobs:
+  - job: copr_build
+    trigger: release
+    owner: archledger
+    project: plasma-fusion
+    # The build fetches nothing (Packit turns networking off for its builds anyway).
+    enable_net: false
+    targets:
+      - fedora-stable
+      # The branched pre-release (fedora-45 until it is stable) sits between fedora-stable and
+      # fedora-rawhide; without this alias its chroot keeps serving the previous build.
+      - fedora-development
+      - fedora-rawhide
+
+  # Pull request builds go to Packit's own sandbox project, never to archledger/plasma-fusion:
+  # their timestamped Release outranks a release, so dnf would serve a pull request build.
+  - job: copr_build
+    trigger: pull_request
+    enable_net: false
+    targets:
+      - fedora-stable

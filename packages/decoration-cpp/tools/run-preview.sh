@@ -2,14 +2,14 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Laptop side: run tests/pfdeco-preview (built by tools/build-rpm.sh) on the test device, offscreen,
+# Laptop side: run tests/pfdeco-preview (built by tools/build-remote.sh) on the test device, offscreen,
 # under a private D-Bus session, for the dark and light Plasma Fusion colour schemes, over the Main /
 # MainLight board renders. Results (PNG scenes + preview-<scheme>.log with PASS/FAIL lines) land in
 # OUT_DIR (default build/cx/out/preview). Scratch config lives in ~/.local/state/plasma-fusion/
-# decoration-cpp/preview-config-* (PF_REMOTE overrides the directory below HOME, as for build-rpm.sh);
+# decoration-cpp/preview-config-* (PF_REMOTE overrides the directory below HOME, as for build-remote.sh);
 # the user's own configuration is never read or written.
 #
-# PF_SCALES (default 1,1.3333333,1.325) picks the scales; PF_SSH_OPTS as for build-rpm.sh. The
+# PF_SCALES (default 1,1.3333333,1.325) picks the scales; PF_SSH_OPTS as for build-remote.sh. The
 # tool runs with LANG=en_US.UTF-8 (the tooltip check expects the English board text).
 #
 #   packages/decoration-cpp/tools/run-preview.sh [OUT_DIR]

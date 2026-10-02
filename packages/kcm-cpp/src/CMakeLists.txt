@@ -8,8 +8,8 @@ add_definitions(-DTRANSLATION_DOMAIN=\"kcm_plasmafusion\")
 kcmutils_add_qml_kcm(kcm_plasmafusion SOURCES kcm.cpp kcm.h kcm_p.h shell.cpp)
 
 # The shared Plasma Fusion QML the page uses (FusionMetrics), next to the page's own files in the
-# module's resources. Its source is packages/common in the repository; build-rpm.sh puts a copy
-# in common/ of the source tarball.
+# module's resources. Its source is packages/common in the repository (../common from here);
+# build-remote.sh sends a copy as common/.
 foreach(dir "${CMAKE_SOURCE_DIR}/common" "${CMAKE_SOURCE_DIR}/../common")
     if(NOT PF_COMMON_DIR AND EXISTS "${dir}/FusionMetrics.qml")
         get_filename_component(PF_COMMON_DIR "${dir}" ABSOLUTE)

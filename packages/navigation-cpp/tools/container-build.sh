@@ -6,9 +6,9 @@
 #   /work/src      this package (packages/navigation-cpp)
 #   /work/build    CMake build directory
 #   /work/stage    DESTDIR install of the build (for private test sessions; nothing is installed)
-#   /work/rpmbuild rpmbuild top directory; the RPM lands in /work/rpmbuild/RPMS/x86_64/
-# Started by tools/build-rpm.sh; JOBS (default 6) limits the parallelism, CLEAN=1 starts from an
-# empty build directory, RPM=0 skips the RPM (compile and stage only).
+# Development builds only (the packages: packaging/build-rpm.sh --compiled). Started by
+# tools/build-remote.sh; JOBS (default 6) limits the parallelism, CLEAN=1 starts from an empty build
+# directory.
 set -euo pipefail
 JOBS=${JOBS:-6}
 cd /work
@@ -20,15 +20,3 @@ nice -n 10 ninja -C build -j"$JOBS" 2>&1 | tee build-ninja.log
 rm -rf stage
 DESTDIR=/work/stage ninja -C build install >build-install.log 2>&1 || { tail -30 build-install.log; exit 1; }
 find stage -type f | sort
-
-[ "${RPM:-1}" = 1 ] || exit 0
-VERSION=$(sed -n 's/^Version:[[:space:]]*//p' src/plasma-fusion-navigation.spec)
-rm -rf rpmbuild
-mkdir -p rpmbuild/SOURCES
-tar -czf "rpmbuild/SOURCES/plasma-fusion-navigation-$VERSION.tar.gz" \
-  --exclude='src/build' --exclude='src/tools/__pycache__' \
-  --transform "s,^src,plasma-fusion-navigation-$VERSION," src
-nice -n 10 rpmbuild --define "_topdir /work/rpmbuild" --define "_smp_mflags -j$JOBS" \
-  -bb src/plasma-fusion-navigation.spec >rpmbuild.log 2>&1 || { tail -60 rpmbuild.log; exit 1; }
-ls -l rpmbuild/RPMS/x86_64/
-rpm -qlp rpmbuild/RPMS/x86_64/plasma-fusion-navigation-"$VERSION"-*.x86_64.rpm

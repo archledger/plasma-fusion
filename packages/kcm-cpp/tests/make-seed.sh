@@ -8,7 +8,7 @@
 #   tests/make-seed.sh STAGE KCM_ROOT SEED NAME [dark|light] [DECO_PLUGIN_DIR]
 #
 #   STAGE     tools/build.sh output (a HOME tree with every Plasma Fusion part)
-#   KCM_ROOT  the unpacked RPM (build-rpm.sh OUTDIR/root)
+#   KCM_ROOT  the installed module (build-remote.sh OUTDIR/root)
 #   SEED      seed directory to (re)create
 #   NAME      the vsession name it will run as (paths in .config/pfv-env are absolute: the
 #             session HOME is $PFV_BASE/pfv-NAME/home, PFV_BASE defaulting to /var/tmp as in

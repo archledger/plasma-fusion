@@ -1,26 +1,29 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Template for plasma-fusion.spec: packaging/build-rpm.sh fills in the version, the release, the
-# git revision and the changelog date, then builds the SRPM and the noarch RPM.
-# The RPM holds everything of Plasma Fusion that can be shared by all users of the system. The
-# per-user step stays /usr/share/plasma-fusion/tools/device/fusion-config.sh, run by each user
-# inside their Plasma session; the login greeter is styled by
-# /usr/share/plasma-fusion/tools/system/greeter-apply.sh (root). See docs/parts/system.md.
+# Plasma Fusion for Fedora, from one source tarball: the shared part (plasma-fusion: themes,
+# widgets, icons, fonts, KWin scripts, setup tools) and the three compiled parts (-decoration,
+# -settings, -navigation). Copr builds releases through Packit (.packit.yaml); packaging/build-rpm.sh
+# builds snapshots of a working tree (rpmbuild --without compiled: the shared part only). Every
+# package records nothing in a home directory: each user runs "plasma-fusion setup" in their Plasma
+# session (docs/parts/system.md).
+#
+# The shared part holds no compiled code but is built for each architecture with the compiled parts
+# (rpm builds noarch subpackages of an arched package, not the other way round).
+
+%bcond compiled 1
 
 Name:           plasma-fusion
-Version:        @VERSION@
-Release:        @RELEASE@%{?dist}
+Version:        0.2.0
+Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
-# Code (QML, JavaScript, shell scripts, KWin scripts): GPL-2.0-or-later.
+# Code (QML, JavaScript, shell scripts, KWin scripts, C++): GPL-2.0-or-later.
 # Artwork (Plasma style, icons, cursors, window decorations, wallpapers, backgrounds,
 # previews): CC-BY-SA-4.0. Fonts (Manrope, Space Grotesk): OFL-1.1.
 License:        GPL-2.0-or-later AND CC-BY-SA-4.0 AND OFL-1.1
-# Built from the working tree of the Plasma Fusion repository, git revision @GITREV@.
-Source0:        %{name}-%{version}.tar.gz
-
-BuildArch:      noarch
+URL:            https://github.com/archledger/plasma-fusion
+Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
 # tools/build.sh renders the artwork: Pillow for the wallpapers and the decoration,
 # PySide6 (QtSvg, offscreen) for the wallpaper check and the cursors, NumPy for the boot splash.
@@ -31,8 +34,36 @@ BuildRequires:  python3
 BuildRequires:  python3-numpy
 BuildRequires:  python3-pillow
 BuildRequires:  python3-pyside6
-# %check resolves the icon themes' links into Breeze against the installed Breeze.
+# %%check resolves the icon themes' links into Breeze against the installed Breeze.
 BuildRequires:  breeze-icon-theme >= 6.30
+%if %{with compiled}
+BuildRequires:  cmake >= 3.22
+BuildRequires:  extra-cmake-modules
+BuildRequires:  gcc-c++
+BuildRequires:  ninja-build
+BuildRequires:  kf6-rpm-macros
+BuildRequires:  qt6-rpm-macros
+BuildRequires:  cmake(KWin) >= 6.7
+BuildRequires:  cmake(KDecoration3) >= 6.7
+BuildRequires:  cmake(PlasmaActivities)
+BuildRequires:  pkgconfig(epoxy)
+BuildRequires:  pkgconfig(libdrm)
+BuildRequires:  pkgconfig(vulkan)
+BuildRequires:  cmake(Qt6Core)
+BuildRequires:  cmake(Qt6DBus)
+BuildRequires:  cmake(Qt6Gui)
+BuildRequires:  cmake(Qt6Qml)
+BuildRequires:  cmake(Qt6Quick)
+BuildRequires:  cmake(KF6ColorScheme)
+BuildRequires:  cmake(KF6Config)
+BuildRequires:  cmake(KF6ConfigWidgets)
+BuildRequires:  cmake(KF6CoreAddons)
+BuildRequires:  cmake(KF6GlobalAccel)
+BuildRequires:  cmake(KF6I18n)
+BuildRequires:  cmake(KF6KCMUtils)
+BuildRequires:  cmake(KF6Package)
+BuildRequires:  cmake(KF6WindowSystem)
+%endif
 
 # Plasma 6.7 packages the themes plug into (Global Theme, Plasma style, shells, KWin
 # switcher/scripts, Aurorae v2 decoration).
@@ -60,6 +91,13 @@ Requires:       /usr/bin/setpriv
 Requires:       python3-pillow
 Requires:       (librsvg2-tools or python3-pyside6)
 Suggests:       python3-pyside6
+# The compiled parts of the same build: the window decoration and the settings page by default,
+# the tablet gestures for convertibles.
+%if %{with compiled}
+Recommends:     %{name}-decoration%{?_isa} = %{version}-%{release}
+Recommends:     %{name}-settings%{?_isa} = %{version}-%{release}
+Suggests:       %{name}-navigation%{?_isa} = %{version}-%{release}
+%endif
 # The design's Code and Notes apps, the terminal whose theme is included, the login screen
 # styled by tools/system/greeter-apply.sh.
 Suggests:       kate
@@ -79,10 +117,70 @@ shell, Konsole and Kate/KWrite color themes and the Manrope and Space Grotesk
 fonts.
 
 The package installs these for every user. Each user then runs
-/usr/share/plasma-fusion/tools/device/fusion-config.sh inside their Plasma
-session to apply the Global Theme and the settings a Global Theme cannot
-carry. As root, /usr/share/plasma-fusion/tools/system/greeter-apply.sh styles
-the Plasma login greeter.
+"plasma-fusion setup" inside their Plasma session to apply the Global Theme
+and the settings a Global Theme cannot carry, and "plasma-fusion update" after
+later updates. As root, /usr/share/plasma-fusion/tools/system/greeter-apply.sh
+styles the Plasma login greeter.
+
+%if %{with compiled}
+%package decoration
+Summary:        Plasma Fusion window decoration for KWin
+License:        GPL-2.0-or-later
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+# Built and tested against KDecoration 6.7. The plugin links only the public libkdecorations3.so.6
+# (the soname dependency is generated), not the private library.
+Requires:       kdecoration%{?_isa} >= 6.7
+Enhances:       kwin
+
+%description decoration
+The Plasma Fusion window decoration: a tall title bar with the app icon and
+a left-aligned title, round buttons, rounded corners with the window content
+clipped, a thin light edge and soft shadows. Square corners and no shadow when
+maximized, square inner corners when tiled. In tablet mode the title bar and
+its buttons grow to touch size. Button layouts and the snap-layouts trigger on
+the maximize button are set on the Plasma Fusion page of System Settings.
+
+%package settings
+Summary:        Plasma Fusion settings page for System Settings
+License:        GPL-2.0-or-later AND CC-BY-SA-4.0
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       plasma-systemsettings
+Requires:       plasma-workspace
+Requires:       kf6-kirigami
+Requires:       kf6-kcmutils
+Requires:       qt6-qtdeclarative
+# Owns the hicolor icon directories the logo is installed into.
+Requires:       hicolor-icon-theme
+
+%description settings
+The Appearance page of the Plasma Fusion desktop as a System Settings module
+(Appearance & Style > Plasma Fusion): Light, Dark or Follow sunset style, the
+accent color, the window-button layout of the Plasma Fusion window decoration,
+dock magnification, the global menu in the top bar and the Overview hot corner;
+snap layouts on hold or hover, the glass level, high contrast, reduced motion,
+the top bar next to windows and on every screen, desktop icons, what dragging
+files does, the battery saving at 10 %, tablet mode, and two ways to start over
+(the previous desktop look, a fresh Plasma Fusion layout).
+
+%package navigation
+Summary:        Plasma Fusion tablet navigation gestures (KWin effect)
+License:        GPL-2.0-or-later
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+# Built against KWin's own (not stable) library API. The Plasma Fusion login check turns the
+# effect off when the installed KWin differs from the tested version; Copr rebuilds it after every
+# KWin update. No exact version pin, so Fedora updates are never blocked.
+Requires:       kwin%{?_isa} >= 6.7
+Enhances:       kwin
+
+%description navigation
+Plasma Fusion's tablet navigation: in tablet posture, swipe up from the bottom
+edge to go home, swipe up a little to show the dock, swipe up and hold for the
+app switcher (one card per app or split pair, swipe a card up to close it),
+or swipe along the bottom edge for the previous app. The app follows the
+finger. A key press on a hardware keyboard hides the on-screen keyboard.
+Laptop posture keeps KWin's own edges. Derived from Plasma Mobile's task
+switcher.
+%endif
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -99,96 +197,45 @@ bash tools/build.sh
 # /usr/share/plymouth/themes: installing this package never changes the boot splash.
 bash generators/plymouth/build.sh "$PWD/_plymouth/plasma-fusion"
 
+%if %{with compiled}
+for part in decoration navigation; do
+  %cmake -S packages/$part-cpp -B _build/$part -G Ninja -DBUILD_TESTING=OFF -DKDE_INSTALL_USE_QT_SYS_PATHS=ON
+  %__cmake --build _build/$part %{?_smp_mflags} --verbose
+done
+# rcc stamps every QML file of the settings page with SOURCE_DATE_EPOCH, and Qt's QML disk cache
+# (~/.cache/systemsettings/qmlcache, ~/.cache/kcmshell6/qmlcache) reuses a compiled file whose
+# source time stamp is unchanged: two builds from the same day would share the stamp, and an update
+# would keep showing the previous page. The stamp is derived from the sources instead: the same
+# sources give the same stamp (the build stays reproducible), any change gives a new one.
+(
+  cd packages/kcm-cpp
+  SOURCE_DATE_EPOCH=$(( 1700000000 + 0x$(cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/*.json src/ui/*.qml ../common/*.qml | sha256sum | cut -c1-6) ))
+  export SOURCE_DATE_EPOCH QT_RCC_SOURCE_DATE_OVERRIDE=$SOURCE_DATE_EPOCH
+  echo "settings page QML time stamp: $SOURCE_DATE_EPOCH"
+  %cmake_kf6 -S . -B ../../_build/settings -G Ninja -DBUILD_TESTING=OFF
+  %__cmake --build ../../_build/settings %{?_smp_mflags} --verbose
+)
+%endif
+
 %install
-share=_stage/.local/share
-dest=%{buildroot}%{_datadir}
-
-# Copy with the links as they are (the icon themes are mostly symbolic links).
-copy_tree() { # $1 source below $share, $2 destination below %%{_datadir}
-  mkdir -p "$dest/$2"
-  cp -a "$share/$1/." "$dest/$2/"
-}
-copy_tree color-schemes color-schemes
-for t in look-and-feel desktoptheme plasmoids shells layout-templates; do
-  copy_tree "plasma/$t" "plasma/$t"
+bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion \
+  --destdir %{buildroot} --prefix %{_prefix} --libexecdir %{_libexecdir}
+mkdir -p %{buildroot}%{_datadir}/plasma-fusion/built-against
+%if %{with compiled}
+for part in decoration settings navigation; do
+  DESTDIR=%{buildroot} %__cmake --install _build/$part
 done
-copy_tree icons icons
-copy_tree aurorae/themes aurorae/themes
-copy_tree wallpapers wallpapers
-copy_tree kwin/tabbox kwin/tabbox
-copy_tree kwin/scripts kwin/scripts
-copy_tree konsole konsole
-copy_tree org.kde.syntax-highlighting/themes org.kde.syntax-highlighting/themes
-copy_tree fonts/plasma-fusion fonts/plasma-fusion
-copy_tree plasma-fusion/backgrounds plasma-fusion/backgrounds
-# Xournal++ templates of the pen menu; the power-tiers unit where fusion-config.sh looks for it
-copy_tree plasma-fusion/pen plasma-fusion/pen
-copy_tree plasma-fusion/powerfx plasma-fusion/powerfx
-# The familiar app icons unit (fusion-config.sh enables it per user; the tool goes to libexec)
-copy_tree plasma-fusion/appicons plasma-fusion/appicons
-# The LibreOffice scale guard's desktop entry (HIDPI-1; fusion-config.sh installs it per user)
-copy_tree plasma-fusion/compat plasma-fusion/compat
-# The charge-limit helper's polkit action (the helper itself goes to libexec below)
-copy_tree polkit-1/actions polkit-1/actions
-# The power-tiers service itself: the unit's ExecSearchPath includes /usr/libexec/plasma-fusion.
-mkdir -p %{buildroot}%{_libexecdir}/plasma-fusion
-cp -a _stage/.local/libexec/plasma-fusion/. %{buildroot}%{_libexecdir}/plasma-fusion/
-
-# Everything the build staged must be in the package: a new part that writes somewhere below
-# .local/share without a copy line above (and a %%files line below) fails here instead of being
-# left out without a word. The build writes nothing else than .local/share and .config.
-(cd _stage/.local/share && find . \( -type f -o -type l \) | LC_ALL=C sort) >staged-files.txt
-(cd "$dest" && find . \( -type f -o -type l \) | LC_ALL=C sort) >copied-files.txt
-LC_ALL=C comm -23 staged-files.txt copied-files.txt >not-copied.txt
-(cd _stage/.local/libexec && find . \( -type f -o -type l \) | LC_ALL=C sort) >staged-libexec.txt
-(cd %{buildroot}%{_libexecdir} && find . \( -type f -o -type l \) | LC_ALL=C sort) >copied-libexec.txt
-LC_ALL=C comm -23 staged-libexec.txt copied-libexec.txt >>not-copied.txt
-(cd _stage && find . -mindepth 1 -maxdepth 2 ! -path ./.local ! -path ./.local/share ! -path ./.local/libexec ! -path ./.config ! -path './.config/*') >>not-copied.txt
-if [ -s not-copied.txt ]; then
-  echo "staged by tools/build.sh but not packaged:" >&2
-  head -n 50 not-copied.txt >&2
-  exit 1
-fi
-
-# The icon themes hand some names back to Breeze and to apps' own hicolor icons with absolute
-# links (right for a per-user install in ~/.local/share). Here they become relative links to
-# ../breeze, ../breeze-dark and ../hicolor, which resolve inside whatever root the package is
-# installed to.
-find "$dest/icons" -type l -lname '/usr/share/icons/*' -print0 |
-  while IFS= read -r -d '' link; do
-    ln -sfn "$(realpath -m -s --relative-to="$(dirname "${link#%{buildroot}}")" "$(readlink "$link")")" "$link"
+# Qt's QML disk cache (~/.cache/kwin/qmlcache) reuses a compiled file while the source's time stamp
+# is unchanged, and rpm clamps every time stamp to the %%changelog date: two releases built on one
+# day ship equal times, and KWin kept running the previous release's effect QML after an update.
+# Each QML/JS file gets a time derived from its content instead, before the clamp date so rpm keeps
+# it: the same file gives the same time (reproducible), any change a new one.
+find %{buildroot}%{_datadir}/kwin/effects/plasmafusion_navigation %{buildroot}%{_qt6_qmldir}/org/plasmafusion/navigation \
+  -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 |
+  while IFS= read -r -d '' f; do
+    touch -h -d "@$(( ${SOURCE_DATE_EPOCH:-1700000000} - 1 - 0x$(sha256sum "$f" | cut -c1-6) ))" "$f"
   done
-
-# Plymouth theme for plymouth-install.sh (see %%build)
-mkdir -p "$dest/plasma-fusion/plymouth"
-cp -a _plymouth/plasma-fusion "$dest/plasma-fusion/plymouth/"
-
-# Per-user configuration from the build (GTK 3/4 stylesheets), kept as templates for the
-# per-user step; the package itself writes nothing into a home directory.
-mkdir -p "$dest/plasma-fusion/config"
-cp -a _stage/.config/. "$dest/plasma-fusion/config/"
-
-# Scripts: per-user setup (tools/device, with the login check in gate/ and the "My previous
-# desktop" generator), the pen defaults (tools/pen) and root setup of the login greeter
-# (tools/system).
-for d in device device/gate pen system; do
-  mkdir -p "$dest/plasma-fusion/tools/$d"
-  for f in tools/$d/*.sh; do
-    [ -e "$f" ] && install -m 0755 "$f" "$dest/plasma-fusion/tools/$d/"
-  done
-done
-install -m 0755 tools/device/previous-theme.py "$dest/plasma-fusion/tools/device/"
-
-# Documentation.
-mkdir -p "$dest/plasma-fusion/docs/parts"
-install -m 0644 README.md docs/PLAN.md "$dest/plasma-fusion/docs/"
-install -m 0644 docs/parts/*.md "$dest/plasma-fusion/docs/parts/"
-
-# Plain permissions everywhere (links keep theirs), executable scripts only in tools/ and libexec.
-find "$dest" -type d -exec chmod 0755 {} +
-find "$dest" -type f -exec chmod 0644 {} +
-find "$dest/plasma-fusion/tools" -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod 0755 {} +
-find %{buildroot}%{_libexecdir}/plasma-fusion -type f -exec chmod 0755 {} +
+%endif
 
 %check
 # Every symbolic link must resolve, inside the package or (the Breeze hand-back links) in
@@ -228,12 +275,11 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 # templates, the login check, the top-bar script of the Global Themes, the font fallback.
 test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
 test -s %{buildroot}%{_datadir}/plasma-fusion/appicons/plasma-fusion-app-icons.service
-test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
-test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
-test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
-test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
-test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-app-icons
-test -s %{buildroot}%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
+for h in powerfx libreoffice charge-limit keyboard-keys app-icons; do
+  test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-$h
+done
+grep -qF '%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit</annotate>' \
+  %{buildroot}%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 test -s %{buildroot}%{_datadir}/plasma-fusion/pen/templates/Note.xopp
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/device/gate/plasma-fusion-gate.sh
 test -x %{buildroot}%{_datadir}/plasma-fusion/tools/pen/pen-defaults.sh
@@ -245,10 +291,20 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/config/fontconfig/conf.d/60-plasma
 test -s %{buildroot}%{_datadir}/plasma-fusion/config/systemd/user/plasma-fusion-powerfx.service
 test -s %{buildroot}%{_datadir}/kwin/tabbox/org.plasmafusion.switcher/contents/ui/shaders/thumbnail.frag.qsb
 test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensureTopBars.js
+# The command and the version files it reads.
+test "$(%{buildroot}%{_bindir}/plasma-fusion version)" = "$(cat VERSION)"
+test -s %{buildroot}%{_datadir}/plasma-fusion/tested-plasma.txt
+test -s %{buildroot}%{_datadir}/plasma-fusion/items.txt
+%if %{with compiled}
+for part in decoration settings navigation; do
+  test -s %{buildroot}%{_datadir}/plasma-fusion/built-against/$part
+done
+%endif
 
 %files
 %license packaging/LICENSES/GPL-2.0-or-later.txt
 %license packaging/LICENSES/CC-BY-SA-4.0.txt
+%{_bindir}/plasma-fusion
 # Colour schemes (the directory has no owner in Fedora 44)
 %dir %{_datadir}/color-schemes
 %{_datadir}/color-schemes/PlasmaFusionDark.colors
@@ -304,8 +360,9 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 %{_datadir}/fonts/plasma-fusion/*.ttf
 %license %{_datadir}/fonts/plasma-fusion/OFL-Manrope.txt
 %license %{_datadir}/fonts/plasma-fusion/OFL-SpaceGrotesk.txt
-# Backgrounds, per-user templates, scripts and documentation
+# Backgrounds, per-user templates, scripts, version files and documentation
 %dir %{_datadir}/plasma-fusion
+%dir %{_datadir}/plasma-fusion/built-against
 %{_datadir}/plasma-fusion/backgrounds/
 %{_datadir}/plasma-fusion/pen/
 %{_datadir}/plasma-fusion/powerfx/
@@ -314,18 +371,44 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 %{_datadir}/plasma-fusion/config/
 %{_datadir}/plasma-fusion/plymouth/
 %{_datadir}/plasma-fusion/tools/
+%{_datadir}/plasma-fusion/version
+%{_datadir}/plasma-fusion/tested-plasma.txt
+%{_datadir}/plasma-fusion/items.txt
 %doc %{_datadir}/plasma-fusion/docs/
-# The power-tiers service (started per user by fusion-config.sh; nothing is enabled by the package)
+# The helpers: power tiers (started per user by plasma-fusion setup; nothing is enabled by the
+# package), the battery charge limit of the quick settings (pkexec, polkit action
+# org.plasmafusion.charge-limit), Esc/Tab/arrows on the on-screen keyboard, the familiar app icons,
+# the LibreOffice scale guard
 %dir %{_libexecdir}/plasma-fusion
 %{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
 %{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
-# The battery charge limit of the quick settings (pkexec, polkit action org.plasmafusion.charge-limit)
 %{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
-%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
-# Esc, Tab and arrows on the on-screen keyboard (the layouts are built in the user's data directory)
 %{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
 %{_libexecdir}/plasma-fusion/plasma-fusion-app-icons
+%{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
+
+%if %{with compiled}
+%files decoration
+%license LICENSES/GPL-2.0-or-later.txt
+%{_qt6_plugindir}/org.kde.kdecoration3/org.plasmafusion.decoration.so
+%{_datadir}/plasma-fusion/built-against/decoration
+
+%files settings
+%license LICENSES/GPL-2.0-or-later.txt LICENSES/CC-BY-SA-4.0.txt
+%{_kf6_qtplugindir}/plasma/kcms/systemsettings/kcm_plasmafusion.so
+%{_kf6_datadir}/applications/kcm_plasmafusion.desktop
+%{_kf6_datadir}/icons/hicolor/scalable/apps/plasmafusion-logo.svg
+%{_datadir}/plasma-fusion/built-against/settings
+
+%files navigation
+%license LICENSES/GPL-2.0-or-later.txt
+%doc packages/navigation-cpp/README.md
+%{_datadir}/kwin/effects/plasmafusion_navigation/
+%{_qt6_qmldir}/org/plasmafusion/navigation/
+%{_datadir}/plasma-fusion/built-against/navigation
+%endif
 
 %changelog
-* @CHANGELOG_DATE@ Wisbendji Fimerlus <archledger236@gmail.com> - @VERSION@-@RELEASE@
-- Snapshot of git revision @GITREV@
+* Fri Oct 02 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.2.0-1
+- First release: one package set for Fedora from one source (the shared part
+  and the window decoration, settings page and tablet navigation)

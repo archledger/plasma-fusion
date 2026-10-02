@@ -20,7 +20,7 @@ it (TEST_RE): generators/cursors/sheet.py, generators/icons/compare_boards.py, t
 tools/shadow-alpha.py, tools/sheet.py and tools/run-preview.sh, and tools/device/power-ab.sh.
 Maintainer tools: the programs run by hand to regenerate committed tables and files, and the
 package build scripts (packaging/build-rpm.sh, which the build workflow also runs, and the
-compiled parts' build-rpm.sh and container-build.sh); neither tools/build.sh nor the package runs
+compiled parts' build-remote.sh and container-build.sh); neither tools/build.sh nor the package runs
 them (MAINT_RE). Everything else is product code: what tools/build.sh runs and what the packages
 install. Within product code, the build and lint scripts (BUILD_RE) run whenever the build
 runs, so the summary also gives the product figures without them.
@@ -46,7 +46,7 @@ TEST_RE = re.compile(r"(^|/)(tests?|vsession)/|^tools/(tests|vsession|container)
                      r"|^tools/device/power-ab\.sh$")
 MAINT_RE = re.compile(r"^generators/icons/(make_[a-z_]+|coverage_report)\.py$|^generators/fonts/make_static\.py$"
                       r"|^generators/look-and-feel/previews\.py$|^packaging/build-rpm\.sh$"
-                      r"|^packages/[a-z-]+/(tools/)?(build-rpm|container-build)\.sh$")
+                      r"|^packages/[a-z-]+/(tools/)?(build-remote|container-build)\.sh$")
 BUILD_RE = re.compile(r"^tools/(build\.sh$|build\.d/|build-lib/|checks/)|^generators/[a-z-]+/build\.sh$")
 KINDS = ("product", "maintainer", "tests")
 # A heredoc operator (not <<<), its optional "-", its quote and its delimiter word.

@@ -66,16 +66,17 @@ if [ "$DEPS" = 1 ]; then
   for part in "${parts[@]}"; do
     case $part in
       scripts)
-        mapfile -t req < <(sed -n 's/^BuildRequires:[[:space:]]*//p' "$ROOT/packaging/plasma-fusion.spec.in")
         # The spec's requirements run tools/build.sh; the rest switch on the checks it skips
         # without them (as in build.yml), the login check and power tiers tests, and the tools.
-        dnf install -y -q "${req[@]}" git-core python3-coverage kcov nodejs \
+        dnf install -y -q dnf-plugins-core
+        dnf builddep -y -q --without compiled "$ROOT/packaging/fedora/plasma-fusion.spec"
+        dnf install -y -q git-core python3-coverage kcov nodejs \
           ShellCheck desktop-file-utils libxml2 kf6-kconfig glib2 python3-gobject gtk3 gtk4 \
           dbus-daemon dbus-tools systemd libXcursor
         ;;
       cpp:*)
         dnf install -y -q dnf-plugins-core rpm-build gcovr dbus-daemon python3 git-core
-        dnf builddep -y -q "$ROOT/packages/${part#cpp:}"/*.spec
+        dnf builddep -y -q "$ROOT/packaging/fedora/plasma-fusion.spec"
         ;;
     esac
   done
