@@ -22,6 +22,11 @@ find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config CoreAddons I18n KC
 
 add_subdirectory(src)
 
+# kcmctl and the module test (ctest); KDECMakeSettings sets BUILD_TESTING on by default.
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+
 install(FILES icons/plasmafusion-logo.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
 
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)

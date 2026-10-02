@@ -13,7 +13,8 @@
       sh COMMAND           runs COMMAND with bash -c and waits for it
       # ...                comment
 
-    Output lines start with "kcmctl: ". Exit status 0, or 2 when the plugin could not be loaded.
+    Output lines start with "kcmctl: "; the first one names the plugin file that was loaded. Exit
+    status 0, or 2 when the plugin could not be loaded.
 
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
@@ -95,6 +96,7 @@ int main(int argc, char **argv)
         return 2;
     }
     KQuickConfigModule *module = result.plugin;
+    out << "kcmctl: plugin " << metaData.fileName() << Qt::endl;
     QMetaObject::invokeMethod(module, "load");
 
     QTextStream in(stdin);
