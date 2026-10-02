@@ -271,15 +271,18 @@ behaved wrongly before it and the commit corrects it: a crash, an error, a wrong
 display, a performance or memory problem, a build or packaging failure, a breakage with a newer
 Plasma, or a platform defect Plasma Fusion now works around. New behaviour, tuning to a design
 decision, documentation and test-only changes do not count. Fixes to the test suites themselves
-(5417df4, and the teardown and portal fixes in 19ca2cb and d99756b) are left out.
+(5417df4, and the teardown and portal fixes in 19ca2cb and d99756b) are left out; the snap flyout
+fix in d99756b counts among the fixes in passing below. The unit counted is the commit, not the
+bug: a commit that fixes several bugs counts once (a8559a3 lists five), and two commits for one
+bug count twice (cc1bce8 and 4166eed are one crash).
 
 A fix **has a regression test** when an automated check in the repository, run without a person,
 fails if the bug comes back: a check in `tools/build.sh` or the RPM build, a unit test, or a
 scripted private-session scenario that asserts its results. "Verified" means it was run here
 against the code with the fix taken out.
 
-Result: **9 of 58 bug-fix commits have a regression test (15.5 %)**. Counting also the 19 feature
-commits that fix something in passing (two of them with a test): 11 of 77 (14.3 %). Below the 50 %
+Result: **9 of 58 bug-fix commits have a regression test (15.5 %)**. Counting also the 20 feature
+commits that fix something in passing (five of them with a test): 14 of 78 (17.9 %). Below the 50 %
 the criterion asks for.
 
 | Commit | What was wrong | Regression test |
@@ -350,12 +353,19 @@ opened the layouts: tested by `pfdeco-preview`, same commit), 871ecb1 (typing in
 password field), fce9608 (the clock shifted; settings pages showed the first entry), ac2aa8a (a
 global menu crash), a04bc82 (KWin crash when quitting in tablet posture), 8fa94c2 (the launcher
 key did not reopen), c40d66b (settings pages showed the first entry), 3693b33 (the power service
-unit was looked up in an empty folder), 321228a (the log-out cancel area exposed to screen
-readers), 3e9b751 ("Setting initial properties failed"), e7316d4 (errors from removed
-notification rows), 2bc6cf1 (a synthesised pointer move showed the prompt), a8f233a (a tap on
-the page dots also hit the page), 1a3022c (an "off" action for pop-ups already off), 3fd0e69 (the
-split handle appeared late), da23db6 (a glyph sheen step; an old icon backup put over a newer
-one: tested by `designed_test.py`, same commit).
+unit was looked up in an empty folder: the same commit added a `%check` line to the spec that
+tests the unit is installed in that folder, so the RPM build fails without it; a packaging check),
+321228a (the log-out cancel area exposed to screen readers: the same commit made the
+accessibility lint stop the build; with `Accessible.ignored` taken out of `Logout.qml`,
+`a11y-lint.py` reports the cancel area and exits 1; verified), 3e9b751 ("Setting initial
+properties failed"), e7316d4 (errors from removed notification rows), 2bc6cf1 (a synthesised
+pointer move showed the prompt), a8f233a (a tap on the page dots also hit the page), 1a3022c (an
+"off" action for pop-ups already off), 3fd0e69 (the split handle appeared late), da23db6 (a glyph
+sheen step; an old icon backup put over a newer one: tested by `designed_test.py`, same commit),
+d99756b (the snap layouts flyout was not under the maximize button when the window buttons are on
+the left: tested by the flyout checks of `packages/kwin/tests/vsession/scenario-kwin2-a.sh` for
+the compiled decoration with left buttons and the Aurorae -Left theme, same commit; private
+sessions; not re-run here).
 
 ## Test policy
 
