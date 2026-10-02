@@ -1037,13 +1037,17 @@ void randomStep(Harness &h, Harness::Instance &in, QRandomGenerator &rng, FakeTa
     auto flip = [&rng] {
         return rng.bounded(2) == 1;
     };
-    // Anywhere over the title bar and a little around it, or the centre of a visible button.
+    // Anywhere over the title bar and a little around it, or the centre of a visible button. (One
+    // draw per statement: the order of function arguments is unspecified, and a seed has to give
+    // the same scenes with every compiler.)
     auto point = [&] {
         const auto buttons = h.visibleButtons(d);
         if (!buttons.isEmpty() && flip()) {
             return buttons.at(rng.bounded(int(buttons.size())))->geometry().center();
         }
-        return QPointF(rng.bounded(d->size().width() + 80) - 40, rng.bounded(d->borderTop() + 80) - 40);
+        const qreal x = rng.bounded(d->size().width() + 80) - 40;
+        const qreal y = rng.bounded(d->borderTop() + 80) - 40;
+        return QPointF(x, y);
     };
     auto mouseButton = [&rng] {
         static const QList<Qt::MouseButton> buttons{Qt::LeftButton, Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
@@ -1058,13 +1062,17 @@ void randomStep(Harness &h, Harness::Instance &in, QRandomGenerator &rng, FakeTa
         h.leave(d);
         break;
     case 3:
-    case 4:
-        h.press(d, point(), mouseButton());
+    case 4: {
+        const QPointF p = point();
+        h.press(d, p, mouseButton());
         break;
+    }
     case 5:
-    case 6:
-        h.release(d, point(), mouseButton());
+    case 6: {
+        const QPointF p = point();
+        h.release(d, p, mouseButton());
         break;
+    }
     case 7: {
         const QPointF p = point();
         QMouseEvent e(QEvent::MouseButtonDblClick, p, p, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
@@ -1244,7 +1252,10 @@ void runFuzz(Harness &h, FakeTabletMode *tablet, int scenes, quint32 seed)
         const bool tool = rng.bounded(5) == 0;
         QRectF tile;
         if (rng.bounded(4) == 0) {
-            tile = QRectF(rng.bounded(1.5) - 0.25, rng.bounded(1.5) - 0.25, rng.bounded(1.25), rng.bounded(1.25));
+            const qreal x = rng.bounded(1.5) - 0.25;
+            const qreal y = rng.bounded(1.5) - 0.25;
+            const qreal w = rng.bounded(1.25);
+            tile = QRectF(x, y, w, rng.bounded(1.25));
         }
         const bool onScreen = rng.bounded(2) == 1;
         screen.rect = randomScreen(rng);
