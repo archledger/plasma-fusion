@@ -517,14 +517,20 @@ In containers (`archlinux:latest` and `debian:sid`, 2026-10-02; the engine with 
 with the lock screen, the compiled decoration and the Plasma Fusion desktop on): Arch with the eight
 packages in pacman's database (`pacman -S --dbonly -dd`, real `pacman -Q`: Plasma 6.7.5, Qt 6.11.2),
 Debian sid with one binary package of each source package (`dpkg -i --force-depends`, real
-`dpkg-query`, Debian's `mawk`: Plasma 6.7.4, `qt6-base=6.11.2+dfsg`; no `libplasma` binary was
-found, recorded `absent`). Each: `deploy` records the versions with `db=`, a matching login changes
+`dpkg-query`, Debian's `mawk`: Plasma 6.7.4, `qt6-base=6.11.2+dfsg`, `libplasma` 6.7.4 from its
+binary `libplasma7`; sid's binaries of the libplasma source are `libplasma7` and
+`libplasmaquick7`, the first run looked for `libplasma6` and `libplasma-data`, found neither and
+recorded `absent`). Each: `deploy` records the versions with `db=`, a matching login changes
 nothing, a second one answers from the cache with the package tool out of PATH, kwin edited to
 6.99.0 in the database switches the lock screen, the title bars and the desktop off with the
 notification `kwin 6.7.5 → 6.99.0` (`6.7.4` on sid), the tested version again turns them back on
 (files as before), and without the package tool in PATH a login switches off with "no package
 database (rpm, pacman, dpkg or Nix) was found" and `deploy` fails and keeps the record: 17 of 17
-checks on each. Containers removed.
+checks on each (run again after the review fixes, with `libplasma7`: 17 of 17 on each). A second
+sid run with several binaries per source package (`kwin-common`, `kwin-data`, `kwin-wayland`,
+`libplasma7`, `libplasmaquick7`, five Qt libraries): binNMU binaries (`4:6.7.4-2+b1`) give the
+source version 6.7.4, and `kwin-common` or `kwin-wayland` left at 6.3.6 both record
+`kwin 6.3.6,6.7.4`. Containers removed.
 
 NixOS, from archhost's real system closure (`nix-store --query --requisites
 /run/current-system/sw`, read-only: 1,355 store paths, Plasma 6.6.6, Qt 6.11.2 and Qt 5.15.19 with
