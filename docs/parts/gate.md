@@ -56,8 +56,8 @@ then `env -0`; startplasma imports that environment (minus `_`, `SHELL`, `SHLVL*
 The stub therefore only runs the check as its own process and never exits:
 
 ```sh
-[ -r '/home/test/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' ] &&
-  timeout -k 1 4 /bin/bash '/home/test/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' login </dev/null >/dev/null 2>&1 || :
+[ -r '/home/USER/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' ] &&
+  timeout -k 1 4 /bin/bash '/home/USER/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' login </dev/null >/dev/null 2>&1 || :
 ```
 
 Worst case (a hung check) the login waits 5 s. The check itself runs no GUI or Qt program, makes

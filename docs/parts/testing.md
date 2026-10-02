@@ -496,7 +496,7 @@ Checked and left as they are (reasons):
 - `SHELL` stays opt-in (`PFV_SHELL`), as the build decided.
 
 Observed on the host during the review, not caused by it: at 22:56:10 EDT someone on the laptop
-(SSH from 10.0.10.42) ran `kscreen-doctor -j` and `plasmashell --version` over plain SSH in the
+(SSH from the laptop) ran `kscreen-doctor -j` and `plasmashell --version` over plain SSH in the
 host user's real runtime dir; both dumped core (SIGABRT), and the real session's plasmashell was
 started again at 22:56:14. Other agents' sessions dumped `xdg-desktop-portal-kde` four times
 (`perf-dk-new6`, `perf-dk-nomag`, `perf-dk-new10`, `perf-dk-nomag2`) and `plasmashell` once

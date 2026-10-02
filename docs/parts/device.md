@@ -53,7 +53,7 @@ On an upgrade (version 1 to 2) the changed and the kept settings are written to
 `~/.local/state/plasma-fusion/config-changes`, for the settings module's "What changed" page:
 
 ```
-# Plasma Fusion configuration upgrade 1 -> 2, 2026-09-30T04:02:11Z, backup /home/test/.local/state/plasma-fusion/backup-...
+# Plasma Fusion configuration upgrade 1 -> 2, 2026-09-30T04:02:11Z, backup /home/USER/.local/state/plasma-fusion/backup-...
 changed	plasmarc	PlasmaToolTips	Delay	600	300
 kept	plasmanotifyrc	Notifications	PopupTimeout	8000	5000
 changed	kwinrc	TabBox	DelayTime	__plasma_fusion_unset__	120
