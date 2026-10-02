@@ -13,6 +13,7 @@ Two regression gates that run from the laptop against the ThinkPad in private vi
   configuration (sizes, scales, two outputs, lid, tablet, rotation) with layout assertions.
 - **Rubber-band test** (`tools/tests/perf/band.sh`, BACKLOG S5): band selection over 20, 60 and
   100 desktop icons.
+- **Field log** (daily use on the laptop, apart from test noise): [fieldlog.md](fieldlog.md).
 
 Status: built and run on HEAD 282b1a5 (the staged HOME tree is byte-identical to the deployed
 3a27b3f and to b69fe19); reviewed and fixed afterwards (see "Review" at the end), re-run on the
