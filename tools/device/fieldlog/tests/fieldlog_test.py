@@ -652,6 +652,84 @@ class UnitFile(unittest.TestCase):
             os.environ["PATH"] = old
 
 
+def as_byte_array(s):
+    return list(s if isinstance(s, bytes) else s.encode())
+
+
+class ByteArrays(unittest.TestCase):
+    """journalctl -o json prints a field with control characters (other than tab and newline) or with
+    bytes that are not UTF-8 as an array of byte values; such a dump record stopped the recorder at
+    every start (review of 2026-10-02)."""
+
+    def array_record(self, pid=4401, t=1790960500):
+        r = app_record(pid=pid, t=t)
+        r["COREDUMP_ENVIRON"] = as_byte_array(r["COREDUMP_ENVIRON"] + "\nLESS_TERMCAP_mb=\x1b[01;31m\nOPENCODE=1")
+        r["COREDUMP_CMDLINE"] = as_byte_array(b"/usr/bin/dolphin /home/test/caf\xe9")
+        return r
+
+    def test_classify_after_plain(self):
+        cls, reason, markers = fl.classify(fl.plain(self.array_record()))
+        self.assertEqual((cls, markers), ("tooling", ["OPENCODE"]))
+        self.assertEqual(fl.text_of(["a", "b"]), "a\nb")
+        self.assertEqual(fl.text_of([104, 105]), "hi")
+
+    def test_poll_records_array_fields_and_survives_a_bad_record(self):
+        d = fresh_dir("arrays")
+        env = fake_setup(d, [self.array_record(), app_record(pid=4402, t=1790960600),
+                             app_record(pid=4403, t=1790960700)])
+        keep = {k: os.environ.get(k) for k in ("PATH", "FAKE_DUMPS", "FAKE_LOG", "XDG_STATE_HOME")}
+        orig = fl.classify
+
+        def classify(rec, uid=None):
+            if rec.get("COREDUMP_PID") == "4402":
+                raise TypeError("a record the tool does not expect")
+            return orig(rec, uid)
+
+        try:
+            for k in keep:
+                os.environ[k] = env[k]
+            fl.classify = classify
+            f = fl.FieldLog()
+            f.state["since"] = 1790956800
+            f.poll_coredumps()
+            f.poll_coredumps()
+            f.log.flush()
+        finally:
+            fl.classify = orig
+            for k, v in keep.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        groups = fl.aggregate(fl.read_events("2026-10-02", f.sdir))
+        crashes = {g["pid"]: g for g in groups if g["kind"] == "crash"}
+        self.assertEqual(sorted(crashes), [4401, 4403])
+        self.assertEqual(crashes[4401]["cls"], "tooling")
+        self.assertEqual(crashes[4401]["cmd"], "/usr/bin/dolphin")  # argv[0] of the non-UTF-8 command line
+        errors = [g for g in groups if g["kind"] == "fieldlog-error"]
+        self.assertEqual([(g["key"], g["count"]) for g in errors], [("crash-record|TypeError", 1)])
+        self.assertIn("4402", errors[0]["text"])
+        self.assertEqual(f.state["last_dump_us"], 1790960700 * 1000000 + 812345)
+
+    def test_journal_line_with_array_fields(self):
+        state = fresh_dir("arrays-journal")
+        os.environ["XDG_STATE_HOME"] = str(state)
+        f = fl.FieldLog()
+        line = json.loads(jline("plasmashell", "x", QT_CATEGORY="qml"))
+        line["MESSAGE"] = as_byte_array("file:///usr/share/plasma/plasmoids/org.plasmafusion.dock/contents/ui/main.qml:9: "
+                                        "TypeError: \x1b[1mbold\x1b[0m")
+        line["QT_CATEGORY"] = ["qml", "js"]
+        fl.handle_journal_line(f, json.dumps(line, separators=(",", ":")).encode())
+        # Passes the byte filter through CODE_FILE; process name and identifier are arrays.
+        line.update(_COMM=as_byte_array("plasmashell\x01"), SYSLOG_IDENTIFIER=as_byte_array("plasmashell\x01"),
+                    CODE_FILE="/usr/share/plasma/plasmoids/org.plasmafusion.dock/contents/ui/main.qml")
+        fl.handle_journal_line(f, json.dumps(line, separators=(",", ":")).encode())
+        f.log.flush()
+        errs = [g for g in fl.aggregate(fl.read_events("2026-10-02", f.sdir)) if g["kind"] == "pf-error"]
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0]["where"], "org.plasmafusion.dock/contents/ui/main.qml:9")
+
+
 class Install(unittest.TestCase):
     def test_install_and_remove(self):
         d = fresh_dir("install")

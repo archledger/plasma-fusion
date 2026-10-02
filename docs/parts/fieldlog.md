@@ -71,7 +71,10 @@ journal record is read once (`journalctl -a -o json MESSAGE_ID=fc2e22bc... CORED
 user can read the records of their own dumps (the user journal) and, in `wheel`, the system's.
 Fields used: `COREDUMP_EXE`, `_CMDLINE`, `_CWD`, `_CGROUP`, `_ENVIRON` (names only),
 `_SIGNAL_NAME`, `_PACKAGE_NAME/VERSION`, `_UID`, `_USER_UNIT`, `_TIMESTAMP` and the stack trace in
-`MESSAGE`. The first rule that matches decides:
+`MESSAGE`. journalctl prints a field with control characters (an ESC in the environment) or bytes
+that are not UTF-8 as an array of byte values; such fields, in dump records and in journal lines,
+are decoded first. A record the tool still cannot handle is a `fieldlog-error`; the dump is marked
+as seen and the recorder goes on. The first rule that matches decides:
 
 | Class | Rule |
 |---|---|

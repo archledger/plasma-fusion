@@ -333,14 +333,26 @@ def normalise(s, quotes="long"):
 
 
 def text_of(v):
+    """A journal field as text. journalctl -o json prints a value with control characters (other
+    than tab and newline) or bytes that are not UTF-8 as an array of byte values, and a field that
+    occurs more than once as an array of its values."""
     if v is None:
         return ""
     if isinstance(v, list):
-        try:
-            return bytes(v).decode("utf-8", "replace")
-        except (TypeError, ValueError):
-            return ""
+        if all(isinstance(x, int) for x in v):
+            try:
+                return bytes(v).decode("utf-8", "replace")
+            except ValueError:
+                return ""
+        return "\n".join(text_of(x) for x in v)
     return str(v)
+
+
+def plain(d):
+    """A parsed journal record with every array value turned into text."""
+    if not isinstance(d, dict):
+        return {}
+    return {k: (text_of(v) if isinstance(v, list) else v) for k, v in d.items()}
 
 
 def tool(name):
@@ -838,12 +850,22 @@ class FieldLog:
             self.log.emit("fieldlog-error", key="coredumpctl-json", text="coredumpctl printed no JSON")
             return
         new = 0
-        for e in sorted(entries, key=lambda e: e.get("time") or 0):
-            t, pid = int(e.get("time") or 0), int(e.get("pid") or 0)
+        for e in sorted((e for e in entries if isinstance(e, dict)), key=lambda e: e.get("time") or 0):
+            try:
+                t, pid = int(e.get("time") or 0), int(e.get("pid") or 0)
+            except (TypeError, ValueError):
+                continue
             tk = f"{t}:{pid}"
             if t < last or tk in seen:
                 continue
-            self.record_crash(e)
+            try:
+                self.record_crash(e)
+            except Exception as ex:
+                # A record the tool cannot handle must not stop it at every start: note it, mark the
+                # dump as seen and go on.
+                self.log.emit("fieldlog-error", key=f"crash-record|{type(ex).__name__}",
+                              text=f"core dump {tk} ({os.path.basename(str(e.get('exe') or '?'))}) not "
+                                   f"recorded: {type(ex).__name__}: {scrub(str(ex), limit=160)}")
             new += 1
             seen.add(tk)
             self.state["last_dump_us"] = max(int(self.state["last_dump_us"]), t)
@@ -866,7 +888,7 @@ class FieldLog:
         best = None
         for line in r.stdout.splitlines():
             try:
-                d = json.loads(line)
+                d = plain(json.loads(line))
             except ValueError:
                 continue
             if best is None or str(d.get("__REALTIME_TIMESTAMP")) == str(t):
@@ -957,7 +979,12 @@ class FieldLog:
         for line in lines:
             if line:
                 self.jlast = line
-                handle_journal_line(self, line)
+                try:
+                    handle_journal_line(self, line)
+                except Exception as ex:
+                    # One line the tool cannot handle must not stop it: note the kind of error.
+                    self.log.emit("fieldlog-error", key=f"journal-line|{type(ex).__name__}",
+                                  text=f"a journal line not handled: {type(ex).__name__}: {scrub(str(ex), limit=160)}")
         return "data"
 
     # -- memory snapshot
@@ -1177,26 +1204,26 @@ class FieldLog:
         now, mono = time.time(), time.monotonic()
         limit = float(os.environ.get("PF_FIELDLOG_RUN_SECONDS") or 0)
         end_at = mono + limit if limit > 0 else None
-        cleanup(self.sdir, local_day(now))
-        for w in self.watched:
-            w.sample(self.log, now, mono, self)  # the first sample is the base of the first CPU value
-        self.poll_screens(now)
-        self.check_suspend(now)
-        self.log.emit("fieldlog-start", ts=now, coalesce=False, sync=True, version=VERSION,
-                      pids={w.name: w.pid for w in self.watched},
-                      screens={k: v for k, v in (self.screens or {}).items() if not k.endswith("dpms")} or None,
-                      first=True if self.first_run else None)
-        self.poll_coredumps()
-        self.check_login(now)
-        self.check_units(now)
-        self.poll_gate()
-        self.start_journal()
-        self.overhead(now, mono)
-        day, hour = local_day(now), time.strftime("%H", time.localtime(now))
-        next_sample = mono + INTERVAL
-        next_flush = mono + FLUSH_S
         reason = "stopped"
         try:
+            cleanup(self.sdir, local_day(now))
+            for w in self.watched:
+                w.sample(self.log, now, mono, self)  # the first sample is the base of the first CPU value
+            self.poll_screens(now)
+            self.check_suspend(now)
+            self.log.emit("fieldlog-start", ts=now, coalesce=False, sync=True, version=VERSION,
+                          pids={w.name: w.pid for w in self.watched},
+                          screens={k: v for k, v in (self.screens or {}).items() if not k.endswith("dpms")} or None,
+                          first=True if self.first_run else None)
+            self.poll_coredumps()
+            self.check_login(now)
+            self.check_units(now)
+            self.poll_gate()
+            self.start_journal()
+            self.overhead(now, mono)
+            day, hour = local_day(now), time.strftime("%H", time.localtime(now))
+            next_sample = mono + INTERVAL
+            next_flush = mono + FLUSH_S
             while not self.stop:
                 mono = time.monotonic()
                 if end_at and mono >= end_at:
@@ -1341,7 +1368,7 @@ def handle_journal_line(fl, line):
     if not PREFILTER.search(line):
         return
     try:
-        d = json.loads(line)
+        d = plain(json.loads(line))
     except ValueError:
         return
     ts = int(d.get("__REALTIME_TIMESTAMP") or 0) / 1e6 or time.time()
