@@ -15,8 +15,12 @@
 #                      with more than Plasma's colors.css import only gets the Plasma Fusion
 #                      import added
 #   --dry-run          print every change it would make, change nothing (no backup either)
-#   --light            apply Plasma Fusion Light instead of Plasma Fusion Dark
+#   --light            apply Plasma Fusion Light
+#   --dark             apply Plasma Fusion Dark
 #   --auto             switch between Light and Dark with the time of day ("Follow sunset")
+#   --no-auto          stop that switching
+#                      (without these a HOME already on Plasma Fusion keeps its variant and its
+#                      automatic switching; any other HOME gets Dark without switching)
 #   --reset-layout     always rebuild the top bar, dock and desktop cards
 #   --keep-layout      never touch the panels (appearance and settings only)
 #   --hot-corner       let the top-left screen corner open Overview (off by default)
@@ -184,7 +188,7 @@ GATE_WANTS_REL=systemd/user/xdg-desktop-autostart.target.wants/$GATE_UNIT_NAME
 SESSION_WANTS_REL=systemd/user/graphical-session.target.wants
 SESSION_ENV_REL=plasma-workspace/env/plasma-fusion-session.sh
 
-DRY=0 VARIANT=dark AUTO=0 LAYOUT=auto HOT_CORNER=0 FONTS=0 INSTALL=
+DRY=0 VARIANT='' AUTO='' LAYOUT=auto HOT_CORNER=0 FONTS=0 INSTALL=
 PEN=0 PEN_GARAGE=0 SCREENS=0 SHORTCUTS=auto
 usage() { sed -n '/^#   fusion-config.sh/,/^#   -h/p' "$0" | sed 's/^# \{0,1\}//'; }
 while [ $# -gt 0 ]; do
@@ -197,6 +201,7 @@ while [ $# -gt 0 ]; do
     --light) VARIANT=light ;;
     --dark) VARIANT=dark ;;
     --auto) AUTO=1 ;;
+    --no-auto) AUTO=0 ;;
     --reset-layout) LAYOUT=reset ;;
     --keep-layout) LAYOUT=keep ;;
     --hot-corner) HOT_CORNER=1 ;;
@@ -212,6 +217,17 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ "$PEN_GARAGE" = 0 ] || [ "$PEN" = 1 ] || { echo "--pen-garage needs --pen" >&2; exit 2; }
+# A later run (a package update) keeps the user's light, dark or automatic choice.
+current_lnf=$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage 2>/dev/null || true)
+if [ -z "$VARIANT" ]; then
+  [ "$current_lnf" = "$LIGHT" ] && VARIANT=light || VARIANT=dark
+fi
+if [ -z "$AUTO" ]; then
+  AUTO=0
+  if [ "$current_lnf" = "$DARK" ] || [ "$current_lnf" = "$LIGHT" ]; then
+    [ "$(kreadconfig6 --file kdeglobals --group KDE --key AutomaticLookAndFeel 2>/dev/null || true)" = true ] && AUTO=1
+  fi
+fi
 [ "$VARIANT" = light ] && LNF=$LIGHT || LNF=$DARK
 HERE=$(cd "$(dirname "$0")" && pwd)
 
@@ -2028,6 +2044,18 @@ fi
 # and the Aurorae title bars after a Plasma update until this script records the new versions, and
 # switches the Fusion-only parts off while another Global Theme is chosen. See docs/parts/gate.md.
 GATE_SRC=$HERE/gate/plasma-fusion-gate.sh
+# The Plasma series this Plasma Fusion version was tested with: next to the tools in a package,
+# packaging/ in a checkout. deploy records no other series as tested.
+GATE_TESTED=
+for f in "$HERE/../../tested-plasma.txt" "$HERE/../../packaging/tested-plasma.txt"; do
+  [ -f "$f" ] && { GATE_TESTED=$(cd "$(dirname "$f")" && pwd)/tested-plasma.txt; break; }
+done
+# This Plasma Fusion version (a package's version file, a checkout's VERSION): recorded per user,
+# so that the login check can say when a package update has settings to apply.
+PF_VERSION=
+for f in "$HERE/../../version" "$HERE/../../VERSION"; do
+  [ -f "$f" ] && { PF_VERSION=$(tr -d '[:space:]' <"$f"); break; }
+done
 GATE_ENGINE=$DATA/plasma-fusion/gate/plasma-fusion-gate.sh
 sh_quote() { local q="'\\''"; printf "'%s'" "${1//\'/$q}"; }
 # bash for the stub and the unit: /bin/bash, or through /usr/bin/env where there is none (NixOS).
@@ -2113,8 +2141,8 @@ else
   # This run is the test of the installed Plasma: record it, and turn back on what a login switched
   # off (the compiled decoration; the lock screen came back in section 6).
   if [ "$DRY" = 1 ]; then
-    PF_GATE_TOOL=$HERE/fusion-config.sh bash "$GATE_SRC" deploy --dry-run || note "warning: the login check could not read the installed versions"
-  elif PF_GATE_TOOL=$HERE/fusion-config.sh bash "$GATE_ENGINE" deploy; then
+    PF_GATE_TOOL=$HERE/fusion-config.sh PF_GATE_TESTED=$GATE_TESTED bash "$GATE_SRC" deploy --dry-run || note "warning: the login check could not read the installed versions"
+  elif PF_GATE_TOOL=$HERE/fusion-config.sh PF_GATE_TESTED=$GATE_TESTED bash "$GATE_ENGINE" deploy; then
     bus call org.kde.KWin /KWin org.kde.KWin reconfigure >/dev/null 2>&1 || true
     # A navigation effect the login check had switched off is on again: KWin's reconfigure does not
     # load a newly enabled effect (PLASMA-68 upgrade test: enabled, not loaded until the next login).
@@ -2144,6 +2172,8 @@ if [ "$DRY" = 1 ]; then
   say "Dry run finished: $CHANGES change(s) would be made."
 else
   echo "$CHANGES" >"$BACKUP/changes"
+  # The version these settings came from (plasma-fusion status; the login check's update notice).
+  [ -z "$PF_VERSION" ] || { mkdir -p "$STATE" && printf '%s\n' "$PF_VERSION" >"$STATE/setup-version"; }
   say "Done: $CHANGES change(s). Restore with: $(dirname "$0")/fusion-restore.sh $BACKUP"
   say "Log out and back in once so the splash screen, fonts and every application pick up the theme."
 fi

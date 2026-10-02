@@ -31,6 +31,7 @@ mkdir -p "$BASE/run" && chmod 700 "$BASE/run"
 PASS=0 FAIL=0
 ok() { PASS=$((PASS + 1)); echo "PASS $*"; }
 bad() { FAIL=$((FAIL + 1)); echo "FAIL $*"; }
+not() { ! "$@"; } # check "..." not COMMAND...
 check() { # DESCRIPTION COMMAND...
   local d=$1
   shift
@@ -90,7 +91,8 @@ gate() { # MODE... in the current HOME $H
   env -i HOME="$H" PATH="${FAKEBIN:+$FAKEBIN:}$SYSBIN" XDG_RUNTIME_DIR="$BASE/run" XDG_CONFIG_DIRS="$BASE/xdg-config" \
     XDG_DATA_DIRS="${XDGDATA:-$BASE/xdg-data}" LANG="${GATE_LANG:-C.UTF-8}" PF_GATE_RPM="$RPM" QT_PLUGIN_PATH="$PLUGINS" \
     PF_GATE_SYSTEM_PLUGINS= PF_GATE_ROOT="$ROOT" \
-    ${FAKE:+PF_GATE_FAKE_VERSIONS="$FAKE"} ${TOOL:+PF_GATE_TOOL="$TOOL"} bash "$ENGINE" "$@"
+    ${FAKE:+PF_GATE_FAKE_VERSIONS="$FAKE"} ${TOOL:+PF_GATE_TOOL="$TOOL"} ${TESTED:+PF_GATE_TESTED="$TESTED"} \
+    bash "$ENGINE" "$@"
 }
 kw() { # FILE GROUP KEY VALUE|--delete, user file of $H
   if [ "$4" = --delete ]; then
@@ -994,6 +996,83 @@ mapfile -t sorted < <(printf '%s\n' "${times[@]}" | sort -n)
 echo "timing (match path, drop-in and compiled decoration on, $([ "$REAL_RPM" = 1 ] && echo real || echo fake) rpm, cached): median ${sorted[10]} ms, max ${sorted[20]} ms (wall time incl. env -i and bash start)"
 check "timing: median under 50 ms" [ "${sorted[10]}" -lt 50 ]
 rm -f "$H/.local/state/plasma-fusion/gate/cache"
+# ---------- (u) Plasma series this version was not tested with (PF_GATE_TESTED) ----------
+TESTED=$BASE/tested-plasma.txt
+printf '# tested series\n6.7\n' >"$TESTED"
+make_home "$BASE/u"
+gate deploy >"$BASE/u1.deploy.log" 2>&1
+check "u1: a tested series is recorded as tested" grep -q 'recorded as tested' "$BASE/u1.deploy.log"
+check "u1: no untested-series line" not grep -q '^untested-series=' "$H/.local/state/plasma-fusion/gate/tested"
+orig=$(sums)
+FAKE="kwin=6.8.0 kscreenlocker=6.8.0"
+gate deploy >"$BASE/u2.deploy.log" 2>&1
+check "u2: deploy says the series is untested" grep -q 'Plasma 6.8 is newer than this Plasma Fusion version was tested with (6.7)' "$BASE/u2.deploy.log"
+check "u2: the record marks 6.8 untested" grep -qx 'untested-series=6.8' "$H/.local/state/plasma-fusion/gate/tested"
+check "u2: the versions are recorded" grep -qx 'pkg kwin=6.8.0' "$H/.local/state/plasma-fusion/gate/tested"
+# deploy only turns parts back on; like after a Plasma update, the next login switches them off.
+gate login
+check "u2: login switches the navigation effect off" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
+check "u2: login gives the Aurorae title bars" [ "$(keff kwinrc org.kde.kdecoration2 library)" = org.kde.kwin.aurorae.v2 ]
+check "u2: the notification names the untested series" grep -q 'This Plasma Fusion version was not tested with Plasma 6.8. ' "$H/.local/state/plasma-fusion/gate/notify"
+check "u2: the notification points to an update" grep -q 'until a Plasma Fusion update that supports Plasma 6.8.$' "$H/.local/state/plasma-fusion/gate/notify"
+check "u2: no version list in the notification" not grep -q '6.7.5 → 6.8.0' "$H/.local/state/plasma-fusion/gate/notify"
+rm -f "$H/.local/state/plasma-fusion/gate/notify"
+gate login
+check "u2: a second login keeps the effect off" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
+check "u2: no second notification" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
+check "u2: status says changed" grep -q '^versions=changed' "$H/.local/state/plasma-fusion/gate/status"
+check "u2: the log names the untested series" grep -q 'Plasma 6.8 is not among the series this Plasma Fusion version was tested with' "$H/.local/state/plasma-fusion/gate.log"
+gate check >"$BASE/u2.check.log"
+check "u2: check reports the untested series" grep -q 'Plasma 6.8 is not among the series' "$BASE/u2.check.log"
+FAKE="kwin=6.7.90 kscreenlocker=6.7.90"
+gate deploy >"$BASE/u3.deploy.log" 2>&1
+check "u3: a 6.8 beta (6.7.90) counts as 6.8" grep -qx 'untested-series=6.8' "$H/.local/state/plasma-fusion/gate/tested"
+printf '6.7\n6.8 # after the 6.8 tests\n' >"$TESTED"
+FAKE="kwin=6.8.0 kscreenlocker=6.8.0"
+gate deploy >"$BASE/u4.deploy.log" 2>&1
+check "u4: a listed 6.8 is recorded as tested" not grep -q '^untested-series=' "$H/.local/state/plasma-fusion/gate/tested"
+check "u4: deploy turns the effect back on" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = true ]
+check "u4: deploy puts the compiled decoration back" [ "$(get kwinrc org.kde.kdecoration2 library)" = org.plasmafusion.decoration ]
+gate login
+check "u4: matching login changes nothing" [ ! -e "$H/.local/state/plasma-fusion/gate/off" ]
+TESTED=$BASE/no-such-file
+FAKE="kwin=6.9.0 kscreenlocker=6.9.0"
+gate deploy >"$BASE/u5.deploy.log" 2>&1
+check "u5: without a list every series is recorded as tested" not grep -q '^untested-series=' "$H/.local/state/plasma-fusion/gate/tested"
+TESTED='' FAKE=''
+gate deploy >/dev/null 2>&1
+check "u: back to the installed versions restores every config file" [ "$(sums)" = "$orig" ]
+
+# ---------- (v) a package update with settings to apply ----------
+make_home "$BASE/v"
+gate deploy >/dev/null 2>&1
+mkdir -p "$BASE/v-data/plasma-fusion"
+echo 0.2.1 >"$BASE/v-data/plasma-fusion/version"
+XDGDATA=$BASE/v-data:$BASE/xdg-data
+gate login
+check "v: no notice before the account was set up by a package" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
+echo 0.2.0 >"$H/.local/state/plasma-fusion/setup-version"
+gate login
+check "v: a newer package queues the update notice" grep -q '^Plasma Fusion 0.2.1 is installed$' "$H/.local/state/plasma-fusion/gate/notify"
+check "v: the notice names the command" grep -q 'Run plasma-fusion update in a terminal' "$H/.local/state/plasma-fusion/gate/notify"
+rm -f "$H/.local/state/plasma-fusion/gate/notify"
+gate login
+check "v: one notice per version" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
+echo 0.2.1 >"$H/.local/state/plasma-fusion/setup-version"
+echo 0.2.2 >"$BASE/v-data/plasma-fusion/version"
+FAKE="kwin=6.8.0 kscreenlocker=6.8.0"
+gate login
+check "v: the safe-mode notice comes first" grep -q '^Safe mode after a Plasma change$' "$H/.local/state/plasma-fusion/gate/notify"
+FAKE=
+rm -f "$H/.local/state/plasma-fusion/gate/notify"
+gate login
+check "v: the update notice follows at the next login" grep -q '^Plasma Fusion 0.2.2 is installed$' "$H/.local/state/plasma-fusion/gate/notify"
+echo 0.2.2 >"$H/.local/state/plasma-fusion/setup-version"
+rm -f "$H/.local/state/plasma-fusion/gate/notify"
+gate login
+check "v: no notice once the settings are applied" [ ! -e "$H/.local/state/plasma-fusion/gate/notify" ]
+XDGDATA=
+
 t=${EPOCHREALTIME/[.,]/}
 gate login
 echo "timing (first login after an rpm transaction, cache rebuilt): $(((${EPOCHREALTIME/[.,]/} - t) / 1000)) ms"

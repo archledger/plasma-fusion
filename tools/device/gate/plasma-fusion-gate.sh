@@ -50,6 +50,12 @@
 #    org.plasmafusion.desktop and that package is missing, it becomes Folder View. Both switch back
 #    at the first login after the plugin or package is installed again.
 #
+# 4. An untested Plasma series. fusion-config.sh passes the list of Plasma series this Plasma Fusion
+#    version was tested with (PF_GATE_TESTED, a file: tested-plasma.txt of the package); deploy then
+#    records a KWin of another series (6.8.0, or a 6.7.90 beta of 6.8) with untested-series=, and
+#    every login keeps the parts of 1. off, with a notification that names the series, until a
+#    Plasma Fusion version tested with it runs deploy again.
+#
 # Every change is recorded first (~/.local/state/plasma-fusion/gate/off) and undone only while the
 # value is still the one written here. With matching versions and a Fusion theme nothing changes.
 # At login it runs no GUI program, makes no D-Bus or systemd call and always exits 0 (the stub also
@@ -57,6 +63,7 @@
 #
 # Test hooks (never set in a real session): PF_GATE_FAKE_VERSIONS="kwin=6.8.0 kscreenlocker=6.8.0"
 # replaces installed versions in memory (never cached); PF_GATE_RPM names the rpm program;
+# PF_GATE_TESTED (deploy; set by fusion-config.sh, not a test hook) names the tested-series list;
 # PF_GATE_ROOT is put in front of the package databases' paths and the Nix system profile.
 
 # The package databases, in this order: the first that knows one of its packages answers (a foreign
@@ -737,7 +744,7 @@ do_writes() {
 # ---------- versions ----------
 
 declare -A TESTED=() CUR=()
-TESTED_STATE=missing TESTED_LOCK='' TESTED_TOOL='' TESTED_DB=rpm VERS_STATE='' VERS_FAKED=0 VERS_ASKED='' STAMP=''
+TESTED_STATE=missing TESTED_LOCK='' TESTED_TOOL='' TESTED_UNTESTED='' TESTED_DB=rpm VERS_STATE='' VERS_FAKED=0 VERS_ASKED='' STAMP=''
 load_tested() {
   local line fmt='' end='' p
   [ -f "$GATE/tested" ] || { TESTED_STATE=missing; return; }
@@ -753,6 +760,9 @@ load_tested() {
         TESTED[${p%%=*}]=${p#*=} ;;
       lockshell-hash=*) TESTED_LOCK=${line#lockshell-hash=} ;;
       tool=/*) TESTED_TOOL=${line#tool=} ;;
+      untested-series=*)
+        [[ ${line#untested-series=} =~ ^[0-9]+\.[0-9]+$ ]] || return
+        TESTED_UNTESTED=${line#untested-series=} ;;
       end=1) end=1 ;;
     esac
   done <"$GATE/tested"
@@ -928,7 +938,7 @@ vers_why() {
 # UPDATE_OK: installed versions equal the tested ones; LOCK_OK: also the lock-screen files.
 # WHY: every reason (log); DIFFS: version changes, RECORD: why the record cannot be used, LOCKWHY:
 # the lock-screen files (notification).
-UPDATE_OK='' LOCK_OK='' WHY=() DIFFS=() RECORD='' LOCKWHY='' LOCK_HASH=''
+UPDATE_OK='' LOCK_OK='' WHY=() DIFFS=() RECORD='' LOCKWHY='' LOCK_HASH='' UNTESTED=''
 check_versions() {
   local p
   [ -n "$UPDATE_OK" ] && return 0
@@ -947,6 +957,10 @@ check_versions() {
   elif [ "$TESTED_STATE" = ok ] && [ "$TESTED_DB" != "$DB" ]; then
     UPDATE_OK=0
     RECORD="it was recorded with ${DB_NAME[$TESTED_DB]}, the versions now come from ${DB_NAME[$DB]}"
+  elif [ "$TESTED_STATE" = ok ] && [ -n "$TESTED_UNTESTED" ]; then
+    UPDATE_OK=0
+    UNTESTED=$TESTED_UNTESTED
+    WHY+=("Plasma $UNTESTED is not among the series this Plasma Fusion version was tested with")
   elif [ "$TESTED_STATE" = ok ]; then
     for p in "${PACKAGES[@]}"; do
       [ "${TESTED[$p]-}" = "${CUR[$p]}" ] && continue
@@ -994,6 +1008,7 @@ queue_notification() {
     body="Plasma changed since Plasma Fusion was checked: ${j%, }. "
   fi
   [ -z "$RECORD" ] || body+="Plasma Fusion cannot tell which Plasma it was checked with ($RECORD). "
+  [ -z "$UNTESTED" ] || body+="This Plasma Fusion version was not tested with Plasma $UNTESTED. "
   [ -z "$LOCKWHY" ] || body+="${LOCKWHY^}. "
   # The fusion-config.sh that recorded the versions (its path is in the record), if it is still there.
   how=tools/device/fusion-config.sh
@@ -1004,7 +1019,11 @@ queue_notification() {
     printf -v d '%s, ' "${what[@]:0:${#what[@]}-1}"
     j="${d%, } and $j"
   fi
-  body+="This session uses $j. To check and switch back, run $how."
+  if [ -n "$UNTESTED" ] && [ ${#DIFFS[@]} -eq 0 ] && [ -z "$RECORD" ] && [ -z "$LOCKWHY" ]; then
+    body+="This session uses $j until a Plasma Fusion update that supports Plasma $UNTESTED."
+  else
+    body+="This session uses $j. To check and switch back, run $how."
+  fi
   if [ "$DRY" = 1 ]; then say "  would queue a notification: $body"; return 0; fi
   [ -d "$GATE" ] || mkdir -p "$GATE" 2>/dev/null
   printf 'Safe mode after a Plasma change\n%s\n' "$body" >"$GATE/notify.tmp" && mv -f "$GATE/notify.tmp" "$GATE/notify" &&
@@ -1123,6 +1142,27 @@ write_status() {
   printf '%s' "$s" >"$GATE/status.tmp" && mv -f "$GATE/status.tmp" "$GATE/status"
 }
 
+# A Plasma Fusion package update whose settings this account has not applied yet: fusion-config.sh
+# records the version it applied ($ROOT/setup-version), packages ship plasma-fusion/version in a
+# system data directory. One notification per version, only while nothing else is queued.
+update_notice() {
+  local d pkg='' setup='' told=''
+  [ -f "$ROOT/setup-version" ] || return 0
+  IFS= read -r setup <"$ROOT/setup-version" || true
+  IFS=: read -r -a dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in "${dirs[@]}"; do
+    [ -f "$d/plasma-fusion/version" ] && { IFS= read -r pkg <"$d/plasma-fusion/version" || true; break; }
+  done
+  [[ $pkg =~ ^[0-9][0-9A-Za-z.~^+]*$ ]] && [ -n "$setup" ] && [ "$pkg" != "$setup" ] || return 0
+  [ -f "$GATE/update-notified" ] && IFS= read -r told <"$GATE/update-notified"
+  [ "$told" != "$pkg" ] && [ ! -e "$GATE/notify" ] || return 0
+  say "update notice: package $pkg, settings of $setup"
+  [ "$DRY" = 0 ] || return 0
+  [ -d "$GATE" ] || mkdir -p "$GATE" 2>/dev/null
+  printf 'Plasma Fusion %s is installed\nRun plasma-fusion update in a terminal to apply its settings (your own choices are kept).\n' "$pkg" \
+    >"$GATE/notify.tmp" && mv -f "$GATE/notify.tmp" "$GATE/notify" && printf '%s\n' "$pkg" >"$GATE/update-notified"
+}
+
 run_check() {
   local fp old
   load_ini
@@ -1147,6 +1187,7 @@ run_check() {
       [ "$DRY" = 1 ] || { [ -d "$GATE" ] || mkdir -p "$GATE" 2>/dev/null; printf '%s\n' "$fp" >"$GATE/notified"; }
     fi
   fi
+  update_notice
   write_status
   local vers=not-needed lock='' j
   [ -z "$UPDATE_OK" ] || { [ "$UPDATE_OK" = 1 ] && vers=tested || vers=changed; }
@@ -1166,8 +1207,33 @@ run_check() {
   fi
 }
 
+# The Plasma series of a KWin version: 6.7.5 is 6.7; a beta (6.7.80, 6.7.90) belongs to 6.8.
+plasma_series() {
+  local v=$1 major minor patch
+  [[ $v =~ ^([0-9]+)\.([0-9]+)(\.([0-9]+))? ]] || { REPLY=; return 1; }
+  major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[4]:-0}
+  [ "$((10#$patch))" -lt 80 ] || minor=$((10#$minor + 1))
+  REPLY=$major.$((10#$minor))
+}
+
+# untested_series: prints the installed Plasma series when PF_GATE_TESTED lists others only.
+untested_series() {
+  local s line found=0 listed=0
+  [ -n "${PF_GATE_TESTED:-}" ] && [ -r "$PF_GATE_TESTED" ] || return 0
+  plasma_series "${CUR[kwin]-}" || return 0
+  s=$REPLY
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%%#*}
+    line=${line//[[:space:]]/}
+    [ -n "$line" ] || continue
+    listed=1
+    [ "$line" = "$s" ] && found=1
+  done <"$PF_GATE_TESTED"
+  [ "$listed" = 0 ] || [ "$found" = 1 ] || echo "$s"
+}
+
 run_deploy() {
-  local p rc=0 lock=absent
+  local p rc=0 lock=absent untested=''
   VERS_STATE=
   current_versions
   [ "$VERS_FAKED" = 0 ] || say "note: PF_GATE_FAKE_VERSIONS is set; recording the fake versions"
@@ -1181,6 +1247,10 @@ run_deploy() {
     rc=1
   fi
   if lockshell_dir; then lockshell_hash "$REPLY"; lock=$REPLY; fi
+  [ "$rc" != 0 ] || untested=$(untested_series)
+  if [ -n "$untested" ]; then
+    echo "  login check: Plasma $untested is newer than this Plasma Fusion version was tested with ($(grep -v '^[[:space:]]*#' "$PF_GATE_TESTED" | tr -s '[:space:]' ' ' | sed 's/^ //;s/ $//')); the parts that depend on Plasma internals stay off until a Plasma Fusion update" >&2
+  fi
   if [ "$rc" = 0 ]; then
     if [ "$DRY" = 1 ]; then
       echo "  login check: would record as tested: $(for p in "${PACKAGES[@]}"; do printf '%s %s, ' "$p" "${CUR[$p]}"; done)lock screen files ${lock:0:12}"
@@ -1191,10 +1261,15 @@ run_deploy() {
         [ "$DB" = rpm ] || printf 'db=%s\n' "$DB"
         for p in "${PACKAGES[@]}"; do printf 'pkg %s=%s\n' "$p" "${CUR[$p]}"; done
         printf 'lockshell-hash=%s\n' "$lock"
+        [ -z "$untested" ] || printf 'untested-series=%s\n' "$untested"
         # Named in the notification as the way back (fusion-config.sh passes its own path).
         [[ ${PF_GATE_TOOL:-} == /* && $PF_GATE_TOOL != *$'\n'* ]] && printf 'tool=%s\n' "$PF_GATE_TOOL"
         printf 'end=1\n'; } >"$GATE/tested.tmp" && mv -f "$GATE/tested.tmp" "$GATE/tested" || { echo "  login check: could not write $GATE/tested" >&2; return 1; }
-      echo "  login check: recorded as tested: $(for p in "${PACKAGES[@]}"; do printf '%s %s, ' "$p" "${CUR[$p]}"; done)lock screen files ${lock:0:12}"
+      if [ -n "$untested" ]; then
+        echo "  login check: recorded the installed versions as untested (Plasma $untested): $(for p in "${PACKAGES[@]}"; do printf '%s %s, ' "$p" "${CUR[$p]}"; done)lock screen files ${lock:0:12}"
+      else
+        echo "  login check: recorded as tested: $(for p in "${PACKAGES[@]}"; do printf '%s %s, ' "$p" "${CUR[$p]}"; done)lock screen files ${lock:0:12}"
+      fi
     fi
   fi
   load_ini
