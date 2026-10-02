@@ -309,7 +309,13 @@ Item {
         readonly property int preferred: s ? s.preferred : 80
         readonly property bool fullOnce: s ? s.restoreLimit > 0 : false
         readonly property bool busy: s ? s.busy : false
+        // TLP sets the thresholds here (services/ChargeLimit.qml): shown, not changed.
+        readonly property bool managed: s ? s.managedBy !== "" : false
         readonly property string subtitle: {
+            if (managed) {
+                return limited ? i18nc("@info:status battery charge limit set by the TLP power tool, %1 percent", "TLP: stops at %1 %", limit)
+                               : i18nc("@info:status battery charge limit set by the TLP power tool", "TLP: no limit");
+            }
             if (fullOnce) {
                 return i18nc("@info:status battery charge limit", "Charging to 100 % once");
             }

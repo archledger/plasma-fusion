@@ -39,7 +39,19 @@ sets 100; the limit comes back when the battery is full, at 100 %, or when the c
 (also when that happened while the shell was not running). The value is read again whenever the
 sheet opens. Each change logs `quicksettings: charge limit N %` / `off`.
 
+## TLP
+
+TLP owns the thresholds when `tlp.service` is enabled and `/etc/tlp.conf` or `/etc/tlp.d/*.conf` sets
+`START_CHARGE_THRESH_*` or `STOP_CHARGE_THRESH_*`: it writes them again at boot, on unplugging and on
+resume (on ASUS machines on every resume), so a limit set from the quick settings would not stay. The
+helper's `get` then prints a second line, `managed=tlp`, and `set` refuses (exit 69). The tile shows
+TLP's limit ("TLP: stops at 85 %"), dimmed, without choices; a click changes nothing, and the tooltip
+names TLP's configuration. Change the limit in TLP's configuration instead. Older shells ignore the
+extra line.
+
 ## Tests
 
-Laptop (UX5406S, ASUS): `get` prints `85 -1` (an existing limit, no start threshold); `set` without
-root exits 77, `set 30` exits 64. ThinkPad hardware: see `artifacts/plasma-fusion/2026-10-01-tablet2/DEPLOY-2/`.
+Laptop (UX5406S, ASUS): `get` prints `85 -1` (an existing limit, no start threshold) and, since the
+TLP check (2026-10-02; TLP 1.10.2 with STOP_CHARGE_THRESH_BAT0=85 in /etc/tlp.d/01-charge-limit.conf),
+`managed=tlp`; `set` without root exits 77, `set 30` exits 64. ThinkPad (no TLP): `get` prints
+`100 0` only. ThinkPad hardware: see `artifacts/plasma-fusion/2026-10-01-tablet2/DEPLOY-2/`.

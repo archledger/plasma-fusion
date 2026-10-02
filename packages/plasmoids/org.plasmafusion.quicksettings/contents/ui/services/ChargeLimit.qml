@@ -14,6 +14,9 @@ import org.kde.plasma.plasma5support as P5Support
 // plasmafusionrc [Battery]: ChargeLimit = the limit the tile turns on (80 by default, the last one
 // picked); RestoreChargeLimit = the limit "Charge to 100 % once" puts back when the battery is full
 // or the charger is unplugged (0: none pending; offered only while plugged in).
+//
+// Where TLP sets the thresholds (the helper prints "managed=tlp"), TLP writes them again at boot, on
+// unplugging and on resume: the tile shows TLP's limit and offers no changes (`managedBy`).
 Item {
     id: charge
 
@@ -22,6 +25,8 @@ Item {
     property int preferred: 80
     property int restoreLimit: 0
     property bool busy: false
+    // "tlp" when TLP sets the thresholds; nothing is changed from here then.
+    property string managedBy: ""
 
     // From the battery service (Backend); batteryKnown once it has reported.
     property bool batteryKnown: false
@@ -60,6 +65,7 @@ Item {
     function refresh(): void {
         run(readCommand + " # " + Date.now(), (code, out) => {
             let found = false;
+            let manager = "";
             for (const line of out.split("\n")) {
                 const fields = line.trim().split(/\s+/);
                 if (/^\d+$/.test(fields[0]) && fields.length >= 2) {
@@ -68,12 +74,15 @@ Item {
                 } else if (fields[0].startsWith("pref=")) {
                     const value = Number(fields[0].slice(5));
                     preferred = value >= 50 && value < 100 ? value : 80;
+                } else if (fields[0].startsWith("managed=")) {
+                    manager = fields[0].slice(8);
                 } else if (fields[0].startsWith("restore=")) {
                     const value = Number(fields[0].slice(8));
                     restoreLimit = value >= 50 && value < 100 ? value : 0;
                 }
             }
             present = found;
+            managedBy = manager;
             busy = false;
             checkRestore(false);
         });
@@ -82,7 +91,7 @@ Item {
 
     // Sets the stop threshold (100: no limit), then reads it back.
     function setLimit(value: int): void {
-        if (!present || busy) {
+        if (!present || busy || managedBy !== "") {
             return;
         }
         busy = true;
@@ -105,7 +114,7 @@ Item {
     }
     // Charge to 100 % once: the limit comes back when the battery is full or the charger is unplugged.
     function fullChargeOnce(): void {
-        if (!limited) {
+        if (!limited || managedBy !== "") {
             return;
         }
         restoreLimit = limit;
@@ -119,7 +128,7 @@ Item {
         }
     }
     function checkRestore(unplugged: bool): void {
-        if (!present || busy || !batteryKnown || restoreLimit <= 0 || limit < 100) {
+        if (!present || busy || managedBy !== "" || !batteryKnown || restoreLimit <= 0 || limit < 100) {
             return;
         }
         if (unplugged || batteryFull || batteryPercent >= 100 || !pluggedIn) {

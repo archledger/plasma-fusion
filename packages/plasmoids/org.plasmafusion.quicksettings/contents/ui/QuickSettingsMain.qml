@@ -462,10 +462,12 @@ ColumnLayout {
             subtitle: page.backend.charge.subtitle
             iconPath: Icons.batteryOutline
             checked: page.backend.charge.limited || page.backend.charge.fullOnce
-            available: !page.backend.charge.busy
-            hasDetails: true
+            available: !page.backend.charge.busy && !page.backend.charge.managed
+            hasDetails: !page.backend.charge.managed
             detailsText: i18nc("@action:button", "Charge limit choices")
-            toolTip: i18nc("@info:tooltip", "Click to limit charging to keep the battery healthy")
+            toolTip: page.backend.charge.managed
+                     ? i18nc("@info:tooltip", "TLP sets the charge limit on this computer (/etc/tlp.conf, /etc/tlp.d)")
+                     : i18nc("@info:tooltip", "Click to limit charging to keep the battery healthy")
             onToggled: page.backend.charge.toggle()
             onDetailsRequested: page.chargeChoicesOpen = !page.chargeChoicesOpen
         }
@@ -534,7 +536,7 @@ ColumnLayout {
     // Charge limit choices.
     Flow {
         Layout.fillWidth: true
-        visible: page.chargeChoicesOpen && page.backend.charge.present
+        visible: page.chargeChoicesOpen && page.backend.charge.present && !page.backend.charge.managed
         spacing: page.metrics.px(8)
 
         Repeater {
