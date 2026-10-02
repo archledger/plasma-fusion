@@ -189,10 +189,15 @@ bool FusionTaskFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &s
 }
 
 // Plasma Fusion (SPLIT.md item 4): two apps side by side are one card, as Android's Overview shows
-// a split pair. The topmost task tiled to the left and the topmost tiled to the right of this
-// screen form the pair (minimized or not: the switcher minimizes every app when it opens, and going
-// home leaves them so); the more recently used of the two stands for it in the list (the higher one
-// when both came up at once), the other is left out. Found once, when the switcher opens.
+// a split pair. Found once, when the switcher opens (before it minimizes the apps):
+// - the apps shown, layer by layer: the topmost app and the app seen in the other half of its
+//   split, then the same again under them (an older split under a newer one, or under an app);
+// - then the pairs the task model remembers (seen side by side, or minimized by the switcher as
+//   one card), both shown or both minimized: a split with an app between its two halves, and
+//   minimized apps (they keep their tiles, so tiles alone would pair apps that were never side
+//   by side).
+// The more recently used app of a pair stands for it in the list (the higher one when both came
+// up at once), the other is left out. An app on a card of its own is no longer part of a pair.
 void FusionTaskFilterModel::updatePairs()
 {
     m_partners.clear();
@@ -200,36 +205,46 @@ void FusionTaskFilterModel::updatePairs()
     if (!m_taskModel || !m_output) {
         return;
     }
-    Window *left = nullptr;
-    Window *right = nullptr;
-    Window *higher = nullptr;
+    QList<Window *> tasks; // topmost first
     const QList<Window *> &order = workspace()->stackingOrder();
-    for (auto it = order.crbegin(); it != order.crend() && !(left && right); ++it) {
-        Window *window = *it;
-        if (!window->isNormalWindow() || !isTask(window)) {
-            continue;
-        }
-        const FusionSplitSide side = fusionSplitSide(window);
-        if (side == FusionSplitSide::Left && !left) {
-            left = window;
-        } else if (side == FusionSplitSide::Right && !right) {
-            right = window;
-        } else {
-            continue;
-        }
-        if (!higher) {
-            higher = window;
+    for (auto it = order.crbegin(); it != order.crend(); ++it) {
+        if ((*it)->isNormalWindow() && isTask(*it)) {
+            tasks.append(*it);
         }
     }
-    if (!left || !right) {
-        return;
+    QList<Window *> shown;
+    for (Window *window : std::as_const(tasks)) {
+        if (!window->isMinimized()) {
+            shown.append(window);
+        }
     }
-    m_partners.insert(left, right);
-    m_partners.insert(right, left);
-    const qint64 leftUsed = lastActivated(left);
-    const qint64 rightUsed = lastActivated(right);
-    Window *shown = leftUsed == rightUsed ? higher : (leftUsed > rightUsed ? left : right);
-    m_hidden.insert(shown == left ? right : left);
+    while (!shown.isEmpty()) {
+        Window *window = shown.takeFirst();
+        if (Window *partner = fusionVisiblePartner(window, shown)) {
+            shown.removeOne(partner);
+            addPair(window, partner);
+        }
+    }
+    for (Window *window : std::as_const(tasks)) {
+        Window *partner = m_taskModel->splitPair(window);
+        if (partner && tasks.contains(partner) && partner->isMinimized() == window->isMinimized() && !m_partners.contains(window)
+            && !m_partners.contains(partner)) {
+            addPair(window, partner);
+        }
+    }
+    for (Window *window : std::as_const(tasks)) {
+        if (!m_partners.contains(window)) {
+            m_taskModel->forgetSplitPair(window);
+        }
+    }
+}
+
+// window: the higher of the two in the stack
+void FusionTaskFilterModel::addPair(Window *window, Window *partner)
+{
+    m_partners.insert(window, partner);
+    m_partners.insert(partner, window);
+    m_hidden.insert(lastActivated(partner) > lastActivated(window) ? window : partner);
 }
 
 qint64 FusionTaskFilterModel::lastActivated(Window *window) const

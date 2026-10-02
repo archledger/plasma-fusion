@@ -54,6 +54,7 @@ Q_SIGNALS:
 private:
     bool isTask(Window *window) const;
     void updatePairs();
+    void addPair(Window *window, Window *partner);
     qint64 lastActivated(Window *window) const;
     void handleWindowRemoved(Window *window);
 

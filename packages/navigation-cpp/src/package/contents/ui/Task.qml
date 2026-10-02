@@ -43,7 +43,7 @@ Item {
 
     // Plasma Fusion (SPLIT.md item 4): two apps side by side are one card, as in Android's
     // Overview: both previews in their split, picked, minimized and closed together. The model
-    // gives the app in the other half (FusionTaskFilterModel, the split divider's pairing).
+    // gives the app in the other half (FusionTaskFilterModel.updatePairs).
     // The functions below read it from the model: the switcher's setup minimizes the apps
     // before the cards' bindings have run.
     function pairedApp(): QtObject {

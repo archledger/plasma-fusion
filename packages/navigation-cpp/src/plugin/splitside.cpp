@@ -33,4 +33,36 @@ FusionSplitSide fusionSplitSide(Window *window)
     return FusionSplitSide::None;
 }
 
+bool fusionSideBySide(Window *window, Window *other)
+{
+    if (!window || !other || window == other || window->output() != other->output()) {
+        return false;
+    }
+    const FusionSplitSide side = fusionSplitSide(window);
+    const FusionSplitSide otherSide = fusionSplitSide(other);
+    return side != FusionSplitSide::None && otherSide != FusionSplitSide::None && side != otherSide;
+}
+
+Window *fusionVisiblePartner(Window *window, const QList<Window *> &below)
+{
+    const FusionSplitSide side = fusionSplitSide(window);
+    if (side == FusionSplitSide::None) {
+        return nullptr;
+    }
+    for (int i = 0; i < below.size(); ++i) {
+        const FusionSplitSide otherSide = fusionSplitSide(below[i]);
+        if (otherSide == FusionSplitSide::None || otherSide == side) {
+            continue;
+        }
+        const QPointF middle = below[i]->frameGeometry().center();
+        for (int j = 0; j < i; ++j) {
+            if (below[j]->frameGeometry().contains(middle)) {
+                return nullptr;
+            }
+        }
+        return below[i];
+    }
+    return nullptr;
+}
+
 } // namespace KWin

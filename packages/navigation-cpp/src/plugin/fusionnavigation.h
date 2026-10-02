@@ -93,8 +93,8 @@ public:
     // app the gesture returned to is active again (activating it makes the dock dodge away).
     Q_INVOKABLE void showDock();
     // Plasma Fusion (SPLIT.md item 4): the switcher minimized a split pair (it opened, or the home
-    // gesture). When one of the two is activated again (the dock, a notification), the other comes
-    // back into its half.
+    // gesture). It is one card the next time, and when one of the two is activated again (the
+    // dock, a notification), the other comes back into its half.
     Q_INVOKABLE void rememberPair(KWin::Window *window, KWin::Window *partner);
 
     qreal touchXPosition() const;

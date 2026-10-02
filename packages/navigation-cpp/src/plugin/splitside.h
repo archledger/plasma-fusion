@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <QList>
+
 namespace KWin
 {
 class Window;
@@ -18,5 +20,13 @@ enum class FusionSplitSide {
 };
 
 FusionSplitSide fusionSplitSide(Window *window);
+
+// Plasma Fusion: whether two windows are tiled on opposite sides of the same screen.
+bool fusionSideBySide(Window *window, Window *other);
+
+// Plasma Fusion: the app seen in the other half of the window's split. Of the apps under it
+// (topmost first), the topmost one tiled on the other side, unless an app above that one covers
+// its middle (a maximized app, say); or null.
+Window *fusionVisiblePartner(Window *window, const QList<Window *> &below);
 
 } // namespace KWin

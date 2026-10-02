@@ -129,6 +129,10 @@ void FusionNavigationState::rememberPair(KWin::Window *window, KWin::Window *par
     if (!window || !partner || window == partner) {
         return;
     }
+    // the switcher shows them as one card again while both are minimized
+    if (m_taskModel) {
+        m_taskModel->rememberSplitPair(window, partner);
+    }
     m_minimizedPairs.removeIf([window, partner](const auto &pair) {
         return !pair.first || !pair.second || pair.first == window || pair.second == window || pair.first == partner || pair.second == partner;
     });
@@ -136,7 +140,8 @@ void FusionNavigationState::rememberPair(KWin::Window *window, KWin::Window *par
 }
 
 // One app of a remembered pair is active again: the other one comes back into its half, under it,
-// while both are still tiled side by side on the same screen and desktop. Each pair is used once.
+// while the two are still that pair, side by side on the same screen and desktop. Each pair is
+// used once.
 void FusionNavigationState::restorePartner(Window *window)
 {
     if (!window || m_minimizedPairs.isEmpty()) {
@@ -155,12 +160,8 @@ void FusionNavigationState::restorePartner(Window *window)
             ++it;
         }
     }
-    if (!partner || !partner->isMinimized() || partner->output() != window->output() || !partner->isOnCurrentDesktop()) {
-        return;
-    }
-    const FusionSplitSide side = fusionSplitSide(window);
-    const FusionSplitSide partnerSide = fusionSplitSide(partner);
-    if (side == FusionSplitSide::None || partnerSide == FusionSplitSide::None || side == partnerSide) {
+    if (!partner || !partner->isMinimized() || !window->isOnCurrentDesktop() || !partner->isOnCurrentDesktop() || !m_taskModel
+        || m_taskModel->splitPair(window) != partner) {
         return;
     }
     partner->setMinimized(false);
