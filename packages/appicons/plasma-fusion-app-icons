@@ -61,8 +61,9 @@ FLATPAK = [DATA / "flatpak/exports/share", pathlib.Path("/var/lib/flatpak/export
 NEUTRAL = "#eef1f8"
 
 
-# The files below are written by other programs (KConfig, packages, Flatpak, the theme); the pure
-# functions next to the readers parse their text.
+# The files below are written by other programs (KConfig, packages, Flatpak, the theme): they are
+# read with bytes that are not UTF-8 replaced (a hand-edited Latin-1 line must not stop the tool),
+# and the pure functions next to the readers parse their text.
 
 def parse_mode(text):
     """plasmafusionrc's [Icons] AppIcons: "familiar" (also for an unknown value) or "designs"; the
@@ -80,7 +81,7 @@ def parse_mode(text):
 
 def mode():
     try:
-        return parse_mode((CONFIG / "plasmafusionrc").read_text())
+        return parse_mode((CONFIG / "plasmafusionrc").read_text(errors="replace"))
     except OSError:
         return "familiar"
 
@@ -201,7 +202,7 @@ def designed_names():
     first Plasma Fusion theme found: the per-user copy, then the system one)."""
     for root in theme_roots():
         try:
-            return set((root / "designed-apps.txt").read_text().split())
+            return set((root / "designed-apps.txt").read_text(errors="replace").split())
         except OSError:
             continue
     return set()

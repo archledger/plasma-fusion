@@ -100,6 +100,9 @@ removes the familiar icons. fusion-restore.sh stops the service and runs `remove
 (a designed name gets no familiar icon; a file-path icon, a generic Breeze name and a name the theme
 hands back get a per-app tile only; dropping a familiar icon puts the theme's link back, keeps a link that replaced it since, and
 the backup is the newest file; standard library only),
+`packages/appicons/tests/parse_test.py` (what the tool reads from other programs' files: a desktop
+entry's first value of a key wins, other groups and hidden entries are left out; plasmafusionrc and
+`designed-apps.txt` with bytes that are not UTF-8 are read, not a crash; standard library only),
 `packages/appicons/tests/compose_test.py`
 (a square and a rounded square become the tile; a one-colour circle gets a light tile in its hue; a
 three-colour logo the neutral tile; a wide shape a plate).
