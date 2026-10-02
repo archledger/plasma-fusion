@@ -2,7 +2,7 @@
 
 Status as written on 2026-09-30. This paragraph is a dated snapshot and is not kept current: its
 deployment facts are out of date, and the part pages in `docs/parts/` and the git history show the
-current state. Phases 1 and 2 and round 2 are built and installed on the ThinkPad; of phase 3, the decoration and the settings module are installed as RPMs (the decoration is not selected yet). The real session runs d4afee8 (round 2 plus text scale and the dock rework, deployed 2026-09-30 02:56Z). The one-pass build in `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md` is under way: waves 0 and 1 and batch B0 are committed (CARD-1, BASE-1, POWER-1, KCM-1, DEVICE-1, TEST-1, DECO-1, STYLE-1; not deployed); the next lanes are KWIN-1, LAYOUT-1, LOCK-1 and PEN-1. Last edited 2026-09-30.
+current state. Phases 1 and 2 and round 2 are built and installed on the ThinkPad; of phase 3, the decoration and the settings module are installed as RPMs (the decoration is not selected yet). The real session runs d4afee8 (round 2 plus text scale and the dock rework, deployed 2026-09-30 02:56Z). The one-pass build (planned in the maintainer's notes, not in this repository) is under way: waves 0 and 1 and batch B0 are committed (CARD-1, BASE-1, POWER-1, KCM-1, DEVICE-1, TEST-1, DECO-1, STYLE-1; not deployed); the next lanes are KWIN-1, LAYOUT-1, LOCK-1 and PEN-1. Last edited 2026-09-30.
 
 ## Decisions
 
