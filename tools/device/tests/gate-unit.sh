@@ -715,13 +715,15 @@ dpkg_status() { # KWIN-VERSION: what dpkg-query reports, and a new status file (
   mkdir -p "$ROOT/var/lib/dpkg"
   echo "$1" >"$ROOT/var/lib/dpkg/status.new" && mv -f "$ROOT/var/lib/dpkg/status.new" "$ROOT/var/lib/dpkg/status"
 }
-nix_system() { # N PLASMA-VERSION: system profile N, current, with that Plasma in its closure
-  local sp n
+nix_system() { # N PLASMA-VERSION [QT-STORE-NAME...]: system profile N, current, with that Plasma
+  # and Qt 6.11.2 (or the Qt store names given, in that order) in its closure
+  local sp n qt=(qtbase-6.11.2 qtdeclarative-6.11.2)
+  [ $# -le 2 ] || qt=("${@:3}")
   sp=$ROOT/nix/store/$(printf '%032d' "$1")-system-path
   mkdir -p "$sp/bin" "$ROOT/run" "$ROOT/nix/store/$(printf '%032d' "$1")-nixos-system"
   cp "$FB/nix-store" "$sp/bin/nix-store"
   for n in glibc-2.42-47 "kwin-$2" "kwin-$2-dev" kwin-x11-6.5.0 "plasma-workspace-$2" "plasma-desktop-$2" \
-    "kscreenlocker-$2" "libplasma-$2" "kdecoration-$2" qtbase-6.11.2 qtdeclarative-6.11.2 source system-path; do
+    "kscreenlocker-$2" "libplasma-$2" "kdecoration-$2" "${qt[@]}" source system-path; do
     echo "/nix/store/$(printf '%s' "$n" | sha256sum | cut -c1-32)-$n"
   done >"$sp/closure"
   ln -sfn "$sp" "$ROOT/nix/store/$(printf '%032d' "$1")-nixos-system/sw"
@@ -825,6 +827,29 @@ check "v3: Nix: notification names it" grep -q 'kwin 6.6.6 → 6.7.5' "$S/notify
 nix_system 1 6.6.6
 gate login
 check "v3: Nix: rollback: the lock screen is back" [ -f "$H/.config/$DROPIN_REL" ]
+# v3b: the closure also holds Qt 5 and other outputs (as on a real NixOS Plasma 6 system), listed
+# in an order that changes between generations: only Qt 6 counts.
+make_home "$BASE/v3b"
+S=$H/.local/state/plasma-fusion/gate
+RPM='' FAKEBIN='' ROOT=$BASE/root-nix-qt
+qt6=(qtbase-6.11.2 qtdeclarative-6.11.2 qtbase-6.11.2-only-plugins-qml)
+qt5=(qtbase-5.15.19 qtdeclarative-5.15.19 qtdeclarative-5.15.19-bin qtbase-5.15.19-bin)
+nix_system 1 6.6.6 "${qt6[@]}" "${qt5[@]}"
+gate deploy >/dev/null 2>&1
+check "v3b: Nix: Qt 6's qtbase recorded, not Qt 5's" grep -qx 'pkg qtbase=6.11.2' "$S/tested"
+check "v3b: Nix: Qt 6's qtdeclarative recorded" grep -qx 'pkg qtdeclarative=6.11.2' "$S/tested"
+before=$(sums)
+nix_system 2 6.6.6 "${qt5[@]}" "${qt6[@]}"
+gate login
+check "v3b: Nix: a rebuild listing Qt 5 first changes nothing" [ "$(sums)" = "$before" ]
+check "v3b: Nix: log 'no change'" bash -c '[[ $(tail -n 1 "$1") == *"versions=tested lock=tested; no change"* ]]' _ "$H/.local/state/plasma-fusion/gate.log"
+nix_system 3 6.6.6 "${qt6[@]}" qtbase-5.15.20 qtdeclarative-5.15.20 qtbase-5.15.20-bin
+gate login
+check "v3b: Nix: a Qt 5 update alone changes nothing" [ "$(sums)" = "$before" ]
+nix_system 4 6.6.6 qtbase-6.12.0 qtdeclarative-6.12.0 "${qt5[@]}"
+gate login
+check "v3b: Nix: a Qt 6 update: drop-in aside" [ ! -e "$H/.config/$DROPIN_REL" ]
+check "v3b: Nix: notification names it" grep -q 'qtbase 6.11.2 → 6.12.0' "$S/notify"
 
 # v4: no package database: never recorded as tested, the version-bound parts stay off.
 make_home "$BASE/v4"

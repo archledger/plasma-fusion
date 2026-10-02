@@ -447,7 +447,7 @@ them and is skipped):
 | rpm (Fedora) | `rpm -q --qf '%{NAME}=%{VERSION}\n'` | `qt6-qtbase`, `qt6-qtdeclarative` | `%{VERSION}` | inode, size and time of `rpmdb.sqlite` (+ `-wal`), as before |
 | pacman (Arch) | `pacman -Q` | `qt6-base`, `qt6-declarative` | without epoch and pkgrel | `/var/lib/pacman/local` (a directory per package, replaced at every upgrade) |
 | dpkg (Debian) | `dpkg-query -W -f '${db:Status-Status} ${source:Package}=${source:Version}\n'` over all packages | source packages `qt6-base`, `qt6-declarative` (the binary names change between releases: `kwin-wayland`, `libkscreenlocker6`...) | without epoch and Debian revision (`6.11.2+dfsg`); removed packages that kept their configuration files do not count | `/var/lib/dpkg/status` (rewritten and renamed over by every dpkg run) |
-| Nix (NixOS) | `nix-store --query --requisites /run/current-system/sw` (`nix-store` from PATH, else from the system profile) | store names `qtbase`, `qtdeclarative`; the name ends before the first `-digit`, so `kwin-x11-6.6.6` is not `kwin` | the store name's version (`kwin-6.6.6-dev` gives 6.6.6) | `readlink /run/current-system/sw` |
+| Nix (NixOS) | `nix-store --query --requisites /run/current-system/sw` (`nix-store` from PATH, else from the system profile) | store names `qtbase`, `qtdeclarative`, Qt 6 only (a Plasma 6 system's closure also holds Qt 5 5.15, for Plasma's Qt 5 integration); the name ends before the first `-digit`, so `kwin-x11-6.6.6` is not `kwin` | the store name's version (`kwin-6.6.6-dev` gives 6.6.6) | `readlink /run/current-system/sw` |
 
 The other six names (`plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration`)
 are the same everywhere. A package listed more than once (Debian binaries of one source package,
@@ -488,7 +488,10 @@ longer needs to be skipped where the compiled decoration is installed). New case
   downgrade; `v2b` kwin binaries at 6.7.4 and 6.3.6 give `kwin=6.3.6,6.7.4` in either order.
 - `v3` Nix: a system profile in a store below `PF_GATE_ROOT`, `nix-store` only in the profile;
   `kwin-x11` and the `-dev` output do not count; cached per profile; a switch to 6.7.5 switches off,
-  a rollback turns back on.
+  a rollback turns back on. `v3b` a closure with Qt 5 next to Qt 6 and their other outputs, as on a
+  real NixOS system: Qt 6.11.2 recorded; the same versions listed in another order (the closure's
+  order changes between generations) and a Qt 5 update alone change nothing; a Qt 6 update
+  switches off.
 - `v4` no database: `deploy` fails and records nothing; logins switch off with the reason, one
   notification; `v4b` a record made with rpm and no database later; `v4c` the earlier check's
   `no-rpm` record.
@@ -514,3 +517,11 @@ notification `kwin 6.7.5 → 6.99.0` (`6.7.4` on sid), the tested version again 
 (files as before), and without the package tool in PATH a login switches off with "no package
 database (rpm, pacman, dpkg or Nix) was found" and `deploy` fails and keeps the record: 17 of 17
 checks on each. Containers removed.
+
+NixOS, from archhost's real system closure (`nix-store --query --requisites
+/run/current-system/sw`, read-only: 1,355 store paths, Plasma 6.6.6, Qt 6.11.2 and Qt 5.15.19 with
+their `-bin` and `-only-plugins-qml` outputs) printed by a fake `nix-store`, 2026-10-02: `deploy`
+records `qtbase=6.11.2` and `qtdeclarative=6.11.2`; the same closure with the Qt 5 paths first and
+one with Qt 5 at 5.15.20 give "no change"; Qt 6 at 6.12.0 switches off with `qtbase 6.11.2 →
+6.12.0`. Before this fix the first record was Qt 5's 5.15.19, a Qt 6 update went unnoticed, and
+the reordered closure or a Qt 5 update switched the parts off.

@@ -66,7 +66,7 @@
 #   rpm     rpm -q (Fedora)
 #   pacman  pacman -Q (Arch)
 #   dpkg    source packages (Debian): the binary names change between releases
-#   nix     the store path names in the closure of the NixOS system profile
+#   nix     the store path names in the closure of the NixOS system profile (Qt 6 only)
 DBS=(rpm pacman dpkg nix)
 declare -A DB_PACKAGES=(
   [rpm]="plasma-workspace plasma-desktop kwin kscreenlocker libplasma kdecoration qt6-qtbase qt6-qtdeclarative"
@@ -851,12 +851,14 @@ query_versions() {
           line=${line#* }
           [[ $line == *=* ]] || continue
           n=${line%%=*} v=${line#*=}; v=${v#*:}; [[ $v != *-* ]] || v=${v%-*} ;;
-        # /nix/store/HASH-name-version[-output]: the name ends before the first "-digit"
+        # /nix/store/HASH-name-version[-output]: the name ends before the first "-digit". Plasma 6
+        # runs on Qt 6; the closure also holds Qt 5 (Plasma's Qt 5 integration), which is left out.
         nix)
           line=${line##*/}; line=${line#*-}
           n=${line%%-[0-9]*}
           [ "$n" != "$line" ] || continue
-          v=${line#"$n"-}; v=${v%%-*} ;;
+          v=${line#"$n"-}; v=${v%%-*}
+          case $n in qtbase | qtdeclarative) [[ $v == 6.* ]] || continue ;; esac ;;
       esac
       [[ $n =~ $NAME_RE ]] && [[ " ${PACKAGES[*]} " == *" $n "* ]] || continue
       if [ -z "${got[$n]-}" ]; then got[$n]=$v; elif [[ ,${got[$n]}, != *",$v,"* ]]; then got[$n]+=",$v"; fi
