@@ -3,8 +3,9 @@
 Plasma Fusion installs parts that run with privileges or guard the session: the charge-limit
 helper (`/usr/libexec/plasma-fusion/plasma-fusion-charge-limit`, run through pkexec with the
 polkit action `org.plasmafusion.charge-limit`), the lock screen shell, the login check that switches
-version-bound parts off after a Plasma update, the boot splash installer (run as root) and the
-user services (power tiers, app icons). What users can and cannot expect from them, and why, is in
+version-bound parts off after a Plasma update, the boot splash installer (run as root), the login
+greeter styling tool (`tools/system/greeter-apply.sh`, run as root) and the user services (power
+tiers, app icons). What users can and cannot expect from them, and why, is in
 the security assurance case: [`docs/SECURITY-ASSURANCE.md`](docs/SECURITY-ASSURANCE.md).
 
 ## Reporting a vulnerability
