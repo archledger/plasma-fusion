@@ -17,6 +17,9 @@ ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
 Type=simple
 # The user's own copy first, then a system package's.
 ExecSearchPath=%h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion
+# Without PATH here, ExecSearchPath= becomes the service's PATH (systemd.exec(5)) and coredumpctl,
+# journalctl and systemctl are not found.
+Environment=PATH=/usr/local/bin:/usr/bin
 ExecStart=plasma-fusion-fieldlog run
 ExecReload=/usr/bin/kill -HUP $MAINPID
 # SIGTERM to the tool only: it writes the counts it holds and the day's digest, then stops journalctl.

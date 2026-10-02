@@ -592,6 +592,37 @@ class Run(unittest.TestCase):
             self.assertNotIn(f"systemctl --user {verb}", calls.replace("--no-pager ", ""))
 
 
+def unit_section(name):
+    """(key, value) lines of a section of the unit template."""
+    out, cur = [], None
+    for line in (HERE.parent / "plasma-fusion-fieldlog.service").read_text().splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            cur = line
+        elif cur == f"[{name}]" and line and not line.startswith("#") and "=" in line:
+            out.append(tuple(line.split("=", 1)))
+    return out
+
+
+class UnitFile(unittest.TestCase):
+    def test_path_is_set_next_to_exec_search_path(self):
+        # ExecSearchPath= becomes the whole PATH of a unit that sets none (systemd.exec(5)): coredumpctl,
+        # journalctl and systemctl were then not found (review of 2026-10-02).
+        svc = unit_section("Service")
+        self.assertIn("ExecSearchPath", [k for k, _ in svc])
+        paths = [v[5:] for k, v in svc if k == "Environment" and v.startswith("PATH=")]
+        self.assertEqual(len(paths), 1, svc)
+        self.assertIn("/usr/bin", paths[0].split(":"))
+
+    def test_tool_falls_back_to_usr_bin(self):
+        old = os.environ["PATH"]
+        os.environ["PATH"] = str(BASE / "libexec-only")
+        try:
+            self.assertEqual(fl.tool("journalctl"), "/usr/bin/journalctl")
+        finally:
+            os.environ["PATH"] = old
+
+
 class Install(unittest.TestCase):
     def test_install_and_remove(self):
         d = fresh_dir("install")

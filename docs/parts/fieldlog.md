@@ -172,7 +172,10 @@ contain the crashed program's command line, as coredumpctl prints it, and stay l
 
 `tools/device/fieldlog/plasma-fusion-fieldlog.service`: `Type=simple`, `ExecSearchPath=
 %h/.local/libexec/plasma-fusion:/usr/local/libexec/plasma-fusion:/usr/libexec/plasma-fusion` like the
-units in `packages/`, `KillMode=mixed` (SIGTERM to the tool, which writes its counts, the digest and
+units in `packages/`, with `Environment=PATH=/usr/local/bin:/usr/bin` (without it `ExecSearchPath=`
+becomes the service's whole PATH, systemd.exec(5), and `coredumpctl`, `journalctl` and `systemctl`
+are not found; the tool also falls back to `/usr/bin/NAME` when a program is not on PATH),
+`KillMode=mixed` (SIGTERM to the tool, which writes its counts, the digest and
 stops journalctl), `Restart=on-failure`, `background.slice`, `Nice=10`, `IOSchedulingClass=idle`,
 `MemoryMax=64M`, and the hardening that works in a user unit without a user namespace:
 `NoNewPrivileges`, `LockPersonality`, `RestrictRealtime`, `RestrictSUIDSGID`, `RestrictNamespaces`,

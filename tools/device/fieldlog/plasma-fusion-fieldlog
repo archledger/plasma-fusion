@@ -343,6 +343,12 @@ def text_of(v):
     return str(v)
 
 
+def tool(name):
+    """A system program by name: from PATH, else from /usr/bin (a unit's ExecSearchPath= becomes the
+    whole PATH when the unit sets no PATH)."""
+    return shutil.which(name) or "/usr/bin/" + name
+
+
 def read_text(path, limit=None):
     try:
         with open(path, "r", errors="replace") as f:
@@ -814,7 +820,7 @@ class FieldLog:
         last = int(self.state["last_dump_us"])
         seen = set(self.state.get("seen_dumps", []))
         try:
-            r = subprocess.run(["coredumpctl", "--no-pager", "--json=short", "list",
+            r = subprocess.run([tool("coredumpctl"), "--no-pager", "--json=short", "list",
                                 f"--since=@{max(0, last // 1000000 - 1)}"],
                                capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
         except (OSError, subprocess.TimeoutExpired) as e:
@@ -851,7 +857,7 @@ class FieldLog:
         t, pid = int(e.get("time") or 0), int(e.get("pid") or 0)
         sec = t // 1000000
         try:
-            r = subprocess.run(["journalctl", "--no-pager", "-a", "-o", "json",
+            r = subprocess.run([tool("journalctl"), "--no-pager", "-a", "-o", "json",
                                 f"--since=@{sec - 2}", f"--until=@{sec + 3}",
                                 f"MESSAGE_ID={COREDUMP_MSGID}", f"COREDUMP_PID={pid}"],
                                capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
@@ -886,7 +892,7 @@ class FieldLog:
     def start_journal(self):
         fields = ("MESSAGE,PRIORITY,_COMM,SYSLOG_IDENTIFIER,_PID,CODE_FILE,CODE_LINE,QT_CATEGORY,"
                   "MESSAGE_ID,USER_UNIT,UNIT_RESULT,EXIT_CODE,EXIT_STATUS,_SYSTEMD_USER_UNIT")
-        args = ["journalctl", "--user", "-f", "-a", "-o", "json", "--no-pager", "--output-fields=" + fields]
+        args = [tool("journalctl"), "--user", "-f", "-a", "-o", "json", "--no-pager", "--output-fields=" + fields]
         cur = self.state.get("cursor")
         m = re.search(r"(?:^|;)t=([0-9a-f]+)", cur or "")
         if cur and m and time.time() - int(m.group(1), 16) / 1e6 < 12 * 3600:
@@ -1040,7 +1046,7 @@ class FieldLog:
     # -- systemd
     def systemctl(self, *args):
         try:
-            r = subprocess.run(["systemctl", "--user", "--no-pager", *args], capture_output=True,
+            r = subprocess.run([tool("systemctl"), "--user", "--no-pager", *args], capture_output=True,
                                text=True, timeout=20, stdin=subprocess.DEVNULL)
             return r.stdout
         except (OSError, subprocess.TimeoutExpired):
@@ -1291,7 +1297,7 @@ def crash_event(log, e, rec, cls, reason, markers, sdir, save):
         path = pathlib.Path(sdir, "crashes", f"{compact(ts)}-{name}-{pid}.txt")
         sec = int(e.get("time") or t_us) // 1000000
         try:
-            r = subprocess.run(["coredumpctl", "--no-pager", "info", f"--since=@{sec - 2}",
+            r = subprocess.run([tool("coredumpctl"), "--no-pager", "info", f"--since=@{sec - 2}",
                                 f"--until=@{sec + 3}", str(pid)], capture_output=True, text=True,
                                timeout=60, stdin=subprocess.DEVNULL)
             body = r.stdout or r.stderr
@@ -1484,10 +1490,10 @@ def aggregate(events):
 def demangler(names):
     names = sorted({n for n in names if n.startswith("_Z")})
     out = {}
-    if not names or not shutil.which("c++filt"):
+    if not names or not os.access(tool("c++filt"), os.X_OK):
         return out
     try:
-        r = subprocess.run(["c++filt"], input="\n".join(names) + "\n", capture_output=True, text=True, timeout=20)
+        r = subprocess.run([tool("c++filt")], input="\n".join(names) + "\n", capture_output=True, text=True, timeout=20)
         for a, b in zip(names, r.stdout.splitlines()):
             out[a] = b
     except (OSError, subprocess.TimeoutExpired):
@@ -1813,9 +1819,9 @@ def cmd_status(args):
     sdir = state_dir()
     print("Plasma Fusion field log")
     active = ""
-    if shutil.which("systemctl"):
+    if os.access(tool("systemctl"), os.X_OK):
         try:
-            active = subprocess.run(["systemctl", "--user", "is-active", UNIT], capture_output=True,
+            active = subprocess.run([tool("systemctl"), "--user", "is-active", UNIT], capture_output=True,
                                     text=True, timeout=10).stdout.strip()
         except (OSError, subprocess.TimeoutExpired):
             pass
@@ -1863,7 +1869,7 @@ def unit_path():
 
 
 def systemctl_user(*args, check=False):
-    r = subprocess.run(["systemctl", "--user", *args], stdin=subprocess.DEVNULL)
+    r = subprocess.run([tool("systemctl"), "--user", *args], stdin=subprocess.DEVNULL)
     if check and r.returncode != 0:
         raise SystemExit(f"{NAME}: systemctl --user {' '.join(args)} failed ({r.returncode})")
     return r.returncode
