@@ -90,9 +90,17 @@ else
   printf '{"error": "no session display reachable (run inside the Plasma session); see .config/kwinoutputconfig.json"}\n' >"$WORK/kscreen.json"
 fi
 rm -f "$WORK/kscreen.err"
+# Plasma's version from the package database (rpm, pacman, dpkg; upstream version only), else from
+# plasmashell itself.
 plasma=$(rpm -q --qf '%{VERSION}\n' plasma-workspace 2>/dev/null | head -n 1) || plasma=
 case $plasma in '' | *"not installed"*)
-  plasma=$(QT_QPA_PLATFORM=offscreen timeout 15 plasmashell --version 2>/dev/null) || plasma= ;;
+  if plasma=$(pacman -Q plasma-workspace 2>/dev/null) && [ -n "$plasma" ]; then
+    plasma=${plasma#* }; plasma=${plasma#*:}; plasma=${plasma%-*}
+  elif plasma=$(dpkg-query -W -f '${db:Status-Status} ${Version}' plasma-workspace 2>/dev/null) && [[ $plasma == "installed "* ]]; then
+    plasma=${plasma#installed }; plasma=${plasma#*:}; plasma=${plasma%-*}
+  else
+    plasma=$(QT_QPA_PLATFORM=offscreen timeout 15 plasmashell --version 2>/dev/null) || plasma=
+  fi ;;
 esac
 {
   echo "created=$STAMP"

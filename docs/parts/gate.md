@@ -466,6 +466,10 @@ rpm, the versions now come from pacman"), and a record of the earlier check on a
 (`no-rpm` values) counts as untested ("it was recorded without a package database"); in both cases
 the next `fusion-config.sh` run records the versions again.
 
+The other places that read the rpm database read the same ones: the keyboard keys' line in the stub
+and `plasma-fusion-keyboard-keys` (`docs/parts/keyboard.md`), the Plasma version
+`backup-profile.sh` records, and the package `greeter-apply.sh` writes into its backup.
+
 Tests (`tools/device/tests/gate-unit.sh`) no longer depend on the machine: PATH holds the machine's
 programs without `rpm`, `pacman`, `dpkg-query` and `nix-store` (fakes go in front per case), the
 package databases are below `PF_GATE_ROOT`, and `XDG_DATA_DIRS` and `XDG_CONFIG_DIRS` are empty

@@ -27,8 +27,13 @@ in Konsole `cat -v` shows `^[`, a tab and `^[[D ^[[B ^[[A ^[[C` (6.7.5 and 6.7.9
 - `plasma-fusion-keyboard-keys install | refresh | remove | status` (`/usr/libexec/plasma-fusion/`,
   per user in `~/.local/libexec/plasma-fusion/`). Record: `~/.local/state/plasma-fusion/keyboard-keys`.
 - `fusion-config.sh --install` runs `refresh` (builds on first run; keeps a user's `remove`).
-- Login: the env stub of the login check runs `refresh` only when the rpm database is newer than the
-  record (about 2 ms otherwise); a plasma-keyboard update rebuilds the copy from the new file.
+- Login: the env stub of the login check runs `refresh` only when a package database (the rpm
+  database; on other distributions `/var/lib/pacman/local`, `/var/lib/dpkg/status` or the Nix
+  profiles directory) is newer than the record (about 2 ms otherwise); a plasma-keyboard update
+  rebuilds the copy from the new file. The tool's own stamp is the rpm database's size and time
+  (with pacman's, dpkg's and the NixOS system profile's where they exist), and plasma-keyboard's
+  version comes from rpm, pacman or dpkg, on NixOS from the store path of its layouts. A `refresh`
+  that finds the stamp unchanged touches the record, so the next login skips the tool again.
 - `fusion-restore.sh` removes the layouts and the record (a later install builds them again).
 
 ## Checks

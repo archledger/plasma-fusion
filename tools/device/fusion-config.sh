@@ -2004,11 +2004,15 @@ gate_stub() {
 [ -r $(sh_quote "$GATE_ENGINE") ] &&
   timeout -k 1 4 /usr/bin/env bash $(sh_quote "$GATE_ENGINE") login </dev/null >/dev/null 2>&1 || :
 # The on-screen keyboard's terminal keys follow plasma-keyboard updates (docs/parts/keyboard.md); the
-# tool runs only when the rpm database changed since its record (a few ms otherwise).
+# tool runs only when a package database (rpm, pacman, dpkg, the Nix profiles) changed since its
+# record (a few ms otherwise).
 [ -x $(sh_quote "$KEYS_TOOL") ] &&
   { [ ! -e $(sh_quote "$STATE/keyboard-keys") ] ||
     [ /usr/lib/sysimage/rpm/rpmdb.sqlite -nt $(sh_quote "$STATE/keyboard-keys") ] ||
-    [ /var/lib/rpm/rpmdb.sqlite -nt $(sh_quote "$STATE/keyboard-keys") ]; } &&
+    [ /var/lib/rpm/rpmdb.sqlite -nt $(sh_quote "$STATE/keyboard-keys") ] ||
+    [ /var/lib/pacman/local -nt $(sh_quote "$STATE/keyboard-keys") ] ||
+    [ /var/lib/dpkg/status -nt $(sh_quote "$STATE/keyboard-keys") ] ||
+    [ /nix/var/nix/profiles -nt $(sh_quote "$STATE/keyboard-keys") ]; } &&
   timeout -k 1 3 $(sh_quote "$KEYS_TOOL") refresh </dev/null >/dev/null 2>&1 || :
 EOF
 }

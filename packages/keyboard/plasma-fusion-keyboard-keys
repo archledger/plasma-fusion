@@ -43,15 +43,25 @@ QUOTE = re.compile(r"(Key \{\s*key: +Qt\.Key_QuoteDbl\s*text: '\"')(\s*\})")
 
 
 def version():
-    try:
-        out = subprocess.run(["rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", "plasma-keyboard"],
-                             capture_output=True, text=True, timeout=10)
-        if out.returncode == 0:
-            return out.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired):
-        pass
+    # From the package database that has plasma-keyboard (rpm, pacman, dpkg); on NixOS the store
+    # path the layouts come from; else the installed file's time.
+    for cmd in (["rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", "plasma-keyboard"],
+                ["pacman", "-Q", "plasma-keyboard"],
+                ["dpkg-query", "-W", "-f", "${db:Status-Status} ${Version}", "plasma-keyboard"]):
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        words = out.stdout.split()
+        if out.returncode == 0 and words and (cmd[0] != "dpkg-query" or words[0] == "installed"):
+            return words[-1]
     src = SYSTEM / "fallback/symbols.qml"
-    return "mtime-%d" % src.stat().st_mtime if src.exists() else ""
+    if not src.exists():
+        return ""
+    real = src.resolve()
+    if real.parts[1:3] == ("nix", "store"):
+        return real.parts[3]
+    return "mtime-%d" % src.stat().st_mtime
 
 
 def patch_symbols(text):
@@ -90,14 +100,24 @@ def patched(text):
 
 
 def rpmdb_stamp():
-    # The rpm database's size and time: unchanged means no package changed (a login checks only this).
-    for db in ("/usr/lib/sysimage/rpm/rpmdb.sqlite", "/var/lib/rpm/rpmdb.sqlite"):
-        try:
-            st = os.stat(db)
-            return "%d:%d" % (st.st_size, st.st_mtime_ns)
-        except OSError:
-            continue
-    return ""
+    # The package databases' size and time (rpm, pacman, dpkg) and the NixOS system profile's
+    # package set: unchanged means no package changed (a login checks only this). With rpm alone
+    # it is the rpm database's, as in records from before the other databases.
+    stamps = []
+    for dbs in (("/usr/lib/sysimage/rpm/rpmdb.sqlite", "/var/lib/rpm/rpmdb.sqlite"),
+                ("/var/lib/pacman/local",), ("/var/lib/dpkg/status",)):
+        for db in dbs:
+            try:
+                st = os.stat(db)
+            except OSError:
+                continue
+            stamps.append("%d:%d" % (st.st_size, st.st_mtime_ns))
+            break
+    try:
+        stamps.append(os.readlink("/run/current-system/sw"))
+    except OSError:
+        pass
+    return ",".join(stamps)
 
 
 def save_record(rec):
@@ -181,6 +201,8 @@ def main(argv):
         return install(dry)
     if cmd == "refresh":
         if rec.get("state") == "on" and ours() and rec.get("rpmdb") and rec.get("rpmdb") == rpmdb_stamp():
+            if not dry:
+                RECORD.touch()  # newer than the databases the login stub looks at: it skips the tool
             return 0
         if rec.get("state") == "on" and rec.get("version") == version() and ours():
             rec["rpmdb"] = rpmdb_stamp()

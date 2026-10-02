@@ -89,6 +89,15 @@ say() { printf '%s\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
 die() { printf 'greeter-apply: %s\n' "$*" >&2; exit 1; }
 
+# The plasma-fusion package as the package database names it (rpm, pacman or dpkg).
+installed_package() {
+  local p
+  p=$(rpm -q plasma-fusion 2>/dev/null) || p=$(pacman -Q plasma-fusion 2>/dev/null) ||
+    { p=$(dpkg-query -W -f '${db:Status-Status} ${Package} ${Version}' plasma-fusion 2>/dev/null) &&
+      [[ $p == "installed "* ]] && p=${p#installed }; } || p='not installed as a package'
+  printf '%s\n' "$p"
+}
+
 # Outputs and scales of a kwinoutputconfig.json given on stdin ("eDP-1 x1.3333 ..."); fails when
 # it is not one.
 display_summary() {
@@ -396,7 +405,7 @@ fi
 {
   echo "created=$stamp"
   echo "greeter_home=$GHOME"
-  echo "package=$(rpm -q plasma-fusion 2>/dev/null || echo 'not installed as a package')"
+  echo "package=$(installed_package)"
   echo "lookandfeel=$LNF"
   echo "image=$IMAGE"
   echo "before=$BEFORE"
