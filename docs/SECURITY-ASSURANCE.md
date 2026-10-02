@@ -143,7 +143,10 @@ Each boundary, what crosses it, and how it is guarded.
   `plymouth-uninstall.sh`.
 - The greeting name and the keyboard label it draws come from the account database and
   `/etc/vconsole.conf` and are filtered first (section 6). The greeting is drawn by
-  `python3 -I -B`, which ignores the caller's Python environment and user site packages.
+  `python3 -I -B`, which ignores the caller's Python environment, user site packages and the
+  current directory. The keyboard label's short name is looked up in `evdev.xml` by a second
+  Python call that has no `-I` (`python3 -`), so it also imports from the directory the tool was
+  started in (section 7).
 - In the initramfs the theme script only draws; Plymouth and systemd-cryptsetup handle the
   passphrase (section 1).
 
@@ -151,9 +154,11 @@ Each boundary, what crosses it, and how it is guarded.
 
 - `tools/system/greeter-apply.sh` runs as root but does everything inside the `plasmalogin`
   user's home as that user, through `setpriv --reuid ... --no-new-privs`, so a link planted there
-  cannot make root write elsewhere. Tools run with a cleared environment (`env -i`).
+  cannot make root write elsewhere. The KDE tools run with a cleared environment (`env -i`).
 - `--display-from FILE` refuses a link and files over 1 MiB, reads the file as its owner, not as
-  root, and accepts it only if it parses as KWin's output configuration.
+  root, and accepts it only if it parses as KWin's output configuration. That parse
+  (`display_summary`) runs `python3 -c` as root in the caller's directory, without `-I` and
+  without `env -i` (section 7).
 - Work directories come from `mktemp -d` with mode 0700; backups go to
   `/var/lib/plasma-fusion/greeter-backup-<time>/` with mode 0700; `greeter-restore.sh` puts them
   back.
@@ -233,7 +238,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | CWE-862 | Missing authorization | Writing the charge limit needs polkit's `allow_active` and root in the helper. |
 | CWE-377 | Insecure temporary files | `mktemp -d` with mode 0700 in the root tools; the login check writes its temporary file next to the target in the user's own directory and renames it. |
 | CWE-400 | Resource exhaustion | Time limits on the login check (4 s), on child processes in the app icons service and on the settings module's tools; memory limits on the user services; a 1 MiB limit on the display file the greeter tool reads. |
-| CWE-426 | Untrusted search path | The helper is called by absolute path and started by pkexec with a minimal environment; the root boot splash installer runs Python with `-I`; the greeter tool runs tools with `env -i` and a fixed `PATH`. |
+| CWE-426 | Untrusted search path | The helper is called by absolute path and started by pkexec with a minimal environment; the boot splash installer draws the greeting with `python3 -I`; the greeter tool runs the KDE tools with `env -i` and a fixed `PATH`. Not yet everywhere: two Python calls in the root tools have no `-I` and import from the current directory (section 7). |
 | CWE-200, CWE-359 | Private information shown on the lock screen | Notification titles off and text never shown (`config.xml`); no notification watcher at all when the cards are off. |
 | CWE-549 | Unmasked password | Lock screen and boot splash show bullets; the lock screen reveals the password only where KDE's permission allows it. |
 | CWE-798 | Hard-coded credentials | None in the code; secret scanning and push protection on the repository. |
@@ -269,8 +274,9 @@ Widget files named here without a path are under
 - User services: `NoNewPrivileges=yes`, memory limits, `Nice=10`, the background slice, idle I/O
   for the icons service (section 3.6).
 - Root tools: dropping to the greeter user or the file's owner with `setpriv --no-new-privs`,
-  cleared environments, isolated Python, private temporary directories, dry-run modes, backups
-  before every change and undo scripts (sections 3.4, 3.5).
+  cleared environments for the KDE tools, isolated Python (`-I`) for the boot splash greeting,
+  private temporary directories, dry-run modes, backups before every change and undo scripts
+  (sections 3.4, 3.5).
 - Compiled parts: the RPM spec files build with Fedora's `%cmake` macros, so the default Fedora 44
   flags apply: `-D_FORTIFY_SOURCE=3`, `-D_GLIBCXX_ASSERTIONS`, `-fstack-protector-strong`,
   `-fstack-clash-protection`, `-fcf-protection`, `-Werror=format-security`, position-independent
@@ -295,6 +301,12 @@ Widget files named here without a path are under
   threshold as an octal number, so `050` sets the start threshold to 35 instead of 45, and `080`
   stops with an error before anything is written. The value stays within the kernel's range and
   the tile never sends such a value, but the check should reject it.
+- Two Python calls in the root tools run without `-I`: the keyboard label lookup in
+  `tools/system/plymouth-install.sh` (`python3 -`) and `display_summary` in
+  `tools/system/greeter-apply.sh` (`python3 -c`, also without `env -i`). For `-c` and `-`,
+  Python puts the current directory first on its module path, so a `json.py` or an `xml/`
+  package in the directory the tool was started from would be imported as root. Until `-I` is
+  added, start these tools from a directory that no other user can write to.
 - The C++ plugins are not fuzzed and no test runs them under AddressSanitizer or
   UndefinedBehaviorSanitizer.
 - Commits, tags and packages are not signed; the CI's RPMs are kept for 14 days as unsigned
