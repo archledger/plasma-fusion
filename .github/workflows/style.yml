@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Coding style (docs/parts/ci.md, "Coding style"), with the tools Fedora 44 packages: ruff over
+# the Python code (ruff.toml), and KDE's clang-format style (.clang-format) over the C++ lines that
+# a pull request or a push to main changes (git clang-format), so that existing files are not
+# reformatted in one go.
+
+name: style
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: style-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: "Python style (ruff)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install ruff
+        run: dnf install -y -q ruff
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: ruff check
+        run: |
+          set -euo pipefail
+          ruff --version
+          ruff check --no-cache --output-format github
+
+  cpp:
+    name: "C++ style (clang-format, changed lines)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git and git-clang-format (checkout runs inside the container)
+        run: dnf install -y -q git git-clang-format
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The base commit has to be in the clone.
+          fetch-depth: 0
+
+      - name: git clang-format over the changed C++ lines
+        env:
+          # A pull request is measured against its base, a push against the previous tip of main.
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "Base commit '${BASE}' is not in the clone; nothing to compare with."
+            exit 0
+          fi
+          clang-format --version
+          # C++ only: .clang-format also has JSON rules, and the JSON files keep their own layout.
+          status=0
+          git clang-format --extensions c,cc,cpp,cxx,h,hh,hpp,hxx --diff "$BASE" >"$RUNNER_TEMP/format.diff" || status=$?
+          cat "$RUNNER_TEMP/format.diff"
+          if grep -q '^diff --git' "$RUNNER_TEMP/format.diff" || [ "$status" -gt 1 ]; then
+            echo "::error::Changed C++ lines differ from .clang-format (KDE style). Run: git clang-format ${BASE}"
+            exit 1
+          fi
