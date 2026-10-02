@@ -88,7 +88,8 @@ def mode():
 
 
 def parse_desktop_entry(text):
-    """The keys and values of a desktop file's [Desktop Entry] group (the first value of a key wins)."""
+    """The keys and values of a desktop file's [Desktop Entry] group (the first value of a key
+    wins)."""
     entry, values = False, {}
     for line in text.splitlines():
         if line.startswith("["):
@@ -100,7 +101,8 @@ def parse_desktop_entry(text):
 
 
 def visible_icon(values):
-    """The Icon= value of a visible application (Type=Application, not NoDisplay or Hidden), else None."""
+    """The Icon= value of a visible application (Type=Application, not NoDisplay or Hidden), else
+    None."""
     if values.get("Type") != "Application" or values.get("NoDisplay") == "true" or values.get("Hidden") == "true":
         return None
     return values.get("Icon") or None

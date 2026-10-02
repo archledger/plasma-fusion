@@ -6,9 +6,9 @@
 # Global Theme's contents/defaults and its metadata.json. An input is four files separated by NUL
 # bytes: the user's files (one text for every file the generator reads), the kdedefaults files (the
 # same), the previous Global Theme's contents/defaults and its metadata.json. Checked: no exception;
-# parsed keys and values are text, values stripped; a later value of a key wins; the package's defaults
-# files, with the theme's name in their comment, read back as exactly the values the generator
-# chose (a name cannot add keys).
+# parsed keys and values are text, values stripped; a later value of a key wins; the package's
+# defaults files, with the theme's name in their comment, read back as exactly the values the
+# generator chose (a name cannot add keys).
 #   python3 fuzz/previous_theme_fuzzer.py [libFuzzer options] [corpus directory...]
 import sys
 

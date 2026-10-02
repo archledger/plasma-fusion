@@ -27,12 +27,13 @@ with tempfile.TemporaryDirectory() as d:
         "[Desktop Action new]\nIcon=action\n[Desktop Entry]\nIcon=third\nNoDisplay=false\n")
     if values != {"Type": "Application", "Icon": "first", "NoDisplay": "false"}:
         fails.append(f"parse_desktop_entry gave {values}")
-    for entry, icon in (({"Type": "Application", "Icon": "x"}, "x"), ({"Type": "Application", "Icon": ""}, None),
-                        ({"Type": "Link", "Icon": "x"}, None), ({"Type": "Application", "Icon": "x", "NoDisplay": "true"}, None),
-                        ({"Type": "Application", "Icon": "x", "Hidden": "true"}, None)):
+    app = {"Type": "Application", "Icon": "x"}
+    for entry, icon in ((app, "x"), (dict(app, Icon=""), None), (dict(app, Type="Link"), None),
+                        (dict(app, NoDisplay="true"), None), (dict(app, Hidden="true"), None)):
         if tool.visible_icon(entry) != icon:
             fails.append(f"visible_icon({entry}) is not {icon!r}")
-    if tool.parse_mode("[General]\nAppIcons=designs\n[Icons]\nAppIcons = designs\nAppIcons=Designs\nAppIcons=familiar\n") != "designs":
+    rc = "[General]\nAppIcons=designs\n[Icons]\nAppIcons = familiar\nAppIcons=Designs\nAppIcons=familiar\n"
+    if tool.parse_mode(rc) != "designs":
         fails.append("parse_mode did not take the first AppIcons= line of [Icons]")
     if tool.parse_mode("[Icons]\nAppIcons=other\n") != "familiar":
         fails.append("parse_mode did not fall back to familiar for an unknown value")

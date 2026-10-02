@@ -22,9 +22,9 @@ want = {("", "top"): "1", ("General", "ColorScheme"): "B", ("General", "Icon"): 
         ("General", "fixed"): None, ("kdeglobals][KDE", "widgetStyle"): "Fusion"}
 if parsed != want:
     fails.append(f"parse_kconfig_text gave {parsed}")
-if tool.package_defaults(parsed) != {("", "", "top"): "1", ("", "General", "ColorScheme"): "B", ("", "General", "Icon"): "x",
-                                     ("", "General", "font"): None, ("", "General", "fixed"): None,
-                                     ("kdeglobals", "KDE", "widgetStyle"): "Fusion"}:
+want = {("", "", "top"): "1", ("", "General", "ColorScheme"): "B", ("", "General", "Icon"): "x",
+        ("", "General", "font"): None, ("", "General", "fixed"): None, ("kdeglobals", "KDE", "widgetStyle"): "Fusion"}
+if tool.package_defaults(parsed) != want:
     fails.append(f"package_defaults gave {tool.package_defaults(parsed)}")
 
 for text, name in (('{"KPlugin": {"Name": "Ocean"}}', "Ocean"), ('[1, 2]', "id"), ('{"KPlugin": "Ocean"}', "id"),
@@ -51,7 +51,8 @@ with tempfile.TemporaryDirectory() as d:
     (pkg / "contents").mkdir(parents=True)
     (pkg / "contents/defaults").write_text("[kdeglobals][KDE]\nwidgetStyle=Fusion\n")
     env = dict(os.environ, XDG_CONFIG_DIRS=str(d / "none"), XDG_DATA_DIRS=str(d / "none"))
-    for meta, name in (([1, 2], "org.example.ocean.desktop"), ({"KPlugin": {"Name": "Ocean\n[x]\ny=z"}}, "Ocean [x] y=z")):
+    for meta, name in (([1, 2], "org.example.ocean.desktop"),
+                       ({"KPlugin": {"Name": "Ocean\n[x]\ny=z"}}, "Ocean [x] y=z")):
         (pkg / "metadata.json").write_text(json.dumps(meta))
         out = subprocess.run([sys.executable, sys.argv[1], "--config-dir", str(d / "config"), "--lookandfeel",
                               "org.example.ocean.desktop", "--data", str(d / "data"), "--force"],
