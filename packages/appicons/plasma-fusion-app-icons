@@ -350,9 +350,20 @@ class Painter:
             p.end()
             img = img.convertToFormat(self.QImage.Format_RGBA8888)
             return Image.frombuffer("RGBA", (size, size), bytes(img.constBits()), "raw", "RGBA", img.bytesPerLine(), 1).copy()
+        if path.suffix == ".xpm" and self.qt:
+            # Qt reads XPM as Plasma does; Pillow rejects valid files such as xterm's (a space as a
+            # colour key: ValueError).
+            img = self.QImage(str(path))
+            if img.isNull():
+                return None
+            img = img.convertToFormat(self.QImage.Format_RGBA8888)
+            im = Image.frombuffer("RGBA", (img.width(), img.height()), bytes(img.constBits()), "raw", "RGBA",
+                                  img.bytesPerLine(), 1).copy()
+            return self.centred(im, size)
         try:
             im = Image.open(path).convert("RGBA")
-        except OSError:
+        except (OSError, ValueError, SyntaxError):
+            # A file the decoder cannot read: the app keeps its own icon.
             return None
         return self.centred(im, size)
 

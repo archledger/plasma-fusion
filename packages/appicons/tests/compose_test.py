@@ -19,6 +19,16 @@ except ImportError as e:
     sys.exit(0)
 
 
+def xpm(path):
+    # Shaped like xterm's icon: tab-separated colour lines and a space as a colour key, which
+    # Pillow's XPM reader rejects (ValueError) while Qt reads it.
+    rows = ["." * 32] * 4 + ["...." + " " * 24 + "...."] * 24 + ["." * 32] * 4
+    text = '/* XPM */\nstatic char * t_xpm[] = {\n"32 32 2 1",\n".\tc None",\n" \tc #282830",\n'
+    text += ",\n".join('"%s"' % r for r in rows) + "};\n"
+    path.write_text(text)
+    return str(path)
+
+
 def png(draw, path):
     im = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
     draw(ImageDraw.Draw(im))
@@ -37,6 +47,8 @@ with tempfile.TemporaryDirectory() as d:
                  "plate", "neutral"),
         "wide": (png(lambda g: g.rectangle((4, 44, 123, 83), fill=(200, 60, 120, 255)), d / "e.png"), "plate", None),
     }
+    if painter.qt:
+        cases["xpm"] = (xpm(d / "f.xpm"), "tile", None)
     fails = []
     for name, (src, kind, tint) in cases.items():
         svg, info = tool.compose(painter, src)
