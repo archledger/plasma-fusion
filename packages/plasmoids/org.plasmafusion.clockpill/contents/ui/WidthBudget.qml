@@ -43,6 +43,16 @@ import org.kde.ksvg as KSvg
 // stay centred with it; "overlap" compacts it only when the bar would otherwise overlap: the
 // pill may then leave the middle, and the menu is compacted far less often.
 //
+// The global menu's Search entry (Wayland, full view) is hidden unless `menuSearch` is on. In
+// Plasma 6.7.5 (and 6.8) the stock AppMenuModel keeps plain pointers to the app's menu items it
+// found; when the app rebuilds a submenu (Google Chrome's History and Profiles do, with new item
+// ids) the menu importer deletes those items, and the next key typed in the Search field passes
+// a deleted one to QWidget::removeAction: plasmashell crashes (ThinkPad, 2026-10-01; reproduced
+// with a stock panel). Hiding the action hides the stock button; arrowing right past the last
+// menu would still open it (the stock applet does not check visibility), so the budget moves on
+// to the first menu then. Turn it on again once plasma-workspace carries the fix
+// (docs/parts/shell-topbar.md).
+//
 // The level is computed in one go, never by trying: every widget of the bar that takes part
 // has `budgetLevel` (written here) and `budgetSaving(level)`, the width it gives up at that
 // level against level 0. From the bar as it is now and the savings at each widget's current
@@ -68,6 +78,9 @@ Item {
     signal menuCompactedWritten(bool compacted)
     // "centre" or "overlap" (see the header).
     property string menuPolicy: "centre"
+    // Whether the global menu shows its Search entry (see the header): hidden unless the user turns
+    // it on.
+    property bool menuSearch: false
 
     readonly property int maxLevel: 7
     readonly property int minLevel: !tablet ? 0 : (metrics.portrait || metrics.compactWidth ? 5 : 2)
@@ -136,13 +149,44 @@ Item {
         model: budget.menuModel
         delegate: Item {
             id: title
+            required property int index
             required property string activeMenu
             required property var activeActions
+            // The stock Search entry: AppMenuModel's search action, named "appmenu" (imported menu
+            // items have no name). Hidden unless menuSearch is on; the stock button and the width
+            // estimate below follow the action's visibility.
+            readonly property bool searchEntry: activeActions?.objectName === "appmenu"
+            function applySearchGuard(): void {
+                if (searchEntry && activeActions.visible !== budget.menuSearch) {
+                    activeActions.visible = budget.menuSearch;
+                }
+            }
+            Connections {
+                target: budget
+                function onMenuSearchChanged() {
+                    title.applySearchGuard();
+                }
+            }
+            // Arrowing right past the last menu opens the next row even when it is hidden: move on
+            // to the first menu, as a menu bar wraps (later, so the applet has finished opening).
+            Connections {
+                target: title.searchEntry && !budget.menuSearch ? budget.menuApplet.plasmoid : null
+                function onCurrentIndexChanged() {
+                    Qt.callLater(title.skipHiddenSearch);
+                }
+            }
+            function skipHiddenSearch(): void {
+                const applet = budget.menuApplet ? budget.menuApplet.plasmoid : null;
+                if (applet && searchEntry && !budget.menuSearch && applet.currentIndex === index && index > 0) {
+                    applet.requestActivateIndex(0);
+                }
+            }
             readonly property real advance: activeMenu !== "" && (activeActions?.visible ?? false)
                 ? Math.ceil(titleMetrics.advanceWidth) + menuItemFrame.margins.left + menuItemFrame.margins.right : 0
             visible: false
             onAdvanceChanged: Qt.callLater(budget.measureMenu)
             Component.onCompleted: {
+                title.applySearchGuard();
                 budget.menuGeneration++;
                 Qt.callLater(budget.measureMenu);
             }

@@ -49,6 +49,10 @@
       <label>When the width budget switches the global menu to its compact view: "centre" (whenever the pill cannot stay on the middle with the full menu, ADAPTIVE 5.1) or "overlap" (only when the bar would otherwise overlap; the pill may leave the middle). Plasma 6.7.5 cannot switch the menu back after it changed, so a compacted menu may stay compact until plasmashell starts again.</label>
       <default>centre</default>
     </entry>
+    <entry name="menuSearch" type="Bool">
+      <label>Show the Search entry of the global menu. Off by default: in Plasma 6.7.5 typing in it can crash plasmashell when the active app rebuilds a submenu (Google Chrome's History does), because the stock applet keeps pointers to the app's menu items that are already deleted (docs/parts/shell-topbar.md). Turn it on once plasma-workspace carries the fix.</label>
+      <default>false</default>
+    </entry>
     <entry name="menuCompacted" type="Bool">
       <label>Internal: the width budget switched the global menu to its compact view (and switches it back). A compact view the user chose is left alone.</label>
       <default>false</default>

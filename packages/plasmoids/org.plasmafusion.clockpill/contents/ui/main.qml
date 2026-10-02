@@ -346,6 +346,7 @@ PlasmoidItem {
             cell: root.layoutCell
             active: Plasmoid.configuration.widthBudget
             menuPolicy: Plasmoid.configuration.menuPolicy === "overlap" ? "overlap" : "centre"
+            menuSearch: Plasmoid.configuration.menuSearch
             menuCompacted: Plasmoid.configuration.menuCompacted
             onMenuCompactedWritten: compacted => Plasmoid.configuration.menuCompacted = compacted
         }

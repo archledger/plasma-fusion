@@ -24,6 +24,7 @@ KCM.SimpleKCM {
     property int cfg_firstDayOfWeek
     property alias cfg_popupGap: popupGap.value
     property alias cfg_centerInPanel: centerInPanel.checked
+    property alias cfg_menuSearch: menuSearch.checked
 
     // The configuration dialog also hands every key's default value to the page.
     property bool cfg_showWorkspacesDefault
@@ -35,6 +36,7 @@ KCM.SimpleKCM {
     property int cfg_firstDayOfWeekDefault
     property int cfg_popupGapDefault
     property bool cfg_centerInPanelDefault
+    property bool cfg_menuSearchDefault
 
     readonly property date sample: new Date()
 
@@ -141,6 +143,14 @@ KCM.SimpleKCM {
             id: centerInPanel
             Kirigami.FormData.label: i18nc("@title:group", "Position:")
             text: i18nc("@option:check", "Keep the pill on the middle of the panel")
+        }
+
+        QQC2.CheckBox {
+            id: menuSearch
+            Kirigami.FormData.label: i18nc("@title:group", "Global menu:")
+            text: i18nc("@option:check", "Show the Search entry")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: i18nc("@info:tooltip", "Off by default: in Plasma 6.7.5 typing in it can crash the shell when the app changes its menus")
         }
 
         RowLayout {
