@@ -1,0 +1,117 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Statement coverage of the automated tests, per language, with tools/tests/coverage.sh in
+# Fedora 44 (docs/parts/coverage.md): Python (coverage.py), shell (kcov) and JavaScript (node) over
+# the build and the offline tests, and each compiled part (gcov and gcovr) over its tests. Each job
+# writes its table to the job summary and keeps the reports as an artifact. It measures and
+# reports; it fails only when the measurement itself fails, not on a low number.
+
+name: coverage
+
+on:
+  schedule:
+    - cron: "10 6 * * 3" # Wednesdays 06:10 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scripts:
+    name: "Python, shell and JavaScript (Fedora 44)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git (checkout runs inside the container)
+        run: dnf install -y -q git-core
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the tools and the build requirements
+        run: tools/tests/coverage.sh --deps scripts
+
+      - name: Measure
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tools/tests/coverage.sh --out build/coverage scripts
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f build/coverage/summary.md ]; then
+            cat build/coverage/summary.md >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "No summary: the measurement did not finish (see the Measure step)." >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-scripts
+          path: |
+            build/coverage/summary.*
+            build/coverage/tests.tsv
+            build/coverage/logs/
+            build/coverage/python/html/
+            build/coverage/shell/merged/
+            build/coverage/js/lcov.info
+          retention-days: 14
+
+  compiled:
+    name: "C++ ${{ matrix.package }} (Fedora 44)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container: registry.fedoraproject.org/fedora:44
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [decoration-cpp, kcm-cpp, navigation-cpp]
+    steps:
+      - name: Install git (checkout runs inside the container)
+        run: dnf install -y -q git-core
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the tools and the part's build requirements
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: tools/tests/coverage.sh --deps "cpp:$PACKAGE"
+
+      - name: Measure
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tools/tests/coverage.sh --out build/coverage "cpp:$PACKAGE"
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f build/coverage/summary.md ]; then
+            cat build/coverage/summary.md >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "No summary: the measurement did not finish (see the Measure step)." >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-${{ matrix.package }}
+          path: |
+            build/coverage/summary.*
+            build/coverage/tests.tsv
+            build/coverage/logs/
+            build/coverage/cpp-*/gcovr.*
+          retention-days: 14
