@@ -34,4 +34,10 @@ add_definitions(-DTRANSLATION_DOMAIN=\"plasma_fusion_navigation\")
 
 add_subdirectory(src)
 
+# The versions this build was made against, for plasma-fusion status (a package built against an
+# older KWin or KDecoration than the running one is due for a rebuild).
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/built-against "kwin=${KWin_VERSION}\nqt=${Qt6_VERSION}\n")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/built-against
+        DESTINATION ${KDE_INSTALL_DATADIR}/plasma-fusion/built-against RENAME navigation)
+
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)

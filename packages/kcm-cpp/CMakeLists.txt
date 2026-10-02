@@ -29,4 +29,10 @@ endif()
 
 install(FILES icons/plasmafusion-logo.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
 
+# The versions this build was made against, for plasma-fusion status (a package built against an
+# older KWin or KDecoration than the running one is due for a rebuild).
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/built-against "kf=${KF6Config_VERSION}\nqt=${Qt6_VERSION}\n")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/built-against
+        DESTINATION ${KDE_INSTALL_DATADIR}/plasma-fusion/built-against RENAME settings)
+
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)
