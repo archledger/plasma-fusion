@@ -51,7 +51,7 @@
 # PF_FIELDLOG_GATE_LOG (default $XDG_STATE_HOME/plasma-fusion/gate.log). For tests:
 # PF_FIELDLOG_INTERVAL (60 s), PF_FIELDLOG_RUN_SECONDS, PF_FIELDLOG_PROC, PF_FIELDLOG_SYS,
 # PF_FIELDLOG_CGROUP_ROOT.
-import collections, datetime, fcntl, json, os, pathlib, re, select, shlex, shutil, signal, subprocess
+import collections, datetime, errno, fcntl, json, os, pathlib, re, select, shlex, shutil, signal, subprocess
 import sys, threading, time
 
 VERSION = 1
@@ -431,11 +431,34 @@ def state_dir():
 
 def write_atomic(path, data, mode=0o600):
     path = pathlib.Path(path)
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with open(tmp, "w") as f:
-        f.write(data)
-    os.chmod(tmp, mode)
-    os.replace(tmp, path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(tmp, "w") as f:
+            f.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()  # not a half-written file left behind (disk full)
+        except OSError:
+            pass
+        raise
+
+
+def append_line(path, data, sync=False):
+    """Appends one line (bytes ending in a newline) with a single write. A line that an earlier
+    failed write left without its newline is ended first, so that it does not swallow this one."""
+    fd = os.open(path, os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    try:
+        size = os.fstat(fd).st_size
+        if size and os.pread(fd, 1, size - 1) != b"\n":
+            data = b"\n" + data
+        if os.write(fd, data) != len(data):
+            raise OSError(errno.ENOSPC, "short write")  # the next write ends the cut line
+        if sync:
+            os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def load_json(path, default):
@@ -459,6 +482,8 @@ class EventLog:
         # Earlier days written to after they ended (a crash seen after midnight, a stop's problems read
         # at the next start): day -> counts of the notable events, for their digests and a note.
         self.late = {}
+        self.dropped = 0
+        self.drop_error = None
 
     def path(self, day):
         return self.sdir / f"events-{day}.jsonl"
@@ -495,13 +520,21 @@ class EventLog:
                        "text": f"more than {DAY_LINE_CAP} lines; only crashes and session events are kept"}
             else:
                 return
-        self.sdir.mkdir(parents=True, exist_ok=True)
-        with open(self.path(day), "a") as f:
-            f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
-            f.flush()
-            if sync:
-                os.fsync(f.fileno())
+        line = (json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+        try:
+            self.sdir.mkdir(parents=True, exist_ok=True)
+            append_line(self.path(day), line, sync=sync)
+        except OSError as e:
+            # Disk full or not writable: the recorder goes on; how many were lost is written once
+            # writing works again.
+            self.dropped += 1
+            self.drop_error = e.strerror or str(e)
+            return
         self.lines[day] = n + 1
+        if self.dropped:
+            lost, self.dropped = self.dropped, 0
+            self.emit("fieldlog-error", coalesce=False, text=f"{lost} event(s) not written ({self.drop_error})",
+                      lost=lost)
         if day < local_day(time.time()):
             counts = self.late.setdefault(day, collections.Counter())
             what = late_label(rec)

@@ -229,6 +229,35 @@ class EventsAndPrivacy(unittest.TestCase):
         self.assertEqual(noise[0]["last"], fl.iso(t0 + 9))
         self.assertEqual(sum(g["count"] for g in groups if g["kind"] == "restart"), 2)
 
+    def test_write_errors(self):
+        # Disk full: the recorder used to exit, and its cut last line swallowed the next run's first
+        # event (review of 2026-10-02).
+        d = fresh_dir("enospc")
+        log = fl.EventLog(d)
+        t0 = 1790956800
+        path = d / "events-2026-10-02.jsonl"
+        path.write_text('{"t":"2026-10-02T00:00:00Z","kind":"noise","key":"pl')  # a write cut short
+        log.emit("restart", key="a", ts=t0, coalesce=False, proc="plasmashell")
+        real_write = os.write
+
+        def full(fd, data):
+            raise OSError(28, "No space left on device")
+
+        os.write = full
+        try:
+            for i in range(3):
+                self.assertTrue(log.emit("restart", key=f"b{i}", ts=t0 + i, coalesce=False))
+        finally:
+            os.write = real_write
+        log.emit("restart", key="c", ts=t0 + 9, coalesce=False)
+        events = fl.read_events("2026-10-02", d)
+        self.assertEqual(len(path.read_text().splitlines()), 4)  # the cut line stays, unreadable
+        self.assertEqual([e.get("key") for e in events if e["kind"] == "restart"], ["a", "c"])
+        err = [e for e in events if e["kind"] == "fieldlog-error"]
+        self.assertEqual(len(err), 1)
+        self.assertEqual(err[0]["lost"], 3)
+        self.assertIn("No space left on device", err[0]["text"])
+
     def test_scrub(self):
         h = os.environ["HOME"]
         self.assertEqual(fl.scrub(f"open {h}/Documents/x.pdf"), "open ~/Documents/x.pdf")

@@ -50,7 +50,10 @@ State in `${XDG_STATE_HOME:-~/.local/state}/plasma-fusion/fieldlog/` (private to
 
 Kept: 30 days (`PF_FIELDLOG_KEEP_DAYS`) and 100 MiB (`PF_FIELDLOG_MAX_MB`); over the size the oldest
 memory snapshots go first, then saved crash texts, then old events and digests, never today's
-events. Core files are never touched. With `PF_FIELDLOG_SHARE` a copy of each digest goes to
+events. Core files are never touched. When an event cannot be written (disk full), it is lost and
+the recorder goes on; once writing works again a `fieldlog-error` says how many were lost, and a line
+that a failed write cut short is ended first, so it does not swallow the next. With
+`PF_FIELDLOG_SHARE` a copy of each digest goes to
 `DIR/digest-YYYY-MM-DD-HOST.md` (from a thread, so a hanging network mount does not stop the
 recorder).
 
