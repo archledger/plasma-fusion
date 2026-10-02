@@ -58,8 +58,11 @@ The stub therefore only runs the check as its own process and never exits:
 
 ```sh
 [ -r '/home/USER/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' ] &&
-  timeout -k 1 4 /bin/bash '/home/USER/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' login </dev/null >/dev/null 2>&1 || :
+  timeout -k 1 4 /usr/bin/env bash '/home/USER/.local/share/plasma-fusion/gate/plasma-fusion-gate.sh' login </dev/null >/dev/null 2>&1 || :
 ```
+
+The stub and the notify unit (`ExecStart=/usr/bin/env bash ... notify`) find bash through
+`/usr/bin/env` and PATH: NixOS has no `/bin/bash` (2026-10-02; before, the check never ran there).
 
 Worst case (a hung check) the login waits 5 s. The check itself runs no GUI or Qt program, makes
 no D-Bus or systemd call at login, reads the configuration with one `awk` run, edits files in place

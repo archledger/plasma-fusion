@@ -28,8 +28,9 @@ check() { local d=$1; shift; if "$@"; then PASS=$((PASS + 1)); echo "PASS $d"; e
 eval "$(sed -n '/^sh_quote() /p' "$DEVICE/fusion-config.sh")"
 eval "$(sed -n '/^gate_stub() {/,/^}/p' "$DEVICE/fusion-config.sh")"
 make_stub() { # ENGINE OUT
-  GATE_ENGINE=$1 # read by gate_stub (from fusion-config.sh)
-  export GATE_ENGINE
+  # read by gate_stub (from fusion-config.sh); the keyboard keys tool is not installed here
+  GATE_ENGINE=$1 KEYS_TOOL=$H/.local/libexec/plasma-fusion/plasma-fusion-keyboard-keys STATE=$H/.local/state/plasma-fusion
+  export GATE_ENGINE KEYS_TOOL STATE
   gate_stub >"$2"
 }
 mkdir -p "$H/.local/share/plasma-fusion/gate" "$H/.config/plasma-workspace/env"
