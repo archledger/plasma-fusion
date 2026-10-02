@@ -7,10 +7,12 @@ the monitor's screendump command, keys with send-key. Runs on the test device (s
     vmrun.py --work DIR --initrd FILE --disk FILE --size WxH --append CMDLINE --scenario NAME --out DIR
 
 Scenarios:
-  password   wait for the unlock field, type, Caps Lock, Esc (details) and back, unlock
-  splash     no password: screenshots of the logo and the pulsing dots
-  selftest   the self-test unit in the initramfs overlay shows a message, asks a question,
-             other prompts and a system update; each step is announced on ttyS0
+  password   wait for the unlock field, a wrong passphrase (asked again), type, Caps Lock, Esc
+             (details) and back, unlock
+  splash     no password: screenshots of the greeting, the progress bar and the orbiting dots
+  selftest   the self-test unit in the initramfs overlay shows a message, a prompt asked again,
+             a question, other prompts, a system update, the shutdown and reboot screens; each
+             step is announced on ttyS0
 """
 import argparse
 import json
@@ -171,7 +173,8 @@ class VM:
             x, y = fx(w, h), fy(w, h)
             i = (y * w + x) * 3
             c = tuple(px[i:i + 3])
-            if all(abs(c[k] - colour[k]) <= tol for k in range(3)):
+            # (Before the mode is set the screen is the 720x400 text console.)
+            if 0 <= x < w and 0 <= y < h and all(abs(c[k] - colour[k]) <= tol for k in range(3)):
                 self.note(f"seen {what} at {x},{y}: {c}")
                 return True
             time.sleep(0.5)
@@ -226,18 +229,26 @@ def frame_pos(bx, by):
     return fx, fy
 
 
-BUTTON = frame_pos(875.5, 433)      # upper part of the round submit button (off the arrow)
+BUTTON = frame_pos(875.5, 653)      # upper part of the round submit button (off the arrow)
 BUTTON_RGB = (0x2F, 0x6F, 0xDF)
-LOGO_BLUE = frame_pos(720, 266)     # top of the blue circle
-BLUE_RGB = (0x5B, 0x9D, 0xFF)
+LOGO_BLUE = frame_pos(720, 320)     # upper part of the blue circle
+BLUE_RGB = (0x63, 0xA3, 0xFF)
 
 
 def scenario_password(vm):
     if not vm.wait_pixel(*BUTTON, BUTTON_RGB, what="unlock field"):
         vm.shot("error-no-field")
         return 1
-    time.sleep(0.4)
-    vm.shot("01-prompt")
+    time.sleep(0.7)
+    vm.shot("00-prompt-first")
+    vm.q.type("wrong-one")
+    vm.q.keys("ret")
+    time.sleep(0.5)
+    if not vm.wait_pixel(*BUTTON, BUTTON_RGB, what="unlock field again"):
+        vm.shot("error-no-retry")
+        return 1
+    time.sleep(0.7)
+    vm.shot("01-prompt-retry")
     time.sleep(0.55)
     vm.shot("01-prompt-caret")
     vm.q.type(PASSPHRASE[:6])
@@ -275,19 +286,25 @@ def scenario_splash(vm):
     time.sleep(1.5)
     for i in range(5):
         vm.shot(f"splash-{i}")
-        time.sleep(0.28)
+        time.sleep(1.0)
+    time.sleep(10)
+    vm.shot("splash-later")
     return 0
 
 
 def scenario_selftest(vm):
     steps = [
         ("PFSTEP message", "st-01-message", None),
+        ("PFSTEP first", "st-02a-first-prompt", "wrong"),
+        ("PFSTEP retry", "st-02b-retry", "fusion"),
         ("PFSTEP question", "st-02-question", "backup-01"),
         ("PFSTEP recovery", "st-03-recovery-prompt", "abcdefgh"),
         ("PFSTEP pin", "st-04-pin", "1234"),
         ("PFSTEP other", "st-05-other-prompt", "secret"),
         ("PFSTEP update", "st-06-update-42", None),
         ("PFSTEP update2", "st-07-update-87", None),
+        ("PFSTEP shutdown", "st-08-shutdown", None),
+        ("PFSTEP reboot", "st-09-reboot", None),
     ]
     for marker, shot, answer in steps:
         if not vm.wait_serial(marker, timeout=90):
@@ -302,7 +319,7 @@ def scenario_selftest(vm):
             vm.q.keys("ret")
     vm.wait_serial("PFSTEP done", timeout=60)
     time.sleep(0.5)
-    vm.shot("st-08-done")
+    vm.shot("st-10-done")
     return 0
 
 

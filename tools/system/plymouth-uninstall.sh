@@ -13,6 +13,7 @@
 #   --remove-plugin  also remove plymouth-plugin-script if plymouth-install.sh installed it
 #   --dry-run        print what would be done
 #
+# The greeting choice remembered by plymouth-install.sh --user/--name is forgotten too.
 # When Plasma Fusion is the selected theme, the saved /etc/plymouth/plymouthd.conf is put back
 # (or the previous theme selected) and the initramfs rebuilt (also when it is no longer selected
 # but the running kernel's image still holds it). A copy made by --select
@@ -144,7 +145,7 @@ if [ "$PLUGIN" = 1 ] && grep -qx plymouth-plugin-script "$STATE/installed-packag
   [ "$DRY" = 1 ] || rm -f "$STATE/installed-packages"
 fi
 if [ "$DRY" = 0 ]; then
-  rm -f "$STATE/previous-theme" "$STATE/plymouthd.conf.orig"
+  rm -f "$STATE/previous-theme" "$STATE/plymouthd.conf.orig" "$STATE/greeting"
   rmdir "$STATE" /var/lib/plasma-fusion 2>/dev/null || true
 fi
 echo "done"

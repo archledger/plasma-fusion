@@ -10,13 +10,21 @@
 #
 #   vmtest.sh WORK setup                 disk images and the base initramfs (needs the theme in
 #                                        /usr/share/plymouth/themes/plasma-fusion and
-#                                        plymouth-plugin-script installed)
+#                                        plymouth-plugin-script installed; PF_BASE_THEME= builds
+#                                        it with the host's own theme instead, for a machine
+#                                        without them: then only "test" runs show the theme)
 #   vmtest.sh WORK overlay THEME_DIR     initrd-test.img = base + a cpio with THEME_DIR's files
-#                                        (for quick iterations) + the self-test unit
+#                                        (for quick iterations), plymouthd.conf selecting it and
+#                                        the self-test unit; PF_SCRIPT_SO=FILE adds the script
+#                                        plugin (e.g. extracted from the plymouth-plugin-script
+#                                        RPM), PF_GREETING_NAME=NAME draws the greeting with it,
+#                                        PF_LAYOUT_LABEL=EN sets the keyboard label
 #   vmtest.sh WORK run NAME SCENARIO SIZE [base|test] [disk|bare] [bios|uefi]
 #                                        boot and run a vmrun.py scenario; results in WORK/out/NAME
 #                                        (uefi: OVMF, so plymouth starts on simpledrm;
-#                                        PF_SECOND_HEAD=WxH adds a second display)
+#                                        PF_SECOND_HEAD=WxH adds a second display;
+#                                        PF_APPEND="..." adds kernel arguments, e.g.
+#                                        plymouth.force-scale=2 as on a HiDPI panel)
 #   vmtest.sh WORK clean                 delete everything but WORK/out
 #
 # The LUKS passphrase is "fusion-test" (pbkdf2, 1000 iterations: the VM unlocks at once).
@@ -49,7 +57,9 @@ setup)
   # Base initramfs of the running kernel. --no-hostonly with an explicit module list; the big
   # GPU drivers are left out (the VM has a bochs VGA).
   mkdir -p tmp
-  PLYMOUTH_THEME_NAME=plasma-fusion nice -n 10 dracut --force --no-hostonly --no-hostonly-cmdline \
+  theme=()
+  [ -n "${PF_BASE_THEME-plasma-fusion}" ] && theme=(env PLYMOUTH_THEME_NAME="${PF_BASE_THEME-plasma-fusion}")
+  "${theme[@]}" nice -n 10 dracut --force --no-hostonly --no-hostonly-cmdline \
     --no-early-microcode --tmpdir "$WORK/tmp" \
     -m "bash systemd systemd-initrd systemd-udevd systemd-journald systemd-tmpfiles systemd-sysctl systemd-modules-load systemd-ask-password systemd-cryptsetup dracut-systemd kernel-modules base fs-lib rootfs-block udev-rules crypt dm drm plymouth" \
     --omit-drivers "amdgpu radeon nouveau i915 xe" \
@@ -62,11 +72,23 @@ setup)
 overlay)
   THEME=${1:?theme dir}
   rm -rf ov initrd-test.img
-  mkdir -p ov/usr/share/plymouth/themes/plasma-fusion ov/etc/systemd/system/initrd.target.wants ov/usr/bin
-  cp "$THEME"/* ov/usr/share/plymouth/themes/plasma-fusion/
-  # The installed copy carries the keyboard label; keep it in the overlay too.
-  if grep -q '^PFKeyboardLayout=' /usr/share/plymouth/themes/plasma-fusion/plasma-fusion.plymouth 2>/dev/null; then
-    lbl=$(sed -n 's/^PFKeyboardLayout=//p' /usr/share/plymouth/themes/plasma-fusion/plasma-fusion.plymouth | head -1)
+  mkdir -p ov/usr/share/plymouth/themes/plasma-fusion ov/etc/systemd/system/initrd.target.wants ov/usr/bin \
+    ov/etc/plymouth
+  # The installed files only (greeting/ is used by the installer and stays out of the initramfs).
+  find "$THEME" -maxdepth 1 -type f -exec cp -t ov/usr/share/plymouth/themes/plasma-fusion/ {} +
+  if [ -n "${PF_GREETING_NAME:-}" ]; then
+    python3 -I -B "$THEME/greeting/greeting.py" "$THEME/greeting/layout.json" \
+      ov/usr/share/plymouth/themes/plasma-fusion "--name=$PF_GREETING_NAME"
+  fi
+  printf '[Daemon]\nTheme=plasma-fusion\n' > ov/etc/plymouth/plymouthd.conf
+  if [ -n "${PF_SCRIPT_SO:-}" ]; then
+    mkdir -p ov/usr/lib64/plymouth
+    install -m 0755 "$PF_SCRIPT_SO" ov/usr/lib64/plymouth/script.so
+  fi
+  # The installed copy carries the keyboard label; keep it in the overlay too (PF_LAYOUT_LABEL
+  # sets it on a machine without the installed theme).
+  lbl=${PF_LAYOUT_LABEL:-$(sed -n 's/^PFKeyboardLayout=//p' /usr/share/plymouth/themes/plasma-fusion/plasma-fusion.plymouth 2>/dev/null | head -1)}
+  if [ -n "$lbl" ]; then
     sed -i "/^\[script-env-vars\]/a PFKeyboardLayout=$lbl" ov/usr/share/plymouth/themes/plasma-fusion/plasma-fusion.plymouth
   fi
   install -m 0755 "$HERE/selftest/pf-selftest.sh" ov/usr/bin/pf-selftest.sh
@@ -84,7 +106,7 @@ overlay)
 run)
   NAME=${1:?name}; SCEN=${2:?scenario}; SIZE=${3:-1920x1200}; WHICH=${4:-base}; DISK=${5:-disk}; FW=${6:-bios}
   UUID=$(cat luks.uuid)
-  common="rhgb quiet plymouth.enable=1 loglevel=3 rd.udev.log_level=3 systemd.show_status=false plymouth.ignore-serial-consoles plymouth.debug=stream:/dev/ttyS1"
+  common="rhgb quiet plymouth.enable=1 loglevel=3 rd.udev.log_level=3 systemd.show_status=false plymouth.ignore-serial-consoles plymouth.debug=stream:/dev/ttyS1${PF_APPEND:+ $PF_APPEND}"
   case $SCEN in
     password) APPEND="rd.luks.uuid=$UUID root=LABEL=pf-no-root $common" ;;
     splash) APPEND="root=LABEL=pf-no-root $common" ;;

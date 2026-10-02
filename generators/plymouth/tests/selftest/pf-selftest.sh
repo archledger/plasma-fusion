@@ -10,6 +10,13 @@ plymouth display-message --text="$msg"
 say message
 sleep 5
 plymouth hide-message --text="$msg"
+# A wrong passphrase: systemd-cryptsetup asks the same prompt again.
+again="Please enter passphrase for disk Internal drive (luks-0b1c2d3e):"
+say first
+plymouth ask-for-password --prompt="$again" > /dev/null
+sleep 1
+say retry
+plymouth ask-for-password --prompt="$again" > /dev/null
 say question
 answer=$(plymouth ask-question --prompt="Name of the recovery host:")
 say "answer=$answer"
@@ -28,5 +35,11 @@ plymouth display-message --text="Installing 27 of 31 packages"
 say update2
 sleep 5
 plymouth hide-message --text="Installing 27 of 31 packages"
+plymouth change-mode --shutdown
+say shutdown
+sleep 4
+plymouth change-mode --reboot
+say reboot
+sleep 4
 plymouth change-mode --boot-up
 say "done"

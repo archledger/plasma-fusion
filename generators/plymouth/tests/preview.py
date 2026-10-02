@@ -5,9 +5,13 @@
 plasma-fusion.script places them (same arithmetic, re-implemented here), for quick comparison
 with the board render before the real test in a VM.
 
-    preview.py THEME_DIR META_JSON OUT.png [--size 1440x900] [--state password|splash|question|update]
+    preview.py THEME_DIR META_JSON OUT.png [--size 1440x900] [--state password|splash|question]
                [--prompt TEXT] [--bullets N] [--answer TEXT] [--message TEXT] [--layout EN]
-               [--capslock] [--progress P] [--frame F]
+               [--capslock] [--progress P] [--frame F] [--mode boot|shutdown|reboot|updates|...]
+               [--boot FRACTION] [--retry]
+
+--progress is a system update's percentage (-1: none), --boot the boot progress the bar shows
+in the splash state, --frame the refresh count (orbit position, fade-in).
 
 Only a preview: the real script runs in plymouth (tests/vmtest.sh on the test device).
 """
@@ -191,20 +195,96 @@ def parse_prompt(prompt):
     return r
 
 
+HEADINGS = {"shutdown": "h-shutdown", "reboot": "h-reboot", "system-upgrade": "h-upgrade",
+            "firmware-upgrade": "h-firmware", "system-reset": "h-reset", "updates": "h-updates"}
+
+
+def heading(mode, update):
+    """As pf_heading."""
+    if mode in HEADINGS and mode != "updates":
+        return HEADINGS[mode]
+    if mode == "updates" or update >= 0:
+        return "h-updates"
+    return "greeting"
+
+
+def background(S, theme, meta, w, h):
+    """As pf_background (single display): scaled to cover, centred; portrait keeps the sun."""
+    bg = meta["bg"]
+    k = max(w / bg["w"], h / bg["h"])
+    bw, bh = math.floor(bg["w"] * k + 0.999), math.floor(bg["h"] * k + 0.999)
+    image = S.img(bg["file"])
+    if (bw, bh) != (bg["w"], bg["h"]):
+        image = image.resize((bw, bh), Image.BILINEAR)
+    x = math.floor((w - bw) / 2)
+    if h > w:
+        x = -math.floor(min(max(bg["sunx"] * k - 0.68 * w, 0), bw - w))
+    return image, x, math.floor((h - bh) / 2)
+
+
 def compose(theme, meta, w, h, state="password", prompt="", bullets=0, answer="", message="",
-            layout=None, capslock=False, progress=-1, frame=0, mode="boot"):
+            layout=None, capslock=False, progress=-1, frame=0, mode="boot", boot=0.62, retry=False):
     S = Screen(theme, meta, w, h)
     L, fx, fy, bottom = S.L, S.fx, S.fy, h
-    fade = min(1, frame / 12) if frame else 1
-    t = frame / FPS
+    fade = 1.0
+    if frame and frame < 15 and mode in ("boot", "shutdown", "reboot"):
+        fade = 1 - (1 - frame / 15) ** 3
+    image, bx, by = background(S, theme, meta, w, h)
+    S.put(image, bx, by, 1, fade)
+    S.put(S.img(L["rings"]["file"]), fx + L["rings"]["x"], fy + L["rings"]["y"], 5, fade)
     S.put(S.img(L["logo"]["file"]), fx + L["logo"]["x"], fy + L["logo"]["y"], 10, fade)
-    for i in range(3):
-        c = (1 + math.cos(2 * math.pi * (t / 1.4 - i / 4))) / 2
-        d = L[f"dot{i}"]
-        S.put(S.img(d["file"]), fx + d["x"], bottom + d["y"], 10, fade * (0.25 + 0.75 * c * math.sqrt(c)))
+    # Orbit dots, as pf_orbit.
+    t = frame / FPS
+    O = L["orbit"]
+    n = O["phases"]
+    for i, angle in enumerate(meta["orbit"]["angles"]):
+        D = L[f"dot{i}"]
+        a = math.radians(angle + 360 * t / meta["orbit"]["period"])
+        x = fx + O["cx"] + O["r"] * math.sin(a) - D["d"] / 2
+        y = fy + O["cy"] - O["r"] * math.cos(a) - D["d"] / 2
+        ix, iy = math.floor(x), math.floor(y)
+        px, py = math.floor((x - ix) * n + 0.5), math.floor((y - iy) * n + 0.5)
+        if px >= n:
+            px, ix = 0, ix + 1
+        if py >= n:
+            py, iy = 0, iy + 1
+        S.put(S.img(D[f"file{px}{py}"]), ix - D["pad"], iy - D["pad"], 6, fade)
     form = state in ("password", "question")
     lines = L["lines"]
-    if form:
+    if not form:
+        # The column: heading, bar, status line; the mark bottom left.
+        key = heading(mode, progress)
+        e = L[key]
+        S.put(S.img(e["file"]), fx + e["x"], fy + e["y"], 30, fade)
+        value = max(0, min(100, progress)) / 100 if progress >= 0 else (boot if key == "greeting" else -1)
+        if value >= 0:
+            tr = L["track"]
+            S.put(S.img(tr["file"]), fx + tr["x"], fy + tr["y"], 20, fade)
+            B = L["bar"]
+            end = min(math.floor(B["x0"] + value * B["w"] + 0.5), B["end"])
+            if end - B["left"] >= B["minw"]:
+                S.put(S.img(L["head"]["file"]), fx + L["head"]["x"], fy + L["head"]["y"], 21, fade)
+                bw = end - B["tail"] - L["body"]["x"]
+                if bw > 0:
+                    body = S.img(L["body"]["file"]).resize((bw, L["body"]["h"]), Image.NEAREST)
+                    S.put(body, fx + L["body"]["x"], fy + L["body"]["y"], 21, fade)
+                S.put(S.img(L["tail"]["file"]), fx + end - B["tail"], fy + L["tail"]["y"], 21, fade)
+        line = ""
+        if progress >= 0:
+            line = f"{math.floor(progress + 0.5)} %" + (f" · {message}" if message else "")
+        elif message:
+            line = message
+        if line:
+            S.text("status", line, fx + lines["cx"], fy + lines["status"], lines["maxw"], True, opacity=fade)
+        elif key == "greeting":
+            e = L["t-starting"]
+            S.put(S.img(e["file"]), fx + e["x"], fy + e["y"], 30, fade)
+        if progress >= 0:
+            e = L["t-dontoff"]
+            S.put(S.img(e["file"]), fx + e["x"], fy + e["y"], 30, fade)
+        e = L["mark"]
+        S.put(S.img(e["file"]), e["x"], bottom + e["y"], 30, fade)
+    else:
         r = parse_prompt(prompt)
         title = r["title"]
         if state == "password":
@@ -223,8 +303,11 @@ def compose(theme, meta, w, h, state="password", prompt="", bullets=0, answer=""
         if caps:
             e = L["t-capslock"]
             S.put(S.img(e["file"]), fx + e["x"], fy + e["y"], 30)
+        elif state == "password" and retry:
+            e = L[{"t-recovery": "t-wrong-recovery", "t-pin": "t-wrong-pin"}.get(title, "t-wrong")]
+            S.put(S.img(e["file"]), fx + e["x"], fy + e["y"], 30)
         elif r["hint"]:
-            S.text("hint", r["hint"], fx + lines["cx"], fy + lines["hint"], lines["hintmaxw"], True)
+            S.text("status", r["hint"], fx + lines["cx"], fy + lines["hint"], lines["hintmaxw"], True)
         elif r["disk"]:
             e = L["t-encrypted"]
             S.put(S.img(e["file"]), fx + e["x"], fy + e["y"], 30)
@@ -252,27 +335,8 @@ def compose(theme, meta, w, h, state="password", prompt="", bullets=0, answer=""
             left = w + K["right"] - S.run_width("chip", keys)
             S.text("chip", layout, left, bottom + K["base"], 200 * S.s, False)
             S.put(S.img(K["file"]), math.floor(left - K["gap"] - K["size"] + 0.5) + K["x"], bottom + K["y"], 30)
-    if message:
-        if form:
+        if message:
             S.text("prompt", message, fx + lines["cx"], fy + lines["message"], lines["maxw"], True)
-        elif progress >= 0:
-            S.text("hint", message, fx + lines["cx"], fy + lines["hint"], lines["maxw"], True)
-        else:
-            S.text("prompt", message, fx + lines["cx"], fy + lines["prompt"], lines["maxw"], True)
-    if progress >= 0 and not form:
-        tr = L["track"]
-        S.put(S.img(tr["file"]), fx + tr["x"], fy + tr["y"], 20)
-        F = L["fill"]
-        fw = math.floor(F["w"] * max(0, min(100, progress)) / 100 + 0.5)
-        if fw >= F["cap"] * 2:
-            full = S.img(F["file"])
-            S.put(ply_crop(full.crop((0, 0, fw - F["cap"], F["h"]))), fx + F["x"], fy + F["y"], 21)
-            S.put(ply_crop(full.crop((F["w"] - F["cap"], 0, F["w"], F["h"]))), fx + F["x"] + fw - F["cap"], fy + F["y"], 21)
-        S.text("hint", f"{math.floor(progress + 0.5)} %", fx + lines["cx"], fy + L["percent"]["base"], lines["maxw"], True)
-        title = {"system-upgrade": "t-upgrade", "firmware-upgrade": "t-firmware", "system-reset": "t-reset"}.get(mode, "t-updates")
-        for key in (title, "t-dontoff"):
-            e = L[key]
-            S.put(S.img(e["file"]), fx + e["x"], fy + e["y"], 30)
     return S.flush().convert("RGB"), S
 
 
@@ -291,12 +355,17 @@ def main():
     ap.add_argument("--capslock", action="store_true")
     ap.add_argument("--progress", type=float, default=-1)
     ap.add_argument("--frame", type=int, default=0)
+    ap.add_argument("--mode", default="boot",
+                    choices=["boot", "shutdown", "reboot", "updates", "system-upgrade", "firmware-upgrade",
+                             "system-reset"])
+    ap.add_argument("--boot", type=float, default=0.62, help="boot progress 0..1 (the board shows 62 %%)")
+    ap.add_argument("--retry", action="store_true", help="the prompt is asked again (wrong passphrase)")
     a = ap.parse_args()
     w, h = map(int, a.size.split("x"))
     with open(a.meta, encoding="utf-8") as f:
         meta = json.load(f)
     img, S = compose(a.theme, meta, w, h, a.state, a.prompt, a.bullets, a.answer, a.message, a.layout,
-                     a.capslock, a.progress, a.frame)
+                     a.capslock, a.progress, a.frame, a.mode, a.boot, a.retry)
     img.save(a.out)
     print(f"{a.out}: scale {S.s:.4g} ({S.sid}), frame origin {S.fx},{S.fy}")
 

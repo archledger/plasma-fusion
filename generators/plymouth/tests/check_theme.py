@@ -10,15 +10,20 @@
 * PNGs are 8-bit RGBA (what libply's PNG loader handles);
 * the script's brackets balance outside strings and comments, it is UTF-8, uses only the
   string escapes plymouth's scanner knows, and has no member names with a dash;
-* the whole theme stays small (it is copied into every initramfs).
+* greeting/ (used by plymouth-install.sh, not installed) holds the renderer, its layout with an
+  entry for every NNN-greeting.png, and the font;
+* the installed part stays small (it is copied into every initramfs).
 """
+import json
 import os
 import re
 import sys
 
 from PIL import Image
 
-MAX_BYTES = 2_000_000
+# The theme is copied into every initramfs (Fedora 44 on the test device: about 55 MB).
+MAX_BYTES = 3_000_000
+GREETING_FILES = {"greeting.py", "layout.json", "SpaceGrotesk-SemiBold.ttf", "OFL-SpaceGrotesk.txt"}
 
 
 def fail(msg):
@@ -101,7 +106,7 @@ def main():
                 stack.pop()
     if stack:
         fail(f"unclosed {stack[-1][0]} from line {stack[-1][1]}")
-    named = set(re.findall(r'"([0-9]{3}-[a-z0-9-]+\.png)"', src))
+    named = set(re.findall(r'"((?:[0-9]{3}-)?[a-z0-9-]+\.png)"', src))
     pngs = {f for f in os.listdir(d) if f.endswith(".png")}
     missing = named - pngs
     if missing:
@@ -109,9 +114,24 @@ def main():
     unused = pngs - named
     if unused:
         fail(f"unused images: {sorted(unused)[:5]}")
+    gdir = os.path.join(d, "greeting")
+    if not os.path.isdir(gdir) or set(os.listdir(gdir)) != GREETING_FILES:
+        fail(f"greeting/ must hold exactly {sorted(GREETING_FILES)}")
+    layout = json.load(open(os.path.join(gdir, "layout.json"), encoding="utf-8"))
+    if layout.get("font") not in GREETING_FILES:
+        fail("greeting/layout.json names a font that is not there")
+    greet = {e["file"] for e in layout["scales"]}
+    if greet != {f for f in pngs if f.endswith("-greeting.png")} or not greet:
+        fail("greeting/layout.json does not match the NNN-greeting.png images")
+    for e in layout["scales"]:
+        with Image.open(os.path.join(d, e["file"])) as im:
+            if im.size != (e["w"], e["h"]):
+                fail(f"{e['file']} is {im.size}, layout says {(e['w'], e['h'])}")
     total = 0
     for f in sorted(os.listdir(d)):
         p = os.path.join(d, f)
+        if f == "greeting":
+            continue
         total += os.path.getsize(p)
         if f.endswith(".png"):
             with Image.open(p) as im:

@@ -1,10 +1,11 @@
-# Plasma Fusion boot splash and disk unlock (design/boards/Boot.dc.html).
+# Plasma Fusion boot splash and disk unlock (design/boards/Splash.dc.html, the unlock form of
+# design/boards/Boot.dc.html).
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Images: CC-BY-SA-4.0; text drawn with Manrope (OFL-1.1).
+# Images: CC-BY-SA-4.0; text drawn with Manrope and Space Grotesk (OFL-1.1).
 [Plymouth Theme]
 Name=Plasma Fusion
-Description=Plasma Fusion boot splash with the disk unlock prompt
+Description=Plasma Fusion boot splash with the greeting and the disk unlock prompt
 ModuleName=script
 
 [script]
