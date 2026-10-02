@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Integrated Plasma style scenario for tools/vsession (sourced inside the private session; test
 # use only). Seed with make-integrated-seed.sh. Applies Plasma Fusion Dark with the Global Theme

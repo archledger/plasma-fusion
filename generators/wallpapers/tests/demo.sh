@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Test only: prints the board's terminal lines and the ANSI palette, then a shell with a teal prompt.
-mkdir -p ~/fusion && cd ~/fusion
+mkdir -p ~/fusion && cd ~/fusion || exit 1
 printf '\e[36m~/fusion $\e[0m make theme\n'
 printf '\e[2m[ 64%%] Building icons (216 of 340)\e[0m\n'
 printf '\e[2m[ 71%%] Packing cursors\e[0m\n'

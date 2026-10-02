@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Dock scenario for tools/vsession (test use only; seed with make-seed.sh): 88 px dock with stock
 # icontasks, Konsole running and Dolphin active, screenshots in dark and light.
@@ -38,7 +39,7 @@ for (var i = 0; i < ws.length; i++) {
   if (w.resourceClass == "org.kde.dolphin" || w.resourceClass == "dolphin") { w.frameGeometry = {x: 80, y: 80, width: 720, height: 460}; workspace.activeWindow = w; }
 }
 KJS
-id=$(qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript $HOME/place.js pfplace); qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start; sleep 3
+qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$HOME/place.js" pfplace >/dev/null; qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start; sleep 3
 shot dark-dock-running
 plasma-apply-colorscheme PlasmaFusionLight; plasma-apply-desktoptheme plasma-fusion-light
 evaljs - <<JS

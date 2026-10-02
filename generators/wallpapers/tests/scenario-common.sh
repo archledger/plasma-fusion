@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Foundation test scenario (not installed), sourced by scenario-dark.sh / scenario-light.sh inside a
 # tools/vsession session: sets the fonts, applies the colour scheme and the PlasmaFusion wallpaper,

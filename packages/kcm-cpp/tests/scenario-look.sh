@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Test tooling (not installed). The module as it opens: Plasma Fusion Dark or Light applied
 # (make-seed.sh ... dark|light), System Settings at 180,60 1080x700 (as scenario-interact.sh) and

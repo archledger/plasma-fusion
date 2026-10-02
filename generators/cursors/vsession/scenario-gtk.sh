@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 # vsession scenario (sourced by tools/vsession/vsession.sh): the Xcursor half of the themes,
 # loaded by a GTK 3 app (GTK 3 does not use cursor-shape-v1). The theme name reaches GTK the way
 # Plasma's GTK settings sync delivers it: GSettings org.gnome.desktop.interface and settings.ini.

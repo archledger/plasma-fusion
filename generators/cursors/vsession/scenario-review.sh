@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 # vsession scenario (sourced by tools/vsession/vsession.sh): the cursor themes together with all
 # other parts. The seed is a full build (tools/build.sh) with NO kcminputrc: applying each Global
 # Theme must select the Fusion pointer by itself. The pointer is then shot over the desktop, the

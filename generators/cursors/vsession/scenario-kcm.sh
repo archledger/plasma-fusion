@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 # vsession scenario: the cursor settings page (kcm_cursortheme) lists both themes, draws their
 # previews from the Xcursor files and offers the board's sizes.
 T=$HOME/pfv-cursor-test

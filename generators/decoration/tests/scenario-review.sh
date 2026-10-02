@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 # Test tooling (not installed). Integrated virtual-session scenario for the window decoration,
 # sourced by tools/vsession/vsession.sh; seed from make-review-seed.sh (all parts).
 #

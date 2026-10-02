@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # Test tooling (not installed). "Top bar on every screen" off and on, "Reset Fusion layout" twice
 # (the widgets' global shortcuts carried over, the default ones given, dead entries released,

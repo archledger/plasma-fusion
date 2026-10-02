@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
 #
 # STYLE-1 wallpaper scenario for tools/vsession (sourced inside a private session; test use only).
 # Seed: make-style1-seed.sh from a stage built with every wallpaper size (PF_WALLPAPER_SIZES=all).

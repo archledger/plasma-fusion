@@ -1,5 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
+# shellcheck shell=bash
+# mine() prints one PID per line; kill takes each as an argument on purpose.
+# shellcheck disable=SC2046
 #
 # Icons with every part, in a private Plasma session (tools/vsession): applies the Plasma Fusion
 # Global Theme named in ~/.ric-variant ("dark" or "light"), then shows the desktop, the launcher,
@@ -62,7 +65,6 @@ shot 02-launcher
 qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.activateLauncherMenu >/dev/null 2>&1
 sleep 1
 TRAY=$(awk '$3=="org.kde.plasma.systemtray"{print $2; exit}' "$OUT/panel-widgets.txt")
-TPANEL=$(awk '$3=="org.kde.plasma.systemtray"{print $1; exit}' "$OUT/panel-widgets.txt")
 evaljs - >>"$OUT/panel-widgets.txt" 2>&1 <<JS
 var ps = panels(); for (var i = 0; i < ps.length; i++) { var w = ps[i].widgetById($TRAY); if (w) { w.globalShortcut = "Ctrl+Alt+Shift+F9"; print('shortcut set on ' + w.id + '\n'); } }
 JS
