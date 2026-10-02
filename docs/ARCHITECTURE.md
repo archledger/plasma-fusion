@@ -120,6 +120,7 @@ and writes only below `$STAGE` (default `stage/home`), in the paths the naming t
 | `kscreenlocker_greet` | the lock screen QML | the user; PAM checks the password, not this code |
 | `plasma-fusion-powerfx`, `plasma-fusion-app-icons` | user services | the user, `NoNewPrivileges=yes` |
 | the login check | `plasma-fusion-gate.sh`, before KWin starts | the user, 4 s time limit |
+| `plasma-fusion-fieldlog` (optional) | the field log: crashes, restarts and Plasma Fusion errors in daily use | the user, `NoNewPrivileges=yes`, 96 MiB, no swap ([`parts/fieldlog.md`](parts/fieldlog.md)) |
 | `plasma-fusion-charge-limit` | the charge-limit helper | root, through pkexec and polkit |
 | Plymouth | the boot splash script | boot and shutdown, before any user logs in |
 | plasma-login-manager's greeter | styling only (colours, fonts, wallpaper); its QML is KDE's | the `plasmalogin` user |
@@ -137,7 +138,7 @@ and writes only below `$STAGE` (default `stage/home`), in the paths the naming t
 - **Login check.** At every login startplasma sources
   `~/.config/plasma-workspace/env/plasma-fusion-gate.sh`, which runs the check as its own process
   with a time limit. The check compares the installed Plasma, KWin, kscreenlocker, libplasma,
-  KDecoration and Qt versions (read with `rpm`, so for now on Fedora only) with the ones recorded
+  KDecoration and Qt versions (read from rpm, pacman, dpkg or Nix) with the ones recorded
   as tested; after an update it switches the version-bound parts off (lock screen, compiled
   decoration, navigation effect, desktop containment) and queues a notification, which
   `plasma-fusion-gate-notify.service` shows once the desktop is up. `fusion-config.sh` records
@@ -165,6 +166,7 @@ and writes only below `$STAGE` (default `stage/home`), in the paths the naming t
 | `~/.local/share/` | the per-user copy of every package | `fusion-config.sh --install`, the app icons service (icon theme) |
 | `~/.local/libexec/plasma-fusion/` | per-user copies of the helper programs | `fusion-config.sh --install` |
 | `~/.local/state/plasma-fusion/` | backups (`backup-<time>/`), the login check's state and log (`gate/`, `gate.log`), `config-changes`, the app icons record and backup | `fusion-config.sh`, the login check, the app icons service |
+| `~/.local/state/plasma-fusion/fieldlog/` | the field log's events, saved crash reports and daily digests (only where it is installed) | `plasma-fusion-fieldlog` |
 | `/usr/share/`, `/usr/libexec/plasma-fusion/`, `/usr/share/polkit-1/actions/` | the system package | the RPM |
 | `/usr/share/plymouth/themes/plasma-fusion/`, `/var/lib/plasma-fusion/plymouth/` | installed boot splash, its saved previous theme and settings | `plymouth-install.sh` |
 | `/var/lib/plasmalogin/.config/`, `/etc/plasmalogin.conf`, `/var/lib/plasma-fusion/greeter-backup-<time>/` | greeter styling and its backup | `greeter-apply.sh` |

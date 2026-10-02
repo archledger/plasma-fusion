@@ -36,14 +36,16 @@ the session or run before the desktop starts; those are what this case is about.
 - **No network traffic of its own, no telemetry.** Plasma Fusion's code opens no network
   connections. The weather card asks Plasma's own weather engine, and only after you pick a
   location (`packages/plasmoids/org.plasmafusion.weathercard/contents/ui/main.qml`).
-- **On Fedora, after a Plasma update, the version-bound parts step aside.** After an update of
-  Plasma, KWin, kscreenlocker, libplasma, KDecoration or Qt, the login check switches the
-  version-bound parts off until the new versions are tested: KDE's own lock screen and Folder View
-  desktop come back, the tablet gestures are off, and the compiled decoration is replaced by the
-  Plasma Fusion Aurorae theme, which has no compiled plugin ([`parts/gate.md`](parts/gate.md)).
-  The check reads the versions with `rpm` and Fedora's package names. Without `rpm` it records no
-  versions, so it does not notice an update and switches nothing off; support for pacman, dpkg
-  and Nix is roadmap item 3 ([`ROADMAP.md`](ROADMAP.md)).
+- **After a Plasma update, the version-bound parts step aside.** After an update of Plasma,
+  KWin, kscreenlocker, libplasma, KDecoration or Qt, the login check switches the version-bound
+  parts off until the new versions are tested: KDE's own lock screen and Folder View desktop come
+  back, the tablet gestures are off, and the compiled decoration is replaced by the Plasma Fusion
+  Aurorae theme, which has no compiled plugin ([`parts/gate.md`](parts/gate.md)). The check reads
+  the versions from rpm, pacman, dpkg or Nix, whichever knows the packages; when none answers, the
+  versions count as unknown and the parts are switched off with a notification saying why. Only
+  the rpm path runs in daily use (Fedora); the others are tested with the real tools in Arch and
+  Debian containers and with a NixOS system's package list ([`parts/gate.md`](parts/gate.md),
+  "Other distributions").
 
 ### You cannot expect
 
@@ -148,9 +150,8 @@ Each boundary, what crosses it, and how it is guarded.
 - The greeting name and the keyboard label it draws come from the account database and
   `/etc/vconsole.conf` and are filtered first (section 6). The greeting is drawn by
   `python3 -I -B`, which ignores the caller's Python environment, user site packages and the
-  current directory. The keyboard label's short name is looked up in `evdev.xml` by a second
-  Python call that has no `-I` (`python3 -`), so it also imports from the directory the tool was
-  started in (section 7).
+  current directory; the keyboard label's short name is looked up in `evdev.xml` by
+  `python3 -I -` the same way.
 - In the initramfs the theme script only draws; Plymouth and systemd-cryptsetup handle the
   passphrase (section 1).
 
@@ -161,8 +162,8 @@ Each boundary, what crosses it, and how it is guarded.
   cannot make root write elsewhere. The KDE tools run with a cleared environment (`env -i`).
 - `--display-from FILE` refuses a link and files over 1 MiB, reads the file as its owner, not as
   root, and accepts it only if it parses as KWin's output configuration. That parse
-  (`display_summary`) runs `python3 -c` as root in the caller's directory, without `-I` and
-  without `env -i` (section 7).
+  (`display_summary`) runs `python3 -I -c` as root with a cleared environment (`env -i`), so
+  nothing from the caller's directory or environment is imported.
 - Work directories come from `mktemp -d` with mode 0700; backups go to
   `/var/lib/plasma-fusion/greeter-backup-<time>/` with mode 0700; `greeter-restore.sh` puts them
   back.
@@ -192,8 +193,8 @@ Each boundary, what crosses it, and how it is guarded.
   input. They are small C++ plugins built on KDE's and Qt's libraries
   ([`ARCHITECTURE.md`](ARCHITECTURE.md), "Compiled parts"). The navigation effect stays idle when
   the running KWin is not the version it was built against
-  (`packages/navigation-cpp/src/plugin/fusionnavigation.cpp`), and on Fedora the login check
-  turns the version-bound parts off after a KWin update (sections 1 and 3.3).
+  (`packages/navigation-cpp/src/plugin/fusionnavigation.cpp`), and the login check turns the
+  version-bound parts off after a KWin update (sections 1 and 3.3).
 
 ### 3.9 CI and the supply chain
 
@@ -215,6 +216,11 @@ Each boundary, what crosses it, and how it is guarded.
   jobs and the local test image in `tools/container/beta` also use the KDE SIG's
   `@kdesig/kde-beta` Copr; they test against the next Plasma, and nothing built there is
   published. The installed code downloads nothing.
+- `packaging/patches/` rebuilds Fedora packages that need a fix before upstream ships it (today
+  plasma-workspace, for a global menu crash): Fedora's own source package, downloaded by dnf in a
+  Fedora container, plus the patches in the repository, built with `rpmbuild` and suffixed `.pf1`.
+  A machine that installs it replaces Fedora's package until Fedora's next update replaces it back;
+  the README there says when to rebuild and when to drop it.
 
 ## 4. Secure design principles applied
 
@@ -223,7 +229,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | Principle | Where |
 |---|---|
 | Economy of mechanism | The only part that runs as root in normal use is an 84-line shell script with two commands (`packages/power/charge-limit/plasma-fusion-charge-limit`). Everything else is themes, QML and small user services that Plasma loads in its usual places ([`ARCHITECTURE.md`](ARCHITECTURE.md)). |
-| Fail-safe defaults | After an update the login check falls back to KDE's own lock screen and desktop and to the Plasma Fusion Aurorae decoration, which has no compiled plugin (`plasma-fusion-gate.sh`); a missing or unreadable version record counts as untested ([`parts/gate.md`](parts/gate.md)). This holds where `rpm` reports the versions (Fedora); without `rpm` the check does not notice updates yet (section 1). The polkit action denies remote and inactive sessions. Lock screen notification text is off by default. A QML error in the lock screen falls back to kscreenlocker's own. |
+| Fail-safe defaults | After an update the login check falls back to KDE's own lock screen and desktop and to the Plasma Fusion Aurorae decoration, which has no compiled plugin (`plasma-fusion-gate.sh`); a missing or unreadable version record, and versions no package database reports, count as untested ([`parts/gate.md`](parts/gate.md)). The polkit action denies remote and inactive sessions. Lock screen notification text is off by default. A QML error in the lock screen falls back to kscreenlocker's own. |
 | Complete mediation | Every charge-limit change goes through pkexec and polkit, and the helper checks root and its argument itself on every call. |
 | Open design | All code and all security measures are public in this repository; nothing depends on secrecy. |
 | Separation of privilege | Reading the charge limit needs no privilege; writing needs pkexec ([`parts/charge-limit.md`](parts/charge-limit.md)). The greeter tool writes `/etc/plasmalogin.conf` as root but the greeter's home as the greeter user (`tools/system/greeter-apply.sh`). |
@@ -245,7 +251,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | CWE-862 | Missing authorization | Writing the charge limit needs polkit's `allow_active` and root in the helper. |
 | CWE-377 | Insecure temporary files | `mktemp -d` with mode 0700 in the root tools; the login check writes its temporary file next to the target in the user's own directory and renames it. |
 | CWE-400 | Resource exhaustion | Time limits on the login check (4 s), on child processes in the app icons service and on the settings module's tools; memory limits on the power tiers and app icons services; a 1 MiB limit on the display file the greeter tool reads. |
-| CWE-426 | Untrusted search path | The helper is called by absolute path and started by pkexec with a minimal environment; the boot splash installer draws the greeting with `python3 -I`; the greeter tool runs the KDE tools with `env -i` and a fixed `PATH`. Not yet everywhere: two Python calls in the root tools have no `-I` and import from the current directory (section 7). |
+| CWE-426 | Untrusted search path | The helper is called by absolute path and started by pkexec with a minimal environment; every Python call in the root tools runs isolated (`python3 -I`: the greeting and the keyboard label in the boot splash installer, the display check in the greeter tool, which also clears the environment); the greeter tool runs the KDE tools with `env -i` and a fixed `PATH`. |
 | CWE-200, CWE-359 | Private information shown on the lock screen | Notification titles off and text never shown (`config.xml`); no notification watcher at all when the cards are off. |
 | CWE-549 | Unmasked password | Lock screen and boot splash show bullets; the lock screen reveals the password only where KDE's permission allows it. |
 | CWE-798 | Hard-coded credentials | None in the code; secret scanning and push protection on the repository. |
@@ -261,7 +267,7 @@ Widget files named here without a path are under
 
 | Boundary | Input | Check |
 |---|---|---|
-| Charge-limit helper (root) | the command and END | `get` or `set` only; END must match `^[0-9]{2,3}$` and lie in 50..100, else exit 64 (`plasma-fusion-charge-limit`); a leading zero still passes (section 7) |
+| Charge-limit helper (root) | the command and END | `get` or `set` only; END must be 50..100 written without a leading zero (`^(5[0-9]|[6-9][0-9]|100)$`), else exit 64, checked before the root check (`plasma-fusion-charge-limit`; `tests/args_test.sh` in the build) |
 | Quick settings to the helper | the limit | an `int` parameter (`ChargeLimit.qml`) |
 | Quick settings, notifications | an app's desktop entry name, put into a `kwriteconfig6` command | must match `^[A-Za-z0-9._-]+$`, else nothing is written (`NotificationCentreContent.qml`, `setAppKey`) |
 | Quick settings, light and dark | a Global Theme id from the configuration | reduced to `[A-Za-z0-9._-]` and checked against `plasma-apply-lookandfeel --list` before it is applied (`Backend.qml`) |
@@ -270,7 +276,7 @@ Widget files named here without a path are under
 | App icons service | `.desktop` files and icons of any package | only `[Desktop Entry]` keys are read; hidden and non-application entries skipped; icon names with `/` skipped; rendering in a child process with time limits |
 | Boot splash installer (root) | options; the theme directory; the greeting name; the keyboard layout | unknown options refused; only three file types copied; the name has control and separator characters replaced and is drawn only if the font covers it (`generators/plymouth/greeting.py`, `clean`); the label is reduced to `[A-Z0-9+_()-]`, at most 6 characters |
 | Greeter styling (root) | `--display-from FILE` | no link, a regular file, at most 1 MiB, read as its owner, must parse as a KWin output configuration |
-| Login check | KDE configuration files and package versions | values compared with fixed Plasma Fusion ids; an unreadable record or a slow `rpm` (over 3 s) counts as untested ([`parts/gate.md`](parts/gate.md)) |
+| Login check | KDE configuration files and package versions | values compared with fixed Plasma Fusion ids; an unreadable record or a package database that takes over 3 s counts as untested ([`parts/gate.md`](parts/gate.md)) |
 | Settings module | the user's choices | stored as enumerated names (for example the glass and button styles in `kcm.cpp`) |
 
 ## 7. Hardening
@@ -279,9 +285,10 @@ Widget files named here without a path are under
 
 - polkit action limited to one program and the active local session (section 3.1).
 - The power tiers and app icons services: `NoNewPrivileges=yes`, memory limits, `Nice=10`, the
-  background slice, idle I/O for the icons service (section 3.6).
+  background slice, idle I/O for the icons service (section 3.6). The login check's notification
+  unit (`plasma-fusion-gate-notify.service`): `NoNewPrivileges=yes` and a 64 MiB memory limit.
 - Root tools: dropping to the greeter user or the file's owner with `setpriv --no-new-privs`,
-  cleared environments for the KDE tools, isolated Python (`-I`) for the boot splash greeting,
+  cleared environments for the KDE tools, isolated Python (`-I`) for every Python call,
   private temporary directories, dry-run modes, backups before every change and undo scripts
   (sections 3.4, 3.5).
 - Compiled parts: the RPM spec files build with Fedora's `%cmake` macros, so the default Fedora 44
@@ -289,7 +296,7 @@ Widget files named here without a path are under
   `-fstack-clash-protection`, `-fcf-protection`, `-Werror=format-security`, position-independent
   executables, and `-z relro -z now` (`rpm --eval '%{optflags}'` and `'%{build_ldflags}'` on
   Fedora 44).
-- The navigation effect's version check, and on Fedora the login check, keep a mismatched
+- The navigation effect's version check and the login check keep a mismatched
   compiled plugin from running against a newer KWin (section 3.8).
 - The root tools, the charge-limit helper, `fusion-config.sh` and `fusion-restore.sh` stop on the
   first error (`set -euo pipefail`), as do 63 of the 82 tracked scripts with a bash shebang. Three
@@ -303,26 +310,13 @@ Widget files named here without a path are under
 
 - The power tiers and app icons services have no systemd sandboxing beyond `NoNewPrivileges` and
   the limits (`ProtectSystem`, `ProtectHome`, `PrivateTmp`, `SystemCallFilter` and similar are not
-  set). The login check's notification unit, `plasma-fusion-gate-notify.service`, which
-  `tools/device/fusion-config.sh` writes, has neither `NoNewPrivileges` nor a memory limit.
+  set); nor has the login check's notification unit.
 - The app icons service parses SVG files from any installed package with QtSvg or rsvg-convert in a
   child process that has time and memory limits but no sandbox.
 - Widgets build shell command lines for Plasma's executable engine; safety rests on the typing,
   allowlists and quoting of section 6, not on an argument-list API.
-- The charge-limit helper accepts a leading zero (for example `050`): bash then reads the start
-  threshold as an octal number, so `050` sets the start threshold to 35 instead of 45, and `080`
-  stops with an error before anything is written. The value stays within the kernel's range and
-  the tile never sends such a value, but the check should reject it.
-- Two Python calls in the root tools run without `-I`: the keyboard label lookup in
-  `tools/system/plymouth-install.sh` (`python3 -`) and `display_summary` in
-  `tools/system/greeter-apply.sh` (`python3 -c`, also without `env -i`). For `-c` and `-`,
-  Python puts the current directory first on its module path, so a `json.py` or an `xml/`
-  package in the directory the tool was started from would be imported as root. Until `-I` is
-  added, start these tools from a directory that no other user can write to.
-- The login check finds the installed versions only with `rpm`. On a system without `rpm` it
-  does not notice a Plasma, KWin or Qt update and leaves the version-bound parts on (section 1).
 - The C++ plugins are not fuzzed and no test runs them under AddressSanitizer or
-  UndefinedBehaviorSanitizer.
+  UndefinedBehaviorSanitizer. Fuzzing covers the parsers of three Python tools only (section 8).
 - Commits, tags and packages are not signed; the CI's RPMs are kept for 14 days as unsigned
   artifacts. The CI's Fedora container image is named by tag (`fedora:44`), not by digest.
 - The maintainer, as the repository admin, can bypass the ruleset on `main`, and is the only
@@ -337,5 +331,10 @@ Widget files named here without a path are under
   ([`parts/testing.md`](parts/testing.md), [`parts/lockscreen.md`](parts/lockscreen.md)).
 - **Static analysis:** CodeQL, zizmor, actionlint, shellcheck on the installed helpers during the
   build, OpenSSF Scorecard.
-- **Not yet:** fuzzing, sanitizer runs, an outside review, a second maintainer. Section 7 lists the
+- **Dynamic analysis:** ClusterFuzzLite fuzzes the parsers of the app icons, previous theme and
+  keyboard keys tools (atheris, UndefinedBehaviorSanitizer builds) on pull requests that touch them
+  and for 30 minutes every week, with properties beyond "no exception"; setting it up found and
+  fixed four input bugs ([`parts/ci.md`](parts/ci.md), "Fuzzing").
+- **Not yet:** fuzzing or sanitizer runs of the C++ plugins, an outside review, a second
+  maintainer. Section 7 lists the
   hardening still missing. This case is updated when a boundary or a measure changes.

@@ -22,21 +22,23 @@ are welcome in GitHub Discussions; the way decisions are made is in
    workflow), and a test round on 6.7.91 found and fixed five breakages
    ([`docs/parts/containers.md`](parts/containers.md)). Then: test 6.8 in private sessions, raise
    [`packaging/tested-versions.txt`](../packaging/tested-versions.txt) and lift the hold.
-2. **Split screen in tablet posture.** A split pair shown as one card in the app switcher (built,
-   in review on a branch). Then saved app pairs (one icon that opens both apps side by side) and an
-   app picker in the free half after one app is tiled.
-3. **Other distributions.** The login check and the installer learn pacman, dpkg and Nix next to
-   rpm, and find helpers and data outside Fedora's paths (under way on a branch). Then packaging for
-   Arch Linux (a PKGBUILD) and NixOS (a package and a module), and container builds for Arch and
-   Debian unstable in CI. The aim is distributions with Plasma 6.7 or later: Arch Linux, Debian
-   testing and unstable, NixOS unstable.
-4. **OpenSSF Best Practices silver.** Style checks in CI, test coverage measurement, fuzzing of the
-   parsers in the Python tools (under way), and the project documents: governance, code of conduct,
-   architecture, this roadmap, the security assurance case
+2. **Split screen in tablet posture.** A split pair shown as one card in the app switcher (in
+   navigation 0.1-7 since 2026-10-02; a touch check on the tablet is next). Then saved app pairs
+   (one icon that opens both apps side by side) and an app picker in the free half after one app is
+   tiled.
+3. **Other distributions.** The login check and the installer read pacman, dpkg and Nix next to rpm
+   and find helpers and data outside Fedora's paths (done 2026-10-02, tested in Arch and Debian
+   containers and with a NixOS package list; not yet on a real Arch, Debian or NixOS desktop). Then
+   packaging for Arch Linux (a PKGBUILD) and NixOS (a package and a module), and container builds
+   for Arch and Debian unstable in CI. The aim is distributions with Plasma 6.7 or later: Arch
+   Linux, Debian testing and unstable, NixOS unstable.
+4. **OpenSSF Best Practices silver.** Style checks in CI, test coverage measurement (fuzzing of the
+   Python tools' parsers runs since 2026-10-02), and the project documents: governance, code of
+   conduct, architecture, this roadmap, the security assurance case
    ([`SECURITY-ASSURANCE.md`](SECURITY-ASSURANCE.md)). Also a known documentation defect:
    [`PLAN.md`](PLAN.md) and 27 of the part pages in [`docs/parts/`](parts/) cite paths on the
-   maintainer's private share, which other readers cannot open. Those references are to be
-   replaced with public text or removed.
+   maintainer's private share, which other readers cannot open. Those references are to be replaced
+   with public text or removed.
 
 ### In the year
 
