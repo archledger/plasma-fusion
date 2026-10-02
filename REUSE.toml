@@ -11,7 +11,7 @@ SPDX-PackageSupplier = "Wisbendji Fimerlus <archledger236@gmail.com>"
 
 # Documentation
 [[annotations]]
-path = ["README.md", "docs/**", "packages/navigation-cpp/README.md"]
+path = ["README.md", "SECURITY.md", "docs/**", "packages/navigation-cpp/README.md"]
 SPDX-FileCopyrightText = "2026 Wisbendji Fimerlus <archledger236@gmail.com>"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
 

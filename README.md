@@ -1,5 +1,8 @@
 # Plasma Fusion
 
+[![build](https://github.com/archledger/plasma-fusion/actions/workflows/build.yml/badge.svg)](https://github.com/archledger/plasma-fusion/actions/workflows/build.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/archledger/plasma-fusion/badge)](https://scorecard.dev/viewer/?uri=github.com/archledger/plasma-fusion)
+
 A KDE Plasma 6 desktop built from the Plasma Fusion design concept: ideas from macOS,
 GNOME and Windows 11 on top of Plasma's Global Theme structure, in a dark and a light scheme,
 with a tablet posture for convertibles.

@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Labels a pull request by the parts it changes (.github/workflows/labeler.yml).
+icons:
+  - changed-files:
+      - any-glob-to-any-file: ["generators/icons/**", "generators/cursors/**", "packages/appicons/**"]
+shell:
+  - changed-files:
+      - any-glob-to-any-file: ["packages/plasmoids/**", "packages/common/**", "packages/lockscreen/**", "packages/look-and-feel/**"]
+kwin:
+  - changed-files:
+      - any-glob-to-any-file: ["packages/kwin/**", "packages/navigation-cpp/**", "packages/decoration-cpp/**", "generators/decoration/**"]
+settings:
+  - changed-files:
+      - any-glob-to-any-file: ["packages/kcm-cpp/**"]
+theme:
+  - changed-files:
+      - any-glob-to-any-file: ["generators/plasma-style/**", "generators/wallpapers/**", "generators/fonts/**", "generators/look-and-feel/**", "packages/color-schemes/**", "packages/gtk/**", "packages/konsole/**", "packages/ktexteditor/**"]
+boot:
+  - changed-files:
+      - any-glob-to-any-file: ["generators/plymouth/**", "packages/plymouth/**", "tools/system/plymouth-*"]
+system:
+  - changed-files:
+      - any-glob-to-any-file: ["tools/system/**", "tools/device/**", "packages/power/**", "packages/powerfx/**", "packages/keyboard/**", "packages/compat/**"]
+packaging:
+  - changed-files:
+      - any-glob-to-any-file: ["packaging/**", "**/*.spec"]
+design:
+  - changed-files:
+      - any-glob-to-any-file: ["design/**"]
+docs:
+  - changed-files:
+      - any-glob-to-any-file: ["docs/**", "*.md"]
+ci:
+  - changed-files:
+      - any-glob-to-any-file: [".github/**", "tools/checks/**"]

@@ -1,0 +1,116 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma update watcher (docs/parts/ci.md): once a day, the versions Fedora 44 offers (stable
+# updates and updates-testing) of the packages the login check watches, against the versions
+# Plasma Fusion is tested on (packaging/tested-versions.txt). When Fedora has a newer one, an issue
+# labelled plasma-update says which, so the update is tested before the dnf hold on the test
+# machines is lifted. The issue is updated, not repeated, while it stays open.
+
+name: plasma-watch
+
+on:
+  schedule:
+    - cron: "25 6 * * *" # daily 06:25 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plasma-watch
+  cancel-in-progress: false
+
+jobs:
+  query:
+    name: "Fedora 44 versions"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container: registry.fedoraproject.org/fedora:44
+    outputs:
+      newer: ${{ steps.compare.outputs.newer }}
+      title: ${{ steps.compare.outputs.title }}
+      report: ${{ steps.compare.outputs.report }}
+    steps:
+      - name: Install git (checkout runs inside the container)
+        run: dnf install -y -q git
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: packaging/tested-versions.txt
+          sparse-checkout-cone-mode: false
+
+      - name: Compare with the tested versions
+        id: compare
+        run: |
+          set -euo pipefail
+          newest() {  # NAME REPO... -> the highest version of NAME in those repositories
+            local name=$1; shift
+            local args=()
+            for r in "$@"; do args+=(--repo "$r"); done
+            dnf repoquery -q "${args[@]}" --qf '%{version}\n' "$name" 2>/dev/null | sort -V | tail -n 1
+          }
+          is_newer() {  # A B -> true when A is a higher version than B
+            [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n 1)" = "$1" ]
+          }
+          rows=""; newer=false; first=""
+          while read -r name tested; do
+            case "$name" in ''|'#'*) continue ;; esac
+            stable=$(newest "$name" fedora updates)
+            testing=$(newest "$name" fedora updates updates-testing)
+            mark=""
+            if [ -n "$stable" ] && is_newer "$stable" "$tested"; then
+              mark="newer (stable)"; newer=true
+              first=${first:-"$name $stable"}
+            elif [ -n "$testing" ] && is_newer "$testing" "$tested"; then
+              mark="newer (testing)"; newer=true
+              first=${first:-"$name $testing in updates-testing"}
+            fi
+            rows+="| $name | $tested | ${stable:-?} | ${testing:-?} | $mark |"$'\n'
+          done < packaging/tested-versions.txt
+          report="Fedora 44 offers newer versions of packages Plasma Fusion is tested on (\`packaging/tested-versions.txt\`).
+
+          | Package | Tested | Fedora 44 stable | with updates-testing | |
+          |---|---|---|---|---|
+          ${rows}
+          Before lifting the dnf hold on the test machines: build the compiled parts against the new version, test a private session, then raise the versions in \`packaging/tested-versions.txt\` (docs/parts/ci.md)."
+          {
+            echo "newer=$newer"
+            echo "title=Fedora 44 has a newer Plasma stack: $first"
+            echo "report<<PF_REPORT_END"
+            printf '%s\n' "$report"
+            echo "PF_REPORT_END"
+          } >>"$GITHUB_OUTPUT"
+          printf '%s\n' "$report" >>"$GITHUB_STEP_SUMMARY"
+          echo "newer: $newer"
+
+  issue:
+    name: "Open or update the issue"
+    needs: query
+    if: needs.query.outputs.newer == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the plasma-update issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: ${{ needs.query.outputs.title }}
+          REPORT: ${{ needs.query.outputs.report }}
+        run: |
+          set -euo pipefail
+          gh label create plasma-update --color 1d76db \
+            --description "A newer Plasma or Qt in Fedora 44 to test" --force >/dev/null
+          number=$(gh issue list --label plasma-update --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh issue create --title "$TITLE" --label plasma-update --body "$REPORT"
+          else
+            old=$(gh issue view "$number" --json body --jq .body)
+            if [ "$old" != "$REPORT" ]; then
+              gh issue edit "$number" --title "$TITLE" --body "$REPORT"
+              gh issue comment "$number" --body "The versions in Fedora 44 changed; the table above is current."
+            fi
+          fi

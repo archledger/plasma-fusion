@@ -5,6 +5,9 @@
 # KDecoration and KDE Frameworks that Fedora 44 ships: build requirements from each spec
 # (dnf builddep), configure, build and the parts' tests. A Plasma update in Fedora that breaks one
 # of them shows up here.
+#
+# The same build against KDE's Plasma beta packages for Fedora (the @kdesig/kde-beta Copr) warns
+# early when the next Plasma release breaks a part. It may fail without failing the run.
 
 name: compiled
 
@@ -36,14 +39,16 @@ concurrency:
 
 jobs:
   build:
-    name: "${{ matrix.package }} (Fedora 44)"
+    name: "${{ matrix.package }} (Fedora 44, Plasma ${{ matrix.plasma }})"
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     container: registry.fedoraproject.org/fedora:44
+    continue-on-error: ${{ matrix.plasma == 'beta' }}
     strategy:
       fail-fast: false
       matrix:
         package: [navigation-cpp, decoration-cpp, kcm-cpp]
+        plasma: [stable, beta]
     steps:
       - name: Install git and builddep (checkout runs inside the container)
         run: dnf install -y -q git dnf-plugins-core rpm-build
@@ -51,6 +56,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Use KDE's Plasma beta packages
+        if: matrix.plasma == 'beta'
+        run: |
+          set -euo pipefail
+          dnf copr enable -y @kdesig/kde-beta
+          dnf repoquery -q --qf '%{name} %{version}\n' kwin-devel libplasma-devel | sort -u
 
       - name: Install the build requirements from the spec
         env:

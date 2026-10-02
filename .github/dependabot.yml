@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Dependabot keeps the commit pins of the workflows' actions current (docs/parts/ci.md). Every
+# action is pinned to a commit hash, which nothing else updates.
+#
+# Its pull requests fail the commits check until their commit carries the maintainer's
+# Signed-off-by: reword the commit (plain message, one Signed-off-by) before merging, as in the
+# other archledger repositories.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    # A release is proposed only after it has been public for a week, so a compromised release
+    # has time to be reported and pulled first. Security updates are not delayed.
+    cooldown:
+      default-days: 7
+    groups:
+      # CodeQL's actions share one implementation and must move together.
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
+    commit-message:
+      prefix: "ci"

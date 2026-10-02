@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# The upstream versions Plasma Fusion is tested on (Fedora 44): the packages the login check
+# watches (tools/device/gate/plasma-fusion-gate.sh PACKAGES). The Plasma update watcher
+# (.github/workflows/plasma-watch.yml) opens an issue when Fedora 44 has newer ones. Raise a line
+# after testing the new version (docs/parts/ci.md).
+plasma-workspace 6.7.5
+plasma-desktop 6.7.5
+kwin 6.7.5
+kscreenlocker 6.7.5
+libplasma 6.7.5
+kdecoration 6.7.5
+qt6-qtbase 6.11.2
+qt6-qtdeclarative 6.11.2

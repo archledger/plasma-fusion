@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Labels pull requests by the parts they change (.github/labeler.yml, docs/parts/ci.md).
+#
+# pull_request_target gives the job a token that can label pull requests from forks. It is safe here
+# because nothing from the pull request is checked out or run: the labeler only reads the list of
+# changed paths through the API and the configuration from the base branch.
+
+name: labeler
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] no checkout, no code from the pull request runs
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: "Label by changed paths"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          sync-labels: false
