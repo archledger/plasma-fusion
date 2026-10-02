@@ -9,10 +9,11 @@
 #   plasma-fusion-fieldlog digest [DATE]       write and print the digest of DATE (YYYY-MM-DD, today,
 #                                              yesterday; default today)
 #   plasma-fusion-fieldlog status              what is recorded today, the service, the state
-#   plasma-fusion-fieldlog install [--share DIR]
+#   plasma-fusion-fieldlog install [--share DIR | --no-share] [--dev-dirs LIST]
 #                                              copy this tool to ~/.local/libexec/plasma-fusion/,
 #                                              write ~/.config/systemd/user/plasma-fusion-fieldlog.service
-#                                              from the template next to it, enable and start it
+#                                              from the template next to it, enable and start it; a
+#                                              setting not given keeps the installed unit's value
 #   plasma-fusion-fieldlog remove              stop, disable and remove the unit and the copy (the
 #                                              recorded state stays)
 #
@@ -1988,6 +1989,9 @@ def cmd_digest(args):
     else:
         print(f"{NAME} digest: not a date: {arg}", file=sys.stderr)
         return 2
+    share = share_dir()  # by hand too, the share copy follows (the installed unit's setting)
+    if share:
+        os.environ["PF_FIELDLOG_SHARE"] = share
     path, text = write_digest(day)
     sys.stdout.write(text)
     print(f"\n(written to {short(str(path))})", file=sys.stderr)
@@ -2033,8 +2037,8 @@ def cmd_status(args):
     dg = sdir / f"digest-{day}.md"
     if dg.exists():
         print(f"  digest:   {short(str(dg))} (written {time.strftime('%H:%M', time.localtime(dg.stat().st_mtime))})")
-    if os.environ.get("PF_FIELDLOG_SHARE"):
-        print(f"  share:    {os.environ['PF_FIELDLOG_SHARE']}")
+    if share_dir():
+        print(f"  share:    {share_dir()}")
     return 0
 
 
@@ -2054,13 +2058,47 @@ def systemctl_user(*args, check=False):
     return r.returncode
 
 
+INSTALL_OPTIONS = {"--share": "PF_FIELDLOG_SHARE", "--dev-dirs": "PF_FIELDLOG_DEV_DIRS"}
+
+
+def installed_settings():
+    """The PF_FIELDLOG_* settings of the installed unit (its Environment= lines)."""
+    out = {}
+    for line in read_text(unit_path()).splitlines():
+        m = re.match(r"^Environment=(PF_FIELDLOG_[A-Z_]+)=(.*)$", line.strip())
+        if m:
+            out[m.group(1)] = m.group(2)
+    return out
+
+
+def share_dir():
+    """PF_FIELDLOG_SHARE of the environment (the service), else of the installed unit (digest and
+    status run by hand; "run" takes the environment only)."""
+    return os.environ.get("PF_FIELDLOG_SHARE") or installed_settings().get("PF_FIELDLOG_SHARE")
+
+
 def cmd_install(args):
-    share = None
-    if args[:1] == ["--share"] and len(args) == 2:
-        share = os.path.abspath(args[1])
-    elif args:
-        print(f"usage: {NAME} install [--share DIR]", file=sys.stderr)
-        return 2
+    usage = f"usage: {NAME} install [--share DIR | --no-share] [--dev-dirs LIST]"
+    given, drop, i = {}, set(), 0
+    while i < len(args):
+        if args[i] in INSTALL_OPTIONS and i + 1 < len(args):
+            given[INSTALL_OPTIONS[args[i]]] = args[i + 1]
+            i += 2
+        elif args[i] == "--no-share":
+            drop.add("PF_FIELDLOG_SHARE")
+            i += 1
+        else:
+            print(usage, file=sys.stderr)
+            return 2
+    if "PF_FIELDLOG_SHARE" in given:
+        if "PF_FIELDLOG_SHARE" in drop or not given["PF_FIELDLOG_SHARE"]:
+            print(usage, file=sys.stderr)
+            return 2
+        given["PF_FIELDLOG_SHARE"] = os.path.abspath(given["PF_FIELDLOG_SHARE"])
+    for name, value in given.items():
+        if re.search(r"[\s\"'\\%$]", value):
+            print(f"{NAME}: {name} must not contain spaces, quotes, % or $", file=sys.stderr)
+            return 2
     here = pathlib.Path(__file__).resolve().parent
     template = here / UNIT
     if not template.is_file():
@@ -2068,12 +2106,19 @@ def cmd_install(args):
               "(tools/device/fieldlog/)", file=sys.stderr)
         return 1
     unit = template.read_text()
-    if share:
-        if re.search(r"[\s\"'\\%$]", share):
-            print(f"{NAME}: the share path must not contain spaces, quotes, % or $", file=sys.stderr)
-            return 2
-        unit = re.sub(r"^#\s*Environment=PF_FIELDLOG_SHARE=.*$", f"Environment=PF_FIELDLOG_SHARE={share}",
-                      unit, flags=re.M)
+    # A setting not given keeps the value of the unit installed before (a reinstall after an update
+    # must not turn the share copy off); --no-share turns it off.
+    before = installed_settings()
+    settings, kept = {}, []
+    for name in INSTALL_OPTIONS.values():
+        if name in given:
+            settings[name] = given[name]
+        elif name in before and name not in drop:
+            settings[name] = before[name]
+            kept.append(name)
+    for name, value in settings.items():
+        unit = re.sub(rf"^#\s*Environment={name}=.*$", lambda m: f"Environment={name}={value}", unit, flags=re.M)
+    share = settings.get("PF_FIELDLOG_SHARE")
     lib = libexec_dir()
     lib.mkdir(parents=True, exist_ok=True)
     dest = lib / NAME
@@ -2088,7 +2133,12 @@ def cmd_install(args):
     systemctl_user("enable", UNIT, check=True)
     systemctl_user("restart", UNIT, check=True)
     print(f"installed {short(str(dest))} and {short(str(up))}; {UNIT} enabled and started")
-    print(f"state: {short(str(state_dir()))}" + (f"; digests copied to {share}" if share else ""))
+    print(f"state: {short(str(state_dir()))}")
+    print(f"share copy: {share}" if share else "share copy: off (install --share DIR turns it on)")
+    if "PF_FIELDLOG_DEV_DIRS" in settings:
+        print(f"development folders: {settings['PF_FIELDLOG_DEV_DIRS'] or '(none)'}")
+    if kept:
+        print("kept from the unit installed before: " + ", ".join(kept))
     return 0
 
 
@@ -2128,7 +2178,7 @@ def main(argv):
             for line in f.read().split("\nimport ", 1)[0].splitlines()[4:]:
                 print(line[2:] if line.startswith("# ") else line.lstrip("#"))
         return 0
-    print(f"usage: {NAME} run | digest [DATE] | status | install [--share DIR] | remove | --help", file=sys.stderr)
+    print(f"usage: {NAME} run | digest [DATE] | status | install [--share DIR | --no-share] [--dev-dirs LIST] | remove | --help", file=sys.stderr)
     return 2
 
 

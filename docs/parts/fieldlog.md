@@ -20,14 +20,20 @@ can be read in a minute a day, and lists development crashes last, separately.
 On the laptop, from the checkout (the tool copies itself, so the checkout can move on):
 
 ```
-tools/device/fieldlog/plasma-fusion-fieldlog install --share /mnt/archledger-gp/artifacts/plasma-fusion/fieldlog
+tools/device/fieldlog/plasma-fusion-fieldlog install --share /mnt/archledger-gp/artifacts/plasma-fusion/fieldlog \
+    --dev-dirs '~/tmp-*:~/archledger-gp/artifacts'
 plasma-fusion-fieldlog status          # after install, from ~/.local/libexec/plasma-fusion/
 ```
 
-`install [--share DIR]` copies the tool to `~/.local/libexec/plasma-fusion/plasma-fusion-fieldlog`,
-writes `~/.config/systemd/user/plasma-fusion-fieldlog.service` from the template next to it (with
-`--share`: `Environment=PF_FIELDLOG_SHARE=DIR`), then `systemctl --user daemon-reload`, `enable`
-and `restart` of that unit only. It starts with every Plasma session (`WantedBy` and `PartOf`
+`install [--share DIR | --no-share] [--dev-dirs LIST]` copies the tool to
+`~/.local/libexec/plasma-fusion/plasma-fusion-fieldlog`, writes
+`~/.config/systemd/user/plasma-fusion-fieldlog.service` from the template next to it (with
+`--share`: `Environment=PF_FIELDLOG_SHARE=DIR`; with `--dev-dirs`:
+`Environment=PF_FIELDLOG_DEV_DIRS=LIST`, see "Crashes"), then `systemctl --user daemon-reload`,
+`enable` and `restart` of that unit only. A setting not given keeps the value of the unit installed
+before, so a reinstall after an update keeps the share copy; `--no-share` turns it off. Install
+prints the settings it wrote and which it kept. `digest` and `status` run by hand take the share
+from the installed unit too, so a digest written by hand also goes to the share. It starts with every Plasma session (`WantedBy` and `PartOf`
 `graphical-session.target`), just before KWin and plasmashell, and stops after them (see "The
 unit"). `remove` stops and disables it and deletes the unit and the copy; the
 recorded state stays. `digest [DATE]` writes and prints a day's digest (`today`, `yesterday` or
@@ -339,7 +345,7 @@ The tests:
   Of the laptop's dump records (checked 2026-10-02): 37 probes from an agent's `~/tmp-NAME/`
   (2026-09-15), tooling with the default `~/tmp-*`, and 39 test programs from
   `~/archledger-gp/artifacts/` (2026-09-07 to 09-25; 28 "other", 10 "app" without the setting);
-  for such folders set `PF_FIELDLOG_DEV_DIRS` in the unit.
+  for such folders set `PF_FIELDLOG_DEV_DIRS` (`install --dev-dirs`).
 - Sustained CPU and memory jumps are seen at minute resolution.
 - The global `noise` counts depend on Qt's message text; a Plasma update that rewords a warning makes
   a new row.

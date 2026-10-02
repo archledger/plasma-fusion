@@ -1032,6 +1032,46 @@ class Install(unittest.TestCase):
         self.assertFalse((d / "home/.config/systemd/user/plasma-fusion-fieldlog.service").exists())
         self.assertIn("systemctl --user disable --now plasma-fusion-fieldlog.service", (d / "calls.log").read_text())
 
+    def test_reinstall_keeps_settings(self):
+        # "install" again without --share used to turn the share copy off without a word (review of
+        # 2026-10-02).
+        d = fresh_dir("reinstall")
+        bin_ = d / "bin"
+        bin_.mkdir()
+        write_exe(bin_ / "systemctl", FAKE_SYSTEMCTL)
+        env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", HOME=str(d / "home"),
+                   XDG_CONFIG_HOME=str(d / "home/.config"), XDG_STATE_HOME=str(d / "home/.local/state"),
+                   FAKE_LOG=str(d / "calls.log"))
+        env.pop("PF_FIELDLOG_SHARE", None)
+        unit_file = d / "home/.config/systemd/user/plasma-fusion-fieldlog.service"
+        share = d / "share"
+
+        def install(*a, rc=0):
+            r = subprocess.run([sys.executable, str(TOOL), "install", *a], env=env, capture_output=True, text=True)
+            self.assertEqual(r.returncode, rc, r.stderr)
+            return r.stdout
+
+        install("--share", str(share), "--dev-dirs", "~/tmp-*:~/src/probes")
+        out = install()
+        unit = unit_file.read_text()
+        self.assertIn(f"\nEnvironment=PF_FIELDLOG_SHARE={share}\n", unit)
+        self.assertIn("\nEnvironment=PF_FIELDLOG_DEV_DIRS=~/tmp-*:~/src/probes\n", unit)
+        self.assertIn(f"share copy: {share}", out)
+        self.assertIn("kept from the unit installed before: PF_FIELDLOG_SHARE, PF_FIELDLOG_DEV_DIRS", out)
+        # A digest written by hand goes to the installed unit's share too.
+        copy = d / "home/.local/libexec/plasma-fusion/plasma-fusion-fieldlog"
+        r = subprocess.run([sys.executable, str(copy), "digest", "2026-10-02"], env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((share / f"digest-2026-10-02-{os.uname().nodename}.md").exists())
+        out = install("--no-share")
+        unit = unit_file.read_text()
+        self.assertIn("\n#Environment=PF_FIELDLOG_SHARE=\n", unit)
+        self.assertNotIn("\nEnvironment=PF_FIELDLOG_SHARE", unit)
+        self.assertIn("\nEnvironment=PF_FIELDLOG_DEV_DIRS=~/tmp-*:~/src/probes\n", unit)
+        self.assertIn("share copy: off", out)
+        install("--share", str(d / "a b"), rc=2)
+        install("--share", str(share), "--no-share", rc=2)
+
 
 if __name__ == "__main__":
     try:

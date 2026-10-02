@@ -4,7 +4,7 @@
 # Plasma Fusion field log: records crashes, session restarts, Plasma Fusion QML errors and the memory
 # and CPU of plasmashell and KWin in daily use, apart from development noise (docs/parts/fieldlog.md
 # in the Plasma Fusion sources). Installed by
-#   tools/device/fieldlog/plasma-fusion-fieldlog install [--share DIR]
+#   tools/device/fieldlog/plasma-fusion-fieldlog install [--share DIR] [--dev-dirs LIST]
 # which copies the tool to ~/.local/libexec/plasma-fusion/ and enables this unit; "remove" takes both
 # away and keeps the recorded state (~/.local/state/plasma-fusion/fieldlog/).
 [Unit]
@@ -50,6 +50,8 @@ UMask=0077
 SyslogIdentifier=plasma-fusion-fieldlog
 # A copy of each day's digest goes to PF_FIELDLOG_SHARE when it is set (install --share DIR).
 #Environment=PF_FIELDLOG_SHARE=
+# More development folders for the crash classes (install --dev-dirs LIST; default ~/tmp-*).
+#Environment=PF_FIELDLOG_DEV_DIRS=
 
 [Install]
 WantedBy=graphical-session.target
