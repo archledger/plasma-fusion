@@ -27,7 +27,12 @@ templates (`share/plasma-fusion/config`) and the setup scripts (`share/plasma-fu
 along; `fusion-config.sh` finds the templates through `XDG_DATA_DIRS`, and the helpers through
 `/run/current-system/sw/libexec/plasma-fusion` (`environment.pathsToLink`). The user services'
 `ExecSearchPath` already lists that directory, and the login check reads the versions from the
-system closure (`nix-store`, [`gate.md`](gate.md)).
+system closure (`nix-store`, [`gate.md`](gate.md)). The helpers get the programs they run in
+their PATH (on Fedora all in `/usr/bin`): power tiers gdbus, busctl and kwriteconfig6, app icons
+rsvg-convert and busctl, and the charge limit coreutils, grep and systemctl, since pkexec starts it
+with a PATH of `/usr/bin` and `/bin` only; the module also installs notify-send and gdbus for the
+login check's notification. KDE Connect is optional: without it the quick settings leave the phone
+tile out.
 
 ## Install
 

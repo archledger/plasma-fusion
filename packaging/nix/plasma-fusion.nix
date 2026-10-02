@@ -31,7 +31,7 @@ rec {
   plasma-fusion = stdenvNoCC.mkDerivation {
     pname = "plasma-fusion";
     inherit version src;
-    nativeBuildInputs = [ python pkgs.librsvg kdePackages.qtshadertools pkgs.libxml2 pkgs.desktop-file-utils ];
+    nativeBuildInputs = [ python pkgs.librsvg kdePackages.qtshadertools pkgs.libxml2 pkgs.desktop-file-utils pkgs.makeWrapper ];
     dontConfigure = true;
     # qtshadertools (qsb) brings Qt's setup hook; nothing here is a Qt application to wrap.
     dontWrapQtApps = true;
@@ -76,7 +76,22 @@ rec {
       cp -a tools/device tools/pen tools/system $out/share/plasma-fusion/tools/
       runHook postInstall
     '';
-    # fixupPhase patches the shebangs of $out (bash and python3 from the store).
+    # fixupPhase patches the shebangs of $out (bash and python3 from the store). The helpers then get
+    # the programs they run in their PATH: on Fedora those are all in /usr/bin, on NixOS gdbus and
+    # rsvg-convert are in no profile by default, and pkexec starts the charge-limit helper with a
+    # PATH of /usr/bin and /bin only. The system profile stays last, for programs a user installs
+    # (tlp).
+    postFixup = ''
+      wrapProgram $out/libexec/plasma-fusion/plasma-fusion-powerfx \
+        --prefix PATH : ${lib.makeBinPath [ pkgs.glib.bin pkgs.systemd kdePackages.kconfig pkgs.coreutils pkgs.util-linux pkgs.gnused ]} \
+        --suffix PATH : ${sw}/bin
+      wrapProgram $out/libexec/plasma-fusion/plasma-fusion-app-icons \
+        --prefix PATH : ${lib.makeBinPath [ pkgs.librsvg pkgs.systemd ]} \
+        --suffix PATH : ${sw}/bin
+      wrapProgram $out/libexec/plasma-fusion/plasma-fusion-charge-limit \
+        --prefix PATH : ${lib.makeBinPath [ pkgs.coreutils pkgs.gnugrep pkgs.systemd ]} \
+        --suffix PATH : ${sw}/bin
+    '';
     meta = {
       description = "Plasma Fusion: a KDE Plasma 6 desktop (themes, widgets, icons, fonts and setup tools)";
       homepage = "https://github.com/archledger/plasma-fusion";
