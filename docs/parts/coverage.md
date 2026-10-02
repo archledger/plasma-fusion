@@ -46,7 +46,7 @@ test's exit status.
 | Shell (bash) | kcov 43 | lines kcov counts as code | every bash script the tests start (kcov sets `BASH_ENV` and traces with `PS4`) |
 | JavaScript | node 22's own coverage (`--experimental-test-coverage`, V8) | code lines (blank and comment-only lines left out) | `node --test` over `packages/*/tests/*.test.js` |
 | C++ | gcov (GCC 16) and gcovr 8.6 | lines | the part's tests, built with `--coverage -O0` |
-| QML | none usable (see "QML") | | |
+| QML | not measured; qoverage can instrument most of it (see "QML") | | |
 
 The tests run for `scripts`, all without a desktop session:
 
@@ -104,15 +104,15 @@ Details that change the numbers:
 | Shell, lines | 31.1 % (1,167 of 3,757) | 0.0 % (0 of 99) | 12.0 % (604 of 5,015) | 20.0 % (1,771 of 8,871) |
 | JavaScript, code lines | 14.2 % (176 of 1,242) | - | 84.0 % (326 of 388) | 30.8 % (502 of 1,630) |
 | C++, lines | 35.2 % (1,226 of 3,479) | - | - | 35.2 % (1,226 of 3,479) |
-| QML | not measured: 232 files, about 32,600 code lines | | | |
+| QML | not measured: 212 files, about 31,800 code lines (16 files, about 3,200 lines, kept from plasma-desktop's Folder View: `UPSTREAM-FILES`) | - | not measured: 20 files, about 850 code lines | not measured: 232 files, about 32,600 code lines |
 
 The test tooling column includes `tools/tests/coverage_summary.py` (263 statements) and
 `tools/tests/coverage.sh` (91 lines), which the measurement itself does not run.
 
 Over the four measured languages, product code: 8,559 of 15,297 statements or lines run (56.0 %;
 the units differ per tool, so this is a rough figure). With the maintainer tools counted as
-product code, Python is at 79.7 % (5,990 of 7,512). The QML is the largest body of code, and no
-usable tool measures it.
+product code, Python is at 79.7 % (5,990 of 7,512). The QML is the largest body of code, about
+twice the product code of the four measured languages together, and no test measures it yet.
 
 ### Python, product code by area
 
@@ -173,16 +173,23 @@ In `tools/device`: `fusion-config.sh` 0 of 1,119, `fusion-restore.sh` 0 of 203,
 
 ### QML
 
-There is no usable FLOSS statement-coverage tool for this QML:
+The QML is not measured yet, but a FLOSS tool can instrument most of it, so the criterion applies
+to it as well:
 
-- Qt 6.11 ships none. `qmltestrunner` runs tests and `qmlprofiler` records timings; neither
-  reports which statements ran.
-- The Qt Group's Coco lists QML among its languages, but it is a commercial product, not FLOSS,
-  so it does not count for the criterion (https://www.qt.io/quality-assurance/coco).
-- qoverage (https://github.com/SanderVocke/qoverage, GPL-3.0, v0.1.14 of April 2026) instruments
-  QML files through Qt's `qmldom`. Its README calls it pre-alpha, counts only lines, counts a
-  declarative object only by its declaration line when it is created, does not instrument
-  imported JavaScript files and lists false negatives as a known issue. It was not tried here.
+- qoverage (https://github.com/SanderVocke/qoverage, GPL-3.0, v0.1.14 of April 2026; `pip
+  install qoverage`, with Qt's `qmldom` bundled) instruments QML files so that a run reports the
+  lines it reached. In a fedora:44 container, `qoverage instrument -p packages -o DIR` instrumented
+  216 of the 224 QML files under `packages/` (the QML of 37a4d82; this branch changes none). It
+  could not parse 8: the dock's `main.qml`, the launcher's `LauncherCard.qml`, `NavGrid.qml`,
+  `ResultsList.qml` and `TabletSheet.qml`, the clock's `WidthBudget.qml`, the quick settings'
+  `NotificationCard.qml` and the lock screen's `PowerButton.qml`. Its README calls it pre-alpha,
+  counts only lines, counts a declarative object only by its declaration line when it is created,
+  does not instrument imported JavaScript files and lists false negatives as a known issue. No
+  test has run the instrumented files yet, so there is no QML figure.
+- Qt 6.11 ships no coverage tool. `qmltestrunner` runs tests and `qmlprofiler` records timings;
+  neither reports which statements ran.
+- The Qt Group's Coco lists QML among its languages, but it is a commercial product, not FLOSS
+  (https://www.qt.io/quality-assurance/coco).
 - Most of the QML runs only inside `plasmashell`, KWin or the lock screen greeter. The tests that
   load it offscreen (`packages/common/tests/offscreen.sh` and `icontile.sh`,
   `packages/kwin/tests/offscreen/`, `packages/lockscreen/test/`) reach a small part of it; the
@@ -260,8 +267,16 @@ Per language, product code. A day is a working day of one person.
   writes its data when KWin exits cleanly), or the parts that do not need KWin are split out and
   unit-tested (3 to 5 days). Even then 80 % needs both the settings module and the effect above
   about 75 %.
-- **QML**: no FLOSS tool fit for the criterion today. A first step is trying qoverage on the
-  offscreen QML tests (1 day). Most of the QML can only be measured inside plasmashell and KWin.
+- **QML** (not measured; product QML is about twice the product code of the four measured
+  languages together, see "Results"). First, qoverage under the offscreen QML tests
+  (`packages/common/tests/offscreen.sh` and `icontile.sh`, `packages/kwin/tests/offscreen/`,
+  `packages/lockscreen/test/`) in the Plasma test container: about 1 to 2 days, for a first
+  figure. Then the private-session scenarios (`tools/tests/`, `packages/*/tests/vsession/`) with
+  the instrumented QML installed in the Plasma test containers, since most of the QML runs only
+  inside plasmashell and KWin: about 3 to 5 days to wire up. How close that comes to 80 % is not
+  known until it is measured; the 8 files qoverage cannot parse stay unmeasured until qoverage
+  parses them or they change. Until the QML is measured, 80 % over all of the project's code
+  cannot be shown.
 
 ## Regression tests for the bugs fixed in the last six months
 
