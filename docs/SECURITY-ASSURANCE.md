@@ -284,10 +284,13 @@ Widget files named here without a path are under
   Fedora 44).
 - The navigation effect's version check and the login check keep a mismatched compiled plugin
   from running against a newer KWin (section 3.8).
-- Most shell scripts stop on the first error (`set -euo pipefail`). Two do not, on purpose: the
-  login check must always finish and exit 0 so a login is never blocked (`plasma-fusion-gate.sh`),
-  and the power service must keep running and give values back (`set -u` only,
-  `packages/powerfx/plasma-fusion-powerfx`).
+- The root tools, the charge-limit helper, `fusion-config.sh` and `fusion-restore.sh` stop on the
+  first error (`set -euo pipefail`), as do 63 of the 82 tracked scripts with a bash shebang. Three
+  installed helpers do not: the login check must always finish and exit 0 so a login is never
+  blocked (`plasma-fusion-gate.sh`, no `set`), the power service must keep running and give
+  values back (`set -u` only, `packages/powerfx/plasma-fusion-powerfx`), and the LibreOffice
+  launcher uses `set -u` only (`packages/compat/plasma-fusion-libreoffice`). The other 16 are
+  test, measurement and test-session tools with `set -u` or no `set` line.
 
 ### Missing (known gaps)
 
