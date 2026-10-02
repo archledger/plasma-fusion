@@ -75,6 +75,13 @@ losing one person.
    user process, which takes 7 to 21 days; it is a fallback, not a replacement for item 1.
 3. **Shared access to the project's other entries:** the OpenSSF Best Practices entry (project
    15168) lets its owner give other people edit rights.
+4. **Sealed keys and a will.** The Best Practices criterion also allows a project run by one
+   person to leave the keys and passwords it needs with a trusted person in a sealed form (a
+   lockbox), with a will that gives that person the rights to carry on. This cannot cover the
+   GitHub login itself: GitHub's terms let a login be used by one person only
+   ([Terms of Service, B.3 "Account Requirements"](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#3-account-requirements)).
+   It can cover the other keys, such as a release signing key once there is one, and the written
+   permission to continue the project; the repository itself still needs item 1.
 
 Who the second person is, and when these steps happen, is the maintainer's decision. This section
 will name them once they have agreed.
