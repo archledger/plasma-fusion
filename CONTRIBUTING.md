@@ -28,7 +28,8 @@ taking part follows the [code of conduct](CODE_OF_CONDUCT.md); how decisions are
      "Coding style", says what they check;
    - the part's own tests (for example `tools/device/tests/gate-unit.sh`,
      `packages/common/tests/icontile.sh`, `packages/appicons/tests/*.py`), listed on its page;
-   - new behaviour needs a test that would fail without it.
+   - new behaviour, and a bug fix, needs a test in an automated suite that would fail without it
+     (the test policy in [`docs/parts/coverage.md`](docs/parts/coverage.md#test-policy)).
 5. Give every new file an SPDX header or a `REUSE.toml` entry (`reuse lint` must pass).
 6. Open a pull request against `main`. It needs the checks `DCO and attribution`,
    `REUSE compliance` and `plasma-fusion RPM (Fedora 44)` and one approval.
