@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Commit checks for every pushed or proposed commit:
+# - DCO: exactly one Signed-off-by trailer per commit (made with `git commit -s`). A squash merge
+#   satisfies it when the pull request body carries the trailer.
+# - Attribution: the Signed-off-by trailer is the only trailer, and no commit message credits an
+#   AI agent, model or tool (project rule).
+
+name: commits
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commits-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: "DCO and attribution"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history so the base-to-head range can be enumerated.
+          fetch-depth: 0
+
+      - name: Every commit carries one Signed-off-by and no other trailer or AI attribution
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          base=${PR_BASE:-$PUSH_BEFORE}
+          head=${PR_HEAD:-$PUSH_SHA}
+          range=$(git rev-list --no-merges "$base..$head" 2>/dev/null || true)
+          if [ -z "$range" ]; then
+            range=$(git rev-list --no-merges -n 1 "$head")
+          fi
+          status=0
+          for c in $range; do
+            what=$(git log -1 --format='%h %s' "$c")
+            trailers=$(git log -1 --format='%(trailers:only=true,unfold=true)' "$c")
+            n=$(printf '%s\n' "$trailers" | grep -c '^Signed-off-by: .\+ <.\+@.\+>$' || true)
+            if [ "$n" -ne 1 ]; then
+              printf 'DCO: %s has %s Signed-off-by trailers (need exactly 1)\n' "$what" "$n" >&2
+              status=1
+            fi
+            other=$(printf '%s\n' "$trailers" | grep -v '^Signed-off-by: ' | grep -v '^$' || true)
+            if [ -n "$other" ]; then
+              printf 'Trailers: %s carries other trailers:\n%s\n' "$what" "$other" >&2
+              status=1
+            fi
+            if git log -1 --format='%B' "$c" \
+                | grep -inE 'claude|anthropic|openai|chatgpt|copilot|codex|opencode|gemini|generated (with|by) (an? )?ai|ai[- ]generated|co-authored-by' >&2; then
+              printf 'Attribution: %s credits an AI tool (lines above)\n' "$what" >&2
+              status=1
+            fi
+          done
+          exit $status

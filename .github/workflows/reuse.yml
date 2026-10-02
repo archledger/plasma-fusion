@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Licensing: every file states its copyright and licence (SPDX header or REUSE.toml) and every
+# licence used has its text in LICENSES/. `reuse` is installed at a pinned version from PyPI.
+
+name: reuse
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reuse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: "REUSE compliance"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: reuse lint
+        env:
+          REUSE_VERSION: 6.2.0
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/reuse"
+          "$RUNNER_TEMP/reuse/bin/pip" install --quiet "reuse==${REUSE_VERSION}"
+          "$RUNNER_TEMP/reuse/bin/reuse" lint

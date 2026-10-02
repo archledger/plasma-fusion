@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Static analysis of the workflows themselves: zizmor for security (unpinned actions or images,
+# credentials left in .git/config, expressions interpolated into run blocks, excess permissions)
+# and actionlint for correctness (expressions, contexts, ShellCheck over run blocks).
+
+name: workflow-audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/**"
+  # Weekly: the online audits (archived actions, known-bad refs) can start failing unedited.
+  schedule:
+    - cron: "20 6 * * 2" # Tuesdays 06:20 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: "zizmor (workflow security)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.28.0
+          persona: regular
+          advanced-security: false
+
+  actionlint:
+    name: "actionlint (workflow correctness)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        env:
+          # Pinned by version and verified by checksum (from the upstream checksums file).
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+          echo "${ACTIONLINT_SHA256}  ${tarball}" | sha256sum -c -
+          tar xzf "$tarball" actionlint
+          ./actionlint -color

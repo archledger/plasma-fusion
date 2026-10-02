@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The plasma-fusion package on Fedora 44: the lints' self-tests, the login check's unit tests, then
+# packaging/build-rpm.sh, which runs tools/build.sh (every part with its own checks: colour
+# contrast, GTK stylesheets, package structure, widget unit tests, the app icon composition test)
+# inside rpmbuild, the spec's %check and rpmlint. The build requirements are read from the spec,
+# so a requirement the spec forgets fails here. Node.js, ShellCheck, desktop-file-utils and GTK's
+# Python bindings switch on the checks that are skipped without them.
+
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rpm:
+    name: "plasma-fusion RPM (Fedora 44)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git and the RPM tools (checkout runs inside the container)
+        run: dnf install -y -q git rpm-build rpmlint
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The package release counts the commits.
+          fetch-depth: 0
+
+      - name: Install the build requirements and the check tools
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mapfile -t deps < <(sed -n 's/^BuildRequires:[[:space:]]*//p' packaging/plasma-fusion.spec.in)
+          dnf install -y -q "${deps[@]}" \
+            nodejs ShellCheck desktop-file-utils kf6-kconfig glib2 python3-gobject gtk3 gtk4
+
+      - name: Lint self-tests
+        run: tools/checks/tests/run.sh
+
+      - name: Login check unit tests
+        run: tools/device/tests/gate-unit.sh build/gate
+
+      - name: Build the RPM (tools/build.sh, %check, rpmlint)
+        run: packaging/build-rpm.sh --topdir "$GITHUB_WORKSPACE/build/rpmbuild"
+
+      - name: Keep the packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plasma-fusion-rpm
+          # build/ is git-ignored, so the tree stays clean for the package release.
+          path: |
+            build/rpmbuild/RPMS/noarch/*.rpm
+            build/rpmbuild/SRPMS/*.rpm
+          retention-days: 14

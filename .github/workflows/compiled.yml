@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The compiled parts (navigation effect, window decoration, settings module) against the KWin,
+# KDecoration and KDE Frameworks that Fedora 44 ships: build requirements from each spec
+# (dnf builddep), configure, build and the parts' tests. A Plasma update in Fedora that breaks one
+# of them shows up here.
+
+name: compiled
+
+on:
+  pull_request:
+    paths:
+      - "packages/navigation-cpp/**"
+      - "packages/decoration-cpp/**"
+      - "packages/kcm-cpp/**"
+      - ".github/workflows/compiled.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "packages/navigation-cpp/**"
+      - "packages/decoration-cpp/**"
+      - "packages/kcm-cpp/**"
+      - ".github/workflows/compiled.yml"
+  # Weekly, so that a Plasma update in Fedora 44 is noticed without a change here.
+  schedule:
+    - cron: "40 5 * * 1" # Mondays 05:40 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compiled-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: "${{ matrix.package }} (Fedora 44)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container: registry.fedoraproject.org/fedora:44
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [navigation-cpp, decoration-cpp, kcm-cpp]
+    steps:
+      - name: Install git and builddep (checkout runs inside the container)
+        run: dnf install -y -q git dnf-plugins-core rpm-build
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the build requirements from the spec
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          cd "packages/$PACKAGE"
+          dnf builddep -y -q ./*.spec
+
+      - name: Configure, build and test
+        env:
+          PACKAGE: ${{ matrix.package }}
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          cmake -S "packages/$PACKAGE" -B "$RUNNER_TEMP/build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_TESTING=ON
+          cmake --build "$RUNNER_TEMP/build"
+          ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure
