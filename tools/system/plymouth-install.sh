@@ -174,7 +174,8 @@ layout_label() {
   fi
   [ -n "$layout" ] || return 0
   if [ -r /usr/share/X11/xkb/rules/evdev.xml ] && command -v python3 >/dev/null; then
-    short=$(python3 - "$layout" <<'EOF' 2>/dev/null || true
+    # -I: no module from the current directory or the environment (this runs as root).
+    short=$(python3 -I - "$layout" <<'EOF' 2>/dev/null || true
 import sys
 import xml.etree.ElementTree as ET
 want = sys.argv[1]

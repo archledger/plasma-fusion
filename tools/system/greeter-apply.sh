@@ -101,7 +101,9 @@ installed_package() {
 # Outputs and scales of a kwinoutputconfig.json given on stdin ("eDP-1 x1.3333 ..."); fails when
 # it is not one.
 display_summary() {
-  python3 -c '
+  # Root: isolated Python (-I) in an empty environment, so no module from the current directory or
+  # PYTHON* variables is used.
+  env -i PATH=/usr/bin:/bin python3 -I -c '
 import json, sys
 data = json.load(sys.stdin)
 outs = [s for s in data if isinstance(s, dict) and s.get("name") == "outputs"] if isinstance(data, list) else []
