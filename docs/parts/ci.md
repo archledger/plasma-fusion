@@ -42,8 +42,16 @@ functions) and calls the pure functions the tool's readers use:
 | `previous_theme_fuzzer` | `tools/device/previous-theme.py` | four files separated by NUL bytes: the user's KConfig files, kdedefaults, the previous Global Theme's `contents/defaults` and `metadata.json` | parsed values stripped text; a later value of a key wins; the package's defaults files, with the theme's name in their comment, read back as exactly the values the generator chose |
 | `keyboard_keys_fuzzer` | `packages/keyboard/plasma-fusion-keyboard-keys` | plasma-keyboard's `symbols.qml` | either the reason the page was left alone, or Esc, Tab and the four arrows each added once, the trademark key removed once, the semicolon kept, two more long-press lists; no input slower than libFuzzer's timeout (exponential backtracking; a quadratic pattern needs longer inputs, which `packages/keyboard/tests/patch_test.py` times) |
 
+The functions that read the files around those parsers are left to the unit tests: the icon
+fuzzer decodes the bytes and derives the desktop id itself, so `mode()` and `designed_names()`
+reading bytes that are not UTF-8, and `wanted()` leaving out a name too long for a file, are checked
+by `packages/appicons/tests/parse_test.py` only.
+
 Each has hand-written seeds in `fuzz/corpus/<fuzzer>/` (the cases fixed when the fuzzing was set
-up among them) and a libFuzzer dictionary `fuzz/<fuzzer>.dict`. Setting it up found, and fixed
+up among them) and a libFuzzer dictionary `fuzz/<fuzzer>.dict`. ClusterFuzzLite unpacks the seeds
+only into a stored corpus of five files or fewer (the first run, or a corpus pruned to that few),
+so a seed added later may never run there: a fixed input's regression check is its unit test, the
+seeds serve local runs and an empty start. Setting it up found, and fixed
 with tests: plasmafusionrc or `designed-apps.txt` with a byte that is not UTF-8 stopped the
 familiar icon tool; a desktop id below Wine's nested start menu longer than a file name stopped
 its refresh; a previous Global Theme whose `metadata.json` was not an object stopped "My previous
@@ -134,7 +142,9 @@ The base image's digest is not updated by Dependabot (it watches the actions onl
   centred on 1280x640, each side filled with the board's edge colour row by row).
 - OpenSSF Best Practices badge: passing, project 15168 (https://www.bestpractices.dev/projects/15168,
   registered 2026-10-02). Open items there: tagged releases (version tags, semantic versions,
-  release notes: N/A until releases exist), broader automated tests, dynamic analysis (fuzzing).
+  release notes: N/A until releases exist), broader automated tests. Dynamic analysis is the
+  fuzzing ("Fuzzing", above); its answers on the project page are updated by hand once it is on
+  `main`.
 
 ## When something speaks up
 
@@ -151,6 +161,7 @@ The base image's digest is not updated by Dependabot (it watches the actions onl
 - **A code scanning or Scorecard alert**: Security tab; fix or dismiss with a reason.
 - **A ClusterFuzzLite failure** (`cflite-pr` or `cflite-batch`): the run's artifacts hold the
   input; replay it with the fuzzer locally (above), fix the tool with a test
-  (`packages/appicons/tests/`, `tools/device/tests/previous_theme_test.py`) and add the input to
-  `fuzz/corpus/<fuzzer>/`. A failed property that the tool does not promise is fixed in the
-  fuzzer instead.
+  (`packages/appicons/tests/`, `tools/device/tests/previous_theme_test.py`,
+  `packages/keyboard/tests/patch_test.py`), which is the regression check, and add the input to
+  `fuzz/corpus/<fuzzer>/` for local runs. A failed property that the tool does not promise is fixed
+  in the fuzzer instead.
