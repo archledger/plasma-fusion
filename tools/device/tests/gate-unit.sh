@@ -899,6 +899,20 @@ S=$H/.local/state/plasma-fusion/gate
 RPM=$FB/rpm-empty/rpm FAKEBIN=$FB/pacman ROOT=$BASE/root-pacman
 gate deploy >/dev/null 2>&1
 check "v5: foreign rpm: pacman answers" grep -qx 'db=pacman' "$S/tested"
+# v5b: an rpm that cannot run (a missing library: 127) or crashes is passed over too.
+mkdir -p "$FB/rpm-broken"
+printf '#!/bin/bash\necho "rpm: error while loading shared libraries" >&2\nexit 127\n' >"$FB/rpm-broken/rpm"
+printf '#!/bin/bash\necho "plasma-workspace=6.7.5"\nkill -SEGV $$\n' >"$FB/rpm-broken/rpm-crash"
+chmod +x "$FB/rpm-broken/rpm" "$FB/rpm-broken/rpm-crash"
+make_home "$BASE/v5b"
+S=$H/.local/state/plasma-fusion/gate
+RPM=$FB/rpm-broken/rpm FAKEBIN=$FB/pacman ROOT=$BASE/root-pacman
+gate deploy >/dev/null 2>&1
+check "v5b: rpm that cannot run: pacman answers" grep -qx 'db=pacman' "$S/tested"
+rm -f "$S/tested"
+RPM=$FB/rpm-broken/rpm-crash
+gate deploy >/dev/null 2>&1
+check "v5b: crashing rpm: pacman answers" grep -qx 'db=pacman' "$S/tested"
 # v6: recorded with rpm, the versions now come from pacman: not comparable.
 make_home "$BASE/v6"
 S=$H/.local/state/plasma-fusion/gate

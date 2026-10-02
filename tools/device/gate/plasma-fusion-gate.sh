@@ -814,8 +814,9 @@ read_cache() {
   return 0
 }
 # CUR from the first package database that knows one of its packages: VERS_STATE ok, with DB,
-# PACKAGES and STAMP that database's. A database that does not answer within 3 s ends the search.
-# VERS_ASKED names the databases asked ("rpm", "rpm and pacman"; empty: none is installed).
+# PACKAGES and STAMP that database's. A database that does not answer within 3 s ends the search;
+# one whose tool cannot run (timeout's 125-127) or dies of a signal is passed over. VERS_ASKED
+# names the databases asked ("rpm", "rpm and pacman"; empty: none is installed).
 query_versions() {
   local db prog out rc line n v p vs sorted asked=()
   declare -A got=()
@@ -838,7 +839,8 @@ query_versions() {
       nix) out=$(LC_ALL=C timeout 3 "$prog" --query --requisites "$NIX_SW" 2>/dev/null) ;;
     esac
     rc=$?
-    [ "$rc" -lt 124 ] || return 1
+    [ "$rc" != 124 ] || return 1
+    [ "$rc" -lt 125 ] || continue
     got=()
     while IFS= read -r line; do
       case $db in

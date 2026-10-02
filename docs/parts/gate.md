@@ -453,7 +453,8 @@ The other six names (`plasma-workspace plasma-desktop kwin kscreenlocker libplas
 are the same everywhere. A package listed more than once (Debian binaries of one source package,
 Nix outputs) keeps each version once, in version order, whatever order the database lists them in
 (`kwin=6.3.6,6.7.4` while `kwin-common` is held back). A database that does not answer within 3 s
-ends the search.
+ends the search; a package tool that cannot run (a missing library: exit 127) or crashes is passed
+over, so a broken foreign rpm on Arch does not hide pacman.
 
 When no database answers, the versions are unknown: `deploy` records nothing (exit 1, "could not
 read the installed versions: no package database (rpm, pacman, dpkg or Nix) was found" or "... with
@@ -495,8 +496,8 @@ longer needs to be skipped where the compiled decoration is installed). New case
 - `v4` no database: `deploy` fails and records nothing; logins switch off with the reason, one
   notification; `v4b` a record made with rpm and no database later; `v4c` the earlier check's
   `no-rpm` record.
-- `v5` an rpm that knows none of the packages (next to pacman) does not answer; `v6` a record from
-  rpm against versions from pacman.
+- `v5` an rpm that knows none of the packages (next to pacman) does not answer; `v5b` neither does
+  one that exits 127 or crashes; `v6` a record from rpm against versions from pacman.
 - `v7` the engine of a95f707 records and logs in (fake rpm, the machine's rpm database stamp), then
   this one: "no change", record and cache unchanged, rpm not run.
 
