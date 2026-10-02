@@ -217,7 +217,18 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
-KEYS_TOOL=$HOME/.local/libexec/plasma-fusion/plasma-fusion-keyboard-keys
+# Plasma Fusion's helper programs: the user's copy (--install) first, then a system package's
+# (/usr/lib/plasma-fusion where the distribution has no /usr/libexec, such as Arch).
+HELPER_DIRS=("$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion /usr/lib/plasma-fusion)
+helper_path() { # $1 program name: prints the first installed copy
+  local d
+  for d in "${HELPER_DIRS[@]}"; do
+    [ -x "$d/$1" ] && { echo "$d/$1"; return 0; }
+  done
+  return 1
+}
+# The keyboard keys tool; found again after --install copied the build (section 4).
+KEYS_TOOL=${HELPER_DIRS[0]}/plasma-fusion-keyboard-keys
 BACKUP=
 CHANGES=0
 
@@ -1708,6 +1719,7 @@ managed_key plasmakeyboardrc General diacriticsPopupEnabled false
 # layouts built from plasma-keyboard's installed ones in ~/.local/share/plasma/keyboard/layouts, built
 # again at login when plasma-keyboard changes; "plasma-fusion-keyboard-keys remove" turns them off for
 # good (this run then keeps them off).
+KEYS_TOOL=$(helper_path plasma-fusion-keyboard-keys) || KEYS_TOOL=${HELPER_DIRS[0]}/plasma-fusion-keyboard-keys
 if [ -d /usr/share/plasma/keyboard/layouts ] && [ -x "$KEYS_TOOL" ]; then
   if [ "$DRY" = 1 ]; then
     note "$("$KEYS_TOOL" refresh --dry-run 2>&1 || true) $("$KEYS_TOOL" status 2>&1)"
@@ -1905,10 +1917,7 @@ install_user_service plasma-fusion-app-icons.service appicons
 # ~/.local/bin/libreoffice that is not Plasma Fusion's is left alone.
 if [ -x /usr/bin/libreoffice ]; then
   say "LibreOffice scale guard"
-  lo_guard=
-  for d in "$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion; do
-    [ -x "$d/plasma-fusion-libreoffice" ] && { lo_guard=$d/plasma-fusion-libreoffice; break; }
-  done
+  lo_guard=$(helper_path plasma-fusion-libreoffice) || lo_guard=
   lo_link=$HOME/$LO_GUARD_REL
   if [ -z "$lo_guard" ]; then
     note "note: plasma-fusion-libreoffice is not installed yet; run this again after installing it"

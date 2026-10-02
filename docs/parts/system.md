@@ -67,7 +67,7 @@ packaging/build-rpm.sh [--topdir DIR] [--no-lint]      # default DIR: build/rpmb
 | `/usr/share/plasma-fusion/backgrounds/` | foundation | `dusk-ridge-dark-{dimmed,blurred,login,splash}.png` |
 | `/usr/share/plasma-fusion/pen/templates/{Note,Whiteboard}.xopp` | pen | the pen menu finds them with StandardPaths |
 | `/usr/share/plasma-fusion/powerfx/plasma-fusion-powerfx.service` | powerfx | where `fusion-config.sh` looks for the unit to enable it per user |
-| `/usr/libexec/plasma-fusion/plasma-fusion-powerfx` | powerfx (`.local/libexec` of the build) | the unit's `ExecSearchPath` ends here; nothing is enabled by the package |
+| `/usr/libexec/plasma-fusion/plasma-fusion-powerfx` | powerfx (`.local/libexec` of the build) | in the unit's `ExecSearchPath` (as `/usr/lib/plasma-fusion/` on distributions without `/usr/libexec`); nothing is enabled by the package |
 | `/usr/share/plasma-fusion/config/` | the build's `.config`: `gtk-{3,4}.0/{gtk.css,plasma-fusion.css}`, `fontconfig/conf.d/60-plasma-fusion-fallback.conf`, `systemd/user/plasma-fusion-powerfx.service` | templates for the per-user step only; the package writes nothing into a home directory |
 | `/usr/share/plasma-fusion/tools/{device,system,pen}/*.sh`, `tools/device/gate/plasma-fusion-gate.sh`, `tools/device/previous-theme.py` | `tools/device`, `tools/system`, `tools/pen` | shebangs become `/usr/bin/bash` (Fedora's brp-mangle-shebangs); the login check and "My previous desktop" generator sit where `fusion-config.sh` expects them |
 | `/usr/share/plasma-fusion/docs/` | `README.md`, `docs/PLAN.md`, `docs/parts/*.md` | `%doc` |

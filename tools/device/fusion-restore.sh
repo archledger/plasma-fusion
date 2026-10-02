@@ -55,6 +55,16 @@ note() { printf '  %s\n' "$*"; }
 run() { if [ "$DRY" = 1 ]; then note "would: $*"; else "$@"; fi; }
 bus() { busctl --user "$@"; }
 bus_json() { busctl --user --json=short "$@"; }
+# Plasma Fusion's helper programs, found as fusion-config.sh finds them: the user's copy first,
+# then a system package's.
+HELPER_DIRS=("$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion /usr/lib/plasma-fusion)
+helper_path() { # $1 program name: prints the first installed copy
+  local d
+  for d in "${HELPER_DIRS[@]}"; do
+    [ -x "$d/$1" ] && { echo "$d/$1"; return 0; }
+  done
+  return 1
+}
 
 shopt -s nullglob
 backups=("$STATE"/backup-*/)
@@ -162,8 +172,8 @@ for unit in "${UNITS[@]}"; do
   note "stop $unit"
   if session_manager; then
     run systemctl --user stop "$unit" 2>/dev/null || true
-  elif [ "$unit" = plasma-fusion-powerfx.service ] && [ -x "$HOME/.local/libexec/plasma-fusion/plasma-fusion-powerfx" ]; then
-    run "$HOME/.local/libexec/plasma-fusion/plasma-fusion-powerfx" --apply full || true
+  elif [ "$unit" = plasma-fusion-powerfx.service ] && prog=$(helper_path plasma-fusion-powerfx); then
+    run "$prog" --apply full || true
   fi
 done
 
@@ -186,9 +196,9 @@ fi
 # 1e. The on-screen keyboard's terminal keys: Plasma Fusion's layouts out of the data directory, so
 #     plasma-keyboard reads its own again (only a directory the tool built; docs/parts/keyboard.md).
 if [ -e "$HOME/.local/share/plasma/keyboard/layouts/.plasma-fusion" ] &&
-  [ -x "$HOME/.local/libexec/plasma-fusion/plasma-fusion-keyboard-keys" ]; then
+  prog=$(helper_path plasma-fusion-keyboard-keys); then
   note "on-screen keyboard: plasma-keyboard's own layouts again"
-  run "$HOME/.local/libexec/plasma-fusion/plasma-fusion-keyboard-keys" remove || true
+  run "$prog" remove || true
   # not "removed on request": a later fusion-config.sh run builds them again
   run rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/keyboard-keys"
 fi
@@ -196,9 +206,9 @@ fi
 # 1f. Familiar app icons: the drawn icons out of ~/.local/share/icons (any of the user's own icons
 #     they replaced come back; docs/parts/app-icons.md). The service was stopped above.
 if [ -e "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/app-icons.json" ] &&
-  [ -x "$HOME/.local/libexec/plasma-fusion/plasma-fusion-app-icons" ]; then
+  prog=$(helper_path plasma-fusion-app-icons); then
   note "app icons: the familiar icons removed"
-  run "$HOME/.local/libexec/plasma-fusion/plasma-fusion-app-icons" remove || true
+  run "$prog" remove || true
   run rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/app-icons.json"
 fi
 

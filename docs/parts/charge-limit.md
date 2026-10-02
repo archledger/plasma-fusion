@@ -11,6 +11,11 @@ settings; want 14, ThinkPads keep the limit across reboots, PowerDevil has no te
 | polkit action | `org.plasmafusion.charge-limit` -> `/usr/share/polkit-1/actions/`; `allow_active=yes`, `allow_inactive=no`, `allow_any=no`, `exec.path` = the helper |
 | Quick settings | `services/ChargeLimit.qml`, the `charge` facade in `Backend.qml`, the "Charge limit" tile and its choices in `QuickSettingsMain.qml` |
 
+The helper path `/usr/libexec/plasma-fusion/plasma-fusion-charge-limit` is written in two places, the
+action's `exec.path` and `ChargeLimit.qml`'s `helper` (with the action's path in `policy`); they must
+name the same file (pkexec matches the path). A package for a distribution that keeps helpers
+elsewhere substitutes it in both (Arch: `/usr/lib/plasma-fusion`; NixOS: the store path).
+
 The value is the battery's own stop threshold (`/sys/class/power_supply/BAT*/charge_control_end_threshold`,
 and `charge_control_start_threshold` where present), the same one PowerDevil's Energy Saving page
 writes through its helper; that page shows what the tile sets. Not a Plasma Fusion setting file.

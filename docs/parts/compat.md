@@ -32,7 +32,9 @@ all "huge on the 100 % screen next to a scaled one"; the known workaround is XWa
 ## LibreOffice scale guard
 
 - `packages/compat/plasma-fusion-libreoffice`, staged to `.local/libexec/plasma-fusion/` (RPM:
-  `/usr/libexec/plasma-fusion/`). fusion-config.sh links `~/.local/bin/libreoffice` to it (first in
+  `/usr/libexec/plasma-fusion/`; fusion-config.sh takes the first of `~/.local/libexec`,
+  `/usr/local/libexec`, `/usr/libexec` and `/usr/lib`, each `/plasma-fusion`). fusion-config.sh
+  links `~/.local/bin/libreoffice` to it (first in
   the session's PATH, so menus, the dock and opening files all pass through it) and copies
   `soffice.desktop` (hidden) to `~/.local/share/applications/`. A `~/.local/bin/libreoffice` that
   is not Plasma Fusion's is left alone; both paths are in the backup (fusion-restore.sh removes
