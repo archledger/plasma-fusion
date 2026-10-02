@@ -1376,6 +1376,10 @@ class FieldLog:
                     if not units_checked:
                         units_checked = True
                         self.check_units(now)
+                    if self.log.late:
+                        # Once a minute at most: reading the journal back after a stop writes to
+                        # earlier days with every chunk.
+                        self.handle_late()
                 if mono >= next_flush:
                     next_flush = mono + FLUSH_S
                     self.save_state()
@@ -1395,8 +1399,6 @@ class FieldLog:
                         cleanup(self.sdir, nday)
                         day = nday
                     self.save_state()
-                elif self.log.late:
-                    self.handle_late()
                 if self.write_digest_now:
                     self.write_digest_now = False
                     self.log.flush()

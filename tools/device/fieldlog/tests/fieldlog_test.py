@@ -859,6 +859,24 @@ class LateDays(unittest.TestCase):
         self.assertIn(f"Recorded after their day had ended (in that day's digest, written again): {yday}: "
                       "session crash 1x.", today)
 
+    def test_journal_read_back_rewrites_a_day_once_a_minute(self):
+        # Yesterday's lines read back at a start go to yesterday in chunks; its digest is rewritten
+        # at the minute tick and at the stop, not after every chunk.
+        d = fresh_dir("late-readback")
+        yday = fl.local_day(time.time() - 86400)
+        t0 = int(fl.day_start(yday) + 12 * 3600)
+        lines = [jline("plasmashell", f"file:///usr/share/plasma/plasmoids/org.plasmafusion.dock/contents/ui/main.qml:{i}: "
+                       "TypeError: Cannot read property 'width' of null", ts=t0 + i, QT_CATEGORY="qml") for i in range(6000)]
+        env = fake_setup(d, journal=lines, seconds=3, interval=2)
+        r = subprocess.run([sys.executable, str(TOOL), "run"], env=env, capture_output=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr.decode())
+        today = fl.read_events(fl.local_day(time.time()), d / "state/plasma-fusion/fieldlog")
+        late = [e for e in today if e["kind"] == "late"]
+        self.assertLessEqual(len(late), 2, len(late))
+        self.assertEqual(sum(e["count"] for e in late), 6000)
+        self.assertIn("| Plasma Fusion errors / warnings | 6000 / 0 (6000 kinds) |",
+                      (d / f"state/plasma-fusion/fieldlog/digest-{yday}.md").read_text())
+
     def test_crash_seen_after_midnight(self):
         # Local midnight 4 s after the start (a made-up time zone); a plasmashell crash at 23:59:58 is
         # listed by coredumpctl only from 00:00:02.
