@@ -20,7 +20,19 @@
 # removed (stock keyboard) and the reason is recorded. Records: ~/.local/state/plasma-fusion/keyboard-keys.
 import json, os, pathlib, re, shutil, subprocess, sys
 
-SYSTEM = pathlib.Path(os.environ.get("PF_KEYBOARD_SYSTEM", "/usr/share/plasma/keyboard/layouts"))
+def system_layouts():
+    # plasma-keyboard's own layouts: the first in the system data directories (XDG_DATA_DIRS:
+    # /usr/share on Fedora, the system profile on NixOS), never a directory this tool built.
+    if os.environ.get("PF_KEYBOARD_SYSTEM"):
+        return pathlib.Path(os.environ["PF_KEYBOARD_SYSTEM"])
+    for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":"):
+        p = pathlib.Path(d) / "plasma/keyboard/layouts"
+        if d.startswith("/") and p.is_dir() and not (p / ".plasma-fusion").exists():
+            return p
+    return pathlib.Path("/usr/share/plasma/keyboard/layouts")
+
+
+SYSTEM = system_layouts()
 DATA = pathlib.Path(os.environ.get("XDG_DATA_HOME") or pathlib.Path.home() / ".local/share")
 OUT = DATA / "plasma/keyboard/layouts"
 STATE = pathlib.Path(os.environ.get("XDG_STATE_HOME") or pathlib.Path.home() / ".local/state") / "plasma-fusion"

@@ -477,6 +477,16 @@ kw kdeglobals KDE LookAndFeelPackage org.plasmafusion.dark.desktop
 gate login
 check "t4: uninstalled unit: link not put back" [ ! -L "$H/.config/$WANTS/plasma-fusion-powerfx.service" ]
 check "t4: InputMethod back as the policy left it" [ "$(get kwinrc Wayland InputMethod)" = /usr/share/applications/org.kde.plasma.keyboard.desktop ]
+# plasma-keyboard in another system data directory (NixOS) is the policy's value too.
+make_home "$BASE/t4b"
+kw kwinrc Wayland InputMethod /run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop
+gate deploy >/dev/null 2>&1
+kw kdeglobals KDE LookAndFeelPackage org.kde.breeze.desktop
+gate login
+check "t4b: NixOS plasma-keyboard value removed under Breeze" [ "$(get kwinrc Wayland InputMethod)" = "<absent>" ]
+kw kdeglobals KDE LookAndFeelPackage org.plasmafusion.dark.desktop
+gate login
+check "t4b: and back" [ "$(get kwinrc Wayland InputMethod)" = /run/current-system/sw/share/applications/org.kde.plasma.keyboard.desktop ]
 # A record naming another path is ignored (no file outside the wants link is ever moved).
 make_home "$BASE/t5"
 gate deploy >/dev/null 2>&1

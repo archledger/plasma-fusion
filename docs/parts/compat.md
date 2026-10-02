@@ -36,7 +36,8 @@ all "huge on the 100 % screen next to a scaled one"; the known workaround is XWa
   `/usr/local/libexec`, `/usr/libexec` and `/usr/lib`, each `/plasma-fusion`). fusion-config.sh
   links `~/.local/bin/libreoffice` to it (first in
   the session's PATH, so menus, the dock and opening files all pass through it) and copies
-  `soffice.desktop` (hidden) to `~/.local/share/applications/`. A `~/.local/bin/libreoffice` that
+  `soffice.desktop` (hidden) to `~/.local/share/applications/`, only when LibreOffice itself is in
+  PATH (any `libreoffice` but this guard; `/usr/bin` on Fedora). A `~/.local/bin/libreoffice` that
   is not Plasma Fusion's is left alone; both paths are in the backup (fusion-restore.sh removes
   them).
 - At each start it asks KScreen (`kscreen-doctor -j`, about 30 ms) for the enabled screens. Only

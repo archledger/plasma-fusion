@@ -11,7 +11,9 @@ held; `;` and `\` stay), and moves the six symbols to the long-press lists of th
 the `"` key (“ ” « »). Same number of keys and rows, so nothing else moves.
 
 How: plasma-keyboard reads its layouts from the first `plasma/keyboard/layouts` directory of the data
-directories, and nowhere else. The tool builds `~/.local/share/plasma/keyboard/layouts` with a link
+directories, and nowhere else (the system's: the first in `XDG_DATA_DIRS`, `/usr/share` on Fedora, the
+system profile on NixOS; a directory the tool built is never taken for it). The tool builds
+`~/.local/share/plasma/keyboard/layouts` with a link
 to every system language directory and a `fallback` directory (English and every language without
 its own layout) whose files link to the system's, except `symbols.qml`: a copy of the *installed* file
 with that row replaced (exact text matches; if one fails, the directory is removed and the stock

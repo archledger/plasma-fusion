@@ -417,7 +417,9 @@ the lead directly.
   excluded). Before, only the list shrank and the rest was cut off.
 - **Keyboard policy** (`services/TabletPolicy.qml`, TABLET 3.3): kwinrc `[Wayland] InputMethod` per
   posture, written with `--notify` only when it differs and only once KWin has reported the posture;
-  `VirtualKeyboardMode` is never written.
+  `VirtualKeyboardMode` is never written. The value is plasma-keyboard's desktop file, looked up once
+  at start in the system data directories (`XDG_DATA_DIRS`; `/usr/share/applications` on Fedora, the
+  system profile on NixOS; 2026-10-02), with the Fedora path when none has it.
 - **Rotation lock** (F14, T19): lock = one `kscreen-doctor output.<o>.rotation.<current>
   output.<o>.autoRotatePolicy.never`; unlock = `autoRotatePolicy.inTabletMode rotation.normal`; leaving
   tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc

@@ -213,7 +213,7 @@ In addition to what `gate.md` describes, for the chosen backup and every later r
 |---|---|---|
 | `tablet` | `kwinrc [Plugins] plasmafusion-tabletEnabled=true` | written `false` (not removed: the script's EnabledByDefault is not the check's to know) |
 | `navigation` | `kwinrc [Plugins] plasmafusion_navigationEnabled=true` | written `false`; also after a KWin or Qt update (version-checked like the compiled decoration) |
-| `inputmethod` | user `kwinrc [Wayland] InputMethod` is empty or `/usr/share/applications/org.kde.plasma.keyboard.desktop` (the values the Fusion policy writes) | the user key removed, so Fedora's default keyboard returns; another input method is never touched |
+| `inputmethod` | user `kwinrc [Wayland] InputMethod` is empty or `/usr/share/applications/org.kde.plasma.keyboard.desktop` (the values the Fusion policy writes; on other distributions the same file in another system data directory, such as `/run/current-system/sw/share/applications/`) | the user key removed, so Fedora's default keyboard returns; another input method is never touched |
 | `powerfx`, `pengarage` | `~/.config/systemd/user/graphical-session.target.wants/plasma-fusion-{powerfx,pen-garage}.service` exists | the link moved to `~/.local/state/plasma-fusion/gate/saved/` (no systemd call at login: startplasma reloads the manager after the check, so the service does not start at this login) |
 
 They follow the existing theme-part rules: recorded first, switched off once (a part the user turns

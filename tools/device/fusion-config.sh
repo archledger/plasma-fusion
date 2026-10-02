@@ -163,7 +163,8 @@ PEN_SHORTCUT_TEXT=Meta+Shift+W
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
 NOTIFY_SHORTCUT=$((META + 0x4e))
 LAUNCHER_ACTION="activate application launcher"
-# The on-screen keyboard (plasma-keyboard) as kwinrc [Wayland] InputMethod names it.
+# The on-screen keyboard (plasma-keyboard) as kwinrc [Wayland] InputMethod names it on Fedora;
+# section 4 takes the copy in the system data directories (XDG_DATA_DIRS) where there is one.
 OSK_DESKTOP=/usr/share/applications/org.kde.plasma.keyboard.desktop
 # Window switcher: KWin hands every window to org.plasmafusion.switcher (DesktopMode 0), which
 # opens on "This workspace" and filters the list itself; its "All workspaces" tab needs the
@@ -294,6 +295,26 @@ data_path() { # $1 path relative to a data directory
     for base in ${d//:/ }; do
       [ -e "$base/$1" ] && { echo "$base/$1"; return 0; }
     done
+  done
+  return 1
+}
+# A path in the system's data directories only (XDG_DATA_DIRS: /usr/share on Fedora, the system
+# profile on NixOS), never the user's own. $1 path relative to a data directory
+system_data_path() {
+  local d dirs
+  IFS=: read -r -a dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for d in "${dirs[@]}"; do
+    [[ $d == /* ]] && [ -e "$d/$1" ] && { echo "$d/$1"; return 0; }
+  done
+  return 1
+}
+# LibreOffice itself in PATH (/usr/bin on Fedora), not Plasma Fusion's ~/.local/bin guard.
+libreoffice_installed() {
+  local d dirs
+  IFS=: read -r -a dirs <<<"${PATH:-}"
+  for d in "${dirs[@]}" /usr/bin; do
+    [ -n "$d" ] && [ -x "$d/libreoffice" ] || continue
+    [[ $(readlink -f "$d/libreoffice") == */plasma-fusion-libreoffice ]] || return 0
   done
   return 1
 }
@@ -437,7 +458,7 @@ UNSET=__plasma_fusion_unset__
 cpp_decoration_installed() {
   local d dirs
   IFS=: read -r -a dirs <<<"${QT_PLUGIN_PATH:-}"
-  for d in "${dirs[@]}" /usr/lib64/qt6/plugins /usr/lib/qt6/plugins /usr/lib/x86_64-linux-gnu/qt6/plugins; do
+  for d in "${dirs[@]}" /usr/lib64/qt6/plugins /usr/lib/qt6/plugins /usr/lib/x86_64-linux-gnu/qt6/plugins /run/current-system/sw/lib/qt-6/plugins; do
     [ -n "$d" ] && [ -f "$d/org.kde.kdecoration3/org.plasmafusion.decoration.so" ] && return 0
   done
   return 1
@@ -809,7 +830,7 @@ TRAY_HIDE=(org.kde.plasma.vault org.kde.plasma.devicenotifier org.kde.kscreen or
 installed_previews() {
   local p d dirs out=()
   IFS=: read -r -a dirs <<<"${QT_PLUGIN_PATH:-}"
-  dirs+=(/usr/lib64/qt6/plugins /usr/lib/qt6/plugins /usr/lib/x86_64-linux-gnu/qt6/plugins)
+  dirs+=(/usr/lib64/qt6/plugins /usr/lib/qt6/plugins /usr/lib/x86_64-linux-gnu/qt6/plugins /run/current-system/sw/lib/qt-6/plugins)
   for p in "${FOLDER_PREVIEWS[@]}"; do
     for d in "${dirs[@]}"; do
       [ -n "$d" ] && [ -e "$d/kf6/thumbcreator/$p.so" ] && { out+=("$p"); break; }
@@ -1708,7 +1729,8 @@ fi
 if bus get-property org.kde.KWin /org/kde/KWin org.kde.KWin.TabletModeManager tabletMode 2>/dev/null | grep -q true; then
   note "kwinrc [Wayland] InputMethod: tablet posture, left on (quick settings switches it)"
 else
-  managed_key kwinrc Wayland InputMethod "" "$OSK_DESKTOP"
+  osk=$(system_data_path applications/org.kde.plasma.keyboard.desktop) || osk=$OSK_DESKTOP
+  managed_key kwinrc Wayland InputMethod "" "$osk" "$OSK_DESKTOP"
 fi
 # plasma-keyboard (6.7 and later) shows an accent pop-up when a physical key is held 600 ms while
 # it runs, which turns a held key into a pop-up and broke password entry for users
@@ -1720,7 +1742,7 @@ managed_key plasmakeyboardrc General diacriticsPopupEnabled false
 # again at login when plasma-keyboard changes; "plasma-fusion-keyboard-keys remove" turns them off for
 # good (this run then keeps them off).
 KEYS_TOOL=$(helper_path plasma-fusion-keyboard-keys) || KEYS_TOOL=${HELPER_DIRS[0]}/plasma-fusion-keyboard-keys
-if [ -d /usr/share/plasma/keyboard/layouts ] && [ -x "$KEYS_TOOL" ]; then
+if system_data_path plasma/keyboard/layouts >/dev/null && [ -x "$KEYS_TOOL" ]; then
   if [ "$DRY" = 1 ]; then
     note "$("$KEYS_TOOL" refresh --dry-run 2>&1 || true) $("$KEYS_TOOL" status 2>&1)"
   else
@@ -1915,7 +1937,8 @@ install_user_service plasma-fusion-app-icons.service appicons
 # sits next to a scaled one (LibreOffice's Qt backends draw twice too big there, tdf#141578), and
 # the hidden soffice.desktop names those XWayland windows. Only with LibreOffice installed; a
 # ~/.local/bin/libreoffice that is not Plasma Fusion's is left alone.
-if [ -x /usr/bin/libreoffice ]; then
+# shellcheck disable=SC2088 # "~/" is printed, not expanded
+if libreoffice_installed; then
   say "LibreOffice scale guard"
   lo_guard=$(helper_path plasma-fusion-libreoffice) || lo_guard=
   lo_link=$HOME/$LO_GUARD_REL

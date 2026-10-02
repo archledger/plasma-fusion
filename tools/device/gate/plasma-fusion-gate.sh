@@ -101,8 +101,9 @@ FOLDER=org.kde.plasma.folder
 APPLETSRC=plasma-org.kde.plasma.desktop-appletsrc
 PARTS=(lockscreen decoration navigation desktop snap attach outline switcher tablet inputmethod powerfx pengarage)
 # The on-screen keyboard values the Fusion keyboard policy writes (quick settings, fusion-config.sh):
-# empty (keyboard off in laptop posture) and plasma-keyboard. Any other input method is the user's.
-OSK=/usr/share/applications/org.kde.plasma.keyboard.desktop
+# empty (keyboard off in laptop posture) and plasma-keyboard's desktop file in a system data
+# directory (/usr/share/applications on Fedora). Any other input method is the user's.
+OSK=org.kde.plasma.keyboard.desktop
 # User services enabled by fusion-config.sh (WantedBy=graphical-session.target): part -> unit.
 declare -A UNIT=([powerfx]=plasma-fusion-powerfx.service [pengarage]=plasma-fusion-pen-garage.service)
 WANTS_REL=systemd/user/graphical-session.target.wants
@@ -414,7 +415,7 @@ aurorae_installed() { # THEME
 cpp_deco_installed() {
   local d dirs sys
   IFS=: read -r -a dirs <<<"${QT_PLUGIN_PATH:-}"
-  IFS=: read -r -a sys <<<"${PF_GATE_SYSTEM_PLUGINS-/usr/lib64/qt6/plugins:/usr/lib/qt6/plugins:/usr/lib/x86_64-linux-gnu/qt6/plugins}"
+  IFS=: read -r -a sys <<<"${PF_GATE_SYSTEM_PLUGINS-/usr/lib64/qt6/plugins:/usr/lib/qt6/plugins:/usr/lib/x86_64-linux-gnu/qt6/plugins:/run/current-system/sw/lib/qt-6/plugins}"
   for d in "${dirs[@]}" "${sys[@]}"; do
     [ -n "$d" ] && [ -f "$d/org.kde.kdecoration3/$CPP_DECO.so" ] && return 0
   done
@@ -447,7 +448,7 @@ part_on() {
       return 1 ;;
     # Only the values the Fusion keyboard policy writes; the user file only (the system's value is
     # Fedora's default).
-    inputmethod) ustate kwinrc Wayland InputMethod && case $REPLY in = | "=$OSK") return 0 ;; esac; return 1 ;;
+    inputmethod) ustate kwinrc Wayland InputMethod && case $REPLY in = | =/*/applications/"$OSK") return 0 ;; esac; return 1 ;;
     powerfx | pengarage) [ -L "$CONFIG/$WANTS_REL/${UNIT[$1]}" ] || [ -e "$CONFIG/$WANTS_REL/${UNIT[$1]}" ] ;;
     *) return 1 ;;
   esac

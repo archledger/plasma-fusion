@@ -82,7 +82,7 @@ it starts KWin; `kwinrc` is read by KWin when it starts.
 | outline | `kwinrc [Outline] QmlPath` contains `plasmafusion` | Fusion theme |
 | switcher | effective `kwinrc [TabBox]` or `[TabBoxAlternative] LayoutName=org.plasmafusion.switcher` | Fusion theme |
 | tablet (DEVICE-1) | effective `kwinrc [Plugins] plasmafusion-tabletEnabled=true` | Fusion theme |
-| inputmethod (DEVICE-1) | user `kwinrc [Wayland] InputMethod` empty or plasma-keyboard (the Fusion keyboard policy's values) | Fusion theme |
+| inputmethod (DEVICE-1) | user `kwinrc [Wayland] InputMethod` empty or plasma-keyboard (the Fusion keyboard policy's values: `org.kde.plasma.keyboard.desktop` in any `.../applications/` directory, `/usr/share` on Fedora; test `t4b`) | Fusion theme |
 | powerfx, pengarage (DEVICE-1) | `~/.config/systemd/user/graphical-session.target.wants/plasma-fusion-{powerfx,pen-garage}.service` exists | Fusion theme |
 
 "Fusion theme": `kdeglobals [KDE] LookAndFeelPackage` is `org.plasmafusion.dark.desktop` or

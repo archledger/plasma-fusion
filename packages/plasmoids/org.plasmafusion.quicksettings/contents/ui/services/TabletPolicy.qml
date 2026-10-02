@@ -44,7 +44,12 @@ Item {
     // Name of the screen quick settings sits on (the rotation lock's fallback output).
     property string screenName: ""
 
-    readonly property string oskDesktop: "/usr/share/applications/org.kde.plasma.keyboard.desktop"
+    // plasma-keyboard's desktop file as KWin names it: the first in the system data directories
+    // (XDG_DATA_DIRS; /usr/share on Fedora, the system profile on NixOS), found at start.
+    property string oskDesktop: "/usr/share/applications/org.kde.plasma.keyboard.desktop"
+    readonly property string findOskScript: "IFS=:; for d in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do "
+        + "f=$d/applications/org.kde.plasma.keyboard.desktop; "
+        + "case $d in /*) [ -f \"$f\" ] && { echo \"$f\"; exit 0; } ;; esac; done"
 
     // ---- Commands
     function quote(value: string): string {
@@ -392,10 +397,15 @@ Item {
         run("kreadconfig6 --file kwinrc --group Script-plasmafusion-tablet --key WindowMode --default fullscreen", (code, out) => {
             policy.windowMode = out.trim() === "windowed" ? "windowed" : "fullscreen";
         });
-        run("kreadconfig6 --file kwinrc --group Wayland --key InputMethod", (code, out) => {
-            policy.inputMethod = out.trim();
-            policy.inputMethodKnown = true;
-            policy.applyKeyboard();
+        run("sh -c " + quote(findOskScript), (found, path) => {
+            if (path.trim() !== "") {
+                policy.oskDesktop = path.trim();
+            }
+            run("kreadconfig6 --file kwinrc --group Wayland --key InputMethod", (code, out) => {
+                policy.inputMethod = out.trim();
+                policy.inputMethodKnown = true;
+                policy.applyKeyboard();
+            });
         });
         run("kreadconfig6 --file kwinrc --group Input --key TabletMode --default auto", (code, out) => {
             const value = out.trim();

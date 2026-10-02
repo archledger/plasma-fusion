@@ -281,7 +281,8 @@ for (var sc = 1; sc < screenCount; ++sc) {
 var FOLDER_KEYS = { url: "desktop:/", sortMode: -1, arrangement: 1, alignment: 0, iconSize: 2, popups: false,
                     toolTips: false, selectionMarkers: true, useTypeAhead: true };
 var PREVIEWS = ["imagethumbnail", "jpegthumbnail", "svgthumbnail", "gsthumbnail", "opendocumentthumbnail", "ffmpegthumbs"];
-var PLUGIN_DIRS = ["/usr/lib64/qt6/plugins", "/usr/lib/qt6/plugins", "/usr/lib/x86_64-linux-gnu/qt6/plugins"];
+var PLUGIN_DIRS = ["/usr/lib64/qt6/plugins", "/usr/lib/qt6/plugins", "/usr/lib/x86_64-linux-gnu/qt6/plugins",
+                   "/run/current-system/sw/lib/qt-6/plugins"];
 function installedPreviews() {
     var out = [];
     for (var i = 0; i < PREVIEWS.length; ++i) {
