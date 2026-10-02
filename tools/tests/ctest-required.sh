@@ -13,7 +13,7 @@ part=${1:?usage: ctest-required.sh PART_DIR BUILD_DIR}
 build=${2:?usage: ctest-required.sh PART_DIR BUILD_DIR}
 
 case $(basename "$part") in
-  decoration-cpp) required=(pfdeco-preview-dark pfdeco-preview-light) ;;
+  decoration-cpp) required=(pfdeco-preview-dark pfdeco-preview-light pfdeco-fuzz) ;;
   kcm-cpp) required=(kcmctl-load) ;;
   # The navigation effect has no tests of its own yet.
   *) required=() ;;

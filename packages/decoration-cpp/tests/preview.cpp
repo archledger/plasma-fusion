@@ -16,6 +16,10 @@
       pfdeco-preview --out DIR --scheme FILE.colors --name dark [--fonts DIR] [--backdrop PNG]
                      [--frame X,Y,W,H] [--scales 1,1.3333333]
 
+    With --fuzz it runs random scenes instead (runFuzz below: random configuration, button lists,
+    fonts, window states, screens, input events), --scenes of them from the generator seeded with
+    --seed; PF_FUZZ_COUNT and PF_FUZZ_SEED give the defaults.
+
     The caller sets XDG_CONFIG_HOME to a scratch directory; the tool writes plasmafusionrc and
     kwinrc there for each scene (kdeglobals should be the colour scheme, for the accent ring).
 */
@@ -52,8 +56,10 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPluginLoader>
+#include <QRandomGenerator>
 #include <QTextStream>
 #include <QTimer>
+#include <QWheelEvent>
 
 #include <algorithm>
 #include <cmath>
@@ -906,6 +912,391 @@ struct Harness {
     }
 };
 
+// --- random scenes (--fuzz) ------------------------------------------------------------------
+
+// One of `valid`, or (one time in three) an odd value: empty, blank, unknown, out of range, not a
+// number, right-to-left text, very long.
+QString randomValue(QRandomGenerator &rng, const QStringList &valid)
+{
+    static const QStringList odd{QString(),
+                                 QStringLiteral(" "),
+                                 QStringLiteral("Unknown"),
+                                 QStringLiteral("-1"),
+                                 QStringLiteral("2147483648"),
+                                 QStringLiteral("nan"),
+                                 QStringLiteral("1e308"),
+                                 QStringLiteral("[Decoration]"),
+                                 QStringLiteral("\u202e\u0645\u062b\u0627\u0644\u202c"),
+                                 QString(400, QLatin1Char('x'))};
+    if (rng.bounded(3) == 0) {
+        return odd.at(rng.bounded(int(odd.size())));
+    }
+    return valid.at(rng.bounded(int(valid.size())));
+}
+
+// The keys the decoration reads (fusionconfig.cpp), each with a random value or left out.
+void writeRandomConfig(QRandomGenerator &rng)
+{
+    const QStringList booleans{QStringLiteral("true"), QStringLiteral("false"), QStringLiteral("1"), QStringLiteral("0")};
+    auto entry = [&rng](KConfigGroup &group, const char *key, const QStringList &valid) {
+        if (rng.bounded(5) == 0) {
+            group.deleteEntry(key);
+        } else {
+            group.writeEntry(key, randomValue(rng, valid));
+        }
+    };
+    KConfig fusion(QStringLiteral("plasmafusionrc"), KConfig::NoGlobals);
+    KConfigGroup deco(&fusion, QStringLiteral("Decoration"));
+    entry(deco, "ButtonStyle", {QStringLiteral("RightGlyphs"), QStringLiteral("LeftCircles"), QStringLiteral("ShowOnHover"), QStringLiteral(" leftcircles ")});
+    entry(deco, "SnapLayoutsOnHover", booleans);
+    fusion.sync();
+    KConfig kwin(QStringLiteral("kwinrc"), KConfig::NoGlobals);
+    KConfigGroup plugins(&kwin, QStringLiteral("Plugins"));
+    entry(plugins, "plasmafusion-snapEnabled", booleans);
+    kwin.sync();
+    KConfig globals(QStringLiteral("kdeglobals"), KConfig::NoGlobals);
+    KConfigGroup kde(&globals, QStringLiteral("KDE"));
+    entry(kde, "AnimationDurationFactor", {QStringLiteral("0"), QStringLiteral("0.5"), QStringLiteral("1"), QStringLiteral("20")});
+    globals.sync();
+}
+
+QList<DecorationButtonType> randomButtons(QRandomGenerator &rng)
+{
+    static const QList<DecorationButtonType> types{DecorationButtonType::Menu,
+                                                   DecorationButtonType::ApplicationMenu,
+                                                   DecorationButtonType::OnAllDesktops,
+                                                   DecorationButtonType::Minimize,
+                                                   DecorationButtonType::Maximize,
+                                                   DecorationButtonType::Close,
+                                                   DecorationButtonType::ContextHelp,
+                                                   DecorationButtonType::Shade,
+                                                   DecorationButtonType::KeepBelow,
+                                                   DecorationButtonType::KeepAbove,
+                                                   DecorationButtonType::Custom,
+                                                   DecorationButtonType::Spacer,
+                                                   DecorationButtonType::ExcludeFromCapture};
+    QList<DecorationButtonType> list;
+    const int count = rng.bounded(8);
+    for (int i = 0; i < count; ++i) {
+        list << types.at(rng.bounded(int(types.size())));
+    }
+    return list;
+}
+
+qreal randomLength(QRandomGenerator &rng)
+{
+    static const QList<qreal> lengths{0, 1, 7, 40, 99.5, 320, 650, 1366, 2560, 7680};
+    return rng.bounded(3) == 0 ? lengths.at(rng.bounded(int(lengths.size()))) : rng.bounded(3000.0);
+}
+
+qreal randomScale(QRandomGenerator &rng)
+{
+    static const QList<qreal> scales{0.5, 1, 1.25, 4.0 / 3.0, 1.5, 1.75, 2, 3};
+    return scales.at(rng.bounded(int(scales.size())));
+}
+
+QString randomCaption(QRandomGenerator &rng)
+{
+    static const QStringList captions{QString(),
+                                      QStringLiteral("Appearance"),
+                                      QStringLiteral("A very long document title that does not fit into the title bar of this window at all — Kate"),
+                                      QStringLiteral("\u0645\u0633\u062a\u0646\u062f \u062c\u062f\u064a\u062f \u2014 Kate"),
+                                      QStringLiteral("tab\there, new\nline, zero\u200bwidth, e\u0301"),
+                                      QStringLiteral("\U0001F600 \U0001F680"),
+                                      QString(3000, QLatin1Char('W'))};
+    return captions.at(rng.bounded(int(captions.size())));
+}
+
+QRect randomScreen(QRandomGenerator &rng)
+{
+    static const QList<QSize> sizes{QSize(1440, 900), QSize(1280, 799), QSize(1280, 800), QSize(1366, 768), QSize(768, 1366), QSize(3840, 2160), QSize(0, 0)};
+    if (rng.bounded(8) == 0) {
+        return QRect();
+    }
+    return QRect(QPoint(0, 0), sizes.at(rng.bounded(int(sizes.size()))));
+}
+
+// The decoration painted into an image of at most 1600 x 400 logical px (enough for the title bar
+// and two corners of any window).
+void paintCapped(Decoration *deco, qreal scale)
+{
+    const QSizeF logical(std::clamp(deco->size().width(), 1.0, 1600.0), std::clamp(deco->size().height(), 1.0, 400.0));
+    QImage img((logical * scale).toSize().expandedTo(QSize(1, 1)), QImage::Format_ARGB32_Premultiplied);
+    img.setDevicePixelRatio(scale);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    deco->paint(&p, QRectF(QPointF(0, 0), deco->size()));
+}
+
+// One random change or input event for a live decoration.
+void randomStep(Harness &h, Harness::Instance &in, QRandomGenerator &rng, FakeTabletMode *tablet, FakeOutput *screen)
+{
+    Decoration *d = in.deco;
+    WindowState &st = *in.state;
+    DecoratedWindow *dw = in.window->w();
+    auto flip = [&rng] {
+        return rng.bounded(2) == 1;
+    };
+    // Anywhere over the title bar and a little around it, or the centre of a visible button.
+    auto point = [&] {
+        const auto buttons = h.visibleButtons(d);
+        if (!buttons.isEmpty() && flip()) {
+            return buttons.at(rng.bounded(int(buttons.size())))->geometry().center();
+        }
+        return QPointF(rng.bounded(d->size().width() + 80) - 40, rng.bounded(d->borderTop() + 80) - 40);
+    };
+    auto mouseButton = [&rng] {
+        static const QList<Qt::MouseButton> buttons{Qt::LeftButton, Qt::LeftButton, Qt::RightButton, Qt::MiddleButton};
+        return buttons.at(rng.bounded(int(buttons.size())));
+    };
+    switch (rng.bounded(26)) {
+    case 0:
+    case 1:
+        h.hover(d, point());
+        break;
+    case 2:
+        h.leave(d);
+        break;
+    case 3:
+    case 4:
+        h.press(d, point(), mouseButton());
+        break;
+    case 5:
+    case 6:
+        h.release(d, point(), mouseButton());
+        break;
+    case 7: {
+        const QPointF p = point();
+        QMouseEvent e(QEvent::MouseButtonDblClick, p, p, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(d, &e);
+        break;
+    }
+    case 8: {
+        const QPointF p = point();
+        QWheelEvent e(p, p, QPoint(), QPoint(0, flip() ? 120 : -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        QCoreApplication::sendEvent(d, &e);
+        break;
+    }
+    case 9:
+        st.active = !st.active;
+        Q_EMIT dw->activeChanged(st.active);
+        break;
+    case 10:
+        st.maximized = !st.maximized;
+        Q_EMIT dw->maximizedChanged(st.maximized);
+        break;
+    case 11:
+        st.maximizedH = flip();
+        st.maximizedV = flip();
+        Q_EMIT dw->maximizedHorizontallyChanged(st.maximizedH);
+        Q_EMIT dw->maximizedVerticallyChanged(st.maximizedV);
+        break;
+    case 12:
+        st.shaded = !st.shaded;
+        Q_EMIT dw->shadedChanged(st.shaded);
+        break;
+    case 13:
+        st.width = randomLength(rng);
+        st.height = randomLength(rng);
+        Q_EMIT dw->widthChanged(st.width);
+        Q_EMIT dw->heightChanged(st.height);
+        Q_EMIT dw->sizeChanged(QSizeF(st.width, st.height));
+        break;
+    case 14:
+        st.caption = randomCaption(rng);
+        Q_EMIT dw->captionChanged(st.caption);
+        break;
+    case 15:
+        st.edges = Qt::Edges::fromInt(rng.bounded(16));
+        Q_EMIT dw->adjacentScreenEdgesChanged(st.edges);
+        break;
+    case 16:
+        if (h.otherScheme) {
+            st.scheme = st.scheme == h.scheme ? h.otherScheme : h.scheme;
+        }
+        Q_EMIT dw->paletteChanged(in.window->palette());
+        break;
+    case 17:
+        st.scale = randomScale(rng);
+        Q_EMIT dw->nextScaleChanged();
+        Q_EMIT dw->scaleChanged();
+        break;
+    case 18:
+        writeRandomConfig(rng);
+        wait(1); // the configuration is read again in the next event-loop pass
+        Q_EMIT h.settings->reconfigured();
+        break;
+    case 19:
+        s_left = randomButtons(rng);
+        s_right = randomButtons(rng);
+        QGuiApplication::setLayoutDirection(rng.bounded(4) == 0 ? Qt::RightToLeft : Qt::LeftToRight);
+        Q_EMIT h.settings->decorationButtonsLeftChanged(s_left);
+        Q_EMIT h.settings->decorationButtonsRightChanged(s_right);
+        break;
+    case 20:
+        s_font.setPixelSize(1 + rng.bounded(64));
+        Q_EMIT h.settings->fontChanged(s_font);
+        break;
+    case 21:
+        if (tablet) {
+            tablet->set(flip());
+        }
+        break;
+    case 22:
+        if (screen) {
+            screen->setGeometry(randomScreen(rng));
+        }
+        break;
+    case 23:
+        switch (rng.bounded(8)) {
+        case 0:
+            st.closeable = !st.closeable;
+            Q_EMIT dw->closeableChanged(st.closeable);
+            break;
+        case 1:
+            st.maximizeable = !st.maximizeable;
+            Q_EMIT dw->maximizeableChanged(st.maximizeable);
+            break;
+        case 2:
+            st.minimizeable = !st.minimizeable;
+            Q_EMIT dw->minimizeableChanged(st.minimizeable);
+            break;
+        case 3:
+            st.keepAbove = !st.keepAbove;
+            Q_EMIT dw->keepAboveChanged(st.keepAbove);
+            break;
+        case 4:
+            st.keepBelow = !st.keepBelow;
+            Q_EMIT dw->keepBelowChanged(st.keepBelow);
+            break;
+        case 5:
+            st.onAllDesktops = !st.onAllDesktops;
+            Q_EMIT dw->onAllDesktopsChanged(st.onAllDesktops);
+            break;
+        case 6:
+            st.contextHelp = !st.contextHelp;
+            Q_EMIT dw->providesContextHelpChanged(st.contextHelp);
+            break;
+        default:
+            st.shadeable = !st.shadeable;
+            Q_EMIT dw->shadeableChanged(st.shadeable);
+            break;
+        }
+        break;
+    case 24:
+        st.icon = flip() ? QIcon() : makeAppIcon();
+        Q_EMIT dw->iconChanged(st.icon);
+        break;
+    default:
+        // Mostly short, sometimes long enough for the snap-layouts timer (600 ms) and the animations.
+        wait(rng.bounded(50) == 0 ? 650 : rng.bounded(30));
+        break;
+    }
+}
+
+// --fuzz: `scenes` random scenes from a generator seeded with `seed` (the same seed repeats the
+// same scenes). Each one writes a random configuration, picks the button lists, title font, layout
+// direction, tablet mode, window state, tile and screen, creates the decoration, runs up to 24
+// random changes and input events on it, paints it and destroys it. Meant for the sanitizer build
+// (tools/sanitizers/run.sh), where a memory error or undefined behaviour stops the process; the
+// checks here are only that the borders stay finite and not negative.
+void runFuzz(Harness &h, FakeTabletMode *tablet, int scenes, quint32 seed)
+{
+    QRandomGenerator rng(seed);
+    const QFont font = s_font;
+    const auto left = s_left;
+    const auto right = s_right;
+    FakeOutput screen;
+    int checked = 0;
+    for (int i = 0; i < scenes; ++i) {
+        writeRandomConfig(rng);
+        s_left = randomButtons(rng);
+        s_right = randomButtons(rng);
+        s_font = font;
+        s_font.setPixelSize(1 + rng.bounded(40));
+        QGuiApplication::setLayoutDirection(rng.bounded(6) == 0 ? Qt::RightToLeft : Qt::LeftToRight);
+        if (tablet && rng.bounded(4) == 0) {
+            tablet->set(rng.bounded(2) == 1);
+        }
+        wait(1); // the configuration is read again in the next event-loop pass
+
+        auto state = std::make_unique<WindowState>();
+        state->active = rng.bounded(4) != 0;
+        state->caption = randomCaption(rng);
+        state->maximized = rng.bounded(4) == 0;
+        state->maximizedH = rng.bounded(8) == 0;
+        state->maximizedV = rng.bounded(8) == 0;
+        state->width = randomLength(rng);
+        state->height = randomLength(rng);
+        state->edges = Qt::Edges::fromInt(rng.bounded(4) == 0 ? rng.bounded(16) : 0);
+        state->scale = randomScale(rng);
+        state->shaded = rng.bounded(10) == 0;
+        state->keepAbove = rng.bounded(6) == 0;
+        state->onAllDesktops = rng.bounded(6) == 0;
+        state->maximizeable = rng.bounded(6) != 0;
+        state->closeable = rng.bounded(8) != 0;
+        state->minimizeable = rng.bounded(6) != 0;
+        state->contextHelp = rng.bounded(6) == 0;
+        state->shadeable = rng.bounded(6) == 0;
+        state->modal = rng.bounded(8) == 0;
+        // create() gives every window the app icon; some lose it again once created.
+        const bool noIcon = rng.bounded(6) == 0;
+        const bool tool = rng.bounded(5) == 0;
+        QRectF tile;
+        if (rng.bounded(4) == 0) {
+            tile = QRectF(rng.bounded(1.5) - 0.25, rng.bounded(1.5) - 0.25, rng.bounded(1.25), rng.bounded(1.25));
+        }
+        const bool onScreen = rng.bounded(2) == 1;
+        screen.rect = randomScreen(rng);
+        const int steps = rng.bounded(25);
+        out() << "fuzz scene " << i << ": " << state->width << " x " << state->height << " at " << state->scale << ", " << s_left.size() << " + "
+              << s_right.size() << " buttons, tool " << tool << ", tile " << tile.isValid() << ", screen " << (onScreen ? screen.rect.height() : -1) << ", "
+              << steps << " steps\n";
+        out().flush();
+
+        auto in = h.create(std::move(state), tool, tile, onScreen ? &screen : nullptr);
+        if (!in.deco) {
+            continue; // create() counted the failure
+        }
+        if (noIcon) {
+            in.state->icon = QIcon();
+            Q_EMIT in.window->w()->iconChanged(QIcon());
+        }
+        for (int s = 0; s < steps; ++s) {
+            randomStep(h, in, rng, tablet, onScreen ? &screen : nullptr);
+        }
+        wait(rng.bounded(20));
+        paintCapped(in.deco, in.state->scale);
+        const qreal borders[] = {in.deco->borderLeft(), in.deco->borderTop(), in.deco->borderRight(), in.deco->borderBottom()};
+        for (const qreal b : borders) {
+            if (!std::isfinite(b) || b < 0) {
+                h.check(false,
+                        QStringLiteral("scene %1: border %2 (left, top, right, bottom: %3 %4 %5 %6)")
+                            .arg(i)
+                            .arg(b)
+                            .arg(borders[0])
+                            .arg(borders[1])
+                            .arg(borders[2])
+                            .arg(borders[3]));
+                break;
+            }
+        }
+        if (const auto shadow = in.deco->shadow()) {
+            const QMarginsF pad = shadow->padding();
+            if (!std::isfinite(pad.left() + pad.top() + pad.right() + pad.bottom()) || shadow->shadow().isNull()) {
+                h.check(false, QStringLiteral("scene %1: shadow image or padding invalid").arg(i));
+            }
+        }
+        h.destroy(in);
+        ++checked;
+    }
+    s_font = font;
+    s_left = left;
+    s_right = right;
+    QGuiApplication::setLayoutDirection(Qt::LeftToRight);
+    h.check(h.failures == 0, QStringLiteral("%1 random scenes (seed %2), %3 decorations created, painted and destroyed").arg(scenes).arg(seed).arg(checked));
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -928,6 +1319,9 @@ int main(int argc, char **argv)
                       QStringLiteral("title font (QFont string)"),
                       QStringLiteral("font"),
                       QStringLiteral("Manrope,10.5,-1,5,800,0,0,0,0,0,0,0,0,0,0,1,,0,0")});
+    parser.addOption({QStringLiteral("fuzz"), QStringLiteral("run random scenes instead of the checks (--scenes, --seed)")});
+    parser.addOption({QStringLiteral("scenes"), QStringLiteral("number of random scenes (default: PF_FUZZ_COUNT, else 200)"), QStringLiteral("n")});
+    parser.addOption({QStringLiteral("seed"), QStringLiteral("seed of the random scenes (default: PF_FUZZ_SEED, else 1)"), QStringLiteral("n")});
     parser.process(app);
 
     if (parser.isSet(QStringLiteral("fonts"))) {
@@ -994,6 +1388,22 @@ int main(int argc, char **argv)
         }
     }
     out() << "fake KWin TabletModeManager on the session bus: " << (tabletDbus ? "yes" : "no (tablet checks skipped)") << "\n";
+
+    if (parser.isSet(QStringLiteral("fuzz"))) {
+        // An option, else the environment variable, else the default.
+        auto number = [&parser](const QString &option, const char *variable, uint fallback) {
+            const QString text = parser.isSet(option) ? parser.value(option) : qEnvironmentVariable(variable);
+            bool ok = false;
+            const uint value = text.toUInt(&ok);
+            return ok ? value : fallback;
+        };
+        const int scenes = int(std::min(number(QStringLiteral("scenes"), "PF_FUZZ_COUNT", 200), 100000u));
+        const quint32 seed = number(QStringLiteral("seed"), "PF_FUZZ_SEED", 1);
+        out() << "random scenes: " << scenes << ", seed " << seed << " (repeat with --fuzz --scenes " << scenes << " --seed " << seed << ")\n";
+        runFuzz(h, tabletDbus ? &fakeTablet : nullptr, scenes, seed);
+        out() << (h.failures == 0 ? "ALL PASS" : "FAILURES: ") << (h.failures ? QString::number(h.failures) : QString()) << "\n";
+        return h.failures == 0 ? 0 : 1;
+    }
 
     QList<qreal> scales;
     for (const QString &s : parser.value(QStringLiteral("scales")).split(QLatin1Char(','))) {

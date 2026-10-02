@@ -6,12 +6,14 @@
 # with a scratch configuration and cache, on a private D-Bus session without service activation
 # (session-bus.conf) and without display variables, so nothing it starts reaches a desktop session.
 # The tool's output is kept in WORKDIR/preview.log; the exit status is the tool's, 0 when every
-# check passed.
+# check passed. Options after FONTS_DIR go to the tool (--fuzz: random scenes instead of the
+# checks; PF_FUZZ_COUNT and PF_FUZZ_SEED in the environment reach it).
 #
-#   run-checks.sh PREVIEW PLUGIN WORKDIR NAME SCHEME OTHER_SCHEME [FONTS_DIR]
+#   run-checks.sh PREVIEW PLUGIN WORKDIR NAME SCHEME OTHER_SCHEME [FONTS_DIR [OPTION...]]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 preview=$1 plugin=$2 work=$3 name=$4 scheme=$5 other=$6 fonts=${7:-}
+shift $(($# < 7 ? $# : 7))
 
 rm -rf "$work"
 mkdir -p "$work/config" "$work/cache" "$work/out"
@@ -21,6 +23,7 @@ args=(--decoration-plugin "$plugin" --out "$work/out" --name "$name" --scheme "$
 if [ -n "$fonts" ] && [ -d "$fonts" ]; then
   args+=(--fonts "$fonts")
 fi
+args+=("$@")
 
 unset DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS LANGUAGE LC_ALL LC_MESSAGES
 # The tooltip check expects the English text.
