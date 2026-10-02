@@ -62,13 +62,12 @@ MouseArea {
     }
 
     function minimizeAll(): void {
-        for (let i = 0; i < repeater.count; i++) {
-            let item = repeater.itemAt(i);
-
-            // minimize window
-            if (!item.window.minimized) {
-                item.minimizeApp();
-            }
+        // Plasma Fusion: the oldest first. Minimizing the active app makes KWin activate the next
+        // app that is still shown, which then counted as the most recently used one: after going
+        // home, the switcher led with the app that had been behind (SPLIT.md item 4, session lone1).
+        for (let i = repeater.count - 1; i >= 0; i--) {
+            // minimize window (Plasma Fusion: both apps of a split pair's card)
+            repeater.itemAt(i).minimizeApp();
         }
     }
 
