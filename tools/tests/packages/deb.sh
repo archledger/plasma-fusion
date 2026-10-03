@@ -12,7 +12,7 @@ TARGET=$1 TARBALL=$(realpath "$2") OUT=$(mkdir -p "$3" && realpath "$3")
 UPSTREAM=${4:-}
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq --no-install-recommends dpkg-dev debhelper devscripts equivs lintian ca-certificates >/dev/null
+apt-get install -y -qq --no-install-recommends dpkg-dev debhelper devscripts equivs lintian ca-certificates qt6-declarative-dev-tools >/dev/null
 bd=$(mktemp -d)
 tar -xzf "$TARBALL" -C "$bd" --wildcards '*/packaging/debian/control' --strip-components=2
 (cd "$bd" && mk-build-deps -i -r -t "apt-get -y -qq --no-install-recommends" debian/control) >"$bd/build-deps.log" 2>&1 ||
@@ -34,4 +34,5 @@ broken=$(find /usr/share/icons/PlasmaFusion* -xtype l | grep -vcE '/(hicolor|fla
 [ "$broken" = 0 ] || { echo "$broken broken icon links" >&2; exit 1; }
 echo "navigation depends: $(dpkg-query -W -f '${Depends}' plasma-fusion-navigation)"
 bash "$ROOT/tools/tests/packages/qml-imports.sh"
+bash "$ROOT/tools/tests/packages/qml-parse.sh"
 echo "deb ($TARGET): ok"

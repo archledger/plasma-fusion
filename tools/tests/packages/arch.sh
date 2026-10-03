@@ -42,4 +42,5 @@ for p in decoration settings navigation; do test -s "/usr/share/plasma-fusion/bu
 broken=$(find /usr/share/icons/PlasmaFusion* -xtype l | grep -vcE '/(hicolor|flatpak)/' || true)
 [ "$broken" = 0 ] || { echo "$broken broken icon links" >&2; exit 1; }
 bash "$ROOT/tools/tests/packages/qml-imports.sh"
+bash "$ROOT/tools/tests/packages/qml-parse.sh"
 echo "arch: ok"
