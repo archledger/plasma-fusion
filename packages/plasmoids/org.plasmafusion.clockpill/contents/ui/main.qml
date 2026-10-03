@@ -96,8 +96,9 @@ PlasmoidItem {
         }
         let saving = 0;
         if (Plasmoid.configuration.showDate) {
-            const full = Math.ceil(fullDateMetrics.advanceWidth), short = Math.ceil(shortDateMetrics.advanceWidth);
-            saving += level >= 5 ? full + pillPadding : level >= 4 ? full - short : 0;
+            // Not "short": Qt 6.10's QML parser still reserves it (the pill failed to load on Debian testing).
+            const fullWidth = Math.ceil(fullDateMetrics.advanceWidth), shortWidth = Math.ceil(shortDateMetrics.advanceWidth);
+            saving += level >= 5 ? fullWidth + pillPadding : level >= 4 ? fullWidth - shortWidth : 0;
         }
         if (level >= 7 && !tabletState.tablet && Plasmoid.configuration.showWorkspaces && desktopCount > 1) {
             saving += dotsSeen + pillPadding - 2 * dots.cellPadding;
