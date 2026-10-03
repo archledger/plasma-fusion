@@ -12,7 +12,9 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 H=${PF_VM_HOME:-$HOME/pf-vm}
 [ $# -gt 0 ] || set -- fedora44:copr arch:aur ubuntu2610:ppa debian-testing:deb neon:deb nixos:nix
-bash "$HERE/channels.sh" </dev/null >"$H/channels.log" 2>&1 || { echo "channels.sh failed (see $H/channels.log)" >&2; exit 1; }
+# PF_PUBLIC=1 (vmtest.sh): the public channels, nothing to serve.
+[ "${PF_PUBLIC:-}" = 1 ] ||
+  bash "$HERE/channels.sh" </dev/null >"$H/channels.log" 2>&1 || { echo "channels.sh failed (see $H/channels.log)" >&2; exit 1; }
 for vm in "$@"; do
   name=${vm%%:*} lane=${vm#*:}
   [ -d "$H/vms/$name" ] || { echo "$(date -u +%T) $name: no VM (provision.sh)" | tee -a "$H/run-all.log"; continue; }

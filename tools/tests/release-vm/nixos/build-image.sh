@@ -6,10 +6,12 @@
 # module from SRC, user pf with the test key of vm.sh, tty1 session) as a compressed qcow2.
 #
 #   tools/tests/release-vm/nixos/build-image.sh SRC PUBKEY_FILE OUTPUT.qcow2
+#   SRC: a source tree, or after a release the published flake (github:archledger/plasma-fusion/vX.Y.Z)
 #   (then: copy OUTPUT to $PF_VM_HOME/images/nixos.qcow2 on the test machine; vm.sh create nixos nixos.qcow2)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-SRC=$(realpath "$1") KEY=$(cat "$2") OUT=$(realpath -m "$3")
+case $1 in github:*) SRC=$1 ;; *) SRC=path:$(realpath "$1") ;; esac
+KEY=$(cat "$2") OUT=$(realpath -m "$3")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 sed "s|@SRC@|$SRC|" "$HERE/flake.nix" >"$work/flake.nix"

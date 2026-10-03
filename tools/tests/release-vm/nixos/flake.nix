@@ -4,7 +4,7 @@
 # The release-test NixOS VM image from a Plasma Fusion source tree (@SRC@, nixos/build-image.sh).
 {
   description = "Plasma Fusion release test: a NixOS VM image";
-  inputs.plasma-fusion.url = "path:@SRC@";
+  inputs.plasma-fusion.url = "@SRC@";
   # The nixos-unstable revision Plasma Fusion's flake.lock pins.
   inputs.nixpkgs.follows = "plasma-fusion/nixpkgs";
   outputs = { nixpkgs, plasma-fusion, ... }: {
