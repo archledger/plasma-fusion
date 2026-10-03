@@ -109,6 +109,9 @@ echo "changed" >>"$BASE/rel-tampered/plasma-fusion-decoration_${V}-1~neon1_amd64
 make_release "$BASE/rel-sumsedit" "$TEST_FP"
 make_release "$BASE/rel-subkey" "$SUB_PRIMARY"
 sed -i '1s/^./0/' "$BASE/rel-sumsedit/SHA256SUMS"
+# As GitHub serves a release: the '~' of the Debian versions became '.' on upload.
+make_release "$BASE/rel-github" "$TEST_FP"
+for f in "$BASE/rel-github"/*~*; do mv "$f" "${f//\~/.}"; done
 
 # ---------- the cases ----------
 osr() { # ID ID_LIKE VERSION_ID CODENAME PRETTY
@@ -278,6 +281,14 @@ for SHNAME in "${shells[@]}"; do
   osr debian "" "" forky "Debian GNU/Linux forky/sid"
   RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
   expect "Debian testing installs the testing set" has_log "plasma-fusion-settings_${V}-1~testing1_amd64.deb"
+  # GitHub renames the files ('~' -> '.'); the installer finds them and checks them by their names.
+  RELEASE=$BASE/rel-github run "$sh" $DEB -- --yes
+  expect "Debian testing installs from GitHub's renamed files" [ "$RC" = 0 ]
+  expect "  the whole testing set" has_log "plasma-fusion-navigation_${V}-1~testing1_amd64.deb"
+  osr neon "ubuntu debian" 24.04 noble "KDE neon User Edition"
+  RELEASE=$BASE/rel-github run "$sh" $DEB -- --yes
+  expect "neon installs from GitHub's renamed files" has_log "plasma-fusion-decoration_${V}-1~neon1_amd64.deb"
+  osr debian "" "" forky "Debian GNU/Linux forky/sid"
   osr pika "ubuntu debian" 26.10 stonking "Another derivative"
   RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
   expect "another derivative gets the shared part only" has_log "plasma-fusion_${V}-1_all.deb"

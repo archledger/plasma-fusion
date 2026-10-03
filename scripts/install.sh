@@ -215,7 +215,12 @@ fetch_sums() {
 fetch_asset() {
   line=$(awk -v n="$1" '$2 == n || $2 == "*" n' "$TMP/SHA256SUMS")
   [ "$(printf '%s\n' "$line" | grep -c .)" = 1 ] || die "$1 is not in the release's SHA256SUMS."
-  curl -fsSL "$RELEASE_BASE/$1" -o "$TMP/$1" || die "download of $1 failed."
+  # GitHub renames release files on upload: a character other than a letter, digit, '-', '_' or '.'
+  # becomes '.' (the '~' of the Debian versions), so the file may sit there under that name.
+  gh_name=$(printf '%s\n' "$1" | sed 's/[^A-Za-z0-9._-]/./g')
+  curl -fsSL "$RELEASE_BASE/$1" -o "$TMP/$1" 2>/dev/null ||
+    { [ "$gh_name" != "$1" ] && curl -fsSL "$RELEASE_BASE/$gh_name" -o "$TMP/$1"; } ||
+    die "download of $1 failed."
   (cd "$TMP" && printf '%s\n' "$line" | sha256sum -c - >/dev/null 2>&1) || die "checksum mismatch on $1; refusing to install."
   printf '%s\n' "$TMP/$1"
 }
