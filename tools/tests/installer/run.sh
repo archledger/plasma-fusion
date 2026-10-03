@@ -229,6 +229,10 @@ for SHNAME in "${shells[@]}"; do
   VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-decoration=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
   expect "uninstall removes the installed packages only" has_log "dnf -y remove plasma-fusion plasma-fusion-decoration"
   expect "  (not the ones that are not installed)" bash -c '! grep -q "remove.*settings" <<<"$0"' "$LOG"
+  osr arch "" "" "" "Arch Linux"
+  VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-decoration=0.2.0 plasma-fusion-debug=0.2.0" run "$sh" $AUR -- uninstall --yes --package-only
+  expect "Arch uninstall also removes the AUR helper's debug package" has_log "pacman -Rns --noconfirm plasma-fusion plasma-fusion-decoration plasma-fusion-debug"
+  osr fedora "" 44 "" "Fedora Linux 44"
   # setup failure
   EXTRA_ENV="FAKE_SETUP_RC=1" run "$sh" $FED -- --yes
   expect "a failed setup exits 1" [ "$RC" = 1 ]
