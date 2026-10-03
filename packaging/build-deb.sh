@@ -72,8 +72,13 @@ cp -a "$src/packaging/debian" "$src/debian"
 echo "== plasma-fusion $version ($dist)"
 cd "$src"
 if [ "$SOURCE" = 1 ]; then
-  dpkg-buildpackage -S -d -us -uc
-  files=("$work"/plasma-fusion_"${version}"*.{dsc,debian.tar.xz,_source.changes} "$work/plasma-fusion_$UPSTREAM.orig.tar.gz")
+  # -sa: the upload carries the original tarball, which Launchpad needs the first time a PPA sees
+  # this upstream version (it accepts the same tarball again later).
+  dpkg-buildpackage -S -sa -d -us -uc
+  files=("$work/plasma-fusion_$version.dsc" "$work/plasma-fusion_$version.debian.tar.xz"
+         "$work/plasma-fusion_${version}_source.changes" "$work/plasma-fusion_${version}_source.buildinfo"
+         "$work/plasma-fusion_$UPSTREAM.orig.tar.gz")
+  for f in "${files[@]}"; do [ -e "$f" ] || { echo "missing from the source package: ${f##*/}" >&2; exit 1; }; done
 else
   dpkg-buildpackage -b -us -uc
   files=("$work"/*.deb "$work"/*.ddeb "$work"/*.buildinfo "$work"/*.changes)
