@@ -20,4 +20,5 @@ dnf install -y -q "${rpms[@]}" >/dev/null
 rpm -q plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation
 test "$(plasma-fusion version)" = "$(tr -d '[:space:]' <"$ROOT/VERSION")"
 for p in decoration settings navigation; do test -s "/usr/share/plasma-fusion/built-against/$p"; done
+bash "$ROOT/tools/tests/packages/qml-imports.sh"
 echo "fedora: ok"

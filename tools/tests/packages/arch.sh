@@ -41,4 +41,5 @@ grep -q 'exec.path">/usr/lib/plasma-fusion/plasma-fusion-charge-limit<' /usr/sha
 for p in decoration settings navigation; do test -s "/usr/share/plasma-fusion/built-against/$p"; done
 broken=$(find /usr/share/icons/PlasmaFusion* -xtype l | grep -vcE '/(hicolor|flatpak)/' || true)
 [ "$broken" = 0 ] || { echo "$broken broken icon links" >&2; exit 1; }
+bash "$ROOT/tools/tests/packages/qml-imports.sh"
 echo "arch: ok"
