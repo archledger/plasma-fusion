@@ -16,7 +16,7 @@ vm() { "$HERE/vm.sh" "$@"; }
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$OUT/steps.log"; }
 # insession CMD: run CMD as pf with the environment of pf's plasmashell (the tty1 session).
 insession() {
-  vm ssh "$name" "pid=\$(pgrep -u pf -x plasmashell | head -n 1); [ -n \"\$pid\" ] || { echo 'no plasmashell'; exit 97; }
+  vm ssh "$name" "pid=\$(pgrep -u pf -x 'plasmashell|\.plasmashell-wr' | head -n 1); [ -n \"\$pid\" ] || { echo 'no plasmashell'; exit 97; }
     while IFS= read -r -d '' kv; do case \${kv%%=*} in
       DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR|WAYLAND_DISPLAY|DISPLAY|XDG_CURRENT_DESKTOP|XDG_SESSION_TYPE|XDG_SESSION_DESKTOP|KDE_SESSION_VERSION|KDE_FULL_SESSION|XDG_DATA_DIRS|XDG_CONFIG_DIRS|QT_QPA_PLATFORM|XAUTHORITY|PATH|LANG) export \"\$kv\" ;;
     esac; done < /proc/\$pid/environ
@@ -24,12 +24,12 @@ insession() {
 }
 wait_plasma() { # wait for a settled desktop
   for _ in $(seq 1 60); do
-    vm ssh "$name" 'pgrep -u pf -x plasmashell >/dev/null' && break
+    vm ssh "$name" 'pgrep -u pf -x "plasmashell|\.plasmashell-wr" >/dev/null' && break
     sleep 5
   done
   sleep 25
   # Plasma's welcome app opens on a first login; it would cover the desktop in the screenshots.
-  vm ssh "$name" 'for p in $(pgrep -u pf -x plasma-welcome); do kill "$p"; done' 2>/dev/null || true
+  vm ssh "$name" 'for p in $(pgrep -u pf -x "plasma-welcome|\.plasma-welcome"); do kill "$p"; done' 2>/dev/null || true
   sleep 3
 }
 # The VM's session on tty1 (loginctl list-sessions has no TTY column in every systemd version).
