@@ -11,6 +11,10 @@
 let
   inherit (pkgs) lib stdenv stdenvNoCC kdePackages;
   python = pkgs.python3.withPackages (ps: [ ps.pillow ps.numpy ps.pyside6 ]);
+  # What the installed helpers and setup tools run: the standard library, and Pillow for the app icons
+  # tool (which draws SVG icons with rsvg-convert, on its PATH, when PySide6 is not there). A minimal
+  # NixOS has no python3 at all: setup stopped with "python3 is missing" (release-test VM).
+  pythonRuntime = pkgs.python3.withPackages (ps: [ ps.pillow ]);
   # NixOS links environment.systemPackages here; /usr/share and /usr/libexec do not exist.
   sw = "/run/current-system/sw";
   compiled = { pname, version, dir, buildInputs, cmakeFlags ? [ ] }:
@@ -32,6 +36,8 @@ rec {
     pname = "plasma-fusion";
     inherit version src;
     nativeBuildInputs = [ python pkgs.librsvg kdePackages.qtshadertools pkgs.libxml2 pkgs.desktop-file-utils pkgs.makeWrapper ];
+    # patchShebangs gives the Python scripts of $out (#!/usr/bin/python3) this interpreter.
+    buildInputs = [ pythonRuntime ];
     dontConfigure = true;
     # qtshadertools (qsb) brings Qt's setup hook; nothing here is a Qt application to wrap.
     dontWrapQtApps = true;
@@ -62,6 +68,11 @@ rec {
     # PATH of /usr/bin and /bin only. The system profile stays last, for programs a user installs
     # (tlp).
     postFixup = ''
+      # The command and the tools that run python3 by name find it without a system-wide Python.
+      for t in bin/plasma-fusion share/plasma-fusion/tools/device/fusion-config.sh \
+          share/plasma-fusion/tools/device/fusion-restore.sh share/plasma-fusion/tools/device/lockscreen-enable.sh; do
+        wrapProgram $out/$t --prefix PATH : ${pythonRuntime}/bin
+      done
       wrapProgram $out/libexec/plasma-fusion/plasma-fusion-powerfx \
         --prefix PATH : ${lib.makeBinPath [ pkgs.glib.bin pkgs.systemd kdePackages.kconfig pkgs.coreutils pkgs.util-linux pkgs.gnused ]} \
         --suffix PATH : ${sw}/bin
