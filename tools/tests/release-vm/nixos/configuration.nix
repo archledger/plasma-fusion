@@ -7,6 +7,9 @@
   # The test runs under QEMU (virtio disk and network in the initrd).
   imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
   services.desktopManager.plasma6.enable = true;
+  # Mesa's drivers in /run/opengl-driver: a display manager's module would turn this on; the test logs in on
+  # tty1 without one, and KWin found no usable DRM device.
+  hardware.graphics.enable = true;
   programs.plasma-fusion.enable = true;
   environment.systemPackages = [ pkgs.kdePackages.konsole ];
   users.users.pf = {
