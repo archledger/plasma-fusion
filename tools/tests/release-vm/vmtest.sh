@@ -123,9 +123,9 @@ shot 22-lock
 vm ssh "$name" "$TTY1"' sudo loginctl unlock-session $(tty1_session)'
 sleep 4
 insession "plasma-fusion status" >"$OUT/23-status-after-login.log" 2>&1
-vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log; echo; coredumpctl list --no-pager --since="$(uptime -s)" 2>&1 | tail -n 5; echo; journalctl --user -b --no-pager -p err 2>/dev/null | grep -iE "plasma-?fusion|plasmafusion" | tail -n 20' >"$OUT/24-logs.log" 2>&1
+vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log; echo; coredumpctl list --no-pager --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>&1 | tail -n 5; echo; journalctl --user -b --no-pager -p err 2>/dev/null | grep -iE "plasma-?fusion|plasmafusion" | tail -n 20' >"$OUT/24-logs.log" 2>&1
 # Crashes of this boot only (the provisioned base keeps the journal of its own boots).
-log "crashes: $(vm ssh "$name" 'coredumpctl list --no-pager --no-legend --since="$(uptime -s)" 2>/dev/null | wc -l')"
+log "crashes: $(vm ssh "$name" 'coredumpctl list --no-pager --no-legend --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>/dev/null | wc -l')"
 
 log "installer: uninstall"
 if [ "$lane" = nix ]; then
