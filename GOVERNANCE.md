@@ -28,7 +28,7 @@ maintainer accepts or declines it and says why.
 |---|---|---|
 | Maintainer | Wisbendji Fimerlus ([@archledger](https://github.com/archledger)) | Decides what goes in and what the project does next. Reviews and merges pull requests. Triages issues and Discussions. Keeps `main` building and the checks green. Handles the `plasma-update` issues, Dependabot pull requests and code scanning alerts ([`docs/parts/ci.md`](docs/parts/ci.md), "When something speaks up"). Keeps the documentation current. Enforces the [code of conduct](CODE_OF_CONDUCT.md); conduct reports go to the address in it, and today the maintainer is the only person who reads them. |
 | Security contact | the maintainer | Reads private vulnerability reports, answers within a week, fixes, publishes advisories and credits reporters ([`SECURITY.md`](SECURITY.md)). |
-| Reviewer (code owner) | the maintainer ([`.github/CODEOWNERS`](.github/CODEOWNERS)) | Approves pull requests. The ruleset on `main` needs one code owner's approval after the last push ([`docs/parts/ci.md`](docs/parts/ci.md), "Repository settings"). |
+| Reviewer (code owner) | the maintainer ([`.github/CODEOWNERS`](.github/CODEOWNERS)) | Reviews pull requests. With a single reviewer the ruleset on `main` requires no approval, only the required checks ([`docs/parts/ci.md`](docs/parts/ci.md), "Repository settings"). |
 | Release manager | the maintainer | There are no releases yet (see "Releases" below). |
 | Repository owner (GitHub admin) | the maintainer's personal account `archledger`, the only collaborator | Repository settings, the ruleset, security settings, advisories, deleting or transferring the repository. |
 | Contributor | anyone | Follows [`CONTRIBUTING.md`](CONTRIBUTING.md): one subject per change, the coding standards, tests for new behaviour, a DCO sign-off on every commit, an SPDX header or `REUSE.toml` entry for new files. |
@@ -36,7 +36,7 @@ maintainer accepts or declines it and says why.
 
 The maintainer may push to `main` directly: repository admins bypass the ruleset
 ([`docs/parts/ci.md`](docs/parts/ci.md)). Changes from anyone else, including Dependabot, go
-through reviewed pull requests with the required checks.
+through pull requests with the required checks, which the maintainer reviews before merging.
 
 ## Releases
 
@@ -68,9 +68,10 @@ losing one person.
 
 1. **A second trusted person**, chosen by the maintainer, with:
    - write access to the repository (to triage and close issues, merge pull requests and publish
-     releases) and an entry in `.github/CODEOWNERS`, so their approval counts;
-   - the right to merge without the maintainer's approval when the maintainer is gone (today only
-     the owner bypasses the ruleset on `main`);
+     releases) and an entry in `.github/CODEOWNERS`, so GitHub asks them to review; with two
+     reviewers the ruleset on `main` can require one approval again;
+   - the right to bypass the ruleset when the maintainer is gone (today only the owner bypasses
+     it);
    - admin rights: on a personal account only the owner has them, so this needs the repository in
      a GitHub organization with both people as owners;
    - their own signing key for releases and tags, once releases are signed.
