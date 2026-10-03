@@ -67,12 +67,7 @@ jobs:
           persist-credentials: false
 
       - name: Install the build requirements from the spec
-        env:
-          PACKAGE: ${{ matrix.package }}
-        run: |
-          set -euo pipefail
-          cd "packages/$PACKAGE"
-          dnf builddep -y -q ./*.spec
+        run: dnf builddep -y -q packaging/fedora/plasma-fusion.spec
 
       - name: Build and test with the sanitizers
         env:

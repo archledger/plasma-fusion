@@ -81,7 +81,7 @@ jobs:
     name: Arch PKGBUILD
     runs-on: ubuntu-24.04
     timeout-minutes: 75
-    container: docker.io/library/archlinux:latest
+    container: docker.io/library/archlinux:base
     steps:
       - name: Install git (checkout runs inside the container)
         run: pacman -Sy --noconfirm --needed git >/dev/null
