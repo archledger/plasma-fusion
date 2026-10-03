@@ -14,7 +14,7 @@ H=${PF_VM_HOME:-$HOME/pf-vm} C=${PF_REL:-$HOME/pf-rel}/channels
 name=$1 lane=$2
 OUT=$H/results/$name
 rm -rf "$OUT" && mkdir -p "$OUT"
-vm() { "$HERE/vm.sh" "$@"; }
+vm() { bash "$HERE/vm.sh" "$@"; }
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$OUT/steps.log"; }
 # insession CMD: run CMD as pf with the environment of pf's plasmashell (the tty1 session).
 insession() {
