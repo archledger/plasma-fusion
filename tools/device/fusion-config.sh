@@ -536,6 +536,11 @@ upgrade_log() { # STATUS FILE GROUP KEY OLD NEW (only for an upgrade from an ear
   UPGRADE_LOG+=("$*")
 }
 
+# kglobalaccel reads a key sequence as a structure of exactly four key codes (KF6 GlobalAccel's
+# QKeySequence demarshaller), so every "(ai)" argument below carries four, unused ones 0. With fewer,
+# libdbus fails a check while KWin reads the call; where libdbus makes its checks fatal (Ubuntu 26.10)
+# KWin aborts, and with it the session (release-test VM, 2026-10-03).
+
 # Current keys of a global shortcut as Qt key codes. $1 component, $2 action
 shortcut_get() {
   bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel shortcut as 4 "$1" "$2" "" "" 2>/dev/null |
@@ -729,7 +734,7 @@ ensure_floating_applets() {
 release_dead_widget_key() {
   local appletsrc=$CONFIG/plasma-org.kde.plasma.desktop-appletsrc holders wid released=1
   [ -s "$appletsrc" ] || return 1
-  holders=$(bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutsByKey "(ai)(i)" 1 "$1" 0 2>/dev/null |
+  holders=$(bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutsByKey "(ai)(i)" 4 "$1" 0 0 0 0 2>/dev/null |
     python3 -c '
 import json, sys
 # KGlobalShortcutInfo: action, action name, component, component name, context, ...
@@ -749,7 +754,7 @@ for s in json.load(sys.stdin)["data"][0]:
 
 # Every action holding a key, as "component<TAB>action" lines. $1 Qt key code
 key_holders() {
-  bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutsByKey "(ai)(i)" 1 "$1" 0 2>/dev/null |
+  bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutsByKey "(ai)(i)" 4 "$1" 0 0 0 0 2>/dev/null |
     python3 -c '
 import json, sys
 # KGlobalShortcutInfo: action, action name, component, component name, context, ...
@@ -810,7 +815,7 @@ print(out.join(\" \"));" || true)
       done < <(key_holders "$code")
       free=true
     else
-      free=$(bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutAvailable "(ai)s" 1 "$code" plasmashell 2>/dev/null | awk '{print $2}' || true)
+      free=$(bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel globalShortcutAvailable "(ai)s" 4 "$code" 0 0 0 plasmashell 2>/dev/null | awk '{print $2}' || true)
       # A dry run removes nothing, so the key only counts as free after the removal it would do.
       [ "$DRY" = 1 ] && [ "$released" = 0 ] && free=true
     fi
