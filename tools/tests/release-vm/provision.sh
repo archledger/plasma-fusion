@@ -12,10 +12,10 @@ d=$H/vms/$name
 mkdir -p "$d"
 {
   echo "== $(date -u +%FT%TZ) provision $name from $image ($distro)"
-  "$HERE/vm.sh" create "$name" "$image" && "$HERE/vm.sh" start "$name" base && "$HERE/vm.sh" wait "$name" &&
-  "$HERE/vm.sh" ssh "$name" 'cloud-init status --wait >/dev/null 2>&1; true' &&
-  cat "$HERE/prov-$distro.sh" "$HERE/prov-common.sh" | "$HERE/vm.sh" ssh "$name" sudo bash -s
+  bash "$HERE/vm.sh" create "$name" "$image" && bash "$HERE/vm.sh" start "$name" base && bash "$HERE/vm.sh" wait "$name" &&
+  bash "$HERE/vm.sh" ssh "$name" 'cloud-init status --wait >/dev/null 2>&1; true' &&
+  cat "$HERE/prov-$distro.sh" "$HERE/prov-common.sh" | bash "$HERE/vm.sh" ssh "$name" sudo bash -s
   rc=$?
-  "$HERE/vm.sh" stop "$name"
+  bash "$HERE/vm.sh" stop "$name"
   echo "== $(date -u +%FT%TZ) provision $name rc=$rc"
 } >"$d/provision.log" 2>&1
