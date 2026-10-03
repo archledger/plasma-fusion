@@ -12,6 +12,10 @@
 # (rpm builds noarch subpackages of an arched package, not the other way round).
 
 %bcond compiled 1
+# Without the compiled parts there is nothing to put in debug packages.
+%if %{without compiled}
+%global debug_package %{nil}
+%endif
 
 Name:           plasma-fusion
 Version:        0.2.0
