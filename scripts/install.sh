@@ -223,15 +223,17 @@ fetch_asset() {
 deb_assets() {
   fetch_sums
   names=$(awk '{print $2}' "$TMP/SHA256SUMS" | sed 's/^\*//')
+  # The version inside the patterns below, its dots and plus signs taken literally.
+  vre=$(printf '%s' "$PF_VERSION" | sed 's/[.+]/\\&/g')
   DEBS='' DEB_PARTIAL=0
   if [ -n "$DEB_TAG" ] && in_list "$DEB_TAG" "$PF_DEB_TARGETS"; then
     for p in $PKGS; do
-      n=$(printf '%s\n' "$names" | grep -E "^${p}_${PF_VERSION}-[0-9]+~${DEB_TAG}[0-9]+_(all|amd64)\.deb\$" || true)
+      n=$(printf '%s\n' "$names" | grep -E "^${p}_${vre}-[0-9]+~${DEB_TAG}[0-9]+_(all|amd64)\.deb\$" || true)
       [ "$(printf '%s\n' "$n" | grep -c .)" = 1 ] || die "the release has no single $p package for $DEB_TAG."
       DEBS="$DEBS $n"
     done
   else
-    n=$(printf '%s\n' "$names" | grep -E "^plasma-fusion_${PF_VERSION}-[0-9]+_all\.deb\$" || true)
+    n=$(printf '%s\n' "$names" | grep -E "^plasma-fusion_${vre}-[0-9]+_all\.deb\$" || true)
     [ "$(printf '%s\n' "$n" | grep -c .)" = 1 ] || die "the release has no shared plasma-fusion package."
     DEBS=" $n" DEB_PARTIAL=1
   fi
