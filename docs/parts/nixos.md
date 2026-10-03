@@ -32,7 +32,10 @@ along; `fusion-config.sh` finds the templates through `XDG_DATA_DIRS`, and the h
 system closure (`nix-store`, [`gate.md`](gate.md)). The helpers get the programs they run in
 their PATH (on Fedora all in `/usr/bin`): power tiers gdbus, busctl and kwriteconfig6, app icons
 rsvg-convert and busctl, and the charge limit coreutils, grep and systemctl, since pkexec starts it
-with a PATH of `/usr/bin` and `/bin` only; the module also installs notify-send and gdbus for the
+with a PATH of `/usr/bin` and `/bin` only. The package brings its own Python (with Pillow, for the
+app icons tool): the Python helpers and tools point to it, and the `plasma-fusion` command,
+`fusion-config.sh`, `fusion-restore.sh` and `lockscreen-enable.sh` have it on their PATH, so a
+system without a system-wide Python can run setup; the module also installs notify-send and gdbus for the
 login check's notification. KDE Connect is optional: without it the quick settings leave the phone
 tile out.
 

@@ -57,3 +57,27 @@ Each fixed before the final round:
 | Debian testing | the clock pill failed to parse: Qt 6.10 reserves `short` | renamed (`7d55dbe`); `tools/tests/packages/qml-parse.sh` |
 | Fedora 44 | Xournal++ as a weak dependency pulled in TeX Live, 322 MiB | suggested only (`0117bc2`) |
 | every system | `plasma-fusion status` called the app icons layer a hiding per-user copy | `ec7d635` |
+| NixOS | setup stopped with "python3 is missing" on a system without a system-wide Python, and the Python tools kept `#!/usr/bin/python3` | the Nix package brings a Python with Pillow and wraps the command and tools (`781b082`) |
+
+The test images needed fixes of their own, not Plasma Fusion's: Debian's cloud kernel has no
+virtio-gpu driver (the generic kernel), the NixOS image the QEMU guest profile and
+`hardware.graphics.enable` (a display manager would turn it on), and the harness NixOS's wrapped
+process names (`.plasmashell-wrapped`).
+
+## Final round
+
+Every channel built from `399fe3e` (Fedora 44, Arch, Debian testing, Ubuntu 26.10, KDE neon and the
+shared `.deb`: built, installed, QML imports present, every QML file parsed by the system's Qt, no
+lintian or rpmlint error), then the VMs, each from a fresh overlay of its provisioned system:
+
+| System | Plasma | Installer | Setup | New login | Crashes | Uninstall |
+|---|---|---|---|---|---|---|
+| Fedora 44 | 6.7.5, Qt 6.11.2 | Copr lane (test repository), 27 s | 114 changes | Plasma Fusion desktop, launcher, lock screen; login check "versions=tested lock=tested; no change" | 0 | Fedora's desktop back, no package left |
+| Arch | 6.7.5, Qt 6.11.2 | AUR lane, `makepkg -si` in the VM, about 3 min | 114 changes | as Fedora | 0 | as Fedora |
+| Ubuntu 26.10 | 6.7.5, Qt 6.11.2 | PPA lane (test apt repository) | 114 changes | as Fedora, full dock | 0 | as Fedora |
+| Debian testing | 6.7.4, Qt 6.10.2 | release `.deb` lane, `~testing1` set, signed `SHA256SUMS` | 114 changes | as Fedora, clock pill with date and time | 0 | as Fedora |
+| KDE neon (noble) | 6.7.5, Qt 6.11.1 | release `.deb` lane, `~neon1` set | 114 changes | as Fedora | 0 | as Fedora |
+| NixOS (unstable, image from `55afc07`) | 6.7.5, Qt 6.11.2 | prints the flake and module lines; the image has the module; `plasma-fusion setup` | 109 changes | as Fedora | 0 | `plasma-fusion restore`: the stock desktop back |
+
+Every system passed (2026-10-03). Evidence: the project ledger's artifacts,
+`plasma-fusion/2026-10-02-release/vm-tests/`.
