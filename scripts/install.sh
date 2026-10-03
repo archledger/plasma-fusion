@@ -473,7 +473,7 @@ main() {
     [ "$PACKAGE_ONLY" = 1 ] || echo "  plasma-fusion restore   (your desktop as it was before Plasma Fusion)" >&2
     case $LANE in
       copr) echo "  sudo dnf -y remove $PKGS" >&2 ;;
-      aur) echo "  sudo pacman -Rns $PKGS (the ones installed)" >&2 ;;
+      aur) echo "  sudo pacman -Rns $PKGS plasma-fusion-debug (the ones installed)" >&2 ;;
       ppa | deb) echo "  sudo apt-get remove -y $PKGS" >&2 ;;
     esac
     [ "$DRY" = 1 ] && { say "Dry run: nothing was changed."; exit 0; }
@@ -483,7 +483,11 @@ main() {
     fi
     $SUDO -v || die "sudo failed."
     installed_pkgs=
-    for p in $PKGS; do [ -z "$(pf_installed "$p")" ] || installed_pkgs="$installed_pkgs $p"; done
+    # An AUR helper also installs the debug package makepkg builds by default; pacman does not
+    # remove it with the others (dnf and apt remove their debug packages as dependents).
+    all_pkgs=$PKGS
+    [ "$LANE" = aur ] && all_pkgs="$PKGS plasma-fusion-debug"
+    for p in $all_pkgs; do [ -z "$(pf_installed "$p")" ] || installed_pkgs="$installed_pkgs $p"; done
     # shellcheck disable=SC2086 # package lists split on purpose
     case $LANE in
       copr) $SUDO dnf -y remove $installed_pkgs ;;
