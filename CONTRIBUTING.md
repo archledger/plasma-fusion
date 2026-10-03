@@ -32,7 +32,8 @@ taking part follows the [code of conduct](CODE_OF_CONDUCT.md); how decisions are
      (the test policy in [`docs/parts/coverage.md`](docs/parts/coverage.md#test-policy)).
 5. Give every new file an SPDX header or a `REUSE.toml` entry (`reuse lint` must pass).
 6. Open a pull request against `main`. It needs the checks `DCO and attribution`,
-   `REUSE compliance` and `plasma-fusion RPM (Fedora 44)` and one approval.
+   `REUSE compliance` and `plasma-fusion RPM (Fedora 44)` to pass; the maintainer reviews and
+   merges it.
 
 ## Coding standards
 

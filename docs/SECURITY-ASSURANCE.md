@@ -208,9 +208,10 @@ Each boundary, what crosses it, and how it is guarded.
   (`.github/dependabot.yml`). Secret scanning and push protection are on.
 - The labeler runs on pull requests from forks with a write token but checks out and runs nothing
   from the pull request (`.github/workflows/labeler.yml`).
-- The `main` branch cannot be deleted or force-pushed; other people's changes need a pull request,
-  a code owner's approval after the last push and three passing checks (DCO and attribution, REUSE,
-  the RPM build) ([`parts/ci.md`](parts/ci.md), "Repository settings").
+- The `main` branch cannot be deleted or force-pushed; other people's changes need a pull request
+  and three passing checks (DCO and attribution, REUSE, the RPM build). No approval is required,
+  because the maintainer is the only reviewer ([`parts/ci.md`](parts/ci.md), "Repository
+  settings").
 - The shipped RPM build (`.github/workflows/build.yml`) runs in Fedora's `fedora:44` container
   and installs only Fedora packages: the spec file's build requirements
   (`packaging/fedora/plasma-fusion.spec`) and the check tools. The weekly `compiled` workflow's beta
@@ -321,7 +322,7 @@ Widget files named here without a path are under
 - Commits, tags and packages are not signed; the CI's RPMs are kept for 14 days as unsigned
   artifacts. The CI's Fedora container image is named by tag (`fedora:44`), not by digest.
 - The maintainer, as the repository admin, can bypass the ruleset on `main`, and is the only
-  reviewer ([`GOVERNANCE.md`](../GOVERNANCE.md)).
+  reviewer, so the ruleset requires no approval ([`GOVERNANCE.md`](../GOVERNANCE.md)).
 
 ## 8. Assurance evidence and its limits
 

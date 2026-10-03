@@ -136,11 +136,14 @@ The base image's digest is not updated by Dependabot (it watches the actions onl
   Scorecard's results.
 - Private vulnerability reporting: on; `SECURITY.md` says how to report.
 - Ruleset `main`: the branch cannot be deleted or force-pushed; changes come through pull requests
-  with one approval from a code owner (`.github/CODEOWNERS`), given after the last push, on a branch
-  up to date with `main`, and the checks `DCO and attribution`, `REUSE compliance` and
-  `plasma-fusion RPM (Fedora 44)` passing. Repository admins bypass it: the maintainer pushes to
-  `main` directly, as before, and a deliberate history fix stays possible (as on 2026-10-02).
-  Dependabot and outside contributions go through reviewed pull requests.
+  on a branch up to date with `main`, with review threads resolved and the checks
+  `DCO and attribution`, `REUSE compliance` and `plasma-fusion RPM (Fedora 44)` passing. No
+  approval is required (since 2026-10-03): the project has one maintainer, who cannot approve their
+  own pull requests, so a required approval only meant an admin bypass on every merge.
+  `.github/CODEOWNERS` stays, so a second maintainer would be asked to review and one approval
+  could be required again. Repository admins bypass the ruleset: the maintainer can push to `main`
+  directly, and a deliberate history fix stays possible (as on 2026-10-02). Dependabot and outside
+  contributions go through pull requests that the maintainer reviews before merging.
 - Not required (yet): the `style` jobs (`Python style (ruff)`, `C++ style (clang-format, changed
   lines)`, `Shell (ShellCheck)`) report on every pull request, but a failure does not block the
   merge until they are added to the ruleset's required checks. They can be added as they are,
