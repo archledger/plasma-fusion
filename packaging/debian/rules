@@ -13,6 +13,10 @@ CMAKE_FLAGS = -DBUILD_TESTING=OFF -DKDE_INSTALL_USE_QT_SYS_PATHS=ON
 KWIN_VERSION := $(shell dpkg-query -W -f '$${Version}' kwin-dev)
 KWIN_SERIES := $(shell echo '$(KWIN_VERSION)' | sed -E 's/^([0-9]+:)?([0-9]+)\.([0-9]+).*/\2 \3/' | awk '{print $$1 "." $$2+1}')
 KWIN_EPOCH := $(shell echo '$(KWIN_VERSION)' | sed -nE 's/^([0-9]+:).*/\1/p')
+# The dock imports org.kde.layershell: Debian and Ubuntu package that QML module on its own
+# (qml6-module-org-kde-layershell; their layer-shell-qt is only the Qt plugin), KDE neon ships it in
+# layer-shell-qt (packaging/build-deb.sh --target neon sets LAYERSHELL_DEP).
+LAYERSHELL_DEP ?= qml6-module-org-kde-layershell
 
 %:
 	dh $@ --buildsystem=cmake+ninja
@@ -58,4 +62,5 @@ override_dh_auto_install:
 	  done
 
 override_dh_gencontrol:
-	dh_gencontrol -- '-Vkwin:Depends=kwin-wayland (>= $(KWIN_VERSION)), kwin-wayland (<< $(KWIN_EPOCH)$(KWIN_SERIES)~)'
+	dh_gencontrol -- '-Vkwin:Depends=kwin-wayland (>= $(KWIN_VERSION)), kwin-wayland (<< $(KWIN_EPOCH)$(KWIN_SERIES)~)' \
+	  '-Vlayershell:Depends=$(LAYERSHELL_DEP)'

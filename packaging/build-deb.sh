@@ -45,7 +45,9 @@ UPSTREAM=${UPSTREAM:-$(tr -d '[:space:]' <"$top/VERSION")}
 
 case $TARGET in
   ubuntu:*) series=${TARGET#ubuntu:}; version=$UPSTREAM-0ppa1~${series}1; dist=$series ;;
-  neon) series=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"); version=$UPSTREAM-1~neon1; dist=$series ;;
+  neon) series=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}"); version=$UPSTREAM-1~neon1; dist=$series
+    # neon ships the layer-shell QML module in layer-shell-qt (packaging/debian/rules).
+    export LAYERSHELL_DEP=layer-shell-qt ;;
   debian:*) series=${TARGET#debian:}; version=$UPSTREAM-1~${series}1; dist=$series ;;
   plain) version=$UPSTREAM-1; dist=unstable ;;
   *) echo "--target: ubuntu:SERIES, neon, debian:SUITE or plain" >&2; exit 2 ;;

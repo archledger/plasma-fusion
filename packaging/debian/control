@@ -50,7 +50,7 @@ Depends: ${misc:Depends},
          plasma-workspace (>= 4:6.7),
          plasma-desktop (>= 4:6.7),
          kwin-wayland (>= 4:6.7),
-         qml6-module-org-kde-layershell | layer-shell-qt,
+         ${layershell:Depends},
          breeze-icon-theme,
          libkf6config-bin,
          pkexec,
@@ -58,7 +58,8 @@ Depends: ${misc:Depends},
          python3-pil,
          systemd,
          librsvg2-bin | python3-pyside6.qtsvg
-Recommends: plasma-fusion-decoration, plasma-fusion-settings, libnotify-bin
+Recommends: plasma-fusion-decoration, plasma-fusion-settings, libnotify-bin, powerdevil, plasma-nm,
+            plasma-pa, bluedevil
 Suggests: plasma-fusion-navigation, xournalpp, kate, konsole, python3-pyside6.qtsvg
 Description: Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
  Plasma Fusion is a desktop for KDE Plasma 6 in a dark and a light variant:
