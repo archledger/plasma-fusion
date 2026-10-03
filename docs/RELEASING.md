@@ -21,13 +21,12 @@ key in the AUR package's `validpgpkeys` and the installer.
 
 ## 2. Test the candidate (before the tag)
 
-On the merged commit, build every channel (`tools/tests/packages/`, as the `packages` workflow
-does) and install it with the installer in a virtual machine of each system, in a real Plasma
-session: Fedora 44, Arch, Ubuntu 26.10, KDE neon and Debian testing (test channels served from the
-test host, `PLASMA_FUSION_DEV=1`, docs/parts/installer.md), and NixOS from the flake. Per system:
-the installer's plan and run, `plasma-fusion status`, a new login (screenshots of the desktop, the
-launcher, quick settings and the lock screen), the login check's log, no new crash in the journal,
-then `uninstall` back to the previous desktop. The evidence goes to the ledger's artifacts.
+On the merged commit, build every channel and install it with the installer in a virtual machine
+of each system, in a real Plasma session: Fedora 44, Arch, Ubuntu 26.10, Debian testing, KDE neon
+and NixOS (`tools/tests/release-vm/build-all.sh`, then `run-all.sh`; docs/parts/release-tests.md).
+Per system: the installer's plan and run, `plasma-fusion status`, a new login (the desktop, the
+launcher and the lock screen), the login check's log, no crash, then `uninstall` and a new login
+with the previous desktop. Every system must pass; the evidence goes to the ledger's artifacts.
 
 ## 3. Tag (owner)
 
