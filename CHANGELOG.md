@@ -20,8 +20,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   Meta+Alt+1..9 keys go through Plasma Fusion's own shortcuts; the tablet navigation starts from a
   defined state.
 - The window decoration supports the shadow-only style of Plasma 6.8 when built against
-  KDecoration 6.8: windows without a title bar of their own (frameless Xwayland windows, the "Only
-  shadow" window rule) get the Plasma Fusion shadow and outline instead of none. Builds against
+  KDecoration 6.8: windows with the "Only shadow" window rule get the Plasma Fusion shadow and
+  outline without a title bar, instead of falling back to the app's own decoration. Builds against
   Plasma 6.7 are unchanged.
 - Known issue on Plasma 6.8: the log-out screen is Plasma's own, not Plasma Fusion's.
 

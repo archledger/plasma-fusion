@@ -87,9 +87,9 @@ public:
     {
         return m_tablet;
     }
-    // KDecoration 6.8 shadow-only decoration (KWin: frameless Xwayland windows, the "Only shadow"
-    // window rule): no title bar, no buttons, no borders; only the shadow, the outline and the
-    // resize band. The only place that reads KDecoration3::Decoration::style().
+    // KDecoration 6.8 shadow-only decoration (KWin: the "Only shadow" window rule): no title bar,
+    // no buttons, no borders; only the shadow, the outline and the resize band. The only place
+    // that reads KDecoration3::Decoration::style().
     bool isShadowOnly() const;
     // the window's screen is under 800 logical px high: 40 px title bars (ADAPTIVE.md 5.12)
     bool isShortScreen() const;

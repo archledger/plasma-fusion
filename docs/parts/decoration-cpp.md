@@ -164,12 +164,18 @@ preview) the height is unknown and the normal values apply.
 KDecoration 6.8 gives every decoration a style, `KDecoration3::Style::Titled` or `Shadow`
 ([kdecoration 64cf5468][kdeco-style], in 6.7.90), read from the `style` key of the constructor
 arguments and returned by `Decoration::style()`. KWin 6.8 ([kwin b70fc02b][kwin-style], in
-6.7.91) asks for a shadow-only decoration for frameless Xwayland windows that draw no shadow of
-their own (unless `KWIN_X11_USE_SSD_DROP_SHADOW=0`) and for windows with the "Only shadow"
-decoration rule, but only when the plugin metadata lists `"shadow"` in `org.kde.kdecoration3`
-`styles`: otherwise frameless windows stay undecorated and the rule falls back to client-side
-decoration. KWin creates a new decoration when the style changes, so a decoration keeps its style
-for its whole life.
+6.7.91) asks for a shadow-only decoration for windows whose window rule "Window manager draws
+titlebar, frame, and shadows" is "Only shadow" (`decorationpolicy=3` in `kwinrulesrc`), and only
+when the plugin metadata lists `"shadow"` in `org.kde.kdecoration3` `styles`; otherwise the rule
+falls back to client-side decoration. Nothing else asks for it: a frameless window that wants no
+decoration gets none (`preferredDecorationMode()` of `X11Window` and `XdgToplevelWindow` in KWin
+6.7.91, the Plasma/6.8 branch and master, checked 2026-10-04). KWin creates a new decoration when
+the style changes, so a decoration keeps its style for its whole life.
+
+Seen in a Plasma 6.7.91 session (2026-10-04, Fedora 44 VM, software rendering): with the rule on a
+Wayland window, the window had no title bar, round corners, the outline and the shadow. The same
+rule on an X11 window (matched by its class) left that window's title bar in place: KWin did not
+apply the rule there, before the decoration is asked; not investigated further.
 
 - One check in `CMakeLists.txt`: `KDecoration3_VERSION` 6.7.90 or later turns on
   `PFDECO_HAVE_STYLES` (a compile definition, and the `ShadowStyle` entry of the feature summary)
