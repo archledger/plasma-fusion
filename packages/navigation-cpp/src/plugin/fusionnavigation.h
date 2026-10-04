@@ -187,8 +187,10 @@ private:
     Status m_status = Status::Inactive;
     bool m_gestureInProgress = false;
 
-    int m_currentTaskIndex;
-    int m_initialTaskIndex;
+    // Initialized as in Plasma Mobile 6.8 (plasma-mobile 73c5b4fd): the QML reads the current task
+    // index, and the first gesture copies it, before anything has written it.
+    int m_currentTaskIndex = 0;
+    int m_initialTaskIndex = 0;
 
     void clearVelocityFilter();
     void resetGestureState();
@@ -216,7 +218,7 @@ private:
     qreal m_xPosition = 0;
     qreal m_yPosition = 0;
 
-    bool m_wasInActiveTask;
+    bool m_wasInActiveTask = false;
 
     QElapsedTimer *m_doubleClickTimer;
     qint64 getDoubleClickInterval() const

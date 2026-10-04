@@ -22,7 +22,9 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 include(ECMQmlModule)
 include(FeatureSummary)
 
-set(CMAKE_CXX_STANDARD 20)
+# KWin itself is C++23, and from 6.8 its headers need it (std::expected in workspace.h); KWin 6.8
+# also passes cxx_std_23 on to its users. Asking for it here builds the same way on 6.7 and 6.8.
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core DBus Gui Quick Qml)
