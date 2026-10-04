@@ -1455,8 +1455,8 @@ apply_launcher_keys() {
 }
 
 # Windows and the dock: Meta+Up maximize, Meta+Down restore, quick tile top/bottom on
-# Meta+Alt+Up/Down, Meta+Tab Overview, Meta+Alt+1..9 the dock's apps (Meta+5..9 lose them; Meta+1..4
-# switch workspaces, section 3).
+# Meta+Alt+Up/Down, Meta+Tab Overview, Meta+Alt+1..9 the dock's apps (apply_dock_entry_keys, after
+# KWin has loaded the scripts; Meta+5..9 lose them; Meta+1..4 switch workspaces, section 3).
 apply_window_keys() {
   local n
   shortcut_claim kwin "Window Maximize" $((META + K_UP))
@@ -1466,7 +1466,35 @@ apply_window_keys() {
   shortcut_claim kwin Overview $((META + K_TAB))
   for n in 1 2 3 4 5 6 7 8 9; do
     shortcut_remove plasmashell "activate task manager entry $n" $((META + 0x30 + n))
-    shortcut_claim plasmashell "activate task manager entry $n" $((META + ALT + 0x30 + n))
+  done
+}
+
+# The dock's apps on Meta+Alt+1..9: the snap KWin script's "Plasma Fusion: Activate Dock Entry N"
+# actions, which reach the dock on every Plasma version. Up to Plasma 6.7 plasmashell's "activate
+# task manager entry N" did it; Plasma 6.8 gives those actions to the stock task manager only,
+# which the dock replaces. The actions exist once KWin runs the script, so this comes after section
+# 4 starts the scripts. $1 claim: the Windows-style set; migrate: move only a key an earlier
+# Plasma Fusion gave to plasmashell's entry N (a run without the set, after an update).
+DOCK_ENTRY="Plasma Fusion: Activate Dock Entry"
+dock_entry_actions_registered() {
+  bus call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
+    grep -qF "\"$DOCK_ENTRY 1\""
+}
+apply_dock_entry_keys() {
+  local n key
+  if [ "$DRY" = 0 ]; then
+    for _ in $(seq 1 20); do dock_entry_actions_registered && break; sleep 0.5; done
+    if ! dock_entry_actions_registered; then
+      note "dock entry keys: the snap KWin script's actions are not registered (keys not set)"
+      return 0
+    fi
+  fi
+  for n in 1 2 3 4 5 6 7 8 9; do
+    key=$((META + ALT + 0x30 + n))
+    if [ "$1" = migrate ]; then
+      key_holders "$key" | grep -qxF "plasmashell"$'\t'"activate task manager entry $n" || continue
+    fi
+    shortcut_claim kwin "$DOCK_ENTRY $n" "$key"
   done
 }
 
@@ -1813,6 +1841,11 @@ if [ "$DRY" = 0 ]; then
   if [ "$NAV_EFFECT" = 1 ] && [ "$(kreadconfig6 --file kwinrc --group Plugins --key plasmafusion_navigationEnabled)" = true ]; then
     bus call org.kde.KWin /Effects org.kde.kwin.Effects loadEffect s plasmafusion_navigation >/dev/null 2>&1 || true
   fi
+fi
+if [ "$WINDOWS_SET" = 1 ]; then
+  apply_dock_entry_keys claim
+elif [ "$SHORTCUTS" != keep ]; then
+  apply_dock_entry_keys migrate
 fi
 
 # Tiling: padding on every screen and workspace, set live through a one-shot KWin script

@@ -11,7 +11,7 @@ they differ. Last edited 2026-09-30.
 | Id | Type | What |
 |---|---|---|
 | `org.plasmafusion.switcher` | KWin/WindowSwitcher | Alt+Tab switcher of the AltTab / AltTabLight boards: frosted 1100 px card (radius 26), "This workspace" / "All workspaces" tabs, window count, live previews in a 5-column grid, key-hint bar, dimmed work area behind |
-| `plasmafusion-snap` | KWin/Script (declarative) | Meta+Z snap-layouts flyout (QuickSettings board), "Pick a window for this side" after snapping a half (TabsSnap board), 6 px gaps for snapped halves and quarters, pairs that minimise and restore together |
+| `plasmafusion-snap` | KWin/Script (declarative) | Meta+Z snap-layouts flyout (QuickSettings board), "Pick a window for this side" after snapping a half (TabsSnap board), 6 px gaps for snapped halves and quarters, pairs that minimise and restore together; "Plasma Fusion: Activate Dock Entry 1..9" (Meta+Alt+1..9 from setup), passed to the dock as its `activateRequest` key, since Plasma 6.8 gives plasmashell's task manager entries to the stock task manager only |
 | (in `plasmafusion-snap`) `contents/outline/outline.qml` | KWin outline QML | blue snap-zone preview of the TabsSnap board (drag to an edge, Shift+drag custom zones, Meta+Z zone preview) |
 | `plasmafusion-attach` | KWin/Script (JavaScript) | modal dialogs placed centred on their window, just under its title bar, and moving with it (Windows board, "Dialogs · Attached to the parent window") |
 

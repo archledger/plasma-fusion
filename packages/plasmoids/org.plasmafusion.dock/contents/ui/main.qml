@@ -908,7 +908,8 @@ PlasmoidItem {
         }
     }
 
-    // Plasmashell calls this for Meta+1 ... Meta+9.
+    // Plasmashell calls this for its "activate task manager entry N" up to Plasma 6.7; the snap KWin
+    // script's "Plasma Fusion: Activate Dock Entry N" asks for it through activateRequest.
     function activateTaskAtIndex(index: var): void {
         if (typeof index !== "number") {
             return;
@@ -1539,6 +1540,12 @@ PlasmoidItem {
     }
     Connections {
         target: Plasmoid.configuration
+        function onActivateRequestChanged(): void {
+            const n = parseInt(String(Plasmoid.configuration.activateRequest || "").split(":")[0], 10);
+            if (n >= 1 && n <= 9) {
+                root.activateTaskAtIndex(n - 1);
+            }
+        }
         function onSplitRequestChanged(): void {
             const parts = String(Plasmoid.configuration.splitRequest || "").split(":");
             if (parts.length >= 3 && (parts[0] === "left" || parts[0] === "right") && parts[2] !== "") {
