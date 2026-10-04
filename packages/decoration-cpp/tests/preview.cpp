@@ -780,8 +780,8 @@ struct Harness {
         QVariantMap args{{QStringLiteral("bridge"), QVariant::fromValue(static_cast<DecorationBridge *>(&bridge))}};
 #ifdef PFDECO_HAVE_STYLES
         if (shadowOnly) {
-            // What KWin's DecorationBridge::createDecoration() adds for a frameless Xwayland window
-            // or the "Only shadow" window rule.
+            // What KWin's DecorationBridge::createDecoration() adds for a window with the "Only
+            // shadow" window rule.
             args.insert(QStringLiteral("style"), QVariant::fromValue(Style::Shadow));
         }
 #else
@@ -1815,8 +1815,8 @@ int main(int argc, char **argv)
         }
 
 #ifdef PFDECO_HAVE_STYLES
-        // Shadow-only decoration (KDecoration 6.8: KWin's frameless Xwayland windows and the "Only
-        // shadow" window rule): no title bar, no buttons, no borders, nothing painted; the shadow,
+        // Shadow-only decoration (KDecoration 6.8: KWin's "Only shadow" window rule): no title bar,
+        // no buttons, no borders, nothing painted; the shadow,
         // the outline and the resize band are the titled decoration's, active and inactive.
         {
             writeConfig(QStringLiteral("RightGlyphs"), true, true);
