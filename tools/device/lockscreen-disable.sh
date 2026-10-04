@@ -2,9 +2,10 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Go back to Plasma's own lock screen: removes the plasma-kwin_wayland.service drop-in that
-# lockscreen-enable.sh wrote. The shell package itself stays installed (it is inert without
-# the drop-in) unless --remove-package is given.
+# Go back to Plasma's own lock screen: removes the plasma-kwin_wayland.service drop-in and
+# the log-out greeter's D-Bus service override that lockscreen-enable.sh wrote. The shell
+# package itself stays installed (it is inert without the drop-in) unless --remove-package
+# is given.
 #
 #   lockscreen-disable.sh [--dry-run] [--remove-package]
 #
@@ -16,6 +17,8 @@ CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 DROPIN_DIR=$CONFIG_HOME/systemd/user/plasma-kwin_wayland.service.d
 DROPIN=$DROPIN_DIR/plasma-fusion-lockscreen.conf
+DBSVC_DIR=$DATA_HOME/dbus-1/services
+DBSVC=$DBSVC_DIR/org.kde.LogoutPrompt.service
 PKG=$DATA_HOME/plasma/shells/$ID
 DRY=0
 REMOVE_PKG=0
@@ -44,6 +47,16 @@ if [ -f "$DROPIN" ]; then
   echo "Removed $DROPIN"
 else
   echo "Not enabled ($DROPIN does not exist)."
+fi
+
+if [ -f "$DBSVC" ]; then
+  if grep -q "PLASMA_DEFAULT_SHELL=$ID" "$DBSVC"; then
+    run rm -f "$DBSVC"
+    run rmdir --ignore-fail-on-non-empty "$DBSVC_DIR"
+    echo "Removed $DBSVC"
+  else
+    echo "Note: $DBSVC is not Plasma Fusion's; leaving it alone."
+  fi
 fi
 
 if [ "$REMOVE_PKG" = 1 ] && [ -d "$PKG" ]; then

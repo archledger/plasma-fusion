@@ -2,8 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Lock-screen shell package org.plasmafusion.lockshell (Plasma/Shell holding only
-# contents/lockscreen/; everything else falls back to org.kde.plasma.desktop)
+# Lock-screen and log-out shell package org.plasmafusion.lockshell (Plasma/Shell holding
+# contents/lockscreen/ and contents/logout/; everything else falls back to
+# org.kde.plasma.desktop)
 # -> $STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/, with copies of the shared QML
 # blocks it uses (packages/common/*.qml, tools/build-lib/shared-qml.sh) in contents/lockscreen.
 # It only takes effect once tools/device/lockscreen-enable.sh has pointed KWin's
@@ -39,6 +40,13 @@ mkdir -p "$DEST/contents"
 install -m 0644 "$SRC/metadata.json" "$DEST/metadata.json"
 cp -r "$SRC/contents/lockscreen" "$DEST/contents/"
 bash "$ROOT/tools/build-lib/shared-qml.sh" install "$SRC" "$DEST/contents/lockscreen"
+# The log-out screen: the same files the Global Theme carries (the Plasma 6.7 greeter reads them
+# from there; the Plasma 6.8 greeter reads the shell package instead, plasma-workspace 3729037a).
+for f in Logout.qml LogoutButton.qml timer.js; do
+  [ -s "$ROOT/packages/look-and-feel/common/contents/logout/$f" ] ||
+    { echo "lockscreen: missing look-and-feel contents/logout/$f" >&2; exit 1; }
+done
+cp -r "$ROOT/packages/look-and-feel/common/contents/logout" "$DEST/contents/"
 find "$DEST" -type d -exec chmod 0755 {} +
 find "$DEST" -type f -exec chmod 0644 {} +
 echo "lockscreen: $(find "$DEST" -type f | wc -l) files in ${DEST#"$STAGE"/}"

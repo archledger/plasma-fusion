@@ -7,7 +7,7 @@
                 "Name": "Wisbendji Fimerlus"
             }
         ],
-        "Description": "Plasma Fusion lock screen; every other shell file comes from the Plasma desktop shell",
+        "Description": "Plasma Fusion lock screen and log-out screen; every other shell file comes from the Plasma desktop shell",
         "Icon": "system-lock-screen",
         "Id": "org.plasmafusion.lockshell",
         "License": "GPL-2.0-or-later",

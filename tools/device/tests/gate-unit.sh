@@ -124,7 +124,7 @@ make_home() {
   local v=${2:-Dark} lnf=org.plasmafusion.dark.desktop
   [ "$v" = Light ] && lnf=org.plasmafusion.light.desktop
   mkdir -p "$H/.config/kdedefaults" "$H/.config/systemd/user/plasma-kwin_wayland.service.d" \
-    "$H/.local/share/plasma/shells" "$H/.local/share/aurorae/themes"
+    "$H/.local/share/plasma/shells" "$H/.local/share/aurorae/themes" "$H/.local/share/dbus-1/services"
   cp -a "$LOCKPKG" "$H/.local/share/plasma/shells/"
   for t in PlasmaFusionDark PlasmaFusionLight PlasmaFusionDark-Left PlasmaFusionLight-Left; do
     mkdir -p "$H/.local/share/aurorae/themes/$t"
@@ -132,6 +132,8 @@ make_home() {
   done
   printf '[Service]\nEnvironment=PLASMA_DEFAULT_SHELL=org.plasmafusion.lockshell\n' \
     >"$H/.config/systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf"
+  printf '# Written by Plasma Fusion lockscreen-enable.sh; remove with lockscreen-disable.sh.\n# Starts the log-out greeter with the Plasma Fusion lock shell package, so Plasma 6.8\n# (which reads the log-out QML from the shell package) shows Plasma Fusion\x27s log-out screen.\n[D-BUS Service]\nName=org.kde.LogoutPrompt\nExec=/usr/bin/env PLASMA_DEFAULT_SHELL=org.plasmafusion.lockshell /usr/libexec/ksmserver-logout-greeter\n' \
+    >"$H/.local/share/dbus-1/services/org.kde.LogoutPrompt.service"
   kw kdeglobals KDE LookAndFeelPackage "$lnf"
   kw kdeglobals General font "Manrope,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,,0,0"
   kwd kdeglobals General ColorScheme "PlasmaFusion$v"
@@ -195,6 +197,8 @@ gate login
 check "b: login exits 0" [ $? = 0 ]
 check "b: drop-in moved aside" [ ! -e "$H/.config/$DROPIN_REL" ]
 check "b: drop-in saved" [ -f "$H/.local/state/plasma-fusion/gate/saved/plasma-fusion-lockscreen.conf" ]
+check "b: log-out greeter override moved aside" [ ! -e "$H/.local/share/dbus-1/services/org.kde.LogoutPrompt.service" ]
+check "b: log-out greeter override saved" [ -f "$H/.local/state/plasma-fusion/gate/saved/org.kde.LogoutPrompt.service" ]
 check "b: decoration library Aurorae" [ "$(keff kwinrc org.kde.kdecoration2 library)" = org.kde.kwin.aurorae.v2 ]
 check "b: decoration theme PlasmaFusionDark" [ "$(keff kwinrc org.kde.kdecoration2 theme)" = __aurorae__svg__PlasmaFusionDark ]
 # The Global Theme names the Aurorae theme in kdedefaults: the user's keys go, so the title bars
@@ -216,6 +220,8 @@ gate login
 check "b: matching login restores every config file" [ "$(sums)" = "$orig" ]
 check "b: records cleared" [ ! -e "$H/.local/state/plasma-fusion/gate/off" ]
 check "b: saved drop-in removed" [ ! -e "$H/.local/state/plasma-fusion/gate/saved/plasma-fusion-lockscreen.conf" ]
+check "b: log-out greeter override restored" [ -f "$H/.local/share/dbus-1/services/org.kde.LogoutPrompt.service" ]
+check "b: saved log-out greeter override removed" [ ! -e "$H/.local/state/plasma-fusion/gate/saved/org.kde.LogoutPrompt.service" ]
 
 # b2: left circles and light
 make_home "$BASE/b2" Light

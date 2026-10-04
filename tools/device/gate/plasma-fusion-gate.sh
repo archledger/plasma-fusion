@@ -132,6 +132,9 @@ LOG=$ROOT/gate.log
 DROPIN_DIR=$CONFIG/systemd/user/plasma-kwin_wayland.service.d
 DROPIN=$DROPIN_DIR/plasma-fusion-lockscreen.conf
 SAVED_DROPIN=$GATE/saved/plasma-fusion-lockscreen.conf
+DBSVC_DIR=$DATA/dbus-1/services
+DBSVC=$DBSVC_DIR/org.kde.LogoutPrompt.service
+SAVED_DBSVC=$GATE/saved/org.kde.LogoutPrompt.service
 T0=${EPOCHREALTIME/[.,]/}
 
 LINES=()
@@ -490,7 +493,7 @@ DID=()
 off_lockscreen() { # REASON
   rec_has lockscreen dropin || rec_add lockscreen "$1" dropin - - - =present - -
   FILEOPS+=(dropin-off)
-  DID+=("lock screen: Plasma's own (drop-in moved to $SAVED_DROPIN)")
+  DID+=("lock screen: Plasma's own (drop-in and log-out greeter override moved to $GATE/saved/)")
 }
 off_decoration() {
   local v left='' lib theme before_lib before_theme deflib='' deftheme=''
@@ -625,9 +628,9 @@ restore_keys() { # PART [relaxed]
 }
 restore_lockscreen() {
   if rec_has lockscreen dropin; then
-    if [ -f "$DROPIN" ]; then
+    if [ -f "$DROPIN" ] && [ ! -e "$SAVED_DBSVC" ]; then
       say "  lock screen: drop-in already back"
-    elif [ ! -f "$SAVED_DROPIN" ]; then
+    elif [ ! -f "$SAVED_DROPIN" ] && [ ! -e "$SAVED_DBSVC" ]; then
       say "  lock screen: no saved drop-in; stays Plasma's own (lockscreen-enable.sh turns it on)"
     elif ! lockshell_dir; then
       say "  lock screen: $LOCKSHELL is not installed; stays Plasma's own"
@@ -675,24 +678,52 @@ do_fileops() {
   for op in "${FILEOPS[@]}"; do
     case $op in
       dropin-off)
-        [ -f "$DROPIN" ] || continue
-        if [ "$DRY" = 1 ]; then say "  would move $DROPIN to $SAVED_DROPIN"; continue; fi
-        { [ -d "${SAVED_DROPIN%/*}" ] || mkdir -p "${SAVED_DROPIN%/*}"; } && cp -p "$DROPIN" "$SAVED_DROPIN.tmp" && mv -f "$SAVED_DROPIN.tmp" "$SAVED_DROPIN" &&
-          rm -f "$DROPIN" && { rmdir "$DROPIN_DIR" 2>/dev/null; say "  moved $DROPIN aside"; } ||
-          say "  error: could not move $DROPIN aside"
+        if [ -f "$DROPIN" ]; then
+          if [ "$DRY" = 1 ]; then
+            say "  would move $DROPIN to $SAVED_DROPIN"
+          elif { [ -d "${SAVED_DROPIN%/*}" ] || mkdir -p "${SAVED_DROPIN%/*}"; } && cp -p "$DROPIN" "$SAVED_DROPIN.tmp" && mv -f "$SAVED_DROPIN.tmp" "$SAVED_DROPIN" &&
+            rm -f "$DROPIN" && { rmdir "$DROPIN_DIR" 2>/dev/null; say "  moved $DROPIN aside"; }; then
+            :
+          else
+            say "  error: could not move $DROPIN aside"
+          fi
+        fi
+        if [ -e "$DBSVC" ]; then
+          if [ "$DRY" = 1 ]; then
+            say "  would move $DBSVC to $SAVED_DBSVC"
+          elif { [ -d "${SAVED_DBSVC%/*}" ] || mkdir -p "${SAVED_DBSVC%/*}"; } && cp -p "$DBSVC" "$SAVED_DBSVC.tmp" && mv -f "$SAVED_DBSVC.tmp" "$SAVED_DBSVC" &&
+            rm -f "$DBSVC" && { rmdir "$DBSVC_DIR" 2>/dev/null; say "  moved $DBSVC aside"; }; then
+            :
+          else
+            say "  error: could not move $DBSVC aside"
+          fi
+        fi
         ;;
       dropin-on)
         if [ "$DRY" = 1 ]; then say "  would put $DROPIN back"; continue; fi
-        if mkdir -p "$DROPIN_DIR" && cp -p "$SAVED_DROPIN" "$DROPIN.tmp" && mv -f "$DROPIN.tmp" "$DROPIN"; then
-          say "  put $DROPIN back"
-          DROPIN_RESTORED=1
-        else
-          say "  error: could not put $DROPIN back (kept $SAVED_DROPIN)"
-          KEEP_SAVED=1
+        if [ -f "$SAVED_DROPIN" ]; then
+          if mkdir -p "$DROPIN_DIR" && cp -p "$SAVED_DROPIN" "$DROPIN.tmp" && mv -f "$DROPIN.tmp" "$DROPIN"; then
+            say "  put $DROPIN back"
+            DROPIN_RESTORED=1
+          else
+            say "  error: could not put $DROPIN back (kept $SAVED_DROPIN)"
+            KEEP_SAVED=1
+          fi
+        fi
+        if [ -e "$SAVED_DBSVC" ]; then
+          if mkdir -p "$DBSVC_DIR" && cp -p "$SAVED_DBSVC" "$DBSVC.tmp" && mv -f "$DBSVC.tmp" "$DBSVC"; then
+            say "  put $DBSVC back"
+          else
+            say "  error: could not put $DBSVC back (kept $SAVED_DBSVC)"
+            KEEP_SAVED=1
+          fi
         fi
         ;;
       dropin-forget)
-        [ "$DRY" = 1 ] || [ "${KEEP_SAVED:-0}" = 1 ] || [ ! -e "$SAVED_DROPIN" ] || rm -f "$SAVED_DROPIN"
+        if [ "$DRY" != 1 ] && [ "${KEEP_SAVED:-0}" != 1 ]; then
+          [ ! -e "$SAVED_DROPIN" ] || rm -f "$SAVED_DROPIN"
+          [ ! -e "$SAVED_DBSVC" ] || rm -f "$SAVED_DBSVC"
+        fi
         ;;
       link-off:* | link-on:* | link-forget:*)
         p=${op#*:} lnk=$CONFIG/$WANTS_REL/${UNIT[${op#*:}]} saved=$GATE/saved/${UNIT[${op#*:}]}
