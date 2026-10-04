@@ -23,7 +23,15 @@
 # plasmashell does not see it (it reads the variable from its own unit), so the desktop
 # layout stays on org.kde.plasma.desktop. Nothing is written to plasmashellrc.
 #
-# Takes effect after logging out and back in (KWin reads its environment at start).
+# The Plasma 6.8 log-out greeter (ksmserver-logout-greeter, D-Bus name org.kde.LogoutPrompt)
+# reads the log-out QML from the same shell package (plasma-workspace 3729037a), so this
+# script also writes a per-user D-Bus service override that starts it with
+# PLASMA_DEFAULT_SHELL: Plasma 6.8 shows Plasma Fusion's log-out screen (contents/logout/
+# in the package). Plasma 6.7's greeter reads the Global Theme and ignores the variable;
+# the override is harmless there.
+#
+# The lock screen takes effect after logging out and back in (KWin reads its environment at
+# start); the log-out override applies the next time the log-out screen opens.
 # Undo: tools/device/lockscreen-disable.sh. If the lock screen ever fails to unlock, unlock
 # the session from a TTY or over SSH with: loginctl unlock-session <session id>
 set -euo pipefail
@@ -33,13 +41,15 @@ CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 DROPIN_DIR=$CONFIG_HOME/systemd/user/plasma-kwin_wayland.service.d
 DROPIN=$DROPIN_DIR/plasma-fusion-lockscreen.conf
+DBSVC_DIR=$DATA_HOME/dbus-1/services
+DBSVC=$DBSVC_DIR/org.kde.LogoutPrompt.service
 DRY=0
 CHECK=0
 for arg in "$@"; do
   case $arg in
     --dry-run) DRY=1 ;;
     --check) CHECK=1 ;;
-    -h|--help) sed -n '5,31p' "$0"; exit 0 ;;
+    -h|--help) sed -n '5,36p' "$0"; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -58,6 +68,26 @@ done
 CONTENT="[Service]
 Environment=PLASMA_DEFAULT_SHELL=$ID
 "
+
+# The greeter's system service file, wrapped unchanged by the per-user override below.
+SYS_DBSVC=""
+for base in /usr/share ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do
+  for dir in ${base//:/ }; do
+    if [ -f "$dir/dbus-1/services/org.kde.LogoutPrompt.service" ]; then
+      SYS_DBSVC=$dir/dbus-1/services/org.kde.LogoutPrompt.service
+      break 2
+    fi
+  done
+done
+
+dbsvc_content() {
+  local exec
+  exec=$(sed -n 's/^Exec=//p' "$SYS_DBSVC" | head -n 1)
+  printf '# Written by Plasma Fusion lockscreen-enable.sh; remove with lockscreen-disable.sh.\n'
+  printf '# Starts the log-out greeter with the Plasma Fusion lock shell package, so Plasma 6.8\n'
+  printf "# (which reads the log-out QML from the shell package) shows Plasma Fusion's log-out screen.\n"
+  printf '[D-BUS Service]\nName=org.kde.LogoutPrompt\nExec=/usr/bin/env PLASMA_DEFAULT_SHELL=%s %s\n' "$ID" "$exec"
+}
 
 shell_package=$(kreadconfig6 --file plasmashellrc --group Shell --key ShellPackage 2>/dev/null || true)
 
@@ -81,6 +111,13 @@ if [ "$CHECK" = 1 ]; then
     echo "active:   unknown (plasma-kwin_wayland.service is not running)"
   fi
   [ -n "$shell_package" ] && echo "note:     plasmashellrc [Shell] ShellPackage=$shell_package overrides PLASMA_DEFAULT_SHELL"
+  if [ -f "$DBSVC" ] && grep -q "PLASMA_DEFAULT_SHELL=$ID" "$DBSVC"; then
+    echo "log-out:  Plasma Fusion's ($DBSVC)"
+  elif [ -f "$DBSVC" ]; then
+    echo "log-out:  another override ($DBSVC is not Plasma Fusion's)"
+  else
+    echo "log-out:  Plasma's own"
+  fi
   exit 0
 fi
 
@@ -99,6 +136,12 @@ fi
 if [ "$DRY" = 1 ]; then
   echo "would write $DROPIN:"
   printf '%s' "$CONTENT" | sed 's/^/  /'
+  if [ -n "$SYS_DBSVC" ]; then
+    echo "would write $DBSVC:"
+    dbsvc_content | sed 's/^/  /'
+  else
+    echo "note: no org.kde.LogoutPrompt.service on this system; the log-out screen would stay Plasma's own"
+  fi
   echo "would run: systemctl --user daemon-reload"
   exit 0
 fi
@@ -109,6 +152,19 @@ printf '%s' "$CONTENT" >"$tmp"
 chmod 0644 "$tmp"
 mv -f "$tmp" "$DROPIN"
 systemctl --user daemon-reload 2>/dev/null || echo "note: systemctl --user daemon-reload failed; the drop-in is still read at the next login"
+
+if [ -z "$SYS_DBSVC" ]; then
+  echo "note: no org.kde.LogoutPrompt.service on this system; the log-out screen was not overridden"
+elif [ -f "$DBSVC" ] && ! grep -q "PLASMA_DEFAULT_SHELL=$ID" "$DBSVC"; then
+  echo "note: $DBSVC is not Plasma Fusion's; leaving it alone (the log-out screen stays that override's)"
+else
+  mkdir -p "$DBSVC_DIR"
+  tmp=$(mktemp "$DBSVC_DIR/.org.kde.LogoutPrompt.XXXXXX")
+  dbsvc_content >"$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$DBSVC"
+  echo "Wrote $DBSVC (the log-out greeter starts with $ID; takes effect the next time the log-out screen opens)"
+fi
 
 echo "Plasma Fusion lock screen enabled ($PKG)."
 echo "Wrote $DROPIN"

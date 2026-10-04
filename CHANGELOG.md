@@ -23,6 +23,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   KDecoration 6.8: windows with the "Only shadow" window rule get the Plasma Fusion shadow and
   outline without a title bar, instead of falling back to the app's own decoration. Builds against
   Plasma 6.7 are unchanged.
+- The log-out screen is Plasma Fusion's again on Plasma 6.8: 6.8's log-out greeter reads the
+  log-out QML from the shell package, so the screen ships in the org.plasmafusion.lockshell shell
+  package and the Plasma Fusion lock screen setup starts the greeter with that package through a
+  per-user D-Bus service override. Plasma 6.7 is unchanged (its greeter reads the Global Theme).
 - Known issue on Plasma 6.8: the log-out screen is Plasma's own, not Plasma Fusion's.
 
 ## 0.2.0 (2026-10-03)

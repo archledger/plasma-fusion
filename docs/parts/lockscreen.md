@@ -2,7 +2,7 @@
 
 The Plasma Fusion lock screen, built from the Lock board (`Lock.dc.html`, render `startup-3`) for the
 idle screen and the Login board (`Login.dc.html`, render `startup-4`) for the unlock prompt. QML
-only, no compiled code. It is a Plasma/Shell package that holds only `contents/lockscreen/`; every
+only, no compiled code. It is a Plasma/Shell package that holds `contents/lockscreen/` and `contents/logout/`; every
 other shell file falls back to `org.kde.plasma.desktop`. It is selected for the lock screen alone,
 through `PLASMA_DEFAULT_SHELL` in KWin's environment, so plasmashell and its layout are untouched.
 
