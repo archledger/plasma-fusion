@@ -174,8 +174,15 @@ the style changes, so a decoration keeps its style for its whole life.
 
 Seen in a Plasma 6.7.91 session (2026-10-04, Fedora 44 VM, software rendering): with the rule on a
 Wayland window, the window had no title bar, round corners, the outline and the shadow. The same
-rule on an X11 window (matched by its class) left that window's title bar in place: KWin did not
-apply the rule there, before the decoration is asked; not investigated further.
+rule first left an X11 window's title bar in place; investigated the same day: the window's
+WM_CLASS is `("qml", "Qml Runtime")` while its Wayland class is the app_id `qml`, and the test
+rule named `wmclass=qml` with `wmclassmatch=2` -- a regular expression, which KWin matches
+case-sensitively (exact and substring matching are case-insensitive) -- so it missed
+`Qml Runtime`. With `wmclass=Qml Runtime` the X11 window gets the shadow-only style too:
+`_NET_FRAME_EXTENTS` reads 0, 0, 0, 0 against the compiled decoration. On X11 the rule must
+therefore name the window's WM_CLASS class (its second field), which can differ from the Wayland
+app_id of the same program. One caveat from the same session: a two-rule `kwinrulesrc` did not
+take effect (cause not investigated); the one-rule file works on both window types.
 
 - One check in `CMakeLists.txt`: `KDecoration3_VERSION` 6.7.90 or later turns on
   `PFDECO_HAVE_STYLES` (a compile definition, and the `ShadowStyle` entry of the feature summary)
