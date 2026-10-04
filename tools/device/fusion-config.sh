@@ -630,10 +630,34 @@ shell_is_systemd_unit() {
 # again. The systemd unit when it is this session's shell; otherwise kquitapp6, and the new shell
 # gets this script's environment (from a terminal in the session) or the environment of the shell
 # it replaces (run from outside the session, SSH).
+# Before plasmashell is stopped: let it finish what the last change started. A shell stopped while its
+# render thread still compiles the shaders of a new theme can crash on exit (Mesa's software
+# renderer, llvmpipe, in VMs; 2026-10-03). Waits until the shell has used under 6 % of a core for a
+# second, at most 20 s; with a GPU driver it returns within a second.
+shell_settle() {
+  local pid t0 t1 calm=0
+  pid=$(bus call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s org.kde.plasmashell 2>/dev/null | awk '{print $2}')
+  [ -n "$pid" ] && [ -r "/proc/$pid/stat" ] || return 0
+  # utime + stime (fields 14 and 15; the name in parentheses may hold spaces)
+  t0=$(sed 's/.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $12 + $13}')
+  for _ in $(seq 1 40); do
+    sleep 0.5
+    t1=$(sed 's/.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $12 + $13}')
+    [ -n "$t1" ] && [ -n "$t0" ] || return 0
+    if [ $((t1 - t0)) -le $(($(getconf CLK_TCK) * 3 / 100)) ]; then
+      calm=$((calm + 1))
+      [ "$calm" -ge 2 ] && return 0
+    else
+      calm=0
+    fi
+    t0=$t1
+  done
+}
 SHELL_VIA_UNIT=0 SHELL_ENV=()
 stop_plasmashell() {
   local pid
   SHELL_VIA_UNIT=0 SHELL_ENV=()
+  shell_settle
   if shell_is_systemd_unit; then
     SHELL_VIA_UNIT=1
     systemctl --user stop plasma-plasmashell.service
@@ -663,6 +687,7 @@ start_plasmashell() {
 }
 restart_plasmashell() {
   if shell_is_systemd_unit; then
+    shell_settle
     systemctl --user restart plasma-plasmashell.service
     for _ in $(seq 1 60); do has_name org.kde.plasmashell && break; sleep 0.5; done
     wait_panels 1 >/dev/null

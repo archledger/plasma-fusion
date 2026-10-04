@@ -7,6 +7,14 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## Unreleased
+
+- Setup waits until plasmashell has finished redrawing before it restarts it: a shell stopped
+  right after a live theme change could crash on exit while it still compiled the new theme's
+  shaders (seen with Mesa's software renderer in virtual machines).
+- On Arch, `install.sh uninstall` also removes the `plasma-fusion-debug` package that an AUR
+  helper installs.
+
 ## 0.2.0 (2026-10-03)
 
 The first release. Tested with Plasma 6.7 (6.7.5 on Fedora 44, Arch, Ubuntu 26.10 and KDE neon,
