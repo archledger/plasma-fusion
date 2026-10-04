@@ -79,6 +79,9 @@ fi
 if [ "$lane_env" != public ]; then
   vm ssh "$name" "curl -fsS -o ~/install.sh http://10.0.2.2:8088/install.sh && curl -fsS -o ~/test-key.asc http://10.0.2.2:8088/test-key.asc"
   env="PLASMA_FUSION_DEV=1 PLASMA_FUSION_DEV_VERSION=0.2.0"
+  # PF_DEV_ENV: more test-mode settings, for example PLASMA_FUSION_DEV_SERIES='6.7 6.8' for a
+  # candidate tested with a new Plasma series.
+  env="$env ${PF_DEV_ENV:-}"
 fi
 case $lane_env in
   copr) env="$env PLASMA_FUSION_DEV_DNF_REPO=http://10.0.2.2:8088/fedora/" ;;
