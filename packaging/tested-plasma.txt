@@ -7,3 +7,4 @@
 # series after testing it; packaging/tested-versions.txt has the exact versions of the test
 # machines (Fedora 44).
 6.7
+6.8
