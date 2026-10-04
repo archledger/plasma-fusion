@@ -28,6 +28,29 @@ Item {
     readonly property string label: grid ? grid.labelFor(model) : (model.display || "")
     readonly property real nameGap: grid && grid.metrics ? grid.metrics.px(7) : 7
 
+    // Today's date over the Calendar tile's fixed "SEP" / "28" (AppIcon board), as the dock's
+    // TaskItem: the same apps, the same overlay, one timer to the next midnight (no polling).
+    property var today: new Date()
+    readonly property string monthText: Qt.locale().toString(tile.today, "MMM").toUpperCase().replace(".", "")
+    readonly property string dayText: String(tile.today.getDate())
+    readonly property bool calendarApp: ["korganizer", "org.kde.korganizer", "office-calendar", "org.gnome.Calendar",
+                                         "gnome-calendar", "org.gnome.merkuro.calendar", "org.kde.kalendar",
+                                         "kalendar"].indexOf(Launcher.iconNameFor(tile.model)) !== -1
+    readonly property bool calendarTile: calendarApp && !icon.foreign && !icon.familiar
+    Timer {
+        running: true
+        interval: {
+            const now = new Date();
+            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+            return Math.max(1000, next.getTime() - now.getTime());
+        }
+        onTriggered: {
+            tile.today = new Date();
+            interval = 24 * 3600 * 1000;
+            restart();
+        }
+    }
+
     width: grid ? grid.cellWidth - grid.gap : 102
     height: grid ? grid.cellHeight - grid.gap : 84
 
@@ -74,6 +97,47 @@ Item {
         size: 52
         source: tile.model.decoration || "application-x-executable"
         iconName: Launcher.iconNameFor(tile.model)
+    }
+
+    // Calendar apps: today's month and day over the tile's fixed "SEP" / "28" (AppIcon board,
+    // 64-unit tile: red band 0-21 with the month, the day in 21-60).
+    Item {
+        id: calOverlay
+        anchors.fill: icon
+        visible: tile.calendarTile && tile.dayText !== ""
+        readonly property real u: width / 64
+
+        Rectangle {
+            x: 14 * calOverlay.u
+            y: 3 * calOverlay.u
+            width: 36 * calOverlay.u
+            height: 16 * calOverlay.u
+            color: "#e7585d"
+            Text {
+                anchors.centerIn: parent
+                text: tile.monthText
+                color: "#ffffff"
+                font.pixelSize: 9 * calOverlay.u
+                font.weight: Font.ExtraBold
+                textFormat: Text.PlainText
+            }
+        }
+        Rectangle {
+            x: 10 * calOverlay.u
+            y: 23 * calOverlay.u
+            width: 44 * calOverlay.u
+            height: 35 * calOverlay.u
+            color: "#f6f4ef"
+            Text {
+                anchors.centerIn: parent
+                text: tile.dayText
+                color: "#1b2031"
+                font.pixelSize: 26 * calOverlay.u
+                font.weight: Font.ExtraBold
+                font.features: { "tnum": 1 }
+                textFormat: Text.PlainText
+            }
+        }
     }
 
     FusionText {
