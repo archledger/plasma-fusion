@@ -79,6 +79,9 @@ fi
 if [ "$lane_env" != public ]; then
   vm ssh "$name" "curl -fsS -o ~/install.sh http://10.0.2.2:8088/install.sh && curl -fsS -o ~/test-key.asc http://10.0.2.2:8088/test-key.asc"
   env="PLASMA_FUSION_DEV=1 PLASMA_FUSION_DEV_VERSION=0.2.0"
+  # PF_DEV_ENV: more test-mode settings, for example PLASMA_FUSION_DEV_SERIES='6.7 6.8' for a
+  # candidate tested with a new Plasma series.
+  env="$env ${PF_DEV_ENV:-}"
 fi
 case $lane_env in
   copr) env="$env PLASMA_FUSION_DEV_DNF_REPO=http://10.0.2.2:8088/fedora/" ;;
@@ -126,6 +129,12 @@ insession "plasma-fusion status" >"$OUT/23-status-after-login.log" 2>&1
 vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log; echo; coredumpctl list --no-pager --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>&1 | tail -n 5; echo; journalctl --user -b --no-pager -p err 2>/dev/null | grep -iE "plasma-?fusion|plasmafusion" | tail -n 20' >"$OUT/24-logs.log" 2>&1
 # Crashes of this boot only (the provisioned base keeps the journal of its own boots).
 log "crashes: $(vm ssh "$name" 'coredumpctl list --no-pager --no-legend --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>/dev/null | wc -l')"
+
+# PF_AFTER_LOGIN: a check of the change under test, run in the session; output in 25-after-login.log.
+if [ -n "${PF_AFTER_LOGIN:-}" ]; then
+  insession "$PF_AFTER_LOGIN" >"$OUT/25-after-login.log" 2>&1
+  log "after-login check rc=$?: $(tail -n 1 "$OUT/25-after-login.log")"
+fi
 
 log "installer: uninstall"
 if [ "$lane" = nix ]; then

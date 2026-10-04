@@ -127,7 +127,7 @@ file, so `fusion-restore.sh` gives every key back.
 | Meta+Up / Meta+Down | `kwin` / `Window Maximize` (a toggle in KWin 6.7.5) / `Window Restore` (Meta+PgUp and Meta+Backspace stay) |
 | Meta+Alt+Up / Meta+Alt+Down | `kwin` / `Window Quick Tile Top` / `Bottom` (`Switch Window Up/Down` lose them) |
 | Meta+Tab | `kwin` / `Overview` (Meta+W stays; `Walk Through Windows` keeps Alt+Tab) |
-| Meta+Alt+1..9 | `plasmashell` / `activate task manager entry 1..9` (the dock's `activateTaskAtIndex`); Meta+5..9 lose them |
+| Meta+Alt+1..9 | `kwin` / `Plasma Fusion: Activate Dock Entry 1..9` (the snap KWin script; the dock's `activateTaskAtIndex` through its `activateRequest` key, on Plasma 6.7 and 6.8); plasmashell's `activate task manager entry 1..9` lose Meta+5..9, and a Meta+Alt+N an earlier version gave them moves to the new action |
 | Meta+1..4 | `kwin` / `Switch to Desktop 1..4` (unchanged) |
 | Meta+Shift+W (with `--pen`) | the pen widget's "activate widget <id>", only when free |
 

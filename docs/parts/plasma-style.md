@@ -74,7 +74,7 @@ enabled=true`.
 | Pop-ups, `dialogs/background` | rgba(22,27,46,.88), edge white .12 | white .88, edge ink .12 | radius 22, margins 14 |
 | Pop-up shadow (KWin tiles) | 0 18 44 rgba(0,0,0,.45) | 0 18 44 rgba(20,24,39,.16) | clipped inside the shape |
 | Plasma tooltips, `widgets/tooltip` | rgba(22,27,46,.90), edge white .12 | white .90, edge ink .12 | radius 16, margins 6 (+ DefaultToolTip's 8 = the board's 14), shadow 0 18 44 (Popups rich tooltip) |
-| PC3 ToolTip, `solid/widgets/tooltip` | #0c0f1c, edge white .12 | #1b2031, no edge | radius 8, own `shadow` frame |
+| PC3 ToolTip, `solid/widgets/tooltip` | #0c0f1c, edge white .12 | #1b2031, no edge | radius 8, own `shadow` frame; the fill is the colour set's background (`ColorScheme-Background`): the Tooltip set gives these colours, and PC3 Menu and the ComboBox pop-up, which draw this file since Plasma 6.8, get their own set's background (white in Light) under their own text |
 | Desktop widget cards, `widgets/background` `blurred-*` | rgba(14,18,34,.52), edge white .10 | white .62, edge ink .10 | radius 18, margins 14, `blurred-mask-*` for the wallpaper blur |
 | PC3 Menu/Popup, widgets without blur (unprefixed `widgets/background`) | rgba(22,27,46,.96) | white .96 | radius 18 |
 

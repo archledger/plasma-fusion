@@ -239,7 +239,15 @@ def tooltip(v, a, solid=False):
     stretch_hint(doc)
     if solid:
         t = v["pc3_tooltip"]
-        add_frame(doc, Frame("", t["radius"], surface_layers(t["fill"], t["a"], t["edge"]),
+        # The surface takes the background of the colour set it is drawn in, as Breeze's does:
+        # PC3 ToolTip asks for the Tooltip set, whose background is t["fill"] in both colour
+        # schemes, so tooltips look as before. Since Plasma 6.8 PC3 Menu and the ComboBox pop-up
+        # draw this file too, in the set they inherit (Window), with that set's text; a fixed dark
+        # fill gave them dark text on a dark surface in Plasma Fusion Light.
+        layers = [Fill(0, Scheme("ColorScheme-Background", t["a"]))]
+        if t["edge"][1] > 0:
+            layers.append(Ring(0, 1, rgba(t["edge"])))
+        add_frame(doc, Frame("", t["radius"], layers,
                              (5, 5, 10, 10), mask=True, note="PC3 tooltip, inverted colours"))
         # PC3 ToolTip draws a 'shadow' prefix frame around itself (margins = shadow reach)
         c = v["ctl"]

@@ -146,6 +146,17 @@ bool Decoration::isToolWindow() const
     return false;
 }
 
+bool Decoration::isShadowOnly() const
+{
+#ifdef PFDECO_HAVE_STYLES
+    // KWin passes the style with the constructor arguments and creates a new decoration when it
+    // changes, so it stays the same for the life of this one.
+    return style() == KDecoration3::Style::Shadow;
+#else
+    return false;
+#endif
+}
+
 bool Decoration::isShortScreen() const
 {
     return m_screenHeight > 0 && m_screenHeight < s_shortScreenHeight;
@@ -475,6 +486,11 @@ void Decoration::computeMetrics()
     }
     // Tablet sizes are minimums (44 px hit areas): round up to the device grid, not to the nearest.
     m.titleHeight = m_tablet ? snapUp(m.titleHeight) : snap(m.titleHeight);
+    if (isShadowOnly()) {
+        // The window draws its own title bar: no top border, and titleBar() is empty, so the
+        // pointer is never over a title bar and nothing is painted.
+        m.titleHeight = 0;
+    }
     m.radius = snap(13);
     // The 1 px light edge as a Plasma Fusion hairline (FusionMetrics): 1 device px up to 1.5, 2 from
     // 1.75. Rounding 1 px to the grid gave 2 device px at 1.5 (an edge a third heavier than the
@@ -492,7 +508,7 @@ void Decoration::updateState()
     const bool maximized = isMaximizedFully();
 
     // No side or bottom borders (Windows.dc.html: "No visible border"); the title bar is the only
-    // decoration.
+    // decoration (none on a shadow-only one: computeMetrics() makes it 0 high).
     setBorders(QMarginsF(0, m.titleHeight, 0, 0));
 
     // spec 7: invisible 8 px resize band outside the window (KDecoration makes its corners
@@ -507,7 +523,10 @@ void Decoration::updateState()
     const qreal r = m.radius;
     // KWin clips the window (title bar and client) with this radius; the top corners are painted
     // round by paint() itself so the settings-page preview, which does not clip, looks the same.
-    setBorderRadius(KDecoration3::BorderRadius(0, 0, br ? r : 0, bl ? r : 0));
+    // A shadow-only decoration paints no title bar, so KWin clips the top corners too: otherwise
+    // the window's square corners would stick out of the round outline.
+    const bool clipTop = isShadowOnly();
+    setBorderRadius(KDecoration3::BorderRadius(clipTop && tl ? r : 0, clipTop && tr ? r : 0, br ? r : 0, bl ? r : 0));
     if (maximized) {
         setBorderOutline(KDecoration3::BorderOutline());
     } else {
@@ -588,6 +607,9 @@ void Decoration::createButtons()
     }
     m_left.clear();
     m_right.clear();
+    if (isShadowOnly()) {
+        return; // no title bar to put buttons in
+    }
 
     auto make = [this](DecorationButtonType type) {
         auto *button = new Button(type, this, this);
@@ -815,6 +837,9 @@ void Decoration::hoverLeaveEvent(QHoverEvent *event)
 
 void Decoration::paint(QPainter *painter, const QRectF &repaintArea)
 {
+    if (isShadowOnly()) {
+        return; // KWin draws the shadow and the outline; there is nothing else
+    }
     const qreal width = size().width();
     const qreal height = borderTop();
     if (width <= 0 || height <= 0) {

@@ -14,6 +14,16 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   shaders (seen with Mesa's software renderer in virtual machines).
 - On Arch, `install.sh uninstall` also removes the `plasma-fusion-debug` package that an AUR
   helper installs.
+- Ready for Plasma 6.8 (tested with the 6.8 beta): menus and drop-down lists are readable in
+  Plasma Fusion Light; the lock screen asks for the password even when the stock lock screen last
+  unlocked another way; split screen from the home screen and the launcher works again; the dock's
+  Meta+Alt+1..9 keys go through Plasma Fusion's own shortcuts; the tablet navigation starts from a
+  defined state.
+- The window decoration supports the shadow-only style of Plasma 6.8 when built against
+  KDecoration 6.8: windows without a title bar of their own (frameless Xwayland windows, the "Only
+  shadow" window rule) get the Plasma Fusion shadow and outline instead of none. Builds against
+  Plasma 6.7 are unchanged.
+- Known issue on Plasma 6.8: the log-out screen is Plasma's own, not Plasma Fusion's.
 
 ## 0.2.0 (2026-10-03)
 

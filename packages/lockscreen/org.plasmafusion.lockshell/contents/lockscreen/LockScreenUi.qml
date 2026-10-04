@@ -10,6 +10,7 @@ import QtQuick
 import QtQuick.Controls
 
 import org.kde.kirigami as Kirigami
+import org.kde.kscreenlocker as ScreenLocker
 import org.kde.plasma.clock as PlasmaClock
 import org.kde.plasma.private.keyboardindicator as KeyboardIndicator
 import org.kde.plasma.workspace.keyboardlayout as Keyboards
@@ -190,6 +191,18 @@ Item {
         function onPromptForSecretChanged(msg) {
             mainBlock.showPassword = false;
             mainBlock.mainPasswordBox.forceActiveFocus();
+        }
+    }
+
+    // Plasma 6.8 runs one chosen authenticator and starts with the one that unlocked last time
+    // (kscreenlockerrc [Greeter] Authenticator in the state directory), which the stock lock
+    // screen's picker may have set to Fingerprint, Face, Smartcard or a security key. This screen
+    // has no picker, only the password field, so it asks for the password authenticator; the
+    // fingerprint reader still runs next to it. Plasma 6.7 has no such property.
+    Component.onCompleted: {
+        if (authenticator.authenticator !== undefined
+                && authenticator.authenticator !== ScreenLocker.Authenticators.Regular) {
+            authenticator.authenticator = ScreenLocker.Authenticators.Regular;
         }
     }
     // qmllint enable unqualified

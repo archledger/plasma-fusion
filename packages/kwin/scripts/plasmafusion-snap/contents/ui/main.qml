@@ -238,6 +238,36 @@ Item {
             && win.resizeable && !win.fullScreen && !win.specialWindow;
     }
 
+    // ---------------------------------------------------------------- dock entries
+
+    // "Plasma Fusion: Activate Dock Entry N": the dock's app N (setup gives them Meta+Alt+1..9 in
+    // the Windows-style set). Up to Plasma 6.7 plasmashell's "activate task manager entry N" did
+    // this for any task manager in a panel, the dock included; Plasma 6.8 moved those actions into
+    // the stock task manager, which the dock replaces, so they reach the dock from here: the dock
+    // reacts to its activateRequest key "N:nonce", written through plasmashell's script interface.
+    Instantiator {
+        model: 9
+        delegate: ShortcutHandler {
+            required property int index
+            name: "Plasma Fusion: Activate Dock Entry " + (index + 1)
+            text: i18nd("plasmafusion", "Plasma Fusion: Activate Dock Entry %1", index + 1)
+            onActivated: {
+                dockEntryCall.arguments = ["panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {"
+                    + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"activateRequest\", \"" + (index + 1)
+                    + ":" + Date.now() + "\"); }); });"];
+                dockEntryCall.call();
+            }
+        }
+    }
+    DBusCall {
+        id: dockEntryCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+        onFailed: console.info("plasmafusion-snap: plasmashell did not take the dock entry request")
+    }
+
     // ---------------------------------------------------------------- Meta+Z flyout
 
     ShortcutHandler {

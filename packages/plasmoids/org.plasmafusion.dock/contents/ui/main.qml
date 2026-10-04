@@ -908,7 +908,8 @@ PlasmoidItem {
         }
     }
 
-    // Plasmashell calls this for Meta+1 ... Meta+9.
+    // Plasmashell calls this for its "activate task manager entry N" up to Plasma 6.7; the snap KWin
+    // script's "Plasma Fusion: Activate Dock Entry N" asks for it through activateRequest.
     function activateTaskAtIndex(index: var): void {
         if (typeof index !== "number") {
             return;
@@ -1507,19 +1508,26 @@ PlasmoidItem {
         engine: "executable"
         onNewData: (source, data) => disconnectSource(source)
     }
+    // Two app ids name the same app. The home screen and the launcher send desktop file names
+    // ("org.kde.dolphin.desktop"); the task model's AppId had that suffix up to Plasma 6.7 and has
+    // none from Plasma 6.8 on (libtaskmanager uses the desktop entry name), so compare without it.
+    function sameApp(a, b): bool {
+        const bare = id => String(id || "").replace(/\.desktop$/, "");
+        return bare(a) !== "" && bare(a) === bare(b);
+    }
     // A split asked for by the home screen or the launcher: an app the dock has (running or
     // pinned) goes the dock's own way; any other app is started here once the app in use moved.
     function startSplitForApp(appId: string, side: string): void {
         const atm = TaskManager.AbstractTasksModel;
         for (let r = 0; r < tasksModel.count; ++r) {
-            if (String(tasksModel.data(tasksModel.makeModelIndex(r), atm.AppId) || "") === appId) {
+            if (sameApp(tasksModel.data(tasksModel.makeModelIndex(r), atm.AppId), appId)) {
                 startSplit(r, side);
                 return;
             }
         }
         const active = tasksModel.activeTask;
         const activeApp = active && active.valid ? String(tasksModel.data(active, atm.AppId) || "") : "";
-        const other = activeApp !== "" && activeApp !== appId && tasksModel.data(active, atm.IsWindow) === true
+        const other = activeApp !== "" && !sameApp(activeApp, appId) && tasksModel.data(active, atm.IsWindow) === true
             && tasksModel.data(active, atm.IsMinimized) !== true;
         console.info("dock: split request: " + appId + " (not in the dock) to the " + side + (other ? ", " + activeApp + " to the other half" : ""));
         splitPlan = { "side": side, "appId": appId, "row": -1 };
@@ -1532,6 +1540,12 @@ PlasmoidItem {
     }
     Connections {
         target: Plasmoid.configuration
+        function onActivateRequestChanged(): void {
+            const n = parseInt(String(Plasmoid.configuration.activateRequest || "").split(":")[0], 10);
+            if (n >= 1 && n <= 9) {
+                root.activateTaskAtIndex(n - 1);
+            }
+        }
         function onSplitRequestChanged(): void {
             const parts = String(Plasmoid.configuration.splitRequest || "").split(":");
             if (parts.length >= 3 && (parts[0] === "left" || parts[0] === "right") && parts[2] !== "") {
@@ -1582,7 +1596,7 @@ PlasmoidItem {
             }
             const atm = TaskManager.AbstractTasksModel;
             const active = tasksModel.activeTask;
-            if (active && active.valid && String(tasksModel.data(active, atm.AppId) || "") === root.splitPlan.appId) {
+            if (active && active.valid && root.sameApp(tasksModel.data(active, atm.AppId), root.splitPlan.appId)) {
                 root.splitActiveIsApp();
             } else if (root.splitPlan.row >= 0) {
                 root.activateTask(root.splitPlan.row, 0);
@@ -1612,7 +1626,7 @@ PlasmoidItem {
             const atm = TaskManager.AbstractTasksModel;
             const active = tasksModel.activeTask;
             if (active && active.valid && tasksModel.data(active, atm.IsWindow) === true
-                    && String(tasksModel.data(active, atm.AppId) || "") === root.splitPlan.appId) {
+                    && root.sameApp(tasksModel.data(active, atm.AppId), root.splitPlan.appId)) {
                 root.splitActiveIsApp();
             }
         }

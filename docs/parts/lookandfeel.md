@@ -131,6 +131,12 @@ instant. Imports only QtQuick, Kirigami and org.kde.coreaddons (KUser).
 
 ## Log-out screen
 
+Plasma 6.8 no longer reads the Global Theme's `contents/logout/`: the log-out greeter loads the
+shell package's `logout/Logout.qml` (plasma-workspace 3729037a), so from 6.8 on the screen below is
+not used and Plasma's own log-out screen appears (a black veil with the Complementary colours,
+hard to read in Plasma Fusion Light). Known issue, accepted for now: bringing ours back would need
+a per-user override of the greeter's D-Bus service (owner decision, 2026-10-04).
+
 `contents/logout/` (both packages): Plasma 6.7.5's Breeze `Logout.qml`, `LogoutButton.qml` and
 `timer.js` with one change. Breeze draws the Complementary colours on a black 85 % veil; Plasma
 Fusion Light has the board's light Complementary set (`#f7f8fb`, text `#141827`), which made the
