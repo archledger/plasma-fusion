@@ -1,6 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 
+# The plugin metadata (embedded by K_PLUGIN_FACTORY_WITH_JSON, found through the build directory).
+# Without styles it is the same file as before KDecoration 6.8, byte for byte.
+if(PFDECO_HAVE_STYLES)
+    string(CONCAT PFDECO_STYLES_JSON ",\n"
+                  "        \"styles\": [\n"
+                  "            \"titled\",\n"
+                  "            \"shadow\"\n"
+                  "        ]")
+else()
+    set(PFDECO_STYLES_JSON "")
+endif()
+configure_file(plasmafusion.json.in ${CMAKE_CURRENT_BINARY_DIR}/plasmafusion.json @ONLY)
+
 add_library(plasmafusiondecoration MODULE
     button.cpp
     colors.cpp

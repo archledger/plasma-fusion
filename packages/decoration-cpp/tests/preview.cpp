@@ -11,7 +11,9 @@
     given scales. It also checks the snap-layouts trigger against a fake kglobalaccel D-Bus service
     and the tablet-mode title bars against a fake org.kde.KWin.TabletModeManager when a session bus
     is available (run it under dbus-run-session), the 40 px title bar on short screens through a
-    fake KWin output, and the shadow at 200 % against an exact Gaussian rendered at 2x.
+    fake KWin output, and the shadow at 200 % against an exact Gaussian rendered at 2x. Built
+    against KDecoration 6.8 (PFDECO_HAVE_STYLES), it also checks the "styles" of the plugin
+    metadata and the shadow-only decoration KWin asks for with the "style" argument.
 
       pfdeco-preview --out DIR --scheme FILE.colors --name dark [--fonts DIR] [--backdrop PNG]
                      [--frame X,Y,W,H] [--scales 1,1.3333333]
@@ -750,7 +752,8 @@ struct Harness {
         std::unique_ptr<WindowState> state;
     };
 
-    Instance create(std::unique_ptr<WindowState> state, bool tool = false, const QRectF &tile = QRectF(), QObject *output = nullptr)
+    // shadowOnly: a KDecoration 6.8 shadow-only decoration (only with PFDECO_HAVE_STYLES)
+    Instance create(std::unique_ptr<WindowState> state, bool tool = false, const QRectF &tile = QRectF(), QObject *output = nullptr, bool shadowOnly = false)
     {
         Instance in;
         in.state = std::move(state);
@@ -774,7 +777,16 @@ struct Harness {
             in.owner->setProperty("output", QVariant::fromValue<QObject *>(output));
         }
         bridge.next = in.state.get();
-        const QVariantMap args{{QStringLiteral("bridge"), QVariant::fromValue(static_cast<DecorationBridge *>(&bridge))}};
+        QVariantMap args{{QStringLiteral("bridge"), QVariant::fromValue(static_cast<DecorationBridge *>(&bridge))}};
+#ifdef PFDECO_HAVE_STYLES
+        if (shadowOnly) {
+            // What KWin's DecorationBridge::createDecoration() adds for a frameless Xwayland window
+            // or the "Only shadow" window rule.
+            args.insert(QStringLiteral("style"), QVariant::fromValue(Style::Shadow));
+        }
+#else
+        Q_UNUSED(shadowOnly)
+#endif
         in.deco = factory->create<Decoration>(in.owner.get(), QVariantList{args});
         if (!in.deco) {
             out() << "FAIL cannot create the decoration\n";
@@ -900,6 +912,29 @@ struct Harness {
         QPainter p(&img);
         deco->paint(&p, QRectF(QPointF(0, 0), size));
         return img;
+    }
+
+    // Whether paint() leaves the decoration untouched: its top 400 px (at least the 60 px a title
+    // bar would take) and at most 1600 px of its width, as paintCapped() does for random sizes.
+    bool paintsNothing(Decoration *deco, qreal scale = 1)
+    {
+        const QSizeF size(std::clamp(deco->size().width(), 1.0, 1600.0), std::clamp(deco->size().height(), 60.0, 400.0));
+        QImage img((size * scale).toSize(), QImage::Format_ARGB32_Premultiplied);
+        img.setDevicePixelRatio(scale);
+        img.fill(Qt::transparent);
+        {
+            QPainter p(&img);
+            deco->paint(&p, QRectF(QPointF(0, 0), size));
+        }
+        for (int y = 0; y < img.height(); ++y) {
+            const auto *line = reinterpret_cast<const QRgb *>(img.constScanLine(y));
+            for (int x = 0; x < img.width(); ++x) {
+                if (qAlpha(line[x]) != 0) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     void check(bool ok, const QString &what)
@@ -1216,6 +1251,7 @@ void runFuzz(Harness &h, FakeTabletMode *tablet, int scenes, quint32 seed)
     const auto right = s_right;
     FakeOutput screen;
     int checked = 0;
+    int shadowScenes = 0;
     for (int i = 0; i < scenes; ++i) {
         writeRandomConfig(rng);
         s_left = randomButtons(rng);
@@ -1260,12 +1296,19 @@ void runFuzz(Harness &h, FakeTabletMode *tablet, int scenes, quint32 seed)
         const bool onScreen = rng.bounded(2) == 1;
         screen.rect = randomScreen(rng);
         const int steps = rng.bounded(25);
+#ifdef PFDECO_HAVE_STYLES
+        // Every fourth scene is shadow-only. Not drawn from the generator, so a seed gives the same
+        // scenes with and without styles.
+        const bool shadowOnly = i % 4 == 3;
+#else
+        const bool shadowOnly = false;
+#endif
         out() << "fuzz scene " << i << ": " << state->width << " x " << state->height << " at " << state->scale << ", " << s_left.size() << " + "
               << s_right.size() << " buttons, tool " << tool << ", tile " << tile.isValid() << ", screen " << (onScreen ? screen.rect.height() : -1) << ", "
-              << steps << " steps\n";
+              << steps << " steps" << (shadowOnly ? ", shadow only" : "") << "\n";
         out().flush();
 
-        auto in = h.create(std::move(state), tool, tile, onScreen ? &screen : nullptr);
+        auto in = h.create(std::move(state), tool, tile, onScreen ? &screen : nullptr, shadowOnly);
         if (!in.deco) {
             continue; // create() counted the failure
         }
@@ -1298,6 +1341,20 @@ void runFuzz(Harness &h, FakeTabletMode *tablet, int scenes, quint32 seed)
                 h.check(false, QStringLiteral("scene %1: shadow image or padding invalid").arg(i));
             }
         }
+        if (shadowOnly) {
+            // Whatever happened to it, a shadow-only decoration keeps no borders, no title bar and
+            // no buttons, and paints nothing.
+            const bool empty = borders[0] == 0 && borders[1] == 0 && borders[2] == 0 && borders[3] == 0 && in.deco->titleBar().height() == 0;
+            if (!empty || !h.visibleButtons(in.deco).isEmpty() || !h.paintsNothing(in.deco)) {
+                h.check(false,
+                        QStringLiteral("scene %1: shadow only, but top border %2, title bar %3, %4 buttons or painted")
+                            .arg(i)
+                            .arg(borders[1])
+                            .arg(in.deco->titleBar().height())
+                            .arg(h.visibleButtons(in.deco).size()));
+            }
+            ++shadowScenes;
+        }
         h.destroy(in);
         ++checked;
     }
@@ -1305,7 +1362,12 @@ void runFuzz(Harness &h, FakeTabletMode *tablet, int scenes, quint32 seed)
     s_left = left;
     s_right = right;
     QGuiApplication::setLayoutDirection(Qt::LeftToRight);
-    h.check(h.failures == 0, QStringLiteral("%1 random scenes (seed %2), %3 decorations created, painted and destroyed").arg(scenes).arg(seed).arg(checked));
+    h.check(h.failures == 0,
+            QStringLiteral("%1 random scenes (seed %2), %3 decorations created, painted and destroyed (%4 shadow-only)")
+                .arg(scenes)
+                .arg(seed)
+                .arg(checked)
+                .arg(shadowScenes));
 }
 
 } // namespace
@@ -1376,6 +1438,19 @@ int main(int argc, char **argv)
     const QStringList fr = parser.value(QStringLiteral("frame")).split(QLatin1Char(','));
     h.frame = QRectF(fr.value(0).toDouble(), fr.value(1).toDouble(), fr.value(2).toDouble(), fr.value(3).toDouble());
     h.clientColor = QColor(parser.value(QStringLiteral("client")));
+
+    // KWin creates shadow-only decorations only for a plugin whose metadata lists "shadow" in
+    // "styles" (KDecoration 6.8); a build against an older KDecoration lists no styles at all.
+    {
+        const QJsonObject deco = meta.rawData().value(QStringLiteral("org.kde.kdecoration3")).toObject();
+#ifdef PFDECO_HAVE_STYLES
+        const QStringList styles = deco.value(QStringLiteral("styles")).toVariant().toStringList();
+        h.check(styles == QStringList{QStringLiteral("titled"), QStringLiteral("shadow")},
+                QStringLiteral("metadata styles: [%1] (titled, shadow)").arg(styles.join(QStringLiteral(", "))));
+#else
+        h.check(!deco.contains(QStringLiteral("styles")), QStringLiteral("metadata: no styles before KDecoration 6.8"));
+#endif
+    }
 
     FakeAccel accel;
     bool dbus = false;
@@ -1739,6 +1814,85 @@ int main(int argc, char **argv)
             }
         }
 
+#ifdef PFDECO_HAVE_STYLES
+        // Shadow-only decoration (KDecoration 6.8: KWin's frameless Xwayland windows and the "Only
+        // shadow" window rule): no title bar, no buttons, no borders, nothing painted; the shadow,
+        // the outline and the resize band are the titled decoration's, active and inactive.
+        {
+            writeConfig(QStringLiteral("RightGlyphs"), true, true);
+            wait(5);
+            auto titled = h.create(base(scale));
+            auto in = h.create(base(scale), false, QRectF(), nullptr, true);
+            if (titled.deco && in.deco) {
+                auto *d = in.deco;
+                h.check(d->borderLeft() == 0 && d->borderTop() == 0 && d->borderRight() == 0 && d->borderBottom() == 0 && d->titleBar().height() == 0,
+                        QStringLiteral("shadow only: no borders, no title bar (top %1, title bar %2)").arg(d->borderTop()).arg(d->titleBar().height()));
+                h.check(d->findChildren<DecorationButton *>().isEmpty(),
+                        QStringLiteral("shadow only: no buttons (%1)").arg(d->findChildren<DecorationButton *>().size()));
+                h.check(h.paintsNothing(d, scale), QStringLiteral("shadow only: paints nothing"));
+                const BorderRadius r = d->borderRadius();
+                h.check(r.topLeft() > 12 && r.topRight() > 12 && r.bottomRight() > 12 && r.bottomLeft() > 12,
+                        QStringLiteral("shadow only: clip radius %1 %2 %3 %4 on every corner")
+                            .arg(r.topLeft())
+                            .arg(r.topRight())
+                            .arg(r.bottomRight())
+                            .arg(r.bottomLeft()));
+                h.check(d->resizeOnlyBorders() == titled.deco->resizeOnlyBorders(),
+                        QStringLiteral("shadow only: resize band %1 px like the titled decoration").arg(d->resizeOnlyBorders().left()));
+                auto same = [&h](Decoration *a, Decoration *b, const QString &state) {
+                    const BorderOutline oa = a->borderOutline();
+                    const BorderOutline ob = b->borderOutline();
+                    h.check(!oa.isNull() && oa.thickness() == ob.thickness() && oa.color() == ob.color() && oa.radius() == ob.radius()
+                                && oa.radius().topLeft() > 12 && oa.radius().bottomRight() > 12,
+                            QStringLiteral("shadow only, %1: outline %2 px %3, radius %4 like the titled decoration (%5)")
+                                .arg(state, QString::number(oa.thickness()), oa.color().name(QColor::HexArgb), QString::number(oa.radius().topLeft()))
+                                .arg(ob.color().name(QColor::HexArgb)));
+                    const auto sa = a->shadow();
+                    const auto sb = b->shadow();
+                    h.check(sa && sb && sa->shadow() == sb->shadow() && sa->padding() == sb->padding() && sa->innerShadowRect() == sb->innerShadowRect(),
+                            QStringLiteral("shadow only, %1: the titled decoration's shadow").arg(state));
+                };
+                same(d, titled.deco, QStringLiteral("active"));
+                const QColor activeEdge = d->borderOutline().color();
+                for (auto *instance : {&in, &titled}) {
+                    instance->state->active = false;
+                    Q_EMIT instance->window->w()->activeChanged(false);
+                }
+                same(d, titled.deco, QStringLiteral("inactive"));
+                h.check(d->borderOutline().color() != activeEdge,
+                        QStringLiteral("shadow only: the outline follows activation (%1 -> %2)")
+                            .arg(activeEdge.name(QColor::HexArgb), d->borderOutline().color().name(QColor::HexArgb)));
+                for (auto *instance : {&in, &titled}) {
+                    instance->state->active = true;
+                    Q_EMIT instance->window->w()->activeChanged(true);
+                }
+                // A new button style (LeftCircles creates its own buttons) brings none back.
+                writeConfig(QStringLiteral("LeftCircles"), true, true);
+                wait(5);
+                Q_EMIT h.settings->reconfigured();
+                wait(30);
+                h.check(d->findChildren<DecorationButton *>().isEmpty() && d->borderTop() == 0 && h.paintsNothing(d, scale),
+                        QStringLiteral("shadow only: still no buttons and no title bar after a reconfigure"));
+                writeConfig(QStringLiteral("RightGlyphs"), true, true);
+                wait(5);
+                Q_EMIT h.settings->reconfigured();
+                wait(350);
+                h.render(d, QStringLiteral("27-shadow-only"), scale, h.frame);
+            }
+            h.destroy(in);
+            h.destroy(titled);
+            auto st = base(scale);
+            st->maximized = true;
+            auto mx = h.create(std::move(st), false, QRectF(), nullptr, true);
+            if (mx.deco) {
+                h.check(!mx.deco->shadow() && mx.deco->borderOutline().isNull() && mx.deco->borderTop() == 0 && mx.deco->borderRadius().topLeft() == 0
+                            && mx.deco->borderRadius().bottomLeft() == 0,
+                        QStringLiteral("shadow only, maximized: no shadow, no outline, no title bar, square"));
+                h.destroy(mx);
+            }
+        }
+#endif
+
         // State changes on a live decoration: no crash, borders follow.
         {
             writeConfig(QStringLiteral("RightGlyphs"), true, true);
@@ -2054,6 +2208,16 @@ int main(int argc, char **argv)
             }
             fakeTablet.set(true);
             wait(50);
+#ifdef PFDECO_HAVE_STYLES
+            {
+                auto shadowOnly = h.create(base(scale), false, QRectF(), nullptr, true);
+                if (shadowOnly.deco) {
+                    h.check(shadowOnly.deco->borderTop() == 0 && shadowOnly.deco->findChildren<DecorationButton *>().isEmpty(),
+                            QStringLiteral("tablet: a shadow-only decoration has no title bar (%1) and no buttons").arg(shadowOnly.deco->borderTop()));
+                    h.destroy(shadowOnly);
+                }
+            }
+#endif
             // maximized, tool window, short screen: 44 px bars
             {
                 auto st = base(scale);

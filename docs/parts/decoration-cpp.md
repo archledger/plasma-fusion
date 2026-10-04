@@ -23,7 +23,7 @@ review) is kept below. Last edited 2026-09-30.
 |---|---|
 | Plugin id | `org.plasmafusion.decoration` (file `org.plasmafusion.decoration.so`; KWin takes the id from the file name) |
 | Name in System Settings | Plasma Fusion |
-| Installed at | `/usr/lib64/qt6/plugins/org.kde.kdecoration3/org.plasmafusion.decoration.so` (RPM); metadata (`src/plasmafusion.json`) is embedded in the .so |
+| Installed at | `/usr/lib64/qt6/plugins/org.kde.kdecoration3/org.plasmafusion.decoration.so` (RPM); metadata (generated from `src/plasmafusion.json.in`) is embedded in the .so |
 | Package | `plasma-fusion-decoration` (x86_64), GPL-2.0-or-later, licence text in `/usr/share/licenses/plasma-fusion-decoration/` |
 | kwinrc | `[org.kde.kdecoration2] library=org.plasmafusion.decoration`, `theme=` (empty) |
 | Options | `~/.config/plasmafusionrc [Decoration]`: `ButtonStyle`, `SnapLayoutsOnHover` (contract below) |
@@ -39,8 +39,8 @@ the reviewed Aurorae part (docs/parts/decoration.md), value for value.
 
 | Path | What |
 |---|---|
-| `CMakeLists.txt` | project (ECM, C++20 because the KDecoration 6.7 headers need it); `BUILD_TESTING=ON` also builds `tests/` |
-| `src/plasmafusion.json` | plugin metadata (`org.kde.kdecoration3`: `blur false`, `recommendedBorderSize None`); licence in `src/plasmafusion.json.license` (REUSE) |
+| `CMakeLists.txt` | project (ECM, C++20 because the KDecoration 6.7 headers need it); `BUILD_TESTING=ON` also builds `tests/`; the KDecoration version check for the shadow style (`PFDECO_HAVE_STYLES`, feature `ShadowStyle`) |
+| `src/plasmafusion.json.in` | plugin metadata template (`org.kde.kdecoration3`: `blur false`, `recommendedBorderSize None`, and `styles` with KDecoration 6.8), made into `plasmafusion.json` in the build directory by `configure_file`; licence in `src/plasmafusion.json.in.license` (REUSE) |
 | `src/decoration.{h,cpp}` | `PlasmaFusion::Decoration`: metrics, borders, radius, outline, shadow, button layout, caption, hover tracking, state handling |
 | `src/button.{h,cpp}` | `PlasmaFusion::Button`: circles / dots / app icon, hover and press animations, the snap-layouts trigger |
 | `src/colors.{h,cpp}` | colours from the window's colour scheme plus the board constants |
@@ -159,6 +159,44 @@ output's `geometryChanged`: rotating a 1366x768 screen to portrait gives 50 agai
 their laptop size (28 px circles in a 40 px bar, as when maximized). Outside KWin (settings-page
 preview) the height is unknown and the normal values apply.
 
+## Shadow style (KDecoration 6.8)
+
+KDecoration 6.8 gives every decoration a style, `KDecoration3::Style::Titled` or `Shadow`
+([kdecoration 64cf5468][kdeco-style], in 6.7.90), read from the `style` key of the constructor
+arguments and returned by `Decoration::style()`. KWin 6.8 ([kwin b70fc02b][kwin-style], in
+6.7.91) asks for a shadow-only decoration for frameless Xwayland windows that draw no shadow of
+their own (unless `KWIN_X11_USE_SSD_DROP_SHADOW=0`) and for windows with the "Only shadow"
+decoration rule, but only when the plugin metadata lists `"shadow"` in `org.kde.kdecoration3`
+`styles`: otherwise frameless windows stay undecorated and the rule falls back to client-side
+decoration. KWin creates a new decoration when the style changes, so a decoration keeps its style
+for its whole life.
+
+- One check in `CMakeLists.txt`: `KDecoration3_VERSION` 6.7.90 or later turns on
+  `PFDECO_HAVE_STYLES` (a compile definition, and the `ShadowStyle` entry of the feature summary)
+  and adds `"styles": ["titled", "shadow"]` to the metadata generated from
+  `src/plasmafusion.json.in`. Against 6.7 the generated metadata is byte for byte the former
+  `src/plasmafusion.json` and the code compiles as before: `Style` and `style()` appear only under
+  `#ifdef PFDECO_HAVE_STYLES`.
+- `Decoration::isShadowOnly()` is the only place that reads `style()`. A shadow-only decoration
+  has a 0 px title bar (`computeMetrics()`, so tablet mode and short screens do not bring one
+  back), no borders, an empty `titleBar()`, no buttons (`createButtons()` makes none, also after a
+  reconfigure) and paints nothing.
+- The shadow, the outline (its colour follows activation, all four corners round), the resize band
+  and the maximized and tiled behaviour are the titled decoration's. The clip radius also rounds
+  the top corners, as no title bar paints them; Breeze 6.7.91 does the same when its title bar is
+  hidden (`breezedecoration.cpp`, `Decoration::recalculateBorders()`), and lists
+  `"styles": ["shadow", "titled"]` with border size 0 for `Style::Shadow`.
+- `pfdeco-preview` checks the metadata styles (none before 6.8) in all three ctest tests, and with
+  `PFDECO_HAVE_STYLES` a shadow-only decoration next to a titled one at each scale: no borders,
+  title bar or buttons, nothing painted, the same shadow, outline and resize band active and
+  inactive, an outline that follows activation, round clip corners, still nothing after a
+  reconfigure, maximized without shadow or outline, and no title bar in tablet mode (scene
+  `27-shadow-only`). Every fourth random scene of `pfdeco-fuzz` is shadow-only and must end without
+  borders, title bar or buttons and paint nothing.
+
+[kdeco-style]: https://invent.kde.org/plasma/kdecoration/-/commit/64cf54686f5547e1faa03f24a3ba90a60e82f6d1
+[kwin-style]: https://invent.kde.org/plasma/kwin/-/commit/b70fc02bbb1e433a974a26a6da6ca3df00dc3cfc
+
 ## Look (board values; everything in logical px, snapped to the device grid at 4/3)
 
 | Board (Windows.dc.html unless named) | Implementation |
@@ -232,6 +270,8 @@ against a fake kglobalaccel service: nothing before 600 ms, hover fires once per
 after leaving, hold fires and the release does not maximize, a quick click maximizes without the
 flyout, inactive windows and `SnapLayoutsOnHover=false` or a disabled script do nothing special,
 and a live `ButtonStyle` switch. Result: 120 PASS, 0 FAIL (dark and light, scales 1 and 4/3).
+With the shadow style checks ("Shadow style (KDecoration 6.8)"): 135 PASS against KDecoration
+6.7.5 and 161 PASS against 6.7.91 per scheme, 0 FAIL.
 
 Virtual sessions on the ThinkPad (whole desktop from `tools/build.sh`, applied with
 `fusion-config.sh --install`, then `library=org.plasmafusion.decoration`), real pointer input with

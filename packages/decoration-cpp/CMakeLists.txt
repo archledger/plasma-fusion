@@ -30,6 +30,21 @@ find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui DBus)
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS CoreAddons Config ColorScheme)
 find_package(KDecoration3 6.7 REQUIRED)
 
+# KDecoration 6.8 (6.7.90 and later) passes a style to each decoration: KWin asks for a shadow-only
+# one (no title bar, only the shadow and the outline) for frameless Xwayland windows and the "Only
+# shadow" window rule, but only when the plugin metadata lists "shadow" in "styles"; otherwise
+# frameless windows stay without a shadow and the rule falls back to client-side decoration. This
+# one check decides both the metadata (src/plasmafusion.json.in) and the code (PFDECO_HAVE_STYLES),
+# so they cannot disagree.
+if(KDecoration3_VERSION VERSION_GREATER_EQUAL 6.7.90)
+    set(PFDECO_HAVE_STYLES ON)
+    add_compile_definitions(PFDECO_HAVE_STYLES)
+else()
+    set(PFDECO_HAVE_STYLES OFF)
+endif()
+add_feature_info(ShadowStyle PFDECO_HAVE_STYLES
+                 "shadow-only decorations (KDecoration 6.7.90 or later)")
+
 if(NOT KDECORATION_PLUGIN_DIR)
     set(KDECORATION_PLUGIN_DIR "org.kde.kdecoration3")
 endif()
