@@ -27,6 +27,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   log-out QML from the shell package, so the screen ships in the org.plasmafusion.lockshell shell
   package and the Plasma Fusion lock screen setup starts the greeter with that package through a
   per-user D-Bus service override. Plasma 6.7 is unchanged (its greeter reads the Global Theme).
+- The launcher's Calendar tile shows today's month and day over the tile art (as the dock
+  already did) instead of the art's fixed SEP 28.
 - Known issue on Plasma 6.8: the log-out screen is Plasma's own, not Plasma Fusion's.
 
 ## 0.2.0 (2026-10-03)
