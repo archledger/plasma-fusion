@@ -115,10 +115,10 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
     return style == other.style && sameAccent(other) && buttonStyle == other.buttonStyle && fusionDecoration == other.fusionDecoration
         && magnify == other.magnify && globalMenu == other.globalMenu && hotCorner == other.hotCorner && snapTrigger == other.snapTrigger
         && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen
-        && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical
-        && fileContentIndexing == other.fileContentIndexing && tabletMode == other.tabletMode
-        && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight
-        && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
+        && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical && fileContentIndexing == other.fileContentIndexing
+        && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications && lockNotificationSummaries == other.lockNotificationSummaries
+        && tabletMode == other.tabletMode && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft
+        && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
         && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
 }
 
@@ -391,6 +391,38 @@ void PlasmaFusionKcm::setGlass(int value)
     if (value >= GlassFull && value <= GlassSolid) {
         setField(&State::glass, value);
     }
+}
+
+int PlasmaFusionKcm::iconsMode() const
+{
+    return m_current.iconsMode;
+}
+
+void PlasmaFusionKcm::setIconsMode(int value)
+{
+    if (value == IconsDesigned || value == IconsFamiliar) {
+        setField(&State::iconsMode, value);
+    }
+}
+
+bool PlasmaFusionKcm::lockNotifications() const
+{
+    return m_current.lockNotifications;
+}
+
+void PlasmaFusionKcm::setLockNotifications(bool value)
+{
+    setField(&State::lockNotifications, value);
+}
+
+bool PlasmaFusionKcm::lockNotificationSummaries() const
+{
+    return m_current.lockNotificationSummaries;
+}
+
+void PlasmaFusionKcm::setLockNotificationSummaries(bool value)
+{
+    setField(&State::lockNotificationSummaries, value);
 }
 
 bool PlasmaFusionKcm::highContrast() const
@@ -856,10 +888,20 @@ void PlasmaFusionKcm::loadConfigState(State &state) const
     const QList<int> borders = KConfigGroup(kwin, u"Effect-overview"_s).readEntry("BorderActivate", QList<int>{s_hotCornerOn});
     state.hotCorner = borders.contains(s_hotCornerOn);
 
-    // Glass, top bars, battery (plasmafusionrc)
+    // Glass, top bars, battery, app icons (plasmafusionrc)
     state.glass = glassFromName(KConfigGroup(fusion, u"Effects"_s).readEntry("Glass", QString()));
     state.everyScreen = KConfigGroup(fusion, u"TopBar"_s).readEntry("EveryScreen", true);
     state.lighterOnCritical = KConfigGroup(fusion, u"Power"_s).readEntry("LighterOnCritical", true);
+    // The app-icons service treats anything but "designs" as familiar (docs/parts/app-icons.md).
+    state.iconsMode = KConfigGroup(fusion, u"Icons"_s).readEntry("AppIcons", QString()) == u"designs"_s ? IconsDesigned : IconsFamiliar;
+
+    // Lock screen notification privacy (the two lock shell keys no Plasma page shows; the lock
+    // shell's own defaults are true and false, docs/parts/lockscreen.md).
+    KSharedConfig::Ptr lock = KSharedConfig::openConfig(u"kscreenlockerrc"_s, KConfig::NoGlobals);
+    lock->reparseConfiguration();
+    const KConfigGroup lockGeneral(lock, u"Greeter][LnF][General"_s);
+    state.lockNotifications = lockGeneral.readEntry("showNotifications", true);
+    state.lockNotificationSummaries = lockGeneral.readEntry("showNotificationSummaries", false);
     // File contents in search: Baloo's own key (System Settings > File Search), on by default.
     const KSharedConfig::Ptr baloo = KSharedConfig::openConfig(u"baloofilerc"_s, KConfig::NoGlobals);
     baloo->reparseConfiguration();
@@ -1006,6 +1048,7 @@ void PlasmaFusionKcm::onConfigChanged(const KConfigGroup &group, const QByteArra
         s_tabletScriptGroup,
         u"Decoration"_s,
         u"Effects"_s,
+        u"Icons"_s,
         u"Power"_s,
         u"TopBar"_s,
     };
@@ -1081,9 +1124,11 @@ void PlasmaFusionKcm::save()
         themeApplied = applyStyle(after.style) && after.style != FollowSunset;
         decoration = true;
     }
-    // 2. Colour scheme: high contrast on top of the Global Theme's scheme, or back to it.
+    // 2. Colour scheme: high contrast on top of the Global Theme's scheme, or back to it, and the
+    //    gsettings key the portal's contrast is served from.
     if (after.highContrast != before.highContrast || (after.highContrast && themeApplied)) {
         applyColorScheme(after.highContrast);
+        setPortalHighContrast(after.highContrast);
     }
     // 3. Accent colour, on top of the colour scheme the style just applied.
     if (!after.sameAccent(before)) {
@@ -1125,6 +1170,16 @@ void PlasmaFusionKcm::save()
     }
     if (after.fileContentIndexing != before.fileContentIndexing) {
         applyFileContentIndexing(after.fileContentIndexing);
+    }
+    if (after.iconsMode != before.iconsMode) {
+        applyIconsMode(after.iconsMode);
+    }
+    // 5b. Lock screen notification privacy (kscreenlockerrc).
+    if (after.lockNotifications != before.lockNotifications) {
+        writeLockEntry(u"showNotifications"_s, after.lockNotifications);
+    }
+    if (after.lockNotificationSummaries != before.lockNotificationSummaries) {
+        writeLockEntry(u"showNotificationSummaries"_s, after.lockNotificationSummaries);
     }
     applyTabletConfig(before, after);
 
@@ -1274,6 +1329,30 @@ bool PlasmaFusionKcm::applyColorScheme(bool highContrast)
 {
     const QString scheme = highContrast ? s_highContrastScheme : (currentVariantIsLight() ? s_lightScheme : s_darkScheme);
     return runTool(u"plasma-apply-colorscheme"_s, {scheme});
+}
+
+// The XDG settings portal's contrast key is served by the GTK portal from the gsettings key
+// org.gnome.desktop.a11y.interface high-contrast; xdg-desktop-portal-kde 6.7.5 does not serve
+// contrast at all (its appearance keys are color-scheme, accent-color and reduced-motion), so the
+// scheme alone cannot reach applications that follow the portal. Written quietly: gsettings or its
+// schema can be absent, which is not an error the user needs to see (settings plan task 2,
+// artifacts/plasma-fusion/2026-10-05-settings-plan/PLAN.md).
+void PlasmaFusionKcm::setPortalHighContrast(bool value)
+{
+    if (QStandardPaths::findExecutable(u"gsettings"_s).isEmpty()) {
+        qCDebug(KCM_PLASMAFUSION) << "gsettings not found; the portal contrast key is not written";
+        return;
+    }
+    QProcess process;
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.start(u"gsettings"_s, {u"set"_s, u"org.gnome.desktop.a11y.interface"_s, u"high-contrast"_s, value ? u"true"_s : u"false"_s});
+    if (!process.waitForFinished(s_toolTimeout)) {
+        process.kill();
+        process.waitForFinished(1000);
+    }
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+        qCDebug(KCM_PLASMAFUSION) << "gsettings high-contrast not written (schema missing?)";
+    }
 }
 
 bool PlasmaFusionKcm::applyAccent(const State &state)
@@ -1454,6 +1533,38 @@ void PlasmaFusionKcm::applyGlassConfig(int glass)
 
 // Reduce motion is Plasma's own "Instant" animation speed (EFFECTS.md 7): factor 0, with the
 // previous factor kept to put back (absent = 1.0, so the key is removed again).
+// plasmafusionrc [Icons] AppIcons: the apps' own familiar icons on Fusion tiles (the default) or
+// the designed tiles only (docs/parts/app-icons.md; the app-icons service reads the same key and
+// treats anything but "designs" as familiar).
+void PlasmaFusionKcm::applyIconsMode(int mode)
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup(fusion, u"Icons"_s).writeEntry("AppIcons", mode == IconsDesigned ? u"designs"_s : u"familiar"_s, KConfig::Notify);
+    fusion->sync();
+}
+
+// kscreenlockerrc [Greeter][LnF][General]: the lock shell's notification keys (nested groups use
+// the bracket path). The lock screen reads them on the next lock.
+void PlasmaFusionKcm::writeLockEntry(const QString &key, bool value)
+{
+    KSharedConfig::Ptr lock = KSharedConfig::openConfig(u"kscreenlockerrc"_s, KConfig::NoGlobals);
+    lock->reparseConfiguration();
+    KConfigGroup(lock, u"Greeter][LnF][General"_s).writeEntry(key, value, KConfig::Notify);
+    lock->sync();
+}
+
+// System Settings > Screen Locking (kcm_screenlocker) holds the clock and media card keys.
+void PlasmaFusionKcm::openScreenLockerSettings()
+{
+    const QString kcmshell = QStandardPaths::findExecutable(u"kcmshell6"_s);
+    if (kcmshell.isEmpty()) {
+        qCDebug(KCM_PLASMAFUSION) << "kcmshell6 not found; the Screen Locking page is not opened";
+        return;
+    }
+    QProcess::startDetached(kcmshell, {u"screenlocker"_s});
+}
+
 void PlasmaFusionKcm::applyReduceMotion(bool on)
 {
     KSharedConfig::Ptr globals = KSharedConfig::openConfig(u"kdeglobals"_s);

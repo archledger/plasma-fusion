@@ -137,6 +137,10 @@ since System Settings does not run with the variable):
 
 Example: `kwriteconfig6 --file kscreenlockerrc --group Greeter --group LnF --group General --key showNotificationSummaries true`.
 
+The two notification keys are also on the Plasma Fusion settings module's Lock & Login section
+(System Settings > Appearance & Style > Plasma Fusion, docs/parts/kcm-cpp.md); the clock and media
+card keys stay on Screen Locking > Appearance.
+
 The lock-screen wallpaper is kscreenlocker's own setting (`kscreenlockerrc [Greeter]
 WallpaperPlugin`, `[Greeter][Wallpaper][org.kde.image][General] Image=`), see "Needs".
 

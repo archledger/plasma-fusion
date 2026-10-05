@@ -482,6 +482,71 @@ KCM.SimpleKCM {
                 }
             }
 
+            // ---------- Icons ----------
+            ColumnLayout {
+                spacing: 10
+                Layout.fillWidth: true
+
+                SectionTitle {
+                    text: i18nc("@title:group", "Icons")
+                    pal: fusionPalette
+                }
+                ChoiceRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    last: true
+                    text: i18nc("@label", "Application icons")
+                    // plasmafusionrc [Icons] AppIcons: designs 0, familiar 1 (the default).
+                    model: [
+                        i18nc("@option:radio the designed Plasma Fusion tiles", "Designed tiles"),
+                        i18nc("@option:radio the apps' own icons on Plasma Fusion tiles", "Real app icons")
+                    ]
+                    currentIndex: kcm.iconsMode
+                    note: kcm.iconsMode === 0
+                        ? i18nc("@info", "Only the designed Plasma Fusion tiles are shown; the icon service removes the apps' own icons it drew earlier.")
+                        : i18nc("@info", "Every installed app's own icon is drawn on a Plasma Fusion tile and kept up to date as apps change.")
+                    onActivated: index => kcm.iconsMode = index
+                }
+            }
+
+            // ---------- Lock & Login ----------
+            ColumnLayout {
+                spacing: 10
+                Layout.fillWidth: true
+
+                SectionTitle {
+                    text: i18nc("@title:group", "Lock & Login")
+                    pal: fusionPalette
+                }
+                ToggleRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    text: i18nc("@option:check", "Notification cards on the lock screen")
+                    checked: kcm.lockNotifications
+                    note: i18nc("@info", "When off, the lock screen shows no notifications at all.")
+                    onToggleRequested: kcm.lockNotifications = !kcm.lockNotifications
+                }
+                ToggleRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    text: i18nc("@option:check", "Show the newest notification's title (never bodies or actions)")
+                    checked: kcm.lockNotificationSummaries
+                    note: i18nc("@info", "The title appears on the notification's card while the screen is locked.")
+                    onToggleRequested: kcm.lockNotificationSummaries = !kcm.lockNotificationSummaries
+                }
+                ActionRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    last: true
+                    text: i18nc("@label", "Clock and media card")
+                    description: i18nc("@info", "The lock screen's clock and media card stay in System Settings > Screen Locking > Appearance.")
+                    buttonText: i18nc("@action:button", "Open…")
+                    buttonIcon: "configure"
+                    enabled: !kcm.busy
+                    onTriggered: kcm.openScreenLockerSettings()
+                }
+            }
+
             // ---------- Battery ----------
             ColumnLayout {
                 spacing: 10

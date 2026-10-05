@@ -85,6 +85,8 @@ def main():
              "solidTopBar": True, "everyScreen": True, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
              "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
              "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
+             "fileContentIndexing": True,
+             "iconsMode": 1, "lockNotifications": True, "lockNotificationSummaries": False,
              "quickSettingsAvailable": True, "folderAvailable": True, "highContrastAvailable": True,
              "previousDesktopAvailable": True, "topBarScriptAvailable": True, "tabletModeAvailable": True,
              "tabletModeActive": False, "powerCritical": False, "fusionLookAndFeel": True, "busy": False}
@@ -130,6 +132,10 @@ def main():
         glass = Property(int, _get("glass"), _set("glass"), notify=changed)
         highContrast = Property(bool, _get("highContrast"), _set("highContrast"), notify=changed)
         reduceMotion = Property(bool, _get("reduceMotion"), _set("reduceMotion"), notify=changed)
+        iconsMode = Property(int, _get("iconsMode"), _set("iconsMode"), notify=changed)
+        fileContentIndexing = Property(bool, _get("fileContentIndexing"), _set("fileContentIndexing"), notify=changed)
+        lockNotifications = Property(bool, _get("lockNotifications"), _set("lockNotifications"), notify=changed)
+        lockNotificationSummaries = Property(bool, _get("lockNotificationSummaries"), _set("lockNotificationSummaries"), notify=changed)
         magnifiedSize = Property(int, _get("magnifiedSize"), _set("magnifiedSize"), notify=changed)
         solidTopBar = Property(bool, _get("solidTopBar"), _set("solidTopBar"), notify=changed)
         everyScreen = Property(bool, _get("everyScreen"), _set("everyScreen"), notify=changed)
