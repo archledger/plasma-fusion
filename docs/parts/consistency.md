@@ -36,17 +36,21 @@ holds the map and the values to give app authors.
 ## App table
 
 Fill one row per app after checking it against Plasma Fusion Dark and Light. "Dark follows" means
-the app switches with the system `color-scheme` portal key without an in-app setting.
+the app switches with the system `color-scheme` portal key without an in-app setting. The first
+four rows were checked 2026-10-05 in the ubuntu2610 VM (Fusion Dark and Light applied per app,
+screenshots in `artifacts/plasma-fusion/2026-10-05-settings-plan/app-consistency/`): the verdict
+for dark follows compares the app window's pixels across the two themes, and the title bar and
+file dialog columns are what the toolkit draws.
 
 | App | Toolkit | Dark follows | Accent follows | Title bars | File dialog | Notes |
 |---|---|---|---|---|---|---|
-| VS Code | Electron | yes (workbench theme "auto") | no | CSD | portal (Electron >= 14) | `nativeTheme` path; known good in the survey sources |
+| LibreOffice | Qt 6 (`libreoffice-qt6` VCL) | yes (chrome changes with the theme) | yes (scheme colours) | SSD | KDE dialog (KIO) | VM-checked 2026-10-05 |
+| GIMP 3 | GTK 3 | no (its own theme: the window is identical under Fusion Dark and Light) | no | CSD | own (GtkFileChooser) | VM-checked 2026-10-05 |
+| Inkscape | GTK 3 | no (identical under both) | no | CSD | own (GtkFileChooser) | VM-checked 2026-10-05 |
+| VS Code | Electron | no (its own dark theme; "auto detect color scheme" is opt-in) | no | CSD | own | VM-checked 2026-10-05 |
 | Discord | Electron | app setting | no | CSD | app dialog | not yet checked on Plasma Fusion |
 | Spotify | Electron | app setting | no | CSD | app dialog | not yet checked on Plasma Fusion |
 | Obsidian | Electron | broken unless the app uses `nativeTheme` | no | CSD | app dialog | the "adapt to system" case from the survey |
-| LibreOffice | Qt 6 (KDE VCL) | yes | yes (scheme) | SSD | KDE dialog | the Qt backend has poor fractional scaling (tdf#141578) |
-| GIMP | GTK 3 (GIMP 3) | follows the GTK settings | no | CSD | app dialog (no portal yet, GNOME/gimp#1830) | not yet checked on Plasma Fusion |
-| Inkscape | GTK 3 | follows the GTK settings | no | CSD | portal when enabled | not yet checked on Plasma Fusion |
 | Steam | custom Chromium | no (own skin) | no | CSD | own dialog | games themselves are out of scope |
 | Blender | custom OpenGL | no (own theme) | no | SSD | own dialog | match with `imgui_fusion`-style values if it matters |
 
