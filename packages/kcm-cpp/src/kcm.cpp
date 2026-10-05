@@ -115,12 +115,10 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
     return style == other.style && sameAccent(other) && buttonStyle == other.buttonStyle && fusionDecoration == other.fusionDecoration
         && magnify == other.magnify && globalMenu == other.globalMenu && hotCorner == other.hotCorner && snapTrigger == other.snapTrigger
         && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen
-        && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical
-        && fileContentIndexing == other.fileContentIndexing && iconsMode == other.iconsMode
-        && lockNotifications == other.lockNotifications
-        && lockNotificationSummaries == other.lockNotificationSummaries && tabletMode == other.tabletMode
-        && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight
-        && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
+        && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical && fileContentIndexing == other.fileContentIndexing
+        && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications && lockNotificationSummaries == other.lockNotificationSummaries
+        && tabletMode == other.tabletMode && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft
+        && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
         && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
 }
 
@@ -1347,8 +1345,7 @@ void PlasmaFusionKcm::setPortalHighContrast(bool value)
     }
     QProcess process;
     process.setProcessChannelMode(QProcess::MergedChannels);
-    process.start(u"gsettings"_s,
-                  {u"set"_s, u"org.gnome.desktop.a11y.interface"_s, u"high-contrast"_s, value ? u"true"_s : u"false"_s});
+    process.start(u"gsettings"_s, {u"set"_s, u"org.gnome.desktop.a11y.interface"_s, u"high-contrast"_s, value ? u"true"_s : u"false"_s});
     if (!process.waitForFinished(s_toolTimeout)) {
         process.kill();
         process.waitForFinished(1000);

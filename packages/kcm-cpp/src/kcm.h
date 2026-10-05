@@ -155,7 +155,10 @@ public:
     Q_ENUM(TabletDock)
     enum KeyboardPolicy { KeyboardTablet = 0, KeyboardTouch = 1, KeyboardNever = 2 };
     Q_ENUM(KeyboardPolicy)
-    enum IconsMode { IconsDesigned = 0, IconsFamiliar = 1 };
+    enum IconsMode {
+        IconsDesigned = 0,
+        IconsFamiliar = 1
+    };
     Q_ENUM(IconsMode)
 
     explicit PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData);

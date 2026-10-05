@@ -21,8 +21,9 @@ OUT = ROOT / "reference-kits"
 SCHEMES = (("PlasmaFusionDark.colors", "dark", "Brightness.dark", "ApplyFusionDark"),
            ("PlasmaFusionLight.colors", "light", "Brightness.light", "ApplyFusionLight"))
 
-COPYRIGHT = "SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>"
-LICENSE = "SPDX-License-Identifier: GPL-2.0-or-later"
+# Split so reuse lint does not read the literals as tags on top of the file's own header.
+COPYRIGHT = "SPDX-File" + "CopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>"
+LICENSE = "SPDX-License-" + "Identifier: GPL-2.0-or-later"
 
 
 def load(name):
