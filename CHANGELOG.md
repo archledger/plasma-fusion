@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- The Plasma Fusion settings module gains an Icons section (Designed tiles / Real app icons) and a
+  Lock & Login section (notification cards and titles on the lock screen). High contrast now reaches
+  applications that follow the XDG settings portal, and the generated reference palette kits
+  (`docs/parts/consistency.md`) let apps built on other toolkits match the theme.
 - The live date patch on the Calendar tiles no longer shows as a seam: it paints the tile art's
   own colours. The launcher shows Merkuro Calendar's live date again (its app list had a typo),
   and GNOME Calendar keeps its own tile art: the patch only covers tiles that carry the art's
