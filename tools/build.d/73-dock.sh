@@ -19,6 +19,10 @@ python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$src/conten
 
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" dock
 
+if command -v node >/dev/null 2>&1; then
+  node "$src/tests/pins.test.js" >/dev/null
+fi
+
 rm -rf "$dest"
 mkdir -p "$dest"
 cp -r "$src/metadata.json" "$src/contents" "$dest/"

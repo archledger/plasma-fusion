@@ -19,6 +19,8 @@ import org.kde.notificationmanager as NotificationManager
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.private.kicker as Kicker
 
+import "../code/pins.js" as Pins
+
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
 // (88 px: 16 px transparent headroom + the 72 px dock drawn by the Plasma style; with the plain
@@ -253,18 +255,32 @@ PlasmoidItem {
             && !role(row, TaskManager.AbstractTasksModel.AppId);
     }
 
-    // Which rows are shown (launchers of apps that are not installed are hidden) and
-    // which belong to pinned apps (they come first; the rest follow the second separator).
+    // Which rows are shown (launchers of apps that are not installed are hidden, and a pinned
+    // app that two pins resolve to keeps one row) and which belong to pinned apps (they come
+    // first; the rest follow the second separator).
     function rescan(): void {
         const n = tasksModel.count;
         const visible = [];
         const pinned = [];
+        // Pinned rows come in configured pin order, one per pin (a running app's window replaces
+        // its launcher row in place), so the k-th of them comes from the k-th raw pin. Its
+        // preferred:// scheme tells a role pin from an explicit one (Pins.isRolePin).
+        const rawPins = tasksModel.launcherList || [];
+        const dupRows = [];
+        let pinIdx = 0;
         let recents = 0;
         for (let i = 0; i < n; ++i) {
             const isLauncher = role(i, TaskManager.AbstractTasksModel.IsLauncher) === true;
             const url = role(i, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon);
             const isPinned = isLauncher || (url ? tasksModel.launcherPosition(url) !== -1 : false);
             let shown = !isMissingLauncher(i);
+            if (isPinned) {
+                if (isLauncher) {
+                    dupRows.push({ row: i, app: String(role(i, TaskManager.AbstractTasksModel.AppId) || ""),
+                                   rolePin: Pins.isRolePin(rawPins[pinIdx]) });
+                }
+                pinIdx++;
+            }
             // Tablet posture: only the most recent apps that are not pinned (the rows come in
             // recency order there); the App Switcher has the rest.
             if (shown && !isPinned && tablet && ++recents > Plasmoid.configuration.tabletRecents) {
@@ -272,6 +288,12 @@ PlasmoidItem {
             }
             visible.push(shown);
             pinned.push(isPinned);
+        }
+        // The Ubuntu 2026-10-03 defect: preferred://browser resolved to the pinned Kate on a
+        // machine without a browser and the dock showed two identical Kate tiles.
+        const dup = Pins.hiddenDuplicates(dupRows.map(r => ({ app: r.app, rolePin: r.rolePin })));
+        for (const j of dup) {
+            visible[dupRows[j].row] = false;
         }
         if (JSON.stringify(visible) !== JSON.stringify(taskVisible) || JSON.stringify(pinned) !== JSON.stringify(taskPinned)) {
             taskVisible = visible;

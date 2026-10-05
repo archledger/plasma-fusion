@@ -9,6 +9,11 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- The dock shows one tile per app: on a system without a web browser, the Browser pin
+  (`preferred://browser`) resolves to whatever handles HTML's `text/plain` parent type (Kate on a
+  minimal install) and the dock showed two identical Kate tiles. A `preferred://` pin that
+  resolves to an app pinned explicitly is hidden while the explicit pin stays; it reappears once
+  the system has a real app for the role.
 - Setup waits until plasmashell has finished redrawing before it restarts it: a shell stopped
   right after a live theme change could crash on exit while it still compiled the new theme's
   shaders (seen with Mesa's software renderer in virtual machines).
