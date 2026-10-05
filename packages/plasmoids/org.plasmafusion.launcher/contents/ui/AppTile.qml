@@ -33,8 +33,8 @@ Item {
     property var today: new Date()
     readonly property string monthText: Qt.locale().toString(tile.today, "MMM").toUpperCase().replace(".", "")
     readonly property string dayText: String(tile.today.getDate())
-    readonly property bool calendarApp: ["korganizer", "org.kde.korganizer", "office-calendar", "org.gnome.Calendar",
-                                         "gnome-calendar", "org.gnome.merkuro.calendar", "org.kde.kalendar",
+    readonly property bool calendarApp: ["korganizer", "org.kde.korganizer", "office-calendar", "gnome-calendar",
+                                         "org.kde.merkuro.calendar", "org.kde.kalendar",
                                          "kalendar"].indexOf(Launcher.iconNameFor(tile.model)) !== -1
     readonly property bool calendarTile: calendarApp && !icon.foreign && !icon.familiar
     Timer {
@@ -100,7 +100,9 @@ Item {
     }
 
     // Calendar apps: today's month and day over the tile's fixed "SEP" / "28" (AppIcon board,
-    // 64-unit tile: red band 0-21 with the month, the day in 21-60).
+    // 64-unit tile: red band 0-21 with the month, the day in 21-60). The app list is names.py
+    // APPS['calendar'] (the names that draw this art) and the patch paints the art's own colours,
+    // so it hides the labels without a seam; tools/checks/calendar-tile.py keeps both in step.
     Item {
         id: calOverlay
         anchors.fill: icon
@@ -112,7 +114,7 @@ Item {
             y: 3 * calOverlay.u
             width: 36 * calOverlay.u
             height: 16 * calOverlay.u
-            color: "#e7585d"
+            color: "#e5484d"
             Text {
                 anchors.centerIn: parent
                 text: tile.monthText

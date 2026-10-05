@@ -57,8 +57,8 @@ Item {
     // The theme icon's name: apps name their icon after their desktop id, which is AppId (without
     // the ".desktop" some entries carry).
     readonly property string iconName: String(model.AppId ?? "").replace(/\.desktop$/, "")
-    readonly property bool calendarApp: ["korganizer", "org.kde.korganizer", "office-calendar", "org.gnome.Calendar",
-                                         "gnome-calendar", "org.kde.merkuro.calendar", "org.kde.kalendar",
+    readonly property bool calendarApp: ["korganizer", "org.kde.korganizer", "office-calendar", "gnome-calendar",
+                                         "org.kde.merkuro.calendar", "org.kde.kalendar",
                                          "kalendar"].indexOf(iconName) !== -1
     // Today's date goes over the designed calendar tile only: not over an app's own icon (a foreign
     // one, or a familiar app icon; KOrganizer keeps its designed tile in both modes).
@@ -188,7 +188,10 @@ Item {
         }
 
         // Calendar apps: today's month and day over the tile's fixed "SEP" / "28" (AppIcon board,
-        // 64-unit tile: red band 0-21 with the month, the day in 21-60).
+        // 64-unit tile: red band 0-21 with the month, the day in 21-60). The app list is names.py
+        // APPS['calendar'] (the names that draw this art) and the patch paints the art's own
+        // colours, so it hides the labels without a seam; tools/checks/calendar-tile.py keeps both
+        // in step.
         Item {
             id: calOverlay
             anchors.fill: parent
@@ -200,7 +203,7 @@ Item {
                 y: 3 * calOverlay.u
                 width: 36 * calOverlay.u
                 height: 16 * calOverlay.u
-                color: "#e7585d"
+                color: "#e5484d"
                 Text {
                     anchors.centerIn: parent
                     text: task.monthText
