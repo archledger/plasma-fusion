@@ -52,6 +52,9 @@ class QDBusServiceWatcher;
       Desktop icons   Folder View [General] filterMode=1 with the pattern "/", which matches no
                       file name (positions are kept), and iconSize.
       File drag       kdeglobals [KDE] DndBehavior (AlwaysAsk / MoveIfSameDevice).
+      Icons           plasmafusionrc [Icons] AppIcons: the apps' own familiar icons on Fusion
+                      tiles (familiar, the default) or the designed tiles only (designs; the
+                      app-icons service then removes the icons it drew).
       Battery         plasmafusionrc [Power] LighterOnCritical; file contents in search:
                       baloofilerc [General] "only basic indexing" (the key System Settings >
                       File Search writes), then Baloo's updateConfig over D-Bus.
@@ -92,6 +95,7 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     // The switches below all notify through stateChanged.
     Q_PROPERTY(int snapTrigger READ snapTrigger WRITE setSnapTrigger NOTIFY stateChanged)
     Q_PROPERTY(int glass READ glass WRITE setGlass NOTIFY stateChanged)
+    Q_PROPERTY(int iconsMode READ iconsMode WRITE setIconsMode NOTIFY stateChanged)
     Q_PROPERTY(bool highContrast READ highContrast WRITE setHighContrast NOTIFY stateChanged)
     Q_PROPERTY(bool reduceMotion READ reduceMotion WRITE setReduceMotion NOTIFY stateChanged)
     Q_PROPERTY(int magnifiedSize READ magnifiedSize WRITE setMagnifiedSize NOTIFY stateChanged)
@@ -146,6 +150,8 @@ public:
     Q_ENUM(TabletDock)
     enum KeyboardPolicy { KeyboardTablet = 0, KeyboardTouch = 1, KeyboardNever = 2 };
     Q_ENUM(KeyboardPolicy)
+    enum IconsMode { IconsDesigned = 0, IconsFamiliar = 1 };
+    Q_ENUM(IconsMode)
 
     explicit PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData);
     ~PlasmaFusionKcm() override;
@@ -178,6 +184,8 @@ public:
     void setSnapTrigger(int value);
     int glass() const;
     void setGlass(int value);
+    int iconsMode() const;
+    void setIconsMode(int value);
     bool highContrast() const;
     void setHighContrast(bool value);
     bool reduceMotion() const;
@@ -283,6 +291,7 @@ private:
         int dndBehavior = DndAsk;
         bool lighterOnCritical = true;
         bool fileContentIndexing = true;
+        int iconsMode = IconsFamiliar;
         int tabletMode = TabletAuto;
         int tabletApps = AppsFullScreen;
         int tabletDock = DockHideOverApps;
@@ -330,6 +339,7 @@ private:
     void applyHotCorner(bool on);
     void reconfigureKWin(bool overviewEffect);
     void applyGlassConfig(int glass);
+    void applyIconsMode(int mode);
     void applyReduceMotion(bool on);
     void applyDndBehavior(int behavior);
     void applyLighterOnCritical(bool on);

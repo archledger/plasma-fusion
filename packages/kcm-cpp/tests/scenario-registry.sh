@@ -12,6 +12,23 @@ set -x
 source "$HOME/pf-kcm-tests/session-common.sh"
 export OUT
 
+# Registry row 8 (Icons): the designed Plasma Fusion tiles or the apps' own familiar icons. The
+# key is plasmafusionrc [Icons] AppIcons (fusion-config.sh and the app-icons service read it; the
+# service treats an absent key as familiar, so each case changes the mode before saving).
+kcm <<'EOF'
+set iconsMode 0
+call save
+waitidle
+EOF
+check "icons mode writes designs" "$(ck "$HOME/.config/plasmafusionrc" Icons AppIcons)" "designs"
+
+kcm <<'EOF'
+set iconsMode 1
+call save
+waitidle
+EOF
+check "icons mode writes familiar" "$(ck "$HOME/.config/plasmafusionrc" Icons AppIcons)" "familiar"
+
 # Registry row 15 (High contrast): the switch must write the gsettings key the XDG settings
 # portal's contrast is served from. xdg-desktop-portal-kde 6.7.5 does not serve the contrast key
 # at all (its appearance keys are color-scheme, accent-color and reduced-motion); the gtk impl

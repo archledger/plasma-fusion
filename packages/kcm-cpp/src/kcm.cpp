@@ -116,7 +116,7 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && magnify == other.magnify && globalMenu == other.globalMenu && hotCorner == other.hotCorner && snapTrigger == other.snapTrigger
         && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen
         && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical
-        && fileContentIndexing == other.fileContentIndexing && tabletMode == other.tabletMode
+        && fileContentIndexing == other.fileContentIndexing && iconsMode == other.iconsMode && tabletMode == other.tabletMode
         && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight
         && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
         && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
@@ -390,6 +390,18 @@ void PlasmaFusionKcm::setGlass(int value)
 {
     if (value >= GlassFull && value <= GlassSolid) {
         setField(&State::glass, value);
+    }
+}
+
+int PlasmaFusionKcm::iconsMode() const
+{
+    return m_current.iconsMode;
+}
+
+void PlasmaFusionKcm::setIconsMode(int value)
+{
+    if (value == IconsDesigned || value == IconsFamiliar) {
+        setField(&State::iconsMode, value);
     }
 }
 
@@ -856,10 +868,12 @@ void PlasmaFusionKcm::loadConfigState(State &state) const
     const QList<int> borders = KConfigGroup(kwin, u"Effect-overview"_s).readEntry("BorderActivate", QList<int>{s_hotCornerOn});
     state.hotCorner = borders.contains(s_hotCornerOn);
 
-    // Glass, top bars, battery (plasmafusionrc)
+    // Glass, top bars, battery, app icons (plasmafusionrc)
     state.glass = glassFromName(KConfigGroup(fusion, u"Effects"_s).readEntry("Glass", QString()));
     state.everyScreen = KConfigGroup(fusion, u"TopBar"_s).readEntry("EveryScreen", true);
     state.lighterOnCritical = KConfigGroup(fusion, u"Power"_s).readEntry("LighterOnCritical", true);
+    // The app-icons service treats anything but "designs" as familiar (docs/parts/app-icons.md).
+    state.iconsMode = KConfigGroup(fusion, u"Icons"_s).readEntry("AppIcons", QString()) == u"designs"_s ? IconsDesigned : IconsFamiliar;
     // File contents in search: Baloo's own key (System Settings > File Search), on by default.
     const KSharedConfig::Ptr baloo = KSharedConfig::openConfig(u"baloofilerc"_s, KConfig::NoGlobals);
     baloo->reparseConfiguration();
@@ -1006,6 +1020,7 @@ void PlasmaFusionKcm::onConfigChanged(const KConfigGroup &group, const QByteArra
         s_tabletScriptGroup,
         u"Decoration"_s,
         u"Effects"_s,
+        u"Icons"_s,
         u"Power"_s,
         u"TopBar"_s,
     };
@@ -1127,6 +1142,9 @@ void PlasmaFusionKcm::save()
     }
     if (after.fileContentIndexing != before.fileContentIndexing) {
         applyFileContentIndexing(after.fileContentIndexing);
+    }
+    if (after.iconsMode != before.iconsMode) {
+        applyIconsMode(after.iconsMode);
     }
     applyTabletConfig(before, after);
 
@@ -1481,6 +1499,17 @@ void PlasmaFusionKcm::applyGlassConfig(int glass)
 
 // Reduce motion is Plasma's own "Instant" animation speed (EFFECTS.md 7): factor 0, with the
 // previous factor kept to put back (absent = 1.0, so the key is removed again).
+// plasmafusionrc [Icons] AppIcons: the apps' own familiar icons on Fusion tiles (the default) or
+// the designed tiles only (docs/parts/app-icons.md; the app-icons service reads the same key and
+// treats anything but "designs" as familiar).
+void PlasmaFusionKcm::applyIconsMode(int mode)
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup(fusion, u"Icons"_s).writeEntry("AppIcons", mode == IconsDesigned ? u"designs"_s : u"familiar"_s, KConfig::Notify);
+    fusion->sync();
+}
+
 void PlasmaFusionKcm::applyReduceMotion(bool on)
 {
     KSharedConfig::Ptr globals = KSharedConfig::openConfig(u"kdeglobals"_s);

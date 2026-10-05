@@ -482,6 +482,33 @@ KCM.SimpleKCM {
                 }
             }
 
+            // ---------- Icons ----------
+            ColumnLayout {
+                spacing: 10
+                Layout.fillWidth: true
+
+                SectionTitle {
+                    text: i18nc("@title:group", "Icons")
+                    pal: fusionPalette
+                }
+                ChoiceRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    last: true
+                    text: i18nc("@label", "Application icons")
+                    // plasmafusionrc [Icons] AppIcons: designs 0, familiar 1 (the default).
+                    model: [
+                        i18nc("@option:radio the designed Plasma Fusion tiles", "Designed tiles"),
+                        i18nc("@option:radio the apps' own icons on Plasma Fusion tiles", "Real app icons")
+                    ]
+                    currentIndex: kcm.iconsMode
+                    note: kcm.iconsMode === 0
+                        ? i18nc("@info", "Only the designed Plasma Fusion tiles are shown; the icon service removes the apps' own icons it drew earlier.")
+                        : i18nc("@info", "Every installed app's own icon is drawn on a Plasma Fusion tile and kept up to date as apps change.")
+                    onActivated: index => kcm.iconsMode = index
+                }
+            }
+
             // ---------- Battery ----------
             ColumnLayout {
                 spacing: 10
