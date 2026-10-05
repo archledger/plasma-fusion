@@ -5,8 +5,8 @@
 # Style the Plasma login greeter (plasma-login-manager 6.7) with Plasma Fusion Dark. Run as root
 # after the plasma-fusion package is installed (it reads the system-wide copies in /usr/share).
 #
-#   greeter-apply.sh [--display-from FILE] [--dry-run] [--check]
-#   greeter-apply.sh --output DIR [--data-dir DIR] [--display-from FILE]
+#   greeter-apply.sh [--display-from FILE] [--login-image VARIANT] [--dry-run] [--check]
+#   greeter-apply.sh --output DIR [--data-dir DIR] [--display-from FILE] [--login-image VARIANT]
 #
 #   --display-from FILE  also give the greeter this display configuration, normally the
 #                   kwinoutputconfig.json of the user whose display scale it should use:
@@ -14,6 +14,10 @@
 #                   ("Apply Plasma Settings…" copies it too). The Plasma Fusion sizes are
 #                   logical pixels at the session's scale (4/3 on the 1920x1200 test device);
 #                   without it the greeter keeps its own scale (often 1: everything smaller)
+#   --login-image VARIANT
+#                   login (default, the Login board's blur with its veil), dimmed (the lock
+#                   screen's wallpaper, for greeter and lock parity) or blurred (the Login
+#                   board's blur without the veil)
 #   --dry-run       show what would be written; change nothing
 #   --check         report whether the greeter uses Plasma Fusion; change nothing
 #   --output DIR    no root: write the greeter's files into DIR/config/ and the daemon
@@ -50,6 +54,11 @@
 #   [Greeter] WallpaperPlugin=org.kde.image, [Greeter][Wallpaper][org.kde.image][General] Image
 #   and PreviewImage = the pre-darkened Dusk Ridge,
 #   /usr/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png
+#   --login-image VARIANT picks the wallpaper treatment from the generator's three Dusk Ridge
+#   variants: login (default) is the Login board's blur(20px) with its 50 % veil, dimmed is the
+#   lock screen's sharp wallpaper with its 22 % veil (greeter and lock screen parity), and blurred
+#   is the Login board's blur without the veil. The greeter's clock and layout are compiled into
+#   plasma-login-greeter and do not change here.
 # (a block appended to the file while it has no [Greeter] settings, so its comments stay;
 # otherwise the keys are written with kwriteconfig6, which rewrites the file as the KCM does).
 # The greeter's layout is compiled into plasma-login-greeter; only its styling changes.
@@ -78,6 +87,15 @@ while [ $# -gt 0 ]; do
     --output) [ $# -ge 2 ] || { echo "--output needs a directory" >&2; exit 2; }; OUTPUT=$2; shift ;;
     --data-dir) [ $# -ge 2 ] || { echo "--data-dir needs a directory" >&2; exit 2; }; DATA=$(cd "$2" && pwd); shift ;;
     --display-from) [ $# -ge 2 ] || { echo "--display-from needs a file" >&2; exit 2; }; DISPLAY_FROM=$2; shift ;;
+    --login-image)
+      [ $# -ge 2 ] || { echo "--login-image needs login, dimmed or blurred" >&2; exit 2; }
+      case $2 in
+        login) BACKGROUND=plasma-fusion/backgrounds/dusk-ridge-dark-login.png ;;
+        dimmed) BACKGROUND=plasma-fusion/backgrounds/dusk-ridge-dark-dimmed.png ;;
+        blurred) BACKGROUND=plasma-fusion/backgrounds/dusk-ridge-dark-blurred.png ;;
+        *) echo "--login-image needs login, dimmed or blurred" >&2; exit 2 ;;
+      esac
+      shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac

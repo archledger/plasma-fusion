@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- The greeter's wallpaper can match the lock screen's treatment (`greeter-apply.sh --login-image
+  dimmed`); the other choices are the Login board's blur with its veil (the default) and the same
+  blur without it. The greeter's clock and layout stay compiled into plasma-login-greeter.
 - The Plasma Fusion settings module gains an Icons section (Designed tiles / Real app icons) and a
   Lock & Login section (notification cards and titles on the lock screen). High contrast now reaches
   applications that follow the XDG settings portal, and the generated reference palette kits
