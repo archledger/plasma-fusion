@@ -141,6 +141,11 @@ The two notification keys are also on the Plasma Fusion settings module's Lock &
 (System Settings > Appearance & Style > Plasma Fusion, docs/parts/kcm-cpp.md); the clock and media
 card keys stay on Screen Locking > Appearance.
 
+Verified visually 2026-10-05 in a VM (a notification sent while the screen is locked;
+`artifacts/plasma-fusion/2026-10-05-settings-plan/lock-privacy/`): `showNotifications=false` shows
+no card, `true` with `showNotificationSummaries=false` shows the card without a title, and the
+summaries key adds the title. The body never shows.
+
 The lock-screen wallpaper is kscreenlocker's own setting (`kscreenlockerrc [Greeter]
 WallpaperPlugin`, `[Greeter][Wallpaper][org.kde.image][General] Image=`), see "Needs".
 
