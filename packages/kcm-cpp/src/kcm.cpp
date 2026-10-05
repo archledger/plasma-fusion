@@ -116,7 +116,9 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && magnify == other.magnify && globalMenu == other.globalMenu && hotCorner == other.hotCorner && snapTrigger == other.snapTrigger
         && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen
         && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical
-        && fileContentIndexing == other.fileContentIndexing && iconsMode == other.iconsMode && tabletMode == other.tabletMode
+        && fileContentIndexing == other.fileContentIndexing && iconsMode == other.iconsMode
+        && lockNotifications == other.lockNotifications
+        && lockNotificationSummaries == other.lockNotificationSummaries && tabletMode == other.tabletMode
         && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight
         && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
         && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
@@ -403,6 +405,26 @@ void PlasmaFusionKcm::setIconsMode(int value)
     if (value == IconsDesigned || value == IconsFamiliar) {
         setField(&State::iconsMode, value);
     }
+}
+
+bool PlasmaFusionKcm::lockNotifications() const
+{
+    return m_current.lockNotifications;
+}
+
+void PlasmaFusionKcm::setLockNotifications(bool value)
+{
+    setField(&State::lockNotifications, value);
+}
+
+bool PlasmaFusionKcm::lockNotificationSummaries() const
+{
+    return m_current.lockNotificationSummaries;
+}
+
+void PlasmaFusionKcm::setLockNotificationSummaries(bool value)
+{
+    setField(&State::lockNotificationSummaries, value);
 }
 
 bool PlasmaFusionKcm::highContrast() const
@@ -874,6 +896,14 @@ void PlasmaFusionKcm::loadConfigState(State &state) const
     state.lighterOnCritical = KConfigGroup(fusion, u"Power"_s).readEntry("LighterOnCritical", true);
     // The app-icons service treats anything but "designs" as familiar (docs/parts/app-icons.md).
     state.iconsMode = KConfigGroup(fusion, u"Icons"_s).readEntry("AppIcons", QString()) == u"designs"_s ? IconsDesigned : IconsFamiliar;
+
+    // Lock screen notification privacy (the two lock shell keys no Plasma page shows; the lock
+    // shell's own defaults are true and false, docs/parts/lockscreen.md).
+    KSharedConfig::Ptr lock = KSharedConfig::openConfig(u"kscreenlockerrc"_s, KConfig::NoGlobals);
+    lock->reparseConfiguration();
+    const KConfigGroup lockGeneral(lock, u"Greeter][LnF][General"_s);
+    state.lockNotifications = lockGeneral.readEntry("showNotifications", true);
+    state.lockNotificationSummaries = lockGeneral.readEntry("showNotificationSummaries", false);
     // File contents in search: Baloo's own key (System Settings > File Search), on by default.
     const KSharedConfig::Ptr baloo = KSharedConfig::openConfig(u"baloofilerc"_s, KConfig::NoGlobals);
     baloo->reparseConfiguration();
@@ -1145,6 +1175,13 @@ void PlasmaFusionKcm::save()
     }
     if (after.iconsMode != before.iconsMode) {
         applyIconsMode(after.iconsMode);
+    }
+    // 5b. Lock screen notification privacy (kscreenlockerrc).
+    if (after.lockNotifications != before.lockNotifications) {
+        writeLockEntry(u"showNotifications"_s, after.lockNotifications);
+    }
+    if (after.lockNotificationSummaries != before.lockNotificationSummaries) {
+        writeLockEntry(u"showNotificationSummaries"_s, after.lockNotificationSummaries);
     }
     applyTabletConfig(before, after);
 
@@ -1508,6 +1545,27 @@ void PlasmaFusionKcm::applyIconsMode(int mode)
     fusion->reparseConfiguration();
     KConfigGroup(fusion, u"Icons"_s).writeEntry("AppIcons", mode == IconsDesigned ? u"designs"_s : u"familiar"_s, KConfig::Notify);
     fusion->sync();
+}
+
+// kscreenlockerrc [Greeter][LnF][General]: the lock shell's notification keys (nested groups use
+// the bracket path). The lock screen reads them on the next lock.
+void PlasmaFusionKcm::writeLockEntry(const QString &key, bool value)
+{
+    KSharedConfig::Ptr lock = KSharedConfig::openConfig(u"kscreenlockerrc"_s, KConfig::NoGlobals);
+    lock->reparseConfiguration();
+    KConfigGroup(lock, u"Greeter][LnF][General"_s).writeEntry(key, value, KConfig::Notify);
+    lock->sync();
+}
+
+// System Settings > Screen Locking (kcm_screenlocker) holds the clock and media card keys.
+void PlasmaFusionKcm::openScreenLockerSettings()
+{
+    const QString kcmshell = QStandardPaths::findExecutable(u"kcmshell6"_s);
+    if (kcmshell.isEmpty()) {
+        qCDebug(KCM_PLASMAFUSION) << "kcmshell6 not found; the Screen Locking page is not opened";
+        return;
+    }
+    QProcess::startDetached(kcmshell, {u"screenlocker"_s});
 }
 
 void PlasmaFusionKcm::applyReduceMotion(bool on)

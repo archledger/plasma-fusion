@@ -49,3 +49,22 @@ waitidle
 EOF
 check "high contrast writes gsettings off" \
   "$(gsettings get org.gnome.desktop.a11y.interface high-contrast 2>/dev/null | tr -d "'")" "false"
+
+# Registry row 11 (Lock: notification privacy): the two lock shell keys no Plasma page shows
+# (kscreenlockerrc [Greeter][LnF][General], docs/parts/lockscreen.md; the first three keys stay on
+# System Settings > Screen Locking > Appearance).
+kcm <<'EOF'
+set lockNotifications false
+call save
+waitidle
+EOF
+check "lock notifications writes showNotifications false" \
+  "$(ck "$HOME/.config/kscreenlockerrc" "Greeter][LnF][General" showNotifications)" "false"
+
+kcm <<'EOF'
+set lockNotificationSummaries true
+call save
+waitidle
+EOF
+check "lock summaries writes showNotificationSummaries true" \
+  "$(ck "$HOME/.config/kscreenlockerrc" "Greeter][LnF][General" showNotificationSummaries)" "true"

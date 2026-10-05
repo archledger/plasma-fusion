@@ -509,6 +509,44 @@ KCM.SimpleKCM {
                 }
             }
 
+            // ---------- Lock & Login ----------
+            ColumnLayout {
+                spacing: 10
+                Layout.fillWidth: true
+
+                SectionTitle {
+                    text: i18nc("@title:group", "Lock & Login")
+                    pal: fusionPalette
+                }
+                ToggleRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    text: i18nc("@option:check", "Notification cards on the lock screen")
+                    checked: kcm.lockNotifications
+                    note: i18nc("@info", "When off, the lock screen shows no notifications at all.")
+                    onToggleRequested: kcm.lockNotifications = !kcm.lockNotifications
+                }
+                ToggleRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    text: i18nc("@option:check", "Show the newest notification's title (never bodies or actions)")
+                    checked: kcm.lockNotificationSummaries
+                    note: i18nc("@info", "The title appears on the notification's card while the screen is locked.")
+                    onToggleRequested: kcm.lockNotificationSummaries = !kcm.lockNotificationSummaries
+                }
+                ActionRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
+                    last: true
+                    text: i18nc("@label", "Clock and media card")
+                    description: i18nc("@info", "The lock screen's clock and media card stay in System Settings > Screen Locking > Appearance.")
+                    buttonText: i18nc("@action:button", "Open…")
+                    buttonIcon: "configure"
+                    enabled: !kcm.busy
+                    onTriggered: kcm.openScreenLockerSettings()
+                }
+            }
+
             // ---------- Battery ----------
             ColumnLayout {
                 spacing: 10

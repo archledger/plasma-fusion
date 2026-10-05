@@ -55,6 +55,9 @@ class QDBusServiceWatcher;
       Icons           plasmafusionrc [Icons] AppIcons: the apps' own familiar icons on Fusion
                       tiles (familiar, the default) or the designed tiles only (designs; the
                       app-icons service then removes the icons it drew).
+      Lock & Login    kscreenlockerrc [Greeter][LnF][General] showNotifications and
+                      showNotificationSummaries (the two lock shell keys no Plasma page shows;
+                      the clock and media card keys stay on Screen Locking > Appearance).
       Battery         plasmafusionrc [Power] LighterOnCritical; file contents in search:
                       baloofilerc [General] "only basic indexing" (the key System Settings >
                       File Search writes), then Baloo's updateConfig over D-Bus.
@@ -96,6 +99,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(int snapTrigger READ snapTrigger WRITE setSnapTrigger NOTIFY stateChanged)
     Q_PROPERTY(int glass READ glass WRITE setGlass NOTIFY stateChanged)
     Q_PROPERTY(int iconsMode READ iconsMode WRITE setIconsMode NOTIFY stateChanged)
+    Q_PROPERTY(bool lockNotifications READ lockNotifications WRITE setLockNotifications NOTIFY stateChanged)
+    Q_PROPERTY(bool lockNotificationSummaries READ lockNotificationSummaries WRITE setLockNotificationSummaries NOTIFY stateChanged)
     Q_PROPERTY(bool highContrast READ highContrast WRITE setHighContrast NOTIFY stateChanged)
     Q_PROPERTY(bool reduceMotion READ reduceMotion WRITE setReduceMotion NOTIFY stateChanged)
     Q_PROPERTY(int magnifiedSize READ magnifiedSize WRITE setMagnifiedSize NOTIFY stateChanged)
@@ -186,6 +191,10 @@ public:
     void setGlass(int value);
     int iconsMode() const;
     void setIconsMode(int value);
+    bool lockNotifications() const;
+    void setLockNotifications(bool value);
+    bool lockNotificationSummaries() const;
+    void setLockNotificationSummaries(bool value);
     bool highContrast() const;
     void setHighContrast(bool value);
     bool reduceMotion() const;
@@ -244,6 +253,8 @@ public:
     // still pending on the page is kept.
     Q_INVOKABLE void restorePreviousDesktop();
     Q_INVOKABLE void resetLayout();
+    // System Settings > Screen Locking (kcm_screenlocker): the clock and media card keys.
+    Q_INVOKABLE void openScreenLockerSettings();
 
 public Q_SLOTS:
     void load() override;
@@ -292,6 +303,8 @@ private:
         bool lighterOnCritical = true;
         bool fileContentIndexing = true;
         int iconsMode = IconsFamiliar;
+        bool lockNotifications = true;
+        bool lockNotificationSummaries = false;
         int tabletMode = TabletAuto;
         int tabletApps = AppsFullScreen;
         int tabletDock = DockHideOverApps;
@@ -340,6 +353,7 @@ private:
     void reconfigureKWin(bool overviewEffect);
     void applyGlassConfig(int glass);
     void applyIconsMode(int mode);
+    void writeLockEntry(const QString &key, bool value);
     void applyReduceMotion(bool on);
     void applyDndBehavior(int behavior);
     void applyLighterOnCritical(bool on);
