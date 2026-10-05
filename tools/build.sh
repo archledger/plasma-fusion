@@ -29,6 +29,7 @@ case "$lints" in
     failed=0
     bash "$ROOT/tools/checks/motion-lint.sh" "${flag[@]}" "$ROOT/packages" || failed=1
     python3 "$ROOT/tools/checks/a11y-lint.py" "${flag[@]}" "$ROOT/packages" || failed=1
+    python3 "$ROOT/tools/checks/calendar-tile.py" "${flag[@]}" "$ROOT/packages" || failed=1
     [ "$failed" = 0 ] || { echo "build.sh: the checks found problems (PF_LINTS=$lints); nothing was built" >&2; exit 1; }
     ;;
   *) echo "build.sh: PF_LINTS must be warn, fail or off (not '$lints')" >&2; exit 2 ;;

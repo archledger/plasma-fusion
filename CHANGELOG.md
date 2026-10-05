@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- The live date patch on the Calendar tiles no longer shows as a seam: it paints the tile art's
+  own colours. The launcher shows Merkuro Calendar's live date again (its app list had a typo),
+  and GNOME Calendar keeps its own tile art: the patch only covers tiles that carry the art's
+  fixed SEP 28.
 - The dock shows one tile per app: on a system without a web browser, the Browser pin
   (`preferred://browser`) resolves to whatever handles HTML's `text/plain` parent type (Kate on a
   minimal install) and the dock showed two identical Kate tiles. A `preferred://` pin that
