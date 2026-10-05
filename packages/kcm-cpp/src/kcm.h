@@ -323,6 +323,7 @@ private:
 
     bool applyStyle(int style);
     bool applyColorScheme(bool highContrast);
+    void setPortalHighContrast(bool value);
     bool applyAccent(const State &state);
     bool applyDecoration(int buttonStyle);
     void applySnapTrigger(int trigger);

@@ -1081,9 +1081,11 @@ void PlasmaFusionKcm::save()
         themeApplied = applyStyle(after.style) && after.style != FollowSunset;
         decoration = true;
     }
-    // 2. Colour scheme: high contrast on top of the Global Theme's scheme, or back to it.
+    // 2. Colour scheme: high contrast on top of the Global Theme's scheme, or back to it, and the
+    //    gsettings key the portal's contrast is served from.
     if (after.highContrast != before.highContrast || (after.highContrast && themeApplied)) {
         applyColorScheme(after.highContrast);
+        setPortalHighContrast(after.highContrast);
     }
     // 3. Accent colour, on top of the colour scheme the style just applied.
     if (!after.sameAccent(before)) {
@@ -1274,6 +1276,31 @@ bool PlasmaFusionKcm::applyColorScheme(bool highContrast)
 {
     const QString scheme = highContrast ? s_highContrastScheme : (currentVariantIsLight() ? s_lightScheme : s_darkScheme);
     return runTool(u"plasma-apply-colorscheme"_s, {scheme});
+}
+
+// The XDG settings portal's contrast key is served by the GTK portal from the gsettings key
+// org.gnome.desktop.a11y.interface high-contrast; xdg-desktop-portal-kde 6.7.5 does not serve
+// contrast at all (its appearance keys are color-scheme, accent-color and reduced-motion), so the
+// scheme alone cannot reach applications that follow the portal. Written quietly: gsettings or its
+// schema can be absent, which is not an error the user needs to see (settings plan task 2,
+// artifacts/plasma-fusion/2026-10-05-settings-plan/PLAN.md).
+void PlasmaFusionKcm::setPortalHighContrast(bool value)
+{
+    if (QStandardPaths::findExecutable(u"gsettings"_s).isEmpty()) {
+        qCDebug(KCM_PLASMAFUSION) << "gsettings not found; the portal contrast key is not written";
+        return;
+    }
+    QProcess process;
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.start(u"gsettings"_s,
+                  {u"set"_s, u"org.gnome.desktop.a11y.interface"_s, u"high-contrast"_s, value ? u"true"_s : u"false"_s});
+    if (!process.waitForFinished(s_toolTimeout)) {
+        process.kill();
+        process.waitForFinished(1000);
+    }
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+        qCDebug(KCM_PLASMAFUSION) << "gsettings high-contrast not written (schema missing?)";
+    }
 }
 
 bool PlasmaFusionKcm::applyAccent(const State &state)

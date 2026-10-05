@@ -22,6 +22,7 @@ ORIG_ACCENT=$(kread kdeglobals General AccentColor)
 ORIG_LASTACCENT=$(kread kdeglobals General LastUsedCustomAccentColor)
 ORIG_ACCENTWP=$(kread kdeglobals General accentColorFromWallpaper)
 ORIG_MOTION=$(kread kdeglobals KDE AnimationDurationFactor)
+ORIG_HC=$(gsettings get org.gnome.desktop.a11y.interface high-contrast 2>/dev/null | tr -d "'")
 
 restore_key() { # restore_key FILE GROUP KEY VALUE
   if [ -n "$4" ]; then
@@ -41,6 +42,9 @@ restore() {
   restore_key kdeglobals General LastUsedCustomAccentColor "$ORIG_LASTACCENT"
   restore_key kdeglobals General accentColorFromWallpaper "$ORIG_ACCENTWP"
   restore_key kdeglobals KDE AnimationDurationFactor "$ORIG_MOTION"
+  if [ -n "$ORIG_HC" ]; then
+    gsettings set org.gnome.desktop.a11y.interface high-contrast "$ORIG_HC" >/dev/null 2>&1
+  fi
 }
 trap restore EXIT
 
@@ -50,8 +54,12 @@ read_one() { busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/
 
 fail=0
 check() { # check NAME KEY WANT
-  local got
-  got=$(read_one "$2")
+  local got=""
+  for _ in 1 2 3 4 5; do
+    got=$(read_one "$2")
+    [ "$got" = "$3" ] && break
+    sleep 1
+  done
   if [ "$got" != "$3" ]; then
     echo "FAIL $1: $2 = '$got', want '$3'"
     fail=1
@@ -106,12 +114,19 @@ else
   fail=1
 fi
 
-# 15. High contrast on/off (the KCM's switch applies the scheme).
+# 15. High contrast: the KCM applies the Plasma Fusion High Contrast scheme and writes the
+#     gsettings key the portal's contrast is served from (settings plan task 2): the KDE impl does
+#     not serve contrast at all, and the gtk impl that answers it reads
+#     org.gnome.desktop.a11y.interface high-contrast.
+if command -v gsettings >/dev/null 2>&1; then
+  gsettings set org.gnome.desktop.a11y.interface high-contrast true
+fi
 plasma-apply-colorscheme PlasmaFusionHighContrast >/dev/null 2>&1
-sleep 2
 check "high contrast on" contrast 1
+if command -v gsettings >/dev/null 2>&1; then
+  gsettings set org.gnome.desktop.a11y.interface high-contrast false
+fi
 plasma-apply-colorscheme PlasmaFusionDark >/dev/null 2>&1
-sleep 2
 check "high contrast off" contrast 0
 
 # 5. Reduce motion (the KCM's switch writes AnimationDurationFactor).
