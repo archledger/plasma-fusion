@@ -7,7 +7,11 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
-## Unreleased
+## 0.3.0 (2026-10-06)
+
+Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch).
+Plasma 6.8 support comes from that beta testing; anything Plasma 6.8.0 final needs will
+come in a follow-up release.
 
 - The greeter's wallpaper can match the lock screen's treatment (`greeter-apply.sh --login-image
   dimmed`); the other choices are the Login board's blur with its veil (the default) and the same
