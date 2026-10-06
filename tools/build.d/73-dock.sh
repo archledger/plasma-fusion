@@ -21,6 +21,7 @@ bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" dock
 
 if command -v node >/dev/null 2>&1; then
   node "$src/tests/pins.test.js" >/dev/null
+  node "$src/tests/date-timer.test.js" >/dev/null
 fi
 
 rm -rf "$dest"

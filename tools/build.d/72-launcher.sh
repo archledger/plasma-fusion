@@ -21,6 +21,10 @@ PY
 
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" launcher
 
+if command -v node >/dev/null 2>&1; then
+  node "$src/tests/date-timer.test.js" >/dev/null
+fi
+
 rm -rf "$dest"
 mkdir -p "$dest"
 cp -r "$src/metadata.json" "$src/contents" "$dest/"

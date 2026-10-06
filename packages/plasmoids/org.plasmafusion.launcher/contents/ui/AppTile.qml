@@ -9,6 +9,7 @@ import QtQuick
 import org.kde.plasma.components as PC3
 
 import "../code/launcher.js" as Launcher
+import "../code/date-timer.js" as DateTimer
 
 // App tile of the launcher grids: 84 px tall, radius 14, 52 px icon with a soft drop shadow, 12 px name.
 // The height, the name and its gap follow the user's text size; the icon keeps its size. The icon
@@ -29,7 +30,7 @@ Item {
     readonly property real nameGap: grid && grid.metrics ? grid.metrics.px(7) : 7
 
     // Today's date over the Calendar tile's fixed "SEP" / "28" (AppIcon board), as the dock's
-    // TaskItem: the same apps, the same overlay, one timer to the next midnight (no polling).
+    // TaskItem: the same apps, the same overlay, the same capped midnight timer (suspend-safe).
     property var today: new Date()
     readonly property string monthText: Qt.locale().toString(tile.today, "MMM").toUpperCase().replace(".", "")
     readonly property string dayText: String(tile.today.getDate())
@@ -38,16 +39,14 @@ Item {
                                          "kalendar"].indexOf(Launcher.iconNameFor(tile.model)) !== -1
     readonly property bool calendarTile: calendarApp && !icon.foreign && !icon.familiar
     Timer {
-        running: true
-        interval: {
-            const now = new Date();
-            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
-            return Math.max(1000, next.getTime() - now.getTime());
-        }
+        running: tile.calendarTile
+        repeat: true
+        interval: DateTimer.intervalTo(new Date(), DateTimer.CAP_MS)
         onTriggered: {
-            tile.today = new Date();
-            interval = 24 * 3600 * 1000;
-            restart();
+            const now = new Date();
+            if (DateTimer.changed(tile.today, now))
+                tile.today = now;
+            interval = DateTimer.intervalTo(now, DateTimer.CAP_MS);
         }
     }
 

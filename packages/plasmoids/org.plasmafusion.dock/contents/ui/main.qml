@@ -20,6 +20,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.private.kicker as Kicker
 
 import "../code/pins.js" as Pins
+import "../code/date-timer.js" as DateTimer
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
@@ -1010,19 +1011,19 @@ PlasmoidItem {
     property date today: new Date()
     readonly property string todayMonth: Qt.locale().toString(today, "MMM").toUpperCase().replace(".", "")
     readonly property string todayDay: String(today.getDate())
-    // One timer to the next midnight (no polling).
+    // Re-arms to the next midnight, capped at CAP_MS: Qt timers count monotonic time, which
+    // pauses across system suspend, so one long interval fired hours late and left the tile on
+    // yesterday's date after a resume (2026-10-06). A tick only rechecks the date.
     Timer {
         id: midnight
         running: true
-        interval: {
-            const now = new Date();
-            const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
-            return Math.max(1000, next.getTime() - now.getTime());
-        }
+        repeat: true
+        interval: DateTimer.intervalTo(new Date(), DateTimer.CAP_MS)
         onTriggered: {
-            root.today = new Date();
-            interval = 24 * 3600 * 1000;
-            restart();
+            const now = new Date();
+            if (DateTimer.changed(root.today, now))
+                root.today = now;
+            interval = DateTimer.intervalTo(now, DateTimer.CAP_MS);
         }
     }
 
