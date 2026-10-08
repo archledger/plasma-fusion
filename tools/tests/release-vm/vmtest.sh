@@ -122,23 +122,26 @@ case $lane_env in
        env="${env/PLASMA_FUSION_DEV_VERSION=$PF_VER/PLASMA_FUSION_DEV_VERSION=$snap}"
        env="$env PLASMA_FUSION_DEV_RELEASE_BASE=http://10.0.2.2:8088/release PLASMA_FUSION_DEV_KEY=\$HOME/test-key.asc PLASMA_FUSION_DEV_KEY_FP=$(cat "$C/test-key.fp")" ;;
   aur)
-    vm ssh "$name" 'mkdir -p ~/aur && cd ~/aur && curl -fsS -O http://10.0.2.2:8088/arch/PKGBUILD && t=$(curl -fsS http://10.0.2.2:8088/arch/ | grep -o "plasma-fusion-[0-9.]*\.tar\.gz" | head -n 1) && curl -fsS -O "http://10.0.2.2:8088/arch/$t" && sed -i -e "s|^source=.*|source=(\"$t\")|" -e "/^validpgpkeys=/d" PKGBUILD && sudo pacman -S --needed --noconfirm base-devel git >/dev/null'
+    vm ssh "$name" 'mkdir -p ~/aur && cd ~/aur && curl -fsS -O http://10.0.2.2:8088/arch/PKGBUILD && t=$(curl -fsS http://10.0.2.2:8088/arch/ | grep -o "plasma-fusion-[0-9.]*\.tar\.gz" | head -n 1) && curl -fsS -O "http://10.0.2.2:8088/arch/$t" && sed -i -e "s|^source=.*|source=(\"$t\")|" -e "/^validpgpkeys=/d" PKGBUILD && sudo pacman -Syu --needed --noconfirm base-devel git && command -v debugedit && command -v fakeroot' \
+      || { log "FAIL: could not prepare AUR build prerequisites"; exit 1; }
     env="$env PLASMA_FUSION_DEV_AUR_SRC=\$HOME/aur" ;;
 esac
 log "installer: dry run"
 insession "env $env sh ~/install.sh --dry-run" >"$OUT/10-dry-run.log" 2>&1
-log "  rc=$? $(grep -c . "$OUT/10-dry-run.log") lines"
+rc=$?
+log "  rc=$rc $(grep -c . "$OUT/10-dry-run.log") lines"
+[ "$rc" = 0 ] || { log "FAIL: dry run"; exit "$rc"; }
 log "installer: install"
 if [ "$lane" = nix ]; then
   # NixOS: the installer prints the configuration lines (the image has the module already); the
   # per-user step is the packaged command.
-  insession "env $env sh ~/install.sh --yes; plasma-fusion setup" >"$OUT/11-install.log" 2>&1
+  insession "env $env sh ~/install.sh --yes && plasma-fusion setup" >"$OUT/11-install.log" 2>&1
 else
   insession "env $env sh ~/install.sh --yes" >"$OUT/11-install.log" 2>&1
 fi
 rc=$?
 log "  rc=$rc"
-[ "$rc" = 0 ] || { log "FAIL: install"; tail -30 "$OUT/11-install.log"; }
+[ "$rc" = 0 ] || { log "FAIL: install"; tail -30 "$OUT/11-install.log"; exit "$rc"; }
 insession "plasma-fusion status" >"$OUT/12-status.log" 2>&1
 log "status: $(head -n 1 "$OUT/12-status.log")"
 shot 13-after-setup
@@ -167,8 +170,10 @@ log "crashes: $crashes"
 
 # PF_AFTER_LOGIN: a check of the change under test, run in the session; output in 25-after-login.log.
 if [ -n "${PF_AFTER_LOGIN:-}" ]; then
-  insession "$PF_AFTER_LOGIN" >"$OUT/25-after-login.log" 2>&1
-  log "after-login check rc=$?: $(tail -n 1 "$OUT/25-after-login.log")"
+  hook_rc=0
+  insession "$PF_AFTER_LOGIN" >"$OUT/25-after-login.log" 2>&1 || hook_rc=$?
+  log "after-login check rc=$hook_rc: $(tail -n 1 "$OUT/25-after-login.log")"
+  [ "$hook_rc" = 0 ] || { log "FAIL: after-login check"; exit "$hook_rc"; }
 fi
 
 log "installer: uninstall"
@@ -177,7 +182,9 @@ if [ "$lane" = nix ]; then
 else
   insession "env $env sh ~/install.sh uninstall --yes" >"$OUT/30-uninstall.log" 2>&1
 fi
-log "  rc=$?"
+rc=$?
+log "  rc=$rc"
+[ "$rc" = 0 ] || { log "FAIL: uninstall"; exit "$rc"; }
 relogin
 shot 31-restored
 vm ssh "$name" '(rpm -qa 2>/dev/null; pacman -Qq 2>/dev/null; dpkg-query -W -f "\${db:Status-Abbrev} \${Package}\n" 2>/dev/null | awk "\$1 == \"ii\" {print \$2}") | grep "^plasma-fusion" || echo "no plasma-fusion package"; grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/32-after-uninstall.txt" 2>&1

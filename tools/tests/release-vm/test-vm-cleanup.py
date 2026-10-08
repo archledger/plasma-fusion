@@ -20,6 +20,11 @@ case "$cmd" in
   stop|shot) exit 0 ;;
   ssh)
     case "$*" in
+      *FAULT_HOOK*) exit 9 ;;
+      *'sh ~/install.sh --yes'*) [ "$FAULT" != install ] ;;
+      *'sh ~/install.sh --dry-run'*) [ "$FAULT" != dry ] ;;
+      *'sh ~/install.sh uninstall --yes'*) [ "$FAULT" != uninstall ] ;;
+      *'curl -fsS -O http://10.0.2.2:8088/arch/PKGBUILD'*) [ "$FAULT" != prerequisites ] ;;
       *tty1_session*) n=$(cat "$PF_VM_HOME/session" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" >"$PF_VM_HOME/session"; echo "$n" ;;
       'python3 -')
         n=$(cat "$PF_VM_HOME/counts" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" >"$PF_VM_HOME/counts"
@@ -33,20 +38,25 @@ esac
 class VMCleanupTest(unittest.TestCase):
     def run_vm(self, fault):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            home = Path(directory)
+            root = home / "repo/tools/tests/release-vm"
+            root.mkdir(parents=True)
+            (home / "repo/VERSION").write_text("0.3.1\n")
             for filename in ["vmtest.sh", "crash-count.py"]:
                 shutil.copy2(HERE / filename, root / filename)
             (root / "vm.sh").write_text(BOUNDARY)
-            (root / "vms/test").mkdir(parents=True)
+            (home / "vms/test").mkdir(parents=True)
             (root / "bin").mkdir()
             sleep = root / "bin/sleep"
             sleep.write_text("#!/bin/sh\nexit 0\n")
             sleep.chmod(0o755)
-            result = subprocess.run(["bash", str(root / "vmtest.sh"), "test", "nix"], capture_output=True, text=True,
-                env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "1", "FAULT": fault,
+            lane = "aur" if fault == "prerequisites" else "copr"
+            result = subprocess.run(["bash", str(root / "vmtest.sh"), "test", lane], capture_output=True, text=True,
+                env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "0" if lane == "aur" else "1", "FAULT": fault,
+                     "PF_AFTER_LOGIN": "FAULT_HOOK" if fault == "hook" else "",
                      "PATH": str(root / "bin") + ":" + os.environ["PATH"]})
-            calls = (root / "calls").read_text().splitlines()
-            return result, calls, (root / "vms/test/run.qcow2").exists(), list((root / "vms/test").glob("failed-run-*.qcow2"))
+            calls = (home / "calls").read_text().splitlines()
+            return result, calls, (home / "vms/test/run.qcow2").exists(), list((home / "vms/test").glob("failed-run-*.qcow2"))
 
     def test_initial_crash_gate_releases_vm(self):
         result, calls, locked, preserved = self.run_vm("first")
@@ -75,6 +85,23 @@ class VMCleanupTest(unittest.TestCase):
         self.assertIn("stop", calls)
         self.assertFalse(locked)
         self.assertFalse(preserved)
+
+    def test_after_login_failure_is_rejected_and_preserved(self):
+        result, calls, locked, preserved = self.run_vm("hook")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stop", calls)
+        self.assertFalse(locked)
+        self.assertEqual(len(preserved), 1)
+
+    def test_installer_stage_failures_are_rejected_and_preserved(self):
+        for stage in ["prerequisites", "dry", "install", "uninstall"]:
+            with self.subTest(stage=stage):
+                result, calls, locked, preserved = self.run_vm(stage)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("stop", calls)
+                self.assertFalse(locked)
+                self.assertEqual(len(preserved), 1)
+                self.assertNotIn("done test", result.stdout)
 
 
 if __name__ == "__main__":
