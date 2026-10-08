@@ -10,6 +10,7 @@ import QtQuick.Window
 import QtQuick.Window as QtQuickWindow
 import org.kde.kirigami as Kirigami
 import org.kde.kwin
+import org.kde.plasma.plasma5support as P5Support
 import "../ui/SnapGeometry.js" as SnapGeometry
 
 // Snap-zone preview for KWin's outline (kwinrc [Outline] QmlPath=
@@ -36,6 +37,37 @@ QtQuickWindow.Window {
     property bool animated: false
     property var quickRoots: ({})
     property rect targetGeometry: outline.geometry
+    property real configuredGap: 6
+    property bool quickGaps: true
+    property bool settingsLoaded: false
+    readonly property real innerGap: quickGaps ? configuredGap : 0
+    // kreadconfig's boolean mode reports through its exit status, not stdout.
+    readonly property string configCommand: "if kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key QuickTileGaps --type bool --default true; "
+        + "then printf 'true\\n'; else printf 'false\\n'; fi; "
+        + "kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap --default 6"
+
+    function readSettings() {
+        configReader.connectSource(configCommand);
+    }
+    function applySettings(text) {
+        const values = String(text).trim().split("\n");
+        const value = Number(values[1]);
+        quickGaps = String(values[0]).trim() === "true";
+        configuredGap = Math.max(0, Math.min(48, isNaN(value) ? 6 : value));
+        if (visible) place(outline.geometry, false);
+    }
+    P5Support.DataSource {
+        id: configReader
+        engine: "executable"
+        onNewData: (sourceName, data) => {
+            disconnectSource(sourceName);
+            if (Number(data["exit code"]) === 0) {
+                window.applySettings(data["stdout"] || "");
+                window.settingsLoaded = true;
+            }
+        }
+    }
+    Component.onCompleted: readSettings()
 
     Kirigami.Theme.colorSet: Kirigami.Theme.Window
     Kirigami.Theme.inherit: false
@@ -60,7 +92,8 @@ QtQuickWindow.Window {
         for (const win of Workspace.stackingOrder) {
             const tile = win ? win.tile : null;
             if (!tile || !tile.parent || tile.parent.parent || !win.output) continue;
-            const desktop = !win.onAllDesktops && win.desktops.length ? win.desktops[0] : Workspace.currentDesktop;
+            const desktop = !win.onAllDesktops && win.desktops.length ? win.desktops[0]
+                : Workspace.currentDesktopForScreen(win.output) || Workspace.currentDesktop;
             const root = tile.parent;
             if (root.tiles.length === 8 && root !== Workspace.rootTile(win.output, desktop)) {
                 quickRoots[win.output.name + "|" + (desktop ? desktop.id : "?")] = {root: root, output: win.output.name};
@@ -87,24 +120,47 @@ QtQuickWindow.Window {
     function previewRect(geometry) {
         const output = Workspace.screenAt(Qt.point(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2));
         if (!output) return geometry;
-        const area = Workspace.clientArea(Workspace.MaximizeArea, output, Workspace.currentDesktop);
+        const desktop = Workspace.currentDesktopForScreen(output) || Workspace.currentDesktop;
+        const area = Workspace.clientArea(Workspace.MaximizeArea, output, desktop);
         // The outline API supplies geometry, not the tiling mode. Preserve a matching custom
         // tile's preview when its shape coincides with a quick tile (e.g. custom 50/50 zones).
-        if (customMatches(Workspace.rootTile(output, Workspace.currentDesktop), geometry, area)) return geometry;
-        for (const key of Object.keys(quickRoots)) {
-            const record = quickRoots[key];
-            if (record.output !== output.name) continue;
+        if (customMatches(Workspace.rootTile(output, desktop), geometry, area)) return geometry;
+        const key = output.name + "|" + (desktop ? desktop.id : "?");
+        const record = quickRoots[key];
+        if (record) {
             try {
                 for (const tile of record.root.tiles) {
                     if (!tile.absoluteGeometry || !tile.relativeGeometry) continue;
                     const native = SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, tile.padding, area, false);
                     if (equalRect(native, geometry)) {
-                        const filled = SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, tile.padding, area, true);
+                    const filled = SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, innerGap, area, true);
                         return Qt.rect(filled.x, filled.y, filled.width, filled.height);
                     }
                 }
             } catch (e) {
                 delete quickRoots[key]; // this screen/desktop's native tiles were removed
+            }
+        }
+        // With no tiled windows the native root is inaccessible. Empty quick-tile roots reset
+        // to halves/quarters; recognize their padded geometry before the first window joins.
+        // Infer current native padding from an outer edge: it may still be zero or reflect a
+        // previous setting. The resulting preview uses the configured gap of the snap script.
+        const padding = Math.max(0, Math.min(geometry.x - area.x, geometry.y - area.y,
+            area.x + area.width - geometry.x - geometry.width,
+            area.y + area.height - geometry.y - geometry.height));
+        if (padding <= 48) {
+            const zones = [Qt.rect(0, 0, 0.5, 1), Qt.rect(0.5, 0, 0.5, 1),
+                Qt.rect(0, 0, 1, 0.5), Qt.rect(0, 0.5, 1, 0.5),
+                Qt.rect(0, 0, 0.5, 0.5), Qt.rect(0.5, 0, 0.5, 0.5),
+                Qt.rect(0, 0.5, 0.5, 0.5), Qt.rect(0.5, 0.5, 0.5, 0.5)];
+            for (const relative of zones) {
+                const absolute = Qt.rect(Math.round(area.x + relative.x * area.width),
+                    Math.round(area.y + relative.y * area.height), Math.round(relative.width * area.width),
+                    Math.round(relative.height * area.height));
+                if (equalRect(SnapGeometry.tileRect(absolute, relative, padding, area, false), geometry)) {
+                    const filled = SnapGeometry.tileRect(absolute, relative, innerGap, area, true);
+                    return Qt.rect(filled.x, filled.y, filled.width, filled.height);
+                }
             }
         }
         return geometry; // Meta+Z already supplies the filled target; unknown outlines stay native
@@ -124,6 +180,7 @@ QtQuickWindow.Window {
 
     onVisibleChanged: {
         if (visible) {
+            readSettings();
             appear.stop();
             zone.opacity = 0;
             if (outline.visualParentGeometry.width > 0 && outline.visualParentGeometry.height > 0) {
