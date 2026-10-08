@@ -16,6 +16,26 @@ OUT=$H/results/$name
 rm -rf "$OUT" && mkdir -p "$OUT"
 vm() { bash "$HERE/vm.sh" "$@"; }
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$OUT/steps.log"; }
+cleanup_vm() {
+  local status=$1 disk=$H/vms/$name/run.qcow2
+  trap - EXIT
+  if ! vm stop "$name" >/dev/null; then
+    log "FAIL: could not stop the VM during cleanup"
+    exit 1
+  fi
+  if [ -f "$disk" ]; then
+    if [ "$status" = 0 ]; then
+      rm -f "$disk"
+    else
+      local saved
+      saved=$H/vms/$name/failed-run-$(date -u +%Y%m%dT%H%M%S)-$$.qcow2
+      mv "$disk" "$saved" || { log "FAIL: could not preserve failed overlay"; exit 1; }
+      log "failed overlay preserved: $saved"
+    fi
+  fi
+  [ "$status" != 0 ] || log "done $name"
+  exit "$status"
+}
 # insession CMD: run CMD as pf with the environment of pf's plasmashell (the tty1 session).
 insession() {
   vm ssh "$name" "pid=\$(pgrep -u pf -x 'plasmashell|\.plasmashell-wr' | head -n 1); [ -n \"\$pid\" ] || { echo 'no plasmashell'; exit 97; }
@@ -54,7 +74,9 @@ relogin() {
 shot() { vm shot "$name" "$OUT/$1.png" >/dev/null && log "screenshot $1"; }
 
 log "start $name ($lane)"
-vm start "$name" run >/dev/null && vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
+vm start "$name" run >/dev/null || { log "FAIL: the VM did not start"; exit 1; }
+trap 'cleanup_vm $?' EXIT
+vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
 # Crash reports everywhere (Debian and Ubuntu do not install systemd-coredump by default).
 case $lane in
   ppa | deb)
@@ -164,6 +186,3 @@ final_crashes=$(vm ssh "$name" 'python3 -' <"$HERE/crash-count.py") \
   || { log "FAIL: final crash collector unavailable or failed"; exit 1; }
 log "final crashes: $final_crashes"
 [ "$final_crashes" = 0 ] || { log "FAIL: crashes found after restore"; exit 1; }
-vm stop "$name" >/dev/null
-rm -f "$H/vms/$name/run.qcow2"
-log "done $name"

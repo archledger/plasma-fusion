@@ -57,6 +57,7 @@ jobs:
         run: |
           python3 tools/tests/release-vm/test-crash-count.py
           python3 tools/tests/release-vm/test-run-all.py
+          python3 tools/tests/release-vm/test-vm-cleanup.py
 
       - name: One version everywhere (VERSION, spec, PKGBUILD, Debian changelog)
         run: packaging/check-version.sh
