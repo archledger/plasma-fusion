@@ -86,10 +86,14 @@ Item {
             return;
         }
         outlineWindow = outlineComponent.createObject(null);
-        Qt.callLater(testGeometry);
+        outlineWindow.settingsLoadedChanged.connect(() => {
+            if (outlineWindow.settingsLoaded) Qt.callLater(testGeometry);
+        });
     }
 
     function testGeometry() {
+        check("actual outline config reader loads enabled default", outlineWindow.quickGaps, outlineWindow.quickGaps);
+        check("actual outline config reader loads default gap", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
         const a = Qt.rect(0, 34, 1440, 866);
         for (const gap of [0, 6, 12, 48]) {
             rectCheck("left half gap=" + gap, script.zoneRect(a, 0, 0, 0.5, 1, gap), Qt.rect(0, 34, 720 - gap / 2, 866));
@@ -155,6 +159,50 @@ Item {
             outlineWindow.place(outline.geometry, false);
             rectCheck("native padded outline matches filled target", Qt.rect(zone.x + outlineWindow.x,
                 zone.y + outlineWindow.y, zone.width, zone.height), Qt.rect(0, 34, 717, 866));
+            // A newly created outline has no remembered root when every window is untiled.
+            KW.Workspace.windows = [];
+            outlineWindow.quickRoots = ({});
+            rectCheck("first native padded preview fills outer edges",
+                outlineWindow.previewRect(Qt.rect(6, 40, 711, 854)), Qt.rect(0, 34, 717, 866));
+            rectCheck("first zero-padding preview keeps configured inner gap",
+                outlineWindow.previewRect(Qt.rect(0, 34, 720, 866)), Qt.rect(0, 34, 717, 866));
+            outlineWindow.applySettings("true\n12\n");
+            rectCheck("first preview follows nondefault configured gap",
+                outlineWindow.previewRect(Qt.rect(6, 40, 711, 854)), Qt.rect(0, 34, 714, 866));
+            outlineWindow.applySettings("false\n12\n");
+            rectCheck("first preview follows disabled quick gaps",
+                outlineWindow.previewRect(Qt.rect(6, 40, 711, 854)), Qt.rect(0, 34, 720, 866));
+            outlineWindow.applySettings("true\n6\n");
+            rectCheck("unknown outline stays unchanged",
+                outlineWindow.previewRect(Qt.rect(80, 90, 500, 300)), Qt.rect(80, 90, 500, 300));
+            const secondDesktop = {id: "desktop-2"};
+            const secondOutput = {name: "Virtual-2", geometry: Qt.rect(1440, 0, 1440, 900)};
+            const secondTile = {tiles: [], absoluteGeometry: Qt.rect(1440, 34, 720, 866),
+                relativeGeometry: Qt.rect(0, 0, 0.5, 1), padding: 6};
+            KW.Workspace.outlineScreen = secondOutput;
+            KW.Workspace.outputDesktops = {"Virtual-2": secondDesktop};
+            KW.Workspace.maximizeArea = Qt.rect(1440, 34, 1440, 866);
+            KW.Workspace.customRoots = {"Virtual-2|desktop-2": {tiles: [secondTile]}};
+            outlineWindow.quickRoots = {"Virtual-2|desktop-1": {root: {tiles: [secondTile]}, output: "Virtual-2"}};
+            rectCheck("outline preserves target output desktop custom tile",
+                outlineWindow.previewRect(Qt.rect(1446, 40, 711, 854)), Qt.rect(1446, 40, 711, 854));
+            KW.Workspace.customRoots = ({});
+            KW.Workspace.desktopAreas = {"desktop-1": Qt.rect(1440, 70, 1440, 830),
+                                        "desktop-2": Qt.rect(1440, 34, 1440, 866)};
+            outlineWindow.quickRoots = {"Virtual-2|desktop-2": {root: {tiles: [secondTile]}, output: "Virtual-2"}};
+            rectCheck("native outline uses target output desktop work area",
+                outlineWindow.previewRect(Qt.rect(1446, 40, 711, 854)), Qt.rect(1440, 34, 717, 866));
+            const staleTile = {absoluteGeometry: Qt.rect(1440, 34, 960, 866),
+                relativeGeometry: Qt.rect(0, 0, 2 / 3, 1), padding: 6};
+            outlineWindow.quickRoots = {"Virtual-2|desktop-1": {root: {tiles: [staleTile]}, output: "Virtual-2"}};
+            rectCheck("another desktop cached split is not used",
+                outlineWindow.previewRect(Qt.rect(1446, 40, 951, 854)), Qt.rect(1446, 40, 951, 854));
+            KW.Workspace.outlineScreen = null;
+            KW.Workspace.outputDesktops = ({});
+            KW.Workspace.desktopAreas = ({});
+            KW.Workspace.customRoots = ({});
+            KW.Workspace.maximizeArea = a;
+            KW.Workspace.windows = [win];
             outline.active = false;
         }
         win.frameGeometry = Qt.rect(6, 40, 711, 854.25);

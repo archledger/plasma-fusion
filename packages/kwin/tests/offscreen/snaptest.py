@@ -7,6 +7,7 @@ QT_QPA_PLATFORM=offscreen python3 snaptest.py STAGE_HOME
 """
 import os
 import sys
+import tempfile
 
 from PySide6.QtCore import QObject, QTimer, QUrl, Slot
 from PySide6.QtGui import QGuiApplication
@@ -30,6 +31,8 @@ class Config(QObject):
 
 
 here = os.path.dirname(os.path.abspath(__file__))
+config_home = tempfile.TemporaryDirectory(prefix="plasmafusion-snap-config-")
+os.environ["XDG_CONFIG_HOME"] = config_home.name
 app = QGuiApplication(sys.argv[:1])
 engine = QQmlApplicationEngine()
 engine.addImportPath(os.path.join(here, "stubs"))
