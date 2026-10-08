@@ -11,7 +11,7 @@
   # tty1 without one, and KWin found no usable DRM device.
   hardware.graphics.enable = true;
   programs.plasma-fusion.enable = true;
-  environment.systemPackages = [ pkgs.kdePackages.konsole ];
+  environment.systemPackages = [ pkgs.kdePackages.konsole pkgs.python3 ];
   users.users.pf = {
     isNormalUser = true;
     extraGroups = [ "wheel" ];

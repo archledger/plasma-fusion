@@ -56,7 +56,14 @@ shot() { vm shot "$name" "$OUT/$1.png" >/dev/null && log "screenshot $1"; }
 log "start $name ($lane)"
 vm start "$name" run >/dev/null && vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
 # Crash reports everywhere (Debian and Ubuntu do not install systemd-coredump by default).
-case $lane in ppa | deb) vm ssh "$name" 'command -v coredumpctl >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd-coredump >/dev/null 2>&1' ;; esac
+case $lane in
+  ppa | deb)
+    vm ssh "$name" 'command -v coredumpctl >/dev/null || {
+      sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get update -q &&
+      sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install -y -q systemd-coredump;
+    }' || { log "FAIL: could not prepare crash collector"; exit 1; }
+    ;;
+esac
 # No dimming, screen off or suspend in the test sessions (from the next login on).
 vm ssh "$name" 'mkdir -p ~/.config && printf "[AC][Display]\nDimDisplayWhenIdle=false\nTurnOffDisplayWhenIdle=false\n\n[AC][SuspendAndShutdown]\nAutoSuspendAction=0\n" >~/.config/powerdevilrc'
 
