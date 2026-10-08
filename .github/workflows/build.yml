@@ -54,7 +54,9 @@ jobs:
         run: tools/device/tests/gate-unit.sh build/gate
 
       - name: VM crash collector unit tests
-        run: python3 tools/tests/release-vm/test-crash-count.py
+        run: |
+          python3 tools/tests/release-vm/test-crash-count.py
+          python3 tools/tests/release-vm/test-run-all.py
 
       - name: One version everywhere (VERSION, spec, PKGBUILD, Debian changelog)
         run: packaging/check-version.sh
