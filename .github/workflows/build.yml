@@ -45,7 +45,7 @@ jobs:
           # The shared part's build requirements (the compiled parts build in compiled.yml).
           dnf builddep -y -q --without compiled packaging/fedora/plasma-fusion.spec
           dnf install -y -q nodejs ShellCheck desktop-file-utils kf6-kconfig glib2 python3-gobject gtk3 gtk4 \
-            dbus-daemon libplasma kf6-kirigami plasma5support
+            dbus-daemon libplasma kf6-kirigami plasma5support plasma-workspace
 
       - name: Lint self-tests
         run: tools/checks/tests/run.sh
