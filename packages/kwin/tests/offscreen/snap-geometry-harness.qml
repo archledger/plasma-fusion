@@ -108,9 +108,15 @@ Item {
         const end = script.thirdRect(odd, 2, 7, false);
         check("odd third reaches right edge", end.x + end.width === 1459 && end.y + end.height === 899, end);
         rectCheck("picker matches tiled window", script.tileWindowRect(tile), Qt.rect(0, 34, 717, 866));
+        const oddArea = Qt.rect(0, 34, 1439, 865);
+        const trailingTile = {absoluteGeometry: Qt.rect(720, 467, 720, 433),
+                              relativeGeometry: Qt.rect(0.5, 0.5, 0.5, 0.5), padding: 6};
+        const trailingRect = script.tileWindowRect(trailingTile, oddArea);
+        check("odd quick tile stays inside work-area right", trailingRect.x + trailingRect.width === 1439, trailingRect);
+        check("odd quick tile stays inside work-area bottom", trailingRect.y + trailingRect.height === 899, trailingRect);
         // Startup watcher must correct a window that was already snapped when the script loaded.
         rectCheck("already tiled startup", win.frameGeometry, Qt.rect(0, 34, 717, 866));
-        check("native padding cleared", quickRoot.padding === 0, quickRoot.padding);
+        check("native inner padding retained", quickRoot.padding === 6, quickRoot.padding);
         KWin.setConfig("QuickTileGaps", false);
         rectCheck("quick gap disabled preview", script.targetRect(win, 0, 0), Qt.rect(0, 34, 720, 866));
         script.fitQuickTile(win);
@@ -133,9 +139,10 @@ Item {
         rectCheck("fullscreen left alone", win.frameGeometry, a);
         win.fullScreen = false;
         win.resize = true;
-        win.frameGeometry = Qt.rect(0, 34, 900, 866);
+        win.frameGeometry = Qt.rect(6, 40, 711, 854);
         script.fitQuickTile(win);
-        rectCheck("interactive resize left alone", win.frameGeometry, Qt.rect(0, 34, 900, 866));
+        rectCheck("interactive resize outer edges filled", win.frameGeometry, Qt.rect(0, 34, 717, 866));
+        check("interactive resize shared edge unchanged", win.frameGeometry.x + win.frameGeometry.width === 717, win.frameGeometry);
         win.resize = false;
         if (outlineWindow) {
             outline.active = true;
@@ -143,6 +150,11 @@ Item {
             const zone = outlineWindow.contentItem.children[0];
             rectCheck("outline keeps work-area edges", Qt.rect(zone.x + outline.unifiedGeometry.x,
                 zone.y + outline.unifiedGeometry.y, zone.width, zone.height), a);
+            outline.geometry = Qt.rect(6, 40, 711, 854);
+            outline.unifiedGeometry = outline.geometry;
+            outlineWindow.place(outline.geometry, false);
+            rectCheck("native padded outline matches filled target", Qt.rect(zone.x + outlineWindow.x,
+                zone.y + outlineWindow.y, zone.width, zone.height), Qt.rect(0, 34, 717, 866));
             outline.active = false;
         }
         win.frameGeometry = Qt.rect(6, 40, 711, 854.25);

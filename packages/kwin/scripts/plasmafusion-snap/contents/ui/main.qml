@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.kwin
 import "ensureTopBars.js" as EnsureTopBars
+import "SnapGeometry.js" as SnapGeometry
 
 // Plasma Fusion snapping (boards QuickSettings.dc.html "Snap layouts", TabsSnap.dc.html).
 //
@@ -90,10 +91,11 @@ Item {
         if (!quickRoot) {
             return;
         }
-        // KWin's scalar Tile.padding also insets screen edges. Keep its native tiles flush;
-        // fitQuickTile applies only the inner gap without removing the tile association.
-        if (quickRoot.padding !== 0) {
-            quickRoot.padding = 0;
+        // Keep native padding for the interactive resize controller's pointer compensation.
+        // fitQuickTile removes only outer insets without changing the native shared edges.
+        const g = setting("QuickTileGaps", true) ? gap() : 0;
+        if (quickRoot.padding !== g) {
+            quickRoot.padding = g;
         }
     }
 
@@ -382,28 +384,26 @@ Item {
         return list;
     }
 
-    // Native quick-tile geometry with only the script's inner padding. Also used by the picker.
-    function tileWindowRect(tile) {
-        const a = tile.absoluteGeometry;
-        const r = tile.relativeGeometry;
+    // Native shared edges, with outer edges filled and clipped to this window's work area.
+    function tileWindowRect(tile, area) {
+        if (!area) {
+            area = Workspace.clientArea(Workspace.MaximizeArea, Workspace.activeScreen, Workspace.currentDesktop);
+        }
         const p = setting("QuickTileGaps", true) ? gap() : 0;
-        const l = r.x > 0.001 ? p / 2 : 0;
-        const t = r.y > 0.001 ? p / 2 : 0;
-        const rr = r.x + r.width < 0.999 ? p / 2 : 0;
-        const b = r.y + r.height < 0.999 ? p / 2 : 0;
-        return Qt.rect(a.x + l, a.y + t, a.width - l - rr, a.height - t - b);
+        const g = SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, p, area, true);
+        return Qt.rect(g.x, g.y, g.width, g.height);
     }
 
     function fitQuickTile(win) {
-        if (!usable(win) || win.move || win.resize || win.maximizeMode !== 0 || quickIndexOf(win) < 0) {
+        if (!usable(win) || win.move || win.maximizeMode !== 0 || quickIndexOf(win) < 0) {
             return;
         }
-        const target = tileWindowRect(win.tile);
+        const target = tileWindowRect(win.tile, Workspace.clientArea(Workspace.MaximizeArea, win));
         const current = win.frameGeometry;
         // Wayland clients round to device pixels; don't send the same configure endlessly.
         const tolerance = 1 / Math.max(1, win.output ? win.output.devicePixelRatio : 1);
-        if (Math.abs(current.x - target.x) > tolerance || Math.abs(current.y - target.y) > tolerance
-                || Math.abs(current.width - target.width) > tolerance || Math.abs(current.height - target.height) > tolerance) {
+        if (Math.abs(current.x - target.x) >= tolerance || Math.abs(current.y - target.y) >= tolerance
+                || Math.abs(current.width - target.width) >= tolerance || Math.abs(current.height - target.height) >= tolerance) {
             win.frameGeometry = target;
         }
     }
@@ -458,7 +458,7 @@ Item {
         pickerLoader.tile = other;
         pickerLoader.output = win.output;
         pickerLoader.desktop = desktopOf(win);
-        pickerLoader.area = tileWindowRect(other);
+        pickerLoader.area = tileWindowRect(other, Workspace.clientArea(Workspace.MaximizeArea, win));
         pickerLoader.candidates = candidates;
         pickerLoader.active = true;
     }

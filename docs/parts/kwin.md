@@ -184,8 +184,11 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   restores the other, activating one raises the other. A pair ends when either leaves its half.
 - Gaps: 6 px between halves and quarters, with the outer edges flush to the work area (panels
   remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
-  native quick-tile padding at zero and applies only the inner gap to each window's geometry
-  after KWin settles. Tile membership, shared splits and restoration on drag remain native.
+  native quick-tile padding at the configured gap and fills only each window's outer edges
+  after KWin settles. Native padding keeps the inner gap and pointer compensation during split
+  resizing; the outer-edge correction runs during resizing too. Work-area endpoints clamp odd
+  trailing tiles that KWin rounds one pixel too wide or tall. Tile membership, shared splits and
+  restoration on drag remain native.
   The picker uses the same inner-gap geometry. Meta+T custom zones retain their own padding.
 
 ### Snap-zone outline
@@ -194,7 +197,10 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 2 px #5b9dff edge (light scheme: rgba(47,111,223,.20) / #2f6fdf; other accents follow the accent).
 It fades in after 150 ms (TabsSnap "after the pointer rests at the edge for 150 ms") and glides
 from the window to the zone. It draws the supplied geometry without an extra edge inset:
-Meta+Z supplies its gap-aware target; native edge drags preview the unpadded quick tile.
+Meta+Z supplies its gap-aware target; a native padded quick-tile preview is expanded to the same
+filled outer edges. The outline window's bounds include that expanded target. Matching custom
+tiles keep their native preview: the outline API exposes geometry, not the tiling mode, so a
+custom zone with exactly the same shape as a quick tile is kept native rather than guessed.
 
 ### Attached dialogs
 
