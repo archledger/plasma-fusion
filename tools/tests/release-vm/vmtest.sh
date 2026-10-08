@@ -160,6 +160,10 @@ relogin
 shot 31-restored
 vm ssh "$name" '(rpm -qa 2>/dev/null; pacman -Qq 2>/dev/null; dpkg-query -W -f "\${db:Status-Abbrev} \${Package}\n" 2>/dev/null | awk "\$1 == \"ii\" {print \$2}") | grep "^plasma-fusion" || echo "no plasma-fusion package"; grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/32-after-uninstall.txt" 2>&1
 log "after uninstall: $(tr '\n' ' ' <"$OUT/32-after-uninstall.txt")"
+final_crashes=$(vm ssh "$name" 'python3 -' <"$HERE/crash-count.py") \
+  || { log "FAIL: final crash collector unavailable or failed"; exit 1; }
+log "final crashes: $final_crashes"
+[ "$final_crashes" = 0 ] || { log "FAIL: crashes found after restore"; exit 1; }
 vm stop "$name" >/dev/null
 rm -f "$H/vms/$name/run.qcow2"
 log "done $name"
