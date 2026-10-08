@@ -11,6 +11,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch), like 0.3.0.
 
+- Snapped windows fill the work-area edges instead of leaving desktop strips around them. The
+  configured gap remains between neighbouring windows, including the Meta+Z thirds and rows.
 - The Calendar tiles' live date no longer stays on yesterday's date after the computer wakes from
   suspend: the midnight timer re-arms in short steps instead of one long interval (Qt timers pause
   across suspend). The launcher tile now also only keeps a timer while a Calendar tile needs one.

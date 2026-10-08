@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.kwin
 import "ensureTopBars.js" as EnsureTopBars
+import "SnapGeometry.js" as SnapGeometry
 
 // Plasma Fusion snapping (boards QuickSettings.dc.html "Snap layouts", TabsSnap.dc.html).
 //
@@ -16,7 +17,7 @@ import "ensureTopBars.js" as EnsureTopBars
 // - After a window is snapped to the left or right half, the other half offers the remaining
 //   windows ("Pick a window for this side"). Esc, a click elsewhere or any focus change
 //   dismisses it; it also closes itself after a minute without input.
-// - Snapped halves and quarters get the same gap as the Meta+T custom zones (6 px).
+// - Snapped halves and quarters get a 6 px inner gap, with no work-area edge inset.
 // - Windows picked for the other half form a pair: they minimise and restore together.
 //
 // Halves, 2:1 and quarters use KWin's own quick tiles (so they stay tiled, share their edge
@@ -87,10 +88,12 @@ Item {
     }
 
     function applyGap(quickRoot) {
-        if (!quickRoot || !setting("QuickTileGaps", true)) {
+        if (!quickRoot) {
             return;
         }
-        const g = gap();
+        // Keep native padding for the interactive resize controller's pointer compensation.
+        // fitQuickTile removes only outer insets without changing the native shared edges.
+        const g = setting("QuickTileGaps", true) ? gap() : 0;
         if (quickRoot.padding !== g) {
             quickRoot.padding = g;
         }
@@ -157,26 +160,28 @@ Item {
         return true;
     }
 
-    // Gap-aware geometry of a fraction of the work area, as KWin tiles compute it.
+    // Only shared edges are inset; windows reach the work area's outer edges.
     function zoneRect(area, fx, fy, fw, fh, g) {
         const x0 = area.x + fx * area.width;
         const y0 = area.y + fy * area.height;
         const x1 = area.x + (fx + fw) * area.width;
         const y1 = area.y + (fy + fh) * area.height;
-        const l = fx > 0.001 ? g / 2 : g;
-        const t = fy > 0.001 ? g / 2 : g;
-        const r = fx + fw < 0.999 ? g / 2 : g;
-        const b = fy + fh < 0.999 ? g / 2 : g;
+        const l = fx > 0.001 ? g / 2 : 0;
+        const t = fy > 0.001 ? g / 2 : 0;
+        const r = fx + fw < 0.999 ? g / 2 : 0;
+        const b = fy + fh < 0.999 ? g / 2 : 0;
         return Qt.rect(Math.round(x0 + l), Math.round(y0 + t), Math.round(x1 - r - (x0 + l)), Math.round(y1 - b - (y0 + t)));
     }
 
     function thirdRect(area, i, g, rows) {
-        if (rows) {
-            const h = (area.height - 4 * g) / 3;
-            return Qt.rect(Math.round(area.x + g), Math.round(area.y + g + i * (h + g)), Math.round(area.width - 2 * g), Math.round(h));
-        }
-        const w = (area.width - 4 * g) / 3;
-        return Qt.rect(Math.round(area.x + g + i * (w + g)), Math.round(area.y + g), Math.round(w), Math.round(area.height - 2 * g));
+        const origin = rows ? area.y : area.x;
+        const length = rows ? area.height : area.width;
+        const size = (length - 2 * g) / 3;
+        // Round endpoints, not a repeated width: odd work-area sizes still fill the last edge.
+        const start = i === 0 ? origin : Math.round(origin + i * (size + g));
+        const end = i === 2 ? origin + length : Math.round(origin + (i + 1) * size + i * g);
+        return rows ? Qt.rect(area.x, start, area.width, end - start)
+                    : Qt.rect(start, area.y, end - start, area.height);
     }
 
     // Layouts of the flyout (board order): zones as fractions [x, y, w, h], plus how to place.
@@ -379,16 +384,28 @@ Item {
         return list;
     }
 
-    // Tile geometry minus padding, as Tile::windowGeometry computes it.
-    function tileWindowRect(tile) {
-        const a = tile.absoluteGeometry;
-        const r = tile.relativeGeometry;
-        const p = tile.padding;
-        const l = r.x > 0.001 ? p / 2 : p;
-        const t = r.y > 0.001 ? p / 2 : p;
-        const rr = r.x + r.width < 0.999 ? p / 2 : p;
-        const b = r.y + r.height < 0.999 ? p / 2 : p;
-        return Qt.rect(a.x + l, a.y + t, a.width - l - rr, a.height - t - b);
+    // Native shared edges, with outer edges filled and clipped to this window's work area.
+    function tileWindowRect(tile, area) {
+        if (!area) {
+            area = Workspace.clientArea(Workspace.MaximizeArea, Workspace.activeScreen, Workspace.currentDesktop);
+        }
+        const p = setting("QuickTileGaps", true) ? gap() : 0;
+        const g = SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, p, area, true);
+        return Qt.rect(g.x, g.y, g.width, g.height);
+    }
+
+    function fitQuickTile(win) {
+        if (!usable(win) || win.move || win.maximizeMode !== 0 || quickIndexOf(win) < 0) {
+            return;
+        }
+        const target = tileWindowRect(win.tile, Workspace.clientArea(Workspace.MaximizeArea, win));
+        const current = win.frameGeometry;
+        // Wayland clients round to device pixels; don't send the same configure endlessly.
+        const tolerance = 1 / Math.max(1, win.output ? win.output.devicePixelRatio : 1);
+        if (Math.abs(current.x - target.x) >= tolerance || Math.abs(current.y - target.y) >= tolerance
+                || Math.abs(current.width - target.width) >= tolerance || Math.abs(current.height - target.height) >= tolerance) {
+            win.frameGeometry = target;
+        }
     }
 
     property var pendingSnap: null
@@ -441,7 +458,7 @@ Item {
         pickerLoader.tile = other;
         pickerLoader.output = win.output;
         pickerLoader.desktop = desktopOf(win);
-        pickerLoader.area = tileWindowRect(other);
+        pickerLoader.area = tileWindowRect(other, Workspace.clientArea(Workspace.MaximizeArea, win));
         pickerLoader.candidates = candidates;
         pickerLoader.active = true;
     }
@@ -700,13 +717,33 @@ Item {
         delegate: QtObject {
             id: watcher
             required property var window
-            // Windows already in a half or quarter when the script starts get the gap too.
-            Component.onCompleted: root.applyGap(root.quickRootOf(window))
+            // Windows already tiled at startup, and native resizes/reconfigures, keep the inner
+            // gap. Defer past KWin's own geometry update; never configure from its signal stack.
+            function fit() {
+                Qt.callLater(() => root.fitQuickTile(watcher.window));
+            }
+            Component.onCompleted: {
+                root.applyGap(root.quickRootOf(window));
+                fit();
+            }
+            readonly property Connections tileConnections: Connections {
+                target: watcher.window ? watcher.window.tile : null
+                function onWindowGeometryChanged() {
+                    watcher.fit();
+                }
+            }
             readonly property Connections connections: Connections {
                 target: watcher.window
                 function onTileChanged() {
                     root.windowSnapped(watcher.window);
                     root.pairTileChanged(watcher.window);
+                    watcher.fit();
+                }
+                function onFrameGeometryChanged() {
+                    watcher.fit();
+                }
+                function onInteractiveMoveResizeFinished() {
+                    watcher.fit();
                 }
                 function onMinimizedChanged() {
                     root.pairMinimizedChanged(watcher.window);

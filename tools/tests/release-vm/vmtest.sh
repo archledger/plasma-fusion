@@ -16,6 +16,26 @@ OUT=$H/results/$name
 rm -rf "$OUT" && mkdir -p "$OUT"
 vm() { bash "$HERE/vm.sh" "$@"; }
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$OUT/steps.log"; }
+cleanup_vm() {
+  local status=$1 disk=$H/vms/$name/run.qcow2
+  trap - EXIT
+  if ! vm stop "$name" >/dev/null; then
+    log "FAIL: could not stop the VM during cleanup"
+    exit 1
+  fi
+  if [ -f "$disk" ]; then
+    if [ "$status" = 0 ]; then
+      rm -f "$disk"
+    else
+      local saved
+      saved=$H/vms/$name/failed-run-$(date -u +%Y%m%dT%H%M%S)-$$.qcow2
+      mv "$disk" "$saved" || { log "FAIL: could not preserve failed overlay"; exit 1; }
+      log "failed overlay preserved: $saved"
+    fi
+  fi
+  [ "$status" != 0 ] || log "done $name"
+  exit "$status"
+}
 # insession CMD: run CMD as pf with the environment of pf's plasmashell (the tty1 session).
 insession() {
   vm ssh "$name" "pid=\$(pgrep -u pf -x 'plasmashell|\.plasmashell-wr' | head -n 1); [ -n \"\$pid\" ] || { echo 'no plasmashell'; exit 97; }
@@ -54,9 +74,18 @@ relogin() {
 shot() { vm shot "$name" "$OUT/$1.png" >/dev/null && log "screenshot $1"; }
 
 log "start $name ($lane)"
-vm start "$name" run >/dev/null && vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
+vm start "$name" run >/dev/null || { log "FAIL: the VM did not start"; exit 1; }
+trap 'cleanup_vm $?' EXIT
+vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
 # Crash reports everywhere (Debian and Ubuntu do not install systemd-coredump by default).
-case $lane in ppa | deb) vm ssh "$name" 'command -v coredumpctl >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd-coredump >/dev/null 2>&1' ;; esac
+case $lane in
+  ppa | deb)
+    vm ssh "$name" 'command -v coredumpctl >/dev/null || {
+      sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get update -q &&
+      sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install -y -q systemd-coredump;
+    }' || { log "FAIL: could not prepare crash collector"; exit 1; }
+    ;;
+esac
 # No dimming, screen off or suspend in the test sessions (from the next login on).
 vm ssh "$name" 'mkdir -p ~/.config && printf "[AC][Display]\nDimDisplayWhenIdle=false\nTurnOffDisplayWhenIdle=false\n\n[AC][SuspendAndShutdown]\nAutoSuspendAction=0\n" >~/.config/powerdevilrc'
 
@@ -129,7 +158,12 @@ sleep 4
 insession "plasma-fusion status" >"$OUT/23-status-after-login.log" 2>&1
 vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log; echo; coredumpctl list --no-pager --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>&1 | tail -n 5; echo; journalctl --user -b --no-pager -p err 2>/dev/null | grep -iE "plasma-?fusion|plasmafusion" | tail -n 20' >"$OUT/24-logs.log" 2>&1
 # Crashes of this boot only (the provisioned base keeps the journal of its own boots).
-log "crashes: $(vm ssh "$name" 'coredumpctl list --no-pager --no-legend --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>/dev/null | wc -l')"
+# A missing/failed collector is not zero crashes: abort the gate instead of hiding its status
+# behind wc (Ubuntu's failed collector installation previously produced a false zero).
+crashes=$(vm ssh "$name" 'python3 -' <"$HERE/crash-count.py") \
+  || { log "FAIL: crash collector unavailable or failed"; exit 1; }
+log "crashes: $crashes"
+[ "$crashes" = 0 ] || { log "FAIL: crashes found"; exit 1; }
 
 # PF_AFTER_LOGIN: a check of the change under test, run in the session; output in 25-after-login.log.
 if [ -n "${PF_AFTER_LOGIN:-}" ]; then
@@ -148,6 +182,7 @@ relogin
 shot 31-restored
 vm ssh "$name" '(rpm -qa 2>/dev/null; pacman -Qq 2>/dev/null; dpkg-query -W -f "\${db:Status-Abbrev} \${Package}\n" 2>/dev/null | awk "\$1 == \"ii\" {print \$2}") | grep "^plasma-fusion" || echo "no plasma-fusion package"; grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/32-after-uninstall.txt" 2>&1
 log "after uninstall: $(tr '\n' ' ' <"$OUT/32-after-uninstall.txt")"
-vm stop "$name" >/dev/null
-rm -f "$H/vms/$name/run.qcow2"
-log "done $name"
+final_crashes=$(vm ssh "$name" 'python3 -' <"$HERE/crash-count.py") \
+  || { log "FAIL: final crash collector unavailable or failed"; exit 1; }
+log "final crashes: $final_crashes"
+[ "$final_crashes" = 0 ] || { log "FAIL: crashes found after restore"; exit 1; }
