@@ -8,3 +8,5 @@ ShortcutHandler 3.0 ShortcutHandler.qml
 DBusCall 3.0 DBusCall.qml
 singleton Workspace 3.0 Workspace.qml
 DesktopBackground 3.0 DesktopBackground.qml
+WindowModel 3.0 WindowModel.qml
+SwipeGestureHandler 3.0 SwipeGestureHandler.qml

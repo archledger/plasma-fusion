@@ -21,7 +21,6 @@ import org.kde.kwin
 QtQuickWindow.Window {
     id: window
 
-    readonly property int gap: 6
     readonly property bool dark: {
         const c = Kirigami.Theme.backgroundColor;
         return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
@@ -52,28 +51,10 @@ QtQuickWindow.Window {
         console.warn("plasmafusion outline: scene graph error:", message);
     }
 
-    // Zones that touch the work area's edge are drawn inset, like the board's zones.
-    function inset(geometry) {
-        let area = null;
-        try {
-            area = Workspace.clientArea(Workspace.MaximizeArea,
-                                        Workspace.screenAt(Qt.point(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2)),
-                                        Workspace.currentDesktop);
-        } catch (e) {
-            area = null;
-        }
-        if (!area) {
-            return geometry;
-        }
-        const l = Math.abs(geometry.x - area.x) < 1 ? gap : 0;
-        const t = Math.abs(geometry.y - area.y) < 1 ? gap : 0;
-        const r = Math.abs(geometry.x + geometry.width - area.x - area.width) < 1 ? gap : 0;
-        const b = Math.abs(geometry.y + geometry.height - area.y - area.height) < 1 ? gap : 0;
-        return Qt.rect(geometry.x + l, geometry.y + t, geometry.width - l - r, geometry.height - t - b);
-    }
-
     function place(geometry, animate) {
-        const g = inset(geometry);
+        // Meta+Z already supplies the gap-aware target; native edge snaps touch the work area.
+        // Do not add a second inset to either preview.
+        const g = geometry;
         window.animated = animate;
         zone.x = g.x - outline.unifiedGeometry.x;
         zone.y = g.y - outline.unifiedGeometry.y;

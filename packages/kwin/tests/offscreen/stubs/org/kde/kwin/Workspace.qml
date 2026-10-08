@@ -21,6 +21,8 @@ QtObject {
     signal windowAdded(var window)
     signal windowRemoved(var window)
     signal windowActivated(var window)
+    signal screensChanged()
+    signal virtualScreenGeometryChanged()
 
     function screenAt(p) { return activeScreen; }
     function currentDesktopForScreen(o) { return currentDesktop; }
@@ -30,9 +32,12 @@ QtObject {
     function hideOutline() { console.log("hideOutline"); }
     function slotWindowQuickTileLeft() { console.log("quickTileLeft"); }
     function slotWindowQuickTileRight() { console.log("quickTileRight"); }
+    function slotWindowQuickTileTop() {}
+    function slotWindowQuickTileBottom() {}
     function slotWindowQuickTileTopLeft() {}
     function slotWindowQuickTileTopRight() {}
     function slotWindowQuickTileBottomLeft() {}
     function slotWindowQuickTileBottomRight() {}
     function rootTile(o, d) { return null; }
+    function slotToggleShowDesktop() {}
 }
