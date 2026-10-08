@@ -18,7 +18,7 @@
 %endif
 
 Name:           plasma-fusion
-Version:        0.3.0
+Version:        0.3.1
 Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
@@ -415,6 +415,9 @@ done
 %endif
 
 %changelog
+* Tue Oct 06 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.3.1-1
+- Calendar tiles keep the live date correct after suspend
+
 * Tue Oct 06 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.3.0-1
 - Settings module sections for icons and lock/login, greeter wallpaper
   treatment, Calendar tile and dock fixes, Plasma 6.8 support
