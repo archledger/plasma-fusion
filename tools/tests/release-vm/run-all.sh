@@ -15,9 +15,21 @@ H=${PF_VM_HOME:-$HOME/pf-vm}
 # PF_PUBLIC=1 (vmtest.sh): the public channels, nothing to serve.
 [ "${PF_PUBLIC:-}" = 1 ] ||
   bash "$HERE/channels.sh" </dev/null >"$H/channels.log" 2>&1 || { echo "channels.sh failed (see $H/channels.log)" >&2; exit 1; }
+failed=0
 for vm in "$@"; do
   name=${vm%%:*} lane=${vm#*:}
-  [ -d "$H/vms/$name" ] || { echo "$(date -u +%T) $name: no VM (provision.sh)" | tee -a "$H/run-all.log"; continue; }
-  bash "$HERE/vmtest.sh" "$name" "$lane"
+  [ -d "$H/vms/$name" ] || { echo "$(date -u +%T) $name: no VM (provision.sh)" | tee -a "$H/run-all.log"; [ "$failed" != 0 ] || failed=1; continue; }
+  rc=0
+  bash "$HERE/vmtest.sh" "$name" "$lane" || rc=$?
+  [ "$rc" = 0 ] || { [ "$failed" != 0 ] || failed=$rc; }
+  if [ ! -f "$H/results/$name/steps.log" ]; then
+    echo "$(date -u +%T) $name: missing result log" | tee -a "$H/run-all.log"
+    [ "$failed" != 0 ] || failed=1
+    continue
+  fi
+  if grep -q 'FAIL' "$H/results/$name/steps.log"; then
+    [ "$failed" != 0 ] || failed=1
+  fi
   echo "$(date -u +%T) $name: $(grep -E 'FAIL' "$H/results/$name/steps.log" | head -n 1 || true)$(tail -n 1 "$H/results/$name/steps.log")" | tee -a "$H/run-all.log"
 done
+exit "$failed"

@@ -10,7 +10,7 @@
   <kcfgfile name=""/>
   <group name="">
     <entry name="Gap" type="Int">
-      <label>Gap in pixels between snapped windows and at the screen edges</label>
+      <label>Gap in pixels between snapped windows (no gap at work-area edges)</label>
       <default>6</default>
       <min>0</min>
       <max>48</max>

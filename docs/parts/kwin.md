@@ -101,7 +101,7 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 
 | Group / key | Default | Meaning |
 |---|---|---|
-| `[Script-plasmafusion-snap] Gap` | 6 | px between snapped windows and at the work-area edges (0-48) |
+| `[Script-plasmafusion-snap] Gap` | 6 | logical px between snapped windows (0-48); no gap at work-area edges |
 | `[Script-plasmafusion-snap] QuickTileGaps` | true | apply the gap to KWin's quick tiles (edge snapping, Meta+arrow, Meta+Z halves/quarters) |
 | `[Script-plasmafusion-snap] FillOtherHalf` | true | offer the other windows after a window is snapped to a half |
 | `[Script-plasmafusion-snap] PairWindows` | true | windows placed side by side through the picker minimise/restore/raise together |
@@ -182,15 +182,25 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   window that already sits in that quick tile (e.g. 2:1 then halves) also offers the picker.
 - Pairs (windows placed through the picker): minimising one minimises the other, restoring one
   restores the other, activating one raises the other. A pair ends when either leaves its half.
-- Gaps: the script sets the quick-tile root's padding to the gap (6 px): 6 px between halves and
-  quarters and 6 px from the work-area edges, the same look as the Meta+T custom zones.
+- Gaps: 6 px between halves and quarters, with the outer edges flush to the work area (panels
+  remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
+  native quick-tile padding at the configured gap and fills only each window's outer edges
+  after KWin settles. Native padding keeps the inner gap and pointer compensation during split
+  resizing; the outer-edge correction runs during resizing too. Work-area endpoints clamp odd
+  trailing tiles that KWin rounds one pixel too wide or tall. Tile membership, shared splits and
+  restoration on drag remain native.
+  The picker uses the same inner-gap geometry. Meta+T custom zones retain their own padding.
 
 ### Snap-zone outline
 
 `outline.qml` replaces KWin's outline: rounded rectangle radius 14, fill rgba(91,157,255,.28) with a
 2 px #5b9dff edge (light scheme: rgba(47,111,223,.20) / #2f6fdf; other accents follow the accent).
 It fades in after 150 ms (TabsSnap "after the pointer rests at the edge for 150 ms") and glides
-from the window to the zone. Zones that touch the work-area edge are drawn 6 px inset.
+from the window to the zone. It draws the supplied geometry without an extra edge inset:
+Meta+Z supplies its gap-aware target; a native padded quick-tile preview is expanded to the same
+filled outer edges. The outline window's bounds include that expanded target. Matching custom
+tiles keep their native preview: the outline API exposes geometry, not the tiling mode, so a
+custom zone with exactly the same shape as a quick tile is kept native rather than guessed.
 
 ### Attached dialogs
 
@@ -213,6 +223,12 @@ Offline (laptop):
   against the board render: card 170,268 1100x316 (board 170,268 1100x316), tabs, rows, key caps
   within 1-2 px (`tests/compare.py` for side-by-sides). Edge cases rendered: 30 windows (scrolls to
   the selection), 0 windows, 2 windows, all windows on another workspace.
+- `QT_QPA_PLATFORM=offscreen dbus-run-session
+  --config-file=packages/kwin/tests/offscreen/session-bus.conf -- python3
+  packages/kwin/tests/offscreen/snaptest.py STAGE_HOME` loads the built snap script and outline
+  in Qt. It checks flush outer edges, inner gaps, thirds/portrait rows, offset/odd work areas,
+  picker geometry, existing tiled windows, native geometry updates, shared-split resize and
+  leaving an interactive move or tile. Build the stage with `STAGE=STAGE_HOME tools/build.sh kwin`.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -509,4 +525,3 @@ Private sessions on the ThinkPad (seed from `fusion-config.sh --install`):
 - Touchpad swipes cannot be produced in a private session: hand check at DEPLOY-1 (also that
   KWin's own three-finger vertical gesture does nothing visible with one desktop row).
 - The 6 px strip between a snapped half and the picker shows the windows under it (as before).
-

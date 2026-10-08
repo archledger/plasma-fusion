@@ -16,6 +16,26 @@ OUT=$H/results/$name
 rm -rf "$OUT" && mkdir -p "$OUT"
 vm() { bash "$HERE/vm.sh" "$@"; }
 log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" | tee -a "$OUT/steps.log"; }
+cleanup_vm() {
+  local status=$1 disk=$H/vms/$name/run.qcow2
+  trap - EXIT
+  if ! vm stop "$name" >/dev/null; then
+    log "FAIL: could not stop the VM during cleanup"
+    exit 1
+  fi
+  if [ -f "$disk" ]; then
+    if [ "$status" = 0 ]; then
+      rm -f "$disk"
+    else
+      local saved
+      saved=$H/vms/$name/failed-run-$(date -u +%Y%m%dT%H%M%S)-$$.qcow2
+      mv "$disk" "$saved" || { log "FAIL: could not preserve failed overlay"; exit 1; }
+      log "failed overlay preserved: $saved"
+    fi
+  fi
+  [ "$status" != 0 ] || log "done $name"
+  exit "$status"
+}
 # insession CMD: run CMD as pf with the environment of pf's plasmashell (the tty1 session).
 insession() {
   vm ssh "$name" "pid=\$(pgrep -u pf -x 'plasmashell|\.plasmashell-wr' | head -n 1); [ -n \"\$pid\" ] || { echo 'no plasmashell'; exit 97; }
@@ -54,9 +74,18 @@ relogin() {
 shot() { vm shot "$name" "$OUT/$1.png" >/dev/null && log "screenshot $1"; }
 
 log "start $name ($lane)"
-vm start "$name" run >/dev/null && vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
+vm start "$name" run >/dev/null || { log "FAIL: the VM did not start"; exit 1; }
+trap 'cleanup_vm $?' EXIT
+vm wait "$name" >/dev/null || { log "FAIL: the VM did not come up"; exit 1; }
 # Crash reports everywhere (Debian and Ubuntu do not install systemd-coredump by default).
-case $lane in ppa | deb) vm ssh "$name" 'command -v coredumpctl >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd-coredump >/dev/null 2>&1' ;; esac
+case $lane in
+  ppa | deb)
+    vm ssh "$name" 'command -v coredumpctl >/dev/null || {
+      sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get update -q &&
+      sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install -y -q systemd-coredump;
+    }' || { log "FAIL: could not prepare crash collector"; exit 1; }
+    ;;
+esac
 # No dimming, screen off or suspend in the test sessions (from the next login on).
 vm ssh "$name" 'mkdir -p ~/.config && printf "[AC][Display]\nDimDisplayWhenIdle=false\nTurnOffDisplayWhenIdle=false\n\n[AC][SuspendAndShutdown]\nAutoSuspendAction=0\n" >~/.config/powerdevilrc'
 
@@ -93,23 +122,26 @@ case $lane_env in
        env="${env/PLASMA_FUSION_DEV_VERSION=$PF_VER/PLASMA_FUSION_DEV_VERSION=$snap}"
        env="$env PLASMA_FUSION_DEV_RELEASE_BASE=http://10.0.2.2:8088/release PLASMA_FUSION_DEV_KEY=\$HOME/test-key.asc PLASMA_FUSION_DEV_KEY_FP=$(cat "$C/test-key.fp")" ;;
   aur)
-    vm ssh "$name" 'mkdir -p ~/aur && cd ~/aur && curl -fsS -O http://10.0.2.2:8088/arch/PKGBUILD && t=$(curl -fsS http://10.0.2.2:8088/arch/ | grep -o "plasma-fusion-[0-9.]*\.tar\.gz" | head -n 1) && curl -fsS -O "http://10.0.2.2:8088/arch/$t" && sed -i -e "s|^source=.*|source=(\"$t\")|" -e "/^validpgpkeys=/d" PKGBUILD && sudo pacman -S --needed --noconfirm base-devel git >/dev/null'
+    vm ssh "$name" 'mkdir -p ~/aur && cd ~/aur && curl -fsS -O http://10.0.2.2:8088/arch/PKGBUILD && t=$(curl -fsS http://10.0.2.2:8088/arch/ | grep -o "plasma-fusion-[0-9.]*\.tar\.gz" | head -n 1) && curl -fsS -O "http://10.0.2.2:8088/arch/$t" && sed -i -e "s|^source=.*|source=(\"$t\")|" -e "/^validpgpkeys=/d" PKGBUILD && sudo pacman -Syu --needed --noconfirm base-devel git && command -v debugedit && command -v fakeroot' \
+      || { log "FAIL: could not prepare AUR build prerequisites"; exit 1; }
     env="$env PLASMA_FUSION_DEV_AUR_SRC=\$HOME/aur" ;;
 esac
 log "installer: dry run"
 insession "env $env sh ~/install.sh --dry-run" >"$OUT/10-dry-run.log" 2>&1
-log "  rc=$? $(grep -c . "$OUT/10-dry-run.log") lines"
+rc=$?
+log "  rc=$rc $(grep -c . "$OUT/10-dry-run.log") lines"
+[ "$rc" = 0 ] || { log "FAIL: dry run"; exit "$rc"; }
 log "installer: install"
 if [ "$lane" = nix ]; then
   # NixOS: the installer prints the configuration lines (the image has the module already); the
   # per-user step is the packaged command.
-  insession "env $env sh ~/install.sh --yes; plasma-fusion setup" >"$OUT/11-install.log" 2>&1
+  insession "env $env sh ~/install.sh --yes && plasma-fusion setup" >"$OUT/11-install.log" 2>&1
 else
   insession "env $env sh ~/install.sh --yes" >"$OUT/11-install.log" 2>&1
 fi
 rc=$?
 log "  rc=$rc"
-[ "$rc" = 0 ] || { log "FAIL: install"; tail -30 "$OUT/11-install.log"; }
+[ "$rc" = 0 ] || { log "FAIL: install"; tail -30 "$OUT/11-install.log"; exit "$rc"; }
 insession "plasma-fusion status" >"$OUT/12-status.log" 2>&1
 log "status: $(head -n 1 "$OUT/12-status.log")"
 shot 13-after-setup
@@ -129,12 +161,19 @@ sleep 4
 insession "plasma-fusion status" >"$OUT/23-status-after-login.log" 2>&1
 vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log; echo; coredumpctl list --no-pager --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>&1 | tail -n 5; echo; journalctl --user -b --no-pager -p err 2>/dev/null | grep -iE "plasma-?fusion|plasmafusion" | tail -n 20' >"$OUT/24-logs.log" 2>&1
 # Crashes of this boot only (the provisioned base keeps the journal of its own boots).
-log "crashes: $(vm ssh "$name" 'coredumpctl list --no-pager --no-legend --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>/dev/null | wc -l')"
+# A missing/failed collector is not zero crashes: abort the gate instead of hiding its status
+# behind wc (Ubuntu's failed collector installation previously produced a false zero).
+crashes=$(vm ssh "$name" 'python3 -' <"$HERE/crash-count.py") \
+  || { log "FAIL: crash collector unavailable or failed"; exit 1; }
+log "crashes: $crashes"
+[ "$crashes" = 0 ] || { log "FAIL: crashes found"; exit 1; }
 
 # PF_AFTER_LOGIN: a check of the change under test, run in the session; output in 25-after-login.log.
 if [ -n "${PF_AFTER_LOGIN:-}" ]; then
-  insession "$PF_AFTER_LOGIN" >"$OUT/25-after-login.log" 2>&1
-  log "after-login check rc=$?: $(tail -n 1 "$OUT/25-after-login.log")"
+  hook_rc=0
+  insession "$PF_AFTER_LOGIN" >"$OUT/25-after-login.log" 2>&1 || hook_rc=$?
+  log "after-login check rc=$hook_rc: $(tail -n 1 "$OUT/25-after-login.log")"
+  [ "$hook_rc" = 0 ] || { log "FAIL: after-login check"; exit "$hook_rc"; }
 fi
 
 log "installer: uninstall"
@@ -143,11 +182,14 @@ if [ "$lane" = nix ]; then
 else
   insession "env $env sh ~/install.sh uninstall --yes" >"$OUT/30-uninstall.log" 2>&1
 fi
-log "  rc=$?"
+rc=$?
+log "  rc=$rc"
+[ "$rc" = 0 ] || { log "FAIL: uninstall"; exit "$rc"; }
 relogin
 shot 31-restored
 vm ssh "$name" '(rpm -qa 2>/dev/null; pacman -Qq 2>/dev/null; dpkg-query -W -f "\${db:Status-Abbrev} \${Package}\n" 2>/dev/null | awk "\$1 == \"ii\" {print \$2}") | grep "^plasma-fusion" || echo "no plasma-fusion package"; grep -h LookAndFeelPackage ~/.config/kdeglobals' >"$OUT/32-after-uninstall.txt" 2>&1
 log "after uninstall: $(tr '\n' ' ' <"$OUT/32-after-uninstall.txt")"
-vm stop "$name" >/dev/null
-rm -f "$H/vms/$name/run.qcow2"
-log "done $name"
+final_crashes=$(vm ssh "$name" 'python3 -' <"$HERE/crash-count.py") \
+  || { log "FAIL: final crash collector unavailable or failed"; exit 1; }
+log "final crashes: $final_crashes"
+[ "$final_crashes" = 0 ] || { log "FAIL: crashes found after restore"; exit 1; }

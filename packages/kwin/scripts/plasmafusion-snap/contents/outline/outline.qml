@@ -10,6 +10,8 @@ import QtQuick.Window
 import QtQuick.Window as QtQuickWindow
 import org.kde.kirigami as Kirigami
 import org.kde.kwin
+import org.kde.plasma.plasma5support as P5Support
+import "../ui/SnapGeometry.js" as SnapGeometry
 
 // Snap-zone preview for KWin's outline (kwinrc [Outline] QmlPath=
 // kwin/scripts/plasmafusion-snap/contents/outline/outline.qml). TabsSnap board "Drag to snap":
@@ -21,7 +23,6 @@ import org.kde.kwin
 QtQuickWindow.Window {
     id: window
 
-    readonly property int gap: 6
     readonly property bool dark: {
         const c = Kirigami.Theme.backgroundColor;
         return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) < 0.5;
@@ -34,6 +35,39 @@ QtQuickWindow.Window {
         ? (dark ? Qt.rgba(91 / 255, 157 / 255, 1, 0.28) : Qt.rgba(47 / 255, 111 / 255, 223 / 255, 0.20))
         : Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.28 : 0.20)
     property bool animated: false
+    property var quickRoots: ({})
+    property rect targetGeometry: outline.geometry
+    property real configuredGap: 6
+    property bool quickGaps: true
+    property bool settingsLoaded: false
+    readonly property real innerGap: quickGaps ? configuredGap : 0
+    // kreadconfig's boolean mode reports through its exit status, not stdout.
+    readonly property string configCommand: "if kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key QuickTileGaps --type bool --default true; "
+        + "then printf 'true\\n'; else printf 'false\\n'; fi; "
+        + "kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap --default 6"
+
+    function readSettings() {
+        configReader.connectSource(configCommand);
+    }
+    function applySettings(text) {
+        const values = String(text).trim().split("\n");
+        const value = Number(values[1]);
+        quickGaps = String(values[0]).trim() === "true";
+        configuredGap = Math.max(0, Math.min(48, isNaN(value) ? 6 : value));
+        if (visible) place(outline.geometry, false);
+    }
+    P5Support.DataSource {
+        id: configReader
+        engine: "executable"
+        onNewData: (sourceName, data) => {
+            disconnectSource(sourceName);
+            if (Number(data["exit code"]) === 0) {
+                window.applySettings(data["stdout"] || "");
+                window.settingsLoaded = true;
+            }
+        }
+    }
+    Component.onCompleted: readSettings()
 
     Kirigami.Theme.colorSet: Kirigami.Theme.Window
     Kirigami.Theme.inherit: false
@@ -41,10 +75,12 @@ QtQuickWindow.Window {
     flags: Qt.BypassWindowManagerHint | Qt.FramelessWindowHint
     color: "transparent"
 
-    x: outline.unifiedGeometry.x
-    y: outline.unifiedGeometry.y
-    width: Math.max(1, outline.unifiedGeometry.width)
-    height: Math.max(1, outline.unifiedGeometry.height)
+    x: Math.min(outline.unifiedGeometry.x, targetGeometry.x)
+    y: Math.min(outline.unifiedGeometry.y, targetGeometry.y)
+    width: Math.max(1, Math.max(outline.unifiedGeometry.x + outline.unifiedGeometry.width,
+        targetGeometry.x + targetGeometry.width) - x)
+    height: Math.max(1, Math.max(outline.unifiedGeometry.y + outline.unifiedGeometry.height,
+        targetGeometry.y + targetGeometry.height) - y)
 
     visible: outline.active
 
@@ -52,31 +88,91 @@ QtQuickWindow.Window {
         console.warn("plasmafusion outline: scene graph error:", message);
     }
 
-    // Zones that touch the work area's edge are drawn inset, like the board's zones.
-    function inset(geometry) {
-        let area = null;
-        try {
-            area = Workspace.clientArea(Workspace.MaximizeArea,
-                                        Workspace.screenAt(Qt.point(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2)),
-                                        Workspace.currentDesktop);
-        } catch (e) {
-            area = null;
+    function rememberRoots() {
+        for (const win of Workspace.stackingOrder) {
+            const tile = win ? win.tile : null;
+            if (!tile || !tile.parent || tile.parent.parent || !win.output) continue;
+            const desktop = !win.onAllDesktops && win.desktops.length ? win.desktops[0]
+                : Workspace.currentDesktopForScreen(win.output) || Workspace.currentDesktop;
+            const root = tile.parent;
+            if (root.tiles.length === 8 && root !== Workspace.rootTile(win.output, desktop)) {
+                quickRoots[win.output.name + "|" + (desktop ? desktop.id : "?")] = {root: root, output: win.output.name};
+            }
         }
-        if (!area) {
-            return geometry;
-        }
-        const l = Math.abs(geometry.x - area.x) < 1 ? gap : 0;
-        const t = Math.abs(geometry.y - area.y) < 1 ? gap : 0;
-        const r = Math.abs(geometry.x + geometry.width - area.x - area.width) < 1 ? gap : 0;
-        const b = Math.abs(geometry.y + geometry.height - area.y - area.height) < 1 ? gap : 0;
-        return Qt.rect(geometry.x + l, geometry.y + t, geometry.width - l - r, geometry.height - t - b);
     }
 
-    function place(geometry, animate) {
-        const g = inset(geometry);
+    function equalRect(a, b) {
+        return Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1
+            && Math.abs(a.width - b.width) <= 1 && Math.abs(a.height - b.height) <= 1;
+    }
+
+    function customMatches(tile, geometry, area) {
+        if (!tile) return false;
+        if (tile.tiles.length) {
+            for (const child of tile.tiles) {
+                if (customMatches(child, geometry, area)) return true;
+            }
+            return false;
+        }
+        return equalRect(SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, tile.padding, area, false), geometry);
+    }
+
+    function previewRect(geometry) {
+        const output = Workspace.screenAt(Qt.point(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2));
+        if (!output) return geometry;
+        const desktop = Workspace.currentDesktopForScreen(output) || Workspace.currentDesktop;
+        const area = Workspace.clientArea(Workspace.MaximizeArea, output, desktop);
+        // The outline API supplies geometry, not the tiling mode. Preserve a matching custom
+        // tile's preview when its shape coincides with a quick tile (e.g. custom 50/50 zones).
+        if (customMatches(Workspace.rootTile(output, desktop), geometry, area)) return geometry;
+        const key = output.name + "|" + (desktop ? desktop.id : "?");
+        const record = quickRoots[key];
+        if (record) {
+            try {
+                for (const tile of record.root.tiles) {
+                    if (!tile.absoluteGeometry || !tile.relativeGeometry) continue;
+                    const native = SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, tile.padding, area, false);
+                    if (equalRect(native, geometry)) {
+                    const filled = SnapGeometry.tileRect(tile.absoluteGeometry, tile.relativeGeometry, innerGap, area, true);
+                        return Qt.rect(filled.x, filled.y, filled.width, filled.height);
+                    }
+                }
+            } catch (e) {
+                delete quickRoots[key]; // this screen/desktop's native tiles were removed
+            }
+        }
+        // With no tiled windows the native root is inaccessible. Empty quick-tile roots reset
+        // to halves/quarters; recognize their padded geometry before the first window joins.
+        // Infer current native padding from an outer edge: it may still be zero or reflect a
+        // previous setting. The resulting preview uses the configured gap of the snap script.
+        const padding = Math.max(0, Math.min(geometry.x - area.x, geometry.y - area.y,
+            area.x + area.width - geometry.x - geometry.width,
+            area.y + area.height - geometry.y - geometry.height));
+        if (padding <= 48) {
+            const zones = [Qt.rect(0, 0, 0.5, 1), Qt.rect(0.5, 0, 0.5, 1),
+                Qt.rect(0, 0, 1, 0.5), Qt.rect(0, 0.5, 1, 0.5),
+                Qt.rect(0, 0, 0.5, 0.5), Qt.rect(0.5, 0, 0.5, 0.5),
+                Qt.rect(0, 0.5, 0.5, 0.5), Qt.rect(0.5, 0.5, 0.5, 0.5)];
+            for (const relative of zones) {
+                const absolute = Qt.rect(Math.round(area.x + relative.x * area.width),
+                    Math.round(area.y + relative.y * area.height), Math.round(relative.width * area.width),
+                    Math.round(relative.height * area.height));
+                if (equalRect(SnapGeometry.tileRect(absolute, relative, padding, area, false), geometry)) {
+                    const filled = SnapGeometry.tileRect(absolute, relative, innerGap, area, true);
+                    return Qt.rect(filled.x, filled.y, filled.width, filled.height);
+                }
+            }
+        }
+        return geometry; // Meta+Z already supplies the filled target; unknown outlines stay native
+    }
+
+    function place(geometry, animate, parentGeometry) {
+        rememberRoots();
+        targetGeometry = previewRect(outline.geometry);
+        const g = parentGeometry ? geometry : previewRect(geometry);
         window.animated = animate;
-        zone.x = g.x - outline.unifiedGeometry.x;
-        zone.y = g.y - outline.unifiedGeometry.y;
+        zone.x = g.x - window.x;
+        zone.y = g.y - window.y;
         zone.width = g.width;
         zone.height = g.height;
         window.animated = true;
@@ -84,10 +180,11 @@ QtQuickWindow.Window {
 
     onVisibleChanged: {
         if (visible) {
+            readSettings();
             appear.stop();
             zone.opacity = 0;
             if (outline.visualParentGeometry.width > 0 && outline.visualParentGeometry.height > 0) {
-                place(outline.visualParentGeometry, false);
+                place(outline.visualParentGeometry, false, true);
                 place(outline.geometry, true);
             } else {
                 place(outline.geometry, false);
@@ -110,6 +207,12 @@ QtQuickWindow.Window {
             if (window.visible) {
                 window.place(outline.geometry, false);
             }
+        }
+    }
+    Connections {
+        target: Workspace.activeWindow
+        function onTileChanged() {
+            window.rememberRoots();
         }
     }
 
