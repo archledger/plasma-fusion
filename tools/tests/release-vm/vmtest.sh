@@ -129,7 +129,12 @@ sleep 4
 insession "plasma-fusion status" >"$OUT/23-status-after-login.log" 2>&1
 vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log; echo; coredumpctl list --no-pager --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>&1 | tail -n 5; echo; journalctl --user -b --no-pager -p err 2>/dev/null | grep -iE "plasma-?fusion|plasmafusion" | tail -n 20' >"$OUT/24-logs.log" 2>&1
 # Crashes of this boot only (the provisioned base keeps the journal of its own boots).
-log "crashes: $(vm ssh "$name" 'coredumpctl list --no-pager --no-legend --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>/dev/null | wc -l')"
+# A missing/failed collector is not zero crashes: abort the gate instead of hiding its status
+# behind wc (Ubuntu's failed collector installation previously produced a false zero).
+crashes=$(vm ssh "$name" 'python3 -' <"$HERE/crash-count.py") \
+  || { log "FAIL: crash collector unavailable or failed"; exit 1; }
+log "crashes: $crashes"
+[ "$crashes" = 0 ] || { log "FAIL: crashes found"; exit 1; }
 
 # PF_AFTER_LOGIN: a check of the change under test, run in the session; output in 25-after-login.log.
 if [ -n "${PF_AFTER_LOGIN:-}" ]; then

@@ -44,7 +44,8 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           # The shared part's build requirements (the compiled parts build in compiled.yml).
           dnf builddep -y -q --without compiled packaging/fedora/plasma-fusion.spec
-          dnf install -y -q nodejs ShellCheck desktop-file-utils kf6-kconfig glib2 python3-gobject gtk3 gtk4
+          dnf install -y -q nodejs ShellCheck desktop-file-utils kf6-kconfig glib2 python3-gobject gtk3 gtk4 \
+            dbus-daemon libplasma kf6-kirigami plasma5support
 
       - name: Lint self-tests
         run: tools/checks/tests/run.sh
@@ -52,8 +53,19 @@ jobs:
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
 
+      - name: VM crash collector unit tests
+        run: python3 tools/tests/release-vm/test-crash-count.py
+
       - name: One version everywhere (VERSION, spec, PKGBUILD, Debian changelog)
         run: packaging/check-version.sh
+
+      - name: Snap geometry regression tests (offscreen Qt)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/snap-stage" tools/build.sh kwin
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/kwin/tests/offscreen/snaptest.py "$RUNNER_TEMP/snap-stage"
 
       - name: Build the RPM (tools/build.sh, %check, rpmlint)
         run: packaging/build-rpm.sh --topdir "$GITHUB_WORKSPACE/build/rpmbuild"
