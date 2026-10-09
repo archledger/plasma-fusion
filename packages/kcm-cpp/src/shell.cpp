@@ -246,8 +246,18 @@ if (main === null) {
         }
     }
 }
+// A shortcut held by quick settings in a removed bar moves to the main bar's quick settings.
+var mainQs = main !== null ? main.widgets("org.plasmafusion.quicksettings") : [];
 for (var i = 0; main !== null && i < tops.length; ++i) {
     if (tops[i].id !== main.id && tops[i].screen !== main.screen) {
+        var qs = tops[i].widgets("org.plasmafusion.quicksettings");
+        for (var j = 0; j < qs.length; ++j) {
+            var key = String(qs[j].globalShortcut || "");
+            if (key !== "" && mainQs.length > 0 && String(mainQs[0].globalShortcut || "") === "") {
+                qs[j].globalShortcut = "";
+                mainQs[0].globalShortcut = key;
+            }
+        }
         tops[i].remove();
         ++removed;
     }

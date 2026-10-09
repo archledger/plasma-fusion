@@ -809,16 +809,26 @@ shortcut_claim() {
 # $1 plugin, $2 Qt key code, $3 key text, $4 label, $5 REPLACE key text or "", $6 claim|free
 ensure_widget_shortcut() {
   local plugin=$1 code=$2 text=$3 label=$4 replace=${5:-} mode=${6:-free} found entry id cur free released old comp action
+  # Lowest screen first: the key goes to the widget of the main bar only (quick settings is in
+  # every screen's top bar; a removed bar would take the key with it).
   found=$(plasmashell_eval "
 var out = [], ps = panels();
 for (var i = 0; i < ps.length; i++) {
     var ws = ps[i].widgets(\"$plugin\");
-    for (var j = 0; j < ws.length; j++) out.push(ws[j].id + \"=\" + ws[j].globalShortcut);
+    for (var j = 0; j < ws.length; j++) out.push((ps[i].screen < 0 ? 999 : ps[i].screen) + \":\" + ws[j].id + \"=\" + ws[j].globalShortcut);
 }
+out.sort(function (a, b) { return parseInt(a, 10) - parseInt(b, 10); });
 print(out.join(\" \"));" || true)
   [ -n "$found" ] || { note "$label: widget not in a panel (no shortcut set)"; return 0; }
+  local first=1
   for entry in $found; do
+    entry=${entry#*:}
     id=${entry%%=*} cur=${entry#*=}
+    if [ "$first" = 0 ]; then
+      note "$label widget $id: another screen's bar (the shortcut stays with the main one)"
+      continue
+    fi
+    first=0
     if [ "$cur" = "$text" ]; then
       note "$label widget $id shortcut = $text (unchanged)"
       continue
