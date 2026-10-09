@@ -289,7 +289,10 @@ ColumnLayout {
                 Accessible.name: i18nc("@label:slider", "Volume")
                 to: page.backend.audio.maximum
                 value: Math.min(to, page.backend.audio.volume)
-                onMoved: page.backend.audio.setVolume(value)
+                // Beyond the slider's end (raised elsewhere above the limit), a wheel or key step goes
+                // from the real volume: 140 % steps down to 135 %, not to 95 %.
+                onMoved: page.backend.audio.setVolume(lastStep !== 0 && page.backend.audio.volume > to
+                                                      ? page.backend.audio.volume + lastStep : value)
                 onDraggingChanged: {
                     if (!dragging) {
                         value = Qt.binding(() => Math.min(to, page.backend.audio.volume));
@@ -341,7 +344,8 @@ ColumnLayout {
                 Accessible.name: i18nc("@label:slider", "Microphone volume")
                 to: page.backend.audio.maximum
                 value: page.backend.audio.inputVolume
-                onMoved: page.backend.audio.setInputVolume(value)
+                onMoved: page.backend.audio.setInputVolume(lastStep !== 0 && page.backend.audio.inputVolume > to
+                                                           ? page.backend.audio.inputVolume + lastStep : value)
                 onDraggingChanged: if (!dragging) { value = Qt.binding(() => page.backend.audio.inputVolume); }
             }
             IconButton {

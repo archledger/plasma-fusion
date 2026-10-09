@@ -26,12 +26,31 @@ T.Slider {
     implicitHeight: bar ? 44 : Math.max(28, knobSize)
     wheelEnabled: false
 
+    // The last wheel or key step (signed), 0 for a pointer press or drag: an owner whose model can
+    // be beyond `to` (a volume raised elsewhere) applies the step to the model's value instead.
+    property real lastStep: 0
+    function step(delta: real): void {
+        const next = Math.max(slider.from, Math.min(slider.to, slider.value + delta));
+        lastStep = delta;
+        if (next !== slider.value) {
+            slider.value = next;
+            slider.moved();
+        }
+    }
+    onPressedChanged: if (pressed) lastStep = 0
+
     Keys.onPressed: event => {
+        let delta = 0;
         if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
             // At least one step: a slider of a few levels (keyboard backlight) moves by one.
-            const step = (event.key === Qt.Key_PageUp ? 1 : -1) * Math.max(slider.stepSize, 0.1);
-            slider.value = Math.max(slider.from, Math.min(slider.to, slider.value + step));
-            slider.moved();
+            delta = (event.key === Qt.Key_PageUp ? 1 : -1) * Math.max(slider.stepSize, 0.1);
+        } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Up) {
+            delta = slider.stepSize > 0 ? slider.stepSize : 0.01;
+        } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Down) {
+            delta = -(slider.stepSize > 0 ? slider.stepSize : 0.01);
+        }
+        if (delta !== 0) {
+            slider.step(delta);
             event.accepted = true;
         }
     }
@@ -40,10 +59,8 @@ T.Slider {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: event => {
             const delta = (event.angleDelta.y || -event.angleDelta.x) * (event.inverted ? -1 : 1);
-            const next = Math.max(slider.from, Math.min(slider.to, slider.value + (delta / 120) * Math.max(slider.stepSize, 0.05)));
-            if (next !== slider.value) {
-                slider.value = next;
-                slider.moved();
+            if (delta !== 0) {
+                slider.step((delta / 120) * Math.max(slider.stepSize, 0.05));
             }
         }
     }

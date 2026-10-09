@@ -76,7 +76,12 @@ ColumnLayout {
                         to: streams.backend.audio.maximum
                         value: row.stream ? row.stream.volume / streams.backend.audio.normal : 0
                         Accessible.name: i18nc("@label:slider", "Application volume")
-                        onMoved: streams.backend.audio.setStreamVolume(row.stream, value)
+                        // A stream raised above the slider's end elsewhere: wheel and key steps go from its
+                        // real volume.
+                        onMoved: {
+                            const real = row.stream ? row.stream.volume / streams.backend.audio.normal : 0;
+                            streams.backend.audio.setStreamVolume(row.stream, lastStep !== 0 && real > to ? real + lastStep : value);
+                        }
                         onDraggingChanged: if (!dragging) {
                             value = Qt.binding(() => row.stream ? row.stream.volume / streams.backend.audio.normal : 0);
                         }
