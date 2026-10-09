@@ -10,7 +10,8 @@ import QtQuick.Shapes
 
 // One app in the dock: its tile (the Fusion icon, or any other icon on a neutral Fusion tile,
 // FusionIconTile) over a soft drop shadow, the running dot or active pill under it, an unread
-// count or progress ring (Unity LauncherEntry, GAPS G17) and, when the app asks for attention,
+// count or progress ring (Unity LauncherEntry, GAPS G17), an audio indicator while the app plays
+// sound or is muted (a click on it mutes or unmutes the app) and, when the app asks for attention,
 // one short bounce next to the orange dot (G26). Calendar apps show today's date on their tile.
 //
 // The item keeps its rest size (`iconSize`) and rest position. Magnification never changes a
@@ -69,6 +70,47 @@ Item {
     readonly property int unityCount: entry !== null && entry.countVisible === true ? Math.max(0, Math.round(entry.count || 0)) : 0
     readonly property int badgeCount: Math.max(unityCount, notificationCount)
     readonly property real progress: entry !== null && entry.progressVisible === true ? Math.max(0, Math.min(1, entry.progress || 0)) : -1
+
+    // Audio (AudioStreams.qml; null without plasma-pa): the app's streams. As in the stock task
+    // manager, the indicator shows a playing app after 2 s (no flash for short sounds) and a
+    // muted one at once.
+    property QtObject audio: null
+    property var audioStreams: []
+    readonly property bool playingAudio: audioStreams.some(s => !s.corked)
+    readonly property bool muted: audioStreams.length > 0 && audioStreams.every(s => s.muted)
+    readonly property bool audioShown: muted || (playingAudio && audioDelay.passed)
+    readonly property int appPid: model.AppPid ?? 0
+    function updateAudioStreams(): void {
+        audioStreams = audio && isRunning ? audio.streamsFor(iconName, appPid, String(model.AppName ?? "")) : [];
+    }
+    // Mutes every stream of the app, or unmutes them all when all are muted.
+    function toggleMuted(): void {
+        const on = !muted;
+        for (const s of audioStreams) {
+            s.setMuted(on);
+        }
+    }
+    function hitsAudioBadge(x: real, y: real): bool {
+        const p = audioBadge.mapFromItem(mouse, x, y);
+        return audioShown && p.x >= -4 && p.y >= -4 && p.x <= audioBadge.width + 4 && p.y <= audioBadge.height + 4;
+    }
+    onAudioChanged: updateAudioStreams()
+    onAppPidChanged: updateAudioStreams()
+    onIsRunningChanged: updateAudioStreams()
+    onPlayingAudioChanged: if (!playingAudio) audioDelay.passed = false
+    Connections {
+        target: task.audio
+        function onStreamsChanged(): void {
+            task.updateAudioStreams();
+        }
+    }
+    Timer {
+        id: audioDelay
+        property bool passed: false
+        interval: 2000
+        running: task.playingAudio && !passed
+        onTriggered: passed = true
+    }
     // Set by the dock, which knows from its magnification which icon is under the pointer; the
     // item's own MouseArea does not track hover (one hover pass per pointer event for the whole
     // dock instead of one per item).
@@ -76,6 +118,7 @@ Item {
     readonly property alias pressed: mouse.pressed
     readonly property alias mouseArea: mouse
     readonly property alias iconItem: iconBox
+    readonly property alias audioBadge: audioBadge
     readonly property real iconTop: iconBox.y
     readonly property real magnification: (iconSize + grow) / iconSize
 
@@ -250,6 +293,39 @@ Item {
                 font.weight: Font.ExtraBold
                 font.features: { "tnum": 1 }
                 textFormat: Text.PlainText
+            }
+        }
+
+        // Audio: a playing or muted app, on the progress ring's disc in the icon's top-left corner
+        // (the count and progress use the right one). A click on it mutes or unmutes (the
+        // MouseArea). Inside the icon, not over its edge like the count: the dock tracks the
+        // pointer only up to 10 px above the resting icons, and a magnified icon rises past that;
+        // here the disc's centre stays below it at every magnified size (48-72 px).
+        Rectangle {
+            id: audioBadge
+            x: 2
+            y: 2
+            width: 20
+            height: 20
+            radius: 10
+            color: task.pal.progressDisc
+            opacity: task.audioShown ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity {
+                enabled: task.motion.animate
+                NumberAnimation { duration: task.motion.toggle }
+            }
+            Accessible.role: Accessible.Button
+            Accessible.checkable: true
+            Accessible.checked: task.muted
+            Accessible.name: task.muted ? i18nc("@action:button", "Unmute %1", task.name) : i18nc("@action:button", "Mute %1", task.name)
+            Accessible.onPressAction: task.toggleMuted()
+            Glyph {
+                anchors.centerIn: parent
+                size: 14
+                // Quick settings' speaker glyphs (Icons.js speaker + wave1 / muteCross).
+                path: task.muted ? "M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6" : "M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6"
+                color: task.pal.ink
             }
         }
 
@@ -502,6 +578,8 @@ Item {
                 task.menuRequested();
             } else if (mouse.button === Qt.MiddleButton) {
                 task.newInstanceRequested();
+            } else if (task.hitsAudioBadge(mouse.x, mouse.y)) {
+                task.toggleMuted();
             } else {
                 task.activated(mouse.modifiers);
             }

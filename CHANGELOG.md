@@ -29,6 +29,17 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - Quick Settings adds a **Wi‑Fi hotspot** tile on Plasma's own hotspot (the Networks applet's
   settings). It says why when the radio can't host one, for example when the only Wi‑Fi radio
   carries the connection; the Wi‑Fi page starts and stops it and shows its name and password.
+- The dock shows **window previews**: resting on a running app shows its windows with live
+  thumbnails; click a preview to switch to that window, or close it from there. An option in the
+  dock's settings turns them off.
+- A dock app that plays sound shows a small speaker on its icon; click it to mute or unmute the app
+  (also **Mute** in its menu).
+- The dock's app menu adds what Plasma's task manager offers: the app's own actions (such as
+  Firefox's New Private Window), its **Recent Files**, **Move to Desktop**, **Show in Activities**
+  and **More** window actions (Keep Above Others, Fullscreen, No Titlebar and Frame...). The
+  launcher's item menu can **Keep in Dock** an app.
+- Choosing an entry in the launcher's right-click menu (Pin, Unpin, an app's actions) did nothing;
+  it now runs.
 
 ## 0.3.1 (2026-10-06)
 

@@ -18,14 +18,20 @@ separator · running apps that are not pinned · **Downloads** stack · **Trash*
 | `.../contents/ui/TaskItem.qml` | one app: theme icon with the board's drop shadow, running dot or active pill, pointer/keyboard handling |
 | `.../contents/ui/DockButton.qml` | the 48 px fixed buttons (fill, hover, pressed, "aria-pressed" accent state, indicator, focus ring) |
 | `.../contents/ui/NamePill.qml` | the name pill above the hovered item (a separate tooltip window) |
+| `.../contents/ui/WindowPreview.qml` | window previews above a hovered running app (live thumbnails, close, activate) |
+| `.../contents/ui/AudioStreams.qml` | the apps' audio streams (plasma-pa) for the audio indicator and mute |
 | `.../contents/ui/DockMenu.qml` | script-filled context menu (PlasmaExtras.Menu) |
 | `.../contents/ui/DockPalette.qml` | every colour of the dark and light boards |
 | `.../contents/ui/Glyph.qml`, `FusionLogo.qml`, `DownloadsStack.qml` | board line icons (1.8 stroke), the three-circle mark, the fanned download cards |
 | `tools/build.d/73-dock.sh` | copies the package to `$STAGE/.local/share/plasma/plasmoids/org.plasmafusion.dock/` after checking metadata.json and main.xml |
 
-No compiled code, no private QML modules: it uses `org.kde.taskmanager` (TasksModel), `org.kde.plasma.core/extras/plasmoid`,
-`org.kde.plasma.workspace.dbus`, `org.kde.plasma.plasma5support` (executable engine), `QtQuick.Effects`,
+No compiled code: it uses `org.kde.taskmanager` (TasksModel, ScreencastingRequest), `org.kde.pipewire`
+(window thumbnails), `org.kde.plasma.core/extras/plasmoid`, `org.kde.plasma.workspace.dbus`,
+`org.kde.plasma.plasma5support` (executable engine), `org.kde.plasma.private.kicker` (the app's own actions
+and recent files, as Kickoff and the launcher use them), `org.kde.kitemmodels`, `QtQuick.Effects`,
 `QtQuick.Shapes`, `Qt.labs.folderlistmodel` and `QtCore` — all verified installed on the ThinkPad.
+`org.kde.plasma.private.volume` (plasma-pa) is optional: AudioStreams.qml is loaded through a Loader, so
+without plasma-pa the dock works and has no audio indicator.
 
 ## Install and apply
 
@@ -55,6 +61,7 @@ dock.addWidget("org.plasmafusion.dock");
 | `magnify` | `true` | "Magnify icons on hover" |
 | `magnifiedSize` | `62` | size of the icon under the pointer (48–72; neighbours follow the falloff) |
 | `showTooltips` | `true` | name pill above the hovered item |
+| `showPreviews` | `true` | window previews above a hovered running app (replace the name pill there) |
 | `colorVariant` | `0` | 0 follow the Plasma style (brightness of the theme background), 1 dark, 2 light |
 | `searchAction` | `0` | 0 KRunner, 1 the application launcher |
 | `showOnlyCurrentDesktop` / `showOnlyCurrentActivity` / `showOnlyCurrentScreen` | true / true / false | task filters, as in the stock task manager |
@@ -97,6 +104,25 @@ dock.addWidget("org.plasmafusion.dock");
   `.desktop` files to pin, other files on an app to open them with it; Meta+1..9 through
   `activateTaskAtIndex`; startup feedback pulses the icon; an app demanding attention gets an orange dot;
   minimize animation targets are published.
+- **App menu (stock parity, 2026-10-09):** besides the above, as the stock task manager's menu: the app's
+  own actions from its desktop entry (jump list, e.g. Firefox's New Private Window) and a **Recent Files**
+  submenu with **Forget Recent Files** (Kicker's action list, the same Kickoff shows); **Mute** while the
+  app has audio streams; for windows **Move to Desktop** (All Desktops, each desktop, New Desktop), **Show
+  in Activities** (with more than one activity) and **More** (Move, Resize, Maximize, Keep Above Others,
+  Keep Below Others, Fullscreen, Shade, No Titlebar and Frame); **Add to Desktop** for pinnable apps.
+- **Window previews (`showPreviews`):** after the pointer rests 500 ms on a running app, its windows'
+  previews replace the name pill: one card per window (at most six) with the app icon, the title, a close
+  button and a live thumbnail (KWin's screencast through `ScreencastingRequest` and `PipeWireSourceItem`,
+  as the stock tooltips; the app icon while a window is minimized or before the first frame). The active
+  window's card has the accent ring. Clicking a card activates that window. Moving to another running
+  app switches at once; the preview stays while the pointer is on it and hides 300 ms after the pointer
+  leaves both. The thumbnails stream only while the preview is shown.
+- **Audio indicator:** a 20 px disc with a speaker glyph inside the icon's top-left corner (the count and
+  progress use the top-right one; inside the icon, because a magnified icon rises past the 10 px above the
+  resting icons where the dock tracks the pointer, so a disc over the edge would move away under it) while the app plays sound (after 2 s, so short sounds do not flash it)
+  or is muted (crossed speaker, at once). Clicking it mutes or unmutes all of the app's streams without
+  activating the app. Streams are matched as in the stock task manager: the portal app id, the process
+  id, else the application name (only for apps never matched by process id).
 - **Start:** if a launcher applet (org.plasmafusion.launcher, Kickoff, Kicker) sits in the dock's own
   panel, Start opens/closes it (the Fusion launcher's `open()`/`close()`/`recentlyOpen()`, else
   `expanded`) and shows the board's pressed state (accent fill, inner ring, 16×4 pill) while its menu is
@@ -152,13 +178,15 @@ theme; `screens-real-icons/*.png` and `real-icons-dock-strip.png` with the built
    "Overview active" state to QML.
 3. **Start highlight** works only when the launcher applet is in the dock's own panel (the Global Theme
    layout puts it there). Applets in other panels cannot be observed from QML.
-4. **Recent documents in the context menu:** not offered; they need the task manager's compiled private
-   backend, which cannot be imported by another package.
+4. **Audio streams from an app's helper process** are matched by application name only: the stock task
+   manager also tries the stream's parent process, but its helper for that is private to the stock applet.
+   Like stock, the indicator follows the stream's paused ("corked") state, so it stays while an app keeps
+   an idle stream open when paused (Elisa on Qt Multimedia does).
 5. **Context menus** are PlasmaExtras.Menu (QMenu), so they keep Breeze's radius (accepted deviation).
    They could not be screenshotted in the virtual session: Wayland refuses grabbing popups before the panel
    has received real input. The menus are built without errors (log checked).
-6. **Hover and drag-to-reorder with a real pointer** were not exercised live (no input injection on the
-   ThinkPad); hover delivery was verified with qmltestrunner and the pointer mapping with `debugPointerX`.
+6. **Drag-to-reorder with a real pointer** was not exercised live; hover was (window previews and the
+   audio indicator, 2026-10-09, injected pointer input on the ThinkPad and in the archhost VM).
 7. **Names in the pill** are the real app names (e.g. "Firefox", "KWrite"), not the board's generic
    "Browser"/"Code".
 8. The dock is laid out for a horizontal bottom panel only (its only intended use).
@@ -477,3 +505,21 @@ Each icon's touch area reached 4 px into the gap on each side (half the laptop's
 gap is 12 px, so a long press in the middle of a gap reached the panel, which went into its edit mode.
 The area now takes half the dock's gap on each side (`TaskItem.gap`). Test (gap1): a long press in a
 tablet gap opens the neighbouring app's menu.
+
+## Stock parity: app menu, window previews, audio (2026-10-09)
+
+The stock task manager's menu entries, window previews and audio indicator that the dock lacked (stock
+parity audit, artifacts/plasma-fusion/2026-10-09-stock-parity). Tests, all with injected pointer input:
+- Menu (archhost parity VM, Fedora 44, Plasma 6.7.5): Firefox's menu lists its three actions and New
+  Private Window opens one; KWrite's Recent Files lists the file it opened (Forget Recent Files is offered,
+  not exercised); New Desktop adds a desktop and Move to Desktop moves the KWrite window there; More's Keep
+  Above Others toggles. The launcher's Keep in Dock pins and unpins.
+- Previews (ThinkPad, real GPU; 17 checks): two Konsole windows show two cards with live thumbnails on
+  forced and real hover; the preview stays while the pointer is on it; a card click activates the other
+  window (KWin's active window) and hides the preview; the active card is marked; a card's close button
+  closes that window; leaving hides it; no QML warnings, no crashes. In the VM (llvmpipe) the same
+  checks pass with app-icon cards (KWin produces no screencast frames there).
+- Audio (ThinkPad and VM, 16 and 14 checks; Elisa playing a silent file): the indicator appears 2.4 s after
+  the stream starts; a click on it mutes the stream (pactl `Mute: yes`) without restoring the minimized
+  app, and a second click unmutes it; the menu shows Mute checked and unchecked accordingly; stopping
+  playback hides it.

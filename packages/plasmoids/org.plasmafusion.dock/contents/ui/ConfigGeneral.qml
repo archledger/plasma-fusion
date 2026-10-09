@@ -17,6 +17,7 @@ KCM.SimpleKCM {
     property alias cfg_magnify: magnify.checked
     property alias cfg_magnifiedSize: magnifiedSize.value
     property alias cfg_showTooltips: showTooltips.checked
+    property alias cfg_showPreviews: showPreviews.checked
     property alias cfg_colorVariant: colorVariant.currentIndex
     property alias cfg_tabletRecents: tabletRecents.value
     property alias cfg_searchAction: searchAction.currentIndex
@@ -46,6 +47,7 @@ KCM.SimpleKCM {
     property bool cfg_magnifyDefault
     property int cfg_magnifiedSizeDefault
     property bool cfg_showTooltipsDefault
+    property bool cfg_showPreviewsDefault
     property int cfg_colorVariantDefault
     property int cfg_searchActionDefault
     property bool cfg_showOnlyCurrentDesktopDefault
@@ -107,6 +109,10 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: showTooltips
             text: i18nc("@option:check", "Show app names above the hovered icon")
+        }
+        QQC2.CheckBox {
+            id: showPreviews
+            text: i18nc("@option:check", "Show window previews above a hovered running app")
         }
 
         RowLayout {

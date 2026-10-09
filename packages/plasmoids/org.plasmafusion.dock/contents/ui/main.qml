@@ -18,6 +18,7 @@ import org.kde.taskmanager as TaskManager
 import org.kde.notificationmanager as NotificationManager
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.private.kicker as Kicker
+import org.kde.kitemmodels as KItemModels
 
 import "../code/pins.js" as Pins
 import "../code/date-timer.js" as DateTimer
@@ -843,7 +844,7 @@ PlasmoidItem {
         case "downloads-menu": showDownloadsMenu(); break;
         case "trash-menu": showTrashMenu(); break;
         case "close-menu": if (lastMenu) lastMenu.close(); break;
-        case "menu": if (item) showTaskMenu(item); break;
+        case "menu": if (item) { logNextMenu = true; showTaskMenu(item); } break;
         case "activate": if (item) activateTask(row, 0); break;
         case "new": if (item) tasksModel.requestNewInstance(tasksModel.makeModelIndex(row)); break;
         case "dump-targets": dumpTargets(); break;
@@ -881,11 +882,25 @@ PlasmoidItem {
             const t = taskRepeater.itemAt(i) as TaskItem;
             if (t && t.visible) {
                 add("task" + i + "-" + t.iconName + (t.badgeCount > 0 ? "#" + t.badgeCount : "")
-                    + (t.progress >= 0 ? "%" + t.progress.toFixed(2) : "") + (t.calendarTile ? "=" + t.dayText : ""),
+                    + (t.progress >= 0 ? "%" + t.progress.toFixed(2) : "") + (t.calendarTile ? "=" + t.dayText : "")
+                    + (t.audioStreams.length > 0 ? (t.muted ? "+muted" : t.audioShown ? "+audio" : "+quiet") : ""),
                     t, t.width + root.gap, t.iconItem.height);
+                if (t.audioShown) {
+                    add("audio" + i, t.audioBadge, t.audioBadge.width, t.audioBadge.height);
+                }
             }
         }
-        console.info("dock: targets tablet=" + root.tablet + " tile=" + root.tile + " " + out.join(" "));
+        // Preview cards: "*" the active window, "~" a live thumbnail; the close button apart.
+        const shown = preview.item as WindowPreview;
+        if (shown && shown.visible) {
+            shown.cards().forEach((card, i) => {
+                add("preview" + i + (card.modelData.active ? "*" : "") + (card.live ? "~" : ""), card, card.width, card.height);
+                add("previewclose" + i, card.closeTarget, card.closeTarget.width, card.closeTarget.height);
+            });
+        }
+        console.info("dock: targets tablet=" + root.tablet + " tile=" + root.tile
+                     + " preview=" + (shown ? shown.row + "/" + shown.windows.length + (shown.visible ? "" : "(hidden)") : "none")
+                     + " " + out.join(" "));
     }
 
     // ---- Task actions (same rules as the stock task manager) ----
@@ -960,6 +975,32 @@ PlasmoidItem {
             tasksModel.requestAddLauncher(url);
         } else {
             tasksModel.requestRemoveLauncher(url);
+        }
+    }
+
+    // Pins asked for by other shell parts: the launcher's "Keep in Dock" (it finds this applet in
+    // its panel, as for the split request), by desktop file id; and the stock task manager's
+    // hasLauncher/addLauncher, the names Kicker calls on task managers it knows.
+    function isAppPinned(id: string): bool {
+        return id !== "" && tasksModel.launcherPosition("applications:" + id) !== -1;
+    }
+    function setAppPinned(id: string, pinned: bool): void {
+        if (id === "" || Plasmoid.immutability === PlasmaCore.Types.SystemImmutable) {
+            return;
+        }
+        console.info("dock: " + (pinned ? "pin " : "unpin ") + id);
+        if (pinned) {
+            tasksModel.requestAddLauncher("applications:" + id);
+        } else {
+            tasksModel.requestRemoveLauncher("applications:" + id);
+        }
+    }
+    function hasLauncher(url: url): bool {
+        return tasksModel.launcherPosition(url) !== -1;
+    }
+    function addLauncher(url: url): void {
+        if (Plasmoid.immutability !== PlasmaCore.Types.SystemImmutable) {
+            tasksModel.requestAddLauncher(url);
         }
     }
 
@@ -1068,6 +1109,118 @@ PlasmoidItem {
         return menu;
     }
 
+    // ---- The app's own actions and recent files (the stock task manager's jump list and recent
+    // documents). Kicker's favourites model for the one app the menu is for: its action list holds
+    // the desktop file's actions (_kicker_jumpListAction) and the app's recent files from the
+    // activity manager (_kicker_recentDocument, _kicker_forgetRecentDocuments), and its trigger()
+    // runs them as the launcher does.
+    Kicker.SimpleFavoritesModel {
+        id: appActionsModel
+    }
+
+    function storageId(row: int): string {
+        const url = String(role(row, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon) || "");
+        if (url.startsWith("applications:")) {
+            return url.slice(13);
+        }
+        if (url.startsWith("file://") && url.endsWith(".desktop")) {
+            return decodeURIComponent(url.slice(url.lastIndexOf("/") + 1));
+        }
+        return "";
+    }
+    function appActions(id: string): var {
+        if (id === "") {
+            return [];
+        }
+        appActionsModel.favorites = [id];
+        if (appActionsModel.rowCount() < 1) {
+            return [];
+        }
+        const list = appActionsModel.data(appActionsModel.index(0, 0), appActionsModel.KItemModels.KRoleNames.role("actionList"));
+        return list ? Array.from(list) : [];
+    }
+    function runAppAction(id: string, action: var): void {
+        appActionsModel.favorites = [id];
+        appActionsModel.trigger(0, action.actionId, action.actionArgument);
+    }
+    function addAppActions(menu: DockMenu, row: int): void {
+        const id = storageId(row);
+        const actions = appActions(id);
+        for (const action of actions.filter(a => a.actionId === "_kicker_jumpListAction")) {
+            menu.addAction(action.text, action.icon, () => root.runAppAction(id, action), {});
+        }
+        const recent = actions.filter(a => a.actionId === "_kicker_recentDocument");
+        if (recent.length > 0) {
+            const sub = menu.addSubMenu(i18nc("@action:inmenu", "Recent Files"), "document-open-recent-symbolic");
+            for (const action of recent) {
+                menu.addSubAction(sub, action.text, action.icon, () => root.runAppAction(id, action), {});
+            }
+            const forget = actions.find(a => a.actionId === "_kicker_forgetRecentDocuments");
+            if (forget) {
+                menu.addSubSeparator(sub);
+                menu.addSubAction(sub, forget.text, forget.icon, () => root.runAppAction(id, forget), {});
+            }
+        }
+    }
+
+    // ---- Moving a window (the stock task manager's "Move to Desktop", "Show in Activities", "More")
+    function addWindowActions(menu: DockMenu, index: var, group: bool): void {
+        const atm = TaskManager.AbstractTasksModel;
+        if (virtualDesktopInfo.numberOfDesktops > 1) {
+            const sub = menu.addSubMenu(i18nc("@action:inmenu", "Move to Desktop"), "virtual-desktops");
+            const onAll = tasksModel.data(index, atm.IsOnAllVirtualDesktops) === true;
+            menu.addSubAction(sub, i18nc("@action:inmenu", "All Desktops"), "", () => tasksModel.requestVirtualDesktops(index, []),
+                              { checkable: true, checked: onAll });
+            menu.addSubSeparator(sub);
+            const on = tasksModel.data(index, atm.VirtualDesktops) || [];
+            for (let i = 0; i < virtualDesktopInfo.desktopIds.length; ++i) {
+                const desktop = virtualDesktopInfo.desktopIds[i];
+                menu.addSubAction(sub, virtualDesktopInfo.desktopNames[i], "", () => tasksModel.requestVirtualDesktops(index, [desktop]),
+                                  { checkable: true, checked: !onAll && Array.from(on).indexOf(desktop) !== -1 });
+            }
+            menu.addSubSeparator(sub);
+            menu.addSubAction(sub, i18nc("@action:inmenu", "New Desktop"), "list-add-symbolic", () => tasksModel.requestNewVirtualDesktop(index), {});
+        }
+        if (activityInfo.numberOfRunningActivities > 1) {
+            const sub = menu.addSubMenu(i18nc("@action:inmenu", "Show in Activities"), "activities");
+            const current = Array.from(tasksModel.data(index, atm.Activities) || []);
+            menu.addSubAction(sub, i18nc("@action:inmenu", "All Activities"), "", () => tasksModel.requestActivities(index, []),
+                              { checkable: true, checked: current.length === 0 });
+            menu.addSubSeparator(sub);
+            for (const activity of activityInfo.runningActivities()) {
+                const shown = current.indexOf(activity) !== -1;
+                menu.addSubAction(sub, activityInfo.activityName(activity), activityInfo.activityIcon(activity), () => {
+                    const next = shown ? current.filter(a => a !== activity) : current.concat(activity);
+                    tasksModel.requestActivities(index, next.length > 0 ? next : [activityInfo.currentActivity]);
+                }, { checkable: true, checked: shown });
+            }
+        }
+        if (group) {
+            return;
+        }
+        const more = menu.addSubMenu(i18nc("@action:inmenu", "More"), "view-more-symbolic");
+        const flag = r => tasksModel.data(index, r) === true;
+        menu.addSubAction(more, i18nc("@action:inmenu", "Move"), "transform-move", () => tasksModel.requestMove(index),
+                          { enabled: flag(atm.IsMovable) });
+        menu.addSubAction(more, i18nc("@action:inmenu", "Resize"), "transform-scale", () => tasksModel.requestResize(index),
+                          { enabled: flag(atm.IsResizable) });
+        menu.addSubAction(more, i18nc("@action:inmenu", "Maximize"), "window-maximize-symbolic", () => tasksModel.requestToggleMaximized(index),
+                          { enabled: flag(atm.IsMaximizable), checkable: true, checked: flag(atm.IsMaximized) });
+        menu.addSubAction(more, i18nc("@action:inmenu", "Keep Above Others"), "window-keep-above", () => tasksModel.requestToggleKeepAbove(index),
+                          { checkable: true, checked: flag(atm.IsKeepAbove) });
+        menu.addSubAction(more, i18nc("@action:inmenu", "Keep Below Others"), "window-keep-below", () => tasksModel.requestToggleKeepBelow(index),
+                          { checkable: true, checked: flag(atm.IsKeepBelow) });
+        menu.addSubAction(more, i18nc("@action:inmenu", "Fullscreen"), "view-fullscreen", () => tasksModel.requestToggleFullScreen(index),
+                          { enabled: flag(atm.IsFullScreenable), checkable: true, checked: flag(atm.IsFullScreen) });
+        menu.addSubAction(more, i18nc("@action:inmenu", "Shade"), "window-shade", () => tasksModel.requestToggleShaded(index),
+                          { enabled: flag(atm.IsShadeable), checkable: true, checked: flag(atm.IsShaded) });
+        menu.addSubAction(more, i18nc("@action:inmenu", "No Titlebar and Frame"), "edit-none-border", () => tasksModel.requestToggleNoBorder(index),
+                          { enabled: flag(atm.CanSetNoBorder), checkable: true, checked: flag(atm.HasNoBorder) });
+    }
+
+    // Testing: the next task menu logs its entries ("menu:ROW" debug action).
+    property bool logNextMenu: false
+
     function showTaskMenu(item: TaskItem): void {
         const row = item.index;
         const index = tasksModel.makeModelIndex(row);
@@ -1092,6 +1245,11 @@ PlasmoidItem {
         } else if (tasksModel.data(index, atm.CanLaunchNewInstance) !== false) {
             menu.addAction(i18nc("@action:inmenu", "New Window"), "window-new-symbolic", () => tasksModel.requestNewInstance(index), {});
         }
+        addAppActions(menu, row);
+        if (item.audioStreams.length > 0) {
+            menu.addAction(i18nc("@action:inmenu", "Mute"), "audio-volume-muted-symbolic", () => item.toggleMuted(),
+                           { checkable: true, checked: item.muted });
+        }
         // Tablet posture (SPLIT.md item 2, Android's "Split" in the app menu): the app opens in that
         // half and the app in use takes the other one, as with the dock's split drag.
         if (tablet && !item.isStartup) {
@@ -1105,6 +1263,7 @@ PlasmoidItem {
             menu.addAction(minimized ? i18nc("@action:inmenu", "Restore") : i18nc("@action:inmenu", "Minimize"),
                            minimized ? "window-restore-symbolic" : "window-minimize-symbolic",
                            () => tasksModel.requestToggleMinimized(index), {});
+            addWindowActions(menu, index, tasksModel.data(index, atm.IsGroupParent) === true);
         }
         menu.addSeparator();
         const pinned = isPinned(row);
@@ -1121,6 +1280,10 @@ PlasmoidItem {
             const count = tasksModel.rowCount(index);
             menu.addAction(count > 1 ? i18nc("@action:inmenu", "Close All %1 Windows", count) : i18nc("@action:inmenu", "Close"),
                            "window-close-symbolic", () => tasksModel.requestClose(index), {});
+        }
+        if (logNextMenu) {
+            logNextMenu = false;
+            console.info("dock: menu " + item.iconName + ": " + menu.entries.join(" | "));
         }
         menu.openRelative();
     }
@@ -1824,6 +1987,7 @@ PlasmoidItem {
                 pulseCycles: root.pulseCycles
                 gap: root.gap
                 entry: root.launcherEntries[taskItem.iconName] ?? null
+                audio: root.audio
                 monthText: root.todayMonth
                 dayText: root.todayDay
                 shown: root.taskVisible[taskItem.index] ?? true
@@ -1972,6 +2136,9 @@ PlasmoidItem {
                 if (pill.item) {
                     (pill.item as NamePill).reposition();
                 }
+                if (preview.item) {
+                    (preview.item as WindowPreview).reposition();
+                }
             }
         }
     }
@@ -2020,7 +2187,82 @@ PlasmoidItem {
             pal: dockPal
             anchorItem: pillAnchor
             text: root.pillText
-            visible: root.pillText !== "" && root.visible
+            visible: root.pillText !== "" && root.visible && root.previewTarget === null
+        }
+    }
+
+    // ---- Audio indicator (the stock task manager's): the apps' streams, from plasma-pa ----
+    // Without plasma-pa the file does not load and the tiles show no indicator.
+    Loader {
+        id: audioLoader
+        asynchronous: true
+        source: "AudioStreams.qml"
+    }
+    readonly property QtObject audio: audioLoader.item
+
+    // ---- Window previews (showPreviews; the stock task manager's tooltips) ----
+    // After the pointer rests on a running app for 500 ms its windows' previews replace the name
+    // pill; moving to another running app switches at once. The preview stays while the pointer
+    // is on it, and leaving both the app and the preview hides it after 300 ms (time to cross the
+    // gap between them).
+    property Item previewTarget: null
+    // Read fresh where it decides: a change handler can run before this binding is updated.
+    function previewWantedNow(): bool {
+        return Plasmoid.configuration.showPreviews && pillTarget instanceof TaskItem && (pillTarget as TaskItem).isRunning;
+    }
+    readonly property bool previewWanted: previewWantedNow()
+    readonly property bool previewHovered: preview.item ? (preview.item as WindowPreview).hovered : false
+    onPillTargetChanged: {
+        if (previewWantedNow()) {
+            previewHide.stop();
+            if (previewTarget) {
+                previewTarget = pillTarget;
+            } else {
+                previewDwell.restart();
+            }
+        } else {
+            previewDwell.stop();
+            if (previewTarget && !previewHovered) {
+                previewHide.restart();
+            }
+        }
+    }
+    onPreviewHoveredChanged: {
+        if (previewHovered) {
+            previewHide.stop();
+        } else if (previewTarget && !previewWantedNow()) {
+            previewHide.restart();
+        }
+    }
+    Timer {
+        id: previewDwell
+        interval: 500
+        onTriggered: {
+            if (root.previewWantedNow()) {
+                root.previewTarget = root.pillTarget;
+            }
+        }
+    }
+    Timer {
+        id: previewHide
+        interval: 300
+        onTriggered: {
+            if (!root.previewHovered && !root.previewWantedNow()) {
+                root.previewTarget = null;
+            }
+        }
+    }
+    Loader {
+        id: preview
+        active: root.previewTarget !== null
+        sourceComponent: WindowPreview {
+            pal: dockPal
+            taskModel: tasksModel
+            anchorItem: pillAnchor
+            row: root.previewTarget ? (root.previewTarget as TaskItem).index : -1
+            appName: root.previewTarget ? (root.previewTarget as TaskItem).name : ""
+            visible: root.visible
+            onDone: root.previewTarget = null
         }
     }
 
