@@ -97,10 +97,20 @@ ContainmentItem {
         }
         cardsRect = x1 > x0 ? Qt.rect(x0, y0, x1 - x0, y1 - y0) : Qt.rect(0, 0, 0, 0);
     }
-    onTabletHomeChanged: {
+    // The home screen's mask follows the cards: look again for a while after the posture changes,
+    // a drop (which may add a widget) and any widget added or removed.
+    function watchCards(): void {
         Qt.callLater(updateCardsRect);
         cardsTimer.ticks = 0;
         cardsTimer.running = tabletHome;
+    }
+    onTabletHomeChanged: watchCards()
+    Connections {
+        target: Plasmoid
+        ignoreUnknownSignals: true
+        function onAppletAdded() { root.watchCards(); }
+        function onAppletRemoved() { root.watchCards(); }
+        function onAppletsChanged() { root.watchCards(); }
     }
     Timer {
         id: cardsTimer
@@ -420,6 +430,7 @@ ContainmentItem {
                     event.y - appletsLayout.placeHolder.height / 2);
                 event.accept(event.proposedAction);
                 appletsLayout.hidePlaceHolder();
+                root.watchCards();
             }
         }
 
