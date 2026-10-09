@@ -104,7 +104,7 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   application icon; when libkmpris cannot read the player's desktop file (it then reports the
   generic `emblem-music-symbolic`), the desktop entry name is used as the icon name. As the stock
   Media Player widget: a seek slider with the elapsed and total time when the player can seek (the
-  position is asked for every second while the sheet shows; the player seeks when the slider is
+  position is asked for every second while the sheet is open; the player seeks when the slider is
   let go or the wheel or keys pause, so always on the track playing then; a drag let go on
   another player, title or length is dropped), and,
   with two or more players, a row of their icons to choose one (the first, a star, chooses

@@ -798,7 +798,8 @@ ColumnLayout {
             interval: 1000
             repeat: true
             triggeredOnStart: true
-            running: page.visible && page.backend.media.available && page.backend.media.canSeek && page.backend.media.playing
+            running: page.backend.popupOpen && page.visible && page.backend.media.available && page.backend.media.canSeek
+                     && page.backend.media.playing
             onTriggered: page.backend.media.updatePosition()
         }
         function clock(us: double): string {
