@@ -132,11 +132,14 @@ Item {
     }
     Component.onCompleted: refreshHotspotSettings()
 
-    // As the stock Networks widget: plasma-nm switches Wi-Fi, mobile data and Bluetooth off and
-    // keeps the setting. Ending it brings back the radios given (Backend.qml keeps which were on),
-    // not the handler's own record, which only the widget that started airplane mode has.
+    // As the stock Networks widget: plasma-nm's setting, and its handler switches Wi-Fi and mobile
+    // data off. Bluetooth is Backend.qml's, over BlueZ itself (the handler's own airplane step
+    // powers the adapters off late, after its asynchronous calls, which a quick exit could
+    // cross). Ending it brings back the radios given (Backend.qml keeps which were on), not the
+    // handler's own record, which only the widget that started airplane mode has.
     function enterAirplaneMode(): void {
-        handler.enableAirplaneMode(true);
+        handler.enableWireless(false);
+        handler.enableWwan(false);
         PlasmaNM.Configuration.airplaneModeEnabled = true;
     }
     function leaveAirplaneMode(wifi: bool, wwan: bool): void {
