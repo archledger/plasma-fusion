@@ -6,7 +6,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
-import org.kde.plasma.private.volume
 
 import "components"
 import "components/Icons.js" as Icons
@@ -73,19 +72,26 @@ ColumnLayout {
 
             width: ListView.view.width
             // The stock Audio Volume widget's device menu: ports (speakers, headphones) and the
-            // card's profiles (HDMI, analog, Pro Audio, off).
-            hasMenu: deviceMenu.hasContent
+            // card's profiles (HDMI, analog, Pro Audio, off), from plasma-pa's QML module in its
+            // own file: without that module the row has no menu and the page still lists the
+            // devices (AudioDeviceMenu.qml).
+            hasMenu: deviceMenu.item ? deviceMenu.item.hasContent : false
             menuText: i18nc("@action:button", "Ports and profiles")
             onMenuRequested: from => {
-                deviceMenu.visualParent = from;
-                deviceMenu.openRelative();
+                if (deviceMenu.item) {
+                    deviceMenu.item.visualParent = from;
+                    deviceMenu.item.openRelative();
+                }
             }
-            ListItemMenu {
+            Loader {
                 id: deviceMenu
-                pulseObject: deviceRow.model.PulseObject
-                cardModel: page.backend.audio.cardModel
-                itemType: tabs.currentIndex === 1 ? ListItemMenu.Source : ListItemMenu.Sink
-                sourceModel: tabs.currentIndex === 1 ? page.backend.audio.sourceModel : page.backend.audio.sinkModel
+                source: "AudioDeviceMenu.qml"
+                onLoaded: {
+                    item.pulseObject = Qt.binding(() => deviceRow.model.PulseObject);
+                    item.cardModel = Qt.binding(() => page.backend.audio.cardModel);
+                    item.input = Qt.binding(() => tabs.currentIndex === 1);
+                    item.sourceModel = Qt.binding(() => tabs.currentIndex === 1 ? page.backend.audio.sourceModel : page.backend.audio.sinkModel);
+                }
             }
             pal: page.pal
             metrics: page.metrics
