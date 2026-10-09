@@ -223,13 +223,17 @@ Item {
         // the widgets' settings across a plasmashell restart, main.qml), so the one that ends it
         // brings them back; with no record (airplane mode started elsewhere) they all come back on.
         // Bluetooth is read and set over BlueZ's D-Bus itself (the adapters powered on), not
-        // through the optional Bluetooth service, which may not be loaded or installed.
+        // through the optional Bluetooth service, which may not be loaded or installed, and not
+        // through plasma-nm's handler either: its airplane step powers the adapters off after
+        // its own asynchronous BlueZ calls, which a quick exit could cross; here every Powered
+        // goes out on the one connection, in order.
         property bool airplaneSwitching: false
         function setAirplaneMode(on: bool): void {
             if (!s || airplaneSwitching) {
                 return;
             }
             airplaneSwitching = true;
+            bluetoothPowerRetry.drop();
             if (on) {
                 // The radios as they are now, before BlueZ answers: airplane mode started elsewhere
                 // meanwhile has turned them off, and is not this widget's to record.
@@ -243,6 +247,7 @@ Item {
                     // No answer from BlueZ (absent, or failed): every adapter comes back, as with
                     // no record, rather than none.
                     Instances.airplaneRestore = { wifi: wifi, wwan: wwan, bluetooth: adapters === null ? true : adapters };
+                    (adapters || []).forEach(path => backend.powerBluetoothAdapter(path, false));
                     s.enterAirplaneMode();
                 });
                 return;
@@ -639,6 +644,9 @@ Item {
         bluetoothAdapters(adapters => done(adapters === null ? null : adapters.filter(a => a.powered).map(a => a.path)));
     }
     function powerBluetoothAdapter(path: string, on: bool): void {
+        powerBluetoothAdapterTries(path, on, 3);
+    }
+    function powerBluetoothAdapterTries(path: string, on: bool, left: int): void {
         DBus.SystemBus.asyncCall({
             "service": "org.bluez",
             "path": path,
@@ -646,7 +654,34 @@ Item {
             "member": "Set",
             "arguments": [new DBus.string("org.bluez.Adapter1"), new DBus.string("Powered"), new DBus.variant(on)],
             "signature": "(ssv)"
-        }, () => {}, () => {});
+        }, () => {}, reply => {
+            // Refused while BlueZ is still applying the previous change to the adapter
+            // (org.bluez.Error.Busy, an exit right after the entry): powering on is asked again a
+            // few times; powering off is not, a late one could cross an exit.
+            if (on && left > 0) {
+                bluetoothPowerRetry.add(path, left - 1);
+            } else {
+                console.warn("quicksettings: BlueZ Powered not set on " + path + ": " + reply.error.name);
+            }
+        });
+    }
+    Timer {
+        id: bluetoothPowerRetry
+        interval: 400
+        property var pending: []
+        function add(path: string, left: int): void {
+            pending.push({ path: path, left: left });
+            restart();
+        }
+        function drop(): void {
+            stop();
+            pending = [];
+        }
+        onTriggered: {
+            const again = pending;
+            pending = [];
+            again.forEach(p => backend.powerBluetoothAdapterTries(p.path, true, p.left));
+        }
     }
 
     // Airplane mode ended by anything else (the stock widget, nmcli): the record is stale.
