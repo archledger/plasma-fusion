@@ -219,8 +219,9 @@ FocusScope {
                 footer.launcher.close();
                 session.suspend();
             }
-            // Hibernate, where the system offers it: right-click or press and hold.
+            // Hibernate, where the system offers it: right-click, press and hold or the Menu key.
             onPressAndHold: sleepMenu.offer()
+            Keys.onMenuPressed: sleepMenu.offer()
             TapHandler {
                 acceptedButtons: Qt.RightButton
                 onTapped: sleepMenu.offer()
