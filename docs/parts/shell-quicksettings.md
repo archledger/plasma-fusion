@@ -682,9 +682,13 @@ applets into one QML engine, which the stock notifications applet's Globals reli
 - **Leader:** the widget on the lowest screen number (the primary screen is 0), else the first. It
   runs the session-wide jobs: the tablet posture's settings and keyboard (`TabletPolicy.leader`;
   the posture script was already locked and idempotent, so a takeover rewrites the same values) and
-  the new-device sheet.
+  the new-device sheet. When tablet mode ends it reads the rotation lock from KWin's auto-rotate
+  policy (another screen's widget may have set it) to turn the built-in display back to normal.
 - **The screen in use:** Meta+A belongs to one widget (the main bar's); it asks KWin for its active
-  output (`activeOutputName`) and opens the widget on that screen. A new device's sheet opens there
+  output (`activeOutputName`) and opens the widget on that screen. fusion-config.sh gives the key to the
+  main bar's widget only (lowest screen), and the settings module's removal of the other bars moves a
+  key held there to it. A widget names its screen from its bar's screen geometry (the window's Screen
+  named the first screen for a while in a new bar on another screen). A new device's sheet opens there
   the same way. `openRequest` already acted only on the active screen's widget.
 - **One set of settings:** the user settings (`sharedKeys` in main.qml: what the pill shows, the
   pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
