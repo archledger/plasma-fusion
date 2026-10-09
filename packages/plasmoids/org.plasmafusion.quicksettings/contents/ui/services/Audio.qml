@@ -88,6 +88,16 @@ Item {
         // Virtual microphones (noise suppression/remapped inputs) remain useful inputs.
         sourceModel: SourceModel {}
     }
-    SinkInputModel { id: playback }
-    SourceOutputModel { id: recording }
+    // Application streams only: virtual streams (modules' loopbacks, monitors, event sounds) are not
+    // applications to mute or route; the dock filters its streams the same way.
+    PulseObjectFilterModel {
+        id: playback
+        filters: [{ role: "VirtualStream", value: false }]
+        sourceModel: SinkInputModel {}
+    }
+    PulseObjectFilterModel {
+        id: recording
+        filters: [{ role: "VirtualStream", value: false }]
+        sourceModel: SourceOutputModel {}
+    }
 }
