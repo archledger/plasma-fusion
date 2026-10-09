@@ -68,7 +68,10 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
         return;
     }
     var unplaced = 0;
-    var topOn = {};
+    // Screens with a top panel (any), and each screen's Plasma Fusion top bar (one with the status
+    // area first): another top panel on the same screen must not hide the Fusion bar.
+    var occupied = {};
+    var fusionOn = {};
     var main = null;
     for (var i = 0; i < ps.length; ++i) {
         if (ps[i].location !== "top") {
@@ -78,7 +81,11 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
             unplaced++;
             continue;
         }
-        topOn[ps[i].screen] = ps[i];
+        occupied[ps[i].screen] = true;
+        var chosen = fusionOn[ps[i].screen];
+        if (fusionBar(ps[i]) && (chosen === undefined || (!has(chosen, QS) && has(ps[i], QS)))) {
+            fusionOn[ps[i].screen] = ps[i];
+        }
         if (fusionBar(ps[i]) && (has(ps[i], QS) || has(ps[i], TRAY)) && (main === null || ps[i].screen < main.screen)) {
             main = ps[i];
         }
@@ -129,9 +136,9 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
     }
     var added = 0, completed = 0;
     for (var sc = 0; sc < screenCount; ++sc) {
-        var bar = topOn[sc];
+        var bar = fusionOn[sc];
         if (bar !== undefined) {
-            if (bar !== main && fusionBar(bar)) {
+            if (bar !== main) {
                 bar.currentConfigGroup = ["PlasmaFusion"];
                 var marked = truthy(bar.readConfig("statusItems", false));
                 bar.currentConfigGroup = [];
@@ -139,6 +146,9 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
                     completed++;
                 }
             }
+            continue;
+        }
+        if (occupied[sc]) {
             continue;
         }
         bar = new Panel;
