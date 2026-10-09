@@ -47,6 +47,11 @@ function hiddenDuplicates(rows) {
 // scheme (the launcher's pinned entries, and all of its entries on Plasma 6.8, have it):
 // "org.kde.dolphin.desktop" and "applications:org.kde.dolphin.desktop" both give
 // "applications:org.kde.dolphin.desktop".
+// A launcher given by a file URL ("file:///home/me/bin/thing.desktop") is kept as it is.
 function appLauncherUrl(id) {
-    return "applications:" + String(id || "").replace(/^applications:/, "");
+    const value = String(id || "");
+    if (value.indexOf("://") >= 0) {
+        return value;
+    }
+    return "applications:" + value.replace(/^applications:/, "");
 }

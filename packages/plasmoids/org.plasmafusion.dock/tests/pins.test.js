@@ -72,5 +72,6 @@ assert.deepStrictEqual(hiddenDuplicates(rows([])), []);
 // appLauncherUrl(): one applications: scheme whether the launcher's id has it or not
 assert.strictEqual(appLauncherUrl("org.kde.dolphin.desktop"), "applications:org.kde.dolphin.desktop", "plain desktop id");
 assert.strictEqual(appLauncherUrl("applications:org.kde.dolphin.desktop"), "applications:org.kde.dolphin.desktop", "id with the scheme (pinned entries, Plasma 6.8)");
+assert.strictEqual(appLauncherUrl("file:///home/pf/bin/thing.desktop"), "file:///home/pf/bin/thing.desktop", "a file-backed launcher keeps its URL");
 
 console.log("pins: all checks passed");
