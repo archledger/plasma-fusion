@@ -78,12 +78,35 @@ PlasmoidItem {
         }
     }
     // Airplane mode's radio record (Backend.qml) survives a plasmashell restart: every widget keeps
-    // a copy in its settings, and the first to start after a restart gives it back.
+    // a copy in its settings, and the first to start after a restart gives it back, once the
+    // network service says airplane mode is still on; off (ended while the shell was down), the
+    // record is stale and dropped.
     Connections {
         target: Instances
         function onAirplaneRestoreChanged() {
             Plasmoid.configuration.airplaneRestore = Instances.airplaneRestore ? JSON.stringify(Instances.airplaneRestore) : "";
         }
+    }
+    function adoptAirplaneRecord(): void {
+        if (!backend.net.available || !Plasmoid.configuration.airplaneRestore) {
+            return;
+        }
+        if (!backend.net.airplane) {
+            Plasmoid.configuration.airplaneRestore = "";
+            return;
+        }
+        if (!Instances.airplaneRestore) {
+            try {
+                Instances.airplaneRestore = JSON.parse(Plasmoid.configuration.airplaneRestore);
+            } catch (e) {
+                Plasmoid.configuration.airplaneRestore = "";
+            }
+        }
+    }
+    Connections {
+        target: backend.net
+        function onAvailableChanged() { root.adoptAirplaneRecord(); }
+        function onAirplaneChanged() { root.adoptAirplaneRecord(); }
     }
     Component.onCompleted: {
         // The leader before this widget joins: a widget on a lower screen number (the primary
@@ -93,13 +116,7 @@ PlasmoidItem {
             sharedKeys.forEach(key => setShared(key, lead.sharedValue(key)));
         }
         Instances.adopt(root);
-        if (!Instances.airplaneRestore && Plasmoid.configuration.airplaneRestore) {
-            try {
-                Instances.airplaneRestore = JSON.parse(Plasmoid.configuration.airplaneRestore);
-            } catch (e) {
-                Plasmoid.configuration.airplaneRestore = "";
-            }
-        }
+        adoptAirplaneRecord();
         console.info("quicksettings: widget on " + (screenName || "?") + " (screen " + screenIndex + "), "
                      + Instances.items.length + " in this shell");
     }
