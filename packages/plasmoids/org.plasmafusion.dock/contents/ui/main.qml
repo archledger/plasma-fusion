@@ -2262,6 +2262,7 @@ PlasmoidItem {
         sourceComponent: WindowPreview {
             pal: dockPal
             taskModel: tasksModel
+            screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
             anchorItem: pillAnchor
             row: root.previewTarget ? (root.previewTarget as TaskItem).index : -1
             appName: root.previewTarget ? (root.previewTarget as TaskItem).name : ""

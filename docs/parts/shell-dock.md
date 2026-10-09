@@ -111,7 +111,8 @@ dock.addWidget("org.plasmafusion.dock");
   in Activities** (with more than one activity) and **More** (Move, Resize, Maximize, Keep Above Others,
   Keep Below Others, Fullscreen, Shade, No Titlebar and Frame); **Add to Desktop** for pinnable apps.
 - **Window previews (`showPreviews`):** after the pointer rests 500 ms on a running app, its windows'
-  previews replace the name pill: one card per window (at most six) with the app icon, the title, a close
+  previews replace the name pill: one card per window (at most six; on a narrow screen the cards shrink to 140 px thumbnails and the
+  windows that still do not fit are left out, the active one kept) with the app icon, the title, a close
   button and a live thumbnail (KWin's screencast through `ScreencastingRequest` and `PipeWireSourceItem`,
   as the stock tooltips; the app icon while a window is minimized or before the first frame). The active
   window's card has the accent ring. Clicking a card activates that window. Moving to another running

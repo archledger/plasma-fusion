@@ -27,6 +27,9 @@ PlasmaCore.Dialog {
     required property var taskModel
     // The item whose top edge the preview sits on (horizontally centred on it).
     property Item anchorItem
+    // The dock's screen (its containment's screenGeometry, global coordinates): the preview stays
+    // 8 px inside it and its cards fit its width.
+    property rect screenGeometry: Qt.rect(0, 0, 0, 0)
     // The task's row in taskModel; a group's windows are its children.
     property int row: -1
     property string appName
@@ -49,10 +52,10 @@ PlasmaCore.Dialog {
             return;
         }
         const p = anchorItem.mapToGlobal(0, 0);
-        const screen = anchorItem.Window.window.screen;
+        const g = screenGeometry;
         let left = Math.round(p.x + (anchorItem.width - width) / 2);
-        if (screen) {
-            left = Math.max(screen.virtualX + 8, Math.min(left, screen.virtualX + screen.width - width - 8));
+        if (g.width > 0) {
+            left = Math.max(g.x + 8, Math.min(left, g.x + g.width - width - 8));
         }
         x = left;
         y = Math.round(p.y - height);
@@ -93,6 +96,16 @@ PlasmaCore.Dialog {
         void revision;
         return taskModel && row >= 0 && row < taskModel.rowCount() ? taskModel.data(taskModel.makeModelIndex(row), Qt.DecorationRole) : "";
     }
+    // The first `count` windows, the active one among them (in the last place when it would be
+    // left out).
+    function shownWindows(count: int): var {
+        const list = windows.slice(0, count);
+        const active = windows.findIndex(w => w.active);
+        if (active >= count && count > 0) {
+            list[count - 1] = windows[active];
+        }
+        return list;
+    }
     // Testing: the card items, in window order.
     function cards(): list<Item> {
         const out = [];
@@ -121,8 +134,16 @@ PlasmaCore.Dialog {
             id: m
         }
         readonly property real pad: m.px(8)
-        readonly property real thumbW: m.px(208)
-        readonly property real thumbH: m.px(130)
+        // The cards fit the screen (less 8 px on each side): they shrink from 208 px thumbnails down
+        // to 140 px, and the windows that still do not fit are left out (a grouped app with six
+        // windows on a 1280 px screen), keeping the active one.
+        readonly property real screenWidth: preview.screenGeometry.width > 0 ? preview.screenGeometry.width : 1280
+        readonly property real cardInset: 2 * m.px(6)
+        readonly property real room: screenWidth - 16 - 2 * pad - 2
+        readonly property int shown: Math.max(1, Math.min(preview.windows.length,
+                                                          Math.floor((room + pad) / (m.px(140) + cardInset + pad))))
+        readonly property real thumbW: Math.min(m.px(208), (room + pad) / shown - pad - cardInset)
+        readonly property real thumbH: Math.round(thumbW * 130 / 208)
 
         implicitWidth: cards.implicitWidth + 2 * pad + 2
         implicitHeight: cards.implicitHeight + 2 * pad + 2
@@ -152,7 +173,7 @@ PlasmaCore.Dialog {
 
             Repeater {
                 id: cardRepeater
-                model: preview.windows
+                model: preview.shownWindows(frame.shown)
 
                 delegate: T.AbstractButton {
                     id: card
@@ -160,7 +181,7 @@ PlasmaCore.Dialog {
                     readonly property bool live: thumbnail.ready
                     readonly property Item closeTarget: closeButton
 
-                    implicitWidth: frame.thumbW + 2 * m.px(6)
+                    implicitWidth: frame.thumbW + frame.cardInset
                     implicitHeight: column.implicitHeight + 2 * m.px(6)
                     hoverEnabled: true
                     focusPolicy: Qt.NoFocus
