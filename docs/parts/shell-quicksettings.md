@@ -33,7 +33,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   first display (internal panels first), with a chevron when there is more to set: the
   **Brightness** page (`DisplayPage.qml`) has a slider for every display PowerDevil can dim and the
   keyboard backlight (`KeyboardBrightnessControl`, stepping through its levels), as the stock
-  Brightness widget; the sliders' wheel and Page Up/Down move at least one step;
+  Brightness widget; the sliders' wheel and Page Up/Down move at least one step. With a keyboard
+  light and no display to dim (a monitor without DDC/CI), the keyboard backlight's slider takes the
+  brightness slider's place;
 * microphone/input volume and mute when a recording input exists; its chevron opens the input
   chooser. Sound has Output, Input and Applications tabs. Applications lists active playback and
   recording streams with independent volume, mute and device routing, using the native plasma-pa

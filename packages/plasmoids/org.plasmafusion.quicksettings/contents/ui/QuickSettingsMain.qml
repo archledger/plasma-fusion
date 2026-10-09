@@ -5,6 +5,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 
@@ -249,6 +250,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: page.tablet ? 12 : 10
         visible: page.backend.audio.available || page.backend.audio.inputAvailable || page.backend.display.brightnessAvailable
+                 || page.backend.display.keyboardAvailable
 
         RowLayout {
             Layout.fillWidth: true
@@ -397,6 +399,47 @@ ColumnLayout {
             }
             Item {
                 visible: !brightnessChevron.visible
+                Layout.preferredWidth: audioChevron.implicitWidth
+                Layout.preferredHeight: 28
+            }
+        }
+
+        // A keyboard light and no display to dim (a desktop whose monitor has no DDC/CI): the
+        // keyboard backlight's slider takes the brightness row's place.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: page.pal.touch ? 44 : 28
+            spacing: 12
+            visible: !page.backend.display.brightnessAvailable && page.backend.display.keyboardAvailable
+
+            Item {
+                Layout.preferredWidth: page.pal.touch ? 44 : 18
+                Layout.preferredHeight: 28
+                LineIcon {
+                    anchors.centerIn: parent
+                    size: 18
+                    path: Icons.keyboard
+                    color: page.pal.controlText
+                }
+            }
+            FusionSlider {
+                id: keyboardRowSlider
+                Layout.fillWidth: true
+                pal: page.pal
+                from: 0
+                to: Math.max(1, page.backend.display.keyboardMax)
+                stepSize: 1
+                snapMode: T.Slider.SnapAlways
+                Accessible.name: i18nc("@label:slider", "Keyboard backlight")
+                value: page.backend.display.keyboardValue
+                onMoved: page.backend.display.setKeyboardBrightness(Math.round(value))
+                onDraggingChanged: {
+                    if (!dragging) {
+                        value = Qt.binding(() => page.backend.display.keyboardValue);
+                    }
+                }
+            }
+            Item {
                 Layout.preferredWidth: audioChevron.implicitWidth
                 Layout.preferredHeight: 28
             }
