@@ -14,6 +14,14 @@ KCM.SimpleKCM {
     id: page
     property var cfg_enabledCalendarPlugins: []
     property var cfg_enabledCalendarPluginsDefault: []
+    // Defaults and Reset change the key from outside: the checks follow it. A click changes it from
+    // the model, which already matches, so it is not read back.
+    property bool editing: false
+    onCfg_enabledCalendarPluginsChanged: {
+        if (!editing) {
+            providers.populateEnabledPluginsList(cfg_enabledCalendarPlugins);
+        }
+    }
     PlasmaCalendar.EventPluginsManager {
         id: providers
         Component.onCompleted: populateEnabledPluginsList(page.cfg_enabledCalendarPlugins)
@@ -34,7 +42,11 @@ KCM.SimpleKCM {
                 Accessible.name: text
                 onClicked: {
                     model.checked = checked;
+                    page.editing = true;
                     page.cfg_enabledCalendarPlugins = providers.enabledPlugins;
+                    page.editing = false;
+                    // The click replaced the binding: follow the model again.
+                    checked = Qt.binding(() => model.checked);
                 }
             }
         }
