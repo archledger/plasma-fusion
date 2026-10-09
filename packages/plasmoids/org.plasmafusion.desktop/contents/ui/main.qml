@@ -87,7 +87,10 @@ ContainmentItem {
         }
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
         for (const child of layout.children) {
-            if (!child || child.applet === undefined || child.applet === null || child.width <= 0) {
+            if (!child || child.applet === undefined || child.applet === null) {
+                continue;
+            }
+            if (child.width <= 0) {
                 continue;
             }
             x0 = Math.min(x0, child.x);
@@ -95,7 +98,13 @@ ContainmentItem {
             x1 = Math.max(x1, child.x + child.width);
             y1 = Math.max(y1, child.y + child.height);
         }
-        cardsRect = x1 > x0 ? Qt.rect(x0, y0, x1 - x0, y1 - y0) : Qt.rect(0, 0, 0, 0);
+        if (x1 > x0) {
+            cardsRect = Qt.rect(x0, y0, x1 - x0, y1 - y0);
+        } else if (Plasmoid.applets.length === 0) {
+            cardsRect = Qt.rect(0, 0, 0, 0);
+        }
+        // Cards without a size yet, or not in the layout for a moment (edit mode rebuilds it): the
+        // last rectangle stays, so the home screen never covers them.
     }
     // The home screen's mask follows the cards: look again for a while after the posture changes,
     // a drop (which may add a widget) and any widget added or removed.
@@ -111,6 +120,18 @@ ContainmentItem {
         function onAppletAdded() { root.watchCards(); }
         function onAppletRemoved() { root.watchCards(); }
         function onAppletsChanged() { root.watchCards(); }
+    }
+    // Widgets moved or resized in edit mode (the stock one, or the home screen's own): measured
+    // again while editing and once it ends.
+    readonly property bool editingCards: (fullRepresentationItem && fullRepresentationItem.appletsLayout
+                                          ? fullRepresentationItem.appletsLayout.editMode : false)
+                                         || (homeLoader.item ? homeLoader.item.editing : false)
+    onEditingCardsChanged: watchCards()
+    Timer {
+        interval: 500
+        repeat: true
+        running: root.tabletHome && root.editingCards
+        onTriggered: root.updateCardsRect()
     }
     Timer {
         id: cardsTimer

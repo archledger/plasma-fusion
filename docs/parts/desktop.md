@@ -56,8 +56,11 @@ overflow page, dot targets 16 px off the dot, a move to page 2 keeping its app, 
 page 2, an add from A-Z opening a home page, a move to a full page 1, a posture round trip.
 
 The cards' rectangle is read from the containment's applet containers when tablet posture starts
-and for 10 s after (the layout manager places them asynchronously); there is no timer on an idle
-home screen.
+and for 10 s after (the layout manager places them asynchronously), again after a drop and when a
+widget is added or removed, and every 0.5 s while a widget edit mode is on (the stock one or the
+home screen's) and once it ends, so a moved or resized card stays tappable; there is no timer on an
+idle home screen. A reading with no sized containers keeps the last rectangle (edit mode rebuilds
+the layout for a moment); only a containment without widgets gets an empty one.
 
 ## Installation and switch-over
 
