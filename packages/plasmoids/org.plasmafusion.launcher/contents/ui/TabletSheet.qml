@@ -276,7 +276,12 @@ FocusScope {
                 }
                 // Hibernate, where the system offers it, as in the laptop launcher's footer: press
                 // and hold, right-click or the Menu key.
-                onPressAndHold: tabletSleepMenu.offer()
+                onPressAndHold: {
+                    if (!tabletSleepMenu.offer()) {
+                        sheet.closeRequested();
+                        session.suspend();
+                    }
+                }
                 Keys.onMenuPressed: tabletSleepMenu.offer()
                 TapHandler {
                     acceptedButtons: Qt.RightButton
@@ -286,10 +291,12 @@ FocusScope {
                     id: tabletSleepMenu
                     visualParent: tabletSleepButton
                     placement: PlasmaExtras.Menu.TopPosedLeftAlignedPopup
-                    function offer(): void {
-                        if (session.canHibernate) {
-                            openRelative();
+                    function offer(): bool {
+                        if (!session.canHibernate) {
+                            return false;
                         }
+                        openRelative();
+                        return true;
                     }
                     PlasmaExtras.MenuItem {
                         text: i18nc("@action:inmenu", "Sleep")

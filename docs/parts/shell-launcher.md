@@ -94,7 +94,8 @@ user/session footer. Plasma 6 applet (QML only), GPL-2.0-or-later.
   Lock, Sleep, Restart (asks), Shut Down (asks); buttons are disabled when logind forbids them.
   Where the system can hibernate, Sleep's menu (right-click, press and hold or the Menu key) offers Hibernate,
   in the footer and in the tablet sheet; where it can hibernate but not suspend, Sleep stays enabled and
-  a click opens that menu.
+  a click opens that menu. Where it cannot hibernate, a long press on Sleep sleeps (a held button sends
+  no click of its own).
 - Keyboard: Down from search goes to the pinned grid (to results while searching); arrows move
   in grids (the home "Recommended" grid keeps the selection in its four visible files); Up from
   a top row goes back to chips/search; Tab / Shift+Tab walk search, chips,

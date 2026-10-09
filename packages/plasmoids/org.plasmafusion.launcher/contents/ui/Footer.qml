@@ -225,7 +225,14 @@ FocusScope {
                 session.suspend();
             }
             // Hibernate, where the system offers it: right-click, press and hold or the Menu key.
-            onPressAndHold: sleepMenu.offer()
+            // A long press with no menu to offer does what a press does (the button then sends no
+            // clicked() of its own).
+            onPressAndHold: {
+                if (!sleepMenu.offer()) {
+                    footer.launcher.close();
+                    session.suspend();
+                }
+            }
             Keys.onMenuPressed: sleepMenu.offer()
             TapHandler {
                 acceptedButtons: Qt.RightButton
@@ -235,10 +242,12 @@ FocusScope {
                 id: sleepMenu
                 visualParent: sleepButton
                 placement: PlasmaExtras.Menu.TopPosedRightAlignedPopup
-                function offer(): void {
-                    if (session.canHibernate) {
-                        openRelative();
+                function offer(): bool {
+                    if (!session.canHibernate) {
+                        return false;
                     }
+                    openRelative();
+                    return true;
                 }
                 PlasmaExtras.MenuItem {
                     text: i18nc("@action:inmenu", "Sleep")
