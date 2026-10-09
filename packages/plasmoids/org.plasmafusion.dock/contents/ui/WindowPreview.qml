@@ -63,7 +63,8 @@ PlasmaCore.Dialog {
     onWidthChanged: if (visible) Qt.callLater(reposition)
     onVisibleChanged: if (visible) Qt.callLater(reposition)
 
-    // [{child, title, winId, active, minimized}] of the task's windows (at most 6).
+    // [{child, title, winId, active, minimized}] of all the task's windows (the cards show at most
+    // six, shownWindows(); all are read so that the active one is found wherever it is).
     readonly property var windows: {
         void revision;
         const atm = TaskManager.AbstractTasksModel;
@@ -83,7 +84,7 @@ PlasmaCore.Dialog {
         };
         const parent = taskModel.makeModelIndex(row);
         if (taskModel.data(parent, atm.IsGroupParent) === true) {
-            for (let j = 0; j < taskModel.rowCount(parent) && out.length < 6; ++j) {
+            for (let j = 0; j < taskModel.rowCount(parent); ++j) {
                 read(taskModel.makeModelIndex(row, j), j);
             }
         } else if (taskModel.data(parent, atm.IsWindow) === true) {
@@ -140,7 +141,7 @@ PlasmaCore.Dialog {
         readonly property real screenWidth: preview.screenGeometry.width > 0 ? preview.screenGeometry.width : 1280
         readonly property real cardInset: 2 * m.px(6)
         readonly property real room: screenWidth - 16 - 2 * pad - 2
-        readonly property int shown: Math.max(1, Math.min(preview.windows.length,
+        readonly property int shown: Math.max(1, Math.min(preview.windows.length, 6,
                                                           Math.floor((room + pad) / (m.px(140) + cardInset + pad))))
         readonly property real thumbW: Math.min(m.px(208), (room + pad) / shown - pad - cardInset)
         readonly property real thumbH: Math.round(thumbW * 130 / 208)
