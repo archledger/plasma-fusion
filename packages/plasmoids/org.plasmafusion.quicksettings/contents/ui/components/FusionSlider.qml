@@ -27,15 +27,13 @@ T.Slider {
     wheelEnabled: false
 
     // The last wheel or key step (signed), 0 for a pointer press or drag: an owner whose model can
-    // be beyond `to` (a volume raised elsewhere) applies the step to the model's value instead.
+    // be beyond `to` (a volume raised elsewhere) applies the step to the model's value instead,
+    // so moved() comes for every step, also at the ends (the model may still have room).
     property real lastStep: 0
     function step(delta: real): void {
-        const next = Math.max(slider.from, Math.min(slider.to, slider.value + delta));
         lastStep = delta;
-        if (next !== slider.value) {
-            slider.value = next;
-            slider.moved();
-        }
+        slider.value = Math.max(slider.from, Math.min(slider.to, slider.value + delta));
+        slider.moved();
     }
     onPressedChanged: if (pressed) lastStep = 0
 

@@ -80,7 +80,7 @@ ColumnLayout {
                         // real volume.
                         onMoved: {
                             const real = row.stream ? row.stream.volume / streams.backend.audio.normal : 0;
-                            streams.backend.audio.setStreamVolume(row.stream, lastStep !== 0 && real > to ? real + lastStep : value);
+                            streams.backend.audio.setStreamVolume(row.stream, lastStep !== 0 ? real + lastStep : value);
                         }
                         onDraggingChanged: if (!dragging) {
                             value = Qt.binding(() => row.stream ? row.stream.volume / streams.backend.audio.normal : 0);
