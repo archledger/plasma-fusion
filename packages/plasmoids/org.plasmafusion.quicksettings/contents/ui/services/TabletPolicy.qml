@@ -342,9 +342,12 @@ Item {
     onTabletChanged: {
         Qt.callLater(applyKeyboard);
         Qt.callLater(applyPostureSettings);
-        if (leader && !tablet && rotationLocked) {
-            withOutput((name, rotation) => {
-                if (name !== "" && rotation !== 1) {
+        if (leader && !tablet) {
+            // The lock may have been set from another screen's quick settings: KWin's policy for
+            // the output says (0 never = locked), else this widget's own state.
+            withOutput((name, rotation, policyValue) => {
+                const locked = policyValue >= 0 ? policyValue === 0 : policy.rotationLocked;
+                if (locked && name !== "" && rotation !== 1) {
                     console.info("quicksettings: tablet mode ended with the rotation locked: " + name + " back to normal");
                     run("kscreen-doctor " + quote("output." + name + ".rotation.normal"), () => {});
                 }
