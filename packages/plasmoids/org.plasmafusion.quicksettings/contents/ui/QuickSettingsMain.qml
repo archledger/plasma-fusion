@@ -929,39 +929,22 @@ ColumnLayout {
                 stepSize: 0.001
                 Accessible.name: i18nc("@label:slider", "Track position")
                 value: page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0
-                // The position asked for, kept apart from `value`, which follows the player again
-                // as soon as the slider is let go (a click lets go within the queue's 100 ms).
-                property real target: -1
+                // The player seeks once the slider is let go (a click or a drag), or at each keyboard
+                // or wheel step: always on the track playing at that moment. (A queued seek, as the
+                // stock widget's 100 ms one, could land on the next track: libkmpris 6.7 neither
+                // signals a track change with the same title and length nor shows the track id.)
+                function seekNow(): void {
+                    page.backend.media.seek(Math.round(value * page.backend.media.length));
+                }
                 onMoved: {
-                    target = value;
-                    seekTimer.restart();
+                    if (!dragging) {
+                        seekNow();
+                    }
                 }
                 onDraggingChanged: {
                     if (!dragging) {
+                        seekNow();
                         value = Qt.binding(() => page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0);
-                    }
-                }
-                // A seek still queued belongs to the track it was made on: another player, track or
-                // length drops it.
-                function cancelQueued(): void {
-                    seekTimer.stop();
-                    target = -1;
-                }
-                Connections {
-                    target: page.backend.media
-                    function onCurrentIndexChanged() { seekSlider.cancelQueued(); }
-                    function onTitleChanged() { seekSlider.cancelQueued(); }
-                    function onLengthChanged() { seekSlider.cancelQueued(); }
-                }
-                // A drag sends one request when it pauses (as the stock widget's 100 ms queue).
-                Timer {
-                    id: seekTimer
-                    interval: 100
-                    onTriggered: {
-                        if (seekSlider.target >= 0) {
-                            page.backend.media.seek(Math.round(seekSlider.target * page.backend.media.length));
-                            seekSlider.target = -1;
-                        }
                     }
                 }
             }
