@@ -59,8 +59,11 @@ function _mapUnquoted(format, fn) {
 // already has the wanted hour cycle, so the order, the separators and the place of the AM/PM
 // marker stay the region's ("2:49 PM", "14:49", "오후 2:49", "下午2:49", "14 h 49").
 function timeFormat(shortTimeFormat, use24h, localeName, showSeconds) {
+    // Seconds take the separator the region puts before the minutes ("H.mm" -> "H.mm.ss"); a
+    // colon when there is none (a quoted literal, as in "HH 'h' mm").
     function displayFormat(value) {
-        return showSeconds ? _mapUnquoted(value, part => part.replace(/m+/, token => token + ":ss")) : value;
+        return showSeconds ? _mapUnquoted(value, part => part.replace(/([.:]?)(m+)/,
+                                                                       (all, sep, token) => sep + token + (sep || ":") + "ss")) : value;
     }
     // Short formats have no seconds; drop them should a region have them.
     const format = _mapUnquoted(shortTimeFormat, part => part.replace(/[.:\s]*s+/g, "")) || "HH:mm";

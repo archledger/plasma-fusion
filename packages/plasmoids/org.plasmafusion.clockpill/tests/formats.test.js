@@ -15,6 +15,11 @@ test("seconds are opt-in and preserve the region's AM/PM order", () => {
     assert.equal(context.timeFormat("h:mm AP", 1, "en_US", true), "h:mm:ss AP");
     assert.equal(context.timeFormat("APh:mm", 1, "zh_TW", true), "APh:mm:ss");
 });
+test("seconds keep the region's separator", () => {
+    assert.equal(context.timeFormat("H.mm", 1, "fi_FI", true), "H.mm.ss");
+    assert.equal(context.timeFormat("HH.mm", 1, "da_DK", true), "HH.mm.ss");
+    assert.match(context.timeFormat("H.mm", 0, "fi_FI", true), /mm\.ss/);
+});
 test("seconds respect forced hour cycle and quoted locale text", () => {
     assert.equal(context.timeFormat("h:mm AP", 2, "en_US", true), "HH:mm:ss");
     assert.equal(context.timeFormat("HH:mm", 0, "ko_KR", true), "AP h:mm:ss");
