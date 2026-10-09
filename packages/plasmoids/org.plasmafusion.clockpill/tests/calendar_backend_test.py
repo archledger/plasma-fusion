@@ -6,7 +6,7 @@
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QDate, QDateTime, QTime, QUrl
+from PySide6.QtCore import Q_ARG, QDate, QDateTime, QMetaObject, QTime, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
@@ -54,4 +54,14 @@ check((days[0]["year"], days[0]["month"], days[0]["day"]) == (2026, 12, 28), "ye
 backend.setProperty("displayedDate", QDateTime(QDate(2028, 2, 1), QTime(12, 0)))
 QTest.qWait(100)
 check(any(d["year"] == 2028 and d["month"] == 2 and d["day"] == 29 for d in value("days")), "leap-day calendar preserved")
+# Add event with KOrganizer reported but not reachable (the private bus has none): the failed call
+# ends busy and leaves its error, so the buttons work again.
+backend.setProperty("korganizerAvailable", True)
+QMetaObject.invokeMethod(backend, "openCalendar", Q_ARG(bool, True))
+for _ in range(60):
+    QTest.qWait(50)
+    if not value("busy"):
+        break
+check(not value("busy") and value("actionError") != "", "a failed calendar call ends busy and reports (%s)" % value("actionError"))
+backend.setProperty("korganizerAvailable", False)
 print(f"Calendar adapter: {checks} checks, 0 failures; providers {value('providerIds')}")

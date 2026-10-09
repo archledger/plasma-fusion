@@ -72,9 +72,12 @@ Item {
                         }
                     }, reply => backend.actionFailed(reply));
     }
-    function actionFailed(reply): void {
-        actionError = reply.error.message;
+    // A rejected call passes its error ({name, message}); busy always ends here.
+    function actionFailed(error): void {
         busy = false;
+        const text = error && (error.message || (error.error && error.error.message) || error.name);
+        actionError = text ? String(text) : (typeof i18nc === "function" ? i18nc("@info", "The calendar application did not respond.")
+                                                                          : "The calendar application did not respond.");
     }
     function checkCalendarApp(): void {
         DBus.SessionBus.asyncCall({ service: "org.freedesktop.DBus", path: "/org/freedesktop/DBus",
