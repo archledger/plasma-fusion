@@ -130,12 +130,17 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
     // gives undefined): [] for the lists, "" for the others (their text, written back as is).
     var TRAY_LISTS = ["disabledStatusNotifiers", "hiddenItems", "knownItems", "extraItems", "shownItems"];
     var TRAY_VALUES = ["showAllItems", "scaleIconsToFit", "iconSpacing"];
+    // readConfig's default for a list key that is not set (an empty default cannot tell it from
+    // a list the user emptied).
+    var UNSET = ["\u0001unset"];
     function copyTray(from, to) {
         from.currentConfigGroup = ["General"];
         to.currentConfigGroup = ["General"];
         for (var k = 0; k < TRAY_LISTS.length; ++k) {
-            var list = from.readConfig(TRAY_LISTS[k], []);
-            if (list && list.length > 0) {
+            // A list the user emptied is copied as well (the new tray's own defaults would bring
+            // the removed items back); only a list never set is left to the new tray.
+            var list = from.readConfig(TRAY_LISTS[k], UNSET);
+            if (list && !(list.length === 1 && list[0] === UNSET[0])) {
                 to.writeConfig(TRAY_LISTS[k], list);
             }
         }
