@@ -797,7 +797,24 @@ ColumnLayout {
         radius: 16
         color: page.pal.overlay(0.06)
 
-        // While the sheet shows, the position is asked for every second (MPRIS reports it on request).
+        // The position once when the sheet opens and when playback starts or stops (a player paused
+        // while the sheet was closed), then every second while it plays (MPRIS reports it on request).
+        Connections {
+            target: page.backend
+            function onPopupOpenChanged() {
+                if (page.backend.popupOpen && page.backend.media.canSeek) {
+                    page.backend.media.updatePosition();
+                }
+            }
+        }
+        Connections {
+            target: page.backend.media
+            function onPlayingChanged() {
+                if (page.backend.popupOpen && page.backend.media.canSeek) {
+                    page.backend.media.updatePosition();
+                }
+            }
+        }
         Timer {
             interval: 1000
             repeat: true
