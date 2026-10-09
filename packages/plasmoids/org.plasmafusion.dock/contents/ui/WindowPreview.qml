@@ -126,6 +126,9 @@ PlasmaCore.Dialog {
         function onDataChanged(): void { preview.revision++; }
         function onRowsInserted(): void { preview.revision++; }
         function onRowsRemoved(): void { preview.revision++; }
+        function onRowsMoved(): void { preview.revision++; }
+        function onModelReset(): void { preview.revision++; }
+        function onLayoutChanged(): void { preview.revision++; }
     }
 
     mainItem: Rectangle {
