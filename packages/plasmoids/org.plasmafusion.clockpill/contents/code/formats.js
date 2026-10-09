@@ -58,7 +58,10 @@ function _mapUnquoted(format, fn) {
 // the stock digital clock's setting). The region's own short time format is used whenever it
 // already has the wanted hour cycle, so the order, the separators and the place of the AM/PM
 // marker stay the region's ("2:49 PM", "14:49", "오후 2:49", "下午2:49", "14 h 49").
-function timeFormat(shortTimeFormat, use24h, localeName) {
+function timeFormat(shortTimeFormat, use24h, localeName, showSeconds) {
+    function displayFormat(value) {
+        return showSeconds ? _mapUnquoted(value, part => part.replace(/m+/, token => token + ":ss")) : value;
+    }
     // Short formats have no seconds; drop them should a region have them.
     const format = _mapUnquoted(shortTimeFormat, part => part.replace(/[.:\s]*s+/g, "")) || "HH:mm";
     let regionAp = false;
@@ -67,22 +70,22 @@ function timeFormat(shortTimeFormat, use24h, localeName) {
         return part;
     });
     if (use24h === 1 || (use24h === 0 && regionAp) || (use24h === 2 && !regionAp)) {
-        return format;
+        return displayFormat(format);
     }
     if (use24h === 2) {
         // A 12-hour region shown with 24 hours: drop the marker, two-digit hours ("09:05").
-        return _mapUnquoted(format, part => part.replace(/[Aa][Pp]?/g, "").replace(/h+/g, "HH"))
-            .replace(/\s{2,}/g, " ").trim();
+        return displayFormat(_mapUnquoted(format, part => part.replace(/[Aa][Pp]?/g, "").replace(/h+/g, "HH"))
+            .replace(/\s{2,}/g, " ").trim());
     }
     // A 24-hour region shown with 12 hours: "2:49 PM"; Chinese, Japanese and Korean put the
     // marker first, as their own 12-hour formats do.
     const hours = _mapUnquoted(format, part => part.replace(/[Hh]+/g, "h"));
     const language = String(localeName || "").split(/[_-]/)[0];
     if (language === "ko") {
-        return "AP " + hours;
+        return displayFormat("AP " + hours);
     }
     if (language === "zh" || language === "ja") {
-        return "AP" + hours;
+        return displayFormat("AP" + hours);
     }
-    return hours + " AP";
+    return displayFormat(hours + " AP");
 }

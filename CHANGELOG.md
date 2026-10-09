@@ -7,6 +7,14 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## Unreleased
+
+- The clock calendar gains selected-day events, event dots, calendar-provider/resource settings,
+  Open calendar and a native KOrganizer Add event action. Calendar apps continue to own sync,
+  recurrence and reminders; the date grid remains usable without them.
+- The clock offers optional seconds and searchable world-clock time zones, shown with their local
+  dates in the calendar popup; the panel's system time zone remains unchanged.
+
 ## 0.3.1 (2026-10-06)
 
 Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch), like 0.3.0.

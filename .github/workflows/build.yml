@@ -70,6 +70,18 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/kwin/tests/offscreen/snaptest.py "$RUNNER_TEMP/snap-stage"
 
+      - name: Calendar adapter and interaction tests (offscreen Qt)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/calendar-stage" tools/build.sh topbar
+          node --test packages/plasmoids/org.plasmafusion.clockpill/tests/formats.test.js
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_backend_test.py
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_view_test.py "$RUNNER_TEMP/calendar-stage"
+
       - name: Build the RPM (tools/build.sh, %check, rpmlint)
         run: packaging/build-rpm.sh --topdir "$GITHUB_WORKSPACE/build/rpmbuild"
 
