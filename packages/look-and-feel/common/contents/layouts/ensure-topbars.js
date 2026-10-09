@@ -15,11 +15,41 @@
     made before that (app name, menu and clock only) gets the status area once; the bar is marked
     ([PlasmaFusion] statusItems), so what the user removes later stays removed. The main bar is the
     Plasma Fusion top bar with quick settings or a tray on the lowest screen number (the primary
-    screen is 0). Prints one line: "top bars: screens N, added M, completed K".
+    screen is 0); with none (all top bars removed), the first bar made here gets Plasma Fusion's
+    own status area and is the main bar for the others. Prints one line: "top bars: screens N,
+    added M, completed K".
 
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
 */
+
+// The layout script's tray lists (org.kde.plasma.desktop-layout.js explains them; the build checks
+// they are the same), for a first bar's tray when no other bar has one to copy.
+var TRAY_ITEMS_REPLACED = [
+    "org.kde.plasma.networkmanagement",
+    "org.kde.plasma.volume",
+    "org.kde.plasma.battery",
+    "org.kde.plasma.bluetooth",
+    "org.kde.plasma.brightness",
+    "org.kde.plasma.notifications",
+    "org.kde.plasma.keyboardlayout",
+    "org.kde.kdeconnect",
+    "org.kde.plasma.clipboard",
+    "org.kde.plasma.mediacontroller"
+];
+var TRAY_ITEMS_UNLOADED = [
+    "org.kde.plasma.weather"
+];
+var TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS = [
+    "org.kde.plasma.devicenotifier"
+];
+var TRAY_ITEMS_HIDDEN = [
+    "org.kde.plasma.vault",
+    "org.kde.plasma.devicenotifier",
+    "org.kde.kscreen",
+    "org.kde.plasma.printmanager",
+    "org.kde.plasma.manage-inputmethod"
+];
 
 function ensureTopBarsTextScale() {  // identical to the layout script's textScale()
     var pt = NaN;
@@ -100,34 +130,77 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
     // gives undefined): [] for the lists, "" for the others (their text, written back as is).
     var TRAY_LISTS = ["disabledStatusNotifiers", "hiddenItems", "knownItems", "extraItems", "shownItems"];
     var TRAY_VALUES = ["showAllItems", "scaleIconsToFit", "iconSpacing"];
+    function copyTray(from, to) {
+        from.currentConfigGroup = ["General"];
+        to.currentConfigGroup = ["General"];
+        for (var k = 0; k < TRAY_LISTS.length; ++k) {
+            var list = from.readConfig(TRAY_LISTS[k], []);
+            if (list && list.length > 0) {
+                to.writeConfig(TRAY_LISTS[k], list);
+            }
+        }
+        for (var v = 0; v < TRAY_VALUES.length; ++v) {
+            var text = from.readConfig(TRAY_VALUES[v], "");
+            if (text !== undefined && text !== null && String(text) !== "") {
+                to.writeConfig(TRAY_VALUES[v], text);
+            }
+        }
+        from.currentConfigGroup = [];
+        to.currentConfigGroup = [];
+    }
+    // As the layout script sets up a tray: the items quick settings replaces and the passive ones
+    // hidden, the ones with no use (and Disks & Devices, which quick settings replaces) not loaded.
+    function defaultTray(tray) {
+        tray.currentConfigGroup = ["General"];
+        var off = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED);
+        tray.writeConfig("disabledStatusNotifiers", off);
+        tray.writeConfig("hiddenItems", off);
+        var knownItems = tray.readConfig("knownItems", []) || [];
+        var extraItems = tray.readConfig("extraItems", []) || [];
+        var unloaded = TRAY_ITEMS_UNLOADED.concat(TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS);
+        for (var u = 0; u < unloaded.length; ++u) {
+            if (knownItems.indexOf(unloaded[u]) === -1) {
+                knownItems.push(unloaded[u]);
+            }
+            extraItems = extraItems.filter(function (item) { return item !== unloaded[u]; });
+        }
+        tray.writeConfig("knownItems", knownItems);
+        tray.writeConfig("extraItems", extraItems);
+        tray.currentConfigGroup = [];
+    }
     // The main bar's tray and quick settings, after what the bar has (the pen menu stays in the
-    // main bar); then the mark. Returns how many widgets were added.
-    function statusArea(bar) {
+    // main bar); then the mark. With no main bar yet, a bar made here (all top bars were removed)
+    // gets Plasma Fusion's own status area (tray set up as above, pen menu, quick settings) and
+    // becomes the main bar for the next screens; an existing bar is left as it is and unmarked (a
+    // layout the user made without a status area), to be completed once a main bar has one.
+    // Returns how many widgets were added.
+    function statusArea(bar, made) {
         var count = 0;
-        if (mainTray !== null && !has(bar, TRAY)) {
+        if (main === null && !made) {
+            return 0;
+        }
+        var founding = main === null;
+        if ((founding || mainTray !== null) && !has(bar, TRAY)) {
             var tray = add(bar, [TRAY]);
             if (tray) {
-                mainTray.currentConfigGroup = ["General"];
-                tray.currentConfigGroup = ["General"];
-                for (var k = 0; k < TRAY_LISTS.length; ++k) {
-                    var list = mainTray.readConfig(TRAY_LISTS[k], []);
-                    if (list && list.length > 0) {
-                        tray.writeConfig(TRAY_LISTS[k], list);
-                    }
+                if (mainTray !== null) {
+                    copyTray(mainTray, tray);
+                } else {
+                    defaultTray(tray);
                 }
-                for (var v = 0; v < TRAY_VALUES.length; ++v) {
-                    var text = mainTray.readConfig(TRAY_VALUES[v], "");
-                    if (text !== undefined && text !== null && String(text) !== "") {
-                        tray.writeConfig(TRAY_VALUES[v], text);
-                    }
-                }
-                mainTray.currentConfigGroup = [];
-                tray.currentConfigGroup = [];
                 count++;
             }
         }
-        if (mainQs && !has(bar, QS) && add(bar, [QS])) {
+        if (founding && !has(bar, "org.plasmafusion.pen")) {
+            add(bar, ["org.plasmafusion.pen"]);
+        }
+        if ((founding || mainQs) && !has(bar, QS) && add(bar, [QS])) {
             count++;
+        }
+        if (founding) {
+            main = bar;
+            mainTray = has(bar, TRAY) ? bar.widgets(TRAY)[0] : null;
+            mainQs = has(bar, QS);
         }
         bar.currentConfigGroup = ["PlasmaFusion"];
         bar.writeConfig("statusItems", true);
@@ -142,7 +215,7 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
                 bar.currentConfigGroup = ["PlasmaFusion"];
                 var marked = truthy(bar.readConfig("statusItems", false));
                 bar.currentConfigGroup = [];
-                if (!marked && statusArea(bar) > 0) {
+                if (!marked && statusArea(bar, false) > 0) {
                     completed++;
                 }
             }
@@ -173,7 +246,7 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
             add(bar, ["org.kde.plasma.digitalclock"]);
         }
         add(bar, ["org.kde.plasma.panelspacer"]);
-        statusArea(bar);
+        statusArea(bar, true);
         added++;
     }
     print("top bars: screens " + screenCount + ", added " + added + ", completed " + completed);

@@ -45,16 +45,20 @@ echo "look-and-feel: $(ls "$DEST" | tr '\n' ' ')"
 # "Add Panel" templates: the Plasma Fusion top bar and dock (owner decision 8, ADAPTIVE 6), at
 #   $STAGE/.local/share/plasma/layout-templates/org.plasmafusion.panel.{topbar,dock}/
 TEMPLATES=$STAGE/.local/share/plasma/layout-templates
-# The top-bar template sets up a first bar's tray with the layout script's lists: the same lists.
+# The top-bar template and ensure-topbars.js set up a first bar's tray with the layout script's
+# lists: the same lists.
 python3 - "$SRC/common/contents/layouts/org.kde.plasma.desktop-layout.js" \
-  "$SRC/layout-templates/org.plasmafusion.panel.topbar/contents/layout.js" <<'PY'
+  "$SRC/layout-templates/org.plasmafusion.panel.topbar/contents/layout.js" \
+  "$SRC/common/contents/layouts/ensure-topbars.js" <<'PY'
 import re, sys
-layout, template = (open(f, encoding="utf-8").read() for f in sys.argv[1:3])
-for name in ("TRAY_ITEMS_REPLACED", "TRAY_ITEMS_UNLOADED", "TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS", "TRAY_ITEMS_HIDDEN"):
-    pattern = r"^var %s = (\[.*?\]);" % name
-    a, b = re.search(pattern, layout, re.S | re.M), re.search(pattern, template, re.S | re.M)
-    assert a and b and re.findall(r'"([^"]+)"', a[1]) == re.findall(r'"([^"]+)"', b[1]), \
-        "%s differs between the layout script and the top-bar template" % name
+layout = open(sys.argv[1], encoding="utf-8").read()
+for other in sys.argv[2:]:
+    text = open(other, encoding="utf-8").read()
+    for name in ("TRAY_ITEMS_REPLACED", "TRAY_ITEMS_UNLOADED", "TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS", "TRAY_ITEMS_HIDDEN"):
+        pattern = r"^var %s = (\[.*?\]);" % name
+        a, b = re.search(pattern, layout, re.S | re.M), re.search(pattern, text, re.S | re.M)
+        assert a and b and re.findall(r'"([^"]+)"', a[1]) == re.findall(r'"([^"]+)"', b[1]), \
+            "%s differs between the layout script and %s" % (name, other.rsplit("/", 2)[-2] + "/" + other.rsplit("/", 1)[-1])
 PY
 for id in org.plasmafusion.panel.topbar org.plasmafusion.panel.dock; do
   src=$SRC/layout-templates/$id

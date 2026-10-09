@@ -451,7 +451,10 @@ live session gets these changes through DEVICE-1's in-place migration.
   bar's status area (its tray, with the tray's item lists copied, and quick settings; the pen menu
   stays in the main bar); a Plasma Fusion bar made before (app name, menu, clock) gets it once and
   is marked `[PlasmaFusion] statusItems`, so what the user removes later stays removed. The main bar
-  is the Fusion top bar with quick settings or a tray on the lowest screen number. Note:
+  is the Fusion top bar with quick settings or a tray on the lowest screen number; with none (all
+  top bars removed), the first bar made gets Plasma Fusion's own status area (a tray set up from the
+  layout script's lists, which the build checks are the same, the pen menu and quick settings) and is
+  the main bar for the others; existing bars without one are left as they are and unmarked. Note:
   `readConfig` needs a default of the key's type (`[]` for lists; `null` returns undefined).
 - Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
   `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into
