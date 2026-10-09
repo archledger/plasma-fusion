@@ -1871,9 +1871,13 @@ PlasmoidItem {
             root.maybeShowGestureCard();
         }
     }
+    // Leaving tablet mode closes a card not dismissed yet (its gestures are tablet ones); it shows
+    // again the next time.
     function maybeShowGestureCard(): void {
         if (tablet && !gestureCardShown && !gestureCardOpen) {
             gestureCardOpen = true;
+        } else if (!tablet && gestureCardOpen) {
+            gestureCardOpen = false;
         }
     }
     function dismissGestureCard(): void {

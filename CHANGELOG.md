@@ -46,6 +46,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   screens get them at the next login; a status icon you remove from them stays removed.
 - Switching off "Top bar on every screen" in the Plasma Fusion settings now lasts: before, the bars
   came back at the next screen change.
+- The touch-gestures card closes when tablet mode ends before it was dismissed (it shows again the
+  next time) instead of staying over the laptop desktop.
 
 ## 0.3.1 (2026-10-06)
 
