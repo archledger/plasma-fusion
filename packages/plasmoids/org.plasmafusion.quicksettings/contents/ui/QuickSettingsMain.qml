@@ -464,10 +464,13 @@ ColumnLayout {
             iconPath: Icons.wifi
             checked: page.backend.net.checked
             available: page.backend.net.available && page.backend.net.wifiDevice
-            // Without a Wi-Fi radio the page still lists the VPN connections.
-            hasDetails: page.backend.net.available && (page.backend.net.wifiDevice || page.backend.net.vpnCount > 0)
+            // Without a Wi-Fi radio the page still has the VPN connections and, with a modem, the
+            // airplane mode switch.
+            hasDetails: page.backend.net.available
+                        && (page.backend.net.wifiDevice || page.backend.net.vpnCount > 0 || page.backend.net.airplaneAvailable)
             detailsText: page.backend.net.wifiDevice ? i18nc("@action:button", "Show Wi‑Fi networks")
-                                                     : i18nc("@action:button", "Show VPN connections")
+                       : page.backend.net.vpnCount > 0 ? i18nc("@action:button", "Show VPN connections")
+                       : i18nc("@action:button", "Show network options")
             onToggled: {
                 if (available) {
                     page.backend.net.toggle();

@@ -101,8 +101,8 @@ ColumnLayout {
         Layout.fillWidth: true
         pal: page.pal
         metrics: page.metrics
-        // Without a Wi-Fi radio the page is only the VPN list.
-        title: page.backend.net.wifiDevice ? i18nc("@title", "Wi‑Fi") : i18nc("@title", "VPN")
+        // Without a Wi-Fi radio the page has the VPN connections and the airplane mode switch.
+        title: page.backend.net.wifiDevice ? i18nc("@title", "Wi‑Fi") : i18nc("@title", "Network")
         hasSwitch: page.backend.net.wifiDevice
         switchText: i18nc("@action:button", "Wi‑Fi")
         switchChecked: page.backend.net.wifiEnabled

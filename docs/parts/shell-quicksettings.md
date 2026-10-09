@@ -78,7 +78,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Bluetooth off, and back on), and the **VPN** connections (plugin VPNs and WireGuard: type `Vpn`
   or plasma-nm's `network-vpn` icon, as WireGuard has no type of its own in plasma-nm's Enums); a
   click connects one, or disconnects the active one. Without a Wi‑Fi radio the tile's chevron
-  (`Show VPN connections`) opens the page as the VPN list only;
+  (`Show VPN connections`, or `Show network options` with a modem alone) opens the page as
+  `Network`: the VPN list and the airplane mode switch;
 * **Disks & Devices** (device name, or `N devices`; accent while one is mounted), shown while a
   removable device is connected, with a USB-drive icon in the status pill: the stock Disks &
   Devices, which is not loaded where this widget is in the bar (desktop layout and
