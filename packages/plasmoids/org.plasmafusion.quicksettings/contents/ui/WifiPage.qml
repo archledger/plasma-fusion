@@ -32,6 +32,7 @@ ColumnLayout {
     // plasma-nm enums (org.kde.plasma.networkmanagement Enums)
     readonly property int stateActivating: 1
     readonly property int stateActivated: 2
+    readonly property int stateDeactivating: 3
     readonly property int stateDeactivated: 4
 
     function securityLabel(type) {
@@ -486,15 +487,19 @@ ColumnLayout {
                 required property var model
                 readonly property bool connected: model.ConnectionState === page.stateActivated
                 readonly property bool connecting: model.ConnectionState === page.stateActivating
+                // A slow shutdown: the row waits (a click would connect again).
+                readonly property bool disconnecting: model.ConnectionState === page.stateDeactivating
                 Layout.fillWidth: true
+                enabled: !disconnecting
                 pal: page.pal
                 metrics: page.metrics
                 text: model.Name || ""
                 iconPath: Icons.lock
                 selected: connected
-                busy: connecting
+                busy: connecting || disconnecting
                 status: connected ? i18nc("@info:status VPN", "Connected")
-                      : connecting ? i18nc("@info:status VPN", "Connecting…") : ""
+                      : connecting ? i18nc("@info:status VPN", "Connecting…")
+                      : disconnecting ? i18nc("@info:status VPN", "Disconnecting…") : ""
                 trailingPath: connected ? Icons.check : ""
                 Accessible.description: connected || connecting ? i18nc("@info:tooltip", "Click to disconnect") : i18nc("@info:tooltip", "Click to connect")
                 onClicked: {
