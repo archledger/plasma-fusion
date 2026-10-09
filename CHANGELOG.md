@@ -70,6 +70,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   Plasma's Audio Volume widget.
 - The media card in Quick Settings has a **seek bar** with the track's time and, when several
   players run, a row of the players to **choose one**, as Plasma's Media Player widget.
+- Quick Settings lists **VPN** connections (including WireGuard) on the network page: a click
+  connects or disconnects. On a computer without Wi‑Fi the Wi‑Fi tile opens the VPN list.
 
 ## 0.3.1 (2026-10-06)
 

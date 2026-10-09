@@ -225,6 +225,8 @@ Item {
         readonly property int level: s ? s.level : 0
         readonly property var activeModel: s ? s.activeModel : null
         readonly property var otherModel: s ? s.otherModel : null
+        readonly property var vpnModel: s ? s.vpnModel : null
+        readonly property int vpnCount: s ? s.vpnCount : 0
         readonly property bool scanning: s ? s.scanning : false
         readonly property bool checked: wifiDevice && wifiEnabled && !airplane
         readonly property bool hotspotSupported: s ? s.hotspotSupported : false

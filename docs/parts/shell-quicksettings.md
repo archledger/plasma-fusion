@@ -73,7 +73,10 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   NetworkManager drops within 20 s reads `Failed to start`. The chevron opens the Wi‑Fi page,
   which also has the **Airplane mode** switch (with a Wi‑Fi radio or a modem): plasma-nm's
   `enableAirplaneMode` and setting, as the stock Networks widget (Wi‑Fi, mobile data and
-  Bluetooth off, and back on);
+  Bluetooth off, and back on), and the **VPN** connections (plugin VPNs and WireGuard: type `Vpn`
+  or plasma-nm's `network-vpn` icon, as WireGuard has no type of its own in plasma-nm's Enums); a
+  click connects one, or disconnects the active one. Without a Wi‑Fi radio the tile's chevron
+  (`Show VPN connections`) opens the page as the VPN list only;
 * **Disks & Devices** (device name, or `N devices`; accent while one is mounted), shown while a
   removable device is connected, with a USB-drive icon in the status pill: the stock Disks &
   Devices, which is not loaded where this widget is in the bar (desktop layout and

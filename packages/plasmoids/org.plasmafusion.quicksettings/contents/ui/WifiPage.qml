@@ -101,8 +101,9 @@ ColumnLayout {
         Layout.fillWidth: true
         pal: page.pal
         metrics: page.metrics
-        title: i18nc("@title", "Wi‑Fi")
-        hasSwitch: true
+        // Without a Wi-Fi radio the page is only the VPN list.
+        title: page.backend.net.wifiDevice ? i18nc("@title", "Wi‑Fi") : i18nc("@title", "VPN")
+        hasSwitch: page.backend.net.wifiDevice
         switchText: i18nc("@action:button", "Wi‑Fi")
         switchChecked: page.backend.net.wifiEnabled
         switchEnabled: page.backend.net.wifiHwEnabled && !page.backend.net.airplane
@@ -434,7 +435,7 @@ ColumnLayout {
         Layout.minimumHeight: page.metrics.px(44)
         pal: page.pal
         metrics: page.metrics
-        visible: !list.visible
+        visible: !list.visible && page.backend.net.wifiDevice
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         color: page.pal.secondary
@@ -455,6 +456,56 @@ ColumnLayout {
     Item {
         Layout.fillHeight: true
         visible: list.visible
+    }
+
+    // ---------------------------------------------------------------- VPN
+    // The VPN connections (plugin VPNs and WireGuard), as the stock Networks widget lists them:
+    // a click connects, or disconnects the active one.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 1
+        visible: vpnBox.visible
+        color: page.pal.overlay(0.08)
+    }
+    ColumnLayout {
+        id: vpnBox
+        Layout.fillWidth: true
+        visible: page.backend.net.vpnCount > 0
+        spacing: page.metrics.px(2)
+        FText {
+            Layout.fillWidth: true
+            pal: page.pal
+            metrics: page.metrics
+            text: i18nc("@title", "VPN")
+            font.weight: Font.Bold
+        }
+        Repeater {
+            model: page.backend.net.vpnModel
+            delegate: ListRow {
+                id: vpnRow
+                required property var model
+                readonly property bool connected: model.ConnectionState === page.stateActivated
+                readonly property bool connecting: model.ConnectionState === page.stateActivating
+                Layout.fillWidth: true
+                pal: page.pal
+                metrics: page.metrics
+                text: model.Name || ""
+                iconPath: Icons.lock
+                selected: connected
+                busy: connecting
+                status: connected ? i18nc("@info:status VPN", "Connected")
+                      : connecting ? i18nc("@info:status VPN", "Connecting…") : ""
+                trailingPath: connected ? Icons.check : ""
+                Accessible.description: connected || connecting ? i18nc("@info:tooltip", "Click to disconnect") : i18nc("@info:tooltip", "Click to connect")
+                onClicked: {
+                    if (connected || connecting) {
+                        page.backend.net.deactivate(model.ConnectionPath, model.DevicePath);
+                    } else {
+                        page.backend.net.activate(model.ConnectionPath, model.DevicePath, model.SpecificPath);
+                    }
+                }
+            }
+        }
     }
 
     // ---------------------------------------------------------------- airplane mode
@@ -646,6 +697,7 @@ ColumnLayout {
         spacing: page.metrics.px(8)
 
         TextButton {
+            visible: page.backend.net.wifiDevice
             pal: page.pal
             metrics: page.metrics
             implicitHeight: page.metrics.px(32)

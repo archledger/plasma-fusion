@@ -199,6 +199,21 @@ Item {
     readonly property int stateRole: appletModel.KItemModels.KRoleNames.role("ConnectionState")
     readonly property int nameRole: appletModel.KItemModels.KRoleNames.role("Name")
     readonly property int ssidRole: appletModel.KItemModels.KRoleNames.role("Ssid")
+    readonly property int iconRole: appletModel.KItemModels.KRoleNames.role("ConnectionIcon")
+
+    // VPN connections (plugin VPNs and WireGuard, which plasma-nm draws with the network-vpn icon
+    // but whose type its Enums leave out), as the stock Networks widget lists them.
+    function vpnRow(model, row, parent) {
+        const index = model.index(row, 0, parent);
+        return model.data(index, typeRole) === PlasmaNM.Enums.Vpn || String(model.data(index, iconRole) || "").startsWith("network-vpn");
+    }
+    readonly property var vpnModel: vpnConnections
+    readonly property int vpnCount: vpnConnections.count
+    KItemModels.KSortFilterProxyModel {
+        id: vpnConnections
+        sourceModel: appletModel
+        filterRowCallback: (row, parent) => net.vpnRow(appletModel, row, parent)
+    }
 
     function wirelessRow(model, row, parent, wantActive) {
         const index = model.index(row, 0, parent);
