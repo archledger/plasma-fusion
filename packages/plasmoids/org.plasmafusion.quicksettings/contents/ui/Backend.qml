@@ -6,6 +6,8 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as DBus
 
 import "components"
+import "global"
+import "../code/power.js" as Power
 
 // Every data source behind one null-safe object. Each service lives in its own
 // file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
@@ -23,7 +25,7 @@ Item {
     property bool showNotifications: true
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
-    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" or "devices".
+    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices" or "display".
     property string page: "main"
     property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
@@ -79,6 +81,18 @@ Item {
     Loader { id: audioLoader; asynchronous: true; source: "services/Audio.qml" }
     Loader { id: batteryLoader; asynchronous: true; source: "services/Battery.qml" }
     Loader { id: profilesLoader; asynchronous: true; source: "services/PowerProfiles.qml" }
+    Connections {
+        target: profilesLoader.item
+        function onFailed(profile: string) {
+            backend.profile.failedProfile = profile;
+            profileFailedTimer.restart();
+        }
+    }
+    Timer {
+        id: profileFailedTimer
+        interval: 5000
+        onTriggered: backend.profile.failedProfile = ""
+    }
     Loader { id: keepAwakeLoader; asynchronous: true; source: "services/KeepAwake.qml" }
     Loader { id: devicesLoader; asynchronous: true; source: "services/Devices.qml" }
     Connections {
@@ -204,12 +218,34 @@ Item {
         readonly property bool wifiEnabled: s ? s.wifiEnabled : false
         readonly property bool wifiHwEnabled: s ? s.wifiHwEnabled : false
         readonly property bool airplane: s ? s.airplane : false
+        readonly property bool airplaneAvailable: s ? s.airplaneAvailable : false
+        // The radios on before airplane mode are kept for every screen's widget (Instances, and in
+        // the widgets' settings across a plasmashell restart, main.qml), so the one that ends it
+        // brings them back; with no record (airplane mode started elsewhere) they all come back on.
+        function setAirplaneMode(on: bool): void {
+            if (!s) {
+                return;
+            }
+            if (on) {
+                Instances.airplaneRestore = { wifi: s.wifiEnabled, wwan: s.wwanEnabled, bluetooth: backend.bt.enabled };
+                s.enterAirplaneMode();
+                return;
+            }
+            const restore = Instances.airplaneRestore || { wifi: true, wwan: true, bluetooth: true };
+            Instances.airplaneRestore = null;
+            s.leaveAirplaneMode(restore.wifi, restore.wwan);
+            if (restore.bluetooth && backend.bt.available) {
+                backend.bt.setEnabled(true);
+            }
+        }
         readonly property string ssid: s ? s.ssid : ""
         readonly property bool connecting: s ? s.connecting : false
         readonly property string kind: s ? s.kind : "none"
         readonly property int level: s ? s.level : 0
         readonly property var activeModel: s ? s.activeModel : null
         readonly property var otherModel: s ? s.otherModel : null
+        readonly property var vpnModel: s ? s.vpnModel : null
+        readonly property int vpnCount: s ? s.vpnCount : 0
         readonly property bool scanning: s ? s.scanning : false
         readonly property bool checked: wifiDevice && wifiEnabled && !airplane
         readonly property bool hotspotSupported: s ? s.hotspotSupported : false
@@ -332,9 +368,11 @@ Item {
         readonly property bool inputMuted: s ? s.inputMuted : true
         readonly property string inputDescription: s ? s.inputDescription : ""
         readonly property var sourceModel: s ? s.sourceModel : null
+        readonly property var cardModel: s ? s.cardModel : null
         readonly property var playbackModel: s ? s.playbackModel : null
         readonly property var recordingModel: s ? s.recordingModel : null
         readonly property real normal: s ? s.normal : 65536
+        readonly property real maximum: s ? s.maximum : 1
         function setInputVolume(fraction: real): void { if (s) { s.setInputVolume(fraction); } }
         function toggleInputMute(): void { if (s) { s.toggleInputMute(); } }
         function setStreamVolume(stream: var, fraction: real): void { if (s) { s.setStreamVolume(stream, fraction); } }
@@ -427,11 +465,20 @@ Item {
         readonly property bool brightnessAvailable: s ? s.brightnessAvailable : false
         readonly property real brightness: s ? s.brightness : 0
         readonly property string label: s ? s.displayLabel : ""
+        readonly property var displaysModel: s ? s.displaysModel : null
+        readonly property int displayCount: s ? s.displayCount : 0
+        readonly property bool keyboardAvailable: s ? s.keyboardAvailable : false
+        readonly property int keyboardValue: s ? s.keyboardValue : 0
+        readonly property int keyboardMax: s ? s.keyboardMax : 0
+        // The Brightness page has more than the main slider: another display or a keyboard light.
+        readonly property bool more: displayCount > 1 || keyboardAvailable
         function setBrightness(fraction: real) {
             if (s) {
                 s.setBrightness(fraction);
             }
         }
+        function setDisplayBrightness(name: string, value: int) { if (s) { s.setDisplayBrightness(name, value); } }
+        function setKeyboardBrightness(value: int) { if (s) { s.setKeyboardBrightness(value); } }
     }
 
     // ------------------------------------------------------------------ night light
@@ -528,18 +575,29 @@ Item {
         }
     }
 
+    // Airplane mode ended by anything else (the stock widget, nmcli): the record is stale.
+    Connections {
+        target: backend.net
+        function onAirplaneChanged() {
+            if (!backend.net.airplane && Instances.airplaneRestore) {
+                Instances.airplaneRestore = null;
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ power profile
     readonly property var profile: QtObject {
         readonly property var s: profilesLoader.item
         readonly property bool available: s ? s.available : false
         readonly property string active: s ? s.active : ""
-        readonly property var order: ["power-saver", "balanced", "performance"]
         readonly property bool checked: available && active !== "" && active !== "balanced"
-        readonly property string subtitle: {
-            if (!available) {
-                return i18nc("@info:status power profiles", "Unavailable");
-            }
-            switch (active) {
+        readonly property string inhibitionReason: s ? s.inhibitionReason : ""
+        readonly property string degradationReason: s ? s.degradationReason : ""
+        readonly property var holds: s ? Power.holds(s.holds) : []
+        // A refused switch shows on the tile for a few seconds (the profile's id).
+        property string failedProfile: ""
+        function profileName(profile: string): string {
+            switch (profile) {
             case "power-saver":
                 return i18nc("@info:status power profile", "Power saver");
             case "performance":
@@ -547,21 +605,62 @@ Item {
             case "balanced":
                 return i18nc("@info:status power profile", "Balanced");
             default:
-                return active;
+                return profile;
             }
+        }
+        readonly property string subtitle: {
+            if (!available) {
+                return i18nc("@info:status power profiles", "Unavailable");
+            }
+            if (failedProfile !== "") {
+                return i18nc("@info:status %1 power profile name", "Couldn't switch to %1", profileName(failedProfile));
+            }
+            return profileName(active);
+        }
+        // Why Performance is not offered or may be slower, and which applications hold a profile:
+        // the stock Power and Battery widget's wording.
+        readonly property string note: {
+            const lines = [];
+            switch (inhibitionReason) {
+            case "":
+                break;
+            case "lap-detected":
+                lines.push(i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap."));
+                break;
+            case "high-operating-temperature":
+                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot."));
+                break;
+            default:
+                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable."));
+            }
+            if (active === "performance" && degradationReason !== "") {
+                switch (degradationReason) {
+                case "lap-detected":
+                    lines.push(i18nc("@info:tooltip", "Performance may be lowered to reduce heat generation because the computer has detected that it may be sitting on your lap."));
+                    break;
+                case "high-operating-temperature":
+                    lines.push(i18nc("@info:tooltip", "Performance may be reduced because the computer is running too hot."));
+                    break;
+                default:
+                    lines.push(i18nc("@info:tooltip", "Performance may be reduced."));
+                }
+            }
+            for (const h of holds) {
+                lines.push(i18nc("@info:tooltip %1 application name, %2 power profile name", "%1 has requested %2", h.name, profileName(h.profile)));
+            }
+            return lines.join("\n");
         }
         function cycle() {
             if (!s || !available) {
                 backend.openSettings("kcm_powerdevilprofilesconfig", []);
                 return;
             }
-            const choices = order.filter(p => s.list.indexOf(p) !== -1);
-            if (choices.length === 0) {
-                return;
+            // Performance is skipped while the daemon inhibits it; a refused switch shows on the tile.
+            const next = Power.next(s.list, active, inhibitionReason);
+            if (next !== "") {
+                failedProfile = "";
+                s.setProfile(next);
             }
-            const next = choices[(choices.indexOf(active) + 1) % choices.length];
-            // Performance may be inhibited (for example on battery); the subtitle then stays.
-            s.setProfile(next);
         }
     }
 
@@ -650,6 +749,15 @@ Item {
         readonly property bool canNext: s ? s.canNext : false
         readonly property bool canPlayPause: s ? s.canPlayPause : false
         readonly property bool canRaise: s ? s.canRaise : false
+        readonly property var playersModel: s ? s.playersModel : null
+        readonly property int currentIndex: s ? s.currentIndex : -1
+        readonly property var player: s ? s.player : null
+        readonly property bool canSeek: s ? s.canSeek : false
+        readonly property double length: s ? s.length : 0
+        readonly property double position: s ? s.position : 0
+        function choosePlayer(i: int) { if (s) { s.choosePlayer(i); } }
+        function seek(us: double) { if (s) { s.seek(us); } }
+        function updatePosition() { if (s) { s.updatePosition(); } }
         function previous() {
             if (s) {
                 s.previous();
@@ -720,11 +828,23 @@ Item {
         readonly property int count: s ? s.count : 0
         readonly property string label: s ? s.label : ""
         readonly property string longName: s ? s.longName : ""
+        readonly property var layouts: s ? s.layouts : []
+        readonly property int index: s ? s.index : -1
         readonly property bool shown: backend.showKeyboardLayout && available && label.length > 0
                                       && (backend.keyboardLayoutAlways || count > 1)
         function next() {
             if (s) {
                 s.next();
+            }
+        }
+        function previous() {
+            if (s) {
+                s.previous();
+            }
+        }
+        function select(i: int) {
+            if (s) {
+                s.select(i);
             }
         }
     }

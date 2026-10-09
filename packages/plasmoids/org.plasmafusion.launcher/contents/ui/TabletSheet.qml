@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
+import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.private.sessions as Sessions
 import org.kde.plasma.workspace.dbus as DBus
 
@@ -260,12 +261,60 @@ FocusScope {
             RoundButton {
                 pal: sheet.pal
                 size: 44
+                id: tabletSleepButton
                 glyph: "sleep"
                 text: i18nc("@action:button", "Sleep")
-                enabled: session.canSuspend
+                // Also where only hibernation is possible: the button then opens its menu.
+                enabled: session.canSuspend || session.canHibernate
                 onClicked: {
+                    if (!session.canSuspend) {
+                        tabletSleepMenu.offer();
+                        return;
+                    }
                     sheet.closeRequested();
                     session.suspend();
+                }
+                // Hibernate, where the system offers it, as in the laptop launcher's footer: press
+                // and hold, right-click or the Menu key.
+                onPressAndHold: {
+                    if (!tabletSleepMenu.offer()) {
+                        sheet.closeRequested();
+                        session.suspend();
+                    }
+                }
+                Keys.onMenuPressed: tabletSleepMenu.offer()
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    onTapped: tabletSleepMenu.offer()
+                }
+                PlasmaExtras.Menu {
+                    id: tabletSleepMenu
+                    visualParent: tabletSleepButton
+                    placement: PlasmaExtras.Menu.TopPosedLeftAlignedPopup
+                    function offer(): bool {
+                        if (!session.canHibernate) {
+                            return false;
+                        }
+                        openRelative();
+                        return true;
+                    }
+                    PlasmaExtras.MenuItem {
+                        text: i18nc("@action:inmenu", "Sleep")
+                        icon: "system-suspend"
+                        enabled: session.canSuspend
+                        onClicked: {
+                            sheet.closeRequested();
+                            session.suspend();
+                        }
+                    }
+                    PlasmaExtras.MenuItem {
+                        text: i18nc("@action:inmenu", "Hibernate")
+                        icon: "system-suspend-hibernate"
+                        onClicked: {
+                            sheet.closeRequested();
+                            session.hibernate();
+                        }
+                    }
                 }
             }
             RoundButton {

@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.extras as PlasmaExtras
 
 import "components"
 import "components/Icons.js" as Icons
@@ -102,7 +103,54 @@ Item {
             text: bar.backend.kbd.label
             Accessible.name: i18nc("@action:button %1 keyboard layout name", "Keyboard layout: %1", bar.backend.kbd.longName || bar.backend.kbd.label)
             Keys.onReturnPressed: bar.backend.kbd.next()
+            Keys.onMenuPressed: layoutMenu.openBelow()
             onClicked: bar.backend.kbd.next()
+            // As the stock Keyboard Layout widget: its menu lists the layouts to choose from
+            // (right-click, or press and hold), and the wheel switches through them.
+            onPressAndHold: layoutMenu.openBelow()
+            TapHandler {
+                acceptedButtons: Qt.RightButton
+                onTapped: layoutMenu.openBelow()
+            }
+            WheelHandler {
+                acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                property real pending: 0
+                onWheel: event => {
+                    pending += event.angleDelta.y || -event.angleDelta.x;
+                    while (Math.abs(pending) >= 120) {
+                        if (pending > 0) {
+                            bar.backend.kbd.previous();
+                            pending -= 120;
+                        } else {
+                            bar.backend.kbd.next();
+                            pending += 120;
+                        }
+                    }
+                }
+            }
+            PlasmaExtras.Menu {
+                id: layoutMenu
+                visualParent: layoutBadge
+                placement: PlasmaExtras.Menu.BottomPosedLeftAlignedPopup
+                function openBelow(): void {
+                    if (bar.backend.kbd.count > 0) {
+                        openRelative();
+                    }
+                }
+            }
+            Instantiator {
+                model: bar.backend.kbd.layouts
+                delegate: PlasmaExtras.MenuItem {
+                    required property var modelData
+                    required property int index
+                    text: String(modelData.longName || modelData.shortName || "")
+                    checkable: true
+                    checked: index === bar.backend.kbd.index
+                    onClicked: bar.backend.kbd.select(index)
+                }
+                onObjectAdded: (index, object) => layoutMenu.addMenuItem(object)
+                onObjectRemoved: (index, object) => layoutMenu.removeMenuItem(object)
+            }
 
             background: Rectangle {
                 radius: 6
@@ -129,7 +177,7 @@ Item {
                 // Touch synthesises hover: no tooltips in tablet posture (TABLET2 S1).
                 active: !bar.tablet
                 mainText: bar.backend.kbd.longName || bar.backend.kbd.label
-                subText: bar.backend.kbd.count > 1 ? i18nc("@info:tooltip", "Click to switch to the next layout") : ""
+                subText: bar.backend.kbd.count > 1 ? i18nc("@info:tooltip", "Click to switch to the next layout, right-click to choose one") : ""
             }
         }
 

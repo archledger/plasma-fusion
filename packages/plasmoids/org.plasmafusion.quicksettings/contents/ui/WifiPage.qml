@@ -32,6 +32,7 @@ ColumnLayout {
     // plasma-nm enums (org.kde.plasma.networkmanagement Enums)
     readonly property int stateActivating: 1
     readonly property int stateActivated: 2
+    readonly property int stateDeactivating: 3
     readonly property int stateDeactivated: 4
 
     function securityLabel(type) {
@@ -101,8 +102,9 @@ ColumnLayout {
         Layout.fillWidth: true
         pal: page.pal
         metrics: page.metrics
-        title: i18nc("@title", "Wi‑Fi")
-        hasSwitch: true
+        // Without a Wi-Fi radio the page has the VPN connections and the airplane mode switch.
+        title: page.backend.net.wifiDevice ? i18nc("@title", "Wi‑Fi") : i18nc("@title", "Network")
+        hasSwitch: page.backend.net.wifiDevice
         switchText: i18nc("@action:button", "Wi‑Fi")
         switchChecked: page.backend.net.wifiEnabled
         switchEnabled: page.backend.net.wifiHwEnabled && !page.backend.net.airplane
@@ -434,7 +436,7 @@ ColumnLayout {
         Layout.minimumHeight: page.metrics.px(44)
         pal: page.pal
         metrics: page.metrics
-        visible: !list.visible
+        visible: !list.visible && page.backend.net.wifiDevice
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         color: page.pal.secondary
@@ -455,6 +457,105 @@ ColumnLayout {
     Item {
         Layout.fillHeight: true
         visible: list.visible
+    }
+
+    // ---------------------------------------------------------------- VPN
+    // The VPN connections (plugin VPNs and WireGuard), as the stock Networks widget lists them:
+    // a click connects, or disconnects the active one.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 1
+        visible: vpnBox.visible
+        color: page.pal.overlay(0.08)
+    }
+    ColumnLayout {
+        id: vpnBox
+        Layout.fillWidth: true
+        visible: page.backend.net.vpnCount > 0
+        spacing: page.metrics.px(2)
+        FText {
+            Layout.fillWidth: true
+            pal: page.pal
+            metrics: page.metrics
+            text: i18nc("@title", "VPN")
+            font.weight: Font.Bold
+        }
+        Repeater {
+            model: page.backend.net.vpnModel
+            delegate: ListRow {
+                id: vpnRow
+                required property var model
+                readonly property bool connected: model.ConnectionState === page.stateActivated
+                readonly property bool connecting: model.ConnectionState === page.stateActivating
+                // A slow shutdown: the row waits (a click would connect again).
+                readonly property bool disconnecting: model.ConnectionState === page.stateDeactivating
+                Layout.fillWidth: true
+                enabled: !disconnecting
+                pal: page.pal
+                metrics: page.metrics
+                text: model.Name || ""
+                iconPath: Icons.lock
+                selected: connected
+                busy: connecting || disconnecting
+                status: connected ? i18nc("@info:status VPN", "Connected")
+                      : connecting ? i18nc("@info:status VPN", "Connecting…")
+                      : disconnecting ? i18nc("@info:status VPN", "Disconnecting…") : ""
+                trailingPath: connected ? Icons.check : ""
+                Accessible.description: connected || connecting ? i18nc("@info:tooltip", "Click to disconnect") : i18nc("@info:tooltip", "Click to connect")
+                onClicked: {
+                    if (connected || connecting) {
+                        page.backend.net.deactivate(model.ConnectionPath, model.DevicePath);
+                    } else {
+                        page.backend.net.activate(model.ConnectionPath, model.DevicePath, model.SpecificPath);
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- airplane mode
+    // The stock Networks widget's switch: Wi-Fi, mobile data and Bluetooth off, and back on.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 1
+        visible: airplaneRow.visible
+        color: page.pal.overlay(0.08)
+    }
+    RowLayout {
+        id: airplaneRow
+        Layout.fillWidth: true
+        visible: page.backend.net.airplaneAvailable
+        spacing: page.metrics.px(8)
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+            FText {
+                Layout.fillWidth: true
+                pal: page.pal
+                metrics: page.metrics
+                text: i18nc("@title", "Airplane mode")
+                font.weight: Font.Bold
+            }
+            FText {
+                Layout.fillWidth: true
+                pal: page.pal
+                metrics: page.metrics
+                px: 11.5
+                color: page.pal.secondary
+                wrapMode: Text.Wrap
+                text: page.backend.net.airplane ? i18nc("@info", "Wi‑Fi and Bluetooth are off")
+                                                : i18nc("@info", "Turns off Wi‑Fi and Bluetooth")
+            }
+        }
+        FusionSwitch {
+            pal: page.pal
+            text: i18nc("@action:button", "Airplane mode")
+            checked: page.backend.net.airplane
+            onToggled: {
+                page.backend.net.setAirplaneMode(checked);
+                checked = Qt.binding(() => page.backend.net.airplane);
+            }
+        }
     }
 
     // ---------------------------------------------------------------- hotspot
@@ -601,6 +702,7 @@ ColumnLayout {
         spacing: page.metrics.px(8)
 
         TextButton {
+            visible: page.backend.net.wifiDevice
             pal: page.pal
             metrics: page.metrics
             implicitHeight: page.metrics.px(32)

@@ -222,9 +222,9 @@ leaves mode-0 entries). The scenarios send the service's journal lines to `out/j
 
 - A layout reset inside a running plasmashell during saver or critical leaves the new widgets at
   their defaults until the next tier change, plasmashell start or `systemctl --user reload`.
-- The system card reads `powerTier` since CARD-1 (af0bb47); the dock has no `powerTier` and no
-  `glass` (DOCK-2), quick settings and the launcher no `glass` (QS-1, LAUNCH-1): until then only the
-  blur and magnification parts of the tiers have an effect.
+- The system card reads `powerTier` since CARD-1 (af0bb47) and the dock for its start-up pulse; the
+  dock has no `glass` (DOCK-2), quick settings and the launcher no `glass` (QS-1, LAUNCH-1): until
+  then only the blur, magnification and pulse parts of the tiers have an effect.
 - A Glass change in the settings module while critical loads blur again (the service then leaves
   blur alone, since the user changed it); see "Needs".
 - The service reacts to option changes at the next tier change or a reload, not by itself.

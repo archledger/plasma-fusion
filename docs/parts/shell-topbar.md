@@ -272,8 +272,7 @@ The layout places it right after the app name with its defaults (`compactView=fa
 - Launcher-open look follows the launcher through window focus (see Behaviour); a launcher opened
   with the Meta key does not light the button, and closing that one with the button leaves the
   button lit until the next focus change.
-- Calendar has no events, holidays or week numbers (the stock calendar plugins are not used; the
-  stock digital clock is the fallback when they are wanted).
+- Calendar has no week numbers (events and holidays come from the calendar plugins, see above).
 - The pill width changes with the time's digits (proportional figures as on the board); the pill
   stays centred.
 

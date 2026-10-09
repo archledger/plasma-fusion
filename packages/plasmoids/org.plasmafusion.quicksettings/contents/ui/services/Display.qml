@@ -31,6 +31,24 @@ Item {
         isSilent: display.silent
     }
 
+    // ---- Every display and the keyboard backlight (the Brightness page; the stock Brightness
+    // widget's sliders). The model's roles: displayName, label, isInternal, brightness, maxBrightness.
+    readonly property var displaysModel: screenBrightness.displays
+    readonly property int displayCount: brightnessInfo.count
+    function setDisplayBrightness(name: string, value: int) {
+        screenBrightness.setBrightness(name, value);
+    }
+    readonly property bool keyboardAvailable: keyboardBrightness.isBrightnessAvailable && keyboardBrightness.brightnessMax > 0
+    readonly property int keyboardValue: keyboardBrightness.brightness
+    readonly property int keyboardMax: keyboardBrightness.brightnessMax
+    function setKeyboardBrightness(value: int) {
+        keyboardBrightness.brightness = Math.max(0, Math.min(keyboardMax, value));
+    }
+    KeyboardBrightnessControl {
+        id: keyboardBrightness
+        isSilent: display.silent
+    }
+
     QtObject {
         id: brightnessInfo
         property bool valid: false
@@ -38,6 +56,7 @@ Item {
         property string label: ""
         property int value: 0
         property int max: 0
+        property int count: 0
     }
 
     Connections {
@@ -46,6 +65,7 @@ Item {
 
         function update() {
             const model = screenBrightness.displays;
+            brightnessInfo.count = model ? model.rowCount() : 0;
             if (!model || model.rowCount() === 0) {
                 brightnessInfo.valid = false;
                 return;

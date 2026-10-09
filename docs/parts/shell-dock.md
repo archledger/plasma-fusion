@@ -101,8 +101,9 @@ dock.addWidget("org.plasmafusion.dock");
   launch / activate / minimize the active one / cycle a group's windows (stock rules); Shift+click and
   middle-click: new instance; right-click: menu with window list, New Window or Open, Minimize/Restore,
   **Keep in Dock** (pin/unpin), Close / Close All; drag sideways to reorder within pinned or running; drop
-  `.desktop` files to pin, other files on an app to open them with it; Meta+1..9 through
-  `activateTaskAtIndex`; startup feedback pulses the icon; an app demanding attention gets an orange dot;
+  `.desktop` files to pin, other files on an app to open them with it; Meta+Alt+1..9 through
+  `activateTaskAtIndex` (fusion-config.sh binds the snap script's "Activate Dock Entry N" actions;
+  Meta+1..4 switch workspaces); startup feedback pulses the icon; an app demanding attention gets an orange dot;
   minimize animation targets are published.
 - **App menu (stock parity, 2026-10-09):** besides the above, as the stock task manager's menu: the app's
   own actions from its desktop entry (jump list, e.g. Firefox's New Private Window) and a **Recent Files**

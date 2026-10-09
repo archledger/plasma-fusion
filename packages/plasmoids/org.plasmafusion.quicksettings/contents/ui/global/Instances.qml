@@ -34,6 +34,9 @@ QtObject {
             hotspotStarting = false;
         }
     }
+    // The radios to bring back when airplane mode ends ({wifi, wwan, bluetooth}), whichever screen's
+    // widget switches it off: plasma-nm's handlers each keep their own copy (Backend.qml).
+    property var airplaneRestore: null
     // The keep-awake request's one timeout (a widget's own timer could end another widget's request early).
     readonly property Timer keepAwakeTimeout: Timer {
         interval: 5000

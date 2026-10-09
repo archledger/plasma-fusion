@@ -15,7 +15,7 @@ the top bar of `Main.dc.html` / `MainLight.dc.html` and the Wi-Fi tray panel of
 | System status pill: Wi-Fi, volume, battery icon + `NN%` | 26 px, radius 13, padding 12, gap 10, fill 8 % overlay; accent tint `rgba(91,157,255,.35)` + 1 px `rgba(138,184,255,.5)` while the pop-up is open | plasma-nm `ConnectionIcon`, plasma-pa `PreferredDevice.sink`, `BatteryControlModel` | each icon only when its service has data; a gear icon when none has |
 | Clipboard | 28 × 26, 16 px icon | Klipper D-Bus `showKlipperPopupMenu` | option |
 | Phone | 28 × 26, 16 px icon | `org.kde.kdeconnect` `DevicesModel` (paired + reachable) | a device is connected |
-| `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout |
+| `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout, wheel = next/previous, right-click or press and hold = menu of the layouts (as the stock Keyboard Layout widget) |
 
 The pill also takes the mouse wheel (volume ±5 %) and middle click (mute). Icons are the boards'
 line icons (24 px grid, 1.8 stroke) drawn with QtQuick Shapes, with the FileIcons board's level
@@ -26,8 +26,20 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
 
 * battery chip (`82%`, 34 px, radius 17) and four 34 px round buttons: screenshot (Spectacle's
   rectangular-region shortcut), System Settings, lock, leave (logout / restart / shut down prompt);
-* volume slider with mute button and chevron to the output chooser; brightness slider
-  (8 px track, 20 px white knob with shadow, `#5B9DFF` fill = colour scheme DecorationHover);
+* volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
+  Plasma's "Raise maximum volume", `plasmaparc` read through plasma-pa's `GlobalConfig`; a volume
+  set above the limit elsewhere is kept by a step up, and every wheel or key step counts from the
+  real volume, not the slider's clamped value: 140 % steps down to 135 %, ten quick steps to 90 %);
+  brightness slider
+  (8 px track, 20 px white knob with shadow, `#5B9DFF` fill = colour scheme DecorationHover) of the
+  first display (internal panels first), with a chevron when there is more to set: the
+  **Brightness** page (`DisplayPage.qml`) has a slider for every display PowerDevil can dim and the
+  keyboard backlight (`KeyboardBrightnessControl`, stepping through its levels), as the stock
+  Brightness widget; the sliders' wheel, arrow keys and Page Up/Down move at least one step (Left
+  and Right follow a mirrored, right-to-left layout), and count as a drag until the input pauses
+  (600 ms), so each slider follows its value again after it. With a keyboard
+  light and no display to dim (a monitor without DDC/CI), the keyboard backlight's slider takes the
+  brightness slider's place;
 * microphone/input volume and mute when a recording input exists; its chevron opens the input
   chooser. Sound has Output, Input and Applications tabs. Applications lists active playback and
   recording streams with independent volume, mute and device routing, using the native plasma-pa
@@ -40,7 +52,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Night Light inhibition, turns Night Light on when it is off),
   Do not disturb (`Off`, `On`, `Until 18:00`; same code path as Plasma's own shortcut, with OSD),
   Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
-  uses tuned-ppd on the ThinkPad),
+  uses tuned-ppd on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). As the
+  stock Power and Battery widget: Performance is skipped while the daemon inhibits it, and the
+  tooltip says why (on a lap, too hot) and when it may be slower; it names applications holding a
+  profile; a refused switch reads `Couldn't switch to …` for 5 s. tuned-ppd 2.28 refuses
+  `HoldProfile` ("Invalid bus name"), so holds come from power-profiles-daemon systems),
   Dark style (switches between the two Plasma Fusion Global Themes, see below);
 * **Keep awake** (`Off` / `On`): manually blocks sleep, display power saving and automatic screen
   locking until turned off in this session. An accent coffee-cup icon stays in the status pill
@@ -60,7 +76,19 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   NetworkManager removes when it stops. plasma-nm offers it only on a free radio or while the
   connection runs over something else, so a single radio that carries the connection reads
   `Wi‑Fi in use`; the dimmed tile then opens the Wi‑Fi page, which explains it. A start that
-  NetworkManager drops within 20 s reads `Failed to start`. The chevron opens the Wi‑Fi page;
+  NetworkManager drops within 20 s reads `Failed to start`. The chevron opens the Wi‑Fi page,
+  which also has the **Airplane mode** switch (with a Wi‑Fi radio or a modem): plasma-nm's
+  `enableAirplaneMode` and setting, as the stock Networks widget (Wi‑Fi, mobile data and
+  Bluetooth off, and back on: the radios that were on are kept for every screen's widget in
+  `Instances`, since each plasma-nm handler keeps its own copy, and in each widget's settings
+  (`airplaneRestore`) across a plasmashell restart, taken back only while airplane mode is still
+  on, else dropped as stale; with no record, airplane mode having started elsewhere, all come back
+  on), and the **VPN** connections (plugin VPNs and WireGuard: type `Vpn`
+  or plasma-nm's `network-vpn` icon, as WireGuard has no type of its own in plasma-nm's Enums); a
+  click connects one, or disconnects the active one (one shutting down shows `Disconnecting…` and
+  waits, so a click cannot connect it again). Without a Wi‑Fi radio the tile's chevron
+  (`Show VPN connections`, or `Show network options` with a modem alone) opens the page as
+  `Network`: the VPN list and the airplane mode switch;
 * **Disks & Devices** (device name, or `N devices`; accent while one is mounted), shown while a
   removable device is connected, with a USB-drive icon in the status pill: the stock Disks &
   Devices, which is not loaded where this widget is in the bar (desktop layout and
@@ -79,7 +107,15 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
 * media card (64 px, radius 16): album art or player icon, title, `Paused` / artist, previous,
   play/pause (36 px filled), next; shown only while a player exists. The player icon is the
   application icon; when libkmpris cannot read the player's desktop file (it then reports the
-  generic `emblem-music-symbolic`), the desktop entry name is used as the icon name;
+  generic `emblem-music-symbolic`), the desktop entry name is used as the icon name. As the stock
+  Media Player widget: a seek slider with the elapsed and total time when the player can seek (the
+  position is asked for when the sheet opens, when playback starts or stops, when the player or
+  track changes, and every second while it plays with the sheet open; the player seeks when the slider is
+  let go or the wheel or keys pause, so always on the track playing then; a drag let go on
+  another player, title or length is dropped), and,
+  with two or more players, a row of their icons to choose one (the first, a star, chooses
+  automatically; `Mpris2Model.currentIndex`); a stopped player chosen there keeps the card while
+  it can play, so it can be played or another chosen;
 * `Notifications` header with `Clear all`, then the notification cards (app icon + name, time,
   summary, body, job progress with Cancel, action buttons; the first action is the accent button
   for critical or persistent notifications, as the board's calendar reminder). Close button on hover.
@@ -93,7 +129,10 @@ the network name and the masked password with Show/Hide while it is on, and `Cha
 password…` (an empty password keeps the saved one, which plasma-nm generates on first use; it is
 not read before that), `Hidden network…` and `Network settings`), Bluetooth (paired devices, connect /
 disconnect, `Pair a new device…`, `Bluetooth settings`), Sound output (choose the default sink).
-The Sound page also selects the default input and exposes per-application playback/recording
+A device row's "⋯" button (or right-click, press and hold, the Menu key) opens plasma-pa's own
+device menu (`ListItemMenu` with the cards' `CardModel`, as the stock Audio Volume widget): its
+ports (speakers, headphones) and the card's profiles (HDMI, analog, Pro Audio, off), shown only
+when there is a choice. The Sound page also selects the default input and exposes per-application playback/recording
 controls. Empty inputs or streams have explicit placeholders and a Sound settings link.
 
 Keyboard: every control is reachable with Tab and has the design's focus ring (2 px, 2 px gap);
@@ -123,7 +162,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/QuickSettingsMain.qml header row, sliders, tiles, media card
   contents/ui/WifiPage.qml          Wi-Fi drill-down
   contents/ui/BluetoothPage.qml     Bluetooth drill-down
-  contents/ui/AudioPage.qml         output device chooser
+  contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
+  contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
   contents/ui/NotificationCard.qml  one notification
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),

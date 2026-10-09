@@ -5,6 +5,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
 
@@ -249,6 +250,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: page.tablet ? 12 : 10
         visible: page.backend.audio.available || page.backend.audio.inputAvailable || page.backend.display.brightnessAvailable
+                 || page.backend.display.keyboardAvailable
 
         RowLayout {
             Layout.fillWidth: true
@@ -285,11 +287,15 @@ ColumnLayout {
                 pal: page.pal
                 dimmed: page.backend.audio.muted
                 Accessible.name: i18nc("@label:slider", "Volume")
-                value: Math.min(1, page.backend.audio.volume)
-                onMoved: page.backend.audio.setVolume(value)
+                to: page.backend.audio.maximum
+                value: Math.min(to, page.backend.audio.volume)
+                // A wheel or key step goes from the real volume, which can be beyond the slider's end
+                // (raised elsewhere above the limit): 140 % steps down to 135 %, and a run of quick
+                // steps keeps counting from it rather than from the slider's clamped value.
+                onMoved: page.backend.audio.setVolume(lastStep !== 0 ? page.backend.audio.volume + lastStep : value)
                 onDraggingChanged: {
                     if (!dragging) {
-                        value = Qt.binding(() => Math.min(1, page.backend.audio.volume));
+                        value = Qt.binding(() => Math.min(to, page.backend.audio.volume));
                     }
                 }
                 PlasmaCore.ToolTipArea {
@@ -336,8 +342,9 @@ ColumnLayout {
                 pal: page.pal
                 dimmed: page.backend.audio.inputMuted
                 Accessible.name: i18nc("@label:slider", "Microphone volume")
+                to: page.backend.audio.maximum
                 value: page.backend.audio.inputVolume
-                onMoved: page.backend.audio.setInputVolume(value)
+                onMoved: page.backend.audio.setInputVolume(lastStep !== 0 ? page.backend.audio.inputVolume + lastStep : value)
                 onDraggingChanged: if (!dragging) { value = Qt.binding(() => page.backend.audio.inputVolume); }
             }
             IconButton {
@@ -383,6 +390,58 @@ ColumnLayout {
                     }
                 }
             }
+            IconButton {
+                id: brightnessChevron
+                visible: page.backend.display.more
+                pal: page.pal
+                size: page.pal.touch ? 32 : 28
+                iconSize: 14
+                iconPath: Icons.chevronRight
+                text: i18nc("@action:button", "More brightness controls")
+                onClicked: page.openPage("display", brightnessChevron)
+            }
+            Item {
+                visible: !brightnessChevron.visible
+                Layout.preferredWidth: audioChevron.implicitWidth
+                Layout.preferredHeight: 28
+            }
+        }
+
+        // A keyboard light and no display to dim (a desktop whose monitor has no DDC/CI): the
+        // keyboard backlight's slider takes the brightness row's place.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: page.pal.touch ? 44 : 28
+            spacing: 12
+            visible: !page.backend.display.brightnessAvailable && page.backend.display.keyboardAvailable
+
+            Item {
+                Layout.preferredWidth: page.pal.touch ? 44 : 18
+                Layout.preferredHeight: 28
+                LineIcon {
+                    anchors.centerIn: parent
+                    size: 18
+                    path: Icons.keyboard
+                    color: page.pal.controlText
+                }
+            }
+            FusionSlider {
+                id: keyboardRowSlider
+                Layout.fillWidth: true
+                pal: page.pal
+                from: 0
+                to: Math.max(1, page.backend.display.keyboardMax)
+                stepSize: 1
+                snapMode: T.Slider.SnapAlways
+                Accessible.name: i18nc("@label:slider", "Keyboard backlight")
+                value: page.backend.display.keyboardValue
+                onMoved: page.backend.display.setKeyboardBrightness(Math.round(value))
+                onDraggingChanged: {
+                    if (!dragging) {
+                        value = Qt.binding(() => page.backend.display.keyboardValue);
+                    }
+                }
+            }
             Item {
                 Layout.preferredWidth: audioChevron.implicitWidth
                 Layout.preferredHeight: 28
@@ -408,8 +467,13 @@ ColumnLayout {
             iconPath: Icons.wifi
             checked: page.backend.net.checked
             available: page.backend.net.available && page.backend.net.wifiDevice
-            hasDetails: page.backend.net.available && page.backend.net.wifiDevice
-            detailsText: i18nc("@action:button", "Show Wi‑Fi networks")
+            // Without a Wi-Fi radio the page still has the VPN connections and, with a modem, the
+            // airplane mode switch.
+            hasDetails: page.backend.net.available
+                        && (page.backend.net.wifiDevice || page.backend.net.vpnCount > 0 || page.backend.net.airplaneAvailable)
+            detailsText: page.backend.net.wifiDevice ? i18nc("@action:button", "Show Wi‑Fi networks")
+                       : page.backend.net.vpnCount > 0 ? i18nc("@action:button", "Show VPN connections")
+                       : i18nc("@action:button", "Show network options")
             onToggled: {
                 if (available) {
                     page.backend.net.toggle();
@@ -476,7 +540,9 @@ ColumnLayout {
             iconPath: Icons.gauge
             checked: page.backend.profile.checked
             available: page.backend.profile.available
-            toolTip: i18nc("@info:tooltip", "Click to switch between Power saver, Balanced and Performance")
+            toolTip: [i18nc("@info:tooltip", "Click to switch between Power saver, Balanced and Performance"),
+                      page.backend.profile.note].filter(t => t !== "").join("\n")
+            note: page.backend.profile.note
             onToggled: page.backend.profile.cycle()
         }
         Tile {
@@ -723,16 +789,65 @@ ColumnLayout {
 
     // ---------------------------------------------------------------- media card
     Rectangle {
+        id: mediaCard
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.max(page.tablet ? 72 : 64, mediaText.implicitHeight + page.metrics.px(20))
+        Layout.preferredHeight: mediaColumn.implicitHeight + page.metrics.px(12)
         visible: page.backend.media.available
         radius: 16
         color: page.pal.overlay(0.06)
 
-        RowLayout {
-            anchors.fill: parent
+        // The position once when the sheet opens and when playback starts or stops (a player paused
+        // while the sheet was closed), then every second while it plays (MPRIS reports it on request).
+        Connections {
+            target: page.backend
+            function onPopupOpenChanged() {
+                if (page.backend.popupOpen && page.backend.media.canSeek) {
+                    page.backend.media.updatePosition();
+                }
+            }
+        }
+        Connections {
+            target: page.backend.media
+            // Also another player or track while paused (Next, Previous, the player row): the
+            // position shown is the one asked for last.
+            function onPlayingChanged() { mediaCard.refreshPosition(); }
+            function onCurrentIndexChanged() { mediaCard.refreshPosition(); }
+            function onTitleChanged() { mediaCard.refreshPosition(); }
+            function onLengthChanged() { mediaCard.refreshPosition(); }
+        }
+        function refreshPosition(): void {
+            if (page.backend.popupOpen && page.backend.media.canSeek) {
+                page.backend.media.updatePosition();
+            }
+        }
+        Timer {
+            interval: 1000
+            repeat: true
+            triggeredOnStart: true
+            running: page.backend.popupOpen && page.visible && page.backend.media.available && page.backend.media.canSeek
+                     && page.backend.media.playing
+            onTriggered: page.backend.media.updatePosition()
+        }
+        function clock(us: double): string {
+            const total = Math.max(0, Math.floor(us / 1000000));
+            const h = Math.floor(total / 3600);
+            const m = Math.floor(total / 60) % 60;
+            const sec = String(total % 60).padStart(2, "0");
+            return h > 0 ? h + ":" + String(m).padStart(2, "0") + ":" + sec : m + ":" + sec;
+        }
+
+        ColumnLayout {
+            id: mediaColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: 10
             anchors.rightMargin: 10
+            spacing: page.metrics.px(4)
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.max(page.tablet ? 60 : 52, mediaText.implicitHeight + page.metrics.px(8))
             spacing: page.metrics.px(12)
 
             Item {
@@ -820,6 +935,95 @@ ColumnLayout {
                 text: i18nc("@action:button", "Next track")
                 onClicked: page.backend.media.next()
             }
+        }
+
+        // Seek (the stock Media Player widget's slider), when the player can.
+        RowLayout {
+            Layout.fillWidth: true
+            visible: page.backend.media.canSeek && page.backend.media.length > 0
+            spacing: page.metrics.px(8)
+            FText {
+                pal: page.pal
+                metrics: page.metrics
+                px: 11
+                color: page.pal.secondary
+                text: mediaCard.clock(seekSlider.dragging ? seekSlider.value * page.backend.media.length : page.backend.media.position)
+            }
+            FusionSlider {
+                id: seekSlider
+                Layout.fillWidth: true
+                pal: page.pal
+                stepSize: 0.001
+                Accessible.name: i18nc("@label:slider", "Track position")
+                value: page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0
+                // The player seeks once the slider is let go (a click or a drag) or the wheel or keys
+                // pause (FusionSlider's `dragging`): always on the track playing at that moment. (A
+                // queued seek, as the stock widget's 100 ms one, could land on the next track:
+                // libkmpris 6.7 neither signals a track change with the same title and length nor
+                // shows the track id.)
+                function seekNow(): void {
+                    page.backend.media.seek(Math.round(value * page.backend.media.length));
+                }
+                // The player and track the slider was taken on: let go on another one (the track
+                // ended, the automatic choice moved), the drag is dropped.
+                property var takenOn: null
+                onDraggingChanged: {
+                    const media = page.backend.media;
+                    if (dragging) {
+                        takenOn = { player: media.player, title: media.title, length: media.length };
+                        return;
+                    }
+                    if (takenOn && takenOn.player === media.player && takenOn.title === media.title && takenOn.length === media.length) {
+                        seekNow();
+                    }
+                    takenOn = null;
+                    value = Qt.binding(() => page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0);
+                }
+            }
+            FText {
+                pal: page.pal
+                metrics: page.metrics
+                px: 11
+                color: page.pal.secondary
+                text: mediaCard.clock(page.backend.media.length)
+            }
+        }
+
+        // The players, when there is more than one (the first entry chooses automatically): centred
+        // while they fit, wrapping to more lines within the card when they do not.
+        Flow {
+            id: playerFlow
+            readonly property real chipsWidth: playerChips.count * 28 + Math.max(0, playerChips.count - 1) * spacing
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: Math.min(mediaColumn.width, chipsWidth)
+            visible: playerChips.count > 2
+            spacing: page.metrics.px(6)
+            Repeater {
+                id: playerChips
+                model: page.backend.media.playersModel
+                delegate: IconButton {
+                    id: chip
+                    required property string iconName
+                    required property bool isMultiplexer
+                    required property string identity
+                    required property int index
+                    pal: page.pal
+                    size: 28
+                    iconSize: 16
+                    fill: index === page.backend.media.currentIndex ? page.pal.overlay(0.14) : "transparent"
+                    iconPath: ""
+                    text: isMultiplexer ? i18nc("@action:button", "Choose player automatically") : identity
+                    onClicked: page.backend.media.choosePlayer(index)
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        width: 16
+                        height: 16
+                        source: chip.iconName || "emblem-music-symbolic"
+                        fallback: "emblem-music-symbolic"
+                    }
+                }
+            }
+        }
         }
     }
 }

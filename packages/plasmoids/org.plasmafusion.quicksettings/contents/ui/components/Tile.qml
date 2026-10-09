@@ -23,6 +23,8 @@ Item {
     property bool available: true
     property string detailsText: ""
     property string toolTip: ""
+    // More about the state than the subtitle says (why, who): read by screen readers with it.
+    property string note: ""
 
     signal toggled()
     signal detailsRequested()
@@ -78,7 +80,7 @@ Item {
         Accessible.checkable: true
         Accessible.checked: tile.checked
         Accessible.name: tile.title
-        Accessible.description: tile.subtitle
+        Accessible.description: [tile.subtitle, tile.note].filter(t => t !== "").join(". ")
         Keys.onReturnPressed: tile.toggled()
         Keys.onEnterPressed: tile.toggled()
         Keys.onRightPressed: event => {

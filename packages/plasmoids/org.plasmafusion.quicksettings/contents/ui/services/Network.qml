@@ -19,7 +19,10 @@ Item {
     readonly property bool wifiDevice: availableDevices.wirelessDeviceAvailable
     readonly property bool wifiEnabled: enabledConnections.wirelessEnabled
     readonly property bool wifiHwEnabled: enabledConnections.wirelessHwEnabled
+    readonly property bool wwanEnabled: enabledConnections.wwanEnabled
     readonly property bool airplane: PlasmaNM.Configuration.airplaneModeEnabled
+    // Airplane mode is offered with a Wi-Fi radio or a modem, as in the stock Networks widget.
+    readonly property bool airplaneAvailable: availableDevices.wirelessDeviceAvailable || availableDevices.modemDeviceAvailable
     readonly property string ssid: wirelessStatus.wifiSSID
     readonly property bool connecting: connectionIcon.connecting
     readonly property string iconName: connectionIcon.connectionIcon
@@ -129,6 +132,18 @@ Item {
     }
     Component.onCompleted: refreshHotspotSettings()
 
+    // As the stock Networks widget: plasma-nm switches Wi-Fi, mobile data and Bluetooth off and
+    // keeps the setting. Ending it brings back the radios given (Backend.qml keeps which were on),
+    // not the handler's own record, which only the widget that started airplane mode has.
+    function enterAirplaneMode(): void {
+        handler.enableAirplaneMode(true);
+        PlasmaNM.Configuration.airplaneModeEnabled = true;
+    }
+    function leaveAirplaneMode(wifi: bool, wwan: bool): void {
+        PlasmaNM.Configuration.airplaneModeEnabled = false;
+        handler.enableWireless(wifi);
+        handler.enableWwan(wwan);
+    }
     function setWifiEnabled(on: bool) {
         handler.enableWireless(on);
     }
@@ -191,6 +206,21 @@ Item {
     readonly property int stateRole: appletModel.KItemModels.KRoleNames.role("ConnectionState")
     readonly property int nameRole: appletModel.KItemModels.KRoleNames.role("Name")
     readonly property int ssidRole: appletModel.KItemModels.KRoleNames.role("Ssid")
+    readonly property int iconRole: appletModel.KItemModels.KRoleNames.role("ConnectionIcon")
+
+    // VPN connections (plugin VPNs and WireGuard, which plasma-nm draws with the network-vpn icon
+    // but whose type its Enums leave out), as the stock Networks widget lists them.
+    function vpnRow(model, row, parent) {
+        const index = model.index(row, 0, parent);
+        return model.data(index, typeRole) === PlasmaNM.Enums.Vpn || String(model.data(index, iconRole) || "").startsWith("network-vpn");
+    }
+    readonly property var vpnModel: vpnConnections
+    readonly property int vpnCount: vpnConnections.count
+    KItemModels.KSortFilterProxyModel {
+        id: vpnConnections
+        sourceModel: appletModel
+        filterRowCallback: (row, parent) => net.vpnRow(appletModel, row, parent)
+    }
 
     function wirelessRow(model, row, parent, wantActive) {
         const index = model.index(row, 0, parent);

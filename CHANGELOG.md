@@ -48,6 +48,30 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   came back at the next screen change.
 - The touch-gestures card closes when tablet mode ends before it was dismissed (it shows again the
   next time) instead of staying over the laptop desktop.
+- On the tablet home screen, files on the desktop no longer show among the apps: the desktop's
+  file layer stayed loaded after the first start. A file dropped there now offers widgets, as on a
+  desktop without icons.
+- Quick Settings keeps a volume set above 100 %: one scroll step on the status pill no longer
+  lowers it to 100 %. With Plasma's "Raise maximum volume" the volume sliders now reach 150 %.
+- Quick Settings' Wi‑Fi page has an **Airplane mode** switch, as Plasma's Networks widget: it turns
+  Wi‑Fi, mobile data and Bluetooth off and back on.
+- The keyboard layout badge in the top bar lists the layouts on right-click (or press and hold) to
+  choose one, and the mouse wheel switches through them, as Plasma's Keyboard Layout widget.
+- The launcher's account row opens a menu with Account Settings, **Switch User** and **Log Out**;
+  where the computer can hibernate, the Sleep button's menu offers **Hibernate**.
+- The Power mode tile explains itself as Plasma's Power and Battery widget: it skips Performance
+  while the system holds it back (on a lap, too hot) and says why, names applications that requested
+  a mode, and shows when a switch was refused.
+- Quick Settings has a **Brightness** page (the chevron next to the brightness slider) with a
+  slider for every display that can be dimmed and the **keyboard backlight**, as Plasma's Brightness
+  widget.
+- Quick Settings' Sound page has a menu on each device (the "⋯" button or right-click) to choose its
+  **port** (speakers, headphones) and the sound card's **profile** (HDMI, analog, Pro Audio), as
+  Plasma's Audio Volume widget.
+- The media card in Quick Settings has a **seek bar** with the track's time and, when several
+  players run, a row of the players to **choose one**, as Plasma's Media Player widget.
+- Quick Settings lists **VPN** connections (including WireGuard) on the network page: a click
+  connects or disconnects. On a computer without Wi‑Fi the Wi‑Fi tile opens the VPN list.
 
 ## 0.3.1 (2026-10-06)
 

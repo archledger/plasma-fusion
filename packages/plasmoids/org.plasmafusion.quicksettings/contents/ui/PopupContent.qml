@@ -217,6 +217,8 @@ Item {
                             return powerComponent;
                         case "devices":
                             return devicesComponent;
+                        case "display":
+                            return displayComponent;
                         default:
                             return null;
                         }
@@ -348,6 +350,15 @@ Item {
     Component {
         id: devicesComponent
         DevicesPage {
+            backend: content.backend
+            pal: content.pal
+            metrics: content.metrics
+            onBack: content.closePage(false)
+        }
+    }
+    Component {
+        id: displayComponent
+        DisplayPage {
             backend: content.backend
             pal: content.pal
             metrics: content.metrics
