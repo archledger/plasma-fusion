@@ -100,7 +100,10 @@ is absent. KOrganizer or Merkuro manages local calendars, accounts/sync, recurre
 Fusion does not store credentials or start a second alarm service. Holidays and other installed
 providers can also be enabled in the same page.
 
-**Open calendar** uses KDE's calendar application integration. **Add event** is available when
+**Open calendar** uses KDE's calendar application integration (the calendar application the
+system uses); KOrganizer is first sent to the selected day only when it is that application
+(`code/calendar.js`, tests/calendar.test.js), so another calendar application opens without
+starting KOrganizer. **Add event** is available when
 KOrganizer's D-Bus service is installed and opens its native editor. The editor's initial date/time
 follows KOrganizer's own current-view defaults and remains editable; Fusion does not save an event
 until the user confirms it there. Browsing dates works without a calendar app or provider.

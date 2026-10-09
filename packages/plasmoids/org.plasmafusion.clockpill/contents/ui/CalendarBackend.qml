@@ -7,6 +7,8 @@ import org.kde.plasma.workspace.calendar as PlasmaCalendar
 import org.kde.plasma.private.digitalclock
 import org.kde.plasma.workspace.dbus as DBus
 
+import "../code/calendar.js" as CalendarRoute
+
 // Native calendar providers, shared with the stock clock and KDE PIM applications.
 // Contract: plasma-workspace/components/calendar/{calendar,daysmodel,eventpluginsmanager}.h.
 Item {
@@ -44,21 +46,23 @@ Item {
             return;
         }
         actionError = "";
-        if (!korganizerAvailable) {
-            if (calendarInstalled) {
-                ApplicationIntegration.launchCalendar();
-            }
+        const action = CalendarRoute.openAction(create, korganizerAvailable, calendarInstalled, calendarName);
+        if (action === "launch") {
+            ApplicationIntegration.launchCalendar();
+        }
+        if (!action.startsWith("korganizer")) {
             return;
         }
         busy = true;
         const dateText = Qt.locale().toString(selectedDate, Qt.locale().dateFormat(Locale.LongFormat));
-        // Navigate the calendar, then open its native editor. KOrganizer chooses the draft's
+        // Navigate KOrganizer, then open its native editor (Add event) or the calendar application
+        // (Open calendar, KOrganizer being that application). KOrganizer chooses the draft's
         // default date/time from its current view; those fields remain editable in the editor.
         DBus.SessionBus.asyncCall({ service: "org.kde.korganizer", path: "/Calendar",
                     iface: "org.kde.Korganizer.Calendar", member: "goDate",
                     arguments: [new DBus.string(dateText)],
                     signature: "(s)" }, () => {
-                        if (create) {
+                        if (action === "korganizer-editor") {
                             DBus.SessionBus.asyncCall({ service: "org.kde.korganizer", path: "/Calendar",
                                 iface: "org.kde.Korganizer.Calendar", member: "openEventEditor" },
                                 () => { backend.busy = false; }, reply => backend.actionFailed(reply));

@@ -95,7 +95,8 @@ jobs:
         run: |
           set -euo pipefail
           STAGE="$RUNNER_TEMP/calendar-stage" tools/build.sh topbar
-          node --test packages/plasmoids/org.plasmafusion.clockpill/tests/formats.test.js
+          node --test packages/plasmoids/org.plasmafusion.clockpill/tests/formats.test.js \
+            packages/plasmoids/org.plasmafusion.clockpill/tests/calendar.test.js
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_backend_test.py
