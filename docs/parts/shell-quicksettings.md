@@ -81,7 +81,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   setting and its handler's Wi‑Fi and mobile data switches, as the stock Networks widget, and the
   Bluetooth adapters over BlueZ from the widget itself, not the handler's own airplane step (its
   power-off comes late, after its asynchronous calls, and a quick exit could cross it; a refused
-  power-on, BlueZ still busy with the previous change, is asked again) (Wi‑Fi, mobile data and
+  power-on, BlueZ still busy with the previous change, is asked again, as is an adapter list
+  BlueZ did not give at the exit, and such retries are dropped once airplane mode is on again,
+  from anywhere) (Wi‑Fi, mobile data and
   Bluetooth off, and back on: the radios that were on are kept for every screen's widget in
   `Instances`, since each plasma-nm handler keeps its own copy (Bluetooth as the BlueZ adapters
   powered on, read and set over the system bus, not through the optional Bluetooth service: every

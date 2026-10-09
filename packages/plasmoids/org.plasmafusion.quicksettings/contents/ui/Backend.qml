@@ -233,7 +233,7 @@ Item {
                 return;
             }
             airplaneSwitching = true;
-            bluetoothPowerRetry.drop();
+            bluetoothRetry.drop();
             if (on) {
                 // The radios as they are now, before BlueZ answers: airplane mode started elsewhere
                 // meanwhile has turned them off, and is not this widget's to record.
@@ -272,10 +272,7 @@ Item {
                     airplaneSwitching = false;
                     return;
                 }
-                backend.bluetoothAdapters(adapters => {
-                    (adapters || []).forEach(a => backend.powerBluetoothAdapter(a.path, true));
-                    airplaneSwitching = false;
-                });
+                backend.powerAllBluetoothAdapters(5, () => { airplaneSwitching = false; });
             });
         }
         readonly property string ssid: s ? s.ssid : ""
@@ -659,18 +656,39 @@ Item {
             // (org.bluez.Error.Busy, an exit right after the entry): powering on is asked again a
             // few times; powering off is not, a late one could cross an exit.
             if (on && left > 0) {
-                bluetoothPowerRetry.add(path, left - 1);
+                bluetoothRetry.add(() => backend.powerBluetoothAdapterTries(path, true, left - 1));
             } else {
                 console.warn("quicksettings: BlueZ Powered not set on " + path + ": " + reply.error.name);
             }
         });
     }
+    // Every adapter on, for a restore with no list (no record, or an earlier one). The list is
+    // asked again a few times when BlueZ gives none (restarting): the record is gone by now, so
+    // this is the last chance; done is called after the first answer, the retries run by
+    // themselves and are dropped once airplane mode is on again.
+    function powerAllBluetoothAdapters(left: int, done): void {
+        bluetoothAdapters(adapters => {
+            if (adapters !== null) {
+                if (!backend.net.airplane) {
+                    adapters.forEach(a => backend.powerBluetoothAdapter(a.path, true));
+                }
+            } else if (left > 0) {
+                bluetoothRetry.add(() => backend.powerAllBluetoothAdapters(left - 1, () => {}));
+            } else {
+                console.warn("quicksettings: BlueZ adapters not read, Bluetooth left as it is");
+            }
+            done();
+        });
+    }
+    // Bluetooth asked again a little later: a power-on BlueZ refused, or an adapter list it did
+    // not give. Dropped when airplane mode starts again (this widget's switch, another screen's,
+    // or the setting from elsewhere), so nothing late crosses that entry.
     Timer {
-        id: bluetoothPowerRetry
+        id: bluetoothRetry
         interval: 400
         property var pending: []
-        function add(path: string, left: int): void {
-            pending.push({ path: path, left: left });
+        function add(action): void {
+            pending.push(action);
             restart();
         }
         function drop(): void {
@@ -680,15 +698,20 @@ Item {
         onTriggered: {
             const again = pending;
             pending = [];
-            again.forEach(p => backend.powerBluetoothAdapterTries(p.path, true, p.left));
+            if (!backend.net.airplane) {
+                again.forEach(action => action());
+            }
         }
     }
 
-    // Airplane mode ended by anything else (the stock widget, nmcli): the record is stale.
+    // Airplane mode ended by anything else (the stock widget, nmcli): the record is stale. Started
+    // by anything else: a Bluetooth retry still pending here would cross it.
     Connections {
         target: backend.net
         function onAirplaneChanged() {
-            if (!backend.net.airplane && Instances.airplaneRestore) {
+            if (backend.net.airplane) {
+                bluetoothRetry.drop();
+            } else if (Instances.airplaneRestore) {
                 Instances.airplaneRestore = null;
             }
         }
