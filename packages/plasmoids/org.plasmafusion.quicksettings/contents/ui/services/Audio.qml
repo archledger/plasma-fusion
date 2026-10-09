@@ -17,6 +17,45 @@ Item {
     readonly property string deviceName: available ? (sink.description || sink.name || "") : ""
     readonly property var sinkModel: sinks
     readonly property int sinkCount: sinks.count
+    readonly property var source: PreferredDevice.source
+    readonly property bool inputAvailable: !!source && source.name !== "auto_null.monitor"
+    readonly property string inputName: inputAvailable ? source.name : ""
+    readonly property string inputDescription: inputAvailable ? (source.description || source.name) : ""
+    readonly property real inputVolume: inputAvailable ? source.volume / normal : 0
+    readonly property bool inputMuted: inputAvailable ? source.muted : true
+    readonly property var sourceModel: sources
+    readonly property var playbackModel: playback
+    readonly property var recordingModel: recording
+
+    function setInputVolume(fraction: real): void {
+        if (inputAvailable) {
+            const v = Math.max(0, Math.min(1, fraction));
+            source.volume = Math.round(v * normal);
+            source.muted = v === 0;
+        }
+    }
+    function toggleInputMute(): void {
+        if (inputAvailable) {
+            source.muted = !source.muted;
+        }
+    }
+    function setStreamVolume(stream: var, fraction: real): void {
+        if (stream && stream.hasVolume) {
+            const v = Math.max(0, Math.min(1, fraction));
+            stream.volume = Math.round(v * normal);
+            stream.muted = v === 0;
+        }
+    }
+    function toggleStreamMute(stream: var): void {
+        if (stream) {
+            stream.muted = !stream.muted;
+        }
+    }
+    function routeStream(stream: var, deviceIndex: int): void {
+        if (stream && deviceIndex >= 0) {
+            stream.deviceIndex = deviceIndex;
+        }
+    }
 
     function setVolume(fraction: real) {
         if (!available) {
@@ -43,4 +82,12 @@ Item {
         filterVirtualDevices: true
         sourceModel: SinkModel {}
     }
+    PulseObjectFilterModel {
+        id: sources
+        filterOutInactiveDevices: true
+        // Virtual microphones (noise suppression/remapped inputs) remain useful inputs.
+        sourceModel: SourceModel {}
+    }
+    SinkInputModel { id: playback }
+    SourceOutputModel { id: recording }
 }

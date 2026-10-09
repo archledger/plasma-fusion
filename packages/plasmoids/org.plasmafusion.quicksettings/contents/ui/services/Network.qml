@@ -68,6 +68,65 @@ Item {
     readonly property var activeModel: activeWifiModel
     readonly property var otherModel: otherWifiModel
     readonly property bool scanning: handler.scanning
+    readonly property bool hotspotSupported: handler.hotspotSupported
+    readonly property bool hotspotActive: handler.hotspotActive
+    // From a start request until the hotspot has stayed up for hotspotStartTimer: plasma-nm reports
+    // it active once NetworkManager accepts it, and inactive again when the activation fails.
+    property bool hotspotStarting: false
+    property string hotspotName: ""
+    property bool hotspotFailedToStart: false
+
+    function toggleHotspot(): void {
+        if (hotspotActive || Boolean(PlasmaNM.Configuration.hotspotConnectionPath)) {
+            hotspotFailedToStart = false;
+            hotspotStarting = false;
+            hotspotStartTimer.stop();
+            handler.stopHotspot();
+        } else if (!hotspotStarting && wifiEnabled && wifiHwEnabled && !airplane && hotspotSupported) {
+            hotspotFailedToStart = false;
+            hotspotStarting = true;
+            hotspotStartTimer.restart();
+            handler.createHotspot();
+        }
+    }
+    function hotspotFailed(): void {
+        hotspotStarting = false;
+        hotspotStartTimer.stop();
+        hotspotFailedToStart = true;
+    }
+    function refreshHotspotSettings(): void {
+        hotspotName = PlasmaNM.Configuration.hotspotName;
+    }
+    // Read on request only: plasma-nm generates and saves a password the first time it is read.
+    function hotspotPassword(): string {
+        return PlasmaNM.Configuration.hotspotPassword;
+    }
+    // The same settings as the stock Networks applet; an empty password keeps the saved one.
+    function configureHotspot(name: string, password: string): bool {
+        const trimmed = name.trim();
+        if (trimmed === "" || (password !== "" && (password.length < 8 || password.length > 63))) {
+            return false;
+        }
+        PlasmaNM.Configuration.hotspotName = trimmed;
+        if (password !== "") {
+            PlasmaNM.Configuration.hotspotPassword = password;
+        }
+        refreshHotspotSettings();
+        return true;
+    }
+    Component.onCompleted: refreshHotspotSettings()
+
+    Timer {
+        id: hotspotStartTimer
+        interval: 20000
+        onTriggered: {
+            if (net.hotspotActive) {
+                net.hotspotStarting = false;
+            } else {
+                net.hotspotFailed();
+            }
+        }
+    }
 
     function setWifiEnabled(on: bool) {
         handler.enableWireless(on);
@@ -110,6 +169,14 @@ Item {
     }
     PlasmaNM.Handler {
         id: handler
+        onHotspotActiveChanged: {
+            net.refreshHotspotSettings();
+            activeWifiModel.invalidateFilter();
+            otherWifiModel.invalidateFilter();
+            if (!handler.hotspotActive && net.hotspotStarting) {
+                net.hotspotFailed();
+            }
+        }
     }
     PlasmaNM.NetworkModel {
         id: networkModel
@@ -121,6 +188,8 @@ Item {
 
     readonly property int typeRole: appletModel.KItemModels.KRoleNames.role("Type")
     readonly property int stateRole: appletModel.KItemModels.KRoleNames.role("ConnectionState")
+    readonly property int nameRole: appletModel.KItemModels.KRoleNames.role("Name")
+    readonly property int ssidRole: appletModel.KItemModels.KRoleNames.role("Ssid")
 
     function wirelessRow(model, row, parent, wantActive) {
         const index = model.index(row, 0, parent);
@@ -129,6 +198,10 @@ Item {
         }
         const active = model.data(index, stateRole) === PlasmaNM.Enums.Activated
             || model.data(index, stateRole) === PlasmaNM.Enums.Activating;
+        // The running hotspot is this computer's own network, not one it is connected to.
+        if (active && hotspotActive && (model.data(index, nameRole) === hotspotName || model.data(index, ssidRole) === hotspotName)) {
+            return false;
+        }
         return active === wantActive;
     }
 

@@ -213,6 +213,8 @@ Item {
                             return bluetoothComponent;
                         case "audio":
                             return audioComponent;
+                        case "power":
+                            return powerComponent;
                         default:
                             return null;
                         }
@@ -334,6 +336,16 @@ Item {
     Component {
         id: audioComponent
         AudioPage {
+            backend: content.backend
+            initialTab: content.backend.audioPage === "input" ? 1 : 0
+            pal: content.pal
+            metrics: content.metrics
+            onBack: content.closePage(false)
+        }
+    }
+    Component {
+        id: powerComponent
+        PowerPage {
             backend: content.backend
             pal: content.pal
             metrics: content.metrics

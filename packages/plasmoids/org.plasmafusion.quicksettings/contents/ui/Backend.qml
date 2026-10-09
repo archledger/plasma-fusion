@@ -25,6 +25,7 @@ Item {
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
     // Page of the pop-up: "main", "wifi", "bluetooth" or "audio".
     property string page: "main"
+    property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
     property bool showEmptyNotifications: false
     // Tablet posture with the Notification Centre apart from the controls (TABLET2 S1): the sheet
@@ -74,6 +75,7 @@ Item {
     Loader { id: audioLoader; asynchronous: true; source: "services/Audio.qml" }
     Loader { id: batteryLoader; asynchronous: true; source: "services/Battery.qml" }
     Loader { id: profilesLoader; asynchronous: true; source: "services/PowerProfiles.qml" }
+    Loader { id: keepAwakeLoader; asynchronous: true; source: "services/KeepAwake.qml" }
     Loader { id: displayLoader; asynchronous: true; source: "services/Display.qml" }
     Loader { id: mediaLoader; asynchronous: true; source: "services/Media.qml" }
     Loader { id: notifLoader; asynchronous: true; source: "services/Notifications.qml" }
@@ -193,6 +195,45 @@ Item {
         readonly property var otherModel: s ? s.otherModel : null
         readonly property bool scanning: s ? s.scanning : false
         readonly property bool checked: wifiDevice && wifiEnabled && !airplane
+        readonly property bool hotspotSupported: s ? s.hotspotSupported : false
+        readonly property bool hotspotActive: s ? s.hotspotActive : false
+        readonly property bool hotspotStarting: s ? s.hotspotStarting : false
+        readonly property bool hotspotReady: hotspotActive
+            || (wifiDevice && wifiEnabled && wifiHwEnabled && !airplane && hotspotSupported)
+        readonly property string hotspotName: s ? s.hotspotName : ""
+        readonly property string hotspotError: s && s.hotspotFailedToStart
+            ? i18nc("@info", "The hotspot could not start") : ""
+        // plasma-nm only offers a hotspot on a free radio, or while the connection runs over
+        // something else; with one radio that is connected, Wi-Fi itself is the connection.
+        readonly property bool hotspotRadioBusy: !hotspotSupported && kind === "wifi"
+        readonly property string hotspotSubtitle: {
+            if (hotspotActive) { return i18nc("@info:status hotspot", "On"); }
+            if (hotspotStarting) { return i18nc("@info:status hotspot", "Starting…"); }
+            if (!wifiDevice) { return i18nc("@info:status hotspot", "No Wi‑Fi radio"); }
+            if (airplane) { return i18nc("@info:status hotspot", "Airplane mode"); }
+            if (!wifiEnabled || !wifiHwEnabled) { return i18nc("@info:status hotspot", "Wi‑Fi is off"); }
+            if (hotspotRadioBusy) { return i18nc("@info:status hotspot", "Wi‑Fi in use"); }
+            if (!hotspotSupported) { return i18nc("@info:status hotspot", "Unavailable"); }
+            if (hotspotError) { return i18nc("@info:status hotspot", "Failed to start"); }
+            return i18nc("@info:status hotspot", "Off");
+        }
+        readonly property string hotspotHint: {
+            if (hotspotActive) {
+                return i18nc("@info %1 is the hotspot network name", "Sharing this computer's connection as “%1”", hotspotName);
+            }
+            if (hotspotRadioBusy) {
+                return i18nc("@info", "The Wi‑Fi radio is connected to a network. Disconnect it or use a cable to share the connection.");
+            }
+            if (wifiDevice && wifiEnabled && wifiHwEnabled && !airplane && !hotspotSupported) {
+                return i18nc("@info", "This Wi‑Fi radio cannot run a hotspot");
+            }
+            return i18nc("@info", "Share this computer's connection over Wi‑Fi");
+        }
+        function toggleHotspot(): void { if (s) { s.toggleHotspot(); } }
+        function hotspotPassword(): string { return s ? s.hotspotPassword() : ""; }
+        function configureHotspot(name: string, password: string): bool {
+            return s ? s.configureHotspot(name, password) : false;
+        }
         readonly property string subtitle: {
             if (!available) {
                 return i18nc("@info:status network", "Unavailable");
@@ -214,6 +255,9 @@ Item {
             }
             if (ssid.length > 0) {
                 return ssid;
+            }
+            if (hotspotActive) {
+                return i18nc("@info:status Wi-Fi", "Hotspot on");
             }
             return i18nc("@info:status Wi-Fi", "Not connected");
         }
@@ -266,6 +310,19 @@ Item {
         readonly property string deviceName: s ? s.deviceName : ""
         readonly property var sinkModel: s ? s.sinkModel : null
         readonly property int sinkCount: s ? s.sinkCount : 0
+        readonly property bool inputAvailable: s ? s.inputAvailable : false
+        readonly property real inputVolume: s ? s.inputVolume : 0
+        readonly property bool inputMuted: s ? s.inputMuted : true
+        readonly property string inputDescription: s ? s.inputDescription : ""
+        readonly property var sourceModel: s ? s.sourceModel : null
+        readonly property var playbackModel: s ? s.playbackModel : null
+        readonly property var recordingModel: s ? s.recordingModel : null
+        readonly property real normal: s ? s.normal : 65536
+        function setInputVolume(fraction: real): void { if (s) { s.setInputVolume(fraction); } }
+        function toggleInputMute(): void { if (s) { s.toggleInputMute(); } }
+        function setStreamVolume(stream: var, fraction: real): void { if (s) { s.setStreamVolume(stream, fraction); } }
+        function toggleStreamMute(stream: var): void { if (s) { s.toggleStreamMute(stream); } }
+        function routeStream(stream: var, index: int): void { if (s) { s.routeStream(stream, index); } }
         function setVolume(fraction: real) {
             if (s) {
                 s.setVolume(fraction);
@@ -488,6 +545,25 @@ Item {
             const next = choices[(choices.indexOf(active) + 1) % choices.length];
             // Performance may be inhibited (for example on battery); the subtitle then stays.
             s.setProfile(next);
+        }
+    }
+
+    // ------------------------------------------------------------------ manual sleep and lock inhibition
+    readonly property var keepAwake: QtObject {
+        readonly property var s: keepAwakeLoader.item
+        readonly property bool available: s ? s.available : false
+        readonly property bool active: s ? s.active : false
+        readonly property var inhibitors: s ? s.inhibitors : []
+        function setAllowed(appName: string, reason: string, allowed: bool): void {
+            if (s) { s.setAllowed(appName, reason, allowed); }
+        }
+        readonly property string subtitle: !available ? i18nc("@info:status Keep awake", "Unavailable")
+                                         : active ? i18nc("@info:status Keep awake", "On")
+                                                  : i18nc("@info:status Keep awake", "Off")
+        function toggle(): void {
+            if (s) {
+                s.toggle(i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking"));
+            }
         }
     }
 

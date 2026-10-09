@@ -12,8 +12,18 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - The clock calendar gains selected-day events, event dots, calendar-provider/resource settings,
   Open calendar and a native KOrganizer Add event action. Calendar apps continue to own sync,
   recurrence and reminders; the date grid remains usable without them.
+- Quick Settings adds microphone/input volume and mute, input-device selection, and independent
+  application playback/recording volume, mute and device routing in the Sound page.
 - The clock offers optional seconds and searchable world-clock time zones, shown with their local
   dates in the calendar popup; the panel's system time zone remains unchanged.
+- Quick Settings gains a **Keep awake** switch to manually block sleep and automatic screen
+  locking until turned off. A coffee-cup indicator stays visible in the status pill while active;
+  configured timeouts and other applications' inhibitors are preserved.
+  Its chevron opens **Sleep blockers**: the applications blocking sleep or screen locking, their
+  reasons, and a box to block or allow each request.
+- Quick Settings adds a **Wi‑Fi hotspot** tile on Plasma's own hotspot (the Networks applet's
+  settings). It says why when the radio can't host one, for example when the only Wi‑Fi radio
+  carries the connection; the Wi‑Fi page starts and stops it and shows its name and password.
 
 ## 0.3.1 (2026-10-06)
 

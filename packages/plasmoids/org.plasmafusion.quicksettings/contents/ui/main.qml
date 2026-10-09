@@ -154,7 +154,7 @@ PlasmoidItem {
             contentWanted = true;
             placeAnchor();
             const start = String(Plasmoid.configuration.startPage || "main");
-            backend.page = ["main", "wifi", "bluetooth", "audio"].indexOf(start) !== -1 ? start : "main";
+            backend.page = ["main", "wifi", "bluetooth", "audio", "power"].indexOf(start) !== -1 ? start : "main";
             // The settings are read again after the sheet's first frame (policyRefresh).
             policyRefresh.restart();
         }
@@ -281,10 +281,11 @@ PlasmoidItem {
             return;
         }
         // qmllint disable missing-property
-        const interactive = typeof item.clicked === "function" || (item.moved !== undefined && item.value !== undefined);
+        const interactive = typeof item.clicked === "function" || typeof item.editingFinished === "function"
+            || (item.moved !== undefined && item.value !== undefined);
         if (interactive && item.width > 0 && item.height > 0 && item.enabled !== false && item.Accessible.ignored !== true) {
             const c = item.mapToItem(null, item.width / 2, item.height / 2);
-            const name = item.objectName || item.text || item.Accessible.name || "?";
+            const name = item.objectName || item.Accessible.name || item.text || "?";
             out.push(String(name).replace(/[;,]/g, " ") + " " + Math.round(ox + c.x) + "," + Math.round(oy + c.y) + " "
                      + Math.round(item.width) + "x" + Math.round(item.height));
         }
@@ -314,6 +315,10 @@ PlasmoidItem {
                      + ", scroll " + (scroller ? Math.round(scroller.contentHeight) + "/" + Math.round(scroller.height) + (scroller.interactive ? " interactive at " + Math.round(scroller.contentY) : "") : "-")
                      + ", bt model " + (backend.bt.devicesModel ? "created" : "none")
                      + ", dnd " + backend.dnd.subtitle
+                     + ", keep awake " + backend.keepAwake.subtitle
+                     + ", hotspot " + backend.net.hotspotSubtitle
+                     + ", page " + backend.page
+                     + ", focus " + (popup.activeFocusItem ? popup.activeFocusItem.Accessible.name : "-")
                      + ", policy " + (policy ? "im " + (policy.inputMethod === "" ? "off" : "on") + " window " + policy.windowMode + " rotation "
                                       + (policy.rotationLocked ? "locked" : "free") + " mode " + policy.tabletModeSetting + " osk "
                                       + (policy.oskAvailable ? "available" : "none") : "-")
