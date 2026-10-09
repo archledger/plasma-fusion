@@ -15,6 +15,8 @@ PlasmaExtras.Menu {
 
     // Testing: the entries as added ("> " a submenu, "  " its entries, "[x]" checked).
     property var entries: []
+    // A task's menu: its window actions hold the task's model index from when it opened.
+    property bool taskMenu: false
 
     onStatusChanged: {
         if (status === PlasmaExtras.Menu.Closed) {

@@ -207,8 +207,17 @@ PlasmoidItem {
                 root.scheduleRescan();
             }
         }
-        onRowsMoved: root.scheduleRescan()
-        onModelReset: root.scheduleRescan()
+        onRowsMoved: {
+            root.closeTaskMenu();
+            root.scheduleRescan();
+        }
+        onModelReset: {
+            root.closeTaskMenu();
+            root.scheduleRescan();
+        }
+        onRowsInserted: root.closeTaskMenu()
+        onRowsRemoved: root.closeTaskMenu()
+        onLayoutChanged: root.closeTaskMenu()
 
         Component.onCompleted: {
             launcherList = Plasmoid.configuration.launchers;
@@ -900,6 +909,7 @@ PlasmoidItem {
         }
         console.info("dock: targets tablet=" + root.tablet + " tile=" + root.tile
                      + " preview=" + (shown ? shown.row + "/" + shown.windows.length + (shown.visible ? "" : "(hidden)") : "none")
+                     + " menu=" + (root.menuOpen ? "open" : "closed")
                      + " " + out.join(" "));
     }
 
@@ -1103,6 +1113,13 @@ PlasmoidItem {
     }
 
     property DockMenu lastMenu: null
+    // A task's menu acts on model indexes taken when it opened: when tasks come, go or move, they
+    // may name another task, so the menu closes (open it again for the task).
+    function closeTaskMenu(): void {
+        if (lastMenu && lastMenu.taskMenu && lastMenu.status !== PlasmaExtras.Menu.Closed) {
+            lastMenu.close();
+        }
+    }
 
     function openMenu(visualParent: Item): DockMenu {
         const menu = menuComponent.createObject(root, { visualParent: visualParent }) as DockMenu;
@@ -1228,6 +1245,7 @@ PlasmoidItem {
         const index = tasksModel.makeModelIndex(row);
         const atm = TaskManager.AbstractTasksModel;
         const menu = openMenu(item.iconItem);
+        menu.taskMenu = true;
         const name = item.name;
         if (name) {
             menu.addHeader(name);
