@@ -24,18 +24,16 @@ Item {
     // replaced them and left an inhibition nothing could release. A request is pending until the
     // state changes (or 5 s pass).
     readonly property bool pending: Instances.keepAwakePending
-    onActiveChanged: Instances.keepAwakePending = false
-    Timer {
-        id: pendingTimeout
-        interval: 5000
-        onTriggered: Instances.keepAwakePending = false
+    onActiveChanged: {
+        Instances.keepAwakeTimeout.stop();
+        Instances.keepAwakePending = false;
     }
     function toggle(reason: string): void {
         if (!available || Instances.keepAwakePending) {
             return;
         }
         Instances.keepAwakePending = true;
-        pendingTimeout.restart();
+        Instances.keepAwakeTimeout.restart();
         if (active) {
             control.uninhibit();
         } else {
