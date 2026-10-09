@@ -26,6 +26,40 @@ Item {
             adapter.powered = on;
         });
     }
+    // Clears a soft rfkill block and calls done once BluezQt sees it gone (the block is written
+    // from a thread; BlueZ then powers the adapters it had on), or after a moment when it stays:
+    // a hard block, which only the hardware switch clears.
+    property var unblockDone: null
+    function unblock(done): void {
+        if (!BluezQt.Manager.bluetoothBlocked) {
+            done();
+            return;
+        }
+        unblockDone = done;
+        BluezQt.Manager.bluetoothBlocked = false;
+        unblockWait.restart();
+    }
+    function unblocked(): void {
+        unblockWait.stop();
+        const done = unblockDone;
+        unblockDone = null;
+        if (done) {
+            done();
+        }
+    }
+    Connections {
+        target: BluezQt.Manager
+        function onBluetoothBlockedChanged() {
+            if (!BluezQt.Manager.bluetoothBlocked && bt.unblockDone) {
+                bt.unblocked();
+            }
+        }
+    }
+    Timer {
+        id: unblockWait
+        interval: 2000
+        onTriggered: bt.unblocked()
+    }
     function toggleDevice(device, ubi: string, connected: bool) {
         if (!device) {
             return;

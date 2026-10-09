@@ -81,8 +81,10 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   `enableAirplaneMode` and setting, as the stock Networks widget (Wi‑Fi, mobile data and
   Bluetooth off, and back on: the radios that were on are kept for every screen's widget in
   `Instances`, since each plasma-nm handler keeps its own copy (Bluetooth as the BlueZ adapters
-  powered on, read and set over the system bus, not through the optional Bluetooth service), and in
-  each widget's settings
+  powered on, read and set over the system bus, not through the optional Bluetooth service: every
+  adapter when BlueZ gave no answer; a soft rfkill block set meanwhile is cleared first, through
+  the Bluetooth service when loaded; the radios are read before BlueZ is asked, and an answer
+  arriving after airplane mode started elsewhere records nothing), and in each widget's settings
   (`airplaneRestore`) across a plasmashell restart, taken back only while airplane mode is still
   on, else dropped as stale; with no record, airplane mode having started elsewhere, all come back
   on), and the **VPN** connections (plugin VPNs and WireGuard: type `Vpn`

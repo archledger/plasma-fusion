@@ -231,30 +231,47 @@ Item {
             }
             airplaneSwitching = true;
             if (on) {
+                // The radios as they are now, before BlueZ answers: airplane mode started elsewhere
+                // meanwhile has turned them off, and is not this widget's to record.
+                const wifi = s.wifiEnabled;
+                const wwan = s.wwanEnabled;
                 backend.poweredBluetoothAdapters(adapters => {
-                    Instances.airplaneRestore = { wifi: s.wifiEnabled, wwan: s.wwanEnabled, bluetooth: adapters };
-                    s.enterAirplaneMode();
                     airplaneSwitching = false;
+                    if (s.airplane) {
+                        return;
+                    }
+                    // No answer from BlueZ (absent, or failed): every adapter comes back, as with
+                    // no record, rather than none.
+                    Instances.airplaneRestore = { wifi: wifi, wwan: wwan, bluetooth: adapters === null ? true : adapters };
+                    s.enterAirplaneMode();
                 });
                 return;
             }
             const restore = Instances.airplaneRestore;
             Instances.airplaneRestore = null;
             s.leaveAirplaneMode(restore ? restore.wifi : true, restore ? restore.wwan : true);
-            // The record's Bluetooth: the adapters that were on; a record saved before this (one
-            // boolean for the Bluetooth service's state) or none: every adapter on, or none.
+            // The record's Bluetooth: the adapters that were on; true (a record saved before this,
+            // one boolean for the Bluetooth service's state, or BlueZ not answering when airplane
+            // mode started) or no record: every adapter; false or none listed: none.
             const bluetooth = restore ? restore.bluetooth : true;
-            if (Array.isArray(bluetooth)) {
-                bluetooth.forEach(path => backend.powerBluetoothAdapter(path, true));
+            if (bluetooth !== true && !(Array.isArray(bluetooth) && bluetooth.length > 0)) {
                 airplaneSwitching = false;
-            } else if (bluetooth === true) {
+                return;
+            }
+            // A soft rfkill block set meanwhile (the Bluetooth tile, bluedevil's switch, rfkill)
+            // makes BlueZ refuse Powered: cleared first, through the Bluetooth service when it is
+            // loaded (a hard block stays, and so does Bluetooth off).
+            backend.bt.unblock(() => {
+                if (Array.isArray(bluetooth)) {
+                    bluetooth.forEach(path => backend.powerBluetoothAdapter(path, true));
+                    airplaneSwitching = false;
+                    return;
+                }
                 backend.bluetoothAdapters(adapters => {
-                    adapters.forEach(a => backend.powerBluetoothAdapter(a.path, true));
+                    (adapters || []).forEach(a => backend.powerBluetoothAdapter(a.path, true));
                     airplaneSwitching = false;
                 });
-            } else {
-                airplaneSwitching = false;
-            }
+            });
         }
         readonly property string ssid: s ? s.ssid : ""
         readonly property bool connecting: s ? s.connecting : false
@@ -593,8 +610,9 @@ Item {
         }
     }
 
-    // BlueZ's adapters ([{path, powered}]; [] without BlueZ) and their power, as plasma-nm's
-    // handler reads and sets them for airplane mode.
+    // BlueZ's adapters ([{path, powered}]; [] with none, null when BlueZ gave no answer: not
+    // running, not installed, or the call failed) and their power, as plasma-nm's handler reads
+    // and sets them for airplane mode.
     function bluetoothAdapters(done): void {
         DBus.SystemBus.asyncCall({
             "service": "org.bluez",
@@ -612,10 +630,13 @@ Item {
                 }
             }
             done(adapters);
-        }, () => done([]));
+        }, reply => {
+            console.warn("quicksettings: BlueZ adapters not read: " + reply.error.name);
+            done(null);
+        });
     }
     function poweredBluetoothAdapters(done): void {
-        bluetoothAdapters(adapters => done(adapters.filter(a => a.powered).map(a => a.path)));
+        bluetoothAdapters(adapters => done(adapters === null ? null : adapters.filter(a => a.powered).map(a => a.path)));
     }
     function powerBluetoothAdapter(path: string, on: bool): void {
         DBus.SystemBus.asyncCall({
@@ -919,6 +940,15 @@ Item {
         readonly property var s: btLoader.item
         readonly property bool available: s ? s.available : false
         readonly property bool enabled: s ? s.powered : false
+        readonly property bool blocked: s ? s.blocked : false
+        // Clears a soft rfkill block, then calls done (at once when there is none, or no service).
+        function unblock(done): void {
+            if (s && s.blocked) {
+                s.unblock(done);
+            } else {
+                done();
+            }
+        }
         readonly property int connectedCount: s ? s.connectedCount : 0
         readonly property var devicesModel: s ? s.devicesModel : null
         readonly property bool checked: available && enabled
