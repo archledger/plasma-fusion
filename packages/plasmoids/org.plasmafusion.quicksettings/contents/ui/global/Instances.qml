@@ -13,6 +13,9 @@ import QtQuick
 QtObject {
     // The widgets' root items (main.qml), in the order they came.
     property var items: []
+    // A keep-awake request is on its way (KeepAwake.qml): the native monitor is shared by every
+    // widget and keeps one pair of cookies, so one request at a time across all of them.
+    property bool keepAwakePending: false
 
     readonly property var leader: {
         let best = null;

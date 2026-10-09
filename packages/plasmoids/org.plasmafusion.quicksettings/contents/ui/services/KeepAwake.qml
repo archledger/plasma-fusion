@@ -5,6 +5,8 @@ import QtQuick
 import org.kde.plasma.private.batterymonitor
 import org.kde.plasma.workspace.dbus as DBus
 
+import "../global"
+
 // The same manual inhibition as Plasma's battery applet. The native monitor owns both the sleep
 // and ScreenSaver cookies, shares the state across applets, and releases them at session exit.
 Item {
@@ -17,21 +19,22 @@ Item {
         if (available) { control.setInhibitionAllowed(appName, reason, allowed); }
     }
 
-    // One request at a time: the native monitor keeps one pair of cookies, so a second inhibit
-    // before the first one's reply replaced them and left an inhibition nothing could release.
-    // A request is pending until the state changes (or 5 s pass).
-    property bool pending: false
-    onActiveChanged: pending = false
+    // One request at a time, across every quick settings widget (Instances): the native monitor
+    // is shared and keeps one pair of cookies, so a second inhibit before the first one's reply
+    // replaced them and left an inhibition nothing could release. A request is pending until the
+    // state changes (or 5 s pass).
+    readonly property bool pending: Instances.keepAwakePending
+    onActiveChanged: Instances.keepAwakePending = false
     Timer {
         id: pendingTimeout
         interval: 5000
-        onTriggered: keepAwake.pending = false
+        onTriggered: Instances.keepAwakePending = false
     }
     function toggle(reason: string): void {
-        if (!available || pending) {
+        if (!available || Instances.keepAwakePending) {
             return;
         }
-        pending = true;
+        Instances.keepAwakePending = true;
         pendingTimeout.restart();
         if (active) {
             control.uninhibit();

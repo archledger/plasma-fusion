@@ -97,6 +97,16 @@ try:
     wait_for(lambda: not first.property("active"), "turning off after a double tap failed")
     QTest.qWait(300)
     check(tuple(test.Counts()) == (0, 0), "turning off after a double tap leaves no cookies behind")
+    # The tiles of two screens (two widgets, one native monitor) tapped before the first reply.
+    QMetaObject.invokeMethod(first, "toggle", Q_ARG(str, "Manually block sleep and screen locking"))
+    QMetaObject.invokeMethod(second, "toggle", Q_ARG(str, "Manually block sleep and screen locking"))
+    wait_for(lambda: first.property("active"), "two widgets' taps did not turn it on")
+    QTest.qWait(300)
+    check(tuple(test.Counts()) == (1, 1), "two widgets tapped at once acquire one inhibition pair")
+    QMetaObject.invokeMethod(second, "toggle", Q_ARG(str, "Manually block sleep and screen locking"))
+    wait_for(lambda: not first.property("active"), "turning off after two widgets' taps failed")
+    QTest.qWait(300)
+    check(tuple(test.Counts()) == (0, 0), "turning off from the other widget leaves no cookies behind")
     print(f"Keep awake: {checks} checks, 0 failures")
 finally:
     fixture.terminate()
