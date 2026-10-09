@@ -17,10 +17,22 @@ Item {
         if (available) { control.setInhibitionAllowed(appName, reason, allowed); }
     }
 
+    // One request at a time: the native monitor keeps one pair of cookies, so a second inhibit
+    // before the first one's reply replaced them and left an inhibition nothing could release.
+    // A request is pending until the state changes (or 5 s pass).
+    property bool pending: false
+    onActiveChanged: pending = false
+    Timer {
+        id: pendingTimeout
+        interval: 5000
+        onTriggered: keepAwake.pending = false
+    }
     function toggle(reason: string): void {
-        if (!available) {
+        if (!available || pending) {
             return;
         }
+        pending = true;
+        pendingTimeout.restart();
         if (active) {
             control.uninhibit();
         } else {

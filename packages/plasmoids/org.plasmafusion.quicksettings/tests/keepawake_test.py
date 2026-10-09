@@ -86,6 +86,17 @@ try:
     QMetaObject.invokeMethod(first, "toggle", Q_ARG(str, "Manually block sleep and screen locking"))
     wait_for(lambda: not first.property("active") and tuple(test.Counts()) == (0, 0), "final release did not finish")
     check(tuple(test.Counts()) == (0, 0), "service recovery and repeated use leave no cookies behind")
+    # Two quick taps: the second, before the first reply, is ignored. The native monitor keeps one
+    # pair of cookies, so a second inhibit would leave a pair nothing could release.
+    QMetaObject.invokeMethod(first, "toggle", Q_ARG(str, "Manually block sleep and screen locking"))
+    QMetaObject.invokeMethod(first, "toggle", Q_ARG(str, "Manually block sleep and screen locking"))
+    wait_for(lambda: first.property("active"), "a quick double tap did not turn it on")
+    QTest.qWait(300)
+    check(tuple(test.Counts()) == (1, 1), "a quick double tap acquires one inhibition pair")
+    QMetaObject.invokeMethod(first, "toggle", Q_ARG(str, "Manually block sleep and screen locking"))
+    wait_for(lambda: not first.property("active"), "turning off after a double tap failed")
+    QTest.qWait(300)
+    check(tuple(test.Counts()) == (0, 0), "turning off after a double tap leaves no cookies behind")
     print(f"Keep awake: {checks} checks, 0 failures")
 finally:
     fixture.terminate()
