@@ -15,9 +15,10 @@ done
 # Provided by the process that loads the file: KWin (window switcher, scripts, effects) and the lock
 # screen greeter. Files loaded with a Loader degrade on their own: the quick settings services
 # (services/*.qml; a missing module leaves its tile out: no Bluetooth stack, no KDE Connect, no
-# PowerDevil) and the lock screen's network indicator (no plasma-nm): reported, not an error.
+# PowerDevil), the lock screen's network indicator (no plasma-nm) and the dock's audio streams
+# (no plasma-pa: no audio indicator): reported, not an error.
 inprocess=" org.kde.kwin org.kde.kwin.private.effects org.kde.kscreenlocker "
-loaded='/org\.plasmafusion\.quicksettings/contents/ui/services/|/org\.plasmafusion\.lockshell/contents/lockscreen/NetworkIndicator\.qml$'
+loaded='/org\.plasmafusion\.quicksettings/contents/ui/services/|/org\.plasmafusion\.lockshell/contents/lockscreen/NetworkIndicator\.qml$|/org\.plasmafusion\.dock/contents/ui/AudioStreams\.qml$'
 files=$(find /usr/share/plasma/plasmoids/org.plasmafusion.* /usr/share/plasma/shells/org.plasmafusion.* \
   /usr/share/plasma/look-and-feel/org.plasmafusion.* /usr/share/kwin/tabbox/org.plasmafusion.* \
   /usr/share/kwin/scripts/plasmafusion-* /usr/share/kwin/effects/plasmafusion_* \
