@@ -53,6 +53,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   desktop without icons.
 - Quick Settings keeps a volume set above 100 %: one scroll step on the status pill no longer
   lowers it to 100 %. With Plasma's "Raise maximum volume" the volume sliders now reach 150 %.
+- Quick Settings' Wi‑Fi page has an **Airplane mode** switch, as Plasma's Networks widget: it turns
+  Wi‑Fi, mobile data and Bluetooth off and back on.
 
 ## 0.3.1 (2026-10-06)
 

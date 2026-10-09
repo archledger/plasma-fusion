@@ -457,6 +457,51 @@ ColumnLayout {
         visible: list.visible
     }
 
+    // ---------------------------------------------------------------- airplane mode
+    // The stock Networks widget's switch: Wi-Fi, mobile data and Bluetooth off, and back on.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 1
+        visible: airplaneRow.visible
+        color: page.pal.overlay(0.08)
+    }
+    RowLayout {
+        id: airplaneRow
+        Layout.fillWidth: true
+        visible: page.backend.net.airplaneAvailable
+        spacing: page.metrics.px(8)
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+            FText {
+                Layout.fillWidth: true
+                pal: page.pal
+                metrics: page.metrics
+                text: i18nc("@title", "Airplane mode")
+                font.weight: Font.Bold
+            }
+            FText {
+                Layout.fillWidth: true
+                pal: page.pal
+                metrics: page.metrics
+                px: 11.5
+                color: page.pal.secondary
+                wrapMode: Text.Wrap
+                text: page.backend.net.airplane ? i18nc("@info", "Wi‑Fi and Bluetooth are off")
+                                                : i18nc("@info", "Turns off Wi‑Fi and Bluetooth")
+            }
+        }
+        FusionSwitch {
+            pal: page.pal
+            text: i18nc("@action:button", "Airplane mode")
+            checked: page.backend.net.airplane
+            onToggled: {
+                page.backend.net.setAirplaneMode(checked);
+                checked = Qt.binding(() => page.backend.net.airplane);
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- hotspot
     // plasma-nm's own hotspot (the stock Networks applet's settings): start and stop, the
     // reason when the radio can't run one, and the network name and password to share.

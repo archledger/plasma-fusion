@@ -62,7 +62,10 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   NetworkManager removes when it stops. plasma-nm offers it only on a free radio or while the
   connection runs over something else, so a single radio that carries the connection reads
   `Wi‑Fi in use`; the dimmed tile then opens the Wi‑Fi page, which explains it. A start that
-  NetworkManager drops within 20 s reads `Failed to start`. The chevron opens the Wi‑Fi page;
+  NetworkManager drops within 20 s reads `Failed to start`. The chevron opens the Wi‑Fi page,
+  which also has the **Airplane mode** switch (with a Wi‑Fi radio or a modem): plasma-nm's
+  `enableAirplaneMode` and setting, as the stock Networks widget (Wi‑Fi, mobile data and
+  Bluetooth off, and back on);
 * **Disks & Devices** (device name, or `N devices`; accent while one is mounted), shown while a
   removable device is connected, with a USB-drive icon in the status pill: the stock Disks &
   Devices, which is not loaded where this widget is in the bar (desktop layout and

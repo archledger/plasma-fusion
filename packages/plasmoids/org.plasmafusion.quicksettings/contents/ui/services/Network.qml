@@ -20,6 +20,8 @@ Item {
     readonly property bool wifiEnabled: enabledConnections.wirelessEnabled
     readonly property bool wifiHwEnabled: enabledConnections.wirelessHwEnabled
     readonly property bool airplane: PlasmaNM.Configuration.airplaneModeEnabled
+    // Airplane mode is offered with a Wi-Fi radio or a modem, as in the stock Networks widget.
+    readonly property bool airplaneAvailable: availableDevices.wirelessDeviceAvailable || availableDevices.modemDeviceAvailable
     readonly property string ssid: wirelessStatus.wifiSSID
     readonly property bool connecting: connectionIcon.connecting
     readonly property string iconName: connectionIcon.connectionIcon
@@ -129,6 +131,12 @@ Item {
     }
     Component.onCompleted: refreshHotspotSettings()
 
+    // As the stock Networks widget: plasma-nm switches Wi-Fi, mobile data and Bluetooth off (or
+    // back on) and keeps the setting.
+    function setAirplaneMode(on: bool): void {
+        handler.enableAirplaneMode(on);
+        PlasmaNM.Configuration.airplaneModeEnabled = on;
+    }
     function setWifiEnabled(on: bool) {
         handler.enableWireless(on);
     }

@@ -204,6 +204,8 @@ Item {
         readonly property bool wifiEnabled: s ? s.wifiEnabled : false
         readonly property bool wifiHwEnabled: s ? s.wifiHwEnabled : false
         readonly property bool airplane: s ? s.airplane : false
+        readonly property bool airplaneAvailable: s ? s.airplaneAvailable : false
+        function setAirplaneMode(on: bool): void { if (s) { s.setAirplaneMode(on); } }
         readonly property string ssid: s ? s.ssid : ""
         readonly property bool connecting: s ? s.connecting : false
         readonly property string kind: s ? s.kind : "none"
