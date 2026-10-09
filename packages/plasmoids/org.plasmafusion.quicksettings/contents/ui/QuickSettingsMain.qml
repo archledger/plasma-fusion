@@ -941,6 +941,18 @@ ColumnLayout {
                         value = Qt.binding(() => page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0);
                     }
                 }
+                // A seek still queued belongs to the track it was made on: another player, track or
+                // length drops it.
+                function cancelQueued(): void {
+                    seekTimer.stop();
+                    target = -1;
+                }
+                Connections {
+                    target: page.backend.media
+                    function onCurrentIndexChanged() { seekSlider.cancelQueued(); }
+                    function onTitleChanged() { seekSlider.cancelQueued(); }
+                    function onLengthChanged() { seekSlider.cancelQueued(); }
+                }
                 // A drag sends one request when it pauses (as the stock widget's 100 ms queue).
                 Timer {
                     id: seekTimer
