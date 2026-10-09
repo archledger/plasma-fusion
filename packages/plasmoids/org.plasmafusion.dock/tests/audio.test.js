@@ -46,6 +46,14 @@ assert.deepStrictEqual(r.streams, [], "a second instance after a pid match");
 r = match(all, never, "firefox", 101, "Firefox");
 assert.deepStrictEqual(r.streams, [firefox], "before any pid match the name still matches");
 
+// a grouped task: its windows' processes all count (the first child's pid alone missed the others)
+const konsoleA = { pid: 500, appName: "Konsole", portalAppId: "" };
+const konsoleB = { pid: 501, appName: "Konsole", portalAppId: "" };
+r = match([konsoleA, konsoleB, firefox], never, "org.kde.konsole", [500, 501], "Konsole");
+assert.deepStrictEqual(r.streams, [konsoleA, konsoleB], "every process of a group");
+assert.strictEqual(r.pidMatch, "Konsole", "a group's process-id match is remembered");
+assert.deepStrictEqual(match([konsoleB], never, "org.kde.konsole", [500, 501], "Konsole").streams, [konsoleB], "the second window's process alone");
+
 // nothing to match
 assert.deepStrictEqual(match([], never, "org.kde.elisa", 200, "Elisa").streams, [], "no streams");
 assert.deepStrictEqual(match(all, never, "", 0, "").streams, [], "no id, pid or name");

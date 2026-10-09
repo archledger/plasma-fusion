@@ -215,8 +215,14 @@ PlasmoidItem {
             root.closeTaskMenu();
             root.scheduleRescan();
         }
-        onRowsInserted: root.closeTaskMenu()
-        onRowsRemoved: root.closeTaskMenu()
+        onRowsInserted: {
+            root.closeTaskMenu();
+            Qt.callLater(root.refreshAudio);
+        }
+        onRowsRemoved: {
+            root.closeTaskMenu();
+            Qt.callLater(root.refreshAudio);
+        }
         onLayoutChanged: root.closeTaskMenu()
 
         Component.onCompleted: {
@@ -2012,6 +2018,7 @@ PlasmoidItem {
                 gap: root.gap
                 entry: root.launcherEntries[taskItem.iconName] ?? null
                 audio: root.audio
+                pidsFor: row => root.taskPids(row)
                 monthText: root.todayMonth
                 dayText: root.todayDay
                 shown: root.taskVisible[taskItem.index] ?? true
@@ -2223,6 +2230,35 @@ PlasmoidItem {
         source: "AudioStreams.qml"
     }
     readonly property QtObject audio: audioLoader.item
+    // The process ids of a task: for a group, every window's (they can be several processes; the
+    // group's own AppPid is its first window's).
+    function taskPids(row: int): var {
+        const atm = TaskManager.AbstractTasksModel;
+        const index = tasksModel.makeModelIndex(row);
+        const pids = [];
+        const take = pid => {
+            if (pid > 0 && pids.indexOf(pid) === -1) {
+                pids.push(pid);
+            }
+        };
+        if (tasksModel.data(index, atm.IsGroupParent) === true) {
+            for (let j = 0; j < tasksModel.rowCount(index); ++j) {
+                take(Number(tasksModel.data(tasksModel.makeModelIndex(row, j), atm.AppPid) || 0));
+            }
+        } else {
+            take(Number(tasksModel.data(index, atm.AppPid) || 0));
+        }
+        return pids;
+    }
+    // Windows came or went (a group gained or lost a process): the tiles match their streams again.
+    function refreshAudio(): void {
+        for (let i = 0; i < taskRepeater.count; ++i) {
+            const task = taskRepeater.itemAt(i) as TaskItem;
+            if (task) {
+                task.updateAudioStreams();
+            }
+        }
+    }
 
     // ---- Window previews (showPreviews; the stock task manager's tooltips) ----
     // After the pointer rests on a running app for 500 ms its windows' previews replace the name

@@ -80,8 +80,11 @@ Item {
     readonly property bool muted: audioStreams.length > 0 && audioStreams.every(s => s.muted)
     readonly property bool audioShown: muted || (playingAudio && audioDelay.passed)
     readonly property int appPid: model.AppPid ?? 0
+    // The task's process ids: all of a group's windows (main.qml), else its own.
+    property var pidsFor: null
     function updateAudioStreams(): void {
-        audioStreams = audio && isRunning ? audio.streamsFor(iconName, appPid, String(model.AppName ?? "")) : [];
+        const pids = pidsFor ? pidsFor(index) : [appPid];
+        audioStreams = audio && isRunning ? audio.streamsFor(iconName, pids, String(model.AppName ?? "")) : [];
     }
     // Mutes every stream of the app, or unmutes them all when all are muted.
     function toggleMuted(): void {

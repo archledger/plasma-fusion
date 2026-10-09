@@ -51,14 +51,15 @@ QtObject {
         return out;
     }
 
-    function streamsFor(appId: string, pid: int, appName: string): var {
-        const r = AudioMatch.match(find(() => true), name => pidMatches.has(name), appId, pid, appName);
+    // pids: the task's process ids (a grouped task's windows can be several processes).
+    function streamsFor(appId: string, pids: var, appName: string): var {
+        const r = AudioMatch.match(find(() => true), name => pidMatches.has(name), appId, pids, appName);
         if (r.pidMatch !== "") {
-            const pids = pidMatches.get(r.pidMatch);
-            if (pids) {
-                pids.add(pid);
+            const matched = pidMatches.get(r.pidMatch);
+            if (matched) {
+                r.streams.forEach(s => matched.add(s.pid));
             } else {
-                pidMatches.set(r.pidMatch, new Set([pid]));
+                pidMatches.set(r.pidMatch, new Set(r.streams.map(s => s.pid)));
                 Qt.callLater(audio.streamsChanged);
             }
         }

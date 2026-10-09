@@ -123,7 +123,7 @@ dock.addWidget("org.plasmafusion.dock");
   resting icons where the dock tracks the pointer, so a disc over the edge would move away under it) while the app plays sound (after 2 s, so short sounds do not flash it)
   or is muted (crossed speaker, at once). Clicking it mutes or unmutes all of the app's streams without
   activating the app. Streams are matched as in the stock task manager: the portal app id, the process
-  id, else the application name (not for an app matched by process id while that process still has
+  id (every window's process for a grouped task), else the application name (not for an app matched by process id while that process still has
   streams, so that of two instances only the playing one shows it; once that process's streams are
   gone, a helper's stream of the same name is matched by name again).
 - **Start:** if a launcher applet (org.plasmafusion.launcher, Kickoff, Kicker) sits in the dock's own
