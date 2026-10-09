@@ -83,6 +83,9 @@ jobs:
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/hotspot_settings_test.py
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/hotspot_share_test.py
 
       - name: Disks & Devices service on Plasma's data engines (offscreen, read-only)
         run: |

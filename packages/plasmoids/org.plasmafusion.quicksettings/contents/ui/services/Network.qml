@@ -5,6 +5,8 @@ import QtQuick
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.networkmanagement as PlasmaNM
 
+import "../global"
+
 // NetworkManager state through plasma-nm's QML module (same objects the
 // stock Networks applet uses).
 Item {
@@ -69,7 +71,13 @@ Item {
     readonly property var otherModel: otherWifiModel
     readonly property bool scanning: handler.scanning
     readonly property bool hotspotSupported: handler.hotspotSupported
-    readonly property bool hotspotActive: handler.hotspotActive
+    // This widget's handler, or another widget's that started the hotspot (Instances).
+    readonly property bool hotspotActive: handler.hotspotActive || Instances.hotspotActive
+    onHotspotActiveChanged: {
+        refreshHotspotSettings();
+        activeWifiModel.invalidateFilter();
+        otherWifiModel.invalidateFilter();
+    }
     // From a start request until the hotspot has stayed up for hotspotStartTimer: plasma-nm reports
     // it active once NetworkManager accepts it, and inactive again when the activation fails.
     property bool hotspotStarting: false
@@ -169,10 +177,13 @@ Item {
     }
     PlasmaNM.Handler {
         id: handler
+        Component.onCompleted: {
+            if (handler.hotspotActive) {
+                Instances.hotspotActive = true;
+            }
+        }
         onHotspotActiveChanged: {
-            net.refreshHotspotSettings();
-            activeWifiModel.invalidateFilter();
-            otherWifiModel.invalidateFilter();
+            Instances.hotspotActive = handler.hotspotActive;
             if (!handler.hotspotActive && net.hotspotStarting) {
                 net.hotspotFailed();
             }
