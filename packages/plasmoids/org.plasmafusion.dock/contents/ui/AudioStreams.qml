@@ -22,15 +22,15 @@ QtObject {
     // Streams came or went (or an app's process id was first matched): read them again.
     signal streamsChanged()
 
-    // Apps whose streams were matched by process id. An app leaves the set once none of its
-    // streams is left (its next process-id match adds it again), so an app restarted with its
-    // sound from a helper process is matched by name again.
-    property var pidMatches: new Set()
+    // Apps whose streams were matched by process id, with those process ids. An app leaves the
+    // map once none of those processes has a stream left (its next process-id match adds it
+    // again), so a helper process's stream of the same name is matched by name again.
+    property var pidMatches: new Map()
     function pruneMatches(): void {
-        const names = new Set(find(() => true).map(s => s.appName));
+        const live = new Set(find(() => true).map(s => s.pid));
         let changed = false;
-        for (const name of Array.from(pidMatches)) {
-            if (!names.has(name)) {
+        for (const [name, pids] of Array.from(pidMatches)) {
+            if (!Array.from(pids).some(p => live.has(p))) {
                 pidMatches.delete(name);
                 changed = true;
             }
@@ -53,9 +53,14 @@ QtObject {
 
     function streamsFor(appId: string, pid: int, appName: string): var {
         const r = AudioMatch.match(find(() => true), name => pidMatches.has(name), appId, pid, appName);
-        if (r.pidMatch !== "" && !pidMatches.has(r.pidMatch)) {
-            pidMatches.add(r.pidMatch);
-            Qt.callLater(audio.streamsChanged);
+        if (r.pidMatch !== "") {
+            const pids = pidMatches.get(r.pidMatch);
+            if (pids) {
+                pids.add(pid);
+            } else {
+                pidMatches.set(r.pidMatch, new Set([pid]));
+                Qt.callLater(audio.streamsChanged);
+            }
         }
         return r.streams;
     }
