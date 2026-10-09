@@ -29,6 +29,35 @@ function add(container, candidates) {
     }
     return null;
 }
+// The layout script's tray lists (packages/look-and-feel/common/contents/layouts/
+// org.kde.plasma.desktop-layout.js, which explains them; tools/build.d/60-lookandfeel.sh checks that
+// they are the same), for the first top bar, which has no other tray to copy from.
+var TRAY_ITEMS_REPLACED = [
+    "org.kde.plasma.networkmanagement",
+    "org.kde.plasma.volume",
+    "org.kde.plasma.battery",
+    "org.kde.plasma.bluetooth",
+    "org.kde.plasma.brightness",
+    "org.kde.plasma.notifications",
+    "org.kde.plasma.keyboardlayout",
+    "org.kde.kdeconnect",
+    "org.kde.plasma.clipboard",
+    "org.kde.plasma.mediacontroller"
+];
+var TRAY_ITEMS_UNLOADED = [
+    "org.kde.plasma.weather"
+];
+var TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS = [
+    "org.kde.plasma.devicenotifier"
+];
+var TRAY_ITEMS_HIDDEN = [
+    "org.kde.plasma.vault",
+    "org.kde.plasma.devicenotifier",
+    "org.kde.kscreen",
+    "org.kde.plasma.printmanager",
+    "org.kde.plasma.manage-inputmethod"
+];
+
 var hasQuickSettings = false;
 var otherTray = null;
 for (var p = 0; p < panelIds.length; ++p) {
@@ -82,6 +111,25 @@ if (tray && otherTray) {
         }
     }
     otherTray.currentConfigGroup = [];
+    tray.currentConfigGroup = [];
+} else if (tray) {
+    // The first top bar: the items quick settings replaces and the passive ones hidden, the ones
+    // with no use (and Disks & Devices, which quick settings replaces) known and not loaded.
+    tray.currentConfigGroup = ["General"];
+    var trayOff = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED);
+    tray.writeConfig("disabledStatusNotifiers", trayOff);
+    tray.writeConfig("hiddenItems", trayOff);
+    var knownItems = tray.readConfig("knownItems", []) || [];
+    var extraItems = tray.readConfig("extraItems", []) || [];
+    var unloaded = TRAY_ITEMS_UNLOADED.concat(TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS);
+    for (var u = 0; u < unloaded.length; ++u) {
+        if (knownItems.indexOf(unloaded[u]) === -1) {
+            knownItems.push(unloaded[u]);
+        }
+        extraItems = extraItems.filter(function (item) { return item !== unloaded[u]; });
+    }
+    tray.writeConfig("knownItems", knownItems);
+    tray.writeConfig("extraItems", extraItems);
     tray.currentConfigGroup = [];
 }
 if (!hasQuickSettings) {
