@@ -722,6 +722,7 @@ Item {
         readonly property bool canRaise: s ? s.canRaise : false
         readonly property var playersModel: s ? s.playersModel : null
         readonly property int currentIndex: s ? s.currentIndex : -1
+        readonly property var player: s ? s.player : null
         readonly property bool canSeek: s ? s.canSeek : false
         readonly property double length: s ? s.length : 0
         readonly property double position: s ? s.position : 0

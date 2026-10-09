@@ -941,11 +941,20 @@ ColumnLayout {
                         seekNow();
                     }
                 }
+                // The player and track the slider was taken on: let go on another one (the track
+                // ended, the automatic choice moved), the drag is dropped.
+                property var takenOn: null
                 onDraggingChanged: {
-                    if (!dragging) {
-                        seekNow();
-                        value = Qt.binding(() => page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0);
+                    const media = page.backend.media;
+                    if (dragging) {
+                        takenOn = { player: media.player, title: media.title, length: media.length };
+                        return;
                     }
+                    if (takenOn && takenOn.player === media.player && takenOn.title === media.title && takenOn.length === media.length) {
+                        seekNow();
+                    }
+                    takenOn = null;
+                    value = Qt.binding(() => page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0);
                 }
             }
             FText {
