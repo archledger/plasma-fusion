@@ -267,6 +267,12 @@ Item {
             // makes BlueZ refuse Powered: cleared first, through the Bluetooth service when it is
             // loaded (a hard block stays, and so does Bluetooth off).
             backend.bt.unblock(() => {
+                // Airplane mode back on while the block was clearing (another screen's widget,
+                // the setting from elsewhere): nothing to power on any more.
+                if (s.airplane) {
+                    airplaneSwitching = false;
+                    return;
+                }
                 if (Array.isArray(bluetooth)) {
                     bluetooth.forEach(path => backend.powerBluetoothAdapter(path, true));
                     airplaneSwitching = false;
