@@ -51,6 +51,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - On the tablet home screen, files on the desktop no longer show among the apps: the desktop's
   file layer stayed loaded after the first start. A file dropped there now offers widgets, as on a
   desktop without icons.
+- Quick Settings keeps a volume set above 100 %: one scroll step on the status pill no longer
+  lowers it to 100 %. With Plasma's "Raise maximum volume" the volume sliders now reach 150 %.
 
 ## 0.3.1 (2026-10-06)
 

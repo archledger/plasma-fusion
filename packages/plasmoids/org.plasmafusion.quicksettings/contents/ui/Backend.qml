@@ -335,6 +335,7 @@ Item {
         readonly property var playbackModel: s ? s.playbackModel : null
         readonly property var recordingModel: s ? s.recordingModel : null
         readonly property real normal: s ? s.normal : 65536
+        readonly property real maximum: s ? s.maximum : 1
         function setInputVolume(fraction: real): void { if (s) { s.setInputVolume(fraction); } }
         function toggleInputMute(): void { if (s) { s.toggleInputMute(); } }
         function setStreamVolume(stream: var, fraction: real): void { if (s) { s.setStreamVolume(stream, fraction); } }

@@ -73,6 +73,7 @@ ColumnLayout {
                         pal: streams.pal
                         enabled: !!row.stream && row.stream.hasVolume
                         dimmed: !!row.stream && row.stream.muted
+                        to: streams.backend.audio.maximum
                         value: row.stream ? row.stream.volume / streams.backend.audio.normal : 0
                         Accessible.name: i18nc("@label:slider", "Application volume")
                         onMoved: streams.backend.audio.setStreamVolume(row.stream, value)

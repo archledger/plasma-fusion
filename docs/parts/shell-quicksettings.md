@@ -26,7 +26,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
 
 * battery chip (`82%`, 34 px, radius 17) and four 34 px round buttons: screenshot (Spectacle's
   rectangular-region shortcut), System Settings, lock, leave (logout / restart / shut down prompt);
-* volume slider with mute button and chevron to the output chooser; brightness slider
+* volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
+  Plasma's "Raise maximum volume", `plasmaparc` read through plasma-pa's `GlobalConfig`; a volume
+  set above the limit elsewhere is kept by a step up); brightness slider
   (8 px track, 20 px white knob with shadow, `#5B9DFF` fill = colour scheme DecorationHover);
 * microphone/input volume and mute when a recording input exists; its chevron opens the input
   chooser. Sound has Output, Input and Applications tabs. Applications lists active playback and

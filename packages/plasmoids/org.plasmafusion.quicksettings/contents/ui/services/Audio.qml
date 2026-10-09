@@ -11,6 +11,9 @@ Item {
     readonly property var sink: PreferredDevice.sink
     readonly property bool available: !!sink && sink.name !== "auto_null"
     readonly property real normal: PulseAudio.NormalVolume
+    // Plasma's "Raise maximum volume" (Sound settings or the stock Audio Volume widget, plasmaparc):
+    // the sliders and steps reach 150 % then, else 100 %.
+    readonly property real maximum: config.raiseMaximumVolume ? PulseAudio.MaximalVolume / normal : 1
     // 0..1 for 0..100 %, may exceed 1 when the volume was raised above 100 %.
     readonly property real volume: available ? sink.volume / normal : 0
     readonly property bool muted: available ? sink.muted : true
@@ -27,9 +30,14 @@ Item {
     readonly property var playbackModel: playback
     readonly property var recordingModel: recording
 
+    // A volume within 0 and the maximum; one already above the maximum (set elsewhere) is not
+    // lowered by a step up.
+    function limited(fraction: real, current: real): real {
+        return Math.max(0, Math.min(Math.max(maximum, current), fraction));
+    }
     function setInputVolume(fraction: real): void {
         if (inputAvailable) {
-            const v = Math.max(0, Math.min(1, fraction));
+            const v = limited(fraction, inputVolume);
             source.volume = Math.round(v * normal);
             source.muted = v === 0;
         }
@@ -41,7 +49,7 @@ Item {
     }
     function setStreamVolume(stream: var, fraction: real): void {
         if (stream && stream.hasVolume) {
-            const v = Math.max(0, Math.min(1, fraction));
+            const v = limited(fraction, stream.volume / normal);
             stream.volume = Math.round(v * normal);
             stream.muted = v === 0;
         }
@@ -61,7 +69,7 @@ Item {
         if (!available) {
             return;
         }
-        const v = Math.max(0, Math.min(1, fraction));
+        const v = limited(fraction, volume);
         sink.volume = Math.round(v * normal);
         sink.muted = v === 0;
     }
@@ -74,6 +82,10 @@ Item {
         if (pulseObject) {
             pulseObject.default = true;
         }
+    }
+
+    GlobalConfig {
+        id: config
     }
 
     PulseObjectFilterModel {

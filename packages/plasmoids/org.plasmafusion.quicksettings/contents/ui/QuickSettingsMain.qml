@@ -285,11 +285,12 @@ ColumnLayout {
                 pal: page.pal
                 dimmed: page.backend.audio.muted
                 Accessible.name: i18nc("@label:slider", "Volume")
-                value: Math.min(1, page.backend.audio.volume)
+                to: page.backend.audio.maximum
+                value: Math.min(to, page.backend.audio.volume)
                 onMoved: page.backend.audio.setVolume(value)
                 onDraggingChanged: {
                     if (!dragging) {
-                        value = Qt.binding(() => Math.min(1, page.backend.audio.volume));
+                        value = Qt.binding(() => Math.min(to, page.backend.audio.volume));
                     }
                 }
                 PlasmaCore.ToolTipArea {
@@ -336,6 +337,7 @@ ColumnLayout {
                 pal: page.pal
                 dimmed: page.backend.audio.inputMuted
                 Accessible.name: i18nc("@label:slider", "Microphone volume")
+                to: page.backend.audio.maximum
                 value: page.backend.audio.inputVolume
                 onMoved: page.backend.audio.setInputVolume(value)
                 onDraggingChanged: if (!dragging) { value = Qt.binding(() => page.backend.audio.inputVolume); }
