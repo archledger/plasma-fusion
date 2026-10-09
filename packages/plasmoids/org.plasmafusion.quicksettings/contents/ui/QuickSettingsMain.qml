@@ -974,9 +974,13 @@ ColumnLayout {
             }
         }
 
-        // The players, when there is more than one (the first entry chooses automatically).
-        Row {
+        // The players, when there is more than one (the first entry chooses automatically): centred
+        // while they fit, wrapping to more lines within the card when they do not.
+        Flow {
+            id: playerFlow
+            readonly property real chipsWidth: playerChips.count * 28 + Math.max(0, playerChips.count - 1) * spacing
             Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: Math.min(mediaColumn.width, chipsWidth)
             visible: playerChips.count > 2
             spacing: page.metrics.px(6)
             Repeater {
