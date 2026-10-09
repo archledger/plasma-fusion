@@ -68,8 +68,16 @@ Item {
     }
 
     // The engine reports a change of its sources only while this runs: a widget made when the
-    // engine already knew its devices (the second top bar's quick settings) reads them once here.
-    Component.onCompleted: Qt.callLater(syncOrder)
+    // engine already knew its devices (the second top bar's quick settings) reads them once here,
+    // as known: a device plugged in before this widget came is not announced as new.
+    property bool started: false
+    Component.onCompleted: Qt.callLater(() => {
+        syncOrder();
+        for (const e of list) {
+            known[e.udi] = true;
+        }
+        started = true;
+    })
     function syncOrder(): void {
         const now = hotplug.sources;
         const kept = order.filter(u => now.indexOf(u) !== -1);
@@ -90,7 +98,7 @@ Item {
             }
             known[e.udi] = true;
             const hp = hotplug.data[e.udi];
-            if (hp && hp.added === true) {
+            if (started && hp && hp.added === true) {
                 devices.deviceAdded(e.udi);
             }
         }
