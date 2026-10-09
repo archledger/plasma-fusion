@@ -264,8 +264,13 @@ FocusScope {
                 id: tabletSleepButton
                 glyph: "sleep"
                 text: i18nc("@action:button", "Sleep")
-                enabled: session.canSuspend
+                // Also where only hibernation is possible: the button then opens its menu.
+                enabled: session.canSuspend || session.canHibernate
                 onClicked: {
+                    if (!session.canSuspend) {
+                        tabletSleepMenu.offer();
+                        return;
+                    }
                     sheet.closeRequested();
                     session.suspend();
                 }
