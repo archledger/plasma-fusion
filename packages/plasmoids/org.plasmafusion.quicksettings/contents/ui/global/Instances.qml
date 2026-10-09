@@ -21,7 +21,20 @@ QtObject {
     // new handler (it looks the connection up), by the one that starts, stops or sees the end of
     // the hotspot, and off by a widget's stop.
     property bool hotspotActive: false
-    // Its one timeout (a widget's own timer could end another widget's request early).
+    // A start request on its way, from any widget (Network.qml): until the hotspot has stayed up for
+    // hotspotStartTimer, no widget sends another; and whether the last one failed.
+    property bool hotspotStarting: false
+    property bool hotspotFailedToStart: false
+    readonly property Timer hotspotStartTimer: Timer {
+        interval: 20000
+        onTriggered: {
+            if (!hotspotActive) {
+                hotspotFailedToStart = true;
+            }
+            hotspotStarting = false;
+        }
+    }
+    // The keep-awake request's one timeout (a widget's own timer could end another widget's request early).
     readonly property Timer keepAwakeTimeout: Timer {
         interval: 5000
         onTriggered: keepAwakePending = false

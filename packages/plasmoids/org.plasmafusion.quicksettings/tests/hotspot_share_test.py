@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Quick settings widgets (one per screen's top bar) show the same hotspot state: plasma-nm's
 handler of a widget follows only a hotspot it started, so the widgets share it (Instances); a new
-widget's handler, which looks the hotspot's connection up, and a stop from any widget set it.
+widget's handler, which looks the hotspot's connection up, and a stop from any widget set it; a start
+request on its way is shared too, so no widget sends a second one meanwhile.
 Read-only: nothing is started or stopped (the stop runs with no hotspot connection recorded).
 QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 tests/hotspot_share_test.py"""
 import os
@@ -40,6 +41,7 @@ if first is None or second is None:
 shared = QQmlComponent(engine)
 shared.setData(b'import QtQuick\nimport org.kde.plasma.networkmanagement as PlasmaNM\nimport "../global"\n'
                b'QtObject { function setHotspot(on: bool) { Instances.hotspotActive = on; }\n'
+               b' function setStarting(on: bool) { Instances.hotspotStarting = on; }\n'
                b' readonly property string recorded: String(PlasmaNM.Configuration.hotspotConnectionPath) }\n',
                QUrl.fromLocalFile(str(SERVICES / "shared-probe.qml")))
 probe = shared.create()
@@ -56,6 +58,12 @@ check(first.property("hotspotActive") and second.property("hotspotActive"),
 QMetaObject.invokeMethod(probe, "setHotspot", Q_ARG(bool, False))
 QTest.qWait(100)
 check(not first.property("hotspotActive") and not second.property("hotspotActive"), "and its end in both")
+QMetaObject.invokeMethod(probe, "setStarting", Q_ARG(bool, True))
+QTest.qWait(100)
+check(first.property("hotspotStarting") and second.property("hotspotStarting"),
+      "a start request from one widget shows as starting in both (no second request)")
+QMetaObject.invokeMethod(probe, "setStarting", Q_ARG(bool, False))
+QTest.qWait(100)
 
 # A state left on with no handler that sees the hotspot (it was running when the widgets came, then
 # ended): a new widget's handler looks it up and turns the shared state off.

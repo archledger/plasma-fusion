@@ -79,32 +79,33 @@ Item {
         activeWifiModel.invalidateFilter();
         otherWifiModel.invalidateFilter();
     }
-    // From a start request until the hotspot has stayed up for hotspotStartTimer: plasma-nm reports
-    // it active once NetworkManager accepts it, and inactive again when the activation fails.
-    property bool hotspotStarting: false
+    // From a start request until the hotspot has stayed up for 20 s: plasma-nm reports it active once
+    // NetworkManager accepts it, and inactive again when the activation fails. Shared by the
+    // screens' widgets (Instances), so a press on another screen meanwhile sends no second request.
+    readonly property bool hotspotStarting: Instances.hotspotStarting
     property string hotspotName: ""
-    property bool hotspotFailedToStart: false
+    readonly property bool hotspotFailedToStart: Instances.hotspotFailedToStart
 
     function toggleHotspot(): void {
         if (hotspotActive || Boolean(PlasmaNM.Configuration.hotspotConnectionPath)) {
-            hotspotFailedToStart = false;
-            hotspotStarting = false;
-            hotspotStartTimer.stop();
+            Instances.hotspotFailedToStart = false;
+            Instances.hotspotStarting = false;
+            Instances.hotspotStartTimer.stop();
             handler.stopHotspot();
             // Off either way: stopped here, or no longer running (a hotspot found running when
             // the widgets were made has no handler that sees it end).
             Instances.hotspotActive = false;
         } else if (!hotspotStarting && wifiEnabled && wifiHwEnabled && !airplane && hotspotSupported) {
-            hotspotFailedToStart = false;
-            hotspotStarting = true;
-            hotspotStartTimer.restart();
+            Instances.hotspotFailedToStart = false;
+            Instances.hotspotStarting = true;
+            Instances.hotspotStartTimer.restart();
             handler.createHotspot();
         }
     }
     function hotspotFailed(): void {
-        hotspotStarting = false;
-        hotspotStartTimer.stop();
-        hotspotFailedToStart = true;
+        Instances.hotspotStarting = false;
+        Instances.hotspotStartTimer.stop();
+        Instances.hotspotFailedToStart = true;
     }
     function refreshHotspotSettings(): void {
         hotspotName = PlasmaNM.Configuration.hotspotName;
@@ -127,18 +128,6 @@ Item {
         return true;
     }
     Component.onCompleted: refreshHotspotSettings()
-
-    Timer {
-        id: hotspotStartTimer
-        interval: 20000
-        onTriggered: {
-            if (net.hotspotActive) {
-                net.hotspotStarting = false;
-            } else {
-                net.hotspotFailed();
-            }
-        }
-    }
 
     function setWifiEnabled(on: bool) {
         handler.enableWireless(on);
