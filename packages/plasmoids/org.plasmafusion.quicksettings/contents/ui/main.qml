@@ -10,6 +10,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.workspace.dbus as DBus
 
 import "components"
+import "global"
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -30,6 +31,59 @@ PlasmoidItem {
     readonly property bool inPanel: [PlasmaCore.Types.TopEdge, PlasmaCore.Types.RightEdge,
         PlasmaCore.Types.BottomEdge, PlasmaCore.Types.LeftEdge].includes(Plasmoid.location)
     readonly property bool tablet: tabletState.tablet
+
+    // ---- One quick settings per top bar (every screen's bar has one, owner decision 2026-10-09) ----
+    // The widgets know each other through Instances (global/). The leader runs the session-wide
+    // jobs (the tablet posture's settings, the new-device sheet); the sheet and Meta+A open on the
+    // screen in use (KWin's active output); the settings are the same in every widget: a change in
+    // one is copied to the others, and a new widget takes the leader's.
+    readonly property int screenIndex: Plasmoid.containment ? Plasmoid.containment.screen : -1
+    readonly property string screenName: String(root.Screen.name || "")
+    readonly property bool leader: Instances.leader === root
+    readonly property var sharedKeys: ["showKeyboardLayout", "keyboardLayoutAlways", "showKdeConnect", "showClipboard",
+        "showBatteryPercent", "popupOnNewDevice", "showNotifications", "popupGap", "popupScreenMargin", "startPage",
+        "keyboardPolicy", "tabletNotifications", "lightLookAndFeel", "darkLookAndFeel"]
+    readonly property var sharedSettings: sharedKeys.map(key => Plasmoid.configuration[key])
+    function sharedValue(key: string): var {
+        return Plasmoid.configuration[key];
+    }
+    function setShared(key: string, value: var): void {
+        if (Plasmoid.configuration[key] !== value) {
+            Plasmoid.configuration[key] = value;
+        }
+    }
+    onSharedSettingsChanged: {
+        // Not before this widget has taken the leader's settings (Component.onCompleted): a new
+        // widget's settings change while it loads, and pushing those defaults reset the others.
+        if (Instances.items.indexOf(root) === -1) {
+            return;
+        }
+        for (const other of Instances.items) {
+            if (other !== root) {
+                sharedKeys.forEach((key, i) => other.setShared(key, sharedSettings[i]));
+            }
+        }
+    }
+    Component.onCompleted: {
+        Instances.adopt(root);
+        const lead = Instances.leader;
+        if (lead && lead !== root) {
+            sharedKeys.forEach(key => setShared(key, lead.sharedValue(key)));
+        }
+        console.info("quicksettings: widget on " + (screenName || "?") + " (screen " + screenIndex + "), "
+                     + Instances.items.length + " in this shell");
+    }
+    Component.onDestruction: Instances.forget(root)
+    // Runs action(widget) for the widget on KWin's active screen (this one when that is unknown).
+    function onActiveScreen(action: var): void {
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.KWin",
+            "path": "/KWin",
+            "iface": "org.kde.KWin",
+            "member": "activeOutputName",
+            "arguments": []
+        }, reply => action(Instances.onScreen(String(reply.value || "")) ?? root), () => action(root));
+    }
 
     FusionTablet {
         id: tabletState
@@ -140,6 +194,19 @@ PlasmoidItem {
     function togglePopup() {
         setPopupOpen(!popupOpen);
     }
+    // A device was plugged in (popupOnNewDevice): the sheet on the device list, unless the user is
+    // busy on another page or in the Notification Centre.
+    function showNewDevice(): void {
+        if (centreOpen) {
+            return;
+        }
+        if (!popupOpen) {
+            setPopupOpen(true);
+            backend.page = "devices";
+        } else if (backend.page === "main") {
+            backend.page = "devices";
+        }
+    }
     function setPopupOpen(open: bool) {
         if (open && centreOpen) {
             // after the Notification Centre's window is gone (see onHidden)
@@ -201,8 +268,9 @@ PlasmoidItem {
 
     Connections {
         target: Plasmoid
+        // The global shortcut (Meta+A) belongs to one widget: the one on the screen in use opens.
         function onActivated() {
-            root.togglePopup();
+            root.onActiveScreen(widget => widget.togglePopup());
         }
     }
 
@@ -318,6 +386,7 @@ PlasmoidItem {
                      + ", keep awake " + backend.keepAwake.subtitle
                      + ", hotspot " + backend.net.hotspotSubtitle
                      + ", devices " + backend.devices.count
+                     + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length
                      + ", page " + backend.page
                      + ", focus " + (popup.activeFocusItem ? popup.activeFocusItem.Accessible.name : "-")
                      + ", policy " + (policy ? "im " + (policy.inputMethod === "" ? "off" : "on") + " window " + policy.windowMode + " rotation "
@@ -339,17 +408,11 @@ PlasmoidItem {
         showClipboard: Plasmoid.configuration.showClipboard
         showBatteryPercent: Plasmoid.configuration.showBatteryPercent
         showNotifications: Plasmoid.configuration.showNotifications
-        // Stock Disks & Devices opens its pop-up on a new device (popupOnNewDevice, default on):
-        // open the sheet on the device list, unless the user is busy on another page.
+        // Stock Disks & Devices opens its pop-up on a new device (popupOnNewDevice, default on).
+        // Every bar's widget sees the device: the leader opens the sheet on the screen in use.
         onDeviceAdded: udi => {
-            if (!Plasmoid.configuration.popupOnNewDevice || root.centreOpen) {
-                return;
-            }
-            if (!root.popupOpen) {
-                root.setPopupOpen(true);
-                backend.page = "devices";
-            } else if (backend.page === "main") {
-                backend.page = "devices";
+            if (root.leader && Plasmoid.configuration.popupOnNewDevice) {
+                root.onActiveScreen(widget => widget.showNewDevice());
             }
         }
         lightLookAndFeel: Plasmoid.configuration.lightLookAndFeel
@@ -358,7 +421,8 @@ PlasmoidItem {
         tablet: tabletState.tablet
         postureKnown: tabletState.fromKWin
         tabletAvailable: tabletState.available
-        screenName: String(root.Screen.name || "")
+        screenName: root.screenName
+        leader: root.leader
         barCompact: tabletState.tablet || root.budgetLevel >= 2
         penPresent: root.penPresent
         notificationsApart: root.notificationsApart

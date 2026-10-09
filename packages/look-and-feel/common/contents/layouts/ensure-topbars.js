@@ -1,13 +1,21 @@
 /*
     Plasma Fusion: a top bar on every screen (owner decision 8, ADAPTIVE 6). Run in plasmashell
-    (org.kde.PlasmaShell.evaluateScript) by tools/device/fusion-config.sh --screens and by the KWin
-    hot-plug handler when a screen is added. Idempotent: a screen that already has a top panel is
-    left alone, and a bar is never removed (a screen that goes away takes its panels with it, and
+    (org.kde.PlasmaShell.evaluateScript) by tools/device/fusion-config.sh --screens, by the Plasma
+    Fusion settings and by the KWin script plasmafusion-snap at session start and when a screen is
+    added. Nothing happens while plasmafusionrc [TopBar] EveryScreen is false (the settings page's
+    "Top bar on every screen" switched off). Idempotent: a screen that already has a top panel gets
+    no second one, and a bar is never removed (a screen that goes away takes its panels with it, and
     Plasma brings them back when it returns).
 
     A new bar holds the app name, the global menu of that screen's windows and the clock pill, like
-    the bars the layout script puts on the other screens; the primary screen's bar with the tray and
-    quick settings comes from the layout script. Prints one line: "top bars: screens N, added M".
+    the bars the layout script puts on the other screens, and then the main bar's status area: its
+    system tray (with the tray's settings: which items are hidden or not loaded) and quick settings
+    (owner decision 2026-10-09: status icons, the bell and quick settings on every screen, as macOS
+    shows its menu bar on each display). The pen menu stays in the main bar. A Plasma Fusion bar
+    made before that (app name, menu and clock only) gets the status area once; the bar is marked
+    ([PlasmaFusion] statusItems), so what the user removes later stays removed. The main bar is the
+    Plasma Fusion top bar with quick settings or a tray on the lowest screen number (the primary
+    screen is 0). Prints one line: "top bars: screens N, added M, completed K".
 
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
@@ -24,6 +32,7 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
 }
 
 (function () {
+    var QS = "org.plasmafusion.quicksettings", TRAY = "org.kde.plasma.systemtray";
     var known = knownWidgetTypes;
     function add(container, candidates) {
         for (var i = 0; i < candidates.length; ++i) {
@@ -36,7 +45,19 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
         }
         return null;
     }
-    var hasTop = {};
+    function has(panel, type) {
+        return panel.widgets(type).length > 0;
+    }
+    function fusionBar(panel) {
+        return has(panel, "org.plasmafusion.appname") || has(panel, "org.plasmafusion.clockpill");
+    }
+    function truthy(value) {
+        return value === true || String(value) === "true";
+    }
+    if (String(ConfigFile("plasmafusionrc", "TopBar").readEntry("EveryScreen")) === "false") {
+        print("top bars: off (plasmafusionrc [TopBar] EveryScreen=false)");
+        return;
+    }
     var ps = panels();
     // Only once plasmashell has loaded its layout: KWin runs this after its own start too, and a
     // plasmashell that answered before loading its panels got a second top bar (ThinkPad,
@@ -47,26 +68,80 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
         return;
     }
     var unplaced = 0;
+    var topOn = {};
+    var main = null;
     for (var i = 0; i < ps.length; ++i) {
         if (ps[i].location !== "top") {
             continue;
         }
         if (ps[i].screen < 0 || ps[i].screen >= screenCount) {
             unplaced++;
-        } else {
-            hasTop[ps[i].screen] = true;
+            continue;
+        }
+        topOn[ps[i].screen] = ps[i];
+        if (fusionBar(ps[i]) && (has(ps[i], QS) || has(ps[i], TRAY)) && (main === null || ps[i].screen < main.screen)) {
+            main = ps[i];
         }
     }
     if (unplaced > 0) {
         print("top bars: skipped, " + unplaced + " top panel(s) without a screen");
         return;
     }
-    var added = 0;
+    var mainTray = main !== null && has(main, TRAY) ? main.widgets(TRAY)[0] : null;
+    var mainQs = main !== null && has(main, QS);
+    // The tray's item lists and its look. readConfig needs a default of the key's type (null
+    // gives undefined): [] for the lists, "" for the others (their text, written back as is).
+    var TRAY_LISTS = ["disabledStatusNotifiers", "hiddenItems", "knownItems", "extraItems", "shownItems"];
+    var TRAY_VALUES = ["showAllItems", "scaleIconsToFit", "iconSpacing"];
+    // The main bar's tray and quick settings, after what the bar has (the pen menu stays in the
+    // main bar); then the mark. Returns how many widgets were added.
+    function statusArea(bar) {
+        var count = 0;
+        if (mainTray !== null && !has(bar, TRAY)) {
+            var tray = add(bar, [TRAY]);
+            if (tray) {
+                mainTray.currentConfigGroup = ["General"];
+                tray.currentConfigGroup = ["General"];
+                for (var k = 0; k < TRAY_LISTS.length; ++k) {
+                    var list = mainTray.readConfig(TRAY_LISTS[k], []);
+                    if (list && list.length > 0) {
+                        tray.writeConfig(TRAY_LISTS[k], list);
+                    }
+                }
+                for (var v = 0; v < TRAY_VALUES.length; ++v) {
+                    var text = mainTray.readConfig(TRAY_VALUES[v], "");
+                    if (text !== undefined && text !== null && String(text) !== "") {
+                        tray.writeConfig(TRAY_VALUES[v], text);
+                    }
+                }
+                mainTray.currentConfigGroup = [];
+                tray.currentConfigGroup = [];
+                count++;
+            }
+        }
+        if (mainQs && !has(bar, QS) && add(bar, [QS])) {
+            count++;
+        }
+        bar.currentConfigGroup = ["PlasmaFusion"];
+        bar.writeConfig("statusItems", true);
+        bar.currentConfigGroup = [];
+        return count;
+    }
+    var added = 0, completed = 0;
     for (var sc = 0; sc < screenCount; ++sc) {
-        if (hasTop[sc]) {
+        var bar = topOn[sc];
+        if (bar !== undefined) {
+            if (bar !== main && fusionBar(bar)) {
+                bar.currentConfigGroup = ["PlasmaFusion"];
+                var marked = truthy(bar.readConfig("statusItems", false));
+                bar.currentConfigGroup = [];
+                if (!marked && statusArea(bar) > 0) {
+                    completed++;
+                }
+            }
             continue;
         }
-        var bar = new Panel;
+        bar = new Panel;
         bar.screen = sc;
         ConfigFile(ConfigFile("plasmashellrc", "PlasmaViews"), "Panel " + bar.id).writeEntry("floatingApplets", 1);
         bar.location = "top";
@@ -88,7 +163,8 @@ function ensureTopBarsTextScale() {  // identical to the layout script's textSca
             add(bar, ["org.kde.plasma.digitalclock"]);
         }
         add(bar, ["org.kde.plasma.panelspacer"]);
+        statusArea(bar);
         added++;
     }
-    print("top bars: screens " + screenCount + ", added " + added);
+    print("top bars: screens " + screenCount + ", added " + added + ", completed " + completed);
 })();

@@ -84,7 +84,7 @@ existing panels.
 | Piece | Settings | Widgets (fallback when a Fusion widget is not installed) |
 |---|---|---|
 | Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity adaptive` (solid next to a maximized window, decision 5) | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu` (`allScreens=false`: the menu of that screen's window), panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.kde.plasma.systemtray`, `org.plasmafusion.pen` (when installed), `org.plasmafusion.quicksettings` |
-| Top bars on the other screens | as above | app name, appmenu (`allScreens=false`), clock pill; no tray, quick settings or dock (decision 8) |
+| Top bars on the other screens | as above | app name, appmenu (`allScreens=false`), clock pill, then the main bar's tray (set up the same way) and quick settings (owner decision 2026-10-09, replacing decision 8's "status icons and quick settings on the main screen only"); no pen menu or dock; marked `[PlasmaFusion] statusItems` |
 | Dock | `location bottom`, `height 72` (the dock plate; the Plasma style keeps the 16 px headroom above it in the panel window. 88 with the headroom frame until INT-1), `floating true`, `lengthMode fit`, `alignment center`, `hiding dodgewindows`, `opacity translucent` | `org.plasmafusion.launcher` with `[General] buttonStyle=hidden` when the app-name widget holds the top-left corner (the dock finds it in its own panel for Start; Meta finds it in any panel), then `org.plasmafusion.dock` (else Kickoff when there is no Fusion launcher, and `org.kde.plasma.icontasks`) |
 | Desktop | The Plasma Fusion desktop (`org.plasmafusion.desktop`, `docs/parts/desktop.md`: Folder View on the laptop, the home screen in tablet posture; plain `org.kde.plasma.folder` is accepted, BACKLOG M1): `url desktop:/`, `arrangement 1` (columns), `alignment 0` (from the left), `iconSize 2`, `sortMode -1` (free placement), `popups false`, `toolTips false`, `selectionMarkers true`, `useTypeAhead true`, previews for the installed image/SVG/PDF/office/video thumbnailers; `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | the weather, calendar and system cards, see below |
 
@@ -438,13 +438,21 @@ live session gets these changes through DEVICE-1's in-place migration.
   Aurorae theme, `docs/parts/gate.md`), and the desktop containment `org.plasmafusion.desktop`
   (TABLET2 H1; `org.kde.plasma.folder` before).
 - Layout script: Folder View desktop with the keys above; a top bar on every screen (decision 8; the
-  primary one with tray, pen and quick settings, the others with app name, appmenu and clock pill);
+  primary one with tray, pen and quick settings, the others with app name, appmenu and clock pill,
+  and since 2026-10-09 the tray and quick settings too, `configureTray()` for every tray);
   every appmenu for its own screen; top bars `adaptive`; the five passive tray items hidden (no
   expander arrow); the pen widget between tray and quick settings when installed; card places per
   screen shape (above).
 - `contents/layouts/ensure-topbars.js` (new): adds a top bar to any screen without one, never removes
-  one, prints `top bars: screens N, added M`; for `fusion-config.sh --screens` and KWIN-2's hot-plug
-  handler (`workspace.screensChanged` through `evaluateScript`).
+  one, prints `top bars: screens N, added M, completed K`; for `fusion-config.sh --screens`, the
+  settings page and KWIN-2's handler (at session start and on `workspace.screensChanged`, through
+  `evaluateScript`). Since 2026-10-09: nothing while plasmafusionrc `[TopBar] EveryScreen` is false
+  (before, KWin brought switched-off bars back at the next screen change); a new bar gets the main
+  bar's status area (its tray, with the tray's item lists copied, and quick settings; the pen menu
+  stays in the main bar); a Plasma Fusion bar made before (app name, menu, clock) gets it once and
+  is marked `[PlasmaFusion] statusItems`, so what the user removes later stays removed. The main bar
+  is the Fusion top bar with quick settings or a tray on the lowest screen number. Note:
+  `readConfig` needs a default of the key's type (`[]` for lists; `null` returns undefined).
 - Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
   `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into
   `~/.local/share/plasma/layout-templates/`: "Add Panel" offers the Fusion top bar and dock.

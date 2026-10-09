@@ -36,6 +36,8 @@ Item {
     property bool postureKnown: true
     property bool tabletAvailable: false
     property string screenName: ""
+    // This widget runs the session-wide jobs (main.qml, Instances).
+    property bool leader: true
     property string keyboardPolicy: "tablet"
     // Phone and clipboard live in the sheet instead of the bar (tablet posture, or the top bar's
     // width budget at step 2).
@@ -143,6 +145,12 @@ Item {
         target: tabletLoader.item
         property: "screenName"
         value: backend.screenName
+        when: tabletLoader.item !== null
+    }
+    Binding {
+        target: tabletLoader.item
+        property: "leader"
+        value: backend.leader
         when: tabletLoader.item !== null
     }
 

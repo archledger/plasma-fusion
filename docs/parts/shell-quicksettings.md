@@ -671,3 +671,36 @@ so a mask can only shrink a target. Tested in the 6.7.5 and 6.7.91 containers (c
 x 1397/1430/1435 and y 2/22/40 and a pull from the corner open the Notification Centre; the bar is
 pixel-identical in both postures. "Clear all" (about 90 x 44) and the home screen's "Done" (96 x 56)
 already met the target; a card's close button (44 x 44) is not at a screen edge.
+
+## One quick settings per top bar (owner decision 2026-10-09)
+
+Every screen's top bar has the status icons, the bell and quick settings (the owner chose this over
+decision 8's main-screen-only status area: macOS shows its menu bar, with its icons and Control
+Center, on every display). Each bar's widget is a separate applet; they know each other through
+`ui/global/Instances.qml`, a QML singleton that plasmashell shares between them (it loads all
+applets into one QML engine, which the stock notifications applet's Globals relies on too).
+- **Leader:** the widget on the lowest screen number (the primary screen is 0), else the first. It
+  runs the session-wide jobs: the tablet posture's settings and keyboard (`TabletPolicy.leader`;
+  the posture script was already locked and idempotent, so a takeover rewrites the same values) and
+  the new-device sheet.
+- **The screen in use:** Meta+A belongs to one widget (the main bar's); it asks KWin for its active
+  output (`activeOutputName`) and opens the widget on that screen. A new device's sheet opens there
+  the same way. `openRequest` already acted only on the active screen's widget.
+- **One set of settings:** the user settings (`sharedKeys` in main.qml: what the pill shows, the
+  pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
+  dark themes) are copied from a widget whose settings change to the others; a new widget takes the
+  leader's first, and pushes nothing before that (while it loads its settings change too, and
+  pushing those defaults reset the others: found by the two-screen test). A value equal to the
+  default is not stored, so a script reads it as empty.
+- Disks & Devices reads the engine's devices once when it is created (`Devices.qml`): a widget made
+  after the engine knew its devices (the second bar's) listed none before.
+- Notifications pop up once: the stock Notifications applet in every tray shares its Globals (one
+  pop-up manager).
+- Test (archhost parity VM with a second virtio GPU, two outputs; `two_screens_test.py`,
+  `devices_route.sh`): 20 checks and 4 routing checks: a bar per screen with tray and quick settings, the
+  pen only in the main bar, the tray's item lists copied, the shared singleton and the primary
+  screen's leader, idempotent re-runs, a removed tray stays removed, a new screen's bar complete,
+  the settings page's removal keeps the main bar, `EveryScreen=false` adds nothing, settings synced
+  both ways and adopted by a new widget, posture settings written once per change, Meta+A and a USB
+  stick open the sheet on the screen with the pointer only (both screens), bars made before the
+  change completed at login (two reboots), no QML warnings, no crashes.

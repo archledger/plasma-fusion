@@ -1053,10 +1053,13 @@ for c in sorted(desktops, key=int):
 # The top bar: a top panel holding a Plasma Fusion top-bar widget.
 TOP_WIDGETS = ("org.plasmafusion.quicksettings", "org.plasmafusion.appname", "org.plasmafusion.clockpill")
 top = None
+# Every Plasma Fusion top bar (one per screen; their trays are set up alike).
+tops = []
 for c, kv in sorted(conts.items(), key=lambda i: int(i[0]) if i[0].isdigit() else 0):
     if kv.get("plugin") == "org.kde.panel" and kv.get("location") == "3" and set(applets(c).values()) & set(TOP_WIDGETS):
-        top = c
-        break
+        tops.append(c)
+        if top is None:
+            top = c
 
 # 3. Top bar solid next to maximized windows (owner decision 5): adaptive (0) instead of the
 #    translucent (2) the earlier layout set; another value is the user's.
@@ -1068,12 +1071,13 @@ if top is not None:
     else:
         note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque"}.get(cur, cur))
 
-# 4. Tray items hidden (no expander arrow); 5. app menus for their own screen only.
+# 4. Tray items hidden (no expander arrow), in every top bar's tray; 5. app menus for their own
+#    screen only.
 for c, kv in conts.items():
     if kv.get("plugin") != "org.kde.panel":
         continue
     for a, plugin in applets(c).items():
-        if plugin == "org.kde.plasma.systemtray" and c == top:
+        if plugin == "org.kde.plasma.systemtray" and c in tops:
             general = rc.get(("Containments", c, "Applets", a, "General"), {})
             for key in ("hiddenItems", "disabledStatusNotifiers"):
                 items = [i for i in general.get(key, "").split(",") if i]

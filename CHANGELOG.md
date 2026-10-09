@@ -40,6 +40,12 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   launcher's item menu can **Keep in Dock** an app.
 - Choosing an entry in the launcher's right-click menu (Pin, Unpin, an app's actions) did nothing;
   it now runs.
+- With more than one screen, every screen's top bar now has the status icons, the bell and Quick
+  Settings, not only the main one. Meta+A and a newly connected drive open Quick Settings on the
+  screen you are using, and its settings are the same on every screen. Existing top bars on other
+  screens get them at the next login; a status icon you remove from them stays removed.
+- Switching off "Top bar on every screen" in the Plasma Fusion settings now lasts: before, the bars
+  came back at the next screen change.
 
 ## 0.3.1 (2026-10-06)
 

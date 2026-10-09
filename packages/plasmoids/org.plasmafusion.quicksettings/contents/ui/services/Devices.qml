@@ -67,6 +67,9 @@ Item {
         }
     }
 
+    // The engine reports a change of its sources only while this runs: a widget made when the
+    // engine already knew its devices (the second top bar's quick settings) reads them once here.
+    Component.onCompleted: Qt.callLater(syncOrder)
     function syncOrder(): void {
         const now = hotplug.sources;
         const kept = order.filter(u => now.indexOf(u) !== -1);

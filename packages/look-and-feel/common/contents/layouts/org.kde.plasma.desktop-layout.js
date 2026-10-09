@@ -196,9 +196,12 @@ if (installed("org.plasmafusion.pen")) {
     addFirst(topBar, ["org.plasmafusion.pen"]);
 }
 var quickSettings = addFirst(topBar, ["org.plasmafusion.quicksettings"]);
-if (tray) {
+
+// The tray's items: the ones quick settings replaces and the passive ones hidden, the ones with no
+// use not loaded (the lists above). The same for the tray of every top bar.
+function configureTray(tray, withQuickSettings) {
     tray.currentConfigGroup = ["General"];
-    var trayOff = TRAY_ITEMS_HIDDEN.concat(quickSettings ? TRAY_ITEMS_REPLACED : []);
+    var trayOff = TRAY_ITEMS_HIDDEN.concat(withQuickSettings ? TRAY_ITEMS_REPLACED : []);
     tray.writeConfig("disabledStatusNotifiers", trayOff);
     tray.writeConfig("hiddenItems", trayOff);
     // The tray may or may not have enabled its default items yet: either way the unloaded ones
@@ -206,7 +209,7 @@ if (tray) {
     var knownItems = readList(tray, "knownItems");
     var extraItems = readList(tray, "extraItems");
     var extraChanged = false;
-    var unloaded = TRAY_ITEMS_UNLOADED.concat(quickSettings ? TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS : []);
+    var unloaded = TRAY_ITEMS_UNLOADED.concat(withQuickSettings ? TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS : []);
     for (var u = 0; u < unloaded.length; ++u) {
         if (knownItems.indexOf(unloaded[u]) === -1) {
             knownItems.push(unloaded[u]);
@@ -222,6 +225,9 @@ if (tray) {
         tray.writeConfig("extraItems", extraItems);
     }
     tray.currentConfigGroup = [];
+}
+if (tray) {
+    configureTray(tray, quickSettings !== null);
 }
 
 /* ---------- dock ---------- */
@@ -254,9 +260,12 @@ if (!addFirst(dock, ["org.plasmafusion.dock"])) {
 
 /* ---------- other screens ---------- */
 
-// Every other screen gets a top bar of its own: app name, global menu, clock pill (owner decision 8).
-// The primary screen keeps the tray, quick settings, the dock and the cards. The same bar is added
-// to screens connected later by ensure-topbars.js (fusion-config.sh --screens).
+// Every other screen gets a top bar of its own: app name, global menu, clock pill (owner decision 8)
+// and, since 2026-10-09 (owner decision), the main bar's status area: the tray, set up the same way,
+// and quick settings (the widgets share the session's jobs, see the quick settings part). The pen
+// menu, the dock and the cards stay on the primary screen. The same bar is added to screens
+// connected later by ensure-topbars.js (fusion-config.sh --screens, KWin's plasmafusion-snap), which
+// marks a bar it gives the status area ([PlasmaFusion] statusItems); these bars are marked too.
 // The primary screen is screen 0 in Plasma 6 (a panel created here has no screen yet: its
 // `screen` is not 0 while the script runs, so it cannot tell which screen it is on).
 for (var sc = 1; sc < screenCount; ++sc) {
@@ -277,6 +286,18 @@ for (var sc = 1; sc < screenCount; ++sc) {
         addFirst(bar, ["org.kde.plasma.digitalclock"]);
     }
     addFirst(bar, ["org.kde.plasma.panelspacer"]);
+    if (tray) {
+        var barTray = addFirst(bar, ["org.kde.plasma.systemtray"]);
+        if (barTray) {
+            configureTray(barTray, quickSettings !== null);
+        }
+    }
+    if (quickSettings) {
+        addFirst(bar, ["org.plasmafusion.quicksettings"]);
+    }
+    bar.currentConfigGroup = ["PlasmaFusion"];
+    bar.writeConfig("statusItems", true);
+    bar.currentConfigGroup = [];
 }
 
 /* ---------- desktop ---------- */

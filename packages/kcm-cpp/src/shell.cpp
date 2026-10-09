@@ -221,9 +221,11 @@ for (var i = 0; i < ds.length; ++i) {
 print(JSON.stringify(result));
 )JS"_s;
 
-// Top bars on the screens other than the main one (the screen of the top bar with quick
-// settings, or the lowest screen number) are removed.
-const QString s_removeExtraTopBarsScript = uR"JS(
+// Top bars on the screens other than the main one are removed. The main one is the top bar with
+// quick settings on the lowest screen number (every screen's bar has quick settings since
+// 2026-10-09; the primary screen is 0), else the top bar on the lowest screen number.
+const QString s_removeExtraTopBarsScript =
+    uR"JS(
 var tops = [], main = null, removed = 0;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
@@ -232,13 +234,16 @@ for (var i = 0; i < ps.length; ++i) {
         continue;
     }
     tops.push(p);
-    if (main === null && p.widgets("org.plasmafusion.quicksettings").length > 0) {
+    if (p.widgets("org.plasmafusion.quicksettings").length > 0 && p.screen >= 0
+            && (main === null || p.screen < main.screen)) {
         main = p;
     }
 }
-for (var i = 0; main === null && i < tops.length; ++i) {
-    if (main === null || tops[i].screen < main.screen) {
-        main = tops[i];
+if (main === null) {
+    for (var i = 0; i < tops.length; ++i) {
+        if (main === null || tops[i].screen < main.screen) {
+            main = tops[i];
+        }
     }
 }
 for (var i = 0; main !== null && i < tops.length; ++i) {

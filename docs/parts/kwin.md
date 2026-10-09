@@ -464,7 +464,11 @@ screen).
   area. KWin 6.7.5 already does this for a rotation in both directions (the log line says
   "0 window(s) moved"); the script is the net for what KWin leaves outside.
 - Hot-plug: the same handler sends the Global Theme's `ensure-topbars.js` to plasmashell
-  (`evaluateScript`), so a screen that appears after login gets its top bar. The text comes from
+  (`evaluateScript`), so a screen that appears after login gets its top bar. Since 2026-10-09 it is
+  also sent once 5 s after the script starts (screens attached at login, and bars made before that
+  date get their status area), and a "skipped" answer (layout not loaded, panels not on their
+  screens yet) or a failed call is retried every 3 s, 20 times (a slow start, the parity VM, needed
+  more than 15 s). The text comes from
   `ensureTopBars.js`, which the build generates from the Global Theme's file. (A layout template
   with `loadTemplate()` did not work: plasmashell loads only templates of the panel category,
   which would also put it into "Add Panel".)

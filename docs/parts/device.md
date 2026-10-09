@@ -199,7 +199,9 @@ sets `plasmafusionrc [Pen] GarageService=true`.
 ### Screens (`--screens`)
 
 Runs `contents/layouts/ensure-topbars.js` of the chosen Global Theme in plasmashell (a top bar on
-every screen, decision 8) and prints what it prints.
+every screen, decision 8, with the status area since 2026-10-09) and prints what it prints. The
+layout migration keeps the hidden tray items in every Plasma Fusion top bar's tray, not only the
+main one.
 
 ### Decision 7
 

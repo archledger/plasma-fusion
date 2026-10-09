@@ -1,0 +1,4 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+# The quick settings widgets' shared object (one per plasmashell; see Instances.qml).
+singleton Instances 1.0 Instances.qml

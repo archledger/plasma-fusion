@@ -595,7 +595,15 @@ Item {
     // screen); a window larger than the area is made to fit. Tiled, maximized and full-screen
     // windows are KWin's own business. And every screen gets its top bar (owner decision 8): the
     // Global Theme's ensure-topbars.js, run in plasmashell. The build puts its text into
-    // ensureTopBars.js next to this file (tools/build.d/80-kwin.sh), so there is one source.
+    // ensureTopBars.js next to this file (tools/build.d/80-kwin.sh), so there is one source. It
+    // also runs once when the script starts (the session's start): screens attached at login get
+    // their bar, and bars made before 2026-10-09 their status area.
+    Component.onCompleted: topBarsStart.start()
+    Timer {
+        id: topBarsStart
+        interval: 5000
+        onTriggered: topBarsCall.call()
+    }
     Timer {
         id: screensSettled
         interval: 800
@@ -636,15 +644,24 @@ Item {
         onFinished: returnValue => {
             const line = String(returnValue.length > 0 ? returnValue[0] : "").trim();
             console.info("plasmafusion-snap: " + line);
-            // At session start plasmashell can answer before it has loaded its layout: ask again.
-            if (line.indexOf("not loaded yet") !== -1 && topBarsRetry.tries < 5) {
+            // At session start plasmashell can answer before it has loaded its layout, or before
+            // it has put its panels on their screens ("skipped"): ask again, for up to a minute (a
+            // slow start, the parity VM, took longer than 15 s).
+            if (line.indexOf("top bars: skipped") !== -1 && topBarsRetry.tries < 20) {
                 topBarsRetry.tries++;
                 topBarsRetry.restart();
             } else {
                 topBarsRetry.tries = 0;
             }
         }
-        onFailed: console.info("plasmafusion-snap: plasmashell did not run the top-bar check")
+        // plasmashell not on the bus yet (the session's start): ask again, as above.
+        onFailed: {
+            console.info("plasmafusion-snap: plasmashell did not run the top-bar check");
+            if (topBarsRetry.tries < 20) {
+                topBarsRetry.tries++;
+                topBarsRetry.restart();
+            }
+        }
     }
     Timer {
         id: topBarsRetry
