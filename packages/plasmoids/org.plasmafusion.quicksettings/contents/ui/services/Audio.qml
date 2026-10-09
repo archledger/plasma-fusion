@@ -85,7 +85,8 @@ Item {
     PulseObjectFilterModel {
         id: sources
         filterOutInactiveDevices: true
-        // Virtual microphones (noise suppression/remapped inputs) remain useful inputs.
+        // Virtual microphones (noise suppression/remapped inputs) remain useful inputs. The outputs'
+        // monitors never reach SourceModel: pulseaudio-qt leaves out every monitor source.
         sourceModel: SourceModel {}
     }
     // Application streams only: virtual streams (modules' loopbacks, monitors, event sounds) are not
