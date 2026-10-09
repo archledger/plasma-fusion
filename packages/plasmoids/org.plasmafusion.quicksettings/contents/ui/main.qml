@@ -399,6 +399,7 @@ PlasmoidItem {
                      + ", bt model " + (backend.bt.devicesModel ? "created" : "none")
                      + ", dnd " + backend.dnd.subtitle
                      + ", keep awake " + backend.keepAwake.subtitle
+                     + ", power " + backend.profile.subtitle + (backend.profile.note ? " [" + backend.profile.note.replace(/\n/g, " | ") + "]" : "")
                      + ", hotspot " + backend.net.hotspotSubtitle
                      + ", devices " + backend.devices.count
                      + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length

@@ -42,7 +42,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Night Light inhibition, turns Night Light on when it is off),
   Do not disturb (`Off`, `On`, `Until 18:00`; same code path as Plasma's own shortcut, with OSD),
   Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
-  uses tuned-ppd on the ThinkPad),
+  uses tuned-ppd on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). As the
+  stock Power and Battery widget: Performance is skipped while the daemon inhibits it, and the
+  tooltip says why (on a lap, too hot) and when it may be slower; it names applications holding a
+  profile; a refused switch reads `Couldn't switch to …` for 5 s. tuned-ppd 2.28 refuses
+  `HoldProfile` ("Invalid bus name"), so holds come from power-profiles-daemon systems),
   Dark style (switches between the two Plasma Fusion Global Themes, see below);
 * **Keep awake** (`Off` / `On`): manually blocks sleep, display power saving and automatic screen
   locking until turned off in this session. An accent coffee-cup icon stays in the status pill

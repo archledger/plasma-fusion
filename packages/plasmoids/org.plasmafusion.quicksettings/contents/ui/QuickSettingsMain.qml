@@ -478,7 +478,8 @@ ColumnLayout {
             iconPath: Icons.gauge
             checked: page.backend.profile.checked
             available: page.backend.profile.available
-            toolTip: i18nc("@info:tooltip", "Click to switch between Power saver, Balanced and Performance")
+            toolTip: [i18nc("@info:tooltip", "Click to switch between Power saver, Balanced and Performance"),
+                      page.backend.profile.note].filter(t => t !== "").join("\n")
             onToggled: page.backend.profile.cycle()
         }
         Tile {

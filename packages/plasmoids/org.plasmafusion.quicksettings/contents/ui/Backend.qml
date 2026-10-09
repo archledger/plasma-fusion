@@ -6,6 +6,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as DBus
 
 import "components"
+import "../code/power.js" as Power
 
 // Every data source behind one null-safe object. Each service lives in its own
 // file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
@@ -79,6 +80,18 @@ Item {
     Loader { id: audioLoader; asynchronous: true; source: "services/Audio.qml" }
     Loader { id: batteryLoader; asynchronous: true; source: "services/Battery.qml" }
     Loader { id: profilesLoader; asynchronous: true; source: "services/PowerProfiles.qml" }
+    Connections {
+        target: profilesLoader.item
+        function onFailed(profile: string) {
+            backend.profile.failedProfile = profile;
+            profileFailedTimer.restart();
+        }
+    }
+    Timer {
+        id: profileFailedTimer
+        interval: 5000
+        onTriggered: backend.profile.failedProfile = ""
+    }
     Loader { id: keepAwakeLoader; asynchronous: true; source: "services/KeepAwake.qml" }
     Loader { id: devicesLoader; asynchronous: true; source: "services/Devices.qml" }
     Connections {
@@ -536,13 +549,14 @@ Item {
         readonly property var s: profilesLoader.item
         readonly property bool available: s ? s.available : false
         readonly property string active: s ? s.active : ""
-        readonly property var order: ["power-saver", "balanced", "performance"]
         readonly property bool checked: available && active !== "" && active !== "balanced"
-        readonly property string subtitle: {
-            if (!available) {
-                return i18nc("@info:status power profiles", "Unavailable");
-            }
-            switch (active) {
+        readonly property string inhibitionReason: s ? s.inhibitionReason : ""
+        readonly property string degradationReason: s ? s.degradationReason : ""
+        readonly property var holds: s ? Power.holds(s.holds) : []
+        // A refused switch shows on the tile for a few seconds (the profile's id).
+        property string failedProfile: ""
+        function profileName(profile: string): string {
+            switch (profile) {
             case "power-saver":
                 return i18nc("@info:status power profile", "Power saver");
             case "performance":
@@ -550,21 +564,62 @@ Item {
             case "balanced":
                 return i18nc("@info:status power profile", "Balanced");
             default:
-                return active;
+                return profile;
             }
+        }
+        readonly property string subtitle: {
+            if (!available) {
+                return i18nc("@info:status power profiles", "Unavailable");
+            }
+            if (failedProfile !== "") {
+                return i18nc("@info:status %1 power profile name", "Couldn't switch to %1", profileName(failedProfile));
+            }
+            return profileName(active);
+        }
+        // Why Performance is not offered or may be slower, and which applications hold a profile:
+        // the stock Power and Battery widget's wording.
+        readonly property string note: {
+            const lines = [];
+            switch (inhibitionReason) {
+            case "":
+                break;
+            case "lap-detected":
+                lines.push(i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap."));
+                break;
+            case "high-operating-temperature":
+                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot."));
+                break;
+            default:
+                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable."));
+            }
+            if (active === "performance" && degradationReason !== "") {
+                switch (degradationReason) {
+                case "lap-detected":
+                    lines.push(i18nc("@info:tooltip", "Performance may be lowered to reduce heat generation because the computer has detected that it may be sitting on your lap."));
+                    break;
+                case "high-operating-temperature":
+                    lines.push(i18nc("@info:tooltip", "Performance may be reduced because the computer is running too hot."));
+                    break;
+                default:
+                    lines.push(i18nc("@info:tooltip", "Performance may be reduced."));
+                }
+            }
+            for (const h of holds) {
+                lines.push(i18nc("@info:tooltip %1 application name, %2 power profile name", "%1 has requested %2", h.name, profileName(h.profile)));
+            }
+            return lines.join("\n");
         }
         function cycle() {
             if (!s || !available) {
                 backend.openSettings("kcm_powerdevilprofilesconfig", []);
                 return;
             }
-            const choices = order.filter(p => s.list.indexOf(p) !== -1);
-            if (choices.length === 0) {
-                return;
+            // Performance is skipped while the daemon inhibits it; a refused switch shows on the tile.
+            const next = Power.next(s.list, active, inhibitionReason);
+            if (next !== "") {
+                failedProfile = "";
+                s.setProfile(next);
             }
-            const next = choices[(choices.indexOf(active) + 1) % choices.length];
-            // Performance may be inhibited (for example on battery); the subtitle then stays.
-            s.setProfile(next);
         }
     }
 

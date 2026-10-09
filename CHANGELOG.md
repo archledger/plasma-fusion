@@ -59,6 +59,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   choose one, and the mouse wheel switches through them, as Plasma's Keyboard Layout widget.
 - The launcher's account row opens a menu with Account Settings, **Switch User** and **Log Out**;
   where the computer can hibernate, the Sleep button's menu offers **Hibernate**.
+- The Power mode tile explains itself as Plasma's Power and Battery widget: it skips Performance
+  while the system holds it back (on a lap, too hot) and says why, names applications that requested
+  a mode, and shows when a switch was refused.
 
 ## 0.3.1 (2026-10-06)
 
