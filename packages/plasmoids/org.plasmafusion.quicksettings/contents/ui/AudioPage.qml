@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import org.kde.plasma.private.volume
 
 import "components"
 import "components/Icons.js" as Icons
@@ -66,10 +67,26 @@ ColumnLayout {
         model: tabs.currentIndex === 1 ? page.backend.audio.sourceModel : page.backend.audio.sinkModel
 
         delegate: ListRow {
+            id: deviceRow
             required property var model
             required property int index
 
             width: ListView.view.width
+            // The stock Audio Volume widget's device menu: ports (speakers, headphones) and the
+            // card's profiles (HDMI, analog, Pro Audio, off).
+            hasMenu: deviceMenu.hasContent
+            menuText: i18nc("@action:button", "Ports and profiles")
+            onMenuRequested: from => {
+                deviceMenu.visualParent = from;
+                deviceMenu.openRelative();
+            }
+            ListItemMenu {
+                id: deviceMenu
+                pulseObject: deviceRow.model.PulseObject
+                cardModel: page.backend.audio.cardModel
+                itemType: tabs.currentIndex === 1 ? ListItemMenu.Source : ListItemMenu.Sink
+                sourceModel: tabs.currentIndex === 1 ? page.backend.audio.sourceModel : page.backend.audio.sinkModel
+            }
             pal: page.pal
             metrics: page.metrics
             text: model.Description || model.Name || ""

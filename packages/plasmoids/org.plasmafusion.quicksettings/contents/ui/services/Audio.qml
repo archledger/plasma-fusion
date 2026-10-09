@@ -27,6 +27,8 @@ Item {
     readonly property real inputVolume: inputAvailable ? source.volume / normal : 0
     readonly property bool inputMuted: inputAvailable ? source.muted : true
     readonly property var sourceModel: sources
+    // The sound cards, for a device's ports and profiles menu (plasma-pa's ListItemMenu).
+    readonly property var cardModel: cards
     readonly property var playbackModel: playback
     readonly property var recordingModel: recording
 
@@ -86,6 +88,9 @@ Item {
 
     GlobalConfig {
         id: config
+    }
+    CardModel {
+        id: cards
     }
 
     PulseObjectFilterModel {

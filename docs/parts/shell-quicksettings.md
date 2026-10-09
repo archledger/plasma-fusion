@@ -106,7 +106,10 @@ the network name and the masked password with Show/Hide while it is on, and `Cha
 password…` (an empty password keeps the saved one, which plasma-nm generates on first use; it is
 not read before that), `Hidden network…` and `Network settings`), Bluetooth (paired devices, connect /
 disconnect, `Pair a new device…`, `Bluetooth settings`), Sound output (choose the default sink).
-The Sound page also selects the default input and exposes per-application playback/recording
+A device row's "⋯" button (or right-click, press and hold, the Menu key) opens plasma-pa's own
+device menu (`ListItemMenu` with the cards' `CardModel`, as the stock Audio Volume widget): its
+ports (speakers, headphones) and the card's profiles (HDMI, analog, Pro Audio, off), shown only
+when there is a choice. The Sound page also selects the default input and exposes per-application playback/recording
 controls. Empty inputs or streams have explicit placeholders and a Sound settings link.
 
 Keyboard: every control is reachable with Tab and has the design's focus ring (2 px, 2 px gap);
@@ -136,7 +139,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/QuickSettingsMain.qml header row, sliders, tiles, media card
   contents/ui/WifiPage.qml          Wi-Fi drill-down
   contents/ui/BluetoothPage.qml     Bluetooth drill-down
-  contents/ui/AudioPage.qml         output device chooser
+  contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
+  contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
   contents/ui/NotificationCard.qml  one notification
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),

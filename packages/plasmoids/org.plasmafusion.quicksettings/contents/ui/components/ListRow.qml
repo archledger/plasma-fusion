@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
+import "Icons.js" as Icons
 
 // 44 px list row of the drill-down pages: icon, name, status text, trailing mark.
 // Height, paddings, icons and text follow the user's text size (`metrics`).
@@ -19,6 +20,11 @@ T.AbstractButton {
     property bool selected: false
     property bool busy: false
     property string trailingPath: ""
+    // A menu of the row's own (the stock widgets' "⋮" button): the button, right-click, press and
+    // hold or the Menu key ask for it; the owner opens it at `from`.
+    property bool hasMenu: false
+    property string menuText: ""
+    signal menuRequested(Item from)
 
     implicitHeight: metrics.px(44)
     focusPolicy: Qt.TabFocus
@@ -28,6 +34,13 @@ T.AbstractButton {
     Accessible.role: Accessible.Button
     Keys.onReturnPressed: row.clicked()
     Keys.onEnterPressed: row.clicked()
+    Keys.onMenuPressed: if (row.hasMenu) row.menuRequested(menuButton)
+    onPressAndHold: if (row.hasMenu) row.menuRequested(row)
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        enabled: row.hasMenu
+        onTapped: row.menuRequested(row)
+    }
 
     background: Rectangle {
         radius: 10
@@ -77,6 +90,16 @@ T.AbstractButton {
             color: row.pal.secondary
             px: 11.5
             opacity: row.busy ? 0.7 : 1
+        }
+        IconButton {
+            id: menuButton
+            visible: row.hasMenu
+            pal: row.pal
+            size: row.metrics.px(28)
+            iconSize: 16
+            iconPath: Icons.more
+            text: row.menuText
+            onClicked: row.menuRequested(menuButton)
         }
         LineIcon {
             Layout.rightMargin: row.metrics.px(10)

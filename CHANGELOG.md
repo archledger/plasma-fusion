@@ -65,6 +65,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - Quick Settings has a **Brightness** page (the chevron next to the brightness slider) with a
   slider for every display that can be dimmed and the **keyboard backlight**, as Plasma's Brightness
   widget.
+- Quick Settings' Sound page has a menu on each device (the "⋯" button or right-click) to choose its
+  **port** (speakers, headphones) and the sound card's **profile** (HDMI, analog, Pro Audio), as
+  Plasma's Audio Volume widget.
 
 ## 0.3.1 (2026-10-06)
 

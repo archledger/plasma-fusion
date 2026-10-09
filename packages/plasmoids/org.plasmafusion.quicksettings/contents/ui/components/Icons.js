@@ -52,6 +52,7 @@ var play = "M8 5l11 7-11 7z";
 var pause = "M9 6v12M15 6v12";
 var pauseFill = "M7.5 5.5h3v13h-3zM13.5 5.5h3v13h-3z";
 var keyboard = "M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M8 14h8";
+var more = "M5 12h.01M12 12h.01M19 12h.01";
 var wired = "M9 3h6v5H9zM12 8v5M6 13h12M6 13v4M18 13v4M4 17h4v4H4zM16 17h4v4h-4z";
 var airplane = "M12 3c1 0 1.5 1 1.5 2v4.5L21 14v2l-7.5-2.5V18l2 1.5V21L12 20l-3.5 1v-1.5l2-1.5v-4.5L3 16v-2l7.5-4.5V5c0-1 .5-2 1.5-2z";
 var plus = "M12 5v14M5 12h14";

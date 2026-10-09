@@ -347,6 +347,7 @@ Item {
         readonly property bool inputMuted: s ? s.inputMuted : true
         readonly property string inputDescription: s ? s.inputDescription : ""
         readonly property var sourceModel: s ? s.sourceModel : null
+        readonly property var cardModel: s ? s.cardModel : null
         readonly property var playbackModel: s ? s.playbackModel : null
         readonly property var recordingModel: s ? s.recordingModel : null
         readonly property real normal: s ? s.normal : 65536
