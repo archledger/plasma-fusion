@@ -79,6 +79,8 @@ T.Slider {
         onPressed: mouse => {
             startX = mouse.x;
             startValue = slider.value;
+            // A drag, not a step (the owners apply a step to a value beyond `to`).
+            slider.lastStep = 0;
             slider.forceActiveFocus(Qt.MouseFocusReason);
         }
         onPositionChanged: mouse => {
