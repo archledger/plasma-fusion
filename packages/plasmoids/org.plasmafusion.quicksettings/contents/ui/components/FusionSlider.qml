@@ -73,8 +73,19 @@ T.Slider {
             }
         }
     }
-    // The owners rebind `value` when `pressed` turns false; the bar's drag counts as pressed.
-    readonly property bool dragging: pressed || barDrag.pressed
+    // The owners act on moved() and take `value` back from their model when `dragging` ends. The
+    // bar's drag counts as pressed, and wheel and key steps count until the input pauses (600 ms):
+    // they set `value` themselves, so without that the owner's binding would stay broken.
+    readonly property bool dragging: pressed || barDrag.pressed || nudge.running
+    Timer {
+        id: nudge
+        interval: 600
+    }
+    onMoved: {
+        if (!pressed && !barDrag.pressed) {
+            nudge.restart();
+        }
+    }
 
     background: Item {
         x: slider.leftPadding

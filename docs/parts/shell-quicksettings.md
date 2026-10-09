@@ -33,7 +33,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   first display (internal panels first), with a chevron when there is more to set: the
   **Brightness** page (`DisplayPage.qml`) has a slider for every display PowerDevil can dim and the
   keyboard backlight (`KeyboardBrightnessControl`, stepping through its levels), as the stock
-  Brightness widget; the sliders' wheel and Page Up/Down move at least one step. With a keyboard
+  Brightness widget; the sliders' wheel and Page Up/Down move at least one step, and count as a
+  drag until the input pauses (600 ms), so each slider follows its value again after it. With a keyboard
   light and no display to dim (a monitor without DDC/CI), the keyboard backlight's slider takes the
   brightness slider's place;
 * microphone/input volume and mute when a recording input exists; its chevron opens the input
@@ -103,8 +104,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   application icon; when libkmpris cannot read the player's desktop file (it then reports the
   generic `emblem-music-symbolic`), the desktop entry name is used as the icon name. As the stock
   Media Player widget: a seek slider with the elapsed and total time when the player can seek (the
-  position is asked for every second while the sheet shows; the player seeks when the slider is let
-  go, or at each keyboard or wheel step, so always on the track playing then; a drag let go on
+  position is asked for every second while the sheet shows; the player seeks when the slider is
+  let go or the wheel or keys pause, so always on the track playing then; a drag let go on
   another player, title or length is dropped), and,
   with two or more players, a row of their icons to choose one (the first, a star, chooses
   automatically; `Mpris2Model.currentIndex`);

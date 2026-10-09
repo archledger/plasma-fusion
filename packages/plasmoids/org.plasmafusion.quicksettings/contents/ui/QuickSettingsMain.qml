@@ -929,17 +929,13 @@ ColumnLayout {
                 stepSize: 0.001
                 Accessible.name: i18nc("@label:slider", "Track position")
                 value: page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0
-                // The player seeks once the slider is let go (a click or a drag), or at each keyboard
-                // or wheel step: always on the track playing at that moment. (A queued seek, as the
-                // stock widget's 100 ms one, could land on the next track: libkmpris 6.7 neither
-                // signals a track change with the same title and length nor shows the track id.)
+                // The player seeks once the slider is let go (a click or a drag) or the wheel or keys
+                // pause (FusionSlider's `dragging`): always on the track playing at that moment. (A
+                // queued seek, as the stock widget's 100 ms one, could land on the next track:
+                // libkmpris 6.7 neither signals a track change with the same title and length nor
+                // shows the track id.)
                 function seekNow(): void {
                     page.backend.media.seek(Math.round(value * page.backend.media.length));
-                }
-                onMoved: {
-                    if (!dragging) {
-                        seekNow();
-                    }
                 }
                 // The player and track the slider was taken on: let go on another one (the track
                 // ended, the automatic choice moved), the drag is dropped.
