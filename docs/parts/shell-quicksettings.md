@@ -689,7 +689,8 @@ applets into one QML engine, which the stock notifications applet's Globals reli
 - **One set of settings:** the user settings (`sharedKeys` in main.qml: what the pill shows, the
   pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
   dark themes) are copied from a widget whose settings change to the others; a new widget takes the
-  leader's first, and pushes nothing before that (while it loads its settings change too, and
+  settings of the leader there before it (also when it leads at once, as the primary screen's
+  bar made again does), and pushes nothing before that (while it loads its settings change too, and
   pushing those defaults reset the others: found by the two-screen test). A value equal to the
   default is not stored, so a script reads it as empty.
 - Disks & Devices reads the engine's devices once when it is created (`Devices.qml`): a widget made

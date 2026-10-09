@@ -65,11 +65,13 @@ PlasmoidItem {
         }
     }
     Component.onCompleted: {
-        Instances.adopt(root);
+        // The leader before this widget joins: a widget on a lower screen number (the primary
+        // screen's bar made again) leads at once, and must still take the others' settings first.
         const lead = Instances.leader;
-        if (lead && lead !== root) {
+        if (lead) {
             sharedKeys.forEach(key => setShared(key, lead.sharedValue(key)));
         }
+        Instances.adopt(root);
         console.info("quicksettings: widget on " + (screenName || "?") + " (screen " + screenIndex + "), "
                      + Instances.items.length + " in this shell");
     }
