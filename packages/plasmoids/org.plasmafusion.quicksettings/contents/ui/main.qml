@@ -314,7 +314,7 @@ PlasmoidItem {
         }
     }
     function runRequest(mode: string, output: string) {
-        const mine = String(root.Screen.name || "");
+        const mine = root.screenName;
         if (output !== "" && mine !== "" && output !== mine) {
             return;
         }
