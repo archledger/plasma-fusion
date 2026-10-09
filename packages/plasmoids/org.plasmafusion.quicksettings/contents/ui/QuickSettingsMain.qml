@@ -809,10 +809,16 @@ ColumnLayout {
         }
         Connections {
             target: page.backend.media
-            function onPlayingChanged() {
-                if (page.backend.popupOpen && page.backend.media.canSeek) {
-                    page.backend.media.updatePosition();
-                }
+            // Also another player or track while paused (Next, Previous, the player row): the
+            // position shown is the one asked for last.
+            function onPlayingChanged() { mediaCard.refreshPosition(); }
+            function onCurrentIndexChanged() { mediaCard.refreshPosition(); }
+            function onTitleChanged() { mediaCard.refreshPosition(); }
+            function onLengthChanged() { mediaCard.refreshPosition(); }
+        }
+        function refreshPosition(): void {
+            if (page.backend.popupOpen && page.backend.media.canSeek) {
+                page.backend.media.updatePosition();
             }
         }
         Timer {
