@@ -17,7 +17,7 @@ user/session footer. Plasma 6 applet (QML only), GPL-2.0-or-later.
 | `.../contents/ui/LauncherCard.qml` | card content in board coordinates; views home / category / all apps / recent / search; keyboard map |
 | `.../contents/ui/SearchBox.qml`, `Chip.qml`, `PillButton.qml`, `SectionHeader.qml`, `RoundButton.qml`, `FocusRing.qml`, `ThinScrollBar.qml` | controls of the board |
 | `.../contents/ui/NavGrid.qml`, `AppGrid.qml`, `AppTile.qml`, `DocGrid.qml`, `DocItem.qml`, `ResultsList.qml` | grids and lists |
-| `.../contents/ui/Footer.qml` | avatar or letter, real full name, "Local account", Lock / Sleep / Restart / Shut Down |
+| `.../contents/ui/Footer.qml` | avatar or letter, real full name, "Local account" (account menu), Lock / Sleep (Hibernate menu) / Restart / Shut Down |
 | `.../contents/ui/ActionMenu.qml` | right-click / Menu-key menu: Pin/Unpin, Keep in Dock (when the Fusion dock is in the panel) plus the model's own actions |
 | `.../contents/ui/FusionColors.qml` | dark and light tints of the boards |
 | `.../contents/ui/FusionText.qml` | text in CSS px and CSS weight (see "Manrope weights") |
@@ -88,8 +88,11 @@ user/session footer. Plasma 6 applet (QML only), GPL-2.0-or-later.
   that appear or scroll under a resting pointer do not take the selection (so Enter still
   launches the top result, and the hover highlight is never shown twice).
 - Footer: face image (`~/.face.icon` via KUser) or the first letter on #7b5cd6, full name
-  (login name when the full name is empty), "Local account". The account row opens Users settings.
+  (login name when the full name is empty), "Local account". The account row opens a menu, as the
+  Windows account menu and the stock launcher's leave entries: Account Settings… (Users settings),
+  Switch User and Log Out (each where the session allows it; Log Out asks as configured).
   Lock, Sleep, Restart (asks), Shut Down (asks); buttons are disabled when logind forbids them.
+  Where the system can hibernate, Sleep's menu (right-click or press and hold) offers Hibernate.
 - Keyboard: Down from search goes to the pinned grid (to results while searching); arrows move
   in grids (the home "Recommended" grid keeps the selection in its four visible files); Up from
   a top row goes back to chips/search; Tab / Shift+Tab walk search, chips,

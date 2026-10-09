@@ -8,6 +8,7 @@ import QtQuick.Templates as T
 import org.kde.coreaddons as KCoreAddons
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCMUtils
+import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.private.sessions as Sessions
 
 // User row and session buttons (62 px, darker band, 1 px top edge). The band spans the
@@ -70,13 +71,44 @@ FocusScope {
         focusPolicy: Qt.TabFocus
         Accessible.role: Accessible.Button
         Accessible.name: footer.displayName
-        Accessible.description: i18nc("@info:tooltip", "Open user account settings")
+        Accessible.description: i18nc("@info:tooltip", "Account settings, Switch User and Log Out")
         Keys.onReturnPressed: clicked()
         Keys.onEnterPressed: clicked()
         Keys.onBacktabPressed: footer.backtabFromFirst()
-        onClicked: {
-            footer.launcher.close();
-            KCMUtils.KCMLauncher.openSystemSettings("kcm_users");
+        // As the Windows account menu and the stock launcher's leave entries: the account's
+        // settings, then Switch User and Log Out where the session allows them.
+        onClicked: accountMenu.openRelative()
+
+        PlasmaExtras.Menu {
+            id: accountMenu
+            visualParent: accountButton
+            placement: PlasmaExtras.Menu.TopPosedLeftAlignedPopup
+            PlasmaExtras.MenuItem {
+                text: i18nc("@action:inmenu", "Account Settings…")
+                icon: "user-identity"
+                onClicked: {
+                    footer.launcher.close();
+                    KCMUtils.KCMLauncher.openSystemSettings("kcm_users");
+                }
+            }
+            PlasmaExtras.MenuItem {
+                text: i18nc("@action:inmenu", "Switch User")
+                icon: "system-switch-user"
+                visible: session.canSwitchUser
+                onClicked: {
+                    footer.launcher.close();
+                    session.switchUser();
+                }
+            }
+            PlasmaExtras.MenuItem {
+                text: i18nc("@action:inmenu", "Log Out")
+                icon: "system-log-out"
+                visible: session.canLogout
+                onClicked: {
+                    footer.launcher.close();
+                    session.requestLogout();
+                }
+            }
         }
 
         background: Rectangle {
@@ -186,6 +218,39 @@ FocusScope {
             onClicked: {
                 footer.launcher.close();
                 session.suspend();
+            }
+            // Hibernate, where the system offers it: right-click or press and hold.
+            onPressAndHold: sleepMenu.offer()
+            TapHandler {
+                acceptedButtons: Qt.RightButton
+                onTapped: sleepMenu.offer()
+            }
+            PlasmaExtras.Menu {
+                id: sleepMenu
+                visualParent: sleepButton
+                placement: PlasmaExtras.Menu.TopPosedRightAlignedPopup
+                function offer(): void {
+                    if (session.canHibernate) {
+                        openRelative();
+                    }
+                }
+                PlasmaExtras.MenuItem {
+                    text: i18nc("@action:inmenu", "Sleep")
+                    icon: "system-suspend"
+                    enabled: session.canSuspend
+                    onClicked: {
+                        footer.launcher.close();
+                        session.suspend();
+                    }
+                }
+                PlasmaExtras.MenuItem {
+                    text: i18nc("@action:inmenu", "Hibernate")
+                    icon: "system-suspend-hibernate"
+                    onClicked: {
+                        footer.launcher.close();
+                        session.hibernate();
+                    }
+                }
             }
         }
 

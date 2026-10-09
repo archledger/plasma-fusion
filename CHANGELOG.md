@@ -57,6 +57,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   Wi‑Fi, mobile data and Bluetooth off and back on.
 - The keyboard layout badge in the top bar lists the layouts on right-click (or press and hold) to
   choose one, and the mouse wheel switches through them, as Plasma's Keyboard Layout widget.
+- The launcher's account row opens a menu with Account Settings, **Switch User** and **Log Out**;
+  where the computer can hibernate, the Sleep button's menu offers **Hibernate**.
 
 ## 0.3.1 (2026-10-06)
 
