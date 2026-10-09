@@ -15,6 +15,7 @@ KCM.SimpleKCM {
     property alias cfg_showClipboard: clipboardBox.checked
     property alias cfg_showBatteryPercent: batteryBox.checked
     property alias cfg_showNotifications: notificationsBox.checked
+    property alias cfg_popupOnNewDevice: newDeviceBox.checked
     property alias cfg_popupGap: gapSpin.value
     property alias cfg_popupScreenMargin: marginSpin.value
     property alias cfg_lightLookAndFeel: lightField.text
@@ -52,6 +53,10 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: notificationsBox
             text: i18nc("@option:check", "Notification bell and notification list")
+        }
+        QQC2.CheckBox {
+            id: newDeviceBox
+            text: i18nc("@option:check", "Open Disks & Devices when a device is connected")
         }
 
         Item { Kirigami.FormData.isSection: true }

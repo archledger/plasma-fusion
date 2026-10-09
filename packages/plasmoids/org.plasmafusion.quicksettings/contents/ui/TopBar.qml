@@ -295,9 +295,30 @@ Item {
                     }
                 }
                 LineIcon {
+                    objectName: "devices-indicator"
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: bar.backend.devices.count > 0
+                    size: bar.metrics.px(bar.tablet ? 18 : 16)
+                    path: Icons.usbDrive
+                    color: bar.pal.text
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: i18nc("@info:status", "Removable device connected")
+                }
+                LineIcon {
+                    objectName: "keep-awake-indicator"
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: bar.backend.keepAwake.active
+                    size: bar.metrics.px(bar.tablet ? 18 : 16)
+                    path: Icons.coffee
+                    color: bar.pal.accent
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: i18nc("@info:status", "Sleep and automatic screen locking are blocked")
+                }
+                LineIcon {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: !(bar.backend.net.available && bar.backend.net.kind !== "none")
-                             && !bar.backend.audio.available && !bar.backend.battery.present
+                             && !bar.backend.audio.available && !bar.backend.battery.present && !bar.backend.keepAwake.active
+                             && bar.backend.devices.count === 0
                     size: bar.metrics.px(16)
                     path: Icons.settingsSmall
                     color: bar.pal.text
@@ -332,6 +353,12 @@ Item {
                 mainText: i18nc("@info:tooltip", "Quick settings")
                 subText: {
                     const lines = [];
+                    if (bar.backend.keepAwake.active) {
+                        lines.push(i18nc("@info:tooltip", "Keep awake: sleep and automatic screen locking are blocked"));
+                    }
+                    if (bar.backend.devices.count > 0) {
+                        lines.push(i18nc("@info:tooltip %1 device name or count", "Disks & Devices: %1", bar.backend.devices.subtitle));
+                    }
                     const net = bar.backend.net;
                     if (net.available) {
                         if (net.kind === "wired") {

@@ -40,6 +40,10 @@ var brightness = "M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M2 12h2M20 12h
 var bluetooth = "M7 7l10 10-5 4V3l5 4L7 17";
 var moon = "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z";
 var gauge = "M4 16a8 8 0 0 1 16 0M12 16l4-5";
+// Disks & Devices: a USB stick (body, connector, contacts) and the eject mark.
+var usbDrive = "M8 10h8v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1zM9.5 4h5v6h-5zM11 6.5h.01M13 6.5h.01";
+var eject = "M12 5l7 8H5zM5 18.5h14";
+var coffee = "M4 8h12v6a6 6 0 0 1-12 0zM16 9h2a3 3 0 0 1 0 6h-2M3 21h15M7 2v3M12 2v3";
 var contrast = "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 3v18";
 var contrastFill = "M12 3a9 9 0 0 1 0 18z";
 var previous = "M18 6l-8 6 8 6zM6 6v12";
@@ -52,6 +56,7 @@ var wired = "M9 3h6v5H9zM12 8v5M6 13h12M6 13v4M18 13v4M4 17h4v4H4zM16 17h4v4h-4z
 var airplane = "M12 3c1 0 1.5 1 1.5 2v4.5L21 14v2l-7.5-2.5V18l2 1.5V21L12 20l-3.5 1v-1.5l2-1.5v-4.5L3 16v-2l7.5-4.5V5c0-1 .5-2 1.5-2z";
 var plus = "M12 5v14M5 12h14";
 var headphones = "M4 15v-3a8 8 0 0 1 16 0v3M4 15a2 2 0 0 1 2-2h1v7H6a2 2 0 0 1-2-2zM20 15a2 2 0 0 0-2-2h-1v7h1a2 2 0 0 0 2-2z";
+var microphone = "M9 4a3 3 0 0 1 6 0v8a3 3 0 0 1-6 0zM6 10v2a6 6 0 0 0 12 0v-2M12 18v4M8 22h8";
 var check = "M5 12.5l4.5 4.5L19 7.5";
 
 // Tablet row and tile (TABLET 4.6).

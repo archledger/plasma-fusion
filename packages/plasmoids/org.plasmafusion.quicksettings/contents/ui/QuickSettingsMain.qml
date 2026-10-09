@@ -248,7 +248,7 @@ ColumnLayout {
     ColumnLayout {
         Layout.fillWidth: true
         spacing: page.tablet ? 12 : 10
-        visible: page.backend.audio.available || page.backend.display.brightnessAvailable
+        visible: page.backend.audio.available || page.backend.audio.inputAvailable || page.backend.display.brightnessAvailable
 
         RowLayout {
             Layout.fillWidth: true
@@ -307,10 +307,52 @@ ColumnLayout {
                 iconSize: 14
                 iconPath: Icons.chevronRight
                 text: i18nc("@action:button", "Choose audio output")
-                onClicked: page.openPage("audio", audioChevron)
+                onClicked: {
+                    page.backend.audioPage = "output";
+                    page.openPage("audio", audioChevron);
+                }
             }
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: page.pal.touch ? 44 : 28
+            spacing: 12
+            visible: page.backend.audio.inputAvailable
+            IconButton {
+                pal: page.pal
+                size: 28
+                fill: "transparent"
+                iconSize: 18
+                iconPath: page.backend.audio.inputMuted ? Icons.microphone + Icons.slash : Icons.microphone
+                text: page.backend.audio.inputMuted ? i18nc("@action:button", "Unmute microphone")
+                                                    : i18nc("@action:button", "Mute microphone")
+                Layout.preferredWidth: page.pal.touch ? 44 : 18
+                Layout.preferredHeight: page.pal.touch ? 44 : 28
+                onClicked: page.backend.audio.toggleInputMute()
+            }
+            FusionSlider {
+                Layout.fillWidth: true
+                pal: page.pal
+                dimmed: page.backend.audio.inputMuted
+                Accessible.name: i18nc("@label:slider", "Microphone volume")
+                value: page.backend.audio.inputVolume
+                onMoved: page.backend.audio.setInputVolume(value)
+                onDraggingChanged: if (!dragging) { value = Qt.binding(() => page.backend.audio.inputVolume); }
+            }
+            IconButton {
+                id: inputChevron
+                pal: page.pal
+                size: page.pal.touch ? 32 : 28
+                iconSize: 14
+                iconPath: Icons.chevronRight
+                text: i18nc("@action:button", "Choose microphone and application audio")
+                onClicked: {
+                    page.backend.audioPage = "input";
+                    page.openPage("audio", inputChevron);
+                }
+            }
+        }
         RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: page.pal.touch ? 44 : 28
@@ -447,6 +489,69 @@ ColumnLayout {
             iconFillPath: Icons.contrastFill
             checked: page.backend.darkStyle.checked
             onToggled: page.backend.darkStyle.toggle()
+        }
+        Tile {
+            objectName: "tile-keepawake"
+            Layout.fillWidth: true
+            pal: page.pal
+            metrics: page.metrics
+            title: i18nc("@title tile", "Keep awake")
+            subtitle: page.backend.keepAwake.subtitle
+            iconPath: Icons.coffee
+            checked: page.backend.keepAwake.active
+            available: page.backend.keepAwake.available
+            enabled: available
+            hasDetails: page.backend.keepAwake.available
+            detailsText: i18nc("@action:button", "Show applications blocking sleep")
+            toolTip: checked ? i18nc("@info:tooltip", "Click to resume automatic sleep and screen locking")
+                             : i18nc("@info:tooltip", "Manually block sleep and screen locking")
+            onToggled: page.backend.keepAwake.toggle()
+            onDetailsRequested: page.openPage("power", keepAwakeTile.detailsButton)
+            id: keepAwakeTile
+        }
+        // Disks & Devices (stock tray item): shown while a removable device is connected; accent
+        // while one of them is mounted. The body and the chevron open the device list.
+        Tile {
+            id: devicesTile
+            objectName: "tile-devices"
+            Layout.fillWidth: true
+            visible: page.backend.devices.count > 0
+            pal: page.pal
+            metrics: page.metrics
+            title: i18nc("@title tile", "Disks & Devices")
+            subtitle: page.backend.devices.subtitle
+            iconPath: Icons.usbDrive
+            checked: page.backend.devices.anyMounted
+            hasDetails: true
+            detailsText: i18nc("@action:button", "Show Disks & Devices")
+            onToggled: page.openPage("devices", devicesTile.mainButton)
+            onDetailsRequested: page.openPage("devices", devicesTile.detailsButton)
+        }
+        Tile {
+            id: hotspotTile
+            objectName: "tile-hotspot"
+            Layout.fillWidth: true
+            visible: page.backend.net.wifiDevice
+            pal: page.pal
+            metrics: page.metrics
+            title: i18nc("@title tile", "Wi‑Fi hotspot")
+            subtitle: page.backend.net.hotspotSubtitle
+            iconPath: Icons.wifi
+            checked: page.backend.net.hotspotActive
+            available: page.backend.net.hotspotReady
+            hasDetails: true
+            detailsText: i18nc("@action:button", "Hotspot and Wi‑Fi settings")
+            toolTip: page.backend.net.hotspotHint
+            // plasma-nm always has a password (it generates one); the Wi-Fi page shows it, and
+            // the reason when the radio can't run a hotspot.
+            onToggled: {
+                if (available) {
+                    page.backend.net.toggleHotspot();
+                } else {
+                    page.openPage("wifi", hotspotTile.mainButton);
+                }
+            }
+            onDetailsRequested: page.openPage("wifi", hotspotTile.detailsButton)
         }
         // Battery charge limit (research D-desktop "Add"): a click turns the limit (80 % or the last
         // one picked) on or off; the chevron offers 80 %, 90 %, "Charge to 100 % once" (while

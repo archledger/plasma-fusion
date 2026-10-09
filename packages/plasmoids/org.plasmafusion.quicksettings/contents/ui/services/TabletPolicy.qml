@@ -43,6 +43,16 @@ Item {
     property string keyboardPolicy: "tablet"
     // Name of the screen quick settings sits on (the rotation lock's fallback output).
     property string screenName: ""
+    // Only one quick settings widget (the leader, main.qml) writes the posture's settings by itself;
+    // what the user changes here is written by the widget they use. Taking over writes them again
+    // (both writes are idempotent).
+    property bool leader: true
+    onLeaderChanged: {
+        if (leader) {
+            Qt.callLater(applyKeyboard);
+            Qt.callLater(applyPostureSettings);
+        }
+    }
 
     // plasma-keyboard's desktop file as KWin names it: the first in the system data directories
     // (XDG_DATA_DIRS; /usr/share on Fedora, the system profile on NixOS), found at start.
@@ -90,7 +100,7 @@ Item {
         }
     }
     function applyKeyboard() {
-        if (!inputMethodKnown || !postureKnown) {
+        if (!leader || !inputMethodKnown || !postureKnown) {
             return;
         }
         const want = wantedInputMethod();
@@ -142,7 +152,7 @@ Item {
     ].join("\n")
     property string postureApplied: ""
     function applyPostureSettings() {
-        if (!postureKnown) {
+        if (!leader || !postureKnown) {
             return;
         }
         const want = tablet ? "tablet" : "laptop";
@@ -332,9 +342,12 @@ Item {
     onTabletChanged: {
         Qt.callLater(applyKeyboard);
         Qt.callLater(applyPostureSettings);
-        if (!tablet && rotationLocked) {
-            withOutput((name, rotation) => {
-                if (name !== "" && rotation !== 1) {
+        if (leader && !tablet) {
+            // The lock may have been set from another screen's quick settings: KWin's policy for
+            // the output says (0 never = locked), else this widget's own state.
+            withOutput((name, rotation, policyValue) => {
+                const locked = policyValue >= 0 ? policyValue === 0 : policy.rotationLocked;
+                if (locked && name !== "" && rotation !== 1) {
                     console.info("quicksettings: tablet mode ended with the rotation locked: " + name + " back to normal");
                     run("kscreen-doctor " + quote("output." + name + ".rotation.normal"), () => {});
                 }

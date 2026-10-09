@@ -20,6 +20,7 @@ const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line)
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
 const hiddenDuplicates = globalThis.hiddenDuplicates;
 const isRolePin = globalThis.isRolePin;
+const appLauncherUrl = globalThis.appLauncherUrl;
 assert.notStrictEqual(hiddenDuplicates, undefined, "pins.js does not define hiddenDuplicates");
 assert.notStrictEqual(isRolePin, undefined, "pins.js does not define isRolePin");
 
@@ -66,5 +67,11 @@ assert.deepStrictEqual(hiddenDuplicates(rows([
     ["org.kde.konsole", false], ["", true],
 ])), []);
 assert.deepStrictEqual(hiddenDuplicates(rows([])), []);
+
+
+// appLauncherUrl(): one applications: scheme whether the launcher's id has it or not
+assert.strictEqual(appLauncherUrl("org.kde.dolphin.desktop"), "applications:org.kde.dolphin.desktop", "plain desktop id");
+assert.strictEqual(appLauncherUrl("applications:org.kde.dolphin.desktop"), "applications:org.kde.dolphin.desktop", "id with the scheme (pinned entries, Plasma 6.8)");
+assert.strictEqual(appLauncherUrl("file:///home/pf/bin/thing.desktop"), "file:///home/pf/bin/thing.desktop", "a file-backed launcher keeps its URL");
 
 console.log("pins: all checks passed");

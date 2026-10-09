@@ -809,16 +809,26 @@ shortcut_claim() {
 # $1 plugin, $2 Qt key code, $3 key text, $4 label, $5 REPLACE key text or "", $6 claim|free
 ensure_widget_shortcut() {
   local plugin=$1 code=$2 text=$3 label=$4 replace=${5:-} mode=${6:-free} found entry id cur free released old comp action
+  # Lowest screen first: the key goes to the widget of the main bar only (quick settings is in
+  # every screen's top bar; a removed bar would take the key with it).
   found=$(plasmashell_eval "
 var out = [], ps = panels();
 for (var i = 0; i < ps.length; i++) {
     var ws = ps[i].widgets(\"$plugin\");
-    for (var j = 0; j < ws.length; j++) out.push(ws[j].id + \"=\" + ws[j].globalShortcut);
+    for (var j = 0; j < ws.length; j++) out.push((ps[i].screen < 0 ? 999 : ps[i].screen) + \":\" + ws[j].id + \"=\" + ws[j].globalShortcut);
 }
+out.sort(function (a, b) { return parseInt(a, 10) - parseInt(b, 10); });
 print(out.join(\" \"));" || true)
   [ -n "$found" ] || { note "$label: widget not in a panel (no shortcut set)"; return 0; }
+  local first=1
   for entry in $found; do
+    entry=${entry#*:}
     id=${entry%%=*} cur=${entry#*=}
+    if [ "$first" = 0 ]; then
+      note "$label widget $id: another screen's bar (the shortcut stays with the main one)"
+      continue
+    fi
+    first=0
     if [ "$cur" = "$text" ]; then
       note "$label widget $id shortcut = $text (unchanged)"
       continue
@@ -1053,10 +1063,13 @@ for c in sorted(desktops, key=int):
 # The top bar: a top panel holding a Plasma Fusion top-bar widget.
 TOP_WIDGETS = ("org.plasmafusion.quicksettings", "org.plasmafusion.appname", "org.plasmafusion.clockpill")
 top = None
+# Every Plasma Fusion top bar (one per screen; their trays are set up alike).
+tops = []
 for c, kv in sorted(conts.items(), key=lambda i: int(i[0]) if i[0].isdigit() else 0):
     if kv.get("plugin") == "org.kde.panel" and kv.get("location") == "3" and set(applets(c).values()) & set(TOP_WIDGETS):
-        top = c
-        break
+        tops.append(c)
+        if top is None:
+            top = c
 
 # 3. Top bar solid next to maximized windows (owner decision 5): adaptive (0) instead of the
 #    translucent (2) the earlier layout set; another value is the user's.
@@ -1068,12 +1081,13 @@ if top is not None:
     else:
         note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque"}.get(cur, cur))
 
-# 4. Tray items hidden (no expander arrow); 5. app menus for their own screen only.
+# 4. Tray items hidden (no expander arrow), in every top bar's tray; 5. app menus for their own
+#    screen only.
 for c, kv in conts.items():
     if kv.get("plugin") != "org.kde.panel":
         continue
     for a, plugin in applets(c).items():
-        if plugin == "org.kde.plasma.systemtray" and c == top:
+        if plugin == "org.kde.plasma.systemtray" and c in tops:
             general = rc.get(("Containments", c, "Applets", a, "General"), {})
             for key in ("hiddenItems", "disabledStatusNotifiers"):
                 items = [i for i in general.get(key, "").split(",") if i]
@@ -1082,6 +1096,18 @@ for c, kv in conts.items():
                     write(APPLETSRC, ["Containments", c, "Applets", a, "General"], key, ",".join(items + add), general.get(key))
                 else:
                     note("tray %s %s (unchanged)" % (a, key))
+            # Disks & Devices: the quick-settings page replaces the stock item, which is not loaded
+            # (known, not extra), as the desktop layout does for a new bar.
+            if "org.plasmafusion.quicksettings" in applets(c).values():
+                known = [i for i in general.get("knownItems", "").split(",") if i]
+                extra = [i for i in general.get("extraItems", "").split(",") if i]
+                dn = "org.kde.plasma.devicenotifier"
+                if dn not in known:
+                    write(APPLETSRC, ["Containments", c, "Applets", a, "General"], "knownItems", ",".join(known + [dn]), general.get("knownItems"))
+                if dn in extra:
+                    write(APPLETSRC, ["Containments", c, "Applets", a, "General"], "extraItems", ",".join(i for i in extra if i != dn), general.get("extraItems"))
+                else:
+                    note("tray %s Disks & Devices not loaded (unchanged)" % a)
         if plugin == "org.kde.plasma.appmenu":
             appearance = rc.get(("Containments", c, "Applets", a, "Configuration", "Appearance"), {})
             if "allScreens" in appearance:

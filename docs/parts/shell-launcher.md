@@ -18,7 +18,7 @@ user/session footer. Plasma 6 applet (QML only), GPL-2.0-or-later.
 | `.../contents/ui/SearchBox.qml`, `Chip.qml`, `PillButton.qml`, `SectionHeader.qml`, `RoundButton.qml`, `FocusRing.qml`, `ThinScrollBar.qml` | controls of the board |
 | `.../contents/ui/NavGrid.qml`, `AppGrid.qml`, `AppTile.qml`, `DocGrid.qml`, `DocItem.qml`, `ResultsList.qml` | grids and lists |
 | `.../contents/ui/Footer.qml` | avatar or letter, real full name, "Local account", Lock / Sleep / Restart / Shut Down |
-| `.../contents/ui/ActionMenu.qml` | right-click / Menu-key menu: Pin/Unpin plus the model's own actions |
+| `.../contents/ui/ActionMenu.qml` | right-click / Menu-key menu: Pin/Unpin, Keep in Dock (when the Fusion dock is in the panel) plus the model's own actions |
 | `.../contents/ui/FusionColors.qml` | dark and light tints of the boards |
 | `.../contents/ui/FusionText.qml` | text in CSS px and CSS weight (see "Manrope weights") |
 | `.../contents/ui/Glyph.qml`, `FusionLogo.qml`, `code/launcher.js` | the boards' stroke glyphs and logo, category/file-type/design-name tables |

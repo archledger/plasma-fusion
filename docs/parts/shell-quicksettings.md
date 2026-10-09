@@ -28,6 +28,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   rectangular-region shortcut), System Settings, lock, leave (logout / restart / shut down prompt);
 * volume slider with mute button and chevron to the output chooser; brightness slider
   (8 px track, 20 px white knob with shadow, `#5B9DFF` fill = colour scheme DecorationHover);
+* microphone/input volume and mute when a recording input exists; its chevron opens the input
+  chooser. Sound has Output, Input and Applications tabs. Applications lists active playback and
+  recording streams with independent volume, mute and device routing, using the native plasma-pa
+  models; it updates when streams start/stop. Virtual microphones such as noise-suppression inputs
+  are supported. The existing output controls remain independent;
 * six 60 px tiles, radius 16, accent fill when on:
   Wi-Fi (SSID; body toggles Wi-Fi, chevron opens the network list),
   Bluetooth (`N connected` / device name; body toggles, chevron opens the device list),
@@ -37,6 +42,40 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
   uses tuned-ppd on the ThinkPad),
   Dark style (switches between the two Plasma Fusion Global Themes, see below);
+* **Keep awake** (`Off` / `On`): manually blocks sleep, display power saving and automatic screen
+  locking until turned off in this session. An accent coffee-cup icon stays in the status pill
+  while it is on, including tablet posture; the pill's tooltip explains the active inhibition.
+  The tile uses Plasma's native `InhibitionControl`, so the hidden stock battery applet and all
+  Fusion controls in the same plasmashell process agree on the manual state. Other applications'
+  inhibitors are separate; turning this off leaves those in place. The popup can be closed without
+  releasing the inhibition. Manual Lock still works. Normal timeout settings are never rewritten,
+  and exiting the session releases the native requests. Missing PowerDevil or ScreenSaver service
+  shows `Unavailable` with a disabled tile. Its chevron opens **Sleep blockers**: the applications currently
+  requesting to block sleep or idle screen locking, with their reasons, each with an `Allow this
+  application's request` box (PowerDevil's `SetInhibitionAllowed`, as in the stock battery applet);
+* **Wi‑Fi hotspot** (`Off`, `Starting…`, `On`; otherwise the reason: `Wi‑Fi in use`, `Wi‑Fi is off`,
+  `Airplane mode`, `No Wi‑Fi radio`, `Unavailable`, `Failed to start`): plasma-nm's own hotspot
+  (`Handler.createHotspot`, the stock Networks applet's code path and its settings in
+  `~/.config/plasma-nm`): a WPA2 access point sharing IPv4, as a volatile profile that
+  NetworkManager removes when it stops. plasma-nm offers it only on a free radio or while the
+  connection runs over something else, so a single radio that carries the connection reads
+  `Wi‑Fi in use`; the dimmed tile then opens the Wi‑Fi page, which explains it. A start that
+  NetworkManager drops within 20 s reads `Failed to start`. The chevron opens the Wi‑Fi page;
+* **Disks & Devices** (device name, or `N devices`; accent while one is mounted), shown while a
+  removable device is connected, with a USB-drive icon in the status pill: the stock Disks &
+  Devices, which is not loaded where this widget is in the bar (desktop layout and
+  `fusion-config.sh`). The data comes from Plasma's `hotplug`, `soliddevice` and
+  `devicenotifications` engines (plasma5support, as Plasma 5's Disks & Devices used them; they push
+  every change). Listed like the stock default filter: a device whose drive is removable or
+  hot-pluggable, a camera or a media player (`contents/code/devices.js`). The page shows each with
+  its state (`Not mounted`, `Mounting…`, `X free of Y` with a usage bar, `Removing…`); the row opens
+  it (the file manager for a volume, which Solid mounts first, or the device's own action), the
+  trailing button mounts it or safely removes it (Solid teardown; a disc is ejected), and the
+  engine's own message shows under it (why removing failed and which applications hold the
+  device, or that it can now be safely removed). A device plugged in while the session runs opens
+  the sheet on this page (`popupOnNewDevice`, as the stock item does); the footer opens the
+  Removable Storage settings. The `devicenotifications` engine logs an upstream deprecation notice
+  in Plasma 6.7.5 (it still works there);
 * media card (64 px, radius 16): album art or player icon, title, `Paused` / artist, previous,
   play/pause (36 px filled), next; shown only while a player exists. The player icon is the
   application icon; when libkmpris cannot read the player's desktop file (it then reports the
@@ -49,8 +88,13 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
 **Drill-down pages** replace the quick settings in the same card (back button, title, switch):
 Wi-Fi (Popups board tray panel: connected network card with band, security and live speed,
 `OTHER NETWORKS` list with signal levels and locks, inline password field for new WPA/WPA2/WPA3
-networks, `Hidden network…` and `Network settings`), Bluetooth (paired devices, connect /
+networks, a `Wi‑Fi hotspot` section with Start/Stop and the reason when the radio can't run one,
+the network name and the masked password with Show/Hide while it is on, and `Change name and
+password…` (an empty password keeps the saved one, which plasma-nm generates on first use; it is
+not read before that), `Hidden network…` and `Network settings`), Bluetooth (paired devices, connect /
 disconnect, `Pair a new device…`, `Bluetooth settings`), Sound output (choose the default sink).
+The Sound page also selects the default input and exposes per-application playback/recording
+controls. Empty inputs or streams have explicit placeholders and a Sound settings link.
 
 Keyboard: every control is reachable with Tab and has the design's focus ring (2 px, 2 px gap);
 Space/Return activate, Right/Left moves between a tile and its chevron, Escape goes back a page or
@@ -87,6 +131,7 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     PageHeader, FocusRing, FText
   contents/ui/services/             one file per data source, each loaded by a Loader:
                                     Network (plasma-nm), Audio (plasma-pa), Battery, PowerProfiles,
+                                    KeepAwake (PowerDevil manual sleep/ScreenSaver inhibition),
                                     Display (brightness, Night Light, light/dark pairing), Media (MPRIS),
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
                                     TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
@@ -129,8 +174,10 @@ System tray keys (containment config of the tray, group `[General]`):
   applet hosts Klipper, which the clipboard button calls over D-Bus; Battery/Brightness/Networks keep
   their warnings and password prompts.
 * `shownItems` must not list any of them.
-* Note: the tray shows its expander arrow while any hidden item is active. That arrow is the stock
-  tray's and is not on the board.
+* Note: the tray shows its expander arrow while a passive application status icon exists (for
+  example the XWayland video bridge, which registers a while after login). The stock items Fusion
+  hides are disabled as status notifiers, so they never bring it up, and Disks & Devices is not
+  loaded at all. That arrow is the stock tray's and is not on the board.
 
 Widget options (`[General]` of the widget, `contents/config/main.xml`, also in its settings page):
 
@@ -142,6 +189,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `showClipboard` | true | clipboard button |
 | `showBatteryPercent` | true | `NN%` in the pill |
 | `showNotifications` | true | bell and notification list |
+| `popupOnNewDevice` | true | open the sheet on Disks & Devices when a removable device is plugged in |
 | `popupGap` | 10 | px between the bar and the pop-up |
 | `popupScreenMargin` | 16 | px between the pop-up and the screen edge |
 | `startPage` | main | page shown on open: `main`, `wifi`, `bluetooth`, `audio` (settings page: "Page shown when opened") |
@@ -163,6 +211,19 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 `reconfigure()`, leaves it off). Without the helper the tile opens the Night Light settings.
 
 ## Verification
+
+* Manual inhibition regression test (real Qt QML and Plasma's native plugin against private-bus
+  endpoints; no live desktop changes):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/keepawake_test.py
+  ```
+
+  Needs PySide6, python3-dbus, python3-gobject and PowerDevil's QML module. Checks default-off,
+  both inhibitor endpoints, shared native state, preservation of another application's inhibition,
+  service disappearance/return and complete release after repeated use.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
@@ -610,3 +671,41 @@ so a mask can only shrink a target. Tested in the 6.7.5 and 6.7.91 containers (c
 x 1397/1430/1435 and y 2/22/40 and a pull from the corner open the Notification Centre; the bar is
 pixel-identical in both postures. "Clear all" (about 90 x 44) and the home screen's "Done" (96 x 56)
 already met the target; a card's close button (44 x 44) is not at a screen edge.
+
+## One quick settings per top bar (owner decision 2026-10-09)
+
+Every screen's top bar has the status icons, the bell and quick settings (the owner chose this over
+decision 8's main-screen-only status area: macOS shows its menu bar, with its icons and Control
+Center, on every display). Each bar's widget is a separate applet; they know each other through
+`ui/global/Instances.qml`, a QML singleton that plasmashell shares between them (it loads all
+applets into one QML engine, which the stock notifications applet's Globals relies on too).
+- **Leader:** the widget on the lowest screen number (the primary screen is 0), else the first. It
+  runs the session-wide jobs: the tablet posture's settings and keyboard (`TabletPolicy.leader`;
+  the posture script was already locked and idempotent, so a takeover rewrites the same values) and
+  the new-device sheet. When tablet mode ends it reads the rotation lock from KWin's auto-rotate
+  policy (another screen's widget may have set it) to turn the built-in display back to normal.
+- **The screen in use:** Meta+A belongs to one widget (the main bar's); it asks KWin for its active
+  output (`activeOutputName`) and opens the widget on that screen. fusion-config.sh gives the key to the
+  main bar's widget only (lowest screen), and the settings module's removal of the other bars moves a
+  key held there to it. A widget names its screen from its bar's screen geometry (the window's Screen
+  named the first screen for a while in a new bar on another screen). A new device's sheet opens there
+  the same way. `openRequest` already acted only on the active screen's widget.
+- **One set of settings:** the user settings (`sharedKeys` in main.qml: what the pill shows, the
+  pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
+  dark themes) are copied from a widget whose settings change to the others; a new widget takes the
+  settings of the leader there before it (also when it leads at once, as the primary screen's
+  bar made again does), and pushes nothing before that (while it loads its settings change too, and
+  pushing those defaults reset the others: found by the two-screen test). A value equal to the
+  default is not stored, so a script reads it as empty.
+- Disks & Devices reads the engine's devices once when it is created (`Devices.qml`): a widget made
+  after the engine knew its devices (the second bar's) listed none before.
+- Notifications pop up once: the stock Notifications applet in every tray shares its Globals (one
+  pop-up manager).
+- Test (archhost parity VM with a second virtio GPU, two outputs; `two_screens_test.py`,
+  `devices_route.sh`): 20 checks and 4 routing checks: a bar per screen with tray and quick settings, the
+  pen only in the main bar, the tray's item lists copied, the shared singleton and the primary
+  screen's leader, idempotent re-runs, a removed tray stays removed, a new screen's bar complete,
+  the settings page's removal keeps the main bar, `EveryScreen=false` adds nothing, settings synced
+  both ways and adopted by a new widget, posture settings written once per change, Meta+A and a USB
+  stick open the sheet on the screen with the pointer only (both screens), bars made before the
+  change completed at login (two reboots), no QML warnings, no crashes.

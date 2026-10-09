@@ -31,6 +31,10 @@
       <label>Show the name pill above the hovered item.</label>
       <default>true</default>
     </entry>
+    <entry name="showPreviews" type="Bool">
+      <label>Show window previews above a hovered running app.</label>
+      <default>true</default>
+    </entry>
     <entry name="colorVariant" type="Enum">
       <label>Colours: 0 = follow the Plasma style, 1 = dark, 2 = light.</label>
       <choices>

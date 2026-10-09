@@ -21,6 +21,7 @@ KCM.SimpleKCM {
     property string cfg_dateFormat
     property alias cfg_customDateFormat: customDateFormat.text
     property int cfg_use24hFormat
+    property alias cfg_showSeconds: showSeconds.checked
     property int cfg_firstDayOfWeek
     property alias cfg_popupGap: popupGap.value
     property alias cfg_centerInPanel: centerInPanel.checked
@@ -33,6 +34,7 @@ KCM.SimpleKCM {
     property string cfg_dateFormatDefault
     property string cfg_customDateFormatDefault
     property int cfg_use24hFormatDefault
+    property bool cfg_showSecondsDefault
     property int cfg_firstDayOfWeekDefault
     property int cfg_popupGapDefault
     property bool cfg_centerInPanelDefault
@@ -120,6 +122,10 @@ KCM.SimpleKCM {
             text: i18nc("@action:button", "Change Region Settings…")
             icon.name: "preferences-desktop-locale"
             onClicked: KCM.KCMLauncher.openSystemSettings("kcm_regionandlang")
+        }
+        QQC2.CheckBox {
+            id: showSeconds
+            text: i18nc("@option:check", "Show seconds")
         }
 
         Item {

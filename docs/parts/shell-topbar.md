@@ -64,7 +64,10 @@ No configuration is needed; the defaults are the board values.
 | `dateFormat` | `auto` | `auto`: weekday, day, month in the order of the region's long date, without year and commas (en_GB "Mon 28 Sept", en_US "Mon Sep 28", de_DE "Mo. 28. Sept.", es_ES "lun 28 de sept", ja_JP "9月28日 (月)"); `custom` uses `customDateFormat` |
 | `customDateFormat` | `ddd d MMM` | QLocale format |
 | `use24hFormat` | 1 | 0 = 12-hour, 1 = region setting, 2 = 24-hour (the stock digital clock's key and values). The region's own short time format is kept whenever it has the wanted hour cycle (en_US "2:49 PM", ko_KR "오후 2:49", zh_TW "下午2:49", fr_CA "14 h 49"); forced 24-hour in a 12-hour region gives "09:05", forced 12-hour in a 24-hour region "2:49 PM" (marker first for zh, ja, ko) |
+| `showSeconds` | false | opt-in seconds; native Clock tracks seconds only while requested |
+| `selectedTimeZones` | `Local` | world clocks in the calendar popup, chosen through the searchable Time zones settings page |
 | `firstDayOfWeek` | -1 | calendar week start, -1 = region |
+| `enabledCalendarPlugins` | empty | native calendar providers enabled in the Calendar settings page; their own resource pages appear after Apply |
 | `centerInPanel` | true | keep the pill on the middle of the panel (horizontal panels only; see Behaviour) |
 | `popupGap` | 10 | px between the bar and the calendar card (the quick-settings pop-up uses 10 too) |
 | `widthBudget` | true | the top bar's width budget (TOP-2); off: only tablet posture collapses |
@@ -75,8 +78,50 @@ No configuration is needed; the defaults are the board values.
 
 Formats follow the region settings (`LC_TIME` / KDE Region & Language). The time zone is the
 system one.
+The panel keeps the system time zone. Add world clocks in the Time zones page without changing it;
+the popup shows each selected city's time and date through KDE's native Clock, including DST and
+next/previous-day differences. At least one zone stays selected. Optional seconds preserve the
+region's AM/PM placement and the chosen 12/24-hour cycle.
 
 ## Behaviour
+
+### Calendar agenda and setup
+
+The popup now selects a day by click or with Left/Right/Up/Down; Page Up/Down changes the month
+and clamps the selected day, Home returns to today. Event dots and the selected-day agenda use
+Plasma's native calendar providers, including KDE PIM's timed, all-day and recurring appointments.
+Long content scrolls within the work area. Missing or unselected providers show setup guidance,
+distinct from a configured day with no events.
+
+Choose **Calendar settings → Calendar**, enable **Calendar Events** (called PIM Events in some
+versions), Apply, then choose the calendars
+in the **Calendar Events** resource page. Install the distribution's KDE PIM add-ons if that provider
+is absent. KOrganizer or Merkuro manages local calendars, accounts/sync, recurrence and reminders;
+Fusion does not store credentials or start a second alarm service. Holidays and other installed
+providers can also be enabled in the same page.
+
+**Open calendar** uses KDE's calendar application integration (the calendar application the
+system uses); KOrganizer is first sent to the selected day only when it is that application
+(`code/calendar.js`, tests/calendar.test.js), so another calendar application opens without
+starting KOrganizer. **Add event** is available when
+KOrganizer's D-Bus service is installed and opens its native editor. The editor's initial date/time
+follows KOrganizer's own current-view defaults and remains editable; Fusion does not save an event
+until the user confirms it there. Browsing dates works without a calendar app or provider.
+
+Regression checks (Qt/PySide6, offscreen and a private bus):
+
+```sh
+STAGE=build/parity-stage tools/build.sh topbar
+QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+  python3 packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_backend_test.py
+QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+  python3 packages/plasmoids/org.plasmafusion.clockpill/tests/calendar_view_test.py build/parity-stage
+```
+
+Native adapter checks cover week start, missing providers, year rollover and leap day; view checks
+cover click/keyboard selection and touch targets. Real PIM integration was verified in an isolated
+Fedora VM with synthetic timed/all-day/recurring events, provider/resource settings and the native
+event editor. The backend keeps pending editor calls alive when the popup loses focus.
 
 ### `org.plasmafusion.appname`
 
@@ -144,8 +189,8 @@ system one.
   weekday (Space Grotesk 24 px 600); hairline; month title 13 px 800 with "Today" (only when another
   month is shown) and 26 px chevron buttons; narrow weekday initials 10.5 px 700 tertiary; six weeks
   always (the pop-up never changes size), adjacent days at 35 %, weekends in the tertiary colour
-  (region's weekend), today on a 28 px #2f6fdf circle in white 800. Keys: Left/Right and Page
-  Up/Down change month, Home returns, Tab reaches Today and the chevrons, Esc closes. Opens with a
+  (region's weekend), today on a 28 px #2f6fdf circle in white 800. Keys: Left/Right selects a day,
+  Up/Down moves a week, Page Up/Down changes month, Home returns, Tab reaches the controls, Esc closes. Opens with a
   click or Enter on the date, or the widget's global shortcut; closes on focus loss.
 - Context menu: "Adjust Date and Time…" (kcm_clock), "Configure Virtual Desktops…".
 - Vertical panels are not designed for (the pill is wider than a vertical panel).

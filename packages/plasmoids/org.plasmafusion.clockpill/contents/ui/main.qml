@@ -109,7 +109,8 @@ PlasmoidItem {
     // ---- Formats
     readonly property string timeFormat: Formats.timeFormat(Qt.locale().timeFormat(Locale.ShortFormat),
                                                             Plasmoid.configuration.use24hFormat,
-                                                            Qt.locale().name)
+                                                            Qt.locale().name,
+                                                            Plasmoid.configuration.showSeconds)
     readonly property string dateFormat: Plasmoid.configuration.dateFormat === "custom"
         && Plasmoid.configuration.customDateFormat !== ""
         ? Plasmoid.configuration.customDateFormat
@@ -316,6 +317,7 @@ PlasmoidItem {
     Clock {
         id: clock
         // No time zone: follows the system time zone.
+        trackSeconds: Plasmoid.configuration.showSeconds
     }
 
     // Testing hooks (config key debugAction, cleared after use): "dump-bar:TAG", "menu-refresh"
@@ -333,6 +335,33 @@ PlasmoidItem {
             (widthBudget.item as WidthBudget).dump(parts.slice(1).join(":"));
         } else if (parts[0] === "menu-refresh" && widthBudget.item) {
             console.info("clockpill: debug: full view rebuilt " + (widthBudget.item as WidthBudget).refreshFullView());
+        } else if (parts[0] === "dump-calendar") {
+            const view = calendarLoader.item as CalendarView;
+            if (view) {
+                const targets = [];
+                root.calendarTargets(view, targets);
+                console.info("clockpill: calendar dump " + parts.slice(1).join(":") + " " + JSON.stringify({
+                    selected: Qt.formatDate(view.selectedDate, "yyyy-MM-dd"), events: view.events.length,
+                    configured: view.backend ? view.backend.configured : false,
+                    error: view.backend ? view.backend.error : "", time: root.timeText,
+                    zones: Plasmoid.configuration.selectedTimeZones, targets: targets
+                }));
+            }
+        }
+    }
+    function calendarTargets(item: Item, targets: var): void {
+        if (!item || !item.visible || item.opacity === 0) {
+            return;
+        }
+        if (typeof item.clicked === "function" && item.enabled && item.width > 0 && item.height > 0) {
+            const point = item.mapToItem(null, item.width / 2, item.height / 2);
+            if (point.y >= 0 && point.y <= popup.height) {
+                targets.push({ name: item.Accessible.name, x: Math.round(popup.x + point.x),
+                               y: Math.round(popup.y + point.y), width: item.width, height: item.height });
+            }
+        }
+        for (const child of item.children) {
+            calendarTargets(child, targets);
         }
     }
 
@@ -652,6 +681,11 @@ PlasmoidItem {
             }
             sourceComponent: CalendarView {
                 now: clock.dateTime
+                open: root.popupOpen
+                enabledPlugins: Plasmoid.configuration.enabledCalendarPlugins
+                selectedTimeZones: Plasmoid.configuration.selectedTimeZones
+                showSeconds: Plasmoid.configuration.showSeconds
+                worldTimeFormat: root.timeFormat
                 firstDayOfWeek: Plasmoid.configuration.firstDayOfWeek
                 touch: m.touch
                 motion: motion
@@ -662,6 +696,10 @@ PlasmoidItem {
                 }
                 focus: true
                 onCloseRequested: root.setPopupOpen(false)
+                onSetupRequested: {
+                    root.setPopupOpen(false);
+                    Plasmoid.internalAction("configure").trigger();
+                }
             }
         }
         Connections {

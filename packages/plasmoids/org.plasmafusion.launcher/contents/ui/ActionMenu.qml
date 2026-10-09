@@ -24,9 +24,15 @@ Item {
     readonly property PlasmaExtras.Menu menu: PlasmaExtras.Menu {
         visualParent: null
         placement: PlasmaExtras.Menu.BottomPosedLeftAlignedPopup
+        // QMenu hides itself before it triggers the chosen action: clearing the list right away
+        // destroyed the chosen item before it could run. Clear it afterwards.
         onStatusChanged: {
             if (status === PlasmaExtras.Menu.Closed) {
-                actionMenu.actionList = null;
+                Qt.callLater(() => {
+                    if (actionMenu.menu.status === PlasmaExtras.Menu.Closed) {
+                        actionMenu.actionList = null;
+                    }
+                });
             }
         }
     }
@@ -75,6 +81,20 @@ Item {
             });
         }
 
+        // "Keep in Dock" (the stock "Pin to Task Manager", which Kicker only offers for the stock
+        // task managers): the Plasma Fusion dock in this panel pins or unpins the app.
+        const dock = launcher.dockApplet();
+        if (dock && typeof dock["isAppPinned"] === "function" && /\.desktop$/.test(id)) {
+            actions.push({
+                text: i18nc("@action:inmenu", "Keep in Dock"),
+                icon: "window-pin",
+                actionId: "_fusion_dock",
+                actionArgument: id,
+                checkable: true,
+                checked: dock["isAppPinned"](id),
+            });
+        }
+
         if (entry && entry.hasActionList && entry.actionList) {
             const extra = Array.from(entry.actionList);
             if (extra.length > 0) {
@@ -112,6 +132,15 @@ Item {
 
         if (actionId === "_fusion_split_left" || actionId === "_fusion_split_right") {
             launcher.requestSplit(actionId === "_fusion_split_left" ? "left" : "right", String(action.actionArgument || ""));
+            return;
+        }
+        if (actionId === "_fusion_dock") {
+            const dock = launcher.dockApplet();
+            const id = String(action.actionArgument || "");
+            console.info("launcher: keep in dock " + id + (dock ? "" : " (no dock)"));
+            if (dock) {
+                dock["setAppPinned"](id, !dock["isAppPinned"](id));
+            }
             return;
         }
         if (actionId === "_fusion_pin") {

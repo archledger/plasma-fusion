@@ -5,6 +5,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 
 import "components"
 import "components/Icons.js" as Icons
@@ -17,6 +18,7 @@ ColumnLayout {
     required property FusionPalette pal
     required property FusionMetrics metrics
     property real listMaxHeight: metrics.px(230)
+    property int initialTab: 0
 
     signal back()
 
@@ -38,8 +40,16 @@ ColumnLayout {
         Layout.fillWidth: true
         pal: page.pal
         metrics: page.metrics
-        title: i18nc("@title", "Sound output")
+        title: i18nc("@title", "Sound")
         onBack: page.back()
+    }
+    QQC2.TabBar {
+        id: tabs
+        Layout.fillWidth: true
+        currentIndex: page.initialTab
+        QQC2.TabButton { text: i18nc("@title:tab", "Output") }
+        QQC2.TabButton { text: i18nc("@title:tab", "Input") }
+        QQC2.TabButton { text: i18nc("@title:tab", "Applications") }
     }
 
     ListView {
@@ -48,12 +58,12 @@ ColumnLayout {
         Layout.fillHeight: true
         Layout.preferredHeight: Math.min(contentHeight, page.listMaxHeight)
         Layout.maximumHeight: contentHeight
-        visible: count > 0
+        visible: tabs.currentIndex !== 2 && count > 0
         clip: true
         spacing: page.metrics.px(2)
         interactive: contentHeight > height
         boundsBehavior: Flickable.StopAtBounds
-        model: page.backend.audio.sinkModel
+        model: tabs.currentIndex === 1 ? page.backend.audio.sourceModel : page.backend.audio.sinkModel
 
         delegate: ListRow {
             required property var model
@@ -63,7 +73,7 @@ ColumnLayout {
             pal: page.pal
             metrics: page.metrics
             text: model.Description || model.Name || ""
-            iconPath: page.portIcon(model.PulseObject)
+            iconPath: tabs.currentIndex === 1 ? Icons.microphone : page.portIcon(model.PulseObject)
             selected: !!(model.PulseObject && model.PulseObject.default)
             status: model.Muted ? i18nc("@info:status", "Muted") : ""
             trailingPath: selected ? Icons.check : ""
@@ -77,10 +87,17 @@ ColumnLayout {
         Layout.minimumHeight: page.metrics.px(44)
         pal: page.pal
         metrics: page.metrics
-        visible: !list.visible
+        visible: tabs.currentIndex !== 2 && list.count === 0
         horizontalAlignment: Text.AlignHCenter
         color: page.pal.secondary
-        text: i18nc("@info", "No output devices found")
+        text: tabs.currentIndex === 1 ? i18nc("@info", "No input devices found") : i18nc("@info", "No output devices found")
+    }
+    AudioStreams {
+        Layout.fillWidth: true
+        visible: tabs.currentIndex === 2
+        backend: page.backend
+        pal: page.pal
+        metrics: page.metrics
     }
 
     Item {

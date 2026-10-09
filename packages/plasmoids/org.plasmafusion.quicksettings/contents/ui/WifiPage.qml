@@ -5,6 +5,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as QQC2
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.extras as PlasmaExtras
 
@@ -444,6 +445,9 @@ ColumnLayout {
             if (!page.backend.net.wifiEnabled) {
                 return i18nc("@info", "Wi‑Fi is off");
             }
+            if (page.backend.net.hotspotActive) {
+                return i18nc("@info", "The hotspot is using the Wi‑Fi radio");
+            }
             return i18nc("@info", "Looking for networks…");
         }
     }
@@ -451,6 +455,139 @@ ColumnLayout {
     Item {
         Layout.fillHeight: true
         visible: list.visible
+    }
+
+    // ---------------------------------------------------------------- hotspot
+    // plasma-nm's own hotspot (the stock Networks applet's settings): start and stop, the
+    // reason when the radio can't run one, and the network name and password to share.
+    Rectangle {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 1
+        visible: hotspotBox.visible
+        color: page.pal.overlay(0.08)
+    }
+    ColumnLayout {
+        id: hotspotBox
+        Layout.fillWidth: true
+        visible: page.backend.net.wifiDevice
+        spacing: page.metrics.px(6)
+        // The password shows on request only and hides again when the hotspot starts or stops.
+        // It is read once on Show: plasma-nm's setting has no change signal to bind to.
+        property string shownPassword: ""
+        readonly property bool revealed: shownPassword !== ""
+        property bool editing: false
+        readonly property bool entriesValid: hotspotName.text.trim() !== ""
+            && (hotspotPassword.text === "" || hotspotPassword.text.length >= 8)
+
+        Connections {
+            target: page.backend.net
+            function onHotspotActiveChanged() {
+                hotspotBox.shownPassword = "";
+                hotspotBox.editing = false;
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: page.metrics.px(8)
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                FText {
+                    Layout.fillWidth: true
+                    pal: page.pal
+                    metrics: page.metrics
+                    text: i18nc("@title", "Wi‑Fi hotspot")
+                    font.weight: Font.Bold
+                }
+                FText {
+                    Layout.fillWidth: true
+                    pal: page.pal
+                    metrics: page.metrics
+                    px: 11.5
+                    color: page.pal.secondary
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    text: page.backend.net.hotspotError || page.backend.net.hotspotHint
+                }
+            }
+            TextButton {
+                pal: page.pal
+                metrics: page.metrics
+                primary: !page.backend.net.hotspotActive
+                implicitHeight: page.metrics.px(30)
+                radius: 10
+                text: page.backend.net.hotspotActive ? i18nc("@action:button", "Stop hotspot")
+                                                     : i18nc("@action:button", "Start hotspot")
+                // Stop stays available while a start is still being watched for failure.
+                enabled: page.backend.net.hotspotActive || (page.backend.net.hotspotReady && !page.backend.net.hotspotStarting
+                    && (!hotspotBox.editing || hotspotBox.entriesValid))
+                onClicked: {
+                    if (!page.backend.net.hotspotActive && hotspotBox.editing
+                            && !page.backend.net.configureHotspot(hotspotName.text, hotspotPassword.text)) {
+                        return;
+                    }
+                    hotspotPassword.text = "";
+                    page.backend.net.toggleHotspot();
+                }
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: page.backend.net.hotspotActive
+            spacing: page.metrics.px(8)
+            FText {
+                Layout.fillWidth: true
+                pal: page.pal
+                metrics: page.metrics
+                textFormat: Text.PlainText
+                text: i18nc("@info %1 is the hotspot password", "Password: %1",
+                            hotspotBox.revealed ? hotspotBox.shownPassword : "••••••••")
+            }
+            TextButton {
+                pal: page.pal
+                metrics: page.metrics
+                implicitHeight: page.metrics.px(30)
+                fill: "transparent"
+                textColor: page.pal.link
+                fontSize: 12.5
+                text: hotspotBox.revealed ? i18nc("@action:button", "Hide password")
+                                          : i18nc("@action:button", "Show password")
+                onClicked: hotspotBox.shownPassword = hotspotBox.revealed ? "" : page.backend.net.hotspotPassword()
+            }
+        }
+        TextButton {
+            visible: !page.backend.net.hotspotActive && !hotspotBox.editing
+            pal: page.pal
+            metrics: page.metrics
+            implicitHeight: page.metrics.px(30)
+            sidePadding: 0
+            fill: "transparent"
+            textColor: page.pal.link
+            fontSize: 12.5
+            text: i18nc("@action:button", "Change name and password…")
+            onClicked: {
+                hotspotName.text = page.backend.net.hotspotName;
+                hotspotBox.editing = true;
+                hotspotName.forceActiveFocus();
+            }
+        }
+        QQC2.TextField {
+            id: hotspotName
+            Layout.fillWidth: true
+            visible: hotspotBox.editing && !page.backend.net.hotspotActive
+            placeholderText: i18nc("@info:placeholder", "Hotspot network name")
+            Accessible.name: i18nc("@label:textbox", "Hotspot network name")
+            maximumLength: 32
+        }
+        PlasmaExtras.PasswordField {
+            id: hotspotPassword
+            Layout.fillWidth: true
+            visible: hotspotBox.editing && !page.backend.net.hotspotActive
+            placeholderText: i18nc("@info:placeholder", "New password, 8–63 characters (empty keeps the current one)")
+            Accessible.name: i18nc("@label:textbox", "Hotspot password")
+            maximumLength: 63
+        }
     }
 
     // ---------------------------------------------------------------- footer

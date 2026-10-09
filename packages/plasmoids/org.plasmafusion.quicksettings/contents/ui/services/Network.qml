@@ -5,6 +5,8 @@ import QtQuick
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.networkmanagement as PlasmaNM
 
+import "../global"
+
 // NetworkManager state through plasma-nm's QML module (same objects the
 // stock Networks applet uses).
 Item {
@@ -68,6 +70,64 @@ Item {
     readonly property var activeModel: activeWifiModel
     readonly property var otherModel: otherWifiModel
     readonly property bool scanning: handler.scanning
+    readonly property bool hotspotSupported: handler.hotspotSupported
+    // The widgets' shared state (Instances), not this widget's handler: a handler made while the
+    // hotspot ran does not learn of its end.
+    readonly property bool hotspotActive: Instances.hotspotActive
+    onHotspotActiveChanged: {
+        refreshHotspotSettings();
+        activeWifiModel.invalidateFilter();
+        otherWifiModel.invalidateFilter();
+    }
+    // From a start request until the hotspot has stayed up for 20 s: plasma-nm reports it active once
+    // NetworkManager accepts it, and inactive again when the activation fails. Shared by the
+    // screens' widgets (Instances), so a press on another screen meanwhile sends no second request.
+    readonly property bool hotspotStarting: Instances.hotspotStarting
+    property string hotspotName: ""
+    readonly property bool hotspotFailedToStart: Instances.hotspotFailedToStart
+
+    function toggleHotspot(): void {
+        if (hotspotActive || Boolean(PlasmaNM.Configuration.hotspotConnectionPath)) {
+            Instances.hotspotFailedToStart = false;
+            Instances.hotspotStarting = false;
+            Instances.hotspotStartTimer.stop();
+            handler.stopHotspot();
+            // Off either way: stopped here, or no longer running (a hotspot found running when
+            // the widgets were made has no handler that sees it end).
+            Instances.hotspotActive = false;
+        } else if (!hotspotStarting && wifiEnabled && wifiHwEnabled && !airplane && hotspotSupported) {
+            Instances.hotspotFailedToStart = false;
+            Instances.hotspotStarting = true;
+            Instances.hotspotStartTimer.restart();
+            handler.createHotspot();
+        }
+    }
+    function hotspotFailed(): void {
+        Instances.hotspotStarting = false;
+        Instances.hotspotStartTimer.stop();
+        Instances.hotspotFailedToStart = true;
+    }
+    function refreshHotspotSettings(): void {
+        hotspotName = PlasmaNM.Configuration.hotspotName;
+    }
+    // Read on request only: plasma-nm generates and saves a password the first time it is read.
+    function hotspotPassword(): string {
+        return PlasmaNM.Configuration.hotspotPassword;
+    }
+    // The same settings as the stock Networks applet; an empty password keeps the saved one.
+    function configureHotspot(name: string, password: string): bool {
+        const trimmed = name.trim();
+        if (trimmed === "" || (password !== "" && (password.length < 8 || password.length > 63))) {
+            return false;
+        }
+        PlasmaNM.Configuration.hotspotName = trimmed;
+        if (password !== "") {
+            PlasmaNM.Configuration.hotspotPassword = password;
+        }
+        refreshHotspotSettings();
+        return true;
+    }
+    Component.onCompleted: refreshHotspotSettings()
 
     function setWifiEnabled(on: bool) {
         handler.enableWireless(on);
@@ -110,6 +170,14 @@ Item {
     }
     PlasmaNM.Handler {
         id: handler
+        // A new handler looks the hotspot's connection up (running or not): the shared state follows.
+        Component.onCompleted: Instances.hotspotActive = handler.hotspotActive
+        onHotspotActiveChanged: {
+            Instances.hotspotActive = handler.hotspotActive;
+            if (!handler.hotspotActive && net.hotspotStarting) {
+                net.hotspotFailed();
+            }
+        }
     }
     PlasmaNM.NetworkModel {
         id: networkModel
@@ -121,6 +189,8 @@ Item {
 
     readonly property int typeRole: appletModel.KItemModels.KRoleNames.role("Type")
     readonly property int stateRole: appletModel.KItemModels.KRoleNames.role("ConnectionState")
+    readonly property int nameRole: appletModel.KItemModels.KRoleNames.role("Name")
+    readonly property int ssidRole: appletModel.KItemModels.KRoleNames.role("Ssid")
 
     function wirelessRow(model, row, parent, wantActive) {
         const index = model.index(row, 0, parent);
@@ -129,6 +199,10 @@ Item {
         }
         const active = model.data(index, stateRole) === PlasmaNM.Enums.Activated
             || model.data(index, stateRole) === PlasmaNM.Enums.Activating;
+        // The running hotspot is this computer's own network, not one it is connected to.
+        if (active && hotspotActive && (model.data(index, nameRole) === hotspotName || model.data(index, ssidRole) === hotspotName)) {
+            return false;
+        }
         return active === wantActive;
     }
 

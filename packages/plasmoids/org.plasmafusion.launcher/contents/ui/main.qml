@@ -140,20 +140,27 @@ PlasmoidItem {
         splitAfterClose.appId = appId;
         splitAfterClose.restart();
     }
+    // The Plasma Fusion dock in this widget's panel (the layout puts the launcher there), or null.
+    function dockApplet(): var {
+        const layout = root.parent ? root.parent.parent : null;
+        for (const child of layout ? layout.children : []) {
+            const applet = child ? child["applet"] : null;
+            if (applet && applet["plasmoid"] && applet["plasmoid"].pluginName === "org.plasmafusion.dock") {
+                return applet;
+            }
+        }
+        return null;
+    }
     Timer {
         id: splitAfterClose
         property string side: ""
         property string appId: ""
         interval: 250
         onTriggered: {
-            const layout = root.parent ? root.parent.parent : null;
-            for (const child of layout ? layout.children : []) {
-                const applet = child ? child["applet"] : null;
-                if (applet && applet["plasmoid"] && applet["plasmoid"].pluginName === "org.plasmafusion.dock"
-                        && typeof applet["startSplitForApp"] === "function") {
-                    applet["startSplitForApp"](appId, side);
-                    return;
-                }
+            const dock = root.dockApplet();
+            if (dock && typeof dock["startSplitForApp"] === "function") {
+                dock["startSplitForApp"](appId, side);
+                return;
             }
             console.warn("launcher: split request: no Plasma Fusion dock in this panel");
         }

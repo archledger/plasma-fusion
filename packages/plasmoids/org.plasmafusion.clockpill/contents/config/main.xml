@@ -33,9 +33,21 @@
       <label>Hour format: 0 = 12-hour, 1 = as the region settings, 2 = 24-hour (same values as the stock digital clock).</label>
       <default>1</default>
     </entry>
+    <entry name="showSeconds" type="Bool">
+      <label>Show seconds in the panel clock and world clocks.</label>
+      <default>false</default>
+    </entry>
+    <entry name="selectedTimeZones" type="StringList">
+      <label>Time zones shown in the calendar popup's world clocks.</label>
+      <default>Local</default>
+    </entry>
     <entry name="firstDayOfWeek" type="Int">
       <label>First day of the week in the calendar: -1 = as the region settings, 0 = Sunday, 1 = Monday ... 6 = Saturday.</label>
       <default>-1</default>
+    </entry>
+    <entry name="enabledCalendarPlugins" type="StringList">
+      <label>Native calendar data providers enabled in the calendar settings.</label>
+      <default></default>
     </entry>
     <entry name="centerInPanel" type="Bool">
       <label>Place the pill on the middle of the panel (within 48 px of where the layout puts the widget), independent of the widths of the widgets beside it.</label>

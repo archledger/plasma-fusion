@@ -388,6 +388,12 @@ drop the arrow at that cost, add `org.kde.plasma.vault`, `org.kde.plasma.devicen
 `org.kde.kscreen` (and `org.kde.plasma.printmanager` where print-manager is installed) to
 `TRAY_ITEMS_REPLACED`'s `disabledStatusNotifiers` write.
 
+Update (round 2 and 2026-10-09): the three, printers and the input-method item are now hidden
+and disabled as status notifiers (`TRAY_ITEMS_HIDDEN` in the layout), so they no longer bring up the
+arrow, and Disks & Devices is replaced by the quick-settings page and not loaded where quick
+settings is in the bar (docs/parts/shell-quicksettings.md). The arrow now appears only for passive
+application status icons, such as the XWayland video bridge.
+
 In the tray's own settings the ten show as "Show only in popup" (the page reads `hiddenItems`
 first); choosing another visibility there removes the id from all lists, which brings the item
 back. A replaced applet opened by its own global shortcut, if a user sets one, does not show its

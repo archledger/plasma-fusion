@@ -15,6 +15,11 @@ DEST=$STAGE/.local/share/plasma/plasmoids/$ID
 
 python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$SRC/metadata.json"
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$SRC" quicksettings
+# The Disks & Devices list logic (contents/code/devices.js; the test is not installed), when node
+# is installed (the package build has none).
+if command -v node >/dev/null 2>&1; then
+  node "$SRC/tests/devices.test.js" >/dev/null
+fi
 
 rm -rf "$DEST"
 mkdir -p "$DEST"
