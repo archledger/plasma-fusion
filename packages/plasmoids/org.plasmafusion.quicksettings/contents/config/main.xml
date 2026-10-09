@@ -25,6 +25,10 @@
       <label>Show the battery percentage in the status pill</label>
       <default>true</default>
     </entry>
+    <entry name="popupOnNewDevice" type="Bool">
+      <label>Open Disks &amp; Devices when a removable device is connected</label>
+      <default>true</default>
+    </entry>
     <entry name="showNotifications" type="Bool">
       <label>Show the notification bell and the notification list</label>
       <default>true</default>

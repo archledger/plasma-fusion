@@ -23,7 +23,7 @@ Item {
     property bool showNotifications: true
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
-    // Page of the pop-up: "main", "wifi", "bluetooth" or "audio".
+    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" or "devices".
     property string page: "main"
     property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
@@ -46,6 +46,8 @@ Item {
 
     // Asks the owner to close the pop-up (after launching something).
     signal closeRequested()
+    // A removable device was plugged in while the session runs (Disks & Devices).
+    signal deviceAdded(string udi)
     // the controls sheet's "Notifications" switch (tablet posture, notifications apart)
     signal notificationCentreRequested()
 
@@ -76,6 +78,13 @@ Item {
     Loader { id: batteryLoader; asynchronous: true; source: "services/Battery.qml" }
     Loader { id: profilesLoader; asynchronous: true; source: "services/PowerProfiles.qml" }
     Loader { id: keepAwakeLoader; asynchronous: true; source: "services/KeepAwake.qml" }
+    Loader { id: devicesLoader; asynchronous: true; source: "services/Devices.qml" }
+    Connections {
+        target: devicesLoader.item
+        function onDeviceAdded(udi: string) {
+            backend.deviceAdded(udi);
+        }
+    }
     Loader { id: displayLoader; asynchronous: true; source: "services/Display.qml" }
     Loader { id: mediaLoader; asynchronous: true; source: "services/Media.qml" }
     Loader { id: notifLoader; asynchronous: true; source: "services/Notifications.qml" }
@@ -565,6 +574,24 @@ Item {
                 s.toggle(i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking"));
             }
         }
+    }
+
+    // ------------------------------------------------------------------ disks & devices
+    readonly property var devices: QtObject {
+        readonly property var s: devicesLoader.item
+        readonly property bool available: !!s
+        readonly property var list: s ? s.list : []
+        // Count and subtitle from the list itself: a separate count can change first.
+        readonly property int count: list.length
+        readonly property bool anyMounted: list.some(e => e.mounted)
+        readonly property string subtitle: list.length === 0 ? i18nc("@info:status Disks & Devices", "None")
+            : list.length === 1 ? list[0].name
+            : i18ncp("@info:status Disks & Devices", "%1 device", "%1 devices", list.length)
+        function open(udi: string): void { if (s) { s.open(udi); } }
+        function mount(udi: string): void { if (s) { s.mount(udi); } }
+        function unmount(udi: string): void { if (s) { s.unmount(udi); } }
+        function refresh(): void { if (s) { s.refresh(); } }
+        function openSettings(): void { backend.openSettings("kcm_device_automounter", []); }
     }
 
     // ------------------------------------------------------------------ dark style

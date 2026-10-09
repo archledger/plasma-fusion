@@ -1082,6 +1082,18 @@ for c, kv in conts.items():
                     write(APPLETSRC, ["Containments", c, "Applets", a, "General"], key, ",".join(items + add), general.get(key))
                 else:
                     note("tray %s %s (unchanged)" % (a, key))
+            # Disks & Devices: the quick-settings page replaces the stock item, which is not loaded
+            # (known, not extra), as the desktop layout does for a new bar.
+            if "org.plasmafusion.quicksettings" in applets(c).values():
+                known = [i for i in general.get("knownItems", "").split(",") if i]
+                extra = [i for i in general.get("extraItems", "").split(",") if i]
+                dn = "org.kde.plasma.devicenotifier"
+                if dn not in known:
+                    write(APPLETSRC, ["Containments", c, "Applets", a, "General"], "knownItems", ",".join(known + [dn]), general.get("knownItems"))
+                if dn in extra:
+                    write(APPLETSRC, ["Containments", c, "Applets", a, "General"], "extraItems", ",".join(i for i in extra if i != dn), general.get("extraItems"))
+                else:
+                    note("tray %s Disks & Devices not loaded (unchanged)" % a)
         if plugin == "org.kde.plasma.appmenu":
             appearance = rc.get(("Containments", c, "Applets", a, "Configuration", "Appearance"), {})
             if "allScreens" in appearance:

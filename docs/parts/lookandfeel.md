@@ -98,7 +98,10 @@ media card itself). They stay loaded (notification server and popups, network se
 warnings, Klipper, KDE Connect) but sit in the tray's hidden section. Five passive items are also
 hidden and disabled as status notifiers, so the tray has no expander arrow: `org.kde.plasma.vault`,
 `org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager` and
-`org.kde.plasma.manage-inputmethod` (quick settings has its own keyboard button).
+`org.kde.plasma.manage-inputmethod` (quick settings has its own keyboard button). Where quick
+settings is in the bar, Disks & Devices (`org.kde.plasma.devicenotifier`) is not loaded at all
+(known, not extra, like the tray's weather report): the quick-settings Disks & Devices page and
+status-pill icon replace it, and a loaded stock item would pop up beside the sheet on a new device.
 
 Desktop cards: the Plasma Fusion weather, calendar and system cards (`docs/parts/desktop-cards.md`),
 each with the stock widget as fallback when the Fusion one is not installed, on the primary screen.

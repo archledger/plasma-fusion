@@ -104,6 +104,7 @@ plasmashell is stopped (it writes the layout file when it quits), the files are 
 | portrait card positions `ItemGeometries-<H>x<W>` and `ItemGeometriesVertical`: the first two cards side by side under the bar, right-aligned on the 16 px grid, the rest under the right one (the CPU/memory card hides itself in portrait, CARD-2) | neither key exists; sizes from the landscape positions; screen size from the shell |
 | top bar `plasmashellrc [PlasmaViews][Panel <id>] panelOpacity` 2 (translucent) becomes 0 (adaptive: solid next to maximized windows, decision 5) | it is still 2 |
 | tray: `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager`, `org.kde.plasma.manage-inputmethod` added to `hiddenItems` and `disabledStatusNotifiers` (no expander arrow; quick settings has its own keyboard button) | missing from the list |
+| tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems` |
 | every app menu `[Configuration][Appearance] allScreens=false` (decision 8) | the key is not set |
 | pen widget `org.plasmafusion.pen` added to the top bar between the tray and quick settings (next free applet id, `AppletOrder`) | the widget is installed and not in the bar |
 

@@ -61,6 +61,21 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   connection runs over something else, so a single radio that carries the connection reads
   `Wi‑Fi in use`; the dimmed tile then opens the Wi‑Fi page, which explains it. A start that
   NetworkManager drops within 20 s reads `Failed to start`. The chevron opens the Wi‑Fi page;
+* **Disks & Devices** (device name, or `N devices`; accent while one is mounted), shown while a
+  removable device is connected, with a USB-drive icon in the status pill: the stock Disks &
+  Devices, which is not loaded where this widget is in the bar (desktop layout and
+  `fusion-config.sh`). The data comes from Plasma's `hotplug`, `soliddevice` and
+  `devicenotifications` engines (plasma5support, as Plasma 5's Disks & Devices used them; they push
+  every change). Listed like the stock default filter: a device whose drive is removable or
+  hot-pluggable, a camera or a media player (`contents/code/devices.js`). The page shows each with
+  its state (`Not mounted`, `Mounting…`, `X free of Y` with a usage bar, `Removing…`); the row opens
+  it (the file manager for a volume, which Solid mounts first, or the device's own action), the
+  trailing button mounts it or safely removes it (Solid teardown; a disc is ejected), and the
+  engine's own message shows under it (why removing failed and which applications hold the
+  device, or that it can now be safely removed). A device plugged in while the session runs opens
+  the sheet on this page (`popupOnNewDevice`, as the stock item does); the footer opens the
+  Removable Storage settings. The `devicenotifications` engine logs an upstream deprecation notice
+  in Plasma 6.7.5 (it still works there);
 * media card (64 px, radius 16): album art or player icon, title, `Paused` / artist, previous,
   play/pause (36 px filled), next; shown only while a player exists. The player icon is the
   application icon; when libkmpris cannot read the player's desktop file (it then reports the
@@ -159,8 +174,10 @@ System tray keys (containment config of the tray, group `[General]`):
   applet hosts Klipper, which the clipboard button calls over D-Bus; Battery/Brightness/Networks keep
   their warnings and password prompts.
 * `shownItems` must not list any of them.
-* Note: the tray shows its expander arrow while any hidden item is active. That arrow is the stock
-  tray's and is not on the board.
+* Note: the tray shows its expander arrow while a passive application status icon exists (for
+  example the XWayland video bridge, which registers a while after login). The stock items Fusion
+  hides are disabled as status notifiers, so they never bring it up, and Disks & Devices is not
+  loaded at all. That arrow is the stock tray's and is not on the board.
 
 Widget options (`[General]` of the widget, `contents/config/main.xml`, also in its settings page):
 
@@ -172,6 +189,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `showClipboard` | true | clipboard button |
 | `showBatteryPercent` | true | `NN%` in the pill |
 | `showNotifications` | true | bell and notification list |
+| `popupOnNewDevice` | true | open the sheet on Disks & Devices when a removable device is plugged in |
 | `popupGap` | 10 | px between the bar and the pop-up |
 | `popupScreenMargin` | 16 | px between the pop-up and the screen edge |
 | `startPage` | main | page shown on open: `main`, `wifi`, `bluetooth`, `audio` (settings page: "Page shown when opened") |

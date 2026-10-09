@@ -317,6 +317,7 @@ PlasmoidItem {
                      + ", dnd " + backend.dnd.subtitle
                      + ", keep awake " + backend.keepAwake.subtitle
                      + ", hotspot " + backend.net.hotspotSubtitle
+                     + ", devices " + backend.devices.count
                      + ", page " + backend.page
                      + ", focus " + (popup.activeFocusItem ? popup.activeFocusItem.Accessible.name : "-")
                      + ", policy " + (policy ? "im " + (policy.inputMethod === "" ? "off" : "on") + " window " + policy.windowMode + " rotation "
@@ -338,6 +339,19 @@ PlasmoidItem {
         showClipboard: Plasmoid.configuration.showClipboard
         showBatteryPercent: Plasmoid.configuration.showBatteryPercent
         showNotifications: Plasmoid.configuration.showNotifications
+        // Stock Disks & Devices opens its pop-up on a new device (popupOnNewDevice, default on):
+        // open the sheet on the device list, unless the user is busy on another page.
+        onDeviceAdded: udi => {
+            if (!Plasmoid.configuration.popupOnNewDevice || root.centreOpen) {
+                return;
+            }
+            if (!root.popupOpen) {
+                root.setPopupOpen(true);
+                backend.page = "devices";
+            } else if (backend.page === "main") {
+                backend.page = "devices";
+            }
+        }
         lightLookAndFeel: Plasmoid.configuration.lightLookAndFeel
         darkLookAndFeel: Plasmoid.configuration.darkLookAndFeel
         keyboardPolicy: Plasmoid.configuration.keyboardPolicy

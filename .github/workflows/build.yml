@@ -84,6 +84,13 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/hotspot_settings_test.py
 
+      - name: Disks & Devices service on Plasma's data engines (offscreen, read-only)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/devices_service_test.py
+
       - name: Calendar adapter and interaction tests (offscreen Qt)
         run: |
           set -euo pipefail

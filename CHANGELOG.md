@@ -21,6 +21,11 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   configured timeouts and other applications' inhibitors are preserved.
   Its chevron opens **Sleep blockers**: the applications blocking sleep or screen locking, their
   reasons, and a box to block or allow each request.
+- **Disks & Devices** is back in the bar: while a USB drive, memory card, camera or phone is
+  connected, a drive icon shows in the status pill and Quick Settings has a Disks & Devices tile and
+  page to open, mount or safely remove it, with free space and the reason when removing fails. A
+  new device opens the page, as Plasma's own Disks & Devices does (an option in the widget's
+  settings). Before, the stock item was hidden and removable drives were not reachable from the bar.
 - Quick Settings adds a **Wi‑Fi hotspot** tile on Plasma's own hotspot (the Networks applet's
   settings). It says why when the radio can't host one, for example when the only Wi‑Fi radio
   carries the connection; the Wi‑Fi page starts and stops it and shows its name and password.

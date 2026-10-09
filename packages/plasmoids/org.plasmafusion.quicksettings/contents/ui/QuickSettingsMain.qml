@@ -509,6 +509,24 @@ ColumnLayout {
             onDetailsRequested: page.openPage("power", keepAwakeTile.detailsButton)
             id: keepAwakeTile
         }
+        // Disks & Devices (stock tray item): shown while a removable device is connected; accent
+        // while one of them is mounted. The body and the chevron open the device list.
+        Tile {
+            id: devicesTile
+            objectName: "tile-devices"
+            Layout.fillWidth: true
+            visible: page.backend.devices.count > 0
+            pal: page.pal
+            metrics: page.metrics
+            title: i18nc("@title tile", "Disks & Devices")
+            subtitle: page.backend.devices.subtitle
+            iconPath: Icons.usbDrive
+            checked: page.backend.devices.anyMounted
+            hasDetails: true
+            detailsText: i18nc("@action:button", "Show Disks & Devices")
+            onToggled: page.openPage("devices", devicesTile.mainButton)
+            onDetailsRequested: page.openPage("devices", devicesTile.detailsButton)
+        }
         Tile {
             id: hotspotTile
             objectName: "tile-hotspot"

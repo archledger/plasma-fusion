@@ -72,6 +72,13 @@ var TRAY_ITEMS_UNLOADED = [
     "org.kde.plasma.weather"
 ];
 
+// Not loaded where the quick-settings widget is in the bar: its Disks & Devices page (the status
+// pill's drive icon and the device list) replaces the stock item. Loaded as well, the stock item
+// would pop up beside the sheet on a new device and send "can now be safely removed" a second time.
+var TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS = [
+    "org.kde.plasma.devicenotifier"
+];
+
 // Tray items hidden the same way (disabledStatusNotifiers and hiddenItems), so the tray has no
 // expander arrow (round 2): vaults, removable devices, display configuration and printers stay
 // passive most of the time and would only sit behind the arrow; the input-method item because
@@ -199,11 +206,12 @@ if (tray) {
     var knownItems = readList(tray, "knownItems");
     var extraItems = readList(tray, "extraItems");
     var extraChanged = false;
-    for (var u = 0; u < TRAY_ITEMS_UNLOADED.length; ++u) {
-        if (knownItems.indexOf(TRAY_ITEMS_UNLOADED[u]) === -1) {
-            knownItems.push(TRAY_ITEMS_UNLOADED[u]);
+    var unloaded = TRAY_ITEMS_UNLOADED.concat(quickSettings ? TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS : []);
+    for (var u = 0; u < unloaded.length; ++u) {
+        if (knownItems.indexOf(unloaded[u]) === -1) {
+            knownItems.push(unloaded[u]);
         }
-        var at = extraItems.indexOf(TRAY_ITEMS_UNLOADED[u]);
+        var at = extraItems.indexOf(unloaded[u]);
         if (at !== -1) {
             extraItems.splice(at, 1);
             extraChanged = true;
