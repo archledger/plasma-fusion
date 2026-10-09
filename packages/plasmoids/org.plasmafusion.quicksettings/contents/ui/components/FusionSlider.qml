@@ -42,10 +42,12 @@ T.Slider {
         if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
             // At least one step: a slider of a few levels (keyboard backlight) moves by one.
             delta = (event.key === Qt.Key_PageUp ? 1 : -1) * Math.max(slider.stepSize, 0.1);
-        } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Up) {
-            delta = slider.stepSize > 0 ? slider.stepSize : 0.01;
-        } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Down) {
-            delta = -(slider.stepSize > 0 ? slider.stepSize : 0.01);
+        } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Left) {
+            // Mirrored (a right-to-left layout), the low end is on the right: Left goes up.
+            const up = (event.key === Qt.Key_Right) !== slider.mirrored;
+            delta = (up ? 1 : -1) * (slider.stepSize > 0 ? slider.stepSize : 0.01);
+        } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
+            delta = (event.key === Qt.Key_Up ? 1 : -1) * (slider.stepSize > 0 ? slider.stepSize : 0.01);
         }
         if (delta !== 0) {
             slider.step(delta);
