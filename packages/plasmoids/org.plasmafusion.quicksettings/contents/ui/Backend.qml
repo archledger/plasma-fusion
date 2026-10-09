@@ -723,11 +723,23 @@ Item {
         readonly property int count: s ? s.count : 0
         readonly property string label: s ? s.label : ""
         readonly property string longName: s ? s.longName : ""
+        readonly property var layouts: s ? s.layouts : []
+        readonly property int index: s ? s.index : -1
         readonly property bool shown: backend.showKeyboardLayout && available && label.length > 0
                                       && (backend.keyboardLayoutAlways || count > 1)
         function next() {
             if (s) {
                 s.next();
+            }
+        }
+        function previous() {
+            if (s) {
+                s.previous();
+            }
+        }
+        function select(i: int) {
+            if (s) {
+                s.select(i);
             }
         }
     }

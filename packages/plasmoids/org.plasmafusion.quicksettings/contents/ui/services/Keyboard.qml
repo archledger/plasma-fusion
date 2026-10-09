@@ -16,8 +16,17 @@ Item {
     readonly property string label: current ? String(current.displayName || current.shortName || "").toUpperCase() : ""
     readonly property string longName: current ? String(current.longName || "") : ""
 
+    readonly property int index: layout.layout
     function next() {
         layout.switchToNextLayout();
+    }
+    function previous() {
+        layout.switchToPreviousLayout();
+    }
+    function select(i: int) {
+        if (i >= 0 && i < count) {
+            layout.layout = i;
+        }
     }
 
     Keyboards.KeyboardLayout {

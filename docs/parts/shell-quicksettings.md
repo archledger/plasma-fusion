@@ -15,7 +15,7 @@ the top bar of `Main.dc.html` / `MainLight.dc.html` and the Wi-Fi tray panel of
 | System status pill: Wi-Fi, volume, battery icon + `NN%` | 26 px, radius 13, padding 12, gap 10, fill 8 % overlay; accent tint `rgba(91,157,255,.35)` + 1 px `rgba(138,184,255,.5)` while the pop-up is open | plasma-nm `ConnectionIcon`, plasma-pa `PreferredDevice.sink`, `BatteryControlModel` | each icon only when its service has data; a gear icon when none has |
 | Clipboard | 28 × 26, 16 px icon | Klipper D-Bus `showKlipperPopupMenu` | option |
 | Phone | 28 × 26, 16 px icon | `org.kde.kdeconnect` `DevicesModel` (paired + reachable) | a device is connected |
-| `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout |
+| `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout, wheel = next/previous, right-click or press and hold = menu of the layouts (as the stock Keyboard Layout widget) |
 
 The pill also takes the mouse wheel (volume ±5 %) and middle click (mute). Icons are the boards'
 line icons (24 px grid, 1.8 stroke) drawn with QtQuick Shapes, with the FileIcons board's level

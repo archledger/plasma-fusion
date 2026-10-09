@@ -55,6 +55,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   lowers it to 100 %. With Plasma's "Raise maximum volume" the volume sliders now reach 150 %.
 - Quick Settings' Wi‑Fi page has an **Airplane mode** switch, as Plasma's Networks widget: it turns
   Wi‑Fi, mobile data and Bluetooth off and back on.
+- The keyboard layout badge in the top bar lists the layouts on right-click (or press and hold) to
+  choose one, and the mouse wheel switches through them, as Plasma's Keyboard Layout widget.
 
 ## 0.3.1 (2026-10-06)
 
