@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
+import org.kde.plasma.extras as PlasmaExtras
 import org.kde.plasma.private.sessions as Sessions
 import org.kde.plasma.workspace.dbus as DBus
 
@@ -260,12 +261,48 @@ FocusScope {
             RoundButton {
                 pal: sheet.pal
                 size: 44
+                id: tabletSleepButton
                 glyph: "sleep"
                 text: i18nc("@action:button", "Sleep")
                 enabled: session.canSuspend
                 onClicked: {
                     sheet.closeRequested();
                     session.suspend();
+                }
+                // Hibernate, where the system offers it, as in the laptop launcher's footer: press
+                // and hold, right-click or the Menu key.
+                onPressAndHold: tabletSleepMenu.offer()
+                Keys.onMenuPressed: tabletSleepMenu.offer()
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    onTapped: tabletSleepMenu.offer()
+                }
+                PlasmaExtras.Menu {
+                    id: tabletSleepMenu
+                    visualParent: tabletSleepButton
+                    placement: PlasmaExtras.Menu.TopPosedLeftAlignedPopup
+                    function offer(): void {
+                        if (session.canHibernate) {
+                            openRelative();
+                        }
+                    }
+                    PlasmaExtras.MenuItem {
+                        text: i18nc("@action:inmenu", "Sleep")
+                        icon: "system-suspend"
+                        enabled: session.canSuspend
+                        onClicked: {
+                            sheet.closeRequested();
+                            session.suspend();
+                        }
+                    }
+                    PlasmaExtras.MenuItem {
+                        text: i18nc("@action:inmenu", "Hibernate")
+                        icon: "system-suspend-hibernate"
+                        onClicked: {
+                            sheet.closeRequested();
+                            session.hibernate();
+                        }
+                    }
                 }
             }
             RoundButton {
