@@ -222,20 +222,33 @@ Item {
         // The radios on before airplane mode are kept for every screen's widget (Instances, and in
         // the widgets' settings across a plasmashell restart, main.qml), so the one that ends it
         // brings them back; with no record (airplane mode started elsewhere) they all come back on.
+        // Bluetooth is read and set over BlueZ's D-Bus itself (the adapters powered on), not
+        // through the optional Bluetooth service, which may not be loaded or installed.
+        property bool airplaneSwitching: false
         function setAirplaneMode(on: bool): void {
-            if (!s) {
+            if (!s || airplaneSwitching) {
                 return;
             }
+            airplaneSwitching = true;
             if (on) {
-                Instances.airplaneRestore = { wifi: s.wifiEnabled, wwan: s.wwanEnabled, bluetooth: backend.bt.enabled };
-                s.enterAirplaneMode();
+                backend.poweredBluetoothAdapters(adapters => {
+                    Instances.airplaneRestore = { wifi: s.wifiEnabled, wwan: s.wwanEnabled, bluetooth: adapters };
+                    s.enterAirplaneMode();
+                    airplaneSwitching = false;
+                });
                 return;
             }
-            const restore = Instances.airplaneRestore || { wifi: true, wwan: true, bluetooth: true };
+            const restore = Instances.airplaneRestore;
             Instances.airplaneRestore = null;
-            s.leaveAirplaneMode(restore.wifi, restore.wwan);
-            if (restore.bluetooth && backend.bt.available) {
-                backend.bt.setEnabled(true);
+            s.leaveAirplaneMode(restore ? restore.wifi : true, restore ? restore.wwan : true);
+            if (restore) {
+                (restore.bluetooth || []).forEach(path => backend.powerBluetoothAdapter(path, true));
+                airplaneSwitching = false;
+            } else {
+                backend.bluetoothAdapters(adapters => {
+                    adapters.forEach(a => backend.powerBluetoothAdapter(a.path, true));
+                    airplaneSwitching = false;
+                });
             }
         }
         readonly property string ssid: s ? s.ssid : ""
@@ -573,6 +586,41 @@ Item {
         function openSettings() {
             backend.openSettings("kcm_notifications", []);
         }
+    }
+
+    // BlueZ's adapters ([{path, powered}]; [] without BlueZ) and their power, as plasma-nm's
+    // handler reads and sets them for airplane mode.
+    function bluetoothAdapters(done): void {
+        DBus.SystemBus.asyncCall({
+            "service": "org.bluez",
+            "path": "/",
+            "iface": "org.freedesktop.DBus.ObjectManager",
+            "member": "GetManagedObjects",
+            "arguments": []
+        }, reply => {
+            const objects = reply.value || {};
+            const adapters = [];
+            for (const path in objects) {
+                const adapter = objects[path] ? objects[path]["org.bluez.Adapter1"] : undefined;
+                if (adapter !== undefined) {
+                    adapters.push({ path: path, powered: adapter["Powered"] === true });
+                }
+            }
+            done(adapters);
+        }, () => done([]));
+    }
+    function poweredBluetoothAdapters(done): void {
+        bluetoothAdapters(adapters => done(adapters.filter(a => a.powered).map(a => a.path)));
+    }
+    function powerBluetoothAdapter(path: string, on: bool): void {
+        DBus.SystemBus.asyncCall({
+            "service": "org.bluez",
+            "path": path,
+            "iface": "org.freedesktop.DBus.Properties",
+            "member": "Set",
+            "arguments": [new DBus.string("org.bluez.Adapter1"), new DBus.string("Powered"), new DBus.variant(on)],
+            "signature": "(ssv)"
+        }, () => {}, () => {});
     }
 
     // Airplane mode ended by anything else (the stock widget, nmcli): the record is stale.
