@@ -77,6 +77,14 @@ PlasmoidItem {
             }
         }
     }
+    // Airplane mode's radio record (Backend.qml) survives a plasmashell restart: every widget keeps
+    // a copy in its settings, and the first to start after a restart gives it back.
+    Connections {
+        target: Instances
+        function onAirplaneRestoreChanged() {
+            Plasmoid.configuration.airplaneRestore = Instances.airplaneRestore ? JSON.stringify(Instances.airplaneRestore) : "";
+        }
+    }
     Component.onCompleted: {
         // The leader before this widget joins: a widget on a lower screen number (the primary
         // screen's bar made again) leads at once, and must still take the others' settings first.
@@ -85,6 +93,13 @@ PlasmoidItem {
             sharedKeys.forEach(key => setShared(key, lead.sharedValue(key)));
         }
         Instances.adopt(root);
+        if (!Instances.airplaneRestore && Plasmoid.configuration.airplaneRestore) {
+            try {
+                Instances.airplaneRestore = JSON.parse(Plasmoid.configuration.airplaneRestore);
+            } catch (e) {
+                Plasmoid.configuration.airplaneRestore = "";
+            }
+        }
         console.info("quicksettings: widget on " + (screenName || "?") + " (screen " + screenIndex + "), "
                      + Instances.items.length + " in this shell");
     }

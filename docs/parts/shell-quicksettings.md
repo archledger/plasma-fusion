@@ -77,8 +77,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   which also has the **Airplane mode** switch (with a Wi‑Fi radio or a modem): plasma-nm's
   `enableAirplaneMode` and setting, as the stock Networks widget (Wi‑Fi, mobile data and
   Bluetooth off, and back on: the radios that were on are kept for every screen's widget in
-  `Instances`, since each plasma-nm handler keeps its own copy; with no record, after a plasmashell
-  restart, all come back on), and the **VPN** connections (plugin VPNs and WireGuard: type `Vpn`
+  `Instances`, since each plasma-nm handler keeps its own copy, and in each widget's settings
+  (`airplaneRestore`) across a plasmashell restart; with no record, airplane mode having started
+  elsewhere, all come back on), and the **VPN** connections (plugin VPNs and WireGuard: type `Vpn`
   or plasma-nm's `network-vpn` icon, as WireGuard has no type of its own in plasma-nm's Enums); a
   click connects one, or disconnects the active one (one shutting down shows `Disconnecting…` and
   waits, so a click cannot connect it again). Without a Wi‑Fi radio the tile's chevron

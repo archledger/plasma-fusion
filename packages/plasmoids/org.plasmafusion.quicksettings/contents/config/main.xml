@@ -57,6 +57,10 @@
       <label>Tablet posture: "apart" (the bell, the clock's pull-down and Meta+N open the Notification Centre, the status pill only the controls) or "together" (one sheet with controls and notifications, as on the laptop). TABLET2 S1.</label>
       <default>apart</default>
     </entry>
+    <entry name="airplaneRestore" type="String">
+      <label>The radios that were on when airplane mode started, as JSON ({wifi, wwan, bluetooth}); empty when airplane mode is off. Kept so that a plasmashell restart does not lose it.</label>
+      <default></default>
+    </entry>
     <entry name="debugAction" type="String">
       <label>Testing only: run one action and clear the key. Values: dump:TAG (logs the sheet's geometry and scrolling, every visible target of the bar and the sheet with its centre and size, and the tablet policy state).</label>
       <default></default>

@@ -219,9 +219,9 @@ Item {
         readonly property bool wifiHwEnabled: s ? s.wifiHwEnabled : false
         readonly property bool airplane: s ? s.airplane : false
         readonly property bool airplaneAvailable: s ? s.airplaneAvailable : false
-        // The radios on before airplane mode are kept for every screen's widget (Instances), so the
-        // one that ends it brings them back; with no record (plasmashell restarted meanwhile) they
-        // all come back on.
+        // The radios on before airplane mode are kept for every screen's widget (Instances, and in
+        // the widgets' settings across a plasmashell restart, main.qml), so the one that ends it
+        // brings them back; with no record (airplane mode started elsewhere) they all come back on.
         function setAirplaneMode(on: bool): void {
             if (!s) {
                 return;
@@ -572,6 +572,16 @@ Item {
         }
         function openSettings() {
             backend.openSettings("kcm_notifications", []);
+        }
+    }
+
+    // Airplane mode ended by anything else (the stock widget, nmcli): the record is stale.
+    Connections {
+        target: backend.net
+        function onAirplaneChanged() {
+            if (!backend.net.airplane && Instances.airplaneRestore) {
+                Instances.airplaneRestore = null;
+            }
         }
     }
 
