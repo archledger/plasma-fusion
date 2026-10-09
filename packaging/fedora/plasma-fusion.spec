@@ -231,17 +231,18 @@ mkdir -p %{buildroot}%{_datadir}/plasma-fusion/built-against
 for part in decoration settings navigation; do
   DESTDIR=%{buildroot} %__cmake --install _build/$part
 done
-# Qt's QML disk cache (~/.cache/kwin/qmlcache) reuses a compiled file while the source's time stamp
-# is unchanged, and rpm clamps every time stamp to the %%changelog date: two releases built on one
-# day ship equal times, and KWin kept running the previous release's effect QML after an update.
-# Each QML/JS file gets a time derived from its content instead, before the clamp date so rpm keeps
-# it: the same file gives the same time (reproducible), any change a new one.
-find %{buildroot}%{_datadir}/kwin/effects/plasmafusion_navigation %{buildroot}%{_qt6_qmldir}/org/plasmafusion/navigation \
-  -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 |
+%endif
+# Qt's QML disk cache (~/.cache/kwin/qmlcache, ~/.cache/plasmashell/qmlcache, ...) reuses a compiled
+# file while the source's time stamp is unchanged, and rpm clamps every time stamp to the
+# %%changelog date: two releases built on one day ship equal times. 0.3.0 and 0.3.1 did, and after
+# updating, KWin and plasmashell kept running 0.3.0's snap script and dock. Every QML/JS file of every
+# package gets a time derived from its content instead, before the clamp date so rpm keeps it: the
+# same file gives the same time (reproducible), any change a new one, and an update replaces the
+# compiled copies at the next login.
+find %{buildroot} -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 |
   while IFS= read -r -d '' f; do
     touch -h -d "@$(( ${SOURCE_DATE_EPOCH:-1700000000} - 1 - 0x$(sha256sum "$f" | cut -c1-6) ))" "$f"
   done
-%endif
 
 %check
 # Every symbolic link must resolve, inside the package or (the Breeze hand-back links) in
@@ -301,6 +302,15 @@ test -s %{buildroot}%{_datadir}/kwin/scripts/plasmafusion-snap/contents/ui/ensur
 test "$(%{buildroot}%{_bindir}/plasma-fusion version)" = "$(cat VERSION)"
 test -s %{buildroot}%{_datadir}/plasma-fusion/tested-plasma.txt
 test -s %{buildroot}%{_datadir}/plasma-fusion/items.txt
+# Every QML/JS file carries its content-derived time (%%install): a missed one would let Qt keep the
+# previous release's compiled copy after an update.
+find %{buildroot} -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 |
+  while IFS= read -r -d '' f; do
+    if [ "$(stat -c %Y "$f")" != "$(( ${SOURCE_DATE_EPOCH:-1700000000} - 1 - 0x$(sha256sum "$f" | cut -c1-6) ))" ]; then
+      echo "QML/JS time stamp not derived from the content: $f" >&2
+      exit 1
+    fi
+  done
 %if %{with compiled}
 for part in decoration settings navigation; do
   test -s %{buildroot}%{_datadir}/plasma-fusion/built-against/$part
