@@ -19,6 +19,7 @@ Item {
     readonly property bool wifiDevice: availableDevices.wirelessDeviceAvailable
     readonly property bool wifiEnabled: enabledConnections.wirelessEnabled
     readonly property bool wifiHwEnabled: enabledConnections.wirelessHwEnabled
+    readonly property bool wwanEnabled: enabledConnections.wwanEnabled
     readonly property bool airplane: PlasmaNM.Configuration.airplaneModeEnabled
     // Airplane mode is offered with a Wi-Fi radio or a modem, as in the stock Networks widget.
     readonly property bool airplaneAvailable: availableDevices.wirelessDeviceAvailable || availableDevices.modemDeviceAvailable
@@ -131,11 +132,17 @@ Item {
     }
     Component.onCompleted: refreshHotspotSettings()
 
-    // As the stock Networks widget: plasma-nm switches Wi-Fi, mobile data and Bluetooth off (or
-    // back on) and keeps the setting.
-    function setAirplaneMode(on: bool): void {
-        handler.enableAirplaneMode(on);
-        PlasmaNM.Configuration.airplaneModeEnabled = on;
+    // As the stock Networks widget: plasma-nm switches Wi-Fi, mobile data and Bluetooth off and
+    // keeps the setting. Ending it brings back the radios given (Backend.qml keeps which were on),
+    // not the handler's own record, which only the widget that started airplane mode has.
+    function enterAirplaneMode(): void {
+        handler.enableAirplaneMode(true);
+        PlasmaNM.Configuration.airplaneModeEnabled = true;
+    }
+    function leaveAirplaneMode(wifi: bool, wwan: bool): void {
+        PlasmaNM.Configuration.airplaneModeEnabled = false;
+        handler.enableWireless(wifi);
+        handler.enableWwan(wwan);
     }
     function setWifiEnabled(on: bool) {
         handler.enableWireless(on);

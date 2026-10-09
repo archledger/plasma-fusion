@@ -6,6 +6,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.workspace.dbus as DBus
 
 import "components"
+import "global"
 import "../code/power.js" as Power
 
 // Every data source behind one null-safe object. Each service lives in its own
@@ -218,7 +219,25 @@ Item {
         readonly property bool wifiHwEnabled: s ? s.wifiHwEnabled : false
         readonly property bool airplane: s ? s.airplane : false
         readonly property bool airplaneAvailable: s ? s.airplaneAvailable : false
-        function setAirplaneMode(on: bool): void { if (s) { s.setAirplaneMode(on); } }
+        // The radios on before airplane mode are kept for every screen's widget (Instances), so the
+        // one that ends it brings them back; with no record (plasmashell restarted meanwhile) they
+        // all come back on.
+        function setAirplaneMode(on: bool): void {
+            if (!s) {
+                return;
+            }
+            if (on) {
+                Instances.airplaneRestore = { wifi: s.wifiEnabled, wwan: s.wwanEnabled, bluetooth: backend.bt.enabled };
+                s.enterAirplaneMode();
+                return;
+            }
+            const restore = Instances.airplaneRestore || { wifi: true, wwan: true, bluetooth: true };
+            Instances.airplaneRestore = null;
+            s.leaveAirplaneMode(restore.wifi, restore.wwan);
+            if (restore.bluetooth && backend.bt.available) {
+                backend.bt.setEnabled(true);
+            }
+        }
         readonly property string ssid: s ? s.ssid : ""
         readonly property bool connecting: s ? s.connecting : false
         readonly property string kind: s ? s.kind : "none"
