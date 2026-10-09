@@ -38,7 +38,20 @@ PlasmoidItem {
     // screen in use (KWin's active output); the settings are the same in every widget: a change in
     // one is copied to the others, and a new widget takes the leader's.
     readonly property int screenIndex: Plasmoid.containment ? Plasmoid.containment.screen : -1
-    readonly property string screenName: String(root.Screen.name || "")
+    // The output this widget's bar is on: the screen at its containment's screen geometry (right
+    // as soon as the bar is placed; the window's Screen attached property named the first screen
+    // for a while in a bar made for another screen, so Meta+A went to the wrong widget).
+    readonly property string screenName: {
+        const g = Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0);
+        if (g.width > 0) {
+            for (const screen of Qt.application.screens) {
+                if (screen.virtualX === g.x && screen.virtualY === g.y && screen.width === g.width) {
+                    return screen.name;
+                }
+            }
+        }
+        return String(root.Screen.name || "");
+    }
     readonly property bool leader: Instances.leader === root
     readonly property var sharedKeys: ["showKeyboardLayout", "keyboardLayoutAlways", "showKdeConnect", "showClipboard",
         "showBatteryPercent", "popupOnNewDevice", "showNotifications", "popupGap", "popupScreenMargin", "startPage",
