@@ -60,6 +60,11 @@ ContainmentItem {
     // of one package apart by name)
     property bool isFolder: (Plasmoid.pluginName === "org.kde.plasma.folder" || Plasmoid.pluginName === "org.plasmafusion.desktop")
     property bool isContainment: Plasmoid.isContainment
+    // Plasma Fusion: file drops go to the Folder View while it is loaded; on the tablet home screen
+    // (no Folder View) they go to the widgets on page 1, as on a desktop without folders, and are
+    // refused on the app pages.
+    readonly property bool folderDrops: isFolder && folderViewLayer.view !== null
+    readonly property bool widgetDrops: !tabletHome || appletsLayout.visible
 
     // Plasma Fusion: the home screen in tablet posture.
     FusionTablet {
@@ -209,6 +214,10 @@ ContainmentItem {
     property real haloOpacity: 0.5
 
     readonly property bool isUiReady: Plasmoid.containment.corona.isScreenUiReady(root.screen)
+    // Plasma Fusion: the screen's panels came after isUiReady was read (it does not notify).
+    // Upstream sets the Folder View loader active at that point, which drops its binding and with
+    // it the tablet home screen's "no Folder View"; this keeps the binding.
+    property bool screenUiReadyLater: false
 
     readonly property int hoverActivateDelay: 750 // Magic number that matches Dolphin's auto-expand folders delay.
 
@@ -232,7 +241,7 @@ ContainmentItem {
     }
 
     function addLauncher(desktopUrl) {
-        if (!isFolder) {
+        if (!folderDrops) {
             return;
         }
 
@@ -352,12 +361,16 @@ ContainmentItem {
         preventStealing: true
 
         onDragEnter: event => {
-            if (root.isContainment && Plasmoid.immutable && !(root.isFolder && FolderTools.isFileDrag(event))) {
+            if (root.isContainment && Plasmoid.immutable && !(root.folderDrops && FolderTools.isFileDrag(event))) {
                 event.ignore();
             }
 
             // Don't allow any drops while listing.
-            if (root.isFolder && folderViewLayer.view.status === Folder.FolderModel.Listing) {
+            if (root.folderDrops && folderViewLayer.view.status === Folder.FolderModel.Listing) {
+                event.ignore();
+            }
+
+            if (!root.folderDrops && !root.widgetDrops) {
                 event.ignore();
             }
 
@@ -374,9 +387,9 @@ ContainmentItem {
             // is currently incapable of rejecting drag events.
 
             // Trigger autoscroll.
-            if (root.isFolder && FolderTools.isFileDrag(event)) {
+            if (root.folderDrops && FolderTools.isFileDrag(event)) {
                 handleDragMove(folderViewLayer.view, mapToItem(folderViewLayer.view, event.x, event.y));
-            } else if (root.isContainment) {
+            } else if (root.isContainment && root.widgetDrops) {
                 appletsLayout.showPlaceHolderAt(
                     Qt.rect(event.x - appletsLayout.minimumItemWidth / 2,
                     event.y - appletsLayout.minimumItemHeight / 2,
@@ -388,7 +401,7 @@ ContainmentItem {
 
         onDragLeave: event => {
             // Cancel autoscroll.
-            if (root.isFolder) {
+            if (root.folderDrops) {
                 handleDragEnd(folderViewLayer.view);
             }
 
@@ -398,10 +411,10 @@ ContainmentItem {
         }
 
         onDrop: event => {
-            if (root.isFolder && FolderTools.isFileDrag(event)) {
+            if (root.folderDrops && FolderTools.isFileDrag(event)) {
                 handleDragEnd(folderViewLayer.view);
                 folderViewLayer.view.drop(root, event, mapToItem(folderViewLayer.view, event.x, event.y));
-            } else if (root.isContainment) {
+            } else if (root.isContainment && root.widgetDrops) {
                 root.processMimeData(event.mimeData,
                     event.x - appletsLayout.placeHolder.width / 2,
                     event.y - appletsLayout.placeHolder.height / 2);
@@ -428,7 +441,7 @@ ContainmentItem {
             function onScreenUiReadyChanged(screen: int, newLayoutReady: bool) {
                 if (root.isContainment && root.isFolder && !folderViewLayer.ready && root.screen === screen && newLayoutReady){
                     // We skip x and y since that is handled by the parent of folderViewLayer
-                    folderViewLayer.active = true;
+                    root.screenUiReadyLater = true;
                 }
             }
         }
@@ -574,12 +587,14 @@ ContainmentItem {
                             return true;
                         } else {
                             // For desktop, test if the screen is ready
-                            return root.isUiReady;
+                            return root.isUiReady || root.screenUiReadyLater;
                         }
                     }
                     return false;
                 }
                 asynchronous: false
+                onActiveChanged: if (root.isContainment) console.info("desktop: folder view " + (active ? "loaded" : "unloaded")
+                                                                      + (root.tabletHome ? " (tablet)" : ""))
 
                 onFocusChanged: {
                     if (!focus && model) {

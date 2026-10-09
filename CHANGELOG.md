@@ -48,6 +48,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   came back at the next screen change.
 - The touch-gestures card closes when tablet mode ends before it was dismissed (it shows again the
   next time) instead of staying over the laptop desktop.
+- On the tablet home screen, files on the desktop no longer show among the apps: the desktop's
+  file layer stayed loaded after the first start. A file dropped there now offers widgets, as on a
+  desktop without icons.
 
 ## 0.3.1 (2026-10-06)
 
