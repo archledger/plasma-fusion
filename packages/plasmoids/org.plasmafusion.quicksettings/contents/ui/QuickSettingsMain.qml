@@ -737,16 +737,41 @@ ColumnLayout {
 
     // ---------------------------------------------------------------- media card
     Rectangle {
+        id: mediaCard
         Layout.fillWidth: true
-        Layout.preferredHeight: Math.max(page.tablet ? 72 : 64, mediaText.implicitHeight + page.metrics.px(20))
+        Layout.preferredHeight: mediaColumn.implicitHeight + page.metrics.px(12)
         visible: page.backend.media.available
         radius: 16
         color: page.pal.overlay(0.06)
 
-        RowLayout {
-            anchors.fill: parent
+        // While the sheet shows, the position is asked for every second (MPRIS reports it on request).
+        Timer {
+            interval: 1000
+            repeat: true
+            triggeredOnStart: true
+            running: page.visible && page.backend.media.available && page.backend.media.canSeek && page.backend.media.playing
+            onTriggered: page.backend.media.updatePosition()
+        }
+        function clock(us: double): string {
+            const total = Math.max(0, Math.floor(us / 1000000));
+            const h = Math.floor(total / 3600);
+            const m = Math.floor(total / 60) % 60;
+            const sec = String(total % 60).padStart(2, "0");
+            return h > 0 ? h + ":" + String(m).padStart(2, "0") + ":" + sec : m + ":" + sec;
+        }
+
+        ColumnLayout {
+            id: mediaColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: 10
             anchors.rightMargin: 10
+            spacing: page.metrics.px(4)
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.max(page.tablet ? 60 : 52, mediaText.implicitHeight + page.metrics.px(8))
             spacing: page.metrics.px(12)
 
             Item {
@@ -834,6 +859,91 @@ ColumnLayout {
                 text: i18nc("@action:button", "Next track")
                 onClicked: page.backend.media.next()
             }
+        }
+
+        // Seek (the stock Media Player widget's slider), when the player can.
+        RowLayout {
+            Layout.fillWidth: true
+            visible: page.backend.media.canSeek && page.backend.media.length > 0
+            spacing: page.metrics.px(8)
+            FText {
+                pal: page.pal
+                metrics: page.metrics
+                px: 11
+                color: page.pal.secondary
+                text: mediaCard.clock(seekSlider.dragging ? seekSlider.value * page.backend.media.length : page.backend.media.position)
+            }
+            FusionSlider {
+                id: seekSlider
+                Layout.fillWidth: true
+                pal: page.pal
+                stepSize: 0.001
+                Accessible.name: i18nc("@label:slider", "Track position")
+                value: page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0
+                // The position asked for, kept apart from `value`, which follows the player again
+                // as soon as the slider is let go (a click lets go within the queue's 100 ms).
+                property real target: -1
+                onMoved: {
+                    target = value;
+                    seekTimer.restart();
+                }
+                onDraggingChanged: {
+                    if (!dragging) {
+                        value = Qt.binding(() => page.backend.media.length > 0 ? page.backend.media.position / page.backend.media.length : 0);
+                    }
+                }
+                // A drag sends one request when it pauses (as the stock widget's 100 ms queue).
+                Timer {
+                    id: seekTimer
+                    interval: 100
+                    onTriggered: {
+                        if (seekSlider.target >= 0) {
+                            page.backend.media.seek(Math.round(seekSlider.target * page.backend.media.length));
+                            seekSlider.target = -1;
+                        }
+                    }
+                }
+            }
+            FText {
+                pal: page.pal
+                metrics: page.metrics
+                px: 11
+                color: page.pal.secondary
+                text: mediaCard.clock(page.backend.media.length)
+            }
+        }
+
+        // The players, when there is more than one (the first entry chooses automatically).
+        Row {
+            Layout.alignment: Qt.AlignHCenter
+            visible: playerChips.count > 2
+            spacing: page.metrics.px(6)
+            Repeater {
+                id: playerChips
+                model: page.backend.media.playersModel
+                delegate: IconButton {
+                    id: chip
+                    required property string iconName
+                    required property bool isMultiplexer
+                    required property string identity
+                    required property int index
+                    pal: page.pal
+                    size: 28
+                    iconSize: 16
+                    fill: index === page.backend.media.currentIndex ? page.pal.overlay(0.14) : "transparent"
+                    iconPath: ""
+                    text: isMultiplexer ? i18nc("@action:button", "Choose player automatically") : identity
+                    onClicked: page.backend.media.choosePlayer(index)
+                    Kirigami.Icon {
+                        anchors.centerIn: parent
+                        width: 16
+                        height: 16
+                        source: chip.iconName || "emblem-music-symbolic"
+                        fallback: "emblem-music-symbolic"
+                    }
+                }
+            }
+        }
         }
     }
 }

@@ -718,6 +718,14 @@ Item {
         readonly property bool canNext: s ? s.canNext : false
         readonly property bool canPlayPause: s ? s.canPlayPause : false
         readonly property bool canRaise: s ? s.canRaise : false
+        readonly property var playersModel: s ? s.playersModel : null
+        readonly property int currentIndex: s ? s.currentIndex : -1
+        readonly property bool canSeek: s ? s.canSeek : false
+        readonly property double length: s ? s.length : 0
+        readonly property double position: s ? s.position : 0
+        function choosePlayer(i: int) { if (s) { s.choosePlayer(i); } }
+        function seek(us: double) { if (s) { s.seek(us); } }
+        function updatePosition() { if (s) { s.updatePosition(); } }
         function previous() {
             if (s) {
                 s.previous();

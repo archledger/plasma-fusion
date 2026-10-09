@@ -92,7 +92,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
 * media card (64 px, radius 16): album art or player icon, title, `Paused` / artist, previous,
   play/pause (36 px filled), next; shown only while a player exists. The player icon is the
   application icon; when libkmpris cannot read the player's desktop file (it then reports the
-  generic `emblem-music-symbolic`), the desktop entry name is used as the icon name;
+  generic `emblem-music-symbolic`), the desktop entry name is used as the icon name. As the stock
+  Media Player widget: a seek slider with the elapsed and total time when the player can seek (the
+  position is asked for every second while the sheet shows; a move is sent after 100 ms), and,
+  with two or more players, a row of their icons to choose one (the first, a star, chooses
+  automatically; `Mpris2Model.currentIndex`);
 * `Notifications` header with `Clear all`, then the notification cards (app icon + name, time,
   summary, body, job progress with Cancel, action buttons; the first action is the accent button
   for critical or persistent notifications, as the board's calendar reminder). Close button on hover.

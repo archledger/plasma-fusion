@@ -68,6 +68,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - Quick Settings' Sound page has a menu on each device (the "⋯" button or right-click) to choose its
   **port** (speakers, headphones) and the sound card's **profile** (HDMI, analog, Pro Audio), as
   Plasma's Audio Volume widget.
+- The media card in Quick Settings has a **seek bar** with the track's time and, when several
+  players run, a row of the players to **choose one**, as Plasma's Media Player widget.
 
 ## 0.3.1 (2026-10-06)
 
