@@ -64,16 +64,21 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
 * `%build` runs `tools/build.sh` into `_stage/` (no display, `QT_QPA_PLATFORM=offscreen`, session
   variables removed) and the Plymouth generator; with the compiled parts, the three CMake builds
   (the settings page's QML gets a time stamp derived from its sources, kcm-cpp.md).
-* `%install` runs `packaging/install-tree.sh` and `cmake --install` of the three parts; the effect's
-  QML files get times derived from their content (navigation-cpp README).
+* `%install` runs `packaging/install-tree.sh` and `cmake --install` of the three parts; then every
+  QML/JS file of all four packages gets a time derived from its content, before the clamp date.
+  Qt's QML disk caches (`~/.cache/kwin/qmlcache`, `~/.cache/plasmashell/qmlcache`, ...) reuse a
+  compiled file while its source's time is unchanged, and the clamp to the `%changelog` day gave
+  0.3.0 and 0.3.1 equal times: after updating from 0.3.0, KWin and plasmashell kept running 0.3.0's
+  snap script and dock. Content-derived times stay reproducible, change with every edit, and make
+  an update replace the compiled copies at the next login. The Debian rules do the same.
 * `%check`: every naming-table package has its `metadata.json` (the pen menu, the desktop cards,
   the two layout templates and the tablet script included), all four icon/cursor themes their
   `index.theme`, the login background exists, and what the per-user step takes from the package
   is there (power-tiers unit and the five helpers, pen templates, login check, pen defaults, the
   Global Themes' `ensure-topbars.js`, the font fallback, the switcher's shader, the snap script's
-  `ensureTopBars.js`, the command and its version files, each compiled part's record); no absolute
-  links; no link is dangling (Breeze's two themes are linked into the buildroot for the moment of
-  the check).
+  `ensureTopBars.js`, the command and its version files, each compiled part's record); every
+  QML/JS file has its content-derived time; no absolute links; no link is dangling (Breeze's two
+  themes are linked into the buildroot for the moment of the check).
 * The shared part holds no compiled code but is built per architecture with the compiled parts:
   rpm builds noarch subpackages of an arched package, not the other way round.
 

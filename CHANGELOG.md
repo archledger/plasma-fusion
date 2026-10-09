@@ -9,6 +9,13 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- Updating now replaces the desktop's QML at the next login. The Fedora packages of 0.3.0 and
+  0.3.1 gave their files the same time stamps, and Qt reuses its compiled copy of a QML file while
+  the file's time stamp is unchanged: after updating from 0.3.0, KWin and Plasma kept running
+  0.3.0's snap script and dock, so 0.3.1's snap-edge and Calendar tile fixes did not take effect.
+  Every QML and JavaScript file now carries a time stamp derived from its content, in the Fedora
+  and Debian packages; the next update also replaces the compiled 0.3.0 copies 0.3.1 users still
+  run.
 - The clock calendar gains selected-day events, event dots, calendar-provider/resource settings,
   Open calendar and a native KOrganizer Add event action. Calendar apps continue to own sync,
   recurrence and reminders; the date grid remains usable without them.

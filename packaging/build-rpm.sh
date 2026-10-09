@@ -72,7 +72,8 @@ t, n2 = re.subn(r'^Release:(\s+)\S+$', lambda m: f'Release:{m.group(1)}{release}
 assert n1 == 1 and n2 == 1, 'Version/Release lines not found'
 if not re.fullmatch(r'\d+\.\d+\.\d+', version) or release != '1':
     entry = f'* {date} Wisbendji Fimerlus <archledger236@gmail.com> - {version}-{release}\n- Snapshot of git revision {rev}\n\n'
-    t = t.replace('%changelog\n', '%changelog\n' + entry, 1)
+    t, n3 = re.subn(r'^%changelog\n', lambda m: m.group(0) + entry, t, count=1, flags=re.M)
+    assert n3 == 1, '%changelog section not found'
 open(dst, 'w').write(t)
 PY
 

@@ -54,9 +54,10 @@ override_dh_auto_install:
 	  -not -path '*/icons/PlasmaFusion*/flatpak/*' >_broken-links
 	rm debian/plasma-fusion/usr/share/icons/breeze debian/plasma-fusion/usr/share/icons/breeze-dark
 	if [ -s _broken-links ]; then echo "broken links:" >&2; head -50 _broken-links >&2; exit 1; fi
-	# Qt's QML disk cache reuses a compiled file while the source's time stamp is unchanged: each
-	# QML/JS file of the effect gets a time derived from its content (docs/parts/navigation-cpp.md).
-	find debian/plasma-fusion-navigation -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 | \
+	# Qt's QML disk cache reuses a compiled file while the source's time stamp is unchanged: every
+	# QML/JS file of every package gets a time derived from its content, so an update replaces the
+	# compiled copies (docs/parts/system.md).
+	find debian -type f -path 'debian/plasma-fusion*/*' \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -name qmldir \) -print0 | \
 	  while IFS= read -r -d '' f; do \
 	    touch -h -d "@$$(( $(SOURCE_DATE_EPOCH) - 1 - 0x$$(sha256sum "$$f" | cut -c1-6) ))" "$$f"; \
 	  done
