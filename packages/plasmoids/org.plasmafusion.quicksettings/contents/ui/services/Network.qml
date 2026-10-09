@@ -71,8 +71,9 @@ Item {
     readonly property var otherModel: otherWifiModel
     readonly property bool scanning: handler.scanning
     readonly property bool hotspotSupported: handler.hotspotSupported
-    // This widget's handler, or another widget's that started the hotspot (Instances).
-    readonly property bool hotspotActive: handler.hotspotActive || Instances.hotspotActive
+    // The widgets' shared state (Instances), not this widget's handler: a handler made while the
+    // hotspot ran does not learn of its end.
+    readonly property bool hotspotActive: Instances.hotspotActive
     onHotspotActiveChanged: {
         refreshHotspotSettings();
         activeWifiModel.invalidateFilter();
@@ -90,6 +91,9 @@ Item {
             hotspotStarting = false;
             hotspotStartTimer.stop();
             handler.stopHotspot();
+            // Off either way: stopped here, or no longer running (a hotspot found running when
+            // the widgets were made has no handler that sees it end).
+            Instances.hotspotActive = false;
         } else if (!hotspotStarting && wifiEnabled && wifiHwEnabled && !airplane && hotspotSupported) {
             hotspotFailedToStart = false;
             hotspotStarting = true;
@@ -177,11 +181,8 @@ Item {
     }
     PlasmaNM.Handler {
         id: handler
-        Component.onCompleted: {
-            if (handler.hotspotActive) {
-                Instances.hotspotActive = true;
-            }
-        }
+        // A new handler looks the hotspot's connection up (running or not): the shared state follows.
+        Component.onCompleted: Instances.hotspotActive = handler.hotspotActive
         onHotspotActiveChanged: {
             Instances.hotspotActive = handler.hotspotActive;
             if (!handler.hotspotActive && net.hotspotStarting) {
