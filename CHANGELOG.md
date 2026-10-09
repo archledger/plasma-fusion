@@ -62,6 +62,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - The Power mode tile explains itself as Plasma's Power and Battery widget: it skips Performance
   while the system holds it back (on a lap, too hot) and says why, names applications that requested
   a mode, and shows when a switch was refused.
+- Quick Settings has a **Brightness** page (the chevron next to the brightness slider) with a
+  slider for every display that can be dimmed and the **keyboard backlight**, as Plasma's Brightness
+  widget.
 
 ## 0.3.1 (2026-10-06)
 

@@ -29,7 +29,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
 * volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
   Plasma's "Raise maximum volume", `plasmaparc` read through plasma-pa's `GlobalConfig`; a volume
   set above the limit elsewhere is kept by a step up); brightness slider
-  (8 px track, 20 px white knob with shadow, `#5B9DFF` fill = colour scheme DecorationHover);
+  (8 px track, 20 px white knob with shadow, `#5B9DFF` fill = colour scheme DecorationHover) of the
+  first display (internal panels first), with a chevron when there is more to set: the
+  **Brightness** page (`DisplayPage.qml`) has a slider for every display PowerDevil can dim and the
+  keyboard backlight (`KeyboardBrightnessControl`, stepping through its levels), as the stock
+  Brightness widget; the sliders' wheel and Page Up/Down move at least one step;
 * microphone/input volume and mute when a recording input exists; its chevron opens the input
   chooser. Sound has Output, Input and Applications tabs. Applications lists active playback and
   recording streams with independent volume, mute and device routing, using the native plasma-pa

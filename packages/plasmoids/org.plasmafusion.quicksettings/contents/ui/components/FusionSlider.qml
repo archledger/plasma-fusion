@@ -28,7 +28,8 @@ T.Slider {
 
     Keys.onPressed: event => {
         if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
-            const step = event.key === Qt.Key_PageUp ? 0.1 : -0.1;
+            // At least one step: a slider of a few levels (keyboard backlight) moves by one.
+            const step = (event.key === Qt.Key_PageUp ? 1 : -1) * Math.max(slider.stepSize, 0.1);
             slider.value = Math.max(slider.from, Math.min(slider.to, slider.value + step));
             slider.moved();
             event.accepted = true;
@@ -39,7 +40,7 @@ T.Slider {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: event => {
             const delta = (event.angleDelta.y || -event.angleDelta.x) * (event.inverted ? -1 : 1);
-            const next = Math.max(slider.from, Math.min(slider.to, slider.value + (delta / 120) * 0.05));
+            const next = Math.max(slider.from, Math.min(slider.to, slider.value + (delta / 120) * Math.max(slider.stepSize, 0.05)));
             if (next !== slider.value) {
                 slider.value = next;
                 slider.moved();

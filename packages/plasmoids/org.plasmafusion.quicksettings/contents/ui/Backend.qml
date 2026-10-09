@@ -24,7 +24,7 @@ Item {
     property bool showNotifications: true
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
-    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" or "devices".
+    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices" or "display".
     property string page: "main"
     property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
@@ -443,11 +443,20 @@ Item {
         readonly property bool brightnessAvailable: s ? s.brightnessAvailable : false
         readonly property real brightness: s ? s.brightness : 0
         readonly property string label: s ? s.displayLabel : ""
+        readonly property var displaysModel: s ? s.displaysModel : null
+        readonly property int displayCount: s ? s.displayCount : 0
+        readonly property bool keyboardAvailable: s ? s.keyboardAvailable : false
+        readonly property int keyboardValue: s ? s.keyboardValue : 0
+        readonly property int keyboardMax: s ? s.keyboardMax : 0
+        // The Brightness page has more than the main slider: another display or a keyboard light.
+        readonly property bool more: displayCount > 1 || keyboardAvailable
         function setBrightness(fraction: real) {
             if (s) {
                 s.setBrightness(fraction);
             }
         }
+        function setDisplayBrightness(name: string, value: int) { if (s) { s.setDisplayBrightness(name, value); } }
+        function setKeyboardBrightness(value: int) { if (s) { s.setKeyboardBrightness(value); } }
     }
 
     // ------------------------------------------------------------------ night light

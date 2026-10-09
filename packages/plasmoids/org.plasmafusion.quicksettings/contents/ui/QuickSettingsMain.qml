@@ -385,7 +385,18 @@ ColumnLayout {
                     }
                 }
             }
+            IconButton {
+                id: brightnessChevron
+                visible: page.backend.display.more
+                pal: page.pal
+                size: page.pal.touch ? 32 : 28
+                iconSize: 14
+                iconPath: Icons.chevronRight
+                text: i18nc("@action:button", "More brightness controls")
+                onClicked: page.openPage("display", brightnessChevron)
+            }
             Item {
+                visible: !brightnessChevron.visible
                 Layout.preferredWidth: audioChevron.implicitWidth
                 Layout.preferredHeight: 28
             }
