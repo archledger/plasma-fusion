@@ -981,18 +981,20 @@ PlasmoidItem {
     // Pins asked for by other shell parts: the launcher's "Keep in Dock" (it finds this applet in
     // its panel, as for the split request), by desktop file id; and the stock task manager's
     // hasLauncher/addLauncher, the names Kicker calls on task managers it knows.
+    // `id`: an app's desktop id, with or without the applications: scheme (Pins.appLauncherUrl).
     function isAppPinned(id: string): bool {
-        return id !== "" && tasksModel.launcherPosition("applications:" + id) !== -1;
+        return id !== "" && tasksModel.launcherPosition(Pins.appLauncherUrl(id)) !== -1;
     }
     function setAppPinned(id: string, pinned: bool): void {
         if (id === "" || Plasmoid.immutability === PlasmaCore.Types.SystemImmutable) {
             return;
         }
-        console.info("dock: " + (pinned ? "pin " : "unpin ") + id);
+        const url = Pins.appLauncherUrl(id);
+        console.info("dock: " + (pinned ? "pin " : "unpin ") + url);
         if (pinned) {
-            tasksModel.requestAddLauncher("applications:" + id);
+            tasksModel.requestAddLauncher(url);
         } else {
-            tasksModel.requestRemoveLauncher("applications:" + id);
+            tasksModel.requestRemoveLauncher(url);
         }
     }
     function hasLauncher(url: url): bool {

@@ -42,3 +42,11 @@ function hiddenDuplicates(rows) {
     }
     return hidden.sort(function (a, b) { return a - b; });
 }
+
+// The dock launcher URL of an app given by its desktop id, with or without the applications:
+// scheme (the launcher's pinned entries, and all of its entries on Plasma 6.8, have it):
+// "org.kde.dolphin.desktop" and "applications:org.kde.dolphin.desktop" both give
+// "applications:org.kde.dolphin.desktop".
+function appLauncherUrl(id) {
+    return "applications:" + String(id || "").replace(/^applications:/, "");
+}
