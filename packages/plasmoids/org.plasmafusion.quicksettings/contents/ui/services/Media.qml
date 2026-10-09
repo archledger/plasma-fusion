@@ -9,7 +9,10 @@ Item {
     id: media
 
     readonly property var player: mpris.currentPlayer
-    readonly property bool available: !!player && player.playbackStatus > Mpris.PlaybackStatus.Stopped
+    // A player that plays or is paused; also a stopped one the user chose (the player row) while it
+    // can play, so the card and its row stay to play it or choose another.
+    readonly property bool available: !!player && (player.playbackStatus > Mpris.PlaybackStatus.Stopped
+                                                   || (mpris.currentIndex > 0 && player.canPlay))
     readonly property string track: player ? (player.track || "") : ""
     readonly property string artist: player ? (player.artist || "") : ""
     readonly property string identity: player ? (player.identity || "") : ""

@@ -111,7 +111,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   let go or the wheel or keys pause, so always on the track playing then; a drag let go on
   another player, title or length is dropped), and,
   with two or more players, a row of their icons to choose one (the first, a star, chooses
-  automatically; `Mpris2Model.currentIndex`);
+  automatically; `Mpris2Model.currentIndex`); a stopped player chosen there keeps the card while
+  it can play, so it can be played or another chosen;
 * `Notifications` header with `Clear all`, then the notification cards (app icon + name, time,
   summary, body, job progress with Cancel, action buttons; the first action is the accent button
   for critical or persistent notifications, as the board's calendar reminder). Close button on hover.
