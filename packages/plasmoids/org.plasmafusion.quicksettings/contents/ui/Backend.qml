@@ -241,14 +241,19 @@ Item {
             const restore = Instances.airplaneRestore;
             Instances.airplaneRestore = null;
             s.leaveAirplaneMode(restore ? restore.wifi : true, restore ? restore.wwan : true);
-            if (restore) {
-                (restore.bluetooth || []).forEach(path => backend.powerBluetoothAdapter(path, true));
+            // The record's Bluetooth: the adapters that were on; a record saved before this (one
+            // boolean for the Bluetooth service's state) or none: every adapter on, or none.
+            const bluetooth = restore ? restore.bluetooth : true;
+            if (Array.isArray(bluetooth)) {
+                bluetooth.forEach(path => backend.powerBluetoothAdapter(path, true));
                 airplaneSwitching = false;
-            } else {
+            } else if (bluetooth === true) {
                 backend.bluetoothAdapters(adapters => {
                     adapters.forEach(a => backend.powerBluetoothAdapter(a.path, true));
                     airplaneSwitching = false;
                 });
+            } else {
+                airplaneSwitching = false;
             }
         }
         readonly property string ssid: s ? s.ssid : ""
