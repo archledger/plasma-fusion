@@ -55,6 +55,26 @@ note() { printf '  %s\n' "$*"; }
 run() { if [ "$DRY" = 1 ]; then note "would: $*"; else "$@"; fi; }
 bus() { busctl --user "$@"; }
 bus_json() { busctl --user --json=short "$@"; }
+has_name() { bus call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s "$1" 2>/dev/null | grep -q true; }
+# Wait until plasmashell's CPU use has been low for a second: its start-up is over.
+shell_settle() {
+  local pid t0 t1 calm=0
+  pid=$(bus call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s org.kde.plasmashell 2>/dev/null | awk '{print $2}')
+  [ -n "$pid" ] && [ -r "/proc/$pid/stat" ] || return 0
+  t0=$(sed 's/.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $12 + $13}')
+  for _ in $(seq 1 40); do
+    sleep 0.5
+    t1=$(sed 's/.*) //' "/proc/$pid/stat" 2>/dev/null | awk '{print $12 + $13}')
+    [ -n "$t1" ] && [ -n "$t0" ] || return 0
+    if [ $((t1 - t0)) -le $(($(getconf CLK_TCK) * 3 / 100)) ]; then
+      calm=$((calm + 1))
+      [ "$calm" -ge 2 ] && return 0
+    else
+      calm=0
+    fi
+    t0=$t1
+  done
+}
 # Plasma Fusion's helper programs, found as fusion-config.sh finds them: the user's copy first,
 # then a system package's.
 HELPER_DIRS=("$HOME/.local/libexec/plasma-fusion" /usr/local/libexec/plasma-fusion /usr/libexec/plasma-fusion /usr/lib/plasma-fusion
@@ -367,6 +387,12 @@ if [ "$DRY" = 0 ]; then
   else
     setsid -f plasmashell >/dev/null 2>&1 || true
   fi
+  # Up, not starting, before "Restored" (as fusion-config.sh waits after its own restart): a
+  # logout while the shell still starts has its calls bring kded6 and the portals back during
+  # the teardown, and the new portal dies with the compositor (seen on Arch with Qt 6.12).
+  for _ in $(seq 1 60); do has_name org.kde.plasmashell && break; sleep 0.5; done
+  shell_settle
+  sleep 2
   echo "Restored. Log out and back in to finish."
 else
   echo "Dry run finished."
