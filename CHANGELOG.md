@@ -21,6 +21,9 @@ internals stay off until an update.
   Every QML and JavaScript file now carries a time stamp derived from its content, in the Fedora
   and Debian packages; the next update also replaces the compiled 0.3.0 copies 0.3.1 users still
   run.
+- `plasma-fusion restore` (the uninstaller's first step) returns once the restarted shell is up, as
+  the setup does: logging out right after it no longer brings kded and the portals back during the
+  teardown, where a portal crashed (seen on Arch with Qt 6.12).
 - The clock calendar gains selected-day events, event dots, calendar-provider/resource settings,
   Open calendar and a native KOrganizer Add event action. Calendar apps continue to own sync,
   recurrence and reminders; the date grid remains usable without them.
