@@ -1,3 +1,13 @@
+plasma-fusion (0.4.0-1) unstable; urgency=medium
+
+  * Stock Plasma parity: Disks & Devices, keep awake and sleep blockers,
+    Wi-Fi hotspot, airplane mode and VPN, input and app volume, calendar
+    events and world clocks, dock previews, menus and audio, status area on
+    every screen, brightness and sound pages; updates replace the previous
+    release's QML.
+
+ -- Wisbendji Fimerlus <archledger236@gmail.com>  Fri, 09 Oct 2026 16:00:00 +0000
+
 plasma-fusion (0.3.1-1) unstable; urgency=medium
 
   * Calendar tiles keep the live date correct after suspend.

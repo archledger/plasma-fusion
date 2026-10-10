@@ -7,7 +7,12 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
-## Unreleased
+## 0.4.0 (2026-10-09)
+
+Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch), like 0.3.1.
+Packaged as before for Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian testing and
+KDE neon (.deb) and NixOS (flake); on an untested Plasma series the parts that depend on Plasma
+internals stay off until an update.
 
 - Updating now replaces the desktop's QML at the next login. The Fedora packages of 0.3.0 and
   0.3.1 gave their files the same time stamps, and Qt reuses its compiled copy of a QML file while

@@ -18,7 +18,7 @@
 %endif
 
 Name:           plasma-fusion
-Version:        0.3.1
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
@@ -425,6 +425,13 @@ done
 %endif
 
 %changelog
+* Fri Oct 09 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.4.0-1
+- Stock Plasma parity: Disks & Devices, keep awake and sleep blockers,
+  Wi-Fi hotspot, airplane mode and VPN, input and app volume, calendar
+  events and world clocks, dock previews, menus and audio, status area
+  on every screen, brightness and sound pages; updates replace the
+  previous release's QML
+
 * Tue Oct 06 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.3.1-1
 - Calendar tiles keep the live date correct after suspend
 
