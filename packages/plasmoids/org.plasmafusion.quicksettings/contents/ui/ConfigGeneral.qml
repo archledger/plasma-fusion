@@ -32,6 +32,8 @@ KCM.SimpleKCM {
     property string cfg_debugAction: ""
     property string cfg_airplaneRestore: ""
     property string cfg_glass: "full"
+    property var cfg_tileOrder: []
+    property var cfg_hiddenTiles: []
 
     property bool cfg_showKeyboardLayoutDefault
     property bool cfg_keyboardLayoutAlwaysDefault
@@ -51,6 +53,8 @@ KCM.SimpleKCM {
     property string cfg_lightLookAndFeelDefault
     property string cfg_darkLookAndFeelDefault
     property string cfg_glassDefault
+    property var cfg_tileOrderDefault
+    property var cfg_hiddenTilesDefault
 
     function saveConfig() {
         const config = Plasmoid.configuration;
@@ -61,6 +65,9 @@ KCM.SimpleKCM {
         cfg_airplaneRestore = config.airplaneRestore;
         // written by the settings module and the power service
         cfg_glass = config.glass;
+        // the tiles' order and the hidden tiles (the sheet's edit mode)
+        cfg_tileOrder = config.tileOrder;
+        cfg_hiddenTiles = config.hiddenTiles;
     }
 
     Kirigami.FormLayout {

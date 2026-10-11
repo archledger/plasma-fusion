@@ -20,9 +20,9 @@ python3 -B "$ROOT/packages/common/tests/backdrop_glass_test.py" "$SRC"
 # The settings page declares every key and default and refreshes the ones it does not edit.
 python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$SRC"
 # The Disks & Devices list, power mode, Do Not Disturb, notification card, timed Keep awake,
-# hidden tray item and clipboard sheet logic (contents/code/devices.js, power.js, dnd.js,
-# notifications.js, keepawake.js, tray.js and clipboard.js; the tests are not installed), when
-# node is installed (the package build has none).
+# hidden tray item, clipboard sheet and tile order logic (contents/code/devices.js, power.js,
+# dnd.js, notifications.js, keepawake.js, tray.js, clipboard.js and tiles.js; the tests are not
+# installed), when node is installed (the package build has none).
 if command -v node >/dev/null 2>&1; then
   node "$SRC/tests/devices.test.js" >/dev/null
   node "$SRC/tests/power.test.js" >/dev/null
@@ -31,6 +31,7 @@ if command -v node >/dev/null 2>&1; then
   node "$SRC/tests/keepawake.test.js" >/dev/null
   node "$SRC/tests/tray.test.js" >/dev/null
   node "$SRC/tests/clipboard.test.js" >/dev/null
+  node "$SRC/tests/tiles.test.js" >/dev/null
 fi
 
 rm -rf "$DEST"

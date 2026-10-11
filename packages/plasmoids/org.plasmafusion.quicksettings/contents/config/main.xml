@@ -77,5 +77,13 @@
       <label>Glass level, written by the Plasma Fusion settings module and the power service: "full", "reduced" or "solid" (only a tint, no wallpaper picture, behind the Notification Centre). A String, not an Enum: Applet.writeConfig would store an Enum's text as 0.</label>
       <default>full</default>
     </entry>
+    <entry name="tileOrder" type="StringList">
+      <label>The quick settings tiles in the user's order (contents/code/tiles.js has the ids); empty: the default order of this release. A tile missing from the list (new in a later release) goes after the tile before it in the default order. Written by the sheet's edit mode, the same in every quick settings widget.</label>
+      <default></default>
+    </entry>
+    <entry name="hiddenTiles" type="StringList">
+      <label>The quick settings tiles the user took out of the grid (the edit mode's tray); a tile shown only when it applies (Disks &amp; Devices, Wi-Fi hotspot, Charge limit, Tablet mode) never shows while hidden. The same in every quick settings widget.</label>
+      <default></default>
+    </entry>
   </group>
 </kcfg>

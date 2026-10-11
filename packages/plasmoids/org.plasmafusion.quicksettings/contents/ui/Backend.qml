@@ -25,6 +25,11 @@ Item {
     property bool showClipboard: true
     property bool showBatteryPercent: true
     property bool showNotifications: true
+    // The tiles' order and the hidden tiles (contents/code/tiles.js; the widget's settings).
+    property var tileOrder: []
+    property var hiddenTiles: []
+    // The sheet's edit mode asks main.qml to store a new order and hidden tiles.
+    signal tileLayoutRequested(var order, var hidden)
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
     // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" (Keep awake), "profiles"
