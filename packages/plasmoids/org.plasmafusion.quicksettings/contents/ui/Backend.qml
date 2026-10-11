@@ -600,15 +600,13 @@ Item {
                 s.toggleDnd();
             }
         }
-        // G18: for one hour, or until the next morning (06:00; after midnight the coming one).
-        function forHour() {
-            if (s) {
-                s.dndUntil(new Date(Date.now() + 3600 * 1000));
-            }
+        // G18 and the stock applet's choices (contents/code/dnd.js): [{id, until}] at this moment.
+        function choices() {
+            return Dnd.choices(new Date());
         }
-        function untilTomorrow() {
+        function until(date) {
             if (s) {
-                s.dndUntil(Dnd.untilMorning(new Date()));
+                s.dndUntil(date);
             }
         }
         function openSettings() {

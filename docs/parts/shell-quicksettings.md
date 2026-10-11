@@ -542,10 +542,9 @@ the lead directly.
   tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc
   `[Tablet] RotationLocked`); the lock is read back from `kscreen-doctor -j` when the sheet opens in
   tablet posture (outputs with the auto-rotation capability report it).
-- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow"
-  (the next 06:00: chosen after midnight, the coming morning; `contents/code/dnd.js`,
-  `tests/dnd.test.js`) and "Until turned off"; the time is kept in the notification settings, a
-  timer releases it.
+- **Do Not Disturb for a while** (G18): the tile's chevron offers the stock applet's choices (see
+  "Notification parity (0.5.0)" below; `contents/code/dnd.js`, `tests/dnd.test.js`); the time is
+  kept in the notification settings, a timer releases it.
 - **Built on demand** (S2): the sheet's content is a `Loader` built 4 s after start, or at once when the
   pointer reaches the bar or anything opens it; the Bluetooth device model exists only while the
   Bluetooth page is shown (the tile keeps using BluezQt's manager).
@@ -767,3 +766,23 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   both ways and adopted by a new widget, posture settings written once per change, Meta+A and a USB
   stick open the sheet on the screen with the pointer only (both screens), bars made before the
   change completed at login (two reboots), no QML warnings, no crashes.
+
+## Notification parity (0.5.0)
+
+The notification history in the laptop sheet and the tablet Notification Centre, and Do Not
+Disturb, brought up to Plasma 6.7's Notifications applet (plasma-workspace
+`applets/notifications`, branch Plasma/6.7; improvement survey 3, P3). The stock applet stays
+loaded and hidden: it still owns the pop-ups and the Do Not Disturb bookkeeping.
+
+### Do Not Disturb for a while
+
+The tile's chevron offers the stock applet's choices (`FullRepresentation.qml`), worked out in
+`contents/code/dnd.js` `choices()` when the choices open: **For 1 hour**, **For 4 hours** (both in
+whole minutes), **Until this evening** (20:00, offered before 20:00), **Until tomorrow morning**
+(06:00), **Until Monday** (06:00, offered on Fridays and Saturdays; on Sundays tomorrow morning is
+Monday) and **Until turned off** (a year ahead, as the stock applet keeps it), or **Turn off** while
+it is on. One deviation: the stock applet hides "tomorrow morning" until 07:00; here it is always
+offered and, chosen after midnight, ends at the coming 06:00 (the behaviour of the earlier "Until
+tomorrow"). From the keyboard the chevron moves the focus to the first choice, and a choice gives
+it back to the chevron. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
+Friday/Saturday/Sunday).

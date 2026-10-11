@@ -34,8 +34,8 @@ Item {
         return "";
     }
 
-    // Do Not Disturb until a time (G18: "1 hour", "until tomorrow"). The notification settings
-    // keep the time; the server is inhibited at once and released when it passes.
+    // Do Not Disturb until a time (G18: the "for a while" choices). The notification settings keep
+    // the time; the server is inhibited at once and released when it passes.
     function dndUntil(until) {
         settings.notificationsInhibitedUntil = until;
         settings.save();

@@ -518,6 +518,7 @@ ColumnLayout {
             onToggled: page.backend.night.toggle()
         }
         Tile {
+            id: dndTile
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -529,7 +530,19 @@ ColumnLayout {
             hasDetails: page.backend.dnd.available
             detailsText: i18nc("@action:button", "Do not disturb for a while")
             onToggled: page.backend.dnd.toggle()
-            onDetailsRequested: page.dndChoicesOpen = !page.dndChoicesOpen
+            onDetailsRequested: {
+                page.dndChoicesOpen = !page.dndChoicesOpen;
+                // From the keyboard, focus goes to the first choice (the choices open below the
+                // whole grid, out of sight of the chevron's tab order).
+                if (page.dndChoicesOpen && detailsButton.visualFocus) {
+                    Qt.callLater(() => {
+                        const first = dndChoiceButtons.itemAt(0);
+                        if (first) {
+                            first.forceActiveFocus(Qt.TabFocusReason);
+                        }
+                    });
+                }
+            }
         }
         Tile {
             Layout.fillWidth: true
@@ -668,37 +681,53 @@ ColumnLayout {
         }
     }
 
-    // Do Not Disturb for a while (G18).
+    // Do Not Disturb for a while (G18), with the stock applet's choices (contents/code/dnd.js).
     Flow {
+        id: dndChoices
         Layout.fillWidth: true
         visible: page.dndChoicesOpen && page.backend.dnd.available
         spacing: page.metrics.px(8)
 
         Repeater {
-            model: [
-                { "id": "hour", "text": i18nc("@action:button do not disturb", "For 1 hour") },
-                { "id": "tomorrow", "text": i18nc("@action:button do not disturb", "Until tomorrow") },
-                { "id": "off", "text": page.backend.dnd.active ? i18nc("@action:button do not disturb", "Turn off")
-                                                              : i18nc("@action:button do not disturb", "Until turned off") }
-            ]
+            id: dndChoiceButtons
+            // Read when the choices open: "this evening" and "Monday" depend on the time.
+            model: page.dndChoicesOpen ? page.backend.dnd.choices() : []
             delegate: TextButton {
                 required property var modelData
+                required property int index
                 objectName: "dnd-" + modelData.id
                 pal: page.pal
                 metrics: page.metrics
                 radius: height / 2
                 implicitHeight: page.pal.touch ? 44 : page.metrics.px(30)
                 fontSize: 12.5
-                text: modelData.text
+                text: {
+                    switch (modelData.id) {
+                    case "hour":
+                        return i18nc("@action:button do not disturb", "For 1 hour");
+                    case "hours4":
+                        return i18nc("@action:button do not disturb", "For 4 hours");
+                    case "evening":
+                        return i18nc("@action:button do not disturb", "Until this evening");
+                    case "morning":
+                        return i18nc("@action:button do not disturb", "Until tomorrow morning");
+                    case "monday":
+                        return i18nc("@action:button do not disturb", "Until Monday");
+                    default:
+                        return page.backend.dnd.active ? i18nc("@action:button do not disturb", "Turn off")
+                                                       : i18nc("@action:button do not disturb", "Until turned off");
+                    }
+                }
                 onClicked: {
-                    if (modelData.id === "hour") {
-                        page.backend.dnd.forHour();
-                    } else if (modelData.id === "tomorrow") {
-                        page.backend.dnd.untilTomorrow();
-                    } else {
+                    if (modelData.id === "off") {
                         page.backend.dnd.toggle();
+                    } else {
+                        page.backend.dnd.until(modelData.until);
                     }
                     page.dndChoicesOpen = false;
+                    if (visualFocus) {
+                        dndTile.detailsButton.forceActiveFocus(Qt.TabFocusReason);
+                    }
                 }
             }
         }
