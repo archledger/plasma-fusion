@@ -52,12 +52,19 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Night light (`From sunset`, `Until sunrise`, `From 19:00`, `Paused`, `Off`; toggles KWin's
   Night Light inhibition, turns Night Light on when it is off),
   Do not disturb (`Off`, `On`, `Until 18:00`; same code path as Plasma's own shortcut, with OSD),
-  Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
-  uses tuned-ppd on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). As the
-  stock Power and Battery widget: Performance is skipped while the daemon inhibits it, and the
-  tooltip says why (on a lap, too hot) and when it may be slower; it names applications holding a
-  profile; a refused switch reads `Couldn't switch to …` for 5 s. tuned-ppd 2.28 refuses
-  `HoldProfile` ("Invalid bus name"), so holds come from power-profiles-daemon systems),
+  Power mode (`Power saver` / `Balanced` / `Performance`; through PowerDevil, which uses tuned-ppd
+  on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). The chevron opens
+  the **Power mode** chooser (`ProfilesPage.qml`): the profiles the daemon offers with the active
+  one checked, a click switches straight to one, `Power settings` opens the power management
+  settings. The body is on in any profile but Balanced, as GNOME's Power Mode toggle: a click goes
+  back to Balanced, and from Balanced to the last other profile active in this session (Power
+  saver at first), so Balanced to Power saver no longer passes through Performance. As the stock
+  Power and Battery widget: while the daemon inhibits Performance, the chooser lists it as
+  `Unavailable` (it cannot be chosen, and the body skips it) and says why under the list (on a
+  lap, too hot), as the tile's tooltip does, with when it may be slower and the applications
+  holding a profile; a refused switch reads `Couldn't switch to …` on the tile (and `Couldn't
+  switch` on the row) for 5 s. tuned-ppd 2.28 refuses `HoldProfile` ("Invalid bus name"), so holds
+  come from power-profiles-daemon systems),
   Dark style (switches between the two Plasma Fusion Global Themes, see below);
 * **Keep awake** (`Off` / `On`): manually blocks sleep, display power saving and automatic screen
   locking until turned off in this session. An accent coffee-cup icon stays in the status pill
@@ -174,6 +181,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/BluetoothPage.qml     Bluetooth drill-down
   contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
+  contents/ui/ProfilesPage.qml      Power mode chooser (the Power mode tile's chevron)
+  contents/ui/PowerPage.qml         Sleep blockers (the Keep awake tile's chevron)
   contents/ui/NotificationCard.qml  one notification
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),
@@ -281,6 +290,19 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   both inhibitor endpoints, shared native state, preservation of another application's inhibition,
   service disappearance/return and complete release after repeated use.
 
+* Drill-down pages in the staged real QML with a stand-in backend (offscreen, in CI):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py build/stage
+  ```
+
+  Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
+  Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
+  under the list, a click on a profile chooses it directly.
+
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
   attached `KRoleNames` on a model held in a `var`). `metadata.json` parses, `main.xml` is well formed.
@@ -332,7 +354,7 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   as the board shows it off at 14:49 with `From sunset`. Clicking during the day pauses the coming
   evening (`Paused`), clicking again resumes; Plasma has no "turn on now until sunrise" without
   changing the user's Night Light mode.
-* **Power mode** cycles through the profiles on click (the board shows no chooser).
+* **Power mode** has a chevron and a chooser page (the board shows the tile only).
 * **Drill-down pages** also exist for Bluetooth and sound output (the board draws only the Wi-Fi
   panel); they use the same layout.
 * Wi-Fi speeds are shown only once NetworkManager reports traffic counters (hidden in the virtual
@@ -395,6 +417,19 @@ An independent review of the part, integrated with every other part that exists 
   30x26 with the 7 px #f2a65a dot at right 6 / top 4). All match; zoomed side-by-sides are in
   the evidence folder. Naming-table id, metadata (Authors, GPL-2.0-or-later) and the build script
   (`STAGE=… tools/build.sh quicksettings`, stage identical to the source) are correct.
+* Drill-down pages in the staged real QML with a stand-in backend (offscreen, in CI):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py build/stage
+  ```
+
+  Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
+  Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
+  under the list, a click on a profile chooses it directly.
+
 * `qmllint` (Qt 6.11.2) over all 37 QML files: no errors; the warnings are `i18n*` calls
   (injected by Plasma), plasma-pa singletons and `ListView.currentItem` methods (static-analysis
   limits only).

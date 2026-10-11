@@ -26,7 +26,8 @@ Item {
     property bool showNotifications: true
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
-    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices" or "display".
+    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" (Keep awake), "profiles"
+    // (Power mode), "devices" or "display".
     property string page: "main"
     property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
@@ -753,22 +754,23 @@ Item {
             }
             return profileName(active);
         }
-        // Why Performance is not offered or may be slower, and which applications hold a profile:
-        // the stock Power and Battery widget's wording.
-        readonly property string note: {
-            const lines = [];
+        // Why Performance cannot be chosen (empty when it can), in the stock Power and Battery
+        // widget's wording.
+        readonly property string inhibitionNote: {
             switch (inhibitionReason) {
             case "":
-                break;
+                return "";
             case "lap-detected":
-                lines.push(i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap."));
-                break;
+                return i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap.");
             case "high-operating-temperature":
-                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot."));
-                break;
+                return i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot.");
             default:
-                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable."));
+                return i18nc("@info:tooltip", "Performance mode is unavailable.");
             }
+        }
+        // That, why Performance may be slower, and which applications hold a profile.
+        readonly property string note: {
+            const lines = inhibitionNote !== "" ? [inhibitionNote] : [];
             if (active === "performance" && degradationReason !== "") {
                 switch (degradationReason) {
                 case "lap-detected":
@@ -786,17 +788,42 @@ Item {
             }
             return lines.join("\n");
         }
-        function cycle() {
+        // The chooser's rows ([{profile, active, enabled}]): Performance is listed but cannot be
+        // chosen while the daemon inhibits it.
+        readonly property var options: s ? Power.options(s.list, active, inhibitionReason) : []
+        // The tile's body: back to Balanced, or from Balanced to the last other profile chosen
+        // (shared by every widget, for this session), so Balanced to Power saver never passes
+        // through Performance.
+        readonly property string toggleTarget: s ? Power.toggleTarget(s.list, active, inhibitionReason, Instances.lastPowerProfile) : ""
+        onActiveChanged: {
+            if (active !== "" && active !== "balanced") {
+                Instances.lastPowerProfile = active;
+            }
+        }
+        function setProfile(profile: string) {
             if (!s || !available) {
                 backend.openSettings("kcm_powerdevilprofilesconfig", []);
                 return;
             }
-            // Performance is skipped while the daemon inhibits it; a refused switch shows on the tile.
-            const next = Power.next(s.list, active, inhibitionReason);
-            if (next !== "") {
+            // A refused switch shows on the tile and the page for a few seconds.
+            const row = options.find(o => o.profile === profile);
+            if (row && row.enabled && !row.active) {
                 failedProfile = "";
-                s.setProfile(next);
+                s.setProfile(profile);
             }
+        }
+        function toggle() {
+            if (!s || !available) {
+                backend.openSettings("kcm_powerdevilprofilesconfig", []);
+                return;
+            }
+            if (toggleTarget !== "") {
+                failedProfile = "";
+                s.setProfile(toggleTarget);
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_powerdevilprofilesconfig", []);
         }
     }
 
