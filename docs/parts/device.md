@@ -317,9 +317,14 @@ ensure-topbars.js), the deployed d4afee8 tools (upgrade path) and these tools.
 Open items:
 - Meta+N (the notification list): the component's desktop file is now installed executable (KDE
   refused to run it without the bit), but in a private session neither the key nor
-  `invokeShortcut` launches it, while its command run directly works. Private sessions have no
-  systemd user manager on their bus, the likely difference. To check by hand in the real session at
-  DEPLOY-1; if it fails there, a KWin script shortcut that calls `evaluateScript` replaces it.
+  `invokeShortcut` launches it, while its command run directly works. Found in 0.5.0: the setup
+  registered the component's `_launch` action itself, and kglobalacceld then put an action no
+  program owns in place of the desktop file's own `_launch` (it reads the file when the component is
+  first named, then adds the named action anew), so the key did nothing until the next login read
+  the file again. The setup now registers it as System Settings' "Add Command" does (an action with
+  an empty name, removed again: `register_command_component`), and the key works at once
+  (`tests/shortcut-keys-unit.sh`, 3 checks against a fake kglobalaccel made the way kglobalacceld
+  6.7 behaves). The private-session case is not checked again.
 - Portrait fringe measurement and the real GTK apps the owner uses (hand checks).
 
 ## Needs from other parts

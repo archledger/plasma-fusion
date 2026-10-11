@@ -543,9 +543,10 @@ upgrade_log() { # STATUS FILE GROUP KEY OLD NEW (only for an upgrade from an ear
 # KWin aborts, and with it the session (release-test VM, 2026-10-03).
 
 # Current keys of a global shortcut as Qt key codes. $1 component, $2 action
+# (kglobalaccel lists a desktop file's action without a key as the key 0, which is left out)
 shortcut_get() {
   bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel shortcut as 4 "$1" "$2" "" "" 2>/dev/null |
-    python3 -c 'import json,sys; print(" ".join(str(k) for k in json.load(sys.stdin)["data"][0]))' 2>/dev/null || true
+    python3 -c 'import json,sys; print(" ".join(str(k) for k in json.load(sys.stdin)["data"][0] if k))' 2>/dev/null || true
 }
 
 # Give a global shortcut exactly the keys listed (none when empty). $1 component, $2 action, $3.. keys
@@ -1441,6 +1442,21 @@ Exec=busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell eva
 StartupNotify=false
 EOF
 }
+# Registers a command component (its desktop file in ~/.local/share/kglobalaccel/) as System
+# Settings' "Add Command" does (kcm_keys, GlobalAccelModel::addApplication): an action with an empty
+# name makes kglobalaccel read the desktop file and take the file's own _launch action, which starts
+# the command; the empty one is removed again. Registering "_launch" itself, as this did before, put
+# a second _launch that no program owns in place of the file's own one (kglobalacceld's addAction
+# runs after the component was made from the file), so the key did nothing until the next login.
+# $1 component, $2 its name
+register_command_component() {
+  [ "$DRY" = 1 ] && return 0
+  if ! bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$1" "" "$2" "" >/dev/null 2>&1; then
+    note "warning: kglobalaccel did not take $1"
+    return 0
+  fi
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$1" "" >/dev/null 2>&1 || true
+}
 # $1 claim (the Windows set) or free (only when nothing holds Meta+N)
 ensure_notify_shortcut() {
   local mode=$1 cur free
@@ -1448,11 +1464,7 @@ ensure_notify_shortcut() {
   # executable bit ("not owned by root and executable flag not set"), so kglobalaccel would bind
   # Meta+N and then refuse to launch it. System Settings' "Add Command" entries are made the same way.
   install_text "$DATA/kglobalaccel/$NOTIFY_COMPONENT" "$(notify_desktop)" 0755 || true
-  if [ "$DRY" = 0 ]; then
-    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$NOTIFY_COMPONENT" _launch \
-      "Plasma Fusion: Notifications" "Plasma Fusion: Notifications" >/dev/null 2>&1 ||
-      note "warning: kglobalaccel did not take $NOTIFY_COMPONENT"
-  fi
+  register_command_component "$NOTIFY_COMPONENT" "Plasma Fusion: Notifications"
   if [ "$mode" = claim ]; then
     shortcut_claim "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
     return 0
