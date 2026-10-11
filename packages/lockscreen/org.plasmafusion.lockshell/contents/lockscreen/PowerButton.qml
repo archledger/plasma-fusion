@@ -8,12 +8,15 @@ import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 
 // Login board power button: a 44 px glass circle with an 18 px line icon over an 11.5 px
-// label. Keeps the stock action button's mnemonic handling ("Slee&p" -> Alt+P).
+// label (Shut down: a red circle with a white icon). Keeps the stock action button's mnemonic
+// handling ("Slee&p" -> Alt+P).
 T.AbstractButton {
     id: root
 
     required property FusionMetrics metrics
     property string iconPath: ""
+    // Shut down (Login board): the red circle.
+    property bool destructive: false
 
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
@@ -50,7 +53,8 @@ T.AbstractButton {
             height: width
             radius: width / 2
             antialiasing: true
-            color: root.hovered || root.visualFocus ? PfStyle.chipFillHover : PfStyle.chipFill
+            color: root.destructive ? (root.hovered || root.visualFocus ? PfStyle.shutDownFillHover : PfStyle.shutDownFill)
+                 : root.hovered || root.visualFocus ? PfStyle.chipFillHover : PfStyle.chipFill
             scale: root.down ? 0.94 : 1
 
             Behavior on scale {
@@ -65,13 +69,14 @@ T.AbstractButton {
                 antialiasing: true
                 color: "transparent"
                 border.width: 1
-                border.color: PfStyle.chipBorder
+                border.color: root.destructive ? PfStyle.shutDownFill : PfStyle.chipBorder
             }
 
             LineIcon {
                 anchors.centerIn: parent
                 size: 18
                 path: root.iconPath
+                color: root.destructive ? "#ffffff" : PfStyle.text
             }
             FocusRing {
                 visible: root.visualFocus

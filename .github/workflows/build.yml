@@ -104,6 +104,9 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/devices_service_test.py
 
+      - name: Lock screen Restart and Shut Down (offscreen, mock logind and ksmserver)
+        run: packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy power-noreboot power-kiosk
+
       - name: Scroll safety of the bar's wheel controls (offscreen Qt)
         run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/wheel_guard_test.py
 

@@ -27,6 +27,9 @@ QtObject {
     readonly property color placeholder: "#8f98b3"
     readonly property color link: focusRing // the accent's light shade, #8ab8ff on the board
     readonly property color warning: "#f2c38a"
+    // The Login board's Shut down button fill (and its border); its icon is white.
+    readonly property color shutDownFill: "#d9434b"
+    readonly property color shutDownFillHover: "#e2565d"
     readonly property color error: "#ff9b9f"
 
     // Accent (Login board: focus border, focus halo, unlock button), following the user's
@@ -91,6 +94,9 @@ QtObject {
     readonly property string iconSleep: "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"
     readonly property string iconHibernate: "M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.6 4.6 12 6l2.4-1.4M9.6 19.4 12 18l2.4 1.4"
     readonly property string iconSwitchUser: "M6.6 8.6a2.9 2.9 0 1 0 5.8 0a2.9 2.9 0 1 0-5.8 0M2.8 19a6.7 6.7 0 0 1 13.4 0M15.6 5.9a2.9 2.9 0 0 1 0 5.4M18.4 13.8a6.7 6.7 0 0 1 2.8 5.2"
+    // Login board's Restart and Shut down buttons.
+    readonly property string iconRestart: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"
+    readonly property string iconShutDown: "M12 3v9M6.3 6.3a8 8 0 1 0 11.4 0"
     readonly property string iconKeyboard: "M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"
     readonly property string iconBell: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"
     // Filled glyphs.

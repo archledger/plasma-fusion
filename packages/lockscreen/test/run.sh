@@ -13,7 +13,7 @@ unset DISPLAY WAYLAND_DISPLAY XAUTHORITY
 export QT_QPA_PLATFORM=offscreen
 exec dbus-run-session --config-file="$here/session-bus.conf" -- bash -c '
   here=$1; shift
-  python3 "$here/mock_services.py" mpris notify & m=$!
+  python3 "$here/mock_services.py" mpris notify power & m=$!
   sleep 1
   rc=0; python3 "$here/harness.py" "$@" || rc=$?
   kill "$m" 2>/dev/null; wait "$m" 2>/dev/null
