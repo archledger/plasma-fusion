@@ -118,7 +118,9 @@ dock.addWidget("org.plasmafusion.dock");
   as the stock tooltips; the app icon while a window is minimized or before the first frame). The active
   window's card has the accent ring. Clicking a card activates that window. Moving to another running
   app switches at once; the preview stays while the pointer is on it and hides 300 ms after the pointer
-  leaves both. The thumbnails stream only while the preview is shown.
+  leaves both. The thumbnails stream only while the preview is shown. The cards are a ListModel kept
+  in step with the windows (`contents/code/previews.js`, `tests/previews.test.js`): a title or
+  active-window change sets that card's roles, and every card keeps its stream.
 - **Audio indicator:** a 20 px disc with a speaker glyph inside the icon's top-left corner (the count and
   progress use the top-right one; inside the icon, because a magnified icon rises past the 10 px above the
   resting icons where the dock tracks the pointer, so a disc over the edge would move away under it) while the app plays sound (after 2 s, so short sounds do not flash it)

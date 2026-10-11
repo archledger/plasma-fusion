@@ -909,7 +909,7 @@ PlasmoidItem {
         const shown = preview.item as WindowPreview;
         if (shown && shown.visible) {
             shown.cards().forEach((card, i) => {
-                add("preview" + i + (card.modelData.active ? "*" : "") + (card.live ? "~" : ""), card, card.width, card.height);
+                add("preview" + i + (card.active ? "*" : "") + (card.live ? "~" : ""), card, card.width, card.height);
                 add("previewclose" + i, card.closeTarget, card.closeTarget.width, card.closeTarget.height);
             });
         }

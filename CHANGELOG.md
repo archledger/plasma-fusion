@@ -18,6 +18,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   turned it off.
 - Do Not Disturb "Until tomorrow" chosen after midnight ends at 06:00 that morning, not at 06:00 the
   day after (29 hours from 01:00).
+- The dock's window previews no longer flicker and restart their live thumbnails whenever a
+  window title or the active window changes while they are shown (a terminal printing, a browser
+  loading a page): only the card that changed is updated.
 
 ## 0.4.0 (2026-10-09)
 
