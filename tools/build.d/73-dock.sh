@@ -18,6 +18,8 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["KPlugin"]
 python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$src/contents/config/main.xml"
 
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" dock
+# The settings page declares every key and default and refreshes the ones it does not edit.
+python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$src"
 
 if command -v node >/dev/null 2>&1; then
   node "$src/tests/pins.test.js" >/dev/null

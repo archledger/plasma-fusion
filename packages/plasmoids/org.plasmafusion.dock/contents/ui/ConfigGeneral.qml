@@ -40,6 +40,8 @@ KCM.SimpleKCM {
     property bool cfg_tabletShowDownloadsTrash
     property int cfg_powerTier
     property bool cfg_homeIndicator
+    property string cfg_splitRequest
+    property string cfg_activateRequest
 
     // The dialog also passes every key's default value as cfg_<key>Default.
     property var cfg_launchersDefault
@@ -65,6 +67,8 @@ KCM.SimpleKCM {
     property bool cfg_homeIndicatorDefault
     property int cfg_tabletStripHeight
     property int cfg_tabletStripHeightDefault
+    property string cfg_splitRequestDefault
+    property string cfg_activateRequestDefault
 
     function saveConfig(): void {
         const config = Plasmoid.configuration;
@@ -82,6 +86,9 @@ KCM.SimpleKCM {
         cfg_homeIndicator = config.homeIndicator;
         // written by the tablet KWin script
         cfg_tabletStripHeight = config.tabletStripHeight;
+        // requests other shell parts write through desktop scripting
+        cfg_splitRequest = config.splitRequest;
+        cfg_activateRequest = config.activateRequest;
     }
 
     Kirigami.FormLayout {

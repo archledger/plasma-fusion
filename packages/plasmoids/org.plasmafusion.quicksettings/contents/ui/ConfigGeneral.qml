@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
+import org.kde.plasma.plasmoid
 
 KCM.SimpleKCM {
     id: page
@@ -20,12 +21,47 @@ KCM.SimpleKCM {
     property alias cfg_popupScreenMargin: marginSpin.value
     property alias cfg_lightLookAndFeel: lightField.text
     property alias cfg_darkLookAndFeel: darkField.text
-    // Every key of main.xml needs a cfg_ property here, or the settings dialog warns.
+    // Every key of main.xml needs a cfg_ property here, and its default a cfg_<key>Default, or the
+    // settings dialog warns ("Setting initial properties failed").
     property string cfg_startPage: "main"
     property string cfg_keyboardPolicy: "tablet"
     property string cfg_tabletNotifications: "apart"
+    // Keys this page does not edit. The dialog writes every declared key back on Apply, so they are
+    // refreshed from the live configuration just before saving (nothing written meanwhile is lost).
     property string cfg_openRequest: ""
     property string cfg_debugAction: ""
+    property string cfg_airplaneRestore: ""
+    property string cfg_glass: "full"
+
+    property bool cfg_showKeyboardLayoutDefault
+    property bool cfg_keyboardLayoutAlwaysDefault
+    property bool cfg_showKdeConnectDefault
+    property bool cfg_showClipboardDefault
+    property bool cfg_showBatteryPercentDefault
+    property bool cfg_popupOnNewDeviceDefault
+    property bool cfg_showNotificationsDefault
+    property int cfg_popupGapDefault
+    property int cfg_popupScreenMarginDefault
+    property string cfg_startPageDefault
+    property string cfg_keyboardPolicyDefault
+    property string cfg_openRequestDefault
+    property string cfg_tabletNotificationsDefault
+    property string cfg_airplaneRestoreDefault
+    property string cfg_debugActionDefault
+    property string cfg_lightLookAndFeelDefault
+    property string cfg_darkLookAndFeelDefault
+    property string cfg_glassDefault
+
+    function saveConfig() {
+        const config = Plasmoid.configuration;
+        // requests other shell parts write through desktop scripting
+        cfg_openRequest = config.openRequest;
+        cfg_debugAction = config.debugAction;
+        // the radios to turn back on after airplane mode
+        cfg_airplaneRestore = config.airplaneRestore;
+        // written by the settings module and the power service
+        cfg_glass = config.glass;
+    }
 
     Kirigami.FormLayout {
         QQC2.CheckBox {

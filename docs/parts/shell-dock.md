@@ -251,6 +251,9 @@ Fixed:
    right before Apply writes them back, so pinning an app while the dialog is open is not undone. Only the
    generic Kirigami notice "Created graphical object was not placed in the graphics scene" remains; it is
    printed for any page pushed on a Kirigami PageRow (reproduced offscreen with a plain Kirigami.Page).
+   Since 0.4.1 `packages/common/tests/config_page_keys_test.py` (build step) checks it for the dock,
+   quick settings, the launcher and the one-page cards: keys added later (`splitRequest`,
+   `activateRequest`) had brought four warnings back.
 3. **Name pill edge** was drawn beside the fill (QML border) and showed the wallpaper lightened by 12 %; the
    board's CSS border lies over the background, giving a dark grey edge. The edge is now a separate
    rectangle over the fill (`review-pill-and-ring-fix.png`).

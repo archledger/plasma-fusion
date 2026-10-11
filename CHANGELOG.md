@@ -28,6 +28,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - Quick settings, its tablet policy and the pen menu run a command again when the same one is still
   running, and every caller gets its answer: before, the second run was dropped, and at start-up in
   tablet posture one of the two reads of the window mode and the tablet mode never answered.
+- The settings dialogs of quick settings and the dock open without warnings in the log again, and
+  Apply in quick settings' dialog no longer writes back a value another part changed while it was
+  open (the airplane-mode radios, the glass level).
 
 ## 0.4.0 (2026-10-09)
 
