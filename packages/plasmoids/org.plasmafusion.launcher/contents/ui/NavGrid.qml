@@ -3,6 +3,7 @@
     SPDX-License-Identifier: GPL-2.0-or-later
 */
 
+import QtCore
 import QtQuick
 import QtQuick.Templates as T
 import org.kde.plasma.private.kicker as Kicker
@@ -37,6 +38,19 @@ GridView {
     signal typed(string text)
 
     property int itemHeight: 84
+    // What DocItem rows show: "file" (recent files: type tile and age), "folder" (recent folders)
+    // or "place" (the Places view: the place's own glyph, its path).
+    property string itemKind: "file"
+    // The user's standard folders as file URLs, which tell the places apart (Launcher.placeKind).
+    readonly property var standardFolders: itemKind === "file" ? ({}) : ({
+        "home": String(StandardPaths.writableLocation(StandardPaths.HomeLocation)),
+        "desktop": String(StandardPaths.writableLocation(StandardPaths.DesktopLocation)),
+        "documents": String(StandardPaths.writableLocation(StandardPaths.DocumentsLocation)),
+        "downloads": String(StandardPaths.writableLocation(StandardPaths.DownloadLocation)),
+        "music": String(StandardPaths.writableLocation(StandardPaths.MusicLocation)),
+        "pictures": String(StandardPaths.writableLocation(StandardPaths.PicturesLocation)),
+        "videos": String(StandardPaths.writableLocation(StandardPaths.MoviesLocation)),
+    })
     // The pinned grid: a tile dropped on it moves there (GAPS C7).
     property bool reorderable: false
 
@@ -131,18 +145,29 @@ GridView {
         return entry && entry.display ? entry.display : "";
     }
 
+    // The Kicker model and row behind a row of the view: the view's own model, or the source of a
+    // filter proxy (the Places list), which has no trigger() of its own.
+    function sourceOf(index: int): var {
+        if (model && typeof model.trigger !== "function" && model.sourceModel && typeof model.mapToSource === "function") {
+            return { "model": model.sourceModel, "row": model.mapToSource(model.index(index, 0)).row };
+        }
+        return { "model": model, "row": index };
+    }
+
     function launch(index: int) {
         if (!model || index < 0 || index >= count) {
             return;
         }
-        if (model.trigger(index, "", null) && launcher) {
+        const source = sourceOf(index);
+        if (source.model.trigger(source.row, "", null) && launcher) {
             launcher.close();
         }
     }
 
     function openMenu(index: int, item: Item, x: real, y: real) {
         if (launcher && item) {
-            launcher.openActionMenu(model, index, item.model, item, x, y);
+            const source = sourceOf(index);
+            launcher.openActionMenu(source.model, source.row, item.model, item, x, y);
         }
     }
 

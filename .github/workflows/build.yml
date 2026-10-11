@@ -56,6 +56,9 @@ jobs:
       - name: Setup config keys that keep the user's choice
         run: tools/device/tests/config-keys-unit.sh build/config-keys
 
+      - name: Setup search keys (launcher and KRunner)
+        run: tools/device/tests/launcher-keys-unit.sh build/launcher-keys
+
       - name: VM crash collector unit tests
         run: |
           python3 tools/tests/release-vm/test-crash-count.py
@@ -94,6 +97,20 @@ jobs:
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+
+      - name: Dock file-transfer progress on Plasma's job server (private bus)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.dock/tests/transfers_test.py
+
+      - name: Launcher views on Kicker's models (activity history, private bus)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.launcher/tests/views_test.py
 
       - name: Command runner tests (Plasma's executable engine)
         run: |

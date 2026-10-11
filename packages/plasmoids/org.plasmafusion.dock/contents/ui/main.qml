@@ -20,6 +20,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.private.kicker as Kicker
 import org.kde.kitemmodels as KItemModels
 
+import "../code/jobs.js" as Jobs
 import "../code/pins.js" as Pins
 import "../code/date-timer.js" as DateTimer
 
@@ -813,6 +814,9 @@ PlasmoidItem {
         }
     }
 
+    // Search opens the launcher's search, as every search key does (Meta+S, Meta+Space, Alt+Space);
+    // the full KRunner is Alt+F2 and the launcher's last search row, or this button with
+    // searchAction 0.
     function toggleSearch(): void {
         if (Plasmoid.configuration.searchAction === 1) {
             toggleLauncher(searchButton.clickFromPointer ? searchButton.launcherWasOpen : undefined, "home");
@@ -1062,10 +1066,24 @@ PlasmoidItem {
 
     // ---- Unread counts and progress (GAPS G17) ----
     // Per desktop id: {count, countVisible, progress, progressVisible, urgent}, drawn by TaskItem.
-    // Apps broadcast them as com.canonical.Unity.LauncherEntry.Update signals from any object path;
-    // the QML D-Bus watcher needs a fixed sender and path, so a live source needs a small compiled
-    // helper (docs/parts/shell-dock.md). Until then only the test hook (debugAction badge:) sets them.
+    // Apps broadcast them as com.canonical.Unity.LauncherEntry.Update signals from their own
+    // connection and object path. QML's SignalWatcher connects only with a set service and path
+    // and then hears only that sender on that exact path, so a live source needs a small compiled
+    // helper that connects as the stock SmartLauncher does (docs/parts/shell-dock.md, "Why Unity
+    // LauncherEntry needs a compiled part"). Until then only the test hook (debugAction badge:)
+    // sets them.
     property var launcherEntries: ({})
+    // With the file-transfer progress below: what the tiles draw.
+    readonly property var dockEntries: Jobs.withJobs(launcherEntries, jobProgress)
+
+    // ---- File-transfer progress (stock parity): the jobs of Plasma's notification server, such
+    // as a copy in Dolphin or a download, as a progress bar on their app's tile (TransferJobs.qml).
+    // The stock task manager gets the same numbers from libnotificationmanager, which sends them as
+    // LauncherEntry signals (the mean percentage of the app's running jobs, code/jobs.js).
+    TransferJobs {
+        id: transferJobs
+    }
+    readonly property var jobProgress: transferJobs.progress
 
     // ---- Today, for the calendar tile ----
     property date today: new Date()
@@ -2017,7 +2035,7 @@ PlasmoidItem {
                 tablet: root.tablet
                 pulseCycles: root.pulseCycles
                 gap: root.gap
-                entry: root.launcherEntries[taskItem.iconName] ?? null
+                entry: root.dockEntries[taskItem.iconName] ?? null
                 audio: root.audio
                 pidsFor: row => root.taskPids(row)
                 monthText: root.todayMonth

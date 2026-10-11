@@ -27,6 +27,13 @@ const glyphs = {
     folder: "M3 7.5A2 2 0 0 1 5 5.5h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
     pin: "M9 4h6M10 4v5l-3 4h10l-3-4V4M12 13v7",
     more: "M6 12h.01M12 12h.01M18 12h.01",
+    home: "M4 11l8-7 8 7M6 9.5V20h12V9.5M10 20v-5h4v5",
+    download: "M12 4v11M7 10l5 5 5-5M5 20h14",
+    desktop: "M4 5h16v11H4zM9 20h6M12 16v4",
+    drive: "M4 14l2.5-8h11l2.5 8M4 14h16v5H4zM16 16.5h.01",
+    trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
+    network: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18",
+    clock: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2",
 };
 
 // Recent-file tiles: colour and glyph per kind (colours from the design palette).
@@ -60,6 +67,82 @@ const extensionKinds = {
     zip: "archive", tar: "archive", gz: "archive", tgz: "archive", xz: "archive", zst: "archive", bz2: "archive",
     "7z": "archive", rar: "archive", iso: "archive", rpm: "archive", deb: "archive",
 };
+
+// Places (Kicker's ComputerModel: the file manager's places and removable drives): colour and
+// glyph. The model gives each place's icon as a QIcon, which QML cannot name, so the kind comes
+// from the URL: the user's standard folders (`folders`: home, desktop, documents, downloads, music,
+// pictures, videos as file URLs, from StandardPaths), the trash, network and recent-files schemes,
+// the root and mount points; `icon` is used when it is a name (other models). Drives that are not
+// mounted have no URL yet. Anything else is a folder.
+const placeKinds = {
+    home: { color: "#3f7fe0", glyph: "home" },
+    desktop: { color: "#5b6478", glyph: "desktop" },
+    documents: { color: "#2f6fdf", glyph: "doc" },
+    downloads: { color: "#1f9e8f", glyph: "download" },
+    music: { color: "#d6457a", glyph: "music" },
+    pictures: { color: "#3aa65b", glyph: "image" },
+    videos: { color: "#c2410c", glyph: "video" },
+    trash: { color: "#5b6478", glyph: "trash" },
+    network: { color: "#7b5cd6", glyph: "network" },
+    drive: { color: "#a8741a", glyph: "drive" },
+    recent: { color: "#5b6478", glyph: "clock" },
+    folder: fileKinds.folder,
+};
+
+function placeKind(url, folders, icon) {
+    const u = String(url || "").replace(/\/+$/, "");
+    for (const key of ["home", "desktop", "documents", "downloads", "music", "pictures", "videos"]) {
+        const f = String((folders || {})[key] || "").replace(/\/+$/, "");
+        if (f.length > 0 && u === f) {
+            return placeKinds[key];
+        }
+    }
+    if (/^trash:/.test(u)) {
+        return placeKinds.trash;
+    }
+    if (/^(remote|network|smb|sftp|fish|ftp|webdav|davs?|nfs|mtp|kdeconnect):/.test(u)) {
+        return placeKinds.network;
+    }
+    if (/^(recentlyused|recentdocuments|timeline|baloosearch|search):/.test(u)) {
+        return placeKinds.recent;
+    }
+    const name = String(icon || "").replace(/-symbolic$/, "");
+    if (u === "" || u === "file:" || /^file:\/\/\/(run\/media|media|mnt)\//.test(u + "/") || /^(drive-|media-)/.test(name)) {
+        return placeKinds.drive;
+    }
+    if (name === "user-trash" || name === "user-trash-full") {
+        return placeKinds.trash;
+    }
+    return placeKinds.folder;
+}
+
+// Second line of a place or folder row: a local path with the home folder as "~" ("~/Documents";
+// "~" for the home folder, "/" for the root), else `fallback` (a drive's mount point or the
+// place's group, "Remote", "Devices"...).
+function placePath(url, homeUrl, fallback) {
+    const u = String(url || "");
+    if (u.indexOf("file://") !== 0) {
+        return String(fallback || "");
+    }
+    let path;
+    try {
+        path = decodeURIComponent(u.slice(7));
+    } catch (e) {
+        path = u.slice(7); // malformed escape in the URL
+    }
+    let home = String(homeUrl || "").replace(/^file:\/\//, "");
+    try {
+        home = decodeURIComponent(home);
+    } catch (e) {
+        // keep the encoded form
+    }
+    path = path.replace(/\/+$/, "") || "/";
+    home = home.replace(/\/+$/, "");
+    if (home.length > 0 && (path === home || path.indexOf(home + "/") === 0)) {
+        return "~" + path.slice(home.length);
+    }
+    return path;
+}
 
 function fileKind(name, url) {
     const source = String(name || url || "");
@@ -139,6 +222,13 @@ function categoryRank(key) {
 // (Escape, Backspace, Delete and other control keys carry control characters as text).
 function isPrintable(text) {
     return String(text || "").length > 0 && !/[\u0000-\u001f\u007f]/.test(text) && text.trim().length > 0;
+}
+
+// The hidden apps (Kicker's hiddenApplications list) without the ones shown again in the settings
+// page, as plain strings in their order. `list` may be a QML string list.
+function withoutUnhidden(list, unhidden) {
+    const shown = Array.from(unhidden || []).map(String);
+    return Array.from(list || []).map(String).filter(id => id.length > 0 && shown.indexOf(id) < 0);
 }
 
 // Splits the configured default pins into slots of alternatives.
