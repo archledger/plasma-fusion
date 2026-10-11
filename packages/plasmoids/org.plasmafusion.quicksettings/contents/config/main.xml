@@ -62,7 +62,7 @@
       <default></default>
     </entry>
     <entry name="debugAction" type="String">
-      <label>Testing only: run one action and clear the key. Values: dump:TAG (logs the sheet's geometry and scrolling, every visible target of the bar and the sheet with its centre and size, and the tablet policy state).</label>
+      <label>Testing only: run one action and clear the key. Values: dump:TAG (logs the sheet's geometry and scrolling, every visible target of the bar and the sheet with its centre and size, the tablet policy state, and the sheet's window against its content: frame padding, the content's place, size and wanted size).</label>
       <default></default>
     </entry>
     <entry name="lightLookAndFeel" type="String">
