@@ -190,6 +190,18 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   trailing tiles that KWin rounds one pixel too wide or tall. Tile membership, shared splits and
   restoration on drag remain native.
   The picker uses the same inner-gap geometry. Meta+T custom zones retain their own padding.
+- Quick tiles (0.5.0, survey B12): KWin keeps one quick-tile root per screen and desktop
+  (`QuickRootTile`, `src/tiles/quicktile.cpp`, the same in Plasma 6.7 and 6.8) beside the custom
+  root that `Workspace.rootTile()` returns. Scripts reach it only as a tiled window's
+  `tile.parent`; Plasma 6.8 registers `Tile` and `CustomTile` as QML types but still not
+  `QuickRootTile`, and nothing documents its children. The script used to recognise it by
+  exactly eight children and address them by their place. `SnapGeometry.js` now recognises it by
+  the class name Qt puts in the object's string (`KWin::QuickRootTile(0x…)`, checked in Plasma
+  6.7.91; the custom roots read `KWin::RootTile`, their tiles `KWin::CustomTile`), and, should that
+  name change, by its shape: the left and right halves at full height, top and bottom at full
+  width and the four quarters, which a custom layout cannot have (its tiles never overlap). Each
+  quick tile's role (left, right, top, bottom, the quarters) comes from its shape, not its place
+  among the children; the outline uses the same test.
 
 ### Snap-zone outline
 
@@ -228,7 +240,11 @@ Offline (laptop):
   packages/kwin/tests/offscreen/snaptest.py STAGE_HOME` loads the built snap script and outline
   in Qt. It checks flush outer edges, inner gaps, thirds/portrait rows, offset/odd work areas,
   picker geometry, existing tiled windows, native geometry updates, shared-split resize and
-  leaving an interactive move or tile. Build the stage with `STAGE=STAGE_HOME tools/build.sh kwin`.
+  leaving an interactive move or tile, and the quick-tile root: found by class name and by shape,
+  roles from the shape with the children in another order, a ninth child, another desktop's
+  custom root with quick-tile-shaped children never taken for it (script and outline; the 0.4
+  test of eight children fails 4 of these). Build the stage with `STAGE=STAGE_HOME tools/build.sh
+  kwin`.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`

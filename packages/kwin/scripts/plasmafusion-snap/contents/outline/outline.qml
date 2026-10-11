@@ -95,7 +95,7 @@ QtQuickWindow.Window {
             const desktop = !win.onAllDesktops && win.desktops.length ? win.desktops[0]
                 : Workspace.currentDesktopForScreen(win.output) || Workspace.currentDesktop;
             const root = tile.parent;
-            if (root.tiles.length === 8 && root !== Workspace.rootTile(win.output, desktop)) {
+            if (SnapGeometry.isQuickRoot(root, Workspace.rootTile(win.output, desktop))) {
                 quickRoots[win.output.name + "|" + (desktop ? desktop.id : "?")] = {root: root, output: win.output.name};
             }
         }
