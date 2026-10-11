@@ -16,6 +16,8 @@ QtObject {
     // A keep-awake request is on its way (KeepAwake.qml): the native monitor is shared by every
     // widget and keeps one pair of cookies, so one request at a time across all of them.
     property bool keepAwakePending: false
+    // When a timed Keep awake ends (ms since the epoch; 0: until turned off), for every widget.
+    property double keepAwakeUntil: 0
     // The hotspot runs (Network.qml): plasma-nm's handler follows only a hotspot it started (one it
     // found running when it was made stays "on" for it), so the widgets keep one state: set by a
     // new handler (it looks the connection up), by the one that starts, stops or sees the end of
@@ -37,6 +39,9 @@ QtObject {
     // The radios to bring back when airplane mode ends ({wifi, wwan, bluetooth}), whichever screen's
     // widget switches it off: plasma-nm's handlers each keep their own copy (Backend.qml).
     property var airplaneRestore: null
+    // The last power profile other than Balanced that was active (Backend.qml): the Power mode
+    // tile's body goes back to it from Balanced, as GNOME's toggle does. For this session only.
+    property string lastPowerProfile: ""
     // The keep-awake request's one timeout (a widget's own timer could end another widget's request early).
     readonly property Timer keepAwakeTimeout: Timer {
         interval: 5000

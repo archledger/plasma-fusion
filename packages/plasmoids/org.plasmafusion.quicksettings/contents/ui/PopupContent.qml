@@ -215,6 +215,8 @@ Item {
                             return audioComponent;
                         case "power":
                             return powerComponent;
+                        case "profiles":
+                            return profilesComponent;
                         case "devices":
                             return devicesComponent;
                         case "display":
@@ -353,6 +355,15 @@ Item {
     Component {
         id: displayComponent
         DisplayPage {
+            backend: content.backend
+            pal: content.pal
+            metrics: content.metrics
+            onBack: content.closePage(false)
+        }
+    }
+    Component {
+        id: profilesComponent
+        ProfilesPage {
             backend: content.backend
             pal: content.pal
             metrics: content.metrics

@@ -375,7 +375,9 @@ PlasmoidItem {
         }
     }
 
-    // ---- Testing hook (config key debugAction, cleared after use): "dump:TAG".
+    // ---- Testing hook (config key debugAction, cleared after use): "dump:TAG", or "keepawake:SECONDS"
+    // for a timed Keep awake that ends after so many seconds (the scenario of a timer running out,
+    // which the sheet offers only in hours).
     readonly property string debugAction: Plasmoid.configuration.debugAction
     onDebugActionChanged: Qt.callLater(runDebugAction)
     function runDebugAction(): void {
@@ -387,6 +389,8 @@ PlasmoidItem {
         const parts = action.split(":");
         if (parts[0] === "dump") {
             dump(parts.slice(1).join(":"));
+        } else if (parts[0] === "keepawake") {
+            backend.keepAwake.forSeconds(Math.min(86400, parseInt(parts[1]) || 0));
         }
     }
     // Every visible target (a button, a slider, a mouse area) under `item`, as
@@ -434,6 +438,7 @@ PlasmoidItem {
                      + ", power " + backend.profile.subtitle + (backend.profile.note ? " [" + backend.profile.note.replace(/\n/g, " | ") + "]" : "")
                      + ", hotspot " + backend.net.hotspotSubtitle
                      + ", devices " + backend.devices.count
+                     + ", tray " + (backend.trayRevealed.length > 0 ? backend.trayRevealed.join("+") : "-")
                      + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length
                      + ", page " + backend.page
                      + ", focus " + (popup.activeFocusItem ? popup.activeFocusItem.Accessible.name : "-")
@@ -450,6 +455,7 @@ PlasmoidItem {
     Backend {
         id: backend
         popupOpen: root.popupOpen
+        containment: Plasmoid.containment
         showKeyboardLayout: Plasmoid.configuration.showKeyboardLayout
         keyboardLayoutAlways: Plasmoid.configuration.keyboardLayoutAlways
         showKdeConnect: Plasmoid.configuration.showKdeConnect

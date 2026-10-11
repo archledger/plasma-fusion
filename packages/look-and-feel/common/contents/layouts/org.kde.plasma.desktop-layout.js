@@ -82,7 +82,11 @@ var TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS = [
 // Tray items hidden the same way (disabledStatusNotifiers and hiddenItems), so the tray has no
 // expander arrow (round 2): vaults, removable devices, display configuration and printers stay
 // passive most of the time and would only sit behind the arrow; the input-method item because
-// quick settings has its own keyboard button (TABLET 4.3). They stay loaded.
+// quick settings has its own keyboard button (TABLET 4.3). They stay loaded, and the
+// quick-settings widget next to the tray shows the vault, printer, display and input-method items
+// in the bar while they are active (an open vault, queued print jobs, presentation mode or a
+// second screen, the input-method switch outside tablet posture) through the tray's shownItems,
+// and hides them again when passive (its contents/code/tray.js; the tray has no key for that).
 var TRAY_ITEMS_HIDDEN = [
     "org.kde.plasma.vault",
     "org.kde.plasma.devicenotifier",

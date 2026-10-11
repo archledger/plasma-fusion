@@ -53,22 +53,40 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Night Light inhibition, turns Night Light on when it is off),
   Do not disturb (`Off`, `On`, `Until 18:00`, `Until Mon 06:00`; same code path as Plasma's own
   shortcut, with OSD),
-  Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
-  uses tuned-ppd on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). As the
-  stock Power and Battery widget: Performance is skipped while the daemon inhibits it, and the
-  tooltip says why (on a lap, too hot) and when it may be slower; it names applications holding a
-  profile; a refused switch reads `Couldn't switch to …` for 5 s. tuned-ppd 2.28 refuses
-  `HoldProfile` ("Invalid bus name"), so holds come from power-profiles-daemon systems),
+  Power mode (`Power saver` / `Balanced` / `Performance`; through PowerDevil, which uses tuned-ppd
+  on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). The chevron opens
+  the **Power mode** chooser (`ProfilesPage.qml`): the profiles the daemon offers with the active
+  one checked, a click switches straight to one, `Power settings` opens the power management
+  settings. The body is on in any profile but Balanced, as GNOME's Power Mode toggle: a click goes
+  back to Balanced, and from Balanced to the last other profile active in this session (Power
+  saver at first), so Balanced to Power saver no longer passes through Performance. As the stock
+  Power and Battery widget: while the daemon inhibits Performance, the chooser lists it as
+  `Unavailable` (it cannot be chosen, and the body skips it) and says why under the list (on a
+  lap, too hot), as the tile's tooltip does, with when it may be slower and the applications
+  holding a profile; a refused switch reads `Couldn't switch to …` on the tile (and `Couldn't
+  switch` on the row) for 5 s. tuned-ppd 2.28 refuses `HoldProfile` ("Invalid bus name"), so holds
+  come from power-profiles-daemon systems),
   Dark style (switches between the two Plasma Fusion Global Themes, see below);
-* **Keep awake** (`Off` / `On`): manually blocks sleep, display power saving and automatic screen
-  locking until turned off in this session. An accent coffee-cup icon stays in the status pill
-  while it is on, including tablet posture; the pill's tooltip explains the active inhibition.
+* **Keep awake** (`Off` / `On` / `1 h 5 min left`): manually blocks sleep, display power saving and
+  automatic screen locking; a click turns it on until turned off, as before. Its page (the
+  chevron, `Keep awake options`; titled **Keep awake**, with a switch) also keeps it awake
+  `For 1 hour`, `For 4 hours`, `Until…` a time of day (a quarter-hour chooser in the locale's time
+  format, starting at the quarter hour after an hour from now; a time already passed means
+  tomorrow) or `Until turned off`, as Caffeine, Amphetamine and PowerToys Awake offer; the page
+  says `On until 21:37 (1 h left)`. The end is a wall-clock time kept for every widget of the
+  shell (`Instances`), so the timer runs with the sheet closed and after a suspend still ends it
+  (at most a minute late; `contents/code/keepawake.js`, tested by `tests/keepawake.test.js`);
+  turning it off, here or in the hidden battery applet, drops the end. Across a plasmashell
+  restart nothing is restored: Plasma's own manual inhibition belongs to the plasmashell process
+  and ends with it, timed or not (checked in the test VM). An accent coffee-cup icon stays in the
+  status pill while it is on, including tablet posture; the pill's tooltip explains the active
+  inhibition and, when timed, how long is left and until when.
   The tile uses Plasma's native `InhibitionControl`, so the hidden stock battery applet and all
   Fusion controls in the same plasmashell process agree on the manual state. Other applications'
   inhibitors are separate; turning this off leaves those in place. The popup can be closed without
   releasing the inhibition. Manual Lock still works. Normal timeout settings are never rewritten,
   and exiting the session releases the native requests. Missing PowerDevil or ScreenSaver service
-  shows `Unavailable` with a disabled tile. Its chevron opens **Sleep blockers**: the applications currently
+  shows `Unavailable` with a disabled tile. Under the durations the page lists the **Sleep blockers**: the applications currently
   requesting to block sleep or idle screen locking, with their reasons, each with an `Allow this
   application's request` box (PowerDevil's `SetInhibitionAllowed`, as in the stock battery applet);
 * **Wi‑Fi hotspot** (`Off`, `Starting…`, `On`; otherwise the reason: `Wi‑Fi in use`, `Wi‑Fi is off`,
@@ -182,6 +200,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
   contents/ui/NotificationEntry.qml one row of the history: an app's group header or a card,
                                     and "Show N More" (the sheet and the Notification Centre)
+  contents/ui/ProfilesPage.qml      Power mode chooser (the Power mode tile's chevron)
+  contents/ui/PowerPage.qml         Keep awake durations and the sleep blockers (the tile's chevron)
   contents/ui/NotificationCard.qml  one notification
   contents/ui/NotificationThumbnail.qml, NotificationPreview.qml
                                     a linked file's preview (KIO's, through the stock applet's
@@ -198,7 +218,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
                                     TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
                                     tablet-mode setting, full-screen apps; QS-1; posture
-                                    settings: power button, touch edge, TABLET2 P0/N1)
+                                    settings: power button, touch edge, TABLET2 P0/N1),
+                                    TrayItems (hidden stock tray items shown while active)
 tools/build.d/71-quicksettings.sh   copies the package to $STAGE/.local/share/plasma/plasmoids/
 ```
 
@@ -246,6 +267,36 @@ System tray keys (containment config of the tray, group `[General]`):
   hides are disabled as status notifiers, so they never bring it up, and Disks & Devices is not
   loaded at all. That arrow is the stock tray's and is not on the board.
 
+### Hidden tray items while active (P1)
+
+The layout hides Vaults, Display Configuration, Printers and the input-method item in the tray
+(`TRAY_ITEMS_HIDDEN`: `disabledStatusNotifiers` and `hiddenItems`) so that, passive, they do not
+bring back the expander arrow, and the tray has no key for "hidden while passive". This widget
+supplies it for the tray in its own panel (`services/TrayItems.qml`, `contents/code/tray.js`):
+it reads each stock item's own status from the tray (`Plasma::Containment::applets`,
+`Plasma::Applet::status`), and while one is active it adds the id to the tray's `shownItems`
+(through the tray's configuration, which the tray reloads at once); `shownItems` wins over both
+other lists (6.7.5 `calculateEffectiveStatus`), so the stock item shows in the bar, with its own
+pop-up (lock or open vaults, the print queue, screen layouts and presentation mode, the keyboard
+switch). When it is passive again the id goes out of `shownItems` and the item is hidden, without
+the arrow. Shown while:
+
+| Item | Shown while (the item's own state, checked in the 6.7.5 sources) |
+|---|---|
+| `org.kde.plasma.vault` | a vault is open (`hasOpenVaults`: Active) |
+| `org.kde.plasma.printmanager` | a print job is queued (Active; Passive with printers and no job, Hidden without a printer) |
+| `org.kde.kscreen` | presentation mode is on (its own switch: Active), or more than one screen is connected (the item stays Passive then, but its layout choices matter) |
+| `org.kde.plasma.manage-inputmethod` | it is active (6.7: the on-screen keyboard disabled or set to all input devices, an application with text input in tablet mode; 6.8: the keyboard would show), outside tablet posture, where the tablet row's keyboard button already covers it (TABLET 4.3) |
+
+Disks & Devices stays replaced by its page and is not loaded. An id the user moved out of
+`disabledStatusNotifiers` (any visibility chosen in the tray's settings does that) is the user's:
+this widget neither adds nor removes it, and it never touches other `shownItems` entries. Each
+screen's widget handles its own bar's tray. A stale entry (plasmashell ended while an item was
+shown) is taken out when the widget starts. Nothing is migrated: the layout's lists are unchanged,
+so existing layouts get this with the updated widget, at the next login or plasmashell start. A
+pop-up left open when its item hides (a vault locked from its own pop-up) stays open until it is
+closed. Without quick settings in the bar (a tray on its own) the items stay hidden as before.
+
 Widget options (`[General]` of the widget, `contents/config/main.xml`, also in its settings page):
 
 | Key | Default | Meaning |
@@ -263,7 +314,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
 | `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`; without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
-| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state |
+| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
 Dark style: when kdeglobals `[KDE] DefaultLightLookAndFeel` / `DefaultDarkLookAndFeel` pair the two
@@ -291,7 +342,36 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 
   Needs PySide6, python3-dbus, python3-gobject and PowerDevil's QML module. Checks default-off,
   both inhibitor endpoints, shared native state, preservation of another application's inhibition,
-  service disappearance/return and complete release after repeated use.
+  service disappearance/return and complete release after repeated use; and the timed Keep awake:
+  both widgets know the end, it ends on time with one release, an end left from a Keep awake
+  turned off does not end the next one, `Until turned off` keeps a timed one going.
+
+* Drill-down pages in the staged real QML with a stand-in backend (offscreen, in CI):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py build/stage
+  ```
+
+  Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
+  Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
+  under the list, a click on a profile chooses it directly.
+  Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
+  passes its time, the state line for timed and untimed.
+* Hidden tray items while active (offscreen, Plasma's `org.kde.plasma.core`, a stand-in panel and
+  tray with the stock ids and a writable configuration; in CI):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+  ```
+
+  An active vault or printers needing attention go into `shownItems` and out again when passive,
+  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
+  themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
@@ -344,7 +424,7 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   as the board shows it off at 14:49 with `From sunset`. Clicking during the day pauses the coming
   evening (`Paused`), clicking again resumes; Plasma has no "turn on now until sunrise" without
   changing the user's Night Light mode.
-* **Power mode** cycles through the profiles on click (the board shows no chooser).
+* **Power mode** has a chevron and a chooser page (the board shows the tile only).
 * **Drill-down pages** also exist for Bluetooth and sound output (the board draws only the Wi-Fi
   panel); they use the same layout.
 * Wi-Fi speeds are shown only once NetworkManager reports traffic counters (hidden in the virtual
@@ -407,6 +487,33 @@ An independent review of the part, integrated with every other part that exists 
   30x26 with the 7 px #f2a65a dot at right 6 / top 4). All match; zoomed side-by-sides are in
   the evidence folder. Naming-table id, metadata (Authors, GPL-2.0-or-later) and the build script
   (`STAGE=… tools/build.sh quicksettings`, stage identical to the source) are correct.
+* Drill-down pages in the staged real QML with a stand-in backend (offscreen, in CI):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py build/stage
+  ```
+
+  Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
+  Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
+  under the list, a click on a profile chooses it directly.
+  Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
+  passes its time, the state line for timed and untimed.
+* Hidden tray items while active (offscreen, Plasma's `org.kde.plasma.core`, a stand-in panel and
+  tray with the stock ids and a writable configuration; in CI):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+  ```
+
+  An active vault or printers needing attention go into `shownItems` and out again when passive,
+  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
+  themselves are `tests/tray.test.js`.
+
 * `qmllint` (Qt 6.11.2) over all 37 QML files: no errors; the warnings are `i18n*` calls
   (injected by Plasma), plasma-pa singletons and `ListView.currentItem` methods (static-analysis
   limits only).

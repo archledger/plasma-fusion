@@ -40,6 +40,9 @@ var brightness = "M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M2 12h2M20 12h
 var bluetooth = "M7 7l10 10-5 4V3l5 4L7 17";
 var moon = "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z";
 var gauge = "M4 16a8 8 0 0 1 16 0M12 16l4-5";
+// The Power mode chooser's rows: the same dial with the needle low, upright and high.
+var gaugeLow = "M4 16a8 8 0 0 1 16 0M12 16l-4-5";
+var gaugeMid = "M4 16a8 8 0 0 1 16 0M12 16V9.5";
 // Disks & Devices: a USB stick (body, connector, contacts) and the eject mark.
 var usbDrive = "M8 10h8v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1zM9.5 4h5v6h-5zM11 6.5h.01M13 6.5h.01";
 var eject = "M12 5l7 8H5zM5 18.5h14";

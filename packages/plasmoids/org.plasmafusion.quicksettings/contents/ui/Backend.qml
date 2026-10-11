@@ -9,6 +9,7 @@ import "components"
 import "global"
 import "../code/power.js" as Power
 import "../code/dnd.js" as Dnd
+import "../code/keepawake.js" as Timed
 
 // Every data source behind one null-safe object. Each service lives in its own
 // file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
@@ -26,7 +27,8 @@ Item {
     property bool showNotifications: true
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
-    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices" or "display".
+    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" (Keep awake), "profiles"
+    // (Power mode), "devices" or "display".
     property string page: "main"
     property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
@@ -113,6 +115,23 @@ Item {
     Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
     Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
+    // The panel this widget is in (main.qml): its system tray's hidden stock items are shown
+    // while active (services/TrayItems.qml).
+    property var containment: null
+    Loader { id: trayItemsLoader; asynchronous: true; source: "services/TrayItems.qml" }
+    Binding {
+        target: trayItemsLoader.item
+        property: "containment"
+        value: backend.containment
+        when: trayItemsLoader.item !== null
+    }
+    Binding {
+        target: trayItemsLoader.item
+        property: "tablet"
+        value: backend.tablet
+        when: trayItemsLoader.item !== null
+    }
+    readonly property var trayRevealed: trayItemsLoader.item ? trayItemsLoader.item.revealed : []
     Binding {
         target: chargeLoader.item
         property: "batteryKnown"
@@ -763,22 +782,23 @@ Item {
             }
             return profileName(active);
         }
-        // Why Performance is not offered or may be slower, and which applications hold a profile:
-        // the stock Power and Battery widget's wording.
-        readonly property string note: {
-            const lines = [];
+        // Why Performance cannot be chosen (empty when it can), in the stock Power and Battery
+        // widget's wording.
+        readonly property string inhibitionNote: {
             switch (inhibitionReason) {
             case "":
-                break;
+                return "";
             case "lap-detected":
-                lines.push(i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap."));
-                break;
+                return i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap.");
             case "high-operating-temperature":
-                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot."));
-                break;
+                return i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot.");
             default:
-                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable."));
+                return i18nc("@info:tooltip", "Performance mode is unavailable.");
             }
+        }
+        // That, why Performance may be slower, and which applications hold a profile.
+        readonly property string note: {
+            const lines = inhibitionNote !== "" ? [inhibitionNote] : [];
             if (active === "performance" && degradationReason !== "") {
                 switch (degradationReason) {
                 case "lap-detected":
@@ -796,17 +816,42 @@ Item {
             }
             return lines.join("\n");
         }
-        function cycle() {
+        // The chooser's rows ([{profile, active, enabled}]): Performance is listed but cannot be
+        // chosen while the daemon inhibits it.
+        readonly property var options: s ? Power.options(s.list, active, inhibitionReason) : []
+        // The tile's body: back to Balanced, or from Balanced to the last other profile chosen
+        // (shared by every widget, for this session), so Balanced to Power saver never passes
+        // through Performance.
+        readonly property string toggleTarget: s ? Power.toggleTarget(s.list, active, inhibitionReason, Instances.lastPowerProfile) : ""
+        onActiveChanged: {
+            if (active !== "" && active !== "balanced") {
+                Instances.lastPowerProfile = active;
+            }
+        }
+        function setProfile(profile: string) {
             if (!s || !available) {
                 backend.openSettings("kcm_powerdevilprofilesconfig", []);
                 return;
             }
-            // Performance is skipped while the daemon inhibits it; a refused switch shows on the tile.
-            const next = Power.next(s.list, active, inhibitionReason);
-            if (next !== "") {
+            // A refused switch shows on the tile and the page for a few seconds.
+            const row = options.find(o => o.profile === profile);
+            if (row && row.enabled && !row.active) {
                 failedProfile = "";
-                s.setProfile(next);
+                s.setProfile(profile);
             }
+        }
+        function toggle() {
+            if (!s || !available) {
+                backend.openSettings("kcm_powerdevilprofilesconfig", []);
+                return;
+            }
+            if (toggleTarget !== "") {
+                failedProfile = "";
+                s.setProfile(toggleTarget);
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_powerdevilprofilesconfig", []);
         }
     }
 
@@ -819,14 +864,71 @@ Item {
         function setAllowed(appName: string, reason: string, allowed: bool): void {
             if (s) { s.setAllowed(appName, reason, allowed); }
         }
+        // A timed Keep awake (F7): its end (ms since the epoch, 0 until turned off), the minutes
+        // left and both as text.
+        readonly property double until: s ? s.until : 0
+        readonly property bool timed: active && until > 0
+        readonly property int minutesLeft: s ? s.minutesLeft : 0
+        readonly property string leftText: backend.durationText(minutesLeft)
+        readonly property string untilText: timed ? Qt.formatTime(new Date(until), Qt.locale().timeFormat(Locale.ShortFormat)) : ""
         readonly property string subtitle: !available ? i18nc("@info:status Keep awake", "Unavailable")
+                                         : timed ? i18nc("@info:status Keep awake, %1 remaining time", "%1 left", leftText)
                                          : active ? i18nc("@info:status Keep awake", "On")
                                                   : i18nc("@info:status Keep awake", "Off")
+        // The status pill's tooltip line while it is on.
+        readonly property string toolTipLine: !active ? ""
+            : timed ? i18nc("@info:tooltip %1 remaining time, %2 a time of day", "Keep awake: sleep and automatic screen locking are blocked for %1 more, until %2", leftText, untilText)
+                    : i18nc("@info:tooltip", "Keep awake: sleep and automatic screen locking are blocked")
+        readonly property string reason: i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking")
         function toggle(): void {
             if (s) {
-                s.toggle(i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking"));
+                s.toggle(reason);
             }
         }
+        // For a while: hours from now, until a time of day (minutes after midnight, today or
+        // tomorrow), or until turned off (on stays on).
+        function forHours(hours: int): void {
+            if (s) {
+                s.keepAwakeUntil(reason, Date.now() + hours * Timed.HOUR);
+            }
+        }
+        function untilMinuteOfDay(minute: int): void {
+            if (s) {
+                s.keepAwakeUntil(reason, Timed.untilTime(new Date(), minute));
+            }
+        }
+        function untilTurnedOff(): void {
+            if (s) {
+                s.keepAwakeUntil(reason, 0);
+            }
+        }
+        // Testing only (debugAction "keepawake:SECONDS", main.qml): a short timed Keep awake.
+        function forSeconds(seconds: int): void {
+            if (s && seconds > 0) {
+                s.keepAwakeUntil(reason, Date.now() + seconds * 1000);
+            }
+        }
+        function refresh(): void {
+            if (s) {
+                s.tick();
+            }
+        }
+    }
+    // The minutes left shown again when the sheet opens (after a suspend the timer may be late).
+    onPopupOpenChanged: {
+        if (popupOpen) {
+            keepAwake.refresh();
+        }
+    }
+    // "45 min", "1 h", "1 h 30 min".
+    function durationText(minutes: int): string {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        if (h === 0) {
+            return i18ncp("@info remaining time, minutes", "%1 min", "%1 min", m);
+        }
+        return m === 0 ? i18ncp("@info remaining time, hours", "%1 h", "%1 h", h)
+                       : i18nc("@info remaining time, hours and minutes", "%1 h %2 min", h, m);
     }
 
     // ------------------------------------------------------------------ disks & devices

@@ -102,6 +102,11 @@ hidden and disabled as status notifiers, so the tray has no expander arrow: `org
 settings is in the bar, Disks & Devices (`org.kde.plasma.devicenotifier`) is not loaded at all
 (known, not extra, like the tray's weather report): the quick-settings Disks & Devices page and
 status-pill icon replace it, and a loaded stock item would pop up beside the sheet on a new device.
+The other four come back while they matter: quick settings puts them into the tray's `shownItems`
+while active (an open vault, queued print jobs, presentation mode or a second screen, the
+input-method switch outside tablet posture) and takes them out when passive
+(docs/parts/shell-quicksettings.md, "Hidden tray items while active"); the layout writes nothing
+for that, so existing layouts have it as soon as the widget is updated.
 
 Desktop cards: the Plasma Fusion weather, calendar and system cards (`docs/parts/desktop-cards.md`),
 each with the stock widget as fallback when the Fusion one is not installed, on the primary screen.

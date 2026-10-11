@@ -381,8 +381,9 @@ passive ones in the pop-up.
 
 Result (cd-6, `screens/08-dark-tray-popup.png`): none of the ten is shown anywhere. The expander
 arrow remains only because three other default items are passive: Vaults, Disks & Devices and
-Display Configuration. They become active, and appear in the bar, exactly when they matter (an
-open vault, a removable drive, a second display); there is no tray key for "hide while passive",
+Display Configuration. Vaults and Disks & Devices become active, and appear in the bar, when they
+matter (an open vault, a removable drive; Display Configuration only in presentation mode, not for a
+second display, see the 0.5.0 update below); there is no tray key for "hide while passive",
 and listing them in `disabledStatusNotifiers` would also hide them when active. Left as is; to
 drop the arrow at that cost, add `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier` and
 `org.kde.kscreen` (and `org.kde.plasma.printmanager` where print-manager is installed) to
@@ -395,6 +396,19 @@ settings is in the bar (docs/parts/shell-quicksettings.md). The arrow now appear
 application status icons, such as the XWayland video bridge. The cost named above holds for the
 others: an open vault, queued print jobs, presentation mode and the input-method switch have no item
 in the bar while active, and quick settings has no page for them yet (only Disks & Devices has one).
+
+Update (0.5.0, P1): the quick-settings widget gives the tray the missing "hidden while passive":
+while the vault, printer, display configuration or input-method item is active it adds the id to
+the tray's `shownItems`, which the tray applies before `disabledStatusNotifiers` and `hiddenItems`
+(`calculateEffectiveStatus`), so the stock item shows in the bar with its own pop-up; when it is
+passive again the id goes out of `shownItems` and the item is hidden, with no arrow. The lists above
+are unchanged. Checked against the 6.7.5 sources how each item says it is active: Vaults is Active
+while a vault is open (`hasOpenVaults`), Printers while a job is queued (Passive with printers and no
+job, Hidden with no printer), Display Configuration only while its own Presentation Mode switch is on
+(a second screen leaves it Passive, so a second screen counts too: the layout choices matter then),
+the input-method item in its "disabled" and "show with all input devices" states and in tablet mode
+(6.8: while the on-screen keyboard would show). Details: docs/parts/shell-quicksettings.md, "Hidden
+tray items while active".
 
 In the tray's own settings the ten show as "Show only in popup" (the page reads `hiddenItems`
 first); choosing another visibility there removes the id from all lists, which brings the item

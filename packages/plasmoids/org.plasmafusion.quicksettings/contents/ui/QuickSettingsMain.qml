@@ -545,7 +545,11 @@ ColumnLayout {
                 }
             }
         }
+        // Power mode (P7): the body switches between Balanced and the last other profile, the
+        // chevron opens the chooser (as the Wi-Fi and Bluetooth tiles: body acts, chevron lists).
         Tile {
+            id: powerTile
+            objectName: "tile-power"
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -554,10 +558,17 @@ ColumnLayout {
             iconPath: Icons.gauge
             checked: page.backend.profile.checked
             available: page.backend.profile.available
-            toolTip: [i18nc("@info:tooltip", "Click to switch between Power saver, Balanced and Performance"),
-                      page.backend.profile.note].filter(t => t !== "").join("\n")
+            hasDetails: page.backend.profile.available
+            detailsText: i18nc("@action:button", "Choose a power mode")
+            toolTip: {
+                const target = page.backend.profile.toggleTarget;
+                const action = target === "" ? ""
+                    : i18nc("@info:tooltip %1 power profile name", "Click to switch to %1", page.backend.profile.profileName(target));
+                return [action, page.backend.profile.note].filter(t => t !== "").join("\n");
+            }
             note: page.backend.profile.note
-            onToggled: page.backend.profile.cycle()
+            onToggled: page.backend.profile.toggle()
+            onDetailsRequested: page.openPage("profiles", powerTile.detailsButton)
         }
         Tile {
             Layout.fillWidth: true
@@ -582,7 +593,7 @@ ColumnLayout {
             available: page.backend.keepAwake.available
             enabled: available
             hasDetails: page.backend.keepAwake.available
-            detailsText: i18nc("@action:button", "Show applications blocking sleep")
+            detailsText: i18nc("@action:button", "Keep awake options")
             toolTip: checked ? i18nc("@info:tooltip", "Click to resume automatic sleep and screen locking")
                              : i18nc("@info:tooltip", "Manually block sleep and screen locking")
             onToggled: page.backend.keepAwake.toggle()
