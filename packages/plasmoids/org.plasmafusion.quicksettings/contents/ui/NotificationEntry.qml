@@ -32,7 +32,7 @@ ColumnLayout {
     property color surface: pal.overlay(0.06)
     property color edge: pal.overlay(0.08)
     property bool stackEdges: false
-    // The Centre's card menu (a long press on a card).
+    // The Centre's card menu (a long press, a right click, the Menu key on a card).
     property bool menus: false
 
     signal done()
@@ -149,6 +149,11 @@ ColumnLayout {
             onKillJobClicked: row.notif.killJob(row.index)
             onSuspendJobClicked: row.notif.suspendJob(row.index)
             onResumeJobClicked: row.notif.resumeJob(row.index)
+            onMenuRequested: at => {
+                if (row.menus) {
+                    row.menuRequested(row.card, at);
+                }
+            }
             TapHandler {
                 enabled: row.menus
                 acceptedDevices: PointerDevice.TouchScreen | PointerDevice.Stylus | PointerDevice.Mouse

@@ -47,6 +47,8 @@ Rectangle {
     signal folderRequested(string url, bool highlight)
     // The app's notification settings.
     signal configureClicked()
+    // The card's menu was asked for (right click, Menu key) at `at` in the card.
+    signal menuRequested(point at)
 
     // The row's data. While a removed row's card is torn down, `model` and this property read as
     // null, so every use is optional (`entry?.`).
@@ -219,6 +221,44 @@ Rectangle {
     TapHandler {
         enabled: !!card.entry?.hasDefaultAction
         onTapped: card.actionInvoked("default")
+    }
+    // The card's menu (the Notification Centre's; long press there) from a right click as well.
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: eventPoint => card.menuRequested(eventPoint.position)
+    }
+
+    // Keyboard: the card is in the tab chain before its buttons. Return, Enter or Space run what a
+    // click runs (the stock applet's list: the default action, else the one linked file), Delete
+    // closes it, the Menu key or Shift+F10 asks for its menu.
+    function activate() {
+        if (entry?.hasDefaultAction) {
+            actionInvoked("default");
+        } else if (urls.length === 1) {
+            urlOpened(String(urls[0]));
+        }
+    }
+    activeFocusOnTab: true
+    Accessible.onPressAction: activate()
+    Keys.onReturnPressed: activate()
+    Keys.onEnterPressed: activate()
+    Keys.onSpacePressed: activate()
+    Keys.onDeletePressed: {
+        if (closable) {
+            closeClicked();
+        }
+    }
+    Keys.onMenuPressed: menuRequested(Qt.point(card.metrics.px(16), card.metrics.px(16)))
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+            menuRequested(Qt.point(card.metrics.px(16), card.metrics.px(16)));
+            event.accepted = true;
+        }
+    }
+    FocusRing {
+        baseRadius: card.radius
+        ringColor: card.pal.focus
+        shown: card.activeFocus
     }
 
     ColumnLayout {

@@ -151,9 +151,12 @@ controls. Empty inputs or streams have explicit placeholders and a Sound setting
 Keyboard: every control is reachable with Tab and has the design's focus ring (2 px, 2 px gap);
 Space/Return activate, Right/Left moves between a tile and its chevron, Escape goes back a page or
 closes the pop-up. The widget's global shortcut (Plasmoid shortcut) opens and closes the pop-up.
-A notification's close button is in the tab chain (shown while focused or hovered), and the list
-scrolls to the card that has keyboard focus. Opening or leaving a drill-down page moves the focus
-with it; the ring is shown only when that was done from the keyboard.
+A notification card is in the tab chain itself (with the focus ring): Return, Enter or Space run its
+default action (or open its one linked file), Delete closes it, and in the tablet Notification
+Centre the Menu key or Shift+F10 opens its menu; its Configure and close buttons follow it in the
+tab chain (shown while focused or hovered), and the list scrolls to the card that has keyboard
+focus. Opening or leaving a drill-down page moves the focus with it; the ring is shown only when
+that was done from the keyboard.
 
 Colours: the boards' dark and light values (text `#E8EBF4` / `#141827`, secondary `#A3ABC2` /
 `#5B6278`, overlays white / `#141827` at the board's alphas). Dark or light is chosen from the
@@ -906,3 +909,18 @@ do not repeat it). It runs `Notifications.configure()`: the app's own `settings`
 one, else System Settings' Notifications page for that app; the sheet closes. Test:
 `tests/notifications_card_test.py` (the label, focus showing the buttons, Return reaching the
 app's settings action and closing the sheet, the group header's button).
+
+### Keyboard
+
+The cards' default action was tap-only (a `TapHandler`; the card was not focusable and had no
+`Accessible.onPressAction`) and the Centre's card menu needed a long press. A card is now in the
+tab chain before its buttons, with the design's focus ring: Return, Enter and Space run its default
+action, or open its linked file when it has no default action and one file (the stock applet's
+list keys), Delete closes it, and screen readers get the press action. The Centre's card menu also
+opens from a right click, the Menu key and Shift+F10. Every new control above (Reply, the reply
+field and Send, the preview, Open, Open Containing Folder, Pause/Resume, Configure, Close Group,
+Show N More, the Do Not Disturb choices) is a focusable button with an accessible name; the
+Do Not Disturb chevron moves the focus to the first choice. Test: `tests/notifications_card_test.py`
+(Return reaching the app's default action, Delete, the Menu key, Shift+F10 and a right click asking
+for the menu). Not changed: links inside a notification's body are still reached with the pointer
+only (`Text.StyledText` has no keyboard navigation for links).

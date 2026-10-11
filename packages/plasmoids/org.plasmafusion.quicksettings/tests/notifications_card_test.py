@@ -96,6 +96,9 @@ Item {
     height: 1400
     property var opened: []
     property int closes: 0
+    // The Notification Centre's card menu: on in the second part of the keyboard checks.
+    property bool menusOn: false
+    property int menuRequests: 0
     UI.Backend { id: backend; objectName: "backend" }
     C.FusionMetrics { id: fusionMetrics }
     // The sheet's list (PopupContent.qml): the same card and the same calls.
@@ -112,7 +115,9 @@ Item {
             pal: backend.pal
             metrics: fusionMetrics
             notif: backend.notif
+            menus: root.menusOn
             onDone: ++root.closes
+            onMenuRequested: ++root.menuRequests
         }
     }
 
@@ -519,6 +524,34 @@ try:
     wait_for(lambda: js("groupInfo", "Third test", "groupConfigure"), "no group header for the third app")
     check(js("groupInfo", "Third test", "groupConfigure")["visible"], "an app's group header has Configure")
     check(not info("Grouped 2", "configureButton")["visible"], "and its cards do not repeat it (as the stock applet)")
+
+    # ---- Keyboard: the card's default action, Delete, the menu.
+    app = notify("Meeting at 3", "Room 2", "--action", "default=Open", entry="org.plasmafusion.notifyother")
+    focus("Meeting at 3")
+    card = js("info", "Meeting at 3", "", ["activeFocus", "activeFocusOnTab"])
+    check(card["activeFocus"] and card["activeFocusOnTab"], "the card takes keyboard focus and is in the tab chain")
+    closes = root.property("closes")
+    QTest.keyClick(view, Qt.Key_Return)
+    wait_for(lambda: "action default" in app.lines, "Return did not run the default action (%r)" % app.lines)
+    check(root.property("closes") == closes + 1, "Return runs the default action and closes the sheet")
+    notify("Old news", "To be deleted", entry="org.plasmafusion.notifyother")
+    focus("Old news")
+    QTest.keyClick(view, Qt.Key_Delete)
+    wait_for(lambda: info("Old news") is None, "Delete did not close the card")
+    check(True, "Delete closes the focused card")
+    notify("With a menu", "Long press, right click or the Menu key", entry="org.plasmafusion.notifyother")
+    root.setProperty("menusOn", True)
+    focus("With a menu")
+    QTest.keyClick(view, Qt.Key_Menu)
+    wait_for(lambda: root.property("menuRequests") == 1, "the Menu key did not ask for the card's menu")
+    check(True, "the Menu key asks for the Notification Centre's card menu")
+    QTest.keyClick(view, Qt.Key_F10, Qt.ShiftModifier)
+    wait_for(lambda: root.property("menuRequests") == 2, "Shift+F10 did not ask for the card's menu")
+    check(True, "so does Shift+F10")
+    item = info("With a menu")
+    QTest.mouseClick(view, Qt.RightButton, Qt.NoModifier, QPoint(round(item["x"] + 40), round(item["y"] + 40)))
+    wait_for(lambda: root.property("menuRequests") == 3, "a right click did not ask for the card's menu")
+    check(True, "and a right click")
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:
