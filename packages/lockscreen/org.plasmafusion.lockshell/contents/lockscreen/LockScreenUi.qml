@@ -53,6 +53,14 @@ Item {
     readonly property bool showNotifications: setting("showNotifications", true)
     readonly property bool showNotificationSummaries: setting("showNotificationSummaries", false)
 
+    // Plasma 6.8 and later: the greeter runs one chosen way to unlock (the password, a smartcard,
+    // the fingerprint reader, the face or a security key; kscreenlocker's Authenticators) and
+    // offers the choice (MainBlock's AuthenticatorChoice). Plasma 6.7's authenticator has no
+    // such property and always asks for the password.
+    // qmllint disable unqualified
+    readonly property bool authenticatorChoice: authenticator.authenticator !== undefined
+    // qmllint enable unqualified
+
     function handleMessage(msg, urgent) {
         if (!msg) {
             return;
@@ -163,6 +171,16 @@ Item {
         }
 
         function onSucceeded() {
+            if (lockScreenUi.authenticatorChoice) {
+                // Plasma 6.8: stop the other workers at once (the fingerprint reader beside the
+                // password), and a way that never prompts (face, security key) unlocks without
+                // the explicit Unlock screen, as on the stock lock screen.
+                authenticator.stopAuthenticating();
+                if (mainBlock.choice && !mainBlock.choice.expectingPrompt) {
+                    Qt.quit();
+                    return;
+                }
+            }
             if (authenticator.hadPrompt) {
                 Qt.quit();
             } else {
@@ -179,6 +197,9 @@ Item {
 
         function onInfoMessageChanged() {
             lockScreenUi.handleMessage(authenticator.infoMessage);
+            if (authenticator.infoMessage && !mainBlock.passwordField) {
+                lockScreenRoot.uiVisible = true;
+            }
         }
 
         function onErrorMessageChanged() {
@@ -191,21 +212,32 @@ Item {
         function onPromptForSecretChanged(msg) {
             mainBlock.showPassword = false;
             mainBlock.mainPasswordBox.forceActiveFocus();
-        }
-    }
-
-    // Plasma 6.8 runs one chosen authenticator and starts with the one that unlocked last time
-    // (kscreenlockerrc [Greeter] Authenticator in the state directory), which the stock lock
-    // screen's picker may have set to Fingerprint, Face, Smartcard or a security key. This screen
-    // has no picker, only the password field, so it asks for the password authenticator; the
-    // fingerprint reader still runs next to it. Plasma 6.7 has no such property.
-    Component.onCompleted: {
-        if (authenticator.authenticator !== undefined
-                && authenticator.authenticator !== ScreenLocker.Authenticators.Regular) {
-            authenticator.authenticator = ScreenLocker.Authenticators.Regular;
+            // Plasma 6.8: a way whose prompt says more than "Password:" (a smartcard's PIN, or
+            // the password way with kscreenlockerrc [UI] ShowPromptInRegularAuthenticator) shows
+            // it, as the stock lock screen does.
+            if (mainBlock.choice && mainBlock.choice.showPrompt) {
+                lockScreenUi.handleMessage(authenticator.promptForSecret);
+            }
         }
     }
     // qmllint enable unqualified
+
+    // Plasma 6.8: a way that stopped working says so, and the password is used again
+    // (AuthenticatorChoice switches back); a way without a field shows the prompt when its PAM
+    // module speaks (a face or security-key cue), since nothing would be typed to show it.
+    Connections {
+        target: mainBlock.choice
+        ignoreUnknownSignals: true
+        function onDefunct(message: string): void {
+            lockScreenUi.lockRoot.notification = "";
+            lockScreenUi.handleMessage(message, true);
+            notificationRemoveTimer.stop();
+        }
+        function onChosen(): void {
+            lockScreenUi.lockRoot.notification = "";
+            fadeoutTimer.restart();
+        }
+    }
 
     SessionManagement {
         id: sessionManagement
@@ -617,6 +649,7 @@ Item {
                 id: mainBlock
                 objectName: "mainBlock"
                 lockRoot: lockScreenUi.lockRoot
+                authenticatorChoice: lockScreenUi.authenticatorChoice
                 metrics: lockScreenUi.metrics
                 // qmllint disable unqualified
                 authenticatorObject: authenticator

@@ -27,8 +27,8 @@ assert int(meta["X-Plasma-APIVersion"]) >= 2, "X-Plasma-APIVersion"
 assert meta["X-Plasma-FallbackPackage"] == "org.kde.plasma.desktop", "X-Plasma-FallbackPackage"
 EOF
 
-for f in LockScreen.qml LockScreenUi.qml MainBlock.qml NoPasswordUnlock.qml LockOsd.qml \
-         MediaControls.qml PasswordSync.qml qmldir config.xml config.qml; do
+for f in LockScreen.qml LockScreenUi.qml MainBlock.qml AuthenticatorChoice.qml NoPasswordUnlock.qml \
+         LockOsd.qml MediaControls.qml PasswordSync.qml qmldir config.xml config.qml; do
   [ -s "$SRC/contents/lockscreen/$f" ] || { echo "lockscreen: missing contents/lockscreen/$f" >&2; exit 1; }
 done
 python3 -c 'import sys, xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1])' "$SRC/contents/lockscreen/config.xml"
