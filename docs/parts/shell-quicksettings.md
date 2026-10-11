@@ -131,8 +131,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   summary, body, the notification's image, a linked file's preview, job progress with Pause and
   Cancel, a finished job's Open and Open Containing Folder,
   action buttons; the first action is the accent button for critical or persistent notifications,
-  as the board's calendar reminder). Close button on hover. Clicking a card runs its default
-  action.
+  as the board's calendar reminder). Configure and close buttons on hover. Clicking a card runs
+  its default action.
 
 **Drill-down pages** replace the quick settings in the same card (back button, title, switch):
 Wi-Fi (Popups board tray panel: connected network card with band, security and live speed,
@@ -891,6 +891,18 @@ Clear all opens every group first, so the notifications a collapsed group hides 
 (they are not rows until then). `notifications.js` `groupFooter()`;
 `tests/notifications_card_test.py`: four notifications of one app give one header with all four
 while unread, two and **Show 2 More** once read, all four and **Show Fewer** after a click, two
-again after another, none after Close Group, and Clear all removes a collapsed group's hidden ones. Live (VM 2, tablet posture forced with kwinrc
-`[Input] TabletMode=on`): the Centre's Konsole group with three new cards, the stack edges and
-**Show 4 More**, expanded by a tap.
+again after another, none after Close Group, and Clear all removes a collapsed group's hidden ones.
+Live (VM 2, tablet posture forced with kwinrc `[Input] TabletMode=on`): the Centre's Konsole group
+with three new cards, the stack edges and **Show 4 More**, expanded by a tap.
+
+### Configure
+
+The app's notification settings were reachable only from the tablet Centre's long-press menu
+("Notification Settings…"); `Backend.notif.configure()` was never called from the laptop cards. As
+in the stock applet (`HeadingButtons.qml`), a card now has a **Configure** button beside its close
+button (the app's own label when it gives one, such as "Notification Settings"), shown with it on
+hover, keyboard focus and in touch mode, and an app's group header has one for the group (its cards
+do not repeat it). It runs `Notifications.configure()`: the app's own `settings` action when it has
+one, else System Settings' Notifications page for that app; the sheet closes. Test:
+`tests/notifications_card_test.py` (the label, focus showing the buttons, Return reaching the
+app's settings action and closing the sheet, the group header's button).

@@ -45,6 +45,8 @@ Rectangle {
     signal suspendJobClicked()
     signal resumeJobClicked()
     signal folderRequested(string url, bool highlight)
+    // The app's notification settings.
+    signal configureClicked()
 
     // The row's data. While a removed row's card is torn down, `model` and this property read as
     // null, so every use is optional (`entry?.`).
@@ -102,7 +104,10 @@ Rectangle {
     }
     readonly property bool hovered: cardHover.hovered
     readonly property bool closable: !jobRunning && entry?.closable !== false
-    readonly property bool showClose: closable && (pal.touch || hovered || closeButton.activeFocus)
+    // The header's buttons show on hover, keyboard focus and in touch mode.
+    readonly property bool buttonsShown: pal.touch || hovered || closeButton.activeFocus || configureButton.activeFocus
+    readonly property bool showClose: closable && buttonsShown
+    readonly property bool configurable: !inGroup && !!entry?.configurable
     // Keyboard focus is on one of this card's buttons (the list scrolls it into view).
     readonly property bool focusInside: {
         for (let item = Window.activeFocusItem; item; item = item.parent) {
@@ -248,40 +253,63 @@ Rectangle {
                 px: card.inGroup ? 13.5 : 11.5
                 font.weight: Font.ExtraBold
             }
-            // Time, replaced by the close button on hover or keyboard focus (in touch mode
-            // both are shown). The button stays in the tab chain (transparent) so keyboard
-            // users can close a card too.
+            // Time, replaced by the Configure and close buttons on hover or keyboard focus (in
+            // touch mode all are shown). The buttons stay in the tab chain (transparent), so
+            // keyboard users can reach them too.
             Item {
-                Layout.preferredWidth: card.pal.touch ? timeLabel.implicitWidth + card.metrics.px(4) + closeButton.implicitWidth
-                                                      : card.showClose ? closeButton.implicitWidth : timeLabel.implicitWidth
+                Layout.preferredWidth: card.pal.touch ? timeLabel.implicitWidth + card.metrics.px(4) + headerButtons.implicitWidth
+                                                      : card.buttonsShown ? headerButtons.implicitWidth : timeLabel.implicitWidth
                 Layout.preferredHeight: card.metrics.px(22)
 
                 FText {
                     id: timeLabel
-                    anchors.right: card.pal.touch ? closeButton.left : parent.right
+                    anchors.right: card.pal.touch ? headerButtons.left : parent.right
                     anchors.rightMargin: card.pal.touch ? card.metrics.px(4) : 0
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: card.pal.touch || !card.showClose
+                    visible: card.pal.touch || !card.buttonsShown
                     pal: card.pal
                     metrics: card.metrics
                     text: card.relativeTime(card.entry?.created, card.entry?.updated)
                     color: card.pal.tertiary
                     px: 11.5
                 }
-                IconButton {
-                    id: closeButton
+                Row {
+                    id: headerButtons
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    enabled: card.closable
-                    opacity: card.showClose ? 1 : 0
-                    pal: card.pal
-                    size: card.pal.touch ? 32 : 22
-                    iconSize: card.pal.touch ? 14 : 12
-                    fill: "transparent"
-                    iconPath: Icons.close
-                    text: i18nc("@action:button", "Close notification")
-                    toolTip: card.showClose ? text : ""
-                    onClicked: card.closeClicked()
+                    spacing: card.metrics.px(4)
+                    opacity: card.buttonsShown ? 1 : 0
+
+                    // The app's notification settings (the stock applet's Configure button; in a
+                    // group the header has it).
+                    IconButton {
+                        id: configureButton
+                        objectName: "configureButton"
+                        visible: card.configurable
+                        pal: card.pal
+                        size: card.pal.touch ? 32 : 22
+                        iconSize: card.pal.touch ? 14 : 12
+                        fill: "transparent"
+                        iconPath: Icons.settingsSmall
+                        text: card.entry?.configureActionLabel || i18nc("@action:button notification settings of an app", "Configure")
+                        Accessible.description: card.entry?.applicationName || ""
+                        toolTip: card.buttonsShown ? text : ""
+                        onClicked: card.configureClicked()
+                    }
+                    IconButton {
+                        id: closeButton
+                        objectName: "closeButton"
+                        enabled: card.closable
+                        opacity: card.closable ? 1 : 0
+                        pal: card.pal
+                        size: card.pal.touch ? 32 : 22
+                        iconSize: card.pal.touch ? 14 : 12
+                        fill: "transparent"
+                        iconPath: Icons.close
+                        text: i18nc("@action:button", "Close notification")
+                        toolTip: card.showClose ? text : ""
+                        onClicked: card.closeClicked()
+                    }
                 }
             }
         }

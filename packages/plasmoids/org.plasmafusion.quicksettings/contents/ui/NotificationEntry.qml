@@ -14,11 +14,11 @@ import "../code/notifications.js" as Notes
 // One row of the notification history, in the sheet (PopupContent.qml) and in the tablet
 // Notification Centre: the history is grouped by app as in the stock applet (services/
 // Notifications.qml, GroupApplicationsFlat), so a row is either an app's group header (its icon
-// and name, Close Group) or a notification card (NotificationCard.qml). Under the last listed card
-// of a group: "Show N More" while some are hidden, "Show Fewer" once it is expanded. The Centre
-// draws a collapsed group's hidden notifications as card edges under it (`stackEdges`, the stack
-// of TABLET2 S1). The row makes the history calls itself; `done()` asks the sheet to close (a
-// default action ran, a file was opened).
+// and name, Configure, Close Group) or a notification card (NotificationCard.qml). Under the last
+// listed card of a group: "Show N More" while some are hidden, "Show Fewer" once it is expanded.
+// The Centre draws a collapsed group's hidden notifications as card edges under it (`stackEdges`,
+// the stack of TABLET2 S1). The row makes the history calls itself; `done()` asks the sheet to
+// close (a default action ran, a file was opened).
 ColumnLayout {
     id: row
 
@@ -81,6 +81,21 @@ ColumnLayout {
             Accessible.role: Accessible.Heading
         }
         IconButton {
+            objectName: "groupConfigure"
+            visible: !!row.entry?.configurable
+            pal: row.pal
+            size: row.pal.touch ? 32 : 22
+            iconSize: row.pal.touch ? 14 : 12
+            fill: "transparent"
+            iconPath: Icons.settingsSmall
+            text: row.entry?.configureActionLabel || i18nc("@action:button notification settings of an app", "Configure")
+            Accessible.description: row.entry?.applicationName || ""
+            onClicked: {
+                row.notif.configure(row.index);
+                row.done();
+            }
+        }
+        IconButton {
             objectName: "groupClose"
             visible: row.entry?.closable !== false
             pal: row.pal
@@ -127,6 +142,10 @@ ColumnLayout {
                 row.done();
             }
             onCloseClicked: row.notif.close(row.index)
+            onConfigureClicked: {
+                row.notif.configure(row.index);
+                row.done();
+            }
             onKillJobClicked: row.notif.killJob(row.index)
             onSuspendJobClicked: row.notif.suspendJob(row.index)
             onResumeJobClicked: row.notif.resumeJob(row.index)

@@ -29,7 +29,8 @@ os.environ.setdefault("QT_QUICK_BACKEND", "software")
 # plasmanotifyrc, [Applications][@other] ShowInHistory=false): the test's applications get one.
 data_home = Path(tempfile.mkdtemp(prefix="pf-notify-data-"))
 (data_home / "applications").mkdir()
-for entry, name in (("org.plasmafusion.notifytest", "Notify test"), ("org.plasmafusion.notifyother", "Other test")):
+for entry, name in (("org.plasmafusion.notifytest", "Notify test"), ("org.plasmafusion.notifyother", "Other test"),
+                    ("org.plasmafusion.notifythird", "Third test")):
     (data_home / "applications" / (entry + ".desktop")).write_text(
         "[Desktop Entry]\nType=Application\nName=%s\nExec=true\nIcon=dialog-information\n" % name)
 os.environ["XDG_DATA_HOME"] = str(data_home)
@@ -292,7 +293,8 @@ def job(title, *options, entry="org.plasmafusion.notifytest"):
 
 
 def notify(summary, body, *options, entry="org.plasmafusion.notifytest"):
-    app = {"org.plasmafusion.notifytest": "Notify test", "org.plasmafusion.notifyother": "Other test"}[entry]
+    app = {"org.plasmafusion.notifytest": "Notify test", "org.plasmafusion.notifyother": "Other test",
+           "org.plasmafusion.notifythird": "Third test"}[entry]
     proc = subprocess.Popen([sys.executable, "-B", str(here / "notify_client.py"), "notify", summary, body,
                              "--entry", entry, "--app", app, *options],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
@@ -495,6 +497,28 @@ try:
     QTest.qWait(300)
     check(not any(r.startswith("Note ") or r == "group:Other test" for r in js("rows")),
           "Clear all also closes the notifications a collapsed group hides")
+
+    # ---- Configure: the app's notification settings from the card (the app's own "settings"
+    # action here, which reaches the test client instead of opening System Settings).
+    app = notify("Settings test", "With a settings action", "--action", "settings=Notification Settings",
+                 entry="org.plasmafusion.notifythird")
+    button = info("Settings test", "configureButton", "text", "opacity")
+    check(button["text"] == "Notification Settings", "the card has Configure, with the app's label: %r" % button["text"])
+    check(info("Settings test", "closeButton", "opacity") is not None, "beside the close button")
+    focus("Settings test", "configureButton")
+    wait_for(lambda: info("Settings test", "configureButton")["visible"], "Configure is not shown")
+    QTest.qWait(100)
+    shown = js("info", "Settings test", "", ["buttonsShown"])["buttonsShown"]
+    check(shown, "keyboard focus on it shows the card's buttons (as hover does)")
+    closes = root.property("closes")
+    QTest.keyClick(view, Qt.Key_Return)
+    wait_for(lambda: "action settings" in app.lines, "Configure did not reach the app (%r)" % app.lines)
+    check(root.property("closes") == closes + 1, "Configure opens the app's settings and closes the sheet")
+    for number in (1, 2):
+        notify("Grouped %d" % number, "In a group", entry="org.plasmafusion.notifythird")
+    wait_for(lambda: js("groupInfo", "Third test", "groupConfigure"), "no group header for the third app")
+    check(js("groupInfo", "Third test", "groupConfigure")["visible"], "an app's group header has Configure")
+    check(not info("Grouped 2", "configureButton")["visible"], "and its cards do not repeat it (as the stock applet)")
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:
