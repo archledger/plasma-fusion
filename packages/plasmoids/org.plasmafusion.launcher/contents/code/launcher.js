@@ -224,6 +224,13 @@ function isPrintable(text) {
     return String(text || "").length > 0 && !/[\u0000-\u001f\u007f]/.test(text) && text.trim().length > 0;
 }
 
+// The hidden apps (Kicker's hiddenApplications list) without the ones shown again in the settings
+// page, as plain strings in their order. `list` may be a QML string list.
+function withoutUnhidden(list, unhidden) {
+    const shown = Array.from(unhidden || []).map(String);
+    return Array.from(list || []).map(String).filter(id => id.length > 0 && shown.indexOf(id) < 0);
+}
+
 // Splits the configured default pins into slots of alternatives.
 function pinnedSlots(entries) {
     const slots = [];

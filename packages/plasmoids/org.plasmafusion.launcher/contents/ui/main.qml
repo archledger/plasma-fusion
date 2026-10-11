@@ -34,6 +34,11 @@ PlasmoidItem {
     toolTipMainText: i18nc("@info:tooltip", "Start")
     toolTipSubText: i18nc("@info:tooltip", "Apps, recent files and search")
 
+    // Kicker's models read the applet's settings through `appletInterface.configuration`: its
+    // "Hide Application" and "Unhide Applications in this Submenu" actions and the hidden apps
+    // themselves (hiddenApplications). A PlasmoidItem has no such property in Plasma 6, so without
+    // it the menus offered neither action and the list had no effect.
+    readonly property QtObject configuration: Plasmoid.configuration
     readonly property bool designLabels: Plasmoid.configuration.designLabels
     readonly property bool showRecommended: Plasmoid.configuration.showRecommended
     readonly property bool menuOpen: launcherWindow.visible || sheetWindow.visible
@@ -834,6 +839,13 @@ PlasmoidItem {
                 root.open(mode, argument);
             } else if (mode === "frames") {
                 root.reportFrames();
+            } else if (mode === "configure") {
+                // The settings dialog: next to the Fusion dock the launcher has no button of its
+                // own to right-click (buttonStyle hidden).
+                const configure = Plasmoid.internalAction("configure");
+                if (configure) {
+                    configure.trigger();
+                }
             }
         }
         function onHiddenApplicationsChanged() {

@@ -53,8 +53,8 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 | `dimBackground` | true | dim layer rgba(6,8,18,0.4) dark / rgba(221,230,244,0.35) light |
 | `bottomOffset` | 108 | 16 px dock gap + 74 px dock + 18 px |
 | `showRecommended` | true | recent files section |
-| `openRequest` | "" | written by other parts through desktop scripting: `<mode>:<nonce>[:<argument>]`, modes `home`, `search` (argument = query), `apps`, `recent` (recent files), `history` (the "Recent" chip: recently and often used apps), `places` (the "Places" chip), `category` (argument = key such as `graphics`) |
-| `hiddenApplications` | [] | Kicker's "Hide Application" list |
+| `openRequest` | "" | written by other parts through desktop scripting: `<mode>:<nonce>[:<argument>]`, modes `home`, `search` (argument = query), `apps`, `recent` (recent files), `history` (the "Recent" chip: recently and often used apps), `places` (the "Places" chip), `category` (argument = key such as `graphics`); `configure` opens the settings dialog |
+| `hiddenApplications` | [] | Kicker's "Hide Application" list (menu ids such as `org.kde.kcalc.desktop`); the settings page lists these apps under "Hidden apps" with a Show button each and Show All |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the tablet sheet (no wallpaper picture) |
 
 ### API for other parts
@@ -113,6 +113,14 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 - Hover: a tile, file or result is highlighted and selected only after the pointer moves; items
   that appear or scroll under a resting pointer do not take the selection (so Enter still
   launches the top result, and the hover highlight is never shown twice).
+- Hidden apps: an app's menu (in a category or All apps) has Kicker's "Hide Application"; the apps
+  of that list then offer "Unhide Applications in this Submenu". Kicker reads the list, and offers
+  both actions, through `appletInterface.configuration`; a Plasma 6 PlasmoidItem has no such
+  property, so main.qml declares it (`Plasmoid.configuration`). Before, neither action appeared and
+  the list had no effect (seen in the VM, 2026-10-11). The settings page shows the hidden apps by
+  name and icon (Kicker's SimpleFavoritesModel; an app that is no longer installed by its id), each
+  with a Show button, and Show All; on Apply an app the launcher hid while the dialog was open stays
+  hidden (`Launcher.withoutUnhidden` over the live list).
 - Footer: face image (`~/.face.icon` via KUser) or the first letter on #7b5cd6, full name
   (login name when the full name is empty), "Local account". The account row opens a menu, as the
   Windows account menu and the stock launcher's leave entries: Account Settings… (Users settings),
@@ -140,6 +148,10 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   Down / Up through them; the Places chip with the places (Home first, no "Show KRunner" row) and a
   folder opened in the file manager, Down from the places into the folders, Home shown as "~".
 - `tests/places.test.js` (node, in the build step): the place kinds from the URL and the path line.
+- `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
+  with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
+  by name, Show, Show All) and shows that Kicker's RootModel honours `hiddenApplications` only when
+  `appletInterface` has `configuration`, which main.qml must declare.
 - `qmllint` on every file: only the usual unqualified-`i18n` notes and three type-inference notes.
 - `kpackagetool6 -t Plasma/Applet -i` and `--show` in a sandbox HOME: installs and reads the metadata.
 - Offscreen harness (PySide6 + the real QML, mock models, board wallpaper; test files in the

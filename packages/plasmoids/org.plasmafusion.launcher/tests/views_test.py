@@ -11,11 +11,15 @@ A throw-away HOME gets three test apps and an activity manager; using the apps (
 itself sends when it starts an app, and the file manager when it opens a folder) fills the history
 that UsageModels.qml reads. The card (LauncherCard.qml, staged with the shared blocks as the build
 does) then runs with those models: the "Recent" chip with its two lists in the right order, the
-"Places" chip with the places and the recent folders, and the keyboard through them.
+"Places" chip with the places and the recent folders, and the keyboard through them. Last, the
+settings page (ConfigGeneral.qml) lists the hidden apps by name and shows them again, and Kicker's
+models see the hidden apps (and offer Hide Application) only through the applet's `configuration`
+property, which main.qml now declares.
 """
 
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -38,8 +42,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import dbus  # noqa: E402
 from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QObject, QUrl, Qt, Slot  # noqa: E402
 from PySide6.QtDBus import QDBusConnection  # noqa: E402
+from PySide6.QtQuick import QQuickWindow  # noqa: E402,F401 (the harness windows as QQuickWindow)
 from PySide6.QtWidgets import QApplication  # noqa: E402
-from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
+from PySide6.QtQml import QQmlComponent, QQmlEngine, QQmlPropertyMap  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
 APPS = {"pf-test-alpha": "Alpha Test", "pf-test-beta": "Beta Test", "pf-test-gamma": "Gamma Test"}
@@ -214,6 +219,14 @@ Window {
 """
 
 
+def items(item):
+    """The item and every item below it in the visual tree."""
+    out = [item]
+    for child in item.childItems():
+        out += items(child)
+    return out
+
+
 def call(obj, name, *args):
     return QMetaObject.invokeMethod(obj, name, Q_RETURN_ARG("QVariant"), *[Q_ARG("QVariant", a) for a in args])
 
@@ -301,6 +314,98 @@ try:
         QTest.qWait(100)
     s = json.loads(call(win, "state"))
     check(s["lastFocus"] and not s["primaryFocus"], "Down from the last places row goes on to the recent folders")
+
+    # The settings page: the hidden apps by name, one shown again, then all.
+    SETTINGS = b"""
+import QtQuick
+import QtQuick.Window
+Window {
+    width: 640
+    height: 480
+    visible: true
+    ConfigGeneral {
+        id: page
+        anchors.fill: parent
+        cfg_hiddenApplications: ["pf-test-alpha.desktop", "pf-test-gamma.desktop", "pf-removed-app.desktop"]
+    }
+    function hidden() { return JSON.stringify(Array.from(page.cfg_hiddenApplications)); }
+    function names() { return JSON.stringify(page.hiddenIds.map(id => page.appInfo(id).name)); }
+}
+"""
+    settings_component = QQmlComponent(engine)
+    settings_component.setData(SETTINGS, QUrl.fromLocalFile(str(stage / "contents/ui/SettingsHarness.qml")))
+    settings = settings_component.create()
+    if settings is None:
+        raise AssertionError("settings page did not load: " + "; ".join(e.toString() for e in settings_component.errors()))
+    wait_for(lambda: json.loads(call(settings, "names"))[0] == "Alpha Test", "the hidden apps' names did not arrive")
+    check(json.loads(call(settings, "names")) == ["Alpha Test", "Gamma Test", "pf-removed-app"],
+          "settings: the hidden apps by name (an app no longer installed by its id)")
+    buttons = {b.objectName(): b for b in items(settings.contentItem()) if b.objectName().startswith("unhide")}
+    check(set(buttons) == {"unhide:pf-test-alpha.desktop", "unhide:pf-test-gamma.desktop", "unhide:pf-removed-app.desktop",
+                           "unhideAll"}, "a Show button per hidden app, and Show All")
+    QMetaObject.invokeMethod(buttons["unhide:pf-test-gamma.desktop"], "click")
+    QTest.qWait(100)
+    check(json.loads(call(settings, "hidden")) == ["pf-test-alpha.desktop", "pf-removed-app.desktop"],
+          "Show removes that app from the hidden list (Apply then writes it)")
+    QMetaObject.invokeMethod(buttons["unhideAll"], "click")
+    QTest.qWait(100)
+    check(json.loads(call(settings, "hidden")) == [], "Show All empties the hidden list")
+
+    # Kicker reads hiddenApplications (and offers Hide Application) through
+    # `appletInterface.configuration`, which a Plasma 6 PlasmoidItem does not have: main.qml must
+    # declare it. Here a stand-in configuration hides Alpha.
+    main_qml = (package / "contents/ui/main.qml").read_text()
+    check(re.search(r"^    readonly property QtObject configuration: Plasmoid\.configuration$", main_qml, re.M) is not None,
+          "main.qml gives Kicker the applet's configuration (appletInterface.configuration)")
+    config = QQmlPropertyMap()
+    config.insert("hiddenApplications", ["pf-test-alpha.desktop"])
+    engine.rootContext().setContextProperty("testConfig", config)
+    KICKER = b"""
+import QtQuick
+import org.kde.plasma.private.kicker as Kicker
+QtObject {
+    id: probe
+    property QtObject withConfig: QtObject { property QtObject configuration: testConfig }
+    property QtObject withoutConfig: QtObject {}
+    property Kicker.RootModel rootWith: Kicker.RootModel {
+        autoPopulate: false; appletInterface: probe.withConfig; flat: true; sorted: true
+        showAllApps: true; showRecentApps: false; showRecentDocs: false; showRecentFolders: false
+    }
+    property Kicker.RootModel rootWithout: Kicker.RootModel {
+        autoPopulate: false; appletInterface: probe.withoutConfig; flat: true; sorted: true
+        showAllApps: true; showRecentApps: false; showRecentDocs: false; showRecentFolders: false
+    }
+    property var readers: []
+    // Test apps in the all-apps list. (Their menus are not read: Kicker builds them with the
+    // applet behind appletInterface, which this stand-in is not; the VM scenario shows them.)
+    function apps(which) {
+        const root = which === "with" ? rootWith : rootWithout;
+        root.refresh();
+        const all = root.modelForRow(0);
+        const reader = Qt.createQmlObject('import QtQuick; Instantiator { delegate: QtObject { '
+            + 'required property string display } }', probe);
+        reader.model = all;
+        const out = [];
+        for (let i = 0; i < reader.count; ++i) {
+            const e = reader.objectAt(i);
+            if (e.display.indexOf(" Test") > 0) {
+                out.push(e.display);
+            }
+        }
+        reader.destroy();
+        return JSON.stringify(out.sort());
+    }
+}
+"""
+    kicker_component = QQmlComponent(engine)
+    kicker_component.setData(KICKER, QUrl.fromLocalFile(str(stage / "contents/ui/KickerProbe.qml")))
+    kicker = kicker_component.create()
+    if kicker is None:
+        raise AssertionError("Kicker probe did not load: " + "; ".join(e.toString() for e in kicker_component.errors()))
+    check(json.loads(call(kicker, "apps", "with")) == ["Beta Test", "Gamma Test"],
+          "with the configuration Kicker leaves the hidden app out")
+    check(json.loads(call(kicker, "apps", "without")) == ["Alpha Test", "Beta Test", "Gamma Test"],
+          "without it (a plain PlasmoidItem) the hidden list has no effect")
 
     # The chips: Left and Right walk All -> Recent -> Office.
     call(win, "openMode", "home")
