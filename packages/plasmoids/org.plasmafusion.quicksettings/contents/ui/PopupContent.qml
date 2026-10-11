@@ -309,6 +309,12 @@ Item {
                         }
                         onCloseClicked: content.backend.notif.close(index)
                         onKillJobClicked: content.backend.notif.killJob(index)
+                        onSuspendJobClicked: content.backend.notif.suspendJob(index)
+                        onResumeJobClicked: content.backend.notif.resumeJob(index)
+                        onFolderRequested: (url, highlight) => {
+                            content.backend.notif.openFolder(index, url, highlight);
+                            content.backend.closeRequested();
+                        }
                     }
 
                     add: Transition {

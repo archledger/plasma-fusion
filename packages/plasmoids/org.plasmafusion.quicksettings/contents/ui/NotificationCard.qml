@@ -39,6 +39,11 @@ Rectangle {
     signal urlOpened(string url)
     // An inline reply was sent.
     signal replied(string text)
+    // A file job: pause or resume it; open its destination folder (`highlight`: show the one file
+    // selected in it).
+    signal suspendJobClicked()
+    signal resumeJobClicked()
+    signal folderRequested(string url, bool highlight)
 
     // The row's data. While a removed row's card is torn down, `model` and this property read as
     // null, so every use is optional (`entry?.`).
@@ -46,6 +51,27 @@ Rectangle {
     // org.kde.notificationmanager Notifications enums
     readonly property bool isJob: entry?.type === 2
     readonly property bool jobRunning: isJob && entry?.jobState !== 0
+    // "running", "paused", "failed", "finished" or "" (contents/code/notifications.js).
+    readonly property string jobState: Notes.jobState(entry?.type, entry?.jobState, entry?.jobError)
+    readonly property var jobDetails: entry?.jobDetails ?? null
+    // A finished file job's Open and Open Containing Folder (the stock applet's JobItem).
+    readonly property var fileActions: Notes.fileActions(jobState, jobDetails ? Number(jobDetails.totalFiles) : 0,
+                                                         jobDetails ? String(jobDetails.effectiveDestUrl) : "")
+    // The summary as the stock applet's Summary.qml words it: a job's state after its name, and
+    // nothing when an app sends its own name as the summary.
+    readonly property string summaryText: {
+        const summary = entry?.summary || "";
+        switch (jobState) {
+        case "paused":
+            return summary ? i18nc("Job name, e.g. Copying is paused", "%1 (Paused)", summary) : "";
+        case "failed":
+            return summary ? i18nc("Job name, e.g. Copying has failed", "%1 (Failed)", summary) : i18n("Job Failed");
+        case "finished":
+            return summary ? i18nc("Job name, e.g. Copying has finished", "%1 (Finished)", summary) : i18n("Job Finished");
+        default:
+            return Notes.summaryShown(summary, entry?.applicationName) ? summary : "";
+        }
+    }
     readonly property var actionNames: entry?.actionNames || []
     readonly property var actionLabels: entry?.actionLabels || []
     readonly property bool primaryAction: entry?.urgency === 4 || entry?.timeout === 0
@@ -264,21 +290,24 @@ Rectangle {
                 spacing: card.metrics.px(6)
 
                 FText {
+                    objectName: "summary"
                     Layout.fillWidth: true
                     pal: card.pal
                     metrics: card.metrics
                     visible: text.length > 0
-                    text: card.entry?.summary || ""
+                    text: card.summaryText
                     px: 13.5
                     font.weight: Font.ExtraBold
                     wrapMode: Text.Wrap
                     maximumLineCount: 2
                 }
+                // Also for jobs: "file.txt to Downloads" with a link, or why it failed.
                 FText {
+                    objectName: "body"
                     Layout.fillWidth: true
                     pal: card.pal
                     metrics: card.metrics
-                    visible: !card.isJob && text.length > 0
+                    visible: text.length > 0
                     text: card.bodyParts.text
                     textFormat: Text.StyledText
                     color: card.pal.body
@@ -339,11 +368,13 @@ Rectangle {
             onClicked: card.urlOpened(url)
         }
 
-        // Job progress (file copies and downloads)
+        // Job progress (file copies and downloads) while it runs or is paused, with Pause/Resume
+        // and Cancel where the job offers them.
         RowLayout {
+            objectName: "jobProgress"
             Layout.fillWidth: true
             Layout.topMargin: card.metrics.px(2)
-            visible: card.isJob
+            visible: card.jobState === "running" || card.jobState === "paused"
             spacing: card.metrics.px(10)
             Rectangle {
                 Layout.fillWidth: true
@@ -365,12 +396,60 @@ Rectangle {
                 px: 11.5
             }
             TextButton {
+                objectName: "jobPause"
+                visible: !!card.entry?.suspendable
+                pal: card.pal
+                metrics: card.metrics
+                fontSize: 12
+                text: card.jobState === "paused" ? i18nc("@action:button resume a paused file transfer", "Resume")
+                                                 : i18nc("@action:button pause a file transfer", "Pause")
+                onClicked: card.jobState === "paused" ? card.resumeJobClicked() : card.suspendJobClicked()
+            }
+            TextButton {
+                objectName: "jobCancel"
                 visible: card.jobRunning && !!card.entry?.killable
                 pal: card.pal
                 metrics: card.metrics
                 fontSize: 12
                 text: i18nc("@action:button cancel a file transfer", "Cancel")
                 onClicked: card.killJobClicked()
+            }
+        }
+
+        // A finished file job: open the file, or its folder (Popups board: Open, Show in folder).
+        RowLayout {
+            objectName: "jobFiles"
+            Layout.fillWidth: true
+            Layout.topMargin: card.metrics.px(6)
+            visible: card.fileActions.folder
+            spacing: card.metrics.px(8)
+
+            TextButton {
+                objectName: "jobOpen"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                visible: card.fileActions.open
+                pal: card.pal
+                metrics: card.metrics
+                implicitHeight: pal.touch ? Math.max(44, metrics.px(32)) : metrics.px(32)
+                radius: pal.touch ? 12 : 10
+                fontSize: 12.5
+                primary: true
+                fontWeight: Font.ExtraBold
+                text: i18nc("@action:button open the copied file", "Open")
+                onClicked: card.urlOpened(card.fileActions.folderUrl)
+            }
+            TextButton {
+                objectName: "jobFolder"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                pal: card.pal
+                metrics: card.metrics
+                implicitHeight: pal.touch ? Math.max(44, metrics.px(32)) : metrics.px(32)
+                radius: pal.touch ? 12 : 10
+                fontSize: 12.5
+                text: i18nc("@action:button", "Open Containing Folder")
+                onClicked: card.folderRequested(card.fileActions.folderUrl, card.fileActions.highlight)
             }
         }
 

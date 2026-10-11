@@ -118,6 +118,12 @@ Item {
             }
             onCloseClicked: backend.notif.close(index)
             onKillJobClicked: backend.notif.killJob(index)
+            onSuspendJobClicked: backend.notif.suspendJob(index)
+            onResumeJobClicked: backend.notif.resumeJob(index)
+            onFolderRequested: (url, highlight) => {
+                backend.notif.openFolder(index, url, highlight);
+                ++root.closes;
+            }
         }
     }
 
@@ -218,9 +224,27 @@ def focus(summary, name=""):
 
 
 def click(summary, name=""):
+    # A row that has just appeared is laid out on the next frames.
+    wait_for(lambda: (info(summary, name) or {}).get("width", 0) > 4, "%s of %r has no size" % (name, summary))
+    QTest.qWait(100)
     item = info(summary, name)
     point = QPoint(round(item["x"] + item["width"] / 2), round(item["y"] + item["height"] / 2))
     QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier, point)
+
+
+def start(*args):
+    proc = subprocess.Popen([sys.executable, "-B", str(here / "notify_client.py"), *args],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    proc.lines = []
+    threading.Thread(target=lambda: [proc.lines.append(line.strip()) for line in proc.stdout], daemon=True).start()
+    clients.append(proc)
+    return proc
+
+
+def job(title, *options, entry="org.plasmafusion.notifytest"):
+    proc = start("job", title, "--entry", entry, *options)
+    wait_for(lambda: info(title) is not None, "no card for the job %r" % title)
+    return proc
 
 
 def notify(summary, body, *options, entry="org.plasmafusion.notifytest"):
@@ -321,6 +345,67 @@ try:
     click("Message from Bo", "replySend")
     wait_for(lambda: "reply Yes" in chat.lines, "Send did not reach the app (%r)" % chat.lines)
     check(True, "Send sends the reply")
+
+    # ---- File jobs: a finished copy of one file offers Open and Open Containing Folder.
+    files = start("filemanager")
+    wait_for(lambda: "ready" in files.lines, "the stand-in file manager did not start")
+    src, dst = tmp / "src", tmp / "dst"
+    src.mkdir()
+    dst.mkdir()
+    copy = job("Copying", "--source", str(src / "report.pdf"), "--dest", str(dst / "report.pdf"))
+    wait_for(lambda: "finished" in copy.lines, "the copy did not finish")
+    wait_for(lambda: info("Copying", "summary", "text")["text"] == "Copying (Finished)", "no finished summary")
+    check(True, "a finished job says so, as the stock applet: \"Copying (Finished)\"")
+    body = info("Copying", "body", "text")
+    check(body["visible"] and "report.pdf" in body["text"] and "href" in body["text"],
+          "its text is shown, with the link to the destination: %r" % body["text"])
+    check(not info("Copying", "jobProgress")["visible"], "no progress bar once finished")
+    check(info("Copying", "jobOpen")["visible"] and info("Copying", "jobFolder")["visible"],
+          "one file: Open and Open Containing Folder")
+    opened.urls.clear()
+    click("Copying", "jobOpen")
+    wait_for(lambda: opened.urls, "Open did not open the file")
+    check(opened.urls[-1] == QUrl.fromLocalFile(str(dst / "report.pdf")).toString(), "Open opens the copied file")
+    focus("Copying", "jobFolder")
+    QTest.keyClick(view, Qt.Key_Return)
+    wait_for(lambda: any(line.startswith("show ") for line in files.lines), "the folder was not shown")
+    check(("show " + QUrl.fromLocalFile(str(dst / "report.pdf")).toString()) in files.lines,
+          "Open Containing Folder shows the file selected in the file manager (FileManager1.ShowItems)")
+
+    # Several files: the destination folder itself.
+    many = job("Copying 3 files", "--files", "3", "--source", str(src), "--dest", str(dst))
+    wait_for(lambda: "finished" in many.lines and info("Copying 3 files", "jobFolder")["visible"],
+             "the folder button of a finished multi-file copy is missing")
+    check(not info("Copying 3 files", "jobOpen")["visible"], "several files: no Open, only the folder")
+    opened.urls.clear()
+    click("Copying 3 files", "jobFolder")
+    wait_for(lambda: opened.urls, "the folder did not open")
+    check(opened.urls[-1] == QUrl.fromLocalFile(str(dst)).toString(), "it opens the destination folder")
+
+    # A failed copy: why, and nothing to open.
+    failed = job("Moving", "--source", str(src / "big.iso"), "--dest", str(dst / "big.iso"), "--fail", "No space left on device")
+    wait_for(lambda: "finished" in failed.lines and info("Moving", "summary", "text")["text"] == "Moving (Failed)",
+             "no failed summary")
+    body = info("Moving", "body", "text")
+    check(body["visible"] and "No space left on device" in body["text"], "a failed job shows the error text: %r" % body["text"])
+    check(not info("Moving", "jobFiles")["visible"], "and offers no file to open")
+
+    # A running copy that can be paused and cancelled.
+    running = job("Downloading", "--running", "--suspendable", "--killable", "--source", str(src / "a"), "--dest", str(dst / "a"))
+    wait_for(lambda: info("Downloading", "jobProgress")["visible"], "no progress bar while running")
+    pause, cancel = info("Downloading", "jobPause", "text"), info("Downloading", "jobCancel")
+    check(pause["visible"] and pause["text"] == "Pause" and cancel["visible"],
+          "a running job offers Pause and Cancel (%r, %r)" % (pause, cancel))
+    click("Downloading", "jobPause")
+    wait_for(lambda: "suspend" in running.lines, "Pause did not reach the job")
+    wait_for(lambda: info("Downloading", "jobPause", "text")["text"] == "Resume", "no Resume after pausing")
+    check(info("Downloading", "summary", "text")["text"] == "Downloading (Paused)", "paused: \"Downloading (Paused)\" and Resume")
+    click("Downloading", "jobPause")
+    wait_for(lambda: "resume" in running.lines, "Resume did not reach the job")
+    check(True, "Resume resumes it")
+    click("Downloading", "jobCancel")
+    wait_for(lambda: "cancel" in running.lines, "Cancel did not reach the job")
+    check(True, "Cancel cancels it")
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:

@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "notifications.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { splitBody, sideImage, replyMode } = globalThis;
+const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown } = globalThis;
 
 // The body: declaration and wrapper gone, images taken out of the text and kept in order.
 const server = '<?xml version="1.0"?><html>Look <img src="file:///tmp/a.png" alt="a"/> here<br/>'
@@ -36,4 +36,26 @@ assert.strictEqual(sideImage(undefined, "", "konsole"), null, "nothing");
 assert.strictEqual(replyMode(false, 2), "none", "no reply action");
 assert.strictEqual(replyMode(true, 0), "field", "reply only: the field at once");
 assert.strictEqual(replyMode(true, 1), "button", "reply among others: a Reply button");
+// Jobs.
+assert.strictEqual(jobState(1, 0, 0), "", "a notification is not a job");
+assert.strictEqual(jobState(2, 1, 0), "running", "running");
+assert.strictEqual(jobState(2, 2, 0), "paused", "suspended");
+assert.strictEqual(jobState(2, 0, 0), "finished", "stopped without error");
+assert.strictEqual(jobState(2, 0, 14), "failed", "stopped with an error");
+
+const none = { open: false, folder: false, folderUrl: "", highlight: false };
+assert.deepStrictEqual(fileActions("running", 1, ""), none, "running: no file actions");
+assert.deepStrictEqual(fileActions("failed", 1, "file:///home/u/a.txt"), none, "failed: no file actions");
+assert.deepStrictEqual(fileActions("finished", 1, ""), none, "finished in the trash (no destination): none");
+assert.deepStrictEqual(fileActions("finished", 1, "file:///home/u/a.txt"),
+                       { open: true, folder: true, folderUrl: "file:///home/u/a.txt", highlight: true },
+                       "one file: Open, and the folder with the file selected");
+assert.deepStrictEqual(fileActions("finished", 3, "file:///home/u/dest"),
+                       { open: false, folder: true, folderUrl: "file:///home/u/dest", highlight: false },
+                       "several files: the destination folder");
+
+// The summary line.
+assert.strictEqual(summaryShown("Konsole ", "konsole"), false, "summary that repeats the app name");
+assert.strictEqual(summaryShown("Build done", "Konsole"), true, "a real summary");
+assert.strictEqual(summaryShown("", "Konsole"), false, "no summary");
 console.log("notifications: all checks passed");

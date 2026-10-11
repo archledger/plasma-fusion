@@ -175,6 +175,24 @@ Item {
     function killJob(row: int) {
         history.killJob(indexFor(row));
     }
+    function suspendJob(row: int) {
+        history.suspendJob(indexFor(row));
+    }
+    function resumeJob(row: int) {
+        history.resumeJob(indexFor(row));
+    }
+    // Shows a file in the file manager, selected (KIO's highlightInFileManager, the stock applet's
+    // "Open Containing Folder" for one file).
+    function showInFolder(url: string) {
+        DBus.SessionBus.asyncCall({
+            service: "org.freedesktop.FileManager1",
+            path: "/org/freedesktop/FileManager1",
+            iface: "org.freedesktop.FileManager1",
+            member: "ShowItems",
+            arguments: [[url], new DBus.string("")],
+            signature: "(ass)"
+        });
+    }
     function markRead() {
         history.lastRead = undefined; // resets to "now"
     }

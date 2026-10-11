@@ -128,7 +128,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   automatically; `Mpris2Model.currentIndex`); a stopped player chosen there keeps the card while
   it can play, so it can be played or another chosen;
 * `Notifications` header with `Clear all`, then the notification cards (app icon + name, time,
-  summary, body, the notification's image, a linked file's preview, job progress with Cancel,
+  summary, body, the notification's image, a linked file's preview, job progress with Pause and
+  Cancel, a finished job's Open and Open Containing Folder,
   action buttons; the first action is the accent button for critical or persistent notifications,
   as the board's calendar reminder). Close button on hover. Clicking a card runs its default
   action.
@@ -851,3 +852,21 @@ reply…", **Send**), Send waits for text, Return sends and Escape goes back to 
 goes through `Notifications.reply()`; a notification that is not resident closes then.
 `notifications.js` `replyMode()`; `tests/notifications_card_test.py` sends both kinds through
 `tests/notify_client.py`, which reports the reply the app receives (from Return and from Send).
+
+### File jobs
+
+A job card (a copy, a download) hid its text and offered only a progress bar and Cancel, so a
+failed copy did not say why and a finished one had nothing to open. As in the stock applet
+(`JobItem.qml`, `Summary.qml`): the summary says "Copying (Finished)", "(Failed)" or "(Paused)";
+the job's text is shown (the file and a link to the destination, or the error text); the
+progress bar shows while it runs or is paused, with **Pause**/**Resume** when the job can be
+suspended and **Cancel** when it can be killed; a finished copy of one file offers **Open** (accent,
+as on the Popups board) and **Open Containing Folder**, which shows the file selected in the file
+manager (`org.freedesktop.FileManager1.ShowItems`, KIO's highlightInFileManager), and a copy of
+several files offers **Open Containing Folder** for the destination folder (the job's
+`effectiveDestUrl`, empty after an error or in the trash). Opening lets the notification expire and
+closes the sheet. A summary that only repeats the app's name is left out (the stock rule).
+`notifications.js` `jobState()`, `fileActions()`, `summaryShown()`; `tests/notify_client.py job`
+reports a copy as KIO does (`org.kde.JobViewServerV2`) and `tests/notifications_card_test.py`
+checks the one-file, several-file, failed and running cases (Open, the folder through a stand-in
+file manager, the error text, Pause/Resume/Cancel reaching the job).

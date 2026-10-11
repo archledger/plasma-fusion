@@ -49,3 +49,45 @@ function replyMode(hasReply, actionCount) {
     }
     return actionCount > 0 ? "button" : "field";
 }
+
+// org.kde.notificationmanager enums used below (JobStateRunning is 1).
+var JOB_TYPE = 2;
+var JOB_STOPPED = 0;
+var JOB_SUSPENDED = 2;
+
+// A job's state as the card words it: "running", "paused", "failed", "finished", or "" for a
+// notification.
+function jobState(type, state, error) {
+    if (type !== JOB_TYPE) {
+        return "";
+    }
+    if (state === JOB_SUSPENDED) {
+        return "paused";
+    }
+    if (state === JOB_STOPPED) {
+        return error ? "failed" : "finished";
+    }
+    return "running";
+}
+
+// What a finished file job offers ({open, folder, folderUrl, highlight}): the stock applet's
+// "Open" and "Open Containing Folder". `destUrl` is the job's effectiveDestUrl: the copied file for
+// a single file, the destination folder for several, empty while running, after an error or in
+// the trash. One file: Open opens it, the folder button shows it in the file manager (highlight).
+// Several: only the folder button, which opens the destination folder.
+function fileActions(state, totalFiles, destUrl) {
+    var url = String(destUrl || "");
+    if (state !== "finished" || url === "") {
+        return { open: false, folder: false, folderUrl: "", highlight: false };
+    }
+    if (totalFiles === 1) {
+        return { open: true, folder: true, folderUrl: url, highlight: true };
+    }
+    return { open: false, folder: true, folderUrl: url, highlight: false };
+}
+
+// Whether the summary is worth a line: some apps send their own name as the summary.
+function summaryShown(summary, applicationName) {
+    var s = String(summary || "").trim().toLocaleLowerCase();
+    return s !== "" && s !== String(applicationName || "").trim().toLocaleLowerCase();
+}

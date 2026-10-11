@@ -492,6 +492,12 @@ FocusScope {
                         }
                         onCloseClicked: centre.notif.close(row.index)
                         onKillJobClicked: centre.notif.killJob(row.index)
+                        onSuspendJobClicked: centre.notif.suspendJob(row.index)
+                        onResumeJobClicked: centre.notif.resumeJob(row.index)
+                        onFolderRequested: (url, highlight) => {
+                            centre.notif.openFolder(row.index, url, highlight);
+                            centre.closeRequested();
+                        }
                         TapHandler {
                             acceptedDevices: PointerDevice.TouchScreen | PointerDevice.Stylus | PointerDevice.Mouse
                             onLongPressed: {

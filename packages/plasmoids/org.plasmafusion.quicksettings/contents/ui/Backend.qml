@@ -968,6 +968,29 @@ Item {
                 s.killJob(row);
             }
         }
+        function suspendJob(row: int) {
+            if (s) {
+                s.suspendJob(row);
+            }
+        }
+        function resumeJob(row: int) {
+            if (s) {
+                s.resumeJob(row);
+            }
+        }
+        // A finished job's folder: the one file selected in the file manager (`highlight`), or the
+        // destination folder of several; the notification expires as after Open.
+        function openFolder(row: int, url: string, highlight: bool) {
+            if (!s) {
+                return;
+            }
+            if (highlight) {
+                s.showInFolder(url);
+            } else {
+                Qt.openUrlExternally(url);
+            }
+            s.expire(row);
+        }
         function clearAll() {
             if (s) {
                 s.clearAll();
