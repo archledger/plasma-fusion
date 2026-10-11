@@ -39,6 +39,8 @@ class QDBusServiceWatcher;
       Dock            the org.plasmafusion.dock widgets' [General] magnify and magnifiedSize keys
                       (desktop scripting).
       Global menu     org.kde.plasma.appmenu right after org.plasmafusion.appname in the top bar.
+      System meters   org.plasmafusion.meters right before org.plasmafusion.quicksettings in every
+                      top bar (the widget is in no layout; off: every meters widget of a panel goes).
       Hot corner      kwinrc [Effect-overview] BorderActivate 7 (top-left corner) or 9 (none).
       Glass           plasmafusionrc [Effects] Glass=Full|Reduced|Solid; Solid: kwinrc [Plugins]
                       blurEnabled=false and the blur effect unloaded; Reduced: both Fusion panels
@@ -87,6 +89,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool dockAvailable READ dockAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool topBarAvailable READ topBarAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool quickSettingsAvailable READ quickSettingsAvailable NOTIFY shellStateChanged)
+    // The system meters widget is installed (the shell's knownWidgetTypes).
+    Q_PROPERTY(bool metersAvailable READ metersAvailable NOTIFY shellStateChanged)
     // The desktop is a Folder View (the only desktop type that shows icons).
     Q_PROPERTY(bool folderAvailable READ folderAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool decorationInstalled READ decorationInstalled NOTIFY decorationInstalledChanged)
@@ -105,6 +109,7 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool reduceMotion READ reduceMotion WRITE setReduceMotion NOTIFY stateChanged)
     Q_PROPERTY(int magnifiedSize READ magnifiedSize WRITE setMagnifiedSize NOTIFY stateChanged)
     Q_PROPERTY(bool solidTopBar READ solidTopBar WRITE setSolidTopBar NOTIFY stateChanged)
+    Q_PROPERTY(bool systemMeters READ systemMeters WRITE setSystemMeters NOTIFY stateChanged)
     Q_PROPERTY(bool everyScreen READ everyScreen WRITE setEveryScreen NOTIFY stateChanged)
     Q_PROPERTY(bool desktopIcons READ desktopIcons WRITE setDesktopIcons NOTIFY stateChanged)
     Q_PROPERTY(int iconSize READ iconSize WRITE setIconSize NOTIFY stateChanged)
@@ -181,6 +186,7 @@ public:
     bool shellRunning() const;
     bool dockAvailable() const;
     bool topBarAvailable() const;
+    bool metersAvailable() const;
     bool quickSettingsAvailable() const;
     bool folderAvailable() const;
     bool decorationInstalled() const;
@@ -206,6 +212,8 @@ public:
     void setMagnifiedSize(int value);
     bool solidTopBar() const;
     void setSolidTopBar(bool value);
+    bool systemMeters() const;
+    void setSystemMeters(bool value);
     bool everyScreen() const;
     void setEveryScreen(bool value);
     bool desktopIcons() const;
@@ -316,6 +324,8 @@ private:
         // Plasma shell (widgets and panels)
         int magnifiedSize = 62;
         bool solidTopBar = true;
+        // Off by default: the meters are in no layout.
+        bool systemMeters = false;
         bool desktopIcons = true;
         int iconSize = 2;
         int keyboardPolicy = KeyboardTablet;
@@ -365,6 +375,7 @@ private:
     bool applyMagnify(bool on);
     bool applyMagnifiedSize(int size);
     bool applyGlobalMenu(bool on);
+    bool applySystemMeters(bool on);
     bool applyPanels(int glass, bool solidTopBar, bool widgetGlass);
     bool applyEveryScreen(bool on);
     bool applyDesktop(const State &before, const State &after);
@@ -388,6 +399,7 @@ private:
     bool m_shellRunning = true;
     bool m_dockAvailable = false;
     bool m_topBarAvailable = false;
+    bool m_metersAvailable = false;
     bool m_quickSettingsAvailable = false;
     bool m_folderAvailable = false;
     bool m_decorationInstalled = false;

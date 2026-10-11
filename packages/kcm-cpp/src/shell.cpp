@@ -37,8 +37,9 @@ using namespace PlasmaFusion;
 namespace
 {
 // Reads the shell state in one call: the dock's keys, the top bar (the panel holding
-// org.plasmafusion.appname; the one with quick settings when there are several), the quick
-// settings' keyboard policy and the Folder View desktop's filter and icon size.
+// org.plasmafusion.appname; the one with quick settings when there are several) and whether it
+// has the system meters, the quick settings' keyboard policy and the Folder View desktop's filter
+// and icon size.
 const QString s_readShellScript = uR"JS(
 function bool(v, d) {
     if (v === undefined || v === null || v === "") {
@@ -47,7 +48,8 @@ function bool(v, d) {
     return !(v === false || v === "false");
 }
 var state = { docks: 0, magnify: true, magnifiedSize: 62, homeIndicator: true,
-              topBars: 0, menu: false, topOpacity: "",
+              topBars: 0, menu: false, topOpacity: "", meters: false,
+              metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
               folders: 0, filterMode: 0, filterPattern: "*", iconSize: 3 };
 var mainTopBar = false;
@@ -75,6 +77,7 @@ for (var i = 0; i < ps.length; ++i) {
     if (p.widgets("org.plasmafusion.appname").length > 0) {
         if (state.topBars === 0 || (!mainTopBar && qs.length > 0)) {
             state.menu = p.widgets("org.kde.plasma.appmenu").length > 0;
+            state.meters = p.widgets("org.plasmafusion.meters").length > 0;
             state.topOpacity = String(p.opacity);
             mainTopBar = qs.length > 0;
         }
@@ -160,6 +163,58 @@ for (var i = 0; i < ps.length; ++i) {
     }
 }
 print(changed);
+)JS"_s;
+
+// %1: true (add the system meters to every top bar that has none, right before quick settings)
+// or false (remove every meters widget from the panels). As the global menu, the widget is added
+// at the position just left of quick settings, so the panel inserts it there directly.
+const QString s_metersScript = uR"JS(
+var want = %1;
+var changed = 0;
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var meters = ps[i].widgets("org.plasmafusion.meters");
+    if (!want) {
+        for (var j = 0; j < meters.length; ++j) {
+            meters[j].remove();
+            ++changed;
+        }
+        continue;
+    }
+    var qs = ps[i].widgets("org.plasmafusion.quicksettings");
+    if (ps[i].widgets("org.plasmafusion.appname").length === 0 || qs.length === 0 || meters.length > 0) {
+        continue;
+    }
+    var g = qs[0].geometry;
+    var added = g ? ps[i].addWidget("org.plasmafusion.meters", Math.max(0, g.x - 2), 1, -1, -1)
+                  : ps[i].addWidget("org.plasmafusion.meters");
+    if (added) {
+        ++changed;
+    }
+}
+print(changed);
+)JS"_s;
+
+// Checks that the system meters sit right before quick settings and moves them there if not (a
+// second call, as for the global menu).
+const QString s_placeMetersScript = uR"JS(
+var placed = 0;
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var qs = ps[i].widgets("org.plasmafusion.quicksettings");
+    var meters = ps[i].widgets("org.plasmafusion.meters");
+    if (qs.length === 0 || meters.length === 0) {
+        continue;
+    }
+    // Moving up the order, the widget lands at the index given; moving down, the ones in between
+    // move up a place.
+    var at = meters[0].index < qs[0].index ? qs[0].index - 1 : qs[0].index;
+    if (meters[0].index !== at) {
+        meters[0].index = at;
+    }
+    ++placed;
+}
+print(placed);
 )JS"_s;
 
 // Checks that the global menu sits right after the application name and moves it there if not
@@ -414,6 +469,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
     m_shellRunning = !reply.isError();
     m_dockAvailable = false;
     m_topBarAvailable = false;
+    m_metersAvailable = false;
     m_quickSettingsAvailable = false;
     m_folderAvailable = false;
     if (reply.isError()) {
@@ -422,6 +478,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         const QJsonObject state = QJsonDocument::fromJson(lastLine(reply.value()).toUtf8()).object();
         m_dockAvailable = state.value(u"docks"_s).toInt() > 0;
         m_topBarAvailable = state.value(u"topBars"_s).toInt() > 0;
+        m_metersAvailable = state.value(u"metersInstalled"_s).toBool();
         m_quickSettingsAvailable = state.value(u"quickSettings"_s).toInt() > 0;
         m_folderAvailable = state.value(u"folders"_s).toInt() > 0;
 
@@ -447,6 +504,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         }
         if (m_topBarAvailable) {
             take(m_current.globalMenu, m_saved.globalMenu, state.value(u"menu"_s).toBool(true));
+            take(m_current.systemMeters, m_saved.systemMeters, state.value(u"meters"_s).toBool(false));
             // "adaptive": solid next to windows; "translucent": always glass. With Reduced glass
             // the bar is opaque, and the choice the page made last is in plasmafusionrc.
             const QString opacity = state.value(u"topOpacity"_s).toString();
@@ -527,6 +585,31 @@ bool PlasmaFusionKcm::applyGlobalMenu(bool on)
             addError(i18nc("@info", "The global menu could not be placed after the application name."));
             return false;
         }
+    }
+    return true;
+}
+
+bool PlasmaFusionKcm::applySystemMeters(bool on)
+{
+    bool ok = false;
+    const QString result = evaluateShellScript(s_metersScript.arg(on ? u"true"_s : u"false"_s), &ok);
+    if (!ok) {
+        addError(i18nc("@info", "The top bar could not be changed: %1", result));
+        return false;
+    }
+    if (on && result.toInt() > 0) {
+        // Let the panel store its new widget order before moving the meters. A QML widget the
+        // shell loads for the first time is listed only once it is built (about 0.5 s in the
+        // test VM, where 300 ms were too few), so this asks again for up to 3 s.
+        for (int attempt = 0; attempt < 10; ++attempt) {
+            QThread::msleep(300);
+            const QString placed = evaluateShellScript(s_placeMetersScript, &ok);
+            if (ok && placed.toInt() > 0) {
+                return true;
+            }
+        }
+        addError(i18nc("@info", "The system meters could not be placed before quick settings."));
+        return false;
     }
     return true;
 }

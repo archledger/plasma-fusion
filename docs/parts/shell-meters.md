@@ -31,8 +31,13 @@ test VM, dark and light. Last edited 2026-10-11.
 ## Turning it on
 
 Nothing changes for current users: the widget is in no layout, and the layout scripts never add
-it. To put it in the top bar: **Add Widgets** (right-click the top bar > Add Widgets, "Plasma
-Fusion System Meters"), then drag it where it should go.
+it. Two ways to put it in the top bar:
+
+- **Plasma Fusion settings** (System Settings > Plasma Fusion): "System meters in the top bar".
+  Apply adds the widget right before quick settings in every top bar (and removes it when the
+  switch is turned off); see `docs/parts/kcm-cpp.md`.
+- **Add Widgets** (right-click the top bar > Add Widgets, "Plasma Fusion System Meters"), then
+  drag it where it should go.
 
 Added, it shows the processor and the memory; the network and temperature meters are turned on in
 its settings (right-click > Configure System Meters).
@@ -156,8 +161,9 @@ laid over the user's `~/.local`; `tests/vm_meters.py` in the session, two busy l
 and a host-side traffic source through QEMU's user network (about 2 MB/s down, 300 kB/s up).
 Screenshots and logs: `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/meters-shots/`.
 
-- **Added** with desktop scripting (`vm_meters.py add`, where Add Widgets would place it):
-  `... systemtray | pen | meters | quicksettings`; `vm_meters.py remove` takes it out again.
+- **Added** with desktop scripting (`vm_meters.py add`, where Add Widgets would place it) and from
+  the settings page (`kcmctl`, and a real pointer click on the switch, then Apply): `... systemtray |
+  pen | meters | quicksettings`; off again removes it; the settings page reads it back as on.
 - **Values:** idle "3% 53% 0 B / 0 B"; under load "100%" in the warning colour with the name "CPU
   100%, high", network "2.1 MB / 330 kB" and "Network: download 2.1 MB/s, upload 330 kB/s"
   (ksystemstats' rates matched the traffic source); 5 s after the load "2%" and the warning gone.
