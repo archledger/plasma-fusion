@@ -158,6 +158,8 @@ ColumnLayout {
                 iconFillPath: entry.starred ? Icons.star : ""
                 iconColor: entry.starred ? entry.pal.charging : entry.pal.controlText
                 text: entry.starred ? i18nc("@action:button clipboard entry", "Remove star") : i18nc("@action:button clipboard entry", "Star")
+                // No tooltip in touch mode: a tap leaves it over the actions that open below.
+                toolTip: entry.pal.touch ? "" : text
                 onClicked: entry.starToggled()
             }
             IconButton {
@@ -172,6 +174,7 @@ ColumnLayout {
                 enabled: opacity > 0
                 iconPath: Icons.more
                 text: i18nc("@action:button clipboard entry", "More actions")
+                toolTip: entry.pal.touch ? "" : text
                 onClicked: entry.expandToggled()
             }
         }

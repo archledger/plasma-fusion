@@ -38,7 +38,7 @@ Path(HOME, ".config", "klipperrc").write_text("[General]\nIgnoreImages=false\n")
 from PySide6.QtCore import QMetaObject, QObject, QSortFilterProxyModel, Q_ARG, Q_RETURN_ARG, Qt, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QColor, QCursor, QImage  # noqa: E402
 from PySide6.QtQml import QQmlComponent  # noqa: E402
-from PySide6.QtQuick import QQuickView  # noqa: E402
+from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 import shiboken6  # noqa: E402
@@ -122,7 +122,8 @@ Item {{
     property string chosenUuid: ""
     Services.Clipboard {{ id: history; objectName: "clipboardService" }}
     FusionMetrics {{ id: fusionMetrics }}
-    property FusionPalette pal: FusionPalette {{}}
+    property bool touch: false
+    property FusionPalette pal: FusionPalette {{ touch: root.touch }}
     // What Backend.qml gives the page: the service, choose (on the clipboard, then the sheet
     // closes) and the emoji selector.
     QtObject {{
@@ -403,6 +404,16 @@ check(not lst.property("activeFocus"), "Tab leaves the list")
 emoji = root.findChild(QObject, "clipboardEmoji")
 QMetaObject.invokeMethod(emoji, "clicked")
 check(root.property("emojis") == 1, "the Emoji button asks for the emoji selector")
+
+# The rows are the list's delegates, not QObject children: reach the first one's star through it.
+first_row = QMetaObject.invokeMethod(lst, "itemAtIndex", Q_RETURN_ARG(QQuickItem), Q_ARG(int, 0))
+star = first_row.findChild(QObject, "clipboardStar")
+check(star.property("toolTip") != "", "with a pointer, a row's star has its tooltip")
+root.setProperty("touch", True)
+QTest.qWait(50)
+check(star.property("toolTip") == "" and star.property("text") != "",
+      "in touch mode it has none (a tap would leave it over the row's actions), and keeps its name")
+root.setProperty("touch", False)
 
 starred = service.property("starredCount")
 call(service, "clearHistory")

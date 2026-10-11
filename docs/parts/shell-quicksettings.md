@@ -829,10 +829,11 @@ docs/parts/device.md); the button and Meta+V close it again.
   the QR code or the open actions, then clears the search, then closes the sheet (opened on its own)
   or goes back to quick settings (opened from the sheet's row). Every button and the list have
   accessible names; the rows are list items named by their text.
-- **Touch and tablet posture:** the sheet's tablet width (400 px; portrait up to 560 px), rows of 56
-  px, star and "⋯" always shown, every target at least 44 px (the header's buttons, Clear all, the
-  search field, the tabs, the row and editor buttons), press and hold for the actions; the sheet
-  takes its own height and its list what the rest leaves, so only the list scrolls.
+- **Touch and tablet posture:** the sheet's tablet width (400 px; portrait up to 560 px), rows of
+  56 px, star and "⋯" always shown (without tooltips, which a tap would leave over the actions),
+  every target at least 44 px (the header's buttons, Clear all, the search field, the tabs, the row
+  and editor buttons), press and hold for the actions; the sheet takes its own height and its list
+  what the rest leaves, so only the list scrolls.
 - **Emoji:** the header's Emoji button closes the sheet and opens Plasma's emoji selector
   (plasma-emojier, through its own Meta+. shortcut action, or the program); the sheet draws no emoji
   of its own.
@@ -848,9 +849,9 @@ docs/parts/device.md); the button and Meta+V close it again.
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (44 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (46 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
   the page: focus, arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard,
-  QR code, editor typing, Enter and Escape, Emoji). Both fail without the sheet (the files do not
-  exist on 0.4.1).
+  QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode). Both fail without
+  the sheet (the files do not exist on 0.4.1).
