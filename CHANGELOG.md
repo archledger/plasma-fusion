@@ -16,6 +16,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - The Overview hot corner turned on in the Plasma Fusion settings (or under System Settings >
   Screen Edges) stays on when the setup runs again; before, every run without `--hot-corner`
   turned it off.
+- Do Not Disturb "Until tomorrow" chosen after midnight ends at 06:00 that morning, not at 06:00 the
+  day after (29 hours from 01:00).
 
 ## 0.4.0 (2026-10-09)
 

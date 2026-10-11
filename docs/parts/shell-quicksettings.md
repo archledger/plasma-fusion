@@ -536,7 +536,8 @@ the lead directly.
   tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc
   `[Tablet] RotationLocked`); the lock is read back from `kscreen-doctor -j` when the sheet opens in
   tablet posture (outputs with the auto-rotation capability report it).
-- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow" (06:00)
+- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow" (the next
+  06:00: chosen after midnight, the coming morning; `contents/code/dnd.js`, `tests/dnd.test.js`)
   and "Until turned off"; the time is kept in the notification settings, a timer releases it.
 - **Built on demand** (S2): the sheet's content is a `Loader` built 4 s after start, or at once when the
   pointer reaches the bar or anything opens it; the Bluetooth device model exists only while the

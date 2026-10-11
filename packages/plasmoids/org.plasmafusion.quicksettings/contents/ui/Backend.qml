@@ -8,6 +8,7 @@ import org.kde.plasma.workspace.dbus as DBus
 import "components"
 import "global"
 import "../code/power.js" as Power
+import "../code/dnd.js" as Dnd
 
 // Every data source behind one null-safe object. Each service lives in its own
 // file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
@@ -599,7 +600,7 @@ Item {
                 s.toggleDnd();
             }
         }
-        // G18: for one hour, or until tomorrow morning (06:00).
+        // G18: for one hour, or until the next morning (06:00; after midnight the coming one).
         function forHour() {
             if (s) {
                 s.dndUntil(new Date(Date.now() + 3600 * 1000));
@@ -607,10 +608,7 @@ Item {
         }
         function untilTomorrow() {
             if (s) {
-                const d = new Date();
-                d.setDate(d.getDate() + 1);
-                d.setHours(6, 0, 0, 0);
-                s.dndUntil(d);
+                s.dndUntil(Dnd.untilMorning(new Date()));
             }
         }
         function openSettings() {
