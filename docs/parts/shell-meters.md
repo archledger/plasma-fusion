@@ -47,7 +47,7 @@ its settings (right-click > Configure System Meters).
 | `showTemperature` | false | the hottest core (`cpu/all/maximumTemperature`); the meter appears once a reading came, so it never shows where the machine has no CPU sensor (ksystemstats reads 0 there: virtual machines, some ARM boards) |
 | `updateInterval` | 2000 | ms between two values, 1-10 s (settings list 1, 2, 3, 5, 10 s) |
 | `popupGap` | 10 | px between the bar and the pop-up (no control; the clock pill's and quick settings' value) |
-| `powerTier` | 0 | hidden, for the power service: the interval x 1 (full), x 2 (power saver), x 4 (critical battery), as the system card's key |
+| `powerTier` | 0 | hidden, written by the power service (`docs/parts/powerfx.md`): the interval x 1 (full), x 2 (power saver), x 4 (critical battery), as the system card |
 | `debugAction` | "" | testing only, cleared after use: `dump:TAG` logs a JSON line (`meters: dump TAG {...}`: sampling, subscribed sensors, texts, accessible names, the pill's place), `open` and `close` the pop-up |
 
 No GPU meter: ksystemstats 6.7's GPU usage is not generic. It reads AMD cards from sysfs, NVIDIA
@@ -125,6 +125,12 @@ and clipboard) the whole pill. Tablet posture starts at step 2, so the meters ar
 tablet bar. At 1280 x 800 with all four meters the bar goes to step 1 (the network meter leaves),
 at 1440 x 900 it stays at step 0 (measured in the VM, below).
 
+### Power tiers
+
+`plasma-fusion-powerfx` writes the hidden `powerTier` of every meters widget as it does the system
+card's (`packages/powerfx/tests/widgets.test.js`, "the top bar's system meters slow down with the
+tiers"): 2 s, 4 s and 8 s at the default interval. The user's keys are never written.
+
 ## Tests
 
 - `node packages/plasmoids/org.plasmafusion.meters/tests/meters.test.js` (also in `tools/build.sh
@@ -139,6 +145,7 @@ at 1440 x 900 it stays at step 0 (measured in the VM, below).
   limit 15 values in 1.5 s reach the meter once or twice (every one without a limit). 14 checks.
   Under the pf-ci container the private bus needs root (`docker exec` without `-u`): dbus-daemon
   cannot look up the uid 1000 there, for the existing D-Bus tests too.
+- `node packages/powerfx/tests/widgets.test.js`: the power tiers reach the meters.
 - VM (Fedora 44, Plasma 6.7.5, 2 CPUs, 1280 x 800 and 1440 x 900): `tests/vm_meters.py` with two
   busy loops and network traffic through QEMU's user network; see "Verification".
 
