@@ -361,6 +361,7 @@ Item {
                     color: bar.pal.accent
                     Accessible.role: Accessible.StaticText
                     Accessible.name: i18nc("@info:status", "Sleep and automatic screen locking are blocked")
+                    Accessible.description: bar.backend.keepAwake.timed ? bar.backend.keepAwake.subtitle : ""
                 }
                 LineIcon {
                     anchors.verticalCenter: parent.verticalCenter
@@ -402,7 +403,7 @@ Item {
                 subText: {
                     const lines = [];
                     if (bar.backend.keepAwake.active) {
-                        lines.push(i18nc("@info:tooltip", "Keep awake: sleep and automatic screen locking are blocked"));
+                        lines.push(bar.backend.keepAwake.toolTipLine);
                     }
                     if (bar.backend.devices.count > 0) {
                         lines.push(i18nc("@info:tooltip %1 device name or count", "Disks & Devices: %1", bar.backend.devices.subtitle));

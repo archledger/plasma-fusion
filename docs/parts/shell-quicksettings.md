@@ -66,15 +66,26 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   switch` on the row) for 5 s. tuned-ppd 2.28 refuses `HoldProfile` ("Invalid bus name"), so holds
   come from power-profiles-daemon systems),
   Dark style (switches between the two Plasma Fusion Global Themes, see below);
-* **Keep awake** (`Off` / `On`): manually blocks sleep, display power saving and automatic screen
-  locking until turned off in this session. An accent coffee-cup icon stays in the status pill
-  while it is on, including tablet posture; the pill's tooltip explains the active inhibition.
+* **Keep awake** (`Off` / `On` / `1 h 5 min left`): manually blocks sleep, display power saving and
+  automatic screen locking; a click turns it on until turned off, as before. Its page (the
+  chevron, `Keep awake options`; titled **Keep awake**, with a switch) also keeps it awake
+  `For 1 hour`, `For 4 hours`, `Until…` a time of day (a quarter-hour chooser in the locale's time
+  format, starting at the quarter hour after an hour from now; a time already passed means
+  tomorrow) or `Until turned off`, as Caffeine, Amphetamine and PowerToys Awake offer; the page
+  says `On until 21:37 (1 h left)`. The end is a wall-clock time kept for every widget of the
+  shell (`Instances`), so the timer runs with the sheet closed and after a suspend still ends it
+  (at most a minute late; `contents/code/keepawake.js`, tested by `tests/keepawake.test.js`);
+  turning it off, here or in the hidden battery applet, drops the end. Across a plasmashell
+  restart nothing is restored: Plasma's own manual inhibition belongs to the plasmashell process
+  and ends with it, timed or not (checked in the test VM). An accent coffee-cup icon stays in the
+  status pill while it is on, including tablet posture; the pill's tooltip explains the active
+  inhibition and, when timed, how long is left and until when.
   The tile uses Plasma's native `InhibitionControl`, so the hidden stock battery applet and all
   Fusion controls in the same plasmashell process agree on the manual state. Other applications'
   inhibitors are separate; turning this off leaves those in place. The popup can be closed without
   releasing the inhibition. Manual Lock still works. Normal timeout settings are never rewritten,
   and exiting the session releases the native requests. Missing PowerDevil or ScreenSaver service
-  shows `Unavailable` with a disabled tile. Its chevron opens **Sleep blockers**: the applications currently
+  shows `Unavailable` with a disabled tile. Under the durations the page lists the **Sleep blockers**: the applications currently
   requesting to block sleep or idle screen locking, with their reasons, each with an `Allow this
   application's request` box (PowerDevil's `SetInhibitionAllowed`, as in the stock battery applet);
 * **Wi‑Fi hotspot** (`Off`, `Starting…`, `On`; otherwise the reason: `Wi‑Fi in use`, `Wi‑Fi is off`,
@@ -182,7 +193,7 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
   contents/ui/ProfilesPage.qml      Power mode chooser (the Power mode tile's chevron)
-  contents/ui/PowerPage.qml         Sleep blockers (the Keep awake tile's chevron)
+  contents/ui/PowerPage.qml         Keep awake durations and the sleep blockers (the tile's chevron)
   contents/ui/NotificationCard.qml  one notification
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),
@@ -260,7 +271,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
 | `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`; without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
-| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state |
+| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
 Dark style: when kdeglobals `[KDE] DefaultLightLookAndFeel` / `DefaultDarkLookAndFeel` pair the two
@@ -288,7 +299,9 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 
   Needs PySide6, python3-dbus, python3-gobject and PowerDevil's QML module. Checks default-off,
   both inhibitor endpoints, shared native state, preservation of another application's inhibition,
-  service disappearance/return and complete release after repeated use.
+  service disappearance/return and complete release after repeated use; and the timed Keep awake:
+  both widgets know the end, it ends on time with one release, an end left from a Keep awake
+  turned off does not end the next one, `Until turned off` keeps a timed one going.
 
 * Drill-down pages in the staged real QML with a stand-in backend (offscreen, in CI):
 
@@ -302,6 +315,8 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
   Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
   under the list, a click on a profile chooses it directly.
+  Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
+  passes its time, the state line for timed and untimed.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
@@ -429,6 +444,8 @@ An independent review of the part, integrated with every other part that exists 
   Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
   Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
   under the list, a click on a profile chooses it directly.
+  Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
+  passes its time, the state line for timed and untimed.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files: no errors; the warnings are `i18n*` calls
   (injected by Plasma), plasma-pa singletons and `ListView.currentItem` methods (static-analysis

@@ -16,6 +16,8 @@ QtObject {
     // A keep-awake request is on its way (KeepAwake.qml): the native monitor is shared by every
     // widget and keeps one pair of cookies, so one request at a time across all of them.
     property bool keepAwakePending: false
+    // When a timed Keep awake ends (ms since the epoch; 0: until turned off), for every widget.
+    property double keepAwakeUntil: 0
     // The hotspot runs (Network.qml): plasma-nm's handler follows only a hotspot it started (one it
     // found running when it was made stays "on" for it), so the widgets keep one state: set by a
     // new handler (it looks the connection up), by the one that starts, stops or sees the end of

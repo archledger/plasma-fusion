@@ -79,6 +79,47 @@ Item {
 }
 """
 
+# Keep awake for a while (F7): the stand-in records the calls; timed or not is set by the test.
+KEEPAWAKE = """
+import QtQuick
+import "%(ui)s"
+import "%(ui)s/components"
+
+Item {
+    id: root
+    width: 356
+    height: 640
+    property string calls: ""
+    property bool active: false
+    property bool timed: false
+    function log(text: string) { root.calls += (root.calls ? "; " : "") + text; }
+    FusionPalette { id: pal }
+    FusionMetrics { id: metrics }
+    QtObject {
+        id: backend
+        property QtObject keepAwake: QtObject {
+            readonly property bool available: true
+            readonly property bool active: root.active
+            readonly property bool timed: root.timed
+            readonly property string untilText: "15:30"
+            readonly property string leftText: "1 h 5 min"
+            readonly property var inhibitors: []
+            function toggle() { root.log("toggle"); }
+            function forHours(h: int) { root.log("hours " + h); }
+            function untilMinuteOfDay(m: int) { root.log("until " + m); }
+            function untilTurnedOff() { root.log("until turned off"); }
+            function setAllowed(a: string, r: string, allowed: bool) {}
+        }
+    }
+    PowerPage {
+        width: root.width
+        backend: backend
+        pal: pal
+        metrics: metrics
+    }
+}
+"""
+
 checks = 0
 
 
@@ -150,6 +191,38 @@ check(root.property("calls").endswith("set performance"), "a click on Performanc
 root.setProperty("list", ["balanced", "power-saver"])
 QTest.qWait(50)
 check(find(root, "profile-performance") is None, "a profile the daemon does not offer is not listed")
+view.close()
+
+# ---- Keep awake for a while (F7)
+view, root = load(KEEPAWAKE)
+state = find(root, "keepawake-state")
+check(all(find(root, "keepawake-" + c) for c in ("1h", "4h", "until", "off")), "the page offers 1 hour, 4 hours, until a time and until turned off")
+check(find(root, "keepawake-time") is None, "the time chooser is folded away at first")
+click(view, find(root, "keepawake-1h"))
+click(view, find(root, "keepawake-4h"))
+check(root.property("calls") == "hours 1; hours 4", "1 hour and 4 hours start a timed Keep awake (%s)" % root.property("calls"))
+click(view, find(root, "keepawake-off"))
+check(root.property("calls").endswith("; toggle"), "until turned off, while off, is the tile's own click: on until turned off")
+click(view, find(root, "keepawake-until"))
+spin = find(root, "keepawake-time")
+check(spin is not None and find(root, "keepawake-start") is not None, "Until… shows the time chooser and Start")
+start_value = spin.property("value")
+check(start_value % 15 == 0 and spin.property("stepSize") == 15, "the time chooser offers quarter hours (%s)" % start_value)
+spin.setProperty("value", 17 * 60 + 30)
+click(view, find(root, "keepawake-start"))
+check(root.property("calls").endswith("; until 1050"), "Start keeps it awake until the chosen time (%s)" % root.property("calls"))
+check(find(root, "keepawake-time") is None, "and folds the chooser away")
+root.setProperty("active", True)
+root.setProperty("timed", True)
+QTest.qWait(50)
+check(state.property("text") == "On until %1 (%2 left)" and find(root, "keepawake-off").property("primary") is False,
+      "timed: the page says when it ends and how long is left")
+click(view, find(root, "keepawake-off"))
+check(root.property("calls").endswith("; until turned off"), "until turned off, while timed, keeps it on without the end")
+root.setProperty("timed", False)
+QTest.qWait(50)
+check(state.property("text") == "On until turned off" and find(root, "keepawake-off").property("primary"),
+      "untimed: the page says until turned off and marks that choice")
 view.close()
 
 print(f"Quick settings pages: {checks} checks, 0 failures")

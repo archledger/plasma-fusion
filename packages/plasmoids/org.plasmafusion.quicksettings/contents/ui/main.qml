@@ -375,7 +375,9 @@ PlasmoidItem {
         }
     }
 
-    // ---- Testing hook (config key debugAction, cleared after use): "dump:TAG".
+    // ---- Testing hook (config key debugAction, cleared after use): "dump:TAG", or "keepawake:SECONDS"
+    // for a timed Keep awake that ends after so many seconds (the scenario of a timer running out,
+    // which the sheet offers only in hours).
     readonly property string debugAction: Plasmoid.configuration.debugAction
     onDebugActionChanged: Qt.callLater(runDebugAction)
     function runDebugAction(): void {
@@ -387,6 +389,8 @@ PlasmoidItem {
         const parts = action.split(":");
         if (parts[0] === "dump") {
             dump(parts.slice(1).join(":"));
+        } else if (parts[0] === "keepawake") {
+            backend.keepAwake.forSeconds(Math.min(86400, parseInt(parts[1]) || 0));
         }
     }
     // Every visible target (a button, a slider, a mouse area) under `item`, as

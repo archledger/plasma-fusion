@@ -4,7 +4,8 @@
 """Exercise Fusion's real QML and Plasma's native control on a private D-Bus bus.
 
 QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 tests/keepawake_test.py
-Requires PySide6, python3-dbus, python3-gobject and PowerDevil's QML module.
+Requires PySide6, python3-dbus, python3-gobject and PowerDevil's QML module. Also the timed Keep awake
+(F7): the shared end, the end on time, one release.
 """
 
 from pathlib import Path
@@ -107,6 +108,44 @@ try:
     wait_for(lambda: not first.property("active"), "turning off after two widgets' taps failed")
     QTest.qWait(300)
     check(tuple(test.Counts()) == (0, 0), "turning off from the other widget leaves no cookies behind")
+
+    # Keep awake for a while (F7): the end is shared by the widgets, a widget ends it on time with
+    # its sheet closed (there is none here), once, and leaves no cookies behind.
+    reason = "Manually block sleep and screen locking"
+
+    def until_in(ms):
+        return time.time() * 1000 + ms
+
+    QMetaObject.invokeMethod(first, "keepAwakeUntil", Q_ARG(str, reason), Q_ARG(float, until_in(1500)))
+    wait_for(lambda: first.property("active") and tuple(test.Counts()) == (1, 1), "a timed Keep awake did not start")
+    check(second.property("until") == first.property("until") > 0, "both widgets know when it ends")
+    check(first.property("minutesLeft") == 1, "it shows a minute left")
+    QTest.qWait(500)
+    check(first.property("active"), "it is still on before its end")
+    wait_for(lambda: not first.property("active"), "a timed Keep awake did not end on time")
+    QTest.qWait(500)
+    check(tuple(test.Counts()) == (0, 0) and not second.property("active"), "at its end it is off, with both cookies released once")
+    check(first.property("until") == 0 and second.property("until") == 0, "an ended timer leaves no end behind")
+
+    # Turned off before its end: turning it on again lasts past the old end.
+    QMetaObject.invokeMethod(first, "keepAwakeUntil", Q_ARG(str, reason), Q_ARG(float, until_in(1200)))
+    wait_for(lambda: first.property("active"), "a second timed Keep awake did not start")
+    QMetaObject.invokeMethod(second, "toggle", Q_ARG(str, reason))
+    wait_for(lambda: not first.property("active"), "turning a timed Keep awake off failed")
+    QMetaObject.invokeMethod(first, "toggle", Q_ARG(str, reason))
+    wait_for(lambda: first.property("active"), "turning Keep awake on again failed")
+    QTest.qWait(1800)
+    check(first.property("active") and first.property("until") == 0, "after turning it off, an old end does not end the next one")
+
+    # A timed one made "until turned off" keeps going; a time chosen while on replaces the end.
+    QMetaObject.invokeMethod(second, "keepAwakeUntil", Q_ARG(str, reason), Q_ARG(float, until_in(800)))
+    QTest.qWait(100)
+    check(first.property("until") > 0 and tuple(test.Counts()) == (1, 1), "a time chosen while on sets the end without a second inhibition")
+    QMetaObject.invokeMethod(first, "keepAwakeUntil", Q_ARG(str, reason), Q_ARG(float, 0.0))
+    QTest.qWait(1300)
+    check(first.property("active") and second.property("until") == 0, "until turned off: it stays on past the earlier end")
+    QMetaObject.invokeMethod(first, "toggle", Q_ARG(str, reason))
+    wait_for(lambda: not first.property("active") and tuple(test.Counts()) == (0, 0), "final release after the timed checks")
     print(f"Keep awake: {checks} checks, 0 failures")
 finally:
     fixture.terminate()

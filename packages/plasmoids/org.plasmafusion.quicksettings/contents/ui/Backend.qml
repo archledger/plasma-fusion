@@ -9,6 +9,7 @@ import "components"
 import "global"
 import "../code/power.js" as Power
 import "../code/dnd.js" as Dnd
+import "../code/keepawake.js" as Timed
 
 // Every data source behind one null-safe object. Each service lives in its own
 // file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
@@ -836,14 +837,71 @@ Item {
         function setAllowed(appName: string, reason: string, allowed: bool): void {
             if (s) { s.setAllowed(appName, reason, allowed); }
         }
+        // A timed Keep awake (F7): its end (ms since the epoch, 0 until turned off), the minutes
+        // left and both as text.
+        readonly property double until: s ? s.until : 0
+        readonly property bool timed: active && until > 0
+        readonly property int minutesLeft: s ? s.minutesLeft : 0
+        readonly property string leftText: backend.durationText(minutesLeft)
+        readonly property string untilText: timed ? Qt.formatTime(new Date(until), Qt.locale().timeFormat(Locale.ShortFormat)) : ""
         readonly property string subtitle: !available ? i18nc("@info:status Keep awake", "Unavailable")
+                                         : timed ? i18nc("@info:status Keep awake, %1 remaining time", "%1 left", leftText)
                                          : active ? i18nc("@info:status Keep awake", "On")
                                                   : i18nc("@info:status Keep awake", "Off")
+        // The status pill's tooltip line while it is on.
+        readonly property string toolTipLine: !active ? ""
+            : timed ? i18nc("@info:tooltip %1 remaining time, %2 a time of day", "Keep awake: sleep and automatic screen locking are blocked for %1 more, until %2", leftText, untilText)
+                    : i18nc("@info:tooltip", "Keep awake: sleep and automatic screen locking are blocked")
+        readonly property string reason: i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking")
         function toggle(): void {
             if (s) {
-                s.toggle(i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking"));
+                s.toggle(reason);
             }
         }
+        // For a while: hours from now, until a time of day (minutes after midnight, today or
+        // tomorrow), or until turned off (on stays on).
+        function forHours(hours: int): void {
+            if (s) {
+                s.keepAwakeUntil(reason, Date.now() + hours * Timed.HOUR);
+            }
+        }
+        function untilMinuteOfDay(minute: int): void {
+            if (s) {
+                s.keepAwakeUntil(reason, Timed.untilTime(new Date(), minute));
+            }
+        }
+        function untilTurnedOff(): void {
+            if (s) {
+                s.keepAwakeUntil(reason, 0);
+            }
+        }
+        // Testing only (debugAction "keepawake:SECONDS", main.qml): a short timed Keep awake.
+        function forSeconds(seconds: int): void {
+            if (s && seconds > 0) {
+                s.keepAwakeUntil(reason, Date.now() + seconds * 1000);
+            }
+        }
+        function refresh(): void {
+            if (s) {
+                s.tick();
+            }
+        }
+    }
+    // The minutes left shown again when the sheet opens (after a suspend the timer may be late).
+    onPopupOpenChanged: {
+        if (popupOpen) {
+            keepAwake.refresh();
+        }
+    }
+    // "45 min", "1 h", "1 h 30 min".
+    function durationText(minutes: int): string {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        if (h === 0) {
+            return i18ncp("@info remaining time, minutes", "%1 min", "%1 min", m);
+        }
+        return m === 0 ? i18ncp("@info remaining time, hours", "%1 h", "%1 h", h)
+                       : i18nc("@info remaining time, hours and minutes", "%1 h %2 min", h, m);
     }
 
     // ------------------------------------------------------------------ disks & devices
