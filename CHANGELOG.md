@@ -25,6 +25,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   Plasma Fusion's root tools applied them, before the packages go; before, the login screen was
   left pointing at the removed theme and wallpaper. The installer offers the login screen step only
   where plasma-login-manager is installed (not on SDDM systems, where the tool stops).
+- Quick settings, its tablet policy and the pen menu run a command again when the same one is still
+  running, and every caller gets its answer: before, the second run was dropped, and at start-up in
+  tablet posture one of the two reads of the window mode and the tablet mode never answered.
 
 ## 0.4.0 (2026-10-09)
 

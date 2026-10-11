@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import QtQuick
-import org.kde.plasma.plasma5support as P5Support
 import org.kde.plasma.workspace.dbus as DBus
 
 // Tablet posture policies of quick settings (TABLET 3.3 and 4.6):
@@ -65,25 +64,13 @@ Item {
     function quote(value: string): string {
         return "'" + value.replace(/'/g, "'\\''") + "'";
     }
-    property var handlers: ({})
+    // Each call runs and gets its own answer, also when the same command is already running (the
+    // start-up reads WindowMode and TabletMode twice): Exec.qml.
     function run(command: string, handler) {
-        if (handler) {
-            handlers[command] = handler;
-        }
-        commands.connectSource(command);
+        commands.run(command, handler);
     }
-    P5Support.DataSource {
+    Exec {
         id: commands
-        engine: "executable"
-        connectedSources: []
-        onNewData: (sourceName, data) => {
-            const handler = policy.handlers[sourceName];
-            delete policy.handlers[sourceName];
-            disconnectSource(sourceName);
-            if (handler) {
-                handler(Number(data["exit code"]), String(data["stdout"] || ""));
-            }
-        }
     }
 
     // ---- Keyboard policy
