@@ -46,7 +46,7 @@ PlasmoidItem {
         id: motion
     }
     property string searchText: ""
-    property var chips: [{ key: "all", label: i18nc("@title:tab all applications", "All"), row: -1 }]
+    property var chips: fixedChips()
     property double lastClosed: 0
     property int seedAttempts: 0
 
@@ -92,11 +92,27 @@ PlasmoidItem {
         shownItems: Kicker.RecentUsageModel.OnlyDocs
         ordering: Kicker.RecentUsageModel.Recent
     }
+
+    // The lists of the "Recent" chip (UsageModels.qml).
+    readonly property UsageModels usage: UsageModels {
+        favoritesModel: root.favoritesModel
+    }
+    readonly property var recentAppsModel: usage.recentApps
+    readonly property var frequentAppsModel: usage.frequentApps
     // END models
 
     function allAppsModel() {
         const model = rootModel.count > 0 ? rootModel.modelForRow(0) : null;
         return model && model.description === "KICKER_ALL_MODEL" ? model : null;
+    }
+
+    // The chips before the categories: "All" (the home view) and "Recent" (recently and often used
+    // apps). `view` is the card's view for the chip; categories have "category" and their row.
+    function fixedChips(): var {
+        return [
+            { key: "all", label: i18nc("@title:tab all applications", "All"), row: -1, view: "home" },
+            { key: "recentapps", label: i18nc("@title:tab recently and often used apps", "Recent"), row: -1, view: "history" },
+        ];
     }
 
     // Category chips: "All" plus the XDG menu categories that have apps, in the board's order,
@@ -201,10 +217,10 @@ PlasmoidItem {
                 continue;
             }
             seen[key] = true;
-            found.push({ key: key, label: label, row: i, rank: Launcher.categoryRank(key) });
+            found.push({ key: key, label: label, row: i, view: "category", rank: Launcher.categoryRank(key) });
         }
         found.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
-        chips = [{ key: "all", label: i18nc("@title:tab all applications", "All"), row: -1 }].concat(found);
+        chips = fixedChips().concat(found);
     }
 
     // Default pins: one installed app per slot of the configured list, written once (first run)
@@ -799,7 +815,8 @@ PlasmoidItem {
     }
 
     // Other shell parts can open the launcher in a given state:
-    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent", query) or toggle()
+    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent" | "history", query)
+    //    or toggle()
     //  - with desktop scripting, by writing openRequest = "<mode>:<nonce>[:<argument>]", where the
     //    argument is the search text for "search" and the category key (e.g. "graphics") for "category".
     Connections {
@@ -808,7 +825,7 @@ PlasmoidItem {
             const parts = String(Plasmoid.configuration.openRequest || "").split(":");
             const mode = parts[0];
             const argument = parts.slice(2).join(":");
-            if (["home", "search", "apps", "recent", "category"].indexOf(mode) >= 0) {
+            if (["home", "search", "apps", "recent", "history", "category"].indexOf(mode) >= 0) {
                 root.open(mode, argument);
             } else if (mode === "frames") {
                 root.reportFrames();
