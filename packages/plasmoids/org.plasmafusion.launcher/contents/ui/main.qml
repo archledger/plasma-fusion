@@ -93,12 +93,15 @@ PlasmoidItem {
         ordering: Kicker.RecentUsageModel.Recent
     }
 
-    // The lists of the "Recent" chip (UsageModels.qml).
+    // The lists of the "Recent" and "Places" chips (UsageModels.qml).
     readonly property UsageModels usage: UsageModels {
         favoritesModel: root.favoritesModel
+        appletInterface: root
     }
     readonly property var recentAppsModel: usage.recentApps
     readonly property var frequentAppsModel: usage.frequentApps
+    readonly property var placesModel: usage.places
+    readonly property var recentFoldersModel: usage.recentFolders
     // END models
 
     function allAppsModel() {
@@ -106,12 +109,14 @@ PlasmoidItem {
         return model && model.description === "KICKER_ALL_MODEL" ? model : null;
     }
 
-    // The chips before the categories: "All" (the home view) and "Recent" (recently and often used
-    // apps). `view` is the card's view for the chip; categories have "category" and their row.
+    // The chips before the categories: "All" (the home view), "Recent" (recently and often used
+    // apps) and "Places" (places, drives and recent folders). `view` is the card's view for the
+    // chip; categories have "category" and their row.
     function fixedChips(): var {
         return [
             { key: "all", label: i18nc("@title:tab all applications", "All"), row: -1, view: "home" },
             { key: "recentapps", label: i18nc("@title:tab recently and often used apps", "Recent"), row: -1, view: "history" },
+            { key: "places", label: i18nc("@title:tab the file manager's places, drives and recent folders", "Places"), row: -1, view: "places" },
         ];
     }
 
@@ -815,7 +820,7 @@ PlasmoidItem {
     }
 
     // Other shell parts can open the launcher in a given state:
-    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent" | "history", query)
+    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent" | "history" | "places", query)
     //    or toggle()
     //  - with desktop scripting, by writing openRequest = "<mode>:<nonce>[:<argument>]", where the
     //    argument is the search text for "search" and the category key (e.g. "graphics") for "category".
@@ -825,7 +830,7 @@ PlasmoidItem {
             const parts = String(Plasmoid.configuration.openRequest || "").split(":");
             const mode = parts[0];
             const argument = parts.slice(2).join(":");
-            if (["home", "search", "apps", "recent", "history", "category"].indexOf(mode) >= 0) {
+            if (["home", "search", "apps", "recent", "history", "places", "category"].indexOf(mode) >= 0) {
                 root.open(mode, argument);
             } else if (mode === "frames") {
                 root.reportFrames();

@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""The launcher card's usage views on Kicker's real models, offscreen, on a private D-Bus bus.
+"""The launcher card's Recent and Places views on Kicker's real models, offscreen, private D-Bus.
 
 QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf \
     -- python3 packages/plasmoids/org.plasmafusion.launcher/tests/views_test.py
 Requires PySide6, Plasma's Kicker QML module (plasma-workspace), kactivitymanagerd and kbuildsycoca6.
 
 A throw-away HOME gets three test apps and an activity manager; using the apps (the events Kicker
-itself sends when it starts an app) fills the history that UsageModels.qml reads. The card
-(LauncherCard.qml, staged with the shared blocks as the build does) then runs with those models:
-the "Recent" chip, its two lists in the right order, and the keyboard through them.
+itself sends when it starts an app, and the file manager when it opens a folder) fills the history
+that UsageModels.qml reads. The card (LauncherCard.qml, staged with the shared blocks as the build
+does) then runs with those models: the "Recent" chip with its two lists in the right order, the
+"Places" chip with the places and the recent folders, and the keyboard through them.
 """
 
 import json
@@ -138,6 +139,8 @@ Window {
         property var recentDocsModel: empty
         property var recentAppsModel: usage.recentApps
         property var frequentAppsModel: usage.frequentApps
+        property var placesModel: usage.places
+        property var recentFoldersModel: usage.recentFolders
         property var runnerModel: QtObject {
             property int count: 0
             property bool querying: false
@@ -147,6 +150,7 @@ Window {
         property var chips: [
             { key: "all", label: "All", row: -1, view: "home" },
             { key: "recentapps", label: "Recent", row: -1, view: "history" },
+            { key: "places", label: "Places", row: -1, view: "places" },
             { key: "office", label: "Office", row: 3, view: "category" },
         ]
         property bool designLabels: false
@@ -175,14 +179,16 @@ Window {
         metrics: metrics
     }
 
-    function names(which) {
+    function column(which, role) {
         const model = usage[which];
         const out = [];
-        for (let i = 0; model && i < model.count; ++i) {
-            out.push(String(model.data(model.index(i, 0), Qt.DisplayRole)));
+        for (let i = 0; model && i < model.rowCount(); ++i) {
+            out.push(String(model.data(model.index(i, 0), role)));
         }
         return JSON.stringify(out);
     }
+    function names(which) { return column(which, Qt.DisplayRole); }
+    function icons(which) { return column(which, Qt.DecorationRole); }
     // The card's typed functions, for Python (which passes QVariant arguments).
     function openMode(mode) { card.openMode(mode, ""); }
     function selectChip(index) { card.selectChip(index); }
@@ -195,9 +201,12 @@ Window {
         const last = card.lastGrid();
         return JSON.stringify({
             view: card.view, chip: card.chipIndex,
-            primaryModel: grid.model === usage.recentApps ? "recent" : grid.model === usage.frequentApps ? "frequent" : "other",
+            primaryModel: grid.model === usage.recentApps ? "recent" : grid.model === usage.frequentApps ? "frequent"
+                : grid.model === usage.places ? "places" : "other",
             primaryCount: grid.count, primaryFocus: grid.activeFocus, primaryCurrent: grid.currentIndex,
-            lastModel: last.model === usage.frequentApps ? "frequent" : last.model === usage.recentApps ? "recent" : "other",
+            lastModel: last.model === usage.frequentApps ? "frequent" : last.model === usage.recentApps ? "recent"
+                : last.model === usage.recentFolders ? "folders" : "other",
+            primaryLine: grid.currentItem ? String(grid.currentItem.placeLine || "") : "",
             lastCount: last.count, lastFocus: last.activeFocus, lastVisible: last.visible,
         });
     }
@@ -219,6 +228,12 @@ try:
     for app_id in ["pf-test-alpha", "pf-test-beta", "pf-test-gamma"]:
         resources.RegisterResourceEvent("org.kde.plasma.kicker", dbus.UInt32(0), f"applications:{app_id}.desktop", dbus.UInt32(0))
         QTest.qWait(2200)
+    # A folder opened in the file manager (KIO tells the activity manager the URL and its type).
+    projects = home / "Projects"
+    projects.mkdir()
+    resources.RegisterResourceMimetype(projects.as_uri(), "inode/directory")
+    resources.RegisterResourceEvent("org.kde.dolphin", dbus.UInt32(0), projects.as_uri(), dbus.UInt32(0))
+    QTest.qWait(2200)
 
     engine = QQmlEngine()
     engine.rootContext().setContextObject(I18n(engine))
@@ -259,6 +274,33 @@ try:
     QTest.qWait(100)
     s = json.loads(call(win, "state"))
     check(s["primaryFocus"], "Up from the often used apps goes back to the recent row")
+
+    # Places: the file manager's places (Home first, no "Show KRunner" row) and the recent folder.
+    wait_for(lambda: len(json.loads(call(win, "names", "places"))) > 0 and len(json.loads(call(win, "names", "recentFolders"))) > 0,
+             "the places models did not fill")
+    places = json.loads(call(win, "names", "places"))
+    check(places[0] == "Home" and "Show KRunner" not in places,
+          "places: the home folder first, without ComputerModel's Show KRunner row")
+    check(json.loads(call(win, "icons", "computer"))[0] == "plasma-search",
+          "(ComputerModel itself has that row first; the filter removed it)")
+    check(json.loads(call(win, "names", "recentFolders")) == ["Projects"], "recent folders: the folder opened last")
+    call(win, "openMode", "places")
+    QTest.qWait(200)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "places" and s["chip"] == 2 and s["primaryModel"] == "places", "open request \"places\" shows the places")
+    check(s["lastModel"] == "folders" and s["lastVisible"], "below them the recent folders")
+    QTest.keyClick(win, Qt.Key_Down)
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["primaryFocus"] and s["primaryCurrent"] == 0 and s["primaryLine"] == "~", "Down reaches Home, shown as ~")
+    QTest.keyClick(win, Qt.Key_Down)
+    QTest.qWait(100)
+    rows = -(-len(places) // 2)
+    for _ in range(rows - 1):
+        QTest.keyClick(win, Qt.Key_Down)
+        QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["lastFocus"] and not s["primaryFocus"], "Down from the last places row goes on to the recent folders")
 
     # The chips: Left and Right walk All -> Recent -> Office.
     call(win, "openMode", "home")

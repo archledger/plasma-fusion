@@ -2,7 +2,8 @@
 
 The start menu of the Launcher / LauncherLight boards: a 680 x 700 card centred on the screen
 above the dock, with a search field, category chips, pinned apps, recently used files and a
-user/session footer. A "Recent" chip lists the recently and often used apps. Plasma 6 applet (QML only), GPL-2.0-or-later.
+user/session footer. A "Recent" chip lists the recently and often used apps, a "Places" chip the
+file manager's places, the removable drives and the recent folders. Plasma 6 applet (QML only), GPL-2.0-or-later.
 
 ## Files
 
@@ -15,7 +16,7 @@ user/session footer. A "Recent" chip lists the recently and often used apps. Pla
 | `.../contents/ui/LauncherWindow.qml` | the card window (`PlasmaCore.Dialog`, applet-popup role, explicit position, style frame with the `launcher` prefix) |
 | `.../contents/ui/BackdropWindow.qml` | dim layer behind the card |
 | `.../contents/ui/LauncherCard.qml` | card content in board coordinates; views home / history (recent apps) / category / all apps / recent / search; keyboard map |
-| `.../contents/ui/UsageModels.qml` | the "Recent" chip's lists: Kicker's `RecentUsageModel` with `OnlyApps`, by last use and by use |
+| `.../contents/ui/UsageModels.qml` | the "Recent" chip's lists (Kicker's `RecentUsageModel` with `OnlyApps`, by last use and by use) and the "Places" chip's (`ComputerModel` without its apps and its "Show KRunner" row, `RecentUsageModel` with `OnlyFolders`) |
 | `.../contents/ui/SearchBox.qml`, `Chip.qml`, `PillButton.qml`, `SectionHeader.qml`, `RoundButton.qml`, `FocusRing.qml`, `ThinScrollBar.qml` | controls of the board |
 | `.../contents/ui/NavGrid.qml`, `AppGrid.qml`, `AppTile.qml`, `DocGrid.qml`, `DocItem.qml`, `ResultsList.qml` | grids and lists |
 | `.../contents/ui/Footer.qml` | avatar or letter, real full name, "Local account" (account menu), Lock / Sleep (Hibernate menu) / Restart / Shut Down |
@@ -52,7 +53,7 @@ user/session footer. A "Recent" chip lists the recently and often used apps. Pla
 | `dimBackground` | true | dim layer rgba(6,8,18,0.4) dark / rgba(221,230,244,0.35) light |
 | `bottomOffset` | 108 | 16 px dock gap + 74 px dock + 18 px |
 | `showRecommended` | true | recent files section |
-| `openRequest` | "" | written by other parts through desktop scripting: `<mode>:<nonce>[:<argument>]`, modes `home`, `search` (argument = query), `apps`, `recent` (recent files), `history` (the "Recent" chip: recently and often used apps), `category` (argument = key such as `graphics`) |
+| `openRequest` | "" | written by other parts through desktop scripting: `<mode>:<nonce>[:<argument>]`, modes `home`, `search` (argument = query), `apps`, `recent` (recent files), `history` (the "Recent" chip: recently and often used apps), `places` (the "Places" chip), `category` (argument = key such as `graphics`) |
 | `hiddenApplications` | [] | Kicker's "Hide Application" list |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the tablet sheet (no wallpaper picture) |
 
@@ -72,8 +73,9 @@ user/session footer. A "Recent" chip lists the recently and often used apps. Pla
   `Kicker.RunnerModel` (merged KRunner results), `Kicker.RecentUsageModel` (documents, recent
   first) - the models Kickoff uses - and two more `RecentUsageModel`s with `OnlyApps`, `Recent`
   and `Popular` ordering (`UsageModels.qml`, the lists of Kicker's "Recent Applications" and
-  "Often Used").
-- Chips: "All", "Recent", then every non-empty XDG menu category, identified by its directory icon
+  "Often Used"), Kicker's `ComputerModel` (Kickoff's Places > Computer) and a `RecentUsageModel`
+  with `OnlyFolders`.
+- Chips: "All", "Recent", "Places", then every non-empty XDG menu category, identified by its directory icon
   (locale independent), duplicates and "Lost & Found" dropped, ordered Development, Graphics,
   Internet, Multimedia, Office, System, then Games, Education, Science, Utilities, Settings, Help.
   Chips that do not fit go into a round "..." chip with a menu.
@@ -84,7 +86,19 @@ user/session footer. A "Recent" chip lists the recently and often used apps. Pla
   below it (scrolls; 15 apps each, the current activity). "Apps you open will show up here" while
   the history is empty, also when System Settings > Activities > Privacy does not keep it. The item
   menu has Kicker's "Forget Application" and "Forget All Applications". With six board chips the
-  extra chip moves the last category (System on the board) into the "..." menu.
+  extra chips move the last categories (Office and System on the board) into the "..." menu.
+- Places (the `places` view; Kickoff's Places tab, Computer and History, in the board's recent-file
+  rows): "Places", the file manager's places in its order (Home, Desktop, Documents, Downloads,
+  Music, Pictures, Videos, Trash, Network, the root folder, "Modified Today" and the other recent
+  searches, places the user added) then the removable drives; fixed internal disks are left out,
+  as in Kickoff. Each row has a coloured glyph tile like a recent file (home, document, download,
+  music, picture, video, trash, network, drive, clock, else folder: ComputerModel gives the icons as
+  QIcons, which QML cannot name, so the kind comes from the URL, `Launcher.placeKind`) and the path
+  with "~" for the home folder, a drive's mount point, nothing for non-local places
+  (`Launcher.placePath`). A drive that is not mounted is mounted and opened. Below, "Recent folders",
+  the folders used last (from the activity history, as Kickoff's History); the places take up to
+  four rows above them and the whole height while there are none. The item menus are Kicker's
+  (Open Containing Folder, Forget Folder...) plus Pin to Launcher.
 - Pinned: 6 columns, 3 rows visible (scrolls beyond 18). First run pins, per slot, the first
   installed of: Dolphin, default browser, Konsole, KMail, Kate/KDevelop/Code/KWrite, Elisa,
   Gwenview, System Settings, KOrganizer, Marknote/KNotes, KCalc, Discover, Haruna/Dragon/VLC,
@@ -109,7 +123,8 @@ user/session footer. A "Recent" chip lists the recently and often used apps. Pla
   a click opens that menu. Where it cannot hibernate, a long press on Sleep sleeps (a held button sends
   no click of its own).
 - Keyboard: Down from search goes to the pinned grid (to results while searching; to the recent
-  row in the Recent view, Down again to "Often used" in the same column); arrows move
+  row in the Recent view, Down again to "Often used" in the same column; in Places from the last
+  places row to the recent folders); arrows move
   in grids (the home "Recommended" grid keeps the selection in its four visible files); Up from
   a top row goes back to chips/search; Tab / Shift+Tab walk search, chips,
   header button, grid, "More", recent files, footer; Left/Right switch chips; Enter/Space
@@ -122,7 +137,9 @@ user/session footer. A "Recent" chip lists the recently and often used apps. Pla
 - `tests/views_test.py` (CI step "Launcher views on Kicker's models"): Kicker's real models on a
   private bus with a throw-away HOME, three test apps (kbuildsycoca6) and kactivitymanagerd fed with
   the events Kicker sends when it starts an app; the "Recent" chip and its two lists in order, and
-  Down / Up through them, in the staged card.
+  Down / Up through them; the Places chip with the places (Home first, no "Show KRunner" row) and a
+  folder opened in the file manager, Down from the places into the folders, Home shown as "~".
+- `tests/places.test.js` (node, in the build step): the place kinds from the URL and the path line.
 - `qmllint` on every file: only the usual unqualified-`i18n` notes and three type-inference notes.
 - `kpackagetool6 -t Plasma/Applet -i` and `--show` in a sandbox HOME: installs and reads the metadata.
 - Offscreen harness (PySide6 + the real QML, mock models, board wallpaper; test files in the

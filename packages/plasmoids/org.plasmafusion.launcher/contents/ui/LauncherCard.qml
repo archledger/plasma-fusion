@@ -25,7 +25,7 @@ FocusScope {
     readonly property int inset: 25
     readonly property int innerWidth: width - 2 * inset
 
-    // home | history (recently and often used apps) | category | apps | recent (files)
+    // home | history (recently and often used apps) | places | category | apps | recent (files)
     property string view: "home"
     property int chipIndex: 0
     readonly property bool searching: search.text.length > 0
@@ -64,7 +64,7 @@ FocusScope {
         launchWhenReady = false;
         view = "home";
         chipIndex = 0;
-        for (const g of [pinnedGrid, docGrid, mainGrid, recentGrid, recentAppsGrid, frequentGrid]) {
+        for (const g of [pinnedGrid, docGrid, mainGrid, recentGrid, recentAppsGrid, frequentGrid, placesGrid, foldersGrid]) {
             g.currentIndex = -1;
             g.keyboardNavigation = false;
             g.resetPointer();
@@ -79,8 +79,8 @@ FocusScope {
         reset();
         if (mode === "apps" || mode === "recent") {
             view = mode;
-        } else if (mode === "history") {
-            selectChip(chips.findIndex(c => c.view === "history"));
+        } else if (mode === "history" || mode === "places") {
+            selectChip(chips.findIndex(c => c.view === mode));
         } else if (mode === "category") {
             const index = chips.findIndex(c => c.key === argument);
             if (index > 0) {
@@ -98,7 +98,7 @@ FocusScope {
         }
         chipIndex = index;
         view = chips[index].view || "category";
-        for (const g of [mainGrid, recentAppsGrid, frequentGrid]) {
+        for (const g of [mainGrid, recentAppsGrid, frequentGrid, placesGrid, foldersGrid]) {
             g.currentIndex = -1;
             g.positionViewAtBeginning();
         }
@@ -138,6 +138,9 @@ FocusScope {
         if (view === "history") {
             return recentAppsGrid.count > 0 || frequentGrid.count === 0 ? recentAppsGrid : frequentGrid;
         }
+        if (view === "places") {
+            return placesGrid.count > 0 || foldersGrid.count === 0 ? placesGrid : foldersGrid;
+        }
         return mainGrid;
     }
 
@@ -148,6 +151,9 @@ FocusScope {
         }
         if (view === "history" && frequentGrid.visible) {
             return frequentGrid;
+        }
+        if (view === "places" && foldersGrid.visible) {
+            return foldersGrid;
         }
         return primaryGrid();
     }
@@ -369,7 +375,7 @@ FocusScope {
                 }
             }
             Keys.onTabPressed: {
-                if (card.view === "category" || card.view === "history") {
+                if (card.view === "category" || card.view === "history" || card.view === "places") {
                     card.primaryGrid().focusFirst();
                 } else {
                     topHeader.button.forceActiveFocus(Qt.TabFocusReason);
@@ -408,11 +414,12 @@ FocusScope {
             metrics: card.metrics
             title: card.view === "category" && card.chipIndex < card.chips.length ? card.chips[card.chipIndex].label
                  : card.view === "history" ? i18nc("@title apps by last use", "Recently used")
+                 : card.view === "places" ? i18nc("@title the file manager's places and drives", "Places")
                  : card.view === "apps" ? i18nc("@title", "All apps")
                  : card.view === "recent" ? i18nc("@title", "Recommended")
                  : i18nc("@title", "Pinned")
             buttonText: card.view === "home" ? i18nc("@action:button", "All apps")
-                      : card.view === "category" || card.view === "history" ? "" : i18nc("@action:button", "Back")
+                      : ["category", "history", "places"].indexOf(card.view) >= 0 ? "" : i18nc("@action:button", "Back")
             buttonBack: card.view !== "home"
             onButtonClicked: {
                 if (card.view === "home") {
@@ -623,6 +630,86 @@ FocusScope {
             Keys.onBacktabPressed: {
                 if (recentAppsGrid.count > 0) {
                     recentAppsGrid.focusFirst();
+                } else {
+                    chipRow.forceActiveFocus(Qt.BacktabFocusReason);
+                }
+            }
+        }
+
+        // "Places": the file manager's places and removable drives (Kickoff's Computer list; a drive
+        // that is not mounted is mounted and opened), up to four rows above the folders used last,
+        // the whole height while there are none.
+        DocGrid {
+            id: placesGrid
+            readonly property int rows: Math.max(1, Math.ceil(count / columns))
+            y: card.gridY
+            width: parent.width + gap
+            height: foldersGrid.visible ? Math.min(4, rows) * cellHeight : Math.max(cellHeight, Math.min(rows * cellHeight, parent.height - y))
+            visible: !card.searching && card.view === "places"
+            interactive: rows * cellHeight > height + 1
+            itemKind: "place"
+            pal: card.pal
+            metrics: card.metrics
+            launcher: card.launcher
+            model: visible && card.launcher ? card.launcher.placesModel : null
+            onExitTop: chipRow.forceActiveFocus(Qt.BacktabFocusReason)
+            onExitBottom: {
+                if (foldersGrid.visible) {
+                    foldersGrid.keyboardNavigation = true;
+                    foldersGrid.currentIndex = Math.min(Math.max(0, currentIndex % columns), foldersGrid.count - 1);
+                    foldersGrid.focusFirst();
+                } else {
+                    card.focusFooter();
+                }
+            }
+            onTyped: text => card.typeIntoSearch(text)
+            Keys.onTabPressed: {
+                if (foldersGrid.visible) {
+                    foldersGrid.focusFirst();
+                } else {
+                    card.focusFooter();
+                }
+            }
+            Keys.onBacktabPressed: chipRow.forceActiveFocus(Qt.BacktabFocusReason)
+        }
+
+        SectionHeader {
+            id: foldersHeader
+            y: placesGrid.y + placesGrid.height - placesGrid.gap + card.sectionGap
+            width: parent.width
+            visible: foldersGrid.visible
+            pal: card.pal
+            metrics: card.metrics
+            title: i18nc("@title folders by last use", "Recent folders")
+        }
+
+        DocGrid {
+            id: foldersGrid
+            y: foldersHeader.y + card.headerHeight + card.sectionGap
+            width: parent.width + gap
+            height: Math.max(0, parent.height - y)
+            visible: !card.searching && card.view === "places" && count > 0
+            itemKind: "folder"
+            pal: card.pal
+            metrics: card.metrics
+            launcher: card.launcher
+            model: card.view === "places" && card.launcher ? card.launcher.recentFoldersModel : null
+            onExitTop: {
+                if (placesGrid.count > 0) {
+                    placesGrid.keyboardNavigation = true;
+                    const last = (Math.min(4, placesGrid.rows) - 1) * columns + currentIndex % columns;
+                    placesGrid.currentIndex = Math.min(last, placesGrid.count - 1);
+                    placesGrid.focusFirst();
+                } else {
+                    chipRow.forceActiveFocus(Qt.BacktabFocusReason);
+                }
+            }
+            onExitBottom: card.focusFooter()
+            onTyped: text => card.typeIntoSearch(text)
+            Keys.onTabPressed: card.focusFooter()
+            Keys.onBacktabPressed: {
+                if (placesGrid.count > 0) {
+                    placesGrid.focusFirst();
                 } else {
                     chipRow.forceActiveFocus(Qt.BacktabFocusReason);
                 }
