@@ -14,6 +14,7 @@ app icons, and the build checks durations and accessible names.
 | `packages/common/FusionBackdrop.qml` | the "Tinted" glass material: a cached, blurred wallpaper plus a tint | EFFECTS 3.1, TABLET 4.1 |
 | `packages/common/FusionIconTile.qml` | an app icon with a neutral Fusion tile behind icons that have no Fusion tile | ADAPTIVE 5.4, fix 27 |
 | `packages/common/FusionShadow.qml` (+ `shaders/fusionshadow.frag`) | the soft drop shadow of a rounded box, one small shader; replaces QtQuick.Effects RectangularShadow | STRESS-1, 2026-10-01 |
+| `packages/common/FusionWheelGuard.qml` | scroll safety: a page scroll passing over a wheel control does not change it | survey U8, 0.5.0 |
 | `tools/build-lib/shared-qml.sh` | copies the blocks a package uses into it at build time | |
 | `tools/checks/motion-lint.sh` | literal durations, endless loops, animations without a duration | EFFECTS 6.2 |
 | `tools/checks/a11y-lint.py` | interactive items without an accessible name | GAPS G25 |
@@ -243,6 +244,33 @@ window is not in the dock's task list.
   1.5 → hairline 0.667, step 2; 1 → unchanged. This is what `text-scale.md` describes; sizes that go
   through `px()` move by at most half a logical pixel, and 1 px edges become one device pixel. INT-1's
   side-by-side screenshots cover it. The switcher keeps setting `screenScale` itself.
+
+## FusionWheelGuard (scroll safety)
+
+The bar's wheel controls, the status pill (volume, as on the stock tray icon), its keyboard layout
+badge (next or previous layout, as the stock Keyboard Layout widget) and the clock pill (workspaces,
+`wheelSwitchesWorkspaces`), changed values when a page scroll was still turning as the pointer
+passed over them (KDE Discuss "#uxquirk": "jolted my volume" scrolling over a panel; survey U8).
+`FusionWheelGuard` is a `HoverHandler` declared beside the item's `WheelHandler`, which calls
+`accept(Date.now())` first and does nothing (and drops its partial notches) when it says no. The
+rule follows Firefox's wheel transactions, where a scroll stays with the element it started on,
+seen from the control the pointer arrives at:
+
+| Case | Result |
+|---|---|
+| the first wheel event less than 250 ms after the pointer entered the item, or before any hover | ignored, with the rest of that scroll |
+| that scroll goes on (events less than 1.5 s apart) | ignored, also when the pointer stops over the item |
+| no wheel for 1.5 s (Firefox `mousewheel.transaction.timeout`) | the next wheel acts |
+| the pointer moves again more than 100 ms after a wheel event, and a wheel comes more than 100 ms after that move (Firefox `mousewheel.transaction.ignoremovedelay`) | that wheel acts |
+| a scroll that starts 250 ms or more after the pointer arrived | every notch acts, as before |
+
+250 ms is about one simple reaction time (240 ms in Card, Moran and Newell's Model Human Processor):
+less than that after arriving, the wheel was already turning. Nothing changes for keyboard, click or
+touch input, and nothing is opt-in: the wheel features stay on. Test:
+`packages/common/tests/wheel_guard_test.py` (CI, offscreen): the rule with given times; real pointer
+and wheel events on an item with a hover-enabled MouseArea inside (as in the clock), where notches
+sent while the pointer moves onto it change nothing and a wheel after a pause or a 400 ms rest
+steps; and every `WheelHandler` of the clock pill and of quick settings' bar asks a guard first.
 
 ## Checks
 

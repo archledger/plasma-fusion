@@ -17,9 +17,11 @@ the top bar of `Main.dc.html` / `MainLight.dc.html` and the Wi-Fi tray panel of
 | Phone | 28 × 26, 16 px icon | `org.kde.kdeconnect` `DevicesModel` (paired + reachable) | a device is connected |
 | `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout, wheel = next/previous, right-click or press and hold = menu of the layouts (as the stock Keyboard Layout widget) |
 
-The pill also takes the mouse wheel (volume ±5 %) and middle click (mute). Icons are the boards'
-line icons (24 px grid, 1.8 stroke) drawn with QtQuick Shapes, with the FileIcons board's level
-states (Wi-Fi bars, volume waves, battery fill, charging bolt, 30 % / 10 % warning colours).
+The pill also takes the mouse wheel (volume ±5 %) and middle click (mute). The pill's and the layout
+badge's wheel ignore a page scroll that is still turning as the pointer passes over them
+(`FusionWheelGuard`, docs/parts/shared-blocks.md). Icons are the boards' line icons (24 px grid, 1.8
+stroke) drawn with QtQuick Shapes, with the FileIcons board's level states (Wi-Fi bars, volume
+waves, battery fill, charging bolt, 30 % / 10 % warning colours).
 
 **The pop-up** (356 px wide, 10 px under the bar, 16 px from the screen edge, frame = the Plasma
 style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come from the Plasma style):

@@ -59,7 +59,7 @@ No configuration is needed; the defaults are the board values.
 | Key | Default | Meaning |
 |---|---|---|
 | `showWorkspaces` | true | dots; hidden anyway while there is only one workspace |
-| `wheelSwitchesWorkspaces` | true | scrolling over the pill switches workspaces (wraps when KWin's navigation wraps) |
+| `wheelSwitchesWorkspaces` | true | scrolling over the pill switches workspaces (wraps when KWin's navigation wraps); a page scroll still turning as the pointer passes over the pill is ignored (`FusionWheelGuard`, shared-blocks.md) |
 | `showDate` | true | date before the time |
 | `dateFormat` | `auto` | `auto`: weekday, day, month in the order of the region's long date, without year and commas (en_GB "Mon 28 Sept", en_US "Mon Sep 28", de_DE "Mo. 28. Sept.", es_ES "lun 28 de sept", ja_JP "9月28日 (月)"); `custom` uses `customDateFormat` |
 | `customDateFormat` | `ddd d MMM` | QLocale format |

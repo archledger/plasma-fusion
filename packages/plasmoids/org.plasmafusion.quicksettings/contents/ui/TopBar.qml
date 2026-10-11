@@ -112,10 +112,17 @@ Item {
                 acceptedButtons: Qt.RightButton
                 onTapped: layoutMenu.openBelow()
             }
+            FusionWheelGuard {
+                id: layoutWheelGuard
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 property real pending: 0
                 onWheel: event => {
+                    if (!layoutWheelGuard.accept(Date.now())) {
+                        pending = 0;
+                        return;
+                    }
                     pending += event.angleDelta.y || -event.angleDelta.x;
                     while (Math.abs(pending) >= 120) {
                         if (pending > 0) {
@@ -373,11 +380,20 @@ Item {
                 }
             }
 
+            // The wheel changes the volume (as on the stock tray icon), except a page scroll that is
+            // still turning as the pointer passes over the pill (FusionWheelGuard).
+            FusionWheelGuard {
+                id: volumeWheelGuard
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 enabled: bar.backend.audio.available
                 property real accumulated: 0
                 onWheel: event => {
+                    if (!volumeWheelGuard.accept(Date.now())) {
+                        accumulated = 0;
+                        return;
+                    }
                     accumulated += (event.angleDelta.y || -event.angleDelta.x) * (event.inverted ? -1 : 1);
                     while (Math.abs(accumulated) >= 120) {
                         const step = accumulated > 0 ? 0.05 : -0.05;
