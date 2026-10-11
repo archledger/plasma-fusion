@@ -224,8 +224,9 @@ follows the surrounding scripts; no formatter is enforced.
 tabs: on 2026-10-02, 306 of the 34136 indented lines of the tracked QML were not on a 4-space
 step, most of them continuation lines). Before the parts, `tools/build.sh` runs the project's own
 QML checks over `packages/`, `tools/checks/motion-lint.sh` (durations from the Motion tokens) and
-`tools/checks/a11y-lint.py` (a name for every control), which are rules for motion and
-accessibility, not a style guide. Qt's formatter `qmlformat` (6.11.2) would change 138 of the 204
+`tools/checks/a11y-lint.py` (a name for every control) and `tools/checks/id-scope-lint.py` (no id
+used outside the component that declares it), which are rules for motion, accessibility and name
+lookup, not a style guide. Qt's formatter `qmlformat` (6.11.2) would change 138 of the 204
 QML files outside the paths then excluded (2026-10-02), so enforcing it needs one reformatting
 commit first.
 

@@ -1226,6 +1226,14 @@ Item {
             backend.closeRequested();
             screenshotTimer.restart();
         }
+        // Copy text from the screen (survey F6): Spectacle's region capture, where Extract Text
+        // copies the selected text, as the Meta+Shift+T key the setup gives the same command
+        // (tools/device/fusion-config.sh, ensure_copytext_shortcut). Spectacle has no way to go
+        // straight from a region to the text.
+        function copyText() {
+            backend.closeRequested();
+            copyTextTimer.restart();
+        }
         function openSystemSettings() {
             backend.openSettings("", []);
         }
@@ -1245,6 +1253,12 @@ Item {
             backend.closeRequested();
             backend.dbus("org.kde.klipper", "/klipper", "org.kde.klipper.klipper", "showKlipperPopupMenu", [], "");
         }
+    }
+    Timer {
+        id: copyTextTimer
+        // As for the screenshot: the pop-up closes first.
+        interval: 250
+        onTriggered: backend.run("sh -c 'spectacle --region >/dev/null 2>&1 &'")
     }
     Timer {
         id: screenshotTimer

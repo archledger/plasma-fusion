@@ -211,6 +211,24 @@ Item {
         id: sessionManagement
     }
 
+    // Restart / Shut Down: the confirmation replaces the prompt until it is answered (the prompt
+    // stays up while it is shown, as for any page on the stack) and goes when the prompt hides.
+    function confirmPower(action: string): void {
+        if (mainStack.depth === 1) {
+            mainStack.push(powerConfirmComponent, { "action": action });
+
+        }
+    }
+    Component {
+        id: powerConfirmComponent
+        PowerConfirm {
+            metrics: lockScreenUi.metrics
+            session: sessionManagement
+            onDone: mainStack.pop()
+            onAnnouncement: (text, urgent) => lockScreenUi.announce(text, urgent)
+        }
+    }
+
     KeyboardIndicator.KeyState {
         id: capsLockState
         key: Qt.Key_CapsLock
@@ -378,6 +396,8 @@ Item {
         onUiVisibleChanged: {
             if (uiVisible) {
                 Window.window.requestActivate();
+            } else {
+                powerConfirmCloser.restart();
             }
 
             if (blockUI) {
@@ -416,6 +436,18 @@ Item {
         Keys.onPressed: event => {
             uiVisible = true;
             event.accepted = false;
+        }
+        // The Restart / Shut Down question goes once the prompt has hidden. Not at once: the prompt
+        // hides for a moment when the question replaces it under the pointer, and comes straight
+        // back.
+        Timer {
+            id: powerConfirmCloser
+            interval: 500
+            onTriggered: {
+                if (!lockScreenRoot.uiVisible && mainStack.currentItem && mainStack.currentItem.objectName === "powerConfirm") {
+                    mainStack.pop();
+                }
+            }
         }
         Timer {
             id: fadeoutTimer
@@ -638,6 +670,25 @@ Item {
                             sessionManagement.switchUser();
                         }
                         visible: sessionManagement.canSwitchUser
+                    },
+                    // Restart and Shut Down (survey U6), only where the session may, as on the
+                    // log-out screen; both ask first (PowerConfirm.qml).
+                    PowerButton {
+                        objectName: "restartButton"
+                        metrics: lockScreenUi.metrics
+                        text: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Restart")
+                        iconPath: PfStyle.iconRestart
+                        onClicked: lockScreenUi.confirmPower("reboot")
+                        visible: sessionManagement.canReboot
+                    },
+                    PowerButton {
+                        objectName: "shutdownButton"
+                        metrics: lockScreenUi.metrics
+                        text: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Shut Down")
+                        iconPath: PfStyle.iconShutDown
+                        destructive: true
+                        onClicked: lockScreenUi.confirmPower("shutdown")
+                        visible: sessionManagement.canShutdown
                     }
                 ]
             }

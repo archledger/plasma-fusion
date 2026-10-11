@@ -35,7 +35,8 @@ ADDED=(
   .local/share/kwin/tabbox/org.plasmafusion.switcher .local/share/kwin/scripts/plasmafusion-snap
   .local/share/kwin/scripts/plasmafusion-attach .local/share/kwin/scripts/plasmafusion-tablet
   .local/share/fonts/plasma-fusion .local/share/plasma-fusion
-  .local/share/kglobalaccel/org.plasmafusion.notifications.desktop .local/libexec/plasma-fusion
+  .local/share/kglobalaccel/org.plasmafusion.notifications.desktop
+  .local/share/kglobalaccel/org.plasmafusion.copytext.desktop .local/libexec/plasma-fusion
   .config/systemd/user/plasma-kwin_wayland.service.d/plasma-fusion-lockscreen.conf
   .config/plasma-workspace/env/plasma-fusion-gate.sh .config/plasma-workspace/env/plasma-fusion-session.sh
   .config/systemd/user/plasma-fusion-gate-notify.service

@@ -86,7 +86,8 @@ The navigation effect stays idle when the running KWin is not the one it was bui
 
 ### Build
 
-`tools/build.sh` runs the QML lints (`tools/checks/motion-lint.sh`, `tools/checks/a11y-lint.py`),
+`tools/build.sh` runs the QML lints (`tools/checks/motion-lint.sh`, `tools/checks/a11y-lint.py`,
+`tools/checks/id-scope-lint.py`),
 then every `tools/build.d/NN-<part>.sh` in order. Each part script runs its generator or copies its
 package, runs its own checks (contrast, package structure, unit tests, shellcheck where installed)
 and writes only below `$STAGE` (default `stage/home`), in the paths the naming table gives it

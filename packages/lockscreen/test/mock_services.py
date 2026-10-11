@@ -6,8 +6,13 @@
   mpris   an MPRIS player "Music" (paused, no track), like the Lock board's media card
   notify  a notification server that accepts org.kde.NotificationManager.RegisterWatcher and
           then sends the watcher the Lock board's notifications (Calendar x1, Mail x3)
+  power   logind's Manager (org.freedesktop.login1: Can*, ListInhibitors) and ksmserver's
+          org.kde.Shutdown, for the lock screen's Restart and Shut Down. The harness points the
+          system bus at this private bus (DBUS_SYSTEM_BUS_ADDRESS), so Plasma's own session backend
+          talks to it. org.plasmafusion.TestPower on /Test sets the answers (SetCan, SetInhibitors)
+          and lists the calls ksmserver got (Calls).
 
-Usage: mock_services.py [mpris] [notify]   (runs until killed)
+Usage: mock_services.py [mpris] [notify] [power]   (runs until killed)
 """
 import sys
 import time
@@ -122,7 +127,107 @@ class NotificationServer(dbus.service.Object):
         return False
 
 
+LOGIN1_IF = "org.freedesktop.login1.Manager"
+
+
+class Login1(dbus.service.Object):
+    """The part of logind's Manager that Plasma's session backend and the lock screen read."""
+
+    def __init__(self, test):
+        self.name = dbus.service.BusName("org.freedesktop.login1", BUS)
+        super().__init__(BUS, "/org/freedesktop/login1")
+        self.test = test
+
+    def _can(self, action):
+        return self.test.can.get(action, "yes")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="s")
+    def CanPowerOff(self):
+        return self._can("PowerOff")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="s")
+    def CanReboot(self):
+        return self._can("Reboot")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="s")
+    def CanSuspend(self):
+        return self._can("Suspend")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="s")
+    def CanHibernate(self):
+        return self._can("Hibernate")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="s")
+    def CanHybridSleep(self):
+        return self._can("HybridSleep")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="s")
+    def CanSuspendThenHibernate(self):
+        return self._can("SuspendThenHibernate")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="a(ssssuu)")
+    def ListInhibitors(self):
+        return dbus.Array(self.test.inhibitors, "(ssssuu)")
+
+    @dbus.service.method(LOGIN1_IF, out_signature="a(susso)")
+    def ListSessions(self):
+        return dbus.Array([], "(susso)")
+
+    @dbus.service.signal(LOGIN1_IF, signature="b")
+    def PrepareForSleep(self, start):
+        pass
+
+
+class Shutdown(dbus.service.Object):
+    """ksmserver's org.kde.Shutdown: records what was asked."""
+
+    def __init__(self, test):
+        self.name = dbus.service.BusName("org.kde.Shutdown", BUS)
+        super().__init__(BUS, "/Shutdown")
+        self.test = test
+
+    @dbus.service.method("org.kde.Shutdown")
+    def logoutAndReboot(self):
+        self.test.calls.append("logoutAndReboot")
+
+    @dbus.service.method("org.kde.Shutdown")
+    def logoutAndShutdown(self):
+        self.test.calls.append("logoutAndShutdown")
+
+    @dbus.service.method("org.kde.Shutdown")
+    def logout(self):
+        self.test.calls.append("logout")
+
+
+class TestPower(dbus.service.Object):
+    def __init__(self):
+        self.name = dbus.service.BusName("org.plasmafusion.TestPower", BUS)
+        super().__init__(BUS, "/Test")
+        self.can = {}
+        self.inhibitors = []
+        self.calls = []
+
+    @dbus.service.method("org.plasmafusion.TestPower", in_signature="ss")
+    def SetCan(self, action, answer):
+        self.can[str(action)] = str(answer)
+
+    @dbus.service.method("org.plasmafusion.TestPower", in_signature="a(ssssuu)")
+    def SetInhibitors(self, inhibitors):
+        self.inhibitors = [tuple(i) for i in inhibitors]
+
+    @dbus.service.method("org.plasmafusion.TestPower", out_signature="as")
+    def Calls(self):
+        return dbus.Array(self.calls, "s")
+
+    @dbus.service.method("org.plasmafusion.TestPower")
+    def Reset(self):
+        self.can, self.inhibitors, self.calls = {}, [], []
+
+
 services = []
+if "power" in sys.argv[1:]:
+    test_power = TestPower()
+    services += [test_power, Login1(test_power), Shutdown(test_power)]
 if "mpris" in sys.argv[1:]:
     services.append(Player())
 if "notify" in sys.argv[1:]:

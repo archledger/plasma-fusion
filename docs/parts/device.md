@@ -136,6 +136,31 @@ file, so `fusion-restore.sh` gives every key back.
 | Meta+Alt+1..9 | `kwin` / `Plasma Fusion: Activate Dock Entry 1..9` (the snap KWin script; the dock's `activateTaskAtIndex` through its `activateRequest` key, on Plasma 6.7 and 6.8); plasmashell's `activate task manager entry 1..9` lose Meta+5..9, and a Meta+Alt+N an earlier version gave them moves to the new action |
 | Meta+1..4 | `kwin` / `Switch to Desktop 1..4` (unchanged) |
 | Meta+Shift+W (with `--pen`) | the pen widget's "activate widget <id>", only when free |
+| Meta+Shift+T (every run, not part of the Windows set) | `org.plasmafusion.copytext.desktop` / `_launch` (0.5.0): copy text from the screen, a component like Meta+N whose command is `spectacle --region`; set only when no action holds the key, a key the user gave it is kept, nothing without Spectacle |
+
+**Copy text from the screen** (survey F6; PowerToys Text Extractor's Win+Shift+T, macOS Live Text).
+Spectacle 6.7.5 (OCR since 6.6, Tesseract) recognises text only in its own window: `spectacle
+--help` and its D-Bus interface (`org.kde.Spectacle`: FullScreen, CurrentScreen, ActiveWindow,
+WindowUnderCursor, RectangularRegion, Record*, OpenWithoutScreenshot) have no text option, and
+neither has Plasma 6.8's or master's command line. Its background mode (`-b -n -r`) saved a PNG to
+Pictures/Screenshots and exited without the text (VM, 2026-10-11). So the key and quick settings'
+header button open Spectacle's region capture (`--region`, GUI mode): select the area, then
+**Extract Text** on the selection's toolbar copies the text to the clipboard and a notification says
+so (VM: "Hello Plasma Fusion OCR test 12345" from a Konsole line). The gap to PowerToys: one more
+click (Extract Text; it has no key), and Spectacle's viewer opens afterwards unless its "Close after
+extraction" setting (`spectaclerc [General] closeAfterOcr`) is on; Plasma Fusion leaves that setting
+to the user. Meta+Shift+T was free in KWin, Plasma and Spectacle 6.7.5 and in the Windows-style set
+(`globalShortcutsByKey` empty in the parity VM). kglobalaccel makes a component it loads at login
+active but leaves one registered while it runs inactive (`isActive` false, no key grab) until the
+next login, so the setup gives the key again as present (`setShortcut` with SetPresent |
+NoAutoloading, as a running application does): the key works at once. `fusion-restore.sh` gives the
+key back (none), unregisters the component and removes its desktop file (an `absent-file` entry of
+the backup). Test: `tools/device/tests/copytext-unit.sh` (CI) runs the setup step and the restore's
+sections against a fake kglobalaccel: a free key set and given as present, the old key recorded, a
+second run unchanged, a key in use left with its action, the user's own key kept, nothing without
+Spectacle, and the restore. VM (real keys from a uinput keyboard): after the setup Meta+Shift+T
+started `spectacle --region` without a new login, the header button too; after the restore the key
+holds nothing and starts nothing.
 
 Widget keys (quick settings, pen) are also set on later runs when the widget has none (a layout
 rebuild drops them; a dead entry of a dropped widget is cleared first), but then only when the key is
@@ -229,6 +254,7 @@ In addition to what `gate.md` describes, for the chosen backup and every later r
 5. files: `~/.config` as listed in the manifest (layout, plasmashellrc, kwinrc, fonts.conf, the
    portal env file, units and their links) and the new `present-file`/`absent-file` entries below
    `$HOME` (`~/.local/share/kglobalaccel/org.plasmafusion.notifications.desktop`,
+   `~/.local/share/kglobalaccel/org.plasmafusion.copytext.desktop`,
    `~/.local/libexec/plasma-fusion`);
 6. `daemon-reload`, KWin reconfigure, blur loaded again unless the restored kwinrc turns it off,
    `fc-cache`, plasmashell started.

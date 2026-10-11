@@ -33,14 +33,53 @@ switches at once). The first key goes into the password field and shows the prom
 | Password pill | 340 × 48 (y 396 on the 900 px board), radius 24, `rgba(255,255,255,.1)`, 1.5 px `#5b9dff` + 4 px `rgba(91,157,255,.2)` halo when focused, bullets 16 px 0.2 em apart, 36 px reveal button `#cdd3e4`, 36 px `#2f6fdf` unlock button | `MainBlock.qml` + `PasswordField.qml`; the blues follow the user's accent (decision 3) |
 | Hints | 12 px, 8 px inset: `Caps Lock is on` `#f2c38a` with arrow icon (left), `Use fingerprint` `#8ab8ff` 700 (right) | Caps Lock from `KeyState`; the fingerprint (and smartcard) hint only while that authenticator is available; once pam_fprintd sends its instruction (`noninteractiveInfo`, e.g. `Place your finger on …`) that text replaces `Use fingerprint`; its error text replaces it for a moment |
 | PAM messages | (not on the board) | 13 px / 600 lines under the hints: prompts, info and errors of the PAM stack, including irlume face messages (`irlume: …`) and `Unlocking failed` |
-| Power buttons | 44 px glass circles, 18 px icons, 11.5 px / 700 `#cdd3e4` labels, 18 px apart, 28 px above the edge | Sleep, Hibernate, Switch User (each only when the system allows it), bottom centre |
+| Power buttons | 44 px glass circles, 18 px icons, 11.5 px / 700 `#cdd3e4` labels, 18 px apart, 28 px above the edge; Shut down a `#d9434b` circle with a white icon | Sleep, Hibernate, Switch User, Restart, Shut Down (each only when the system allows it), bottom centre; Restart and Shut Down ask first (below) |
 
 Notification cards, media card and status chip stay in the prompt state. Keyboard: Tab reaches the
 reveal and unlock buttons, the power buttons, the layout badge, the virtual keyboard button and the
 media buttons; focused controls get the Controls board's dark-scheme focus ring (2 px `#8ab8ff`, 2 px outside; a user
 accent gets its own lighter shade). Screen readers hear every PAM message as it arrives (face and fingerprint
 guidance, errors; `Accessible.announce`), and the full screen is named "Lock screen". Alt+P,
-Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the password.
+Alt+H, Alt+U keep the stock mnemonics, Alt+R and Alt+S are the log-out screen's (Restart, Shut
+Down). Escape hides the prompt and clears the password.
+
+## Restart and Shut Down (0.5.0)
+
+Survey U6, KDE wishlist 336369 (8 duplicates): stock Plasma's lock screen offers Sleep, Hibernate
+and Switch User only, so a locked computer had to be unlocked to restart it. The power row adds
+Restart and Shut Down where the session may do them, exactly as the log-out screen decides:
+`SessionManagement.canReboot` / `canShutdown` (logind's `CanReboot` / `CanPowerOff` answering yes,
+challenge or inhibited, and the KAuthorized `logout` action; kiosk `[KDE Action Restrictions]
+logout=false` hides both). The log-out screen itself cannot open over the lock screen
+(SessionManagement shows no prompt while the screen saver is active), so `PowerConfirm.qml` asks on
+the prompt's stack: a 64 px circle with the board's icon, "Restart now?" / "Shut down now?", "Open
+apps are closed first. An app with unsaved work waits until you unlock and answer it.", Cancel (a
+chip pill) and the action (accent fill, or the board's red for Shut Down; it has the focus, as on
+the log-out screen; Escape cancels). Confirmed, it calls `requestReboot` / `requestShutdown` with
+`ConfirmationMode.Skip`: ksmserver closes the session (`org.kde.Shutdown.logoutAndReboot` /
+`logoutAndShutdown`) and asks logind. If the session has not ended after 30 s (an app cancelled the
+log-out; ksmserver says so in a notification) the prompt comes back. The question goes when the
+prompt hides (after 0.5 s hidden: the prompt blinks out for a moment when the page replaces it under
+the pointer).
+
+Who blocks, as on the log-out screen: the same "N other users are currently logged in…" warning
+(`SessionsModel`, the 6.7 log-out screen's text and catalogue), and logind's inhibitors for
+`shutdown` (`ListInhibitors`, read every 2 s while the question is shown). systemd 259 refuses a
+reboot or power-off outright while a strong `block` inhibitor is held ("Operation denied due to
+active block inhibitor"; ksmserver asks without the skip flag), after the session has already
+closed; so while one is held the action stays off and the page lists "Who: why" under "These
+programs are blocking a restart. Try again when they have finished:". `block-weak` inhibitors are
+listed under "These programs are busy:" and leave the action on (logind lets the user's own pass);
+`delay` and other kinds (sleep, the power keys) are not shown. Plasma's D-Bus module hands each
+field of logind's reply over as a typed value (`{"value": …}`) in the greeter; both that and plain
+values are read.
+
+Plasma 6.8: `kscreenlocker_greet` loads the same `LockScreenUi.qml` and SessionManagement keeps the
+same properties, `ConfirmationMode` values and `requestReboot` / `requestShutdown` (plasma-workspace
+Plasma/6.8 `sessionmanagement.h`); the 6.8 log-out screen moved to the shell package
+(`90-lockscreen.sh` already ships it) and its strings to `plasma_shell_org.kde.plasma.desktop`, so
+on 6.8 "&Restart" and "&Shut Down" are looked up in 6.7's `plasma_lookandfeel_org.kde.lookandfeel`
+catalogue and may show in English until Plasma Fusion has its own catalogue. Not run on 6.8 here.
 
 ## Authentication contract (unchanged from Plasma 6.7.5)
 
@@ -81,12 +120,13 @@ Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the pa
 | `…/NotificationCards.qml`, `LockNotifications.qml` (singleton) | notifications while locked (`WatchedNotificationsModel`, grouped per app) |
 | `…/MediaControls.qml`, `StatusChip.qml`, `NetworkIndicator.qml` (loaded on demand, so a system without plasma-nm still locks) | bottom corners |
 | `…/Backdrop.qml`, `GlassPanel.qml` | wallpaper blur/dim/zoom, frosted surfaces (blurred wallpaper through `Kirigami.ShadowedTexture`) |
+| `…/PowerConfirm.qml` | the Restart / Shut Down question, with the other users and logind's shutdown inhibitors |
 | `…/PowerButton.qml`, `RoundButton.qml`, `FocusRing.qml`, `LineIcon.qml`, `PfStyle.qml` (singleton: colours, fonts, the boards' 24 px line-icon paths, date/time helpers; the accent from `FusionAccent`) | building blocks |
 | `FusionMetrics.qml`, `Motion.qml`, `FusionAccent.qml`, `FusionTablet.qml` (installed copies of `packages/common/`, `tools/build-lib/shared-qml.sh`) | text scale, motion tokens, accent, KWin's tablet posture |
 | `…/LockOsd.qml`, `PasswordSync.qml`, `qmldir` | stock |
 | `…/config.xml`, `config.qml` | settings (below) |
-| `packages/lockscreen/test/` | offscreen harness (`run.sh`: a private bus without service activation, `session-bus.conf`), mock authenticator and `org.kde.kscreenlocker` enum, mock MPRIS / notification server, `scenario-greeter.sh` (real greeter in a virtual session; usage in its header) (not installed) |
-| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (31 files) |
+| `packages/lockscreen/test/` | offscreen harness (`run.sh`: a private bus without service activation, `session-bus.conf`), mock authenticator and `org.kde.kscreenlocker` enum, mock MPRIS / notification server, mock logind and ksmserver `org.kde.Shutdown` (`power`), `scenario-greeter.sh` (real greeter in a virtual session; usage in its header) (not installed) |
+| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (36 files in 0.5.0) |
 | `tools/device/lockscreen-enable.sh`, `lockscreen-disable.sh` | select / deselect it for the user |
 
 ## Install and enable
@@ -188,6 +228,24 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 `offscreen-prompt-pam-messages-capslock-fingerprint.png`, `offscreen-no-password-unlock.png`,
 `offscreen-prompt-typed.png`, `offscreen-idle-software-rendering.png`,
 `offscreen-portrait-900x1440-idle-and-prompt.png`, `greeter-and-envtest-log.txt`, pixel reports).
+
+Restart and Shut Down (0.5.0, CI step "Lock screen Restart and Shut Down"): `test/run.sh OUT power
+power-blocked power-busy power-noreboot power-kiosk`. The harness points the system bus at its
+private bus, where `mock_services.py power` answers as logind and ksmserver, so Plasma's own session
+backend (not a stand-in) decides what the row shows, and the clicks are real pointer events:
+`power` both buttons shown; Shut Down asks first, Escape back, nothing called; Restart asks, Cancel
+back, nothing called; Restart confirmed calls `logoutAndReboot`; `power-blocked` a root `block`
+inhibitor and a `block-weak` one listed with their reasons, a sleep `delay` and PowerDevil's
+power-key inhibitor not, Shut Down off and a click on it calls nothing, the typed-value form of the
+reply read the same, the action on again 2 s after the inhibitor goes; `power-busy` a `block-weak`
+inhibitor alone leaves Shut Down on, confirmed calls `logoutAndShutdown`; `power-noreboot` logind
+CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both. On the 0.4.1 package
+four of the five fail (no buttons). In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
+uinput pointer): the row shows Sleep, Switch User, Restart, Shut Down; with `systemd-inhibit
+--what=shutdown --mode=block --who=Updater` held by root, Shut Down lists "Updater: Installing
+updates" and is off; Cancel returns; with it released, Restart confirmed restarted the VM (logind
+"The system will reboot now!", a new boot id). Evidence:
+`artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/small-shots/item2-*`.
 
 ## Deviations from the boards
 

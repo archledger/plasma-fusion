@@ -9,8 +9,11 @@ states and saves one PNG per scenario. Run it on a private bus with fonts from t
 
   test/run.sh OUTDIR [scenario...]   (a private bus without activation, mock services, no display)
 
-Scenarios: idle, prompt, messages, fperror, focus, nopassword. Environment: PF_LOCALE (default en_GB),
-PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board wallpaper).
+Scenarios: idle, prompt, messages, fperror, focus, nopassword, and the Restart / Shut Down checks
+power, power-blocked, power-busy, power-noreboot, power-kiosk (Plasma's session backend on the mock
+logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check). Environment:
+PF_LOCALE (default en_GB), PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board
+wallpaper).
 """
 import atexit
 import os
@@ -92,6 +95,7 @@ class I18n(QObject):
 
     @Slot(str, str, str, result=str)
     @Slot(str, str, str, "QVariant", result=str)
+    @Slot(str, str, str, "QVariant", "QVariant", result=str)
     def i18ndc(self, domain, ctx, text, *args):
         return fmt(text, args)
 
@@ -118,9 +122,10 @@ def main():
     os.makedirs(out, exist_ok=True)
     if len(scenarios) > 1:
         # One process per scenario: every view gets a fresh engine and settings.
+        failed = 0
         for scenario in scenarios:
-            subprocess.run([sys.executable, os.path.abspath(__file__), out, scenario], check=False)
-        return
+            failed += subprocess.run([sys.executable, os.path.abspath(__file__), out, scenario], check=False).returncode != 0
+        sys.exit(1 if failed else 0)
     w, h = (int(v) for v in os.environ.get("PF_SIZE", "1440x900").split("x"))
 
     # The repository fonts through fontconfig, as they are installed for the session
@@ -156,8 +161,16 @@ def main():
                 line = key + "=" + rgb
             lines.append(line)
         text = "\n".join(lines) + "\n[General]\nAccentColor=" + rgb + "\n"
+    if scenarios[0] == "power-kiosk":
+        # The kiosk restriction the log-out screen obeys (SessionManagement::canLogout).
+        text += "\n[KDE Action Restrictions]\nlogout=false\n"
     with open(os.path.join(cfg, "kdeglobals"), "w") as f:
         f.write(text)
+    if scenarios[0].startswith("power"):
+        # Plasma's session backend and the lock screen read logind on the system bus: here the
+        # private bus, where mock_services.py answers for logind and ksmserver.
+        os.environ["DBUS_SYSTEM_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
+        power_setup(scenarios[0])
     os.environ["XDG_CONFIG_HOME"] = cfg
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "org.kde.desktop")
 
@@ -212,6 +225,8 @@ def render(app, out, scenario, w, h, wp_path):
     ctx.setContextProperty("wallpaper", wallpaper)
 
     view.resize(w, h)
+    if scenario.startswith("power"):
+        engine.warnings.connect(lambda ws: [print("QML WARNING:", x.toString()) for x in ws])
     view.setSource(QUrl.fromLocalFile(os.path.join(PKG, "LockScreen.qml")))
     for e in view.errors():
         print("QML ERROR:", e.toString())
@@ -271,6 +286,9 @@ def render(app, out, scenario, w, h, wp_path):
     if scenario == "timing":
         timing(app, out, view, root, lock_root)
         return
+    if scenario.startswith("power"):
+        power(app, out, view, root, lock_root, scenario)
+        return
     if scenario == "tablet":
         tablet(app, out, view, root, lock_root, w, h)
         return
@@ -278,6 +296,169 @@ def render(app, out, scenario, w, h, wp_path):
         QTimer.singleShot(1200, step_prompt)
     QTimer.singleShot(4200, grab)
     app.exec()
+
+
+def test_power():
+    import dbus
+    obj = dbus.SessionBus().get_object("org.plasmafusion.TestPower", "/Test")
+    return dbus.Interface(obj, "org.plasmafusion.TestPower")
+
+
+POWER_INHIBITORS = {
+    # what, who, why, mode, uid, pid (logind's ListInhibitors)
+    "power-blocked": [("shutdown", "Updater", "Installing updates", "block", 0, 4242),
+                      ("shutdown:sleep", "Backup", "Copying files", "block-weak", 1000, 4343),
+                      ("sleep", "NetworkManager", "NetworkManager needs to turn off networks", "delay", 0, 837),
+                      ("handle-power-key", "PowerDevil", "KDE handles power events", "block", 1000, 1564)],
+    "power-busy": [("shutdown", "Backup", "Copying files", "block-weak", 1000, 4343)],
+}
+
+
+def power_setup(scenario):
+    """The mock's answers for this scenario, set before the lock screen asks."""
+    t = test_power()
+    t.Reset()
+    if scenario == "power-noreboot":
+        t.SetCan("Reboot", "na")
+    t.SetInhibitors(POWER_INHIBITORS.get(scenario, []), signature="a(ssssuu)")
+
+
+def power(app, out, view, root, lock_root, scenario):
+    """Restart and Shut Down (survey U6): the buttons follow what the session may do, both ask
+    first, Cancel and Escape do nothing, a confirmation calls ksmserver without its prompt, and a
+    block inhibitor for shutdown is shown and keeps the action off. Writes SCENARIO.json."""
+    from PySide6.QtCore import Q_ARG, Q_RETURN_ARG, QMetaObject, QPoint, QPointF
+    from PySide6.QtTest import QTest
+    res = {"scenario": scenario, "checks": []}
+    t = test_power()
+
+    def item(name):
+        return root.findChild(QQuickItem, name)
+
+    def check(name, ok, detail=None):
+        res["checks"].append({"check": name, "pass": bool(ok), "detail": detail})
+        print(("PASS " if ok else "FAIL ") + scenario + ": " + name, "" if detail is None else detail)
+
+    def shown(name):
+        it = item(name)
+        return it is not None and it.isVisible()
+
+    def click(name):
+        it = item(name)
+        p = it.mapToScene(QPointF(it.width() / 2, it.height() / 2))
+        QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier, p.toPoint())
+
+    def confirm_page():
+        page = root.findChild(QQuickItem, "powerConfirm")
+        return page if page is not None and page.isVisible() else None
+
+    def wait(ms):
+        QTest.qWait(ms)
+
+    def run():
+        # The pointer moves over the screen (the lock screen ignores the first movement it sees).
+        for x in (300, 320, 340):
+            QTest.mouseMove(view, QPoint(x, 300))
+            wait(50)
+        lock_root.setProperty("uiVisible", True)
+        # Plasma's session backend asks logind once, at start.
+        for _ in range(40):
+            if shown("shutdownButton") or scenario in ("power-kiosk",):
+                break
+            wait(100)
+        wait(500)
+        calls = lambda: [str(c) for c in t.Calls()]
+        if scenario == "power-kiosk":
+            check("kiosk logout=false: no Restart button", not shown("restartButton"))
+            check("kiosk logout=false: no Shut Down button", not shown("shutdownButton"))
+            return
+        if scenario == "power-noreboot":
+            check("logind CanReboot na: no Restart button", not shown("restartButton"))
+            check("Shut Down button shown", shown("shutdownButton"))
+            return
+        check("Restart button shown", shown("restartButton"))
+        check("Shut Down button shown", shown("shutdownButton"))
+        if scenario == "power":
+            view.grabWindow().save(os.path.join(out, "power-row.png"))
+            click("shutdownButton")
+            wait(800)
+            page = confirm_page()
+            title = item("powerConfirmTitle")
+            check("Shut Down asks first", page is not None and title is not None and title.property("text") == "Shut down now?",
+                  title.property("text") if title else None)
+            check("asking calls nothing", calls() == [], calls())
+            QTest.keyClick(view, Qt.Key_Escape)
+            wait(800)
+            check("Escape goes back to the prompt", confirm_page() is None and shown("mainBlock"))
+            check("Escape calls nothing", calls() == [], calls())
+            click("restartButton")
+            wait(800)
+            title = item("powerConfirmTitle")
+            check("Restart asks first", confirm_page() is not None and title.property("text") == "Restart now?")
+            view.grabWindow().save(os.path.join(out, "power-confirm.png"))
+            click("powerCancelButton")
+            wait(800)
+            check("Cancel goes back to the prompt", confirm_page() is None and shown("mainBlock"))
+            check("Cancel calls nothing", calls() == [], calls())
+            click("restartButton")
+            wait(800)
+            click("powerConfirmButton")
+            wait(800)
+            check("Restart confirmed: ksmserver logoutAndReboot, without its prompt", calls() == ["logoutAndReboot"], calls())
+            view.grabWindow().save(os.path.join(out, "power-requested.png"))
+        elif scenario == "power-blocked":
+            click("shutdownButton")
+            wait(2500)
+            blockers = item("powerConfirmBlockers")
+            texts = [c.property("text") for c in blockers.childItems() if c.property("text")] if blockers else []
+            check("a block inhibitor for shutdown is listed with its reason", "Updater: Installing updates" in texts, texts)
+            check("a block-weak inhibitor is listed", "Backup: Copying files" in texts, texts)
+            check("sleep delay and power-key inhibitors are not listed",
+                  not any("NetworkManager" in x or "PowerDevil" in x for x in texts), texts)
+            button = item("powerConfirmButton")
+            check("Shut Down is off while blocked", button is not None and not button.property("enabled"))
+            # The greeter on Plasma 6.7.5 gets each field of logind's reply as a typed value.
+            wrapped = [[{"value": f} for f in entry] for entry in POWER_INHIBITORS[scenario]]
+            parsed = QMetaObject.invokeMethod(confirm_page(), "shutdownBlockers", Q_RETURN_ARG("QVariant"), Q_ARG("QVariant", wrapped))
+            parsed = parsed.toVariant() if hasattr(parsed, "toVariant") else parsed
+            check("logind's fields as typed values ({value: ...}) are read the same",
+                  [(b["who"], b["strong"]) for b in parsed] == [("Updater", True), ("Backup", False)], parsed)
+            view.grabWindow().save(os.path.join(out, "power-blocked.png"))
+            click("powerConfirmButton")
+            wait(500)
+            check("a click on it calls nothing", calls() == [], calls())
+            t.SetInhibitors([], signature="a(ssssuu)")
+            wait(2500)
+            check("when the inhibitor goes, Shut Down comes back on (read again every 2 s)",
+                  button.property("enabled") and not item("powerConfirmBlockers").isVisible())
+        elif scenario == "power-busy":
+            click("shutdownButton")
+            wait(2500)
+            button = item("powerConfirmButton")
+            check("a block-weak inhibitor alone leaves Shut Down on", button.property("enabled"))
+            click("powerConfirmButton")
+            wait(800)
+            check("Shut Down confirmed: ksmserver logoutAndShutdown", calls() == ["logoutAndShutdown"], calls())
+
+    def finish():
+        try:
+            run()
+        except Exception as e:  # a missing item on an older package is a failure, not a crash
+            check("no error while running the checks", False, repr(e))
+        res["pass"] = all(c["pass"] for c in res["checks"]) and len(res["checks"]) > 0
+        with open(os.path.join(out, scenario + ".json"), "w") as f:
+            json.dump(res, f, indent=1)
+        print(scenario + ":", "PASS" if res["pass"] else "FAIL")
+        global POWER_FAILED
+        POWER_FAILED = not res["pass"]
+        view.close()
+        app.quit()
+
+    QTimer.singleShot(1200, finish)
+    app.exec()
+
+
+POWER_FAILED = False
 
 
 def gpu_ns():
@@ -509,3 +690,4 @@ def tablet(app, out, view, root, lock_root, w, h):
 
 if __name__ == "__main__":
     main()
+    sys.exit(1 if POWER_FAILED else 0)
