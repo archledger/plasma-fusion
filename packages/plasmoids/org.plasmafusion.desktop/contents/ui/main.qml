@@ -122,10 +122,17 @@ ContainmentItem {
         function onAppletsChanged() { root.watchCards(); }
     }
     // Widgets moved or resized in edit mode (the stock one, or the home screen's own): measured
-    // again while editing and once it ends.
-    readonly property bool editingCards: (fullRepresentationItem && fullRepresentationItem.appletsLayout
-                                          ? fullRepresentationItem.appletsLayout.editMode : false)
-                                         || (homeLoader.item ? homeLoader.item.editing : false)
+    // again while editing and once it ends. The home screen's loader is reached through the full
+    // representation (homeLayer): its id belongs to that component, and naming it here was a
+    // ReferenceError, logged at every start in tablet posture, that left the home screen's edit
+    // mode unseen.
+    readonly property bool editingCards: {
+        const area = fullRepresentationItem;
+        if (!area || !area.appletsLayout) {
+            return false;
+        }
+        return area.appletsLayout.editMode || (area.homeLayer && area.homeLayer.item ? area.homeLayer.item.editing === true : false);
+    }
     onEditingCardsChanged: watchCards()
     Timer {
         interval: 500
@@ -386,6 +393,8 @@ ContainmentItem {
 
         property alias folderViewLayer: folderViewLayer
         property alias appletsLayout: appletsLayout
+        // Plasma Fusion: the tablet home screen's loader, for the containment's own bindings
+        property alias homeLayer: homeLoader
 
         // Layout size bindings are set in Component.onCompleted
 

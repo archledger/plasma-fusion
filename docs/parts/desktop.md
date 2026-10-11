@@ -60,7 +60,24 @@ and for 10 s after (the layout manager places them asynchronously), again after 
 widget is added or removed, and every 0.5 s while a widget edit mode is on (the stock one or the
 home screen's) and once it ends, so a moved or resized card stays tappable; there is no timer on an
 idle home screen. A reading with no sized containers keeps the last rectangle (edit mode rebuilds
-the layout for a moment); only a containment without widgets gets an empty one.
+the layout for a moment); only a containment without widgets gets an empty one. The home screen's
+edit mode is read through the full representation's `homeLayer` alias: until 0.5.0 the containment
+named the loader's id, which belongs to the full representation's component, so the home screen's
+edit mode was never seen and plasmashell logged "ReferenceError: homeLoader is not defined" at
+every start in tablet posture and at each long press there.
+
+Tablet posture across a plasmashell restart (0.5.0): `tools/tests/shell-vm/tablet_restart.py`, run in
+the session, turns tablet mode on, restarts plasmashell in it and goes back to the laptop (auto or
+off) 0, 3, 10 and 25 s later, checking each time that KWin shows the top bar and the dock with their
+posture's heights, that the desktop shows its posture's layer and that plasmashell logs no
+ReferenceError or TypeError from Plasma Fusion. In the test VM (1280 x 800) the previous code passes
+everything but the last check (the ReferenceError above, once per start in tablet posture), with and
+without a cleared QML cache; with the alias it passes. A report of the top bar and the dock missing
+after such a switch until the next plasmashell restart (seen once in another 0.5.0 track's VM) did
+not happen in these eight rounds, nor in eleven manual variants (re-login in tablet posture, a
+deploy that also reloads KWin's scripts, the switch during the shell's start, with the Notification
+Centre, the launcher's sheet, KWin's Overview or the home screen's edit mode open); the scenario
+stays as its regression test.
 
 ## Installation and switch-over
 
