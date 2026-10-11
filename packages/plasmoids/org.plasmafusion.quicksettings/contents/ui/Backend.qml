@@ -115,6 +115,23 @@ Item {
     Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
     Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
+    // The panel this widget is in (main.qml): its system tray's hidden stock items are shown
+    // while active (services/TrayItems.qml).
+    property var containment: null
+    Loader { id: trayItemsLoader; asynchronous: true; source: "services/TrayItems.qml" }
+    Binding {
+        target: trayItemsLoader.item
+        property: "containment"
+        value: backend.containment
+        when: trayItemsLoader.item !== null
+    }
+    Binding {
+        target: trayItemsLoader.item
+        property: "tablet"
+        value: backend.tablet
+        when: trayItemsLoader.item !== null
+    }
+    readonly property var trayRevealed: trayItemsLoader.item ? trayItemsLoader.item.revealed : []
     Binding {
         target: chargeLoader.item
         property: "batteryKnown"

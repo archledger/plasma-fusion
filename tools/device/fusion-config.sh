@@ -882,6 +882,8 @@ FOLDER_KEYS=(url=desktop:/ sortMode=-1 arrangement=1 alignment=0 iconSize=2 popu
   selectionMarkers=true useTypeAhead=true)
 FOLDER_PREVIEWS=(imagethumbnail jpegthumbnail svgthumbnail gsthumbnail opendocumentthumbnail ffmpegthumbs)
 # Tray items hidden in the top bar (round 2; TABLET 4.3: quick settings has its own keyboard button).
+# Quick settings shows the vault, printer, display and input-method items while they are active
+# (the tray's shownItems), so a layout migrated here needs nothing more for that.
 TRAY_HIDE=(org.kde.plasma.vault org.kde.plasma.devicenotifier org.kde.kscreen org.kde.plasma.printmanager
   org.kde.plasma.manage-inputmethod)
 

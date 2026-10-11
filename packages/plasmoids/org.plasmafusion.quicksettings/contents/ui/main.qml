@@ -438,6 +438,7 @@ PlasmoidItem {
                      + ", power " + backend.profile.subtitle + (backend.profile.note ? " [" + backend.profile.note.replace(/\n/g, " | ") + "]" : "")
                      + ", hotspot " + backend.net.hotspotSubtitle
                      + ", devices " + backend.devices.count
+                     + ", tray " + (backend.trayRevealed.length > 0 ? backend.trayRevealed.join("+") : "-")
                      + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length
                      + ", page " + backend.page
                      + ", focus " + (popup.activeFocusItem ? popup.activeFocusItem.Accessible.name : "-")
@@ -454,6 +455,7 @@ PlasmoidItem {
     Backend {
         id: backend
         popupOpen: root.popupOpen
+        containment: Plasmoid.containment
         showKeyboardLayout: Plasmoid.configuration.showKeyboardLayout
         keyboardLayoutAlways: Plasmoid.configuration.keyboardLayoutAlways
         showKdeConnect: Plasmoid.configuration.showKdeConnect

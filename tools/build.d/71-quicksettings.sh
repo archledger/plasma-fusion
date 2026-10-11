@@ -19,14 +19,15 @@ bash "$ROOT/tools/build-lib/shared-qml.sh" check "$SRC" quicksettings
 python3 -B "$ROOT/packages/common/tests/backdrop_glass_test.py" "$SRC"
 # The settings page declares every key and default and refreshes the ones it does not edit.
 python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$SRC"
-# The Disks & Devices list, power mode, Do Not Disturb and timed Keep awake logic
-# (contents/code/devices.js, power.js, dnd.js and keepawake.js; the tests are not installed), when
-# node is installed (the package build has none).
+# The Disks & Devices list, power mode, Do Not Disturb, timed Keep awake and hidden tray item logic
+# (contents/code/devices.js, power.js, dnd.js, keepawake.js and tray.js; the tests are not
+# installed), when node is installed (the package build has none).
 if command -v node >/dev/null 2>&1; then
   node "$SRC/tests/devices.test.js" >/dev/null
   node "$SRC/tests/power.test.js" >/dev/null
   node "$SRC/tests/dnd.test.js" >/dev/null
   node "$SRC/tests/keepawake.test.js" >/dev/null
+  node "$SRC/tests/tray.test.js" >/dev/null
 fi
 
 rm -rf "$DEST"

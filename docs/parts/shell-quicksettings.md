@@ -206,7 +206,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
                                     TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
                                     tablet-mode setting, full-screen apps; QS-1; posture
-                                    settings: power button, touch edge, TABLET2 P0/N1)
+                                    settings: power button, touch edge, TABLET2 P0/N1),
+                                    TrayItems (hidden stock tray items shown while active)
 tools/build.d/71-quicksettings.sh   copies the package to $STAGE/.local/share/plasma/plasmoids/
 ```
 
@@ -253,6 +254,36 @@ System tray keys (containment config of the tray, group `[General]`):
   example the XWayland video bridge, which registers a while after login). The stock items Fusion
   hides are disabled as status notifiers, so they never bring it up, and Disks & Devices is not
   loaded at all. That arrow is the stock tray's and is not on the board.
+
+### Hidden tray items while active (P1)
+
+The layout hides Vaults, Display Configuration, Printers and the input-method item in the tray
+(`TRAY_ITEMS_HIDDEN`: `disabledStatusNotifiers` and `hiddenItems`) so that, passive, they do not
+bring back the expander arrow, and the tray has no key for "hidden while passive". This widget
+supplies it for the tray in its own panel (`services/TrayItems.qml`, `contents/code/tray.js`):
+it reads each stock item's own status from the tray (`Plasma::Containment::applets`,
+`Plasma::Applet::status`), and while one is active it adds the id to the tray's `shownItems`
+(through the tray's configuration, which the tray reloads at once); `shownItems` wins over both
+other lists (6.7.5 `calculateEffectiveStatus`), so the stock item shows in the bar, with its own
+pop-up (lock or open vaults, the print queue, screen layouts and presentation mode, the keyboard
+switch). When it is passive again the id goes out of `shownItems` and the item is hidden, without
+the arrow. Shown while:
+
+| Item | Shown while (the item's own state, checked in the 6.7.5 sources) |
+|---|---|
+| `org.kde.plasma.vault` | a vault is open (`hasOpenVaults`: Active) |
+| `org.kde.plasma.printmanager` | a print job is queued (Active; Passive with printers and no job, Hidden without a printer) |
+| `org.kde.kscreen` | presentation mode is on (its own switch: Active), or more than one screen is connected (the item stays Passive then, but its layout choices matter) |
+| `org.kde.plasma.manage-inputmethod` | it is active (6.7: the on-screen keyboard disabled or set to all input devices, an application with text input in tablet mode; 6.8: the keyboard would show), outside tablet posture, where the tablet row's keyboard button already covers it (TABLET 4.3) |
+
+Disks & Devices stays replaced by its page and is not loaded. An id the user moved out of
+`disabledStatusNotifiers` (any visibility chosen in the tray's settings does that) is the user's:
+this widget neither adds nor removes it, and it never touches other `shownItems` entries. Each
+screen's widget handles its own bar's tray. A stale entry (plasmashell ended while an item was
+shown) is taken out when the widget starts. Nothing is migrated: the layout's lists are unchanged,
+so existing layouts get this with the updated widget, at the next login or plasmashell start. A
+pop-up left open when its item hides (a vault locked from its own pop-up) stays open until it is
+closed. Without quick settings in the bar (a tray on its own) the items stay hidden as before.
 
 Widget options (`[General]` of the widget, `contents/config/main.xml`, also in its settings page):
 
@@ -317,6 +348,18 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   under the list, a click on a profile chooses it directly.
   Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
   passes its time, the state line for timed and untimed.
+* Hidden tray items while active (offscreen, Plasma's `org.kde.plasma.core`, a stand-in panel and
+  tray with the stock ids and a writable configuration; in CI):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+  ```
+
+  An active vault or printers needing attention go into `shownItems` and out again when passive,
+  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
+  themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
@@ -446,6 +489,18 @@ An independent review of the part, integrated with every other part that exists 
   under the list, a click on a profile chooses it directly.
   Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
   passes its time, the state line for timed and untimed.
+* Hidden tray items while active (offscreen, Plasma's `org.kde.plasma.core`, a stand-in panel and
+  tray with the stock ids and a writable configuration; in CI):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+  ```
+
+  An active vault or printers needing attention go into `shownItems` and out again when passive,
+  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
+  themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files: no errors; the warnings are `i18n*` calls
   (injected by Plasma), plasma-pa singletons and `ListView.currentItem` methods (static-analysis
