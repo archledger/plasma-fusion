@@ -110,7 +110,7 @@ Item {
         }
     }
 
-    // A page opened on its own (the clipboard sheet from its button) closes the sheet.
+    // A page opened on its own (the clipboard sheet from its button or Meta+V) closes the sheet.
     Keys.onEscapePressed: event => {
         if (backend.page !== "main" && !backend.pageDirect) {
             closePage(true);

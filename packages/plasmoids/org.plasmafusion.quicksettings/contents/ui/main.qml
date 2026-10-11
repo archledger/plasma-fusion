@@ -243,7 +243,7 @@ PlasmoidItem {
     function togglePopup() {
         setPopupOpen(!popupOpen);
     }
-    // The clipboard sheet (the clipboard button): the pop-up on its clipboard page, or
+    // The clipboard sheet (the clipboard button, Meta+V): the pop-up on its clipboard page, or
     // closed; Klipper's own pop-up where Plasma's clipboard module is missing.
     readonly property bool clipboardShown: popupOpen && backend.page === "clipboard"
     function showClipboard(open: bool): void {
@@ -347,7 +347,7 @@ PlasmoidItem {
     }
 
     // ---- openRequest: "<mode>:<nonce>[:<output>]" (or "<mode> <nonce>"), written by other shell
-    // parts through desktop scripting (the tablet script's right edge, Meta+N). Without an
+    // parts through desktop scripting (the tablet script's right edge, Meta+N, Meta+V). Without an
     // output only the widget on KWin's active screen acts.
     Connections {
         target: Plasmoid.configuration
@@ -391,6 +391,9 @@ PlasmoidItem {
             break;
         case "toggle":
             togglePopup();
+            break;
+        case "clipboard":
+            showClipboard(!clipboardShown);
             break;
         case "close":
             if (popupOpen) {

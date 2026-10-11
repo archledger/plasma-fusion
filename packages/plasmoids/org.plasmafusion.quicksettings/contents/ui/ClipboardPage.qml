@@ -13,7 +13,7 @@ import "components"
 import "components/Icons.js" as Icons
 import "../code/clipboard.js" as Clip
 
-// The clipboard sheet (the clipboard button): Klipper's history, newest first, from
+// The clipboard sheet (the clipboard button, Meta+V): Klipper's history, newest first, from
 // Plasma's own clipboard model (services/Clipboard.qml), so stars and entries are the stock
 // Clipboard widget's. Search (every word, as plain text), All / Starred as in the stock widget,
 // text, images and copied files, star, edit, QR code, Klipper's actions, remove, and Clear all

@@ -12,7 +12,7 @@
 # newest backup of any kind (undo only the last run). --list shows the backups.
 #
 # It gives the changed shortcuts their old keys back (the Windows-style set of owner decision 6,
-# the quick-settings, pen and Meta+N notification keys), renames the workspaces and removes the
+# the quick-settings, pen, Meta+N and Meta+V keys), renames the workspaces and removes the
 # ones fusion-config.sh created, for that backup's run and every later one (each run records only
 # what it changed itself), undoes the pen defaults of those runs (tools/pen/pen-defaults.sh
 # --restore), stops the user services they started (plasma-fusion-powerfx gives the power-tier
@@ -34,6 +34,7 @@ CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 GATE_STUB_REL=plasma-workspace/env/plasma-fusion-gate.sh
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
+CLIPBOARD_COMPONENT=org.plasmafusion.clipboard.desktop
 HERE=$(cd "$(dirname "$0")" && pwd)
 GATE_FILES=("$GATE_STUB_REL" systemd/user/plasma-fusion-gate-notify.service
   systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-gate-notify.service)
@@ -143,13 +144,21 @@ for b in "${LATER[@]}" "$BACKUP"; do
   done
 done
 
-# The Meta+N notification component (Windows-style set): its key went back to none above; the
-# component goes with its desktop file (restored below when the backup had it).
-if ! grep -qx "present-file .local/share/kglobalaccel/$NOTIFY_COMPONENT" "$BACKUP/manifest" &&
-  [ -e "$DATA/kglobalaccel/$NOTIFY_COMPONENT" ]; then
-  note "$NOTIFY_COMPONENT / _launch: unregistered"
-  run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$NOTIFY_COMPONENT" _launch >/dev/null 2>&1 || true
-fi
+# The Meta+N notification and Meta+V clipboard components (Windows-style set): their keys went
+# back to none above, and Klipper's pop-up has Meta+V again; a component goes with its desktop file
+# (restored below when the backup had it). A backup older than the component does not list its
+# file: it did not exist then (only fusion-config.sh writes it), so it is removed here.
+for comp in "$NOTIFY_COMPONENT" "$CLIPBOARD_COMPONENT"; do
+  rel=.local/share/kglobalaccel/$comp
+  if ! grep -qx "present-file $rel" "$BACKUP/manifest" && [ -e "$DATA/kglobalaccel/$comp" ]; then
+    note "$comp / _launch: unregistered"
+    run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$comp" _launch >/dev/null 2>&1 || true
+    if ! grep -qx "absent-file $rel" "$BACKUP/manifest"; then
+      note "remove ~/$rel (made after this backup)"
+      run rm -f "$DATA/kglobalaccel/$comp"
+    fi
+  fi
+done
 
 # 1b. Pen defaults (fusion-config.sh --pen), newest run first: each pen backup holds the values from
 #     before its run; KWin reads them at once (pen-defaults.sh writes them with --notify).

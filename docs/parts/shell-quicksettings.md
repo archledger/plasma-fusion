@@ -253,7 +253,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `popupScreenMargin` | 16 | px between the pop-up and the screen edge |
 | `startPage` | main | page shown on open: `main`, `wifi`, `bluetooth`, `audio` (settings page: "Page shown when opened") |
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
-| `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`; without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
+| `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`, `clipboard` (the clipboard sheet, or closed when it is open: Meta+V); without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
 | `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the tablet policy state and, on the clipboard sheet, its mode, entries shown, stars, current row and search |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
@@ -787,7 +787,9 @@ applets into one QML engine, which the stock notifications applet's Globals reli
 The clipboard button (and its 52 px row in the sheet when the bar has no room for it, as in tablet
 posture) opens the clipboard sheet: a page of the quick-settings pop-up, in its card, sizes and
 colours (the Quick Settings and Popups boards' drill-down pages). It replaces Klipper's own pop-up,
-which the button opened before.
+which the button opened before. Meta+V opens it too, on the screen in use (`openRequest`
+`clipboard`; the setup's Windows-style shortcut set takes the key from Klipper's pop-up,
+docs/parts/device.md); the button and Meta+V close it again.
 
 - **Data:** Plasma's clipboard QML module, the one the stock Clipboard widget and Klipper's pop-up
   use (`org.kde.plasma.private.clipboard`, `HistoryModel`; `services/Clipboard.qml`). It is a view

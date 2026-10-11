@@ -29,7 +29,7 @@ Item {
     // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices", "display" or
     // "clipboard".
     property string page: "main"
-    // The page was opened on its own (the clipboard button), not from quick settings:
+    // The page was opened on its own (the clipboard button, Meta+V), not from quick settings:
     // Escape closes the sheet instead of going back.
     property bool pageDirect: false
     property string audioPage: "output"
@@ -117,8 +117,8 @@ Item {
     Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
     Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
-    // Plasma's clipboard module (Klipper's history), for the clipboard button and its row in the
-    // sheet.
+    // Plasma's clipboard module (Klipper's history), for the clipboard button and Meta+V (which
+    // opens the sheet also without the button).
     Loader { id: clipboardLoader; asynchronous: true; source: "services/Clipboard.qml" }
     Binding {
         target: chargeLoader.item
