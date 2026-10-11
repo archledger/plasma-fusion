@@ -9,6 +9,7 @@ import QtQuick.Layouts
 
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
+import org.kde.plasma.plasmoid
 
 import "../code/formats.js" as Formats
 
@@ -26,6 +27,17 @@ KCM.SimpleKCM {
     property alias cfg_popupGap: popupGap.value
     property alias cfg_centerInPanel: centerInPanel.checked
     property alias cfg_menuSearch: menuSearch.checked
+    // Every key of main.xml needs a cfg_ property on every page, and its default a
+    // cfg_<key>Default, or the settings dialog warns ("Setting initial properties failed").
+    // Keys this page does not edit (the other pages' and the widget's own). The dialog writes
+    // every declared key back on Apply, so they are refreshed from the live configuration just
+    // before saving (nothing written meanwhile is lost).
+    property var cfg_selectedTimeZones: ["Local"]
+    property var cfg_enabledCalendarPlugins: []
+    property bool cfg_widthBudget: true
+    property string cfg_menuPolicy: "centre"
+    property bool cfg_menuCompacted: false
+    property string cfg_debugAction: ""
 
     // The configuration dialog also hands every key's default value to the page.
     property bool cfg_showWorkspacesDefault
@@ -39,6 +51,25 @@ KCM.SimpleKCM {
     property int cfg_popupGapDefault
     property bool cfg_centerInPanelDefault
     property bool cfg_menuSearchDefault
+    property var cfg_selectedTimeZonesDefault: ["Local"]
+    property var cfg_enabledCalendarPluginsDefault: []
+    property bool cfg_widthBudgetDefault
+    property string cfg_menuPolicyDefault
+    property bool cfg_menuCompactedDefault
+    property string cfg_debugActionDefault
+
+    function saveConfig() {
+        const config = Plasmoid.configuration;
+        // edited on the Time zones and Calendar pages
+        cfg_selectedTimeZones = config.selectedTimeZones;
+        cfg_enabledCalendarPlugins = config.enabledCalendarPlugins;
+        // no control in the dialog; the width budget writes menuCompacted itself
+        cfg_widthBudget = config.widthBudget;
+        cfg_menuPolicy = config.menuPolicy;
+        cfg_menuCompacted = config.menuCompacted;
+        // requests written through desktop scripting
+        cfg_debugAction = config.debugAction;
+    }
 
     readonly property date sample: new Date()
 

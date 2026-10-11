@@ -165,6 +165,44 @@ PlasmoidItem {
     property string requestedPage: ""
     property real maxPopupHeight: 820
 
+    // The Plasma style's frame padding of the sheet's window, which the content subtracts from the
+    // card's outer size. The window's leftPadding... properties are 0 until it is first shown and
+    // then become the style's margins (14 px with Plasma Fusion's style) without their change
+    // signal (paddingChanged), so a binding to them stayed 0: the content asked for the outer size
+    // as its own, the window took it without the padding, and the content was drawn 14 px too low
+    // and right with its last 28 px cut off. They are read again whenever the window sets its frame
+    // borders (each time it is placed) or reports a change, and the content follows; the window
+    // then sizes itself from the content's new size hints and the real padding. The read waits for
+    // the window's own handler to return: the content's new size resizes the window, which sets
+    // its borders again, and a nested update lost one of the four values.
+    property real framePaddingLeft: 0
+    property real framePaddingTop: 0
+    property real framePaddingRight: 0
+    property real framePaddingBottom: 0
+    function readFramePadding(): void {
+        framePaddingLeft = popup.leftPadding;
+        framePaddingTop = popup.topPadding;
+        framePaddingRight = popup.rightPadding;
+        framePaddingBottom = popup.bottomPadding;
+    }
+
+    // The window's size follows the content's size hints (AppletPopup sets its minimum and maximum
+    // size to them, which are equal here, and resizes it), but a size set while the sheet is hidden
+    // did not reach the Wayland window: after a scale change, or a notification that came or went
+    // with the sheet closed, it opened at its old height with the content cut off or a gap below.
+    // Once shown, the window takes the size its own limits name.
+    function fitWindow(): void {
+        const width = popup.minimumWidth;
+        const height = popup.minimumHeight;
+        if (!popup.visible || width <= 0 || height <= 0 || width !== popup.maximumWidth || height !== popup.maximumHeight
+                || (popup.width === width && popup.height === height)) {
+            return;
+        }
+        console.info("quicksettings: sheet window " + popup.width + "x" + popup.height + " -> " + width + "x" + height);
+        popup.width = width;
+        popup.height = height;
+    }
+
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     // The whole bar height is the hit area (TABLET 4.3, corrected in review).
     Plasmoid.constraintHints: Plasmoid.CanFillArea
@@ -482,6 +520,18 @@ PlasmoidItem {
         // qmllint enable missing-property
         console.info("quicksettings: dump " + tag + " bar: " + bar.join("; "));
         console.info("quicksettings: dump " + tag + " sheet: " + sheet.join("; "));
+        // The sheet's window against its content: the content item's place and size in the
+        // window, the size the content asks for and the Plasma style's frame padding.
+        // qmllint disable missing-property
+        console.info("quicksettings: dump " + tag + " frame: " + (content && popup.visible
+            ? "window " + popup.width + "x" + popup.height + ", padding " + [popup.leftPadding, popup.topPadding, popup.rightPadding, popup.bottomPadding].join(",")
+              + ", item " + Math.round(contentLoader.x) + "," + Math.round(contentLoader.y) + " " + Math.round(contentLoader.width) + "x" + Math.round(contentLoader.height)
+              + ", wanted " + Math.round(content.implicitWidth) + "x" + Math.round(content.implicitHeight)
+              + ", page " + Math.round(content.scroller.contentHeight)
+              + ", screen " + root.screenArea.x + "," + root.screenArea.y + " " + root.screenArea.width + "x" + root.screenArea.height
+              + " at " + root.Screen.devicePixelRatio
+            : "closed"));
+        // qmllint enable missing-property
     }
 
     readonly property Backend qsBackend: backend
@@ -745,6 +795,9 @@ PlasmoidItem {
 
         onVisibleChanged: {
             const content = contentLoader.item as PopupContent;
+            if (visible) {
+                Qt.callLater(root.fitWindow);
+            }
             if (visible && content) {
                 popup.requestActivate();
                 content.forceActiveFocus();
@@ -772,12 +825,21 @@ PlasmoidItem {
                 tablet: tabletState.tablet
                 touch: tabletState.tablet || m.touch
                 outerWidth: root.outerWidth
-                framePaddingLeft: popup.leftPadding
-                framePaddingRight: popup.rightPadding
-                framePaddingTop: popup.topPadding
-                framePaddingBottom: popup.bottomPadding
+                framePaddingLeft: root.framePaddingLeft
+                framePaddingRight: root.framePaddingRight
+                framePaddingTop: root.framePaddingTop
+                framePaddingBottom: root.framePaddingBottom
                 maxOuterHeight: root.maxPopupHeight
                 focus: true
+            }
+        }
+        Connections {
+            target: popup
+            function onBordersChanged() {
+                Qt.callLater(root.readFramePadding);
+            }
+            function onPaddingChanged() {
+                Qt.callLater(root.readFramePadding);
             }
         }
         Connections {

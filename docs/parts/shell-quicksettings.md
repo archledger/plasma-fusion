@@ -322,7 +322,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
 | `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`, `clipboard` (the clipboard sheet, or closed when it is open: Meta+V); without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
-| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the tablet policy state and, on the clipboard sheet, its mode, entries shown, stars, current row and search; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
+| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the tablet policy state, the sheet's window against its content (`frame`: window, padding, the content's place, size and wanted size) and, on the clipboard sheet, its mode, entries shown, stars, current row and search; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
 Dark style: when kdeglobals `[KDE] DefaultLightLookAndFeel` / `DefaultDarkLookAndFeel` pair the two
@@ -453,7 +453,8 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 
 * **Plasma style** (`plasma-fusion-dark` / `-light`): `dialogs/background` with the 22 px radius,
   88 % fill, 1 px 12 % edge, shadow and blur hint; the widget compensates any frame padding so the
-  content keeps its 16 px inset. Tooltips use `widgets/tooltip`.
+  content keeps its 16 px inset (see "The sheet's window and its content"). Tooltips use
+  `widgets/tooltip`.
 * **Colour schemes**: Selection background `#2F6FDF` (tile and button accent), DecorationHover
   `#5B9DFF` (slider fill), DecorationFocus `#8AB8FF` / `#2F6FDF` (focus ring), link colours.
 * **Global Theme / device setup**: set kdeglobals `[KDE] DefaultLightLookAndFeel=org.plasmafusion.light.desktop`
@@ -1123,3 +1124,38 @@ docs/parts/device.md); the button and Meta+V close it again.
   the page: focus, arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard,
   QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode). Both fail without
   the sheet (the files do not exist on 0.4.1).
+
+## The sheet's window and its content (0.5.0)
+
+The pop-up's content (`PopupContent.qml`) is the card less the Plasma style's frame padding, and
+`AppletPopup` sizes its window from the content's size hints plus that padding (the hints' minimum,
+maximum and preferred size are equal: the card's 356 px and the page's height, at most the room
+below the bar). Two things went wrong in the test VM (1280 x 800, before 0.5.0):
+
+- **The padding.** The window's `leftPadding`, `topPadding`... are 0 until it is first shown and
+  become the style's 14 px then without their change signal (`paddingChanged`). The content is
+  built in the background after start, before the first show, so a binding to them stayed 0: the
+  content asked for the card's outer size as its own (356 x 392 instead of 328 x 364), the window
+  took it without the padding, and the page was drawn 14 px too low and right, 28 px narrower, with
+  its last 28 px (the Keep awake and Disks & Devices row, a page's footer button) cut off and
+  scrolling. `main.qml` now reads the padding whenever the window sets its frame borders (each time
+  it is placed) or reports a change, one event loop pass later (a nested update while the window
+  resized lost one of the four values), and the content follows.
+- **A size set while hidden.** `AppletPopup` resizes the window when the content's hints change,
+  but a size set while the sheet was hidden did not reach the Wayland window: after a scale change,
+  or a notification that came or went with the sheet closed, it opened at its old height (the hints
+  already named the new one; seen 392 for 396 at 1.25). Once shown, the window takes the size its
+  own limits name (`fitWindow()`, logged as `sheet window OLD -> NEW`).
+
+Test: `tools/tests/shell-vm/sheet_fit.py` (run inside the session; `--restart` restarts plasmashell
+first, `--notifications N` makes the main page scroll, modes such as `1280x800@1 1920x1200@1.5
+1280x800@1.25` are set with kscreen-doctor in turn) opens the main page and the Wi-Fi, Bluetooth,
+Sound and sleep blockers (`power`) pages and checks with the dump's `frame` line that the content sits at the padding,
+fills the window less the padding and asks for exactly that size, that the window is the card's
+width and ends at least `popupScreenMargin` above the available area's bottom, and that a page
+scrolls only when it is taller than the room. On the previous code it fails 10 checks after a
+restart at 1280 x 800 (every page: wanted 356 x 392 in a 328 x 364 item, scrolling) and 10 at 1.25
+after a live scale change with only the padding fixed; with the change it passes at 1280 x 800,
+1920 x 1200 and 1280 x 800 at scales 1, 1.25 and 1.5, with and without a scrolling notification
+list. Screenshots: `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/shellfixes-shots/`
+(`base-*` before, `fix-*` after).

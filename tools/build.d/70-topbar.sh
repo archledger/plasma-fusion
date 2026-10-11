@@ -27,6 +27,8 @@ PY
   fi
 
   bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" "topbar: $id"
+  # The clock's three settings pages: every key and default on each, the others' keys refreshed.
+  case $id in *.clockpill) python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$src" ;; esac
 
   rm -rf "$dest"
   mkdir -p "$dest"

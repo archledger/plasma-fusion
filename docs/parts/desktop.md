@@ -67,6 +67,19 @@ visible outside the full representation, so every evaluation logged "ReferenceEr
 not defined" and a home screen edit never started the 0.5 s measuring (the stock edit mode did).
 `tools/checks/id-scope-lint.py` (build step) reports such reads.
 
+Tablet posture across a plasmashell restart (0.5.0): `tools/tests/shell-vm/tablet_restart.py`, run in
+the session, turns tablet mode on, restarts plasmashell in it and goes back to the laptop (auto or
+off) 0, 3, 10 and 25 s later, checking each time that KWin shows the top bar and the dock with their
+posture's heights, that the desktop shows its posture's layer and that plasmashell logs no
+ReferenceError or TypeError from Plasma Fusion. In the test VM (1280 x 800) the previous code passes
+everything but the last check (the ReferenceError above, once per start in tablet posture), with and
+without a cleared QML cache; with the alias it passes. A report of the top bar and the dock missing
+after such a switch until the next plasmashell restart (seen once in another 0.5.0 track's VM) did
+not happen in these eight rounds, nor in eleven manual variants (re-login in tablet posture, a
+deploy that also reloads KWin's scripts, the switch during the shell's start, with the Notification
+Centre, the launcher's sheet, KWin's Overview or the home screen's edit mode open); the scenario
+stays as its regression test.
+
 ## Installation and switch-over
 
 - `fusion-config.sh` layout migration (plasmashell stopped): a desktop containment
