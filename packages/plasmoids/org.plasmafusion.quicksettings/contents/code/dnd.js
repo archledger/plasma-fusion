@@ -91,3 +91,25 @@ function untilLabel(until, now) {
     }
     return { kind: "none", refreshAt: end - FAR };
 }
+
+// Why Do Not Disturb is on besides a time, in the stock applet's order: a list of {kind, name,
+// reason} with kind "app" (an application holds it: names[i] with reasons[i], which may be
+// empty), "mirrored" (screens are mirrored and the settings say to stay quiet then) or
+// "fullscreen" (likewise for a focused full-screen window).
+function reasons(state) {
+    var list = [];
+    if (state.byApp) {
+        var names = state.names || [];
+        var why = state.reasons || [];
+        for (var i = 0; i < names.length; ++i) {
+            list.push({ kind: "app", name: String(names[i] || ""), reason: String(why[i] || "") });
+        }
+    }
+    if (state.whenMirrored && state.mirrored) {
+        list.push({ kind: "mirrored", name: "", reason: "" });
+    }
+    if (state.whenFullscreen && state.fullscreen) {
+        list.push({ kind: "fullscreen", name: "", reason: "" });
+    }
+    return list;
+}

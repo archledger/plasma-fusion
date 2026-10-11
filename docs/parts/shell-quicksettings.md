@@ -800,3 +800,16 @@ check every minute is gone, and nothing wakes up for "until turned off"). Tests:
 `tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on a
 private bus, in CI: a Do Not Disturb set 24 h and 1.5 s ahead shows its day, then the time alone
 without anything else changing, and a short one ends by itself).
+
+### Who holds Do Not Disturb
+
+When an application holds Do Not Disturb (`org.freedesktop.Notifications.Inhibit`, for example a
+presentation or a video call), or the notification settings keep it on while screens are mirrored
+or a full-screen window has the focus, the tile's subtitle says so in the stock applet's words
+("While Kdenlive is active (Rendering)", "Screens are mirrored", "Fullscreen app is focused"), the
+tile's tooltip and the open choices show the whole state in one line ("Until 18:00 · While …"),
+and the Notification Centre shows the reasons under its Do Not Disturb chip. `dnd.js` `reasons()`
+pairs the applications with their reasons (`notificationInhibitionApplications` /
+`…Reasons`); `services/Notifications.qml` `dndReasons` words them. Tests: `tests/dnd.test.js` and
+`tests/notifications_service_test.py` (an inhibition held by `tests/notify_client.py inhibit` is
+named with its reason, and gone when released).

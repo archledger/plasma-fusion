@@ -529,6 +529,7 @@ ColumnLayout {
             available: page.backend.dnd.available
             hasDetails: page.backend.dnd.available
             detailsText: i18nc("@action:button", "Do not disturb for a while")
+            toolTip: page.backend.dnd.description
             onToggled: page.backend.dnd.toggle()
             onDetailsRequested: {
                 page.dndChoicesOpen = !page.dndChoicesOpen;
@@ -681,13 +682,24 @@ ColumnLayout {
         }
     }
 
-    // Do Not Disturb for a while (G18), with the stock applet's choices (contents/code/dnd.js).
+    // Do Not Disturb for a while (G18), with the stock applet's choices (contents/code/dnd.js) and,
+    // while it is on, its state in one line ("Until 18:00 · While Firefox is active").
     Flow {
         id: dndChoices
         Layout.fillWidth: true
         visible: page.dndChoicesOpen && page.backend.dnd.available
         spacing: page.metrics.px(8)
 
+        FText {
+            width: parent.width
+            visible: text !== ""
+            pal: page.pal
+            metrics: page.metrics
+            text: page.backend.dnd.description
+            color: page.pal.secondary
+            px: 12
+            wrapMode: Text.Wrap
+        }
         Repeater {
             id: dndChoiceButtons
             // Read when the choices open: "this evening" and "Monday" depend on the time.

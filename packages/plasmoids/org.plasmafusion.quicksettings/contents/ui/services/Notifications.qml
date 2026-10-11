@@ -45,6 +45,34 @@ Item {
             return "";
         }
     }
+    // Why it is on besides a time (stock wording): the apps that hold it, mirrored screens, a full
+    // screen window; [] when none.
+    readonly property var dndReasons: {
+        if (!dndActive) {
+            return [];
+        }
+        return Dnd.reasons({
+            byApp: inhibitedByApp,
+            names: settings.notificationInhibitionApplications,
+            reasons: settings.notificationInhibitionReasons,
+            whenMirrored: settings.inhibitNotificationsWhenScreensMirrored,
+            mirrored: settings.screensMirrored,
+            whenFullscreen: settings.inhibitNotificationsWhenFullscreen,
+            fullscreen: settings.fullscreenFocused
+        }).map(entry => {
+            switch (entry.kind) {
+            case "app":
+                return entry.reason !== ""
+                    ? i18nc("Do not disturb until app has finished (reason)", "While %1 is active (%2)", entry.name, entry.reason)
+                    : i18nc("Do not disturb until app has finished", "While %1 is active", entry.name);
+            case "mirrored":
+                return i18nc("Do not disturb because external mirrored screens connected", "Screens are mirrored");
+            default:
+                return i18nc("Do not disturb because fullscreen app is focused", "Fullscreen app is focused");
+            }
+        });
+    }
+
     // Do Not Disturb until a time (G18: the "for a while" choices). The notification settings keep
     // the time; the server is inhibited at once and released when it passes.
     function dndUntil(until) {

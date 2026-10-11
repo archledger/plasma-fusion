@@ -587,13 +587,25 @@ Item {
         readonly property bool available: s ? s.serverValid : false
         readonly property bool active: s ? s.dndActive : false
         readonly property string untilText: s ? s.dndUntilText : ""
+        // Why it is on besides a time (an app holds it, mirrored screens, a full screen window), in
+        // the stock applet's words.
+        readonly property var reasons: s ? s.dndReasons : []
         readonly property string subtitle: {
             if (!active) {
                 return i18nc("@info:status Do not disturb", "Off");
             }
-            const until = s ? s.dndUntilText : "";
-            return until ? i18nc("@info:status Do not disturb, %1 is a time", "Until %1", until)
-                         : i18nc("@info:status Do not disturb", "On");
+            if (untilText !== "") {
+                return i18nc("@info:status Do not disturb, %1 is a time", "Until %1", untilText);
+            }
+            return reasons.length > 0 ? reasons[0] : i18nc("@info:status Do not disturb", "On");
+        }
+        // The whole state in one line, as the stock applet's header puts it.
+        readonly property string description: {
+            if (!active) {
+                return "";
+            }
+            const parts = untilText !== "" ? [i18nc("@info:status Do not disturb, %1 is a time", "Until %1", untilText)] : [];
+            return parts.concat(reasons).join(" · ");
         }
         function toggle() {
             if (s) {

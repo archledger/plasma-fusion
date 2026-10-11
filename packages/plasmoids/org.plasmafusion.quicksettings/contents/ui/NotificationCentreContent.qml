@@ -368,6 +368,16 @@ FocusScope {
                       : i18nc("@action:button", "Do not disturb · Turn off")
                 onClicked: centre.backend.dnd.toggle()
             }
+            // Why it is on, besides a time: the apps that hold it (stock wording).
+            Text {
+                width: parent.width
+                visible: dndChip.visible && text !== ""
+                text: centre.backend.dnd.reasons.join(" · ")
+                color: centre.pal.secondary
+                font.pixelSize: centre.metrics.font(14)
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+            }
         }
 
         // ---- The list column

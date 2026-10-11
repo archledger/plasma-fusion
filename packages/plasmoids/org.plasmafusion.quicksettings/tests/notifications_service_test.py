@@ -9,10 +9,11 @@ Requires PySide6, python3-dbus and Plasma's org.kde.notificationmanager QML modu
 
 Plasma's notification model registers the notification server (org.freedesktop.Notifications)
 when it is created, so notifications sent on the bus land in the service's history like in the
-session: Do Not Disturb's "Until" text is checked here.
+session: Do Not Disturb's "Until" text and the applications that hold it are checked here.
 """
 
 from pathlib import Path
+import subprocess
 import sys
 import time
 
@@ -93,6 +94,13 @@ def prop(obj, name):
     return value.toVariant() if hasattr(value, "toVariant") else value
 
 
+def client(*args):
+    """The notification client in its own process: this one runs the server and must keep turning
+    its event loop while a call waits for the answer."""
+    return subprocess.Popen([sys.executable, "-B", str(here / "notify_client.py"), *args],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+
+
 def call(obj, name, *args):
     from PySide6.QtCore import QMetaObject, Q_ARG
     QMetaObject.invokeMethod(obj, name, *[Q_ARG(type(a), a) for a in args])
@@ -122,5 +130,18 @@ call(root, "untilIn", 1200.0)
 wait_for(lambda: service.property("dndUntilText") != "", "a short Do Not Disturb shows no end")
 wait_for(lambda: not service.property("dndActive"), "Do Not Disturb did not end on time", seconds=3)
 check(not service.property("dndActive") and service.property("dndUntilText") == "", "it ends on time, by itself")
+
+# ---- Do Not Disturb held by an application: its name and reason, the stock applet's wording.
+call(root, "inhibit", True)
+holder = client("inhibit", "org.kde.kdenlive", "Rendering")
+wait_for(lambda: prop(service, "dndReasons"), "the inhibiting application was not listed")
+reasons = list(prop(service, "dndReasons"))
+check(reasons == ["While Kdenlive is active (Rendering)"] or reasons == ["While org.kde.kdenlive is active (Rendering)"],
+      "an app that holds it is named with its reason: %r" % reasons)
+holder.stdin.close()
+wait_for(lambda: holder.poll() is not None, "the inhibiting client did not finish")
+wait_for(lambda: not service.property("inhibitedByApp"), "the application's inhibition was not released")
+check(list(prop(service, "dndReasons")) == [], "released: no reason left")
+call(root, "inhibit", False)
 
 print(f"Notification service: {checks} checks, 0 failures")

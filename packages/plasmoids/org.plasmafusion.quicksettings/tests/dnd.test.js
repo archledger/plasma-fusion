@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "dnd.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { untilMorning, choices, untilLabel } = globalThis;
+const { untilMorning, choices, untilLabel, reasons } = globalThis;
 
 // Local times: year, month (0-based), day, hour, minute.
 const at = (d, h, m) => new Date(2026, 9, d, h, m, 0, 0);
@@ -68,4 +68,14 @@ assert.strictEqual(first.kind, "day", "Friday: Monday's end shows the day");
 assert.strictEqual(untilLabel(monday, first.refreshAt).kind, "time", "a day before the end: the time");
 assert.strictEqual(untilLabel(monday, monday.getTime()).kind, "none", "at the end: nothing");
 
+// Who or what holds Do Not Disturb.
+assert.deepStrictEqual(reasons({ byApp: false, names: ["Firefox"], reasons: ["Video"] }), [], "not held by an app: names ignored");
+assert.deepStrictEqual(reasons({ byApp: true, names: ["Firefox", "Zoom"], reasons: ["Playing video"] }),
+                       [{ kind: "app", name: "Firefox", reason: "Playing video" }, { kind: "app", name: "Zoom", reason: "" }],
+                       "each app with its reason, a missing reason empty");
+assert.deepStrictEqual(reasons({ byApp: true, names: [], reasons: [] }), [], "held by an app that gave no name");
+assert.deepStrictEqual(reasons({ whenMirrored: true, mirrored: true, whenFullscreen: true, fullscreen: false }),
+                       [{ kind: "mirrored", name: "", reason: "" }], "mirrored screens when the setting asks for it");
+assert.deepStrictEqual(reasons({ whenMirrored: false, mirrored: true, whenFullscreen: true, fullscreen: true }),
+                       [{ kind: "fullscreen", name: "", reason: "" }], "full screen when the setting asks for it, mirroring not");
 console.log("dnd: all checks passed");
