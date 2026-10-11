@@ -13,7 +13,7 @@ the top bar of `Main.dc.html` / `MainLight.dc.html` and the Wi-Fi tray panel of
 |---|---|---|---|
 | Notification bell, amber (#F2A65A) 7 px unread dot | 30 × 26, radius 13 | `org.kde.notificationmanager` history, `unreadNotificationsCount` | always (option); slashed bell while Do Not Disturb is on |
 | System status pill: Wi-Fi, volume, battery icon + `NN%` | 26 px, radius 13, padding 12, gap 10, fill 8 % overlay; accent tint `rgba(91,157,255,.35)` + 1 px `rgba(138,184,255,.5)` while the pop-up is open | plasma-nm `ConnectionIcon`, plasma-pa `PreferredDevice.sink`, `BatteryControlModel` | each icon only when its service has data; a gear icon when none has |
-| Clipboard | 28 × 26, 16 px icon | Klipper D-Bus `showKlipperPopupMenu` | option |
+| Clipboard | 28 × 26, 16 px icon | the clipboard sheet (Plasma's clipboard model, below); Klipper's pop-up (`showKlipperPopupMenu`) without that module | option |
 | Phone | 28 × 26, 16 px icon | `org.kde.kdeconnect` `DevicesModel` (paired + reachable) | a device is connected |
 | `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout, wheel = next/previous, right-click or press and hold = menu of the layouts (as the stock Keyboard Layout widget) |
 
@@ -174,6 +174,9 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/BluetoothPage.qml     Bluetooth drill-down
   contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
+  contents/ui/ClipboardPage.qml     the clipboard sheet: search, All / Starred, the list, editor, QR code
+  contents/ui/ClipboardEntry.qml    one clipboard entry (text, image thumbnail, files) and its actions
+  contents/code/clipboard.js        the sheet's search, previews and arrow-key steps (tests/clipboard.test.js)
   contents/ui/NotificationCard.qml  one notification
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),
@@ -184,6 +187,7 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     KeepAwake (PowerDevil manual sleep/ScreenSaver inhibition),
                                     Display (brightness, Night Light, light/dark pairing), Media (MPRIS),
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
+                                    Clipboard (Plasma's clipboard module: Klipper's history),
                                     TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
                                     tablet-mode setting, full-screen apps; QS-1; posture
                                     settings: power button, touch edge, TABLET2 P0/N1)
@@ -226,7 +230,7 @@ System tray keys (containment config of the tray, group `[General]`):
 * Do **not** remove them from the tray (`extraItems`) or disable them: hidden items stay loaded, and
   this widget needs them loaded. The Notifications applet owns the notification pop-ups and the
   Do Not Disturb bookkeeping (the tile triggers its `toggle do not disturb` shortcut); the Clipboard
-  applet hosts Klipper, which the clipboard button calls over D-Bus; Battery/Brightness/Networks keep
+  applet hosts Klipper, whose history the clipboard sheet shows; Battery/Brightness/Networks keep
   their warnings and password prompts.
 * `shownItems` must not list any of them.
 * Note: the tray shows its expander arrow while a passive application status icon exists (for
@@ -251,7 +255,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
 | `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`; without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
-| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state |
+| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the tablet policy state and, on the clipboard sheet, its mode, entries shown, stars, current row and search |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
 Dark style: when kdeglobals `[KDE] DefaultLightLookAndFeel` / `DefaultDarkLookAndFeel` pair the two
@@ -309,6 +313,16 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   `side-by-side-topbar.png`, `side-by-side-preview-{dark,light}.png`, `session-*.png`,
   `preview-keyboard-focus.png`; nearby Wi-Fi names are pixelated). The scenario, seed script,
   stand-ins and the preview harness are in `test-tooling/` there.
+* Clipboard sheet (section "Clipboard sheet" below): `node tests/clipboard.test.js` (also run by
+  `tools/build.sh quicksettings`) and, on Plasma's clipboard module in a throw-away HOME:
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/clipboard_sheet_test.py build/stage
+  ```
+
 * Graceful degradation seen in the sessions: no audio server → no volume icon, slider or output
   page entries; no PowerDevil → no brightness row, Power mode `Unavailable` (dimmed); no KDE Connect
   device → no phone; no player → no media card; no notifications → no list (bell opens an empty
@@ -767,3 +781,59 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   both ways and adopted by a new widget, posture settings written once per change, Meta+A and a USB
   stick open the sheet on the screen with the pointer only (both screens), bars made before the
   change completed at login (two reboots), no QML warnings, no crashes.
+
+## Clipboard sheet (0.5.0)
+
+The clipboard button (and its 52 px row in the sheet when the bar has no room for it, as in tablet
+posture) opens the clipboard sheet: a page of the quick-settings pop-up, in its card, sizes and
+colours (the Quick Settings and Popups boards' drill-down pages). It replaces Klipper's own pop-up,
+which the button opened before.
+
+- **Data:** Plasma's clipboard QML module, the one the stock Clipboard widget and Klipper's pop-up
+  use (`org.kde.plasma.private.clipboard`, `HistoryModel`; `services/Clipboard.qml`). It is a view
+  of the history Klipper keeps inside plasmashell, newest first, so the entries, the stars (Plasma
+  6.5) and the storage (`~/.local/share/klipper/history3.sqlite`) are the stock widget's: a star set
+  in the sheet shows in the stock widget and survives a restart. Klipper's settings apply as they
+  are; images are kept only when "Always ignore images" is off in Klipper's settings (Plasma's
+  default keeps none). Without the module the button opens Klipper's pop-up, as before.
+- **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
+  search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
+  Starred Only"); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
+  shows in up to two lines (white space folded, blank text as ␣ ⇥ ↵ as in the stock widget, always
+  as plain text), an image as a thumbnail with its size, copied files with the first one's preview
+  (Klipper's `klipperpreview` images) and their names.
+- **Search** matches every word of the query in any order, ignoring case and accents, as plain text
+  (the stock widget takes the query as a regular expression, so `f(1` or `c++` found nothing);
+  images are also found by "image" or "picture", copied files by their names and "file"
+  (`contents/code/clipboard.js`).
+- **Entry actions:** a tap or click (or Enter) chooses the entry: Klipper puts it on the clipboard
+  and moves it to the top, and the sheet closes. The star and the "⋯" button show on the current
+  row, on hover and always in touch mode; "⋯" (or press and hold) opens the row's actions, as the
+  stock widget's row buttons: Star / Remove star, Edit (text: an editor in the sheet; Enter or Save
+  keeps it and puts it on the clipboard, Shift+Enter starts a new line, as the stock editor), QR
+  code (text, Prison as in the stock widget, on a white card so it scans in both styles), Actions
+  (Klipper's own actions menu for the entry at the pointer, `invokeAction`; the sheet closes) and
+  Remove. Removing a starred entry and "Clear all" ask first: Klipper's own confirmations ("This
+  item is starred...", "Do you really want to clear and delete the entire clipboard history?"), run
+  from the service a moment after the click, as their dialogs run an event loop in which the sheet
+  closes and its page goes away (called from the page's button, plasmashell aborted); Clear all
+  keeps the starred entries, as in stock Plasma.
+- **Keyboard:** the list has the focus with the newest entry current (no ring until a key is used);
+  Up and Down move (Up on the first entry goes to the search field, Down there comes back), Home,
+  End, Page Up and Page Down, Enter chooses, Delete removes, typing goes to the search field (Ctrl+F
+  selects it; Enter there chooses the current or first match). Right or Menu opens the entry's
+  actions; Left and Right then move between them (the list keeps the focus, the ring marks the
+  action) and Enter or Space presses one; Left on the first closes them. Escape closes the editor,
+  the QR code or the open actions, then clears the search, then closes the sheet (opened on its own)
+  or goes back to quick settings (opened from the sheet's row). Every button and the list have
+  accessible names; the rows are list items named by their text.
+- **Touch and tablet posture:** the sheet's tablet width (400 px; portrait up to 560 px), rows of 56
+  px, star and "⋯" always shown, every target at least 44 px (the header's buttons, Clear all, the
+  search field, the tabs, the row and editor buttons), press and hold for the actions; the sheet
+  takes its own height and its list what the rest leaves, so only the list scrolls.
+- Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
+  and `tests/clipboard_sheet_test.py` (42 checks: the service on Klipper's model, newest first,
+  search, image entries with their pictures, stars shared with a second view and kept in Klipper's
+  storage across processes, choose, edit, remove, Clear all keeping the stars; the page: focus,
+  arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard, QR code, editor
+  typing, Enter and Escape). Both fail without the sheet (the files do not exist on 0.4.1).

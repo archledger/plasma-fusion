@@ -26,8 +26,12 @@ Item {
     property bool showNotifications: true
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
-    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices" or "display".
+    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices", "display" or
+    // "clipboard".
     property string page: "main"
+    // The page was opened on its own (the clipboard button), not from quick settings:
+    // Escape closes the sheet instead of going back.
+    property bool pageDirect: false
     property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
     property bool showEmptyNotifications: false
@@ -113,6 +117,9 @@ Item {
     Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
     Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
+    // Plasma's clipboard module (Klipper's history), for the clipboard button and its row in the
+    // sheet.
+    Loader { id: clipboardLoader; asynchronous: true; source: "services/Clipboard.qml" }
     Binding {
         target: chargeLoader.item
         property: "batteryKnown"
@@ -1078,7 +1085,21 @@ Item {
                 s.leave();
             }
         }
-        function openClipboard() {
+    }
+
+    // ------------------------------------------------------------------ clipboard
+    readonly property var clipboard: QtObject {
+        readonly property var service: clipboardLoader.item
+        readonly property bool available: !!service
+        // Puts the entry on the clipboard and closes the sheet.
+        function choose(uuid: string): void {
+            if (!service) {
+                return;
+            }
+            service.choose(uuid);
+            backend.closeRequested();
+        }
+        function legacyPopup(): void {
             backend.closeRequested();
             backend.dbus("org.kde.klipper", "/klipper", "org.kde.klipper.klipper", "showKlipperPopupMenu", [], "");
         }
