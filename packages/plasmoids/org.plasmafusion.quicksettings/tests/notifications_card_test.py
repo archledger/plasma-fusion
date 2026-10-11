@@ -106,35 +106,69 @@ Item {
         spacing: 10
         interactive: false
         model: backend.notif.model
-        delegate: UI.NotificationCard {
+        delegate: UI.NotificationEntry {
             width: ListView.view.width
             pal: backend.pal
             metrics: fusionMetrics
-            onActionInvoked: name => backend.notif.invokeAction(index, name, !!model.resident)
-            onReplied: text => backend.notif.reply(index, text, !!model.resident)
-            onUrlOpened: url => {
-                backend.notif.openUrl(index, url);
-                ++root.closes;
-            }
-            onCloseClicked: backend.notif.close(index)
-            onKillJobClicked: backend.notif.killJob(index)
-            onSuspendJobClicked: backend.notif.suspendJob(index)
-            onResumeJobClicked: backend.notif.resumeJob(index)
-            onFolderRequested: (url, highlight) => {
-                backend.notif.openFolder(index, url, highlight);
-                ++root.closes;
-            }
+            notif: backend.notif
+            onDone: ++root.closes
         }
     }
 
     // Lookups for the test, in QML (walking the item tree from Python trips over some types).
+    // The card of a notification, or with `group` the header row of an app's group.
     function cardOf(summary) {
         for (const item of list.contentItem.children) {
-            if (item.entry !== undefined && item.bodyParts !== undefined && item.entry && item.entry.summary === summary) {
+            if (item.card !== undefined && item.card && item.card.entry && item.card.entry.summary === summary) {
+                return item.card;
+            }
+        }
+        return null;
+    }
+    function groupOf(appName) {
+        for (const item of list.contentItem.children) {
+            if (item.isGroup === true && item.entry && item.entry.applicationName === appName) {
                 return item;
             }
         }
         return null;
+    }
+    // The rows as the list shows them, top to bottom: "group:App" or the summary.
+    function rows() {
+        const result = [];
+        const items = list.contentItem.children.filter(item => item.isGroup !== undefined && item.visible && item.entry)
+                                               .sort((a, b) => a.y - b.y);
+        for (const item of items) {
+            result.push(item.isGroup ? "group:" + item.entry.applicationName : String(item.entry.summary));
+        }
+        return JSON.stringify(result);
+    }
+    function groupInfo(appName, name) {
+        const group = groupOf(appName);
+        const item = group ? (name ? findIn(group, name) : group) : null;
+        if (!item) {
+            return "";
+        }
+        const at = item.mapToItem(null, 0, 0);
+        return JSON.stringify({ visible: item.visible, x: at.x, y: at.y, width: item.width, height: item.height,
+                                text: item.text !== undefined ? String(item.text) : "" });
+    }
+    // The footer ("Show N More") under the last listed card of an app.
+    function footerOf(appName) {
+        let last = null;
+        for (const item of list.contentItem.children) {
+            if (item.isGroup === false && item.entry && item.entry.isInGroup && item.entry.applicationName === appName
+                    && item.footer.shown) {
+                last = item;
+            }
+        }
+        const button = last ? findIn(last, "groupFooter") : null;
+        if (!button) {
+            return "";
+        }
+        const at = button.mapToItem(null, 0, 0);
+        return JSON.stringify({ visible: button.visible, x: at.x, y: at.y, width: button.width, height: button.height,
+                                text: String(button.text) });
     }
     function findIn(item, name) {
         if (!item) {
@@ -219,6 +253,16 @@ def info(summary, name="", *props):
     return json.loads(text) if text else None
 
 
+def js(name, *args):
+    text = QMetaObject.invokeMethod(root, name, Q_RETURN_ARG("QVariant"), *[Q_ARG("QVariant", a) for a in args])
+    return json.loads(text) if text else None
+
+
+def click_at(item):
+    QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier,
+                     QPoint(round(item["x"] + item["width"] / 2), round(item["y"] + item["height"] / 2)))
+
+
 def focus(summary, name=""):
     QMetaObject.invokeMethod(root, "focusOn", Q_ARG("QVariant", summary), Q_ARG("QVariant", name))
 
@@ -248,8 +292,9 @@ def job(title, *options, entry="org.plasmafusion.notifytest"):
 
 
 def notify(summary, body, *options, entry="org.plasmafusion.notifytest"):
+    app = {"org.plasmafusion.notifytest": "Notify test", "org.plasmafusion.notifyother": "Other test"}[entry]
     proc = subprocess.Popen([sys.executable, "-B", str(here / "notify_client.py"), "notify", summary, body,
-                             "--entry", entry, *options],
+                             "--entry", entry, "--app", app, *options],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     proc.lines = []
     threading.Thread(target=lambda: [proc.lines.append(line.strip()) for line in proc.stdout], daemon=True).start()
@@ -287,7 +332,9 @@ try:
     check(image["x"] - image["cardX"] > image["cardWidth"] / 2, "beside the text, on the right")
 
     notify("Body image", 'Look: <img src="%s" alt="wide"/> done' % QUrl.fromLocalFile(str(wide)).toString())
-    wait_for(lambda: (info("Body image", "bodyImage") or {}).get("visible"), "the body's image is not drawn")
+    # Drawn once loaded, then laid out to the card on the next frames.
+    wait_for(lambda: (info("Body image", "bodyImage") or {}).get("visible")
+             and info("Body image", "bodyImage")["width"] < info("Body image")["width"], "the body's image is not drawn")
     body = info("Body image", "bodyImage")
     inset = body["x"] - body["cardX"]
     check(inset > 8 and abs(body["width"] - (body["cardWidth"] - 2 * inset)) < 1,
@@ -406,6 +453,48 @@ try:
     click("Downloading", "jobCancel")
     wait_for(lambda: "cancel" in running.lines, "Cancel did not reach the job")
     check(True, "Cancel cancels it")
+
+    # ---- Grouped by app, as the stock applet's history: a header, two notifications, Show N More.
+    for number in range(1, 5):
+        notify("Mail %d" % number, "From the group test", entry="org.plasmafusion.notifyother")
+    QTest.qWait(300)
+    rows = js("rows")
+    check(rows.count("group:Other test") == 1, "an app with several notifications gets one group header: %r" % rows)
+    at = rows.index("group:Other test")
+    check(rows[at + 1:at + 5] == ["Mail 4", "Mail 3", "Mail 2", "Mail 1"],
+          "unread notifications are all listed under it, newest first (stock expandUnread): %r" % rows[at:at + 5])
+    check(js("groupInfo", "Other test", "groupClose")["visible"], "the header has Close Group")
+    title = info("Mail 4", "headerText", "text")
+    check(title["text"] == "Mail 4" and not info("Mail 4", "summary")["visible"],
+          "in a group the card's header line carries the summary (the header names the app)")
+    QMetaObject.invokeMethod(backend.property("notif"), "markRead")
+    wait_for(lambda: len([r for r in js("rows") if r.startswith("Mail ")]) == 2, "read groups did not collapse to two")
+    rows = js("rows")
+    check([r for r in rows if r.startswith("Mail ")] == ["Mail 4", "Mail 3"], "once read, a group lists its two newest")
+    footer = js("footerOf", "Other test")
+    check(footer and footer["visible"] and footer["text"] == "Show 2 More", "with \"Show 2 More\" under them: %r" % footer)
+    click_at(footer)
+    wait_for(lambda: len([r for r in js("rows") if r.startswith("Mail ")]) == 4, "Show 2 More did not expand the group")
+    footer = js("footerOf", "Other test")
+    check(footer["text"] == "Show Fewer", "expanded: all four, and Show Fewer")
+    click_at(footer)
+    wait_for(lambda: len([r for r in js("rows") if r.startswith("Mail ")]) == 2, "Show Fewer did not collapse the group")
+    check(True, "Show Fewer collapses it again")
+    click_at(js("groupInfo", "Other test", "groupClose"))
+    wait_for(lambda: not any(r.startswith("Mail ") or r == "group:Other test" for r in js("rows")),
+             "Close Group left notifications")
+    check(True, "Close Group closes all of the app's notifications, hidden ones too")
+
+    # Clear all reaches the notifications a collapsed group hides.
+    for number in range(1, 5):
+        notify("Note %d" % number, "To be cleared", entry="org.plasmafusion.notifyother")
+    QMetaObject.invokeMethod(backend.property("notif"), "markRead")
+    wait_for(lambda: len([r for r in js("rows") if r.startswith("Note ")]) == 2, "the group did not collapse")
+    QMetaObject.invokeMethod(backend.property("notif"), "clearAll")
+    wait_for(lambda: not any(r.startswith("Note ") for r in js("rows")), "Clear all left notifications")
+    QTest.qWait(300)
+    check(not any(r.startswith("Note ") or r == "group:Other test" for r in js("rows")),
+          "Clear all also closes the notifications a collapsed group hides")
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:

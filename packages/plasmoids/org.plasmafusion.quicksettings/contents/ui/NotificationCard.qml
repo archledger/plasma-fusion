@@ -13,7 +13,8 @@ import "components/Icons.js" as Icons
 import "../code/notifications.js" as Notes
 
 // One notification of the list (Quick Settings board, notification cards):
-// app icon and name, time, summary, body, the notification's image, file thumbnail, job progress
+// app icon and name (in an app's group: the summary, the group header names the app), time,
+// summary, body, the notification's image, file thumbnail, job progress
 // and action buttons. Images follow the stock Notifications applet's sizes: the notification's own
 // image (or icon, when it is not the app's) beside the text at Plasma's large icon size, a file
 // it links (a screenshot) as a preview strip of the "enormous" icon height, and images in the body
@@ -49,6 +50,8 @@ Rectangle {
     // null, so every use is optional (`entry?.`).
     readonly property var entry: model || ({})
     // org.kde.notificationmanager Notifications enums
+    // One of an app's notifications under its group header (NotificationEntry.qml).
+    readonly property bool inGroup: !!entry?.isInGroup
     readonly property bool isJob: entry?.type === 2
     readonly property bool jobRunning: isJob && entry?.jobState !== 0
     // "running", "paused", "failed", "finished" or "" (contents/code/notifications.js).
@@ -231,15 +234,18 @@ Rectangle {
             Kirigami.Icon {
                 Layout.preferredWidth: card.metrics.px(22)
                 Layout.preferredHeight: card.metrics.px(22)
+                visible: !card.inGroup
                 source: card.entry?.applicationIconName || card.entry?.iconName || "preferences-desktop-notification-bell"
             }
+            // The app's name; in a group (whose header names the app) the summary takes its place.
             FText {
+                objectName: "headerText"
                 Layout.fillWidth: true
                 pal: card.pal
                 metrics: card.metrics
-                text: card.entry?.applicationName || ""
-                color: card.pal.secondary
-                px: 11.5
+                text: card.inGroup ? card.summaryText : (card.entry?.applicationName || "")
+                color: card.inGroup ? card.pal.text : card.pal.secondary
+                px: card.inGroup ? 13.5 : 11.5
                 font.weight: Font.ExtraBold
             }
             // Time, replaced by the close button on hover or keyboard focus (in touch mode
@@ -294,7 +300,7 @@ Rectangle {
                     Layout.fillWidth: true
                     pal: card.pal
                     metrics: card.metrics
-                    visible: text.length > 0
+                    visible: text.length > 0 && !card.inGroup
                     text: card.summaryText
                     px: 13.5
                     font.weight: Font.ExtraBold

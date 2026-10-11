@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "notifications.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown } = globalThis;
+const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown, groupFooter } = globalThis;
 
 // The body: declaration and wrapper gone, images taken out of the text and kept in order.
 const server = '<?xml version="1.0"?><html>Look <img src="file:///tmp/a.png" alt="a"/> here<br/>'
@@ -58,4 +58,10 @@ assert.deepStrictEqual(fileActions("finished", 3, "file:///home/u/dest"),
 assert.strictEqual(summaryShown("Konsole ", "konsole"), false, "summary that repeats the app name");
 assert.strictEqual(summaryShown("Build done", "Konsole"), true, "a real summary");
 assert.strictEqual(summaryShown("", "Konsole"), false, "no summary");
+// The group footer.
+assert.deepStrictEqual(groupFooter(true, true, 5, 2, false), { shown: true, more: 3 }, "collapsed: Show 3 more");
+assert.deepStrictEqual(groupFooter(true, true, 5, 5, true), { shown: true, more: 0 }, "expanded: Show fewer");
+assert.deepStrictEqual(groupFooter(true, true, 2, 2, false), { shown: false, more: 0 }, "all shown, not expanded: nothing");
+assert.deepStrictEqual(groupFooter(true, false, 5, 2, false).shown, false, "only under the last card");
+assert.deepStrictEqual(groupFooter(false, true, 0, 0, false).shown, false, "not in a group");
 console.log("notifications: all checks passed");

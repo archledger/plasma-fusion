@@ -7,7 +7,6 @@ import QtQuick
 import org.kde.plasma.plasma5support as P5Support
 import QtQuick.Layouts
 import QtQuick.Templates as T
-import org.kde.notificationmanager as NotificationManager
 import org.kde.plasma.extras as PlasmaExtras
 import "components"
 
@@ -17,10 +16,11 @@ import "components"
 // clock, the date and Do Not Disturb take a column on the left and the list the rest (portrait: one
 // column with the clock above); the cards are solid behind their text (E-phone 4.2 MUST); newest
 // first; "Clear all" stays visible and can be undone for 5 s; a card is dismissed by a sideways
-// swipe (NotificationCard); an app with 4 or more notifications is shown as one stack until it is
-// opened; a long press on a card offers "No pop-ups from <app>" and its notification settings
-// (E-phone 4.3). A tap on empty space, a swipe up, Escape or an action closes it; a sideways swipe
-// on empty space, or the segment at the top, switches to the controls.
+// swipe (NotificationCard); the history is grouped by app as in the laptop sheet and the stock
+// applet (NotificationEntry.qml): a group lists two notifications, the rest drawn as a stack under
+// them until "Show N More" opens it; a long press on a card offers "No pop-ups from <app>" and its
+// notification settings (E-phone 4.3). A tap on empty space, a swipe up, Escape or an action closes
+// it; a sideways swipe on empty space, or the segment at the top, switches to the controls.
 FocusScope {
     id: centre
 
@@ -85,13 +85,11 @@ FocusScope {
             collapsed();
         } else {
             now = Date.now();
-            Qt.callLater(recount);
         }
         animateTo(shown ? 1 : 0);
     }
     Component.onCompleted: {
         if (shown) {
-            recount();
             animateTo(1);
         }
     }
@@ -115,52 +113,10 @@ FocusScope {
         duration: centre.motion.popupIn
     }
 
-    // ---- Stacks: an app with 4 or more notifications shows its newest one with "N more".
-    property var appCounts: ({})
-    property var firstRows: ({})
-    property var expanded: []
-    function keyOf(desktopEntry, applicationName): string {
-        return String(desktopEntry || applicationName || "");
-    }
-    function recount(): void {
-        const model = notif.model;
-        const counts = {};
-        const first = {};
-        if (model) {
-            for (let row = 0; row < model.rowCount(); ++row) {
-                const idx = model.index(row, 0);
-                const key = keyOf(model.data(idx, NotificationManager.Notifications.DesktopEntryRole),
-                                  model.data(idx, NotificationManager.Notifications.ApplicationNameRole));
-                if (key === "") {
-                    continue;
-                }
-                counts[key] = (counts[key] || 0) + 1;
-                if (first[key] === undefined) {
-                    first[key] = row;
-                }
-            }
-        }
-        appCounts = counts;
-        firstRows = first;
-    }
+    // ---- Groups: the history is grouped by app (NotificationEntry.qml); groups opened while the
+    // sheet is shown close with it.
     function collapsed(): void {
-        expanded = [];
-    }
-    Connections {
-        target: centre.notif.model
-        ignoreUnknownSignals: true
-        function onRowsInserted() {
-            Qt.callLater(centre.recount);
-        }
-        function onRowsRemoved() {
-            Qt.callLater(centre.recount);
-        }
-        function onModelReset() {
-            Qt.callLater(centre.recount);
-        }
-        function onLayoutChanged() {
-            Qt.callLater(centre.recount);
-        }
+        notif.collapseAllGroups();
     }
     Timer {
         // relative times ("5 min ago") while the sheet is open
@@ -431,96 +387,30 @@ FocusScope {
                 height: parent.height - y
                 clip: true
                 visible: !centre.pendingClear
-                spacing: 0
                 boundsBehavior: Flickable.StopAtBounds
                 model: centre.notif.available ? centre.notif.model : null
                 Accessible.role: Accessible.List
                 Accessible.name: i18nc("@title", "Notifications")
 
-                delegate: Item {
-                    id: row
-                    required property var model
-                    required property int index
-                    readonly property string key: model ? centre.keyOf(model.desktopEntry, model.applicationName) : ""
-                    readonly property int stackCount: centre.appCounts[key] || 1
-                    readonly property bool stacked: stackCount >= 4 && centre.expanded.indexOf(key) < 0
-                    readonly property bool leader: centre.firstRows[key] === index
-                    readonly property bool shownInList: !stacked || leader
+                spacing: 12
+                delegate: NotificationEntry {
                     width: ListView.view.width
-                    height: shownInList ? card.height + (stacked ? 14 + more.height + 6 : 0) + 12 : 0
-                    visible: shownInList
-
-                    // The stack's edges behind the newest card.
-                    Repeater {
-                        model: row.stacked ? 2 : 0
-                        delegate: Rectangle {
-                            required property int index
-                            x: 12 * (index + 1)
-                            width: row.width - 24 * (index + 1)
-                            y: card.height - 18 + 7 * (index + 1)
-                            height: 24
-                            radius: 14
-                            color: centre.cardSurface
-                            opacity: 0.8 - 0.25 * index
-                            border.width: 1
-                            border.color: centre.cardEdge
-                            z: -1 - index
-                        }
-                    }
-
-                    NotificationCard {
-                        id: card
-                        width: row.width
-                        pal: centre.pal
-                        metrics: centre.metrics
-                        model: row.model || ({})
-                        index: row.index
-                        now: centre.now
-                        surface: centre.cardSurface
-                        edge: centre.cardEdge
-                        Accessible.name: row.model ? String(row.model.summary || row.model.applicationName || "") : ""
-                        onActionInvoked: name => {
-                            centre.notif.invokeAction(row.index, name, !!(row.model && row.model.resident));
-                            if (name === "default") {
-                                centre.closeRequested();
-                            }
-                        }
-                        onReplied: text => centre.notif.reply(row.index, text, !!(row.model && row.model.resident))
-                        onUrlOpened: url => {
-                            centre.notif.openUrl(row.index, url);
-                            centre.closeRequested();
-                        }
-                        onCloseClicked: centre.notif.close(row.index)
-                        onKillJobClicked: centre.notif.killJob(row.index)
-                        onSuspendJobClicked: centre.notif.suspendJob(row.index)
-                        onResumeJobClicked: centre.notif.resumeJob(row.index)
-                        onFolderRequested: (url, highlight) => {
-                            centre.notif.openFolder(row.index, url, highlight);
-                            centre.closeRequested();
-                        }
-                        TapHandler {
-                            acceptedDevices: PointerDevice.TouchScreen | PointerDevice.Stylus | PointerDevice.Mouse
-                            onLongPressed: {
-                                centre.menuRow = row.index;
-                                centre.menuEntry = String(row.model.desktopEntry || "");
-                                centre.menuApp = String(row.model.applicationName || "");
-                                cardMenu.visualParent = card;
-                                centre.menuAt = Qt.point(point.position.x, point.position.y);
-                                centre.openCardMenu();
-                            }
-                        }
-                    }
-
-                    // "N more from <app>": opens the stack.
-                    PillButton {
-                        id: more
-                        visible: row.stacked
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        y: card.height + 14 + 6
-                        translucent: true
-                        text: i18ncp("@action:button %2 application name", "%1 more from %2", "%1 more from %2",
-                                     row.stackCount - 1, row.model ? row.model.applicationName || "" : "")
-                        onClicked: centre.expanded = centre.expanded.concat([row.key])
+                    pal: centre.pal
+                    metrics: centre.metrics
+                    notif: centre.notif
+                    now: centre.now
+                    surface: centre.cardSurface
+                    edge: centre.cardEdge
+                    stackEdges: true
+                    menus: true
+                    onDone: centre.closeRequested()
+                    onMenuRequested: (card, at) => {
+                        centre.menuRow = index;
+                        centre.menuEntry = String(model.desktopEntry || "");
+                        centre.menuApp = String(model.applicationName || "");
+                        cardMenu.visualParent = card;
+                        centre.menuAt = at;
+                        centre.openCardMenu();
                     }
                 }
 

@@ -91,3 +91,11 @@ function summaryShown(summary, applicationName) {
     var s = String(summary || "").trim().toLocaleLowerCase();
     return s !== "" && s !== String(applicationName || "").trim().toLocaleLowerCase();
 }
+
+// The "Show N More" / "Show Fewer" button under the last card of an app's group: {shown, more}.
+// `last`: the card is the group's last row in the list. children: the group's notifications;
+// expanded: how many of them are listed.
+function groupFooter(inGroup, last, children, expanded, isExpanded) {
+    var more = Math.max(0, children - expanded);
+    return { shown: !!inGroup && !!last && (more > 0 || !!isExpanded), more: more };
+}

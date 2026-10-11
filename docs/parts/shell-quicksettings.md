@@ -177,6 +177,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/BluetoothPage.qml     Bluetooth drill-down
   contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
+  contents/ui/NotificationEntry.qml one row of the history: an app's group header or a card,
+                                    and "Show N More" (the sheet and the Notification Centre)
   contents/ui/NotificationCard.qml  one notification
   contents/ui/NotificationThumbnail.qml, NotificationPreview.qml
                                     a linked file's preview (KIO's, through the stock applet's
@@ -670,8 +672,10 @@ together (the forced split is itself a known complaint).
   Cards are the quick settings' `NotificationCard` on a **solid** surface (#1b2031 / #ffffff; E-phone
   4.2 MUST), newest first, with their actions. **Clear all** (44 px pill in the list's corner) hides
   the list for 5 s with **Notifications cleared · Undo**; the clear happens then or when the sheet
-  closes. An app with **4 or more** notifications shows as one stack (its newest card, two edges
-  behind it, "N more from App"); a tap opens the stack until the sheet closes. **Long press** on a card:
+  closes. Notifications are grouped by app as in the laptop sheet (0.5.0, "Grouped by app" below;
+  until then an app with 4 or more showed as one stack with "N more from App"): a group lists two
+  cards with the stack's two edges under them and **Show N More**, which opens it until the sheet
+  closes. **Long press** on a card:
   "No Pop-ups from App" (writes Plasma's own `plasmanotifyrc [Applications][<desktop entry>]
   ShowPopups=false --notify`, the key the notification settings page writes) and "Notification
   Settings…". A sideways swipe on a card dismisses it (the card's own handler). On the zones outside
@@ -870,3 +874,23 @@ closes the sheet. A summary that only repeats the app's name is left out (the st
 reports a copy as KIO does (`org.kde.JobViewServerV2`) and `tests/notifications_card_test.py`
 checks the one-file, several-file, failed and running cases (Open, the folder through a stand-in
 file manager, the error text, Pause/Resume/Cancel reaching the job).
+
+### Grouped by app
+
+The sheet's history was flat (`groupMode: GroupDisabled`) and the tablet Notification Centre
+stacked an app's notifications only from 4 on, with its own counting. Both now use the stock
+applet's grouping (`services/Notifications.qml`: `GroupApplicationsFlat`, `groupLimit: 2`,
+`expandUnread`), drawn by one row component, `NotificationEntry.qml`: an app with two or more
+notifications gets a group header (its icon and name, **Close Group**, which closes all of them,
+hidden ones too), its cards then carry the summary on their first line (the header names the app),
+and under the last listed card **Show N More** opens the group and **Show Fewer** closes it again
+(the stock strings). Unread notifications are always listed, so a group collapses to its two newest
+once the sheet has been seen (`markRead`). The Centre draws a collapsed group's hidden notifications
+as the two card edges of its stack, and closes the groups opened while it is shown when it closes.
+Clear all opens every group first, so the notifications a collapsed group hides are cleared too
+(they are not rows until then). `notifications.js` `groupFooter()`;
+`tests/notifications_card_test.py`: four notifications of one app give one header with all four
+while unread, two and **Show 2 More** once read, all four and **Show Fewer** after a click, two
+again after another, none after Close Group, and Clear all removes a collapsed group's hidden ones. Live (VM 2, tablet posture forced with kwinrc
+`[Input] TabletMode=on`): the Centre's Konsole group with three new cards, the stack edges and
+**Show 4 More**, expanded by a tap.

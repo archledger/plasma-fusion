@@ -934,6 +934,21 @@ Item {
         readonly property var model: s ? s.model : null
         readonly property int count: s ? s.count : 0
         readonly property int unread: s ? s.unread : 0
+        // Rows come and go (services/Notifications.qml lastInGroup()).
+        readonly property int revision: s ? s.revision : 0
+        function lastInGroup(row: int, revision: int): bool {
+            return s ? s.lastInGroup(row, revision) : false;
+        }
+        function setGroupExpanded(row: int, expanded: bool) {
+            if (s) {
+                s.setGroupExpanded(row, expanded);
+            }
+        }
+        function collapseAllGroups() {
+            if (s) {
+                s.collapseAllGroups();
+            }
+        }
         function invokeAction(row: int, actionName: string, resident: bool) {
             if (s) {
                 s.invokeAction(row, actionName, resident);

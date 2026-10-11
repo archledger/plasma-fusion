@@ -285,36 +285,19 @@ Item {
                     interactive: false
                     model: content.backend.notif.available ? content.backend.notif.model : null
 
-                    delegate: NotificationCard {
-                        id: noteCard
+                    delegate: NotificationEntry {
+                        id: noteEntry
                         width: ListView.view.width
                         pal: content.pal
                         metrics: content.metrics
+                        notif: content.backend.notif
                         now: content.now
                         onFocusInsideChanged: {
                             if (focusInside) {
-                                content.ensureVisible(noteCard);
+                                content.ensureVisible(noteEntry);
                             }
                         }
-                        onActionInvoked: name => {
-                            content.backend.notif.invokeAction(index, name, !!model.resident);
-                            if (name === "default") {
-                                content.backend.closeRequested();
-                            }
-                        }
-                        onReplied: text => content.backend.notif.reply(index, text, !!model.resident)
-                        onUrlOpened: url => {
-                            content.backend.notif.openUrl(index, url);
-                            content.backend.closeRequested();
-                        }
-                        onCloseClicked: content.backend.notif.close(index)
-                        onKillJobClicked: content.backend.notif.killJob(index)
-                        onSuspendJobClicked: content.backend.notif.suspendJob(index)
-                        onResumeJobClicked: content.backend.notif.resumeJob(index)
-                        onFolderRequested: (url, highlight) => {
-                            content.backend.notif.openFolder(index, url, highlight);
-                            content.backend.closeRequested();
-                        }
+                        onDone: content.backend.closeRequested()
                     }
 
                     add: Transition {

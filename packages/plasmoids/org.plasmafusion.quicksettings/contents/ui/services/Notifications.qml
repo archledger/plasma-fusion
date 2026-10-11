@@ -140,8 +140,44 @@ Item {
     }
 
     // ---- History
+    // Grouped by app as in the stock applet's history (GroupApplicationsFlat, two notifications of
+    // a group listed until it is expanded; unread ones always): each group is a header row followed
+    // by its notifications. `revision` moves on with every change of the rows, for lastInGroup().
+    property int revision: 0
+    Connections {
+        target: history
+        function onRowsInserted() {
+            ++notif.revision;
+        }
+        function onRowsRemoved() {
+            ++notif.revision;
+        }
+        function onRowsMoved() {
+            ++notif.revision;
+        }
+        function onModelReset() {
+            ++notif.revision;
+        }
+        function onLayoutChanged() {
+            ++notif.revision;
+        }
+    }
     function indexFor(row) {
         return history.index(row, 0);
+    }
+    // Whether `row` is the last listed notification of its group (the "Show N more" button goes
+    // under it). Bind with `revision` so it is read again when rows come and go.
+    function lastInGroup(row: int, revision: int): bool {
+        if (row < 0 || row >= history.count || !history.data(indexFor(row), NotificationManager.Notifications.IsInGroupRole)) {
+            return false;
+        }
+        return row + 1 >= history.count || !history.data(indexFor(row + 1), NotificationManager.Notifications.IsInGroupRole);
+    }
+    function setGroupExpanded(row: int, expanded: bool) {
+        history.setData(indexFor(row), expanded, NotificationManager.Notifications.IsGroupExpandedRole);
+    }
+    function collapseAllGroups() {
+        history.collapseAllGroups();
     }
     function invokeAction(row: int, actionName: string, resident: bool) {
         const behavior = resident ? NotificationManager.Notifications.None : NotificationManager.Notifications.Close;
@@ -198,10 +234,20 @@ Item {
     }
     function clearAll() {
         history.clear(NotificationManager.Notifications.ClearExpired);
-        // Also remove notifications that are still shown or were kept by Do Not Disturb,
-        // except running jobs and notifications that must stay (resident).
+        // Also remove notifications that are still shown or were kept by Do Not Disturb, except
+        // running jobs and notifications that must stay (resident). Groups are opened first so
+        // their hidden notifications are rows too (from the end: opening one adds rows after it).
         for (let row = history.count - 1; row >= 0; --row) {
             const idx = history.index(row, 0);
+            if (history.data(idx, NotificationManager.Notifications.IsGroupRole)) {
+                history.setData(idx, true, NotificationManager.Notifications.IsGroupExpandedRole);
+            }
+        }
+        for (let row = history.count - 1; row >= 0; --row) {
+            const idx = history.index(row, 0);
+            if (history.data(idx, NotificationManager.Notifications.IsGroupRole)) {
+                continue;
+            }
             const type = history.data(idx, NotificationManager.Notifications.TypeRole);
             const closable = history.data(idx, NotificationManager.Notifications.ClosableRole);
             const resident = history.data(idx, NotificationManager.Notifications.ResidentRole);
@@ -209,6 +255,7 @@ Item {
                 history.close(idx);
             }
         }
+        history.collapseAllGroups();
     }
 
     NotificationManager.Settings {
@@ -221,7 +268,8 @@ Item {
         showDismissed: true
         showJobs: settings.jobsInNotifications
         sortMode: NotificationManager.Notifications.SortByDate
-        groupMode: NotificationManager.Notifications.GroupDisabled
+        groupMode: NotificationManager.Notifications.GroupApplicationsFlat
+        groupLimit: 2
         expandUnread: true
         ignoreBlacklistDuringInhibition: true
         blacklistedDesktopEntries: settings.historyBlacklistedApplications
