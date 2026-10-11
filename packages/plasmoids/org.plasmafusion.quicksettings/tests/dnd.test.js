@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "dnd.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { untilMorning, choices } = globalThis;
+const { untilMorning, choices, untilLabel } = globalThis;
 
 // Local times: year, month (0-based), day, hour, minute.
 const at = (d, h, m) => new Date(2026, 9, d, h, m, 0, 0);
@@ -46,5 +46,26 @@ assert.deepStrictEqual(end(new Date(2026, 9, 31, 12, 0), "monday"), new Date(202
 assert.ok(!ids(at(11, 12, 0)).includes("monday"), "Sunday: tomorrow morning is Monday morning, no Monday choice");
 assert.ok(!ids(at(12, 12, 0)).includes("monday"), "Monday: no Monday choice");
 assert.deepStrictEqual(end(at(14, 10, 15), "off"), new Date(2027, 9, 14, 10, 15), "until turned off: a year ahead");
+
+// The end shown, and when it has to be shown again.
+const now = at(14, 10, 0).getTime();
+const label = (d) => untilLabel(d, now);
+assert.deepStrictEqual(label(undefined), { kind: "none", refreshAt: -1 }, "no end set");
+assert.deepStrictEqual(label(new Date(NaN)), { kind: "none", refreshAt: -1 }, "invalid end");
+assert.deepStrictEqual(label(at(14, 9, 0)), { kind: "none", refreshAt: -1 }, "end passed");
+assert.deepStrictEqual(label(at(14, 18, 0)), { kind: "time", refreshAt: at(14, 18, 0).getTime() }, "today: the time, until it ends");
+assert.deepStrictEqual(label(at(15, 9, 59)), { kind: "time", refreshAt: at(15, 9, 59).getTime() }, "23:59 ahead: the time");
+assert.deepStrictEqual(label(at(16, 6, 0)), { kind: "day", refreshAt: at(15, 6, 0).getTime() }, "two days ahead: day and time, the time from 24 h before");
+assert.deepStrictEqual(label(at(25, 6, 0)).kind, "date", "eleven days ahead: the date");
+assert.deepStrictEqual(label(at(25, 6, 0)).refreshAt, at(18, 6, 0).getTime(), "the date until a week before");
+const year = new Date(2027, 9, 14, 10, 0);
+assert.deepStrictEqual(label(year).kind, "none", "until turned off: no end shown");
+assert.ok(label(year).refreshAt > now, "until turned off: looked at again only 100 days before");
+// The subtitle follows the clock: a Do Not Disturb until Monday shows the day, then the time.
+const monday = end(at(16, 9, 0), "monday");
+const first = untilLabel(monday, at(16, 9, 0).getTime());
+assert.strictEqual(first.kind, "day", "Friday: Monday's end shows the day");
+assert.strictEqual(untilLabel(monday, first.refreshAt).kind, "time", "a day before the end: the time");
+assert.strictEqual(untilLabel(monday, monday.getTime()).kind, "none", "at the end: nothing");
 
 console.log("dnd: all checks passed");

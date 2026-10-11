@@ -12,6 +12,11 @@
 
 var MORNING_HOUR = 6;
 var EVENING_HOUR = 20;
+var HOUR = 3600 * 1000;
+var DAY = 24 * HOUR;
+// A Do Not Disturb that ends further ahead than this is "until turned off" (the stock applet keeps
+// such a one a year ahead and shows no end for it either).
+var FAR = 100 * DAY;
 
 // The end of "Until tomorrow morning" for a Do Not Disturb started at `now` (a Date).
 function untilMorning(now) {
@@ -55,4 +60,34 @@ function choices(now) {
     off.setFullYear(off.getFullYear() + 1);
     list.push({ id: "off", until: off });
     return list;
+}
+
+function valid(date) {
+    return !!date && typeof date.getTime === "function" && !isNaN(date.getTime());
+}
+
+// How the end of a Do Not Disturb running until `until` reads at `now` (a time in ms), and when
+// that changes: {kind, refreshAt}. kind: "none" (no end to show: none set, passed, or "until turned
+// off"), "time" (within 24 hours: "Until 18:00"), "day" (within a week: "Until Mon 06:00") or
+// "date". refreshAt is the time in ms when the kind changes next (the end itself for "time"), or
+// -1 when it never does.
+function untilLabel(until, now) {
+    if (!valid(until)) {
+        return { kind: "none", refreshAt: -1 };
+    }
+    var end = until.getTime();
+    var left = end - now;
+    if (left <= 0) {
+        return { kind: "none", refreshAt: -1 };
+    }
+    if (left <= DAY) {
+        return { kind: "time", refreshAt: end };
+    }
+    if (left <= 7 * DAY) {
+        return { kind: "day", refreshAt: end - DAY };
+    }
+    if (left <= FAR) {
+        return { kind: "date", refreshAt: end - 7 * DAY };
+    }
+    return { kind: "none", refreshAt: end - FAR };
 }

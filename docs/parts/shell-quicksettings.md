@@ -51,7 +51,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Bluetooth (`N connected` / device name; body toggles, chevron opens the device list),
   Night light (`From sunset`, `Until sunrise`, `From 19:00`, `Paused`, `Off`; toggles KWin's
   Night Light inhibition, turns Night Light on when it is off),
-  Do not disturb (`Off`, `On`, `Until 18:00`; same code path as Plasma's own shortcut, with OSD),
+  Do not disturb (`Off`, `On`, `Until 18:00`, `Until Mon 06:00`; same code path as Plasma's own
+  shortcut, with OSD),
   Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
   uses tuned-ppd on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). As the
   stock Power and Battery widget: Performance is skipped while the daemon inhibits it, and the
@@ -786,3 +787,16 @@ offered and, chosen after midnight, ends at the coming 06:00 (the behaviour of t
 tomorrow"). From the keyboard the chevron moves the focus to the first choice, and a choice gives
 it back to the chevron. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
 Friday/Saturday/Sunday).
+
+### The "Until" text
+
+The tile reads `Until 18:00` within 24 hours of the end, `Until Mon 06:00` within a week, the date
+further ahead, and `On` for "until turned off" (more than 100 days ahead, the stock applet's limit
+too). It was read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
+reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
+form applies and when it changes next; one single-shot timer (`services/Notifications.qml`
+`dndClock`) moves the service's clock then, which also ends the Do Not Disturb on time (the
+check every minute is gone, and nothing wakes up for "until turned off"). Tests:
+`tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on a
+private bus, in CI: a Do Not Disturb set 24 h and 1.5 s ahead shows its day, then the time alone
+without anything else changing, and a short one ends by itself).
