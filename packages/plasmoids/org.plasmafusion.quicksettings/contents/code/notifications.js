@@ -40,3 +40,12 @@ function sideImage(image, iconName, applicationIconName) {
     var icon = String(iconName || "");
     return icon !== "" && icon !== String(applicationIconName || "") ? icon : null;
 }
+
+// How the card offers an inline reply: "none", "button" (a Reply button first among the actions,
+// which opens the field) or "field" (the field right away, when replying is the only action).
+function replyMode(hasReply, actionCount) {
+    if (!hasReply) {
+        return "none";
+    }
+    return actionCount > 0 ? "button" : "field";
+}

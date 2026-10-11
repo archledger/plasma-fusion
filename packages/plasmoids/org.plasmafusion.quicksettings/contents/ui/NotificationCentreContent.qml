@@ -485,6 +485,7 @@ FocusScope {
                                 centre.closeRequested();
                             }
                         }
+                        onReplied: text => centre.notif.reply(row.index, text, !!(row.model && row.model.resident))
                         onUrlOpened: url => {
                             centre.notif.openUrl(row.index, url);
                             centre.closeRequested();

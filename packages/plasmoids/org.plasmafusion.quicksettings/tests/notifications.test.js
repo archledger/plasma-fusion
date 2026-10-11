@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "notifications.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { splitBody, sideImage } = globalThis;
+const { splitBody, sideImage, replyMode } = globalThis;
 
 // The body: declaration and wrapper gone, images taken out of the text and kept in order.
 const server = '<?xml version="1.0"?><html>Look <img src="file:///tmp/a.png" alt="a"/> here<br/>'
@@ -32,4 +32,8 @@ assert.strictEqual(sideImage(undefined, "dialog-information", "konsole"), "dialo
 assert.strictEqual(sideImage(undefined, "konsole", "konsole"), null, "not the app icon twice");
 assert.strictEqual(sideImage(undefined, "", "konsole"), null, "nothing");
 
+// Inline reply.
+assert.strictEqual(replyMode(false, 2), "none", "no reply action");
+assert.strictEqual(replyMode(true, 0), "field", "reply only: the field at once");
+assert.strictEqual(replyMode(true, 1), "button", "reply among others: a Reply button");
 console.log("notifications: all checks passed");

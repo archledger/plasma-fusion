@@ -939,6 +939,11 @@ Item {
                 s.invokeAction(row, actionName, resident);
             }
         }
+        function reply(row: int, text: string, resident: bool) {
+            if (s) {
+                s.reply(row, text, resident);
+            }
+        }
         function close(row: int) {
             if (s) {
                 s.close(row);

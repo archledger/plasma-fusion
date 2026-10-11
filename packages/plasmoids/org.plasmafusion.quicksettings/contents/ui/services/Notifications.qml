@@ -151,6 +151,11 @@ Item {
             history.invokeAction(indexFor(row), actionName, behavior);
         }
     }
+    // Inline reply (the stock applet's NotificationReplyField): a non-resident notification closes.
+    function reply(row: int, text: string, resident: bool) {
+        const behavior = resident ? NotificationManager.Notifications.None : NotificationManager.Notifications.Close;
+        history.reply(indexFor(row), text, behavior);
+    }
     // After a file of the notification was opened it has done its job (the stock applet expires it;
     // a resident one only counts as expired).
     function expire(row: int) {

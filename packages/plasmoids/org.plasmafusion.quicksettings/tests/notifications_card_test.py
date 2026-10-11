@@ -21,6 +21,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
@@ -110,6 +111,7 @@ Item {
             pal: backend.pal
             metrics: fusionMetrics
             onActionInvoked: name => backend.notif.invokeAction(index, name, !!model.resident)
+            onReplied: text => backend.notif.reply(index, text, !!model.resident)
             onUrlOpened: url => {
                 backend.notif.openUrl(index, url);
                 ++root.closes;
@@ -225,10 +227,17 @@ def notify(summary, body, *options, entry="org.plasmafusion.notifytest"):
     proc = subprocess.Popen([sys.executable, "-B", str(here / "notify_client.py"), "notify", summary, body,
                              "--entry", entry, *options],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    proc.lines = []
+    threading.Thread(target=lambda: [proc.lines.append(line.strip()) for line in proc.stdout], daemon=True).start()
     clients.append(proc)
     wait_for(lambda: info(summary) is not None, "no card for %r" % summary)
     QTest.qWait(150)
     return proc
+
+
+def type_text(text):
+    for char in text:
+        QTest.keyClick(view, char)
 
 
 def png(name, width, height, colour):
@@ -278,6 +287,40 @@ try:
     QTest.keyClick(view, Qt.Key_Return)
     wait_for(lambda: opened.urls, "Return on the preview did not open the file")
     check(True, "the preview opens from the keyboard too")
+
+    # ---- Inline reply: the field at once when replying is all the notification offers.
+    chat = notify("Message from Ana", "Are you coming?", "--reply", "Reply")
+    row = info("Message from Ana", "replyRow")
+    check(row["visible"] and not info("Message from Ana", "replyButton")["visible"],
+          "reply as the only action: the field is shown at once, no Reply button")
+    check(info("Message from Ana", "replyField", "placeholderText")["placeholderText"] == "Reply to the test…",
+          "the app's placeholder text")
+    check(not info("Message from Ana", "replySend", "enabled")["enabled"], "Send waits for text")
+    focus("Message from Ana", "replyField")
+    type_text("On my way")
+    QTest.keyClick(view, Qt.Key_Return)
+    wait_for(lambda: "reply On my way" in chat.lines, "the reply did not reach the app (%r)" % chat.lines)
+    check(True, "Return sends the reply to the app")
+    wait_for(lambda: info("Message from Ana") is None, "the notification stayed after the reply")
+    check(True, "and the notification closes, as in the stock applet")
+
+    # A Reply button first when there are other actions; Escape goes back to them.
+    chat = notify("Message from Bo", "Lunch?", "--reply", "Answer", "--action", "later=Later")
+    button = info("Message from Bo", "replyButton", "text")
+    check(button["visible"] and button["text"] == "Answer" and not info("Message from Bo", "replyRow")["visible"],
+          "with other actions: the app's Reply label first, the field closed")
+    focus("Message from Bo", "replyButton")
+    QTest.keyClick(view, Qt.Key_Space)
+    wait_for(lambda: info("Message from Bo", "replyField", "activeFocus")["activeFocus"], "the field did not take the focus")
+    check(info("Message from Bo", "replyRow")["visible"], "the Reply button opens the field, with the focus")
+    QTest.keyClick(view, Qt.Key_Escape)
+    wait_for(lambda: not info("Message from Bo", "replyRow")["visible"], "Escape did not close the field")
+    check(info("Message from Bo", "replyButton")["visible"], "Escape goes back to the actions")
+    click("Message from Bo", "replyButton")
+    type_text("Yes")
+    click("Message from Bo", "replySend")
+    wait_for(lambda: "reply Yes" in chat.lines, "Send did not reach the app (%r)" % chat.lines)
+    check(True, "Send sends the reply")
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:

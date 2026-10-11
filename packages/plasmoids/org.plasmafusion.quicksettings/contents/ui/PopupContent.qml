@@ -302,6 +302,7 @@ Item {
                                 content.backend.closeRequested();
                             }
                         }
+                        onReplied: text => content.backend.notif.reply(index, text, !!model.resident)
                         onUrlOpened: url => {
                             content.backend.notif.openUrl(index, url);
                             content.backend.closeRequested();

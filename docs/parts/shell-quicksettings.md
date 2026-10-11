@@ -839,3 +839,15 @@ preview has an accessible name ("Open screenshot.png"). `contents/code/notificat
 bus, in CI; applications without a desktop file stay out of the history by Plasma's default, so the
 test gives its own one): the image is drawn at 48 px on the right, a 1200 × 300 body image is fitted
 to the card at 4:1, a screenshot is previewed 128 px tall and opens from a click and from Return.
+
+### Inline reply
+
+A notification that offers an inline reply (`inline-reply` action, `x-kde-reply-*` hints: chat
+apps, KDE Connect's SMS) can be answered from the history, as from the stock applet
+(`ActionContainer.qml`, `NotificationReplyField.qml`): when replying is all it offers, the field is
+shown at once; otherwise a **Reply** button (the app's label) comes first among the actions and
+opens the field with the focus. The field uses the app's placeholder and button text ("Type a
+reply…", **Send**), Send waits for text, Return sends and Escape goes back to the actions. The reply
+goes through `Notifications.reply()`; a notification that is not resident closes then.
+`notifications.js` `replyMode()`; `tests/notifications_card_test.py` sends both kinds through
+`tests/notify_client.py`, which reports the reply the app receives (from Return and from Send).

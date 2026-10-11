@@ -4,6 +4,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 
@@ -36,6 +37,8 @@ Rectangle {
     signal killJobClicked()
     // A file of the notification was opened (its thumbnail).
     signal urlOpened(string url)
+    // An inline reply was sent.
+    signal replied(string text)
 
     // The row's data. While a removed row's card is torn down, `model` and this property read as
     // null, so every use is optional (`entry?.`).
@@ -51,6 +54,23 @@ Rectangle {
     readonly property var sideImage: Notes.sideImage(entry?.image, entry?.iconName, entry?.applicationIconName)
     readonly property var urls: entry?.urls || []
     readonly property string bodyText: bodyParts.text
+    // Inline reply (the stock applet's ActionContainer): "button" puts a Reply button first among
+    // the actions, which opens the field; "field" shows the field at once (replying is the only
+    // action); "none".
+    readonly property string replyMode: Notes.replyMode(!!entry?.hasReplyAction, actionNames.length)
+    property bool replying: false
+    readonly property bool replyShown: replyMode === "field" || (replyMode === "button" && replying)
+    function beginReply() {
+        replying = true;
+        replyField.forceActiveFocus(Qt.TabFocusReason);
+    }
+    function sendReply() {
+        if (replyField.text.length > 0) {
+            card.replied(replyField.text);
+            replyField.text = "";
+            replying = false;
+        }
+    }
     readonly property bool hovered: cardHover.hovered
     readonly property bool closable: !jobRunning && entry?.closable !== false
     readonly property bool showClose: closable && (pal.touch || hovered || closeButton.activeFocus)
@@ -357,9 +377,23 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: card.metrics.px(6)
-            visible: !card.isJob && card.actionNames.length > 0
+            visible: !card.isJob && card.actionNames.length > 0 && !card.replyShown
             spacing: card.metrics.px(8)
 
+            // "Reply" first, as in the stock applet; it opens the reply field.
+            TextButton {
+                objectName: "replyButton"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 1
+                visible: card.replyMode === "button"
+                pal: card.pal
+                metrics: card.metrics
+                implicitHeight: pal.touch ? Math.max(44, metrics.px(32)) : metrics.px(32)
+                radius: pal.touch ? 12 : 10
+                fontSize: 12.5
+                text: card.entry?.replyActionLabel || i18nc("@action:button reply to a message", "Reply")
+                onClicked: card.beginReply()
+            }
             Repeater {
                 model: card.actionNames.length
                 // The buttons can outlive the card by a moment when the notification list is
@@ -378,6 +412,47 @@ Rectangle {
                     text: card ? (card.actionLabels[index] || card.actionNames[index]) : ""
                     onClicked: card?.actionInvoked(card.actionNames[index])
                 }
+            }
+        }
+
+        // The inline reply: the app's placeholder and button text when it gives them. Return
+        // sends, Escape goes back to the actions (when there are any).
+        RowLayout {
+            objectName: "replyRow"
+            Layout.fillWidth: true
+            Layout.topMargin: card.metrics.px(6)
+            visible: card.replyShown
+            spacing: card.metrics.px(8)
+
+            QQC2.TextField {
+                id: replyField
+                objectName: "replyField"
+                Layout.fillWidth: true
+                Layout.preferredHeight: card.pal.touch ? Math.max(44, card.metrics.px(32)) : card.metrics.px(32)
+                placeholderText: card.entry?.replyPlaceholderText || i18nc("@info:placeholder", "Type a reply…")
+                Accessible.name: placeholderText
+                onAccepted: card.sendReply()
+                Keys.onEscapePressed: event => {
+                    if (card.replyMode === "button" && card.replying) {
+                        card.replying = false;
+                        text = "";
+                        event.accepted = true;
+                    } else {
+                        event.accepted = false;
+                    }
+                }
+            }
+            TextButton {
+                objectName: "replySend"
+                pal: card.pal
+                metrics: card.metrics
+                implicitHeight: pal.touch ? Math.max(44, metrics.px(32)) : metrics.px(32)
+                radius: pal.touch ? 12 : 10
+                fontSize: 12.5
+                primary: true
+                enabled: replyField.text.length > 0
+                text: card.entry?.replySubmitButtonText || i18nc("@action:button send a reply", "Send")
+                onClicked: card.sendReply()
             }
         }
     }
