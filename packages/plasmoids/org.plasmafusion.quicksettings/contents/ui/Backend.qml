@@ -1101,6 +1101,18 @@ Item {
             backend.closeRequested();
             service.showPasteHint();
         }
+        // Plasma's emoji selector (its own Meta+. shortcut action, else the program).
+        function openEmoji(): void {
+            backend.closeRequested();
+            DBus.SessionBus.asyncCall({
+                "service": "org.kde.kglobalaccel",
+                "path": "/component/org_kde_plasma_emojier_desktop",
+                "iface": "org.kde.kglobalaccel.Component",
+                "member": "invokeShortcut",
+                "arguments": [new DBus.string("_launch")],
+                "signature": "(s)"
+            }, () => {}, () => backend.run("plasma-emojier"));
+        }
         function legacyPopup(): void {
             backend.closeRequested();
             backend.dbus("org.kde.klipper", "/klipper", "org.kde.klipper.klipper", "showKlipperPopupMenu", [], "");

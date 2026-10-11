@@ -831,6 +831,9 @@ which the button opened before.
   px, star and "⋯" always shown, every target at least 44 px (the header's buttons, Clear all, the
   search field, the tabs, the row and editor buttons), press and hold for the actions; the sheet
   takes its own height and its list what the rest leaves, so only the list scrolls.
+- **Emoji:** the header's Emoji button closes the sheet and opens Plasma's emoji selector
+  (plasma-emojier, through its own Meta+. shortcut action, or the program); the sheet draws no emoji
+  of its own.
 - **After choosing,** Plasma's on-screen display says "Copied, press Ctrl+V to paste". **Paste after
   choosing (KDE wishlist 427214) is not done:** nothing safe can type Ctrl+V into the window under
   the sheet without a new privilege or a new program. KWin's fake input protocol
@@ -843,9 +846,9 @@ which the button opened before.
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (43 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (44 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
   the page: focus, arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard,
-  QR code, editor typing, Enter and Escape). Both fail without the sheet (the files do not exist on
-  0.4.1).
+  QR code, editor typing, Enter and Escape, Emoji). Both fail without the sheet (the files do not
+  exist on 0.4.1).

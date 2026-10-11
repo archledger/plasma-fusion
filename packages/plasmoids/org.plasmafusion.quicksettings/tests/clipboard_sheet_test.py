@@ -400,6 +400,9 @@ QTest.keyClick(view, Qt.Key_Tab)
 QTest.qWait(50)
 check(not lst.property("activeFocus"), "Tab leaves the list")
 
+emoji = root.findChild(QObject, "clipboardEmoji")
+QMetaObject.invokeMethod(emoji, "clicked")
+check(root.property("emojis") == 1, "the Emoji button asks for the emoji selector")
 
 starred = service.property("starredCount")
 call(service, "clearHistory")
