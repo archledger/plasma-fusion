@@ -1066,9 +1066,12 @@ PlasmoidItem {
 
     // ---- Unread counts and progress (GAPS G17) ----
     // Per desktop id: {count, countVisible, progress, progressVisible, urgent}, drawn by TaskItem.
-    // Apps broadcast them as com.canonical.Unity.LauncherEntry.Update signals from any object path;
-    // the QML D-Bus watcher needs a fixed sender and path, so a live source needs a small compiled
-    // helper (docs/parts/shell-dock.md). Until then only the test hook (debugAction badge:) sets them.
+    // Apps broadcast them as com.canonical.Unity.LauncherEntry.Update signals from their own
+    // connection and object path. QML's SignalWatcher connects only with a set service and path
+    // and then hears only that sender on that exact path, so a live source needs a small compiled
+    // helper that connects as the stock SmartLauncher does (docs/parts/shell-dock.md, "Why Unity
+    // LauncherEntry needs a compiled part"). Until then only the test hook (debugAction badge:)
+    // sets them.
     property var launcherEntries: ({})
     // With the file-transfer progress below: what the tiles draw.
     readonly property var dockEntries: Jobs.withJobs(launcherEntries, jobProgress)

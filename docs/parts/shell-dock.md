@@ -394,11 +394,32 @@ built by the lead directly.
   `AppId`s that carry ".desktop" are stripped before they are used as icon names.
 - **Attention** (G26): one short bounce when an app asks for attention (besides the orange dot).
 - **Unread counts and progress** (G17): `TaskItem` draws the Controls board's badge (20 px, accent,
-  11 px 800, tabular) and a 3 px progress ring on a 20 px disc. **No live source yet**: apps send
-  `com.canonical.Unity.LauncherEntry.Update` as broadcasts from any object path, and the QML D-Bus
-  watcher of plasma-workspace 6.7.5 needs a fixed sender and path (`DBusSignalWatcher::isValid()`;
-  the stock task manager's SmartLauncher is compiled into its own applet). A small compiled helper
-  is needed; until then only the test hook `debugAction badge:ROW:COUNT[:PROGRESS]` sets them.
+  11 px 800, tabular) and a 3 px progress ring on a 20 px disc. The progress of file transfers has a
+  live source (below); the apps' own counts and progress (Unity LauncherEntry) have none yet, and
+  only the test hook `debugAction badge:ROW:COUNT[:PROGRESS]` sets them.
+- **Why Unity LauncherEntry needs a compiled part** (checked 2026-10-11 against plasma-workspace
+  6.7's `components/dbus/dbussignalwatcher.cpp` and an offscreen probe). Apps broadcast
+  `com.canonical.Unity.LauncherEntry.Update(s uri, a{sv} properties)` from their own connection
+  and their own object path (one per app, for example libunity's and Chromium's
+  `/com/canonical/unity/launcherentry/<number>`; a dock cannot know either in advance). The stock
+  SmartLauncher connects with an empty service and path (`QDBusConnection::connect({}, {},
+  interface, "Update", ...)`), which matches every sender and path. QML's only signal listener,
+  `org.kde.plasma.workspace.dbus` `SignalWatcher`, connects only when service, path and interface
+  are all set (`isValid()`), and Qt then delivers a signal only from exactly that path and from the
+  owner of exactly that name. The probe (VM-4 evidence, `unity-probe/`): a watcher for
+  `org.pf.UnityProbe` on `/com/canonical/unity/launcherentry/1` received that sender's signal from
+  that path; the same sender on `.../2`, a sender without that name on `.../1`, and watchers on `/`,
+  on the parent path, with an empty service and path, or with another service received nothing.
+  The other routes are closed too: the stock SmartLauncherItem is a type of the stock task
+  manager's own applet plugin, loaded only when that applet is (not in a Plasma Fusion session) and
+  private to it; `DBusConnection` can add a match rule, but Qt drops signals no connection hook
+  asked for. The one LauncherEntry sender the dock could hear, libnotificationmanager's job
+  progress (fixed path `/org/kde/notificationmanager/jobs`, sent by plasmashell itself), is read
+  directly from the job model instead (below). Follow-up: a small compiled QML module (like
+  `navigation-cpp/src/plugin`) with a backend that connects as SmartLauncher does and exposes
+  `{count, countVisible, progress, progressVisible, urgent}` per desktop entry to
+  `launcherEntries`; or an upstream change that lets SignalWatcher connect with an empty service
+  and path (QDBusConnection supports it), after which the dock could do it in QML.
 - **File-transfer progress** (stock parity, 0.5.0): the jobs of Plasma's notification server (a copy
   or move in Dolphin, a download, an archive being packed: every KIO job and every app that reports
   to the job server) show as the progress ring on their app's tile while they run.
