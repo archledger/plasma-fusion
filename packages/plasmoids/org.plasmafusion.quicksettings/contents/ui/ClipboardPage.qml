@@ -18,7 +18,8 @@ import "../code/clipboard.js" as Clip
 // Clipboard widget's. Search (every word, as plain text), All / Starred as in the stock widget,
 // text, images and copied files, star, edit, QR code, Klipper's actions, remove, and Clear all
 // with Klipper's confirmation (starred entries stay). Choosing an entry puts it on the clipboard
-// and closes the sheet.
+// and closes the sheet; the on-screen hint says to paste with Ctrl+V (there is no paste on
+// choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet").
 //
 // Keyboard: the list has the focus with the newest entry current; Up and Down move, Enter
 // chooses, Delete removes, Menu or Right opens the entry's actions (Left and Right move between

@@ -831,9 +831,21 @@ which the button opened before.
   px, star and "⋯" always shown, every target at least 44 px (the header's buttons, Clear all, the
   search field, the tabs, the row and editor buttons), press and hold for the actions; the sheet
   takes its own height and its list what the rest leaves, so only the list scrolls.
+- **After choosing,** Plasma's on-screen display says "Copied, press Ctrl+V to paste". **Paste after
+  choosing (KDE wishlist 427214) is not done:** nothing safe can type Ctrl+V into the window under
+  the sheet without a new privilege or a new program. KWin's fake input protocol
+  (`org_kde_kwin_fake_input`) is restricted, and plasmashell's desktop file does not list it (only
+  the portal's does); the RemoteDesktop portal asks the user to allow control of the input devices
+  and needs a D-Bus session client of its own, which QML cannot be; KWin's
+  `org.kde.KWin.EIS.RemoteDesktop` interface, which the portal uses, needs a libei client (compiled
+  code or a helper) and would bypass the portal's consent; KWin 6.7 offers no virtual-keyboard
+  protocol (only the configured input method may use `zwp_input_method_v1`), and ydotool needs
+  `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
+  selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (42 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (43 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
-  storage across processes, choose, edit, remove, Clear all keeping the stars; the page: focus,
-  arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard, QR code, editor
-  typing, Enter and Escape). Both fail without the sheet (the files do not exist on 0.4.1).
+  storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
+  the page: focus, arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard,
+  QR code, editor typing, Enter and Escape). Both fail without the sheet (the files do not exist on
+  0.4.1).

@@ -4,6 +4,7 @@
 import QtQuick
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.private.clipboard as Private
+import org.kde.plasma.workspace.dbus as DBus
 
 import "../../code/clipboard.js" as Clip
 
@@ -33,6 +34,20 @@ Item {
     // Puts the entry on the clipboard (Klipper moves it to the top of the history).
     function choose(uuid: string): void {
         history.moveToTop(uuid);
+    }
+    // After choosing: Plasma's on-screen display says how to paste. Nothing can paste into the
+    // window under the sheet without a new privilege (docs/parts/shell-quicksettings.md,
+    // "Clipboard sheet").
+    function showPasteHint(): void {
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.plasmashell",
+            "path": "/org/kde/osdService",
+            "iface": "org.kde.osdService",
+            "member": "showText",
+            "arguments": [new DBus.string("edit-paste"),
+                          new DBus.string(i18nc("@info:osd after choosing a clipboard entry", "Copied, press Ctrl+V to paste"))],
+            "signature": "(ss)"
+        });
     }
     // Removes the entry; a starred one asks first (Klipper's own confirmation).
     // Both confirmations are modal dialogs that run an event loop of their own, in which the

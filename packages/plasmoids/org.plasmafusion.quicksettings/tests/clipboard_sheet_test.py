@@ -266,6 +266,35 @@ call(service, "remove", uuid(filtered.rowCount() - 1))
 QTest.qWait(100)
 check(filtered.rowCount() == count - 1, "remove takes one entry out")
 
+# The hint after choosing: Plasma's on-screen display, here a stand-in on the private bus that
+# writes what it was asked to show.
+shown = Path(HOME, "osd.txt")
+osd = subprocess.Popen([sys.executable, "-c", f'''
+import dbus, dbus.service
+from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
+DBusGMainLoop(set_as_default=True)
+bus = dbus.SessionBus()
+name = dbus.service.BusName("org.kde.plasmashell", bus)
+class Osd(dbus.service.Object):
+    @dbus.service.method("org.kde.osdService", in_signature="ss")
+    def showText(self, icon, text):
+        open({str(shown)!r}, "a").write(icon + "|" + text + "\\n")
+Osd(bus, "/org/kde/osdService")
+GLib.MainLoop().run()
+'''])
+try:
+    import dbus
+    session = dbus.SessionBus()
+    wait_for(lambda: session.name_has_owner("org.kde.plasmashell"), "the on-screen display stand-in did not start")
+    call(service, "showPasteHint")
+    wait_for(lambda: shown.exists() and shown.read_text() != "", "nothing was asked of the on-screen display")
+    check(shown.read_text().strip() == "edit-paste|Copied, press Ctrl+V to paste",
+          "after choosing, the on-screen display says to press Ctrl+V")
+finally:
+    osd.terminate()
+    osd.wait(timeout=5)
+
 # ---- the page, by keyboard
 copy("gamma three")
 copy("delta four")

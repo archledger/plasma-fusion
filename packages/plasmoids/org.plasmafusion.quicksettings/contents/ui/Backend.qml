@@ -1091,13 +1091,15 @@ Item {
     readonly property var clipboard: QtObject {
         readonly property var service: clipboardLoader.item
         readonly property bool available: !!service
-        // Puts the entry on the clipboard and closes the sheet.
+        // Puts the entry on the clipboard and closes the sheet; the on-screen display says how to
+        // paste it.
         function choose(uuid: string): void {
             if (!service) {
                 return;
             }
             service.choose(uuid);
             backend.closeRequested();
+            service.showPasteHint();
         }
         function legacyPopup(): void {
             backend.closeRequested();
