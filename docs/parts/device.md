@@ -169,10 +169,14 @@ free. With `--keep-shortcuts` quick settings keeps Meta+N, as before, and Klippe
 Meta+V (no clipboard component is added; the clipboard button still opens the sheet). A later run
 without the set adds the Meta+V component and gives it Meta+V only when nothing holds the key (on a
 stock Plasma Klipper does), so "Plasma Fusion: Clipboard" can be given a key in System Settings >
-Shortcuts; `--shortcuts` moves Meta+V to it. Tested by `tests/shortcut-keys-unit.sh` (21 checks
-against a fake kglobalaccel: the claim, Klipper's other keys, the backup record that
-`fusion-restore.sh` replays, the executable desktop file, the Meta+N and Meta+V keys starting their
-command at once, later runs, a user's own key, a dry run, and which kind of run claims).
+Shortcuts; `--shortcuts` moves Meta+V to it. One exception, for a HOME an earlier release set up
+with the Windows-style set (Meta+N is the notification list's there, and the set does not run
+again): the first 0.5.0 run moves Meta+V to the sheet once, while Klipper's pop-up still has it and
+the sheet has no key (plasmafusionrc `[Shortcuts] ClipboardKey`); a key the user gave either of
+them stays. Tested by `tests/shortcut-keys-unit.sh` (28 checks against a fake kglobalaccel: the
+claim, Klipper's other keys, the backup record that `fusion-restore.sh` replays, the executable
+desktop file, the Meta+N and Meta+V keys starting their command at once, later runs, a user's own
+key, a dry run, which kind of run claims, and the one-time upgrade).
 
 ### Other settings
 

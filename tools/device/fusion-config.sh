@@ -187,6 +187,8 @@ CLIPBOARD_SHORTCUT=$((META + 0x56))
 LAUNCHER_ACTION="activate application launcher"
 # plasmafusionrc [Shortcuts] KRunnerKey: Alt+F2 went back to KRunner (apply_krunner_key_upgrade).
 KRUNNER_KEY_VERSION=1
+# plasmafusionrc [Shortcuts] ClipboardKey: Meta+V went to the clipboard sheet (apply_clipboard_key_upgrade).
+CLIPBOARD_KEY_VERSION=1
 # The on-screen keyboard (plasma-keyboard) as kwinrc [Wayland] InputMethod names it on Fedora;
 # section 4 takes the copy in the system data directories (XDG_DATA_DIRS) where there is one.
 OSK_DESKTOP=/usr/share/applications/org.kde.plasma.keyboard.desktop
@@ -1631,6 +1633,26 @@ apply_krunner_key_upgrade() {
   set_key plasmafusionrc Shortcuts KRunnerKey "$KRUNNER_KEY_VERSION"
 }
 
+# Meta+V for the clipboard sheet (0.5.0) on a HOME an earlier Plasma Fusion configured with the
+# Windows-style set, which does not run again there: Meta+N being the notification list's is that
+# set's mark (--keep-shortcuts leaves it to quick settings). Once (plasmafusionrc [Shortcuts]
+# ClipboardKey), and only while Klipper's pop-up still holds Meta+V and the sheet has no key: a
+# key the user gave either of them since stays. Otherwise the sheet gets Meta+V only when nothing
+# holds it.
+apply_clipboard_key_upgrade() {
+  read_key plasmafusionrc Shortcuts ClipboardKey
+  if [ "$REPLY" != "$CLIPBOARD_KEY_VERSION" ] &&
+    [ "$(shortcut_get "$NOTIFY_COMPONENT" _launch)" = "$NOTIFY_SHORTCUT" ] &&
+    key_holders "$CLIPBOARD_SHORTCUT" | grep -qxF "plasmashell"$'\t'"show-on-mouse-pos" &&
+    [ -z "$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)" ]; then
+    note "the clipboard sheet gets Meta+V from Klipper's pop-up (earlier Plasma Fusion setup)"
+    ensure_clipboard_shortcut claim
+  else
+    ensure_clipboard_shortcut free
+  fi
+  set_key plasmafusionrc Shortcuts ClipboardKey "$CLIPBOARD_KEY_VERSION"
+}
+
 # Windows and the dock: Meta+Up maximize, Meta+Down restore, quick tile top/bottom on
 # Meta+Alt+Up/Down, Meta+Tab Overview, Meta+Alt+1..9 the dock's apps (apply_dock_entry_keys, after
 # KWin has loaded the scripts; Meta+5..9 lose them; Meta+1..4 switch workspaces, section 3).
@@ -2091,13 +2113,14 @@ if has_name org.kde.plasmashell; then
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "$QS_OLD_SHORTCUT_TEXT" claim
     ensure_notify_shortcut claim
     ensure_clipboard_shortcut claim
+    set_key plasmafusionrc Shortcuts ClipboardKey "$CLIPBOARD_KEY_VERSION"
   elif [ "$SHORTCUTS" = keep ]; then
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_OLD_SHORTCUT" "$QS_OLD_SHORTCUT_TEXT" "quick settings" "" free
   else
     # A widget made by a later layout rebuild gets its key again, when nothing else took it.
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "" free
     ensure_notify_shortcut free
-    ensure_clipboard_shortcut free
+    apply_clipboard_key_upgrade
   fi
 else
   note "quick settings: plasmashell is not running (no shortcut set)"

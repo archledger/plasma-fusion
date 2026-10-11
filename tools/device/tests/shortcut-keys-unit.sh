@@ -45,9 +45,11 @@ LIB=$BASE/lib.sh
   grep -m1 '^CLIPBOARD_COMPONENT=' "$TOOL" || true
   grep -m1 '^CLIPBOARD_SHORTCUT=' "$TOOL" || true
   grep -m1 '^CLIPBOARD_JS=' "$TOOL" || true
+  grep -m1 '^CLIPBOARD_KEY_VERSION=' "$TOOL" || true
+  grep -m1 '^UNSET=' "$TOOL" || true
   extract note keyname install_text shortcut_get shortcut_set shortcut_add shortcut_remove key_holders \
     shortcut_claim register_command_component notify_desktop ensure_notify_shortcut clipboard_desktop \
-    ensure_clipboard_shortcut
+    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade
 } >"$LIB"
 for f in ensure_notify_shortcut ensure_clipboard_shortcut; do
   grep -q "^$f() {" "$LIB" || { echo "FAIL: $f was not found in fusion-config.sh"; exit 1; }
@@ -144,7 +146,8 @@ run_case() {
   : >"$H/kga"
   : >"$H/backup/shortcuts"
   for row in "$@"; do printf '%s\n' "$row" | tr '|' '\t' >>"$H/kga"; done
-  env -i PATH="$PATH" HOME="$H" KGA="$H/kga" bash -c '
+  [ -z "${MARK:-}" ] || printf '[Shortcuts]\nClipboardKey=%s\n' "$MARK" >"$H/plasmafusionrc"
+  env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" KGA="$H/kga" bash -c '
     set -euo pipefail
     . "$1"; . "$2"
     DATA=$HOME/.local/share BACKUP=$HOME/backup CHANGES=0 DRY=0
@@ -239,6 +242,23 @@ fi
 run_case step-later step 0 auto "$KLIPPER"
 expect_keys "a later run (set applied before) leaves Klipper's Meta+V" plasmashell show-on-mouse-pos "$META_V"
 expect_launches "a later run registers the component (for System Settings)" "$COMP"
+
+# An upgrade from 0.4 (the Windows-style set ran then: Meta+N is the notification list's): Meta+V
+# moves to the sheet once; the mark keeps a later run from taking it again.
+run_case step-upgrade step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1"
+expect_keys "an upgraded Windows-style setup gives Meta+V to the clipboard sheet" "$COMP" _launch "$META_V"
+expect_keys "  and Klipper's pop-up loses it" plasmashell show-on-mouse-pos ""
+if grep -qx 'ClipboardKey=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  once: the run is marked"; else fail "  the run is not marked"; fi
+MARK=1 run_case step-upgrade-done step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1"
+expect_keys "after the mark Meta+V stays where the user put it" plasmashell show-on-mouse-pos "$META_V"
+# --keep-shortcuts before (Meta+N is quick settings', the notification component has no key):
+# Klipper keeps Meta+V.
+run_case step-upgrade-kept step 0 auto "$KLIPPER" "$NOTIFY|_launch||1"
+expect_keys "a setup made with --keep-shortcuts leaves Meta+V to Klipper's pop-up" plasmashell show-on-mouse-pos "$META_V"
+# A key the user gave the sheet stays.
+run_case step-upgrade-user step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1" "$COMP|_launch|$META_SHIFT_V|1"
+expect_keys "the sheet's own key from the user stays" "$COMP" _launch "$META_SHIFT_V"
+expect_keys "  and Klipper keeps Meta+V" plasmashell show-on-mouse-pos "$META_V"
 
 echo "shortcut-keys-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]
