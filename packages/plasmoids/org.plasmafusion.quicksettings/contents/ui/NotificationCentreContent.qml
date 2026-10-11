@@ -485,6 +485,10 @@ FocusScope {
                                 centre.closeRequested();
                             }
                         }
+                        onUrlOpened: url => {
+                            centre.notif.openUrl(row.index, url);
+                            centre.closeRequested();
+                        }
                         onCloseClicked: centre.notif.close(row.index)
                         onKillJobClicked: centre.notif.killJob(row.index)
                         TapHandler {

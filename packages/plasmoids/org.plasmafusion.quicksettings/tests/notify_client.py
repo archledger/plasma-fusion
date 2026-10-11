@@ -94,7 +94,8 @@ def main():
     bus.add_signal_receiver(on_action, "ActionInvoked", "org.freedesktop.Notifications")
     bus.add_signal_receiver(on_reply, "NotificationReplied", "org.freedesktop.Notifications")
     bus.add_signal_receiver(on_closed, "NotificationClosed", "org.freedesktop.Notifications")
-    state["id"] = int(server.Notify(args.app, 0, args.icon, args.summary, args.body, actions,
+    state["id"] = int(server.Notify(args.app, dbus.UInt32(0), args.icon, args.summary, args.body,
+                                    dbus.Array(actions, signature="s"),
                                     dbus.Dictionary(hints, signature="sv"), -1))
     say("id %d" % state["id"])
     loop.run()

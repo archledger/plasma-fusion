@@ -944,6 +944,14 @@ Item {
                 s.close(row);
             }
         }
+        // Opens a file of the notification (its thumbnail, a finished job's file) and lets the
+        // notification expire, as the stock applet does.
+        function openUrl(row: int, url: string) {
+            Qt.openUrlExternally(url);
+            if (s) {
+                s.expire(row);
+            }
+        }
         function configure(row: int) {
             if (s) {
                 s.configure(row);

@@ -151,6 +151,16 @@ Item {
             history.invokeAction(indexFor(row), actionName, behavior);
         }
     }
+    // After a file of the notification was opened it has done its job (the stock applet expires it;
+    // a resident one only counts as expired).
+    function expire(row: int) {
+        const idx = indexFor(row);
+        if (history.data(idx, NotificationManager.Notifications.ResidentRole)) {
+            history.setData(idx, true, NotificationManager.Notifications.ExpiredRole);
+        } else {
+            history.expire(idx);
+        }
+    }
     function close(row: int) {
         history.close(indexFor(row));
     }

@@ -94,6 +94,14 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/notifications_service_test.py
 
+      - name: Notification card tests (the staged history cards, Plasma's notification server)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/qs-stage" tools/build.sh quicksettings
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/notifications_card_test.py "$RUNNER_TEMP/qs-stage"
+
       - name: Hotspot settings tests (plasma-nm settings in a sandbox)
         run: |
           set -euo pipefail

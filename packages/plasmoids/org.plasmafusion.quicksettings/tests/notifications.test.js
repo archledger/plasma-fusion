@@ -1,0 +1,35 @@
+// SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// Tests of contents/code/notifications.js (not installed). Run: node tests/notifications.test.js
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const assert = require("assert");
+const vm = require("vm");
+const { pathToFileURL } = require("url");
+
+const file = path.join(__dirname, "..", "contents", "code", "notifications.js");
+const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
+vm.runInThisContext(code, { filename: pathToFileURL(file).href });
+const { splitBody, sideImage } = globalThis;
+
+// The body: declaration and wrapper gone, images taken out of the text and kept in order.
+const server = '<?xml version="1.0"?><html>Look <img src="file:///tmp/a.png" alt="a"/> here<br/>'
+             + "<img src='file:///tmp/b%20c.jpg'></img><img alt=\"denied\"/></html>";
+assert.deepStrictEqual(splitBody(server), { text: "Look  here", images: ["file:///tmp/a.png", "file:///tmp/b%20c.jpg"] },
+                       "images out of the text, in order, denied ones dropped, trailing break trimmed");
+assert.deepStrictEqual(splitBody("<html>one\ntwo</html>\n"), { text: "one<br>two", images: [] }, "line ends become breaks, trimmed");
+assert.deepStrictEqual(splitBody(undefined), { text: "", images: [] }, "no body");
+assert.deepStrictEqual(splitBody('<img src="file:///x?a=1&amp;b=2"/>').images, ["file:///x?a=1&b=2"], "entities in the source");
+assert.strictEqual(splitBody('<b>bold</b> <a href="https://kde.org">link</a>').text, '<b>bold</b> <a href="https://kde.org">link</a>',
+                   "other markup kept");
+
+// The image beside the text.
+const image = { width: 64 };
+assert.strictEqual(sideImage(image, "dialog-information", "konsole"), image, "the image first");
+assert.strictEqual(sideImage(undefined, "dialog-information", "konsole"), "dialog-information", "else the notification's icon");
+assert.strictEqual(sideImage(undefined, "konsole", "konsole"), null, "not the app icon twice");
+assert.strictEqual(sideImage(undefined, "", "konsole"), null, "nothing");
+
+console.log("notifications: all checks passed");

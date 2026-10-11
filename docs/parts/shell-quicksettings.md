@@ -128,9 +128,10 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   automatically; `Mpris2Model.currentIndex`); a stopped player chosen there keeps the card while
   it can play, so it can be played or another chosen;
 * `Notifications` header with `Clear all`, then the notification cards (app icon + name, time,
-  summary, body, job progress with Cancel, action buttons; the first action is the accent button
-  for critical or persistent notifications, as the board's calendar reminder). Close button on hover.
-  Clicking a card runs its default action.
+  summary, body, the notification's image, a linked file's preview, job progress with Cancel,
+  action buttons; the first action is the accent button for critical or persistent notifications,
+  as the board's calendar reminder). Close button on hover. Clicking a card runs its default
+  action.
 
 **Drill-down pages** replace the quick settings in the same card (back button, title, switch):
 Wi-Fi (Popups board tray panel: connected network card with band, security and live speed,
@@ -176,6 +177,10 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
   contents/ui/NotificationCard.qml  one notification
+  contents/ui/NotificationThumbnail.qml, NotificationPreview.qml
+                                    a linked file's preview (KIO's, through the stock applet's
+                                    Thumbnailer; a plain image where that cannot load)
+  contents/code/notifications.js    what a card shows (body images, the side image, ...)
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),
                                     Tile, FusionSlider, FusionSwitch, IconButton, TextButton, ListRow,
@@ -813,3 +818,24 @@ pairs the applications with their reasons (`notificationInhibitionApplications` 
 `…Reasons`); `services/Notifications.qml` `dndReasons` words them. Tests: `tests/dnd.test.js` and
 `tests/notifications_service_test.py` (an inhibition held by `tests/notify_client.py inhibit` is
 named with its reason, and gone when released).
+
+### Images in the history
+
+The cards stripped every image (`cleanBody()` removed `<img>`; the image role and linked files were
+not used). They now follow the stock applet's sizes: the notification's own image (`image-data`,
+`image-path`), or its icon when that is not the app's, beside the text at Plasma's large icon size
+(48 px, its aspect kept, as `Icon.qml`); images in the body (`<img src>`, which the server keeps for
+local files only) below the text, fitted to the card and no taller than the preview strip (the stock
+applet draws them inline at their own size, which can overflow); and the first linked file
+(`x-kde-urls`: Spectacle's screenshot, a received file) as a preview strip of Plasma's "enormous"
+icon height (128 px), as `ThumbnailStrip.qml`. The preview is KIO's, made by the stock applet's own
+`Thumbnailer` type (`NotificationPreview.qml`, loaded in the same shell, so videos and documents
+get theirs too; a file without one shows its type's icon); where that type cannot load, an image is
+drawn by itself and any other file shows a generic icon. A click, Return or Space on the preview
+opens the file, lets the notification expire (as the stock applet) and closes the sheet; the
+preview has an accessible name ("Open screenshot.png"). `contents/code/notifications.js`
+`splitBody()` and `sideImage()`, tests `tests/notifications.test.js`; the cards themselves:
+`tests/notifications_card_test.py` (the staged package on Plasma's notification server on a private
+bus, in CI; applications without a desktop file stay out of the history by Plasma's default, so the
+test gives its own one): the image is drawn at 48 px on the right, a 1200 × 300 body image is fitted
+to the card at 4:1, a screenshot is previewed 128 px tall and opens from a click and from Return.

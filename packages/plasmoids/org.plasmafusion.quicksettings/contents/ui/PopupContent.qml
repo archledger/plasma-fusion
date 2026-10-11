@@ -302,6 +302,10 @@ Item {
                                 content.backend.closeRequested();
                             }
                         }
+                        onUrlOpened: url => {
+                            content.backend.notif.openUrl(index, url);
+                            content.backend.closeRequested();
+                        }
                         onCloseClicked: content.backend.notif.close(index)
                         onKillJobClicked: content.backend.notif.killJob(index)
                     }
