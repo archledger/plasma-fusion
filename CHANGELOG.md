@@ -19,6 +19,13 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   Klipper's "Show Clipboard Items at Mouse Position"; setups an earlier release made with that set
   get it once at the update, while Klipper still has it. `--keep-shortcuts` leaves it with Klipper
   and `plasma-fusion restore` gives it back.
+- **Quick Settings can be edited**: the pencil in the sheet's header (in the tablet row in tablet
+  posture) shows a remove badge on every tile and a tray of hidden tiles below. Drag a tile by mouse
+  or touch to move it, or press Ctrl with the arrow keys; remove it with its badge or Delete, add it
+  back from the tray, or Reset to defaults. The order is the same in every Quick Settings widget on
+  every screen, and the sheet stays one page. Tiles that appear only when they apply (Disks &
+  Devices, Wi‑Fi hotspot, Charge limit, Tablet mode) still do; a hidden one never shows. A tile
+  added in a later release appears after the tile it follows by default, wherever that tile now is.
 - The notification history in Quick Settings and in the tablet Notification Centre is **grouped by
   app**, as in Plasma's own applet: an app's header with Configure and Close Group, its two newest
   notifications and "Show N More". Notifications show their **images** (beside the text, in the
