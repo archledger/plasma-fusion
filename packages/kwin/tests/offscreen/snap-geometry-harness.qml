@@ -158,9 +158,49 @@ Item {
         KW.Workspace.stackingOrder = KW.Workspace.windows;
         tile.parent = quickRoot;
         outlineWindow.quickRoots = ({});
-        Qt.callLater(testGeometry);
+        Qt.callLater(testOutlineSettings);
     }
 
+    // The outline reads the gap settings once and again when KWin reloads its configuration,
+    // not each time it shows (survey B12: a shell and two kreadconfig6 inside KWin per show).
+    function testOutlineSettings() {
+        testFiles.writeKwinrc("[Script-plasmafusion-snap]\nGap=12\n");
+        // Later, shown and hidden twice, as KWin does when the pointer reaches an edge.
+        settingsWait.next = () => {
+            for (let i = 0; i < 2; ++i) {
+                outlineWindow.visible = true;
+                outlineWindow.visible = false;
+            }
+            outlineWindow.visible = Qt.binding(() => outline.active);
+            settingsWait.next = checkShown;
+            settingsWait.restart();
+        };
+        settingsWait.restart();
+    }
+    function checkShown() {
+        settingsWait.next = () => {
+            check("showing the outline does not read the settings again", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
+            KW.Options.configChanged();
+            settingsWait.next = () => {
+                check("KWin reloading its configuration reads them again", outlineWindow.configuredGap === 12, outlineWindow.configuredGap);
+                testFiles.writeKwinrc("");
+                KW.Options.configChanged();
+                settingsWait.next = () => {
+                    check("and back to the default", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
+                    testGeometry();
+                };
+                settingsWait.restart();
+            };
+            settingsWait.restart();
+        };
+        settingsWait.next();
+    }
+    Timer {
+        id: settingsWait
+        property var next: null
+        interval: 2500
+        onTriggered: next()
+    }
 
     function testGeometry() {
         check("actual outline config reader loads enabled default", outlineWindow.quickGaps, outlineWindow.quickGaps);

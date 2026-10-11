@@ -214,6 +214,15 @@ filled outer edges. The outline window's bounds include that expanded target. Ma
 tiles keep their native preview: the outline API exposes geometry, not the tiling mode, so a
 custom zone with exactly the same shape as a quick tile is kept native rather than guessed.
 
+The outline needs the snap script's gap settings (`QuickTileGaps`, `Gap`) but runs in KWin's
+outline context, which has no `KWin.readConfig`, so it reads them with `kreadconfig6` through
+Plasma's executable data engine. It did so each time it showed, starting a shell and two
+`kreadconfig6` processes inside KWin on every edge drag (survey B12). It now reads them when it
+is created and again when KWin reloads its configuration (`Options.configChanged`, the moment
+the snap script's own `KWin.readConfig` sees new values too, so preview and snap agree). Each read
+is a new source of the data engine, which otherwise hands a source read moments before its old
+result.
+
 ### Attached dialogs
 
 A modal dialog whose parent has a KWin title bar is placed horizontally centred on the parent
@@ -243,7 +252,10 @@ Offline (laptop):
   leaving an interactive move or tile, and the quick-tile root: found by class name and by shape,
   roles from the shape with the children in another order, a ninth child, another desktop's
   custom root with quick-tile-shaped children never taken for it (script and outline; the 0.4
-  test of eight children fails 4 of these). Build the stage with `STAGE=STAGE_HOME tools/build.sh
+  test of eight children fails 4 of these), and the outline's settings: not read again when it
+  shows, read again when KWin reloads its configuration and then back to the default (`Options`
+  stub; with the 0.4 outline 6 checks fail: it read the new gap on show, then kept it from the
+  data engine's cached result, which the later geometry checks inherit). Build the stage with `STAGE=STAGE_HOME tools/build.sh
   kwin`.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
