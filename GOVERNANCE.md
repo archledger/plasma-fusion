@@ -29,7 +29,7 @@ maintainer accepts or declines it and says why.
 | Maintainer | Wisbendji Fimerlus ([@archledger](https://github.com/archledger)) | Decides what goes in and what the project does next. Reviews and merges pull requests. Triages issues and Discussions. Keeps `main` building and the checks green. Handles the `plasma-update` issues, Dependabot pull requests and code scanning alerts ([`docs/parts/ci.md`](docs/parts/ci.md), "When something speaks up"). Keeps the documentation current. Enforces the [code of conduct](CODE_OF_CONDUCT.md); conduct reports go to the address in it, and today the maintainer is the only person who reads them. |
 | Security contact | the maintainer | Reads private vulnerability reports, answers within a week, fixes, publishes advisories and credits reporters ([`SECURITY.md`](SECURITY.md)). |
 | Reviewer (code owner) | the maintainer ([`.github/CODEOWNERS`](.github/CODEOWNERS)) | Reviews pull requests. With a single reviewer the ruleset on `main` requires no approval, only the required checks ([`docs/parts/ci.md`](docs/parts/ci.md), "Repository settings"). |
-| Release manager | the maintainer | There are no releases yet (see "Releases" below). |
+| Release manager | the maintainer | Makes and signs the releases (see "Releases" below). |
 | Repository owner (GitHub admin) | the maintainer's personal account `archledger`, the only collaborator | Repository settings, the ruleset, security settings, advisories, deleting or transferring the repository. |
 | Contributor | anyone | Follows [`CONTRIBUTING.md`](CONTRIBUTING.md): one subject per change, the coding standards, tests for new behaviour, a DCO sign-off on every commit, an SPDX header or `REUSE.toml` entry for new files. |
 | Reporter | anyone | Reports bugs as issues, security problems privately. |
@@ -40,9 +40,8 @@ through pull requests with the required checks, which the maintainer reviews bef
 
 ## Releases
 
-There are no releases and no version tags yet (checked 2026-10-02); the first, 0.2.0, is being
-prepared. Until it is out the supported version is `main` and the packages built from it
-([`SECURITY.md`](SECURITY.md)). Releases are signed `vX.Y.Z` tags; their files are listed in a
+Releases since 0.2.0 (2026-10-03), the latest on GitHub's releases page; which ones get fixes is in
+[`SECURITY.md`](SECURITY.md). Releases are signed `vX.Y.Z` tags; their files are listed in a
 `SHA256SUMS` signed with the same key, F350 5339 8E3C 80FE 2089 1B82 C10B 8492 BD7F 30C6
 ([`.github/release-signing-key.asc`](.github/release-signing-key.asc)), which the installer pins and
 the AUR package names. How to check a signature is in

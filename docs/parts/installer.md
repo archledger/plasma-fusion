@@ -114,10 +114,10 @@ PKGBUILD, `_RELEASE_BASE` a release URL), `_ROOT` (a directory with `etc/os-rele
 `tools/tests/installer/run.sh` runs the installer under dash and bash against fake systems (one
 os-release file per system), fake package managers that only log their calls, and a fake release
 signed with a throwaway key: every channel and refusal above, the session checks, update and
-uninstall (with the login screen and boot splash undone first), the signature and checksum
-failures, no downgrade, truncated downloads (seven cut points) and a stamped copy that must
-ignore test endpoints in the environment (154 checks, 2026-10-02; 8 more for the uninstall and the
-optional steps, 2026-10-11). The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
+uninstall (with the login screen and boot splash undone first), the signature and checksum failures,
+no downgrade, truncated downloads (seven cut points) and a stamped copy that must ignore test
+endpoints in the environment (154 checks, 2026-10-02; 8 more for the uninstall and the optional
+steps, 2026-10-11). The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon
 and Debian testing, with the channels served from the test host.

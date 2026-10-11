@@ -213,13 +213,15 @@ What it sets, in order (all idempotent; a second run reports only the theme re-a
 3. Shortcuts through kglobalaccel `setForeignShortcut` (KWin holds kglobalshortcutsrc, so the file
    is not edited): Meta+1..4 is removed from plasmashell `activate task manager entry 1..4` (their
    other keys stay) and added to kwin `Switch to Desktop 1..4` (next to Ctrl+FN and Meta+FN).
-   Alt+Tab and Meta+Tab are left as KWin's defaults (both "Walk Through Windows"): the Fusion
+   Alt+Tab is left as KWin's default ("Walk Through Windows"; Meta+Tab opens Overview with the
+   Windows-style shortcut set, device.md): the Fusion
    switcher has its own "This workspace / All workspaces" tabs (see 4).
 4. kwinrc: [TabBox] and [TabBoxAlternative] LayoutName=org.plasmafusion.switcher, DesktopMode=0
    (KWin hands the switcher every window; it opens on "This workspace" and filters itself, its "All
    workspaces" tab needs the full list), HighlightWindows=false (no flash of a window the switcher
    skips); [Effect-overview] BorderActivate=9 (7 with `--hot-corner`; 9 = no edge, 7 = top-left,
-   KWin globals.h; without `--hot-corner` a corner turned on since the first run is kept); [Effect-blur] BlurStrength=13, NoiseStrength=0, Saturation=140;
+   KWin globals.h; without `--hot-corner` a corner turned on since the first run is kept);
+   [Effect-blur] BlurStrength=13, NoiseStrength=0, Saturation=140;
    [org.kde.kdecoration2] BorderSizeAuto=false; [Plugins] plasmafusion-snapEnabled=true and
    plasmafusion-attachEnabled=true (each only when the script is installed; run again after
    installing it), sheetEnabled=true (dialogs slide out of their parent); [Outline]
@@ -320,8 +322,9 @@ restarts plasmashell with it (as a login would) and copies KWin's keys with
   or the login name as it is written (the ThinkPad's `test` account has no real name). The board
   is a still; the dots' motion (together, one turn in 16 s) is this part's choice.
 - The tray shows its expander arrow, because the replaced items are hidden, not removed.
-- Alt+Tab and Meta+Tab both open the Fusion switcher on "This workspace"; "All workspaces" is the
-  switcher's tab (A key or click). The board shows no Meta+Tab.
+- Alt+Tab opens the Fusion switcher on "This workspace"; "All workspaces" is the switcher's tab (A
+  key or click). Meta+Tab opens Overview with the Windows-style shortcut set (device.md); the board
+  shows no Meta+Tab.
 - Log-out screen: no board; Breeze layout with the Fusion colours and a Complementary veil.
 - Without the clock-pill widget the fallback clock uses the digital clock's automatic font size
   (larger than the board's 13 px).
@@ -371,7 +374,7 @@ restore). Findings and fixes:
   Complementary text on a black veil). Own `contents/logout/`.
 - Fixed (medium): the switcher settings were option A (DesktopMode=1 for Alt+Tab), which disables
   the built switcher's "All workspaces" tab; now DesktopMode=0 and HighlightWindows=false, and
-  Alt+Tab / Meta+Tab keep KWin's defaults.
+  Alt+Tab keeps KWin's default (Meta+Tab: Overview, with the Windows-style shortcut set).
 - Fixed (medium): the tray hid 6 of the 10 items the quick-settings widget replaces, so the stock
   clipboard, keyboard-layout, KDE Connect and media icons could show next to the widget's own.
 - Fixed (medium): the lock screen, the snap outline (`[Outline] QmlPath`), the sheet effect,

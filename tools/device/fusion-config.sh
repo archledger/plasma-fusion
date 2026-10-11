@@ -172,7 +172,8 @@ LAUNCHER_ACTION="activate application launcher"
 OSK_DESKTOP=/usr/share/applications/org.kde.plasma.keyboard.desktop
 # Window switcher: KWin hands every window to org.plasmafusion.switcher (DesktopMode 0), which
 # opens on "This workspace" and filters the list itself; its "All workspaces" tab needs the
-# full list. Alt+Tab and Meta+Tab keep KWin's defaults (both "Walk Through Windows").
+# full list. Alt+Tab keeps KWin's default ("Walk Through Windows"); the Windows-style shortcut set
+# (section 1, unless --keep-shortcuts) gives Meta+Tab to Overview.
 TABBOX_DESKTOP_MODE=0
 TABBOX_ALT_DESKTOP_MODE=0
 OUTLINE_QML=kwin/scripts/plasmafusion-snap/contents/outline/outline.qml

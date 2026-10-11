@@ -9,8 +9,9 @@ are welcome in GitHub Discussions; the way decisions are made is in
 
 - Experimental. Built for and tested on Fedora 44 KDE with Plasma 6.7.5, KDE Frameworks 6.30 and
   Qt 6.11, on two machines: a convertible (ThinkPad X13 Yoga Gen 4) and a laptop (ASUS Zenbook).
-- No releases yet; the first, 0.2.0, is being prepared ([`RELEASING.md`](RELEASING.md)). Until
-  then users build from `main` ([`README.md`](../README.md), "From the sources").
+- Released since 0.2.0 (2026-10-03); 0.4.0 on 2026-10-10 ([`CHANGELOG.md`](../CHANGELOG.md),
+  [`RELEASING.md`](RELEASING.md)). This plan was written before the first release; the items below
+  keep their wording of 2026-10-02 with what has happened since noted.
 - One maintainer.
 
 ## Planned
@@ -32,7 +33,9 @@ are welcome in GitHub Discussions; the way decisions are made is in
    containers and with a NixOS package list; not yet on a real Arch, Debian or NixOS desktop). Then
    packaging for Arch Linux (a PKGBUILD) and NixOS (a package and a module), and container builds
    for Arch and Debian unstable in CI. The aim is distributions with Plasma 6.7 or later: Arch
-   Linux, Debian testing and unstable, NixOS unstable.
+   Linux, Debian testing and unstable, NixOS unstable. Since 0.2.0 the releases are packaged for
+   Arch (AUR), NixOS (the flake's package and module), Ubuntu 26.10 (PPA), KDE neon and Debian
+   testing (.deb) besides Fedora (Copr), each tested in a virtual machine before the release.
 4. **OpenSSF Best Practices silver.** Style checks in CI, test coverage measurement (fuzzing of the
    Python tools' parsers runs since 2026-10-02), and the project documents: governance, code of
    conduct, architecture, this roadmap, the security assurance case
@@ -61,8 +64,6 @@ are welcome in GitHub Discussions; the way decisions are made is in
 The maintainer has not decided these. This file will move them to "Planned" or "Not planned" once
 they are decided.
 
-- **A first release:** when it comes, the version scheme, release notes, and how version tags and
-  release artifacts are signed ([`GOVERNANCE.md`](../GOVERNANCE.md), "Releases").
 - **A second maintainer:** who it is, and when they get merge, release and admin rights
   ([`GOVERNANCE.md`](../GOVERNANCE.md), "Continuity").
 

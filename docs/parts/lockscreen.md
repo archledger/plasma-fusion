@@ -61,7 +61,9 @@ Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the pa
   3 s message removal, launch fade, blank cursor while idle, Escape handling.
 * Root item: `viewVisible`, `notification`, `clearPassword()`, `notificationRepeated()`; OSD item
   `objectName: "onScreenDisplay"` (stock `LockOsd.qml`, unchanged); `PasswordSync` singleton for
-  several screens; `VirtualKeyboardLoader` with `visibleBoundary`; `SessionManagement`
+  several screens; the on-screen keyboard's prompt shift with `visibleBoundary`
+  (`KeyboardShift.qml`, since Plasma 6.8 removed the stock `VirtualKeyboardLoader`);
+  `SessionManagement`
   (`onAboutToSuspend` clears the password); password field without undo, Ctrl+Shift+U clears,
   sensitive input-method hints, reveal only when `KAuthorized` allows `lineedit_reveal_password`.
 * A QML load error still falls back to kscreenlocker's built-in lock screen (greeter behaviour);
@@ -352,7 +354,8 @@ Every PAM prompt and message path is as it was; `/etc/pam.d` was not touched.
   are centred at 38 % of the height (a third in portrait) and messages hang below without moving
   them; the pill is at least 48 px tall and at least 400 px wide (`W − 64` at most); its reveal and
   unlock buttons 44 px; power buttons 48 px; the status chip 48 px with a 48 px keyboard button.
-  Independent of posture, the on-screen keyboard (the stock `VirtualKeyboardLoader`) now keeps
+  Independent of posture, the on-screen keyboard (then the stock `VirtualKeyboardLoader`, now
+  `KeyboardShift.qml`) keeps
   the whole prompt, messages included, 24 px above it (`visibleBoundary`).
 - **Accent** (decision 3): `PfStyle` takes the focus border, halo, unlock button, focus rings and
   the fingerprint hint from a `FusionAccent` on the lock screen (always the dark variant); the
