@@ -813,6 +813,9 @@ PlasmoidItem {
         }
     }
 
+    // Search opens the launcher's search, as every search key does (Meta+S, Meta+Space, Alt+Space);
+    // the full KRunner is Alt+F2 and the launcher's last search row, or this button with
+    // searchAction 0.
     function toggleSearch(): void {
         if (Plasmoid.configuration.searchAction === 1) {
             toggleLauncher(searchButton.clickFromPointer ? searchButton.launcherWasOpen : undefined, "home");

@@ -216,7 +216,12 @@ FocusScope {
                 if (results.count > 0) {
                     results.keyboardNavigation = true;
                     results.pointerActive = false;
+                    results.handoffCurrent = false;
                     results.currentIndex = Math.min(1, results.count - 1);
+                    results.forceActiveFocus(Qt.TabFocusReason);
+                } else if (results.handoffShown) {
+                    // No results: the KRunner hand-off is the only row.
+                    results.selectHandoff();
                     results.forceActiveFocus(Qt.TabFocusReason);
                 }
             } else {
@@ -768,6 +773,7 @@ FocusScope {
         // Search results.
         ResultsList {
             id: results
+            objectName: "searchResults"
             width: parent.width + 10
             height: parent.height
             visible: card.searching
@@ -791,19 +797,6 @@ FocusScope {
             onTyped: text => card.typeIntoSearch(text)
             Keys.onTabPressed: card.focusFooter()
             Keys.onBacktabPressed: card.focusSearch()
-
-            FusionText {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: card.metrics.px(40)
-                width: parent.width - 60
-                visible: card.searching && parent.count === 0 && card.launcher && !card.launcher.runnerModel.querying
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                text: i18nc("@info", "No results for “%1”", search.text)
-                color: card.pal.muted
-                metrics: card.metrics
-                px: 13
-            }
         }
     }
 

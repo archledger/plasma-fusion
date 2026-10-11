@@ -109,7 +109,12 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   time (see deviations).
 - Search: typing anywhere in the card goes to the field (Backspace too); results grouped by
   KRunner category; Enter launches the highlighted (top) result, also when pressed before results
-  arrive. Enter in the empty field does nothing.
+  arrive. Enter in the empty field does nothing. The last row, "Search “query” in KRunner" (Every
+  search plugin, web shortcuts included), hands the query to the full KRunner (`org.kde.krunner /App
+  query`, D-Bus activated) and closes the launcher: Down past the last result, or Down from the field
+  when nothing matches ("No results for “query”" above it), then Enter; or a click. The same row
+  ends the tablet sheet's results. KRunner's own key is Alt+F2 (device.md); the dock's Search button
+  opens this search by default.
 - Hover: a tile, file or result is highlighted and selected only after the pointer moves; items
   that appear or scroll under a resting pointer do not take the selection (so Enter still
   launches the top result, and the hover highlight is never shown twice).
@@ -148,6 +153,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   Down / Up through them; the Places chip with the places (Home first, no "Show KRunner" row) and a
   folder opened in the file manager, Down from the places into the folders, Home shown as "~".
 - `tests/places.test.js` (node, in the build step): the place kinds from the URL and the path line.
+- `tests/views_test.py` also searches with Kicker's real RunnerModel: Down past the last result to
+  the KRunner row, Up back, Enter hands the query over and closes; with no results Down from the
+  field selects the row.
 - `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
   with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
   by name, Show, Show All) and shows that Kicker's RootModel honours `hiddenApplications` only when

@@ -117,14 +117,17 @@ if its portrait rule differs, the migration follows it (see Needs).
 
 ### Shortcuts (owner decision 6)
 
-Applied once per configuration version (`--shortcuts` again, `--keep-shortcuts` never). Every other
+Applied once per configuration version (`--shortcuts` again, `--keep-shortcuts` never).
+`tools/device/tests/launcher-keys-unit.sh` (CI step "Setup search keys") runs the search-key part
+against a table standing in for kglobalaccel: the set, the one-time Alt+F2 upgrade and the cases
+where the user's own keys stay. Every other
 action holding one of these keys loses it; each change is recorded in the backup's `shortcuts`
 file, so `fusion-restore.sh` gives every key back.
 
 | Key | Target (kglobalaccel component / action) |
 |---|---|
-| Meta+Space, Meta+S, Alt+Space, Alt+F2, Search (KRunner's own `_launch` keys) | `plasmashell` / `activate application launcher`: the shell activates the launcher on the active screen, exactly as for Meta |
-| (KRunner) | `org.kde.krunner.desktop` `_launch` and `RunClipboard` keep no key, so nothing starts KRunner |
+| Meta+Space, Meta+S, Alt+Space, Search (KRunner's other `_launch` keys) | `plasmashell` / `activate application launcher`: the shell activates the launcher on the active screen, exactly as for Meta |
+| Alt+F2 | `org.kde.krunner.desktop` / `_launch`, its only key: the full KRunner (every plugin, web shortcuts too). Alt+F2 is the run-command key of KDE since its first release and of GNOME and Xfce, so whoever presses it wants a command line; the Windows and macOS search keys and Alt+Space stay with the launcher, whose last search row hands the query to KRunner. `RunClipboard` keeps no key. On a HOME an earlier release set up (the launcher had Alt+F2, KRunner nothing; the key set does not run again there) the setup moves Alt+F2 back once, only while the launcher still holds it and KRunner has no key (`plasmafusionrc [Shortcuts] KRunnerKey=1`; recorded in the backup like every key) |
 | Meta+A | the quick-settings widget's own "activate widget <id>" (widget API, as before) |
 | Meta+N | `org.plasmafusion.notifications.desktop` / `_launch`: a desktop file in `~/.local/share/kglobalaccel/` (how System Settings adds a command shortcut) that writes the quick-settings widget's `[General] openRequest = "notifications:<ms>"` through `evaluateScript` (`busctl`) |
 | Meta+Up / Meta+Down | `kwin` / `Window Maximize` (a toggle in KWin 6.7.5) / `Window Restore` (Meta+PgUp and Meta+Backspace stay) |
@@ -290,7 +293,8 @@ ensure-topbars.js), the deployed d4afee8 tools (upgrade path) and these tools.
   `kglobalshortcutsrc`; a second run changes 3 things and neither re-applies the key set nor
   migrates again; `fusion-restore.sh` gives the shortcuts and the layout back.
 - Keys (screenshots and window probes): Meta+Space, Meta+S, Alt+Space and Alt+F2 open the launcher
-  (KRunner never starts), Meta+A quick settings, Meta+Up maximizes, Meta+Down restores,
+  (KRunner never starts; since 0.5.0 Alt+F2 opens KRunner instead, VM check of 2026-10-11),
+  Meta+A quick settings, Meta+Up maximizes, Meta+Down restores,
   Meta+Alt+Up tiles to the top half (with KWin's 6 px tile gap), Meta+Tab Overview, Meta+Alt+1 the
   first dock app, Meta+1 workspace 1, Meta+Shift+W the pen widget. Meta+N: see the open items.
 - Text: with the session environment, the top bar's clock text has no colour fringes (0 strongly

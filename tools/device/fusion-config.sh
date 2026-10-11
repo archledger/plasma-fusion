@@ -87,8 +87,10 @@
 #                      View (desktop icons) with the Plasma Fusion keys, portrait card positions,
 #                      top bar solid next to maximized windows, tray items hidden, the app menu
 #                      only for its own screen, the pen widget added to the top bar
-#   Shortcuts (Windows set, once per version) Meta+Space, Meta+S, Alt+Space, Alt+F2 and Search:
-#                      the launcher (KRunner's keys move there); Meta+A quick settings; Meta+N the
+#   Shortcuts (Windows set, once per version) Meta+Space, Meta+S, Alt+Space and Search: the
+#                      launcher (KRunner's other keys move there); Alt+F2 KRunner (also given back
+#                      once on a HOME an earlier release configured, while the launcher still has
+#                      it and KRunner has no key); Meta+A quick settings; Meta+N the
 #                      notification list; Meta+Up / Meta+Down maximize / restore (quick tile top /
 #                      bottom move to Meta+Alt+Up/Down); Meta+Tab Overview; Meta+Alt+1..9 dock apps;
 #                      every other holder of these keys loses them
@@ -167,6 +169,8 @@ PEN_SHORTCUT_TEXT=Meta+Shift+W
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
 NOTIFY_SHORTCUT=$((META + 0x4e))
 LAUNCHER_ACTION="activate application launcher"
+# plasmafusionrc [Shortcuts] KRunnerKey: Alt+F2 went back to KRunner (apply_krunner_key_upgrade).
+KRUNNER_KEY_VERSION=1
 # The on-screen keyboard (plasma-keyboard) as kwinrc [Wayland] InputMethod names it on Fedora;
 # section 4 takes the copy in the system data directories (XDG_DATA_DIRS) where there is one.
 OSK_DESKTOP=/usr/share/applications/org.kde.plasma.keyboard.desktop
@@ -1468,17 +1472,40 @@ ensure_notify_shortcut() {
   fi
 }
 
-# Search: Meta+Space, Meta+S, Alt+Space, Alt+F2 and KRunner's own keys (Search) activate the
-# launcher (the shell's "activate application launcher", which opens it on the active screen, as
-# the Meta key does); KRunner keeps no key, so nothing starts it.
+# Search: Meta+Space, Meta+S, Alt+Space and KRunner's other keys (Search) activate the launcher
+# (the shell's "activate application launcher", which opens it on the active screen, as the Meta
+# key does). KRunner keeps Alt+F2, the run-command key of KDE since its first release and of GNOME
+# and Xfce: who presses it wants a command line, and gets the full KRunner with every plugin; the
+# search keys of Windows and macOS (Meta+S, Meta+Space) and Alt+Space are the launcher's. The
+# launcher's last search row opens the same query in KRunner. RunClipboard keeps no key.
 apply_launcher_keys() {
   local k keys=()
-  for k in $((META + K_SPACE)) $((META + 0x53)) $((ALT + K_SPACE)) $((ALT + K_F2)) $(shortcut_get org.kde.krunner.desktop _launch); do
+  for k in $((META + K_SPACE)) $((META + 0x53)) $((ALT + K_SPACE)) $(shortcut_get org.kde.krunner.desktop _launch); do
+    [ "$k" = $((ALT + K_F2)) ] && continue
     case " ${keys[*]} " in *" $k "*) ;; *) keys+=("$k") ;; esac
   done
   for k in "${keys[@]}"; do shortcut_claim plasmashell "$LAUNCHER_ACTION" "$k"; done
-  shortcut_set org.kde.krunner.desktop _launch
+  shortcut_claim org.kde.krunner.desktop _launch $((ALT + K_F2))
+  shortcut_set org.kde.krunner.desktop _launch $((ALT + K_F2))
   shortcut_set org.kde.krunner.desktop RunClipboard
+  set_key plasmafusionrc Shortcuts KRunnerKey "$KRUNNER_KEY_VERSION"
+}
+
+# Alt+F2 back to KRunner on a HOME an earlier Plasma Fusion configured (it gave the key to the
+# launcher and left KRunner none; the Windows-style set does not run again there). Once
+# (plasmafusionrc [Shortcuts] KRunnerKey), and only while the launcher still holds Alt+F2 and
+# KRunner has no key: a key the user gave either of them since stays.
+apply_krunner_key_upgrade() {
+  read_key plasmafusionrc Shortcuts KRunnerKey
+  [ "$REPLY" = "$KRUNNER_KEY_VERSION" ] && return 0
+  if key_holders $((ALT + K_F2)) | grep -qxF "plasmashell"$'\t'"$LAUNCHER_ACTION" &&
+    [ -z "$(shortcut_get org.kde.krunner.desktop _launch)" ]; then
+    note "KRunner gets Alt+F2 back from the launcher (earlier Plasma Fusion setup)"
+    shortcut_claim org.kde.krunner.desktop _launch $((ALT + K_F2))
+  else
+    note "KRunner key: Alt+F2 and KRunner's keys are the user's (kept)"
+  fi
+  set_key plasmafusionrc Shortcuts KRunnerKey "$KRUNNER_KEY_VERSION"
 }
 
 # Windows and the dock: Meta+Up maximize, Meta+Down restore, quick tile top/bottom on
@@ -1776,6 +1803,7 @@ elif [ "$SHORTCUTS" = keep ]; then
   note "Windows-style set not applied (--keep-shortcuts)"
 else
   note "Windows-style set applied by an earlier run of this version (--shortcuts applies it again)"
+  apply_krunner_key_upgrade
 fi
 
 # ---------- 4. KWin ----------

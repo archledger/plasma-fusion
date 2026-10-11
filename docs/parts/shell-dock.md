@@ -63,7 +63,7 @@ dock.addWidget("org.plasmafusion.dock");
 | `showTooltips` | `true` | name pill above the hovered item |
 | `showPreviews` | `true` | window previews above a hovered running app (replace the name pill there) |
 | `colorVariant` | `0` | 0 follow the Plasma style (brightness of the theme background), 1 dark, 2 light |
-| `searchAction` | `0` | 0 KRunner, 1 the application launcher |
+| `searchAction` | `1` | 0 KRunner, 1 the application launcher (since 0.5.0; before, 0) |
 | `showOnlyCurrentDesktop` / `showOnlyCurrentActivity` / `showOnlyCurrentScreen` | true / true / false | task filters, as in the stock task manager |
 | `minimizeActiveTaskOnClick` | `true` | clicking the active app minimizes it |
 | `downloadsFolder` | empty (XDG download dir) | folder of the Downloads stack |
@@ -133,7 +133,10 @@ dock.addWidget("org.plasmafusion.dock");
   panel, Start opens/closes it (the Fusion launcher's `open()`/`close()`/`recentlyOpen()`, else
   `expanded`) and shows the board's pressed state (accent fill, inner ring, 16×4 pill) while its menu is
   open (`menuOpen`, else `expanded`). Otherwise it calls `org.kde.PlasmaShell.activateLauncherMenu` over D-Bus.
-- **Search:** `org.kde.krunner /App toggleDisplay` (or the launcher, `searchAction=1`).
+- **Search:** opens and closes the launcher (`searchAction=1`, the default since 0.5.0), so the button
+  and every search key (Meta+S, Meta+Space, Alt+Space) open the same search, with the same runners;
+  the full KRunner is Alt+F2 and the launcher's last search row. `searchAction=0`:
+  `org.kde.krunner /App toggleDisplay`.
 - **Overview:** kglobalaccel `invokeShortcut("Overview")` on component `kwin` (verified toggles Overview).
 - **Downloads:** click opens the folder; right-click lists the 10 newest files (FolderListModel sorted by time)
   plus "Open Downloads Folder". Art: three 22×28 cards (#f2a65a −10°, #5b9dff +6°, front card with a

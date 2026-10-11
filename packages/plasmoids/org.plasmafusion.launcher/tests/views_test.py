@@ -12,6 +12,7 @@ itself sends when it starts an app, and the file manager when it opens a folder)
 that UsageModels.qml reads. The card (LauncherCard.qml, staged with the shared blocks as the build
 does) then runs with those models: the "Recent" chip with its two lists in the right order, the
 "Places" chip with the places and the recent folders, and the keyboard through them. Last, the
+search ends in a row that hands the query to KRunner (with Kicker's real RunnerModel). The
 settings page (ConfigGeneral.qml) lists the hidden apps by name and shows them again, and Kicker's
 models see the hidden apps (and offer Hide Application) only through the applet's `configuration`
 property, which main.qml now declares.
@@ -26,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import warnings
 
 here = Path(__file__).resolve().parent
 package = here.parent
@@ -123,6 +125,8 @@ kamd = subprocess.Popen([kamd_path], stdout=subprocess.DEVNULL, stderr=subproces
 HARNESS = b"""
 import QtQuick
 import QtQuick.Window
+import org.kde.plasma.private.kicker as Kicker
+import "../code/launcher.js" as Launcher
 
 Window {
     id: win
@@ -146,11 +150,13 @@ Window {
         property var frequentAppsModel: usage.frequentApps
         property var placesModel: usage.places
         property var recentFoldersModel: usage.recentFolders
-        property var runnerModel: QtObject {
-            property int count: 0
-            property bool querying: false
-            function modelForRow(i) { return null }
+        property var runnerModel: Kicker.RunnerModel {
+            mergeResults: true
+            runners: Launcher.searchRunners
+            query: mock.searchText
         }
+        property string krunnerQuery: ""
+        function searchInKRunner(query) { krunnerQuery = query; close(); }
         property var rootModel: QtObject { function modelForRow(i) { return null } }
         property var chips: [
             { key: "all", label: "All", row: -1, view: "home" },
@@ -194,6 +200,24 @@ Window {
     }
     function names(which) { return column(which, Qt.DisplayRole); }
     function icons(which) { return column(which, Qt.DecorationRole); }
+    function find(item, name) {
+        if (item.objectName === name) {
+            return item;
+        }
+        for (const child of item.children) {
+            const found = find(child, name);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
+    }
+    function results() {
+        const list = find(card, "searchResults");
+        return JSON.stringify({ visible: list.visible, count: list.count, current: list.currentIndex, focus: list.activeFocus,
+                                shown: list.handoffShown, handoff: list.handoffCurrent, query: mock.krunnerQuery,
+                                closed: mock.closed, querying: mock.runnerModel.querying });
+    }
     // The card's typed functions, for Python (which passes QVariant arguments).
     function openMode(mode) { card.openMode(mode, ""); }
     function selectChip(index) { card.selectChip(index); }
@@ -225,6 +249,12 @@ def items(item):
     for child in item.childItems():
         out += items(child)
     return out
+
+
+def type_text(window, text):
+    """QTest.keyClicks for a QWindow (PySide6 has it for widgets only)."""
+    for ch in text:
+        QTest.keyClick(window, ch)
 
 
 def call(obj, name, *args):
@@ -315,6 +345,47 @@ try:
     s = json.loads(call(win, "state"))
     check(s["lastFocus"] and not s["primaryFocus"], "Down from the last places row goes on to the recent folders")
 
+    # The search ends in "Search … in KRunner": after the last result (Down), and as the only row
+    # when nothing matches; Enter hands the query over.
+    call(win, "openMode", "home")
+    QTest.qWait(100)
+    type_text(win, "alpha")
+    # (wait for the runners to finish: results that arrive later would move the last row)
+    wait_for(lambda: json.loads(call(win, "results"))["count"] > 0 and not json.loads(call(win, "results"))["querying"],
+             "no search results for \"alpha\"")
+    QTest.qWait(500)
+    r = json.loads(call(win, "results"))
+    check(r["visible"] and r["shown"] and not r["handoff"], "search: results, then the KRunner row below them")
+    QTest.keyClick(win, Qt.Key_Down)
+    for _ in range(r["count"] + 1):
+        QTest.qWait(50)
+        if json.loads(call(win, "results"))["handoff"]:
+            break
+        QTest.keyClick(win, Qt.Key_Down)
+    r = json.loads(call(win, "results"))
+    check(r["handoff"] and r["focus"], "Down past the last result selects the KRunner row")
+    QTest.keyClick(win, Qt.Key_Up)
+    QTest.qWait(50)
+    r = json.loads(call(win, "results"))
+    check(not r["handoff"] and r["current"] == r["count"] - 1, "Up goes back to the last result")
+    QTest.keyClick(win, Qt.Key_Down)
+    QTest.keyClick(win, Qt.Key_Return)
+    QTest.qWait(50)
+    r = json.loads(call(win, "results"))
+    check(r["query"] == "alpha" and r["closed"] >= 1, "Enter on it opens KRunner with the query and closes the launcher")
+    call(win, "openMode", "home")
+    QTest.qWait(100)
+    type_text(win, "zzqxj")
+    wait_for(lambda: not json.loads(call(win, "results"))["focus"] and json.loads(call(win, "results"))["visible"], "no search")
+    QTest.qWait(1500)
+    QTest.keyClick(win, Qt.Key_Down)
+    QTest.qWait(50)
+    r = json.loads(call(win, "results"))
+    check(r["count"] == 0 and r["handoff"] and r["focus"], "no results: Down from the field selects the KRunner row")
+    QTest.keyClick(win, Qt.Key_Return)
+    QTest.qWait(50)
+    check(json.loads(call(win, "results"))["query"] == "zzqxj", "and Enter hands that query over")
+
     # The settings page: the hidden apps by name, one shown again, then all.
     SETTINGS = b"""
 import QtQuick
@@ -357,7 +428,10 @@ Window {
     main_qml = (package / "contents/ui/main.qml").read_text()
     check(re.search(r"^    readonly property QtObject configuration: Plasmoid\.configuration$", main_qml, re.M) is not None,
           "main.qml gives Kicker the applet's configuration (appletInterface.configuration)")
-    config = QQmlPropertyMap()
+    with warnings.catch_warnings():
+        # PySide6 6.11 marks the constructor deprecated (its parent argument); Kicker needs the type.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        config = QQmlPropertyMap()
     config.insert("hiddenApplications", ["pf-test-alpha.desktop"])
     engine.rootContext().setContextProperty("testConfig", config)
     KICKER = b"""

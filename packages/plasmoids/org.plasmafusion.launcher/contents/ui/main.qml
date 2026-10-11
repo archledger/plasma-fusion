@@ -121,7 +121,8 @@ PlasmoidItem {
         return [
             { key: "all", label: i18nc("@title:tab all applications", "All"), row: -1, view: "home" },
             { key: "recentapps", label: i18nc("@title:tab recently and often used apps", "Recent"), row: -1, view: "history" },
-            { key: "places", label: i18nc("@title:tab the file manager's places, drives and recent folders", "Places"), row: -1, view: "places" },
+            { key: "places", label: i18nc("@title:tab the file manager's places, drives and recent folders", "Places"),
+              row: -1, view: "places" },
         ];
     }
 
@@ -760,6 +761,22 @@ PlasmoidItem {
         }
     }
 
+    // The search's last row: the same query in the full KRunner, which has every search plugin
+    // (the launcher leaves out the web and network ones, decision 6). KRunner starts on demand
+    // (D-Bus activation); Alt+F2 opens it empty.
+    function searchInKRunner(query: string): void {
+        console.info("launcher: search in KRunner: \"" + query + "\"");
+        close();
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.krunner",
+            "path": "/App",
+            "iface": "org.kde.krunner.App",
+            "member": "query",
+            "arguments": [query],
+            "signature": "(s)"
+        });
+    }
+
     // Search timing: the query's first results (the budget is 100 ms).
     property real searchStarted: 0
     onSearchTextChanged: searchStarted = searchText.length > 0 ? Date.now() : 0
@@ -825,8 +842,8 @@ PlasmoidItem {
     }
 
     // Other shell parts can open the launcher in a given state:
-    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent" | "history" | "places", query)
-    //    or toggle()
+    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent" | "history" |
+    //    "places", query) or toggle()
     //  - with desktop scripting, by writing openRequest = "<mode>:<nonce>[:<argument>]", where the
     //    argument is the search text for "search" and the category key (e.g. "graphics") for "category".
     Connections {
