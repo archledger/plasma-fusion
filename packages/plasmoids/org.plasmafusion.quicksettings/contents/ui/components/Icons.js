@@ -80,3 +80,9 @@ var star = "M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 
 var smile = "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01";
 var qrCode = "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM14 20h.01M20 14h.01";
 var bolt = "M13 3L5 13h6l-1 8 8-10h-6z";
+
+// Editing the tiles: a pencil on a line (the pen menu has the plain pencil), the remove badge's
+// minus and the drag handle's six dots, drawn on the same grid.
+var editTiles = "M5 19.5v-3.1L15.2 6.2a2.1 2.1 0 0 1 3 3L8 19.5zM13.5 7.9l3 3M13 19.5h7";
+var minus = "M7 12h10";
+var grip = "M9 6.5h.01M15 6.5h.01M9 12h.01M15 12h.01M9 17.5h.01M15 17.5h.01";

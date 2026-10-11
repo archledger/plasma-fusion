@@ -502,6 +502,10 @@ PlasmoidItem {
         showNotifications: Plasmoid.configuration.showNotifications
         tileOrder: Plasmoid.configuration.tileOrder
         hiddenTiles: Plasmoid.configuration.hiddenTiles
+        onTileLayoutRequested: (order, hidden) => {
+            Plasmoid.configuration.tileOrder = order;
+            Plasmoid.configuration.hiddenTiles = hidden;
+        }
         // Stock Disks & Devices opens its pop-up on a new device (popupOnNewDevice, default on).
         // Every bar's widget sees the device: the leader opens the sheet on the screen in use.
         onDeviceAdded: udi => {

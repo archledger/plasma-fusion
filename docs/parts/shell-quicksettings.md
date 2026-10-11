@@ -29,7 +29,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
 * battery chip (`82%`, 34 px, radius 17) and five 34 px round buttons: screenshot (Spectacle's
   rectangular-region shortcut), copy text from the screen (0.5.0: `spectacle --region` after the
   pop-up closes, where Extract Text copies the selection's text; the same command as Meta+Shift+T,
-  docs/parts/device.md), System Settings, lock, leave (logout / restart / shut down prompt);
+  docs/parts/device.md), System Settings, lock, leave (logout / restart / shut down prompt); to
+  their left the pencil that edits the tiles (0.5.0, section "Editable tiles"; in tablet posture it
+  is in the tablet row);
 * volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
   Plasma's "Raise maximum volume", `plasmaparc` read through plasma-pa's `GlobalConfig`; a volume
   set above the limit elsewhere is kept by a step up, and every wheel or key step counts from the
@@ -173,7 +175,7 @@ controls. Empty inputs or streams have explicit placeholders and a Sound setting
 
 Keyboard: every control is reachable with Tab and has the design's focus ring (2 px, 2 px gap);
 Space/Return activate, Right/Left moves between a tile and its chevron, Escape goes back a page or
-closes the pop-up. The widget's global shortcut (Plasmoid shortcut) opens and closes the pop-up.
+closes the pop-up (in the tiles' edit mode it first ends that; its keys are in "Editable tiles"). The widget's global shortcut (Plasmoid shortcut) opens and closes the pop-up.
 A notification card is in the tab chain itself (with the focus ring): Return, Enter or Space run its
 default action (or open its one linked file), Delete closes it, and in the tablet Notification
 Centre the Menu key or Shift+F10 opens its menu; its Configure and close buttons follow it in the
@@ -430,6 +432,10 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 
 ## Deviations from the boards
 
+* **The tiles' edit mode** (0.5.0) is not on the boards: the pencil uses the header's 34 px round
+  button (44 in the tablet row), the remove badge the media card's play-button colours, the tray
+  and its buttons the sheet's overlays and the Do Not Disturb choices' 30 px pill buttons, Done the
+  accent button.
 * **Notifications are inside the quick-settings card**, below the quick settings, as inset cards
   (6 % overlay, 1 px edge, radius 18). The board draws them as separate frosted cards on the
   wallpaper. Separate cards need either several pop-up windows or a transparent window, which has
@@ -927,6 +933,39 @@ them again before Apply, so the dialog never writes back an older order.
   threshold and the helper is installed, Tablet mode where the posture can change by itself or is
   not automatic (`tileConditions` in QuickSettingsMain.qml). A hidden tile never shows; a shown
   conditional one only while its condition holds, at its place in the order.
+- **Edit mode:** the pencil (`Edit the tiles`) opens it: in the header, left of the screenshot
+  button (the existing buttons keep their places; on open the focus starts on it), and in tablet
+  posture at the end of the tablet row, as the header's 44 px buttons leave no room for a sixth.
+  The pencil is drawn on while editing. Every tile shown is then one control with a 1 px edge, a
+  remove badge (−, 22 px, 24 in tablet posture, over the top edge and flush with the right side,
+  as the sheet clips what passes its side; its target is 28 px, 44 in touch mode) and a drag
+  handle where the chevron was; the tiles' own click and chevron rest, and an unavailable tile is
+  drawn in full, so it can be moved too. There is no wiggle. Below the grid: a
+  hint, the **Hidden tiles** tray (a `+` button per hidden tile that can show now; "Removed tiles
+  wait here to be added back." while it is empty), **Reset to defaults** (clears both keys; off while
+  nothing differs from the defaults) and **Done**. Every change is written at once, so the other
+  screens' widgets follow and closing the sheet keeps it; the mode ends with Done, the pencil,
+  Escape, the sheet closing or another page opening. The Do Not Disturb and charge limit choices
+  close while editing. The sliders and the header buttons stay as they are.
+- **Moving:** a tile is dragged by any part of it (pointer or touch, `DragHandler`, which the sheet's
+  scrolling cannot take over once it moves the tile): it follows the finger 4 % larger, the others
+  glide to their new cells (`Motion.toggle`; instant with reduced motion) and it lands in the cell
+  under its centre (`tiles.js` `slotAt`: below the grid is the last cell) when let go; the order is
+  written then, once. From the keyboard, Tab and Shift+Tab go through the tiles in the order shown
+  (the tiles are re-stacked among their siblings in that order, so Tab, the arrow keys and screen
+  readers follow it, in edit mode and after it); Ctrl+Left / Ctrl+Right move the focused tile one
+  place (mirrored in a right-to-left layout), Ctrl+Up / Ctrl+Down a row, Ctrl+Home / Ctrl+End to the
+  start or the end, and the focus stays on it; the arrow keys and Home / End without Ctrl move the
+  focus; Delete or Backspace removes the tile and the focus goes to the tile now in its place. The
+  edit control reads "Place N of M. Drag the tile or press Ctrl with an arrow key to move it, Delete
+  to remove it." to screen readers; the badge is the button "Remove <tile>", a tray button "Add
+  <tile>".
+- **Hiding and adding back:** a removed tile goes to `hiddenTiles` and the stored order is left as it
+  is (an empty order stays the default one); added back from the tray it returns to its place in the
+  order. A hidden tile whose condition does not hold is in neither the grid nor the tray, and shows
+  in the tray once it applies (plug in a USB stick to bring Disks & Devices back). Only the shown
+  tiles take part in a move: the hidden ones and those that do not apply now keep their places
+  (`tiles.js` `arrange`).
 - **New tiles in later releases:** `tiles.js` lists every tile in the default order. An empty
   `tileOrder` (a user who never moved a tile) is the default order of the running release. A
   stored order keeps the user's tiles in the user's order; a tile it lacks goes right after the
@@ -936,7 +975,23 @@ them again before Apply, so the dialog never writes back an older order.
   next to Wi‑Fi for everyone, and a user who hid tiles gets it all the same.
 - Tests: `tests/tiles.test.js` (run by `tools/build.sh quicksettings`: the merge rule with new tiles
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
-  shown tiles with the hidden ones keeping their places, the slot under a dragged tile, reset).
+  shown tiles with the hidden ones keeping their places, the slot under a dragged tile, reset) and
+  `tests/tiles_edit_test.py` (in CI), the main page on the real Backend offscreen with the two keys
+  as stand-ins (47 checks: the default grid, the stored order, a conditional tile only while it
+  applies, the pencil, the badges and the resting tile actions, a mouse drag written once on
+  release, a touch drag, a drag let go below the grid, Ctrl+arrows, Ctrl+Home / End, the focus keys,
+  Tab and Shift+Tab in the order shown, the badge and Delete with the focus kept in the grid, the
+  tray in order, adding back to the old place, a hidden conditional tile neither in the grid nor the
+  tray while it does not apply and still hidden when it does, Done, Space on the pencil, Escape,
+  closing the sheet, Reset, and in tablet posture the pencil in the tablet row, 44 px targets and a
+  touch drag at the tablet sizes):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/tiles_edit_test.py build/stage
+  ```
 
 ## Notification parity (0.5.0)
 

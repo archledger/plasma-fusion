@@ -6,10 +6,14 @@ import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.plasma.core as PlasmaCore
 
+import "Icons.js" as Icons
+
 // Quick settings tile: 60 px tall, 16 px radius, accent fill when on (64 px, radius 18 in tablet
 // posture, TABLET 4.6). With "hasDetails" the right part is a separate chevron button that opens
 // a list (44 px wide in touch mode).
 // Height, paddings, icons and text follow the user's text size (`metrics`); the radius does not.
+// In the sheet's edit mode the tile is one control with a remove badge and a drag handle
+// (QuickSettingsMain.qml, "Editable tiles" in docs/parts/shell-quicksettings.md).
 Item {
     id: tile
 
@@ -35,6 +39,59 @@ Item {
     visible: slot >= 0
     Layout.row: Math.floor(Math.max(0, slot) / 2)
     Layout.column: Math.max(0, slot) % 2
+    // Edit mode: the tile is dragged to its new place, moved with Ctrl and the arrow keys and
+    // removed with its badge or Delete (the arrangement does the work); its own actions rest.
+    readonly property bool editing: arrangement ? arrangement.editing : false
+    readonly property bool lifted: dragger.active
+    readonly property alias editButton: editArea
+    readonly property alias removeButton: removeBadge
+    z: lifted ? 2 : 0
+    scale: lifted ? 1.04 : 1
+    Behavior on scale {
+        enabled: tile.pal.motion.animate
+        NumberAnimation { duration: tile.pal.motion.toggle; easing.type: tile.pal.motion.standardEasing }
+    }
+    // A dragged tile follows the pointer (`lift`); the others glide to their new cells (`glide`,
+    // from where they were drawn to where the grid now puts them).
+    property point grabPoint: Qt.point(0, 0)
+    property point dragPoint: Qt.point(0, 0)
+    property real lastX: 0
+    property real lastY: 0
+    transform: [
+        Translate {
+            id: lift
+            x: tile.lifted ? tile.dragPoint.x - tile.grabPoint.x - tile.x : 0
+            y: tile.lifted ? tile.dragPoint.y - tile.grabPoint.y - tile.y : 0
+        },
+        Translate {
+            id: glide
+        }
+    ]
+    ParallelAnimation {
+        id: glideBack
+        NumberAnimation { target: glide; property: "x"; to: 0; duration: tile.pal.motion.toggle; easing.type: tile.pal.motion.standardEasing }
+        NumberAnimation { target: glide; property: "y"; to: 0; duration: tile.pal.motion.toggle; easing.type: tile.pal.motion.standardEasing }
+    }
+    function glideFrom(dx: real, dy: real): void {
+        if (!pal.motion.animate || (dx === 0 && dy === 0)) {
+            return;
+        }
+        glide.x += dx;
+        glide.y += dy;
+        glideBack.restart();
+    }
+    onXChanged: {
+        if (editing && visible && !lifted) {
+            glideFrom(lastX - x, 0);
+        }
+        lastX = x;
+    }
+    onYChanged: {
+        if (editing && visible && !lifted) {
+            glideFrom(0, lastY - y);
+        }
+        lastY = y;
+    }
 
     signal toggled()
     signal detailsRequested()
@@ -45,7 +102,8 @@ Item {
     readonly property real radius: pal.tablet ? 18 : 16
     implicitHeight: metrics.px(pal.tablet ? 64 : 60)
     implicitWidth: 158
-    opacity: available ? 1 : 0.55
+    // In edit mode every tile is drawn in full: it can be moved or removed whatever its state.
+    opacity: available || editing ? 1 : 0.55
 
     readonly property color foreground: checked ? pal.accentText : pal.text
     readonly property color subForeground: checked ? pal.accentTextSecondary : pal.secondary
@@ -60,8 +118,11 @@ Item {
             if (tile.checked) {
                 return tile.pressed ? Qt.darker(tile.pal.accent, 1.12) : (tile.hovered ? Qt.lighter(tile.pal.accent, 1.1) : tile.pal.accent);
             }
-            return tile.pal.overlay(tile.pressed ? 0.15 : (tile.hovered ? 0.12 : 0.08));
+            return tile.pal.overlay(tile.pressed ? 0.15 : (tile.hovered || editArea.hovered || tile.lifted ? 0.12 : 0.08));
         }
+        // Edit mode: an edge marks every tile as one that can be moved.
+        border.width: tile.editing ? 1 : 0
+        border.color: tile.pal.overlay(tile.lifted ? 0.4 : 0.22)
         Behavior on color {
             enabled: tile.pal.motion.animate
             ColorAnimation { duration: tile.pal.motion.hover }
@@ -70,7 +131,7 @@ Item {
         FocusRing {
             baseRadius: tile.radius
             ringColor: tile.pal.focus
-            shown: mainArea.visualFocus
+            shown: mainArea.visualFocus || editArea.visualFocus
         }
     }
 
@@ -82,6 +143,7 @@ Item {
             bottom: parent.bottom
             right: tile.hasDetails ? chevronArea.left : parent.right
         }
+        enabled: !tile.editing
         focusPolicy: Qt.TabFocus
         hoverEnabled: true
         checkable: false
@@ -161,7 +223,7 @@ Item {
 
     T.AbstractButton {
         id: chevronArea
-        visible: tile.hasDetails
+        visible: tile.hasDetails && !tile.editing
         width: tile.hasDetails ? Math.max(tile.metrics.px(34), tile.pal.touch ? 44 : 0) : 0
         anchors {
             right: parent.right
@@ -204,6 +266,109 @@ Item {
             anchors.fill: parent
             mainText: tile.detailsText
             active: tile.detailsText.length > 0
+            location: PlasmaCore.Types.Floating
+        }
+    }
+
+    // ---- Edit mode: the whole tile drags; Ctrl+arrow keys move it, Delete removes it.
+    T.Control {
+        id: editArea
+        objectName: "edit-" + tile.tileId
+        anchors.fill: parent
+        visible: tile.editing
+        focusPolicy: Qt.TabFocus
+        hoverEnabled: true
+        Accessible.role: Accessible.Button
+        Accessible.name: tile.title
+        Accessible.description: tile.arrangement ? tile.arrangement.describe(tile.tileId) : ""
+        Keys.onPressed: event => {
+            if (tile.arrangement) {
+                tile.arrangement.keyPressed(tile.tileId, event);
+            }
+        }
+        contentItem: Item {}
+        background: Item {}
+
+        DragHandler {
+            id: dragger
+            target: null
+            enabled: tile.editing
+            // Once it moves the tile, the sheet's scrolling does not take the drag over.
+            grabPermissions: PointerHandler.CanTakeOverFromAnything
+            onActiveChanged: {
+                if (active) {
+                    tile.grabPoint = centroid.pressPosition;
+                    tile.dragPoint = tile.parent.mapFromItem(null, centroid.scenePosition);
+                    tile.arrangement.dragStarted(tile.tileId);
+                } else {
+                    // Let go: the tile glides from under the pointer into its cell.
+                    tile.glideFrom(tile.dragPoint.x - tile.grabPoint.x - tile.x, tile.dragPoint.y - tile.grabPoint.y - tile.y);
+                    tile.arrangement.dragFinished(tile.tileId);
+                }
+            }
+            onCentroidChanged: {
+                if (active) {
+                    tile.dragPoint = tile.parent.mapFromItem(null, centroid.scenePosition);
+                    tile.arrangement.dragMoved(tile.tileId, tile.dragPoint.x - tile.grabPoint.x + tile.width / 2,
+                                               tile.dragPoint.y - tile.grabPoint.y + tile.height / 2);
+                }
+            }
+        }
+    }
+
+    // The drag handle, where the chevron is.
+    LineIcon {
+        visible: tile.editing
+        anchors {
+            right: parent.right
+            rightMargin: tile.metrics.px(10)
+            verticalCenter: parent.verticalCenter
+        }
+        size: tile.metrics.px(16)
+        path: Icons.grip
+        strokeWidth: 2.6
+        color: tile.foreground
+        opacity: 0.7
+    }
+
+    // The remove badge at the top right; its target is larger than the drawn circle (44
+    // in touch mode).
+    T.AbstractButton {
+        id: removeBadge
+        objectName: "remove-" + tile.tileId
+        readonly property real badgeSize: tile.pal.tablet ? 24 : 22
+        visible: tile.editing && !tile.lifted
+        width: Math.max(28, tile.pal.touch ? 44 : 0)
+        height: width
+        // Flush with the tile's right edge (the sheet clips what passes its side) and over its top.
+        x: tile.width - badgeSize / 2 - width / 2
+        y: 4 - height / 2
+        focusPolicy: Qt.NoFocus
+        hoverEnabled: true
+        text: i18nc("@action:button %1 tile name", "Remove %1", tile.title)
+        Accessible.role: Accessible.Button
+        Accessible.name: text
+        onClicked: tile.arrangement.hide(tile.tileId)
+        contentItem: Item {}
+        background: Rectangle {
+            x: (removeBadge.width - width) / 2
+            y: (removeBadge.height - height) / 2
+            width: removeBadge.badgeSize
+            height: width
+            radius: width / 2
+            color: removeBadge.down ? Qt.darker(tile.pal.playFill, 1.15) : (removeBadge.hovered ? Qt.darker(tile.pal.playFill, 1.07) : tile.pal.playFill)
+            LineIcon {
+                anchors.centerIn: parent
+                size: 16
+                strokeWidth: 2.2
+                path: Icons.minus
+                color: tile.pal.playGlyph
+            }
+        }
+        PlasmaCore.ToolTipArea {
+            anchors.fill: parent
+            mainText: removeBadge.text
+            active: !tile.pal.touch
             location: PlasmaCore.Types.Floating
         }
     }
