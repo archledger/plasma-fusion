@@ -26,8 +26,10 @@ waves, battery fill, charging bolt, 30 % / 10 % warning colours).
 **The pop-up** (356 px wide, 10 px under the bar, 16 px from the screen edge, frame = the Plasma
 style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come from the Plasma style):
 
-* battery chip (`82%`, 34 px, radius 17) and four 34 px round buttons: screenshot (Spectacle's
-  rectangular-region shortcut), System Settings, lock, leave (logout / restart / shut down prompt);
+* battery chip (`82%`, 34 px, radius 17) and five 34 px round buttons: screenshot (Spectacle's
+  rectangular-region shortcut), copy text from the screen (0.5.0: `spectacle --region` after the
+  pop-up closes, where Extract Text copies the selection's text; the same command as Meta+Shift+T,
+  docs/parts/device.md), System Settings, lock, leave (logout / restart / shut down prompt);
 * volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
   Plasma's "Raise maximum volume", `plasmaparc` read through plasma-pa's `GlobalConfig`; a volume
   set above the limit elsewhere is kept by a step up, and every wheel or key step counts from the

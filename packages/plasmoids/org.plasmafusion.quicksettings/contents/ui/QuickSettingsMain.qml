@@ -122,6 +122,14 @@ ColumnLayout {
             onClicked: page.backend.session.screenshot()
         }
         IconButton {
+            objectName: "copyTextButton"
+            pal: page.pal
+            size: page.tablet ? 44 : 34
+            iconPath: Icons.copyText
+            text: i18nc("@action:button", "Copy text from the screen")
+            onClicked: page.backend.session.copyText()
+        }
+        IconButton {
             pal: page.pal
             size: page.tablet ? 44 : 34
             iconPath: Icons.settings

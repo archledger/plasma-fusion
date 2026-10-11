@@ -56,6 +56,9 @@ jobs:
       - name: Setup config keys that keep the user's choice
         run: tools/device/tests/config-keys-unit.sh build/config-keys
 
+      - name: Copy-text shortcut set up and undone (fake kglobalaccel)
+        run: tools/device/tests/copytext-unit.sh build/copytext
+
       - name: VM crash collector unit tests
         run: |
           python3 tools/tests/release-vm/test-crash-count.py

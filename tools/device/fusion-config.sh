@@ -62,6 +62,10 @@
 #                      set when the widget has no key yet or still the earlier Plasma Fusion one
 #                      (the dead entry of a widget dropped by an earlier layout rebuild is removed
 #                      first); a key the user chose is kept
+#   Copy text          Meta+Shift+T (when no other action holds it; a key the user chose is kept):
+#                      "Copy Text from Screen", Spectacle's region capture, where its Extract Text
+#                      copies the selected text (a kglobalaccel component in
+#                      ~/.local/share/kglobalaccel/, removed by fusion-restore.sh)
 #   Workspaces         four virtual desktops Work, Design, Media, Chat in one row
 #   Shortcuts          Meta+1..4 switch workspace (added to "Switch to Desktop 1..4", removed
 #                      from "activate task manager entry 1..4")
@@ -166,6 +170,10 @@ PEN_SHORTCUT_TEXT=Meta+Shift+W
 # notification list: it writes the widget's [General] openRequest = "notifications:<ms>".
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
 NOTIFY_SHORTCUT=$((META + 0x4e))
+# Meta+Shift+T (PowerToys' Text Extractor key; no KWin, Plasma or Spectacle default holds it in 6.7):
+# copy text from the screen with Spectacle's OCR, a component made the same way.
+COPYTEXT_COMPONENT=org.plasmafusion.copytext.desktop
+COPYTEXT_SHORTCUT=$((META + SHIFT + 0x54))
 LAUNCHER_ACTION="activate application launcher"
 # The on-screen keyboard (plasma-keyboard) as kwinrc [Wayland] InputMethod names it on Fedora;
 # section 4 takes the copy in the system data directories (XDG_DATA_DIRS) where there is one.
@@ -388,7 +396,8 @@ BACKUP_FILES=(
 # Files below $HOME outside ~/.config (restored or removed the same way).
 LO_GUARD_REL=.local/bin/libreoffice
 LO_ENTRY_REL=.local/share/applications/soffice.desktop
-BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL")
+BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" ".local/share/kglobalaccel/$COPYTEXT_COMPONENT"
+  .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL")
 # Configuration files the build or the system templates would install are saved as well.
 if [ -n "$CONFIG_SRC" ]; then
   while IFS= read -r -d '' f; do
@@ -1468,6 +1477,61 @@ ensure_notify_shortcut() {
   fi
 }
 
+# Copy text from the screen (survey F6; PowerToys Text Extractor, macOS Live Text). Spectacle
+# (6.6 and later) recognises text only from its own capture: there is no command line or D-Bus way to
+# go straight from a region to the clipboard, and its background mode (-b -r) saves an image and
+# exits without the text. So the key opens Spectacle's region capture (--region), where "Extract
+# Text" on the selection's toolbar copies the text and says so in a notification; Spectacle's viewer
+# opens afterwards unless its "Close after extraction" setting is on. Quick settings' header has the
+# same action.
+copytext_desktop() {
+  cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Plasma Fusion: Copy Text from Screen
+Comment=Select an area with Spectacle and choose Extract Text to copy its text (installed by Plasma Fusion's fusion-config.sh, removed by fusion-restore.sh)
+Icon=document-scan
+Exec=spectacle --region
+StartupNotify=false
+EOF
+}
+# Meta+Shift+T only when nothing holds it; a key the user gave the action is kept.
+ensure_copytext_shortcut() {
+  local cur
+  if ! command -v spectacle >/dev/null 2>&1; then
+    note "copy text from the screen: Spectacle is not installed (no shortcut)"
+    return 0
+  fi
+  # Executable, as the Meta+N component (KDE runs a desktop file outside the system directories
+  # only when it has the executable bit).
+  install_text "$DATA/kglobalaccel/$COPYTEXT_COMPONENT" "$(copytext_desktop)" 0755 || true
+  if [ "$DRY" = 0 ]; then
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$COPYTEXT_COMPONENT" _launch \
+      "Plasma Fusion: Copy Text from Screen" "Plasma Fusion: Copy Text from Screen" >/dev/null 2>&1 ||
+      note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT"
+  fi
+  cur=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
+  if [ -n "$cur" ]; then
+    # shellcheck disable=SC2086
+    note "shortcut $COPYTEXT_COMPONENT / _launch = $(keyname $cur) (kept)"
+  elif [ -z "$(key_holders "$COPYTEXT_SHORTCUT")" ]; then
+    shortcut_set "$COPYTEXT_COMPONENT" _launch "$COPYTEXT_SHORTCUT"
+  else
+    note "copy text from the screen: Meta+Shift+T is in use (no shortcut set)"
+  fi
+  # kglobalaccel makes a component it loads at login active; one registered while it runs stays
+  # inactive (no key grab) until the next login. Its keys given again as present (SetPresent 2 |
+  # NoAutoloading 4, what a running application does) make the key work at once.
+  cur=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
+  if [ -n "$cur" ] && [ "$DRY" = 0 ]; then
+    # shellcheck disable=SC2086
+    set -- $cur
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setShortcut asaiu 4 "$COPYTEXT_COMPONENT" _launch \
+      "Plasma Fusion: Copy Text from Screen" "Plasma Fusion: Copy Text from Screen" $# "$@" 6 >/dev/null 2>&1 ||
+      note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT's key as present"
+  fi
+}
+
 # Search: Meta+Space, Meta+S, Alt+Space, Alt+F2 and KRunner's own keys (Search) activate the
 # launcher (the shell's "activate application launcher", which opens it on the active screen, as
 # the Meta key does); KRunner keeps no key, so nothing starts it.
@@ -1948,6 +2012,7 @@ if has_name org.kde.plasmashell; then
 else
   note "quick settings: plasmashell is not running (no shortcut set)"
 fi
+ensure_copytext_shortcut
 
 # ---------- 6. lock screen ----------
 
