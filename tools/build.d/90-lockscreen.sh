@@ -40,13 +40,13 @@ mkdir -p "$DEST/contents"
 install -m 0644 "$SRC/metadata.json" "$DEST/metadata.json"
 cp -r "$SRC/contents/lockscreen" "$DEST/contents/"
 bash "$ROOT/tools/build-lib/shared-qml.sh" install "$SRC" "$DEST/contents/lockscreen"
-# The log-out screen: the same files the Global Theme carries (the Plasma 6.7 greeter reads them
-# from there; the Plasma 6.8 greeter reads the shell package instead, plasma-workspace 3729037a).
-for f in Logout.qml LogoutButton.qml timer.js; do
-  [ -s "$ROOT/packages/look-and-feel/common/contents/logout/$f" ] ||
-    { echo "lockscreen: missing look-and-feel contents/logout/$f" >&2; exit 1; }
+# The log-out screen of Plasma 6.8 and later, whose greeter reads the shell package
+# (plasma-workspace 3729037a): 6.8's files, with the controls on the active screen only. Plasma
+# 6.7's greeter reads the Global Theme's copy (packages/look-and-feel/common/contents/logout/).
+for f in Logout.qml LogoutControls.qml LogoutButton.qml timer.js controlsowner.js; do
+  [ -s "$SRC/contents/logout/$f" ] || { echo "lockscreen: missing contents/logout/$f" >&2; exit 1; }
 done
-cp -r "$ROOT/packages/look-and-feel/common/contents/logout" "$DEST/contents/"
+cp -r "$SRC/contents/logout" "$DEST/contents/"
 find "$DEST" -type d -exec chmod 0755 {} +
 find "$DEST" -type f -exec chmod 0644 {} +
 echo "lockscreen: $(find "$DEST" -type f | wc -l) files in ${DEST#"$STAGE"/}"

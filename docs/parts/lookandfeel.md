@@ -141,8 +141,9 @@ instant. Imports only QtQuick, Kirigami and org.kde.coreaddons (KUser).
 
 Plasma 6.8 no longer reads the Global Theme's `contents/logout/`: the log-out greeter loads the
 shell package's `logout/Logout.qml` (plasma-workspace 3729037a). Plasma Fusion therefore carries
-the same files in the `org.plasmafusion.lockshell` shell package (staged from
-`packages/look-and-feel/common/contents/logout/` by `tools/build.d/90-lockscreen.sh`), and
+a log-out screen in the `org.plasmafusion.lockshell` shell package too
+(`packages/lockscreen/org.plasmafusion.lockshell/contents/logout/`, staged by
+`tools/build.d/90-lockscreen.sh`), and
 `lockscreen-enable.sh` writes a per-user D-Bus service override that starts the greeter
 (`ksmserver-logout-greeter`, D-Bus name `org.kde.LogoutPrompt`) with
 `PLASMA_DEFAULT_SHELL=org.plasmafusion.lockshell`, so Plasma 6.8 shows Plasma Fusion's log-out
@@ -150,14 +151,34 @@ screen as well. Plasma 6.7's greeter still reads the Global Theme and is unaffec
 moves the override aside together with the KWin drop-in on untested Plasma series and puts it
 back with it.
 
-`contents/logout/` (both packages): Plasma 6.7.5's Breeze `Logout.qml`, `LogoutButton.qml` and
-`timer.js` with one change. Breeze draws the Complementary colours on a black 85 % veil; Plasma
+The Global Theme's `contents/logout/` (read by Plasma 6.7): Plasma 6.7.5's Breeze `Logout.qml`,
+`LogoutButton.qml` and `timer.js` with one change. Breeze draws the Complementary colours on a black 85 % veil; Plasma
 Fusion Light has the board's light Complementary set (`#f7f8fb`, text `#141827`), which made the
 Breeze screen unreadable (foundation evidence `session-light/light-10-logout.png`). The veil now
 takes the Complementary background: dark in Plasma Fusion Dark, light in Plasma Fusion Light. The
 greeter contract (context properties, signals, keyboard navigation, count-down) is unchanged;
 qmllint reports only the same unqualified context-property accesses as the upstream file. There is
 no board for this screen.
+
+The shell package's `contents/logout/` (read by Plasma 6.8 and later, 0.5.0): plasma-desktop
+Plasma/6.8's own files (`Logout.qml`, `LogoutControls.qml`, `LogoutButton.qml`, `timer.js`,
+`controlsowner.js`, at 98b61eba) with the same veil change. Until 0.5.0 the shell package carried
+the 6.7.5 copy, which on 6.8 asked for the greeter's `screenGeometry` context property, dropped in
+6.8 (plasma-workspace 37ae55a2; "ReferenceError: screenGeometry is not defined" twice per screen),
+and drew the user, the count-down and the buttons on every screen, each with its own focus. Since
+6.8 (plasma-desktop 18cd295a, bug 431382) every screen gets the veil and its count-down timer, and
+one set of controls (`LogoutControls`, owned through the shared `controlsowner.js`; the greeter's
+views share one engine) is shown on the screen with the pointer, fades in there and follows the
+pointer to another screen; the active screen's window takes the keyboard. The strings are in the
+desktop shell's catalogue (`plasma_shell_org.kde.plasma.desktop`), as in 6.8; a key press on a
+button no longer swallows the key (6.8's `LogoutButton`).
+
+Test (CI step "Log-out screen on Plasma 6.8"): `packages/lockscreen/test/logout_test.py` loads it
+as the 6.8 greeter does (two views on one engine, Plasma Fusion Light): no QML warnings, the
+controls shown once and on the pointer's screen, following it, the count-down with them, Log Out
+and Escape send the greeter's signals, the veil in the Complementary background on every screen.
+The 0.5.0 base fails 7 of its 12 checks (controls and count-down on both screens, the
+`screenGeometry` errors); stock 6.8's files fail the veil checks.
 
 ## tools/device/fusion-config.sh
 

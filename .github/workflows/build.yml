@@ -160,6 +160,13 @@ jobs:
       - name: Lock screen Restart and Shut Down (offscreen, mock logind and ksmserver)
         run: packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy power-noreboot power-kiosk
 
+      - name: Log-out screen on Plasma 6.8 (offscreen, two screens on one engine)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/lockscreen/test/session-bus.conf -- \
+            python3 packages/lockscreen/test/logout_test.py
+
       - name: Lock screen ways to unlock (offscreen, Plasma 6.8 and 6.7 authenticators)
         run: >-
           packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen-auth" auth68-picker auth68-saved

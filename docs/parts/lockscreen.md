@@ -196,9 +196,10 @@ the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones
 | `…/PowerButton.qml`, `RoundButton.qml`, `FocusRing.qml`, `LineIcon.qml`, `PfStyle.qml` (singleton: colours, fonts, the boards' 24 px line-icon paths, date/time helpers; the accent from `FusionAccent`) | building blocks |
 | `FusionMetrics.qml`, `Motion.qml`, `FusionAccent.qml`, `FusionTablet.qml` (installed copies of `packages/common/`, `tools/build-lib/shared-qml.sh`) | text scale, motion tokens, accent, KWin's tablet posture |
 | `…/LockOsd.qml`, `PasswordSync.qml`, `qmldir` | stock |
+| `…/contents/logout/` | the log-out screen of Plasma 6.8 and later (6.8's files with the Complementary veil; docs/parts/lookandfeel.md "Log-out screen") |
 | `…/config.xml`, `config.qml` | settings (below) |
 | `packages/lockscreen/test/` | offscreen harness (`run.sh`: a private bus without service activation, `session-bus.conf`), mock authenticators (Plasma 6.7 `MockAuthenticator.qml`, 6.8 `MockAuthenticator68.qml`) and `org.kde.kscreenlocker` stubs (enums, the 6.8 `AuthenticatorModel`), mock MPRIS / notification server, mock logind and ksmserver `org.kde.Shutdown` (`power`), `scenario-greeter.sh` (real greeter in a virtual session; usage in its header) (not installed) |
-| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (37 files in 0.5.0) |
+| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (39 files in 0.5.0) |
 | `tools/device/lockscreen-enable.sh`, `lockscreen-disable.sh` | select / deselect it for the user |
 
 ## Install and enable
