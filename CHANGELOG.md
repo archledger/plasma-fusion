@@ -21,6 +21,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - The dock's window previews no longer flicker and restart their live thumbnails whenever a
   window title or the active window changes while they are shown (a terminal printing, a browser
   loading a page): only the card that changed is updated.
+- Uninstalling with the installer also puts back the login screen and removes the boot splash when
+  Plasma Fusion's root tools applied them, before the packages go; before, the login screen was
+  left pointing at the removed theme and wallpaper. The installer offers the login screen step only
+  where plasma-login-manager is installed (not on SDDM systems, where the tool stops).
 
 ## 0.4.0 (2026-10-09)
 
