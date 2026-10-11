@@ -32,7 +32,8 @@
 #                      after hand check V2 showed that the laptop reports the pen's garage)
 #   --screens          run the Global Theme's ensure-topbars.js: a top bar on every screen
 #   --shortcuts        apply the Windows-style shortcut set again (normally once per config version)
-#   --keep-shortcuts   do not apply the Windows-style shortcut set (Meta+N stays quick settings)
+#   --keep-shortcuts   do not apply the Windows-style shortcut set (Meta+N stays quick settings,
+#                      Meta+V Klipper's pop-up)
 #   -h, --help
 #
 # By default the layout is rebuilt only when the current panels are not the Plasma Fusion
@@ -95,7 +96,8 @@
 #                      launcher (KRunner's other keys move there); Alt+F2 KRunner (also given back
 #                      once on a HOME an earlier release configured, while the launcher still has
 #                      it and KRunner has no key); Meta+A quick settings; Meta+N the
-#                      notification list; Meta+Up / Meta+Down maximize / restore (quick tile top /
+#                      notification list; Meta+V the clipboard sheet (Klipper's pop-up at the
+#                      pointer loses it); Meta+Up / Meta+Down maximize / restore (quick tile top /
 #                      bottom move to Meta+Alt+Up/Down); Meta+Tab Overview; Meta+Alt+1..9 dock apps;
 #                      every other holder of these keys loses them
 #   Window switcher    kwinrc [TabBox] DelayTime 120 (a quick Alt+Tab shows no switcher)
@@ -176,6 +178,12 @@ NOTIFY_SHORTCUT=$((META + 0x4e))
 # copy text from the screen with Spectacle's OCR, a component made the same way.
 COPYTEXT_COMPONENT=org.plasmafusion.copytext.desktop
 COPYTEXT_SHORTCUT=$((META + SHIFT + 0x54))
+# Meta+V: the same kind of component for quick settings' clipboard sheet ("clipboard:<ms>"). Plasma
+# gives Meta+V to Klipper's "Show Clipboard Items at Mouse Position" (plasmashell /
+# show-on-mouse-pos), which loses it with the Windows-style set and gets it back from
+# fusion-restore.sh; with --keep-shortcuts Klipper keeps it.
+CLIPBOARD_COMPONENT=org.plasmafusion.clipboard.desktop
+CLIPBOARD_SHORTCUT=$((META + 0x56))
 LAUNCHER_ACTION="activate application launcher"
 # plasmafusionrc [Shortcuts] KRunnerKey: Alt+F2 went back to KRunner (apply_krunner_key_upgrade).
 KRUNNER_KEY_VERSION=1
@@ -401,6 +409,7 @@ BACKUP_FILES=(
 LO_GUARD_REL=.local/bin/libreoffice
 LO_ENTRY_REL=.local/share/applications/soffice.desktop
 BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" ".local/share/kglobalaccel/$COPYTEXT_COMPONENT"
+  ".local/share/kglobalaccel/$CLIPBOARD_COMPONENT"
   .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL")
 # Configuration files the build or the system templates would install are saved as well.
 if [ -n "$CONFIG_SRC" ]; then
@@ -556,9 +565,10 @@ upgrade_log() { # STATUS FILE GROUP KEY OLD NEW (only for an upgrade from an ear
 # KWin aborts, and with it the session (release-test VM, 2026-10-03).
 
 # Current keys of a global shortcut as Qt key codes. $1 component, $2 action
+# (kglobalaccel lists a desktop file's action without a key as the key 0, which is left out)
 shortcut_get() {
   bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel shortcut as 4 "$1" "$2" "" "" 2>/dev/null |
-    python3 -c 'import json,sys; print(" ".join(str(k) for k in json.load(sys.stdin)["data"][0]))' 2>/dev/null || true
+    python3 -c 'import json,sys; print(" ".join(str(k) for k in json.load(sys.stdin)["data"][0] if k))' 2>/dev/null || true
 }
 
 # Give a global shortcut exactly the keys listed (none when empty). $1 component, $2 action, $3.. keys
@@ -1456,6 +1466,21 @@ Exec=busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell eva
 StartupNotify=false
 EOF
 }
+# Registers a command component (its desktop file in ~/.local/share/kglobalaccel/) as System
+# Settings' "Add Command" does (kcm_keys, GlobalAccelModel::addApplication): an action with an empty
+# name makes kglobalaccel read the desktop file and take the file's own _launch action, which starts
+# the command; the empty one is removed again. Registering "_launch" itself, as this did before, put
+# a second _launch that no program owns in place of the file's own one (kglobalacceld's addAction
+# runs after the component was made from the file), so the key did nothing until the next login.
+# $1 component, $2 its name
+register_command_component() {
+  [ "$DRY" = 1 ] && return 0
+  if ! bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$1" "" "$2" "" >/dev/null 2>&1; then
+    note "warning: kglobalaccel did not take $1"
+    return 0
+  fi
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$1" "" >/dev/null 2>&1 || true
+}
 # $1 claim (the Windows set) or free (only when nothing holds Meta+N)
 ensure_notify_shortcut() {
   local mode=$1 cur free
@@ -1463,11 +1488,7 @@ ensure_notify_shortcut() {
   # executable bit ("not owned by root and executable flag not set"), so kglobalaccel would bind
   # Meta+N and then refuse to launch it. System Settings' "Add Command" entries are made the same way.
   install_text "$DATA/kglobalaccel/$NOTIFY_COMPONENT" "$(notify_desktop)" 0755 || true
-  if [ "$DRY" = 0 ]; then
-    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$NOTIFY_COMPONENT" _launch \
-      "Plasma Fusion: Notifications" "Plasma Fusion: Notifications" >/dev/null 2>&1 ||
-      note "warning: kglobalaccel did not take $NOTIFY_COMPONENT"
-  fi
+  register_command_component "$NOTIFY_COMPONENT" "Plasma Fusion: Notifications"
   if [ "$mode" = claim ]; then
     shortcut_claim "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
     return 0
@@ -1535,6 +1556,42 @@ ensure_copytext_shortcut() {
     bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setShortcut asaiu 4 "$COPYTEXT_COMPONENT" _launch \
       "Plasma Fusion: Copy Text from Screen" "Plasma Fusion: Copy Text from Screen" $# "$@" 6 >/dev/null 2>&1 ||
       note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT's key as present"
+  fi
+}
+
+# Meta+V: the clipboard sheet of quick settings (its button opens it too), written like Meta+N's
+# component; the sheet's openRequest mode "clipboard" opens it or, when it is open, closes it.
+CLIPBOARD_JS="var q=panels();for(var i=0;i<q.length;i++){var w=q[i].widgets('org.plasmafusion.quicksettings');for(var j=0;j<w.length;j++){w[j].currentConfigGroup=['General'];w[j].writeConfig('openRequest','clipboard:'+Date.now());}}"
+clipboard_desktop() {
+  cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Plasma Fusion: Clipboard
+Comment=Opens the clipboard sheet of quick settings (installed by Plasma Fusion's fusion-config.sh, removed by fusion-restore.sh)
+Icon=edit-paste
+Exec=busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s "$CLIPBOARD_JS"
+StartupNotify=false
+EOF
+}
+# $1 claim (the Windows set: Klipper's pop-up loses Meta+V) or free (Meta+V only when nothing
+# holds it, which on a stock Plasma is never: Klipper has it). Either way the component is there,
+# so "Plasma Fusion: Clipboard" can be given a key under System Settings > Shortcuts.
+ensure_clipboard_shortcut() {
+  local mode=$1 cur
+  install_text "$DATA/kglobalaccel/$CLIPBOARD_COMPONENT" "$(clipboard_desktop)" 0755 || true
+  register_command_component "$CLIPBOARD_COMPONENT" "Plasma Fusion: Clipboard"
+  if [ "$mode" = claim ]; then
+    shortcut_claim "$CLIPBOARD_COMPONENT" _launch "$CLIPBOARD_SHORTCUT"
+    return 0
+  fi
+  cur=$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)
+  if [ -n "$cur" ]; then
+    # shellcheck disable=SC2086
+    note "shortcut $CLIPBOARD_COMPONENT / _launch = $(keyname $cur) (kept)"
+  elif [ -z "$(key_holders "$CLIPBOARD_SHORTCUT")" ]; then
+    shortcut_set "$CLIPBOARD_COMPONENT" _launch "$CLIPBOARD_SHORTCUT"
+  else
+    note "clipboard sheet: Meta+V is in use, by Klipper's pop-up by default (no shortcut set; --shortcuts takes it)"
   fi
 }
 
@@ -2027,17 +2084,20 @@ managed_key krunnerrc General FreeFloating true true
 # badge shows the current layout's [Layout] DisplayNames entry when the user set one, else its
 # short name in capitals ("US" where the board draws its sample "EN"); writing kxkbrc Use or
 # LayoutList would replace the layouts KWin takes from the system (XKB_DEFAULT_LAYOUT).
-# Quick settings: Meta+A (the Windows-style set; Meta+N then opens its notification list) or Meta+N.
+# Quick settings: Meta+A (the Windows-style set; Meta+N then opens its notification list and Meta+V
+# its clipboard sheet) or Meta+N.
 if has_name org.kde.plasmashell; then
   if [ "$WINDOWS_SET" = 1 ]; then
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "$QS_OLD_SHORTCUT_TEXT" claim
     ensure_notify_shortcut claim
+    ensure_clipboard_shortcut claim
   elif [ "$SHORTCUTS" = keep ]; then
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_OLD_SHORTCUT" "$QS_OLD_SHORTCUT_TEXT" "quick settings" "" free
   else
     # A widget made by a later layout rebuild gets its key again, when nothing else took it.
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "" free
     ensure_notify_shortcut free
+    ensure_clipboard_shortcut free
   fi
 else
   note "quick settings: plasmashell is not running (no shortcut set)"

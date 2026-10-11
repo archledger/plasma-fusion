@@ -49,6 +49,8 @@ Item {
     signal pillClicked()
     signal bellPressed()
     signal bellClicked()
+    signal clipboardPressed()
+    signal clipboardClicked()
     // A pull-down on the pill or the bell (touch).
     signal pulled(bool fromBell)
 
@@ -213,7 +215,18 @@ Item {
             implicitHeight: bar.rowHeight
             iconPath: Icons.clipboard
             text: i18nc("@action:button", "Clipboard")
-            onClicked: bar.backend.session.openClipboard()
+            Accessible.role: Accessible.ButtonDropDown
+            // Pressed and clicked apart, as the pill: a click while the sheet is open closes it.
+            Keys.onReturnPressed: {
+                bar.clipboardPressed();
+                bar.clipboardClicked();
+            }
+            Keys.onEnterPressed: {
+                bar.clipboardPressed();
+                bar.clipboardClicked();
+            }
+            onPressed: bar.clipboardPressed()
+            onClicked: bar.clipboardClicked()
         }
 
         // ---- On-screen keyboard (tablet posture, TABLET 4.3)

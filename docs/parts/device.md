@@ -130,6 +130,7 @@ file, so `fusion-restore.sh` gives every key back.
 | Alt+F2 | `org.kde.krunner.desktop` / `_launch`, its only key: the full KRunner (every plugin, web shortcuts too). Alt+F2 is the run-command key of KDE since its first release and of GNOME and Xfce, so whoever presses it wants a command line; the Windows and macOS search keys and Alt+Space stay with the launcher, whose last search row hands the query to KRunner. `RunClipboard` keeps no key. On a HOME an earlier release set up (the launcher had Alt+F2, KRunner nothing; the key set does not run again there) the setup moves Alt+F2 back once, only while the launcher still holds it and KRunner has no key (`plasmafusionrc [Shortcuts] KRunnerKey=1`; recorded in the backup like every key) |
 | Meta+A | the quick-settings widget's own "activate widget <id>" (widget API, as before) |
 | Meta+N | `org.plasmafusion.notifications.desktop` / `_launch`: a desktop file in `~/.local/share/kglobalaccel/` (how System Settings adds a command shortcut) that writes the quick-settings widget's `[General] openRequest = "notifications:<ms>"` through `evaluateScript` (`busctl`) |
+| Meta+V | `org.plasmafusion.clipboard.desktop` / `_launch`, a component of the same kind that writes `openRequest = "clipboard:<ms>"`: quick settings' clipboard sheet on the screen in use (a second Meta+V closes it); Klipper's `plasmashell` / `show-on-mouse-pos` ("Show Clipboard Items at Mouse Position", Plasma's Meta+V) loses the key and keeps its others |
 | Meta+Up / Meta+Down | `kwin` / `Window Maximize` (a toggle in KWin 6.7.5) / `Window Restore` (Meta+PgUp and Meta+Backspace stay) |
 | Meta+Alt+Up / Meta+Alt+Down | `kwin` / `Window Quick Tile Top` / `Bottom` (`Switch Window Up/Down` lose them) |
 | Meta+Tab | `kwin` / `Overview` (Meta+W stays; `Walk Through Windows` keeps Alt+Tab) |
@@ -164,7 +165,14 @@ holds nothing and starts nothing.
 
 Widget keys (quick settings, pen) are also set on later runs when the widget has none (a layout
 rebuild drops them; a dead entry of a dropped widget is cleared first), but then only when the key is
-free. With `--keep-shortcuts` quick settings keeps Meta+N, as before.
+free. With `--keep-shortcuts` quick settings keeps Meta+N, as before, and Klipper's pop-up keeps
+Meta+V (no clipboard component is added; the clipboard button still opens the sheet). A later run
+without the set adds the Meta+V component and gives it Meta+V only when nothing holds the key (on a
+stock Plasma Klipper does), so "Plasma Fusion: Clipboard" can be given a key in System Settings >
+Shortcuts; `--shortcuts` moves Meta+V to it. Tested by `tests/shortcut-keys-unit.sh` (21 checks
+against a fake kglobalaccel: the claim, Klipper's other keys, the backup record that
+`fusion-restore.sh` replays, the executable desktop file, the Meta+N and Meta+V keys starting their
+command at once, later runs, a user's own key, a dry run, and which kind of run claims).
 
 ### Other settings
 
@@ -243,8 +251,10 @@ pins go into the dock's `launchers` and `~/.config/autostart/org.kde.kalendarac.
 
 In addition to what `gate.md` describes, for the chosen backup and every later run, newest first:
 
-1. shortcuts through kglobalaccel (the Windows-style set included); the Meta+N component is
-   unregistered when the restored state has no desktop file for it;
+1. shortcuts through kglobalaccel (the Windows-style set included, so Klipper's pop-up gets Meta+V
+   back); the Meta+N and Meta+V components are unregistered when the restored state has no desktop
+   file for them, and a component file that a backup older than the component does not list is
+   removed;
 2. pen defaults: `pen-defaults.sh --restore <pen backup>` (KWin reads them at once);
 3. user services: stopped in this session's own manager (`plasma-fusion-powerfx` gives the
    power-tier values back in `ExecStopPost=... --apply full`); without a manager its program runs
@@ -255,6 +265,7 @@ In addition to what `gate.md` describes, for the chosen backup and every later r
    portal env file, units and their links) and the new `present-file`/`absent-file` entries below
    `$HOME` (`~/.local/share/kglobalaccel/org.plasmafusion.notifications.desktop`,
    `~/.local/share/kglobalaccel/org.plasmafusion.copytext.desktop`,
+   `~/.local/share/kglobalaccel/org.plasmafusion.clipboard.desktop`,
    `~/.local/libexec/plasma-fusion`);
 6. `daemon-reload`, KWin reconfigure, blur loaded again unless the restored kwinrc turns it off,
    `fc-cache`, plasmashell started.
@@ -347,9 +358,15 @@ ensure-topbars.js), the deployed d4afee8 tools (upgrade path) and these tools.
 Open items:
 - Meta+N (the notification list): the component's desktop file is now installed executable (KDE
   refused to run it without the bit), but in a private session neither the key nor
-  `invokeShortcut` launches it, while its command run directly works. Private sessions have no
-  systemd user manager on their bus, the likely difference. To check by hand in the real session at
-  DEPLOY-1; if it fails there, a KWin script shortcut that calls `evaluateScript` replaces it.
+  `invokeShortcut` launches it, while its command run directly works. Found in 0.5.0: the setup
+  registered the component's `_launch` action itself, and kglobalacceld then put an action no
+  program owns in place of the desktop file's own `_launch` (it reads the file when the component is
+  first named, then adds the named action anew), so the key did nothing until the next login read
+  the file again. The setup now registers it as System Settings' "Add Command" does (an action with
+  an empty name, removed again: `register_command_component`), and the key works at once
+  (`tests/shortcut-keys-unit.sh` against a fake kglobalaccel made the way kglobalacceld 6.7
+  behaves; the Meta+V component, registered the same way, opened the clipboard sheet at once in
+  VM 3 without a new login). The private-session case is not checked again.
 - Portrait fringe measurement and the real GTK apps the owner uses (hand checks).
 
 ## Needs from other parts

@@ -13,6 +13,9 @@ from pathlib import Path
 import sys
 import tempfile
 
+# The backend loads Plasma's clipboard module, whose Klipper code asks the offscreen platform for
+# X11 and crashes on the missing connection (clipboard_sheet_test.py does the same).
+os.environ["QT_QPA_OFFSCREEN_NO_GLX"] = "1"
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 from PySide6.QtCore import QObject, QPoint, QPointF, Qt, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402

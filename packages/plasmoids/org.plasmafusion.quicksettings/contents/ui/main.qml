@@ -161,6 +161,8 @@ PlasmoidItem {
 
     property bool popupOpen: false
     property bool openOnPress: false
+    // A page the next opening shows instead of the start page (the clipboard sheet).
+    property string requestedPage: ""
     property real maxPopupHeight: 820
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
@@ -241,6 +243,26 @@ PlasmoidItem {
     function togglePopup() {
         setPopupOpen(!popupOpen);
     }
+    // The clipboard sheet (the clipboard button, Meta+V): the pop-up on its clipboard page, or
+    // closed; Klipper's own pop-up where Plasma's clipboard module is missing.
+    readonly property bool clipboardShown: popupOpen && backend.page === "clipboard"
+    function showClipboard(open: bool): void {
+        if (!backend.clipboard.available) {
+            backend.clipboard.legacyPopup();
+            return;
+        }
+        if (!open) {
+            setPopupOpen(false);
+            return;
+        }
+        const wasOpen = popupOpen && popup.visible;
+        requestedPage = "clipboard";
+        setPopupOpen(true);
+        if (wasOpen && popupContent) {
+            // Already open on another page: the focus moves to the clipboard at once.
+            Qt.callLater(() => root.popupContent.focusFirst());
+        }
+    }
     // A device was plugged in (popupOnNewDevice): the sheet on the device list, unless the user is
     // busy on another page or in the Notification Centre.
     function showNewDevice(): void {
@@ -268,7 +290,10 @@ PlasmoidItem {
             contentWanted = true;
             placeAnchor();
             const start = String(Plasmoid.configuration.startPage || "main");
-            backend.page = ["main", "wifi", "bluetooth", "audio", "power"].indexOf(start) !== -1 ? start : "main";
+            backend.page = requestedPage !== "" ? requestedPage
+                         : ["main", "wifi", "bluetooth", "audio", "power"].indexOf(start) !== -1 ? start : "main";
+            backend.pageDirect = requestedPage !== "";
+            requestedPage = "";
             // The settings are read again after the sheet's first frame (policyRefresh).
             policyRefresh.restart();
         }
@@ -322,7 +347,7 @@ PlasmoidItem {
     }
 
     // ---- openRequest: "<mode>:<nonce>[:<output>]" (or "<mode> <nonce>"), written by other shell
-    // parts through desktop scripting (the tablet script's right edge, Meta+N). Without an
+    // parts through desktop scripting (the tablet script's right edge, Meta+N, Meta+V). Without an
     // output only the widget on KWin's active screen acts.
     Connections {
         target: Plasmoid.configuration
@@ -366,6 +391,9 @@ PlasmoidItem {
             break;
         case "toggle":
             togglePopup();
+            break;
+        case "clipboard":
+            showClipboard(!clipboardShown);
             break;
         case "close":
             if (popupOpen) {
@@ -440,7 +468,12 @@ PlasmoidItem {
                      + ", devices " + backend.devices.count
                      + ", tray " + (backend.trayRevealed.length > 0 ? backend.trayRevealed.join("+") : "-")
                      + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length
-                     + ", page " + backend.page
+                     + ", page " + backend.page + (backend.pageDirect ? " (direct)" : "")
+                     + (content && content.pageItem && backend.page === "clipboard"
+                        ? " [" + content.pageItem.mode + ", " + content.pageItem.count + " shown of "
+                          + (backend.clipboard.service ? backend.clipboard.service.sourceCount + ", "
+                             + backend.clipboard.service.starredCount + " starred" : "-")
+                          + ", current " + content.pageItem.list.currentIndex + ", query '" + content.pageItem.searchField.text + "']" : "")
                      + ", focus " + (popup.activeFocusItem ? popup.activeFocusItem.Accessible.name : "-")
                      + ", policy " + (policy ? "im " + (policy.inputMethod === "" ? "off" : "on") + " window " + policy.windowMode + " rotation "
                                       + (policy.rotationLocked ? "locked" : "free") + " mode " + policy.tabletModeSetting + " osk "
@@ -516,6 +549,11 @@ PlasmoidItem {
             root.contentWanted = true;
             root.openOnPress = !root.popupOpen;
         }
+        onClipboardPressed: {
+            root.contentWanted = true;
+            root.openOnPress = !root.clipboardShown;
+        }
+        onClipboardClicked: root.showClipboard(root.openOnPress)
         onBellClicked: {
             if (root.notificationsApart) {
                 if (root.centreOpen) {
@@ -648,6 +686,7 @@ PlasmoidItem {
         onTriggered: {
             if (!root.popupOpen) {
                 backend.page = "main";
+                backend.pageDirect = false;
                 backend.showEmptyNotifications = false;
             }
         }

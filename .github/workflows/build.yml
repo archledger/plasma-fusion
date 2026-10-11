@@ -62,6 +62,9 @@ jobs:
       - name: Copy-text shortcut set up and undone (fake kglobalaccel)
         run: tools/device/tests/copytext-unit.sh build/copytext
 
+      - name: Setup command shortcuts (against a fake kglobalaccel)
+        run: tools/device/tests/shortcut-keys-unit.sh build/shortcut-keys
+
       - name: VM crash collector unit tests
         run: |
           python3 tools/tests/release-vm/test-crash-count.py
@@ -167,6 +170,14 @@ jobs:
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.meters/tests/readings_test.py
+
+      - name: Clipboard sheet on Plasma's clipboard model (offscreen, throw-away HOME)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/qs-stage" tools/build.sh quicksettings
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/clipboard_sheet_test.py "$RUNNER_TEMP/qs-stage"
 
       - name: Calendar adapter and interaction tests (offscreen Qt)
         run: |

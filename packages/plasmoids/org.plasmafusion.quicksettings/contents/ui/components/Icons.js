@@ -72,3 +72,11 @@ var fullscreen = "M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5";
 var swipeUp = "M12 16V5M7.5 9.5L12 5l4.5 4.5M6 20h12";
 var pen = "M4 20l4.2-1 11-11a2.1 2.1 0 0 0-3-3l-11 11zM14.5 6.5l3 3";
 var tablet = "M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2";
+
+// Clipboard sheet. Search and Trash are the Icons board's; the others are drawn on the same grid.
+var search = "M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4";
+var trash = "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5";
+var star = "M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z";
+var smile = "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01";
+var qrCode = "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM14 20h.01M20 14h.01";
+var bolt = "M13 3L5 13h6l-1 8 8-10h-6z";

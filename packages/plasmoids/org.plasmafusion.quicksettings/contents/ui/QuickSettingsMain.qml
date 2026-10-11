@@ -821,6 +821,7 @@ ColumnLayout {
         spacing: page.metrics.px(4)
 
         ListRow {
+            id: clipboardRow
             objectName: "sheet-clipboard"
             Layout.fillWidth: true
             implicitHeight: page.metrics.px(52)
@@ -830,7 +831,7 @@ ColumnLayout {
             iconPath: Icons.clipboard
             text: i18nc("@action:button", "Clipboard")
             trailingPath: Icons.chevronRight
-            onClicked: page.backend.session.openClipboard()
+            onClicked: page.backend.clipboard.available ? page.openPage("clipboard", clipboardRow) : page.backend.clipboard.legacyPopup()
         }
         ListRow {
             objectName: "sheet-phone"

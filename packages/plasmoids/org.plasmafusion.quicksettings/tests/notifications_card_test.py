@@ -24,6 +24,10 @@ import tempfile
 import threading
 import time
 
+# The sheet's backend loads Plasma's clipboard module, whose Klipper code asks the platform for X11
+# when the offscreen platform offers it and crashes on the missing connection
+# (clipboard_sheet_test.py does the same).
+os.environ["QT_QPA_OFFSCREEN_NO_GLX"] = "1"
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 # Notifications from applications without a desktop file stay out of the history (Plasma's default
 # plasmanotifyrc, [Applications][@other] ShowInHistory=false): the test's applications get one.

@@ -44,6 +44,7 @@ UNDO=$BASE/undo.sh
 {
   grep -m1 '^NOTIFY_COMPONENT=' "$RESTORE"
   grep -m1 '^COPYTEXT_COMPONENT=' "$RESTORE" || true
+  grep -m1 '^CLIPBOARD_COMPONENT=' "$RESTORE" || true
   awk '/^# 1\. Shortcuts, newest change first/ { on = 1 } /^# 1b\. / { exit } on { print }' "$RESTORE"
   awk '/^while read -r state path; do/ { on = 1 } on { print } on && /^done <"\$BACKUP\/manifest"/ { exit }' "$RESTORE"
 } >"$UNDO"
