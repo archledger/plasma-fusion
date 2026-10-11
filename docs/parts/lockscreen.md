@@ -126,10 +126,19 @@ too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authent
   alone would only take the field away; the hint keeps pam_fprintd's guidance. When the fingerprint
   way itself is in use (chosen on the stock lock screen) the hint goes and "Use password" is offered.
 
+* While the prompt is shown the greeter is asked to authenticate again every second
+  (`startAuthenticating`), as the stock 6.8 lock screen does, except during the 3 s grace time after
+  a failed password. The 6.8 greeter starts a conversation only when asked and drops the request
+  while a way's worker process is still starting (the VM's greeter log: "Worker not ready yet,
+  cannot authenticate." for both workers right after the start) or a conversation is running, and
+  does not restart a failed fingerprint or face attempt by itself. Plasma 6.7's authenticators start
+  themselves and are not asked again.
+
 Tests (CI step "Lock screen ways to unlock"): `test/run.sh OUT auth68-picker auth68-saved
-auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-fingerprint auth67-picker` with a
+auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-fingerprint auth68-heartbeat
+auth67-picker auth67-heartbeat` with a
 6.8 authenticator (`test/MockAuthenticator68.qml`, the model and enum stubs in `test/imports/`) and
-the 6.7 one. On the 0.5.0 base 7 of the 7 auth68 scenarios fail; auth67-picker passes on both.
+the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones pass on both.
 
 ## Authentication contract (Plasma 6.7.5, and 6.8 where noted)
 

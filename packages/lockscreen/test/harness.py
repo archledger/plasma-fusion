@@ -14,8 +14,8 @@ power, power-blocked, power-busy, power-noreboot, power-kiosk (Plasma's session 
 logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check), and the
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
-auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth67-picker (each writes
-SCENARIO.json and exits 1 on a failed check).
+auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth68-heartbeat,
+auth67-picker, auth67-heartbeat (each writes SCENARIO.json and exits 1 on a failed check).
 Environment:
 PF_LOCALE (default en_GB), PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board
 wallpaper).
@@ -500,7 +500,9 @@ AUTH_SETUPS = {
     "auth68-noprompt": ([REGULAR, FACE], FACE, False),
     "auth68-prompt": ([REGULAR, SMARTCARD], REGULAR, False),
     "auth68-fingerprint": ([REGULAR, FINGERPRINT, FACE], REGULAR, True),
+    "auth68-heartbeat": ([REGULAR], REGULAR, False),
     "auth67-picker": ([], REGULAR, False),
+    "auth67-heartbeat": ([], REGULAR, False),
 }
 
 
@@ -525,7 +527,8 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
     a click switches the greeter's way, a way without a password field replaces the field with
     what to do, the way that unlocked last time is kept and one the model no longer offers or
     that stops working falls back to the password; a way that never prompts unlocks without the
-    Unlock screen. On Plasma 6.7 (auth67-*) nothing of this appears. Writes SCENARIO.json."""
+    Unlock screen; the greeter is asked again every second while the prompt is shown (6.8 only).
+    On Plasma 6.7 (auth67-*) nothing of this appears. Writes SCENARIO.json."""
     from PySide6.QtCore import QPointF
     from PySide6.QtTest import QTest
     res = {"scenario": scenario, "checks": []}
@@ -654,9 +657,24 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
             hints = [c.property("text") for c in items() if c.isVisible() and c.property("text") == "Place your finger on the reader"]
             check("pam_fprintd's instruction replaces the hint", len(hints) == 1, hints)
             view.grabWindow().save(os.path.join(out, "auth68-fingerprint.png"))
+        elif scenario == "auth68-heartbeat":
+            start = auth.property("startCount")
+            wait(3300)
+            n = auth.property("startCount") - start
+            check("the greeter is asked again every second while the prompt is shown", 3 <= n <= 4, n)
+            lock_root.setProperty("uiVisible", False)
+            wait(300)
+            start = auth.property("startCount")
+            wait(2200)
+            check("and not while it is hidden", auth.property("startCount") - start == 0, auth.property("startCount") - start)
         elif scenario == "auth67-picker":
             check("Plasma 6.7: no ways to choose", links() == [] and item("authenticatorChoice") is None, links())
             check("Plasma 6.7: the password field", shown("passwordBox") and shown("unlockButton"))
+        elif scenario == "auth67-heartbeat":
+            start = auth.property("startCount")
+            wait(3300)
+            check("Plasma 6.7: the authenticator is not asked again (it starts itself)",
+                  auth.property("startCount") - start == 0, auth.property("startCount") - start)
         check("no QML warnings", warnings == [], warnings)
 
     def finish():

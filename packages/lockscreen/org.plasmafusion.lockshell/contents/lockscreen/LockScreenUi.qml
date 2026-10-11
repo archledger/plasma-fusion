@@ -491,6 +491,22 @@ Item {
                 }
             }
         }
+        // Plasma 6.8: the greeter starts a way's PAM conversation only when asked, and drops the
+        // request while the way's worker process is still starting ("Worker not ready yet") or
+        // its conversation is running; a failed fingerprint or face attempt is not restarted by
+        // the greeter either. While the prompt is shown, ask again every second, as the stock
+        // lock screen does (not during the grace time after a failed password, which asks itself
+        // when it ends). Plasma 6.7 starts every authenticator itself.
+        Timer {
+            objectName: "authenticatorHeartbeat"
+            interval: 1000
+            repeat: true
+            // qmllint disable unqualified
+            running: lockScreenUi.authenticatorChoice && lockScreenRoot.uiVisible && !authenticator.unlocked
+                     && !graceLockTimer.running
+            onTriggered: authenticator.startAuthenticating()
+            // qmllint enable unqualified
+        }
         Timer {
             id: notificationRemoveTimer
             interval: 3000
