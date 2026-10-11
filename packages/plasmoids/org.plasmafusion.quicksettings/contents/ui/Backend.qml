@@ -25,6 +25,9 @@ Item {
     property bool showClipboard: true
     property bool showBatteryPercent: true
     property bool showNotifications: true
+    // The tiles' order and the hidden tiles (contents/code/tiles.js; the widget's settings).
+    property var tileOrder: []
+    property var hiddenTiles: []
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
     // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" (Keep awake), "profiles"

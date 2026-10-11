@@ -50,7 +50,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   models; it updates when streams start/stop. Virtual microphones such as noise-suppression inputs
   are supported. The existing output controls remain independent;
 * 60 px tiles, radius 16, accent fill when on: seven always (the six below and Keep awake) and four
-  when they apply (Disks & Devices, Wi‑Fi hotspot, Charge limit, Tablet mode):
+  when they apply (Disks & Devices, Wi‑Fi hotspot, Charge limit, Tablet mode), in this order unless
+  the user changed it (section "Editable tiles"):
   Wi-Fi (SSID; body toggles Wi-Fi, chevron opens the network list),
   Bluetooth (`N connected` / device name; body toggles, chevron opens the device list),
   Night light (`From sunset`, `Until sunrise`, `From 19:00`, `Paused`, `Off`; toggles KWin's
@@ -209,6 +210,7 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/ClipboardPage.qml     the clipboard sheet: search, All / Starred, the list, editor, QR code
   contents/ui/ClipboardEntry.qml    one clipboard entry (text, image thumbnail, files) and its actions
   contents/code/clipboard.js        the sheet's search, previews and arrow-key steps (tests/clipboard.test.js)
+  contents/code/tiles.js            the tiles' order, hidden tiles and new tiles' places (tests/tiles.test.js)
   contents/ui/NotificationCard.qml  one notification
   contents/ui/NotificationThumbnail.qml, NotificationPreview.qml
                                     a linked file's preview (KIO's, through the stock applet's
@@ -320,6 +322,8 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `popupScreenMargin` | 16 | px between the pop-up and the screen edge |
 | `startPage` | main | page shown on open: `main`, `wifi`, `bluetooth`, `audio` (settings page: "Page shown when opened") |
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
+| `tileOrder` | (empty) | StringList: the tiles in the user's order (ids in `contents/code/tiles.js`: `wifi`, `bluetooth`, `nightlight`, `dnd`, `power`, `darkstyle`, `keepawake`, `devices`, `hotspot`, `chargelimit`, `tabletmode`); empty: the default order (section "Editable tiles") |
+| `hiddenTiles` | (empty) | StringList: the tiles taken out of the grid; a conditional tile listed here never shows |
 | `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`, `clipboard` (the clipboard sheet, or closed when it is open: Meta+V); without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
 | `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the tablet policy state and, on the clipboard sheet, its mode, entries shown, stars, current row and search; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
@@ -888,7 +892,9 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   the same way. `openRequest` already acted only on the active screen's widget.
 - **One set of settings:** the user settings (`sharedKeys` in main.qml: what the pill shows, the
   pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
-  dark themes) are copied from a widget whose settings change to the others; a new widget takes the
+  dark themes, the tiles' order and hidden tiles) are copied from a widget whose settings change to
+  the others (a list by its entries: each read gives a new array, which `!==` always takes for a
+  change); a new widget takes the
   settings of the leader there before it (also when it leads at once, as the primary screen's
   bar made again does), and pushes nothing before that (while it loads its settings change too, and
   pushing those defaults reset the others: found by the two-screen test). A value equal to the
@@ -905,6 +911,32 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   both ways and adopted by a new widget, posture settings written once per change, Meta+A and a USB
   stick open the sheet on the screen with the pointer only (both screens), bars made before the
   change completed at login (two reboots), no QML warnings, no crashes.
+
+## Editable tiles (0.5.0)
+
+The tiles' order and set are the user's (survey 3 F3: macOS Tahoe's Control Center, Windows 11's
+quick settings edit, GNOME's Quick Settings Tweaks). Two StringList keys of the widget hold them,
+`tileOrder` and `hiddenTiles` (table above), shared by every quick settings widget on every screen
+(`sharedKeys`, section "One quick settings per top bar"); the settings page declares them and reads
+them again before Apply, so the dialog never writes back an older order.
+
+- **The grid** shows the tiles of `tileOrder` that are not in `hiddenTiles` and whose condition
+  holds, two to a row, on one page (no paging: multi-page controls are "Not planned"; a long sheet
+  scrolls as before). The conditions are the ones the tiles had: Disks & Devices while a removable
+  device is connected, Wi‑Fi hotspot with a Wi‑Fi radio, Charge limit where the battery has a stop
+  threshold and the helper is installed, Tablet mode where the posture can change by itself or is
+  not automatic (`tileConditions` in QuickSettingsMain.qml). A hidden tile never shows; a shown
+  conditional one only while its condition holds, at its place in the order.
+- **New tiles in later releases:** `tiles.js` lists every tile in the default order. An empty
+  `tileOrder` (a user who never moved a tile) is the default order of the running release. A
+  stored order keeps the user's tiles in the user's order; a tile it lacks goes right after the
+  tile before it in the default order, wherever the user put that one (a tile first in the default
+  order goes first; two new neighbours stay together), and is shown, as it is not in `hiddenTiles`.
+  Ids the release does not know and repeats are ignored. So a new Airplane tile after Wi‑Fi lands
+  next to Wi‑Fi for everyone, and a user who hid tiles gets it all the same.
+- Tests: `tests/tiles.test.js` (run by `tools/build.sh quicksettings`: the merge rule with new tiles
+  first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
+  shown tiles with the hidden ones keeping their places, the slot under a dragged tile, reset).
 
 ## Notification parity (0.5.0)
 

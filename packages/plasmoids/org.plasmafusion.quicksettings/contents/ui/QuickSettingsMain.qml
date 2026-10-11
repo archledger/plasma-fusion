@@ -11,6 +11,7 @@ import org.kde.plasma.core as PlasmaCore
 
 import "components"
 import "components/Icons.js" as Icons
+import "../code/tiles.js" as Tiles
 
 // Main page of the pop-up (Quick Settings board): battery chip and header
 // buttons, volume and brightness sliders, the tiles and the media card. In tablet posture
@@ -458,7 +459,25 @@ ColumnLayout {
     }
 
     // ---------------------------------------------------------------- tiles
+    // The order and the hidden tiles come from the widget's settings (contents/code/tiles.js, the
+    // same in every quick settings widget); the tiles shown only when they apply keep their
+    // conditions here: a hidden tile never shows, a shown one only while its condition holds.
+    property var tileConditions: ({
+        "devices": page.backend.devices.count > 0,
+        "hotspot": !!page.backend.net.wifiDevice,
+        "chargelimit": !!page.backend.charge.present,
+        "tabletmode": !!page.tabletPolicy && (page.backend.tabletAvailable || page.tabletPolicy.tabletModeSetting !== "auto")
+    })
+    readonly property var tileOrder: Tiles.merge(page.backend.tileOrder)
+    readonly property var hiddenTiles: Tiles.known(page.backend.hiddenTiles)
+    // Each tile takes its cell from `slots` (Tile.qml).
+    readonly property QtObject arrangement: QtObject {
+        readonly property var slots: Tiles.shown(page.tileOrder, page.hiddenTiles, page.tileConditions)
+    }
+
     GridLayout {
+        id: tileGrid
+        objectName: "tileGrid"
         Layout.fillWidth: true
         columns: 2
         rowSpacing: page.tablet ? 12 : page.metrics.px(10)
@@ -467,6 +486,9 @@ ColumnLayout {
 
         Tile {
             id: wifiTile
+            objectName: "tile-wifi"
+            tileId: "wifi"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -493,6 +515,9 @@ ColumnLayout {
         }
         Tile {
             id: bluetoothTile
+            objectName: "tile-bluetooth"
+            tileId: "bluetooth"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -513,6 +538,9 @@ ColumnLayout {
             onDetailsRequested: page.openPage("bluetooth", bluetoothTile.detailsButton)
         }
         Tile {
+            objectName: "tile-nightlight"
+            tileId: "nightlight"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -527,6 +555,9 @@ ColumnLayout {
         }
         Tile {
             id: dndTile
+            objectName: "tile-dnd"
+            tileId: "dnd"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -558,6 +589,8 @@ ColumnLayout {
         Tile {
             id: powerTile
             objectName: "tile-power"
+            tileId: "power"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -579,6 +612,9 @@ ColumnLayout {
             onDetailsRequested: page.openPage("profiles", powerTile.detailsButton)
         }
         Tile {
+            objectName: "tile-darkstyle"
+            tileId: "darkstyle"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -591,6 +627,8 @@ ColumnLayout {
         }
         Tile {
             objectName: "tile-keepawake"
+            tileId: "keepawake"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -613,8 +651,9 @@ ColumnLayout {
         Tile {
             id: devicesTile
             objectName: "tile-devices"
+            tileId: "devices"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.backend.devices.count > 0
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Disks & Devices")
@@ -629,8 +668,9 @@ ColumnLayout {
         Tile {
             id: hotspotTile
             objectName: "tile-hotspot"
+            tileId: "hotspot"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.backend.net.wifiDevice
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Wi‑Fi hotspot")
@@ -658,8 +698,9 @@ ColumnLayout {
         // a stop threshold (services/ChargeLimit.qml).
         Tile {
             objectName: "tile-chargelimit"
+            tileId: "chargelimit"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.backend.charge.present
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Charge limit")
@@ -679,8 +720,9 @@ ColumnLayout {
         // or when it is not automatic.
         Tile {
             objectName: "tile-tabletmode"
+            tileId: "tabletmode"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.tabletPolicy !== null && (page.backend.tabletAvailable || page.tabletPolicy.tabletModeSetting !== "auto")
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Tablet mode")

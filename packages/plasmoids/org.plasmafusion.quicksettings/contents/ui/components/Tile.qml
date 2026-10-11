@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 import QtQuick
+import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.plasma.core as PlasmaCore
 
@@ -25,6 +26,15 @@ Item {
     property string toolTip: ""
     // More about the state than the subtitle says (why, who): read by screen readers with it.
     property string note: ""
+    // The tile's id in the order (contents/code/tiles.js) and the page's arrangement of the grid
+    // (QuickSettingsMain.qml): `slots`, the shown tiles in order, puts the tile in its cell of the
+    // two-column grid; a tile not in it (hidden, or its condition does not hold) is not shown.
+    property string tileId: ""
+    property var arrangement: null
+    readonly property int slot: arrangement ? arrangement.slots.indexOf(tileId) : 0
+    visible: slot >= 0
+    Layout.row: Math.floor(Math.max(0, slot) / 2)
+    Layout.column: Math.max(0, slot) % 2
 
     signal toggled()
     signal detailsRequested()

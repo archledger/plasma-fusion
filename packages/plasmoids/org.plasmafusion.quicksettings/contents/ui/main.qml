@@ -11,6 +11,7 @@ import org.kde.plasma.workspace.dbus as DBus
 
 import "components"
 import "global"
+import "../code/tiles.js" as Tiles
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -55,14 +56,18 @@ PlasmoidItem {
     readonly property bool leader: Instances.leader === root
     readonly property var sharedKeys: ["showKeyboardLayout", "keyboardLayoutAlways", "showKdeConnect", "showClipboard",
         "showBatteryPercent", "popupOnNewDevice", "showNotifications", "popupGap", "popupScreenMargin", "startPage",
-        "keyboardPolicy", "tabletNotifications", "lightLookAndFeel", "darkLookAndFeel"]
+        "keyboardPolicy", "tabletNotifications", "lightLookAndFeel", "darkLookAndFeel", "tileOrder", "hiddenTiles"]
     readonly property var sharedSettings: sharedKeys.map(key => Plasmoid.configuration[key])
     function sharedValue(key: string): var {
         return Plasmoid.configuration[key];
     }
+    // A list (the tiles' order) is compared by its entries: each read gives a new array, which
+    // `!==` always takes for a change, so an equal order would be written to every widget again.
     function setShared(key: string, value: var): void {
-        if (Plasmoid.configuration[key] !== value) {
-            Plasmoid.configuration[key] = value;
+        const current = Plasmoid.configuration[key];
+        const list = typeof value === "object" && value !== null;
+        if (list ? !Tiles.same(current, value) : current !== value) {
+            Plasmoid.configuration[key] = list ? Tiles.list(value) : value;
         }
     }
     onSharedSettingsChanged: {
@@ -495,6 +500,8 @@ PlasmoidItem {
         showClipboard: Plasmoid.configuration.showClipboard
         showBatteryPercent: Plasmoid.configuration.showBatteryPercent
         showNotifications: Plasmoid.configuration.showNotifications
+        tileOrder: Plasmoid.configuration.tileOrder
+        hiddenTiles: Plasmoid.configuration.hiddenTiles
         // Stock Disks & Devices opens its pop-up on a new device (popupOnNewDevice, default on).
         // Every bar's widget sees the device: the leader opens the sheet on the screen in use.
         onDeviceAdded: udi => {
