@@ -17,14 +17,15 @@
 #   full      everything else
 #
 # What a tier changes (everything else, blur strength and animations included, stays the user's):
-#   saver     Fusion system card and dock powerTier 1 (card interval x 2, one dock start-up pulse);
+#   saver     Fusion system card, system meters and dock powerTier 1 (card and meters interval x 2,
+#             one dock start-up pulse);
 #             Plasma's own system monitor widgets update at most every 2 x their interval (6 s
 #             when it is unlimited)
-#   critical  powerTier 2 (card interval x 4, no pulse), system monitors x 4; with plasmafusionrc
-#             [Power] LighterOnCritical (default true) also KWin blur off (kwinrc [Plugins]
-#             blurEnabled false and unloaded), dock magnification off and glass=solid for the Fusion
-#             dock, system card, quick settings and launcher; with ShorterAnimationsOnCritical
-#             (default false) AnimationDurationFactor at most 0.75
+#   critical  powerTier 2 (card and meters interval x 4, no pulse), system monitors x 4; with
+#             plasmafusionrc [Power] LighterOnCritical (default true) also KWin blur off (kwinrc
+#             [Plugins] blurEnabled false and unloaded), dock magnification off and glass=solid for
+#             the Fusion dock, system card, quick settings and launcher; with
+#             ShorterAnimationsOnCritical (default false) AnimationDurationFactor at most 0.75
 #   full      gives every value back
 #
 # A value is remembered (plasmafusionrc [Power]) when the service first overrides it, so it never
@@ -143,6 +144,8 @@ for (var i = 0; i < cs.length; i++) {
         } else if (t === "org.plasmafusion.systemcard") {
             tierKey(w);
             handle(w, "General", "glass", "full");
+        } else if (t === "org.plasmafusion.meters") {
+            tierKey(w);
         } else if (t === "org.plasmafusion.quicksettings" || t === "org.plasmafusion.launcher") {
             handle(w, "General", "glass", "full");
         } else if (t.indexOf("org.kde.plasma.systemmonitor") === 0) {

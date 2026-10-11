@@ -25,7 +25,7 @@ the ThinkPad's UPower says "low" (3) at 20 % (`UsePercentageForPolicy=true`, `Pe
 
 | What | full | saver | critical |
 |---|---|---|---|
-| Fusion system card and dock `powerTier` | 0 | 1 (card interval x 2, one dock start-up pulse) | 2 (card x 4, no pulse) |
+| Fusion system card, system meters and dock `powerTier` | 0 | 1 (card and meters interval x 2, one dock start-up pulse) | 2 (card and meters x 4, no pulse) |
 | Plasma's own system monitor widgets (`[Appearance] updateRateLimit`, any `org.kde.plasma.systemmonitor*`) | the user's | 2 x the user's (unlimited or under 1 s counts as 3 s) | 4 x |
 | KWin blur (`kwinrc [Plugins] blurEnabled` + `unloadEffect`) | the user's | the user's | off, with `LighterOnCritical` |
 | Dock `magnify` | the user's | the user's | false, with `LighterOnCritical` |
@@ -140,6 +140,7 @@ After full only `Tier`, `ShellTier`, `ShellLighter` remain.
 |---|---|---|---|
 | `org.plasmafusion.systemcard` | `powerTier` | Int, hidden, 0-2, default 0 | the card waits `updateInterval x (1, 2, 4)[powerTier]` (CARD-1) |
 | `org.plasmafusion.dock` | `powerTier` | Int, hidden, 0-2, default 0 | start-up pulse 3 / 1 / 0 cycles (DOCK-2) |
+| `org.plasmafusion.meters` | `powerTier` | Int, hidden, 0-2, default 0 | the top bar's system meters wait `updateInterval x (1, 2, 4)[powerTier]`, as the card (0.5.0, `docs/parts/shell-meters.md`; `tests/widgets.test.js`) |
 | dock | `magnify` | Bool (exists) | false at critical |
 | dock, systemcard, quicksettings, launcher | `glass` | **String**, hidden, default `full` | `full` / `reduced` / `solid` |
 

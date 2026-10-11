@@ -118,8 +118,8 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical && fileContentIndexing == other.fileContentIndexing
         && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications && lockNotificationSummaries == other.lockNotificationSummaries
         && tabletMode == other.tabletMode && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft
-        && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && desktopIcons == other.desktopIcons
-        && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
+        && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters
+        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
@@ -182,6 +182,7 @@ PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaDat
         m_shellRunning = false;
         m_dockAvailable = false;
         m_topBarAvailable = false;
+        m_metersAvailable = false;
         m_quickSettingsAvailable = false;
         m_folderAvailable = false;
         Q_EMIT shellStateChanged();
@@ -327,6 +328,11 @@ bool PlasmaFusionKcm::dockAvailable() const
 bool PlasmaFusionKcm::topBarAvailable() const
 {
     return m_topBarAvailable;
+}
+
+bool PlasmaFusionKcm::metersAvailable() const
+{
+    return m_metersAvailable;
 }
 
 bool PlasmaFusionKcm::quickSettingsAvailable() const
@@ -478,6 +484,16 @@ bool PlasmaFusionKcm::solidTopBar() const
 void PlasmaFusionKcm::setSolidTopBar(bool value)
 {
     setField(&State::solidTopBar, value);
+}
+
+bool PlasmaFusionKcm::systemMeters() const
+{
+    return m_current.systemMeters;
+}
+
+void PlasmaFusionKcm::setSystemMeters(bool value)
+{
+    setField(&State::systemMeters, value);
 }
 
 bool PlasmaFusionKcm::everyScreen() const
@@ -1079,6 +1095,9 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
         defaults.globalMenu = m_current.globalMenu;
         defaults.solidTopBar = m_current.solidTopBar;
     }
+    if (!m_topBarAvailable || !m_metersAvailable) {
+        defaults.systemMeters = m_current.systemMeters;
+    }
     if (!m_quickSettingsAvailable) {
         defaults.keyboardPolicy = m_current.keyboardPolicy;
     }
@@ -1214,6 +1233,13 @@ void PlasmaFusionKcm::save()
             applyGlobalMenu(after.globalMenu);
         } else {
             m_current.globalMenu = before.globalMenu;
+        }
+    }
+    if (after.systemMeters != before.systemMeters) {
+        if (m_topBarAvailable && m_metersAvailable) {
+            applySystemMeters(after.systemMeters);
+        } else {
+            m_current.systemMeters = before.systemMeters;
         }
     }
     const bool topBarChanged = after.solidTopBar != before.solidTopBar;

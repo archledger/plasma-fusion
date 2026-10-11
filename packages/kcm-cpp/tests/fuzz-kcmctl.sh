@@ -174,8 +174,8 @@ write_config() {
 
 ints=(style buttonStyle snapTrigger glass magnifiedSize iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy)
 bools=(magnify globalMenu hotCorner highContrast reduceMotion solidTopBar everyScreen desktopIcons lighterOnCritical
-  fileContentIndexing edgeLeft edgeRight homeIndicator)
-reads=(accentMode accentColor wallpaperColor shellRunning dockAvailable fusionDecoration errorText infoText
+  fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters)
+reads=(accentMode accentColor wallpaperColor shellRunning dockAvailable metersAvailable fusionDecoration errorText infoText
   highContrastAvailable previousDesktopAvailable powerCritical fusionLookAndFeel busy noSuchProperty)
 methods=(setSchemeAccent setWallpaperAccent useFusionDecoration restorePreviousDesktop resetLayout noSuchMethod)
 

@@ -269,6 +269,17 @@ KCM.SimpleKCM {
                 ToggleRow {
                     Layout.fillWidth: true
                     pal: fusionPalette
+                    text: i18nc("@option:check processor, memory and network meters", "System meters in the top bar")
+                    checked: kcm.systemMeters
+                    enabled: kcm.topBarAvailable && kcm.metersAvailable && !kcm.shellLoading
+                    note: kcm.topBarAvailable && !kcm.metersAvailable && kcm.shellRunning
+                        ? i18nc("@info", "The Plasma Fusion system meters widget is not installed.")
+                        : root.shellNote(kcm.topBarAvailable, i18nc("@info", "The Plasma Fusion top bar is not on this desktop."))
+                    onToggleRequested: kcm.systemMeters = !kcm.systemMeters
+                }
+                ToggleRow {
+                    Layout.fillWidth: true
+                    pal: fusionPalette
                     last: true
                     text: i18nc("@option:check the top-left screen corner opens Overview", "Hot corner opens Overview")
                     checked: kcm.hotCorner

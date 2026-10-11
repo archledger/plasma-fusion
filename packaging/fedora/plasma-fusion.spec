@@ -268,7 +268,8 @@ for p in plasma/look-and-feel/org.plasmafusion.dark.desktop plasma/look-and-feel
          plasma/plasmoids/org.plasmafusion.dock plasma/plasmoids/org.plasmafusion.pen \
          plasma/plasmoids/org.plasmafusion.desktop \
          plasma/plasmoids/org.plasmafusion.calendarcard plasma/plasmoids/org.plasmafusion.weathercard \
-         plasma/plasmoids/org.plasmafusion.systemcard plasma/shells/org.plasmafusion.lockshell \
+         plasma/plasmoids/org.plasmafusion.systemcard plasma/plasmoids/org.plasmafusion.meters \
+         plasma/shells/org.plasmafusion.lockshell \
          plasma/layout-templates/org.plasmafusion.panel.topbar plasma/layout-templates/org.plasmafusion.panel.dock \
          kwin/tabbox/org.plasmafusion.switcher kwin/scripts/plasmafusion-snap kwin/scripts/plasmafusion-attach \
          kwin/scripts/plasmafusion-tablet; do

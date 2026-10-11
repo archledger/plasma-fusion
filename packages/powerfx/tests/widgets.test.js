@@ -113,6 +113,22 @@ test("back to full gives every value back", () => {
     assert.strictEqual(s.set(0, true).writes, 0);
 });
 
+test("the top bar's system meters slow down with the tiers, as the card does", () => {
+    const l = layout();
+    l.panels[0].push({ id: 7, type: "org.plasmafusion.meters", config: { General: { showNetwork: "true" } } });
+    const s = service(l);
+    assert.strictEqual(s.set(0, true).writes, 0, "full on a fresh layout writes nothing to the meters either");
+    s.set(1, true);
+    assert.strictEqual(cfg(l, 7, "General", "powerTier"), "1", "saver: interval x 2");
+    s.set(2, true);
+    assert.strictEqual(cfg(l, 7, "General", "powerTier"), "2", "critical: interval x 4");
+    assert.strictEqual(cfg(l, 7, "General", "glass"), undefined, "the meters have no glass key");
+    assert(!s.state.map.includes("7/"), "nothing of the meters' own is remembered: " + s.state.map);
+    s.set(0, true);
+    assert.strictEqual(cfg(l, 7, "General", "powerTier"), "0");
+    assert.strictEqual(cfg(l, 7, "General", "showNetwork"), "true", "the user's settings are not touched");
+});
+
 test("the same tier again writes nothing", () => {
     const l = layout(), s = service(l);
     s.set(2, true);
