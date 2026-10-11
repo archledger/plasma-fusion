@@ -53,6 +53,9 @@ jobs:
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
 
+      - name: Setup config keys that keep the user's choice
+        run: tools/device/tests/config-keys-unit.sh build/config-keys
+
       - name: VM crash collector unit tests
         run: |
           python3 tools/tests/release-vm/test-crash-count.py

@@ -219,7 +219,7 @@ What it sets, in order (all idempotent; a second run reports only the theme re-a
    (KWin hands the switcher every window; it opens on "This workspace" and filters itself, its "All
    workspaces" tab needs the full list), HighlightWindows=false (no flash of a window the switcher
    skips); [Effect-overview] BorderActivate=9 (7 with `--hot-corner`; 9 = no edge, 7 = top-left,
-   KWin globals.h); [Effect-blur] BlurStrength=13, NoiseStrength=0, Saturation=140;
+   KWin globals.h; without `--hot-corner` a corner turned on since the first run is kept); [Effect-blur] BlurStrength=13, NoiseStrength=0, Saturation=140;
    [org.kde.kdecoration2] BorderSizeAuto=false; [Plugins] plasmafusion-snapEnabled=true and
    plasmafusion-attachEnabled=true (each only when the script is installed; run again after
    installing it), sheetEnabled=true (dialogs slide out of their parent); [Outline]

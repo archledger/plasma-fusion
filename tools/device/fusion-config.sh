@@ -1790,8 +1790,14 @@ managed_key kwinrc TabBoxAlternative DesktopMode "$TABBOX_ALT_DESKTOP_MODE" "$TA
 managed_key kwinrc TabBoxAlternative HighlightWindows false false
 package_dir kwin/tabbox "$SWITCHER" >/dev/null || package_dir kwin-wayland/tabbox "$SWITCHER" >/dev/null ||
   note "note: window switcher $SWITCHER is not installed yet; KWin uses its default until it is"
-# Hot corner: 9 = no screen edge, 7 = top-left corner.
-set_key kwinrc Effect-overview BorderActivate "$([ "$HOT_CORNER" = 1 ] && echo 7 || echo 9)"
+# Hot corner: 9 = no screen edge, 7 = top-left corner. --hot-corner turns it on. Without it the
+# corner is off on a first run, and a corner the user turned on since (the settings module's Hot
+# corner, System Settings > Screen Edges) is kept on later runs (the upgrade rule).
+if [ "$HOT_CORNER" = 1 ]; then
+  set_key kwinrc Effect-overview BorderActivate 7
+else
+  managed_key kwinrc Effect-overview BorderActivate 9 9
+fi
 managed_key kwinrc Effect-blur BlurStrength "$BLUR_STRENGTH" "$BLUR_STRENGTH"
 managed_key kwinrc Effect-blur NoiseStrength "$BLUR_NOISE" "$BLUR_NOISE"
 managed_key kwinrc Effect-blur Saturation "$BLUR_SATURATION" "$BLUR_SATURATION"

@@ -13,6 +13,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   service on a nearly empty battery) now reaches the tablet launcher sheet and the Notification
   Centre: they show a plain tint instead of the blurred wallpaper. Before, the setting was written
   to the widgets but neither of them read it.
+- The Overview hot corner turned on in the Plasma Fusion settings (or under System Settings >
+  Screen Edges) stays on when the setup runs again; before, every run without `--hot-corner`
+  turned it off.
 
 ## 0.4.0 (2026-10-09)
 
