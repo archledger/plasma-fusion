@@ -10,9 +10,10 @@
 # tree) in the environment and writes only below $STAGE in the paths docs/PLAN.md assigns to it.
 #
 # Before the parts, the QML checks in tools/checks/ run over packages/: motion-lint.sh (literal
-# durations, endless loops, animations without a duration; EFFECTS.md 6.2) and a11y-lint.py
-# (interactive items without an accessible name; GAPS.md G25). PF_LINTS=fail (default: stop on
-# a finding), warn (list the findings, build anyway) or off.
+# durations, endless loops, animations without a duration; EFFECTS.md 6.2), a11y-lint.py
+# (interactive items without an accessible name; GAPS.md G25) and id-scope-lint.py (an id used
+# outside the component that declares it, a ReferenceError at run time). PF_LINTS=fail (default:
+# stop on a finding), warn (list the findings, build anyway) or off.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 STAGE=${STAGE:-$ROOT/stage/home}
@@ -29,6 +30,7 @@ case "$lints" in
     failed=0
     bash "$ROOT/tools/checks/motion-lint.sh" "${flag[@]}" "$ROOT/packages" || failed=1
     python3 "$ROOT/tools/checks/a11y-lint.py" "${flag[@]}" "$ROOT/packages" || failed=1
+    python3 "$ROOT/tools/checks/id-scope-lint.py" "${flag[@]}" "$ROOT/packages" || failed=1
     python3 "$ROOT/tools/checks/calendar-tile.py" "${flag[@]}" "$ROOT/packages" || failed=1
     [ "$failed" = 0 ] || { echo "build.sh: the checks found problems (PF_LINTS=$lints); nothing was built" >&2; exit 1; }
     ;;

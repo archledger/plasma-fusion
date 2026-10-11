@@ -17,7 +17,8 @@ app icons, and the build checks durations and accessible names.
 | `tools/build-lib/shared-qml.sh` | copies the blocks a package uses into it at build time | |
 | `tools/checks/motion-lint.sh` | literal durations, endless loops, animations without a duration | EFFECTS 6.2 |
 | `tools/checks/a11y-lint.py` | interactive items without an accessible name | GAPS G25 |
-| `tools/checks/qmlscan.py` | the small QML scanner both checks use | |
+| `tools/checks/id-scope-lint.py` | an id used outside the component that declares it (a ReferenceError at run time) | 0.5.0 |
+| `tools/checks/qmlscan.py` | the small QML scanner the checks use | |
 | `tools/checks/tests/` | fixtures and `run.sh`, the checks' self-test | |
 | `packages/common/tests/` | `Probe.qml` and `offscreen.sh`, the blocks' offscreen test | |
 
@@ -245,9 +246,9 @@ window is not in the dock's task list.
 
 ## Checks
 
-`tools/build.sh` runs both checks over `packages/` before the parts. `PF_LINTS=fail` (default since
-INT-1) stops on a finding (both checks run first), `warn` lists the findings and builds anyway, `off`
-skips them. Both print `FILE:LINE: RULE message | source line` and a count on stderr, exit 1 on a
+`tools/build.sh` runs the checks over `packages/` before the parts. `PF_LINTS=fail` (default since
+INT-1) stops on a finding (all checks run first), `warn` lists the findings and builds anyway, `off`
+skips them. They print `FILE:LINE: RULE message | source line` and a count on stderr, exit 1 on a
 finding, 0 with `--warn`.
 
 **motion-lint.sh** (EFFECTS 6.2): `literal-duration` (a number in a `duration:` binding, including
@@ -272,6 +273,18 @@ control's file names itself from). Skipped: `Accessible.ignored: true` on the it
 uses). A dismiss area (click outside to close) is not a control: mark it `Accessible.ignored: true`.
 At HEAD: 16 findings in 12 files (4 control, 10 pointer, 2 focus), for example the battery chip and a
 notification's default action in quick settings.
+
+**id-scope-lint.py** (0.5.0): `id-scope`, an id of an inner component read outside that component.
+A `Component { }`, the object of a component property (`delegate`, `sourceComponent`,
+`fullRepresentation`, `compactRepresentation`, `appletContainerComponent`, `highlight`), a
+`property Component` and an inline `component` get their own id scope when they are created: their
+ids are not visible outside, and a binding that names one fails with "ReferenceError: name is not
+defined" each time it is evaluated (the desktop's `editingCards` read `homeLoader`, an id inside its
+full representation, from the containment's root; seen in the parity VM's journal on 0.4.1). The
+ids of enclosing scopes stay visible inside a component; a Component's own id belongs to the scope
+around it. Names the file also declares as a property, binding, function, signal, parameter or
+variable are not reported, nor member reads (`item.name`). On 2026-10-11 it found only that bug in
+`packages/` and nothing in the 6.7.5 QML under `/usr/share/plasma` and `/usr/lib/qt6/qml/org/kde`.
 
 Self-test: `tools/checks/tests/run.sh` (each fixture marks the lines a check must report).
 

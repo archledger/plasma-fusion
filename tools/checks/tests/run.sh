@@ -23,4 +23,5 @@ compare() {  # NAME DIR COMMAND...
 }
 compare motion-lint "$HERE/motion" bash "$CHECKS/motion-lint.sh" --warn
 compare a11y-lint "$HERE/a11y" python3 "$CHECKS/a11y-lint.py" --warn
+compare id-scope-lint "$HERE/idscope" python3 "$CHECKS/id-scope-lint.py" --warn
 exit "$fail"

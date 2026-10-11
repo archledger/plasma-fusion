@@ -60,7 +60,12 @@ and for 10 s after (the layout manager places them asynchronously), again after 
 widget is added or removed, and every 0.5 s while a widget edit mode is on (the stock one or the
 home screen's) and once it ends, so a moved or resized card stays tappable; there is no timer on an
 idle home screen. A reading with no sized containers keeps the last rectangle (edit mode rebuilds
-the layout for a moment); only a containment without widgets gets an empty one.
+the layout for a moment); only a containment without widgets gets an empty one. The home screen's
+edit state reaches the root through the full representation (`fullRepresentationItem.homeLoader`,
+a property alias, as `appletsLayout`): until 0.5.0 the root read the loader's id, which is not
+visible outside the full representation, so every evaluation logged "ReferenceError: homeLoader is
+not defined" and a home screen edit never started the 0.5 s measuring (the stock edit mode did).
+`tools/checks/id-scope-lint.py` (build step) reports such reads.
 
 ## Installation and switch-over
 
