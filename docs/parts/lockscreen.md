@@ -77,9 +77,12 @@ values are read.
 Plasma 6.8: `kscreenlocker_greet` loads the same `LockScreenUi.qml` and SessionManagement keeps the
 same properties, `ConfirmationMode` values and `requestReboot` / `requestShutdown` (plasma-workspace
 Plasma/6.8 `sessionmanagement.h`); the 6.8 log-out screen moved to the shell package
-(`90-lockscreen.sh` already ships it) and its strings to `plasma_shell_org.kde.plasma.desktop`, so
-on 6.8 "&Restart" and "&Shut Down" are looked up in 6.7's `plasma_lookandfeel_org.kde.lookandfeel`
-catalogue and may show in English until Plasma Fusion has its own catalogue. Not run on 6.8 here.
+(`90-lockscreen.sh` already ships it) and its strings to `plasma_shell_org.kde.plasma.desktop`;
+6.8 ships `plasma_lookandfeel_org.kde.lookandfeel` without them (Fedora 44, plasma-workspace
+6.7.91: the German catalogue has none of "&Restart", "&Shut Down" or the other users' warning, the
+desktop shell's has all three). So the power row and its question take these strings from
+`PfStyle.logoutDomain`: the Global Theme catalogue on 6.7, the desktop shell's from 6.8 (recognised
+by the 6.8 authenticator). Scenarios `auth68-strings` (fails on the 0.5.0 base) and `auth67-strings`.
 
 ## Ways to unlock (Plasma 6.8, 0.5.0)
 

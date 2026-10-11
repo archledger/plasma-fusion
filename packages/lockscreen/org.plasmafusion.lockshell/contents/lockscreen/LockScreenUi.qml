@@ -96,6 +96,13 @@ Item {
         property: "tint"
         value: accentTint
     }
+    // The log-out strings' catalogue (PfStyle.logoutDomain): the desktop shell's from Plasma 6.8,
+    // recognised by its authenticator.
+    Binding {
+        target: PfStyle
+        property: "logoutDomain"
+        value: lockScreenUi.authenticatorChoice ? "plasma_shell_org.kde.plasma.desktop" : "plasma_lookandfeel_org.kde.lookandfeel"
+    }
 
     // Tablet posture from KWin (TABLET 4.13): touch-sized controls and the prompt higher up.
     FusionTablet {
@@ -725,7 +732,7 @@ Item {
                     PowerButton {
                         objectName: "restartButton"
                         metrics: lockScreenUi.metrics
-                        text: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Restart")
+                        text: i18nd(PfStyle.logoutDomain, "&Restart")
                         iconPath: PfStyle.iconRestart
                         onClicked: lockScreenUi.confirmPower("reboot")
                         visible: sessionManagement.canReboot
@@ -733,7 +740,7 @@ Item {
                     PowerButton {
                         objectName: "shutdownButton"
                         metrics: lockScreenUi.metrics
-                        text: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Shut Down")
+                        text: i18nd(PfStyle.logoutDomain, "&Shut Down")
                         iconPath: PfStyle.iconShutDown
                         destructive: true
                         onClicked: lockScreenUi.confirmPower("shutdown")

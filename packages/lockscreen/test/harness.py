@@ -15,7 +15,8 @@ logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed ch
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
 auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth68-heartbeat,
-auth67-picker, auth67-heartbeat (each writes SCENARIO.json and exits 1 on a failed check).
+auth68-strings, auth67-picker, auth67-heartbeat, auth67-strings (each writes SCENARIO.json and
+exits 1 on a failed check).
 Environment:
 PF_LOCALE (default en_GB), PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board
 wallpaper).
@@ -78,7 +79,12 @@ def fmt(text, args):
 
 
 class I18n(QObject):
-    """The KLocalizedContext functions the lock screen calls (English only)."""
+    """The KLocalizedContext functions the lock screen calls (English only). The catalogue and
+    text of each i18nd/i18ndp call are kept in `domains`."""
+
+    def __init__(self):
+        super().__init__()
+        self.domains = []
 
     @Slot(str, result=str)
     @Slot(str, "QVariant", result=str)
@@ -96,6 +102,7 @@ class I18n(QObject):
     @Slot(str, str, "QVariant", result=str)
     @Slot(str, str, "QVariant", "QVariant", result=str)
     def i18nd(self, domain, text, *args):
+        self.domains.append((domain, text))
         return fmt(text, args)
 
     @Slot(str, str, str, result=str)
@@ -107,6 +114,7 @@ class I18n(QObject):
     @Slot(str, str, str, "QVariant", result=str)
     @Slot(str, str, str, "QVariant", "QVariant", result=str)
     def i18ndp(self, domain, singular, plural, n, *args):
+        self.domains.append((domain, singular))
         return fmt(singular if int(n) == 1 else plural, (n,) + args)
 
 
@@ -171,7 +179,7 @@ def main():
         text += "\n[KDE Action Restrictions]\nlogout=false\n"
     with open(os.path.join(cfg, "kdeglobals"), "w") as f:
         f.write(text)
-    if scenarios[0].startswith("power"):
+    if scenarios[0].startswith("power") or scenarios[0].endswith("-strings"):
         # Plasma's session backend and the lock screen read logind on the system bus: here the
         # private bus, where mock_services.py answers for logind and ksmserver.
         os.environ["DBUS_SYSTEM_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
@@ -306,7 +314,7 @@ def render(app, out, scenario, w, h, wp_path):
         power(app, out, view, root, lock_root, scenario)
         return
     if scenario.startswith("auth"):
-        authenticators(app, out, view, root, lock_root, scenario, auth, warnings, quits)
+        authenticators(app, out, view, root, lock_root, scenario, auth, warnings, quits, i18n)
         return
     if scenario == "tablet":
         tablet(app, out, view, root, lock_root, w, h)
@@ -503,6 +511,8 @@ AUTH_SETUPS = {
     "auth68-heartbeat": ([REGULAR], REGULAR, False),
     "auth67-picker": ([], REGULAR, False),
     "auth67-heartbeat": ([], REGULAR, False),
+    "auth68-strings": ([REGULAR], REGULAR, False),
+    "auth67-strings": ([], REGULAR, False),
 }
 
 
@@ -522,7 +532,7 @@ def auth_setup(auth, scenario):
         auth.setProperty("hadPrompt", False)
 
 
-def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, quits):
+def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, quits, i18n):
     """Plasma 6.8's choice of how to unlock (survey P6): the other ways as links in the hint line,
     a click switches the greeter's way, a way without a password field replaces the field with
     what to do, the way that unlocked last time is kept and one the model no longer offers or
@@ -675,6 +685,17 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
             wait(3300)
             check("Plasma 6.7: the authenticator is not asked again (it starts itself)",
                   auth.property("startCount") - start == 0, auth.property("startCount") - start)
+        elif scenario in ("auth68-strings", "auth67-strings"):
+            # The power row and its question borrow the log-out screen's strings, whose catalogue
+            # moved to the desktop shell's in Plasma 6.8.
+            domain = ("plasma_shell_org.kde.plasma.desktop" if scenario == "auth68-strings"
+                      else "plasma_lookandfeel_org.kde.lookandfeel")
+            wait(1500)
+            click("restartButton")
+            wait(800)
+            # The text each binding shows is its last lookup.
+            last = {s: d for d, s in i18n.domains if s in ("&Restart", "&Shut Down")}
+            check("Restart and Shut Down come from " + domain, set(last.values()) == {domain} and len(last) == 2, last)
         check("no QML warnings", warnings == [], warnings)
 
     def finish():

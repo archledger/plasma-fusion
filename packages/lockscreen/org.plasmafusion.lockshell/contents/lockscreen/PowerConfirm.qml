@@ -177,8 +177,8 @@ FocusScope {
             visible: otherSessions.count > 0
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            // The log-out screen's text (Plasma 6.7's catalogue).
-            text: i18ndp("plasma_lookandfeel_org.kde.lookandfeel",
+            // The log-out screen's text and catalogue (PfStyle.logoutDomain).
+            text: i18ndp(PfStyle.logoutDomain,
                          "One other user is currently logged in. If the computer is shut down or restarted, that user may lose work.",
                          "%1 other users are currently logged in. If the computer is shut down or restarted, those users may lose work.",
                          otherSessions.count)
@@ -256,8 +256,8 @@ FocusScope {
             PillButton {
                 id: confirmButton
                 objectName: "powerConfirmButton"
-                text: root.reboot ? i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Restart")
-                                  : i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Shut Down")
+                text: root.reboot ? i18nd(PfStyle.logoutDomain, "&Restart")
+                                  : i18nd(PfStyle.logoutDomain, "&Shut Down")
                 fill: root.reboot ? PfStyle.accentStrong : PfStyle.shutDownFill
                 hoverFill: root.reboot ? PfStyle.accentStrongHover : PfStyle.shutDownFillHover
                 foreground: root.reboot ? PfStyle.textOnAccent : "#ffffff"

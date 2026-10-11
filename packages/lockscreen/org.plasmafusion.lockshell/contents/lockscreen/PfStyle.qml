@@ -19,6 +19,13 @@ QtObject {
     readonly property string bold: "Bold"
     readonly property string extraBold: "ExtraBold"
 
+    // The catalogue of the log-out screen's strings (Restart, Shut Down, the other users'
+    // warning), which the power row and its question borrow: Plasma 6.7's Global Theme
+    // catalogue, or from Plasma 6.8 the desktop shell's, where the log-out screen moved
+    // (plasma-workspace 3729037a; 6.8 ships the Global Theme catalogue without these strings).
+    // LockScreenUi sets it.
+    property string logoutDomain: "plasma_lookandfeel_org.kde.lookandfeel"
+
     // Text colours on the dark glass.
     readonly property color text: "#e8ebf4"
     readonly property color textSecondary: "#b8bfd3"
