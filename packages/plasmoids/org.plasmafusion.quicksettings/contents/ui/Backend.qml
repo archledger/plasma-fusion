@@ -587,28 +587,38 @@ Item {
         readonly property bool available: s ? s.serverValid : false
         readonly property bool active: s ? s.dndActive : false
         readonly property string untilText: s ? s.dndUntilText : ""
+        // Why it is on besides a time (an app holds it, mirrored screens, a full screen window), in
+        // the stock applet's words.
+        readonly property var reasons: s ? s.dndReasons : []
         readonly property string subtitle: {
             if (!active) {
                 return i18nc("@info:status Do not disturb", "Off");
             }
-            const until = s ? s.dndUntilText : "";
-            return until ? i18nc("@info:status Do not disturb, %1 is a time", "Until %1", until)
-                         : i18nc("@info:status Do not disturb", "On");
+            if (untilText !== "") {
+                return i18nc("@info:status Do not disturb, %1 is a time", "Until %1", untilText);
+            }
+            return reasons.length > 0 ? reasons[0] : i18nc("@info:status Do not disturb", "On");
+        }
+        // The whole state in one line, as the stock applet's header puts it.
+        readonly property string description: {
+            if (!active) {
+                return "";
+            }
+            const parts = untilText !== "" ? [i18nc("@info:status Do not disturb, %1 is a time", "Until %1", untilText)] : [];
+            return parts.concat(reasons).join(" · ");
         }
         function toggle() {
             if (s) {
                 s.toggleDnd();
             }
         }
-        // G18: for one hour, or until the next morning (06:00; after midnight the coming one).
-        function forHour() {
-            if (s) {
-                s.dndUntil(new Date(Date.now() + 3600 * 1000));
-            }
+        // G18 and the stock applet's choices (contents/code/dnd.js): [{id, until}] at this moment.
+        function choices() {
+            return Dnd.choices(new Date());
         }
-        function untilTomorrow() {
+        function until(date) {
             if (s) {
-                s.dndUntil(Dnd.untilMorning(new Date()));
+                s.dndUntil(date);
             }
         }
         function openSettings() {
@@ -924,14 +934,42 @@ Item {
         readonly property var model: s ? s.model : null
         readonly property int count: s ? s.count : 0
         readonly property int unread: s ? s.unread : 0
+        // Rows come and go (services/Notifications.qml lastInGroup()).
+        readonly property int revision: s ? s.revision : 0
+        function lastInGroup(row: int, revision: int): bool {
+            return s ? s.lastInGroup(row, revision) : false;
+        }
+        function setGroupExpanded(row: int, expanded: bool) {
+            if (s) {
+                s.setGroupExpanded(row, expanded);
+            }
+        }
+        function collapseAllGroups() {
+            if (s) {
+                s.collapseAllGroups();
+            }
+        }
         function invokeAction(row: int, actionName: string, resident: bool) {
             if (s) {
                 s.invokeAction(row, actionName, resident);
             }
         }
+        function reply(row: int, text: string, resident: bool) {
+            if (s) {
+                s.reply(row, text, resident);
+            }
+        }
         function close(row: int) {
             if (s) {
                 s.close(row);
+            }
+        }
+        // Opens a file of the notification (its thumbnail, a finished job's file) and lets the
+        // notification expire, as the stock applet does.
+        function openUrl(row: int, url: string) {
+            Qt.openUrlExternally(url);
+            if (s) {
+                s.expire(row);
             }
         }
         function configure(row: int) {
@@ -944,6 +982,29 @@ Item {
             if (s) {
                 s.killJob(row);
             }
+        }
+        function suspendJob(row: int) {
+            if (s) {
+                s.suspendJob(row);
+            }
+        }
+        function resumeJob(row: int) {
+            if (s) {
+                s.resumeJob(row);
+            }
+        }
+        // A finished job's folder: the one file selected in the file manager (`highlight`), or the
+        // destination folder of several; the notification expires as after Open.
+        function openFolder(row: int, url: string, highlight: bool) {
+            if (!s) {
+                return;
+            }
+            if (highlight) {
+                s.showInFolder(url);
+            } else {
+                Qt.openUrlExternally(url);
+            }
+            s.expire(row);
         }
         function clearAll() {
             if (s) {

@@ -51,7 +51,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   Bluetooth (`N connected` / device name; body toggles, chevron opens the device list),
   Night light (`From sunset`, `Until sunrise`, `From 19:00`, `Paused`, `Off`; toggles KWin's
   Night Light inhibition, turns Night Light on when it is off),
-  Do not disturb (`Off`, `On`, `Until 18:00`; same code path as Plasma's own shortcut, with OSD),
+  Do not disturb (`Off`, `On`, `Until 18:00`, `Until Mon 06:00`; same code path as Plasma's own
+  shortcut, with OSD),
   Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
   uses tuned-ppd on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). As the
   stock Power and Battery widget: Performance is skipped while the daemon inhibits it, and the
@@ -127,9 +128,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   automatically; `Mpris2Model.currentIndex`); a stopped player chosen there keeps the card while
   it can play, so it can be played or another chosen;
 * `Notifications` header with `Clear all`, then the notification cards (app icon + name, time,
-  summary, body, job progress with Cancel, action buttons; the first action is the accent button
-  for critical or persistent notifications, as the board's calendar reminder). Close button on hover.
-  Clicking a card runs its default action.
+  summary, body, the notification's image, a linked file's preview, job progress with Pause and
+  Cancel, a finished job's Open and Open Containing Folder,
+  action buttons; the first action is the accent button for critical or persistent notifications,
+  as the board's calendar reminder). Configure and close buttons on hover. Clicking a card runs
+  its default action.
 
 **Drill-down pages** replace the quick settings in the same card (back button, title, switch):
 Wi-Fi (Popups board tray panel: connected network card with band, security and live speed,
@@ -148,9 +151,12 @@ controls. Empty inputs or streams have explicit placeholders and a Sound setting
 Keyboard: every control is reachable with Tab and has the design's focus ring (2 px, 2 px gap);
 Space/Return activate, Right/Left moves between a tile and its chevron, Escape goes back a page or
 closes the pop-up. The widget's global shortcut (Plasmoid shortcut) opens and closes the pop-up.
-A notification's close button is in the tab chain (shown while focused or hovered), and the list
-scrolls to the card that has keyboard focus. Opening or leaving a drill-down page moves the focus
-with it; the ring is shown only when that was done from the keyboard.
+A notification card is in the tab chain itself (with the focus ring): Return, Enter or Space run its
+default action (or open its one linked file), Delete closes it, and in the tablet Notification
+Centre the Menu key or Shift+F10 opens its menu; its Configure and close buttons follow it in the
+tab chain (shown while focused or hovered), and the list scrolls to the card that has keyboard
+focus. Opening or leaving a drill-down page moves the focus with it; the ring is shown only when
+that was done from the keyboard.
 
 Colours: the boards' dark and light values (text `#E8EBF4` / `#141827`, secondary `#A3ABC2` /
 `#5B6278`, overlays white / `#141827` at the board's alphas). Dark or light is chosen from the
@@ -174,7 +180,13 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/BluetoothPage.qml     Bluetooth drill-down
   contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
+  contents/ui/NotificationEntry.qml one row of the history: an app's group header or a card,
+                                    and "Show N More" (the sheet and the Notification Centre)
   contents/ui/NotificationCard.qml  one notification
+  contents/ui/NotificationThumbnail.qml, NotificationPreview.qml
+                                    a linked file's preview (KIO's, through the stock applet's
+                                    Thumbnailer; a plain image where that cannot load)
+  contents/code/notifications.js    what a card shows (body images, the side image, ...)
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),
                                     Tile, FusionSlider, FusionSwitch, IconButton, TextButton, ListRow,
@@ -542,10 +554,9 @@ the lead directly.
   tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc
   `[Tablet] RotationLocked`); the lock is read back from `kscreen-doctor -j` when the sheet opens in
   tablet posture (outputs with the auto-rotation capability report it).
-- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow"
-  (the next 06:00: chosen after midnight, the coming morning; `contents/code/dnd.js`,
-  `tests/dnd.test.js`) and "Until turned off"; the time is kept in the notification settings, a
-  timer releases it.
+- **Do Not Disturb for a while** (G18): the tile's chevron offers the stock applet's choices (see
+  "Notification parity (0.5.0)" below; `contents/code/dnd.js`, `tests/dnd.test.js`); the time is
+  kept in the notification settings, a timer releases it.
 - **Built on demand** (S2): the sheet's content is a `Loader` built 4 s after start, or at once when the
   pointer reaches the bar or anything opens it; the Bluetooth device model exists only while the
   Bluetooth page is shown (the tile keeps using BluezQt's manager).
@@ -664,8 +675,10 @@ together (the forced split is itself a known complaint).
   Cards are the quick settings' `NotificationCard` on a **solid** surface (#1b2031 / #ffffff; E-phone
   4.2 MUST), newest first, with their actions. **Clear all** (44 px pill in the list's corner) hides
   the list for 5 s with **Notifications cleared · Undo**; the clear happens then or when the sheet
-  closes. An app with **4 or more** notifications shows as one stack (its newest card, two edges
-  behind it, "N more from App"); a tap opens the stack until the sheet closes. **Long press** on a card:
+  closes. Notifications are grouped by app as in the laptop sheet (0.5.0, "Grouped by app" below;
+  until then an app with 4 or more showed as one stack with "N more from App"): a group lists two
+  cards with the stack's two edges under them and **Show N More**, which opens it until the sheet
+  closes. **Long press** on a card:
   "No Pop-ups from App" (writes Plasma's own `plasmanotifyrc [Applications][<desktop entry>]
   ShowPopups=false --notify`, the key the notification settings page writes) and "Notification
   Settings…". A sideways swipe on a card dismisses it (the card's own handler). On the zones outside
@@ -767,3 +780,147 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   both ways and adopted by a new widget, posture settings written once per change, Meta+A and a USB
   stick open the sheet on the screen with the pointer only (both screens), bars made before the
   change completed at login (two reboots), no QML warnings, no crashes.
+
+## Notification parity (0.5.0)
+
+The notification history in the laptop sheet and the tablet Notification Centre, and Do Not
+Disturb, brought up to Plasma 6.7's Notifications applet (plasma-workspace
+`applets/notifications`, branch Plasma/6.7; improvement survey 3, P3). The stock applet stays
+loaded and hidden: it still owns the pop-ups and the Do Not Disturb bookkeeping.
+
+### Do Not Disturb for a while
+
+The tile's chevron offers the stock applet's choices (`FullRepresentation.qml`), worked out in
+`contents/code/dnd.js` `choices()` when the choices open: **For 1 hour**, **For 4 hours** (both in
+whole minutes), **Until this evening** (20:00, offered before 20:00), **Until tomorrow morning**
+(06:00), **Until Monday** (06:00, offered on Fridays and Saturdays; on Sundays tomorrow morning is
+Monday) and **Until turned off** (a year ahead, as the stock applet keeps it), or **Turn off** while
+it is on. One deviation: the stock applet hides "tomorrow morning" until 07:00; here it is always
+offered and, chosen after midnight, ends at the coming 06:00 (the behaviour of the earlier "Until
+tomorrow"). From the keyboard the chevron moves the focus to the first choice, and a choice gives
+it back to the chevron. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
+Friday/Saturday/Sunday).
+
+### The "Until" text
+
+The tile reads `Until 18:00` within 24 hours of the end, `Until Mon 06:00` within a week, the date
+further ahead, and `On` for "until turned off" (more than 100 days ahead, the stock applet's limit
+too). It was read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
+reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
+form applies and when it changes next; one single-shot timer (`services/Notifications.qml`
+`dndClock`) moves the service's clock then, which also ends the Do Not Disturb on time (the
+check every minute is gone, and nothing wakes up for "until turned off"). Tests:
+`tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on a
+private bus, in CI: a Do Not Disturb set 24 h and 1.5 s ahead shows its day, then the time alone
+without anything else changing, and a short one ends by itself).
+
+### Who holds Do Not Disturb
+
+When an application holds Do Not Disturb (`org.freedesktop.Notifications.Inhibit`, for example a
+presentation or a video call), or the notification settings keep it on while screens are mirrored
+or a full-screen window has the focus, the tile's subtitle says so in the stock applet's words
+("While Kdenlive is active (Rendering)", "Screens are mirrored", "Fullscreen app is focused"), the
+tile's tooltip and the open choices show the whole state in one line ("Until 18:00 · While …"),
+and the Notification Centre shows the reasons under its Do Not Disturb chip. `dnd.js` `reasons()`
+pairs the applications with their reasons (`notificationInhibitionApplications` /
+`…Reasons`); `services/Notifications.qml` `dndReasons` words them. Tests: `tests/dnd.test.js` and
+`tests/notifications_service_test.py` (an inhibition held by `tests/notify_client.py inhibit` is
+named with its reason, and gone when released).
+
+### Images in the history
+
+The cards stripped every image (`cleanBody()` removed `<img>`; the image role and linked files were
+not used). They now follow the stock applet's sizes: the notification's own image (`image-data`,
+`image-path`), or its icon when that is not the app's, beside the text at Plasma's large icon size
+(48 px, its aspect kept, as `Icon.qml`); images in the body (`<img src>`, which the server keeps for
+local files only) below the text, fitted to the card and no taller than the preview strip (the stock
+applet draws them inline at their own size, which can overflow); and the first linked file
+(`x-kde-urls`: Spectacle's screenshot, a received file) as a preview strip of Plasma's "enormous"
+icon height (128 px), as `ThumbnailStrip.qml`. The preview is KIO's, made by the stock applet's own
+`Thumbnailer` type (`NotificationPreview.qml`, loaded in the same shell, so videos and documents
+get theirs too; a file without one shows its type's icon); where that type cannot load, an image is
+drawn by itself and any other file shows a generic icon. A click, Return or Space on the preview
+opens the file, lets the notification expire (as the stock applet) and closes the sheet; the
+preview has an accessible name ("Open screenshot.png"). `contents/code/notifications.js`
+`splitBody()` and `sideImage()`, tests `tests/notifications.test.js`; the cards themselves:
+`tests/notifications_card_test.py` (the staged package on Plasma's notification server on a private
+bus, in CI; applications without a desktop file stay out of the history by Plasma's default, so the
+test gives its own one): the image is drawn at 48 px on the right, a 1200 × 300 body image is fitted
+to the card at 4:1, a screenshot is previewed 128 px tall and opens from a click and from Return.
+
+### Inline reply
+
+A notification that offers an inline reply (`inline-reply` action, `x-kde-reply-*` hints: chat
+apps, KDE Connect's SMS) can be answered from the history, as from the stock applet
+(`ActionContainer.qml`, `NotificationReplyField.qml`): when replying is all it offers, the field is
+shown at once; otherwise a **Reply** button (the app's label) comes first among the actions and
+opens the field with the focus. The field uses the app's placeholder and button text ("Type a
+reply…", **Send**), Send waits for text, Return sends and Escape goes back to the actions. The reply
+goes through `Notifications.reply()`; a notification that is not resident closes then.
+`notifications.js` `replyMode()`; `tests/notifications_card_test.py` sends both kinds through
+`tests/notify_client.py`, which reports the reply the app receives (from Return and from Send).
+
+### File jobs
+
+A job card (a copy, a download) hid its text and offered only a progress bar and Cancel, so a
+failed copy did not say why and a finished one had nothing to open. As in the stock applet
+(`JobItem.qml`, `Summary.qml`): the summary says "Copying (Finished)", "(Failed)" or "(Paused)";
+the job's text is shown (the file and a link to the destination, or the error text); the
+progress bar shows while it runs or is paused, with **Pause**/**Resume** when the job can be
+suspended and **Cancel** when it can be killed; a finished copy of one file offers **Open** (accent,
+as on the Popups board) and **Open Containing Folder**, which shows the file selected in the file
+manager (`org.freedesktop.FileManager1.ShowItems`, KIO's highlightInFileManager), and a copy of
+several files offers **Open Containing Folder** for the destination folder (the job's
+`effectiveDestUrl`, empty after an error or in the trash). Opening lets the notification expire and
+closes the sheet. A summary that only repeats the app's name is left out (the stock rule).
+`notifications.js` `jobState()`, `fileActions()`, `summaryShown()`; `tests/notify_client.py job`
+reports a copy as KIO does (`org.kde.JobViewServerV2`) and `tests/notifications_card_test.py`
+checks the one-file, several-file, failed and running cases (Open, the folder through a stand-in
+file manager, the error text, Pause/Resume/Cancel reaching the job).
+
+### Grouped by app
+
+The sheet's history was flat (`groupMode: GroupDisabled`) and the tablet Notification Centre
+stacked an app's notifications only from 4 on, with its own counting. Both now use the stock
+applet's grouping (`services/Notifications.qml`: `GroupApplicationsFlat`, `groupLimit: 2`,
+`expandUnread`), drawn by one row component, `NotificationEntry.qml`: an app with two or more
+notifications gets a group header (its icon and name, **Close Group**, which closes all of them,
+hidden ones too), its cards then carry the summary on their first line (the header names the app),
+and under the last listed card **Show N More** opens the group and **Show Fewer** closes it again
+(the stock strings). Unread notifications are always listed, so a group collapses to its two newest
+once the sheet has been seen (`markRead`). The Centre draws a collapsed group's hidden notifications
+as the two card edges of its stack, and closes the groups opened while it is shown when it closes.
+Clear all opens every group first, so the notifications a collapsed group hides are cleared too
+(they are not rows until then). `notifications.js` `groupFooter()`;
+`tests/notifications_card_test.py`: four notifications of one app give one header with all four
+while unread, two and **Show 2 More** once read, all four and **Show Fewer** after a click, two
+again after another, none after Close Group, and Clear all removes a collapsed group's hidden ones.
+Live (VM 2, tablet posture forced with kwinrc `[Input] TabletMode=on`): the Centre's Konsole group
+with three new cards, the stack edges and **Show 4 More**, expanded by a tap.
+
+### Configure
+
+The app's notification settings were reachable only from the tablet Centre's long-press menu
+("Notification Settings…"); `Backend.notif.configure()` was never called from the laptop cards. As
+in the stock applet (`HeadingButtons.qml`), a card now has a **Configure** button beside its close
+button (the app's own label when it gives one, such as "Notification Settings"), shown with it on
+hover, keyboard focus and in touch mode, and an app's group header has one for the group (its cards
+do not repeat it). It runs `Notifications.configure()`: the app's own `settings` action when it has
+one, else System Settings' Notifications page for that app; the sheet closes. Test:
+`tests/notifications_card_test.py` (the label, focus showing the buttons, Return reaching the
+app's settings action and closing the sheet, the group header's button).
+
+### Keyboard
+
+The cards' default action was tap-only (a `TapHandler`; the card was not focusable and had no
+`Accessible.onPressAction`) and the Centre's card menu needed a long press. A card is now in the
+tab chain before its buttons, with the design's focus ring: Return, Enter and Space run its default
+action, or open its linked file when it has no default action and one file (the stock applet's
+list keys), Delete closes it, and screen readers get the press action. The Centre's card menu also
+opens from a right click, the Menu key and Shift+F10. Every new control above (Reply, the reply
+field and Send, the preview, Open, Open Containing Folder, Pause/Resume, Configure, Close Group,
+Show N More, the Do Not Disturb choices) is a focusable button with an accessible name; the
+Do Not Disturb chevron moves the focus to the first choice. Test: `tests/notifications_card_test.py`
+(Return reaching the app's default action, Delete, the Menu key, Shift+F10 and a right click asking
+for the menu). Not changed: links inside a notification's body are still reached with the pointer
+only (`Text.StyledText` has no keyboard navigation for links).
