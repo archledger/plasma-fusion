@@ -47,5 +47,9 @@
             <label>Applications hidden from the menu</label>
             <default></default>
         </entry>
+        <entry name="glass" type="String">
+            <label>Glass level, written by the Plasma Fusion settings module and the power service: "full", "reduced" or "solid" (only a tint, no wallpaper picture, behind the tablet launcher sheet). A String, not an Enum: Applet.writeConfig would store an Enum's text as 0.</label>
+            <default>full</default>
+        </entry>
     </group>
 </kcfg>

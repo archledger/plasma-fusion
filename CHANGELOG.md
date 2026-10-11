@@ -7,6 +7,13 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## Unreleased
+
+- Glass set to Solid in the Plasma Fusion settings (also chosen by High contrast, and by the power
+  service on a nearly empty battery) now reaches the tablet launcher sheet and the Notification
+  Centre: they show a plain tint instead of the blurred wallpaper. Before, the setting was written
+  to the widgets but neither of them read it.
+
 ## 0.4.0 (2026-10-09)
 
 Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch), like 0.3.1.

@@ -584,6 +584,7 @@ PlasmoidItem {
         id: centre
         backend: root.qsBackend
         open: root.centreOpen
+        glass: Plasmoid.configuration.glass
         onCloseRequested: root.closeNotificationCentre(false)
         onDeactivated: root.closeNotificationCentre(true)
         // The controls open once the sheet's window is gone and KWin has activated the next window

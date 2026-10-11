@@ -17,6 +17,8 @@ PlasmaCore.Dialog {
     property rect area: Qt.rect(0, 0, 1, 1)
     property real topBar: 44
     property int screenNumber: 0
+    // The widget's glass key (full, reduced, solid) for the centre's backdrop.
+    property string glass: "full"
     property bool wanted: false
     property bool open: false
     readonly property NotificationCentreContent content: loader.item as NotificationCentreContent
@@ -97,6 +99,7 @@ PlasmaCore.Dialog {
                 motion: centreMotion
                 topBar: window.topBar
                 screenNumber: window.screenNumber
+                glass: window.glass
                 shown: window.open
                 onCloseRequested: window.closeRequested()
                 onMenuClosed: window.requestActivate()
