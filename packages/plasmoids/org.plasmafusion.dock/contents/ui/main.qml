@@ -20,6 +20,7 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.private.kicker as Kicker
 import org.kde.kitemmodels as KItemModels
 
+import "../code/jobs.js" as Jobs
 import "../code/pins.js" as Pins
 import "../code/date-timer.js" as DateTimer
 
@@ -1069,6 +1070,17 @@ PlasmoidItem {
     // the QML D-Bus watcher needs a fixed sender and path, so a live source needs a small compiled
     // helper (docs/parts/shell-dock.md). Until then only the test hook (debugAction badge:) sets them.
     property var launcherEntries: ({})
+    // With the file-transfer progress below: what the tiles draw.
+    readonly property var dockEntries: Jobs.withJobs(launcherEntries, jobProgress)
+
+    // ---- File-transfer progress (stock parity): the jobs of Plasma's notification server, such
+    // as a copy in Dolphin or a download, as a progress bar on their app's tile (TransferJobs.qml).
+    // The stock task manager gets the same numbers from libnotificationmanager, which sends them as
+    // LauncherEntry signals (the mean percentage of the app's running jobs, code/jobs.js).
+    TransferJobs {
+        id: transferJobs
+    }
+    readonly property var jobProgress: transferJobs.progress
 
     // ---- Today, for the calendar tile ----
     property date today: new Date()
@@ -2020,7 +2032,7 @@ PlasmoidItem {
                 tablet: root.tablet
                 pulseCycles: root.pulseCycles
                 gap: root.gap
-                entry: root.launcherEntries[taskItem.iconName] ?? null
+                entry: root.dockEntries[taskItem.iconName] ?? null
                 audio: root.audio
                 pidsFor: row => root.taskPids(row)
                 monthText: root.todayMonth

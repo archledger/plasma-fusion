@@ -20,6 +20,7 @@ separator · running apps that are not pinned · **Downloads** stack · **Trash*
 | `.../contents/ui/NamePill.qml` | the name pill above the hovered item (a separate tooltip window) |
 | `.../contents/ui/WindowPreview.qml` | window previews above a hovered running app (live thumbnails, close, activate) |
 | `.../contents/ui/AudioStreams.qml` | the apps' audio streams (plasma-pa) for the audio indicator and mute |
+| `.../contents/ui/TransferJobs.qml`, `code/jobs.js` | file-transfer progress per app from Plasma's job server |
 | `.../contents/ui/DockMenu.qml` | script-filled context menu (PlasmaExtras.Menu) |
 | `.../contents/ui/DockPalette.qml` | every colour of the dark and light boards |
 | `.../contents/ui/Glyph.qml`, `FusionLogo.qml`, `DownloadsStack.qml` | board line icons (1.8 stroke), the three-circle mark, the fanned download cards |
@@ -398,6 +399,16 @@ built by the lead directly.
   watcher of plasma-workspace 6.7.5 needs a fixed sender and path (`DBusSignalWatcher::isValid()`;
   the stock task manager's SmartLauncher is compiled into its own applet). A small compiled helper
   is needed; until then only the test hook `debugAction badge:ROW:COUNT[:PROGRESS]` sets them.
+- **File-transfer progress** (stock parity, 0.5.0): the jobs of Plasma's notification server (a copy
+  or move in Dolphin, a download, an archive being packed: every KIO job and every app that reports
+  to the job server) show as the progress ring on their app's tile while they run.
+  `TransferJobs.qml` reads them with a `NotificationManager.Notifications` model (`showJobs`, no
+  notifications; expired and dismissed jobs too, since the job's pop-up closes after its timeout)
+  and `code/jobs.js` folds them per desktop entry as libnotificationmanager does for the stock task
+  manager (`JobsModelPrivate::updateApplicationPercentage`: the mean percentage of the app's jobs
+  that have not stopped, in whole percent; a paused job counts). An app's own Unity progress, when
+  there is one, wins; its count stays. The stock task manager also shows the number of jobs as a
+  badge; the dock keeps its badge for unread notifications and shows the ring only.
 - **Motion and accent**: every duration from `Motion` (zoom `popupIn`, press `pressScale`, hover
   colours `hover`, pulse `pulse` with `loops()`, indicator `toggle`); the active fill, ring, pill and
   focus ring follow the user's accent (`FusionAccent`, the board's blues otherwise). The start-up
@@ -424,6 +435,12 @@ the tablet script's window policy switched on for the virtual output): 20/20.
 - T8 (partly): a touch swipe up on the dock opens the launcher (the laptop card until LAUNCH-2).
 - Portrait tablet: Start and Overview only.
 - Badge 3 and progress 0.4 drawn (test hook).
+- File-transfer progress (0.5.0): `tests/jobs.test.js` (node, in the build step) folds jobs per app
+  and merges them with the apps' own state; `tests/transfers_test.py` (CI step "Dock file-transfer
+  progress") starts Plasma's job server on a private bus through TransferJobs.qml and reports jobs
+  the way KIO does (one copy, a second one, paused, another app, finished). VM 4 (2026-10-11): a
+  2 GiB file copied in Dolphin onto a USB disk showed the ring on Dolphin's tile (50 % and 83 % in
+  the screenshots, `dump-targets` `%0.83`) and none once the copy ended.
 - M3: "Add to Desktop" makes `~/Desktop/org.kde.konsole.desktop` → `/usr/share/applications/…`; a drag
   from the dock to the desktop gets KIO's "Link Here", which makes the Dolphin link.
 - No QML warnings from the dock, no core dumps.
