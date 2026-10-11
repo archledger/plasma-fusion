@@ -18,8 +18,10 @@ import org.kde.ksvg as KSvg
 // while each side's widgets fit within W/2 − pill/2 − 24; when a side does not fit, the bar
 // collapses step by step, each step on top of the ones before:
 //
-//   1  the global menu (stock appmenu) becomes its one-button compact view (see below)
-//   2  phone and clipboard move into quick settings (the quicksettings widget)
+//   1  the global menu (stock appmenu) becomes its one-button compact view (see below); the
+//      optional system meters (org.plasmafusion.meters) drop their network meter
+//   2  phone and clipboard move into quick settings (the quicksettings widget); the system
+//      meters leave the bar
 //   3  the app name hides: the logo (tablet: the app icon) only (appname)
 //   4  the short date in the pill
 //   5  the time only

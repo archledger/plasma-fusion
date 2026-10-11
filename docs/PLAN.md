@@ -61,6 +61,7 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 | Plasmoid, desktop card | `org.plasmafusion.weathercard` (current weather, today's high and low) | same |
 | Plasmoid, desktop card | `org.plasmafusion.calendarcard` (this month; a click on a day opens KOrganizer) | same |
 | Plasmoid, desktop card | `org.plasmafusion.systemcard` (processor and memory bars) | same |
+| Plasmoid, top bar (optional) | `org.plasmafusion.meters` (processor, memory, network and temperature meters; in no layout, added by the user) | same |
 | Plasmoid, pen | `org.plasmafusion.pen` (pen button in tablet posture, New note / Snip / Mark up / Whiteboard / pen settings; Meta+Shift+W) and its Xournal++ templates `plasma-fusion/pen/templates/{Note,Whiteboard}.xopp` | same; templates in `~/.local/share/plasma-fusion/pen/` |
 | Layout templates | `org.plasmafusion.panel.topbar`, `org.plasmafusion.panel.dock` ("Add Panel" entries) | `~/.local/share/plasma/layout-templates/` |
 | Power tiers | `plasma-fusion-powerfx` (program) and `plasma-fusion-powerfx.service` (user unit, enabled by `fusion-config.sh`) | `~/.local/libexec/plasma-fusion/`, `~/.config/systemd/user/` (system package: `/usr/libexec/plasma-fusion/`, `/usr/share/plasma-fusion/powerfx/`) |

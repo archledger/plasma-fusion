@@ -483,8 +483,9 @@ built by the lead directly.
     Quick Tile Left/Right" (component `kwin`); the tile loses its title bar as before (KWIN-1).
 - **Width budget** (`WidthBudget.qml` in the clock pill, which sits between the bar's two expanding
   spacers): the pill stays on the middle while each side fits within W/2 − pill/2 − 24; otherwise the
-  steps of ADAPTIVE 5.1 apply in order: 1 the global menu compact, 2 phone and clipboard into quick
-  settings (QS-1 adds its hook), 3 the app name hidden, 4 the short date, 5 the time only, 6 no
+  steps of ADAPTIVE 5.1 apply in order: 1 the global menu compact (and the optional system meters'
+  network meter out, 0.5.0: `docs/parts/shell-meters.md`), 2 phone and clipboard into quick
+  settings (QS-1 adds its hook; the system meters leave the bar), 3 the app name hidden, 4 the short date, 5 the time only, 6 no
   battery % (QS-1), 7 no workspace dots. Tablet posture starts at step 2, portrait or a narrow screen
   at step 5 (TABLET 4.3); the clock pill has no dots in tablet posture and uses 14 px 800 text with
   16 px padding. The step is computed in one go from the widgets' level-0 widths: each Fusion widget
