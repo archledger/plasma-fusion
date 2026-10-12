@@ -221,6 +221,7 @@ Window {
     // The card's typed functions, for Python (which passes QVariant arguments).
     function openMode(mode) { card.openMode(mode, ""); }
     function selectChip(index) { card.selectChip(index); }
+    function setChips(list) { mock.chips = JSON.parse(list); }
     // Ordering (0 Recent, 1 Popular) and shown items (1 OnlyApps) of both lists.
     function orderings() {
         return [usage.recentApps.ordering, usage.frequentApps.ordering, usage.recentApps.shownItems, usage.frequentApps.shownItems].join(" ");
@@ -229,7 +230,7 @@ Window {
         const grid = card.primaryGrid();
         const last = card.lastGrid();
         return JSON.stringify({
-            view: card.view, chip: card.chipIndex,
+            view: card.view, chip: card.chipIndex, chipKey: card.chips[card.chipIndex] ? card.chips[card.chipIndex].key : "",
             primaryModel: grid.model === usage.recentApps ? "recent" : grid.model === usage.frequentApps ? "frequent"
                 : grid.model === usage.places ? "places" : "other",
             primaryCount: grid.count, primaryFocus: grid.activeFocus, primaryCurrent: grid.currentIndex,
@@ -487,6 +488,34 @@ QtObject {
     call(win, "selectChip", 1)
     QTest.qWait(100)
     check(json.loads(call(win, "state"))["view"] == "history", "the second chip is Recent")
+
+    # The chips are rebuilt when the menu changes (Hide Application on the last app of a category
+    # drops its chip): the chosen category stays chosen by key, and a category that is gone gives
+    # way to "All" instead of the next category, or an empty grid titled "Pinned".
+    fixed = [{"key": "all", "label": "All", "row": -1, "view": "home"},
+             {"key": "recentapps", "label": "Recent", "row": -1, "view": "history"},
+             {"key": "places", "label": "Places", "row": -1, "view": "places"}]
+    office = {"key": "office", "label": "Office", "row": 3, "view": "category"}
+    call(win, "selectChip", 3)
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "category" and s["chip"] == 3 and s["chipKey"] == "office", "the Office chip is chosen")
+    call(win, "setChips", json.dumps(fixed + [{"key": "education", "label": "Education", "row": 2, "view": "category"},
+                                              dict(office, row=4)]))
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "category" and s["chip"] == 4 and s["chipKey"] == "office",
+          "a chip added before it: Office stays chosen at its new place (%s)" % s)
+    call(win, "setChips", json.dumps(fixed + [{"key": "graphics", "label": "Graphics", "row": 2, "view": "category"}]))
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "home" and s["chip"] == 0, "its category gone: back to All, not the next chip (%s)" % s)
+    call(win, "setChips", json.dumps(fixed + [office]))
+    call(win, "selectChip", 3)
+    call(win, "setChips", json.dumps(fixed))
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "home" and s["chip"] == 0, "the last chip gone: All, not an empty grid titled Pinned (%s)" % s)
     print(f"views: {checks} checks passed")
 finally:
     kamd.terminate()

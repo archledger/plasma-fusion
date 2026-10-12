@@ -78,7 +78,10 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 - Chips: "All", "Recent", "Places", then every non-empty XDG menu category, identified by its directory icon
   (locale independent), duplicates and "Lost & Found" dropped, ordered Development, Graphics,
   Internet, Multimedia, Office, System, then Games, Education, Science, Utilities, Settings, Help.
-  Chips that do not fit go into a round "..." chip with a menu.
+  Chips that do not fit go into a round "..." chip with a menu. The chips are rebuilt when the menu
+  changes (an app hidden, installed or removed); the card keeps the chosen chip by its key
+  (`LauncherCard.chipKey`), so a category stays chosen when one before it comes or goes, and when
+  the chosen category itself is gone (its last app hidden) the card goes back to "All".
 - Recent (the `history` view, a chip like the categories: Kickoff has History and Frequently Used,
   Kicker "Recent Applications" and "Often Used"; the boards have no such view, so it reuses the
   board's section header and app tiles): "Recently used", one row of the apps started last (as
@@ -156,6 +159,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 - `tests/views_test.py` also searches with Kicker's real RunnerModel: Down past the last result to
   the KRunner row, Up back, Enter hands the query over and closes; with no results Down from the
   field selects the row.
+- `tests/views_test.py` also rebuilds the chips under the card: the chosen category stays chosen
+  when a chip is added before it, and when it is gone (or it was the last chip) the card shows
+  "All", not the next category or an empty grid titled "Pinned".
 - `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
   with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
   by name, Show, Show All) and shows that Kicker's RootModel honours `hiddenApplications` only when
