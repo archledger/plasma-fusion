@@ -197,7 +197,8 @@ the password keeps its grace; a defunct way's message stays) fails on the previo
 `auth67-failed` (6.7 keeps the grace) passes on both. `auth68-switch` (a typed password goes when
 face, the password again or the smartcard is chosen, and when the smartcard stops working; Enter in
 the PIN field sends nothing typed before) fails on the previous package: the password stayed, and
-14 characters went to the smartcard as its PIN.
+14 characters went to the smartcard as its PIN. Its log gives the length of the typed test secret
+and of the screens' shared copy, never their text (CodeQL `py/clear-text-logging-sensitive-data`).
 
 ## Authentication contract (Plasma 6.7.5, and 6.8 where noted)
 
