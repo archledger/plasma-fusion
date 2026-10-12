@@ -108,6 +108,16 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   defined" at every start in tablet posture.
 - The clock's settings open without warnings in the log, and Apply on one of its pages no longer
   writes back a value that another page, or the widget itself, changed while the page was open.
+- On Plasma 6.8, Plasma no longer crashes again and again at login after a monitor with a top bar
+  was unplugged: the tablet-mode script, the Plasma Fusion settings page and `plasma-fusion setup`
+  leave panels whose screen is gone alone (reading their size crashed plasmashell 6.8), and
+  `plasma-fusion setup` no longer takes such a layout for a foreign one and resets it. Plasma Fusion
+  0.4.x has the same crash on Plasma 6.8. The tablet panel sizes are applied again when plasmashell
+  answers late at login.
+- The Plasma Fusion settings page waits up to 25 s for the Plasma shell instead of 5 s: right after
+  the shell restarts, "Top bar on every screen" and the system meters switch no longer report "Did
+  not receive a reply" for a change that is made, and the page keeps drawing and shows it is busy
+  while it waits.
 - A timed Do Not Disturb no longer ends while Plasma itself holds it for a full-screen window or
   mirrored screens: Plasma's own Notifications applet ends a timed one, and Quick Settings only sets
   the time (it also refuses a time already past).
