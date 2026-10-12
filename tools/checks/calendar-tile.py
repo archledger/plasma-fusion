@@ -6,7 +6,8 @@
   tools/checks/calendar-tile.py [--warn] [PATH...]      default PATH: packages/
 
 The launcher's AppTile and the dock's TaskItem paint today's month and day over the calendar tile
-art, which carries a fixed SEP / 28 (generators/icons/art_tiles.py, TILES['calendar']). The patch
+art, which carries a fixed SEP / 28 (generators/icons/art_tiles.py, TILES['calendar']); every other
+app tile turns on the shared FusionIconTile's own overlay (calendarDate: true). The patch
 exists only to hide that art, so it must track the art's names and colours exactly. A name that
 draws another tile (an app's own design, as GNOME Calendar's) must not get the patch, and a name
 that draws the dated art must get it (or the tile keeps a stale SEP 28).
@@ -17,6 +18,11 @@ Findings, one per line as FILE:LINE: RULE message | source:
   calendar-colors   a covering rectangle or its label text does not use the tile art's own colour
                     (TILES['calendar']: c1 the month band, base the page, t2c and tc the labels),
                     so the patch shows as a seam on the band or the page
+  calendar-missing  a FusionIconTile that shows an app by its desktop id (binds iconName) has
+                    neither calendarDate: true (the block's own overlay) nor a calOverlay in its
+                    file, so a calendar app's tile shows the art's fixed SEP 28 (the tablet home
+                    screen and the tablet launcher sheet did until 0.5.0); test files are not
+                    checked
 Exit status: 1 when anything is found, 0 otherwise; with --warn always 0 (tools/build.sh).
 """
 import os
@@ -100,6 +106,14 @@ def check_file(path):
             if kind not in patches:
                 findings.append((cal.line, "calendar-colors",
                                  f"no {kind} patch (rectangle with a {kind}Text label) under calOverlay"))
+    # Every other tile of an app: the shared block's overlay, unless the file paints its own.
+    objs = list(qmlscan.walk(qmlscan.scan(text)))
+    if "tests" not in path.parts and not any(o.value("id") == "calOverlay" for o in objs):
+        for o in objs:
+            if o.short == "FusionIconTile" and o.has("iconName") and o.value("calendarDate") != "true":
+                findings.append((o.line, "calendar-missing",
+                                 "an app's tile without today's date: set calendarDate: true (or paint "
+                                 "a calOverlay), or a calendar app shows the art's fixed SEP 28"))
     return findings
 
 
@@ -110,7 +124,8 @@ def main(argv):
     paths = argv or [os.path.join(ROOT, "packages")]
     findings = []
     for f in qmlscan.qml_files(paths):
-        if "calendarApp" not in f.read_text(encoding="utf-8", errors="replace"):
+        source = f.read_text(encoding="utf-8", errors="replace")
+        if "calendarApp" not in source and "FusionIconTile" not in source:
             continue
         path = str(f.resolve())
         rel = os.path.relpath(path, ROOT) if path.startswith(ROOT + os.sep) else str(f)

@@ -621,6 +621,7 @@ PlasmoidItem {
                             size: pill.iconSize
                             source: root.appIcon
                             iconName: root.appIconName
+                            calendarDate: true
                         }
                     }
                     FusionText {

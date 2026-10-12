@@ -239,7 +239,9 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/icons/`
 * Places and devices are monochrome at 16 and 22 px (the Files window board's sidebar), coloured
   from 24 px (the FileIcons board).
 * Symbolic icons are filled outlines of the board's strokes (GTK 4, see above); the shapes are the same.
-* The calendar tile shows the board's fixed `SEP 28`; an icon theme cannot show today's date.
+* The calendar tile shows the board's fixed `SEP 28`; an icon theme cannot show today's date. Plasma
+  Fusion's own app tiles (dock, launcher, tablet home screen, window cards) paint today's date over
+  it (docs/parts/shared-blocks.md, FusionIconTile `calendarDate`).
 * Folders keep the board's fixed blue instead of following the accent colour; Dolphin's
   "Assign folder color" gets tinted variants (red ... black) in the same construction.
 * The Icons board's symbolic "Battery" (three bars) is not used; all battery names use the status

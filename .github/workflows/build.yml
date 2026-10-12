@@ -184,6 +184,9 @@ jobs:
       - name: Scroll safety of the bar's wheel controls (offscreen Qt)
         run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/wheel_guard_test.py
 
+      - name: Calendar date on app tiles (offscreen Qt)
+        run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/calendar_date_test.py
+
       - name: System meters' sensors (libksysguard, a stand-in ksystemstats on a private bus)
         run: |
           set -euo pipefail
