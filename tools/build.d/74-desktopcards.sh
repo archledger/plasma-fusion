@@ -9,7 +9,7 @@
 # each with copies of the shared QML blocks it uses (packages/common/*.qml,
 # tools/build-lib/shared-qml.sh) in contents/ui.
 # Checks: metadata ids, the config schemas parse, the three copies of the shared card files are
-# identical, and (when node is installed) the weather helper tests pass.
+# identical, and (when node is installed) the weather helper and calendar date-timer tests pass.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
@@ -26,6 +26,7 @@ done
 
 if command -v node >/dev/null 2>&1; then
   node "$PKG/org.plasmafusion.weathercard/tests/weather.test.js" >/dev/null
+  node "$PKG/org.plasmafusion.calendarcard/tests/date-timer.test.js" >/dev/null
 fi
 
 for id in $IDS; do

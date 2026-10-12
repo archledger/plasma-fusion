@@ -29,7 +29,7 @@ deployed to the real session (the lead deploys). Last edited 2026-09-29.
 | `.../weathercard/contents/code/weather.js` | engine source names, safety check, units, forecast parsing, glyph map |
 | `.../weathercard/contents/config/main.xml`, `config.qml` | settings (below) and their pages |
 | `.../weathercard/tests/weather.test.js` | tests of weather.js (`node`), not installed |
-| `packages/plasmoids/org.plasmafusion.calendarcard/...` | `metadata.json`, `ui/main.qml` (the card), `ui/ConfigGeneral.qml`, `config/main.xml`, `config/config.qml` |
+| `packages/plasmoids/org.plasmafusion.calendarcard/...` | `metadata.json`, `ui/main.qml` (the card), `ui/ConfigGeneral.qml`, `code/date-timer.js` (the midnight timer, as the dock's; `tests/date-timer.test.js`), `config/main.xml`, `config/config.qml` |
 | `packages/plasmoids/org.plasmafusion.systemcard/...` | `metadata.json`, `ui/main.qml` (the card), `ui/ConfigGeneral.qml`, `config/main.xml`, `config/config.qml`, `code/memory.js` (the memory figures; the same file as the system meters', compared by their `tests/memory.test.js` in `tools/build.sh meters`) |
 | `.../contents/ui/CardPalette.qml`, `CardText.qml`, `LineGlyph.qml` | shared colours and fonts, board type scale, 24-box line icons; the same file in all three packages |
 | `tools/build.d/74-desktopcards.sh` | checks metadata ids, config XML, that the three copies of the shared files are identical, runs the weather.js tests when `node` exists; copies the packages to `$STAGE/.local/share/plasma/plasmoids/` |
@@ -132,7 +132,9 @@ Settings (`[General]`, `contents/config/main.xml`):
 - Month navigation: the < > arrows (16 px glyphs, 22 px hover tint, tooltips), a click on the
   month title when another month is shown goes back to today. Blank cells before the 1st and after
   the last day, as on the board.
-- Today moves at midnight (checked every 30 s, also after a resume). A new day also brings the
+- Today moves at midnight (a cap-bounded timer, `code/date-timer.js` as the dock's tile: it
+  re-arms to the next midnight, capped at 10 minutes, and every tick rechecks the date, so it is
+  also right after a resume; was a 30-second poll until 2026-10-12). A new day also brings the
   card back to today's month unless it was browsed in the last minute, so a month browsed to
   and left there does not stay on the desktop for good.
 - A click on a day opens KOrganizer on that date when KOrganizer's D-Bus service is installed
