@@ -410,6 +410,7 @@ try:
     src, dst = tmp / "src", tmp / "dst"
     src.mkdir()
     dst.mkdir()
+    (dst / "report.pdf").write_bytes(b"%PDF-1.4\n")
     copy = job("Copying", "--source", str(src / "report.pdf"), "--dest", str(dst / "report.pdf"))
     wait_for(lambda: "finished" in copy.lines, "the copy did not finish")
     wait_for(lambda: info("Copying", "summary", "text")["text"] == "Copying (Finished)", "no finished summary")
@@ -418,8 +419,9 @@ try:
     check(body["visible"] and "report.pdf" in body["text"] and "href" in body["text"],
           "its text is shown, with the link to the destination: %r" % body["text"])
     check(not info("Copying", "jobProgress")["visible"], "no progress bar once finished")
+    QTest.qWait(300)
     check(info("Copying", "jobOpen")["visible"] and info("Copying", "jobFolder")["visible"],
-          "one file: Open and Open Containing Folder")
+          "one file (it exists): Open and Open Containing Folder")
     opened.urls.clear()
     click("Copying", "jobOpen")
     wait_for(lambda: opened.urls, "Open did not open the file")
@@ -439,6 +441,15 @@ try:
     click("Copying 3 files", "jobFolder")
     wait_for(lambda: opened.urls, "the folder did not open")
     check(opened.urls[-1] == QUrl.fromLocalFile(str(dst)).toString(), "it opens the destination folder")
+
+    # A copy whose file is gone (cancelled, moved or deleted since; Dolphin reports a cancelled
+    # copy as finished without an error, ThinkPad 2026-10-11): finished, but nothing to open, as
+    # the stock applet's JobItem hides its file buttons for a file that does not exist.
+    gone = job("Copying gone", "--source", str(src / "gone.iso"), "--dest", str(dst / "gone.iso"))
+    wait_for(lambda: "finished" in gone.lines and info("Copying gone", "summary", "text")["text"] == "Copying gone (Finished)",
+             "no finished summary for the gone file")
+    QTest.qWait(500)
+    check(not info("Copying gone", "jobFiles")["visible"], "a finished copy whose file is gone offers no Open or folder")
 
     # A failed copy: why, and nothing to open.
     failed = job("Moving", "--source", str(src / "big.iso"), "--dest", str(dst / "big.iso"), "--fail", "No space left on device")

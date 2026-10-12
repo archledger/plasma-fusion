@@ -1087,12 +1087,18 @@ suspended and **Cancel** when it can be killed; a finished copy of one file offe
 as on the Popups board) and **Open Containing Folder**, which shows the file selected in the file
 manager (`org.freedesktop.FileManager1.ShowItems`, KIO's highlightInFileManager), and a copy of
 several files offers **Open Containing Folder** for the destination folder (the job's
-`effectiveDestUrl`, empty after an error or in the trash). Opening lets the notification expire and
-closes the sheet. A summary that only repeats the app's name is left out (the stock rule).
-`notifications.js` `jobState()`, `fileActions()`, `summaryShown()`; `tests/notify_client.py job`
-reports a copy as KIO does (`org.kde.JobViewServerV2`) and `tests/notifications_card_test.py`
-checks the one-file, several-file, failed and running cases (Open, the folder through a stand-in
-file manager, the error text, Pause/Resume/Cancel reaching the job).
+`effectiveDestUrl`, empty after an error or in the trash). Neither is offered when that file or
+folder no longer exists (the stock JobItem's FileInfo rule): Dolphin reports a cancelled copy as
+finished without an error, so the card said "Copying (Finished)" with Open for a file KIO had
+removed (ThinkPad, 0.5.0 round); a finished local job's parent folder is listed with a filter on the
+name (`notifications.js existenceProbe()`, a FolderListModel while the card shows), remote URLs are
+not checked. Opening lets the notification expire and closes the sheet. A summary that only repeats
+the app's name is left out (the stock rule).
+`notifications.js` `jobState()`, `fileActions()`, `existenceProbe()`, `summaryShown()`;
+`tests/notify_client.py job` reports a copy as KIO does (`org.kde.JobViewServerV2`) and
+`tests/notifications_card_test.py` checks the one-file, several-file, gone-file, failed and running
+cases (Open, the folder through a stand-in file manager, nothing for a file that is gone, the error
+text, Pause/Resume/Cancel reaching the job).
 
 ### Grouped by app
 

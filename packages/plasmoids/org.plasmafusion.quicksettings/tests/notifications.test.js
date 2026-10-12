@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "notifications.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown, groupFooter, centreDateFormat } = globalThis;
+const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown, groupFooter, centreDateFormat, existenceProbe } = globalThis;
 
 // The body: declaration and wrapper gone, images taken out of the text and kept in order.
 const server = '<?xml version="1.0"?><html>Look <img src="file:///tmp/a.png" alt="a"/> here<br/>'
@@ -73,4 +73,12 @@ assert.strictEqual(centreDateFormat("dddd, d 'de' MMMM 'de' yyyy"), "dddd, d 'de
 assert.strictEqual(centreDateFormat("yyyy年M月d日dddd"), "M月d日dddd", "ja_JP: the year in front, with its suffix");
 assert.strictEqual(centreDateFormat("yyyy. MMMM d., dddd"), "MMMM d., dddd", "hu_HU: the year in front");
 assert.strictEqual(centreDateFormat(""), "dddd d MMMM", "no format: the board's");
+// Where a finished job's file is looked for.
+assert.deepStrictEqual(existenceProbe("file:///home/u/dest/report.pdf"), { folder: "file:///home/u/dest", filter: "report.pdf" },
+                       "a file: its folder and its name");
+assert.deepStrictEqual(existenceProbe("file:///home/u/dest/"), { folder: "file:///home/u", filter: "dest" }, "a folder: its parent");
+assert.deepStrictEqual(existenceProbe("file:///tmp/a%20b%5B1%5D*.txt"), { folder: "file:///tmp", filter: "a b[[]1[]][*].txt" },
+                       "the name decoded, wildcard characters literal");
+assert.strictEqual(existenceProbe("smb://server/share/a.txt"), null, "not a local file: not checked");
+assert.strictEqual(existenceProbe(""), null, "nothing");
 console.log("notifications: all checks passed");

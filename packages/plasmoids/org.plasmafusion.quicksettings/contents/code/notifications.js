@@ -119,3 +119,24 @@ function centreDateFormat(longFormat) {
     f = f.replace(/[\s,]+$/, "").trim();
     return f.length > 0 ? f : "dddd d MMMM";
 }
+
+// Where to look for a finished job's result before offering Open and Open Containing Folder, as
+// the stock applet's JobItem hides them for a file that does not exist (a cancelled copy, which
+// Dolphin reports as finished without an error, or a file moved or deleted since): {folder, filter}
+// for a FolderListModel of the parent folder with a name filter that matches exactly that name
+// (wildcard characters taken literally); null for a URL that is not a local file (not checked).
+function existenceProbe(url) {
+    var u = String(url || "").replace(/\/+$/, "");
+    if (u.indexOf("file:///") !== 0) {
+        return null;
+    }
+    var slash = u.lastIndexOf("/");
+    var name = u.slice(slash + 1);
+    if (name === "") {
+        return null;
+    }
+    var filter = decodeURIComponent(name).replace(/[\[\]*?]/g, function (c) {
+        return "[" + c + "]";
+    });
+    return { folder: u.slice(0, slash) || "file:///", filter: filter };
+}
