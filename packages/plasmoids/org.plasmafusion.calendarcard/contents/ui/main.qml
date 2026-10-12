@@ -11,6 +11,8 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.workspace.dbus as DBus
 
+import "../code/date-timer.js" as DateTimer
+
 // Calendar card of the Main board's desktop widgets: "September 2026" with < > arrows, narrow
 // weekday initials, a compact 7-column month with today on an accent circle. The week starts on
 // the region's first day (or the one chosen in the settings); weekends follow the region.
@@ -38,24 +40,29 @@ PlasmoidItem {
     readonly property real contentWidth: m.px(boardWidth)
     readonly property real contentHeight: m.px(boardHeight)
 
-    // Today, refreshed every half minute so the circle moves at midnight (and after a resume).
+    // Today, refreshed by a cap-bounded midnight timer (date-timer.js, as the dock's tile): Qt
+    // timers count monotonic time, which pauses across system suspend, so one long "next
+    // midnight" interval fired hours late and left the card on yesterday's date after a resume
+    // (the dock's 2026-10-06 bug). A tick only rechecks the date; one within 10 minutes of
+    // midnight (the cap) moves the circle, and a resume's late tick corrects the date at once.
     // A new day also brings the card back to today's month unless someone is browsing right
     // now: a month browsed to and left there would otherwise stay on the desktop for good.
+    // (Was a 30-second poll until 2026-10-12: about 2,900 wake-ups a day for one date compare.)
     property date now: new Date()
     property double lastBrowsed: 0
     Timer {
-        interval: 30000
         running: true
         repeat: true
+        interval: DateTimer.intervalTo(new Date(), DateTimer.CAP_MS)
         onTriggered: {
             const d = new Date();
-            if (d.getDate() !== root.now.getDate() || d.getMonth() !== root.now.getMonth()
-                    || d.getFullYear() !== root.now.getFullYear()) {
+            if (DateTimer.changed(root.now, d)) {
                 root.now = d;
                 if (Date.now() - root.lastBrowsed > 60000) {
                     root.showToday();
                 }
             }
+            interval = DateTimer.intervalTo(d, DateTimer.CAP_MS);
         }
     }
 

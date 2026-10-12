@@ -14,6 +14,14 @@ PartOf=graphical-session.target
 # hang or crash while they stop. (So not After=graphical-session.target, which comes after them.)
 Before=plasma-kwin_wayland.service plasma-plasmashell.service
 ConditionEnvironment=XDG_CURRENT_DESKTOP=KDE
+# Any of the copies ExecSearchPath= would find (| makes the set pass when one exists). A profile
+# restore or a manual cleanup that removes the tool leaves this unit enabled; without this it then
+# restarts every RestartSec forever (the default start limit never trips at 30 s: a laptop ran the
+# 30-second restart loop for five days, 2026-10-07 to 10-12, with over 12,500 logged failures after
+# a profile restore removed the tool). With no copy it is skipped cleanly instead.
+ConditionPathExists=|%h/.local/libexec/plasma-fusion/plasma-fusion-fieldlog
+ConditionPathExists=|/usr/local/libexec/plasma-fusion/plasma-fusion-fieldlog
+ConditionPathExists=|/usr/libexec/plasma-fusion/plasma-fusion-fieldlog
 
 [Service]
 Type=simple

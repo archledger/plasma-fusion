@@ -58,7 +58,9 @@ State in `${XDG_STATE_HOME:-~/.local/state}/plasma-fusion/fieldlog/` (private to
 Kept: 30 days (`PF_FIELDLOG_KEEP_DAYS`) and 100 MiB (`PF_FIELDLOG_MAX_MB`); over the size the oldest
 memory snapshots go first, then saved crash texts, then old events and digests, never today's
 events. Core files are never touched. When an event cannot be written (disk full), it is lost and
-the recorder goes on; once writing works again a `fieldlog-error` says how many were lost, and a
+the recorder goes on; once writing works again a `fieldlog-error` in that day's file says how many
+were lost (the day whose write recovered, so a backfilled day still reports its loss in its own
+digest; 2026-10-12), and a
 line that a failed write cut short is ended first, so it does not swallow the next. With
 `PF_FIELDLOG_SHARE` a copy of each digest goes to `DIR/digest-YYYY-MM-DD-HOST.md` (from a thread,
 so a hanging network mount does not stop the recorder; at the stop the copies get 10 s together).
@@ -211,6 +213,12 @@ contain the crashed program's command line, as coredumpctl prints it, and stay l
 units in `packages/`, with `Environment=PATH=/usr/local/bin:/usr/bin` (without it `ExecSearchPath=`
 becomes the service's whole PATH, systemd.exec(5), and `coredumpctl`, `journalctl` and `systemctl`
 are not found; the tool also falls back to `/usr/bin/NAME` when a program is not on PATH),
+`ConditionPathExists=|` for the tool at each of the three search paths (since 2026-10-12: a profile
+restore replaces `~/.local/libexec/plasma-fusion` from its snapshot and can remove the tool while
+the unit stays enabled; without the condition the unit then restarts every 30 s forever, because
+`RestartSec=30` is longer than the default start limit's window - a laptop ran that loop for five
+days, 2026-10-07 to 10-12, with over 12,500 failures; with no copy the unit is skipped cleanly and
+`install` brings it back),
 `Before=plasma-kwin_wayland.service plasma-plasmashell.service` (units stop in the reverse of their
 start order, so at logout the recorder stops after KWin and plasmashell and still records a hang
 or crash while they stop, as on 2026-09-29 at 19:51 EDT, when plasmashell was aborted 40 s after

@@ -29,7 +29,7 @@ namespace KWin
 
 FusionNavigationState::FusionNavigationState(QObject *parent)
     : QObject{parent}
-    , m_doubleClickTimer{new QElapsedTimer{}}
+    , m_doubleClickTimer{std::make_unique<QElapsedTimer>()}
     , m_shutdownTimer{new QTimer{this}}
 {
     // Configure close timer
@@ -246,12 +246,14 @@ void FusionNavigationState::refreshBorders()
 
 bool FusionNavigationState::gestureInProgress() const
 {
-    return m_effectState->inProgress();
+    // No state before a successful init(): the QML is loaded even when init() stopped at the
+    // version guard, and its bindings read this.
+    return m_effectState && m_effectState->inProgress();
 }
 
 void FusionNavigationState::setGestureInProgress(bool gestureInProgress)
 {
-    if (m_status == Status::Stopped) {
+    if (!m_effectState || m_status == Status::Stopped) {
         return;
     }
     m_effectState->setInProgress(gestureInProgress);

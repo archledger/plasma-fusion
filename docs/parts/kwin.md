@@ -495,8 +495,11 @@ screen).
   (`evaluateScript`), so a screen that appears after login gets its top bar. Since 2026-10-09 it is
   also sent once 5 s after the script starts (screens attached at login, and bars made before that
   date get their status area), and a "skipped" answer (layout not loaded, panels not on their
-  screens yet) or a failed call is retried every 3 s, 20 times (a slow start, the parity VM, needed
-  more than 15 s). The text comes from
+  screens yet) or a failed call is retried with a growing delay: every 3 s for the first ten
+  tries, then every 6 s, 40 tries in all (about three minutes; a slow start, the parity VM,
+  needed more than 15 s). Only the first skip of a burst and the give-up are logged (until
+  2026-10-12 every try logged a line: a laptop logged about 20 at every session start). The text
+  comes from
   `ensureTopBars.js`, which the build generates from the Global Theme's file. (A layout template
   with `loadTemplate()` did not work: plasmashell loads only templates of the panel category,
   which would also put it into "Add Panel".) When the answer says a bar was added or completed, the

@@ -555,8 +555,13 @@ class EventLog:
         self.lines[day] = n + 1
         if self.dropped:
             lost, self.dropped = self.dropped, 0
-            self.emit("fieldlog-error", coalesce=False, text=f"{lost} event(s) not written ({self.drop_error})",
-                      lost=lost)
+            # Same day as the write that recovered: the loss note belongs to the day's file (and
+            # its digest), not to the day the recorder noticed - a backfilled day's events would
+            # otherwise report their loss in today's file only (test_write_errors, 2026-10-12).
+            # coalesce=False: each recovery carries its own lost count. The anchor is midday of
+            # the day: a timestamp inside the day whose file the note belongs to.
+            self.emit("fieldlog-error", coalesce=False, ts=day_start(day) + 43200,
+                      text=f"{lost} event(s) not written ({self.drop_error})", lost=lost)
         if day < local_day(time.time()):
             counts = self.late.setdefault(day, collections.Counter())
             what = late_label(rec)
@@ -950,8 +955,10 @@ class FieldLog:
                 self.record_crash(e)
             except Exception as ex:
                 # A record the tool cannot handle must not stop it at every start: note it, mark the
-                # dump as seen and go on.
-                self.log.emit("fieldlog-error", key=f"crash-record|{type(ex).__name__}",
+                # dump as seen and go on. The note goes to the record's own day (its digest should
+                # carry it), not to the day the poll ran; coredumpctl's time is microseconds
+                # (test, 2026-10-12).
+                self.log.emit("fieldlog-error", key=f"crash-record|{type(ex).__name__}", ts=t / 1e6,
                               text=f"core dump {tk} ({os.path.basename(str(e.get('exe') or '?'))}) not "
                                    f"recorded: {type(ex).__name__}: {scrub(str(ex), limit=160)}")
             new += 1

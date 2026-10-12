@@ -638,16 +638,18 @@ Item {
         arguments: [EnsureTopBars.script]
         onFinished: returnValue => {
             const line = String(returnValue.length > 0 ? returnValue[0] : "").trim();
-            console.info("plasmafusion-snap: " + line);
             // At session start plasmashell can answer before it has loaded its layout, or before
-            // it has put its panels on their screens ("skipped"): ask again, for up to a minute (a
-            // slow start, the parity VM, took longer than 15 s).
-            if (line.indexOf("top bars: skipped") !== -1 && topBarsRetry.tries < 20) {
-                topBarsRetry.tries++;
-                topBarsRetry.restart();
-            } else {
-                topBarsRetry.tries = 0;
+            // it has put its panels on their screens ("skipped"): ask again, with a growing delay
+            // for up to about three minutes (a slow start, the parity VM, took longer than 15 s).
+            // Only the first skip of a burst is logged, and the give-up once: the answer repeats
+            // identically (a laptop logged ~20 skip lines at every session start, 2026-10-12).
+            if (line.indexOf("top bars: skipped") !== -1) {
+                askTopBarsAgain(line);
+                return;
             }
+            topBarsRetry.stop();
+            topBarsRetry.tries = 0;
+            console.info("plasmafusion-snap: " + line);
             // New widgets (a bar's quick settings and tray) get the power tier's keys only when
             // the power service applies its tier again: its reload, which does nothing when the
             // service is not running.
@@ -657,13 +659,23 @@ Item {
             }
         }
         // plasmashell not on the bus yet (the session's start): ask again, as above.
-        onFailed: {
-            console.info("plasmafusion-snap: plasmashell did not run the top-bar check");
-            if (topBarsRetry.tries < 20) {
-                topBarsRetry.tries++;
-                topBarsRetry.restart();
-            }
+        onFailed: askTopBarsAgain("plasmashell did not run the top-bar check")
+    }
+    function askTopBarsAgain(why: string): void {
+        if (topBarsRetry.tries >= topBarsRetry.maxTries) {
+            console.info("plasmafusion-snap: " + why + "; giving up after " + topBarsRetry.tries
+                         + " tries (the next screen change asks again)");
+            topBarsRetry.stop();
+            topBarsRetry.tries = 0;
+            return;
         }
+        if (topBarsRetry.tries === 0) {
+            console.info("plasmafusion-snap: " + why + " (asking again)");
+        }
+        topBarsRetry.tries++;
+        // 3 s while a start is normally just slow, 6 s for the long tail: about 3 minutes total.
+        topBarsRetry.interval = topBarsRetry.tries <= 10 ? 3000 : 6000;
+        topBarsRetry.restart();
     }
     DBusCall {
         id: powerTierCall
@@ -677,6 +689,7 @@ Item {
     Timer {
         id: topBarsRetry
         property int tries: 0
+        readonly property int maxTries: 40
         interval: 3000
         onTriggered: topBarsCall.call()
     }

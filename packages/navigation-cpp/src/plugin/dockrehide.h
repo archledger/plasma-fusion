@@ -8,6 +8,7 @@
 #include <input.h>
 
 #include <QList>
+#include <QObject>
 #include <QPointer>
 
 namespace KWin
@@ -39,6 +40,9 @@ private:
 
     QList<QPointer<Window>> m_docks;
     QMetaObject::Connection m_activation;
+    // Context of the delayed rehide() calls: a QObject that dies with this filter (the filter
+    // itself is no QObject, so QTimer::singleShot cannot take it as its context).
+    QObject m_timerContext;
 };
 
 } // namespace KWin

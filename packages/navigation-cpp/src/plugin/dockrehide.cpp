@@ -43,7 +43,9 @@ void FusionDockRehide::revealed(const QList<Window *> &docks)
     // An app opened or switched to from the dock: hide once it is active (and covers the dock).
     m_activation = QObject::connect(workspace(), &Workspace::windowActivated, workspace(), [this](Window *window) {
         if (window && !window->isDock() && window->isNormalWindow()) {
-            QTimer::singleShot(250, workspace(), [this]() {
+            // The context dies with this filter (not the workspace, which outlives it): a
+            // pending hide is dropped rather than running into a freed filter.
+            QTimer::singleShot(250, &m_timerContext, [this]() {
                 rehide();
             });
         }
@@ -75,7 +77,8 @@ void FusionDockRehide::pressAt(const QPointF &pos)
         }
     }
     // after this event is delivered: no window changes in the middle of input processing
-    QTimer::singleShot(0, workspace(), [this]() {
+    // (the context dies with this filter)
+    QTimer::singleShot(0, &m_timerContext, [this]() {
         rehide();
     });
 }
