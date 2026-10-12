@@ -44,7 +44,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1 ;;
     --latest) PICK=latest ;;
     --list) PICK=list ;;
-    -h|--help) sed -n '/^#   fusion-restore.sh/,/^# use the restored settings/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '/^#   fusion-restore.sh/,/use the restored settings\.$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) BACKUP=$1 ;;
   esac

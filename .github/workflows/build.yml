@@ -56,6 +56,9 @@ jobs:
       - name: Setup config keys that keep the user's choice
         run: tools/device/tests/config-keys-unit.sh build/config-keys
 
+      - name: Device tools' --help prints the usage only
+        run: tools/device/tests/help-unit.sh
+
       - name: Setup search keys (launcher and KRunner)
         run: tools/device/tests/launcher-keys-unit.sh build/launcher-keys
 
