@@ -72,17 +72,28 @@ prompt or pam_faillock's "account locked" message, which PAM does not send again
 on every screen (VM 6.7.91 with `[UI] ShowPromptInRegularAuthenticator`: "Password:" and the
 typed text gone after Cancel; kept now).
 
-Who blocks, as on the log-out screen: the same "N other users are currently logged in…" warning
-(`SessionsModel`, the 6.7 log-out screen's text and catalogue), and logind's inhibitors for
-`shutdown` (`ListInhibitors`, read every 2 s while the question is shown). systemd 259 refuses a
-reboot or power-off outright while a strong `block` inhibitor is held ("Operation denied due to
-active block inhibitor"; ksmserver asks without the skip flag), after the session has already
-closed; so while one is held the action stays off and the page lists "Who: why" under "These
-programs are blocking a restart. Try again when they have finished:". `block-weak` inhibitors are
-listed under "These programs are busy:" and leave the action on (logind lets the user's own pass);
-`delay` and other kinds (sleep, the power keys) are not shown. Plasma's D-Bus module hands each
-field of logind's reply over as a typed value (`{"value": …}`) in the greeter; both that and plain
-values are read.
+What blocks: logind's inhibitors for `shutdown` (`ListInhibitors`, read every 2 s while the
+question is shown). systemd 259 refuses a reboot or power-off outright while a strong `block`
+inhibitor is held ("Operation denied due to active block inhibitor"; ksmserver asks without the
+skip flag), after the session has already closed; so while one is held the action stays off and
+the page says "A program is blocking a restart. Try again when it has finished." (shutdown
+likewise). `block-weak` inhibitors leave the action on (logind lets the user's own pass) and the
+page says "A program is busy. Restarting now may interrupt it."; `delay` and other kinds (sleep,
+the power keys) count for nothing. Plasma's D-Bus module hands each field of logind's reply over as
+a typed value (`{"value": …}`) in the greeter; both that and plain values are read.
+
+The page names no program, reason or user: whoever stands at the locked screen sees it without
+unlocking, and logind lists every user's inhibitors with their holder and reason (an update tool,
+a backup's target, a VM's name). The first 0.5.0 version listed "Who: why" and the log-out screen's
+"N other users are currently logged in…" warning. What stock Plasma shows there: the 6.7.5 and 6.8
+lock screens have no Restart or Shut Down, no inhibitors and no sessions model
+(`/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen/`, plasma-desktop Plasma/6.8
+`desktoppackage/contents/lockscreen/`); the log-out screen, which has the other-users count
+(6.7.5 `Logout.qml`, 6.8 `LogoutControls.qml`), is not opened while the screen is locked
+(plasma-workspace `sessionmanagement.cpp` `requestLogoutPrompt`: "Do not show Logout prompt when
+in the lockscreen"). So the page says neither who blocks nor how many other users are logged in;
+only that a program blocks or is busy, which the action's state needs. The unlocked log-out screen
+still warns about other users.
 
 Plasma 6.8: `kscreenlocker_greet` loads the same `LockScreenUi.qml` and SessionManagement keeps the
 same properties, `ConfirmationMode` values and `requestReboot` / `requestShutdown` (plasma-workspace
@@ -237,7 +248,7 @@ the password keeps its grace; a defunct way's message stays) fails on the previo
 | `…/NotificationCards.qml`, `LockNotifications.qml` (singleton) | notifications while locked (`WatchedNotificationsModel`, grouped per app) |
 | `…/MediaControls.qml`, `StatusChip.qml`, `NetworkIndicator.qml` (loaded on demand, so a system without plasma-nm still locks) | bottom corners |
 | `…/Backdrop.qml`, `GlassPanel.qml` | wallpaper blur/dim/zoom, frosted surfaces (blurred wallpaper through `Kirigami.ShadowedTexture`) |
-| `…/PowerConfirm.qml` | the Restart / Shut Down question, with the other users and logind's shutdown inhibitors |
+| `…/PowerConfirm.qml` | the Restart / Shut Down question, kept off by logind's shutdown inhibitors (unnamed) |
 | `…/PowerButton.qml`, `RoundButton.qml`, `FocusRing.qml`, `LineIcon.qml`, `PfStyle.qml` (singleton: colours, fonts, the boards' 24 px line-icon paths, date/time helpers; the accent from `FusionAccent`) | building blocks |
 | `FusionMetrics.qml`, `Motion.qml`, `FusionAccent.qml`, `FusionTablet.qml` (installed copies of `packages/common/`, `tools/build-lib/shared-qml.sh`) | text scale, motion tokens, accent, KWin's tablet posture |
 | `…/LockOsd.qml`, `PasswordSync.qml`, `qmldir` | stock |
@@ -353,10 +364,11 @@ private bus, where `mock_services.py power` answers as logind and ksmserver, so 
 backend (not a stand-in) decides what the row shows, and the clicks are real pointer events:
 `power` both buttons shown; Shut Down asks first, Escape back, nothing called; Restart asks, Cancel
 back, nothing called; Restart confirmed calls `logoutAndReboot`; `power-blocked` a root `block`
-inhibitor and a `block-weak` one listed with their reasons, a sleep `delay` and PowerDevil's
-power-key inhibitor not, Shut Down off and a click on it calls nothing, the typed-value form of the
-reply read the same, the action on again 2 s after the inhibitor goes; `power-busy` a `block-weak`
-inhibitor alone leaves Shut Down on, confirmed calls `logoutAndShutdown`; `power-noreboot` logind
+inhibitor reported as "A program is blocking a shutdown…" with no holder, reason or other-users
+count on the page, Shut Down off and a click on it calls nothing, the typed-value form of the
+reply read the same (a sleep `delay` and PowerDevil's power-key inhibitor do not count), the action
+on again 2 s after the inhibitor goes; `power-busy` a `block-weak` inhibitor alone leaves Shut Down
+on and is reported as a busy program, unnamed, confirmed calls `logoutAndShutdown`; `power-noreboot` logind
 CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both; `power-mnemonic` Alt+S
 and Alt+R ask, the same chord again calls nothing, the action shows no "&", a deliberate Space
 answers; `power-repeat` Return or Space on a focused power button asks, their repeats (key events
@@ -365,8 +377,9 @@ and typed text are still there after Cancel and after the question closes with t
 0.4.1 package four of the five first ones fail (no buttons); the last three fail on the packages
 before their fixes. In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
 uinput pointer): the row shows Sleep, Switch User, Restart, Shut Down; with `systemd-inhibit
---what=shutdown --mode=block --who=Updater` held by root, Shut Down lists "Updater: Installing
-updates" and is off; Cancel returns; with it released, Restart confirmed restarted the VM (logind
+--what=shutdown --mode=block --who=Updater` held by root, Shut Down said "A program is blocking a
+shutdown…" (it listed "Updater: Installing updates" before the page stopped naming programs; VM
+6.7.91, `tracks/lockfixes-shots/15-*`, `16-*`) and is off; Cancel returns; with it released, Restart confirmed restarted the VM (logind
 "The system will reboot now!", a new boot id). Evidence:
 `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/small-shots/item2-*`.
 

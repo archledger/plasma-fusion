@@ -15,11 +15,17 @@ import org.kde.plasma.workspace.dbus as DBus
 // a prompt: ksmserver closes the session (an app with unsaved work waits for an answer, which needs
 // unlocking) and asks logind to restart or power off.
 //
-// As on the log-out screen it says when other users are logged in. It also lists logind's
-// inhibitors for shutdown: a "block" inhibitor makes logind refuse the request after the session
-// has already closed (systemd 259, "Operation denied due to active block inhibitor"), so while one
-// is held the action stays off and the page says who holds it and why; "block-weak" ones are listed
-// only. The list is read again every 2 s while the page is shown.
+// It reads logind's inhibitors for shutdown: a "block" inhibitor makes logind refuse the request
+// after the session has already closed (systemd 259, "Operation denied due to active block
+// inhibitor"), so while one is held the action stays off and the page says a program is blocking
+// it; for "block-weak" ones it says a program is busy. The list is read again every 2 s while the
+// page is shown.
+//
+// Whoever stands at the locked screen sees this page without unlocking, so it names no program,
+// reason or user: logind lists every user's inhibitors with their holder and reason, and the stock
+// lock screens show neither those nor the log-out screen's count of other logged-in users (Plasma
+// 6.7 and 6.8 offer no Restart or Shut Down there, and do not open the log-out screen while the
+// screen is locked, plasma-workspace sessionmanagement.cpp requestLogoutPrompt).
 FocusScope {
     id: root
     objectName: "powerConfirm"
@@ -30,7 +36,7 @@ FocusScope {
     property SessionManagement session: null
     readonly property bool reboot: action === "reboot"
 
-    // Inhibitors of shutdown: [{who, why, strong}].
+    // Inhibitors of shutdown: [{strong}] ("block" or "block-weak"), without who holds them.
     property var blockers: []
     readonly property bool blocked: blockers.some(b => b.strong)
     property bool requested: false
@@ -69,7 +75,7 @@ FocusScope {
             if (what.indexOf("shutdown") < 0 || (mode !== "block" && mode !== "block-weak")) {
                 continue;
             }
-            out.push({ who: String(f[1] || ""), why: String(f[2] || ""), strong: mode === "block" });
+            out.push({ strong: mode === "block" });
         }
         return out;
     }
@@ -106,13 +112,6 @@ FocusScope {
             root.requested = false;
             root.done();
         }
-    }
-
-    // For the "other users are logged in" warning, as the log-out screen.
-    SessionsModel {
-        id: otherSessions
-        includeUnusedSessions: false
-        includeOwnSession: false
     }
 
     Keys.onEscapePressed: event => {
@@ -176,60 +175,21 @@ FocusScope {
             textFormat: Text.PlainText
         }
         Text {
-            objectName: "powerConfirmOtherUsers"
-            width: parent.width
-            visible: otherSessions.count > 0
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            // The log-out screen's text and catalogue (PfStyle.logoutDomain).
-            text: i18ndp(PfStyle.logoutDomain,
-                         "One other user is currently logged in. If the computer is shut down or restarted, that user may lose work.",
-                         "%1 other users are currently logged in. If the computer is shut down or restarted, those users may lose work.",
-                         otherSessions.count)
-            color: PfStyle.warning
-            font.family: PfStyle.uiFont
-            font.pixelSize: root.metrics.font(13)
-            font.weight: Font.DemiBold
-            font.styleName: PfStyle.bold
-            textFormat: Text.PlainText
-        }
-        Column {
             objectName: "powerConfirmBlockers"
             width: parent.width
             visible: root.blockers.length > 0
-            spacing: root.metrics.px(4)
-            Text {
-                width: parent.width
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                text: !root.blocked ? i18nd("plasma_shell_org.plasmafusion.lockshell", "These programs are busy:")
-                    : root.reboot ? i18nd("plasma_shell_org.plasmafusion.lockshell", "These programs are blocking a restart. Try again when they have finished:")
-                    : i18nd("plasma_shell_org.plasmafusion.lockshell", "These programs are blocking a shutdown. Try again when they have finished:")
-                color: PfStyle.warning
-                font.family: PfStyle.uiFont
-                font.pixelSize: root.metrics.font(13)
-                font.weight: Font.Bold
-                font.styleName: PfStyle.bold
-                textFormat: Text.PlainText
-            }
-            Repeater {
-                model: root.blockers
-                delegate: Text {
-                    required property var modelData
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: modelData.why.length > 0
-                          ? i18ndc("plasma_shell_org.plasmafusion.lockshell", "@info %1 program, %2 its reason", "%1: %2", modelData.who, modelData.why)
-                          : modelData.who
-                    color: PfStyle.textMuted
-                    font.family: PfStyle.uiFont
-                    font.pixelSize: root.metrics.font(13)
-                    font.weight: Font.DemiBold
-                    font.styleName: PfStyle.bold
-                    textFormat: Text.PlainText
-                }
-            }
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: !root.blocked ? (root.reboot ? i18nd("plasma_shell_org.plasmafusion.lockshell", "A program is busy. Restarting now may interrupt it.")
+                                               : i18nd("plasma_shell_org.plasmafusion.lockshell", "A program is busy. Shutting down now may interrupt it."))
+                : root.reboot ? i18nd("plasma_shell_org.plasmafusion.lockshell", "A program is blocking a restart. Try again when it has finished.")
+                : i18nd("plasma_shell_org.plasmafusion.lockshell", "A program is blocking a shutdown. Try again when it has finished.")
+            color: PfStyle.warning
+            font.family: PfStyle.uiFont
+            font.pixelSize: root.metrics.font(13)
+            font.weight: Font.Bold
+            font.styleName: PfStyle.bold
+            textFormat: Text.PlainText
         }
         Text {
             id: statusText

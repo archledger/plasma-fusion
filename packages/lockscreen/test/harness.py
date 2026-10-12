@@ -383,6 +383,16 @@ def power(app, out, view, root, lock_root, scenario):
         page = root.findChild(QQuickItem, "powerConfirm")
         return page if page is not None and page.isVisible() else None
 
+    def page_texts():
+        # Every text the question shows (Repeater delegates are not QObject children).
+        found, todo = [], [confirm_page()] if confirm_page() is not None else []
+        while todo:
+            it = todo.pop()
+            if it.isVisible() and isinstance(it.property("text"), str) and it.property("text"):
+                found.append(it.property("text"))
+            todo.extend(it.childItems())
+        return found
+
     def wait(ms):
         QTest.qWait(ms)
 
@@ -440,20 +450,21 @@ def power(app, out, view, root, lock_root, scenario):
         elif scenario == "power-blocked":
             click("shutdownButton")
             wait(2500)
-            blockers = item("powerConfirmBlockers")
-            texts = [c.property("text") for c in blockers.childItems() if c.property("text")] if blockers else []
-            check("a block inhibitor for shutdown is listed with its reason", "Updater: Installing updates" in texts, texts)
-            check("a block-weak inhibitor is listed", "Backup: Copying files" in texts, texts)
-            check("sleep delay and power-key inhibitors are not listed",
-                  not any("NetworkManager" in x or "PowerDevil" in x for x in texts), texts)
+            texts = page_texts()
+            check("a block inhibitor for shutdown is reported, without its holder or reason",
+                  "A program is blocking a shutdown. Try again when it has finished." in texts, texts)
+            check("no program, reason or user is named on the locked screen",
+                  not any(w in x for x in texts for w in ("Updater", "Installing", "Backup", "Copying", "NetworkManager", "PowerDevil")), texts)
+            check("no count of other logged-in users on the page", item("powerConfirmOtherUsers") is None)
             button = item("powerConfirmButton")
             check("Shut Down is off while blocked", button is not None and not button.property("enabled"))
-            # The greeter on Plasma 6.7.5 gets each field of logind's reply as a typed value.
+            # The greeter on Plasma 6.7.5 gets each field of logind's reply as a typed value; only
+            # the shutdown ones count (the sleep delay and the power-key block do not).
             wrapped = [[{"value": f} for f in entry] for entry in POWER_INHIBITORS[scenario]]
             parsed = QMetaObject.invokeMethod(confirm_page(), "shutdownBlockers", Q_RETURN_ARG("QVariant"), Q_ARG("QVariant", wrapped))
             parsed = parsed.toVariant() if hasattr(parsed, "toVariant") else parsed
             check("logind's fields as typed values ({value: ...}) are read the same",
-                  [(b["who"], b["strong"]) for b in parsed] == [("Updater", True), ("Backup", False)], parsed)
+                  [b["strong"] for b in parsed] == [True, False], parsed)
             view.grabWindow().save(os.path.join(out, "power-blocked.png"))
             click("powerConfirmButton")
             wait(500)
@@ -558,6 +569,10 @@ def power(app, out, view, root, lock_root, scenario):
             wait(2500)
             button = item("powerConfirmButton")
             check("a block-weak inhibitor alone leaves Shut Down on", button.property("enabled"))
+            texts = page_texts()
+            check("and is reported as a busy program, unnamed",
+                  "A program is busy. Shutting down now may interrupt it." in texts
+                  and not any("Backup" in x or "Copying" in x for x in texts), texts)
             click("powerConfirmButton")
             wait(800)
             check("Shut Down confirmed: ksmserver logoutAndShutdown", calls() == ["logoutAndShutdown"], calls())
