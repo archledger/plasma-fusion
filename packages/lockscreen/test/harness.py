@@ -10,7 +10,8 @@ states and saves one PNG per scenario. Run it on a private bus with fonts from t
   test/run.sh OUTDIR [scenario...]   (a private bus without activation, mock services, no display)
 
 Scenarios: idle, prompt, messages, fperror, focus, nopassword, the Restart / Shut Down checks
-power, power-blocked, power-busy, power-noreboot, power-kiosk, power-mnemonic, power-repeat, power-return (Plasma's session backend on the mock
+power, power-blocked, power-busy, power-early, power-late, power-noreboot, power-kiosk, power-mnemonic, power-repeat,
+power-return (Plasma's session backend on the mock
 logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check), and the
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
@@ -342,6 +343,7 @@ POWER_INHIBITORS = {
                       ("sleep", "NetworkManager", "NetworkManager needs to turn off networks", "delay", 0, 837),
                       ("handle-power-key", "PowerDevil", "KDE handles power events", "block", 1000, 1564)],
     "power-busy": [("shutdown", "Backup", "Copying files", "block-weak", 1000, 4343)],
+    "power-early": [("shutdown", "Updater", "Installing updates", "block", 0, 4242)],
 }
 
 
@@ -351,6 +353,9 @@ def power_setup(scenario):
     t.Reset()
     if scenario == "power-noreboot":
         t.SetCan("Reboot", "na")
+    if scenario == "power-early":
+        # logind answers late: the first read is still on its way when the action is chosen.
+        t.SetListDelay(1500)
     t.SetInhibitors(POWER_INHIBITORS.get(scenario, []), signature="a(ssssuu)")
 
 
@@ -564,6 +569,53 @@ def power(app, out, view, root, lock_root, scenario):
             check("and PAM's message is still there", note in message(), message())
             check("and the typed password", pw.property("text") == "secret", len(pw.property("text") or ""))
             check("nothing called", calls() == [], calls())
+        elif scenario == "power-early":
+            # Alt+S and Return at once, before logind's first answer (a block inhibitor): the
+            # action waits for the list and does not shut down.
+            QTest.keyClick(view, Qt.Key_S, Qt.AltModifier)
+            wait(150)
+            QTest.keyClick(view, Qt.Key_Return)
+            wait(300)
+            check("Return before the inhibitors are read calls nothing yet", calls() == [], calls())
+            wait(2500)
+            texts = page_texts()
+            check("the block inhibitor read then keeps Shut Down from being requested", calls() == [], calls())
+            check("and the page says a program is blocking it",
+                  "A program is blocking a shutdown. Try again when it has finished." in texts, texts)
+        elif scenario == "power-late":
+            # An inhibitor taken after the page read the list (it reads every 2 s): the action reads
+            # the list again first and is refused; once the inhibitor is gone it goes ahead.
+            click("shutdownButton")
+            wait(800)
+            reads = t.ListCalls()
+            t.SetInhibitors(POWER_INHIBITORS["power-early"], signature="a(ssssuu)")
+            t.SetListDelay(300)
+            click("powerConfirmButton")
+            wait(1000)
+            check("the list is read again when Shut Down is chosen", t.ListCalls() > reads, (reads, t.ListCalls()))
+            check("an inhibitor taken since the last read keeps it from being requested", calls() == [], calls())
+            check("and the page says so", "A program is blocking a shutdown. Try again when it has finished." in page_texts())
+            t.SetInhibitors([], signature="a(ssssuu)")
+            wait(2500)
+            click("powerConfirmButton")
+            wait(1000)
+            check("without it Shut Down is requested (after that read)", calls() == ["logoutAndShutdown"], calls())
+            # Chosen, then the page closes before logind answers (the prompt hides): nothing is
+            # requested when the answer comes.
+            lock_root.setProperty("uiVisible", False)
+            wait(1200)
+            lock_root.setProperty("uiVisible", True)
+            wait(800)
+            t.Reset()
+            t.SetListDelay(800)
+            check("back on the prompt", confirm_page() is None and shown("restartButton"))
+            click("restartButton")
+            wait(1500)
+            click("powerConfirmButton")
+            wait(100)
+            lock_root.setProperty("uiVisible", False)
+            wait(2000)
+            check("closed before the answer: Restart is not requested", calls() == [], calls())
         elif scenario == "power-busy":
             click("shutdownButton")
             wait(2500)

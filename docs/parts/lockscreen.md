@@ -73,7 +73,9 @@ on every screen (VM 6.7.91 with `[UI] ShowPromptInRegularAuthenticator`: "Passwo
 typed text gone after Cancel; kept now).
 
 What blocks: logind's inhibitors for `shutdown` (`ListInhibitors`, read every 2 s while the
-question is shown). systemd 259 refuses a reboot or power-off outright while a strong `block`
+question is shown, and once more when the action is chosen: it is requested only on that answer,
+so a Return right after Alt+S, before the first answer, or an inhibitor taken since the last read
+cannot slip through; when the question closes before the answer, nothing is requested). systemd 259 refuses a reboot or power-off outright while a strong `block`
 inhibitor is held ("Operation denied due to active block inhibitor"; ksmserver asks without the
 skip flag), after the session has already closed; so while one is held the action stays off and
 the page says "A program is blocking a restart. Try again when it has finished." (shutdown
@@ -367,7 +369,8 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 `offscreen-portrait-900x1440-idle-and-prompt.png`, `greeter-and-envtest-log.txt`, pixel reports).
 
 Restart and Shut Down (0.5.0, CI step "Lock screen Restart and Shut Down"): `test/run.sh OUT power
-power-blocked power-busy power-noreboot power-kiosk power-mnemonic power-repeat power-return`. The harness points the system bus at its
+power-blocked power-busy power-early power-late power-noreboot power-kiosk power-mnemonic
+power-repeat power-return`. The harness points the system bus at its
 private bus, where `mock_services.py power` answers as logind and ksmserver, so Plasma's own session
 backend (not a stand-in) decides what the row shows, and the clicks are real pointer events:
 `power` both buttons shown; Shut Down asks first, Escape back, nothing called; Restart asks, Cancel
@@ -376,7 +379,12 @@ inhibitor reported as "A program is blocking a shutdown…" with no holder, reas
 count on the page, Shut Down off and a click on it calls nothing, the typed-value form of the
 reply read the same (a sleep `delay` and PowerDevil's power-key inhibitor do not count), the action
 on again 2 s after the inhibitor goes; `power-busy` a `block-weak` inhibitor alone leaves Shut Down
-on and is reported as a busy program, unnamed, confirmed calls `logoutAndShutdown`; `power-noreboot` logind
+on and is reported as a busy program, unnamed, confirmed calls `logoutAndShutdown`; `power-early`
+Alt+S and Return while logind's first answer (a `block` inhibitor, 1.5 s late) is on its way call
+nothing; `power-late` an inhibitor taken after the page read the list keeps the confirmed action
+from being requested, which goes ahead once it is gone, and a question closed before logind
+answers requests nothing (both fail on the package before, which acted on the last list read, the
+empty one before the first answer); `power-noreboot` logind
 CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both; `power-mnemonic` Alt+S
 and Alt+R ask, the same chord again calls nothing, the action shows no "&", a deliberate Space
 answers; `power-repeat` Return or Space on a focused power button asks, their repeats (key events

@@ -179,7 +179,7 @@ jobs:
 
       - name: Lock screen Restart and Shut Down (offscreen, mock logind and ksmserver)
         run: >-
-          packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy
+          packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy power-early power-late
           power-noreboot power-kiosk power-mnemonic power-repeat power-return
 
       - name: Log-out screen on Plasma 6.8 (offscreen, two screens on one engine)

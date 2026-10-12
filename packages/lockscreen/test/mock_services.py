@@ -9,8 +9,9 @@
   power   logind's Manager (org.freedesktop.login1: Can*, ListInhibitors) and ksmserver's
           org.kde.Shutdown, for the lock screen's Restart and Shut Down. The harness points the
           system bus at this private bus (DBUS_SYSTEM_BUS_ADDRESS), so Plasma's own session backend
-          talks to it. org.plasmafusion.TestPower on /Test sets the answers (SetCan, SetInhibitors)
-          and lists the calls ksmserver got (Calls).
+          talks to it. org.plasmafusion.TestPower on /Test sets the answers (SetCan, SetInhibitors,
+          SetListDelay: ListInhibitors answers so many ms late) and lists the calls ksmserver got
+          (Calls) and how often the inhibitors were read (ListCalls).
 
 Usage: mock_services.py [mpris] [notify] [power]   (runs until killed)
 """
@@ -165,9 +166,15 @@ class Login1(dbus.service.Object):
     def CanSuspendThenHibernate(self):
         return self._can("SuspendThenHibernate")
 
-    @dbus.service.method(LOGIN1_IF, out_signature="a(ssssuu)")
-    def ListInhibitors(self):
-        return dbus.Array(self.test.inhibitors, "(ssssuu)")
+    @dbus.service.method(LOGIN1_IF, out_signature="a(ssssuu)", async_callbacks=("reply", "error"))
+    def ListInhibitors(self, reply, error):
+        # The list as it is when the call comes in, answered after the test's delay (a busy logind).
+        answer = dbus.Array(self.test.inhibitors, "(ssssuu)")
+        self.test.list_calls += 1
+        if self.test.list_delay_ms > 0:
+            GLib.timeout_add(self.test.list_delay_ms, lambda: reply(answer) and False)
+        else:
+            reply(answer)
 
     @dbus.service.method(LOGIN1_IF, out_signature="a(susso)")
     def ListSessions(self):
@@ -206,6 +213,8 @@ class TestPower(dbus.service.Object):
         self.can = {}
         self.inhibitors = []
         self.calls = []
+        self.list_delay_ms = 0
+        self.list_calls = 0
 
     @dbus.service.method("org.plasmafusion.TestPower", in_signature="ss")
     def SetCan(self, action, answer):
@@ -215,6 +224,14 @@ class TestPower(dbus.service.Object):
     def SetInhibitors(self, inhibitors):
         self.inhibitors = [tuple(i) for i in inhibitors]
 
+    @dbus.service.method("org.plasmafusion.TestPower", in_signature="u")
+    def SetListDelay(self, ms):
+        self.list_delay_ms = int(ms)
+
+    @dbus.service.method("org.plasmafusion.TestPower", out_signature="u")
+    def ListCalls(self):
+        return self.list_calls
+
     @dbus.service.method("org.plasmafusion.TestPower", out_signature="as")
     def Calls(self):
         return dbus.Array(self.calls, "s")
@@ -222,6 +239,7 @@ class TestPower(dbus.service.Object):
     @dbus.service.method("org.plasmafusion.TestPower")
     def Reset(self):
         self.can, self.inhibitors, self.calls = {}, [], []
+        self.list_delay_ms, self.list_calls = 0, 0
 
 
 services = []
