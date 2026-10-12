@@ -15,6 +15,7 @@ import "../code/tiles.js" as Tiles
 import "../code/requests.js" as Requests
 import "../code/shared.js" as Shared
 import "../code/notifications.js" as Notif
+import "../code/clipboard.js" as Clip
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -345,13 +346,21 @@ PlasmoidItem {
         setPopupOpen(!popupOpen);
     }
     // The clipboard sheet (the clipboard button, Meta+V): the pop-up on its clipboard page, or
-    // closed; Klipper's own pop-up where Plasma's clipboard module is missing.
+    // closed; Klipper's own pop-up where Plasma's clipboard module is missing. A request while the
+    // clipboard service is still loading (just after the shell started) waits for it.
     readonly property bool clipboardShown: popupOpen && backend.page === "clipboard"
+    property bool clipboardWaiting: false
     function showClipboard(open: bool): void {
-        if (!backend.clipboard.available) {
+        switch (Clip.opening(backend.clipboard.available, backend.clipboard.loading)) {
+        case "wait":
+            clipboardWaiting = open;
+            return;
+        case "legacy":
+            clipboardWaiting = false;
             backend.clipboard.legacyPopup();
             return;
         }
+        clipboardWaiting = false;
         if (!open) {
             setPopupOpen(false);
             return;
@@ -362,6 +371,25 @@ PlasmoidItem {
         if (wasOpen && popupContent) {
             // Already open on another page: the focus moves to the clipboard at once.
             Qt.callLater(() => root.popupContent.focusFirst());
+        }
+    }
+    // Decided once the loader has settled (its item and status change one after the other).
+    Connections {
+        target: backend.clipboard
+        function onLoadingChanged() {
+            root.clipboardLoaded();
+        }
+        function onAvailableChanged() {
+            root.clipboardLoaded();
+        }
+    }
+    function clipboardLoaded(): void {
+        if (clipboardWaiting && (backend.clipboard.available || !backend.clipboard.loading)) {
+            Qt.callLater(() => {
+                if (root.clipboardWaiting) {
+                    root.showClipboard(true);
+                }
+            });
         }
     }
     // A device was plugged in (popupOnNewDevice): the sheet on the device list, unless the user is

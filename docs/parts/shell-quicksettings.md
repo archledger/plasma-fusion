@@ -1225,7 +1225,10 @@ sheet opened and closed: 1 unread (0 before), then the main sheet opened and clo
   6.5) and the storage (`~/.local/share/klipper/history3.sqlite`) are the stock widget's: a star set
   in the sheet shows in the stock widget and survives a restart. Klipper's settings apply as they
   are; images are kept only when "Always ignore images" is off in Klipper's settings (Plasma's
-  default keeps none). Without the module the button opens Klipper's pop-up, as before.
+  default keeps none). Without the module the button opens Klipper's pop-up, as before. The service
+  loads in the background after the widget starts: the button or Meta+V in those first moments
+  waits for it and then opens the sheet (Klipper's pop-up only when the module could not load,
+  `clipboard.js` `opening()`); before, they opened Klipper's pop-up.
 - **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
   search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
   Starred Only"; every opening starts on All, so Meta+V then Enter chooses what was copied last,

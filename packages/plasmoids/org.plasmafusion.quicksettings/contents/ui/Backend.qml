@@ -1288,6 +1288,8 @@ Item {
     readonly property var clipboard: QtObject {
         readonly property var service: clipboardLoader.item
         readonly property bool available: !!service
+        // Still loading (in the background after the widget starts): a request waits for it.
+        readonly property bool loading: clipboardLoader.status === Loader.Loading
         // Puts the entry on the clipboard and closes the sheet; the on-screen display says how to
         // paste it.
         function choose(uuid: string): void {
