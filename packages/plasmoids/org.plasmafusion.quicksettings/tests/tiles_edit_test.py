@@ -438,7 +438,8 @@ Item {
     signal failed(string profile)
     // The daemon refuses the switch (PowerDevil's profileError).
     property bool refuse: false
-    function setProfile(profile: string) { if (refuse) { failed(profile); } else { active = profile; } }
+    // No answer at all yet: the request is still on its way (the test answers it later).
+    function setProfile(profile: string) { if (silent) { return; } if (refuse) { failed(profile); } else { active = profile; } }
 }
 ''')
 loader = next(o for o in backend.findChildren(QObject)
@@ -482,6 +483,26 @@ click(power_body)
 check(power.property("active") == "power-saver",
       "after the refused switch the body goes to Power saver, the last profile switched to (%s)" % power.property("active"))
 click(power_body)
+
+# A refusal that answers late must not clear a newer request. Performance is chosen (the tile's
+# next toggle goes back to it), then the user asks for Power saver while the request is still out;
+# the refusal for Performance comes late, Power saver is accepted after it.
+QMetaObject.invokeMethod(profile, "setProfile", Q_ARG("QString", "performance"))
+QTest.qWait(50)
+click(power_body)
+power.setProperty("silent", True)
+QMetaObject.invokeMethod(profile, "setProfile", Q_ARG("QString", "performance"))
+QMetaObject.invokeMethod(profile, "setProfile", Q_ARG("QString", "power-saver"))
+QTest.qWait(50)
+QMetaObject.invokeMethod(power, "failed", Q_ARG("QString", "performance"))
+power.setProperty("silent", False)
+power.setProperty("active", "power-saver")
+QTest.qWait(50)
+click(power_body)
+click(power_body)
+check(power.property("active") == "power-saver",
+      "a late refusal of the older request leaves the tile's next toggle at Power saver, the profile chosen last (%s)"
+      % power.property("active"))
 
 # ---- The clipboard sheet opens on All: the Starred tab, the service's, goes back to All when the
 # clipboard page goes (the sheet closed or back to quick settings), before the next page is made.

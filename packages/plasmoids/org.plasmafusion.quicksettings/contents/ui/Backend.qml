@@ -96,7 +96,11 @@ Item {
     Connections {
         target: profilesLoader.item
         function onFailed(profile: string) {
-            backend.profile.requested = "";
+            // Only the request that failed is over: one for another profile made since (chosen
+            // while this switch was on its way) still counts when it becomes active.
+            if (backend.profile.requested === profile) {
+                backend.profile.requested = "";
+            }
             backend.profile.failedProfile = profile;
             profileFailedTimer.restart();
         }
