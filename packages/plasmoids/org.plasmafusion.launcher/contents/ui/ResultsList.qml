@@ -102,6 +102,35 @@ ListView {
         }
     }
 
+    // Home, End, Page Up and Page Down. A page is as many rows as the list shows; Page Down on the
+    // last result, and End, reach the hand-off row, which is the last row.
+    function pageKey(key: int): void {
+        const atLast = handoffCurrent || count === 0 || currentIndex >= count - 1;
+        if (key === Qt.Key_End || (key === Qt.Key_PageDown && atLast)) {
+            if (handoffShown) {
+                selectHandoff();
+            } else if (count > 0) {
+                currentIndex = count - 1;
+                positionViewAtIndex(currentIndex, ListView.Contain);
+            }
+            return;
+        }
+        if (count === 0) {
+            return;
+        }
+        const rowHeight = currentItem ? currentItem.height + spacing : metrics.px(48);
+        const page = Math.max(1, Math.floor(height / Math.max(1, rowHeight)));
+        let target = 0;
+        if (key === Qt.Key_PageUp) {
+            target = handoffCurrent ? count - 1 : Math.max(0, currentIndex - page);
+        } else if (key === Qt.Key_PageDown) {
+            target = Math.min(count - 1, currentIndex + page);
+        }
+        handoffCurrent = false;
+        currentIndex = target;
+        positionViewAtIndex(currentIndex, ListView.Contain);
+    }
+
     function launch(index: int) {
         if (handoffCurrent) {
             openInKRunner();
@@ -349,8 +378,13 @@ ListView {
         case Qt.Key_PageDown:
         case Qt.Key_Home:
         case Qt.Key_End:
+            // ListView itself moves only with the arrows; these keys work as in Kickoff's lists.
+            // The hand-off row is the last row: End goes there, Home and Page Up leave it, so the
+            // row that looks selected is the one Enter opens.
             keyboardNavigation = true;
             pointerActive = false;
+            pageKey(event.key);
+            event.accepted = true;
             break;
         case Qt.Key_Return:
         case Qt.Key_Enter:
