@@ -85,5 +85,9 @@
       <label>The quick settings tiles the user took out of the grid (the edit mode's tray); a tile shown only when it applies (Disks &amp; Devices, Wi-Fi hotspot, Charge limit, Tablet mode) never shows while hidden. The same in every quick settings widget.</label>
       <default></default>
     </entry>
+    <entry name="sharedRevision" type="Double">
+      <label>When this widget's shared settings (the ones every quick settings widget keeps the same: main.qml sharedKeys) last changed, in ms since the epoch; 0 before 0.5.0. After a restart a widget takes the newest set, so a bar whose screen was away does not bring back its old settings.</label>
+      <default>0</default>
+    </entry>
   </group>
 </kcfg>

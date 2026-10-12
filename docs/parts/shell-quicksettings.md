@@ -907,11 +907,17 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
   dark themes, the tiles' order and hidden tiles) are copied from a widget whose settings change to
   the others (a list by its entries: each read gives a new array, which `!==` always takes for a
-  change); a new widget takes the
-  settings of the leader there before it (also when it leads at once, as the primary screen's
-  bar made again does), and pushes nothing before that (while it loads its settings change too, and
-  pushing those defaults reset the others: found by the two-screen test). A value equal to the
-  default is not stored, so a script reads it as empty.
+  change). Each widget keeps when they last changed (`sharedRevision`, ms, set on every change and
+  copied with them; the settings page stamps it on Apply, as the dialog writes it after the
+  settings). A new widget takes the newest set among the widgets there before it, or gives its own
+  on when they are newer (`contents/code/shared.js` `adoptFrom()`, test `tests/shared.test.js`);
+  with equal revisions (widgets from before 0.5.0) it takes the leader's, as before (also when it
+  leads at once, as the primary screen's bar made again does). Before, the first widget to load
+  after a restart won: a bar whose screen was away while the user changed the tiles kept the old
+  ones in its config, and loaded first it gave them back to the main bar. A new widget pushes
+  nothing before it has joined (while it loads its settings change too, and pushing those defaults
+  reset the others: found by the two-screen test). A value equal to the default is not stored, so
+  a script reads it as empty.
 - Disks & Devices reads the engine's devices once when it is created (`Devices.qml`): a widget made
   after the engine knew its devices (the second bar's) listed none before.
 - Notifications pop up once: the stock Notifications applet in every tray shares its Globals (one
