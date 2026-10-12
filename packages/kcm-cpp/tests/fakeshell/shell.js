@@ -5,12 +5,14 @@
 // uses, for fakeshell.cpp. Panels hold widgets in order; a widget's index is its place in that
 // order and setting it moves the widget there (the panel's own rule: taken out, then put in at the
 // index); geometry.x is 100 px per place. Layout file (JSON):
-//   panels            [{ location, screen, opacity, widgets: [plugin id, ...] }]
+//   panels            [{ location, screen, opacity, widgets: [plugin id, ...], listDelayMs }]
 //   knownWidgetTypes  plugin ids addWidget() can make (default: every id in the panels)
 //   failAdd           plugin ids addWidget() fails for (it returns an Error, as plasmashell does)
 //   insert            "x" (default: before the widget at the x given, as a drop there) or "end"
 //   listDelayMs       a new widget is listed by widgets() only this long after addWidget() (a QML
-//                     widget the shell loads for the first time is listed once it is built)
+//                     widget the shell loads for the first time is listed once it is built); a
+//                     panel's own listDelayMs takes its place there (bars that build at different
+//                     times)
 //   screens           the number of screens (default: one more than the highest panel screen). A
 //                     panel on a screen that is not there behaves as in Plasma 6.8: reading or
 //                     writing its opacity crashes the shell (host.crash), as plasmashell crashes on
@@ -37,6 +39,7 @@ function loadLayout(text) {
             location: p.location || "top",
             screen: p.screen === undefined ? 0 : p.screen,
             opacity: p.opacity || "adaptive",
+            listDelayMs: p.listDelayMs,
             items: (p.widgets || []).map(function (type) {
                 all.push(type);
                 return makeWidget(type);
@@ -117,7 +120,7 @@ function panelObject(panel) {
                 return new Error("Could not create the " + type + " widget!");
             }
             var w = makeWidget(type);
-            w.listedAt = Date.now() + state.listDelayMs;
+            w.listedAt = Date.now() + (panel.listDelayMs !== undefined ? panel.listDelayMs : state.listDelayMs);
             var at = panel.items.length;
             if (state.insert === "x" && typeof x === "number" && x >= 0) {
                 at = Math.min(panel.items.length, Math.floor(x / 100) + 1);
