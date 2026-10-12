@@ -140,3 +140,12 @@ function existenceProbe(url) {
     });
     return { folder: u.slice(0, slash) || "file:///", filter: filter };
 }
+
+// Whether the sheet's page shows the notification list (PopupContent): the main page, in the laptop
+// layout. The clipboard sheet (Meta+V, the bar's clipboard button), a page opened on its own (a
+// device plugged in) and the tablet posture's controls (the Notification Centre has the list) show
+// none. Closing the sheet marks the notifications read only after the list was shown (main.qml),
+// as the stock applet marks them read when its pop-up, which is the list, closes.
+function listOnSheet(page, apart) {
+    return page === "main" && !apart;
+}

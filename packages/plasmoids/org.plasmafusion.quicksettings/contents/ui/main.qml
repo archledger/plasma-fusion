@@ -14,6 +14,7 @@ import "global"
 import "../code/tiles.js" as Tiles
 import "../code/requests.js" as Requests
 import "../code/shared.js" as Shared
+import "../code/notifications.js" as Notif
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -552,6 +553,8 @@ PlasmoidItem {
                      + ", power " + backend.profile.subtitle + (backend.profile.note ? " [" + backend.profile.note.replace(/\n/g, " | ") + "]" : "")
                      + ", hotspot " + backend.net.hotspotSubtitle
                      + ", devices " + backend.devices.count
+                     + ", notifications " + backend.notif.count + " (" + backend.notif.unread + " unread"
+                     + (backend.notif.available ? ")" : ", off)")
                      + ", tray " + (backend.trayRevealed.length > 0 ? backend.trayRevealed.join("+") : "-")
                      + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length
                      + ", page " + backend.page + (backend.pageDirect ? " (direct)" : "")
@@ -778,9 +781,22 @@ PlasmoidItem {
         }
     }
 
+    // Whether the notification list was on the sheet while it was open: closing it marks the
+    // notifications read only then. Opened on the clipboard page (Meta+V) and closed there, it
+    // cleared the unread count and the bell though no notification had been shown.
+    property bool notificationsSeen: false
+    readonly property bool notificationListShown: popupOpen && Notif.listOnSheet(backend.page, backend.notificationsApart)
+    onNotificationListShownChanged: {
+        if (notificationListShown) {
+            notificationsSeen = true;
+        }
+    }
     onPopupOpenChanged: {
         if (!popupOpen) {
-            backend.notif.markRead();
+            if (notificationsSeen) {
+                backend.notif.markRead();
+            }
+            notificationsSeen = false;
             resetPage.restart();
         }
     }
