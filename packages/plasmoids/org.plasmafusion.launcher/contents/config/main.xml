@@ -40,7 +40,7 @@
             <default>true</default>
         </entry>
         <entry name="openRequest" type="String">
-            <label>Written by other shell parts through desktop scripting: "search:NONCE" or "apps:NONCE" opens the launcher in that mode Testing: "frames:NONCE" logs the frames the launcher window drew since the last such request, its geometry, pinned rows and columns.</label>
+            <label>Written by other shell parts through desktop scripting: "MODE:NONCE[:ARGUMENT]" opens the launcher in that mode (home, search with the query as argument, apps, recent for recent files, history for recently and often used apps, category with its key); "configure:NONCE" opens the launcher's settings. Testing: "frames:NONCE" logs the frames the launcher window drew since the last such request, its geometry, pinned rows and columns.</label>
             <default></default>
         </entry>
         <entry name="hiddenApplications" type="StringList">

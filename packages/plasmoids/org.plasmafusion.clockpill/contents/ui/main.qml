@@ -436,13 +436,21 @@ PlasmoidItem {
         height: root.vertical ? boardHeight : Math.min(boardHeight, Math.max(1, root.height))
         onWidthChanged: root.placePill()
 
-        // Wheel over any part of the pill switches workspaces (one step per notch).
+        // Wheel over any part of the pill switches workspaces (one step per notch), except a page
+        // scroll that is still turning as the pointer passes over the pill (FusionWheelGuard).
+        FusionWheelGuard {
+            id: wheelGuard
+        }
         WheelHandler {
             id: wheel
             property real accumulated: 0
             enabled: Plasmoid.configuration.wheelSwitchesWorkspaces && root.desktopCount > 1
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: event => {
+                if (!wheelGuard.accept(Date.now())) {
+                    accumulated = 0;
+                    return;
+                }
                 const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : -event.angleDelta.x;
                 if (delta * accumulated < 0) {
                     accumulated = 0;

@@ -25,15 +25,27 @@ FocusScope {
     readonly property int inset: 25
     readonly property int innerWidth: width - 2 * inset
 
-    // home | category | apps | recent
+    // home | history (recently and often used apps) | places | category | apps | recent (files)
     property string view: "home"
     property int chipIndex: 0
+    // The chosen chip's key. The launcher rebuilds its chips when the menu changes (hiding or
+    // removing the last app of a category takes that category's chip away), so the index is found
+    // again by key; a category that is gone gives way to "All", the home view.
+    property string chipKey: "all"
     readonly property bool searching: search.text.length > 0
     // Enter was pressed before the first search results arrived: launch the top one when they do.
     property bool launchWhenReady: false
     readonly property var chips: launcher ? launcher.chips : []
+    onChipsChanged: {
+        const index = chips.findIndex(c => c.key === chipKey);
+        if (index >= 0) {
+            chipIndex = index;
+        } else {
+            selectChip(0);
+        }
+    }
     readonly property var categoryModel: launcher && view === "category" && chipIndex > 0 && chipIndex < chips.length
-        ? launcher.rootModel.modelForRow(chips[chipIndex].row) : null
+        && chips[chipIndex].row >= 0 ? launcher.rootModel.modelForRow(chips[chipIndex].row) : null
     readonly property var allAppsModel: launcher && view === "apps" ? launcher.allAppsModel() : null
 
     // Board rows (px, before the text scale): chips 30, header 26, gaps 16, app tiles 84 with a
@@ -64,7 +76,8 @@ FocusScope {
         launchWhenReady = false;
         view = "home";
         chipIndex = 0;
-        for (const g of [pinnedGrid, docGrid, mainGrid, recentGrid]) {
+        chipKey = "all";
+        for (const g of [pinnedGrid, docGrid, mainGrid, recentGrid, recentAppsGrid, frequentGrid, placesGrid, foldersGrid]) {
             g.currentIndex = -1;
             g.keyboardNavigation = false;
             g.resetPointer();
@@ -79,6 +92,8 @@ FocusScope {
         reset();
         if (mode === "apps" || mode === "recent") {
             view = mode;
+        } else if (mode === "history" || mode === "places") {
+            selectChip(chips.findIndex(c => c.view === mode));
         } else if (mode === "category") {
             const index = chips.findIndex(c => c.key === argument);
             if (index > 0) {
@@ -95,9 +110,12 @@ FocusScope {
             return;
         }
         chipIndex = index;
-        view = index === 0 ? "home" : "category";
-        mainGrid.currentIndex = -1;
-        mainGrid.positionViewAtBeginning();
+        chipKey = chips[index].key;
+        view = chips[index].view || "category";
+        for (const g of [mainGrid, recentAppsGrid, frequentGrid, placesGrid, foldersGrid]) {
+            g.currentIndex = -1;
+            g.positionViewAtBeginning();
+        }
     }
 
     function openMoreCategories() {
@@ -131,7 +149,27 @@ FocusScope {
         if (view === "recent") {
             return recentGrid;
         }
+        if (view === "history") {
+            return recentAppsGrid.count > 0 || frequentGrid.count === 0 ? recentAppsGrid : frequentGrid;
+        }
+        if (view === "places") {
+            return placesGrid.count > 0 || foldersGrid.count === 0 ? placesGrid : foldersGrid;
+        }
         return mainGrid;
+    }
+
+    // The last grid above the footer in the current view (Up and Shift+Tab from the footer).
+    function lastGrid() {
+        if (view === "home" && docGrid.visible && docGrid.count > 0) {
+            return docGrid;
+        }
+        if (view === "history" && frequentGrid.visible) {
+            return frequentGrid;
+        }
+        if (view === "places" && foldersGrid.visible) {
+            return foldersGrid;
+        }
+        return primaryGrid();
     }
 
     // Testing: the pinned tiles' centres in screen coordinates (window origin ox, oy).
@@ -153,6 +191,15 @@ FocusScope {
 
     function focusFooter() {
         footer.firstButton.forceActiveFocus(Qt.TabFocusReason);
+    }
+
+    // Down and Tab from the chips: the view's first row (the next grid when the first has none),
+    // or the footer when the view has nothing to focus (Recent with the activity history off or
+    // no app used yet, an empty category), so the keys do not stop on the chips.
+    function focusFromChips(): void {
+        if (!primaryGrid().focusFirst() && !lastGrid().focusFirst()) {
+            focusFooter();
+        }
     }
 
     Keys.onEscapePressed: handleEscape()
@@ -192,11 +239,17 @@ FocusScope {
                 if (results.count > 0) {
                     results.keyboardNavigation = true;
                     results.pointerActive = false;
+                    results.handoffCurrent = false;
                     results.currentIndex = Math.min(1, results.count - 1);
                     results.forceActiveFocus(Qt.TabFocusReason);
+                } else if (results.handoffShown) {
+                    // No results: the KRunner hand-off is the only row.
+                    results.selectHandoff();
+                    results.forceActiveFocus(Qt.TabFocusReason);
                 }
-            } else {
-                card.primaryGrid().focusFirst();
+            } else if (!card.primaryGrid().focusFirst() && !card.lastGrid().focusFirst()) {
+                // Nothing to focus in the view (focusFromChips()): the chips below the field.
+                chipRow.forceActiveFocus(Qt.TabFocusReason);
             }
         }
         onAccepted: {
@@ -255,6 +308,7 @@ FocusScope {
         // Category chips. Chips that do not fit move into a round "more" chip with a menu.
         FocusScope {
             id: chipRow
+            objectName: "launcherChips"
             width: parent.width
             height: card.chipHeight
             visible: !card.searching
@@ -333,7 +387,7 @@ FocusScope {
             Keys.onLeftPressed: card.selectChip(Math.max(0, card.chipIndex - 1))
             Keys.onRightPressed: card.selectChip(Math.min(card.chips.length - 1, card.chipIndex + 1))
             Keys.onUpPressed: card.focusSearch()
-            Keys.onDownPressed: card.primaryGrid().focusFirst()
+            Keys.onDownPressed: card.focusFromChips()
             Keys.onPressed: event => {
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
                     if (card.chipIndex >= chipRow.fitCount) {
@@ -351,8 +405,8 @@ FocusScope {
                 }
             }
             Keys.onTabPressed: {
-                if (card.view === "category") {
-                    mainGrid.focusFirst();
+                if (card.view === "category" || card.view === "history" || card.view === "places") {
+                    card.focusFromChips();
                 } else {
                     topHeader.button.forceActiveFocus(Qt.TabFocusReason);
                 }
@@ -389,11 +443,13 @@ FocusScope {
             pal: card.pal
             metrics: card.metrics
             title: card.view === "category" && card.chipIndex < card.chips.length ? card.chips[card.chipIndex].label
+                 : card.view === "history" ? i18nc("@title apps by last use", "Recently used")
+                 : card.view === "places" ? i18nc("@title the file manager's places and drives", "Places")
                  : card.view === "apps" ? i18nc("@title", "All apps")
                  : card.view === "recent" ? i18nc("@title", "Recommended")
                  : i18nc("@title", "Pinned")
             buttonText: card.view === "home" ? i18nc("@action:button", "All apps")
-                      : card.view === "category" ? "" : i18nc("@action:button", "Back")
+                      : ["category", "history", "places"].indexOf(card.view) >= 0 ? "" : i18nc("@action:button", "Back")
             buttonBack: card.view !== "home"
             onButtonClicked: {
                 if (card.view === "home") {
@@ -519,6 +575,177 @@ FocusScope {
             }
         }
 
+        // "Recent": one row of the apps used last, then the most used ones (Kicker's "Recent
+        // Applications" and "Often Used"). Both lists come from the activity history; the first
+        // row shows as many apps as there are columns.
+        AppGrid {
+            id: recentAppsGrid
+            y: card.gridY
+            columns: card.columns
+            width: parent.width + gap
+            height: cellHeight
+            visible: !card.searching && card.view === "history"
+            interactive: false
+            limit: columns
+            pal: card.pal
+            metrics: card.metrics
+            launcher: card.launcher
+            model: visible && card.launcher ? card.launcher.recentAppsModel : null
+            onExitTop: chipRow.forceActiveFocus(Qt.BacktabFocusReason)
+            onExitBottom: {
+                if (frequentGrid.visible) {
+                    frequentGrid.keyboardNavigation = true;
+                    frequentGrid.currentIndex = Math.min(Math.max(0, currentIndex), frequentGrid.count - 1);
+                    frequentGrid.focusFirst();
+                } else {
+                    card.focusFooter();
+                }
+            }
+            onTyped: text => card.typeIntoSearch(text)
+            Keys.onTabPressed: {
+                if (frequentGrid.visible) {
+                    frequentGrid.focusFirst();
+                } else {
+                    card.focusFooter();
+                }
+            }
+            Keys.onBacktabPressed: chipRow.forceActiveFocus(Qt.BacktabFocusReason)
+
+            FusionText {
+                anchors.centerIn: parent
+                width: parent.width - 40
+                visible: parent.count === 0
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: i18nc("@info", "Apps you open will show up here")
+                color: card.pal.muted
+                metrics: card.metrics
+                px: 13
+            }
+        }
+
+        SectionHeader {
+            id: frequentHeader
+            y: recentAppsGrid.y + recentAppsGrid.height - recentAppsGrid.gap + card.sectionGap
+            width: parent.width
+            visible: frequentGrid.visible
+            pal: card.pal
+            metrics: card.metrics
+            title: i18nc("@title apps by how often they are used", "Often used")
+        }
+
+        AppGrid {
+            id: frequentGrid
+            y: frequentHeader.y + card.headerHeight + card.sectionGap
+            columns: card.columns
+            width: parent.width + gap
+            height: Math.max(0, parent.height - y)
+            visible: !card.searching && card.view === "history" && count > 0
+            pal: card.pal
+            metrics: card.metrics
+            launcher: card.launcher
+            model: card.view === "history" && card.launcher ? card.launcher.frequentAppsModel : null
+            onExitTop: {
+                if (recentAppsGrid.count > 0) {
+                    recentAppsGrid.keyboardNavigation = true;
+                    recentAppsGrid.currentIndex = Math.min(currentIndex % columns, recentAppsGrid.navCount - 1);
+                    recentAppsGrid.focusFirst();
+                } else {
+                    chipRow.forceActiveFocus(Qt.BacktabFocusReason);
+                }
+            }
+            onExitBottom: card.focusFooter()
+            onTyped: text => card.typeIntoSearch(text)
+            Keys.onTabPressed: card.focusFooter()
+            Keys.onBacktabPressed: {
+                if (recentAppsGrid.count > 0) {
+                    recentAppsGrid.focusFirst();
+                } else {
+                    chipRow.forceActiveFocus(Qt.BacktabFocusReason);
+                }
+            }
+        }
+
+        // "Places": the file manager's places and removable drives (Kickoff's Computer list; a drive
+        // that is not mounted is mounted and opened), up to four rows above the folders used last,
+        // the whole height while there are none.
+        DocGrid {
+            id: placesGrid
+            readonly property int rows: Math.max(1, Math.ceil(count / columns))
+            y: card.gridY
+            width: parent.width + gap
+            height: foldersGrid.visible ? Math.min(4, rows) * cellHeight : Math.max(cellHeight, Math.min(rows * cellHeight, parent.height - y))
+            visible: !card.searching && card.view === "places"
+            interactive: rows * cellHeight > height + 1
+            itemKind: "place"
+            pal: card.pal
+            metrics: card.metrics
+            launcher: card.launcher
+            model: visible && card.launcher ? card.launcher.placesModel : null
+            onExitTop: chipRow.forceActiveFocus(Qt.BacktabFocusReason)
+            onExitBottom: {
+                if (foldersGrid.visible) {
+                    foldersGrid.keyboardNavigation = true;
+                    foldersGrid.currentIndex = Math.min(Math.max(0, currentIndex % columns), foldersGrid.count - 1);
+                    foldersGrid.focusFirst();
+                } else {
+                    card.focusFooter();
+                }
+            }
+            onTyped: text => card.typeIntoSearch(text)
+            Keys.onTabPressed: {
+                if (foldersGrid.visible) {
+                    foldersGrid.focusFirst();
+                } else {
+                    card.focusFooter();
+                }
+            }
+            Keys.onBacktabPressed: chipRow.forceActiveFocus(Qt.BacktabFocusReason)
+        }
+
+        SectionHeader {
+            id: foldersHeader
+            y: placesGrid.y + placesGrid.height - placesGrid.gap + card.sectionGap
+            width: parent.width
+            visible: foldersGrid.visible
+            pal: card.pal
+            metrics: card.metrics
+            title: i18nc("@title folders by last use", "Recent folders")
+        }
+
+        DocGrid {
+            id: foldersGrid
+            y: foldersHeader.y + card.headerHeight + card.sectionGap
+            width: parent.width + gap
+            height: Math.max(0, parent.height - y)
+            visible: !card.searching && card.view === "places" && count > 0
+            itemKind: "folder"
+            pal: card.pal
+            metrics: card.metrics
+            launcher: card.launcher
+            model: card.view === "places" && card.launcher ? card.launcher.recentFoldersModel : null
+            onExitTop: {
+                if (placesGrid.count > 0) {
+                    placesGrid.keyboardNavigation = true;
+                    const last = (Math.min(4, placesGrid.rows) - 1) * columns + currentIndex % columns;
+                    placesGrid.currentIndex = Math.min(last, placesGrid.count - 1);
+                    placesGrid.focusFirst();
+                } else {
+                    chipRow.forceActiveFocus(Qt.BacktabFocusReason);
+                }
+            }
+            onExitBottom: card.focusFooter()
+            onTyped: text => card.typeIntoSearch(text)
+            Keys.onTabPressed: card.focusFooter()
+            Keys.onBacktabPressed: {
+                if (placesGrid.count > 0) {
+                    placesGrid.focusFirst();
+                } else {
+                    chipRow.forceActiveFocus(Qt.BacktabFocusReason);
+                }
+            }
+        }
+
         // Category and "All apps" views.
         AppGrid {
             id: mainGrid
@@ -571,6 +798,7 @@ FocusScope {
         // Search results.
         ResultsList {
             id: results
+            objectName: "searchResults"
             width: parent.width + 10
             height: parent.height
             visible: card.searching
@@ -594,24 +822,12 @@ FocusScope {
             onTyped: text => card.typeIntoSearch(text)
             Keys.onTabPressed: card.focusFooter()
             Keys.onBacktabPressed: card.focusSearch()
-
-            FusionText {
-                anchors.horizontalCenter: parent.horizontalCenter
-                y: card.metrics.px(40)
-                width: parent.width - 60
-                visible: card.searching && parent.count === 0 && card.launcher && !card.launcher.runnerModel.querying
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                text: i18nc("@info", "No results for “%1”", search.text)
-                color: card.pal.muted
-                metrics: card.metrics
-                px: 13
-            }
         }
     }
 
     Footer {
         id: footer
+        objectName: "launcherFooter"
         x: 1
         width: card.width - 2
         height: card.metrics.px(62)
@@ -621,22 +837,14 @@ FocusScope {
         launcher: card.launcher
         cornerRadius: Math.max(0, card.cornerRadius - 1)
         onExitTop: {
-            const grid = card.searching ? results : (card.view === "home" && docGrid.visible && docGrid.count > 0 ? docGrid : card.primaryGrid());
-            if (grid === results) {
-                results.forceActiveFocus(Qt.BacktabFocusReason);
-            } else {
-                grid.focusFirst();
-            }
-        }
-        onBacktabFromFirst: {
             if (card.searching) {
                 results.forceActiveFocus(Qt.BacktabFocusReason);
-            } else if (card.view === "home" && docGrid.visible && docGrid.count > 0) {
-                docGrid.focusFirst();
-            } else {
-                card.primaryGrid().focusFirst();
+            } else if (!card.lastGrid().focusFirst() && !card.primaryGrid().focusFirst()) {
+                // Nothing to focus in the view (focusFromChips()): back to the chips.
+                chipRow.forceActiveFocus(Qt.BacktabFocusReason);
             }
         }
+        onBacktabFromFirst: exitTop()
         onTabFromLast: card.focusSearch()
     }
 }

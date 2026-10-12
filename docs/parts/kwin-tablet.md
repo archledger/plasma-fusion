@@ -14,6 +14,7 @@ mode; plasmoids switch their own layouts from `FusionTablet`.
 |---|---|
 | `packages/kwin/scripts/plasmafusion-tablet/metadata.json` | KWin/Script, declarative, Id `plasmafusion-tablet`, not enabled by default |
 | `packages/kwin/scripts/plasmafusion-tablet/contents/ui/main.qml` | the script |
+| `packages/kwin/scripts/plasmafusion-tablet/contents/ui/Panels.js` | the panel script it runs in plasmashell, and when it asks again (tested by `packages/kwin/tests/tablet-panels.test.js` against a model of desktop scripting) |
 | `packages/kwin/scripts/plasmafusion-tablet/contents/config/main.xml`, `contents/ui/config.ui` | settings (below) and their form in System Settings > Window Management > KWin Scripts |
 | `tools/build.d/81-kwin-tablet.sh` | installs it into the stage with a copy of `FusionTablet.qml` (`tools/build-lib/shared-qml.sh`) |
 
@@ -27,7 +28,7 @@ package is installed); the login gate switches it off while another Global Theme
 |---|---|---|
 | `WindowMode` | `fullscreen` | `fullscreen`: apps maximized without title bars in tablet mode; `windowed`: windows left as they are (the compiled decoration gives touch-sized title bars) |
 | `DockHiding` | `dodgewindows` | the dock in tablet mode: `dodgewindows` (hides over apps) or `none` (always visible) |
-| `EdgeLeft`, `EdgeRight` | `false` | in tablet mode a swipe in from the left edge opens the launcher (`activateLauncherMenu`), from the right edge quick settings (its `openRequest` = `sheet:<ms>`) |
+| `EdgeLeft`, `EdgeRight` | `false` | in tablet mode a swipe in from the left edge opens the launcher (`activateLauncherMenu`), from the right edge quick settings (its `openRequest` = `sheet:<ms>:<output>`, the output being the built-in screen, which is the touch screen, else KWin's active one: `contents/ui/Requests.js`, tested by `packages/kwin/tests/tablet-requests.test.js`; before 0.5.0 without the output, so the widget on the screen of the pointer or focus opened, and every one when KWin did not answer) |
 | `DisableWindowMove` | `false` | windows cannot be dragged in tablet mode |
 | `InternalOutputs` | `eDP,LVDS,DSI` | name prefixes of built-in screens; window policy only while one of them is the only screen. Tests add `Virtual` (private sessions have virtual outputs only) |
 
@@ -47,7 +48,10 @@ needed.
   its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave
   (72 for the dock; a saved 88 or 96 from the headroom frame counts as 72).
   Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
-  start), the call is made again after 500 ms (one call for several panels).
+  start), the call is made again after 500 ms (one call for several panels). A Fusion panel whose
+  screen is gone (the top bar of a monitor that was unplugged) is skipped, see "Panels without a
+  screen" below. When plasmashell is not on the bus, or answers "not ready" (no panels, desktops
+  or screens yet), the call is made again after 1, 2, 4, 8, 16 and 32 s.
 - **Window policy, after 300 ms of stable posture** (flip bouncing), only with `WindowMode=fullscreen`
   and a built-in screen as the only screen: placement "Maximizing" and borderless maximized windows;
   every eligible window (normal, maximizable, not full screen, minimized, skip-taskbar, transient or
@@ -238,3 +242,45 @@ session dock1, the keys written as the settings module writes them, then the sho
 full screen 45+834 with the dock hidden; "Always show": the dock shown and KWrite 45+753, still
 shown after a tap in the app and after a short swipe up; KWrite and Konsole split above it
 (742 px tall); "Hide over apps" again: the dock hidden, the tiles 822 px tall.
+
+## Panels without a screen (0.5.0)
+
+Found on Plasma 6.7.91 (6.8 beta, VM 7, 2026-10-11): plasmashell crashed at every session start,
+three times or more until systemd gave up (SIGSEGV in `KConfigGroup::config` <-
+`KConfigGroup::readEntry<int>` <- `WorkspaceScripting::Panel::height` <-
+`ShellCorona::evaluateScript`), with "plasmafusion-tablet: panels: plasmashell did not run the panel
+script" in the journal. The layout had a Plasma Fusion top bar of a second screen that was no longer
+connected. A scripting `Panel` reads its sizes from the panel's window, or without one from
+`PanelView::panelConfig()` / `panelConfigDefaults()` for its screen; for a screen that is not in
+the screen pool these return an invalid `KConfigGroup`, and reading it dereferences a null pointer
+(`Panel::panelConfig` checks `screenOrder().size() < screenNum` where `<=` was meant, and never
+checks the screen). Plasma 6.8 keeps a panel on its last screen (libplasma: `Containment::screen()`
+is the last screen, unsigned), so `p.screen` is 1 with one screen; Plasma 6.7 reports such a panel
+on screen -1 and the scripting falls back to screen 0, which is why 6.7.5 never crashed. Every
+Plasma Fusion release with this panel script (0.4.0 included) crashes this way on 6.8 once a
+second screen with a top bar was unplugged: the script runs when the shell's panel windows appear.
+
+The panel script now reads and writes a panel's height and hiding only while
+`p.screen >= 0 && p.screen < screenCount`; other panels are counted ("1 without a screen skipped")
+and get their posture when their screen comes back (their window appears and the script runs
+again). The other scripts that read panel sizes get the same rule: the settings module's state
+read and look change (`p.opacity`), and `fusion-config.sh`'s layout check, top-bar ids and bar
+thickness (`lengthMode`, `floating`, `height`; on 6.8 the crash made the layout check answer "no",
+and an automatic setup would then have reset the layout). The panel script also waits for the
+shell: no panels, desktops or screens yet is "not ready", and that answer or a failed call is
+retried with a growing delay (`Panels.retryDelay`).
+
+Tests: `packages/kwin/tests/tablet-panels.test.js` (in `81-kwin-tablet.sh`) runs the panel script
+against a model of desktop scripting with 6.8's and 6.7's behaviour, a model panel crashing on
+the reads plasmashell crashes on; the panel script of 8cf0b3d fails it ("plasmashell crashed: panel
+3 height on missing screen 1"). `tools/tests/shell-vm/shell_starts.py` (run inside the session)
+adds such a bar when there is none, restarts plasmashell six times in laptop and tablet posture,
+triggering the script while the shell starts, and checks for core dumps, the script's answer and
+the bars' heights: on VM 7 with 8cf0b3d 8 checks failed in 4 rounds (12 plasmashell cores), with
+this change all 19 passed; five log-out and automatic log-in cycles gave 0 cores (the log shows
+the retries: "did not run the panel script (not running?), again in 1 s", "has not loaded its
+panels yet, again in 2 s", then "top 34, dock 72 dodgewindows, 1 without a screen skipped"). On
+VM 5 (Plasma 6.7.5) 8cf0b3d did not crash (the bar is on screen -1 there) but gave the bar without
+a screen the tablet height too; with this change all 19 checks passed. A new script reaches a
+running KWin only with a new session: KWin keeps the compiled QML of a script it unloads and
+loads again from the same path.

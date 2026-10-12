@@ -72,6 +72,7 @@ FocusScope {
                 size: card.metrics.px(32)
                 source: card.icon
                 iconName: card.iconName
+                calendarDate: true
             }
             Column {
                 anchors.left: headerIcon.right

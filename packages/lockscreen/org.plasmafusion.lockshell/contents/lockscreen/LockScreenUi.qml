@@ -53,6 +53,14 @@ Item {
     readonly property bool showNotifications: setting("showNotifications", true)
     readonly property bool showNotificationSummaries: setting("showNotificationSummaries", false)
 
+    // Plasma 6.8 and later: the greeter runs one chosen way to unlock (the password, a smartcard,
+    // the fingerprint reader, the face or a security key; kscreenlocker's Authenticators) and
+    // offers the choice (MainBlock's AuthenticatorChoice). Plasma 6.7's authenticator has no
+    // such property and always asks for the password.
+    // qmllint disable unqualified
+    readonly property bool authenticatorChoice: authenticator.authenticator !== undefined
+    // qmllint enable unqualified
+
     function handleMessage(msg, urgent) {
         if (!msg) {
             return;
@@ -87,6 +95,13 @@ Item {
         target: PfStyle
         property: "tint"
         value: accentTint
+    }
+    // The log-out strings' catalogue (PfStyle.logoutDomain): the desktop shell's from Plasma 6.8,
+    // recognised by its authenticator.
+    Binding {
+        target: PfStyle
+        property: "logoutDomain"
+        value: lockScreenUi.authenticatorChoice ? "plasma_shell_org.kde.plasma.desktop" : "plasma_lookandfeel_org.kde.lookandfeel"
     }
 
     // Tablet posture from KWin (TABLET 4.13): touch-sized controls and the prompt higher up.
@@ -155,14 +170,42 @@ Item {
             if (kind != 0) { // if this is coming from the noninteractive authenticators
                 return;
             }
+            // Plasma 6.8 marks a way defunct before it reports the failure that did it: the defunct
+            // message (AuthenticatorChoice) says what happened and stays.
+            if (mainBlock.choice && !mainBlock.choice.currentFunctional) {
+                return;
+            }
             const msg = i18ndc("plasma_shell_org.kde.plasma.desktop", "@info:status", "Unlocking failed");
             lockScreenUi.handleMessage(msg, true);
-            graceLockTimer.restart();
             notificationRemoveTimer.restart();
-            rejectPasswordAnimation.start();
+            // A refused password or PIN: the shake and the 3 s grace (the prompt off, then a new
+            // conversation). Plasma 6.8 reports a failure of any way in use like this, also of a
+            // face or security key, where nothing was typed: no grace and no shake there (both
+            // turn the prompt off), which would keep "Use password" and the power row off for all
+            // but the moment each attempt takes, and space the failures too far apart for the
+            // greeter to mark a broken way defunct (more than 3, each within 2 s of the last,
+            // kscreenlocker pamauthenticator.cpp). It is asked again at once while the prompt is
+            // shown, as the stock lock screen does, and not while it is hidden (the camera or
+            // reader would run all night); showing the prompt asks again.
+            if (mainBlock.passwordField) {
+                rejectPasswordAnimation.start();
+                graceLockTimer.restart();
+            } else if (lockScreenRoot.uiVisible) {
+                authenticator.startAuthenticating();
+            }
         }
 
         function onSucceeded() {
+            if (lockScreenUi.authenticatorChoice) {
+                // Plasma 6.8: stop the other workers at once (the fingerprint reader beside the
+                // password), and a way that never prompts (face, security key) unlocks without
+                // the explicit Unlock screen, as on the stock lock screen.
+                authenticator.stopAuthenticating();
+                if (mainBlock.choice && !mainBlock.choice.expectingPrompt) {
+                    Qt.quit();
+                    return;
+                }
+            }
             if (authenticator.hadPrompt) {
                 Qt.quit();
             } else {
@@ -179,6 +222,9 @@ Item {
 
         function onInfoMessageChanged() {
             lockScreenUi.handleMessage(authenticator.infoMessage);
+            if (authenticator.infoMessage && !mainBlock.passwordField) {
+                lockScreenRoot.uiVisible = true;
+            }
         }
 
         function onErrorMessageChanged() {
@@ -191,24 +237,53 @@ Item {
         function onPromptForSecretChanged(msg) {
             mainBlock.showPassword = false;
             mainBlock.mainPasswordBox.forceActiveFocus();
-        }
-    }
-
-    // Plasma 6.8 runs one chosen authenticator and starts with the one that unlocked last time
-    // (kscreenlockerrc [Greeter] Authenticator in the state directory), which the stock lock
-    // screen's picker may have set to Fingerprint, Face, Smartcard or a security key. This screen
-    // has no picker, only the password field, so it asks for the password authenticator; the
-    // fingerprint reader still runs next to it. Plasma 6.7 has no such property.
-    Component.onCompleted: {
-        if (authenticator.authenticator !== undefined
-                && authenticator.authenticator !== ScreenLocker.Authenticators.Regular) {
-            authenticator.authenticator = ScreenLocker.Authenticators.Regular;
+            // Plasma 6.8: a way whose prompt says more than "Password:" (a smartcard's PIN, or
+            // the password way with kscreenlockerrc [UI] ShowPromptInRegularAuthenticator) shows
+            // it, as the stock lock screen does.
+            if (mainBlock.choice && mainBlock.choice.showPrompt) {
+                lockScreenUi.handleMessage(authenticator.promptForSecret);
+            }
         }
     }
     // qmllint enable unqualified
 
+    // Plasma 6.8: a way that stopped working says so, and the password is used again
+    // (AuthenticatorChoice switches back); a way without a field shows the prompt when its PAM
+    // module speaks (a face or security-key cue), since nothing would be typed to show it.
+    Connections {
+        target: mainBlock.choice
+        ignoreUnknownSignals: true
+        function onDefunct(message: string): void {
+            lockScreenUi.lockRoot.notification = "";
+            lockScreenUi.handleMessage(message, true);
+            notificationRemoveTimer.stop();
+        }
+        function onChosen(): void {
+            lockScreenUi.lockRoot.notification = "";
+            fadeoutTimer.restart();
+        }
+    }
+
     SessionManagement {
         id: sessionManagement
+    }
+
+    // Restart / Shut Down: the confirmation replaces the prompt until it is answered (the prompt
+    // stays up while it is shown, as for any page on the stack) and goes when the prompt hides.
+    function confirmPower(action: string): void {
+        if (mainStack.depth === 1) {
+            mainStack.push(powerConfirmComponent, { "action": action });
+
+        }
+    }
+    Component {
+        id: powerConfirmComponent
+        PowerConfirm {
+            metrics: lockScreenUi.metrics
+            session: sessionManagement
+            onDone: mainStack.pop()
+            onAnnouncement: (text, urgent) => lockScreenUi.announce(text, urgent)
+        }
     }
 
     KeyboardIndicator.KeyState {
@@ -378,6 +453,8 @@ Item {
         onUiVisibleChanged: {
             if (uiVisible) {
                 Window.window.requestActivate();
+            } else {
+                powerConfirmCloser.restart();
             }
 
             if (blockUI) {
@@ -417,6 +494,18 @@ Item {
             uiVisible = true;
             event.accepted = false;
         }
+        // The Restart / Shut Down question goes once the prompt has hidden. Not at once: the prompt
+        // hides for a moment when the question replaces it under the pointer, and comes straight
+        // back.
+        Timer {
+            id: powerConfirmCloser
+            interval: 500
+            onTriggered: {
+                if (!lockScreenRoot.uiVisible && mainStack.currentItem && mainStack.currentItem.objectName === "powerConfirm") {
+                    mainStack.pop();
+                }
+            }
+        }
         Timer {
             id: fadeoutTimer
             interval: 10000
@@ -426,6 +515,22 @@ Item {
                     lockScreenRoot.uiVisible = false;
                 }
             }
+        }
+        // Plasma 6.8: the greeter starts a way's PAM conversation only when asked, and drops the
+        // request while the way's worker process is still starting ("Worker not ready yet") or
+        // its conversation is running; a failed fingerprint or face attempt is not restarted by
+        // the greeter either. While the prompt is shown, ask again every second, as the stock
+        // lock screen does (not during the grace time after a failed password, which asks itself
+        // when it ends). Plasma 6.7 starts every authenticator itself.
+        Timer {
+            objectName: "authenticatorHeartbeat"
+            interval: 1000
+            repeat: true
+            // qmllint disable unqualified
+            running: lockScreenUi.authenticatorChoice && lockScreenRoot.uiVisible && !authenticator.unlocked
+                     && !graceLockTimer.running
+            onTriggered: authenticator.startAuthenticating()
+            // qmllint enable unqualified
         }
         Timer {
             id: notificationRemoveTimer
@@ -473,9 +578,8 @@ Item {
             id: backdrop
             objectName: "backdrop"
             anchors.fill: parent
-            // qmllint disable unqualified
-            source: typeof wallpaper !== "undefined" && wallpaper ? wallpaper : null
-            // qmllint enable unqualified
+            // This screen's own wallpaper item (LockScreen.qml).
+            source: lockScreenUi.lockRoot ? lockScreenUi.lockRoot.wallpaperItem : null
             factor: lockScreenRoot.promptFactor
         }
 
@@ -585,6 +689,7 @@ Item {
                 id: mainBlock
                 objectName: "mainBlock"
                 lockRoot: lockScreenUi.lockRoot
+                authenticatorChoice: lockScreenUi.authenticatorChoice
                 metrics: lockScreenUi.metrics
                 // qmllint disable unqualified
                 authenticatorObject: authenticator
@@ -597,11 +702,14 @@ Item {
                 enabled: !graceLockTimer.running
 
                 StackView.onStatusChanged: {
-                    // prepare for presenting again to the user
+                    // Back on the prompt: the field takes the focus again. The stock lock screen
+                    // also clears the field and the messages here, but pushes no page in normal
+                    // use; this one pushes the Restart / Shut Down question, and after its Cancel,
+                    // or its closing when the prompt hides, PAM's messages and prompt (a
+                    // smartcard's PIN prompt, "account locked", which PAM does not send again) and
+                    // the typed password are still what the user needs.
                     if (StackView.status === StackView.Activating) {
-                        mainPasswordBox.clear();
                         mainPasswordBox.focus = true;
-                        lockScreenUi.lockRoot.notification = "";
                     }
                 }
                 userListModel: users
@@ -638,6 +746,25 @@ Item {
                             sessionManagement.switchUser();
                         }
                         visible: sessionManagement.canSwitchUser
+                    },
+                    // Restart and Shut Down (survey U6), only where the session may, as on the
+                    // log-out screen; both ask first (PowerConfirm.qml).
+                    PowerButton {
+                        objectName: "restartButton"
+                        metrics: lockScreenUi.metrics
+                        text: i18nd(PfStyle.logoutDomain, "&Restart")
+                        iconPath: PfStyle.iconRestart
+                        onClicked: lockScreenUi.confirmPower("reboot")
+                        visible: sessionManagement.canReboot
+                    },
+                    PowerButton {
+                        objectName: "shutdownButton"
+                        metrics: lockScreenUi.metrics
+                        text: i18nd(PfStyle.logoutDomain, "&Shut Down")
+                        iconPath: PfStyle.iconShutDown
+                        destructive: true
+                        onClicked: lockScreenUi.confirmPower("shutdown")
+                        visible: sessionManagement.canShutdown
                     }
                 ]
             }

@@ -49,6 +49,8 @@ Item {
     signal pillClicked()
     signal bellPressed()
     signal bellClicked()
+    signal clipboardPressed()
+    signal clipboardClicked()
     // A pull-down on the pill or the bell (touch).
     signal pulled(bool fromBell)
 
@@ -112,10 +114,17 @@ Item {
                 acceptedButtons: Qt.RightButton
                 onTapped: layoutMenu.openBelow()
             }
+            FusionWheelGuard {
+                id: layoutWheelGuard
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 property real pending: 0
                 onWheel: event => {
+                    if (!layoutWheelGuard.accept(Date.now())) {
+                        pending = 0;
+                        return;
+                    }
                     pending += event.angleDelta.y || -event.angleDelta.x;
                     while (Math.abs(pending) >= 120) {
                         if (pending > 0) {
@@ -206,7 +215,18 @@ Item {
             implicitHeight: bar.rowHeight
             iconPath: Icons.clipboard
             text: i18nc("@action:button", "Clipboard")
-            onClicked: bar.backend.session.openClipboard()
+            Accessible.role: Accessible.ButtonDropDown
+            // Pressed and clicked apart, as the pill: a click while the sheet is open closes it.
+            Keys.onReturnPressed: {
+                bar.clipboardPressed();
+                bar.clipboardClicked();
+            }
+            Keys.onEnterPressed: {
+                bar.clipboardPressed();
+                bar.clipboardClicked();
+            }
+            onPressed: bar.clipboardPressed()
+            onClicked: bar.clipboardClicked()
         }
 
         // ---- On-screen keyboard (tablet posture, TABLET 4.3)
@@ -361,6 +381,7 @@ Item {
                     color: bar.pal.accent
                     Accessible.role: Accessible.StaticText
                     Accessible.name: i18nc("@info:status", "Sleep and automatic screen locking are blocked")
+                    Accessible.description: bar.backend.keepAwake.timed ? bar.backend.keepAwake.subtitle : ""
                 }
                 LineIcon {
                     anchors.verticalCenter: parent.verticalCenter
@@ -373,11 +394,20 @@ Item {
                 }
             }
 
+            // The wheel changes the volume (as on the stock tray icon), except a page scroll that is
+            // still turning as the pointer passes over the pill (FusionWheelGuard).
+            FusionWheelGuard {
+                id: volumeWheelGuard
+            }
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                 enabled: bar.backend.audio.available
                 property real accumulated: 0
                 onWheel: event => {
+                    if (!volumeWheelGuard.accept(Date.now())) {
+                        accumulated = 0;
+                        return;
+                    }
                     accumulated += (event.angleDelta.y || -event.angleDelta.x) * (event.inverted ? -1 : 1);
                     while (Math.abs(accumulated) >= 120) {
                         const step = accumulated > 0 ? 0.05 : -0.05;
@@ -402,7 +432,7 @@ Item {
                 subText: {
                     const lines = [];
                     if (bar.backend.keepAwake.active) {
-                        lines.push(i18nc("@info:tooltip", "Keep awake: sleep and automatic screen locking are blocked"));
+                        lines.push(bar.backend.keepAwake.toolTipLine);
                     }
                     if (bar.backend.devices.count > 0) {
                         lines.push(i18nc("@info:tooltip %1 device name or count", "Disks & Devices: %1", bar.backend.devices.subtitle));

@@ -26,6 +26,7 @@ if command -v node >/dev/null 2>&1; then
   node "$src/tests/date-timer.test.js" >/dev/null
   node "$src/tests/audio.test.js" >/dev/null
   node "$src/tests/previews.test.js" >/dev/null
+  node "$src/tests/jobs.test.js" >/dev/null
 fi
 
 rm -rf "$dest"

@@ -56,6 +56,27 @@ jobs:
       - name: Setup config keys that keep the user's choice
         run: tools/device/tests/config-keys-unit.sh build/config-keys
 
+      - name: Setup layout migration keeps the user's changes
+        run: tools/device/tests/layout-migration-unit.sh build/layout-migration
+
+      - name: Setup's panel scripts leave a top bar without a screen alone (scripting model)
+        run: tools/device/tests/panel-scripts-unit.sh build/panel-scripts
+
+      - name: Restore releases the keys of widgets it does not bring back (fake kglobalaccel)
+        run: tools/device/tests/restore-keys-unit.sh build/restore-keys
+
+      - name: Device tools' --help prints the usage only
+        run: tools/device/tests/help-unit.sh
+
+      - name: Setup search keys (launcher and KRunner)
+        run: tools/device/tests/launcher-keys-unit.sh build/launcher-keys
+
+      - name: Copy-text shortcut set up and undone (fake kglobalaccel)
+        run: tools/device/tests/copytext-unit.sh build/copytext
+
+      - name: Setup command shortcuts (against a fake kglobalaccel)
+        run: tools/device/tests/shortcut-keys-unit.sh build/shortcut-keys
+
       - name: VM crash collector unit tests
         run: |
           python3 tools/tests/release-vm/test-crash-count.py
@@ -80,12 +101,64 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/keepawake_test.py
 
+      - name: Quick settings pages (staged QML, offscreen Qt)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/qs-stage" tools/build.sh quicksettings
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py "$RUNNER_TEMP/qs-stage"
+
+      - name: Quick settings tile editing (staged QML on the real backend, offscreen Qt)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/qs-stage" tools/build.sh quicksettings
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/tiles_edit_test.py "$RUNNER_TEMP/qs-stage"
+
+      - name: Hidden tray items while active (stand-in tray, offscreen Qt)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+
+      - name: Dock file-transfer progress on Plasma's job server (private bus)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.dock/tests/transfers_test.py
+
+      - name: Launcher views on Kicker's models (activity history, private bus)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.launcher/tests/views_test.py
+
       - name: Command runner tests (Plasma's executable engine)
         run: |
           set -euo pipefail
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/exec_test.py
+
+      - name: Notification service tests (Plasma's notification server, private bus)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/notifications_service_test.py
+
+      - name: Notification card tests (the staged history cards, Plasma's notification server)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/qs-stage" tools/build.sh quicksettings
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/notifications_card_test.py "$RUNNER_TEMP/qs-stage"
 
       - name: Hotspot settings tests (plasma-nm settings in a sandbox)
         run: |
@@ -103,6 +176,58 @@ jobs:
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/devices_service_test.py
+
+      - name: Lock screen Restart and Shut Down (offscreen, mock logind and ksmserver)
+        run: >-
+          packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy power-early power-late
+          power-noreboot power-kiosk power-mnemonic power-repeat power-return
+
+      - name: Log-out screen on Plasma 6.8 (offscreen, two screens on one engine)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/lockscreen/test/session-bus.conf -- \
+            python3 packages/lockscreen/test/logout_test.py
+
+      - name: Lock screen ways to unlock (offscreen, Plasma 6.8 and 6.7 authenticators)
+        run: >-
+          packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen-auth" auth68-picker auth68-saved
+          auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-switch auth68-fingerprint auth68-heartbeat
+          auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed auth67-strings
+          wallpaper68
+
+      - name: Scroll safety of the bar's wheel controls (offscreen Qt)
+        run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/wheel_guard_test.py
+
+      - name: Calendar date on app tiles (offscreen Qt)
+        run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/calendar_date_test.py
+
+      - name: Backdrop layer while its picture reloads (offscreen Qt)
+        run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/backdrop_reload_test.py
+
+      - name: Backdrop wallpaper, also the Global Theme's default (offscreen, private bus)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/common/tests/backdrop_wallpaper_test.py
+
+      - name: System meters' sensors (libksysguard, a stand-in ksystemstats on a private bus)
+        run: |
+          set -euo pipefail
+          node packages/plasmoids/org.plasmafusion.meters/tests/meters.test.js
+          node packages/plasmoids/org.plasmafusion.meters/tests/memory.test.js
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.meters/tests/readings_test.py
+
+      - name: Clipboard sheet on Plasma's clipboard model (offscreen, throw-away HOME)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/qs-stage" tools/build.sh quicksettings
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/clipboard_sheet_test.py "$RUNNER_TEMP/qs-stage"
 
       - name: Calendar adapter and interaction tests (offscreen Qt)
         run: |

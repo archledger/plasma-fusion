@@ -10,7 +10,7 @@ import QtQuick.Shapes
 
 // One app in the dock: its tile (the Fusion icon, or any other icon on a neutral Fusion tile,
 // FusionIconTile) over a soft drop shadow, the running dot or active pill under it, an unread
-// count or progress ring (Unity LauncherEntry, GAPS G17), an audio indicator while the app plays
+// count and a progress ring (Unity LauncherEntry, GAPS G17), an audio indicator while the app plays
 // sound or is muted (a click on it mutes or unmutes the app) and, when the app asks for attention,
 // one short bounce next to the orange dot (G26). Calendar apps show today's date on their tile.
 //
@@ -280,6 +280,7 @@ Item {
         // Unread count: the Controls board's badge (20 px, radius 10, accent, 11 px 800), at the
         // tile's top-right corner.
         Rectangle {
+            objectName: "countBadge"
             visible: task.badgeCount > 0
             x: parent.width - width + 6
             y: -6
@@ -332,12 +333,16 @@ Item {
             }
         }
 
-        // Progress (a download, a copy): a ring on a small disc at the top-right corner (next to
-        // no count: the count wins).
+        // Progress (a download, a copy): a ring on a small disc at the top-right corner. With a
+        // count in that corner both show, as in the stock task manager (its progress overlay and
+        // count badge are independent): the ring moves inside the icon to its bottom-right corner,
+        // which nothing else uses (the audio disc is top-left, the running dot under the icon).
         Item {
-            visible: task.progress >= 0 && task.badgeCount === 0
-            x: parent.width - width + 6
-            y: -6
+            objectName: "progressRing"
+            readonly property bool besideCount: task.badgeCount > 0
+            visible: task.progress >= 0
+            x: besideCount ? parent.width - width - 2 : parent.width - width + 6
+            y: besideCount ? parent.height - height - 2 : -6
             width: 20
             height: 20
             Rectangle {

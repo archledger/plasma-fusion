@@ -543,6 +543,7 @@ Item {
         y: home.ghostPos.y - 40
         source: home.ghostSource
         iconName: home.ghostName
+        calendarDate: true
     }
     Row {
         visible: home.editing
@@ -685,6 +686,8 @@ Item {
                 size: 72
                 source: tile.model.decoration || "application-x-executable"
                 iconName: home.iconNameFor(tile.model)
+                // Today's date over the calendar tile, as in the launcher and the dock.
+                calendarDate: true
             }
             // Edit mode: remove (page 1) or add to page 1 (A-Z pages); 26 px drawn, 44 px target.
             T.AbstractButton {

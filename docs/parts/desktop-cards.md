@@ -30,7 +30,7 @@ deployed to the real session (the lead deploys). Last edited 2026-09-29.
 | `.../weathercard/contents/config/main.xml`, `config.qml` | settings (below) and their pages |
 | `.../weathercard/tests/weather.test.js` | tests of weather.js (`node`), not installed |
 | `packages/plasmoids/org.plasmafusion.calendarcard/...` | `metadata.json`, `ui/main.qml` (the card), `ui/ConfigGeneral.qml`, `config/main.xml`, `config/config.qml` |
-| `packages/plasmoids/org.plasmafusion.systemcard/...` | `metadata.json`, `ui/main.qml` (the card), `ui/ConfigGeneral.qml`, `config/main.xml`, `config/config.qml` |
+| `packages/plasmoids/org.plasmafusion.systemcard/...` | `metadata.json`, `ui/main.qml` (the card), `ui/ConfigGeneral.qml`, `config/main.xml`, `config/config.qml`, `code/memory.js` (the memory figures; the same file as the system meters', compared by their `tests/memory.test.js` in `tools/build.sh meters`) |
 | `.../contents/ui/CardPalette.qml`, `CardText.qml`, `LineGlyph.qml` | shared colours and fonts, board type scale, 24-box line icons; the same file in all three packages |
 | `tools/build.d/74-desktopcards.sh` | checks metadata ids, config XML, that the three copies of the shared files are identical, runs the weather.js tests when `node` exists; copies the packages to `$STAGE/.local/share/plasma/plasmoids/` |
 | `packages/look-and-feel/common/contents/layouts/org.kde.plasma.desktop-layout.js` | only the `CARDS` table with its placement loop, and the tray block (`TRAY_ITEMS_REPLACED`, `TRAY_ITEMS_UNLOADED`, `readList`) |
@@ -158,9 +158,13 @@ Settings (`[General]`, `contents/config/main.xml`):
   `org.kde.ksysguard.sensors` (the stock system monitor's source), every 3 s (setting
   `updateInterval`, 1-10 s; x 2 or x 4 in the power tiers), paused while nobody can see the card
   (see "CARD-1" below).
-- "23%" and "6.1 / 16 GB": used memory with one decimal, the total rounded up to whole GB (the
-  kernel reports a little less than the installed memory, e.g. 15.3 GiB for 16 GB). GiB values
-  labelled "GB" as on the board.
+- "23%" and "6.1 / 15.3 GiB": both figures in the binary unit of the total with one decimal, as
+  Plasma formats sizes (KFormat) and System Monitor shows the same sensors, so the card, System
+  Monitor and the top bar's system meters agree (`contents/code/memory.js`, the same file as the
+  meters'; tests: `org.plasmafusion.meters/tests/memory.test.js`). The total is what the kernel
+  reports (a 16 GB machine shows about 15.3 GiB), so a full memory reads "15.3 / 15.3 GiB". Until
+  0.5.0 the card showed GiB labelled "GB" with the total rounded up ("6.1 / 16 GB", the board's
+  text), which disagreed with System Monitor and read "15.3 / 16 GB" at 100 %.
 - Bars step to each value in whole pixels (one frame); only a change of 10 points or more glides
   (one Kirigami longDuration, 200 ms at normal speed, OutCubic), and nothing glides when
   animations are off. Every animation frame redraws the whole desktop window (wallpaper and the
@@ -381,8 +385,9 @@ passive ones in the pop-up.
 
 Result (cd-6, `screens/08-dark-tray-popup.png`): none of the ten is shown anywhere. The expander
 arrow remains only because three other default items are passive: Vaults, Disks & Devices and
-Display Configuration. They become active, and appear in the bar, exactly when they matter (an
-open vault, a removable drive, a second display); there is no tray key for "hide while passive",
+Display Configuration. Vaults and Disks & Devices become active, and appear in the bar, when they
+matter (an open vault, a removable drive; Display Configuration only in presentation mode, not for a
+second display, see the 0.5.0 update below); there is no tray key for "hide while passive",
 and listing them in `disabledStatusNotifiers` would also hide them when active. Left as is; to
 drop the arrow at that cost, add `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier` and
 `org.kde.kscreen` (and `org.kde.plasma.printmanager` where print-manager is installed) to
@@ -395,6 +400,19 @@ settings is in the bar (docs/parts/shell-quicksettings.md). The arrow now appear
 application status icons, such as the XWayland video bridge. The cost named above holds for the
 others: an open vault, queued print jobs, presentation mode and the input-method switch have no item
 in the bar while active, and quick settings has no page for them yet (only Disks & Devices has one).
+
+Update (0.5.0, P1): the quick-settings widget gives the tray the missing "hidden while passive":
+while the vault, printer, display configuration or input-method item is active it adds the id to
+the tray's `shownItems`, which the tray applies before `disabledStatusNotifiers` and `hiddenItems`
+(`calculateEffectiveStatus`), so the stock item shows in the bar with its own pop-up; when it is
+passive again the id goes out of `shownItems` and the item is hidden, with no arrow. The lists above
+are unchanged. Checked against the 6.7.5 sources how each item says it is active: Vaults is Active
+while a vault is open (`hasOpenVaults`), Printers while a job is queued (Passive with printers and no
+job, Hidden with no printer), Display Configuration only while its own Presentation Mode switch is on
+(a second screen leaves it Passive, so a second screen counts too: the layout choices matter then),
+the input-method item in its "disabled" and "show with all input devices" states and in tablet mode
+(6.8: while the on-screen keyboard would show). Details: docs/parts/shell-quicksettings.md, "Hidden
+tray items while active".
 
 In the tray's own settings the ten show as "Show only in popup" (the page reads `hiddenItems`
 first); choosing another visibility there removes the id from all lists, which brings the item

@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Unit tests of fusion-config.sh's config writes that must keep a user's choice, against a
-# throw-away XDG_CONFIG_HOME: the key helpers (read_key, set_key, managed_key) and the hot-corner
-# step are taken out of fusion-config.sh as they are and run with the real kreadconfig6 and
-# kwriteconfig6. Test tooling only, not installed; never touches the caller's configuration.
+# throw-away XDG_CONFIG_HOME: the key helpers (read_key, set_key, managed_key), the hot-corner
+# step and the on-screen keyboard step are taken out of fusion-config.sh as they are and run with
+# the real kreadconfig6 and kwriteconfig6. Test tooling only, not installed; never touches the caller's configuration.
 #
 #   config-keys-unit.sh BASE
 #
@@ -36,9 +36,14 @@ hot_corner_step() {
 LIB=$BASE/lib.sh
 {
   grep -m1 '^UNSET=' "$TOOL"
-  extract note read_key show set_key managed_key upgrade_log
+  grep -m1 '^OSK_DESKTOP=' "$TOOL"
+  extract note read_key show set_key managed_key upgrade_log keyboard_policy_touch
   echo 'UPGRADE_LOG=()'
 } >"$LIB"
+# The on-screen keyboard step: from its comment up to the accent pop-up setting that follows it.
+osk_step() {
+  awk '/^# On-screen keyboard \(TABLET T6\)/ { on = 1 } on && /^# plasma-keyboard \(6\.7 and later\)/ { exit } on { print }' "$TOOL"
+}
 STEP=$BASE/step.sh
 hot_corner_step >"$STEP"
 grep -q 'BorderActivate' "$STEP" || { echo "FAIL: the hot-corner step was not found in fusion-config.sh"; exit 1; }
@@ -67,9 +72,46 @@ case_hot "first run turns the corner off" 0 0 7 9
 case_hot "first run with --hot-corner turns it on" 0 1 unset 7
 case_hot "a later run keeps the corner the user turned on" 2 0 7 7
 case_hot "a later run keeps more edges the user set" 2 0 "1,7" "1,7"
-case_hot "a later run sets an unset corner off" 2 0 unset 9
+# An unset key is KWin's default, the top-left corner: System Settings > Screen Edges deletes the
+# key when the user turns that corner on.
+case_hot "a later run keeps an unset key (KWin's default corner, on)" 2 0 unset ""
 case_hot "a later run keeps the corner off" 2 0 9 9
 case_hot "--hot-corner turns an off corner on" 2 1 9 7
+
+OSKSTEP=$BASE/osk-step.sh
+osk_step >"$OSKSTEP"
+grep -q 'InputMethod' "$OSKSTEP" || { echo "FAIL: the on-screen keyboard step was not found in fusion-config.sh"; exit 1; }
+# CASE DESCRIPTION, PREV_VERSION, the keyboard policy in the layout file, "live" (plasmashell
+# answers with that policy; else it is not running), InputMethod before, InputMethod wanted
+OSK=/usr/share/applications/org.kde.plasma.keyboard.desktop
+case_osk() {
+  local desc=$1 prev=$2 policy=$3 live=$4 before=$5 want=$6 home got
+  home=$BASE/home-$((PASS + FAIL))
+  mkdir -p "$home"
+  printf '[Wayland]\nInputMethod=%s\n' "$before" >"$home/kwinrc"
+  printf '[Containments][2][Applets][5]\nplugin=org.plasmafusion.quicksettings\n\n[Containments][2][Applets][5][General]\nkeyboardPolicy=%s\n' \
+    "$policy" >"$home/plasma-org.kde.plasma.desktop-appletsrc"
+  got=$(env -i PATH="$PATH" HOME="$home" XDG_CONFIG_HOME="$home" bash -c '
+    set -euo pipefail
+    . "$1"
+    DRY=0 CHANGES=0 PREV_VERSION=$2 CONFIG_VERSION=2 CONFIG=$HOME LIVE=$3 POLICY=$4
+    bus() { echo "b false"; }
+    system_data_path() { return 1; }
+    has_name() { [ "$LIVE" = live ]; }
+    plasmashell_eval() { if [ "$POLICY" = touch ]; then echo touch; else echo; fi; }
+    . "$5" >/dev/null
+    kreadconfig6 --file kwinrc --group Wayland --key InputMethod' _ "$LIB" "$prev" "$live" "$policy" "$OSKSTEP" 2>/dev/null) || got="(error)"
+  if [ "$got" = "$want" ]; then
+    PASS=$((PASS + 1)); echo "PASS $desc"
+  else
+    FAIL=$((FAIL + 1)); echo "FAIL $desc: InputMethod=$got, want $want"
+  fi
+}
+case_osk "laptop posture, policy Tablet mode: the keyboard goes off" 2 tablet live "$OSK" ""
+case_osk "laptop posture, policy On touch: the keyboard stays" 2 touch live "$OSK" "$OSK"
+case_osk "policy On touch read from the layout file without plasmashell" 2 touch no "$OSK" "$OSK"
+case_osk "policy Never: off" 2 never no "$OSK" ""
+case_osk "another input method the user chose is kept" 2 tablet live /usr/share/applications/fcitx5.desktop /usr/share/applications/fcitx5.desktop
 
 echo "config-keys-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

@@ -126,6 +126,7 @@ Item {
                         size: Math.min(card.width, card.height, zoom.from.width + (128 - zoom.from.width) * card.parent.p)
                         source: zoom.iconSource
                         iconName: zoom.iconName
+                        calendarDate: true
                     }
                 }
                 TapHandler {

@@ -19,6 +19,9 @@ T.AbstractButton {
     property color fill: primary ? pal.accent : pal.overlay(0.1)
     property color textColor: primary ? pal.accentText : pal.text
     property string iconPath: ""
+    // The ring also when an owner moves a keyboard selection over the button without focusing it
+    // (the clipboard sheet's row actions, chosen with the arrow keys on the list).
+    property bool highlighted: false
 
     implicitHeight: metrics.px(26)
     implicitWidth: label.implicitWidth + 2 * sidePadding + (iconPath.length > 0 ? metrics.px(20) : 0)
@@ -50,7 +53,7 @@ T.AbstractButton {
         FocusRing {
             baseRadius: button.radius
             ringColor: button.pal.focus
-            shown: button.visualFocus
+            shown: button.visualFocus || button.highlighted
         }
     }
 

@@ -12,7 +12,8 @@ import "../code/launcher.js" as Launcher
 
 // Recent file row: 52 px, radius 12, 34 px coloured type tile, name (13 px, 700) and
 // "Folder · 12 min ago" (11.5 px, muted). The row height (from the grid), the text and the
-// paddings next to it follow the user's text size; the type tile keeps its size.
+// paddings next to it follow the user's text size; the type tile keeps its size. The same row
+// shows a place or a recent folder (the grid's itemKind): its glyph and its path instead.
 Item {
     id: row
 
@@ -39,7 +40,13 @@ Item {
         const parts = d.split("/").filter(p => p.length > 0);
         return parts.length > 0 ? parts[parts.length - 1] : "";
     }
-    readonly property var kind: Launcher.fileKind(fileName || model.display, url)
+    readonly property string itemKind: grid ? grid.itemKind : "file"
+    readonly property var kind: itemKind === "file" ? Launcher.fileKind(fileName || model.display, url)
+        : Launcher.placeKind(url, grid.standardFolders, typeof model.decoration === "string" ? model.decoration : "")
+    // Places and folders: their path ("~/Documents"), else a drive's mount point (none for the
+    // trash, the network and other non-local places).
+    readonly property string placeLine: itemKind === "file" ? ""
+        : Launcher.placePath(url, grid.standardFolders.home, String(model.description || ""))
     property date lastUsed: new Date(0)
     // Delegates are reused for other files: forget the previous file's time.
     onUrlChanged: lastUsed = new Date(0)
@@ -110,7 +117,7 @@ Item {
             width: parent.width
             elide: Text.ElideRight
             visible: text.length > 0
-            text: [row.folderName, row.age].filter(s => s.length > 0).join(" · ")
+            text: row.itemKind !== "file" ? row.placeLine : [row.folderName, row.age].filter(s => s.length > 0).join(" · ")
             color: row.grid ? row.grid.pal.muted : "gray"
             metrics: row.grid ? row.grid.metrics : null
             px: 11.5
@@ -121,7 +128,8 @@ Item {
     // not exposed to QML, and access times change whenever an indexer or thumbnailer reads the
     // file, so they are not used. Read only while the launcher is open.
     Instantiator {
-        active: row.isLocal && row.fileName.length > 0 && row.grid !== null && row.grid.launcher && row.grid.launcher.menuOpen
+        active: row.itemKind === "file" && row.isLocal && row.fileName.length > 0 && row.grid !== null && row.grid.launcher
+                && row.grid.launcher.menuOpen
         model: 1
         delegate: FolderListModel {
             folder: row.url.slice(0, row.url.lastIndexOf("/") + 1)

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <!-- The meters in the bar. The widget is in no layout by default; added to a panel it shows
+         the processor and memory, the other two are turned on in its settings. -->
+    <entry name="showCpu" type="Bool">
+      <label>Show the processor load</label>
+      <default>true</default>
+    </entry>
+    <entry name="showMemory" type="Bool">
+      <label>Show the memory in use</label>
+      <default>true</default>
+    </entry>
+    <entry name="showNetwork" type="Bool">
+      <label>Show the download and upload rates</label>
+      <default>false</default>
+    </entry>
+    <entry name="showTemperature" type="Bool">
+      <label>Show the processor temperature</label>
+      <default>false</default>
+    </entry>
+    <entry name="updateInterval" type="Int">
+      <label>Milliseconds between two values</label>
+      <default>2000</default>
+      <min>1000</min>
+      <max>10000</max>
+    </entry>
+    <entry name="popupGap" type="Int">
+      <label>Pixels between the bar and the pop-up</label>
+      <default>10</default>
+      <min>0</min>
+      <max>48</max>
+    </entry>
+    <!-- Written by the Plasma Fusion power service, never shown in the settings: the meters wait
+         updateInterval x 1 (0, full), x 2 (1, power saver) or x 4 (2, critical battery). -->
+    <entry name="powerTier" type="Int" hidden="true">
+      <label>Power tier: 0 full, 1 saver, 2 critical</label>
+      <default>0</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+    <!-- Testing only, cleared after use: "dump:TAG" logs the meters, "open" and "close" the pop-up. -->
+    <entry name="debugAction" type="String" hidden="true">
+      <label>Test action</label>
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

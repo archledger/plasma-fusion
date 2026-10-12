@@ -7,7 +7,8 @@
 # scratch HOME with empty configuration, on a private D-Bus session without service activation
 # (session-bus.conf) and without display variables, so it reads and changes nothing of a real
 # session. Fails when the module does not load from PLUGIN_DIR, when kcmctl fails, or when the
-# properties are not read.
+# properties are not read. The sh command runs too, as the meters and panels tests use it: kcmctl
+# must still see the end of its input afterwards (once spun forever in a sanitizer build).
 #
 #   run-kcmctl.sh KCMCTL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -24,7 +25,7 @@ export QT_PLUGIN_PATH=$plugins QT_QPA_PLATFORM=offscreen
 
 log=$work/kcmctl.log
 status=0
-printf '%s\n' waitshell dump defaults dump |
+printf '%s\n' waitshell dump defaults "sh true" dump |
   dbus-run-session --config-file="$here/session-bus.conf" -- "$kcmctl" >"$log" 2>&1 || status=$?
 cat "$log"
 if [ "$status" -ne 0 ]; then

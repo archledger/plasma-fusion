@@ -20,6 +20,7 @@ separator · running apps that are not pinned · **Downloads** stack · **Trash*
 | `.../contents/ui/NamePill.qml` | the name pill above the hovered item (a separate tooltip window) |
 | `.../contents/ui/WindowPreview.qml` | window previews above a hovered running app (live thumbnails, close, activate) |
 | `.../contents/ui/AudioStreams.qml` | the apps' audio streams (plasma-pa) for the audio indicator and mute |
+| `.../contents/ui/TransferJobs.qml`, `code/jobs.js` | file-transfer progress per app from Plasma's job server |
 | `.../contents/ui/DockMenu.qml` | script-filled context menu (PlasmaExtras.Menu) |
 | `.../contents/ui/DockPalette.qml` | every colour of the dark and light boards |
 | `.../contents/ui/Glyph.qml`, `FusionLogo.qml`, `DownloadsStack.qml` | board line icons (1.8 stroke), the three-circle mark, the fanned download cards |
@@ -63,7 +64,7 @@ dock.addWidget("org.plasmafusion.dock");
 | `showTooltips` | `true` | name pill above the hovered item |
 | `showPreviews` | `true` | window previews above a hovered running app (replace the name pill there) |
 | `colorVariant` | `0` | 0 follow the Plasma style (brightness of the theme background), 1 dark, 2 light |
-| `searchAction` | `0` | 0 KRunner, 1 the application launcher |
+| `searchAction` | `1` | 0 KRunner, 1 the application launcher (since 0.5.0; before, 0) |
 | `showOnlyCurrentDesktop` / `showOnlyCurrentActivity` / `showOnlyCurrentScreen` | true / true / false | task filters, as in the stock task manager |
 | `minimizeActiveTaskOnClick` | `true` | clicking the active app minimizes it |
 | `downloadsFolder` | empty (XDG download dir) | folder of the Downloads stack |
@@ -122,7 +123,7 @@ dock.addWidget("org.plasmafusion.dock");
   in step with the windows (`contents/code/previews.js`, `tests/previews.test.js`): a title or
   active-window change sets that card's roles, and every card keeps its stream.
 - **Audio indicator:** a 20 px disc with a speaker glyph inside the icon's top-left corner (the count and
-  progress use the top-right one; inside the icon, because a magnified icon rises past the 10 px above the
+  progress use the right ones; inside the icon, because a magnified icon rises past the 10 px above the
   resting icons where the dock tracks the pointer, so a disc over the edge would move away under it) while the app plays sound (after 2 s, so short sounds do not flash it)
   or is muted (crossed speaker, at once). Clicking it mutes or unmutes all of the app's streams without
   activating the app. Streams are matched as in the stock task manager: the portal app id, the process
@@ -133,7 +134,10 @@ dock.addWidget("org.plasmafusion.dock");
   panel, Start opens/closes it (the Fusion launcher's `open()`/`close()`/`recentlyOpen()`, else
   `expanded`) and shows the board's pressed state (accent fill, inner ring, 16×4 pill) while its menu is
   open (`menuOpen`, else `expanded`). Otherwise it calls `org.kde.PlasmaShell.activateLauncherMenu` over D-Bus.
-- **Search:** `org.kde.krunner /App toggleDisplay` (or the launcher, `searchAction=1`).
+- **Search:** opens and closes the launcher (`searchAction=1`, the default since 0.5.0), so the button
+  and every search key (Meta+S, Meta+Space, Alt+Space) open the same search, with the same runners;
+  the full KRunner is Alt+F2 and the launcher's last search row. `searchAction=0`:
+  `org.kde.krunner /App toggleDisplay`.
 - **Overview:** kglobalaccel `invokeShortcut("Overview")` on component `kwin` (verified toggles Overview).
 - **Downloads:** click opens the folder; right-click lists the 10 newest files (FolderListModel sorted by time)
   plus "Open Downloads Folder". Art: three 22×28 cards (#f2a65a −10°, #5b9dff +6°, front card with a
@@ -253,7 +257,8 @@ Fixed:
    printed for any page pushed on a Kirigami PageRow (reproduced offscreen with a plain Kirigami.Page).
    Since 0.4.1 `packages/common/tests/config_page_keys_test.py` (build step) checks it for the dock,
    quick settings, the launcher and the one-page cards: keys added later (`splitRequest`,
-   `activateRequest`) had brought four warnings back.
+   `activateRequest`) had brought four warnings back. Since 0.5.0 it checks every page of a widget
+   with several (the clock pill's three, docs/parts/shell-topbar.md).
 3. **Name pill edge** was drawn beside the fill (QML border) and showed the wallpaper lightened by 12 %; the
    board's CSS border lies over the background, giving a dark grey edge. The edge is now a separate
    rectangle over the fill (`review-pill-and-ring-fix.png`).
@@ -390,11 +395,45 @@ built by the lead directly.
   `AppId`s that carry ".desktop" are stripped before they are used as icon names.
 - **Attention** (G26): one short bounce when an app asks for attention (besides the orange dot).
 - **Unread counts and progress** (G17): `TaskItem` draws the Controls board's badge (20 px, accent,
-  11 px 800, tabular) and a 3 px progress ring on a 20 px disc. **No live source yet**: apps send
-  `com.canonical.Unity.LauncherEntry.Update` as broadcasts from any object path, and the QML D-Bus
-  watcher of plasma-workspace 6.7.5 needs a fixed sender and path (`DBusSignalWatcher::isValid()`;
-  the stock task manager's SmartLauncher is compiled into its own applet). A small compiled helper
-  is needed; until then only the test hook `debugAction badge:ROW:COUNT[:PROGRESS]` sets them.
+  11 px 800, tabular) and a 3 px progress ring on a 20 px disc at the top-right corner. Both show
+  together, as in the stock task manager (its progress overlay and count badge are independent):
+  with a count in that corner the ring moves inside the icon to its bottom-right corner (2 px in),
+  which nothing else uses. Before 0.5.0 the count hid the ring. The progress of file transfers has a
+  live source (below); the apps' own counts and progress (Unity LauncherEntry) have none yet, and
+  only the test hook `debugAction badge:ROW:COUNT[:PROGRESS]` sets them.
+- **Why Unity LauncherEntry needs a compiled part** (checked 2026-10-11 against plasma-workspace
+  6.7's `components/dbus/dbussignalwatcher.cpp` and an offscreen probe). Apps broadcast
+  `com.canonical.Unity.LauncherEntry.Update(s uri, a{sv} properties)` from their own connection
+  and their own object path (one per app, for example libunity's and Chromium's
+  `/com/canonical/unity/launcherentry/<number>`; a dock cannot know either in advance). The stock
+  SmartLauncher connects with an empty service and path (`QDBusConnection::connect({}, {},
+  interface, "Update", ...)`), which matches every sender and path. QML's only signal listener,
+  `org.kde.plasma.workspace.dbus` `SignalWatcher`, connects only when service, path and interface
+  are all set (`isValid()`), and Qt then delivers a signal only from exactly that path and from the
+  owner of exactly that name. The probe (VM-4 evidence, `unity-probe/`): a watcher for
+  `org.pf.UnityProbe` on `/com/canonical/unity/launcherentry/1` received that sender's signal from
+  that path; the same sender on `.../2`, a sender without that name on `.../1`, and watchers on `/`,
+  on the parent path, with an empty service and path, or with another service received nothing.
+  The other routes are closed too: the stock SmartLauncherItem is a type of the stock task
+  manager's own applet plugin, loaded only when that applet is (not in a Plasma Fusion session) and
+  private to it; `DBusConnection` can add a match rule, but Qt drops signals no connection hook
+  asked for. The one LauncherEntry sender the dock could hear, libnotificationmanager's job
+  progress (fixed path `/org/kde/notificationmanager/jobs`, sent by plasmashell itself), is read
+  directly from the job model instead (below). Follow-up: a small compiled QML module (like
+  `navigation-cpp/src/plugin`) with a backend that connects as SmartLauncher does and exposes
+  `{count, countVisible, progress, progressVisible, urgent}` per desktop entry to
+  `launcherEntries`; or an upstream change that lets SignalWatcher connect with an empty service
+  and path (QDBusConnection supports it), after which the dock could do it in QML.
+- **File-transfer progress** (stock parity, 0.5.0): the jobs of Plasma's notification server (a copy
+  or move in Dolphin, a download, an archive being packed: every KIO job and every app that reports
+  to the job server) show as the progress ring on their app's tile while they run.
+  `TransferJobs.qml` reads them with a `NotificationManager.Notifications` model (`showJobs`, no
+  notifications; expired and dismissed jobs too, since the job's pop-up closes after its timeout)
+  and `code/jobs.js` folds them per desktop entry as libnotificationmanager does for the stock task
+  manager (`JobsModelPrivate::updateApplicationPercentage`: the mean percentage of the app's jobs
+  that have not stopped, in whole percent; a paused job counts). An app's own Unity progress, when
+  there is one, wins; its count stays. The stock task manager also shows the number of jobs as a
+  badge; the dock keeps its badge for unread notifications and adds the ring next to it (above).
 - **Motion and accent**: every duration from `Motion` (zoom `popupIn`, press `pressScale`, hover
   colours `hover`, pulse `pulse` with `loops()`, indicator `toggle`); the active fill, ring, pill and
   focus ring follow the user's accent (`FusionAccent`, the board's blues otherwise). The start-up
@@ -421,6 +460,14 @@ the tablet script's window policy switched on for the virtual output): 20/20.
 - T8 (partly): a touch swipe up on the dock opens the launcher (the laptop card until LAUNCH-2).
 - Portrait tablet: Start and Overview only.
 - Badge 3 and progress 0.4 drawn (test hook).
+- File-transfer progress (0.5.0): `tests/jobs.test.js` (node, in the build step) folds jobs per app
+  and merges them with the apps' own state; `tests/transfers_test.py` (CI step "Dock file-transfer
+  progress") starts Plasma's job server on a private bus through TransferJobs.qml and reports jobs
+  the way KIO does (one copy, a second one, paused, another app, finished), and on a staged Dolphin
+  tile (TaskItem.qml) the ring shows alone, then with two unread notifications next to the count,
+  inside the icon and clear of it. VM 4 (2026-10-11): a
+  2 GiB file copied in Dolphin onto a USB disk showed the ring on Dolphin's tile (50 % and 83 % in
+  the screenshots, `dump-targets` `%0.83`) and none once the copy ended.
 - M3: "Add to Desktop" makes `~/Desktop/org.kde.konsole.desktop` → `/usr/share/applications/…`; a drag
   from the dock to the desktop gets KIO's "Link Here", which makes the Dolphin link.
 - No QML warnings from the dock, no core dumps.

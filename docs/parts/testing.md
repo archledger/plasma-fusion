@@ -409,6 +409,35 @@ and plasmashell GPU 3.28 % (4.42) are reported "better", KWin 15.6 % "same", eve
 "same"; the sweep line was checked on the end screenshot (y 848 is the icons' middle). No core
 dump came from any review session.
 
+## plasmashell SIGABRT cores in the Fedora test VMs (0.5.0)
+
+Several 0.5.0 tracks saw plasmashell leave a SIGABRT core when it was stopped (log-out, a deploy's
+or a test's restart) in the Plasma 6.7.5 VM. These are not crashes: Fedora's systemd ships
+`/usr/lib/systemd/user/service.d/10-timeout-abort.conf` (`TimeoutStopFailureMode=abort`,
+`TimeoutStopSec=40s` for user services), so a stop that takes more than 40 s ends with SIGABRT and
+a core instead of SIGKILL. KCrash's handler is frame #2 of the main thread, under the place it
+waited at. The cores of 2026-10-11/12 (VM 5, `coredumpctl info`, debug symbols of libplasma and
+plasma-workspace) waited in three places, none in Plasma Fusion code:
+
+- `QCoreApplication::aboutToQuit` -> `QSettings::~QSettings` -> `QSaveFile::commit` -> `fdatasync`
+  (20:28), and during a start the QML loader thread in `CompilationUnit::saveToDisk` ->
+  `fdatasync` while the main thread waits for it in `ShellCorona::createWaitingPanels` (20:30,
+  21:07; the file being compiled was quick settings' `main.qml`, recompiled because the deploy had
+  cleared `~/.cache/plasmashell`): writes to the VM's copy-on-write disk stalled while other VMs
+  and builds ran on the host;
+- at exit, `WaylandClipboard::~WaylandClipboard` (KGuiAddons 6.30) -> `QThread::wait` while its
+  `ClipboardThread::run` waits for `s_clipboardLock` (02:42, a log-out, and 04:06, a restart):
+  `WaylandClipboard::mimeData()` locks it and leaves the unlock to a zero timer, which never runs
+  when the event loop ends first, so the thread can never finish. The caller is Klipper
+  (`SystemClipboard::checkClipData`), which stock Plasma runs in plasmashell as well; quick
+  settings uses Klipper's history model, not the clipboard itself.
+
+On demand neither came back: six real log-outs (`org.kde.Shutdown.logout`, the clipboard just
+changed), six restarts with the clipboard changing every 50 ms and three stops 3 s into a start
+with a cleared QML cache stopped in 1-24 s, without a core. Before counting a plasmashell core as
+a crash, check its signal and the journal: "State 'stop-sigterm' timed out. Aborting." precedes a
+stop-timeout abort.
+
 ## Open items
 
 - `SHELL` is set only with `PFV_SHELL=/bin/bash` (ADAPTIVE fix 21 asks for it by default). Turning it

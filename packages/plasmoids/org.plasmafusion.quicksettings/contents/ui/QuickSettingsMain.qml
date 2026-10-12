@@ -8,9 +8,11 @@ import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.clock
 
 import "components"
 import "components/Icons.js" as Icons
+import "../code/tiles.js" as Tiles
 
 // Main page of the pop-up (Quick Settings board): battery chip and header
 // buttons, volume and brightness sliders, the tiles and the media card. In tablet posture
@@ -19,6 +21,9 @@ import "components/Icons.js" as Icons
 // clipboard get rows here when the top bar has no room for them.
 // Text, the rows and chips that hold it and the gaps between them follow the user's text size
 // (`metrics`); the round icon buttons, sliders and the album art keep their board sizes.
+// The pencil (in the header; in the tablet row in tablet posture, where the header has no room)
+// switches the tiles into edit mode: move, remove and add back tiles (section "Editable tiles" in
+// docs/parts/shell-quicksettings.md).
 ColumnLayout {
     id: page
 
@@ -28,18 +33,45 @@ ColumnLayout {
 
     signal openPage(string name, Item opener)
 
-    readonly property alias firstFocusItem: screenshotButton
+    readonly property Item firstFocusItem: editButton.visible ? editButton : screenshotButton
     readonly property alias wifiDetails: wifiTile.detailsButton
     readonly property alias bluetoothDetails: bluetoothTile.detailsButton
     readonly property alias audioDetails: audioChevron
 
     readonly property bool tablet: pal.tablet
+    // The header's buttons keep their 34 px in laptop posture also after a touch (Kirigami's
+    // transient touch input makes every IconButton a 44 px target): the battery chip and six
+    // 44 px buttons do not fit the laptop card's 329 px, so the card widened, the Power button
+    // lay outside it and the right column of tiles was cut. Tablet posture draws them at 44 px
+    // in its wider card, with the pencil in the tablet row.
+    readonly property real headerHitSize: tablet ? 44 : 0
     readonly property var tabletPolicy: backend.tabletPolicy
-    // The Do Not Disturb durations are shown (the tile's chevron).
+    // The Do Not Disturb durations are shown (the tile's chevron), as of dndChoicesNow (ms): the time
+    // they open at, moved on with the wall clock's minutes while they stay open, so "this evening"
+    // goes at 20:00 and "Monday" follows the day. They close with the sheet and on another page.
     property bool dndChoicesOpen: false
+    property double dndChoicesNow: Date.now()
+    onDndChoicesOpenChanged: dndChoicesNow = Date.now()
+    Loader {
+        // Out of the column's layout (it holds no item).
+        visible: false
+        active: page.dndChoicesOpen
+        sourceComponent: Clock {
+            onDateTimeChanged: page.dndChoicesNow = Date.now()
+        }
+    }
     property bool chargeChoicesOpen: false
 
     spacing: metrics.px(14)
+
+    // Escape ends edit mode before it goes back or closes the sheet.
+    Keys.onEscapePressed: event => {
+        if (editing) {
+            setEditing(false, true);
+        } else {
+            event.accepted = false;
+        }
+    }
 
     // ---------------------------------------------------------------- header row
     RowLayout {
@@ -114,16 +146,42 @@ ColumnLayout {
         }
 
         IconButton {
+            id: editButton
+            objectName: "editTilesButton"
+            visible: !tabletRow.visible
+            pal: page.pal
+            size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
+            iconPath: Icons.editTiles
+            toggleOn: page.editing
+            text: i18nc("@action:button", "Edit the tiles")
+            Accessible.role: Accessible.CheckBox
+            Accessible.checkable: true
+            Accessible.checked: toggleOn
+            onClicked: page.setEditing(!page.editing, false)
+        }
+        IconButton {
             id: screenshotButton
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.screenshot
             text: i18nc("@action:button", "Take a screenshot")
             onClicked: page.backend.session.screenshot()
         }
         IconButton {
+            objectName: "copyTextButton"
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
+            iconPath: Icons.copyText
+            text: i18nc("@action:button", "Copy text from the screen")
+            onClicked: page.backend.session.copyText()
+        }
+        IconButton {
+            pal: page.pal
+            size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.settings
             text: i18nc("@action:button", "System Settings")
             onClicked: page.backend.session.openSystemSettings()
@@ -131,6 +189,7 @@ ColumnLayout {
         IconButton {
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.lock
             text: i18nc("@action:button", "Lock the screen")
             enabled: page.backend.session.canLock
@@ -139,6 +198,7 @@ ColumnLayout {
         IconButton {
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.power
             text: i18nc("@action:button", "Shut down, restart or log out…")
             onClicked: page.backend.session.leave()
@@ -242,6 +302,19 @@ ColumnLayout {
             iconPath: Icons.pen
             text: i18nc("@action:button", "Pen menu")
             onClicked: page.backend.penRequested()
+        }
+        IconButton {
+            id: tabletEditButton
+            objectName: "tabletRow-edit"
+            pal: page.pal
+            size: 44
+            iconPath: Icons.editTiles
+            toggleOn: page.editing
+            text: i18nc("@action:button", "Edit the tiles")
+            Accessible.role: Accessible.CheckBox
+            Accessible.checkable: true
+            Accessible.checked: toggleOn
+            onClicked: page.setEditing(!page.editing, false)
         }
     }
 
@@ -450,7 +523,232 @@ ColumnLayout {
     }
 
     // ---------------------------------------------------------------- tiles
+    // The order and the hidden tiles come from the widget's settings (contents/code/tiles.js, the
+    // same in every quick settings widget); the tiles shown only when they apply keep their
+    // conditions here: a hidden tile never shows, a shown one only while its condition holds.
+    property var tileConditions: ({
+        "devices": page.backend.devices.count > 0,
+        "hotspot": !!page.backend.net.wifiDevice,
+        "chargelimit": !!page.backend.charge.present,
+        "tabletmode": !!page.tabletPolicy && (page.backend.tabletAvailable || page.tabletPolicy.tabletModeSetting !== "auto")
+    })
+    readonly property var tileOrder: Tiles.merge(page.backend.tileOrder)
+    readonly property var hiddenTiles: Tiles.known(page.backend.hiddenTiles)
+    readonly property var shownTiles: Tiles.shown(tileOrder, hiddenTiles, tileConditions)
+    // The edit mode's tray: hidden tiles that could show now.
+    readonly property var trayTiles: Tiles.addable(tileOrder, hiddenTiles, tileConditions)
+
+    // ---- Edit mode. Every change is written at once (Done only leaves the mode), so closing the
+    // sheet keeps it and the other screens' widgets follow; the mode ends when the sheet closes or
+    // another page opens.
+    property bool editing: false
+    // While a tile is dragged: the shown tiles as they would be if it were let go now. A tile that
+    // comes or goes meanwhile (a USB stick, the Wi-Fi radio) joins it at its place or leaves it.
+    property var dragOrder: null
+    onShownTilesChanged: {
+        if (dragOrder) {
+            dragOrder = Tiles.rebase(dragOrder, shownTiles);
+        }
+    }
+    function setEditing(on: bool, fromKeyboard: bool): void {
+        const keyboard = fromKeyboard || editButton.visualFocus || tabletEditButton.visualFocus || editDone.visualFocus;
+        editing = on;
+        dragOrder = null;
+        dndChoicesOpen = false;
+        chargeChoicesOpen = false;
+        if (!on) {
+            // Back on the pencil, which stays where Done goes away.
+            (tabletRow.visible ? tabletEditButton : editButton).forceActiveFocus(keyboard ? Qt.TabFocusReason : Qt.OtherFocusReason);
+        }
+    }
+    Connections {
+        target: page.backend
+        function onPopupOpenChanged() {
+            if (!page.backend.popupOpen) {
+                page.editing = false;
+                page.dndChoicesOpen = false;
+                page.chargeChoicesOpen = false;
+            }
+        }
+        function onPageChanged() {
+            if (page.backend.page !== "main") {
+                page.editing = false;
+                page.dndChoicesOpen = false;
+                page.chargeChoicesOpen = false;
+            }
+        }
+    }
+    // The order and hidden tiles go to the widget's settings (main.qml). A hide or an add back keeps
+    // the stored order as it is (empty stays the default order, which later releases extend).
+    function writeTiles(order: var, hidden: var): void {
+        page.backend.tileLayoutRequested(Tiles.list(order), Tiles.list(hidden));
+    }
+    function arrangeShown(next: var): void {
+        if (!Tiles.same(next, shownTiles)) {
+            writeTiles(Tiles.arrange(tileOrder, shownTiles, next), hiddenTiles);
+        }
+    }
+    function hideTile(id: string): void {
+        const at = shownTiles.indexOf(id);
+        const hadFocus = tileById(id) !== null && tileById(id).editButton.activeFocus;
+        writeTiles(page.backend.tileOrder, Tiles.setHidden(hiddenTiles, id, true));
+        if (hadFocus) {
+            // The focus stays in the grid: the tile now in its place, else the one before, else the
+            // tray's first tile.
+            Qt.callLater(() => {
+                const next = page.shownTiles[Math.min(at, page.shownTiles.length - 1)];
+                const target = next ? page.tileById(next).editButton : (trayButtons.itemAt(0) ?? editDone);
+                target.forceActiveFocus(Qt.TabFocusReason);
+            });
+        }
+    }
+    function showTile(id: string, fromKeyboard: bool): void {
+        writeTiles(page.backend.tileOrder, Tiles.setHidden(hiddenTiles, id, false));
+        if (fromKeyboard) {
+            Qt.callLater(() => {
+                const tile = page.tileById(id);
+                if (tile && tile.visible) {
+                    tile.editButton.forceActiveFocus(Qt.TabFocusReason);
+                }
+            });
+        }
+    }
+    function resetTiles(): void {
+        writeTiles([], []);
+    }
+    function tileById(id: string): var {
+        for (const child of tileGrid.children) {
+            if (child.tileId === id) {
+                return child;
+            }
+        }
+        return null;
+    }
+    // A tile's keys in edit mode: Ctrl with an arrow key moves it a place (Left, Right) or a row
+    // (Up, Down), with Home or End to the start or the end; without Ctrl they move the focus;
+    // Delete or Backspace removes it. Left and Right follow a right-to-left layout.
+    function tileKey(id: string, event: var): void {
+        const at = shownTiles.indexOf(id);
+        const mirrored = page.LayoutMirroring.enabled || Qt.application.layoutDirection === Qt.RightToLeft;
+        let step = 0;
+        switch (event.key) {
+        case Qt.Key_Left:
+            step = mirrored ? 1 : -1;
+            break;
+        case Qt.Key_Right:
+            step = mirrored ? -1 : 1;
+            break;
+        case Qt.Key_Up:
+            step = -tileGrid.columns;
+            break;
+        case Qt.Key_Down:
+            step = tileGrid.columns;
+            break;
+        case Qt.Key_Home:
+            step = -at;
+            break;
+        case Qt.Key_End:
+            step = shownTiles.length - 1 - at;
+            break;
+        case Qt.Key_Delete:
+        case Qt.Key_Backspace:
+            hideTile(id);
+            event.accepted = true;
+            return;
+        default:
+            event.accepted = false;
+            return;
+        }
+        event.accepted = true;
+        if (at === -1 || step === 0) {
+            return;
+        }
+        if (event.modifiers & Qt.ControlModifier) {
+            arrangeShown(Tiles.moveBy(shownTiles, id, step));
+        } else {
+            const next = shownTiles[Math.max(0, Math.min(shownTiles.length - 1, at + step))];
+            page.tileById(next).editButton.forceActiveFocus(Qt.TabFocusReason);
+        }
+    }
+
+    // What the tiles ask of the page (Tile.qml): their cells, the edit mode and its actions.
+    readonly property QtObject arrangement: QtObject {
+        readonly property var slots: page.dragOrder ?? page.shownTiles
+        readonly property bool editing: page.editing
+        function hide(id: string): void {
+            page.hideTile(id);
+        }
+        function keyPressed(id: string, event: var): void {
+            page.tileKey(id, event);
+        }
+        function describe(id: string): string {
+            return i18nc("@info:accessibility %1 place of the tile, %2 number of tiles",
+                         "Place %1 of %2. Drag the tile or press Ctrl with an arrow key to move it, Delete to remove it.",
+                         page.shownTiles.indexOf(id) + 1, page.shownTiles.length);
+        }
+        function dragStarted(id: string): void {
+            page.dragOrder = page.shownTiles.slice();
+        }
+        // The dragged tile's centre in the grid (x, y) puts it in the cell under it.
+        function dragMoved(id: string, x: real, y: real): void {
+            const tile = page.tileById(id);
+            if (!page.dragOrder || !tile) {
+                return;
+            }
+            const slot = Tiles.slotAt(x, y, page.dragOrder.length, tileGrid.columns, tile.width, tile.height,
+                                      tileGrid.columnSpacing, tileGrid.rowSpacing);
+            if (slot >= 0 && page.dragOrder.indexOf(id) !== slot) {
+                page.dragOrder = Tiles.moveTo(page.dragOrder, id, slot);
+            }
+        }
+        function dragFinished(id: string): void {
+            const next = page.dragOrder;
+            page.dragOrder = null;
+            if (next) {
+                page.arrangeShown(next);
+            }
+        }
+    }
+
+    // The tiles' place among their siblings follows the order, so Tab, the arrow keys' neighbours
+    // and screen readers go through them as they are shown (the grid places them by their cells).
+    function restackTiles(): void {
+        if (dragOrder) {
+            return;
+        }
+        const focused = Array.from(tileGrid.children).find(c => c.tileId !== undefined && (c.editButton.activeFocus || c.mainButton.activeFocus
+                                                                         || c.detailsButton.activeFocus)) ?? null;
+        const focusItem = focused ? [focused.editButton, focused.mainButton, focused.detailsButton].find(i => i.activeFocus) : null;
+        const reason = focusItem && focusItem.visualFocus ? Qt.TabFocusReason : Qt.OtherFocusReason;
+        const tiles = tileOrder.map(id => tileById(id)).filter(t => t !== null);
+        const inOrder = Array.from(tileGrid.children).filter(c => c.tileId !== undefined);
+        if (tiles.every((t, i) => inOrder[i] === t)) {
+            return;
+        }
+        for (const tile of tiles) {
+            tile.parent = restackHolder;
+            tile.parent = tileGrid;
+        }
+        if (focusItem) {
+            // Back in the grid the item takes the focus again by itself, without the keyboard's
+            // reason (no ring): it is handed over again with it.
+            tileGrid.forceActiveFocus(reason);
+            focusItem.forceActiveFocus(reason);
+        }
+    }
+    onTileOrderChanged: Qt.callLater(restackTiles)
+    onDragOrderChanged: Qt.callLater(restackTiles)
+    Component.onCompleted: Qt.callLater(restackTiles)
+    Item {
+        id: restackHolder
+        visible: false
+        Layout.preferredWidth: 0
+        Layout.preferredHeight: 0
+    }
+
     GridLayout {
+        id: tileGrid
+        objectName: "tileGrid"
         Layout.fillWidth: true
         columns: 2
         rowSpacing: page.tablet ? 12 : page.metrics.px(10)
@@ -459,6 +757,9 @@ ColumnLayout {
 
         Tile {
             id: wifiTile
+            objectName: "tile-wifi"
+            tileId: "wifi"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -485,6 +786,9 @@ ColumnLayout {
         }
         Tile {
             id: bluetoothTile
+            objectName: "tile-bluetooth"
+            tileId: "bluetooth"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -505,6 +809,9 @@ ColumnLayout {
             onDetailsRequested: page.openPage("bluetooth", bluetoothTile.detailsButton)
         }
         Tile {
+            objectName: "tile-nightlight"
+            tileId: "nightlight"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -518,6 +825,10 @@ ColumnLayout {
             onToggled: page.backend.night.toggle()
         }
         Tile {
+            id: dndTile
+            objectName: "tile-dnd"
+            tileId: "dnd"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -528,10 +839,29 @@ ColumnLayout {
             available: page.backend.dnd.available
             hasDetails: page.backend.dnd.available
             detailsText: i18nc("@action:button", "Do not disturb for a while")
+            toolTip: page.backend.dnd.description
             onToggled: page.backend.dnd.toggle()
-            onDetailsRequested: page.dndChoicesOpen = !page.dndChoicesOpen
+            onDetailsRequested: {
+                page.dndChoicesOpen = !page.dndChoicesOpen;
+                // From the keyboard, focus goes to the first choice (the choices open below the
+                // whole grid, out of sight of the chevron's tab order).
+                if (page.dndChoicesOpen && detailsButton.visualFocus) {
+                    Qt.callLater(() => {
+                        const first = dndChoiceButtons.itemAt(0);
+                        if (first) {
+                            first.forceActiveFocus(Qt.TabFocusReason);
+                        }
+                    });
+                }
+            }
         }
+        // Power mode (P7): the body switches between Balanced and the last other profile, the
+        // chevron opens the chooser (as the Wi-Fi and Bluetooth tiles: body acts, chevron lists).
         Tile {
+            id: powerTile
+            objectName: "tile-power"
+            tileId: "power"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -540,12 +870,22 @@ ColumnLayout {
             iconPath: Icons.gauge
             checked: page.backend.profile.checked
             available: page.backend.profile.available
-            toolTip: [i18nc("@info:tooltip", "Click to switch between Power saver, Balanced and Performance"),
-                      page.backend.profile.note].filter(t => t !== "").join("\n")
+            hasDetails: page.backend.profile.available
+            detailsText: i18nc("@action:button", "Choose a power mode")
+            toolTip: {
+                const target = page.backend.profile.toggleTarget;
+                const action = target === "" ? ""
+                    : i18nc("@info:tooltip %1 power profile name", "Click to switch to %1", page.backend.profile.profileName(target));
+                return [action, page.backend.profile.note].filter(t => t !== "").join("\n");
+            }
             note: page.backend.profile.note
-            onToggled: page.backend.profile.cycle()
+            onToggled: page.backend.profile.toggle()
+            onDetailsRequested: page.openPage("profiles", powerTile.detailsButton)
         }
         Tile {
+            objectName: "tile-darkstyle"
+            tileId: "darkstyle"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -558,6 +898,8 @@ ColumnLayout {
         }
         Tile {
             objectName: "tile-keepawake"
+            tileId: "keepawake"
+            arrangement: page.arrangement
             Layout.fillWidth: true
             pal: page.pal
             metrics: page.metrics
@@ -566,9 +908,10 @@ ColumnLayout {
             iconPath: Icons.coffee
             checked: page.backend.keepAwake.active
             available: page.backend.keepAwake.available
-            enabled: available
+            // Unavailable it cannot be pressed; in edit mode it can still be moved or removed.
+            enabled: available || page.editing
             hasDetails: page.backend.keepAwake.available
-            detailsText: i18nc("@action:button", "Show applications blocking sleep")
+            detailsText: i18nc("@action:button", "Keep awake options")
             toolTip: checked ? i18nc("@info:tooltip", "Click to resume automatic sleep and screen locking")
                              : i18nc("@info:tooltip", "Manually block sleep and screen locking")
             onToggled: page.backend.keepAwake.toggle()
@@ -580,8 +923,9 @@ ColumnLayout {
         Tile {
             id: devicesTile
             objectName: "tile-devices"
+            tileId: "devices"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.backend.devices.count > 0
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Disks & Devices")
@@ -596,8 +940,9 @@ ColumnLayout {
         Tile {
             id: hotspotTile
             objectName: "tile-hotspot"
+            tileId: "hotspot"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.backend.net.wifiDevice
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Wi‑Fi hotspot")
@@ -625,8 +970,9 @@ ColumnLayout {
         // a stop threshold (services/ChargeLimit.qml).
         Tile {
             objectName: "tile-chargelimit"
+            tileId: "chargelimit"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.backend.charge.present
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Charge limit")
@@ -646,8 +992,9 @@ ColumnLayout {
         // or when it is not automatic.
         Tile {
             objectName: "tile-tabletmode"
+            tileId: "tabletmode"
+            arrangement: page.arrangement
             Layout.fillWidth: true
-            visible: page.tabletPolicy !== null && (page.backend.tabletAvailable || page.tabletPolicy.tabletModeSetting !== "auto")
             pal: page.pal
             metrics: page.metrics
             title: i18nc("@title tile", "Tablet mode")
@@ -668,37 +1015,177 @@ ColumnLayout {
         }
     }
 
-    // Do Not Disturb for a while (G18).
-    Flow {
+    // ---------------------------------------------------------------- edit mode
+    // Below the grid: how to move a tile, the tray of hidden tiles to add back, Reset and Done.
+    ColumnLayout {
+        id: editPanel
+        objectName: "tileEditPanel"
         Layout.fillWidth: true
-        visible: page.dndChoicesOpen && page.backend.dnd.available
+        visible: page.editing
+        spacing: page.metrics.px(10)
+
+        FText {
+            Layout.fillWidth: true
+            pal: page.pal
+            metrics: page.metrics
+            px: 12
+            color: page.pal.secondary
+            wrapMode: Text.Wrap
+            text: page.pal.touch ? i18nc("@info", "Drag a tile to move it. Tap − to remove it.")
+                                 : i18nc("@info", "Drag a tile to move it, or press Ctrl with an arrow key. Click − or press Delete to remove it.")
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: trayColumn.implicitHeight + 2 * page.metrics.px(12)
+            radius: page.tablet ? 18 : 16
+            color: page.pal.overlay(0.05)
+            border.width: 1
+            border.color: page.pal.overlay(0.1)
+
+            ColumnLayout {
+                id: trayColumn
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    verticalCenter: parent.verticalCenter
+                    margins: page.metrics.px(12)
+                }
+                spacing: page.metrics.px(8)
+
+                FText {
+                    Layout.fillWidth: true
+                    pal: page.pal
+                    metrics: page.metrics
+                    px: 12
+                    font.weight: Font.ExtraBold
+                    text: i18nc("@title:group tiles taken out of quick settings", "Hidden tiles")
+                }
+                FText {
+                    Layout.fillWidth: true
+                    visible: trayButtons.count === 0
+                    pal: page.pal
+                    metrics: page.metrics
+                    px: 12
+                    color: page.pal.secondary
+                    wrapMode: Text.Wrap
+                    text: i18nc("@info", "Removed tiles wait here to be added back.")
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    visible: trayButtons.count > 0
+                    spacing: page.metrics.px(8)
+                    Repeater {
+                        id: trayButtons
+                        model: page.editing ? page.trayTiles : []
+                        delegate: TextButton {
+                            required property string modelData
+                            objectName: "add-" + modelData
+                            pal: page.pal
+                            metrics: page.metrics
+                            radius: height / 2
+                            implicitHeight: page.pal.touch ? 44 : page.metrics.px(30)
+                            fontSize: 12.5
+                            iconPath: Icons.plus
+                            text: page.tileById(modelData)?.title ?? modelData
+                            Accessible.name: i18nc("@action:button %1 tile name", "Add %1", text)
+                            onClicked: page.showTile(modelData, visualFocus)
+                        }
+                    }
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: page.metrics.px(8)
+            TextButton {
+                id: editReset
+                objectName: "editReset"
+                pal: page.pal
+                metrics: page.metrics
+                implicitHeight: page.pal.touch ? 44 : page.metrics.px(30)
+                fontSize: 12.5
+                enabled: !Tiles.isDefault(page.backend.tileOrder, page.backend.hiddenTiles)
+                text: i18nc("@action:button the tiles' order and set", "Reset to defaults")
+                onClicked: page.resetTiles()
+            }
+            Item {
+                Layout.fillWidth: true
+            }
+            TextButton {
+                id: editDone
+                objectName: "editDone"
+                pal: page.pal
+                metrics: page.metrics
+                primary: true
+                implicitHeight: page.pal.touch ? 44 : page.metrics.px(30)
+                sidePadding: page.metrics.px(18)
+                fontSize: 12.5
+                text: i18nc("@action:button leave the tiles' edit mode", "Done")
+                onClicked: page.setEditing(false, visualFocus)
+            }
+        }
+    }
+
+    // Do Not Disturb for a while (G18), with the stock applet's choices (contents/code/dnd.js) and,
+    // while it is on, its state in one line ("Until 18:00 · While Firefox is active").
+    Flow {
+        id: dndChoices
+        Layout.fillWidth: true
+        visible: page.dndChoicesOpen && page.backend.dnd.available && !page.editing
         spacing: page.metrics.px(8)
 
+        FText {
+            width: parent.width
+            visible: text !== ""
+            pal: page.pal
+            metrics: page.metrics
+            text: page.backend.dnd.description
+            color: page.pal.secondary
+            px: 12
+            wrapMode: Text.Wrap
+        }
         Repeater {
-            model: [
-                { "id": "hour", "text": i18nc("@action:button do not disturb", "For 1 hour") },
-                { "id": "tomorrow", "text": i18nc("@action:button do not disturb", "Until tomorrow") },
-                { "id": "off", "text": page.backend.dnd.active ? i18nc("@action:button do not disturb", "Turn off")
-                                                              : i18nc("@action:button do not disturb", "Until turned off") }
-            ]
+            id: dndChoiceButtons
+            // "This evening" and "Monday" depend on the time.
+            model: page.dndChoicesOpen ? page.backend.dnd.choices(new Date(page.dndChoicesNow)) : []
             delegate: TextButton {
                 required property var modelData
+                required property int index
                 objectName: "dnd-" + modelData.id
                 pal: page.pal
                 metrics: page.metrics
                 radius: height / 2
                 implicitHeight: page.pal.touch ? 44 : page.metrics.px(30)
                 fontSize: 12.5
-                text: modelData.text
+                text: {
+                    switch (modelData.id) {
+                    case "hour":
+                        return i18nc("@action:button do not disturb", "For 1 hour");
+                    case "hours4":
+                        return i18nc("@action:button do not disturb", "For 4 hours");
+                    case "evening":
+                        return i18nc("@action:button do not disturb", "Until this evening");
+                    case "morning":
+                        return i18nc("@action:button do not disturb", "Until tomorrow morning");
+                    case "monday":
+                        return i18nc("@action:button do not disturb", "Until Monday");
+                    default:
+                        return page.backend.dnd.active ? i18nc("@action:button do not disturb", "Turn off")
+                                                       : i18nc("@action:button do not disturb", "Until turned off");
+                    }
+                }
                 onClicked: {
-                    if (modelData.id === "hour") {
-                        page.backend.dnd.forHour();
-                    } else if (modelData.id === "tomorrow") {
-                        page.backend.dnd.untilTomorrow();
-                    } else {
+                    if (modelData.id === "off") {
                         page.backend.dnd.toggle();
+                    } else {
+                        page.backend.dnd.choose(modelData.id);
                     }
                     page.dndChoicesOpen = false;
+                    if (visualFocus) {
+                        dndTile.detailsButton.forceActiveFocus(Qt.TabFocusReason);
+                    }
                 }
             }
         }
@@ -707,7 +1194,7 @@ ColumnLayout {
     // Charge limit choices.
     Flow {
         Layout.fillWidth: true
-        visible: page.chargeChoicesOpen && page.backend.charge.present && !page.backend.charge.managed
+        visible: page.chargeChoicesOpen && page.backend.charge.present && !page.backend.charge.managed && !page.editing
         spacing: page.metrics.px(8)
 
         Repeater {
@@ -761,6 +1248,7 @@ ColumnLayout {
         spacing: page.metrics.px(4)
 
         ListRow {
+            id: clipboardRow
             objectName: "sheet-clipboard"
             Layout.fillWidth: true
             implicitHeight: page.metrics.px(52)
@@ -770,7 +1258,7 @@ ColumnLayout {
             iconPath: Icons.clipboard
             text: i18nc("@action:button", "Clipboard")
             trailingPath: Icons.chevronRight
-            onClicked: page.backend.session.openClipboard()
+            onClicked: page.backend.clipboard.available ? page.openPage("clipboard", clipboardRow) : page.backend.clipboard.legacyPopup()
         }
         ListRow {
             objectName: "sheet-phone"

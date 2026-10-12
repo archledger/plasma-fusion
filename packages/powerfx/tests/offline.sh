@@ -202,6 +202,52 @@ check "Glass=Solid chosen at critical: blur stays off" [ "$(rc_get kwinrc Plugin
 kwc --file plasmafusionrc --group Effects --key Glass Full
 kwc --file kwinrc --group Plugins --key blurEnabled --delete
 
+# ---- the settings page's choices while critical ----
+setcfg() { python3 -c 'import json,sys
+l = json.load(open(sys.argv[1]))
+for w in [w for c in l["desktops"] + l["panels"] for w in c]:
+    if w["id"] == int(sys.argv[2]):
+        w["config"].setdefault(sys.argv[3], {})[sys.argv[4]] = sys.argv[5]
+json.dump(l, open(sys.argv[1], "w"))' "$W/layout.json" "$@"; }
+page() { # what the settings module writes at critical: GLASS (or -) and MAGNIFY (or -)
+  if [ "$1" != - ]; then
+    kwc --file plasmafusionrc --group Effects --key Glass "$1"
+    kwc --file plasmafusionrc --group Power --key PageGlass "$1"
+  fi
+  if [ "$2" != - ]; then
+    kwc --file plasmafusionrc --group Power --key UserDockMagnify "$2"
+    kwc --file plasmafusionrc --group Power --key PageDockMagnify "$2"
+  fi
+}
+pfx --apply critical 2>>"$W/stderr.log"
+page Reduced false
+pfx --apply critical 2>>"$W/stderr.log"
+check "page at critical: the widgets stay held (solid, magnification off)" [ "$(cfg 5 General glass)/$(cfg 12 General magnify)" = solid/false ]
+check "page at critical: the page shows its magnification choice" [ "$(rc_get plasmafusionrc Power UserDockMagnify)" = false ]
+n0=$(grep -c . "$W/calls.log")
+pfx --apply full 2>>"$W/stderr.log"
+check "page chose Reduced at critical: card, quick settings, dock, launcher reduced" \
+  [ "$(cfg 30 General glass)$(cfg 5 General glass)$(cfg 12 General glass)$(cfg 14 General glass)" = reducedreducedreducedreduced ]
+check "page turned magnification off at critical: it stays off" [ "$(cfg 12 General magnify)" = false ]
+check "page chose Reduced at critical: blur back (key removed, effect loaded)" bash -c \
+  "[ \"\$($(printf '%q ' "${E[@]}") kreadconfig6 --file kwinrc --group Plugins --key blurEnabled --default -)\" = - ] && tail -n +$((n0 + 1)) $(printf %q "$W/calls.log") | grep -qx 'kwin loadEffect blur'"
+check "page choices forgotten after critical" [ "$(rc_get plasmafusionrc Power PageGlass)/$(rc_get plasmafusionrc Power PageDockMagnify)" = -/- ]
+# Glass Solid before (blur off by the page, not by the service), Full chosen at critical.
+kwc --file plasmafusionrc --group Effects --key Glass Solid
+kwc --file kwinrc --group Plugins --key blurEnabled false
+for id in 30 5 12 14; do setcfg "$id" General glass solid; done
+setcfg 12 General magnify true
+pfx --apply critical 2>>"$W/stderr.log"
+check "Solid before critical: the service does not force blur" [ "$(rc_get plasmafusionrc Power ForcedBlur)" = - ]
+n0=$(grep -c . "$W/calls.log")
+page Full -
+pfx --apply full 2>>"$W/stderr.log"
+check "page chose Full at critical after Solid: blur back on" [ "$(rc_get kwinrc Plugins blurEnabled)" = - ]
+check "  and KWin loaded it" bash -c "tail -n +$((n0 + 1)) $(printf %q "$W/calls.log") | grep -qx 'kwin loadEffect blur'"
+check "  and the widgets are full" [ "$(cfg 30 General glass)$(cfg 5 General glass)$(cfg 12 General glass)$(cfg 14 General glass)" = fullfullfullfull ]
+check "  and magnification is the remembered one" [ "$(cfg 12 General magnify)" = true ]
+kwc --file kwinrc --group Plugins --key blurEnabled --delete
+
 # ---- plasmashell missing ----
 shell ReleaseShell
 pfx --apply critical 2>>"$W/stderr.log"; rc=$?

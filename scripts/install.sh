@@ -389,12 +389,21 @@ consent() {
 
 # The system-wide looks applied by the package's root tools, which an uninstall undoes before the
 # packages (and the tools, the Global Theme and the wallpaper the greeter would point at) are gone:
-# the login screen (greeter-apply.sh writes a marked block into plasmalogin.conf) and the boot
-# splash (plymouth-install.sh copies its theme into Plymouth's themes).
+# the login screen and the boot splash (plymouth-install.sh copies its theme into Plymouth's
+# themes). greeter-apply.sh points plasmalogin.conf's greeter wallpaper at Plasma Fusion's
+# backgrounds (in a marked block, or as plain keys when the file had a [Greeter] group already, and
+# a later edit by the Login Screen settings drops the mark) and gives the greeter user Plasma
+# Fusion's Global Theme: any of the three counts.
 SYS_TOOLS=/usr/share/plasma-fusion/tools/system
 greeter_styled() {
-  [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] &&
-    $SUDO grep -qs '^# Plasma Fusion: login screen wallpaper' "$TEST_ROOT/etc/plasmalogin.conf"
+  [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] || return 1
+  # shellcheck disable=SC2016 # the sh -c script takes the root as $1
+  $SUDO sh -c 'grep -qs -e "^# Plasma Fusion: login screen wallpaper" -e "plasma-fusion/backgrounds/" "$1/etc/plasmalogin.conf" && exit 0
+    h=$(getent passwd plasmalogin | cut -d: -f6)
+    [ -n "$h" ] && grep -qs "^LookAndFeelPackage=org\.plasmafusion\." "$1$h/.config/kdeglobals"' sh "$TEST_ROOT"
+}
+greeter_present() {
+  [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || getent passwd plasmalogin >/dev/null 2>&1
 }
 splash_installed() {
   [ -x "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" ] && [ -d "$TEST_ROOT/usr/share/plymouth/themes/plasma-fusion" ]
@@ -484,7 +493,7 @@ main() {
   if [ "$MODE" = uninstall ]; then
     say "Plan:"
     [ "$PACKAGE_ONLY" = 1 ] || echo "  plasma-fusion restore   (your desktop as it was before Plasma Fusion)" >&2
-    if [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && [ -e "$TEST_ROOT/etc/plasmalogin.conf" ]; then
+    if [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && greeter_present; then
       echo "  sudo $SYS_TOOLS/greeter-restore.sh   (the login screen, if Plasma Fusion styled it)" >&2
     fi
     splash_installed && echo "  sudo $SYS_TOOLS/plymouth-uninstall.sh   (the boot splash)" >&2

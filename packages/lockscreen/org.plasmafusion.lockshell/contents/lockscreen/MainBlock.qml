@@ -43,7 +43,46 @@ FocusScope {
     readonly property int authenticatorTypes: authenticatorObject ? authenticatorObject.authenticatorTypes : 0
     // qmllint enable missing-property
     readonly property bool fingerprintAvailable: (authenticatorTypes & ScreenLocker.Authenticator.Fingerprint) !== 0
+        && !(choice && choice.current === ScreenLocker.Authenticators.Fingerprint)
     readonly property bool smartcardAvailable: (authenticatorTypes & ScreenLocker.Authenticator.Smartcard) !== 0
+
+    // Plasma 6.8 and later: the greeter lets the user choose how to unlock (AuthenticatorChoice);
+    // set by LockScreenUi when the authenticator has that property. Plasma 6.7 always uses the
+    // password, with the fingerprint reader beside it.
+    property bool authenticatorChoice: false
+    readonly property Item choice: choiceLoader.item
+    // The way in use asks for a password or PIN (a fingerprint, face or security key does not).
+    readonly property bool passwordField: !choice || choice.passwordField
+    onPasswordFieldChanged: {
+        if (passwordField) {
+            Qt.callLater(focusPasswordField);
+        }
+    }
+    function focusPasswordField(): void {
+        if (passwordField) {
+            passwordBox.forceActiveFocus();
+        }
+    }
+    Connections {
+        target: sessionManager.choice
+        ignoreUnknownSignals: true
+        // After a link: back to the field (typing goes there again), once the new way is in use.
+        function onChosen(): void {
+            Qt.callLater(sessionManager.focusPasswordField);
+        }
+        // Another way in use (a link, or the fall-back to the password when a way stops
+        // working): what was typed for the old way goes, on every screen (PasswordSync). Kept, it
+        // came back when the password was chosen again, and the smartcard's field would send the
+        // password as its PIN.
+        function onCurrentChanged(): void {
+            sessionManager.clearSecret();
+        }
+    }
+    function clearSecret(): void {
+        passwordBox.text = "";
+        PasswordSync.password = "";
+        passwordBox.text = Qt.binding(() => PasswordSync.password);
+    }
 
     // Tablet posture (FusionMetrics.tablet follows KWin): touch-sized controls (TABLET 4.13).
     readonly property bool tablet: metrics.tablet
@@ -119,7 +158,7 @@ FocusScope {
                     color: "transparent"
                     border.width: 4
                     border.color: PfStyle.accentHalo
-                    visible: passwordBox.activeFocus
+                    visible: passwordBox.activeFocus && sessionManager.passwordField
                 }
                 Rectangle {
                     anchors.fill: parent
@@ -134,7 +173,7 @@ FocusScope {
                     antialiasing: true
                     color: "transparent"
                     border.width: 1.5
-                    border.color: passwordBox.activeFocus ? PfStyle.accent : PfStyle.fieldBorder
+                    border.color: passwordBox.activeFocus && sessionManager.passwordField ? PfStyle.accent : PfStyle.fieldBorder
                 }
 
                 RowLayout {
@@ -143,6 +182,30 @@ FocusScope {
                     anchors.rightMargin: sessionManager.tablet ? (pill.height - pill.buttonSize) / 2 : sessionManager.metrics.px(6)
                     spacing: sessionManager.metrics.px(8)
 
+                    // A way without a password field (Plasma 6.8): the pill says how to unlock
+                    // instead, and the PAM messages below guide the user.
+                    Kirigami.Icon {
+                        Layout.alignment: Qt.AlignVCenter
+                        implicitWidth: sessionManager.metrics.px(18)
+                        implicitHeight: sessionManager.metrics.px(18)
+                        visible: !sessionManager.passwordField
+                        source: sessionManager.choice ? sessionManager.choice.currentIcon : ""
+                        isMask: true
+                        color: PfStyle.textMuted
+                    }
+                    Text {
+                        objectName: "authenticatorStatus"
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        visible: !sessionManager.passwordField
+                        text: sessionManager.choice ? sessionManager.choice.statusText : ""
+                        elide: Text.ElideRight
+                        color: PfStyle.textMuted
+                        font.family: PfStyle.uiFont
+                        font.pixelSize: sessionManager.metrics.font(14)
+                        textFormat: Text.PlainText
+                    }
+
                     PasswordField {
                         id: passwordBox
                         objectName: "passwordBox"
@@ -150,6 +213,7 @@ FocusScope {
 
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        visible: sessionManager.passwordField
 
                         text: PasswordSync.password
                         placeholderText: i18ndc("plasma_shell_org.kde.plasma.desktop", "@info:placeholder in text field", "Password")
@@ -193,7 +257,7 @@ FocusScope {
                         Layout.alignment: Qt.AlignVCenter
                         implicitWidth: pill.buttonSize
                         implicitHeight: pill.buttonSize
-                        visible: KConfig.KAuthorized.authorize("lineedit_reveal_password")
+                        visible: sessionManager.passwordField && KConfig.KAuthorized.authorize("lineedit_reveal_password")
                         iconPath: passwordBox.showPassword ? PfStyle.iconEye + PfStyle.iconSlash : PfStyle.iconEye
                         foreground: PfStyle.textMuted
                         text: passwordBox.showPassword
@@ -216,16 +280,19 @@ FocusScope {
                         foreground: PfStyle.textOnAccent
                         iconPath: LayoutMirroring.enabled ? PfStyle.iconArrowLeft : PfStyle.iconArrowRight
                         text: i18ndc("plasma_shell_org.kde.plasma.desktop", "@action:button accessible only", "Unlock")
+                        visible: sessionManager.passwordField
                         onClicked: sessionManager.startLogin()
                     }
                 }
             }
 
-            // "Caps Lock is on" on the left, the fingerprint / smartcard hint on the right.
+            // "Caps Lock is on" on the left, the fingerprint / smartcard hint and the other ways to
+            // unlock on the right.
             Item {
                 width: parent.width
                 height: Math.max(capsRow.implicitHeight, hints.implicitHeight)
                 visible: sessionManager.capsLockOn || sessionManager.fingerprintAvailable || sessionManager.smartcardAvailable
+                         || (sessionManager.choice !== null && sessionManager.choice.hasLinks)
 
                 Row {
                     id: capsRow
@@ -275,6 +342,26 @@ FocusScope {
                         kind: ScreenLocker.Authenticator.Smartcard
                         label: i18nd("plasma_shell_org.plasmafusion.lockshell", "Use smartcard")
                         onAnnounce: (text, urgent) => sessionManager.announcement(text, urgent)
+                    }
+                    // By file name, so that Plasma 6.7 never compiles it (its greeter has no
+                    // AuthenticatorModel).
+                    Loader {
+                        id: choiceLoader
+                        width: parent.width
+                        Component.onCompleted: {
+                            if (sessionManager.authenticatorChoice) {
+                                setSource("AuthenticatorChoice.qml", {
+                                    "authenticatorObject": sessionManager.authenticatorObject,
+                                    "metrics": sessionManager.metrics
+                                });
+                            }
+                        }
+                    }
+                    Binding {
+                        target: choiceLoader.item
+                        property: "fingerprintBeside"
+                        value: (sessionManager.authenticatorTypes & ScreenLocker.Authenticator.Fingerprint) !== 0
+                        when: choiceLoader.status === Loader.Ready
                     }
                 }
             }

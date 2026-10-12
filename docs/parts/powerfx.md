@@ -25,7 +25,7 @@ the ThinkPad's UPower says "low" (3) at 20 % (`UsePercentageForPolicy=true`, `Pe
 
 | What | full | saver | critical |
 |---|---|---|---|
-| Fusion system card and dock `powerTier` | 0 | 1 (card interval x 2, one dock start-up pulse) | 2 (card x 4, no pulse) |
+| Fusion system card, system meters and dock `powerTier` | 0 | 1 (card and meters interval x 2, one dock start-up pulse) | 2 (card and meters x 4, no pulse) |
 | Plasma's own system monitor widgets (`[Appearance] updateRateLimit`, any `org.kde.plasma.systemmonitor*`) | the user's | 2 x the user's (unlimited or under 1 s counts as 3 s) | 4 x |
 | KWin blur (`kwinrc [Plugins] blurEnabled` + `unloadEffect`) | the user's | the user's | off, with `LighterOnCritical` |
 | Dock `magnify` | the user's | the user's | false, with `LighterOnCritical` |
@@ -36,6 +36,14 @@ the ThinkPad's UPower says "low" (3) at 20 % (`UsePercentageForPolicy=true`, `Pe
 Options (plasmafusionrc `[Power]`, written by the settings module): `LighterOnCritical` (default
 true), `ShorterAnimationsOnCritical` (default false). With `[Effects] Glass=Solid` blur is off anyway
 and stays off when critical ends.
+
+A Glass level or dock magnification chosen in the settings module while critical is written to
+`[Power] PageGlass` (`Full`, `Reduced`, `Solid`) and `PageDockMagnify` (`true`, `false`), and the
+widgets stay held. When critical ends, the glass key of every held widget and the magnification of
+every dock get the page's value instead of the remembered one, and blur follows the page as it does
+outside critical (on, `blurEnabled` removed, for Full and Reduced, also when blur was already off
+for an earlier Solid and the service had not turned it off; off for Solid). The keys are removed
+once the widgets are given back.
 
 ## Files
 
@@ -113,21 +121,30 @@ monitors); `Restart=on-failure`, `RestartSec=5`; `Slice=background.slice`, `Nice
 - **plasmashell restart or late start.** A new owner of `org.kde.plasmashell` is given 2 s, then
   the widget part is applied again (up to 15 tries, 2 s apart, while it has not loaded a layout).
   New widgets (a layout reset) are remembered with their own values and set. A layout reset inside a
-  running plasmashell keeps the same owner: the settings module's Reset (and `fusion-config.sh
-  --reset-layout`) should `systemctl --user reload` the service (see "Needs").
+  running plasmashell keeps the same owner: the settings module's Reset restarts the service when the
+  tier is not full (`fusion-config.sh --reset-layout` restarts plasmashell).
+- **Widgets added later.** The service has no watch for new widgets, so whoever adds Fusion widgets
+  in a running plasmashell asks it to apply the tier again with `systemctl --user
+  try-reload-or-restart plasma-fusion-powerfx.service` (nothing when it is not running): the settings
+  module after "System meters in the top bar" and "Top bar on every screen" are turned on while the
+  tier is not full (0.5.0; before, meters added in power saver polled at the full rate until the
+  next tier change), KWin's plasmafusion-snap after `ensure-topbars.js` added or completed a bar
+  (systemd's `ReloadOrTryRestartUnit` over D-Bus), and `fusion-config.sh --screens` likewise.
+  Widgets added from Add Widgets wait for the next tier change or plasmashell start.
 - **Journal.** One line per tier change, `logger -t plasma-fusion-powerfx`, for example
   `tier critical (on battery, 8 %, warning level 1, profile balanced): blur off, 7 widget setting(s)`,
   and one when plasmashell came back and something had to be set.
 - **Concurrency.** Every change holds `flock` on `$XDG_RUNTIME_DIR/plasma-fusion-powerfx-$UID.lock`;
   the running service compares with the stored state, so a manual `--apply` is followed too.
 
-## State in plasmafusionrc `[Power]` (written by the service only)
+## State in plasmafusionrc `[Power]` (written by the service, and the two page keys by the settings module)
 
 | Key | Meaning |
 |---|---|
 | `Tier` | tier applied (written with `--notify`, for the settings module and quick settings) |
 | `ShellTier`, `ShellLighter` | tier and light flag applied to the widgets (lag `Tier` while plasmashell is away) |
-| `UserDockMagnify`, `UserGlass` | while overridden: the user's dock magnification (first dock) and glass level (registry keys) |
+| `UserDockMagnify`, `UserGlass` | while overridden: the user's dock magnification (first dock; the settings page shows it) and glass level (registry keys) |
+| `PageGlass`, `PageDockMagnify` | written by the settings module while critical: the page's choice, given back instead of the remembered values, then removed |
 | `UserWidgetValues` | while overridden: every remembered widget value, `WIDGET-ID/key=value,...` |
 | `ForcedBlur`, `UserBlurEnabled` | while blur is off by the service: the user's raw `blurEnabled` (`absent` when unset) |
 | `ForcedAnimationDurationFactor`, `UserAnimationDurationFactor` | while the factor is capped: the value written and the user's (`absent`) |
@@ -140,6 +157,7 @@ After full only `Tier`, `ShellTier`, `ShellLighter` remain.
 |---|---|---|---|
 | `org.plasmafusion.systemcard` | `powerTier` | Int, hidden, 0-2, default 0 | the card waits `updateInterval x (1, 2, 4)[powerTier]` (CARD-1) |
 | `org.plasmafusion.dock` | `powerTier` | Int, hidden, 0-2, default 0 | start-up pulse 3 / 1 / 0 cycles (DOCK-2) |
+| `org.plasmafusion.meters` | `powerTier` | Int, hidden, 0-2, default 0 | the top bar's system meters wait `updateInterval x (1, 2, 4)[powerTier]`, as the card (0.5.0, `docs/parts/shell-meters.md`; `tests/widgets.test.js`) |
 | dock | `magnify` | Bool (exists) | false at critical |
 | dock, systemcard, quicksettings, launcher | `glass` | **String**, hidden, default `full` | `full` / `reduced` / `solid` |
 
@@ -163,8 +181,8 @@ settings.
 
 | Test | Where | Result |
 |---|---|---|
-| `packages/powerfx/tests/widgets.test.js`: the widget script against `fake-shell.js` (the scripting API as plasma-workspace 6.7.5 implements it): writes per tier, remembering, giving back, user changes, flag changes, new widgets, plan mode | laptop, node; also run by 85-powerfx.sh | 15/15 |
-| `packages/powerfx/tests/offline.sh`: two private buses, `mock-power.py` (UPower, power profiles), `mock-session.py` (KWin effects, plasmashell via `fake-shell.js`), throw-away HOME: 14-case tier table, `--apply` each tier, kwinrc and kdeglobals byte for byte after full, options, user changes, missing plasmashell (exit 3, log-out case, next start), the running service (events, coalescing, plasmashell restart with a new dock, reload, UPower away and back, SIGTERM, dying bus), memory, CPU | laptop | 79/79 |
+| `packages/powerfx/tests/widgets.test.js`: the widget script against `fake-shell.js` (the scripting API as plasma-workspace 6.7.5 implements it): writes per tier, remembering, giving back, user changes, flag changes, new widgets, the settings page's Glass and magnification chosen while critical, plan mode | laptop, node; also run by 85-powerfx.sh | 19/19 (0.5.0) |
+| `packages/powerfx/tests/offline.sh`: two private buses, `mock-power.py` (UPower, power profiles), `mock-session.py` (KWin effects, plasmashell via `fake-shell.js`), throw-away HOME: 14-case tier table, `--apply` each tier, kwinrc and kdeglobals byte for byte after full, options, user changes, the settings page's choices while critical (widgets, magnification, blur back after Reduced and after an earlier Solid), missing plasmashell (exit 3, log-out case, next start), the running service (events, coalescing, plasmashell restart with a new dock, reload, UPower away and back, SIGTERM, dying bus), memory, CPU | laptop | 79/79; 0.5.0: 90 checks, 89 in the pf-ci container ("bash plus three gdbus monitor processes" fails there on the base too) |
 | `tests/vsession/scen-tiers.sh` (o1pw-tiers): real KWin and plasmashell with the Fusion layout, `--apply` saver/critical/full, then the service on a mock system bus | ThinkPad, 1920x1200 @4/3 | o1pw-tiers 27/29 (the 2 misses were test bugs: a function used in `bash -c`, a diff filter without KConfig group headers); after the fixes o1pw-tiers2 29/29 |
 | `tests/vsession/scen-unit.sh` (o1pw-unit2): the unit under a second `systemd --user` (sudo `systemd-run`, Delegate, the user's SELinux context) with the session's HOME and buses | ThinkPad | 21/21 |
 | `tests/vsession/scen-idle.sh` + `idle-frames.py` (o1pw-idle3): idle frames per tier, card visible, covered (Dolphin maximized), removed | ThinkPad, exclusive slot | acceptance met, table below |
@@ -228,6 +246,4 @@ leaves mode-0 entries). The scenarios send the service's journal lines to `out/j
   dock has no `glass` (DOCK-2): there only the blur, magnification and pulse parts of the tiers
   have an effect. Quick settings and the launcher read `glass` for their full-screen backdrops
   (0.4.1). The snap fill picker (KWin) has no widget key and keeps the blurred wallpaper copy.
-- A Glass change in the settings module while critical loads blur again (the service then leaves
-  blur alone, since the user changed it); see "Needs".
 - The service reacts to option changes at the next tier change or a reload, not by itself.

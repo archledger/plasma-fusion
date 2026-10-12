@@ -554,6 +554,8 @@ FocusScope {
                 size: 72
                 source: tile.model.decoration || "application-x-executable"
                 iconName: Launcher.iconNameFor(tile.model)
+                // Today's date over the calendar tile (the laptop grid's AppTile paints its own).
+                calendarDate: true
             }
             FusionText {
                 id: label

@@ -20,6 +20,8 @@ EFFECTS 8.3 (install side). The login check itself is described in `gate.md`; th
 | `tools/device/backup-profile.sh` | never starts a Qt program without the session's display; more files |
 | `tools/device/restore-profile.sh` | knows the new Plasma Fusion paths |
 | `tools/device/tests/gate-unit.sh` | cases `t`, `t3`, `t4`, `t5` for the new gate parts |
+| `tools/device/tests/restore-keys-unit.sh` | `fusion-restore.sh` releases the keys of widgets the restored layout does not have (0.5.0) |
+| `tools/device/tests/layout-migration-unit.sh` | the in-place layout migration against a scratch HOME: what a later run keeps (0.5.0) |
 
 ## fusion-config.sh
 
@@ -85,10 +87,12 @@ Settings under the rule: `[TabBox]` and `[TabBoxAlternative]` switcher keys, `[T
 (new, 120), blur strength/noise/saturation, `BorderSizeAuto`, `[Plugins]` script keys (snap,
 attach, tablet, sheet), `[Outline] QmlPath`, `[Wayland] InputMethod`, tooltip delay, OSD,
 notification position and timeout, `krunnerrc FreeFloating`, lock-screen wallpaper, Konsole profile,
-Kate/KWrite colour theme, the three `Xft*` keys, and the hot corner when `--hot-corner` is not
-given (`[Effect-overview] BorderActivate=9`: a corner the user turned on since is kept; with
-`--hot-corner` it is written, 7). Options the user passes each time (`--light`, `--auto`) and the
-Global Theme defaults stay plain writes.
+Kate/KWrite colour theme, the three `Xft*` keys. The hot corner without `--hot-corner` is stricter:
+`[Effect-overview] BorderActivate=9` is written on a first run only, and a later run keeps whatever
+the key holds, unset included (KWin's default is the top-left corner, so System Settings > Screen
+Edges deletes the key when the user turns that corner on); with `--hot-corner` it is written, 7.
+Options the user passes each time (`--light`, `--auto`) and the Global Theme defaults stay plain
+writes.
 
 ### Layout migration (an existing Plasma Fusion layout)
 
@@ -100,15 +104,32 @@ plasmashell is stopped (it writes the layout file when it quits), the files are 
 
 | Change | Only when |
 |---|---|
-| desktop containment `org.kde.desktopcontainment` or `org.kde.plasma.folder` becomes `org.plasmafusion.desktop` (Folder View with the tablet home screen, TABLET2 H1, `docs/parts/desktop.md`; Folder View's keys, so applets and their `ItemGeometries*` keys stay); without that package `org.kde.desktopcontainment` becomes `org.kde.plasma.folder` (desktop icons, BACKLOG M1), and a desktop naming the missing package becomes `org.kde.plasma.folder` | the plugin is another of the three |
+| desktop containment `org.kde.desktopcontainment` or `org.kde.plasma.folder` becomes `org.plasmafusion.desktop` (Folder View with the tablet home screen, TABLET2 H1, `docs/parts/desktop.md`; Folder View's keys, so applets and their `ItemGeometries*` keys stay); without that package `org.kde.desktopcontainment` becomes `org.kde.plasma.folder` (desktop icons, BACKLOG M1), and a desktop naming the missing package becomes `org.kde.plasma.folder` | the plugin is another of the three, on a HOME below configuration version 2 |
 | the `[General]` keys below | the plugin was `org.kde.desktopcontainment` (a Folder View keeps its own) |
 | `[General]` `url=desktop:/ sortMode=-1 arrangement=1 alignment=0 iconSize=2 popups=false toolTips=false selectionMarkers=true useTypeAhead=true previewPlugins=` (the installed ones of imagethumbnail, jpegthumbnail, svgthumbnail, gsthumbnail, opendocumentthumbnail, ffmpegthumbs) | per key, when the key is not set |
 | portrait card positions `ItemGeometries-<H>x<W>` and `ItemGeometriesVertical`: the first two cards side by side under the bar, right-aligned on the 16 px grid, the rest under the right one (the CPU/memory card hides itself in portrait, CARD-2) | neither key exists; sizes from the landscape positions; screen size from the shell |
-| top bar `plasmashellrc [PlasmaViews][Panel <id>] panelOpacity` 2 (translucent) becomes 0 (adaptive: solid next to maximized windows, decision 5) | it is still 2 |
-| tray: `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager`, `org.kde.plasma.manage-inputmethod` added to `hiddenItems` and `disabledStatusNotifiers` (no expander arrow; quick settings has its own keyboard button) | missing from the list |
-| tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems` |
+| top bar `plasmashellrc [PlasmaViews][Panel <id>] panelOpacity` 2 (translucent) becomes 0 (adaptive: solid next to maximized windows, decision 5) | it is still 2, on a HOME below configuration version 2, and the settings page has not chosen translucent (`[TopBar] SolidNextToWindows=false`) |
+| tray: `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager`, `org.kde.plasma.manage-inputmethod` added to `hiddenItems` and `disabledStatusNotifiers` (no expander arrow; quick settings has its own keyboard button) | missing from the list, on a HOME below configuration version 2 |
+| tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems`; once (plasmafusionrc `[Setup] TrayDevices=done`, written after the first run that looked at the layout or built a new one) |
 | every app menu `[Configuration][Appearance] allScreens=false` (decision 8) | the key is not set |
-| pen widget `org.plasmafusion.pen` added to the top bar between the tray and quick settings (next free applet id, `AppletOrder`) | the widget is installed and not in the bar |
+| pen widget `org.plasmafusion.pen` added to the top bar between the tray and quick settings (next free applet id, `AppletOrder`) | the widget is installed and not in the bar, on a HOME below configuration version 2 |
+
+The rows "below configuration version 2" bring a layout from before 0.2.0 up to it; every release
+since ran them at its first run. Until 0.5.0 they ran at every run, so each `plasma-fusion update`
+made the settings page's translucent top bar adaptive again, put a tray item the user set to
+"Always shown" back into the hidden lists (quick settings then hid it again while passive), added
+back a removed pen menu or desktop, and, since such a change is a migration, stopped and started
+plasmashell (ending Keep awake). Now a later run finds nothing to migrate on a layout the user
+left alone, and changes nothing the user changed (`tools/device/tests/layout-migration-unit.sh`).
+
+Whether the layout is a Plasma Fusion one (a full-width top panel and a floating, fit-content
+bottom panel), the top bars that get `floatingApplets` and the bar thickness the run sets are read
+from the panels on the screens that are there (0.5.0). A panel of a monitor that was unplugged
+stays on its missing screen in Plasma 6.8, and reading its length mode, floating or height crashed
+plasmashell (`docs/parts/kwin-tablet.md`, "Panels without a screen"); the layout check then
+answered "no", and a run in the default layout mode would have built a new layout over the
+user's. `tools/device/tests/panel-scripts-unit.sh` (build workflow) runs the three scripts against
+a model of desktop scripting with such a panel (the scripts of 8cf0b3d fail 4 of its 6 checks).
 
 The landscape card positions are not touched. After the 4/3 scale change the shell reads
 `ItemGeometries-1440x900`, which does not exist, and falls back to `ItemGeometriesHorizontal`
@@ -117,26 +138,82 @@ if its portrait rule differs, the migration follows it (see Needs).
 
 ### Shortcuts (owner decision 6)
 
-Applied once per configuration version (`--shortcuts` again, `--keep-shortcuts` never). Every other
+Applied once per configuration version (`--shortcuts` again, `--keep-shortcuts` never).
+`tools/device/tests/launcher-keys-unit.sh` (CI step "Setup search keys") runs the search-key part
+against a table standing in for kglobalaccel: the set, the one-time Alt+F2 upgrade and the cases
+where the user's own keys stay. Every other
 action holding one of these keys loses it; each change is recorded in the backup's `shortcuts`
 file, so `fusion-restore.sh` gives every key back.
 
 | Key | Target (kglobalaccel component / action) |
 |---|---|
-| Meta+Space, Meta+S, Alt+Space, Alt+F2, Search (KRunner's own `_launch` keys) | `plasmashell` / `activate application launcher`: the shell activates the launcher on the active screen, exactly as for Meta |
-| (KRunner) | `org.kde.krunner.desktop` `_launch` and `RunClipboard` keep no key, so nothing starts KRunner |
+| Meta+Space, Meta+S, Alt+Space, Search (KRunner's other `_launch` keys) | `plasmashell` / `activate application launcher`: the shell activates the launcher on the active screen, exactly as for Meta |
+| Alt+F2 | `org.kde.krunner.desktop` / `_launch`, its only key: the full KRunner (every plugin, web shortcuts too). Alt+F2 is the run-command key of KDE since its first release and of GNOME and Xfce, so whoever presses it wants a command line; the Windows and macOS search keys and Alt+Space stay with the launcher, whose last search row hands the query to KRunner. `RunClipboard` keeps no key. On a HOME an earlier release set up (the launcher had Alt+F2, KRunner nothing; the key set does not run again there) the setup moves Alt+F2 back once, only while the launcher still holds it and KRunner has no key (`plasmafusionrc [Shortcuts] KRunnerKey=1`; recorded in the backup like every key) |
 | Meta+A | the quick-settings widget's own "activate widget <id>" (widget API, as before) |
 | Meta+N | `org.plasmafusion.notifications.desktop` / `_launch`: a desktop file in `~/.local/share/kglobalaccel/` (how System Settings adds a command shortcut) that writes the quick-settings widget's `[General] openRequest = "notifications:<ms>"` through `evaluateScript` (`busctl`) |
+| Meta+V | `org.plasmafusion.clipboard.desktop` / `_launch`, a component of the same kind that writes `openRequest = "clipboard:<ms>"`: quick settings' clipboard sheet on the screen in use (a second Meta+V closes it); Klipper's `plasmashell` / `show-on-mouse-pos` ("Show Clipboard Items at Mouse Position", Plasma's Meta+V) loses the key and keeps its others |
 | Meta+Up / Meta+Down | `kwin` / `Window Maximize` (a toggle in KWin 6.7.5) / `Window Restore` (Meta+PgUp and Meta+Backspace stay) |
 | Meta+Alt+Up / Meta+Alt+Down | `kwin` / `Window Quick Tile Top` / `Bottom` (`Switch Window Up/Down` lose them) |
 | Meta+Tab | `kwin` / `Overview` (Meta+W stays; `Walk Through Windows` keeps Alt+Tab) |
 | Meta+Alt+1..9 | `kwin` / `Plasma Fusion: Activate Dock Entry 1..9` (the snap KWin script; the dock's `activateTaskAtIndex` through its `activateRequest` key, on Plasma 6.7 and 6.8); plasmashell's `activate task manager entry 1..9` lose Meta+5..9, and a Meta+Alt+N an earlier version gave them moves to the new action |
 | Meta+1..4 | `kwin` / `Switch to Desktop 1..4` (unchanged) |
 | Meta+Shift+W (with `--pen`) | the pen widget's "activate widget <id>", only when free |
+| Meta+Shift+T (every run, not part of the Windows set) | `org.plasmafusion.copytext.desktop` / `_launch` (0.5.0): copy text from the screen, a component like Meta+N whose command is `spectacle --region`; set only when no action holds the key, a key the user gave it is kept, nothing without Spectacle |
+
+**Copy text from the screen** (survey F6; PowerToys Text Extractor's Win+Shift+T, macOS Live Text).
+Spectacle 6.7.5 (OCR since 6.6, Tesseract) recognises text only in its own window: `spectacle
+--help` and its D-Bus interface (`org.kde.Spectacle`: FullScreen, CurrentScreen, ActiveWindow,
+WindowUnderCursor, RectangularRegion, Record*, OpenWithoutScreenshot) have no text option, and
+neither has Plasma 6.8's or master's command line. Its background mode (`-b -n -r`) saved a PNG to
+Pictures/Screenshots and exited without the text (VM, 2026-10-11). So the key and quick settings'
+header button open Spectacle's region capture (`--region`, GUI mode): select the area, then
+**Extract Text** on the selection's toolbar copies the text to the clipboard and a notification says
+so (VM: "Hello Plasma Fusion OCR test 12345" from a Konsole line). The gap to PowerToys: one more
+click (Extract Text; it has no key), and Spectacle's viewer opens afterwards unless its "Close after
+extraction" setting (`spectaclerc [General] closeAfterOcr`) is on; Plasma Fusion leaves that setting
+to the user. Meta+Shift+T was free in KWin, Plasma and Spectacle 6.7.5 and in the Windows-style set
+(`globalShortcutsByKey` empty in the parity VM). kglobalaccel makes a component it loads at login
+active but leaves one registered while it runs inactive (`isActive` false, no key grab) until the
+next login, so the setup gives the key again as present (`setShortcut` with SetPresent |
+NoAutoloading, as a running application does): the key works at once. `fusion-restore.sh` gives the
+key back (none), unregisters the component and removes its desktop file (an `absent-file` entry of
+the backup). Test: `tools/device/tests/copytext-unit.sh` (CI) runs the setup step and the restore's
+sections against a fake kglobalaccel: a free key set and given as present, the old key recorded, a
+second run unchanged, a key in use left with its action, the user's own key kept, nothing without
+Spectacle, and the restore. VM (real keys from a uinput keyboard): after the setup Meta+Shift+T
+started `spectacle --region` without a new login, the header button too; after the restore the key
+holds nothing and starts nothing.
 
 Widget keys (quick settings, pen) are also set on later runs when the widget has none (a layout
 rebuild drops them; a dead entry of a dropped widget is cleared first), but then only when the key is
-free. With `--keep-shortcuts` quick settings keeps Meta+N, as before.
+free. With `--keep-shortcuts` quick settings keeps Meta+N, as before, and Klipper's pop-up keeps
+Meta+V (no clipboard component is added; the clipboard button still opens the sheet). A later run
+without the set adds the Meta+V component and gives it Meta+V only when nothing holds the key (on a
+stock Plasma Klipper does), so "Plasma Fusion: Clipboard" can be given a key in System Settings >
+Shortcuts; `--shortcuts` moves Meta+V to it. One exception, for a HOME an earlier release set up
+with the Windows-style set (Meta+N is the notification list's and Meta+S the launcher's there, as
+read before the run's own Meta+N step, and the set does not run again): the first 0.5.0 run moves
+Meta+V to the sheet once, while Klipper's pop-up still has it and the sheet has no key
+(plasmafusionrc `[Shortcuts] ClipboardKey`); a key the user gave either of them stays. Meta+N alone
+is not the mark: a run without the set gives the notification list a free Meta+N too, so a
+`--keep-shortcuts` setup whose quick settings lost Meta+N would have lost Meta+V to the sheet.
+The setup run right after the component's `_launch` was unregistered (as `fusion-restore.sh` does)
+lost the key: an unregistered `_launch` leaves its component without actions, kglobalacceld forgets
+such a component only at its next settings write-out (0.5 s later) and reads a component's desktop
+file only when it makes the component, so in that moment the registration gave it no `_launch`, and
+the step reported "none -> Meta+N" for a key bound to nothing until the next login (VM 2, 6.7.5:
+the step 0 s after the unregister lost Meta+N and Meta+V; 2 s after, the component was made from its
+file again and the keys worked). Now `register_command_component` registers `_launch` by name as
+well (it finds the file's own and changes nothing, or makes the missing one, which runs the file's
+command too) and `command_key_present` gives the key as present, as the copy-text step does, so the
+key works at once either way; with no key (Klipper keeps Meta+V) a key chosen later in System
+Settings works at once too.
+Tested by `tests/shortcut-keys-unit.sh` (41 checks against a fake kglobalaccel that models
+kglobalacceld 6.7's components, their write-out, present actions and `setShortcut`: the claim, Klipper's other keys,
+the backup record that `fusion-restore.sh` replays, the executable desktop file, the Meta+N and
+Meta+V keys starting their command at once, also when the setup runs right after a restore's
+unregister or after the write-out, later runs, a user's own key, a dry run, which kind of run claims, the one-time
+upgrade and the former `--keep-shortcuts` setups).
 
 ### Other settings
 
@@ -164,8 +241,11 @@ free. With `--keep-shortcuts` quick settings keeps Meta+N, as before.
   plasma-fusion-navigation package is installed, then loaded through `org.kde.kwin.Effects.loadEffect`
   (KWin's reconfigure does not load a newly enabled effect; private session `n5`: unset -> true, loaded).
 - **On-screen keyboard** (T6): in laptop posture `kwinrc [Wayland] InputMethod=` (empty) unless the
-  user chose another input method; in tablet posture left alone. Quick settings switches it with the
-  posture afterwards. `plasmakeyboardrc [General] diacriticsPopupEnabled=false` (TABLET2 P0):
+  user chose another input method or quick settings' keyboard policy is "On touch" (asked of the
+  running plasmashell, else read from the layout file; 0.5.0: before, every run turned the
+  keyboard off for that policy until the next login or posture change, since quick settings
+  writes the key only when the posture or the policy changes); in tablet posture left alone. Quick
+  settings switches it with the posture afterwards (`tests/config-keys-unit.sh` covers the step). `plasmakeyboardrc [General] diacriticsPopupEnabled=false` (TABLET2 P0):
   plasma-keyboard 6.7 shows an accent pop-up when a physical key is held 600 ms while it runs,
   which broke password entry for users (Fedora discussion 194845); the on-screen keys keep their
   long-press accents. The file is in the backup (`fusion-restore.sh` removes it if it was absent;
@@ -201,9 +281,11 @@ sets `plasmafusionrc [Pen] GarageService=true`.
 ### Screens (`--screens`)
 
 Runs `contents/layouts/ensure-topbars.js` of the chosen Global Theme in plasmashell (a top bar on
-every screen, decision 8, with the status area since 2026-10-09) and prints what it prints. The
-layout migration keeps the hidden tray items in every Plasma Fusion top bar's tray, not only the
-main one.
+every screen, decision 8, with the status area since 2026-10-09) and prints what it prints. When
+it added or completed a bar, the power service is asked to apply its tier to the new widgets
+(`systemctl --user try-reload-or-restart plasma-fusion-powerfx.service`; nothing when it is not
+running). The layout migration keeps the hidden tray items in every Plasma Fusion top bar's tray,
+not only the main one.
 
 ### Decision 7
 
@@ -215,8 +297,10 @@ pins go into the dock's `launchers` and `~/.config/autostart/org.kde.kalendarac.
 
 In addition to what `gate.md` describes, for the chosen backup and every later run, newest first:
 
-1. shortcuts through kglobalaccel (the Windows-style set included); the Meta+N component is
-   unregistered when the restored state has no desktop file for it;
+1. shortcuts through kglobalaccel (the Windows-style set included, so Klipper's pop-up gets Meta+V
+   back); the Meta+N and Meta+V components are unregistered when the restored state has no desktop
+   file for them, and a component file that a backup older than the component does not list is
+   removed;
 2. pen defaults: `pen-defaults.sh --restore <pen backup>` (KWin reads them at once);
 3. user services: stopped in this session's own manager (`plasma-fusion-powerfx` gives the
    power-tier values back in `ExecStopPost=... --apply full`); without a manager its program runs
@@ -226,8 +310,15 @@ In addition to what `gate.md` describes, for the chosen backup and every later r
 5. files: `~/.config` as listed in the manifest (layout, plasmashellrc, kwinrc, fonts.conf, the
    portal env file, units and their links) and the new `present-file`/`absent-file` entries below
    `$HOME` (`~/.local/share/kglobalaccel/org.plasmafusion.notifications.desktop`,
+   `~/.local/share/kglobalaccel/org.plasmafusion.copytext.desktop`,
+   `~/.local/share/kglobalaccel/org.plasmafusion.clipboard.desktop`,
    `~/.local/libexec/plasma-fusion`);
-6. `daemon-reload`, KWin reconfigure, blur loaded again unless the restored kwinrc turns it off,
+6. widget shortcuts: every plasmashell `activate widget N` action whose widget N is not in the
+   restored layout is unregistered (0.5.0). kglobalaccel keeps a widget's key after the widget is
+   gone, and step 1 gives back only the keys the setup recorded, not the Meta+A that the settings
+   module's "Reset Fusion layout" gave the rebuilt quick settings, so after a restore that key
+   stayed held by nothing (`tests/restore-keys-unit.sh`);
+7. `daemon-reload`, KWin reconfigure, blur loaded again unless the restored kwinrc turns it off,
    `fc-cache`, plasmashell started.
 
 ## Login check additions (gate.md)
@@ -290,7 +381,8 @@ ensure-topbars.js), the deployed d4afee8 tools (upgrade path) and these tools.
   `kglobalshortcutsrc`; a second run changes 3 things and neither re-applies the key set nor
   migrates again; `fusion-restore.sh` gives the shortcuts and the layout back.
 - Keys (screenshots and window probes): Meta+Space, Meta+S, Alt+Space and Alt+F2 open the launcher
-  (KRunner never starts), Meta+A quick settings, Meta+Up maximizes, Meta+Down restores,
+  (KRunner never starts; since 0.5.0 Alt+F2 opens KRunner instead, VM check of 2026-10-11),
+  Meta+A quick settings, Meta+Up maximizes, Meta+Down restores,
   Meta+Alt+Up tiles to the top half (with KWin's 6 px tile gap), Meta+Tab Overview, Meta+Alt+1 the
   first dock app, Meta+1 workspace 1, Meta+Shift+W the pen widget. Meta+N: see the open items.
 - Text: with the session environment, the top bar's clock text has no colour fringes (0 strongly
@@ -317,9 +409,15 @@ ensure-topbars.js), the deployed d4afee8 tools (upgrade path) and these tools.
 Open items:
 - Meta+N (the notification list): the component's desktop file is now installed executable (KDE
   refused to run it without the bit), but in a private session neither the key nor
-  `invokeShortcut` launches it, while its command run directly works. Private sessions have no
-  systemd user manager on their bus, the likely difference. To check by hand in the real session at
-  DEPLOY-1; if it fails there, a KWin script shortcut that calls `evaluateScript` replaces it.
+  `invokeShortcut` launches it, while its command run directly works. Found in 0.5.0: the setup
+  registered the component's `_launch` action itself, and kglobalacceld then put an action no
+  program owns in place of the desktop file's own `_launch` (it reads the file when the component is
+  first named, then adds the named action anew), so the key did nothing until the next login read
+  the file again. The setup now registers it as System Settings' "Add Command" does (an action with
+  an empty name, removed again: `register_command_component`), and the key works at once
+  (`tests/shortcut-keys-unit.sh` against a fake kglobalaccel made the way kglobalacceld 6.7
+  behaves; the Meta+V component, registered the same way, opened the clipboard sheet at once in
+  VM 3 without a new login). The private-session case is not checked again.
 - Portrait fringe measurement and the real GTK apps the owner uses (hand checks).
 
 ## Needs from other parts

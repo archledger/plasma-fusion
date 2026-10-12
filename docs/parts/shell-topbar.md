@@ -20,7 +20,7 @@ Last edited 2026-09-29.
 | `.../org.plasmafusion.appname/contents/ui/FusionLogo.qml` | the three-circle mark |
 | `.../org.plasmafusion.appname/contents/ui/FusionText.qml` | text in board px and CSS weight (variable-font `wght` axis) |
 | `packages/plasmoids/org.plasmafusion.clockpill/metadata.json` | Plasma/Applet metadata |
-| `.../org.plasmafusion.clockpill/contents/config/main.xml`, `config.qml`, `ui/ConfigGeneral.qml` | settings (below) and their page |
+| `.../org.plasmafusion.clockpill/contents/config/main.xml`, `config.qml`, `ui/ConfigGeneral.qml`, `ui/ConfigCalendar.qml`, `ui/ConfigTimeZones.qml` | settings (below) and their three pages |
 | `.../org.plasmafusion.clockpill/contents/ui/main.qml` | the pill, panel centring, workspace switching, calendar pop-up |
 | `.../org.plasmafusion.clockpill/contents/ui/WorkspaceDots.qml` | dots / current bar, clicks, keys, tooltips |
 | `.../org.plasmafusion.clockpill/contents/ui/WidthBudget.qml` | the top bar's width budget (ADAPTIVE 5.1), run by the clock pill |
@@ -59,7 +59,7 @@ No configuration is needed; the defaults are the board values.
 | Key | Default | Meaning |
 |---|---|---|
 | `showWorkspaces` | true | dots; hidden anyway while there is only one workspace |
-| `wheelSwitchesWorkspaces` | true | scrolling over the pill switches workspaces (wraps when KWin's navigation wraps) |
+| `wheelSwitchesWorkspaces` | true | scrolling over the pill switches workspaces (wraps when KWin's navigation wraps); a page scroll still turning as the pointer passes over the pill is ignored (`FusionWheelGuard`, shared-blocks.md) |
 | `showDate` | true | date before the time |
 | `dateFormat` | `auto` | `auto`: weekday, day, month in the order of the region's long date, without year and commas (en_GB "Mon 28 Sept", en_US "Mon Sep 28", de_DE "Mo. 28. Sept.", es_ES "lun 28 de sept", ja_JP "9月28日 (月)"); `custom` uses `customDateFormat` |
 | `customDateFormat` | `ddd d MMM` | QLocale format |
@@ -239,6 +239,21 @@ The layout places it right after the app name with its defaults (`compactView=fa
 - D-Bus messages (`test/dbuscalls.py` under `dbus-run-session`, stand-in services on a private bus):
   `setCurrentDesktop(int32 3)`, `invokeShortcut("Overview")`, `activateLauncherMenu()` arrive as sent.
 - `test/configpage.py`: the settings page loads offscreen without QML errors and takes the `cfg_` values.
+- Settings pages (0.5.0): Plasma 6.7's dialog (`AppletConfiguration.qml`) shows one page at a time,
+  creates it with every key and its default (`cfg_<key>`, `cfg_<key>Default`) and on Apply writes
+  back every `cfg_` property of that page only; it replaces the page after Apply or Discard. Each of
+  the three pages (General, Calendar, Time zones) therefore declares all 17 keys and defaults, and
+  its `saveConfig()` refreshes the keys it has no control for (the other pages' keys, `widthBudget`,
+  `menuPolicy`, `menuCompacted`, `debugAction`) from the live configuration, so Apply on one page
+  does not write back a value another page, part or script changed while it was open.
+  `packages/common/tests/config_page_keys_test.py` checks both rules on every page of
+  `config.qml` and runs in the build step (`tools/build.d/70-topbar.sh`); on the previous pages it
+  reports 76 problems (each page lacked the other pages' keys and the widget's own). In the test VM
+  (Plasma 6.7.5) opening the settings and going General, Calendar, Time zones, General logged 88
+  "Setting initial properties failed" lines before and none after; a time zone written by desktop
+  scripting while General was open survived Apply there. The Kirigami notice "Created graphical
+  object was not placed in the graphics scene" stays (see Remains). The calendar providers' own
+  pages (KDE's) are not checked.
 - `test/hovertest.py`: a hover-enabled MouseArea loses hover to a ToolTipArea child on top; both
   widgets therefore put the tooltip area outside the mouse areas (proven Plasma pattern).
 - ThinkPad virtual sessions (prefix `tb-`, 1440 x 900, private HOME and D-Bus; scenarios in
@@ -483,8 +498,9 @@ built by the lead directly.
     Quick Tile Left/Right" (component `kwin`); the tile loses its title bar as before (KWIN-1).
 - **Width budget** (`WidthBudget.qml` in the clock pill, which sits between the bar's two expanding
   spacers): the pill stays on the middle while each side fits within W/2 − pill/2 − 24; otherwise the
-  steps of ADAPTIVE 5.1 apply in order: 1 the global menu compact, 2 phone and clipboard into quick
-  settings (QS-1 adds its hook), 3 the app name hidden, 4 the short date, 5 the time only, 6 no
+  steps of ADAPTIVE 5.1 apply in order: 1 the global menu compact (and the optional system meters'
+  network meter out, 0.5.0: `docs/parts/shell-meters.md`), 2 phone and clipboard into quick
+  settings (QS-1 adds its hook; the system meters leave the bar), 3 the app name hidden, 4 the short date, 5 the time only, 6 no
   battery % (QS-1), 7 no workspace dots. Tablet posture starts at step 2, portrait or a narrow screen
   at step 5 (TABLET 4.3); the clock pill has no dots in tablet posture and uses 14 px 800 text with
   16 px padding. The step is computed in one go from the widgets' level-0 widths: each Fusion widget

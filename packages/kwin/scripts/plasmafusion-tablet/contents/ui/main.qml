@@ -5,6 +5,8 @@
 
 import QtQuick
 import org.kde.kwin
+import "Panels.js" as Panels
+import "Requests.js" as Requests
 
 // Plasma Fusion tablet mode (TABLET.md 3 and 4.2): the single owner of window policy and panel
 // geometry while the device is folded.
@@ -430,13 +432,6 @@ Item {
 
     // ---------------------------------------------------------------- panels
 
-    // The panel script (TABLET 3.6), run in plasmashell. Idempotent; never touches panels the user
-    // added. The tablet top bar height uses the layout script's text scale. The laptop height is
-    // saved once per panel and never as the tablet height (a plasmashell that restarted in tablet
-    // posture must not make the tablet size the laptop size). TABLET 3.6 also switched the stock
-    // appmenu's compactView here; that write crashed plasmashell 6.7.5 (the applet changes its
-    // representation inside the scripting writeConfig while its layout is updated), so the
-    // compact menu is left to the top-bar widgets.
     // The built-in screen's scale (the tablet heights are snapped to its device pixels).
     function internalScale() {
         const screens = Workspace.screens;
@@ -447,67 +442,31 @@ Item {
         }
         return screens.length > 0 ? screens[0].devicePixelRatio : 1;
     }
-    // Pixel grid (research H-hidpi 3.6, owner OK 2026-10-01): the tablet top bar and dock get the
-    // smallest height at or above their size that is a whole number of device pixels at the screen's
-    // scale, so their edges are crisp: at 4/3 the top bar 44 -> 45 (60 px), the dock 80 -> 81 (108 px)
-    // and the dock's bottom strip 20 -> 21 (28 px; its config tabletStripHeight, as plasmashell's QML
-    // only sees Wayland's rounded integer scale); at 1.25, 1.5 or 2 the sizes stay. The laptop sizes
-    // are the boards' and stay as they are.
-    function panelScript(isTablet, hiding) {
-        return "var TABLET = " + (isTablet ? "true" : "false") + ", DOCK_HIDING = \"" + hiding + "\", SCALE = " + internalScale() + ";\n"
-            + "function snap(h) {\n"
-            + "    if (!(SCALE > 0)) return h;\n"
-            + "    for (var x = h; x < h + 6; ++x) { var d = x * SCALE; if (Math.abs(d - Math.round(d)) < 0.01) return x; }\n"
-            + "    return h;\n"
-            + "}\n"
-            + "var HEIGHT_DOCK = snap(80), STRIP = snap(20);\n"
-            + "function textScale() {\n"
-            + "    var pt = NaN, font = ConfigFile(\"kdeglobals\", \"General\").readEntry(\"font\");\n"
-            + "    if (font !== undefined && font !== null && String(font) !== \"\") pt = parseFloat(String(font).split(\",\")[1]);\n"
-            + "    var s = pt > 0 ? pt / 9.75 : gridUnit / 18;\n"
-            + "    return Math.max(0.85, Math.min(1.6, s));\n"
-            + "}\n"
-            + "var HEIGHT_TOP = snap(Math.round(44 * textScale())), done = [];\n"
-            + "panels().forEach(function (p) {\n"
-            + "    var ws = p.widgets(), types = [];\n"
-            + "    for (var i = 0; i < ws.length; ++i) types.push(ws[i].type);\n"
-            + "    var isTop = types.indexOf(\"org.plasmafusion.quicksettings\") >= 0 || types.indexOf(\"org.plasmafusion.clockpill\") >= 0;\n"
-            + "    var isDock = types.indexOf(\"org.plasmafusion.dock\") >= 0;\n"
-            + "    if (!isTop && !isDock) return;\n"
-            + "    p.currentConfigGroup = [\"PlasmaFusion\"];\n"
-            + "    var applied = p.readConfig(\"tabletApplied\", false) === true || p.readConfig(\"tabletApplied\", \"\") === \"true\";\n"
-            + "    var h = isTop ? HEIGHT_TOP : HEIGHT_DOCK, laptop = isTop ? Math.round(34 * textScale()) : 72;\n"
-            + "    if (TABLET) {\n"
-            + "        if (!applied) {\n"
-            + "            p.writeConfig(\"laptopHeight\", p.height == h || (isDock && (p.height == 88 || p.height == 96)) ? laptop : p.height);\n"
-            + "            p.writeConfig(\"laptopHiding\", p.hiding);\n"
-            + "            p.writeConfig(\"tabletApplied\", true);\n"
-            + "        }\n"
-            + "        if (p.height != h) p.height = h;\n"
-            + "        if (isDock && p.hiding != DOCK_HIDING) p.hiding = DOCK_HIDING;\n"
-            + "        if (isDock) p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {\n"
-            + "            w.currentConfigGroup = [\"General\"];\n"
-            + "            if (Number(w.readConfig(\"tabletStripHeight\", 20)) != STRIP) w.writeConfig(\"tabletStripHeight\", STRIP);\n"
-            + "        });\n"
-            + "    } else if (applied) {\n"
-            + "        var saved = Number(p.readConfig(\"laptopHeight\", laptop));\n"
-            + "        if (isDock && (saved == 88 || saved == 96)) saved = laptop;\n"
-            + "        p.height = saved > 0 && saved != h ? saved : laptop;\n"
-            + "        if (isDock) p.hiding = String(p.readConfig(\"laptopHiding\", \"dodgewindows\"));\n"
-            + "        p.writeConfig(\"tabletApplied\", false);\n"
-            + "    }\n"
-            + "    p.currentConfigGroup = [];\n"
-            + "    done.push((isTop ? \"top \" : \"dock \") + p.height + (isDock ? \" \" + p.hiding : \"\"));\n"
-            + "});\n"
-            + "print(done.join(\", \"));\n";
-    }
-
+    // The panel script (TABLET 3.6, contents/ui/Panels.js), run in plasmashell.
     function applyPanels() {
         if (!known) {
             return;
         }
-        panelCall.arguments = [panelScript(tablet, dockHiding())];
+        panelRetry.stop();
+        panelRetry.attempt = 0;
+        callPanels();
+    }
+    function callPanels() {
+        panelCall.arguments = [Panels.panelScript(tablet, dockHiding(), internalScale())];
         panelCall.call();
+    }
+    // Asks again with a growing delay (Panels.retryDelay) while plasmashell is not on the bus or
+    // has not loaded its layout, so a session start or a shell restart still gets the posture.
+    function retryPanels(why: string) {
+        const delay = Panels.retryDelay(panelRetry.attempt);
+        if (delay < 0) {
+            log("panels: " + why + ", given up after " + Panels.retryLimit + " tries (the panels' windows ask again)");
+            return;
+        }
+        log("panels: " + why + ", again in " + delay / 1000 + " s");
+        panelRetry.attempt++;
+        panelRetry.interval = delay;
+        panelRetry.restart();
     }
 
     DBusCall {
@@ -516,8 +475,21 @@ Item {
         path: "/PlasmaShell"
         dbusInterface: "org.kde.PlasmaShell"
         method: "evaluateScript"
-        onFinished: returnValue => root.log("panels: " + (returnValue.length > 0 ? returnValue[0] : ""))
-        onFailed: root.log("panels: plasmashell did not run the panel script (not running?)")
+        onFinished: returnValue => {
+            const answer = returnValue.length > 0 ? String(returnValue[0]) : "";
+            if (Panels.notReady(answer)) {
+                root.retryPanels("plasmashell has not loaded its panels yet");
+                return;
+            }
+            panelRetry.attempt = 0;
+            root.log("panels: " + answer);
+        }
+        onFailed: root.retryPanels("plasmashell did not run the panel script (not running?)")
+    }
+    Timer {
+        id: panelRetry
+        property int attempt: 0
+        onTriggered: root.callPanels()
     }
 
     // A plasmashell (re)start brings its panels back with the last saved thickness: apply the
@@ -583,9 +555,13 @@ Item {
         mode: ScreenEdgeHandler.Touch
         enabled: root.tablet && root.setting("EdgeRight", false)
         onActivated: {
-            // Quick settings opens on an openRequest "<mode>:<nonce>" (the launcher's form).
+            // Quick settings opens on an openRequest "<mode>:<nonce>:<output>": the widget on the
+            // swiped screen opens (without the output, the one on KWin's active screen did, and
+            // every one when KWin did not answer).
+            const request = Requests.openRequest("sheet", Date.now(),
+                Requests.swipeOutput(Workspace.screens, s => root.internalOutput(s), Workspace.activeScreen));
             quickSettingsCall.arguments = ["panels().forEach(function (p) { p.widgets(\"org.plasmafusion.quicksettings\").forEach(function (w) {"
-                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"openRequest\", \"sheet:\" + Date.now()); }); });"];
+                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"openRequest\", " + JSON.stringify(request) + "); }); });"];
             quickSettingsCall.call();
         }
     }

@@ -16,8 +16,10 @@ import org.kde.kirigami as Kirigami
 import org.kde.kwindowsystem
 import org.kde.taskmanager as TaskManager
 
+import "../code/memory.js" as Memory
+
 // CPU and memory card of the Main board's desktop widgets: two labelled 5 px bars, CPU in teal
-// (#3cc4b0) with its load in percent, memory in blue (#5b9dff) as "used / total GB". Values from
+// (#3cc4b0) with its load in percent, memory in blue (#5b9dff) as "used / total GiB". Values from
 // ksystemstats through org.kde.ksysguard.sensors, as the stock system monitor widget reads them.
 //
 // Every change on the card redraws the whole desktop window (wallpaper and blurred cards), so the
@@ -220,19 +222,32 @@ PlasmoidItem {
                                      && memTotal.value > 0
     readonly property real memFraction: memValid ? Math.max(0, Math.min(1, memUsed.value / memTotal.value)) : 0
 
-    readonly property real gib: 1024 * 1024 * 1024
     readonly property string cpuText: cpuValid ? i18nc("@label CPU load in percent", "%1%", Math.round(cpu)) : "–"
+    // "6.1 / 15.3 GiB": binary units as System Monitor shows the same sensors, and as the top
+    // bar's system meters (memory.js, the same file in both widgets).
+    function memoryUnitText(unit: string): string {
+        switch (unit) {
+        case "KiB":
+            return i18nc("@label memory unit, kibibytes", "KiB");
+        case "MiB":
+            return i18nc("@label memory unit, mebibytes", "MiB");
+        case "GiB":
+            return i18nc("@label memory unit, gibibytes", "GiB");
+        case "TiB":
+            return i18nc("@label memory unit, tebibytes", "TiB");
+        case "PiB":
+            return i18nc("@label memory unit, pebibytes", "PiB");
+        }
+        return i18nc("@label memory unit, bytes", "B");
+    }
     readonly property string memoryText: {
-        if (!memValid) {
+        const value = memValid ? Memory.memory(memUsed.value, memTotal.value) : null;
+        if (!value) {
             return "–";
         }
-        const used = memUsed.value / gib;
-        // The installed size: the kernel reports a little less than the modules hold (firmware
-        // and graphics reservations), so the total is rounded up to whole GB.
-        const total = memTotal.value / gib;
-        const totalText = total >= 2 ? Math.ceil(total - 0.05).toString() : Qt.locale().toString(total, "f", 1);
-        return i18nc("@label used / total memory in GB, e.g. 6.1 / 16 GB", "%1 / %2 GB",
-                     Qt.locale().toString(used, "f", 1), totalText);
+        return i18nc("@label used / total memory and its unit, e.g. 6.1 / 15.3 GiB", "%1 / %2 %3",
+                     Qt.locale().toString(value.used, "f", value.decimals),
+                     Qt.locale().toString(value.total, "f", value.decimals), memoryUnitText(value.unit));
     }
 
     Plasmoid.icon: "utilities-system-monitor"

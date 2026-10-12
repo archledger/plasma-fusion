@@ -38,6 +38,8 @@ Item {
     // "Text scale"): gaps, headers and rows next to text follow it; the card padding does not.
     readonly property alias metrics: fusionMetrics
     readonly property alias scroller: scroller
+    // The drill-down page shown (null on quick settings).
+    readonly property var pageItem: subPage.pageItem
     FusionMetrics {
         id: fusionMetrics
         area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
@@ -80,6 +82,7 @@ Item {
     function openPage(name: string, opener: Item) {
         pageOpener = opener;
         const reason = opener && opener.visualFocus ? Qt.TabFocusReason : Qt.OtherFocusReason;
+        backend.pageDirect = false;
         backend.page = name;
         Qt.callLater(() => {
             const pageItem = subPage.pageItem;
@@ -92,10 +95,10 @@ Item {
         const pageItem = subPage.pageItem;
         const keyboard = fromKeyboard || !!(pageItem && pageItem.firstFocusItem && pageItem.firstFocusItem.visualFocus);
         backend.page = "main";
-        if (pageOpener) {
-            const opener = pageOpener;
-            Qt.callLater(() => opener.forceActiveFocus(keyboard ? Qt.TabFocusReason : Qt.OtherFocusReason));
-        }
+        backend.pageDirect = false;
+        // A page opened on its own has no opener: the focus goes to the top of quick settings.
+        const opener = pageOpener || mainPage.firstFocusItem;
+        Qt.callLater(() => opener.forceActiveFocus(keyboard ? Qt.TabFocusReason : Qt.OtherFocusReason));
         pageOpener = null;
     }
     function focusFirst() {
@@ -107,8 +110,9 @@ Item {
         }
     }
 
+    // A page opened on its own (the clipboard sheet from its button or Meta+V) closes the sheet.
     Keys.onEscapePressed: event => {
-        if (backend.page !== "main") {
+        if (backend.page !== "main" && !backend.pageDirect) {
             closePage(true);
         } else {
             backend.closeRequested();
@@ -177,7 +181,10 @@ Item {
                 Layout.fillWidth: true
                 readonly property real mainHeight: mainPage.implicitHeight
                 readonly property real subHeight: subPage.pageItem ? subPage.pageItem.implicitHeight : 0
-                Layout.preferredHeight: content.backend.page === "main" ? mainHeight : Math.max(mainHeight, subHeight)
+                // The clipboard sheet takes its own height (it opens on its own, and its list fits
+                // the screen); the other pages keep at least the quick settings' height.
+                Layout.preferredHeight: content.backend.page === "main" ? mainHeight
+                                      : content.backend.page === "clipboard" ? subHeight : Math.max(mainHeight, subHeight)
 
                 QuickSettingsMain {
                     id: mainPage
@@ -215,10 +222,14 @@ Item {
                             return audioComponent;
                         case "power":
                             return powerComponent;
+                        case "profiles":
+                            return profilesComponent;
                         case "devices":
                             return devicesComponent;
                         case "display":
                             return displayComponent;
+                        case "clipboard":
+                            return clipboardComponent;
                         default:
                             return null;
                         }
@@ -231,8 +242,7 @@ Item {
                 id: notifications
                 Layout.fillWidth: true
                 spacing: content.metrics.px(10)
-                visible: content.backend.page === "main" && content.backend.notif.available && !content.backend.notificationsApart
-                         && (content.backend.notif.count > 0 || content.backend.showEmptyNotifications)
+                visible: content.backend.notif.listShown
 
                 RowLayout {
                     id: notificationHeader
@@ -285,25 +295,19 @@ Item {
                     interactive: false
                     model: content.backend.notif.available ? content.backend.notif.model : null
 
-                    delegate: NotificationCard {
-                        id: noteCard
+                    delegate: NotificationEntry {
+                        id: noteEntry
                         width: ListView.view.width
                         pal: content.pal
                         metrics: content.metrics
+                        notif: content.backend.notif
                         now: content.now
                         onFocusInsideChanged: {
                             if (focusInside) {
-                                content.ensureVisible(noteCard);
+                                content.ensureVisible(noteEntry);
                             }
                         }
-                        onActionInvoked: name => {
-                            content.backend.notif.invokeAction(index, name, !!model.resident);
-                            if (name === "default") {
-                                content.backend.closeRequested();
-                            }
-                        }
-                        onCloseClicked: content.backend.notif.close(index)
-                        onKillJobClicked: content.backend.notif.killJob(index)
+                        onDone: content.backend.closeRequested()
                     }
 
                     add: Transition {
@@ -362,6 +366,25 @@ Item {
             backend: content.backend
             pal: content.pal
             metrics: content.metrics
+            onBack: content.closePage(false)
+        }
+    }
+    Component {
+        id: profilesComponent
+        ProfilesPage {
+            backend: content.backend
+            pal: content.pal
+            metrics: content.metrics
+            onBack: content.closePage(false)
+        }
+    }
+    Component {
+        id: clipboardComponent
+        ClipboardPage {
+            backend: content.backend
+            pal: content.pal
+            metrics: content.metrics
+            maxHeight: content.maxContentHeight - content.innerTop - content.innerBottom
             onBack: content.closePage(false)
         }
     }

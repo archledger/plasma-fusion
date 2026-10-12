@@ -29,6 +29,12 @@ for name in re.findall(r'name="kcfg_([A-Za-z]+)"', form):
     assert name in keys, f"config.ui names kcfg_{name}, which main.xml does not define"
 PY
 test -f "$src/contents/ui/main.qml"
+# The right-edge swipe's quick settings request (contents/ui/Requests.js) and the panel script
+# against a model of desktop scripting (contents/ui/Panels.js), when node is installed.
+if command -v node >/dev/null 2>&1; then
+  node "$ROOT/packages/kwin/tests/tablet-requests.test.js" >/dev/null
+  node "$ROOT/packages/kwin/tests/tablet-panels.test.js" >/dev/null
+fi
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" "kwin-tablet"
 
 rm -rf "$dest"

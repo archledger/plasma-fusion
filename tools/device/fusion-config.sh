@@ -21,7 +21,9 @@
 #   --no-auto          stop that switching
 #                      (without these a HOME already on Plasma Fusion keeps its variant and its
 #                      automatic switching; any other HOME gets Dark without switching)
-#   --reset-layout     always rebuild the top bar, dock and desktop cards
+#   --reset-layout     always rebuild the top bar, dock and desktop cards (their widgets' own
+#                      settings, quick settings' tiles too, go back to the defaults; the settings
+#                      page's Glass, top-bar and every-screen choices apply to the new layout)
 #   --keep-layout      never touch the panels (appearance and settings only)
 #   --hot-corner       let the top-left screen corner open Overview (off by default)
 #   --fonts            set the Plasma Fusion fonts and cursor again (normally only the first
@@ -32,7 +34,8 @@
 #                      after hand check V2 showed that the laptop reports the pen's garage)
 #   --screens          run the Global Theme's ensure-topbars.js: a top bar on every screen
 #   --shortcuts        apply the Windows-style shortcut set again (normally once per config version)
-#   --keep-shortcuts   do not apply the Windows-style shortcut set (Meta+N stays quick settings)
+#   --keep-shortcuts   do not apply the Windows-style shortcut set (Meta+N stays quick settings,
+#                      Meta+V Klipper's pop-up)
 #   -h, --help
 #
 # By default the layout is rebuilt only when the current panels are not the Plasma Fusion
@@ -62,6 +65,10 @@
 #                      set when the widget has no key yet or still the earlier Plasma Fusion one
 #                      (the dead entry of a widget dropped by an earlier layout rebuild is removed
 #                      first); a key the user chose is kept
+#   Copy text          Meta+Shift+T (when no other action holds it; a key the user chose is kept):
+#                      "Copy Text from Screen", Spectacle's region capture, where its Extract Text
+#                      copies the selected text (a kglobalaccel component in
+#                      ~/.local/share/kglobalaccel/, removed by fusion-restore.sh)
 #   Workspaces         four virtual desktops Work, Design, Media, Chat in one row
 #   Shortcuts          Meta+1..4 switch workspace (added to "Switch to Desktop 1..4", removed
 #                      from "activate task manager entry 1..4")
@@ -87,16 +94,19 @@
 #                      View (desktop icons) with the Plasma Fusion keys, portrait card positions,
 #                      top bar solid next to maximized windows, tray items hidden, the app menu
 #                      only for its own screen, the pen widget added to the top bar
-#   Shortcuts (Windows set, once per version) Meta+Space, Meta+S, Alt+Space, Alt+F2 and Search:
-#                      the launcher (KRunner's keys move there); Meta+A quick settings; Meta+N the
-#                      notification list; Meta+Up / Meta+Down maximize / restore (quick tile top /
+#   Shortcuts (Windows set, once per version) Meta+Space, Meta+S, Alt+Space and Search: the
+#                      launcher (KRunner's other keys move there); Alt+F2 KRunner (also given back
+#                      once on a HOME an earlier release configured, while the launcher still has
+#                      it and KRunner has no key); Meta+A quick settings; Meta+N the
+#                      notification list; Meta+V the clipboard sheet (Klipper's pop-up at the
+#                      pointer loses it); Meta+Up / Meta+Down maximize / restore (quick tile top /
 #                      bottom move to Meta+Alt+Up/Down); Meta+Tab Overview; Meta+Alt+1..9 dock apps;
 #                      every other holder of these keys loses them
 #   Window switcher    kwinrc [TabBox] DelayTime 120 (a quick Alt+Tab shows no switcher)
 #   KWin tablet        kwinrc [Plugins] plasmafusion-tabletEnabled; plasmafusion_navigationEnabled
 #                      (the compiled tablet navigation effect, when its package is installed)
-#   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture (quick settings writes it
-#                      from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
+#   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture, unless quick settings'
+#                      keyboard policy is On touch (quick settings writes it from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
 #                      accent pop-up on a held physical key)
 #   Text rendering     greyscale antialiasing, slight hinting: ~/.config/fontconfig/fonts.conf and
 #                      kdeglobals [General] Xft* as System Settings > Fonts writes them (GTK too)
@@ -166,7 +176,21 @@ PEN_SHORTCUT_TEXT=Meta+Shift+W
 # notification list: it writes the widget's [General] openRequest = "notifications:<ms>".
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
 NOTIFY_SHORTCUT=$((META + 0x4e))
+# Meta+Shift+T (PowerToys' Text Extractor key; no KWin, Plasma or Spectacle default holds it in 6.7):
+# copy text from the screen with Spectacle's OCR, a component made the same way.
+COPYTEXT_COMPONENT=org.plasmafusion.copytext.desktop
+COPYTEXT_SHORTCUT=$((META + SHIFT + 0x54))
+# Meta+V: the same kind of component for quick settings' clipboard sheet ("clipboard:<ms>"). Plasma
+# gives Meta+V to Klipper's "Show Clipboard Items at Mouse Position" (plasmashell /
+# show-on-mouse-pos), which loses it with the Windows-style set and gets it back from
+# fusion-restore.sh; with --keep-shortcuts Klipper keeps it.
+CLIPBOARD_COMPONENT=org.plasmafusion.clipboard.desktop
+CLIPBOARD_SHORTCUT=$((META + 0x56))
 LAUNCHER_ACTION="activate application launcher"
+# plasmafusionrc [Shortcuts] KRunnerKey: Alt+F2 went back to KRunner (apply_krunner_key_upgrade).
+KRUNNER_KEY_VERSION=1
+# plasmafusionrc [Shortcuts] ClipboardKey: Meta+V went to the clipboard sheet (apply_clipboard_key_upgrade).
+CLIPBOARD_KEY_VERSION=1
 # The on-screen keyboard (plasma-keyboard) as kwinrc [Wayland] InputMethod names it on Fedora;
 # section 4 takes the copy in the system data directories (XDG_DATA_DIRS) where there is one.
 OSK_DESKTOP=/usr/share/applications/org.kde.plasma.keyboard.desktop
@@ -388,7 +412,9 @@ BACKUP_FILES=(
 # Files below $HOME outside ~/.config (restored or removed the same way).
 LO_GUARD_REL=.local/bin/libreoffice
 LO_ENTRY_REL=.local/share/applications/soffice.desktop
-BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL")
+BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" ".local/share/kglobalaccel/$COPYTEXT_COMPONENT"
+  ".local/share/kglobalaccel/$CLIPBOARD_COMPONENT"
+  .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL")
 # Configuration files the build or the system templates would install are saved as well.
 if [ -n "$CONFIG_SRC" ]; then
   while IFS= read -r -d '' f; do
@@ -543,9 +569,10 @@ upgrade_log() { # STATUS FILE GROUP KEY OLD NEW (only for an upgrade from an ear
 # KWin aborts, and with it the session (release-test VM, 2026-10-03).
 
 # Current keys of a global shortcut as Qt key codes. $1 component, $2 action
+# (kglobalaccel lists a desktop file's action without a key as the key 0, which is left out)
 shortcut_get() {
   bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel shortcut as 4 "$1" "$2" "" "" 2>/dev/null |
-    python3 -c 'import json,sys; print(" ".join(str(k) for k in json.load(sys.stdin)["data"][0]))' 2>/dev/null || true
+    python3 -c 'import json,sys; print(" ".join(str(k) for k in json.load(sys.stdin)["data"][0] if k))' 2>/dev/null || true
 }
 
 # Give a global shortcut exactly the keys listed (none when empty). $1 component, $2 action, $3.. keys
@@ -591,12 +618,17 @@ plasmashell_eval() { # $1 script; prints the script's print() output
 }
 
 # The Plasma Fusion layout is in place when plasmashell shows a full-width top panel and a
-# floating, fit-content bottom panel (the shape its layout script builds).
+# floating, fit-content bottom panel (the shape its layout script builds). The scripts here read a
+# panel's length mode, floating and height only while its screen is there: for a panel of a
+# monitor that was unplugged (Plasma 6.8 keeps it on that screen) plasmashell reads them from an
+# invalid config group and crashes (WorkspaceScripting::Panel), which made this check answer "no"
+# and an automatic setup reset the layout.
 fusion_layout_present() {
   has_name org.kde.plasmashell || return 1
   [ "$(plasmashell_eval '
 var top = false, dock = false, ps = panels();
 for (var i = 0; i < ps.length; i++) {
+    if (!(ps[i].screen >= 0 && ps[i].screen < screenCount)) continue;
     if (ps[i].location === "top" && ps[i].lengthMode === "fill") top = true;
     if (ps[i].location === "bottom" && ps[i].floating && ps[i].lengthMode === "fit") dock = true;
 }
@@ -720,17 +752,19 @@ var top = Math.round(34 * textScale());
 var ps = panels(), fixed = [];
 for (var i = 0; i < ps.length; i++) {
     var p = ps[i];
+    if (!(p.screen >= 0 && p.screen < screenCount)) continue;
     if (p.location === "top" && p.lengthMode === "fill" && p.height !== top) { p.height = top; fixed.push("top bar " + top); }
     if (p.location === "bottom" && p.floating && p.lengthMode === "fit" && p.height !== 72) { p.height = 72; fixed.push("dock 72"); }
 }
 print(fixed.length ? "set " + fixed.join(", ") : "as designed");'
 }
 
-# Ids of the full-width top panels (the Plasma Fusion top bar).
+# Ids of the full-width top panels (the Plasma Fusion top bar) on the screens that are there.
 top_panel_ids() {
   plasmashell_eval '
 var ids = [], ps = panels();
 for (var i = 0; i < ps.length; i++) {
+    if (!(ps[i].screen >= 0 && ps[i].screen < screenCount)) continue;
     if (ps[i].location === "top" && ps[i].lengthMode === "fill") ids.push(ps[i].id);
 }
 print(ids.join(" "));' || true
@@ -874,6 +908,28 @@ for (var i = 0; i < ps.length; i++) {
   done
 }
 
+# True when a quick settings widget's keyboard policy is "touch" (the on-screen keyboard on a touch
+# or pen tap in every posture): asked of the running plasmashell (the layout file may lag behind a
+# change just made), else read from the layout file.
+keyboard_policy_touch() {
+  local out='' appletsrc=$CONFIG/plasma-org.kde.plasma.desktop-appletsrc
+  if has_name org.kde.plasmashell; then
+    out=$(plasmashell_eval '
+      var touch = false, ps = panels();
+      for (var i = 0; i < ps.length; i++) {
+          var ws = ps[i].widgets("org.plasmafusion.quicksettings");
+          for (var j = 0; j < ws.length; j++) {
+              ws[j].currentConfigGroup = ["General"];
+              if (String(ws[j].readConfig("keyboardPolicy", "tablet")) === "touch") touch = true;
+          }
+      }
+      print(touch ? "touch" : "");') || out=''
+  elif [ -r "$appletsrc" ]; then
+    grep -qx 'keyboardPolicy=touch' "$appletsrc" && out='touch'
+  fi
+  [ "$out" = touch ]
+}
+
 # ---------- in-place migration of an existing Plasma Fusion layout ----------
 
 # Folder View (desktop icons) keys for the desktop (BACKLOG M1; LAYOUT-1 writes the same ones into a
@@ -882,6 +938,8 @@ FOLDER_KEYS=(url=desktop:/ sortMode=-1 arrangement=1 alignment=0 iconSize=2 popu
   selectionMarkers=true useTypeAhead=true)
 FOLDER_PREVIEWS=(imagethumbnail jpegthumbnail svgthumbnail gsthumbnail opendocumentthumbnail ffmpegthumbs)
 # Tray items hidden in the top bar (round 2; TABLET 4.3: quick settings has its own keyboard button).
+# Quick settings shows the vault, printer, display and input-method items while they are active
+# (the tray's shownItems), so a layout migrated here needs nothing more for that.
 TRAY_HIDE=(org.kde.plasma.vault org.kde.plasma.devicenotifier org.kde.kscreen org.kde.plasma.printmanager
   org.kde.plasma.manage-inputmethod)
 
@@ -914,14 +972,24 @@ if (best !== null) { var g = screenGeometry(best.screen); print(Math.round(g.wid
 # Migrate the layout file while plasmashell is stopped (or print what it would do): everything a
 # fresh layout gets from the Global Theme's layout script that an existing one lacks. Panels, pins,
 # cards and their places are kept; a value the user changed is kept. $1 "W H" of the card screen
+# Steps 1, 3, 4 (the hidden tray items) and 6 bring a layout made before configuration version 2
+# up to it, so they run only on such a HOME (PREV_VERSION 0 or 1): from version 2 on, what they
+# would change again is the user's (a top bar the settings page made translucent, a tray item set
+# to "Always shown", the pen menu or desktop the user removed or changed). Step 4's Disks & Devices
+# part (0.4.0) runs once, recorded in plasmafusionrc [Setup] TrayDevices.
 migrate_layout() {
-  local out rc=0
+  local out rc=0 solid devices
+  solid=$(kreadconfig6 --file plasmafusionrc --group TopBar --key SolidNextToWindows 2>/dev/null || true)
+  devices=$(kreadconfig6 --file plasmafusionrc --group Setup --key TrayDevices 2>/dev/null || true)
   out=$(python3 - "$CONFIG" "$DRY" "${1:-}" "$(installed_previews)" "$(package_dir plasma/plasmoids "$PEN_WIDGET" >/dev/null && echo 1 || echo 0)" \
-    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" <<'PY'
+    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" \
+    "$PREV_VERSION" "$solid" "$devices" <<'PY'
 import re, subprocess, sys
 
-config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed = sys.argv[1:9]
+config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed, prev, solid, devices = sys.argv[1:12]
 dry = dry == "1"
+# The steps that bring a layout up to configuration version 2 (see above).
+first = not prev.isdigit() or int(prev) < 2
 APPLETSRC = "plasma-org.kde.plasma.desktop-appletsrc"
 
 def parse(path):
@@ -991,6 +1059,9 @@ for c in sorted(desktops, key=int):
     plugin = kv.get("plugin")
     if plugin == target:
         note("desktop %s: %s (unchanged)" % (c, plugin))
+        continue
+    if not first:
+        note("desktop %s: %s (kept: the user's)" % (c, plugin))
         continue
     write(APPLETSRC, ["Containments", c], "plugin", target, plugin)
     if plugin != "org.kde.desktopcontainment":
@@ -1074,13 +1145,15 @@ for c, kv in sorted(conts.items(), key=lambda i: int(i[0]) if i[0].isdigit() els
 
 # 3. Top bar solid next to maximized windows (owner decision 5): adaptive (0) instead of the
 #    translucent (2) the earlier layout set; another value is the user's.
+#    Translucent is also what the settings page sets for "Solid top bar next to windows" off
+#    ([TopBar] SolidNextToWindows=false), and from version 2 on it is the user's.
 if top is not None:
     view = shellrc.get(("PlasmaViews", "Panel %s" % top), {})
     cur = view.get("panelOpacity")
-    if cur == "2":
+    if cur == "2" and first and solid != "false":
         write("plasmashellrc", ["PlasmaViews", "Panel %s" % top], "panelOpacity", "0", cur)
     else:
-        note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque"}.get(cur, cur))
+        note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque", "2": "translucent"}.get(cur, cur))
 
 # 4. Tray items hidden (no expander arrow), in every top bar's tray; 5. app menus for their own
 #    screen only.
@@ -1093,13 +1166,18 @@ for c, kv in conts.items():
             for key in ("hiddenItems", "disabledStatusNotifiers"):
                 items = [i for i in general.get(key, "").split(",") if i]
                 add = [i for i in tray_hide.split() if i not in items]
-                if add:
+                if add and first:
                     write(APPLETSRC, ["Containments", c, "Applets", a, "General"], key, ",".join(items + add), general.get(key))
+                elif add:
+                    note("tray %s %s: %s left out (kept: the user's)" % (a, key, ",".join(add)))
                 else:
                     note("tray %s %s (unchanged)" % (a, key))
             # Disks & Devices: the quick-settings page replaces the stock item, which is not loaded
-            # (known, not extra), as the desktop layout does for a new bar.
-            if "org.plasmafusion.quicksettings" in applets(c).values():
+            # (known, not extra), as the desktop layout does for a new bar. Once: an item the user
+            # turned on again in the tray's settings stays.
+            if devices == "done":
+                note("tray %s Disks & Devices: as the user has it (kept)" % a)
+            elif "org.plasmafusion.quicksettings" in applets(c).values():
                 known = [i for i in general.get("knownItems", "").split(",") if i]
                 extra = [i for i in general.get("extraItems", "").split(",") if i]
                 dn = "org.kde.plasma.devicenotifier"
@@ -1121,6 +1199,8 @@ if top is not None and pen_installed == "1":
     have = applets(top)
     if "org.plasmafusion.pen" in have.values():
         note("pen widget in the top bar (unchanged)")
+    elif not first:
+        note("pen widget not in the top bar (kept: the user's)")
     else:
         ids = [int(x) for g in rc for x in g if x.isdigit()]
         new = str(max(ids) + 1 if ids else 1)
@@ -1441,6 +1521,44 @@ Exec=busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell eva
 StartupNotify=false
 EOF
 }
+# Registers a command component (its desktop file in ~/.local/share/kglobalaccel/) as System
+# Settings' "Add Command" does (kcm_keys, GlobalAccelModel::addApplication): an action with an empty
+# name makes kglobalaccel read the desktop file, which gives the component its _launch action,
+# present (its key grabbed) and starting the command; the empty one is removed again. Registering
+# "_launch" itself first, as this did before, made kglobalacceld add a second _launch, not present,
+# in place of the file's own one (its addAction runs after the component was made from the file),
+# so the key did nothing until the next login.
+# kglobalacceld reads the file only when it makes the component. An unregistered _launch (as
+# fusion-restore.sh does) leaves its component without actions, and kglobalacceld forgets such a
+# component only when it next writes its settings, 0.5 s later: a setup in that moment got no
+# _launch from the empty name and set the key on nothing, until the next login. So _launch is
+# registered by name afterwards: that finds the file's own and changes nothing, or makes the missing
+# one, which starts the command as well (kglobalacceld runs the desktop file's command for its
+# component's _launch, KServiceActionComponent) but is not present until command_key_present.
+# $1 component, $2 its name
+register_command_component() {
+  [ "$DRY" = 1 ] && return 0
+  if ! bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$1" "" "$2" "" >/dev/null 2>&1; then
+    note "warning: kglobalaccel did not take $1"
+    return 0
+  fi
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$1" "" >/dev/null 2>&1 || true
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$1" _launch "$2" "$2" >/dev/null 2>&1 || true
+}
+# kglobalaccel makes a component it loads at login active; an action registered while it runs stays
+# inactive (no key grab) until the next login. Its keys given again as present (SetPresent 2 |
+# NoAutoloading 4, what a running application does) make the key work at once; given with no key,
+# a key chosen later in System Settings works at once too. $1 component, $2 its name
+command_key_present() {
+  local cur
+  [ "$DRY" = 1 ] && return 0
+  cur=$(shortcut_get "$1" _launch)
+  # shellcheck disable=SC2086
+  set -- "$1" "$2" $cur
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setShortcut asaiu 4 "$1" _launch "$2" "$2" \
+    $(($# - 2)) "${@:3}" 6 >/dev/null 2>&1 ||
+    note "warning: kglobalaccel did not take $1's key as present"
+}
 # $1 claim (the Windows set) or free (only when nothing holds Meta+N)
 ensure_notify_shortcut() {
   local mode=$1 cur free
@@ -1448,37 +1566,172 @@ ensure_notify_shortcut() {
   # executable bit ("not owned by root and executable flag not set"), so kglobalaccel would bind
   # Meta+N and then refuse to launch it. System Settings' "Add Command" entries are made the same way.
   install_text "$DATA/kglobalaccel/$NOTIFY_COMPONENT" "$(notify_desktop)" 0755 || true
-  if [ "$DRY" = 0 ]; then
-    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$NOTIFY_COMPONENT" _launch \
-      "Plasma Fusion: Notifications" "Plasma Fusion: Notifications" >/dev/null 2>&1 ||
-      note "warning: kglobalaccel did not take $NOTIFY_COMPONENT"
-  fi
+  register_command_component "$NOTIFY_COMPONENT" "Plasma Fusion: Notifications"
   if [ "$mode" = claim ]; then
     shortcut_claim "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
+  else
+    cur=$(shortcut_get "$NOTIFY_COMPONENT" _launch)
+    if [ -n "$cur" ]; then
+      # shellcheck disable=SC2086
+      note "shortcut $NOTIFY_COMPONENT / _launch = $(keyname $cur) (kept)"
+    elif [ -z "$(key_holders "$NOTIFY_SHORTCUT")" ]; then
+      shortcut_set "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
+    else
+      note "notification list: Meta+N is in use (no shortcut set)"
+    fi
+  fi
+  command_key_present "$NOTIFY_COMPONENT" "Plasma Fusion: Notifications"
+}
+
+# Copy text from the screen (survey F6; PowerToys Text Extractor, macOS Live Text). Spectacle
+# (6.6 and later) recognises text only from its own capture: there is no command line or D-Bus way to
+# go straight from a region to the clipboard, and its background mode (-b -r) saves an image and
+# exits without the text. So the key opens Spectacle's region capture (--region), where "Extract
+# Text" on the selection's toolbar copies the text and says so in a notification; Spectacle's viewer
+# opens afterwards unless its "Close after extraction" setting is on. Quick settings' header has the
+# same action.
+copytext_desktop() {
+  cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Plasma Fusion: Copy Text from Screen
+Comment=Select an area with Spectacle and choose Extract Text to copy its text (installed by Plasma Fusion's fusion-config.sh, removed by fusion-restore.sh)
+Icon=document-scan
+Exec=spectacle --region
+StartupNotify=false
+EOF
+}
+# Meta+Shift+T only when nothing holds it; a key the user gave the action is kept.
+ensure_copytext_shortcut() {
+  local cur
+  if ! command -v spectacle >/dev/null 2>&1; then
+    note "copy text from the screen: Spectacle is not installed (no shortcut)"
     return 0
   fi
-  cur=$(shortcut_get "$NOTIFY_COMPONENT" _launch)
+  # Executable, as the Meta+N component (KDE runs a desktop file outside the system directories
+  # only when it has the executable bit).
+  install_text "$DATA/kglobalaccel/$COPYTEXT_COMPONENT" "$(copytext_desktop)" 0755 || true
+  if [ "$DRY" = 0 ]; then
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$COPYTEXT_COMPONENT" _launch \
+      "Plasma Fusion: Copy Text from Screen" "Plasma Fusion: Copy Text from Screen" >/dev/null 2>&1 ||
+      note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT"
+  fi
+  cur=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
   if [ -n "$cur" ]; then
     # shellcheck disable=SC2086
-    note "shortcut $NOTIFY_COMPONENT / _launch = $(keyname $cur) (kept)"
-  elif [ -z "$(key_holders "$NOTIFY_SHORTCUT")" ]; then
-    shortcut_set "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
+    note "shortcut $COPYTEXT_COMPONENT / _launch = $(keyname $cur) (kept)"
+  elif [ -z "$(key_holders "$COPYTEXT_SHORTCUT")" ]; then
+    shortcut_set "$COPYTEXT_COMPONENT" _launch "$COPYTEXT_SHORTCUT"
   else
-    note "notification list: Meta+N is in use (no shortcut set)"
+    note "copy text from the screen: Meta+Shift+T is in use (no shortcut set)"
+  fi
+  # kglobalaccel makes a component it loads at login active; one registered while it runs stays
+  # inactive (no key grab) until the next login. Its keys given again as present (SetPresent 2 |
+  # NoAutoloading 4, what a running application does) make the key work at once.
+  cur=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
+  if [ -n "$cur" ] && [ "$DRY" = 0 ]; then
+    # shellcheck disable=SC2086
+    set -- $cur
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setShortcut asaiu 4 "$COPYTEXT_COMPONENT" _launch \
+      "Plasma Fusion: Copy Text from Screen" "Plasma Fusion: Copy Text from Screen" $# "$@" 6 >/dev/null 2>&1 ||
+      note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT's key as present"
   fi
 }
 
-# Search: Meta+Space, Meta+S, Alt+Space, Alt+F2 and KRunner's own keys (Search) activate the
-# launcher (the shell's "activate application launcher", which opens it on the active screen, as
-# the Meta key does); KRunner keeps no key, so nothing starts it.
+# Meta+V: the clipboard sheet of quick settings (its button opens it too), written like Meta+N's
+# component; the sheet's openRequest mode "clipboard" opens it or, when it is open, closes it.
+CLIPBOARD_JS="var q=panels();for(var i=0;i<q.length;i++){var w=q[i].widgets('org.plasmafusion.quicksettings');for(var j=0;j<w.length;j++){w[j].currentConfigGroup=['General'];w[j].writeConfig('openRequest','clipboard:'+Date.now());}}"
+clipboard_desktop() {
+  cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Plasma Fusion: Clipboard
+Comment=Opens the clipboard sheet of quick settings (installed by Plasma Fusion's fusion-config.sh, removed by fusion-restore.sh)
+Icon=edit-paste
+Exec=busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s "$CLIPBOARD_JS"
+StartupNotify=false
+EOF
+}
+# $1 claim (the Windows set: Klipper's pop-up loses Meta+V) or free (Meta+V only when nothing
+# holds it, which on a stock Plasma is never: Klipper has it). Either way the component is there,
+# so "Plasma Fusion: Clipboard" can be given a key under System Settings > Shortcuts.
+ensure_clipboard_shortcut() {
+  local mode=$1 cur
+  install_text "$DATA/kglobalaccel/$CLIPBOARD_COMPONENT" "$(clipboard_desktop)" 0755 || true
+  register_command_component "$CLIPBOARD_COMPONENT" "Plasma Fusion: Clipboard"
+  if [ "$mode" = claim ]; then
+    shortcut_claim "$CLIPBOARD_COMPONENT" _launch "$CLIPBOARD_SHORTCUT"
+  else
+    cur=$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)
+    if [ -n "$cur" ]; then
+      # shellcheck disable=SC2086
+      note "shortcut $CLIPBOARD_COMPONENT / _launch = $(keyname $cur) (kept)"
+    elif [ -z "$(key_holders "$CLIPBOARD_SHORTCUT")" ]; then
+      shortcut_set "$CLIPBOARD_COMPONENT" _launch "$CLIPBOARD_SHORTCUT"
+    else
+      note "clipboard sheet: Meta+V is in use, by Klipper's pop-up by default (no shortcut set; --shortcuts takes it)"
+    fi
+  fi
+  command_key_present "$CLIPBOARD_COMPONENT" "Plasma Fusion: Clipboard"
+}
+
+# Search: Meta+Space, Meta+S, Alt+Space and KRunner's other keys (Search) activate the launcher
+# (the shell's "activate application launcher", which opens it on the active screen, as the Meta
+# key does). KRunner keeps Alt+F2, the run-command key of KDE since its first release and of GNOME
+# and Xfce: who presses it wants a command line, and gets the full KRunner with every plugin; the
+# search keys of Windows and macOS (Meta+S, Meta+Space) and Alt+Space are the launcher's. The
+# launcher's last search row opens the same query in KRunner. RunClipboard keeps no key.
 apply_launcher_keys() {
   local k keys=()
-  for k in $((META + K_SPACE)) $((META + 0x53)) $((ALT + K_SPACE)) $((ALT + K_F2)) $(shortcut_get org.kde.krunner.desktop _launch); do
+  for k in $((META + K_SPACE)) $((META + 0x53)) $((ALT + K_SPACE)) $(shortcut_get org.kde.krunner.desktop _launch); do
+    [ "$k" = $((ALT + K_F2)) ] && continue
     case " ${keys[*]} " in *" $k "*) ;; *) keys+=("$k") ;; esac
   done
   for k in "${keys[@]}"; do shortcut_claim plasmashell "$LAUNCHER_ACTION" "$k"; done
-  shortcut_set org.kde.krunner.desktop _launch
+  shortcut_claim org.kde.krunner.desktop _launch $((ALT + K_F2))
+  shortcut_set org.kde.krunner.desktop _launch $((ALT + K_F2))
   shortcut_set org.kde.krunner.desktop RunClipboard
+  set_key plasmafusionrc Shortcuts KRunnerKey "$KRUNNER_KEY_VERSION"
+}
+
+# Alt+F2 back to KRunner on a HOME an earlier Plasma Fusion configured (it gave the key to the
+# launcher and left KRunner none; the Windows-style set does not run again there). Once
+# (plasmafusionrc [Shortcuts] KRunnerKey), and only while the launcher still holds Alt+F2 and
+# KRunner has no key: a key the user gave either of them since stays.
+apply_krunner_key_upgrade() {
+  read_key plasmafusionrc Shortcuts KRunnerKey
+  [ "$REPLY" = "$KRUNNER_KEY_VERSION" ] && return 0
+  if key_holders $((ALT + K_F2)) | grep -qxF "plasmashell"$'\t'"$LAUNCHER_ACTION" &&
+    [ -z "$(shortcut_get org.kde.krunner.desktop _launch)" ]; then
+    note "KRunner gets Alt+F2 back from the launcher (earlier Plasma Fusion setup)"
+    shortcut_claim org.kde.krunner.desktop _launch $((ALT + K_F2))
+  else
+    note "KRunner key: Alt+F2 and KRunner's keys are the user's (kept)"
+  fi
+  set_key plasmafusionrc Shortcuts KRunnerKey "$KRUNNER_KEY_VERSION"
+}
+
+# Meta+V for the clipboard sheet (0.5.0) on a HOME an earlier Plasma Fusion configured with the
+# Windows-style set, which does not run again there. That set's mark is Meta+N on the notification
+# list together with Meta+S on the launcher: a run without the set also gives the notification list
+# Meta+N when nothing holds it (a --keep-shortcuts setup whose quick settings lost its Meta+N), but
+# only the set gives the launcher Meta+S. Read before this run's ensure_notify_shortcut. Once
+# (plasmafusionrc [Shortcuts] ClipboardKey), and only while Klipper's pop-up still holds Meta+V and
+# the sheet has no key: a key the user gave either of them since stays. Otherwise the sheet gets
+# Meta+V only when nothing holds it.
+apply_clipboard_key_upgrade() {
+  read_key plasmafusionrc Shortcuts ClipboardKey
+  if [ "$REPLY" != "$CLIPBOARD_KEY_VERSION" ] &&
+    [ "$(shortcut_get "$NOTIFY_COMPONENT" _launch)" = "$NOTIFY_SHORTCUT" ] &&
+    key_holders $((META + 0x53)) | grep -qxF "plasmashell"$'\t'"$LAUNCHER_ACTION" &&
+    key_holders "$CLIPBOARD_SHORTCUT" | grep -qxF "plasmashell"$'\t'"show-on-mouse-pos" &&
+    [ -z "$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)" ]; then
+    note "the clipboard sheet gets Meta+V from Klipper's pop-up (earlier Plasma Fusion setup)"
+    ensure_clipboard_shortcut claim
+  else
+    ensure_clipboard_shortcut free
+  fi
+  set_key plasmafusionrc Shortcuts ClipboardKey "$CLIPBOARD_KEY_VERSION"
 }
 
 # Windows and the dock: Meta+Up maximize, Meta+Down restore, quick tile top/bottom on
@@ -1644,10 +1897,11 @@ if has_name org.kde.plasmashell && fusion_layout_present; then
 fi
 # An existing Plasma Fusion layout (kept): migrated in place while plasmashell is stopped, in the
 # restart that applies the steps above (one restart for all of it).
-migrate=0 card_size=
+migrate=0 card_size='' layout_checked=0
 if [ "$LAYOUT" = auto ] && [ "$reset" = 0 ] && has_name org.kde.plasmashell; then
   card_size=$(card_screen_size)
   layout_needs_migration "$card_size" && migrate=1
+  layout_checked=1
 fi
 if [ "$migrate" = 1 ]; then
   say "Desktop and top bar (existing layout, kept)"
@@ -1667,6 +1921,11 @@ elif [ -n "$restart_why" ]; then
 fi
 if [ "$DRY" = 0 ] && has_name org.kde.plasmashell && fusion_layout_present; then
   note "panel thickness: $(fix_panel_thickness)"
+fi
+# The trays' Disks & Devices are as Plasma Fusion sets them now (migrated, or a new layout): from
+# here on the user's (migrate_layout).
+if [ "$layout_checked" = 1 ] || [ "$reset" = 1 ]; then
+  set_key plasmafusionrc Setup TrayDevices "done"
 fi
 set_key kdeglobals KDE DefaultDarkLookAndFeel "$DARK"
 set_key kdeglobals KDE DefaultLightLookAndFeel "$LIGHT"
@@ -1776,6 +2035,7 @@ elif [ "$SHORTCUTS" = keep ]; then
   note "Windows-style set not applied (--keep-shortcuts)"
 else
   note "Windows-style set applied by an earlier run of this version (--shortcuts applies it again)"
+  apply_krunner_key_upgrade
 fi
 
 # ---------- 4. KWin ----------
@@ -1792,12 +2052,17 @@ managed_key kwinrc TabBoxAlternative HighlightWindows false false
 package_dir kwin/tabbox "$SWITCHER" >/dev/null || package_dir kwin-wayland/tabbox "$SWITCHER" >/dev/null ||
   note "note: window switcher $SWITCHER is not installed yet; KWin uses its default until it is"
 # Hot corner: 9 = no screen edge, 7 = top-left corner. --hot-corner turns it on. Without it the
-# corner is off on a first run, and a corner the user turned on since (the settings module's Hot
-# corner, System Settings > Screen Edges) is kept on later runs (the upgrade rule).
+# corner is off on a first run, and whatever the key holds on a later run is the user's: a corner
+# turned on in the settings module or under System Settings > Screen Edges. Not the upgrade rule's
+# "unset is ours": KWin's own default is the top-left corner (overviewconfig.kcfg), so Screen Edges
+# turning it on deletes the key, and an unset key on a HOME Plasma Fusion set up means "on".
 if [ "$HOT_CORNER" = 1 ]; then
   set_key kwinrc Effect-overview BorderActivate 7
+elif [ "$PREV_VERSION" = 0 ]; then
+  set_key kwinrc Effect-overview BorderActivate 9
 else
-  managed_key kwinrc Effect-overview BorderActivate 9 9
+  read_key kwinrc Effect-overview BorderActivate
+  note "kwinrc [Effect-overview] BorderActivate = $(show "$REPLY") (kept: the user's hot corner)"
 fi
 managed_key kwinrc Effect-blur BlurStrength "$BLUR_STRENGTH" "$BLUR_STRENGTH"
 managed_key kwinrc Effect-blur NoiseStrength "$BLUR_NOISE" "$BLUR_NOISE"
@@ -1837,9 +2102,15 @@ else
   note "note: $OUTLINE_QML is not installed yet; KWin keeps its own snap-zone outline"
 fi
 # On-screen keyboard (TABLET T6): off in laptop posture; from then on quick settings switches it with
-# the posture. In tablet posture it stays as it is. Another input method the user chose is kept.
+# the posture. In tablet posture it stays as it is. Another input method the user chose is kept, and
+# so is the keyboard while quick settings' keyboard policy (the settings page's "On-screen
+# keyboard") is "On touch": that policy wants it in laptop posture too, and quick settings writes
+# the key only when the posture or the policy changes, so a blank key would stay until the next
+# login.
 if bus get-property org.kde.KWin /org/kde/KWin org.kde.KWin.TabletModeManager tabletMode 2>/dev/null | grep -q true; then
   note "kwinrc [Wayland] InputMethod: tablet posture, left on (quick settings switches it)"
+elif keyboard_policy_touch; then
+  note "kwinrc [Wayland] InputMethod: quick settings' keyboard policy is On touch (left as it is)"
 else
   osk=$(system_data_path applications/org.kde.plasma.keyboard.desktop) || osk=$OSK_DESKTOP
   managed_key kwinrc Wayland InputMethod "" "$osk" "$OSK_DESKTOP"
@@ -1933,21 +2204,27 @@ managed_key krunnerrc General FreeFloating true true
 # badge shows the current layout's [Layout] DisplayNames entry when the user set one, else its
 # short name in capitals ("US" where the board draws its sample "EN"); writing kxkbrc Use or
 # LayoutList would replace the layouts KWin takes from the system (XKB_DEFAULT_LAYOUT).
-# Quick settings: Meta+A (the Windows-style set; Meta+N then opens its notification list) or Meta+N.
+# Quick settings: Meta+A (the Windows-style set; Meta+N then opens its notification list and Meta+V
+# its clipboard sheet) or Meta+N.
 if has_name org.kde.plasmashell; then
   if [ "$WINDOWS_SET" = 1 ]; then
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "$QS_OLD_SHORTCUT_TEXT" claim
     ensure_notify_shortcut claim
+    ensure_clipboard_shortcut claim
+    set_key plasmafusionrc Shortcuts ClipboardKey "$CLIPBOARD_KEY_VERSION"
   elif [ "$SHORTCUTS" = keep ]; then
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_OLD_SHORTCUT" "$QS_OLD_SHORTCUT_TEXT" "quick settings" "" free
   else
     # A widget made by a later layout rebuild gets its key again, when nothing else took it.
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "" free
+    # The clipboard upgrade first: it reads the Meta+N that ensure_notify_shortcut may give.
+    apply_clipboard_key_upgrade
     ensure_notify_shortcut free
   fi
 else
   note "quick settings: plasmashell is not running (no shortcut set)"
 fi
+ensure_copytext_shortcut
 
 # ---------- 6. lock screen ----------
 
@@ -2126,7 +2403,13 @@ if [ "$SCREENS" = 1 ]; then
     else
       note "run $topbars_js in plasmashell"
       CHANGES=$((CHANGES + 1))
-      plasmashell_eval "$(cat "$topbars_js")" | sed 's/^/  /' || note "warning: ensure-topbars.js failed"
+      topbars_out=$(plasmashell_eval "$(cat "$topbars_js")") || note "warning: ensure-topbars.js failed"
+      [ -z "${topbars_out:-}" ] || note "$topbars_out"
+      # The power service sets its tier's keys on new widgets only when it applies the tier again.
+      if [[ ${topbars_out:-} =~ added\ ([0-9]+),\ completed\ ([0-9]+) ]] &&
+        [ $((BASH_REMATCH[1] + BASH_REMATCH[2])) -gt 0 ] && session_manager; then
+        systemctl --user try-reload-or-restart plasma-fusion-powerfx.service 2>/dev/null || true
+      fi
     fi
   else
     note "note: ensure-topbars.js is not installed (Global Theme $LNF); top bars on other screens not checked"

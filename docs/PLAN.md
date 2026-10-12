@@ -28,7 +28,7 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 | 3 | Accent colour | every Fusion part follows it; boot splash and login screen stay blue |
 | 4 | Snap layouts | on hold (about 0.5 s) or Meta+Z; a click always maximizes (`SnapLayoutsOnHover=false`) |
 | 5 | Top bar next to a window | solid while a window is maximized or touches it, frosted over the desktop |
-| 6 | Shortcuts | Windows-style set: Meta+Space, Meta+S, Alt+Space and Alt+F2 search in the Fusion launcher (KRunner no longer starts); Meta+A quick settings; Meta+N notifications; Meta+Up/Down maximize/restore (quick tile on Meta+Alt+Up/Down); Meta+Tab Overview; Meta+1..4 workspaces; Meta+Alt+1..9 dock apps |
+| 6 | Shortcuts | Windows-style set: Meta+Space, Meta+S and Alt+Space search in the Fusion launcher, Alt+F2 opens the full KRunner (since 0.5.0; before, KRunner kept no key); Meta+A quick settings; Meta+N notifications; Meta+Up/Down maximize/restore (quick tile on Meta+Alt+Up/Down); Meta+Tab Overview; Meta+1..4 workspaces; Meta+Alt+1..9 dock apps |
 | 7 | KDE Mail and Calendar | no apps were named, so KMail, KOrganizer and Akonadi stay unchanged (pins, autostart, calendar card click) |
 | 8 | Second monitor | a top bar on every screen; dock, status icons, quick settings and desktop cards on the main screen; launcher and pop-ups on the active screen |
 
@@ -61,6 +61,7 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 | Plasmoid, desktop card | `org.plasmafusion.weathercard` (current weather, today's high and low) | same |
 | Plasmoid, desktop card | `org.plasmafusion.calendarcard` (this month; a click on a day opens KOrganizer) | same |
 | Plasmoid, desktop card | `org.plasmafusion.systemcard` (processor and memory bars) | same |
+| Plasmoid, top bar (optional) | `org.plasmafusion.meters` (processor, memory, network and temperature meters; in no layout, added by the user) | same |
 | Plasmoid, pen | `org.plasmafusion.pen` (pen button in tablet posture, New note / Snip / Mark up / Whiteboard / pen settings; Meta+Shift+W) and its Xournal++ templates `plasma-fusion/pen/templates/{Note,Whiteboard}.xopp` | same; templates in `~/.local/share/plasma-fusion/pen/` |
 | Layout templates | `org.plasmafusion.panel.topbar`, `org.plasmafusion.panel.dock` ("Add Panel" entries) | `~/.local/share/plasma/layout-templates/` |
 | Power tiers | `plasma-fusion-powerfx` (program) and `plasma-fusion-powerfx.service` (user unit, enabled by `fusion-config.sh`) | `~/.local/libexec/plasma-fusion/`, `~/.config/systemd/user/` (system package: `/usr/libexec/plasma-fusion/`, `/usr/share/plasma-fusion/powerfx/`) |

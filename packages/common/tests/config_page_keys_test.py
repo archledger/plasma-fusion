@@ -5,12 +5,15 @@
 
 Plasma's settings dialog passes every key of contents/config/main.xml to the page as cfg_<key>
 and its default as cfg_<key>Default (a missing property logs "Setting initial properties
-failed"), and on Apply it writes every declared cfg_ property back. For a widget with one
-settings page this checks that:
+failed"), and on Apply it writes every declared cfg_ property back. A widget with several pages
+(contents/config/config.qml) gets the same treatment on each one: the dialog shows one page at a
+time (AppletConfiguration.qml in Plasma 6.7 replaces the page, after Apply or Discard when it
+has changes), creates it with every key and default, and on Apply writes back the cfg_ properties
+of that page only, including keys another page edits. For every page this checks that:
   - the page declares cfg_<key> and cfg_<key>Default for every key;
-  - a key the page has no control for (a plain cfg_ property the page never sets) is refreshed
-    from Plasmoid.configuration in saveConfig(), so Apply does not write back a value another
-    part changed while the dialog was open.
+  - a key the page has no control for (a plain cfg_ property the page never sets, such as a key
+    edited on another page) is refreshed from Plasmoid.configuration in saveConfig(), so Apply
+    does not write back a value another page or part changed while the page was open.
 
   config_page_keys_test.py PACKAGE_DIR...
 """
@@ -21,14 +24,22 @@ from pathlib import Path
 
 
 def check(package):
-    problems = []
     config = package / "contents/config/config.qml"
+    # Pages with a literal source are the widget's own; a source bound to a model (the clock's
+    # calendar provider pages) belongs to another package.
     pages = re.findall(r'source:\s*"([^"]+)"', config.read_text()) if config.is_file() else []
-    if len(pages) != 1:
-        return [f"{package}: expected one settings page, found {len(pages)}"]
-    page = package / "contents/ui" / pages[0]
-    text = page.read_text()
+    if not pages:
+        return [f"{package}: no settings page in {config}"]
     keys = re.findall(r'<entry name="([^"]+)"', (package / "contents/config/main.xml").read_text())
+    problems = []
+    for name in pages:
+        problems += check_page(package / "contents/ui" / name, keys)
+    return problems
+
+
+def check_page(page, keys):
+    problems = []
+    text = page.read_text()
     declared = set(re.findall(r"\bproperty\s+(?:alias|[a-z]+)\s+cfg_(\w+)", text))
     for key in keys:
         for name in (key, key + "Default"):

@@ -7,6 +7,8 @@ import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
 import org.kde.plasma.plasmoid
 
+import "../code/shared.js" as Shared
+
 KCM.SimpleKCM {
     id: page
 
@@ -32,6 +34,9 @@ KCM.SimpleKCM {
     property string cfg_debugAction: ""
     property string cfg_airplaneRestore: ""
     property string cfg_glass: "full"
+    property var cfg_tileOrder: []
+    property var cfg_hiddenTiles: []
+    property real cfg_sharedRevision: 0
 
     property bool cfg_showKeyboardLayoutDefault
     property bool cfg_keyboardLayoutAlwaysDefault
@@ -51,6 +56,9 @@ KCM.SimpleKCM {
     property string cfg_lightLookAndFeelDefault
     property string cfg_darkLookAndFeelDefault
     property string cfg_glassDefault
+    property var cfg_tileOrderDefault
+    property var cfg_hiddenTilesDefault
+    property real cfg_sharedRevisionDefault
 
     function saveConfig() {
         const config = Plasmoid.configuration;
@@ -61,6 +69,18 @@ KCM.SimpleKCM {
         cfg_airplaneRestore = config.airplaneRestore;
         // written by the settings module and the power service
         cfg_glass = config.glass;
+        // the tiles' order and the hidden tiles (the sheet's edit mode)
+        cfg_tileOrder = config.tileOrder;
+        cfg_hiddenTiles = config.hiddenTiles;
+        stampSharedRevision();
+    }
+    // The shared settings' revision is set by the page, not refreshed: Apply writes the shared
+    // settings, so they count as changed now. The dialog writes it after them (main.xml order), and
+    // the old revision written back over the widget's own stamp would make the settings just
+    // applied lose to an older set at the next start (main.qml, code/shared.js). Above the one the
+    // widget holds, also after the clock was set back.
+    function stampSharedRevision() {
+        cfg_sharedRevision = Shared.nextRevision(Date.now(), [Plasmoid.configuration.sharedRevision]);
     }
 
     Kirigami.FormLayout {

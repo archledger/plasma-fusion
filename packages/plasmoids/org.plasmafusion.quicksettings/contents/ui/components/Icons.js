@@ -29,6 +29,8 @@ var bellOff = bell + "M4 4l16 16";
 var phone = "M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2";
 var clipboard = "M9 4h6v3H9zM7 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-1";
 var screenshot = "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3";
+// The screenshot frame around three lines of text: copy text from the screen.
+var copyText = "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8.5 9h7M8.5 12h7M8.5 15h4.5";
 var settings = "M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1";
 var settingsSmall = "M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3";
 var lock = "M7 11h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2zM8 11V8a4 4 0 0 1 8 0v3";
@@ -40,6 +42,9 @@ var brightness = "M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M12 2v2M12 20v2M2 12h2M20 12h
 var bluetooth = "M7 7l10 10-5 4V3l5 4L7 17";
 var moon = "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z";
 var gauge = "M4 16a8 8 0 0 1 16 0M12 16l4-5";
+// The Power mode chooser's rows: the same dial with the needle low, upright and high.
+var gaugeLow = "M4 16a8 8 0 0 1 16 0M12 16l-4-5";
+var gaugeMid = "M4 16a8 8 0 0 1 16 0M12 16V9.5";
 // Disks & Devices: a USB stick (body, connector, contacts) and the eject mark.
 var usbDrive = "M8 10h8v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1zM9.5 4h5v6h-5zM11 6.5h.01M13 6.5h.01";
 var eject = "M12 5l7 8H5zM5 18.5h14";
@@ -67,3 +72,17 @@ var fullscreen = "M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5";
 var swipeUp = "M12 16V5M7.5 9.5L12 5l4.5 4.5M6 20h12";
 var pen = "M4 20l4.2-1 11-11a2.1 2.1 0 0 0-3-3l-11 11zM14.5 6.5l3 3";
 var tablet = "M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2";
+
+// Clipboard sheet. Search and Trash are the Icons board's; the others are drawn on the same grid.
+var search = "M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4";
+var trash = "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5";
+var star = "M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z";
+var smile = "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01";
+var qrCode = "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2.5v2.5H14zM17.5 17.5H20V20h-2.5zM14 20h.01M20 14h.01";
+var bolt = "M13 3L5 13h6l-1 8 8-10h-6z";
+
+// Editing the tiles: a pencil on a line (the pen menu has the plain pencil), the remove badge's
+// minus and the drag handle's six dots, drawn on the same grid.
+var editTiles = "M5 19.5v-3.1L15.2 6.2a2.1 2.1 0 0 1 3 3L8 19.5zM13.5 7.9l3 3M13 19.5h7";
+var minus = "M7 12h10";
+var grip = "M9 6.5h.01M15 6.5h.01M9 12h.01M15 12h.01M9 17.5h.01M15 17.5h.01";

@@ -35,6 +35,7 @@
     The source is packages/common/FusionBackdrop.qml; tools/build-lib/shared-qml.sh copies it
     into every package that uses it (do not edit the copies).
 */
+import QtCore
 import QtQuick
 import QtQuick.Effects
 import Qt.labs.folderlistmodel
@@ -101,10 +102,43 @@ Item {
             "signature": "(u)"
         }, reply => {
             const params = reply.value || {};
-            backdrop.wallpaperUrl = params.Image ? backdrop.toUrl(params.Image) : "";
+            // The D-Bus module hands strings over as typed values: an empty Image is an object
+            // (truthy) whose text is "".
+            const image = String(params.Image || "");
+            backdrop.wallpaperUrl = image !== "" ? backdrop.toUrl(image) : backdrop.defaultWallpaper();
         }, () => {
             backdrop.wallpaperUrl = "";
         });
+    }
+    // The Global Theme's default wallpaper, which Plasma's image wallpaper shows while the
+    // desktop's Image key is empty (a desktop whose wallpaper was never chosen; libkworkspace
+    // DefaultWallpaper): kdeglobals [KDE] LookAndFeelPackage (Breeze when unset), that package's
+    // defaults [Wallpaper] Image, a folder under wallpapers/ in the data directories. Empty when
+    // none exists, and the tint is drawn alone. Before 0.5.0 an empty key always meant the tint, so
+    // Full glass looked like Solid on such a desktop.
+    function defaultWallpaper(): string {
+        const config = String(StandardPaths.writableLocation(StandardPaths.GenericConfigLocation));
+        const lookAndFeel = readIni(config + "/kdeglobals", "KDE/LookAndFeelPackage") || "org.kde.breeze.desktop";
+        const defaults = String(StandardPaths.locate(StandardPaths.GenericDataLocation,
+                                                     "plasma/look-and-feel/" + lookAndFeel + "/contents/defaults"));
+        const name = defaults !== "" ? readIni(defaults, "Wallpaper/Image") : "";
+        return name !== "" ? String(StandardPaths.locate(StandardPaths.GenericDataLocation, "wallpapers/" + name,
+                                                         StandardPaths.LocateDirectory)) : "";
+    }
+    // One key of a KDE configuration file (INI syntax), read through a Settings object made for
+    // the call; nothing is written.
+    Component {
+        id: iniFile
+        Settings {}
+    }
+    function readIni(location: string, key: string): string {
+        const file = iniFile.createObject(backdrop, { location: location });
+        if (!file) {
+            return "";
+        }
+        const value = file.value(key, "");
+        file.destroy();
+        return value !== undefined && value !== null ? String(value) : "";
     }
     onFollowWallpaperChanged: readWallpaper()
     onScreenNumberChanged: readWallpaper()
@@ -210,6 +244,7 @@ Item {
     // --- the blurred copy: small, layered, shown scaled up ---
     Item {
         id: small
+        objectName: "backdropBlur"
         visible: !backdrop.solid
         width: backdrop.smallWidth
         height: backdrop.smallHeight
@@ -217,7 +252,12 @@ Item {
             xScale: backdrop.width / small.width
             yScale: backdrop.height / small.height
         }
-        layer.enabled: visible
+        // The layer follows the glass level only, never the picture's loading: Qt reloads an
+        // Image when the window's device pixel ratio changes, from inside the walk that tells
+        // every item (QQuickWindow::physicalDpiChanged), and a layer switched off there deletes
+        // its effect item, a sibling the walk still visits: plasmashell crashed opening the
+        // tablet launcher sheet or the Notification Centre at the 4/3 scale (ThinkPad).
+        layer.enabled: backdrop.glass !== "solid"
         layer.smooth: true
 
         Image {

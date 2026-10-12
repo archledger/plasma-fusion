@@ -61,6 +61,8 @@ The tests run for `scripts`, all without a desktop session:
 - `tools/device/tests/gate-unit.sh` (the login check, 137 checks);
 - `tools/device/tests/config-keys-unit.sh` (fusion-config.sh's key helpers and the hot-corner step
   against a throw-away configuration, 7 checks);
+- `tools/device/tests/shortcut-keys-unit.sh` (fusion-config.sh's command shortcuts, Meta+N and
+  Meta+V, against a fake kglobalaccel, 41 checks);
 - `packages/powerfx/tests/offline.sh` (the power tiers service against mock D-Bus services);
 - `generators/cursors/tests/test_cursors.py`, `generators/decoration/tests/check_aurorae.py`,
   `generators/plasma-style/tests/validate.py`, `generators/icons/validate.py` over the built themes;

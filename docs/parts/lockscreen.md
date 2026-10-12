@@ -31,24 +31,182 @@ switches at once). The first key goes into the password field and shows the prom
 | Avatar | 112 px, `#7b5cd6`, first letter Space Grotesk 46 px / 700, 4 px `rgba(255,255,255,.14)` ring, shadow `0 20px 50px rgba(0,0,0,.4)` | `UserHeader.qml`; the account picture (`kscreenlocker_userImage`) replaces the letter when set |
 | Name | Space Grotesk 28 px / 600 | full name, or the login name when there is none (no placeholder names) |
 | Password pill | 340 × 48 (y 396 on the 900 px board), radius 24, `rgba(255,255,255,.1)`, 1.5 px `#5b9dff` + 4 px `rgba(91,157,255,.2)` halo when focused, bullets 16 px 0.2 em apart, 36 px reveal button `#cdd3e4`, 36 px `#2f6fdf` unlock button | `MainBlock.qml` + `PasswordField.qml`; the blues follow the user's accent (decision 3) |
-| Hints | 12 px, 8 px inset: `Caps Lock is on` `#f2c38a` with arrow icon (left), `Use fingerprint` `#8ab8ff` 700 (right) | Caps Lock from `KeyState`; the fingerprint (and smartcard) hint only while that authenticator is available; once pam_fprintd sends its instruction (`noninteractiveInfo`, e.g. `Place your finger on …`) that text replaces `Use fingerprint`; its error text replaces it for a moment |
+| Hints | 12 px, 8 px inset: `Caps Lock is on` `#f2c38a` with arrow icon (left), `Use fingerprint` `#8ab8ff` 700 (right) | Caps Lock from `KeyState`; the fingerprint (and smartcard) hint only while that authenticator is available; once pam_fprintd sends its instruction (`noninteractiveInfo`, e.g. `Place your finger on …`) that text replaces `Use fingerprint`; its error text replaces it for a moment. Plasma 6.8: the other ways to unlock as links in the same style (`Use security key`, `Use password`; below) |
 | PAM messages | (not on the board) | 13 px / 600 lines under the hints: prompts, info and errors of the PAM stack, including irlume face messages (`irlume: …`) and `Unlocking failed` |
-| Power buttons | 44 px glass circles, 18 px icons, 11.5 px / 700 `#cdd3e4` labels, 18 px apart, 28 px above the edge | Sleep, Hibernate, Switch User (each only when the system allows it), bottom centre |
+| Power buttons | 44 px glass circles, 18 px icons, 11.5 px / 700 `#cdd3e4` labels, 18 px apart, 28 px above the edge; Shut down a `#d9434b` circle with a white icon | Sleep, Hibernate, Switch User, Restart, Shut Down (each only when the system allows it), bottom centre; Restart and Shut Down ask first (below) |
 
 Notification cards, media card and status chip stay in the prompt state. Keyboard: Tab reaches the
 reveal and unlock buttons, the power buttons, the layout badge, the virtual keyboard button and the
 media buttons; focused controls get the Controls board's dark-scheme focus ring (2 px `#8ab8ff`, 2 px outside; a user
 accent gets its own lighter shade). Screen readers hear every PAM message as it arrives (face and fingerprint
 guidance, errors; `Accessible.announce`), and the full screen is named "Lock screen". Alt+P,
-Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the password.
+Alt+H, Alt+U keep the stock mnemonics, Alt+R and Alt+S are the log-out screen's (Restart, Shut
+Down); they open the question, whose action has no mnemonic, so the same chord pressed again or
+held does not answer it. Escape hides the prompt and clears the password.
 
-## Authentication contract (unchanged from Plasma 6.7.5)
+## Restart and Shut Down (0.5.0)
+
+Survey U6, KDE wishlist 336369 (8 duplicates): stock Plasma's lock screen offers Sleep, Hibernate
+and Switch User only, so a locked computer had to be unlocked to restart it. The power row adds
+Restart and Shut Down where the session may do them, exactly as the log-out screen decides:
+`SessionManagement.canReboot` / `canShutdown` (logind's `CanReboot` / `CanPowerOff` answering yes,
+challenge or inhibited, and the KAuthorized `logout` action; kiosk `[KDE Action Restrictions]
+logout=false` hides both). The log-out screen itself cannot open over the lock screen
+(SessionManagement shows no prompt while the screen saver is active), so `PowerConfirm.qml` asks on
+the prompt's stack: a 64 px circle with the board's icon, "Restart now?" / "Shut down now?", "Open
+apps are closed first. An app with unsaved work waits until you unlock and answer it.", Cancel (a
+chip pill) and the action (accent fill, or the board's red for Shut Down; it has the focus, as on
+the log-out screen; Escape cancels). The action is the log-out screen's "&Restart" / "&Shut Down"
+without the "&": both Qt Quick buttons took Alt+R / Alt+S, so pressing it twice, or holding it
+past the key repeat delay, restarted or powered off at once (VM 6.7.91: Alt+R twice rebooted).
+Only a fresh press of Return, Enter or Space answers it, not the repeats of a key held on the power
+button that opened the question. Confirmed, it calls `requestReboot` / `requestShutdown` with
+`ConfirmationMode.Skip`: ksmserver closes the session (`org.kde.Shutdown.logoutAndReboot` /
+`logoutAndShutdown`) and asks logind. If the session has not ended after 30 s (an app cancelled the
+log-out; ksmserver says so in a notification) the prompt comes back. The question goes when the
+prompt hides (after 0.5 s hidden: the prompt blinks out for a moment when the page replaces it under
+the pointer). Back from it (Cancel, Escape, or when it goes) the prompt keeps PAM's messages and
+prompt and the typed password: the stock reset of the field and messages when the prompt's page
+comes back (written for a stack that holds no other page in normal use) wiped a smartcard's PIN
+prompt or pam_faillock's "account locked" message, which PAM does not send again, and the password
+on every screen (VM 6.7.91 with `[UI] ShowPromptInRegularAuthenticator`: "Password:" and the
+typed text gone after Cancel; kept now).
+
+What blocks: logind's inhibitors for `shutdown` (`ListInhibitors`, read every 2 s while the
+question is shown, and once more when the action is chosen: it is requested only on that answer,
+so a Return right after Alt+S, before the first answer, or an inhibitor taken since the last read
+cannot slip through; when the question closes before the answer, nothing is requested). systemd 259 refuses a reboot or power-off outright while a strong `block`
+inhibitor is held ("Operation denied due to active block inhibitor"; ksmserver asks without the
+skip flag), after the session has already closed; so while one is held the action stays off and
+the page says "A program is blocking a restart. Try again when it has finished." (shutdown
+likewise). `block-weak` inhibitors leave the action on (logind lets the user's own pass) and the
+page says "A program is busy. Restarting now may interrupt it."; `delay` and other kinds (sleep,
+the power keys) count for nothing. Plasma's D-Bus module hands each field of logind's reply over as
+a typed value (`{"value": …}`) in the greeter; both that and plain values are read.
+
+The page names no program, reason or user: whoever stands at the locked screen sees it without
+unlocking, and logind lists every user's inhibitors with their holder and reason (an update tool,
+a backup's target, a VM's name). The first 0.5.0 version listed "Who: why" and the log-out screen's
+"N other users are currently logged in…" warning. What stock Plasma shows there: the 6.7.5 and 6.8
+lock screens have no Restart or Shut Down, no inhibitors and no sessions model
+(`/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen/`, plasma-desktop Plasma/6.8
+`desktoppackage/contents/lockscreen/`); the log-out screen, which has the other-users count
+(6.7.5 `Logout.qml`, 6.8 `LogoutControls.qml`), is not opened while the screen is locked
+(plasma-workspace `sessionmanagement.cpp` `requestLogoutPrompt`: "Do not show Logout prompt when
+in the lockscreen"). So the page says neither who blocks nor how many other users are logged in;
+only that a program blocks or is busy, which the action's state needs. The unlocked log-out screen
+still warns about other users.
+
+Plasma 6.8: `kscreenlocker_greet` loads the same `LockScreenUi.qml` and SessionManagement keeps the
+same properties, `ConfirmationMode` values and `requestReboot` / `requestShutdown` (plasma-workspace
+Plasma/6.8 `sessionmanagement.h`); the 6.8 log-out screen moved to the shell package
+(`90-lockscreen.sh` already ships it) and its strings to `plasma_shell_org.kde.plasma.desktop`;
+6.8 ships `plasma_lookandfeel_org.kde.lookandfeel` without them (Fedora 44, plasma-workspace
+6.7.91: the German catalogue has none of "&Restart", "&Shut Down" or the other users' warning, the
+desktop shell's has all three). So the power row and its question take these strings from
+`PfStyle.logoutDomain`: the Global Theme catalogue on 6.7, the desktop shell's from 6.8 (recognised
+by the 6.8 authenticator). Scenarios `auth68-strings` (fails on the 0.5.0 base) and `auth67-strings`.
+
+## Ways to unlock (Plasma 6.8, 0.5.0)
+
+Plasma 6.8's greeter runs one chosen way to unlock and offers the choice (kscreenlocker
+`PamAuthenticators.authenticator`, the `Authenticators` enum and the `AuthenticatorModel` singleton,
+Plasma/6.8 `greeter/pamauthenticator*.h`; the stock lock screen draws a row of icon buttons,
+plasma-desktop e5616c6a). The model lists the password always and a smartcard, the fingerprint
+reader, the face or a security key (`Universal2Factor`) where the distribution built the PAM
+service (Fedora: `kde-smartcard`, `kde-fingerprint`, `kde-face`, `kde-u2f`) and the user turned it
+on in `kscreenlockerrc [Authenticators]` (`Smartcard`, `Fingerprint`, `Face`, `Universal2Factor`,
+all off by default). The greeter starts with the way that unlocked last time (state file
+`kscreenlockerrc [Greeter] Authenticator`) and saves the way only when it unlocks. The fingerprint
+reader also runs beside every other way (`authenticatorTypes`, the "Use fingerprint" hint).
+
+Survey P6. 0.4 forced the password way on 6.8, so a user who unlocks with a security key or a
+smartcard could not choose it, and the forced choice was written back for the stock lock screen
+too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authenticator has the
+`authenticator` property, so Plasma 6.7 never compiles it):
+
+* Each other way is a link in the hint line under the field, right-aligned, in the board's "Use
+  fingerprint" style (12 px / 700, the accent's light shade, underlined on hover): "Use password",
+  "Use smartcard", "Use fingerprint", "Use face", "Use security key" ("Use %1" with the greeter's
+  name for a way it adds later). Tab reaches them, Space or Return uses one, screen readers hear a
+  link with the greeter's name of the way as description. No links when the password is the only
+  way (every system without the opt-in keys, the VM included).
+* A way with a password field (password, smartcard PIN) keeps the pill. A way without one
+  (fingerprint, face, security key) replaces the field, the reveal and the unlock button with its
+  icon and "Unlock with your face" (fingerprint, security key) in the same pill, without the focus
+  halo; its PAM messages ("Touch your security key") show in the message area and, since nothing
+  would be typed, also show the prompt.
+* After a link the field takes the focus again (password, PIN). Whatever was typed for the old way
+  is cleared whenever another way is in use (a link, or the fall-back to the password when a way
+  stops working), in the field and in `PasswordSync`, so on every screen: kept, a password came
+  back when the password was chosen again, and the smartcard's field sent it as the PIN. A way
+  that prompts for more than "Password:" (`showPrompt`: the smartcard's PIN prompt, or the
+  password way with `kscreenlockerrc [UI] ShowPromptInRegularAuthenticator=true`) shows that
+  prompt in the message area, as stock 6.8.
+* A way that never prompts (`expectingPrompt` false: fingerprint, face, security key) unlocks at
+  once, without the explicit Unlock screen, and the greeter's other workers are stopped first
+  (`stopAuthenticating`), as stock 6.8 (plasma-desktop e5c3d608).
+* The saved way is kept. When the model does not offer it (turned off since) or it stops working
+  (the greeter marks it defunct after repeated quick failures or an unavailable PAM service), the
+  screen says the stock "This authentication method is not functioning correctly. Please try another
+  method, and check your system configuration." and goes back to the password, where the stock lock
+  screen hides the field and waits for another choice. A way that stopped working stays listed in
+  the warning colour and does nothing. A saved way the model does not offer is replaced while the
+  views are made (`AuthenticatorChoice` `Component.onCompleted`), not later: the 6.8 greeter starts
+  the saved way from a call it queued before making them, looks the way up in the model and, for
+  one that is not there, dereferences a null entry (`PAMAuthenticatorModel::isFunctional`). The
+  greeter then crashed on every lock until KWin's "The screen locker is broken" screen (VM, Plasma
+  6.7.91, `[Greeter] Authenticator=Face` without `[Authenticators] Face`; the stock 6.8 lock screen
+  crashes the same way, upstream should check the entry). The 6.8 mock records each start of a way
+  the model does not offer; every auth68 scenario checks there is none (`auth68-missing` fails on
+  the previous package).
+* No "Use fingerprint" link while the fingerprint reader runs beside the password: choosing it
+  alone would only take the field away; the hint keeps pam_fprintd's guidance. When the fingerprint
+  way itself is in use (chosen on the stock lock screen) the hint goes and "Use password" is offered.
+
+* While the prompt is shown the greeter is asked to authenticate again every second
+  (`startAuthenticating`), as the stock 6.8 lock screen does, except during the 3 s grace time after
+  a failed password. The 6.8 greeter starts a conversation only when asked and drops the request
+  while a way's worker process is still starting (the VM's greeter log: "Worker not ready yet,
+  cannot authenticate." for both workers right after the start) or a conversation is running, and
+  does not restart a failed fingerprint or face attempt by itself. Plasma 6.7's authenticators start
+  themselves and are not asked again.
+* A failed attempt of a way without a field (face, security key, fingerprint way) shows "Unlocking
+  failed" but neither shakes nor starts the 3 s grace: the 6.8 greeter reports every failure of the
+  way in use as `failed(None)`, like a refused password, and the grace (with the shake) turned the
+  whole prompt off, "Use password" and the power row included, for all but the moment each attempt
+  took, and spaced the failures 3 s apart, so the greeter's own check (more than 3 failures, each
+  within 2 s of the last, `pamauthenticator.cpp`) never marked a broken way defunct. Such a way is
+  asked again at once while the prompt is shown (as the stock lock screen does) and not while it
+  is hidden, so a camera or key reader is not driven all night; showing the prompt asks again. The
+  failure the greeter reports right after marking a way defunct adds nothing to the defunct
+  message. A refused password or PIN keeps the shake and the grace. VM (Plasma 6.7.91, a test
+  `kde-face` PAM service that always fails after 0.3 s): before, an attempt every 3.3 s for good,
+  "Use password" ignored 5 clicks, 6 attempts in 20 s with the prompt hidden; after, defunct after
+  4 attempts in 1.5 s and back on the password with the message; with 2.5 s failures "Use
+  password" works and nothing runs while the prompt is hidden.
+
+Tests (CI step "Lock screen ways to unlock"): `test/run.sh OUT auth68-picker auth68-saved
+auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-switch auth68-fingerprint
+auth68-heartbeat auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed
+auth67-strings` with a
+6.8 authenticator (`test/MockAuthenticator68.qml`, the model and enum stubs in `test/imports/`) and
+the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones pass on both.
+`auth68-failed` (a face failure leaves the prompt on, is asked again at once, not while hidden;
+the password keeps its grace; a defunct way's message stays) fails on the previous package;
+`auth67-failed` (6.7 keeps the grace) passes on both. `auth68-switch` (a typed password goes when
+face, the password again or the smartcard is chosen, and when the smartcard stops working; Enter in
+the PIN field sends nothing typed before) fails on the previous package: the password stayed, and
+14 characters went to the smartcard as its PIN. Its log gives the length of the typed test secret
+and of the screens' shared copy, never their text (CodeQL `py/clear-text-logging-sensitive-data`).
+
+## Authentication contract (Plasma 6.7.5, and 6.8 where noted)
 
 `LockScreenUi.qml` keeps every handler, timer and call of the stock
 `/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen/LockScreenUi.qml`:
 
 * `authenticator` (PamAuthenticators): `onFailed(kind)` (only `kind == 0` shows `Unlocking failed`,
-  starts the 3 s grace timer and the reject animation), `onSucceeded` (`Qt.quit()` only when
+  starts the 3 s grace timer and the reject animation; on 6.8 only for a way with a field, above), `onSucceeded` (`Qt.quit()` only when
   `hadPrompt`, otherwise the explicit Unlock screen `NoPasswordUnlock.qml`), `onInfoMessageChanged`,
   `onErrorMessageChanged`, `onPromptChanged` (all into the message area through the stock
   `handleMessage` with repeat bounce), `onPromptForSecretChanged` (focus the field, hide the text),
@@ -66,6 +224,24 @@ Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the pa
   `SessionManagement`
   (`onAboutToSuspend` clears the password); password field without undo, Ctrl+Shift+U clears,
   sensitive input-method hints, reveal only when `KAuthorized` allows `lineedit_reveal_password`.
+* Plasma 6.8 (kscreenlocker Plasma/6.8): the same properties, signals and calls plus
+  `authenticator` (the way to unlock, above), `unlocked` and `inPasswordDelay`;
+  `authenticatorTypes` reports only the fingerprint reader. `onSucceeded` stops the workers and
+  quits at once for a way that never prompts; `onPromptForSecretChanged` shows the prompt for a way
+  with `showPrompt`. The stock 6.8 lock screen dropped the 3 s grace timer and queues a password
+  typed during PAM's failure delay behind `authenticator.pamTimeout`, a property the 6.8 greeter does
+  not have (it is `inPasswordDelay`); the grace timer is kept here, so a password is never typed into
+  a conversation that is not waiting for one.
+* The wallpaper: each screen's root keeps its own wallpaper item (`LockScreen.qml`
+  `wallpaperItem`: the root's child at z -1000, where both greeters put that screen's item). The
+  6.8 greeter also sets the context property `wallpaper` for each screen, but in the root context
+  that all its views share, so after the second screen it names that screen's item on every screen
+  (6.7's views each had their own context). Following it put another window's item into the first
+  screen's backdrop ("QQuickItem: Cannot use same item on different windows at the same time"):
+  that screen stayed black, and with two screens the greeter crashed while closing after every
+  correct password (segmentation fault in `QQuickWindowPrivate::cleanup` from `~UnlockApp`), so
+  KWin restarted the lock and a second unlock was needed (VM 7, 6.7.91, two outputs: 4 of 4 cycles;
+  stock 6.8's lock screen closes cleanly). Scenario `wallpaper68` (fails on the 0.5.0 base).
 * A QML load error still falls back to kscreenlocker's built-in lock screen (greeter behaviour);
   the package can never unlock without authentication (the greeter checks `isUnlocked()` on quit).
 
@@ -77,16 +253,20 @@ Alt+H, Alt+U keep the stock mnemonics. Escape hides the prompt and clears the pa
 | `…/contents/lockscreen/LockScreen.qml` | root (stock interface) |
 | `…/LockScreenUi.qml` | behaviour (stock) + layout of both states |
 | `…/MainBlock.qml`, `PasswordField.qml`, `UserHeader.qml`, `NoPasswordUnlock.qml` | the prompt |
+| `…/AuthenticatorChoice.qml` | Plasma 6.8: the other ways to unlock as links, the way in use (loaded on 6.8 only) |
+| `…/KeyboardShift.qml` | the on-screen keyboard's prompt shift (`visibleBoundary`) |
 | `…/BigClock.qml`, `SmallClock.qml`, `UnlockHint.qml` | clocks and hint pill |
 | `…/NotificationCards.qml`, `LockNotifications.qml` (singleton) | notifications while locked (`WatchedNotificationsModel`, grouped per app) |
 | `…/MediaControls.qml`, `StatusChip.qml`, `NetworkIndicator.qml` (loaded on demand, so a system without plasma-nm still locks) | bottom corners |
 | `…/Backdrop.qml`, `GlassPanel.qml` | wallpaper blur/dim/zoom, frosted surfaces (blurred wallpaper through `Kirigami.ShadowedTexture`) |
+| `…/PowerConfirm.qml` | the Restart / Shut Down question, kept off by logind's shutdown inhibitors (unnamed) |
 | `…/PowerButton.qml`, `RoundButton.qml`, `FocusRing.qml`, `LineIcon.qml`, `PfStyle.qml` (singleton: colours, fonts, the boards' 24 px line-icon paths, date/time helpers; the accent from `FusionAccent`) | building blocks |
 | `FusionMetrics.qml`, `Motion.qml`, `FusionAccent.qml`, `FusionTablet.qml` (installed copies of `packages/common/`, `tools/build-lib/shared-qml.sh`) | text scale, motion tokens, accent, KWin's tablet posture |
 | `…/LockOsd.qml`, `PasswordSync.qml`, `qmldir` | stock |
+| `…/contents/logout/` | the log-out screen of Plasma 6.8 and later (6.8's files with the Complementary veil; docs/parts/lookandfeel.md "Log-out screen") |
 | `…/config.xml`, `config.qml` | settings (below) |
-| `packages/lockscreen/test/` | offscreen harness (`run.sh`: a private bus without service activation, `session-bus.conf`), mock authenticator and `org.kde.kscreenlocker` enum, mock MPRIS / notification server, `scenario-greeter.sh` (real greeter in a virtual session; usage in its header) (not installed) |
-| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (31 files) |
+| `packages/lockscreen/test/` | offscreen harness (`run.sh`: a private bus without service activation, `session-bus.conf`), mock authenticators (Plasma 6.7 `MockAuthenticator.qml`, 6.8 `MockAuthenticator68.qml`) and `org.kde.kscreenlocker` stubs (enums, the 6.8 `AuthenticatorModel`), mock MPRIS / notification server, mock logind and ksmserver `org.kde.Shutdown` (`power`), `scenario-greeter.sh` (real greeter in a virtual session; usage in its header) (not installed) |
+| `tools/build.d/90-lockscreen.sh` | validates metadata, required files and config.xml; installs into `$STAGE/.local/share/plasma/shells/org.plasmafusion.lockshell/` (39 files in 0.5.0) |
 | `tools/device/lockscreen-enable.sh`, `lockscreen-disable.sh` | select / deselect it for the user |
 
 ## Install and enable
@@ -189,6 +369,37 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 `offscreen-prompt-typed.png`, `offscreen-idle-software-rendering.png`,
 `offscreen-portrait-900x1440-idle-and-prompt.png`, `greeter-and-envtest-log.txt`, pixel reports).
 
+Restart and Shut Down (0.5.0, CI step "Lock screen Restart and Shut Down"): `test/run.sh OUT power
+power-blocked power-busy power-early power-late power-noreboot power-kiosk power-mnemonic
+power-repeat power-return`. The harness points the system bus at its
+private bus, where `mock_services.py power` answers as logind and ksmserver, so Plasma's own session
+backend (not a stand-in) decides what the row shows, and the clicks are real pointer events:
+`power` both buttons shown; Shut Down asks first, Escape back, nothing called; Restart asks, Cancel
+back, nothing called; Restart confirmed calls `logoutAndReboot`; `power-blocked` a root `block`
+inhibitor reported as "A program is blocking a shutdown…" with no holder, reason or other-users
+count on the page, Shut Down off and a click on it calls nothing, the typed-value form of the
+reply read the same (a sleep `delay` and PowerDevil's power-key inhibitor do not count), the action
+on again 2 s after the inhibitor goes; `power-busy` a `block-weak` inhibitor alone leaves Shut Down
+on and is reported as a busy program, unnamed, confirmed calls `logoutAndShutdown`; `power-early`
+Alt+S and Return while logind's first answer (a `block` inhibitor, 1.5 s late) is on its way call
+nothing; `power-late` an inhibitor taken after the page read the list keeps the confirmed action
+from being requested, which goes ahead once it is gone, and a question closed before logind
+answers requests nothing (both fail on the package before, which acted on the last list read, the
+empty one before the first answer); `power-noreboot` logind
+CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both; `power-mnemonic` Alt+S
+and Alt+R ask, the same chord again calls nothing, the action shows no "&", a deliberate Space
+answers; `power-repeat` Return or Space on a focused power button asks, their repeats (key events
+marked auto-repeat) call nothing, a deliberate Return answers; `power-return` a PAM error message
+and typed text are still there after Cancel and after the question closes with the prompt. On the
+0.4.1 package four of the five first ones fail (no buttons); the last three fail on the packages
+before their fixes. In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
+uinput pointer): the row shows Sleep, Switch User, Restart, Shut Down; with `systemd-inhibit
+--what=shutdown --mode=block --who=Updater` held by root, Shut Down said "A program is blocking a
+shutdown…" (it listed "Updater: Installing updates" before the page stopped naming programs; VM
+6.7.91, `tracks/lockfixes-shots/15-*`, `16-*`) and is off; Cancel returns; with it released, Restart confirmed restarted the VM (logind
+"The system will reboot now!", a new boot id). Evidence:
+`artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/small-shots/item2-*`.
+
 ## Deviations from the boards
 
 * The Lock board shows only the idle screen. The prompt follows the Login board (small clock top
@@ -200,7 +411,8 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
   `N new notifications · hidden while locked` (the board's Calendar card shows its text; that is the
   opt-in `showNotificationSummaries`, titles only). Only notifications that arrive after locking
   are known (WatchedNotificationsModel); the list is empty right after locking.
-* `Use fingerprint` is a hint, not a link: kscreenlocker runs fingerprint authentication in parallel
+* `Use fingerprint` is a hint, not a link (on Plasma 6.8 the other ways to unlock are links, above):
+  kscreenlocker runs fingerprint authentication in parallel
   by itself. It appears only while the fingerprint authenticator is available (enrolled finger,
   active session), and pam_fprintd's own instruction (`Place your finger on …`) replaces it as soon
   as the module sends one, so the device's guidance stays visible.

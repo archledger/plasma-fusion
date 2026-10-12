@@ -11,6 +11,10 @@ import org.kde.plasma.workspace.dbus as DBus
 
 import "components"
 import "global"
+import "../code/tiles.js" as Tiles
+import "../code/requests.js" as Requests
+import "../code/shared.js" as Shared
+import "../code/clipboard.js" as Clip
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -41,7 +45,7 @@ PlasmoidItem {
     // The output this widget's bar is on: the screen at its containment's screen geometry (right
     // as soon as the bar is placed; the window's Screen attached property named the first screen
     // for a while in a bar made for another screen, so Meta+A went to the wrong widget).
-    readonly property string screenName: {
+    readonly property string screenFromGeometry: {
         const g = Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0);
         if (g.width > 0) {
             for (const screen of Qt.application.screens) {
@@ -50,19 +54,36 @@ PlasmoidItem {
                 }
             }
         }
-        return String(root.Screen.name || "");
+        return "";
     }
+    readonly property string screenName: screenFromGeometry || String(root.Screen.name || "")
+    // Whether screenName is the bar's own output, not yet the window's guess (requests wait for it).
+    readonly property bool screenSettled: screenFromGeometry !== ""
     readonly property bool leader: Instances.leader === root
     readonly property var sharedKeys: ["showKeyboardLayout", "keyboardLayoutAlways", "showKdeConnect", "showClipboard",
         "showBatteryPercent", "popupOnNewDevice", "showNotifications", "popupGap", "popupScreenMargin", "startPage",
-        "keyboardPolicy", "tabletNotifications", "lightLookAndFeel", "darkLookAndFeel"]
+        "keyboardPolicy", "tabletNotifications", "lightLookAndFeel", "darkLookAndFeel", "tileOrder", "hiddenTiles"]
     readonly property var sharedSettings: sharedKeys.map(key => Plasmoid.configuration[key])
     function sharedValue(key: string): var {
         return Plasmoid.configuration[key];
     }
+    // When the shared settings last changed (ms; 0 before 0.5.0), so the newest set wins when the
+    // widgets meet again after a restart (code/shared.js).
+    readonly property double sharedRevision: Number(Plasmoid.configuration.sharedRevision) || 0
+    // The shared settings as last seen once this widget joined.
+    property var lastShared: null
+    function setSharedRevision(revision: double): void {
+        if (sharedRevision !== revision) {
+            Plasmoid.configuration.sharedRevision = revision;
+        }
+    }
+    // A list (the tiles' order) is compared by its entries: each read gives a new array, which
+    // `!==` always takes for a change, so an equal order would be written to every widget again.
     function setShared(key: string, value: var): void {
-        if (Plasmoid.configuration[key] !== value) {
-            Plasmoid.configuration[key] = value;
+        const current = Plasmoid.configuration[key];
+        const list = typeof value === "object" && value !== null;
+        if (list ? !Tiles.same(current, value) : current !== value) {
+            Plasmoid.configuration[key] = list ? Tiles.list(value) : value;
         }
     }
     onSharedSettingsChanged: {
@@ -71,11 +92,31 @@ PlasmoidItem {
         if (Instances.items.indexOf(root) === -1) {
             return;
         }
+        // The list is made again whenever any key of the configuration changes (the revision's
+        // own write too): only a changed value is a change.
+        const changed = !lastShared || sharedKeys.some((key, i) => {
+            const value = sharedSettings[i];
+            const list = typeof value === "object" && value !== null;
+            return list ? !Tiles.same(lastShared[i], value) : lastShared[i] !== value;
+        });
+        lastShared = sharedSettings;
+        if (!changed) {
+            return;
+        }
         for (const other of Instances.items) {
             if (other !== root) {
                 sharedKeys.forEach((key, i) => other.setShared(key, sharedSettings[i]));
             }
         }
+        Qt.callLater(stampSharedRevision);
+    }
+    // Every widget's revision to now, a moment after the change: a change written by desktop
+    // scripting (writeConfig) is read back into the configuration after this handler ran, which
+    // put this widget's revision back as it was. Never below the revision they hold, also when the
+    // clock was set back (code/shared.js nextRevision).
+    function stampSharedRevision(): void {
+        const now = Shared.nextRevision(Date.now(), Instances.items.map(widget => widget.sharedRevision));
+        Instances.items.forEach(widget => widget.setSharedRevision(now));
     }
     // Airplane mode's radio record (Backend.qml) survives a plasmashell restart: every widget keeps
     // a copy in its settings, and the first to start after a restart gives it back, once the
@@ -109,18 +150,40 @@ PlasmoidItem {
         function onAirplaneChanged() { root.adoptAirplaneRecord(); }
     }
     Component.onCompleted: {
-        // The leader before this widget joins: a widget on a lower screen number (the primary
-        // screen's bar made again) leads at once, and must still take the others' settings first.
-        const lead = Instances.leader;
-        if (lead) {
-            sharedKeys.forEach(key => setShared(key, lead.sharedValue(key)));
+        // The newest shared settings among the widgets there before this one joins, else the
+        // leader's (equal revisions): a widget on a lower screen number (the primary screen's bar
+        // made again) leads at once and still takes the others' first. A bar whose screen was away
+        // after a restart kept its old settings; loaded first, it no longer gives them to the
+        // others. When this widget's own are the newest, it gives them on.
+        const others = Instances.items;
+        const from = Shared.adoptFrom(sharedRevision, others.map(w => w.sharedRevision), others.indexOf(Instances.leader));
+        if (from >= 0) {
+            const source = others[from];
+            sharedKeys.forEach(key => setShared(key, source.sharedValue(key)));
+            setSharedRevision(source.sharedRevision);
+        } else if (others.length > 0) {
+            const revision = sharedRevision;
+            for (const other of others) {
+                sharedKeys.forEach((key, i) => other.setShared(key, sharedSettings[i]));
+                other.setSharedRevision(revision);
+            }
         }
+        lastShared = sharedSettings;
         Instances.adopt(root);
         adoptAirplaneRecord();
         console.info("quicksettings: widget on " + (screenName || "?") + " (screen " + screenIndex + "), "
                      + Instances.items.length + " in this shell");
     }
     Component.onDestruction: Instances.forget(root)
+    // The widget was removed (Plasma's undo notification is shown) or the removal undone: the bar's
+    // tray items it shows are given back to the tray (Backend.qml, services/TrayItems.qml).
+    property bool removed: false
+    Connections {
+        target: Plasmoid
+        function onDestroyedChanged(destroyed: bool) {
+            root.removed = destroyed;
+        }
+    }
     // Runs action(widget) for the widget on KWin's active screen (this one when that is unknown).
     function onActiveScreen(action: var): void {
         DBus.SessionBus.asyncCall({
@@ -161,7 +224,47 @@ PlasmoidItem {
 
     property bool popupOpen: false
     property bool openOnPress: false
+    // A page the next opening shows instead of the start page (the clipboard sheet).
+    property string requestedPage: ""
     property real maxPopupHeight: 820
+
+    // The Plasma style's frame padding of the sheet's window, which the content subtracts from the
+    // card's outer size. The window's leftPadding... properties are 0 until it is first shown and
+    // then become the style's margins (14 px with Plasma Fusion's style) without their change
+    // signal (paddingChanged), so a binding to them stayed 0: the content asked for the outer size
+    // as its own, the window took it without the padding, and the content was drawn 14 px too low
+    // and right with its last 28 px cut off. They are read again whenever the window sets its frame
+    // borders (each time it is placed) or reports a change, and the content follows; the window
+    // then sizes itself from the content's new size hints and the real padding. The read waits for
+    // the window's own handler to return: the content's new size resizes the window, which sets
+    // its borders again, and a nested update lost one of the four values.
+    property real framePaddingLeft: 0
+    property real framePaddingTop: 0
+    property real framePaddingRight: 0
+    property real framePaddingBottom: 0
+    function readFramePadding(): void {
+        framePaddingLeft = popup.leftPadding;
+        framePaddingTop = popup.topPadding;
+        framePaddingRight = popup.rightPadding;
+        framePaddingBottom = popup.bottomPadding;
+    }
+
+    // The window's size follows the content's size hints (AppletPopup sets its minimum and maximum
+    // size to them, which are equal here, and resizes it), but a size set while the sheet is hidden
+    // did not reach the Wayland window: after a scale change, or a notification that came or went
+    // with the sheet closed, it opened at its old height with the content cut off or a gap below.
+    // Once shown, the window takes the size its own limits name.
+    function fitWindow(): void {
+        const width = popup.minimumWidth;
+        const height = popup.minimumHeight;
+        if (!popup.visible || width <= 0 || height <= 0 || width !== popup.maximumWidth || height !== popup.maximumHeight
+                || (popup.width === width && popup.height === height)) {
+            return;
+        }
+        console.info("quicksettings: sheet window " + popup.width + "x" + popup.height + " -> " + width + "x" + height);
+        popup.width = width;
+        popup.height = height;
+    }
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     // The whole bar height is the hit area (TABLET 4.3, corrected in review).
@@ -241,6 +344,53 @@ PlasmoidItem {
     function togglePopup() {
         setPopupOpen(!popupOpen);
     }
+    // The clipboard sheet (the clipboard button, Meta+V): the pop-up on its clipboard page, or
+    // closed; Klipper's own pop-up where Plasma's clipboard module is missing. A request while the
+    // clipboard service is still loading (just after the shell started) waits for it.
+    readonly property bool clipboardShown: popupOpen && backend.page === "clipboard"
+    property bool clipboardWaiting: false
+    function showClipboard(open: bool): void {
+        switch (Clip.opening(backend.clipboard.available, backend.clipboard.loading)) {
+        case "wait":
+            clipboardWaiting = open;
+            return;
+        case "legacy":
+            clipboardWaiting = false;
+            backend.clipboard.legacyPopup();
+            return;
+        }
+        clipboardWaiting = false;
+        if (!open) {
+            setPopupOpen(false);
+            return;
+        }
+        const wasOpen = popupOpen && popup.visible;
+        requestedPage = "clipboard";
+        setPopupOpen(true);
+        if (wasOpen && popupContent) {
+            // Already open on another page: the focus moves to the clipboard at once.
+            Qt.callLater(() => root.popupContent.focusFirst());
+        }
+    }
+    // Decided once the loader has settled (its item and status change one after the other).
+    Connections {
+        target: backend.clipboard
+        function onLoadingChanged() {
+            root.clipboardLoaded();
+        }
+        function onAvailableChanged() {
+            root.clipboardLoaded();
+        }
+    }
+    function clipboardLoaded(): void {
+        if (clipboardWaiting && (backend.clipboard.available || !backend.clipboard.loading)) {
+            Qt.callLater(() => {
+                if (root.clipboardWaiting) {
+                    root.showClipboard(true);
+                }
+            });
+        }
+    }
     // A device was plugged in (popupOnNewDevice): the sheet on the device list, unless the user is
     // busy on another page or in the Notification Centre.
     function showNewDevice(): void {
@@ -268,7 +418,10 @@ PlasmoidItem {
             contentWanted = true;
             placeAnchor();
             const start = String(Plasmoid.configuration.startPage || "main");
-            backend.page = ["main", "wifi", "bluetooth", "audio", "power"].indexOf(start) !== -1 ? start : "main";
+            backend.page = requestedPage !== "" ? requestedPage
+                         : ["main", "wifi", "bluetooth", "audio", "power"].indexOf(start) !== -1 ? start : "main";
+            backend.pageDirect = requestedPage !== "";
+            requestedPage = "";
             // The settings are read again after the sheet's first frame (policyRefresh).
             policyRefresh.restart();
         }
@@ -322,18 +475,18 @@ PlasmoidItem {
     }
 
     // ---- openRequest: "<mode>:<nonce>[:<output>]" (or "<mode> <nonce>"), written by other shell
-    // parts through desktop scripting (the tablet script's right edge, Meta+N). Without an
-    // output only the widget on KWin's active screen acts.
+    // parts through desktop scripting (the tablet script's right edge, Meta+N, Meta+V). Without an
+    // output only the widget on KWin's active screen acts, and only the leader when that is not
+    // known either (code/requests.js).
     Connections {
         target: Plasmoid.configuration
         function onOpenRequestChanged() {
-            const parts = String(Plasmoid.configuration.openRequest || "").split(/[: ]/);
-            if (parts[0] === "") {
+            const request = Requests.parse(Plasmoid.configuration.openRequest);
+            if (request.mode === "") {
                 return;
             }
-            const output = parts.length > 2 ? parts.slice(2).join(":") : "";
-            if (output !== "") {
-                root.runRequest(parts[0], output);
+            if (request.output !== "") {
+                root.runRequest(request.mode, request.output);
                 return;
             }
             DBus.SessionBus.asyncCall({
@@ -342,14 +495,41 @@ PlasmoidItem {
                 "iface": "org.kde.KWin",
                 "member": "activeOutputName",
                 "arguments": []
-            }, reply => root.runRequest(parts[0], String(reply.value || "")), () => root.runRequest(parts[0], ""));
+            }, reply => root.runRequest(request.mode, String(reply.value || "")), () => root.runRequest(request.mode, ""));
         }
     }
     function runRequest(mode: string, output: string) {
-        const mine = root.screenName;
-        if (output !== "" && mine !== "" && output !== mine) {
+        switch (Requests.decide(output, root.screenName, root.screenSettled, root.leader, false)) {
+        case "wait":
+            // Kept until the bar's output is known (2 s at most, then the guess decides): the
+            // request is written once, and Meta+N, Meta+V or the edge swipe did nothing.
+            waitingRequest = { "mode": mode, "output": output };
+            requestWait.restart();
+            return;
+        case "skip":
             return;
         }
+        performRequest(mode, output);
+    }
+    property var waitingRequest: null
+    function runWaitingRequest(final: bool): void {
+        const request = waitingRequest;
+        if (!request || (!final && !screenSettled)) {
+            return;
+        }
+        waitingRequest = null;
+        requestWait.stop();
+        if (Requests.decide(request.output, screenName, screenSettled, leader, true) === "act") {
+            performRequest(request.mode, request.output);
+        }
+    }
+    onScreenSettledChanged: runWaitingRequest(false)
+    Timer {
+        id: requestWait
+        interval: 2000
+        onTriggered: root.runWaitingRequest(true)
+    }
+    function performRequest(mode: string, output: string): void {
         console.info("quicksettings: openRequest " + mode + (output !== "" ? " on " + output : ""));
         switch (mode) {
         case "sheet":
@@ -367,6 +547,9 @@ PlasmoidItem {
         case "toggle":
             togglePopup();
             break;
+        case "clipboard":
+            showClipboard(!clipboardShown);
+            break;
         case "close":
             if (popupOpen) {
                 setPopupOpen(false);
@@ -375,7 +558,9 @@ PlasmoidItem {
         }
     }
 
-    // ---- Testing hook (config key debugAction, cleared after use): "dump:TAG".
+    // ---- Testing hook (config key debugAction, cleared after use): "dump:TAG", or "keepawake:SECONDS"
+    // for a timed Keep awake that ends after so many seconds (the scenario of a timer running out,
+    // which the sheet offers only in hours).
     readonly property string debugAction: Plasmoid.configuration.debugAction
     onDebugActionChanged: Qt.callLater(runDebugAction)
     function runDebugAction(): void {
@@ -387,6 +572,8 @@ PlasmoidItem {
         const parts = action.split(":");
         if (parts[0] === "dump") {
             dump(parts.slice(1).join(":"));
+        } else if (parts[0] === "keepawake") {
+            backend.keepAwake.forSeconds(Math.min(86400, parseInt(parts[1]) || 0));
         }
     }
     // Every visible target (a button, a slider, a mouse area) under `item`, as
@@ -434,8 +621,17 @@ PlasmoidItem {
                      + ", power " + backend.profile.subtitle + (backend.profile.note ? " [" + backend.profile.note.replace(/\n/g, " | ") + "]" : "")
                      + ", hotspot " + backend.net.hotspotSubtitle
                      + ", devices " + backend.devices.count
-                     + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length
-                     + ", page " + backend.page
+                     + ", notifications " + backend.notif.count + " (" + backend.notif.unread + " unread"
+                     + (backend.notif.available ? ")" : ", off)")
+                     + ", tray " + (backend.trayRevealed.length > 0 ? backend.trayRevealed.join("+") : "-")
+                     + ", screen " + (root.screenName || "?") + (root.screenSettled ? "" : " (guess)")
+                     + (root.leader ? " leader" : "") + " of " + Instances.items.length
+                     + ", page " + backend.page + (backend.pageDirect ? " (direct)" : "")
+                     + (content && content.pageItem && backend.page === "clipboard"
+                        ? " [" + content.pageItem.mode + ", " + content.pageItem.count + " shown of "
+                          + (backend.clipboard.service ? backend.clipboard.service.sourceCount + ", "
+                             + backend.clipboard.service.starredCount + " starred" : "-")
+                          + ", current " + content.pageItem.list.currentIndex + ", query '" + content.pageItem.searchField.text + "']" : "")
                      + ", focus " + (popup.activeFocusItem ? popup.activeFocusItem.Accessible.name : "-")
                      + ", policy " + (policy ? "im " + (policy.inputMethod === "" ? "off" : "on") + " window " + policy.windowMode + " rotation "
                                       + (policy.rotationLocked ? "locked" : "free") + " mode " + policy.tabletModeSetting + " osk "
@@ -444,18 +640,38 @@ PlasmoidItem {
         // qmllint enable missing-property
         console.info("quicksettings: dump " + tag + " bar: " + bar.join("; "));
         console.info("quicksettings: dump " + tag + " sheet: " + sheet.join("; "));
+        // The sheet's window against its content: the content item's place and size in the
+        // window, the size the content asks for and the Plasma style's frame padding.
+        // qmllint disable missing-property
+        console.info("quicksettings: dump " + tag + " frame: " + (content && popup.visible
+            ? "window " + popup.width + "x" + popup.height + ", padding " + [popup.leftPadding, popup.topPadding, popup.rightPadding, popup.bottomPadding].join(",")
+              + ", item " + Math.round(contentLoader.x) + "," + Math.round(contentLoader.y) + " " + Math.round(contentLoader.width) + "x" + Math.round(contentLoader.height)
+              + ", wanted " + Math.round(content.implicitWidth) + "x" + Math.round(content.implicitHeight)
+              + ", page " + Math.round(content.scroller.contentHeight)
+              + ", screen " + root.screenArea.x + "," + root.screenArea.y + " " + root.screenArea.width + "x" + root.screenArea.height
+              + " at " + root.Screen.devicePixelRatio
+            : "closed"));
+        // qmllint enable missing-property
     }
 
     readonly property Backend qsBackend: backend
     Backend {
         id: backend
         popupOpen: root.popupOpen
+        containment: Plasmoid.containment
+        removed: root.removed
         showKeyboardLayout: Plasmoid.configuration.showKeyboardLayout
         keyboardLayoutAlways: Plasmoid.configuration.keyboardLayoutAlways
         showKdeConnect: Plasmoid.configuration.showKdeConnect
         showClipboard: Plasmoid.configuration.showClipboard
         showBatteryPercent: Plasmoid.configuration.showBatteryPercent
         showNotifications: Plasmoid.configuration.showNotifications
+        tileOrder: Plasmoid.configuration.tileOrder
+        hiddenTiles: Plasmoid.configuration.hiddenTiles
+        onTileLayoutRequested: (order, hidden) => {
+            Plasmoid.configuration.tileOrder = order;
+            Plasmoid.configuration.hiddenTiles = hidden;
+        }
         // Stock Disks & Devices opens its pop-up on a new device (popupOnNewDevice, default on).
         // Every bar's widget sees the device: the leader opens the sheet on the screen in use.
         onDeviceAdded: udi => {
@@ -510,6 +726,11 @@ PlasmoidItem {
             root.contentWanted = true;
             root.openOnPress = !root.popupOpen;
         }
+        onClipboardPressed: {
+            root.contentWanted = true;
+            root.openOnPress = !root.clipboardShown;
+        }
+        onClipboardClicked: root.showClipboard(root.openOnPress)
         onBellClicked: {
             if (root.notificationsApart) {
                 if (root.centreOpen) {
@@ -630,9 +851,23 @@ PlasmoidItem {
         }
     }
 
+    // Whether the notification list was on the sheet while it was open: closing it marks the
+    // notifications read only then. Opened on the clipboard page (Meta+V) and closed there, it
+    // cleared the unread count and the bell though no notification had been shown.
+    property bool notificationsSeen: false
+    // The list's own condition: with Show notifications off it is hidden, and so nothing is seen.
+    readonly property bool notificationListShown: popupOpen && backend.notif.listShown
+    onNotificationListShownChanged: {
+        if (notificationListShown) {
+            notificationsSeen = true;
+        }
+    }
     onPopupOpenChanged: {
         if (!popupOpen) {
-            backend.notif.markRead();
+            if (notificationsSeen) {
+                backend.notif.markRead();
+            }
+            notificationsSeen = false;
             resetPage.restart();
         }
     }
@@ -642,6 +877,7 @@ PlasmoidItem {
         onTriggered: {
             if (!root.popupOpen) {
                 backend.page = "main";
+                backend.pageDirect = false;
                 backend.showEmptyNotifications = false;
             }
         }
@@ -700,6 +936,9 @@ PlasmoidItem {
 
         onVisibleChanged: {
             const content = contentLoader.item as PopupContent;
+            if (visible) {
+                Qt.callLater(root.fitWindow);
+            }
             if (visible && content) {
                 popup.requestActivate();
                 content.forceActiveFocus();
@@ -727,12 +966,21 @@ PlasmoidItem {
                 tablet: tabletState.tablet
                 touch: tabletState.tablet || m.touch
                 outerWidth: root.outerWidth
-                framePaddingLeft: popup.leftPadding
-                framePaddingRight: popup.rightPadding
-                framePaddingTop: popup.topPadding
-                framePaddingBottom: popup.bottomPadding
+                framePaddingLeft: root.framePaddingLeft
+                framePaddingRight: root.framePaddingRight
+                framePaddingTop: root.framePaddingTop
+                framePaddingBottom: root.framePaddingBottom
                 maxOuterHeight: root.maxPopupHeight
                 focus: true
+            }
+        }
+        Connections {
+            target: popup
+            function onBordersChanged() {
+                Qt.callLater(root.readFramePadding);
+            }
+            function onPaddingChanged() {
+                Qt.callLater(root.readFramePadding);
             }
         }
         Connections {

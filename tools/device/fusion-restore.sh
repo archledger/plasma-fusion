@@ -11,22 +11,22 @@
 # Global Theme, i.e. the state before Plasma Fusion was first configured. --latest takes the
 # newest backup of any kind (undo only the last run). --list shows the backups.
 #
-# It gives the changed shortcuts their old keys back (the Windows-style set of owner decision 6,
-# the quick-settings, pen and Meta+N notification keys), renames the workspaces and removes the
-# ones fusion-config.sh created, for that backup's run and every later one (each run records only
-# what it changed itself), undoes the pen defaults of those runs (tools/pen/pen-defaults.sh
-# --restore), stops the user services they started (plasma-fusion-powerfx gives the power-tier
-# values back when it stops), tells KWin the on-screen keyboard setting of the backup, puts every
-# backed-up file back (the layout with the desktop containment, plasmashellrc, kwinrc with the
-# tablet script, fonts.conf and the text-rendering keys, the session env file, the user
-# services and their links; files that did not exist are removed, among them the lock-screen
-# drop-in of lockscreen-enable.sh), loads the blur effect unless the restored kwinrc turns it
-# off, then reloads KWin and restarts plasmashell. The login check (docs/parts/gate.md) is removed
-# with its env stub, notify unit and state unless the restored backup had it installed; its log
-# stays. The installed Plasma Fusion packages, the Global Theme "My previous desktop" among them,
-# stay installed.
-# Log out and back in afterwards so every application, the lock screen and the splash screen
-# use the restored settings.
+# It gives the changed shortcuts their old keys back (the Windows-style set of owner decision 6, the
+# quick-settings, pen, Meta+N notification, Meta+V clipboard and Meta+Shift+T copy-text keys) and
+# releases the keys of widgets that are not in the restored layout,
+# renames the workspaces and removes the ones fusion-config.sh created, for that backup's run and every later one (each run
+# records only what it changed itself), undoes the pen defaults of those runs
+# (tools/pen/pen-defaults.sh --restore), stops the user services they started (plasma-fusion-powerfx
+# gives the power-tier values back when it stops), tells KWin the on-screen keyboard setting of the
+# backup, puts every backed-up file back (the layout with the desktop containment, plasmashellrc,
+# kwinrc with the tablet script, fonts.conf and the text-rendering keys, the session env file, the
+# user services and their links; files that did not exist are removed, among them the lock-screen
+# drop-in of lockscreen-enable.sh), loads the blur effect unless the restored kwinrc turns it off,
+# then reloads KWin and restarts plasmashell. The login check (docs/parts/gate.md) is removed with
+# its env stub, notify unit and state unless the restored backup had it installed; its log stays.
+# The installed Plasma Fusion packages, the Global Theme "My previous desktop" among them, stay
+# installed. Log out and back in afterwards so every application, the lock screen and the splash
+# screen use the restored settings.
 set -euo pipefail
 
 STATE=${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion
@@ -34,6 +34,8 @@ CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 DATA=${XDG_DATA_HOME:-$HOME/.local/share}
 GATE_STUB_REL=plasma-workspace/env/plasma-fusion-gate.sh
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
+COPYTEXT_COMPONENT=org.plasmafusion.copytext.desktop
+CLIPBOARD_COMPONENT=org.plasmafusion.clipboard.desktop
 HERE=$(cd "$(dirname "$0")" && pwd)
 GATE_FILES=("$GATE_STUB_REL" systemd/user/plasma-fusion-gate-notify.service
   systemd/user/xdg-desktop-autostart.target.wants/plasma-fusion-gate-notify.service)
@@ -43,7 +45,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1 ;;
     --latest) PICK=latest ;;
     --list) PICK=list ;;
-    -h|--help) sed -n '/^#   fusion-restore.sh/,/^# use the restored settings/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '/^#   fusion-restore.sh/,/use the restored settings\.$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) BACKUP=$1 ;;
   esac
@@ -143,13 +145,22 @@ for b in "${LATER[@]}" "$BACKUP"; do
   done
 done
 
-# The Meta+N notification component (Windows-style set): its key went back to none above; the
-# component goes with its desktop file (restored below when the backup had it).
-if ! grep -qx "present-file .local/share/kglobalaccel/$NOTIFY_COMPONENT" "$BACKUP/manifest" &&
-  [ -e "$DATA/kglobalaccel/$NOTIFY_COMPONENT" ]; then
-  note "$NOTIFY_COMPONENT / _launch: unregistered"
-  run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$NOTIFY_COMPONENT" _launch >/dev/null 2>&1 || true
-fi
+# The Meta+N notification and Meta+V clipboard components (Windows-style set) and the
+# Meta+Shift+T copy-text component: their keys went back to none above, and Klipper's pop-up
+# has Meta+V again; a component goes with its desktop file (restored below when the backup had
+# it). A backup older than the component does not list its file: it did not exist then (only
+# fusion-config.sh writes it), so it is removed here.
+for comp in "$NOTIFY_COMPONENT" "$CLIPBOARD_COMPONENT" "$COPYTEXT_COMPONENT"; do
+  rel=.local/share/kglobalaccel/$comp
+  if ! grep -qx "present-file $rel" "$BACKUP/manifest" && [ -e "$DATA/kglobalaccel/$comp" ]; then
+    note "$comp / _launch: unregistered"
+    run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$comp" _launch >/dev/null 2>&1 || true
+    if ! grep -qx "absent-file $rel" "$BACKUP/manifest"; then
+      note "remove ~/$rel (made after this backup)"
+      run rm -f "$DATA/kglobalaccel/$comp"
+    fi
+  fi
+done
 
 # 1b. Pen defaults (fusion-config.sh --pen), newest run first: each pen backup holds the values from
 #     before its run; KWin reads them at once (pen-defaults.sh writes them with --notify).
@@ -315,6 +326,32 @@ while read -r state path; do
       ;;
   esac
 done <"$BACKUP/manifest"
+
+# 3a. Widget shortcuts left on widgets the restored layout does not have. kglobalaccel keeps a
+#     widget's "activate widget N" action and its key after the widget is gone; the records above
+#     give back only the keys fusion-config.sh gave, not those of the settings module's "Reset
+#     Fusion layout" (Meta+A for the rebuilt quick settings) or of widgets a layout rebuild
+#     dropped. Such a key would stay taken by nothing. The restored layout is read now, before
+#     plasmashell starts with it.
+echo "Widget shortcuts"
+# A dry run restored nothing: it reads the layout the restore would put back.
+layout=$CONFIG/plasma-org.kde.plasma.desktop-appletsrc
+if [ "$DRY" = 1 ]; then
+  layout=$BACKUP/config/plasma-org.kde.plasma.desktop-appletsrc
+  grep -qx "absent plasma-org.kde.plasma.desktop-appletsrc" "$BACKUP/manifest" && layout=
+fi
+names=$(bus call org.kde.kglobalaccel /component/plasmashell org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
+  python3 -c '
+import shlex, sys
+words = shlex.split(sys.stdin.read())
+for w in words[2:] if words[:1] == ["as"] else []:
+    if w.startswith("activate widget ") and w[16:].isdigit():
+        print(w[16:])' 2>/dev/null || true)
+for wid in $names; do
+  [ -n "$layout" ] && [ -s "$layout" ] && grep -Eq "^\[Containments\]\[$wid\]|^\[Containments\]\[[0-9]+\]\[Applets\]\[$wid\]" "$layout" && continue
+  note "plasmashell / activate widget $wid: unregistered (no such widget in the restored layout)"
+  run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss plasmashell "activate widget $wid" >/dev/null 2>&1 || true
+done
 
 # 3b. The login check. Backups made before it existed do not list its files, so it goes whenever
 #     the restored state does not have its stub; its records are moot once the files are back.

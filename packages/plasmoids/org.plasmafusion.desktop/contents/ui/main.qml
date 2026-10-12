@@ -125,7 +125,7 @@ ContainmentItem {
     // again while editing and once it ends.
     readonly property bool editingCards: (fullRepresentationItem && fullRepresentationItem.appletsLayout
                                           ? fullRepresentationItem.appletsLayout.editMode : false)
-                                         || (homeLoader.item ? homeLoader.item.editing : false)
+                                         || (homeLoader && homeLoader.item ? homeLoader.item.editing : false)
     onEditingCardsChanged: watchCards()
     Timer {
         interval: 500
@@ -254,6 +254,10 @@ ContainmentItem {
 
     readonly property FolderViewLayerLoader folderViewLayer: fullRepresentationItem.folderViewLayer
     readonly property ContainmentLayoutManager.AppletsLayout appletsLayout: fullRepresentationItem.appletsLayout
+    // Plasma Fusion: the home screen's loader lives in the full representation, a component of its
+    // own, so its id is not visible here: it is reached through the representation like the two
+    // above (tools/checks/id-scope-lint.py).
+    readonly property Loader homeLoader: fullRepresentationItem ? fullRepresentationItem.homeLoader : null
 
     // Plasmoid.title is set by a Binding {} in FolderViewLayer
     toolTipSubText: ""
@@ -386,6 +390,7 @@ ContainmentItem {
 
         property alias folderViewLayer: folderViewLayer
         property alias appletsLayout: appletsLayout
+        property alias homeLoader: homeLoader
 
         // Layout size bindings are set in Component.onCompleted
 

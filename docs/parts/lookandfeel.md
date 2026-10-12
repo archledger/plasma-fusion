@@ -84,9 +84,20 @@ existing panels.
 | Piece | Settings | Widgets (fallback when a Fusion widget is not installed) |
 |---|---|---|
 | Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity adaptive` (solid next to a maximized window, decision 5) | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu` (`allScreens=false`: the menu of that screen's window), panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.kde.plasma.systemtray`, `org.plasmafusion.pen` (when installed), `org.plasmafusion.quicksettings` |
-| Top bars on the other screens | as above | app name, appmenu (`allScreens=false`), clock pill, then the main bar's tray (set up the same way) and quick settings (owner decision 2026-10-09, replacing decision 8's "status icons and quick settings on the main screen only"); no pen menu or dock; marked `[PlasmaFusion] statusItems` |
+| Top bars on the other screens | as above; none while the settings page's "Top bar on every screen" is off (plasmafusionrc `[TopBar] EveryScreen=false`, 0.5.0) | app name, appmenu (`allScreens=false`), clock pill, then the main bar's tray (set up the same way), the system meters when the main bar has them, and quick settings (owner decision 2026-10-09, replacing decision 8's "status icons and quick settings on the main screen only"); no pen menu or dock; marked `[PlasmaFusion] statusItems` |
 | Dock | `location bottom`, `height 72` (the dock plate; the Plasma style keeps the 16 px headroom above it in the panel window. 88 with the headroom frame until INT-1), `floating true`, `lengthMode fit`, `alignment center`, `hiding dodgewindows`, `opacity translucent` | `org.plasmafusion.launcher` with `[General] buttonStyle=hidden` when the app-name widget holds the top-left corner (the dock finds it in its own panel for Start; Meta finds it in any panel), then `org.plasmafusion.dock` (else Kickoff when there is no Fusion launcher, and `org.kde.plasma.icontasks`) |
 | Desktop | The Plasma Fusion desktop (`org.plasmafusion.desktop`, `docs/parts/desktop.md`: Folder View on the laptop, the home screen in tablet posture; plain `org.kde.plasma.folder` is accepted, BACKLOG M1): `url desktop:/`, `arrangement 1` (columns), `alignment 0` (from the left), `iconSize 2`, `sortMode -1` (free placement), `popups false`, `toolTips false`, `selectionMarkers true`, `useTypeAhead true`, previews for the installed image/SVG/PDF/office/video thumbnailers; `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | the weather, calendar and system cards, see below |
+
+The settings page's look applies to what the script makes (0.5.0, `fusionLook()`; before, only the
+page's own Reset applied it afterwards, so `fusion-config.sh --reset-layout` and System Settings'
+Global Theme with its layout gave adaptive bars and Full glass whatever the page said): with
+plasmafusionrc `[Effects] Glass=Reduced` the top bars and the dock are `opaque`; otherwise the top
+bars are `adaptive`, or `translucent` with `[TopBar] SolidNextToWindows=false`, and the dock
+`translucent`. Reduced and Solid also go into `[General] glass` of the new dock, quick settings,
+launcher and system card (Full is their default, so a HOME the page never changed gets no keys).
+`ensure-topbars.js` and the two Add Panel templates apply the same function (the build checks it
+is the same; `packages/look-and-feel/tests/layout.test.js` runs the four scripts against a stand-in
+of the scripting runtime, `tests/layout-shell.js`).
 
 System tray: when the quick-settings widget is installed, `[General] hiddenItems` =
 `org.kde.plasma.networkmanagement, org.kde.plasma.volume, org.kde.plasma.battery,
@@ -102,6 +113,11 @@ hidden and disabled as status notifiers, so the tray has no expander arrow: `org
 settings is in the bar, Disks & Devices (`org.kde.plasma.devicenotifier`) is not loaded at all
 (known, not extra, like the tray's weather report): the quick-settings Disks & Devices page and
 status-pill icon replace it, and a loaded stock item would pop up beside the sheet on a new device.
+The other four come back while they matter: quick settings puts them into the tray's `shownItems`
+while active (an open vault, queued print jobs, presentation mode or a second screen, the
+input-method switch outside tablet posture) and takes them out when passive
+(docs/parts/shell-quicksettings.md, "Hidden tray items while active"); the layout writes nothing
+for that, so existing layouts have it as soon as the widget is updated.
 
 Desktop cards: the Plasma Fusion weather, calendar and system cards (`docs/parts/desktop-cards.md`),
 each with the stock widget as fallback when the Fusion one is not installed, on the primary screen.
@@ -136,8 +152,9 @@ instant. Imports only QtQuick, Kirigami and org.kde.coreaddons (KUser).
 
 Plasma 6.8 no longer reads the Global Theme's `contents/logout/`: the log-out greeter loads the
 shell package's `logout/Logout.qml` (plasma-workspace 3729037a). Plasma Fusion therefore carries
-the same files in the `org.plasmafusion.lockshell` shell package (staged from
-`packages/look-and-feel/common/contents/logout/` by `tools/build.d/90-lockscreen.sh`), and
+a log-out screen in the `org.plasmafusion.lockshell` shell package too
+(`packages/lockscreen/org.plasmafusion.lockshell/contents/logout/`, staged by
+`tools/build.d/90-lockscreen.sh`), and
 `lockscreen-enable.sh` writes a per-user D-Bus service override that starts the greeter
 (`ksmserver-logout-greeter`, D-Bus name `org.kde.LogoutPrompt`) with
 `PLASMA_DEFAULT_SHELL=org.plasmafusion.lockshell`, so Plasma 6.8 shows Plasma Fusion's log-out
@@ -145,14 +162,54 @@ screen as well. Plasma 6.7's greeter still reads the Global Theme and is unaffec
 moves the override aside together with the KWin drop-in on untested Plasma series and puts it
 back with it.
 
-`contents/logout/` (both packages): Plasma 6.7.5's Breeze `Logout.qml`, `LogoutButton.qml` and
-`timer.js` with one change. Breeze draws the Complementary colours on a black 85 % veil; Plasma
+The Global Theme's `contents/logout/` (read by Plasma 6.7): Plasma 6.7.5's Breeze `Logout.qml`,
+`LogoutButton.qml` and `timer.js` with one change. Breeze draws the Complementary colours on a black 85 % veil; Plasma
 Fusion Light has the board's light Complementary set (`#f7f8fb`, text `#141827`), which made the
 Breeze screen unreadable (foundation evidence `session-light/light-10-logout.png`). The veil now
-takes the Complementary background: dark in Plasma Fusion Dark, light in Plasma Fusion Light. The
-greeter contract (context properties, signals, keyboard navigation, count-down) is unchanged;
+takes the Complementary background: dark in Plasma Fusion Dark, light in Plasma Fusion Light. As in
+the 6.8 copy below, a screen's count-down also leaves `timer.js`'s shared list when its screen goes.
+The greeter contract (context properties, signals, keyboard navigation, count-down) is unchanged;
 qmllint reports only the same unqualified context-property accesses as the upstream file. There is
 no board for this screen.
+
+The shell package's `contents/logout/` (read by Plasma 6.8 and later, 0.5.0): plasma-desktop
+Plasma/6.8's own files (`Logout.qml`, `LogoutControls.qml`, `LogoutButton.qml`, `timer.js`,
+`controlsowner.js`, at 98b61eba) with the same veil change. Until 0.5.0 the shell package carried
+the 6.7.5 copy, which on 6.8 asked for the greeter's `screenGeometry` context property, dropped in
+6.8 (plasma-workspace 37ae55a2; "ReferenceError: screenGeometry is not defined" twice per screen),
+and drew the user, the count-down and the buttons on every screen, each with its own focus. Since
+6.8 (plasma-desktop 18cd295a, bug 431382) every screen gets the veil and its count-down timer, and
+one set of controls (`LogoutControls`, owned through the shared `controlsowner.js`; the greeter's
+views share one engine) is shown on the screen with the pointer, fades in there and follows the
+pointer to another screen; the active screen's window takes the keyboard. The strings are in the
+desktop shell's catalogue (`plasma_shell_org.kde.plasma.desktop`), as in 6.8; a key press on a
+button no longer swallows the key (6.8's `LogoutButton`). One change from upstream: the controls
+are the child objects of the screen that made them, wherever they are shown, so an output unplugged
+while the greeter is open took them with it and the remaining screens had none (upstream only
+moves existing controls on hover). That screen's root now hands over as it goes: another screen
+makes the controls at once (the one with the pointer, else the first one left), and a hovered
+screen makes them when there are none. And every screen's count-down timer stays in `timer.js`'s
+shared list, which a key press on a button walks to stop all count-downs; after an output was
+unplugged the gone screen's entry threw on its deleted timer and ended the walk, so the other
+screens went on counting to the log-out or shut-down (upstream 6.7 and 6.8 alike: both greeters
+delete the view of a removed screen and share one engine). The timer now takes its entry out when
+it goes, and the walk goes on past an entry that fails. The Global Theme's 6.7 copy has the same
+change.
+
+Test (CI step "Log-out screen on Plasma 6.8"): `packages/lockscreen/test/logout_test.py` loads it
+as the 6.8 greeter does (two views on one engine, Plasma Fusion Light): no QML warnings, the
+controls shown once and on the pointer's screen, following it, the count-down with them, Log Out
+and Escape send the greeter's signals, the veil in the Complementary background on every screen,
+and with a third view, the controls' screen unplugged (its view deleted): the screen with the
+pointer shows them at once, they follow the pointer, and unplugging their new maker leaves them on
+the third screen (these 3 checks per run fail on the previous package: no controls on any screen).
+In the shut-down run, after that unplug, the gone screen's entry has left the shared list and a key
+pressed on the controls (with a failing entry put first in the list) stops the count-down on both
+screens left; the same for the Global Theme's 6.7 copy (two views on one engine, one unplugged).
+These checks fail on the files before that change (3 entries in the list, the count-down goes on,
+"TypeError: Value is null").
+The 0.5.0 base fails 7 of its 12 checks (controls and count-down on both screens, the
+`screenGeometry` errors); stock 6.8's files fail the veil checks.
 
 ## tools/device/fusion-config.sh
 
@@ -220,7 +277,8 @@ What it sets, in order (all idempotent; a second run reports only the theme re-a
    (KWin hands the switcher every window; it opens on "This workspace" and filters itself, its "All
    workspaces" tab needs the full list), HighlightWindows=false (no flash of a window the switcher
    skips); [Effect-overview] BorderActivate=9 (7 with `--hot-corner`; 9 = no edge, 7 = top-left,
-   KWin globals.h; without `--hot-corner` a corner turned on since the first run is kept);
+   KWin globals.h; without `--hot-corner` only on a first run: later runs keep the key, unset
+   included, which is KWin's own top-left corner);
    [Effect-blur] BlurStrength=13, NoiseStrength=0, Saturation=140;
    [org.kde.kdecoration2] BorderSizeAuto=false; [Plugins] plasmafusion-snapEnabled=true and
    plasmafusion-attachEnabled=true (each only when the script is installed; run again after
@@ -450,9 +508,13 @@ live session gets these changes through DEVICE-1's in-place migration.
   one, prints `top bars: screens N, added M, completed K`; for `fusion-config.sh --screens`, the
   settings page and KWIN-2's handler (at session start and on `workspace.screensChanged`, through
   `evaluateScript`). Since 2026-10-09: nothing while plasmafusionrc `[TopBar] EveryScreen` is false
-  (before, KWin brought switched-off bars back at the next screen change); a new bar gets the main
+  (before, KWin brought switched-off bars back at the next screen change); since 0.5.0 a new bar and
+  its quick settings follow the page's Glass level and top-bar choice (`ensureTopBarsLook()`, the
+  layout script's `fusionLook()`); a new bar gets the main
   bar's status area (its tray, with the tray's item lists copied, and quick settings; the pen menu
-  stays in the main bar); a Plasma Fusion bar made before (app name, menu, clock) gets it once and
+  stays in the main bar), and the system meters right before quick settings when the main bar has
+  them (the settings page's "System meters in the top bar" reads the switch from the main bar, so
+  a bar added later had none until the switch was turned off and on); a Plasma Fusion bar made before (app name, menu, clock) gets it once and
   is marked `[PlasmaFusion] statusItems`, so what the user removes later stays removed. The main bar
   is the Fusion top bar with quick settings or a tray on the lowest screen number; with none (all
   top bars removed), the first bar made gets Plasma Fusion's own status area (a tray set up from the

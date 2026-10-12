@@ -34,6 +34,11 @@ PlasmoidItem {
     toolTipMainText: i18nc("@info:tooltip", "Start")
     toolTipSubText: i18nc("@info:tooltip", "Apps, recent files and search")
 
+    // Kicker's models read the applet's settings through `appletInterface.configuration`: its
+    // "Hide Application" and "Unhide Applications in this Submenu" actions and the hidden apps
+    // themselves (hiddenApplications). A PlasmoidItem has no such property in Plasma 6, so without
+    // it the menus offered neither action and the list had no effect.
+    readonly property QtObject configuration: Plasmoid.configuration
     readonly property bool designLabels: Plasmoid.configuration.designLabels
     readonly property bool showRecommended: Plasmoid.configuration.showRecommended
     readonly property bool menuOpen: launcherWindow.visible || sheetWindow.visible
@@ -46,7 +51,7 @@ PlasmoidItem {
         id: motion
     }
     property string searchText: ""
-    property var chips: [{ key: "all", label: i18nc("@title:tab all applications", "All"), row: -1 }]
+    property var chips: fixedChips()
     property double lastClosed: 0
     property int seedAttempts: 0
 
@@ -92,11 +97,33 @@ PlasmoidItem {
         shownItems: Kicker.RecentUsageModel.OnlyDocs
         ordering: Kicker.RecentUsageModel.Recent
     }
+
+    // The lists of the "Recent" and "Places" chips (UsageModels.qml).
+    readonly property UsageModels usage: UsageModels {
+        favoritesModel: root.favoritesModel
+        appletInterface: root
+    }
+    readonly property var recentAppsModel: usage.recentApps
+    readonly property var frequentAppsModel: usage.frequentApps
+    readonly property var placesModel: usage.places
+    readonly property var recentFoldersModel: usage.recentFolders
     // END models
 
     function allAppsModel() {
         const model = rootModel.count > 0 ? rootModel.modelForRow(0) : null;
         return model && model.description === "KICKER_ALL_MODEL" ? model : null;
+    }
+
+    // The chips before the categories: "All" (the home view), "Recent" (recently and often used
+    // apps) and "Places" (places, drives and recent folders). `view` is the card's view for the
+    // chip; categories have "category" and their row.
+    function fixedChips(): var {
+        return [
+            { key: "all", label: i18nc("@title:tab all applications", "All"), row: -1, view: "home" },
+            { key: "recentapps", label: i18nc("@title:tab recently and often used apps", "Recent"), row: -1, view: "history" },
+            { key: "places", label: i18nc("@title:tab the file manager's places, drives and recent folders", "Places"),
+              row: -1, view: "places" },
+        ];
     }
 
     // Category chips: "All" plus the XDG menu categories that have apps, in the board's order,
@@ -201,10 +228,10 @@ PlasmoidItem {
                 continue;
             }
             seen[key] = true;
-            found.push({ key: key, label: label, row: i, rank: Launcher.categoryRank(key) });
+            found.push({ key: key, label: label, row: i, view: "category", rank: Launcher.categoryRank(key) });
         }
         found.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
-        chips = [{ key: "all", label: i18nc("@title:tab all applications", "All"), row: -1 }].concat(found);
+        chips = fixedChips().concat(found);
     }
 
     // Default pins: one installed app per slot of the configured list, written once (first run)
@@ -734,6 +761,22 @@ PlasmoidItem {
         }
     }
 
+    // The search's last row: the same query in the full KRunner, which has every search plugin
+    // (the launcher leaves out the web and network ones, decision 6). KRunner starts on demand
+    // (D-Bus activation); Alt+F2 opens it empty.
+    function searchInKRunner(query: string): void {
+        console.info("launcher: search in KRunner: \"" + query + "\"");
+        close();
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.krunner",
+            "path": "/App",
+            "iface": "org.kde.krunner.App",
+            "member": "query",
+            "arguments": [query],
+            "signature": "(s)"
+        });
+    }
+
     // Search timing: the query's first results (the budget is 100 ms).
     property real searchStarted: 0
     onSearchTextChanged: searchStarted = searchText.length > 0 ? Date.now() : 0
@@ -799,7 +842,8 @@ PlasmoidItem {
     }
 
     // Other shell parts can open the launcher in a given state:
-    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent", query) or toggle()
+    //  - from QML, with the applet item: open("home" | "search" | "apps" | "recent" | "history" |
+    //    "places", query) or toggle()
     //  - with desktop scripting, by writing openRequest = "<mode>:<nonce>[:<argument>]", where the
     //    argument is the search text for "search" and the category key (e.g. "graphics") for "category".
     Connections {
@@ -808,10 +852,17 @@ PlasmoidItem {
             const parts = String(Plasmoid.configuration.openRequest || "").split(":");
             const mode = parts[0];
             const argument = parts.slice(2).join(":");
-            if (["home", "search", "apps", "recent", "category"].indexOf(mode) >= 0) {
+            if (["home", "search", "apps", "recent", "history", "places", "category"].indexOf(mode) >= 0) {
                 root.open(mode, argument);
             } else if (mode === "frames") {
                 root.reportFrames();
+            } else if (mode === "configure") {
+                // The settings dialog: next to the Fusion dock the launcher has no button of its
+                // own to right-click (buttonStyle hidden).
+                const configure = Plasmoid.internalAction("configure");
+                if (configure) {
+                    configure.trigger();
+                }
             }
         }
         function onHiddenApplicationsChanged() {

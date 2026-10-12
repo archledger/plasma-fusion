@@ -60,7 +60,7 @@ jobs:
             weekly: 100
     steps:
       - name: Install git, builddep, the sanitizer runtimes and D-Bus (checkout runs inside the container)
-        run: dnf install -y -q git dnf-plugins-core rpm-build binutils libasan libubsan dbus-daemon
+        run: dnf install -y -q git dnf-plugins-core rpm-build binutils libasan libubsan dbus-daemon nodejs python3-gobject kf6-kconfig systemd
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

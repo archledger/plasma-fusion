@@ -5,9 +5,13 @@
 
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCMUtils
 import org.kde.plasma.plasmoid
+import org.kde.plasma.private.kicker as Kicker
+
+import "../code/launcher.js" as Launcher
 
 KCMUtils.SimpleKCM {
     id: page
@@ -25,8 +29,11 @@ KCMUtils.SimpleKCM {
     property bool cfg_favoritesPortedToKAstats
     property string cfg_favoritesClientId
     property string cfg_openRequest
-    property var cfg_hiddenApplications
     property string cfg_glass
+    // Kicker's "Hide Application" list, edited by "Hidden apps" below: the apps chosen there are
+    // shown again; apps hidden in the launcher while the page is open stay hidden (saveConfig()).
+    property var cfg_hiddenApplications
+    property var unhidden: []
 
     // The dialog also passes each key's default value.
     property var cfg_favoritesDefault
@@ -47,9 +54,49 @@ KCMUtils.SimpleKCM {
         cfg_favoritesPortedToKAstats = config.favoritesPortedToKAstats;
         cfg_favoritesClientId = config.favoritesClientId;
         cfg_openRequest = config.openRequest;
-        cfg_hiddenApplications = config.hiddenApplications;
+        saveHidden(config.hiddenApplications);
         // written by the settings module and the power service
         cfg_glass = config.glass;
+    }
+
+    // The hidden list to write: the live one (the launcher may have hidden apps meanwhile)
+    // without the apps shown again since the last save. They are forgotten once saved, so an app
+    // the launcher hides again after an Apply stays hidden at the next Apply or OK.
+    function saveHidden(live: var): void {
+        cfg_hiddenApplications = Launcher.withoutUnhidden(live, unhidden);
+        unhidden = [];
+    }
+
+    // Shows hidden apps again (ids as Kicker stores them, "org.kde.kcalc.desktop").
+    function unhide(ids: var): void {
+        unhidden = unhidden.concat(ids);
+        cfg_hiddenApplications = Launcher.withoutUnhidden(cfg_hiddenApplications, ids);
+    }
+    readonly property var hiddenIds: Launcher.withoutUnhidden(cfg_hiddenApplications, [])
+
+    // Names and icons of the hidden apps. The menu leaves hidden apps out, so they are looked up
+    // as favourites are (an app that is no longer installed keeps its id as its name).
+    Kicker.SimpleFavoritesModel {
+        id: hiddenInfo
+        favorites: page.hiddenIds
+    }
+    Instantiator {
+        id: hiddenInfoReader
+        model: hiddenInfo
+        delegate: QtObject {
+            required property string favoriteId
+            required property string display
+            required property var decoration
+        }
+    }
+    function appInfo(id: string): var {
+        for (let i = 0; i < hiddenInfoReader.count; ++i) {
+            const entry = hiddenInfoReader.objectAt(i);
+            if (entry && Launcher.appId(entry.favoriteId) === id) {
+                return { "name": entry.display || id, "icon": entry.decoration || "application-x-executable" };
+            }
+        }
+        return { "name": id.replace(/\.desktop$/, ""), "icon": "application-x-executable" };
     }
 
     Kirigami.FormLayout {
@@ -82,6 +129,62 @@ KCMUtils.SimpleKCM {
             id: dimBackground
             Kirigami.FormData.label: i18nc("@label", "Appearance:")
             text: i18nc("@option:check", "Dim the desktop while the launcher is open")
+        }
+
+        // Kicker's "Hide Application" (an app's menu in the launcher) has no list of its own to
+        // undo it; "Unhide Applications in this Submenu" in the menus stays as well.
+        ColumnLayout {
+            id: hiddenApps
+            Kirigami.FormData.label: i18nc("@label", "Hidden apps:")
+            Kirigami.FormData.labelAlignment: Qt.AlignTop
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Label {
+                visible: page.hiddenIds.length === 0
+                Layout.maximumWidth: Kirigami.Units.gridUnit * 22
+                wrapMode: Text.WordWrap
+                text: i18nc("@info", "None. Right-click an app in the launcher and choose Hide Application to hide it.")
+            }
+
+            Repeater {
+                model: page.hiddenIds
+                delegate: RowLayout {
+                    id: hiddenRow
+                    required property string modelData
+                    readonly property var info: {
+                        // Re-read when the names arrive.
+                        hiddenInfoReader.count;
+                        return page.appInfo(modelData);
+                    }
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Icon {
+                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        source: hiddenRow.info.icon
+                    }
+                    QQC2.Label {
+                        Layout.minimumWidth: Kirigami.Units.gridUnit * 10
+                        text: hiddenRow.info.name
+                        elide: Text.ElideRight
+                    }
+                    QQC2.Button {
+                        objectName: "unhide:" + hiddenRow.modelData
+                        text: i18nc("@action:button show a hidden app in the launcher again", "Show")
+                        icon.name: "view-visible"
+                        Accessible.name: i18nc("@action:button %1 app name", "Show %1 in the launcher", hiddenRow.info.name)
+                        onClicked: page.unhide([hiddenRow.modelData])
+                    }
+                }
+            }
+
+            QQC2.Button {
+                visible: page.hiddenIds.length > 1
+                objectName: "unhideAll"
+                text: i18nc("@action:button", "Show All")
+                icon.name: "view-visible"
+                onClicked: page.unhide(page.hiddenIds)
+            }
         }
 
         QQC2.SpinBox {

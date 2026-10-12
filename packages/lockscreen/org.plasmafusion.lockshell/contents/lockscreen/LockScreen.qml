@@ -25,7 +25,28 @@ Item {
     implicitWidth: 800
     implicitHeight: 600
 
+    // This screen's wallpaper. The greeter makes each screen's wallpaper item a child of that
+    // screen's root at z -1000 (kscreenlocker greeterapp.cpp, Plasma 6.7 and 6.8) and also names it
+    // in the context property "wallpaper". From Plasma 6.8 every screen's view shares the engine's
+    // root context, so "wallpaper" ends up naming the last screen's item on every screen; drawing
+    // another window's item ("QQuickItem: Cannot use same item on different windows") left one
+    // screen black and crashed the greeter when it closed after an unlock with two screens, which
+    // made KWin lock again. So the root's own wallpaper child is used, and the context property
+    // only while it is this root's child.
+    readonly property Item wallpaperItem: {
+        for (let i = 0; i < children.length; ++i) {
+            const child = children[i];
+            if (child.z === -1000 && child !== ui) {
+                return child;
+            }
+        }
+        // qmllint disable unqualified
+        return typeof wallpaper !== "undefined" && wallpaper && wallpaper.parent === root ? wallpaper : null;
+        // qmllint enable unqualified
+    }
+
     LockScreenUi {
+        id: ui
         anchors.fill: parent
         lockRoot: root
     }

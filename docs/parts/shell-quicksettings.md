@@ -13,19 +13,25 @@ the top bar of `Main.dc.html` / `MainLight.dc.html` and the Wi-Fi tray panel of
 |---|---|---|---|
 | Notification bell, amber (#F2A65A) 7 px unread dot | 30 × 26, radius 13 | `org.kde.notificationmanager` history, `unreadNotificationsCount` | always (option); slashed bell while Do Not Disturb is on |
 | System status pill: Wi-Fi, volume, battery icon + `NN%` | 26 px, radius 13, padding 12, gap 10, fill 8 % overlay; accent tint `rgba(91,157,255,.35)` + 1 px `rgba(138,184,255,.5)` while the pop-up is open | plasma-nm `ConnectionIcon`, plasma-pa `PreferredDevice.sink`, `BatteryControlModel` | each icon only when its service has data; a gear icon when none has |
-| Clipboard | 28 × 26, 16 px icon | Klipper D-Bus `showKlipperPopupMenu` | option |
+| Clipboard | 28 × 26, 16 px icon | the clipboard sheet (Plasma's clipboard model, below); Klipper's pop-up (`showKlipperPopupMenu`) without that module | option |
 | Phone | 28 × 26, 16 px icon | `org.kde.kdeconnect` `DevicesModel` (paired + reachable) | a device is connected |
 | `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout, wheel = next/previous, right-click or press and hold = menu of the layouts (as the stock Keyboard Layout widget) |
 
-The pill also takes the mouse wheel (volume ±5 %) and middle click (mute). Icons are the boards'
-line icons (24 px grid, 1.8 stroke) drawn with QtQuick Shapes, with the FileIcons board's level
-states (Wi-Fi bars, volume waves, battery fill, charging bolt, 30 % / 10 % warning colours).
+The pill also takes the mouse wheel (volume ±5 %) and middle click (mute). The pill's and the layout
+badge's wheel ignore a page scroll that is still turning as the pointer passes over them
+(`FusionWheelGuard`, docs/parts/shared-blocks.md). Icons are the boards' line icons (24 px grid, 1.8
+stroke) drawn with QtQuick Shapes, with the FileIcons board's level states (Wi-Fi bars, volume
+waves, battery fill, charging bolt, 30 % / 10 % warning colours).
 
 **The pop-up** (356 px wide, 10 px under the bar, 16 px from the screen edge, frame = the Plasma
 style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come from the Plasma style):
 
-* battery chip (`82%`, 34 px, radius 17) and four 34 px round buttons: screenshot (Spectacle's
-  rectangular-region shortcut), System Settings, lock, leave (logout / restart / shut down prompt);
+* battery chip (`82%`, 34 px, radius 17) and five 34 px round buttons: screenshot (Spectacle's
+  rectangular-region shortcut), copy text from the screen (0.5.0: `spectacle --region` after the
+  pop-up closes, where Extract Text copies the selection's text; the same command as Meta+Shift+T,
+  docs/parts/device.md), System Settings, lock, leave (logout / restart / shut down prompt); to
+  their left the pencil that edits the tiles (0.5.0, section "Editable tiles"; in tablet posture it
+  is in the tablet row);
 * volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
   Plasma's "Raise maximum volume", `plasmaparc` read through plasma-pa's `GlobalConfig`; a volume
   set above the limit elsewhere is kept by a step up, and every wheel or key step counts from the
@@ -46,28 +52,55 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   models; it updates when streams start/stop. Virtual microphones such as noise-suppression inputs
   are supported. The existing output controls remain independent;
 * 60 px tiles, radius 16, accent fill when on: seven always (the six below and Keep awake) and four
-  when they apply (Disks & Devices, Wi‑Fi hotspot, Charge limit, Tablet mode):
+  when they apply (Disks & Devices, Wi‑Fi hotspot, Charge limit, Tablet mode), in this order unless
+  the user changed it (section "Editable tiles"):
   Wi-Fi (SSID; body toggles Wi-Fi, chevron opens the network list),
   Bluetooth (`N connected` / device name; body toggles, chevron opens the device list),
   Night light (`From sunset`, `Until sunrise`, `From 19:00`, `Paused`, `Off`; toggles KWin's
   Night Light inhibition, turns Night Light on when it is off),
-  Do not disturb (`Off`, `On`, `Until 18:00`; same code path as Plasma's own shortcut, with OSD),
-  Power mode (`Power saver` / `Balanced` / `Performance`, click cycles; through PowerDevil, which
-  uses tuned-ppd on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). As the
-  stock Power and Battery widget: Performance is skipped while the daemon inhibits it, and the
-  tooltip says why (on a lap, too hot) and when it may be slower; it names applications holding a
-  profile; a refused switch reads `Couldn't switch to …` for 5 s. tuned-ppd 2.28 refuses
-  `HoldProfile` ("Invalid bus name"), so holds come from power-profiles-daemon systems),
+  Do not disturb (`Off`, `On`, `Until 18:00`, `Until Mon 06:00`; same code path as Plasma's own
+  shortcut, with OSD),
+  Power mode (`Power saver` / `Balanced` / `Performance`; through PowerDevil, which uses tuned-ppd
+  on the ThinkPad; `contents/code/power.js`, tested by `tests/power.test.js`). The chevron opens
+  the **Power mode** chooser (`ProfilesPage.qml`): the profiles the daemon offers with the active
+  one checked, a click switches straight to one, `Power settings` opens the power management
+  settings. The body is on in any profile but Balanced, as GNOME's Power Mode toggle: a click goes
+  back to Balanced, and from Balanced to the last other profile chosen in a Quick Settings widget
+  in this session (Power saver at first), so Balanced to Power saver no longer passes through
+  Performance. A profile the user did not choose there is not learned: one an application holds
+  for a while (a game's Performance) or PowerDevil's own for the power source (it was, and a
+  click then went to it), nor one the daemon refused: a choice counts once the daemon has switched
+  to it (a refused Performance left the body going there instead of back to Power saver; test:
+  `tests/tiles_edit_test.py` on a stand-in profiles service). As the stock
+  Power and Battery widget: while the daemon inhibits Performance, the chooser lists it as
+  `Unavailable` (it cannot be chosen, and the body skips it) and says why under the list (on a
+  lap, too hot), as the tile's tooltip does, with when it may be slower and the applications
+  holding a profile; a refused switch reads `Couldn't switch to …` on the tile (and `Couldn't
+  switch` on the row) for 5 s. tuned-ppd 2.28 refuses `HoldProfile` ("Invalid bus name"), so holds
+  come from power-profiles-daemon systems),
   Dark style (switches between the two Plasma Fusion Global Themes, see below);
-* **Keep awake** (`Off` / `On`): manually blocks sleep, display power saving and automatic screen
-  locking until turned off in this session. An accent coffee-cup icon stays in the status pill
-  while it is on, including tablet posture; the pill's tooltip explains the active inhibition.
+* **Keep awake** (`Off` / `On` / `1 h 5 min left`): manually blocks sleep, display power saving and
+  automatic screen locking; a click turns it on until turned off, as before. Its page (the
+  chevron, `Keep awake options`; titled **Keep awake**, with a switch) also keeps it awake
+  `For 1 hour`, `For 4 hours`, `Until…` a time of day (a quarter-hour chooser in the locale's time
+  format, starting at the quarter hour after an hour from now; a time already passed means
+  tomorrow) or `Until turned off`, as Caffeine, Amphetamine and PowerToys Awake offer; the page
+  says `On until 21:37 (1 h left)` (the hours and the minutes each in their plural form, joined by
+  a translatable `%1 %2`, `Backend.qml` `durationText()`; test: `tests/tiles_edit_test.py`). The
+  end is a wall-clock time kept for every widget of the
+  shell (`Instances`), so the timer runs with the sheet closed and after a suspend still ends it
+  (at most a minute late; `contents/code/keepawake.js`, tested by `tests/keepawake.test.js`);
+  turning it off, here or in the hidden battery applet, drops the end. Across a plasmashell
+  restart nothing is restored: Plasma's own manual inhibition belongs to the plasmashell process
+  and ends with it, timed or not (checked in the test VM). An accent coffee-cup icon stays in the
+  status pill while it is on, including tablet posture; the pill's tooltip explains the active
+  inhibition and, when timed, how long is left and until when.
   The tile uses Plasma's native `InhibitionControl`, so the hidden stock battery applet and all
   Fusion controls in the same plasmashell process agree on the manual state. Other applications'
   inhibitors are separate; turning this off leaves those in place. The popup can be closed without
   releasing the inhibition. Manual Lock still works. Normal timeout settings are never rewritten,
   and exiting the session releases the native requests. Missing PowerDevil or ScreenSaver service
-  shows `Unavailable` with a disabled tile. Its chevron opens **Sleep blockers**: the applications currently
+  shows `Unavailable` with a disabled tile. Under the durations the page lists the **Sleep blockers**: the applications currently
   requesting to block sleep or idle screen locking, with their reasons, each with an `Allow this
   application's request` box (PowerDevil's `SetInhibitionAllowed`, as in the stock battery applet);
 * **Wi‑Fi hotspot** (`Off`, `Starting…`, `On`; otherwise the reason: `Wi‑Fi in use`, `Wi‑Fi is off`,
@@ -127,9 +160,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   automatically; `Mpris2Model.currentIndex`); a stopped player chosen there keeps the card while
   it can play, so it can be played or another chosen;
 * `Notifications` header with `Clear all`, then the notification cards (app icon + name, time,
-  summary, body, job progress with Cancel, action buttons; the first action is the accent button
-  for critical or persistent notifications, as the board's calendar reminder). Close button on hover.
-  Clicking a card runs its default action.
+  summary, body, the notification's image, a linked file's preview, job progress with Pause and
+  Cancel, a finished job's Open and Open Containing Folder,
+  action buttons; the first action is the accent button for critical or persistent notifications,
+  as the board's calendar reminder). Configure and close buttons on hover. Clicking a card runs
+  its default action.
 
 **Drill-down pages** replace the quick settings in the same card (back button, title, switch):
 Wi-Fi (Popups board tray panel: connected network card with band, security and live speed,
@@ -147,10 +182,13 @@ controls. Empty inputs or streams have explicit placeholders and a Sound setting
 
 Keyboard: every control is reachable with Tab and has the design's focus ring (2 px, 2 px gap);
 Space/Return activate, Right/Left moves between a tile and its chevron, Escape goes back a page or
-closes the pop-up. The widget's global shortcut (Plasmoid shortcut) opens and closes the pop-up.
-A notification's close button is in the tab chain (shown while focused or hovered), and the list
-scrolls to the card that has keyboard focus. Opening or leaving a drill-down page moves the focus
-with it; the ring is shown only when that was done from the keyboard.
+closes the pop-up (in the tiles' edit mode it first ends that; its keys are in "Editable tiles"). The widget's global shortcut (Plasmoid shortcut) opens and closes the pop-up.
+A notification card is in the tab chain itself (with the focus ring): Return, Enter or Space run its
+default action (or open its one linked file), Delete closes it, and in the tablet Notification
+Centre the Menu key or Shift+F10 opens its menu; its Configure and close buttons follow it in the
+tab chain (shown while focused or hovered), and the list scrolls to the card that has keyboard
+focus. Opening or leaving a drill-down page moves the focus with it; the ring is shown only when
+that was done from the keyboard.
 
 Colours: the boards' dark and light values (text `#E8EBF4` / `#141827`, secondary `#A3ABC2` /
 `#5B6278`, overlays white / `#141827` at the board's alphas). Dark or light is chosen from the
@@ -174,7 +212,20 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/BluetoothPage.qml     Bluetooth drill-down
   contents/ui/AudioPage.qml         output and input device chooser, each device's ports and profiles menu
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
+  contents/ui/NotificationEntry.qml one row of the history: an app's group header or a card,
+                                    and "Show N More" (the sheet and the Notification Centre)
+  contents/ui/ProfilesPage.qml      Power mode chooser (the Power mode tile's chevron)
+  contents/ui/PowerPage.qml         Keep awake durations and the sleep blockers (the tile's chevron)
+  contents/ui/ClipboardPage.qml     the clipboard sheet: search, All / Starred, the list, editor, QR code
+  contents/ui/ClipboardEntry.qml    one clipboard entry (text, image thumbnail, files) and its actions
+  contents/ui/ClipboardQrView.qml   an entry's QR code (Prison; loaded apart, so the sheet loads without it)
+  contents/code/clipboard.js        the sheet's search, previews and arrow-key steps (tests/clipboard.test.js)
+  contents/code/tiles.js            the tiles' order, hidden tiles and new tiles' places (tests/tiles.test.js)
   contents/ui/NotificationCard.qml  one notification
+  contents/ui/NotificationThumbnail.qml, NotificationPreview.qml
+                                    a linked file's preview (KIO's, through the stock applet's
+                                    Thumbnailer; a plain image where that cannot load)
+  contents/code/notifications.js    what a card shows (body images, the side image, ...)
   contents/ui/ConfigGeneral.qml     settings page
   contents/ui/components/           palette, line icons (Icons.js, LineIcon, Network/Volume/BatteryGlyph),
                                     Tile, FusionSlider, FusionSwitch, IconButton, TextButton, ListRow,
@@ -184,9 +235,11 @@ packages/plasmoids/org.plasmafusion.quicksettings/
                                     KeepAwake (PowerDevil manual sleep/ScreenSaver inhibition),
                                     Display (brightness, Night Light, light/dark pairing), Media (MPRIS),
                                     Notifications, Keyboard, KdeConnect, Bluetooth (BluezQt), Session, Exec,
+                                    Clipboard (Plasma's clipboard module: Klipper's history),
                                     TabletPolicy (keyboard policy, on-screen keyboard, rotation lock,
                                     tablet-mode setting, full-screen apps; QS-1; posture
-                                    settings: power button, touch edge, TABLET2 P0/N1)
+                                    settings: power button, touch edge, TABLET2 P0/N1),
+                                    TrayItems (hidden stock tray items shown while active)
 tools/build.d/71-quicksettings.sh   copies the package to $STAGE/.local/share/plasma/plasmoids/
 ```
 
@@ -226,13 +279,46 @@ System tray keys (containment config of the tray, group `[General]`):
 * Do **not** remove them from the tray (`extraItems`) or disable them: hidden items stay loaded, and
   this widget needs them loaded. The Notifications applet owns the notification pop-ups and the
   Do Not Disturb bookkeeping (the tile triggers its `toggle do not disturb` shortcut); the Clipboard
-  applet hosts Klipper, which the clipboard button calls over D-Bus; Battery/Brightness/Networks keep
+  applet hosts Klipper, whose history the clipboard sheet shows; Battery/Brightness/Networks keep
   their warnings and password prompts.
 * `shownItems` must not list any of them.
 * Note: the tray shows its expander arrow while a passive application status icon exists (for
   example the XWayland video bridge, which registers a while after login). The stock items Fusion
   hides are disabled as status notifiers, so they never bring it up, and Disks & Devices is not
   loaded at all. That arrow is the stock tray's and is not on the board.
+
+### Hidden tray items while active (P1)
+
+The layout hides Vaults, Display Configuration, Printers and the input-method item in the tray
+(`TRAY_ITEMS_HIDDEN`: `disabledStatusNotifiers` and `hiddenItems`) so that, passive, they do not
+bring back the expander arrow, and the tray has no key for "hidden while passive". This widget
+supplies it for the tray in its own panel (`services/TrayItems.qml`, `contents/code/tray.js`):
+it reads each stock item's own status from the tray (`Plasma::Containment::applets`,
+`Plasma::Applet::status`), and while one is active it adds the id to the tray's `shownItems`
+(through the tray's configuration, which the tray reloads at once); `shownItems` wins over both
+other lists (6.7.5 `calculateEffectiveStatus`), so the stock item shows in the bar, with its own
+pop-up (lock or open vaults, the print queue, screen layouts and presentation mode, the keyboard
+switch). When it is passive again the id goes out of `shownItems` and the item is hidden, without
+the arrow. Shown while:
+
+| Item | Shown while (the item's own state, checked in the 6.7.5 sources) |
+|---|---|
+| `org.kde.plasma.vault` | a vault is open (`hasOpenVaults`: Active) |
+| `org.kde.plasma.printmanager` | a print job is queued (Active; Passive with printers and no job, Hidden without a printer) |
+| `org.kde.kscreen` | presentation mode is on (its own switch: Active), or more than one screen is connected (the item stays Passive then, but its layout choices matter) |
+| `org.kde.plasma.manage-inputmethod` | it is active (6.7: the on-screen keyboard disabled or set to all input devices, an application with text input in tablet mode; 6.8: the keyboard would show), outside tablet posture, where the tablet row's keyboard button already covers it (TABLET 4.3) |
+
+Disks & Devices stays replaced by its page and is not loaded. An id the user moved out of
+`disabledStatusNotifiers` (any visibility chosen in the tray's settings does that) is the user's:
+this widget neither adds nor removes it, and it never touches other `shownItems` entries. Each
+screen's widget handles its own bar's tray. A stale entry (plasmashell ended while an item was
+shown) is taken out when the widget starts. When the widget leaves the tray (it is removed, which
+Plasma reports as `Plasma::Applet::destroyedChanged` while its undo notification shows, or it moves
+to another bar) it takes the ids it added out of that tray's `shownItems`, since nothing else would
+and they would stay in the bar for good; an undone removal shows them again. Nothing is migrated: the layout's lists are unchanged,
+so existing layouts get this with the updated widget, at the next login or plasmashell start. A
+pop-up left open when its item hides (a vault locked from its own pop-up) stays open until it is
+closed. Without quick settings in the bar (a tray on its own) the items stay hidden as before.
 
 Widget options (`[General]` of the widget, `contents/config/main.xml`, also in its settings page):
 
@@ -249,9 +335,11 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `popupScreenMargin` | 16 | px between the pop-up and the screen edge |
 | `startPage` | main | page shown on open: `main`, `wifi`, `bluetooth`, `audio` (settings page: "Page shown when opened") |
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
-| `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`; without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
+| `tileOrder` | (empty) | StringList: the tiles in the user's order (ids in `contents/code/tiles.js`: `wifi`, `bluetooth`, `nightlight`, `dnd`, `power`, `darkstyle`, `keepawake`, `devices`, `hotspot`, `chargelimit`, `tabletmode`); empty: the default order (section "Editable tiles") |
+| `hiddenTiles` | (empty) | StringList: the tiles taken out of the grid; a conditional tile listed here never shows |
+| `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`, `clipboard` (the clipboard sheet, or closed when it is open: Meta+V); without OUTPUT only the widget on KWin's active screen acts, and only the leader when KWin does not answer or names no output (0.5.0; before, every widget did: the sheet opened on every screen); a widget that does not know its bar's output from the bar's screen geometry yet (its name is then the window's guess, which can name another screen) keeps a request that names an output until it does, 2 s at most, and then decides on the guess, where it decided at once and the request was lost (`MODE NONCE` accepted too; `contents/code/requests.js`, `tests/requests.test.js`) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
-| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state |
+| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the history's count and unread count, the output (with "(guess)" while it is not known from the bar's geometry), the tablet policy state, the sheet's window against its content (`frame`: window, padding, the content's place, size and wanted size) and, on the clipboard sheet, its mode, entries shown, stars, current row and search; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
 Dark style: when kdeglobals `[KDE] DefaultLightLookAndFeel` / `DefaultDarkLookAndFeel` pair the two
@@ -279,7 +367,37 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 
   Needs PySide6, python3-dbus, python3-gobject and PowerDevil's QML module. Checks default-off,
   both inhibitor endpoints, shared native state, preservation of another application's inhibition,
-  service disappearance/return and complete release after repeated use.
+  service disappearance/return and complete release after repeated use; and the timed Keep awake:
+  both widgets know the end, it ends on time with one release, an end left from a Keep awake
+  turned off does not end the next one, `Until turned off` keeps a timed one going.
+
+* Drill-down pages in the staged real QML with a stand-in backend (offscreen, in CI):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py build/stage
+  ```
+
+  Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
+  Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
+  under the list, a click on a profile chooses it directly.
+  Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
+  passes its time, the state line for timed and untimed.
+* Hidden tray items while active (offscreen, Plasma's `org.kde.plasma.core`, a stand-in panel and
+  tray with the stock ids and a writable configuration; in CI):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+  ```
+
+  An active vault or printers needing attention go into `shownItems` and out again when passive,
+  the user's own entries and ids stay, the input-method item not in tablet posture; the widget
+  removed (and the removal undone), moved to another bar's tray and to a bar without one, the tray
+  it left gets its items back; the rules themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
@@ -309,6 +427,16 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   `side-by-side-topbar.png`, `side-by-side-preview-{dark,light}.png`, `session-*.png`,
   `preview-keyboard-focus.png`; nearby Wi-Fi names are pixelated). The scenario, seed script,
   stand-ins and the preview harness are in `test-tooling/` there.
+* Clipboard sheet (section "Clipboard sheet" below): `node tests/clipboard.test.js` (also run by
+  `tools/build.sh quicksettings`) and, on Plasma's clipboard module in a throw-away HOME:
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/clipboard_sheet_test.py build/stage
+  ```
+
 * Graceful degradation seen in the sessions: no audio server → no volume icon, slider or output
   page entries; no PowerDevil → no brightness row, Power mode `Unavailable` (dimmed); no KDE Connect
   device → no phone; no player → no media card; no notifications → no list (bell opens an empty
@@ -316,6 +444,10 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 
 ## Deviations from the boards
 
+* **The tiles' edit mode** (0.5.0) is not on the boards: the pencil uses the header's 34 px round
+  button (44 in the tablet row), the remove badge the media card's play-button colours, the tray
+  and its buttons the sheet's overlays and the Do Not Disturb choices' 30 px pill buttons, Done the
+  accent button.
 * **Notifications are inside the quick-settings card**, below the quick settings, as inset cards
   (6 % overlay, 1 px edge, radius 18). The board draws them as separate frosted cards on the
   wallpaper. Separate cards need either several pop-up windows or a transparent window, which has
@@ -332,7 +464,7 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   as the board shows it off at 14:49 with `From sunset`. Clicking during the day pauses the coming
   evening (`Paused`), clicking again resumes; Plasma has no "turn on now until sunrise" without
   changing the user's Night Light mode.
-* **Power mode** cycles through the profiles on click (the board shows no chooser).
+* **Power mode** has a chevron and a chooser page (the board shows the tile only).
 * **Drill-down pages** also exist for Bluetooth and sound output (the board draws only the Wi-Fi
   panel); they use the same layout.
 * Wi-Fi speeds are shown only once NetworkManager reports traffic counters (hidden in the virtual
@@ -343,7 +475,8 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 
 * **Plasma style** (`plasma-fusion-dark` / `-light`): `dialogs/background` with the 22 px radius,
   88 % fill, 1 px 12 % edge, shadow and blur hint; the widget compensates any frame padding so the
-  content keeps its 16 px inset. Tooltips use `widgets/tooltip`.
+  content keeps its 16 px inset (see "The sheet's window and its content"). Tooltips use
+  `widgets/tooltip`.
 * **Colour schemes**: Selection background `#2F6FDF` (tile and button accent), DecorationHover
   `#5B9DFF` (slider fill), DecorationFocus `#8AB8FF` / `#2F6FDF` (focus ring), link colours.
 * **Global Theme / device setup**: set kdeglobals `[KDE] DefaultLightLookAndFeel=org.plasmafusion.light.desktop`
@@ -395,6 +528,34 @@ An independent review of the part, integrated with every other part that exists 
   30x26 with the 7 px #f2a65a dot at right 6 / top 4). All match; zoomed side-by-sides are in
   the evidence folder. Naming-table id, metadata (Authors, GPL-2.0-or-later) and the build script
   (`STAGE=… tools/build.sh quicksettings`, stage identical to the source) are correct.
+* Drill-down pages in the staged real QML with a stand-in backend (offscreen, in CI):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py build/stage
+  ```
+
+  Power mode chooser: the offered profiles are listed and the active one checked, an inhibited
+  Performance is `Unavailable` and a click on it switches nothing, the reason and the holders show
+  under the list, a click on a profile chooses it directly.
+  Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
+  passes its time, the state line for timed and untimed.
+* Hidden tray items while active (offscreen, Plasma's `org.kde.plasma.core`, a stand-in panel and
+  tray with the stock ids and a writable configuration; in CI):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/trayitems_test.py
+  ```
+
+  An active vault or printers needing attention go into `shownItems` and out again when passive,
+  the user's own entries and ids stay, the input-method item not in tablet posture; the widget
+  removed (and the removal undone), moved to another bar's tray and to a bar without one, the tray
+  it left gets its items back; the rules themselves are `tests/tray.test.js`.
+
 * `qmllint` (Qt 6.11.2) over all 37 QML files: no errors; the warnings are `i18n*` calls
   (injected by Plasma), plasma-pa singletons and `ListView.currentItem` methods (static-analysis
   limits only).
@@ -542,10 +703,9 @@ the lead directly.
   tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc
   `[Tablet] RotationLocked`); the lock is read back from `kscreen-doctor -j` when the sheet opens in
   tablet posture (outputs with the auto-rotation capability report it).
-- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow"
-  (the next 06:00: chosen after midnight, the coming morning; `contents/code/dnd.js`,
-  `tests/dnd.test.js`) and "Until turned off"; the time is kept in the notification settings, a
-  timer releases it.
+- **Do Not Disturb for a while** (G18): the tile's chevron offers the stock applet's choices (see
+  "Notification parity (0.5.0)" below; `contents/code/dnd.js`, `tests/dnd.test.js`); the time is
+  kept in the notification settings, a timer releases it.
 - **Built on demand** (S2): the sheet's content is a `Loader` built 4 s after start, or at once when the
   pointer reaches the bar or anything opens it; the Bluetooth device model exists only while the
   Bluetooth page is shown (the tile keeps using BluezQt's manager).
@@ -658,14 +818,18 @@ together (the forced split is itself a known complaint).
   It closes itself when another window becomes active, but not while its own card menu is open (it
   takes the activation back when the menu closes).
 - **Content** (`NotificationCentreContent.qml`): the Tinted backdrop; landscape = the clock (64 px
-  light), the date and a Do Not Disturb chip (tap: off) in a column on the left (28 %, at most 400 px),
+  light), the date (the region's long date without the year, `notifications.js centreDateFormat`:
+  "Sunday, October 11" in en_US, "Sunday 11 October" in en_GB; until 0.5.0 always in the British
+  order) and a Do Not Disturb chip (tap: off) in a column on the left (28 %, at most 400 px),
   the list on the right (at most 760 px) — never a narrow centred column (A-ipad, MacRumors 2023);
   portrait = one column with the clock above. A **Notifications | Controls** segment (44 px) at the top.
   Cards are the quick settings' `NotificationCard` on a **solid** surface (#1b2031 / #ffffff; E-phone
   4.2 MUST), newest first, with their actions. **Clear all** (44 px pill in the list's corner) hides
   the list for 5 s with **Notifications cleared · Undo**; the clear happens then or when the sheet
-  closes. An app with **4 or more** notifications shows as one stack (its newest card, two edges
-  behind it, "N more from App"); a tap opens the stack until the sheet closes. **Long press** on a card:
+  closes. Notifications are grouped by app as in the laptop sheet (0.5.0, "Grouped by app" below;
+  until then an app with 4 or more showed as one stack with "N more from App"): a group lists two
+  cards with the stack's two edges under them and **Show N More**, which opens it until the sheet
+  closes. **Long press** on a card:
   "No Pop-ups from App" (writes Plasma's own `plasmanotifyrc [Applications][<desktop entry>]
   ShowPopups=false --notify`, the key the notification settings page writes) and "Notification
   Settings…". A sideways swipe on a card dismisses it (the card's own handler). On the zones outside
@@ -750,11 +914,21 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   the same way. `openRequest` already acted only on the active screen's widget.
 - **One set of settings:** the user settings (`sharedKeys` in main.qml: what the pill shows, the
   pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
-  dark themes) are copied from a widget whose settings change to the others; a new widget takes the
-  settings of the leader there before it (also when it leads at once, as the primary screen's
-  bar made again does), and pushes nothing before that (while it loads its settings change too, and
-  pushing those defaults reset the others: found by the two-screen test). A value equal to the
-  default is not stored, so a script reads it as empty.
+  dark themes, the tiles' order and hidden tiles) are copied from a widget whose settings change to
+  the others (a list by its entries: each read gives a new array, which `!==` always takes for a
+  change). Each widget keeps when they last changed (`sharedRevision`, ms, set on every change and
+  copied with them; the settings page stamps it on Apply, as the dialog writes it after the
+  settings). A new stamp is the clock's time but always above the revision the widgets hold
+  (`nextRevision()`): with the clock set back (a wrong time corrected) while a bar was away, a
+  change got a smaller revision than that bar's older settings, which won when it came back. A new widget takes the newest set among the widgets there before it, or gives its own
+  on when they are newer (`contents/code/shared.js` `adoptFrom()`, test `tests/shared.test.js`);
+  with equal revisions (widgets from before 0.5.0) it takes the leader's, as before (also when it
+  leads at once, as the primary screen's bar made again does). Before, the first widget to load
+  after a restart won: a bar whose screen was away while the user changed the tiles kept the old
+  ones in its config, and loaded first it gave them back to the main bar. A new widget pushes
+  nothing before it has joined (while it loads its settings change too, and pushing those defaults
+  reset the others: found by the two-screen test). A value equal to the default is not stored, so
+  a script reads it as empty.
 - Disks & Devices reads the engine's devices once when it is created (`Devices.qml`): a widget made
   after the engine knew its devices (the second bar's) listed none before.
 - Notifications pop up once: the stock Notifications applet in every tray shares its Globals (one
@@ -767,3 +941,394 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   both ways and adopted by a new widget, posture settings written once per change, Meta+A and a USB
   stick open the sheet on the screen with the pointer only (both screens), bars made before the
   change completed at login (two reboots), no QML warnings, no crashes.
+
+## Editable tiles (0.5.0)
+
+The tiles' order and set are the user's (survey 3 F3: macOS Tahoe's Control Center, Windows 11's
+quick settings edit, GNOME's Quick Settings Tweaks). Two StringList keys of the widget hold them,
+`tileOrder` and `hiddenTiles` (table above), shared by every quick settings widget on every screen
+(`sharedKeys`, section "One quick settings per top bar"); the settings page declares them and reads
+them again before Apply, so the dialog never writes back an older order.
+
+- **The grid** shows the tiles of `tileOrder` that are not in `hiddenTiles` and whose condition
+  holds, two to a row, on one page (no paging: multi-page controls are "Not planned"; a long sheet
+  scrolls as before). The conditions are the ones the tiles had: Disks & Devices while a removable
+  device is connected, Wi‑Fi hotspot with a Wi‑Fi radio, Charge limit where the battery has a stop
+  threshold and the helper is installed, Tablet mode where the posture can change by itself or is
+  not automatic (`tileConditions` in QuickSettingsMain.qml). A hidden tile never shows; a shown
+  conditional one only while its condition holds, at its place in the order.
+- **Edit mode:** the pencil (`Edit the tiles`) opens it: in the header, left of the screenshot
+  button (the existing buttons keep their places; on open the focus starts on it), and in tablet
+  posture at the end of the tablet row, as the header's 44 px buttons leave no room for a sixth.
+  The pencil is drawn on while editing. Every tile shown is then one control with a 1 px edge, a
+  remove badge (−, 22 px, 24 in tablet posture, over the top edge and flush with the right side,
+  as the sheet clips what passes its side; its target is 28 px, 44 in touch mode) and a drag
+  handle where the chevron was; the tiles' own click and chevron rest, and an unavailable tile is
+  drawn in full, so it can be moved too. There is no wiggle. Below the grid: a
+  hint, the **Hidden tiles** tray (a `+` button per hidden tile that can show now; "Removed tiles
+  wait here to be added back." while it is empty), **Reset to defaults** (clears both keys; off while
+  nothing differs from the defaults) and **Done**. Every change is written at once, so the other
+  screens' widgets follow and closing the sheet keeps it; the mode ends with Done, the pencil,
+  Escape, the sheet closing or another page opening. The Do Not Disturb and charge limit choices
+  close while editing. The sliders and the header buttons stay as they are.
+- **Moving:** a tile is dragged by any part of it (pointer or touch, `DragHandler`, which the sheet's
+  scrolling cannot take over once it moves the tile): it follows the finger 4 % larger, the others
+  glide to their new cells (`Motion.toggle`; instant with reduced motion) and it lands in the cell
+  under its centre (`tiles.js` `slotAt`: below the grid is the last cell) when let go; the order is
+  written then, once. From the keyboard, Tab and Shift+Tab go through the tiles in the order shown
+  (the tiles are re-stacked among their siblings in that order, so Tab, the arrow keys and screen
+  readers follow it, in edit mode and after it); Ctrl+Left / Ctrl+Right move the focused tile one
+  place (mirrored in a right-to-left layout), Ctrl+Up / Ctrl+Down a row, Ctrl+Home / Ctrl+End to the
+  start or the end, and the focus stays on it; the arrow keys and Home / End without Ctrl move the
+  focus; Delete or Backspace removes the tile and the focus goes to the tile now in its place. The
+  edit control reads "Place N of M. Drag the tile or press Ctrl with an arrow key to move it, Delete
+  to remove it." to screen readers; the badge is the button "Remove <tile>", a tray button "Add
+  <tile>".
+- **Hiding and adding back:** a removed tile goes to `hiddenTiles` and the stored order is left as it
+  is (an empty order stays the default one); added back from the tray it returns to its place in the
+  order. A hidden tile whose condition does not hold is in neither the grid nor the tray, and shows
+  in the tray once it applies (plug in a USB stick to bring Disks & Devices back). Only the shown
+  tiles take part in a move: the hidden ones and those that do not apply now keep their places
+  (`tiles.js` `arrange`). A tile that comes or goes during a drag (a USB stick plugged in, the
+  Wi‑Fi radio gone) joins the dragged order at its place or leaves it (`rebase`), and only the
+  tiles shown both at the start and at the drop move, each once; before, the stored order lost one
+  tile and held another twice.
+- **New tiles in later releases:** `tiles.js` lists every tile in the default order. An empty
+  `tileOrder` (a user who never moved a tile) is the default order of the running release. A
+  stored order keeps the user's tiles in the user's order; a tile it lacks goes right after the
+  tile before it in the default order, wherever the user put that one (a tile first in the default
+  order goes first; two new neighbours stay together), and is shown, as it is not in `hiddenTiles`.
+  Ids the release does not know and repeats are ignored. So a new Airplane tile after Wi‑Fi lands
+  next to Wi‑Fi for everyone, and a user who hid tiles gets it all the same.
+- Tests: `tests/tiles.test.js` (run by `tools/build.sh quicksettings`: the merge rule with new tiles
+  first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
+  shown tiles with the hidden ones keeping their places, a tile that comes or goes during a drag,
+  the slot under a dragged tile, reset) and `tests/tiles_edit_test.py` (in CI), the main page on
+  the real Backend offscreen with the two keys as stand-ins (60 checks: the default grid, the
+  stored order, a conditional tile only while it applies, the pencil, the badges and the resting
+  tile actions, a mouse drag written once on release, a touch drag, a drag let go below the grid,
+  Ctrl+arrows, Ctrl+Home / End, the focus keys, Tab and Shift+Tab in the order shown, the badge and
+  Delete with the focus kept in the grid, the tray in order, adding back to the old place, a hidden
+  conditional tile neither in the grid nor the tray while it does not apply and still hidden when
+  it does, Done, Space on the pencil, Escape, closing the sheet, Reset, a drag during which Disks &
+  Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), the Power mode
+  tile's body after an application held a profile, Keep awake's time left in plural forms, the
+  clipboard sheet's tab back to All, and in tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/tiles_edit_test.py build/stage
+  ```
+
+## Notification parity (0.5.0)
+
+The notification history in the laptop sheet and the tablet Notification Centre, and Do Not
+Disturb, brought up to Plasma 6.7's Notifications applet (plasma-workspace
+`applets/notifications`, branch Plasma/6.7; improvement survey 3, P3). The stock applet stays
+loaded and hidden: it still owns the pop-ups and the Do Not Disturb bookkeeping.
+
+### Do Not Disturb for a while
+
+The tile's chevron offers the stock applet's choices (`FullRepresentation.qml`), worked out in
+`contents/code/dnd.js` `choices()` when the choices open: **For 1 hour**, **For 4 hours** (both
+elapsed time in whole minutes, also across a daylight saving change, as keep awake's durations;
+the stock applet adds to the hour of the day, so its "For 4 hours" lasts 5 hours in the night the
+clocks go back), **Until this evening** (20:00, offered before 20:00), **Until tomorrow morning**
+(06:00), **Until Monday** (06:00, offered on Fridays and Saturdays; on Sundays tomorrow morning is
+Monday) and **Until turned off** (a year ahead, as the stock applet keeps it), or **Turn off** while
+it is on. One deviation: the stock applet hides "tomorrow morning" until 07:00; here it is always
+offered and, chosen after midnight, ends at the coming 06:00 (the behaviour of the earlier "Until
+tomorrow"). From the keyboard the chevron moves the focus to the first choice, and a choice gives
+it back to the chevron. The choices close with the sheet and when another page opens, so every
+opening works them out at its own time (they stayed open with the times of the first opening: an
+hour later "Until this evening" could still be offered after 20:00, and chosen, it turned Do Not
+Disturb on with an end already passed, which nothing ended). While they stay open they follow the
+wall clock's minutes (Plasma's `Clock`), so "this evening" goes at 20:00; a choice's end is worked
+out at the click ("For 1 hour" is an hour from then), and the service refuses an end that has
+passed. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
+Friday/Saturday/Sunday, both daylight saving changes in Europe/Berlin), `tests/tiles_edit_test.py` (the main page on the real backend: the
+choices close with the sheet and on another page, follow their clock, and "For 1 hour" counts from
+the click) and `tests/notifications_service_test.py` (an end that has passed leaves Do Not Disturb
+off).
+
+### The "Until" text
+
+The tile reads `Until 18:00` within 24 hours of the end, `Until Mon 06:00` within a week, the date
+further ahead, and `On` for "until turned off" (more than 100 days ahead, the stock applet's limit
+too). The day is the locale's own short day name (`Qt.locale().dayName()`), before or after the
+time as the translation of `%1 %2` puts it, and the time and the date are the locale's short
+formats (`toLocaleTimeString`, `toLocaleDateString`): a format string's `ddd` gave English day
+names in every language ("Mon 06:00" for a German region, where Plasma says "Mo. 06:00"). It was
+read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
+reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
+form applies and when it changes next; while a change is ahead, the service
+(`services/Notifications.qml`) moves its clock on the wall clock's minutes with Plasma's `Clock`
+(`org.kde.plasma.clock`, a `CLOCK_REALTIME` timer that also fires right after a resume or a clock
+change, and the one the stock applet's own minute check runs on). Nothing listens for "until
+turned off". A `Timer` set to the next change, as before, counts only the time the machine is
+awake, so after a suspend the text kept its old form for hours.
+
+**Who ends it.** The stock applet (`global/Globals.qml`, loaded and hidden) owns the end, as for its
+own choices: `checkInhibition()` compares the kept end (`plasmanotifyrc [DoNotDisturb] Until`) with
+the time on every wall-clock minute and inhibits or releases the server. The tile's choices only
+write the end (`dndUntil()`), and the widget never ends a Do Not Disturb itself, so after a resume
+it ends on the first minute past its end, by the stock applet, and a Do Not Disturb Plasma holds for
+mirrored screens or a focused full-screen window stays on when a timed end passes (the widget's
+own timer lifted the server then, and pop-ups showed over a presentation; checked in the test VM
+with a full-screen Konsole). Our choices end on whole minutes;
+an end between two minutes (another program's) ends on the next one, as in stock Plasma. Tests:
+`tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on
+a private bus with the stock applet's `Globals` beside the service, as in the session, in CI, under
+a German region: a Do Not Disturb set a day ahead shows its day in German, then the time alone from
+that minute, and one ending
+between two minutes is ended by the stock applet on the next minute while the service leaves the
+kept end alone; the run waits for two minutes of the clock).
+
+### Who holds Do Not Disturb
+
+When an application holds Do Not Disturb (`org.freedesktop.Notifications.Inhibit`, for example a
+presentation or a video call), or the notification settings keep it on while screens are mirrored
+or a full-screen window has the focus, the tile's subtitle says so in the stock applet's words
+("While Kdenlive is active (Rendering)", "Screens are mirrored", "Fullscreen app is focused"), the
+tile's tooltip and the open choices show the whole state in one line ("Until 18:00 · While …"),
+and the Notification Centre shows the reasons under its Do Not Disturb chip. `dnd.js` `reasons()`
+pairs the applications with their reasons (`notificationInhibitionApplications` /
+`…Reasons`); `services/Notifications.qml` `dndReasons` words them. Tests: `tests/dnd.test.js` and
+`tests/notifications_service_test.py` (an inhibition held by `tests/notify_client.py inhibit` is
+named with its reason, and gone when released).
+
+### Images in the history
+
+The cards stripped every image (`cleanBody()` removed `<img>`; the image role and linked files were
+not used). They now follow the stock applet's sizes: the notification's own image (`image-data`,
+`image-path`), or its icon when that is not the app's, beside the text at Plasma's large icon size
+(48 px, its aspect kept, as `Icon.qml`); images in the body (`<img src>`, which the server keeps for
+local files only) below the text, fitted to the card and no taller than the preview strip (the stock
+applet draws them inline at their own size, which can overflow), and decoded at that size in device
+pixels (`sourceSize`: the history's cards live while the sheet is closed, so a 4000 × 3000 photo
+was held at full size in every screen's widget); and the first linked file
+(`x-kde-urls`: Spectacle's screenshot, a received file) as a preview strip of Plasma's "enormous"
+icon height (128 px), as `ThumbnailStrip.qml`. The preview is KIO's, made by the stock applet's own
+`Thumbnailer` type (`NotificationPreview.qml`, loaded in the same shell, so videos and documents
+get theirs too; a file without one shows its type's icon); where that type cannot load, an image is
+drawn by itself and any other file shows a generic icon. A click, Return or Space on the preview
+opens the file, lets the notification expire (as the stock applet) and closes the sheet; the
+preview has an accessible name ("Open screenshot.png"). `contents/code/notifications.js`
+`splitBody()` and `sideImage()`, tests `tests/notifications.test.js`; the cards themselves:
+`tests/notifications_card_test.py` (the staged package on Plasma's notification server on a private
+bus, in CI; applications without a desktop file stay out of the history by Plasma's default, so the
+test gives its own one): the image is drawn at 48 px on the right, a 1200 × 300 body image is fitted
+to the card at 4:1 and decoded at that size, a 300 × 1200 one at the preview strip's height and a
+60 × 40 one at its own, a screenshot is previewed 128 px tall and opens from a click and from
+Return.
+
+### Inline reply
+
+A notification that offers an inline reply (`inline-reply` action, `x-kde-reply-*` hints: chat
+apps, KDE Connect's SMS) can be answered from the history, as from the stock applet
+(`ActionContainer.qml`, `NotificationReplyField.qml`): when replying is all it offers, the field is
+shown at once; otherwise a **Reply** button (the app's label) comes first among the actions and
+opens the field with the focus. The field uses the app's placeholder and button text ("Type a
+reply…", **Send**), Send waits for text, Return sends and Escape goes back to the actions. The reply
+goes through `Notifications.reply()`; a notification that is not resident closes then.
+`notifications.js` `replyMode()`; `tests/notifications_card_test.py` sends both kinds through
+`tests/notify_client.py`, which reports the reply the app receives (from Return and from Send).
+
+### File jobs
+
+A job card (a copy, a download) hid its text and offered only a progress bar and Cancel, so a
+failed copy did not say why and a finished one had nothing to open. As in the stock applet
+(`JobItem.qml`, `Summary.qml`): the summary says "Copying (Finished)", "(Failed)" or "(Paused)";
+the job's text is shown (the file and a link to the destination, or the error text); the
+progress bar shows while it runs or is paused, with **Pause**/**Resume** when the job can be
+suspended and **Cancel** when it can be killed; a finished copy of one file offers **Open** (accent,
+as on the Popups board) and **Open Containing Folder**, which shows the file selected in the file
+manager (`org.freedesktop.FileManager1.ShowItems`, KIO's highlightInFileManager), and a copy of
+several files offers **Open Containing Folder** for the destination folder (the job's
+`effectiveDestUrl`, empty after an error or in the trash). Neither is offered when that file or
+folder no longer exists (the stock JobItem's FileInfo rule): Dolphin reports a cancelled copy as
+finished without an error, so the card said "Copying (Finished)" with Open for a file KIO had
+removed (ThinkPad, 0.5.0 round); a finished local job's parent folder is listed with a filter on the
+name (`notifications.js existenceProbe()`, a FolderListModel while the card shows), remote URLs are
+not checked. Opening lets the notification expire and closes the sheet. A summary that only repeats
+the app's name is left out (the stock rule).
+`notifications.js` `jobState()`, `fileActions()`, `existenceProbe()`, `summaryShown()`;
+`tests/notify_client.py job` reports a copy as KIO does (`org.kde.JobViewServerV2`) and
+`tests/notifications_card_test.py` checks the one-file, several-file, gone-file, failed and running
+cases (Open, the folder through a stand-in file manager, nothing for a file that is gone, the error
+text, Pause/Resume/Cancel reaching the job).
+
+### Grouped by app
+
+The sheet's history was flat (`groupMode: GroupDisabled`) and the tablet Notification Centre
+stacked an app's notifications only from 4 on, with its own counting. Both now use the stock
+applet's grouping (`services/Notifications.qml`: `GroupApplicationsFlat`, `groupLimit: 2`,
+`expandUnread`), drawn by one row component, `NotificationEntry.qml`: an app with two or more
+notifications gets a group header (its icon and name, **Close Group**, which closes all of them,
+hidden ones too), its cards then carry the summary on their first line (the header names the app),
+and under the last listed card **Show N More** opens the group and **Show Fewer** closes it again
+(the stock strings). Unread notifications are always listed, so a group collapses to its two newest
+once the sheet has been seen (`markRead`). The Centre draws a collapsed group's hidden notifications
+as the two card edges of its stack, and closes the groups opened while it is shown when it closes.
+Clear all opens every group first, so the notifications a collapsed group hides are cleared too
+(they are not rows until then). `notifications.js` `groupFooter()`;
+`tests/notifications_card_test.py`: four notifications of one app give one header with all four
+while unread, two and **Show 2 More** once read, all four and **Show Fewer** after a click, two
+again after another, none after Close Group, and Clear all removes a collapsed group's hidden ones.
+Live (VM 2, tablet posture forced with kwinrc `[Input] TabletMode=on`): the Centre's Konsole group
+with three new cards, the stack edges and **Show 4 More**, expanded by a tap.
+
+### Configure
+
+The app's notification settings were reachable only from the tablet Centre's long-press menu
+("Notification Settings…"); `Backend.notif.configure()` was never called from the laptop cards. As
+in the stock applet (`HeadingButtons.qml`), a card now has a **Configure** button beside its close
+button (the app's own label when it gives one, such as "Notification Settings"), shown with it on
+hover, keyboard focus and in touch mode, and an app's group header has one for the group (its cards
+do not repeat it). It runs `Notifications.configure()`: the app's own `settings` action when it has
+one, else System Settings' Notifications page for that app; the sheet closes. Test:
+`tests/notifications_card_test.py` (the label, focus showing the buttons, Return reaching the
+app's settings action and closing the sheet, the group header's button).
+
+### Keyboard
+
+The cards' default action was tap-only (a `TapHandler`; the card was not focusable and had no
+`Accessible.onPressAction`) and the Centre's card menu needed a long press. A card is now in the
+tab chain before its buttons, with the design's focus ring: Return, Enter and Space run its default
+action, or open its linked file when it has no default action and one file (the stock applet's
+list keys), Delete closes it, and screen readers get the press action. The Centre's card menu also
+opens from a right click, the Menu key and Shift+F10. Every new control above (Reply, the reply
+field and Send, the preview, Open, Open Containing Folder, Pause/Resume, Configure, Close Group,
+Show N More, the Do Not Disturb choices) is a focusable button with an accessible name; the
+Do Not Disturb chevron moves the focus to the first choice. Test: `tests/notifications_card_test.py`
+(Return reaching the app's default action, Delete, the Menu key, Shift+F10 and a right click asking
+for the menu). Not changed: links inside a notification's body are still reached with the pointer
+only (`Text.StyledText` has no keyboard navigation for links).
+
+## Clipboard sheet (0.5.0)
+
+The clipboard button (and its 52 px row in the sheet when the bar has no room for it, as in tablet
+posture) opens the clipboard sheet: a page of the quick-settings pop-up, in its card, sizes and
+colours (the Quick Settings and Popups boards' drill-down pages). It replaces Klipper's own pop-up,
+which the button opened before. Meta+V opens it too, on the screen in use (`openRequest`
+`clipboard`; the setup's Windows-style shortcut set takes the key from Klipper's pop-up,
+docs/parts/device.md); the button and Meta+V close it again. It shows no notification list, so
+closing it leaves the notifications unread (the bell keeps its dot): the sheet marks them read on
+closing only once the list was on it (the main page in the laptop layout, with Show notifications
+on and notifications to list: `notifications.js` `listOnSheet`, `Backend.notif.listShown`, the one
+condition of the list and of the closing), as the stock applet marks them read when its pop-up, the
+list, closes. 0.5.0 before this cleared the unread count on every close, and then on every close of
+the main page, also with Show notifications off, where the sheet has no list. VM (6.7.5): a Dolphin
+notification, the clipboard sheet opened and closed: 1 unread (0 before), then the main sheet opened
+and closed: 0. `tests/notifications_card_test.py` checks `listShown` on the real backend (main page,
+Show notifications off, the bell's empty list, the clipboard page).
+
+- **Data:** Plasma's clipboard QML module, the one the stock Clipboard widget and Klipper's pop-up
+  use (`org.kde.plasma.private.clipboard`, `HistoryModel`; `services/Clipboard.qml`). It is a view
+  of the history Klipper keeps inside plasmashell, newest first, so the entries, the stars (Plasma
+  6.5) and the storage (`~/.local/share/klipper/history3.sqlite`) are the stock widget's: a star set
+  in the sheet shows in the stock widget and survives a restart. Klipper's settings apply as they
+  are; images are kept only when "Always ignore images" is off in Klipper's settings (Plasma's
+  default keeps none). Without the module the button opens Klipper's pop-up, as before. The service
+  loads in the background after the widget starts: the button or Meta+V in those first moments
+  waits for it and then opens the sheet (Klipper's pop-up only when the module could not load,
+  `clipboard.js` `opening()`); before, they opened Klipper's pop-up.
+- **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
+  search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
+  Starred Only"; every opening starts on All, so Meta+V then Enter chooses what was copied last,
+  where Klipper's own pop-up keeps the last tab: the tab is the long-lived service's, and Backend
+  puts it back when the clipboard page goes; test `tests/tiles_edit_test.py`); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
+  shows in up to two lines (white space folded, blank text as ␣ ⇥ ↵ as in the stock widget, always
+  as plain text), an image as a thumbnail with its size, copied files with the first one's preview
+  (Klipper's `klipperpreview` images, asked for at the tile's width and height: given only a height
+  the provider answers an empty picture) and their names.
+- **Search** matches every word of the query in any order, ignoring case and accents, as plain text
+  (the stock widget takes the query as a regular expression, so `f(1` or `c++` found nothing);
+  images are also found by "image" or "picture", copied files by their names and "file"
+  (`contents/code/clipboard.js`).
+- **Entry actions:** a tap or click (or Enter) chooses the entry: Klipper puts it on the clipboard
+  and moves it to the top, and the sheet closes. The star and the "⋯" button show on the current
+  row, on hover and always in touch mode; "⋯" (or press and hold) opens the row's actions, as the
+  stock widget's row buttons: Star / Remove star, Edit (text: an editor in the sheet; Enter or Save
+  keeps it and puts it on the clipboard, Shift+Enter starts a new line, as the stock editor), QR
+  code (text, Prison as in the stock widget, on a white card so it scans in both styles), Actions
+  (Klipper's own actions menu for the entry at the pointer, `invokeAction`; the sheet closes) and
+  Remove. Removing a starred entry and "Clear all" ask first: Klipper's own confirmations ("This
+  item is starred...", "Do you really want to clear and delete the entire clipboard history?"), run
+  from the service a moment after the click, as their dialogs run an event loop in which the sheet
+  closes and its page goes away (called from the page's button, plasmashell aborted); Clear all
+  keeps the starred entries, as in stock Plasma.
+- **Keyboard:** the list has the focus with the newest entry current (no ring until a key is used);
+  Up and Down move (Up on the first entry goes to the search field, Down there comes back), Home,
+  End, Page Up and Page Down, Enter or Space chooses (as on the notification cards and the stock
+  widget's rows; Space went to the search field before), Delete removes, typing goes to the search field (Ctrl+F
+  selects it; Enter there chooses the current or first match). Right or Menu opens the entry's
+  actions; Left and Right then move between them (the list keeps the focus, the ring marks the
+  action) and Enter or Space presses one; Left on the first closes them. Escape closes the editor,
+  the QR code or the open actions, then clears the search, then closes the sheet (opened on its own)
+  or goes back to quick settings (opened from the sheet's row). Every button and the list have
+  accessible names; the rows are list items named by their text.
+- **Touch and tablet posture:** the sheet's tablet width (400 px; portrait up to 560 px), rows of
+  56 px, star and "⋯" always shown (without tooltips, which a tap would leave over the actions),
+  every target at least 44 px (the header's buttons, Clear all, the search field, the tabs, the row
+  and editor buttons), press and hold for the actions; the sheet takes its own height and its list
+  what the rest leaves, so only the list scrolls.
+- **Emoji:** the header's Emoji button closes the sheet and opens Plasma's emoji selector
+  (plasma-emojier, through its own Meta+. shortcut action, or the program); the sheet draws no emoji
+  of its own.
+- **After choosing,** Plasma's on-screen display says "Copied, press Ctrl+V to paste". **Paste after
+  choosing (KDE wishlist 427214) is not done:** nothing safe can type Ctrl+V into the window under
+  the sheet without a new privilege or a new program. KWin's fake input protocol
+  (`org_kde_kwin_fake_input`) is restricted, and plasmashell's desktop file does not list it (only
+  the portal's does); the RemoteDesktop portal asks the user to allow control of the input devices
+  and needs a D-Bus session client of its own, which QML cannot be; KWin's
+  `org.kde.KWin.EIS.RemoteDesktop` interface, which the portal uses, needs a libei client (compiled
+  code or a helper) and would bypass the portal's consent; KWin 6.7 offers no virtual-keyboard
+  protocol (only the configured input method may use `zwp_input_method_v1`), and ydotool needs
+  `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
+  selection.
+- Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
+  and `tests/clipboard_sheet_test.py` (49 checks: the service on Klipper's model, newest first,
+  search, image entries with their pictures, stars shared with a second view and kept in Klipper's
+  storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
+  the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by
+  keyboard, QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode, a copied
+  file's row with a non-empty preview). Both fail without the sheet (the files do not exist on
+  0.4.1); the file preview check fails on 2a872e3 (0x0 picture).
+
+## The sheet's window and its content (0.5.0)
+
+The pop-up's content (`PopupContent.qml`) is the card less the Plasma style's frame padding, and
+`AppletPopup` sizes its window from the content's size hints plus that padding (the hints' minimum,
+maximum and preferred size are equal: the card's 356 px and the page's height, at most the room
+below the bar). Two things went wrong in the test VM (1280 x 800, before 0.5.0):
+
+- **The padding.** The window's `leftPadding`, `topPadding`... are 0 until it is first shown and
+  become the style's 14 px then without their change signal (`paddingChanged`). The content is
+  built in the background after start, before the first show, so a binding to them stayed 0: the
+  content asked for the card's outer size as its own (356 x 392 instead of 328 x 364), the window
+  took it without the padding, and the page was drawn 14 px too low and right, 28 px narrower, with
+  its last 28 px (the Keep awake and Disks & Devices row, a page's footer button) cut off and
+  scrolling. `main.qml` now reads the padding whenever the window sets its frame borders (each time
+  it is placed) or reports a change, one event loop pass later (a nested update while the window
+  resized lost one of the four values), and the content follows.
+- **A size set while hidden.** `AppletPopup` resizes the window when the content's hints change,
+  but a size set while the sheet was hidden did not reach the Wayland window: after a scale change,
+  or a notification that came or went with the sheet closed, it opened at its old height (the hints
+  already named the new one; seen 392 for 396 at 1.25). Once shown, the window takes the size its
+  own limits name (`fitWindow()`, logged as `sheet window OLD -> NEW`).
+
+Test: `tools/tests/shell-vm/sheet_fit.py` (run inside the session; `--restart` restarts plasmashell
+first, `--notifications N` makes the main page scroll, modes such as `1280x800@1 1920x1200@1.5
+1280x800@1.25` are set with kscreen-doctor in turn) opens the main page and the Wi-Fi, Bluetooth,
+Sound and sleep blockers (`power`) pages and checks with the dump's `frame` line that the content sits at the padding,
+fills the window less the padding and asks for exactly that size, that the window is the card's
+width and ends at least `popupScreenMargin` above the available area's bottom, and that a page
+scrolls only when it is taller than the room. On the previous code it fails 10 checks after a
+restart at 1280 x 800 (every page: wanted 356 x 392 in a 328 x 364 item, scrolling) and 10 at 1.25
+after a live scale change with only the padding fixed; with the change it passes at 1280 x 800,
+1920 x 1200 and 1280 x 800 at scales 1, 1.25 and 1.5, with and without a scrolling notification
+list. Screenshots: `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/shellfixes-shots/`
+(`base-*` before, `fix-*` after).

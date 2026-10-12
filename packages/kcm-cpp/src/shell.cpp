@@ -18,14 +18,15 @@
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QEventLoop>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QProcess>
-#include <QStandardPaths>
 #include <QSet>
+#include <QStandardPaths>
 #include <QThread>
 
 #include <algorithm>
@@ -37,9 +38,13 @@ using namespace PlasmaFusion;
 namespace
 {
 // Reads the shell state in one call: the dock's keys, the top bar (the panel holding
-// org.plasmafusion.appname; the one with quick settings when there are several), the quick
-// settings' keyboard policy and the Folder View desktop's filter and icon size.
-const QString s_readShellScript = uR"JS(
+// org.plasmafusion.appname; the one with quick settings when there are several) and whether it
+// has the system meters, the quick settings' keyboard policy and the Folder View desktop's filter
+// and icon size. A panel's opacity and sizes are read only while its screen is there: for a
+// panel of a monitor that was unplugged (Plasma 6.8 keeps it on that screen) plasmashell reads
+// them from an invalid config group and crashes (WorkspaceScripting::Panel, KConfigGroup).
+const QString s_readShellScript =
+    uR"JS(
 function bool(v, d) {
     if (v === undefined || v === null || v === "") {
         return d;
@@ -47,10 +52,11 @@ function bool(v, d) {
     return !(v === false || v === "false");
 }
 var state = { docks: 0, magnify: true, magnifiedSize: 62, homeIndicator: true,
-              topBars: 0, menu: false, topOpacity: "",
+              topBars: 0, menu: false, topOpacity: "", meters: false,
+              metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
               folders: 0, filterMode: 0, filterPattern: "*", iconSize: 3 };
-var mainTopBar = false;
+var mainTopBar = false, chosenTopBar = false;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
     var p = ps[i];
@@ -73,10 +79,13 @@ for (var i = 0; i < ps.length; ++i) {
         ++state.quickSettings;
     }
     if (p.widgets("org.plasmafusion.appname").length > 0) {
-        if (state.topBars === 0 || (!mainTopBar && qs.length > 0)) {
+        var onScreen = p.screen >= 0 && p.screen < screenCount;
+        if (onScreen && (!chosenTopBar || (!mainTopBar && qs.length > 0))) {
             state.menu = p.widgets("org.kde.plasma.appmenu").length > 0;
+            state.meters = p.widgets("org.plasmafusion.meters").length > 0;
             state.topOpacity = String(p.opacity);
             mainTopBar = qs.length > 0;
+            chosenTopBar = true;
         }
         ++state.topBars;
     }
@@ -162,6 +171,74 @@ for (var i = 0; i < ps.length; ++i) {
 print(changed);
 )JS"_s;
 
+// %1: true (add the system meters to every top bar that has none, right before quick settings)
+// or false (remove every meters widget from the panels). As the global menu, the widget is added
+// at the position just left of quick settings, so the panel inserts it there directly. Prints
+// {added: [ids of the new widgets], present: top bars that had meters, failed: adds that failed}.
+// addWidget returns an Error object, which is truthy, when the shell cannot make the widget.
+const QString s_metersScript =
+    uR"JS(
+var want = %1;
+var result = { added: [], present: 0, failed: 0 };
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var meters = ps[i].widgets("org.plasmafusion.meters");
+    if (!want) {
+        for (var j = 0; j < meters.length; ++j) {
+            meters[j].remove();
+        }
+        continue;
+    }
+    if (ps[i].widgets("org.plasmafusion.appname").length === 0) {
+        continue;
+    }
+    if (meters.length > 0) {
+        ++result.present;
+        continue;
+    }
+    var qs = ps[i].widgets("org.plasmafusion.quicksettings");
+    if (qs.length === 0) {
+        continue;
+    }
+    var g = qs[0].geometry;
+    var added = g ? ps[i].addWidget("org.plasmafusion.meters", Math.max(0, g.x - 2), 1, -1, -1)
+                  : ps[i].addWidget("org.plasmafusion.meters");
+    if (added && !(added instanceof Error)) {
+        result.added.push(added.id);
+    } else {
+        ++result.failed;
+    }
+}
+print(JSON.stringify(result));
+)JS"_s;
+
+// %1: the ids of the meters widgets just added (a JSON array of numbers). Checks that each sits
+// right before quick settings in its panel and moves it there if not (a second call, as for the
+// global menu); prints how many of them the shell lists. Meters placed by hand stay where they are.
+const QString s_placeMetersScript =
+    uR"JS(
+var ids = %1;
+var placed = 0;
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var qs = ps[i].widgets("org.plasmafusion.quicksettings");
+    var meters = ps[i].widgets("org.plasmafusion.meters");
+    for (var j = 0; j < meters.length && qs.length > 0; ++j) {
+        if (ids.indexOf(meters[j].id) === -1) {
+            continue;
+        }
+        // Moving up the order, the widget lands at the index given; moving down, the ones in
+        // between move up a place.
+        var at = meters[j].index < qs[0].index ? qs[0].index - 1 : qs[0].index;
+        if (meters[j].index !== at) {
+            meters[j].index = at;
+        }
+        ++placed;
+    }
+}
+print(placed);
+)JS"_s;
+
 // Checks that the global menu sits right after the application name and moves it there if not
 // (the panel saves its order on the next event loop pass, so this runs as a second call).
 const QString s_placeMenuScript = uR"JS(
@@ -183,8 +260,11 @@ print(placed);
 )JS"_s;
 
 // %1 top-bar opacity, %2 dock opacity, %3 the widgets' glass value or null (leave them), %4 the
-// widget types that have a glass key. Only panels holding Plasma Fusion widgets change.
-const QString s_panelsScript = uR"JS(
+// widget types that have a glass key. Only panels holding Plasma Fusion widgets change; a panel
+// whose screen is gone keeps its opacity (reading or writing it crashes plasmashell 6.8, see
+// s_readShellScript), its widgets get the glass value.
+const QString s_panelsScript =
+    uR"JS(
 var topOpacity = %1, dockOpacity = %2, glass = %3, glassTypes = %4;
 var result = { panels: 0, widgets: 0 };
 function glassFor(c) {
@@ -208,7 +288,7 @@ for (var i = 0; i < ps.length; ++i) {
         || p.widgets("org.plasmafusion.quicksettings").length > 0;
     var dock = p.widgets("org.plasmafusion.dock").length > 0;
     var want = top ? topOpacity : dock ? dockOpacity : "";
-    if (want !== "" && String(p.opacity) !== want) {
+    if (want !== "" && p.screen >= 0 && p.screen < screenCount && String(p.opacity) !== want) {
         p.opacity = want;
         ++result.panels;
     }
@@ -335,15 +415,15 @@ for (var k = 0; k < cs.length && !found; ++k) {
 print(JSON.stringify({ found: found, key: now }));
 )JS"_s;
 
-// Shortcuts a layout reset gives when the widget had none before (owner decision 6: Meta+A
-// opens quick settings, Meta+Shift+W the pen menu), as tools/device/fusion-config.sh does.
+// Shortcuts a layout reset gives when the widget type had none before (owner decision 6: Meta+A
+// opens quick settings), as tools/device/fusion-config.sh does. The pen menu's Meta+Shift+W is
+// fusion-config.sh --pen's, so it comes back only when the old pen menu had it (keyByType).
 struct DefaultShortcut {
     QString plugin;
     QString key;
 };
 const QList<DefaultShortcut> s_defaultShortcuts = {
     {u"org.plasmafusion.quicksettings"_s, u"Meta+A"_s},
-    {u"org.plasmafusion.pen"_s, u"Meta+Shift+W"_s},
 };
 
 // A key sequence as kglobalaccel's D-Bus type (ai): four Qt key codes.
@@ -380,15 +460,31 @@ QString widgetName(const QString &plugin)
 }
 } // namespace
 
-QString PlasmaFusionKcm::evaluateShellScript(const QString &script, bool *ok) const
+// Apply and the actions change the shell step by step, each step on the answer of the one before.
+// The answer is awaited in a local event loop rather than with QDBus::Block: a shell that is slow
+// to answer (just restarted, up to s_shellTimeout) must not freeze the page, and KWin offers to end
+// a window that has not answered its ping for 5 s. User input waits meanwhile, so no other change
+// can start; the page shows that it is busy. A shell state answer arriving meanwhile is read again
+// afterwards (requestShellState).
+QString PlasmaFusionKcm::evaluateShellScript(const QString &script, bool *ok)
 {
-    const QDBusMessage reply = QDBusConnection::sessionBus().call(shellScriptMessage(script), QDBus::Block, s_dbusTimeout);
-    if (reply.type() != QDBusMessage::ReplyMessage) {
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_shellTimeout);
+    if (!call.isFinished()) {
+        QDBusPendingCallWatcher watcher(call);
+        QEventLoop loop;
+        connect(&watcher, &QDBusPendingCallWatcher::finished, &loop, &QEventLoop::quit);
+        const bool wasBusy = m_busy;
+        setBusy(true);
+        loop.exec(QEventLoop::ExcludeUserInputEvents);
+        setBusy(wasBusy);
+    }
+    const QDBusPendingReply<QString> reply = call;
+    if (reply.isError()) {
         *ok = false;
-        return reply.errorMessage();
+        return reply.error().message();
     }
     *ok = true;
-    return lastLine(reply.arguments().value(0).toString());
+    return lastLine(reply.value());
 }
 
 void PlasmaFusionKcm::requestShellState()
@@ -397,13 +493,20 @@ void PlasmaFusionKcm::requestShellState()
     m_shellLoading = true;
     Q_EMIT shellStateChanged();
 
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_readShellScript), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_readShellScript), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *watcher) {
-        if (request == m_shellRequest) {
-            shellStateArrived(watcher);
-        }
         watcher->deleteLater();
+        if (request != m_shellRequest) {
+            return;
+        }
+        if (m_saving || m_busy) {
+            // Inside Apply or an action (waiting in evaluateShellScript): the state may already be
+            // older than the change being made.
+            m_shellStateDeferred = true;
+            return;
+        }
+        shellStateArrived(watcher);
     });
 }
 
@@ -414,6 +517,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
     m_shellRunning = !reply.isError();
     m_dockAvailable = false;
     m_topBarAvailable = false;
+    m_metersAvailable = false;
     m_quickSettingsAvailable = false;
     m_folderAvailable = false;
     if (reply.isError()) {
@@ -422,6 +526,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         const QJsonObject state = QJsonDocument::fromJson(lastLine(reply.value()).toUtf8()).object();
         m_dockAvailable = state.value(u"docks"_s).toInt() > 0;
         m_topBarAvailable = state.value(u"topBars"_s).toInt() > 0;
+        m_metersAvailable = state.value(u"metersInstalled"_s).toBool();
         m_quickSettingsAvailable = state.value(u"quickSettings"_s).toInt() > 0;
         m_folderAvailable = state.value(u"folders"_s).toInt() > 0;
 
@@ -447,6 +552,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         }
         if (m_topBarAvailable) {
             take(m_current.globalMenu, m_saved.globalMenu, state.value(u"menu"_s).toBool(true));
+            take(m_current.systemMeters, m_saved.systemMeters, state.value(u"meters"_s).toBool(false));
             // "adaptive": solid next to windows; "translucent": always glass. With Reduced glass
             // the bar is opaque, and the choice the page made last is in plasmafusionrc.
             const QString opacity = state.value(u"topOpacity"_s).toString();
@@ -478,14 +584,20 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
 
 bool PlasmaFusionKcm::applyMagnify(bool on)
 {
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup power(fusion, u"Power"_s);
     if (m_powerCritical) {
-        // The power service keeps the dock still at 10 % battery and restores this value later.
-        KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
-        fusion->reparseConfiguration();
-        KConfigGroup(fusion, u"Power"_s).writeEntry("UserDockMagnify", on, KConfig::Notify);
+        // The power service keeps the dock still at 10 % battery and gives every dock this value
+        // when the battery recovers ([Power] PageDockMagnify); UserDockMagnify is what the page
+        // shows meanwhile.
+        power.writeEntry("UserDockMagnify", on, KConfig::Notify);
+        power.writeEntry("PageDockMagnify", on, KConfig::Notify);
         fusion->sync();
         return true;
     }
+    power.deleteEntry("PageDockMagnify", KConfig::Notify);
+    fusion->sync();
     bool ok = false;
     const QString result = evaluateShellScript(s_magnifyScript.arg(on ? u"true"_s : u"false"_s), &ok);
     if (!ok || result.toInt() < 1) {
@@ -529,6 +641,91 @@ bool PlasmaFusionKcm::applyGlobalMenu(bool on)
         }
     }
     return true;
+}
+
+bool PlasmaFusionKcm::applySystemMeters(bool on)
+{
+    // A placement still running for an earlier Apply stops.
+    const int request = ++m_metersPlacement;
+    bool ok = false;
+    const QString output = evaluateShellScript(s_metersScript.arg(on ? u"true"_s : u"false"_s), &ok);
+    if (!ok) {
+        addError(i18nc("@info", "The top bar could not be changed: %1", output));
+        return false;
+    }
+    if (!on) {
+        return true;
+    }
+    const QJsonObject result = QJsonDocument::fromJson(output.toUtf8()).object();
+    QList<int> ids;
+    for (const QJsonValue &id : result.value(u"added"_s).toArray()) {
+        ids << id.toInt();
+    }
+    if (result.value(u"failed"_s).toInt() > 0) {
+        addError(i18nc("@info", "The system meters could not be added to the top bar."));
+    } else if (ids.isEmpty() && result.value(u"present"_s).toInt() == 0) {
+        // The meters go next to quick settings; a top bar without it (the stock system tray in
+        // its place, for example) gets none.
+        addError(i18nc("@info", "The top bar has no Quick Settings to place the system meters next to."));
+    }
+    if (ids.isEmpty()) {
+        return m_errorText.isEmpty();
+    }
+    // The power service gives the new meters the current tier (they run at full rate otherwise).
+    reapplyPowerTier();
+    // Let the panel store its new widget order before moving the meters. A QML widget the shell
+    // loads for the first time is listed only once it is built (about 0.5 s in the test VM), so
+    // the placement asks again, from the event loop, for up to 3 s.
+    QTimer::singleShot(300, this, [this, ids, request] {
+        placeSystemMeters(ids, 0, request);
+    });
+    return true;
+}
+
+void PlasmaFusionKcm::placeSystemMeters(const QList<int> &ids, int attempt, int request)
+{
+    if (request != m_metersPlacement) {
+        return;
+    }
+    QStringList list;
+    for (const int id : ids) {
+        list << QString::number(id);
+    }
+    const QString script = s_placeMetersScript.arg(u'[' + list.join(u',') + u']');
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_shellTimeout);
+    auto *watcher = new QDBusPendingCallWatcher(call, this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, ids, attempt, request](QDBusPendingCallWatcher *watcher) {
+        const QDBusPendingReply<QString> reply = *watcher;
+        watcher->deleteLater();
+        if (request != m_metersPlacement) {
+            return;
+        }
+        if (!reply.isError() && lastLine(reply.value()).toInt() >= ids.size()) {
+            return;
+        }
+        if (attempt < 9) {
+            QTimer::singleShot(300, this, [this, ids, attempt, request] {
+                placeSystemMeters(ids, attempt + 1, request);
+            });
+            return;
+        }
+        addError(i18nc("@info", "The system meters could not be placed before quick settings."));
+    });
+}
+
+// The power service sets a tier's keys (the meters' and cards' powerTier, the glass held at
+// critical) on the widgets there are when the tier changes or plasmashell starts; a widget added
+// later would run at full rate until the next change. Its reload (SIGHUP) applies the tier again;
+// try-reload-or-restart does nothing when the service is not running.
+void PlasmaFusionKcm::reapplyPowerTier()
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    const QString tier = KConfigGroup(fusion, u"Power"_s).readEntry("Tier", QString());
+    if (tier.isEmpty() || tier.compare(u"full"_s, Qt::CaseInsensitive) == 0) {
+        return;
+    }
+    QProcess::startDetached(u"systemctl"_s, {u"--user"_s, u"try-reload-or-restart"_s, u"plasma-fusion-powerfx.service"_s});
 }
 
 // EFFECTS.md 3.3: Reduced makes both Fusion panels opaque; otherwise the top bar is adaptive
@@ -612,8 +809,10 @@ bool PlasmaFusionKcm::applyEveryScreen(bool on)
         addError(i18nc("@info", "The top bars could not be added: %1", result));
         return false;
     }
-    // New bars take the glass level and the top-bar opacity of the page.
-    return applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    // New bars take the glass level and the top-bar opacity of the page, and the power tier.
+    const bool panels = applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    reapplyPowerTier();
+    return panels;
 }
 
 bool PlasmaFusionKcm::applyDesktop(const State &before, const State &after)
@@ -659,7 +858,7 @@ void PlasmaFusionKcm::restorePreviousDesktop()
 
 // ---------- Reset Fusion layout ----------
 
-QJsonObject PlasmaFusionKcm::widgetShortcuts(bool *ok) const
+QJsonObject PlasmaFusionKcm::widgetShortcuts(bool *ok)
 {
     const QString result = evaluateShellScript(s_widgetsScript, ok);
     if (!*ok) {
@@ -721,7 +920,7 @@ void PlasmaFusionKcm::pollResetLayout(const QJsonObject &before, int attempt)
     for (const QJsonValue &id : before.value(u"ids"_s).toArray()) {
         oldMax = std::max(oldMax, id.toInt());
     }
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_widgetsScript), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_widgetsScript), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, before, attempt, oldMax](QDBusPendingCallWatcher *watcher) {
         const QDBusPendingReply<QString> reply = *watcher;

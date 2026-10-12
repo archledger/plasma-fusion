@@ -9,6 +9,8 @@ import "components"
 import "global"
 import "../code/power.js" as Power
 import "../code/dnd.js" as Dnd
+import "../code/keepawake.js" as Timed
+import "../code/notifications.js" as Notif
 
 // Every data source behind one null-safe object. Each service lives in its own
 // file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
@@ -24,10 +26,19 @@ Item {
     property bool showClipboard: true
     property bool showBatteryPercent: true
     property bool showNotifications: true
+    // The tiles' order and the hidden tiles (contents/code/tiles.js; the widget's settings).
+    property var tileOrder: []
+    property var hiddenTiles: []
+    // The sheet's edit mode asks main.qml to store a new order and hidden tiles.
+    signal tileLayoutRequested(var order, var hidden)
     property string lightLookAndFeel: "org.plasmafusion.light.desktop"
     property string darkLookAndFeel: "org.plasmafusion.dark.desktop"
-    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power", "devices" or "display".
+    // Page of the pop-up: "main", "wifi", "bluetooth", "audio", "power" (Keep awake), "profiles"
+    // (Power mode), "devices", "display" or "clipboard".
     property string page: "main"
+    // The page was opened on its own (the clipboard button, Meta+V), not from quick settings:
+    // Escape closes the sheet instead of going back.
+    property bool pageDirect: false
     property string audioPage: "output"
     // The pop-up was opened from the bell: show the notification list even when empty.
     property bool showEmptyNotifications: false
@@ -85,6 +96,11 @@ Item {
     Connections {
         target: profilesLoader.item
         function onFailed(profile: string) {
+            // Only the request that failed is over: one for another profile made since (chosen
+            // while this switch was on its way) still counts when it becomes active.
+            if (backend.profile.requested === profile) {
+                backend.profile.requested = "";
+            }
             backend.profile.failedProfile = profile;
             profileFailedTimer.restart();
         }
@@ -113,6 +129,33 @@ Item {
     Loader { id: execLoader; asynchronous: true; source: "services/Exec.qml" }
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
     Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
+    // The panel this widget is in (main.qml): its system tray's hidden stock items are shown
+    // while active (services/TrayItems.qml), until the widget is removed.
+    property var containment: null
+    property bool removed: false
+    Loader { id: trayItemsLoader; asynchronous: true; source: "services/TrayItems.qml" }
+    Binding {
+        target: trayItemsLoader.item
+        property: "containment"
+        value: backend.containment
+        when: trayItemsLoader.item !== null
+    }
+    Binding {
+        target: trayItemsLoader.item
+        property: "tablet"
+        value: backend.tablet
+        when: trayItemsLoader.item !== null
+    }
+    Binding {
+        target: trayItemsLoader.item
+        property: "removed"
+        value: backend.removed
+        when: trayItemsLoader.item !== null
+    }
+    readonly property var trayRevealed: trayItemsLoader.item ? trayItemsLoader.item.revealed : []
+    // Plasma's clipboard module (Klipper's history), for the clipboard button and Meta+V (which
+    // opens the sheet also without the button).
+    Loader { id: clipboardLoader; asynchronous: true; source: "services/Clipboard.qml" }
     Binding {
         target: chargeLoader.item
         property: "batteryKnown"
@@ -587,29 +630,41 @@ Item {
         readonly property bool available: s ? s.serverValid : false
         readonly property bool active: s ? s.dndActive : false
         readonly property string untilText: s ? s.dndUntilText : ""
+        // Why it is on besides a time (an app holds it, mirrored screens, a full screen window), in
+        // the stock applet's words.
+        readonly property var reasons: s ? s.dndReasons : []
         readonly property string subtitle: {
             if (!active) {
                 return i18nc("@info:status Do not disturb", "Off");
             }
-            const until = s ? s.dndUntilText : "";
-            return until ? i18nc("@info:status Do not disturb, %1 is a time", "Until %1", until)
-                         : i18nc("@info:status Do not disturb", "On");
+            if (untilText !== "") {
+                return i18nc("@info:status Do not disturb, %1 is a time", "Until %1", untilText);
+            }
+            return reasons.length > 0 ? reasons[0] : i18nc("@info:status Do not disturb", "On");
+        }
+        // The whole state in one line, as the stock applet's header puts it.
+        readonly property string description: {
+            if (!active) {
+                return "";
+            }
+            const parts = untilText !== "" ? [i18nc("@info:status Do not disturb, %1 is a time", "Until %1", untilText)] : [];
+            return parts.concat(reasons).join(" · ");
         }
         function toggle() {
             if (s) {
                 s.toggleDnd();
             }
         }
-        // G18: for one hour, or until the next morning (06:00; after midnight the coming one).
-        function forHour() {
-            if (s) {
-                s.dndUntil(new Date(Date.now() + 3600 * 1000));
-            }
+        // G18 and the stock applet's choices (contents/code/dnd.js): [{id, until}] at `now` (a Date).
+        function choices(now: var): var {
+            return Dnd.choices(now);
         }
-        function untilTomorrow() {
-            if (s) {
-                s.dndUntil(Dnd.untilMorning(new Date()));
-            }
+        // The choice `id` from this moment, not from when the choices were drawn: "For 1 hour" lasts
+        // an hour from the click, and a choice no longer offered ("this evening" after 20:00) does
+        // nothing.
+        function choose(id: string): bool {
+            const choice = Dnd.choices(new Date()).find(c => c.id === id);
+            return !!choice && !!s && s.dndUntil(choice.until);
         }
         function openSettings() {
             backend.openSettings("kcm_notifications", []);
@@ -753,22 +808,23 @@ Item {
             }
             return profileName(active);
         }
-        // Why Performance is not offered or may be slower, and which applications hold a profile:
-        // the stock Power and Battery widget's wording.
-        readonly property string note: {
-            const lines = [];
+        // Why Performance cannot be chosen (empty when it can), in the stock Power and Battery
+        // widget's wording.
+        readonly property string inhibitionNote: {
             switch (inhibitionReason) {
             case "":
-                break;
+                return "";
             case "lap-detected":
-                lines.push(i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap."));
-                break;
+                return i18nc("@info:tooltip", "Performance mode has been disabled to reduce heat generation because the computer has detected that it may be sitting on your lap.");
             case "high-operating-temperature":
-                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot."));
-                break;
+                return i18nc("@info:tooltip", "Performance mode is unavailable because the computer is running too hot.");
             default:
-                lines.push(i18nc("@info:tooltip", "Performance mode is unavailable."));
+                return i18nc("@info:tooltip", "Performance mode is unavailable.");
             }
+        }
+        // That, why Performance may be slower, and which applications hold a profile.
+        readonly property string note: {
+            const lines = inhibitionNote !== "" ? [inhibitionNote] : [];
             if (active === "performance" && degradationReason !== "") {
                 switch (degradationReason) {
                 case "lap-detected":
@@ -786,17 +842,53 @@ Item {
             }
             return lines.join("\n");
         }
-        function cycle() {
+        // The chooser's rows ([{profile, active, enabled}]): Performance is listed but cannot be
+        // chosen while the daemon inhibits it.
+        readonly property var options: s ? Power.options(s.list, active, inhibitionReason) : []
+        // The tile's body: back to Balanced, or from Balanced to the last other profile chosen
+        // (shared by every widget, for this session), so Balanced to Power saver never passes
+        // through Performance. Chosen here, by the user: a profile an application holds for a
+        // while (a game's Performance) or PowerDevil's own for the power source is not a choice.
+        readonly property string toggleTarget: s ? Power.toggleTarget(s.list, active, inhibitionReason, Instances.lastPowerProfile) : ""
+        // The profile asked for and not active yet. It counts as the last one chosen only once the
+        // daemon has switched to it: one it refused (a failed switch to Performance) left the body
+        // going there instead of back to the profile chosen before.
+        property string requested: ""
+        onActiveChanged: {
+            if (requested !== "" && active === requested) {
+                if (requested !== "balanced") {
+                    Instances.lastPowerProfile = requested;
+                }
+                requested = "";
+            }
+        }
+        function switchTo(profile: string) {
+            failedProfile = "";
+            requested = profile;
+            s.setProfile(profile);
+        }
+        function setProfile(profile: string) {
             if (!s || !available) {
                 backend.openSettings("kcm_powerdevilprofilesconfig", []);
                 return;
             }
-            // Performance is skipped while the daemon inhibits it; a refused switch shows on the tile.
-            const next = Power.next(s.list, active, inhibitionReason);
-            if (next !== "") {
-                failedProfile = "";
-                s.setProfile(next);
+            // A refused switch shows on the tile and the page for a few seconds.
+            const row = options.find(o => o.profile === profile);
+            if (row && row.enabled && !row.active) {
+                switchTo(profile);
             }
+        }
+        function toggle() {
+            if (!s || !available) {
+                backend.openSettings("kcm_powerdevilprofilesconfig", []);
+                return;
+            }
+            if (toggleTarget !== "") {
+                switchTo(toggleTarget);
+            }
+        }
+        function openSettings() {
+            backend.openSettings("kcm_powerdevilprofilesconfig", []);
         }
     }
 
@@ -809,14 +901,73 @@ Item {
         function setAllowed(appName: string, reason: string, allowed: bool): void {
             if (s) { s.setAllowed(appName, reason, allowed); }
         }
+        // A timed Keep awake (F7): its end (ms since the epoch, 0 until turned off), the minutes
+        // left and both as text.
+        readonly property double until: s ? s.until : 0
+        readonly property bool timed: active && until > 0
+        readonly property int minutesLeft: s ? s.minutesLeft : 0
+        readonly property string leftText: backend.durationText(minutesLeft)
+        readonly property string untilText: timed ? Qt.formatTime(new Date(until), Qt.locale().timeFormat(Locale.ShortFormat)) : ""
         readonly property string subtitle: !available ? i18nc("@info:status Keep awake", "Unavailable")
+                                         : timed ? i18nc("@info:status Keep awake, %1 remaining time", "%1 left", leftText)
                                          : active ? i18nc("@info:status Keep awake", "On")
                                                   : i18nc("@info:status Keep awake", "Off")
+        // The status pill's tooltip line while it is on.
+        readonly property string toolTipLine: !active ? ""
+            : timed ? i18nc("@info:tooltip %1 remaining time, %2 a time of day", "Keep awake: sleep and automatic screen locking are blocked for %1 more, until %2", leftText, untilText)
+                    : i18nc("@info:tooltip", "Keep awake: sleep and automatic screen locking are blocked")
+        readonly property string reason: i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking")
         function toggle(): void {
             if (s) {
-                s.toggle(i18nc("@info reason for manual power inhibition", "Manually block sleep and screen locking"));
+                s.toggle(reason);
             }
         }
+        // For a while: hours from now, until a time of day (minutes after midnight, today or
+        // tomorrow), or until turned off (on stays on).
+        function forHours(hours: int): void {
+            if (s) {
+                s.keepAwakeUntil(reason, Date.now() + hours * Timed.HOUR);
+            }
+        }
+        function untilMinuteOfDay(minute: int): void {
+            if (s) {
+                s.keepAwakeUntil(reason, Timed.untilTime(new Date(), minute));
+            }
+        }
+        function untilTurnedOff(): void {
+            if (s) {
+                s.keepAwakeUntil(reason, 0);
+            }
+        }
+        // Testing only (debugAction "keepawake:SECONDS", main.qml): a short timed Keep awake.
+        function forSeconds(seconds: int): void {
+            if (s && seconds > 0) {
+                s.keepAwakeUntil(reason, Date.now() + seconds * 1000);
+            }
+        }
+        function refresh(): void {
+            if (s) {
+                s.tick();
+            }
+        }
+    }
+    // The minutes left shown again when the sheet opens (after a suspend the timer may be late).
+    onPopupOpenChanged: {
+        if (popupOpen) {
+            keepAwake.refresh();
+        }
+    }
+    // "45 min", "1 h", "1 h 30 min": the hours and the minutes each with their plural form (Polish,
+    // Russian, Czech or Arabic words change with the number), joined by a translatable "%1 %2".
+    function durationText(minutes: int): string {
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        const hours = i18ncp("@info remaining time, hours", "%1 h", "%1 h", h);
+        const mins = i18ncp("@info remaining time, minutes", "%1 min", "%1 min", m);
+        if (h === 0) {
+            return mins;
+        }
+        return m === 0 ? hours : i18nc("@info remaining time, %1 hours part, %2 minutes part", "%1 %2", hours, mins);
     }
 
     // ------------------------------------------------------------------ disks & devices
@@ -924,14 +1075,45 @@ Item {
         readonly property var model: s ? s.model : null
         readonly property int count: s ? s.count : 0
         readonly property int unread: s ? s.unread : 0
+        // The sheet shows the list (PopupContent.qml); closing it marks them read only then.
+        readonly property bool listShown: Notif.listOnSheet(backend.page, backend.notificationsApart, available, count,
+                                                            backend.showEmptyNotifications)
+        // Rows come and go (services/Notifications.qml lastInGroup()).
+        readonly property int revision: s ? s.revision : 0
+        function lastInGroup(row: int, revision: int): bool {
+            return s ? s.lastInGroup(row, revision) : false;
+        }
+        function setGroupExpanded(row: int, expanded: bool) {
+            if (s) {
+                s.setGroupExpanded(row, expanded);
+            }
+        }
+        function collapseAllGroups() {
+            if (s) {
+                s.collapseAllGroups();
+            }
+        }
         function invokeAction(row: int, actionName: string, resident: bool) {
             if (s) {
                 s.invokeAction(row, actionName, resident);
             }
         }
+        function reply(row: int, text: string, resident: bool) {
+            if (s) {
+                s.reply(row, text, resident);
+            }
+        }
         function close(row: int) {
             if (s) {
                 s.close(row);
+            }
+        }
+        // Opens a file of the notification (its thumbnail, a finished job's file) and lets the
+        // notification expire, as the stock applet does.
+        function openUrl(row: int, url: string) {
+            Qt.openUrlExternally(url);
+            if (s) {
+                s.expire(row);
             }
         }
         function configure(row: int) {
@@ -944,6 +1126,29 @@ Item {
             if (s) {
                 s.killJob(row);
             }
+        }
+        function suspendJob(row: int) {
+            if (s) {
+                s.suspendJob(row);
+            }
+        }
+        function resumeJob(row: int) {
+            if (s) {
+                s.resumeJob(row);
+            }
+        }
+        // A finished job's folder: the one file selected in the file manager (`highlight`), or the
+        // destination folder of several; the notification expires as after Open.
+        function openFolder(row: int, url: string, highlight: bool) {
+            if (!s) {
+                return;
+            }
+            if (highlight) {
+                s.showInFolder(url);
+            } else {
+                Qt.openUrlExternally(url);
+            }
+            s.expire(row);
         }
         function clearAll() {
             if (s) {
@@ -1063,6 +1268,14 @@ Item {
             backend.closeRequested();
             screenshotTimer.restart();
         }
+        // Copy text from the screen (survey F6): Spectacle's region capture, where Extract Text
+        // copies the selected text, as the Meta+Shift+T key the setup gives the same command
+        // (tools/device/fusion-config.sh, ensure_copytext_shortcut). Spectacle has no way to go
+        // straight from a region to the text.
+        function copyText() {
+            backend.closeRequested();
+            copyTextTimer.restart();
+        }
         function openSystemSettings() {
             backend.openSettings("", []);
         }
@@ -1078,10 +1291,56 @@ Item {
                 s.leave();
             }
         }
-        function openClipboard() {
+    }
+
+    // ------------------------------------------------------------------ clipboard
+    // Each clipboard sheet opens on All, so the newest entry is current and Meta+V then Enter
+    // chooses what was copied last. The Starred tab is the clipboard service's, which lives as long
+    // as the widget, so it goes back to All when the page goes (the sheet closed, or back to quick
+    // settings), before the next page is made: set by the new page itself, the tab bar's own index,
+    // still Starred while it was built, wrote Starred back.
+    onPageChanged: {
+        if (page !== "clipboard" && clipboard.service) {
+            clipboard.service.starredOnly = false;
+        }
+    }
+    readonly property var clipboard: QtObject {
+        readonly property var service: clipboardLoader.item
+        readonly property bool available: !!service
+        // Still loading (in the background after the widget starts): a request waits for it.
+        readonly property bool loading: clipboardLoader.status === Loader.Loading
+        // Puts the entry on the clipboard and closes the sheet; the on-screen display says how to
+        // paste it.
+        function choose(uuid: string): void {
+            if (!service) {
+                return;
+            }
+            service.choose(uuid);
+            backend.closeRequested();
+            service.showPasteHint();
+        }
+        // Plasma's emoji selector (its own Meta+. shortcut action, else the program).
+        function openEmoji(): void {
+            backend.closeRequested();
+            DBus.SessionBus.asyncCall({
+                "service": "org.kde.kglobalaccel",
+                "path": "/component/org_kde_plasma_emojier_desktop",
+                "iface": "org.kde.kglobalaccel.Component",
+                "member": "invokeShortcut",
+                "arguments": [new DBus.string("_launch")],
+                "signature": "(s)"
+            }, () => {}, () => backend.run("plasma-emojier"));
+        }
+        function legacyPopup(): void {
             backend.closeRequested();
             backend.dbus("org.kde.klipper", "/klipper", "org.kde.klipper.klipper", "showKlipperPopupMenu", [], "");
         }
+    }
+    Timer {
+        id: copyTextTimer
+        // As for the screenshot: the pop-up closes first.
+        interval: 250
+        onTriggered: backend.run("sh -c 'spectacle --region >/dev/null 2>&1 &'")
     }
     Timer {
         id: screenshotTimer

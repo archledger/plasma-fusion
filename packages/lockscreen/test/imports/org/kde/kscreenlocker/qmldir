@@ -1,3 +1,6 @@
-# Test stand-in for the types kscreenlocker_greet registers at run time (greeterapp.cpp).
+# Test stand-in for the types kscreenlocker_greet registers at run time (greeterapp.cpp; the
+# Authenticators enum and AuthenticatorModel are Plasma 6.8's).
 module org.kde.kscreenlocker
 Authenticator 1.0 Authenticator.qml
+Authenticators 1.0 Authenticators.qml
+singleton AuthenticatorModel 1.0 AuthenticatorModel.qml

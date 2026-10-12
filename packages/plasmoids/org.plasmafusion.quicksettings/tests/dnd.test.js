@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "dnd.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { untilMorning } = globalThis;
+const { untilMorning, choices, untilLabel, reasons } = globalThis;
 
 // Local times: year, month (0-based), day, hour, minute.
 const at = (d, h, m) => new Date(2026, 9, d, h, m, 0, 0);
@@ -25,4 +25,77 @@ assert.ok(hours(at(12, 1, 0), untilMorning(at(12, 1, 0))) === 5, "01:00 lasts 5 
 assert.deepStrictEqual(untilMorning(at(12, 0, 0)), at(12, 6, 0), "midnight: this coming morning");
 assert.deepStrictEqual(untilMorning(at(12, 6, 0)), at(13, 6, 0), "06:00 exactly: the next morning");
 assert.deepStrictEqual(untilMorning(at(31, 23, 0)), new Date(2026, 10, 1, 6, 0, 0, 0), "end of the month");
+
+// The choices offered at a time: ids in order, and each end. 2026-10-11 is a Sunday.
+const ids = (now) => choices(now).map((c) => c.id);
+const end = (now, id) => choices(now).find((c) => c.id === id).until;
+assert.deepStrictEqual(ids(at(14, 10, 15)), ["hour", "hours4", "evening", "morning", "off"], "Wednesday morning");
+assert.deepStrictEqual(end(at(14, 10, 15), "hour"), at(14, 11, 15), "for 1 hour");
+assert.deepStrictEqual(end(new Date(2026, 9, 14, 10, 15, 42, 500), "hour"), at(14, 11, 15), "for 1 hour: whole minutes");
+assert.deepStrictEqual(end(at(14, 10, 15), "hours4"), at(14, 14, 15), "for 4 hours");
+assert.deepStrictEqual(end(at(14, 22, 30), "hours4"), at(15, 2, 30), "for 4 hours past midnight");
+assert.deepStrictEqual(end(at(14, 10, 15), "evening"), at(14, 20, 0), "this evening: 20:00");
+assert.deepStrictEqual(ids(at(14, 20, 0)), ["hour", "hours4", "morning", "off"], "no evening from 20:00");
+assert.deepStrictEqual(ids(at(14, 19, 59)).includes("evening"), true, "evening until 19:59");
+assert.deepStrictEqual(end(at(14, 10, 15), "morning"), at(15, 6, 0), "tomorrow morning");
+assert.deepStrictEqual(end(at(15, 2, 0), "morning"), at(15, 6, 0), "after midnight: this coming morning");
+assert.deepStrictEqual(ids(at(16, 9, 0)), ["hour", "hours4", "evening", "morning", "monday", "off"], "Friday: Monday too");
+assert.deepStrictEqual(end(at(16, 9, 0), "monday"), at(19, 6, 0), "Friday: next Monday 06:00");
+assert.deepStrictEqual(end(at(17, 23, 0), "monday"), at(19, 6, 0), "Saturday: next Monday 06:00");
+assert.deepStrictEqual(end(new Date(2026, 9, 31, 12, 0), "monday"), new Date(2026, 10, 2, 6, 0), "Saturday at the end of the month");
+assert.ok(!ids(at(11, 12, 0)).includes("monday"), "Sunday: tomorrow morning is Monday morning, no Monday choice");
+assert.ok(!ids(at(12, 12, 0)).includes("monday"), "Monday: no Monday choice");
+assert.deepStrictEqual(end(at(14, 10, 15), "off"), new Date(2027, 9, 14, 10, 15), "until turned off: a year ahead");
+
+// "For 1 hour" and "For 4 hours" are elapsed time across a daylight saving change (Berlin: clocks go
+// back at 03:00 CEST on 2026-10-25 and forward at 02:00 CET on 2026-03-29).
+const zone = process.env.TZ;
+process.env.TZ = "Europe/Berlin";
+if (new Date(2026, 9, 25, 12, 0).getTimezoneOffset() === -60 && new Date(2026, 9, 24, 12, 0).getTimezoneOffset() === -120) {
+    const lasts = (now, id) => hours(now, end(now, id));
+    assert.strictEqual(lasts(new Date(2026, 9, 25, 0, 30), "hours4"), 4, "for 4 hours over the change to winter time: 4 hours, not 5");
+    assert.strictEqual(lasts(new Date(2026, 9, 25, 2, 30), "hour"), 1, "for 1 hour in the repeated hour: 1 hour, not 2");
+    assert.strictEqual(lasts(new Date(2026, 2, 29, 0, 30), "hours4"), 4, "for 4 hours over the change to summer time: 4 hours, not 3");
+    assert.deepStrictEqual(end(new Date(2026, 2, 29, 1, 30, 42), "hour"), new Date(2026, 2, 29, 3, 30), "whole minutes still (01:30:42 CET: 03:30 CEST)");
+    assert.strictEqual(end(new Date(2026, 9, 25, 2, 30), "hour").getTimezoneOffset(), -60, "the repeated hour's second pass (02:30 CEST: 02:30 CET)");
+} else {
+    throw new Error("no time zone data for Europe/Berlin: the daylight saving checks cannot run");
+}
+if (zone === undefined) {
+    delete process.env.TZ;
+} else {
+    process.env.TZ = zone;
+}
+
+// The end shown, and when it has to be shown again.
+const now = at(14, 10, 0).getTime();
+const label = (d) => untilLabel(d, now);
+assert.deepStrictEqual(label(undefined), { kind: "none", refreshAt: -1 }, "no end set");
+assert.deepStrictEqual(label(new Date(NaN)), { kind: "none", refreshAt: -1 }, "invalid end");
+assert.deepStrictEqual(label(at(14, 9, 0)), { kind: "none", refreshAt: -1 }, "end passed");
+assert.deepStrictEqual(label(at(14, 18, 0)), { kind: "time", refreshAt: at(14, 18, 0).getTime() }, "today: the time, until it ends");
+assert.deepStrictEqual(label(at(15, 9, 59)), { kind: "time", refreshAt: at(15, 9, 59).getTime() }, "23:59 ahead: the time");
+assert.deepStrictEqual(label(at(16, 6, 0)), { kind: "day", refreshAt: at(15, 6, 0).getTime() }, "two days ahead: day and time, the time from 24 h before");
+assert.deepStrictEqual(label(at(25, 6, 0)).kind, "date", "eleven days ahead: the date");
+assert.deepStrictEqual(label(at(25, 6, 0)).refreshAt, at(18, 6, 0).getTime(), "the date until a week before");
+const year = new Date(2027, 9, 14, 10, 0);
+assert.deepStrictEqual(label(year).kind, "none", "until turned off: no end shown");
+assert.strictEqual(label(year).refreshAt, -1, "until turned off: nothing to look at again (no daily wake-up)");
+// The subtitle follows the clock: a Do Not Disturb until Monday shows the day, then the time.
+const monday = end(at(16, 9, 0), "monday");
+const first = untilLabel(monday, at(16, 9, 0).getTime());
+assert.strictEqual(first.kind, "day", "Friday: Monday's end shows the day");
+assert.strictEqual(untilLabel(monday, first.refreshAt).kind, "time", "a day before the end: the time");
+assert.strictEqual(untilLabel(monday, monday.getTime()).kind, "none", "at the end: nothing");
+
+// Who or what holds Do Not Disturb.
+assert.deepStrictEqual(reasons({ byApp: false, names: ["Firefox"], reasons: ["Video"] }), [], "not held by an app: names ignored");
+assert.deepStrictEqual(reasons({ byApp: true, names: ["Firefox", "Zoom"], reasons: ["Playing video"] }),
+                       [{ kind: "app", name: "Firefox", reason: "Playing video" }, { kind: "app", name: "Zoom", reason: "" }],
+                       "each app with its reason, a missing reason empty");
+assert.deepStrictEqual(reasons({ byApp: true, names: [], reasons: [] }), [], "held by an app that gave no name");
+assert.deepStrictEqual(reasons({ whenMirrored: true, mirrored: true, whenFullscreen: true, fullscreen: false }),
+                       [{ kind: "mirrored", name: "", reason: "" }], "mirrored screens when the setting asks for it");
+assert.deepStrictEqual(reasons({ whenMirrored: false, mirrored: true, whenFullscreen: true, fullscreen: true }),
+                       [{ kind: "fullscreen", name: "", reason: "" }], "full screen when the setting asks for it, mirroring not");
 console.log("dnd: all checks passed");

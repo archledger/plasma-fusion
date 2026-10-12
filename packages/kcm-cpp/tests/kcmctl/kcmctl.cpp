@@ -11,6 +11,9 @@
       get PROPERTY         prints PROPERTY=value
       dump                 prints every property of the module, one per line
       sh COMMAND           runs COMMAND with bash -c and waits for it
+      heartbeat MS         counts a timer's ticks every MS milliseconds from now on (the event loop
+                           running, as a page that does not freeze)
+      beats                prints beats=N, the ticks since the last beats, and starts again
       # ...                comment
 
     Output lines start with "kcmctl: "; the first one names the plugin file that was loaded. Exit
@@ -30,11 +33,14 @@
 #include <QEventLoop>
 #include <QGuiApplication>
 #include <QMetaProperty>
-#include <QProcess>
 #include <QTextStream>
+#include <QThread>
 #include <QTimer>
 
 #include <cstdio>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace
 {
@@ -99,6 +105,12 @@ int main(int argc, char **argv)
     out << "kcmctl: plugin " << metaData.fileName() << Qt::endl;
     QMetaObject::invokeMethod(module, "load");
 
+    QTimer heartbeat;
+    int beats = 0;
+    QObject::connect(&heartbeat, &QTimer::timeout, &heartbeat, [&beats] {
+        ++beats;
+    });
+
     QTextStream in(stdin);
     QString line;
     while (in.readLineInto(&line)) {
@@ -149,12 +161,30 @@ int main(int argc, char **argv)
             out << "kcmctl: " << rest << '=' << valueText(module->property(rest.toLatin1().constData())) << Qt::endl;
         } else if (command == QLatin1String("dump")) {
             dump(module);
+        } else if (command == QLatin1String("heartbeat")) {
+            heartbeat.start(rest.toInt());
+        } else if (command == QLatin1String("beats")) {
+            out << "kcmctl: beats=" << beats << Qt::endl;
+            beats = 0;
         } else if (command == QLatin1String("sh")) {
-            QProcess process;
-            process.setProcessChannelMode(QProcess::ForwardedChannels);
-            process.start(QStringLiteral("bash"), {QStringLiteral("-c"), rest});
-            while (!process.waitForFinished(50)) {
-                QCoreApplication::processEvents();
+            // Plain fork and exec, not QProcess: in a sanitizer build (tools/sanitizers/run.sh) a
+            // QProcess::start can leave QTextStream unable to see the end of stdin, after which
+            // readLineInto spins in QFSFileEnginePrivate::nativeRead once the commands run out
+            // (reproduced with a minimal Qt program under libasan; the plain build is fine). The
+            // command runs the same otherwise: bash -c, our channels, the event loop turning while
+            // it runs.
+            const QByteArray script = rest.toLocal8Bit();
+            const pid_t child = fork();
+            if (child == 0) {
+                execlp("bash", "bash", "-c", script.constData(), static_cast<char *>(nullptr));
+                _exit(127);
+            }
+            if (child > 0) {
+                int status = 0;
+                while (waitpid(child, &status, WNOHANG) == 0) {
+                    QCoreApplication::processEvents();
+                    QThread::msleep(50);
+                }
             }
         } else {
             out << "kcmctl: unknown command " << command << Qt::endl;

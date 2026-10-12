@@ -253,6 +253,21 @@ for SHNAME in "${shells[@]}"; do
   rm -r "$CASE/root/usr/share/plymouth/themes/plasma-fusion"
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
   expect "an unstyled login screen and no splash are left alone" bash -c '! grep -qE "greeter-restore|plymouth-uninstall" <<<"$0"' "$LOG"
+  # A styled login screen without the mark: greeter-apply.sh wrote plain keys into an existing
+  # [Greeter] group (or the Login Screen settings rewrote the file since).
+  printf '[Greeter]\nWallpaperPlugin=org.kde.image\n\n[Greeter][Wallpaper][org.kde.image][General]\nImage=file:///usr/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png\n' \
+    >"$CASE/root/etc/plasmalogin.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "a styled login screen without the mark is restored too" has_log "greeter-restore.sh"
+  # Only the greeter user's Global Theme says so (the wallpaper keys were changed since).
+  printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
+  mkdir -p "$CASE/root/var/lib/plasmalogin/.config"
+  printf '[KDE]\nLookAndFeelPackage=org.plasmafusion.dark.desktop\n' >"$CASE/root/var/lib/plasmalogin/.config/kdeglobals"
+  fake getent '[ "$1 $2" = "passwd plasmalogin" ] && echo "plasmalogin:x:975:975::/var/lib/plasmalogin:/sbin/nologin"'
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED getent -- uninstall --yes --package-only
+  expect "a greeter on Plasma Fusion's Global Theme is restored too" has_log "greeter-restore.sh"
+  rm -rf "$CASE/root/var/lib/plasmalogin"
+  printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
   # the optional system steps are offered where they apply
   rm -f "$CASE/root/etc/plasmalogin.conf"
   run "$sh" $FED -- --yes

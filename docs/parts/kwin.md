@@ -190,6 +190,18 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   trailing tiles that KWin rounds one pixel too wide or tall. Tile membership, shared splits and
   restoration on drag remain native.
   The picker uses the same inner-gap geometry. Meta+T custom zones retain their own padding.
+- Quick tiles (0.5.0, survey B12): KWin keeps one quick-tile root per screen and desktop
+  (`QuickRootTile`, `src/tiles/quicktile.cpp`, the same in Plasma 6.7 and 6.8) beside the custom
+  root that `Workspace.rootTile()` returns. Scripts reach it only as a tiled window's
+  `tile.parent`; Plasma 6.8 registers `Tile` and `CustomTile` as QML types but still not
+  `QuickRootTile`, and nothing documents its children. The script used to recognise it by
+  exactly eight children and address them by their place. `SnapGeometry.js` now recognises it by
+  the class name Qt puts in the object's string (`KWin::QuickRootTile(0x…)`, checked in Plasma
+  6.7.91; the custom roots read `KWin::RootTile`, their tiles `KWin::CustomTile`), and, should that
+  name change, by its shape: the left and right halves at full height, top and bottom at full
+  width and the four quarters, which a custom layout cannot have (its tiles never overlap). Each
+  quick tile's role (left, right, top, bottom, the quarters) comes from its shape, not its place
+  among the children; the outline uses the same test.
 
 ### Snap-zone outline
 
@@ -201,6 +213,15 @@ Meta+Z supplies its gap-aware target; a native padded quick-tile preview is expa
 filled outer edges. The outline window's bounds include that expanded target. Matching custom
 tiles keep their native preview: the outline API exposes geometry, not the tiling mode, so a
 custom zone with exactly the same shape as a quick tile is kept native rather than guessed.
+
+The outline needs the snap script's gap settings (`QuickTileGaps`, `Gap`) but runs in KWin's
+outline context, which has no `KWin.readConfig`, so it reads them with `kreadconfig6` through
+Plasma's executable data engine. It did so each time it showed, starting a shell and two
+`kreadconfig6` processes inside KWin on every edge drag (survey B12). It now reads them when it
+is created and again when KWin reloads its configuration (`Options.configChanged`, the moment
+the snap script's own `KWin.readConfig` sees new values too, so preview and snap agree). Each read
+is a new source of the data engine, which otherwise hands a source read moments before its old
+result.
 
 ### Attached dialogs
 
@@ -228,7 +249,14 @@ Offline (laptop):
   packages/kwin/tests/offscreen/snaptest.py STAGE_HOME` loads the built snap script and outline
   in Qt. It checks flush outer edges, inner gaps, thirds/portrait rows, offset/odd work areas,
   picker geometry, existing tiled windows, native geometry updates, shared-split resize and
-  leaving an interactive move or tile. Build the stage with `STAGE=STAGE_HOME tools/build.sh kwin`.
+  leaving an interactive move or tile, and the quick-tile root: found by class name and by shape,
+  roles from the shape with the children in another order, a ninth child, another desktop's
+  custom root with quick-tile-shaped children never taken for it (script and outline; the 0.4
+  test of eight children fails 4 of these), and the outline's settings: not read again when it
+  shows, read again when KWin reloads its configuration and then back to the default (`Options`
+  stub; with the 0.4 outline 6 checks fail: it read the new gap on show, then kept it from the
+  data engine's cached result, which the later geometry checks inherit). Build the stage with `STAGE=STAGE_HOME tools/build.sh
+  kwin`.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -471,7 +499,10 @@ screen).
   more than 15 s). The text comes from
   `ensureTopBars.js`, which the build generates from the Global Theme's file. (A layout template
   with `loadTemplate()` did not work: plasmashell loads only templates of the panel category,
-  which would also put it into "Add Panel".)
+  which would also put it into "Add Panel".) When the answer says a bar was added or completed, the
+  script asks systemd (`ReloadOrTryRestartUnit plasma-fusion-powerfx.service`) to have the power
+  service apply its tier to the new widgets; nothing happens when the service is not running
+  (docs/parts/powerfx.md).
 - Touchpad, three fingers: up opens Overview, down closes it or shows the desktop
   (`SwipeGestureHandler`, device type touchpad). KWin's own three-finger vertical swipe switches
   between rows of virtual desktops; the Fusion layout has one row. Hand check on the device.

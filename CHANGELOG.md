@@ -9,6 +9,144 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- A **clipboard sheet** in Quick Settings, opened by the clipboard button and **Meta+V**, replaces
+  Klipper's pop-up: Klipper's history, newest first, with search (every word, as plain text),
+  images and copied files, the stock Clipboard widget's stars (shared with it), Edit, QR code,
+  Klipper's actions, Remove and Clear all (with Klipper's confirmation; starred entries stay).
+  Choosing an entry puts it on the clipboard and the on-screen display says to press Ctrl+V
+  (pasting by itself would need a new privilege on Wayland). An Emoji button opens Plasma's emoji
+  selector. Meta+V comes with the Windows-style shortcut set, which takes only that key from
+  Klipper's "Show Clipboard Items at Mouse Position"; setups an earlier release made with that set
+  get it once at the update, while Klipper still has it. `--keep-shortcuts` leaves it with Klipper
+  and `plasma-fusion restore` gives it back.
+- **Quick Settings can be edited**: the pencil in the sheet's header (in the tablet row in tablet
+  posture) shows a remove badge on every tile and a tray of hidden tiles below. Drag a tile by mouse
+  or touch to move it, or press Ctrl with the arrow keys; remove it with its badge or Delete, add it
+  back from the tray, or Reset to defaults. The order is the same in every Quick Settings widget on
+  every screen, and the sheet stays one page. Tiles that appear only when they apply (Disks &
+  Devices, Wi‑Fi hotspot, Charge limit, Tablet mode) still do; a hidden one never shows. A tile
+  added in a later release appears after the tile it follows by default, wherever that tile now is.
+- The notification history in Quick Settings and in the tablet Notification Centre is **grouped by
+  app**, as in Plasma's own applet: an app's header with Configure and Close Group, its two newest
+  notifications and "Show N More". Notifications show their **images** (beside the text, in the
+  body, and a preview of a linked file such as a screenshot, which opens it), can be **answered in
+  place** when the app offers an inline reply, and have a **Configure** button for the app's
+  notification settings. A finished file copy offers **Open** and **Open Containing Folder**, a
+  failed one says why, and a running one can be paused and resumed where the app allows it. Cards
+  work from the keyboard: Return runs a card's action, Delete closes it, and the Notification
+  Centre's card menu also opens with a right click or the Menu key.
+- **Do Not Disturb** offers Plasma's durations: for 1 or 4 hours, until this evening, until tomorrow
+  morning, until Monday (on Fridays and Saturdays) or until turned off. Its "Until" time follows
+  the clock (a Do Not Disturb until Monday showed just "On"), and it names the application that
+  turned it on ("While Kdenlive is active").
+- The **Power mode** tile has a chooser behind its chevron, as Plasma's Power and Battery widget:
+  the daemon's profiles with the active one checked, Performance listed as unavailable with the
+  reason while the computer is on a lap or too hot, and the applications holding a profile. A click
+  on the tile now switches between Balanced and the last other profile instead of cycling, so going
+  from Balanced to Power saver no longer passes through Performance.
+- **Keep awake** can run for 1 hour, 4 hours or until a chosen time, besides until turned off; the
+  tile and the status pill's tooltip show the time left. The timer runs with the sheet closed; like
+  Plasma's own Keep awake, it ends when plasmashell restarts.
+- An open vault, queued print jobs, presentation mode or a second screen, and the input-method
+  switch show their stock items in the top bar while they are active, and hide again when passive,
+  still without the tray's expander arrow. Before, they were hidden even while active. Existing
+  layouts get this without a reset.
+- Optional **system meters** for the top bar: the processor load, the memory in use, the download
+  and upload rates and the processor temperature, in a pill drawn like the status pill, with a
+  pop-up for a few more values and System Monitor. They are off: turn them on with "System meters
+  in the top bar" in the Plasma Fusion settings, or add "Plasma Fusion System Meters" from Add
+  Widgets, and choose the meters in its settings. They read Plasma's own sensors, read nothing
+  while an active full-screen window covers the bar, the screen is locked or the bar has no room
+  for them, and update half as often in power saver and a quarter as often on a nearly empty
+  battery.
+- The launcher has a **Recent** chip with the apps used last and the most used ones ("Recently
+  used", "Often used"), from the same history as Kicker's, and a **Places** chip with the file
+  manager's places, the removable drives (a click mounts and opens one) and the recent folders, as
+  in Kickoff's Places tab. Both work with the keyboard like the categories.
+- Hiding an app in the launcher works: its menu offers Kicker's Hide Application and, for the apps
+  of that list, Unhide Applications in this Submenu. Before, neither appeared and the hidden list
+  had no effect. The launcher's settings list the hidden apps with a Show button each and Show All.
+- **Alt+F2** opens KRunner again, with all of its search plugins; Meta+S, Meta+Space and Alt+Space
+  still open the launcher. The update gives the key back once, while the launcher still has it and
+  KRunner has no key; `plasma-fusion restore` undoes it. The launcher's search ends with "Search …
+  in KRunner", which opens KRunner with the same query. The dock's Search button now opens the
+  launcher's search, like the search keys (before, KRunner, with other plugins); KRunner can still
+  be chosen in the dock's settings.
+- The dock shows the **progress of file transfers** on the app's icon: a copy in Dolphin, a download
+  or any other job Plasma's notifications track, as the stock task manager does.
+- The lock screen offers **Restart** and **Shut Down** next to Sleep, Hibernate and Switch User,
+  wherever the session may restart or shut down (the log-out screen's rule). Both ask first and
+  stay off while a program holds logind's block on shutdown; the question names no program or user,
+  since anyone at the locked screen can open it (KDE wishlist 336369).
+- On Plasma 6.8 the lock screen offers the other ways to unlock the system has (**smartcard,
+  fingerprint, face, security key**) as links under the password field; the way used last time is
+  kept, and one that stops working falls back to the password with a message. Before, the password
+  was forced. It also asks the greeter to authenticate again while the prompt is shown, so a quick
+  key press after locking no longer leaves the password field unanswered, and Restart and Shut Down
+  are translated there.
+- With two or more screens on Plasma 6.8, the first correct password unlocks: the screen locker
+  crashed while closing and locked once more, and one screen showed no wallpaper.
+- On Plasma 6.8 the log-out screen shows its buttons on the screen with the pointer only and moves
+  them with it, as Plasma 6.8 does, without its errors about the screen size.
+- Snapping recognises KWin's quick tiles without relying on their number or order (ready for
+  Plasma 6.8's tiles), and the snap preview no longer starts processes inside KWin each time it
+  appears.
+- **Meta+Shift+T**, and a button next to the screenshot button in Quick Settings, copy text from the
+  screen: Spectacle's area selection opens, and Extract Text copies the text. The key is set only
+  when nothing else uses it; restoring removes it.
+- Scrolling a page no longer changes the volume, the keyboard layout or the workspace when the wheel
+  is still turning as the pointer passes over the top bar's status or clock pill; turning the wheel
+  after resting on a pill works as before.
+- The Quick Settings sheet fits its content again. On the first opening after login the page was
+  drawn 14 px too low and its last row of tiles, or a page's button, was cut off; after a scale
+  change, or a notification that came or went while the sheet was closed, it opened at its old
+  height.
+- Meta+N (the notification list) works right after the setup; before, it did nothing until the
+  next login.
+- The tablet home screen's edit mode is seen by the desktop again, which keeps the widgets' tap area
+  up to date while they move, and plasmashell no longer logs "ReferenceError: homeLoader is not
+  defined" at every start in tablet posture.
+- The clock's settings open without warnings in the log, and Apply on one of its pages no longer
+  writes back a value that another page, or the widget itself, changed while the page was open.
+- On Plasma 6.8, Plasma no longer crashes again and again at login after a monitor with a top bar
+  was unplugged: the tablet-mode script, the Plasma Fusion settings page and `plasma-fusion setup`
+  leave panels whose screen is gone alone (reading their size crashed plasmashell 6.8), and
+  `plasma-fusion setup` no longer takes such a layout for a foreign one and resets it. Plasma Fusion
+  0.4.x has the same crash on Plasma 6.8. The tablet panel sizes are applied again when plasmashell
+  answers late at login.
+- The Plasma Fusion settings page waits up to 25 s for the Plasma shell instead of 5 s: right after
+  the shell restarts, "Top bar on every screen" and the system meters switch no longer report "Did
+  not receive a reply" for a change that is made, and the page keeps drawing and shows it is busy
+  while it waits.
+- A timed Do Not Disturb no longer ends while Plasma itself holds it for a full-screen window or
+  mirrored screens: Plasma's own Notifications applet ends a timed one, and Quick Settings only sets
+  the time (it also refuses a time already past).
+- After a restart, Quick Settings on several screens take the shared settings changed last, not
+  those of whichever widget loaded first.
+- `plasma-fusion update` no longer undoes what you changed in the layout: a top bar you made
+  translucent ("Solid top bar next to windows" off), a tray item you set to "Always shown", a pen
+  menu you removed and a desktop you switched stay as they are, and an update that has nothing to
+  migrate no longer restarts the Plasma shell (which also ended Keep awake). Disks & Devices turned
+  back on in the tray stays on after the update that first hid it.
+- A Glass level or dock magnification chosen in the Plasma Fusion settings while the battery is
+  nearly empty is now what the widgets and blur get when the battery recovers; before, they got
+  the level from before and blur could stay off.
+- Top bars added for a newly connected screen, by "Top bar on every screen", by `plasma-fusion setup
+  --screens` and by Add Panel follow the Glass level and "Solid top bar next to windows" (with Glass
+  Solid or High contrast their Notification Centre was blurred), and a layout rebuilt by the setup
+  or by System Settings' Global Theme follows them and "Top bar on every screen" too. Top bars
+  added in power saver or on a nearly empty battery get the lighter tier at once.
+- The on-screen keyboard stays available after an update when its policy is "On touch".
+- "Reset Fusion layout" gives the pen menu Meta+Shift+W only when it had it, and `plasma-fusion
+  restore` frees the keys of widgets the restored layout does not have.
+- A swipe from the right edge in tablet posture opens Quick Settings on the touch screen, and no
+  request opens it on every screen at once any more.
+- The desktop's CPU and memory card shows memory in binary units as System Monitor does ("6.1 /
+  15.3 GiB"), like the new system meters; before, it showed GiB labelled "GB" with the total
+  rounded up, so a full memory read "15.3 / 16 GB" next to 100 %.
+- Uninstalling restores the login screen also when Plasma Fusion's look was written without its
+  mark (into a file that had a [Greeter] group, or rewritten since by the Login Screen settings),
+  and `plasma-fusion restore --help` shows its usage instead of the whole script.
 - Glass set to Solid in the Plasma Fusion settings (also chosen by High contrast, and by the power
   service on a nearly empty battery) now reaches the tablet launcher sheet and the Notification
   Centre: they show a plain tint instead of the blurred wallpaper. Before, the setting was written
