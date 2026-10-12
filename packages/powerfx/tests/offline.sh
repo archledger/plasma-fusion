@@ -101,6 +101,20 @@ wait_for() { # SECONDS COMMAND...: until COMMAND succeeds (every 50 ms)
   local end=$((SECONDS + $1)); shift
   until "$@"; do [ "$SECONDS" -ge "$end" ] && return 1; sleep 0.05; done
 }
+# The gdbus monitors OF THIS TEST: the ones that inherited this test's own session bus address.
+# Matching only the command line also matched a real plasma-fusion service running on the machine
+# (its monitor's command line is identical), so the two clean-up checks failed on a desktop that
+# has Plasma Fusion installed; the private bus address tells the test's monitors apart.
+test_monitors() {
+  local pid line
+  for pid in /proc/[0-9]*; do
+    [ -r "$pid/environ" ] || continue
+    tr '\0' '\n' <"$pid/environ" 2>/dev/null | grep -qxF "DBUS_SESSION_BUS_ADDRESS=$SES" || continue
+    line=$(tr '\0' ' ' <"$pid/cmdline" 2>/dev/null)
+    case $line in *gdbus\ monitor*org.plasmafusion*) echo "${pid#/proc/}" ;; esac
+  done
+}
+test_monitors_gone() { [ -z "$(test_monitors)" ]; }
 st_is() { [ "$(rc_get plasmafusionrc Power "$1")" = "$2" ]; }
 
 # Realistic starting files, written by KConfig itself (so its own order).
@@ -358,8 +372,8 @@ t0=$EPOCHREALTIME; kill -TERM "$SVC"; wait_for 5 bash -c "! kill -0 $SVC 2>/dev/
 check "SIGTERM: exit 0 (got $rc)" [ "$rc" = 0 ]
 ms=$(python3 -c "print(round(($t1 - $t0) * 1000))")
 check "SIGTERM: gone within 1 s (took $ms ms)" [ "$ms" -lt 1000 ]
-# (the [g] keeps pgrep from finding the shell that runs it)
-check "SIGTERM: its $kids_before monitor processes are gone" wait_for 3 bash -c "! pgrep -f '[g]dbus monitor --session --dest org.kde.plasmashell --object-path /org/plasmafusion' -u $(id -u) >/dev/null"
+# (the helper matches by this test's session bus address; the command line alone is not unique)
+check "SIGTERM: its $kids_before monitor processes are gone" wait_for 3 test_monitors_gone
 SVC=
 pfx --apply full 2>>"$W/stderr.log"
 check "ExecStopPost --apply full: kwinrc as before" cmp -s "$W/kwinrc.orig" "$W/home/.config/kwinrc"
@@ -371,7 +385,7 @@ wait_for 5 bash -c "! kill -0 $SVC 2>/dev/null"; wait "$SVC"; rc=$?
 check "system bus gone: service exits 1 (got $rc)" [ "$rc" = 1 ]
 check "system bus gone: logged" grep -q 'monitor stopped' "$W/journal.log"
 SVC=
-check "no stray gdbus of this test" wait_for 3 bash -c "! pgrep -f '[g]dbus monitor --session --dest org.kde.plasmashell --object-path /org/plasmafusion' -u $(id -u) >/dev/null"
+check "no stray gdbus of this test" wait_for 3 test_monitors_gone
 check "--apply printed nothing but its journal lines" bash -c "! grep -v '^plasma-fusion-powerfx: ' $(printf %q "$W/stderr.log")"
 
 echo "# journal:"; sed 's/^/#   /' "$W/journal.log"
