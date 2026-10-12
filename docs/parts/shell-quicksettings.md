@@ -1006,8 +1006,10 @@ loaded and hidden: it still owns the pop-ups and the Do Not Disturb bookkeeping.
 ### Do Not Disturb for a while
 
 The tile's chevron offers the stock applet's choices (`FullRepresentation.qml`), worked out in
-`contents/code/dnd.js` `choices()` when the choices open: **For 1 hour**, **For 4 hours** (both in
-whole minutes), **Until this evening** (20:00, offered before 20:00), **Until tomorrow morning**
+`contents/code/dnd.js` `choices()` when the choices open: **For 1 hour**, **For 4 hours** (both
+elapsed time in whole minutes, also across a daylight saving change, as keep awake's durations;
+the stock applet adds to the hour of the day, so its "For 4 hours" lasts 5 hours in the night the
+clocks go back), **Until this evening** (20:00, offered before 20:00), **Until tomorrow morning**
 (06:00), **Until Monday** (06:00, offered on Fridays and Saturdays; on Sundays tomorrow morning is
 Monday) and **Until turned off** (a year ahead, as the stock applet keeps it), or **Turn off** while
 it is on. One deviation: the stock applet hides "tomorrow morning" until 07:00; here it is always
@@ -1020,7 +1022,7 @@ Disturb on with an end already passed, which nothing ended). While they stay ope
 wall clock's minutes (Plasma's `Clock`), so "this evening" goes at 20:00; a choice's end is worked
 out at the click ("For 1 hour" is an hour from then), and the service refuses an end that has
 passed. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
-Friday/Saturday/Sunday), `tests/tiles_edit_test.py` (the main page on the real backend: the
+Friday/Saturday/Sunday, both daylight saving changes in Europe/Berlin), `tests/tiles_edit_test.py` (the main page on the real backend: the
 choices close with the sheet and on another page, follow their clock, and "For 1 hour" counts from
 the click) and `tests/notifications_service_test.py` (an end that has passed leaves Do Not Disturb
 off).

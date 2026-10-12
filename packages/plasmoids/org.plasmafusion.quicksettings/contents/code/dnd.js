@@ -28,11 +28,13 @@ function untilMorning(now) {
     return end;
 }
 
+// `hours` of elapsed time after `now`, in whole minutes: adding to the hour of the day (setHours)
+// made "For 4 hours" last 5 or 3 hours across a daylight saving change. As keep awake's durations.
+// The minute is cut off the time itself: a local setter (setSeconds) in the hour that repeats
+// when the clocks go back moves the time to that hour's first pass.
 function hoursLater(now, hours) {
-    var end = new Date(now.getTime());
-    end.setHours(end.getHours() + hours);
-    end.setSeconds(0, 0);
-    return end;
+    var MINUTE = 60 * 1000;
+    return new Date(Math.floor((now.getTime() + hours * HOUR) / MINUTE) * MINUTE);
 }
 
 // The choices of "Do not disturb for a while" at `now`, in the stock applet's order: a list of
