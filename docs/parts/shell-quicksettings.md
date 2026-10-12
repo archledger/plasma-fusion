@@ -1063,7 +1063,10 @@ awake, so after a suspend the text kept its old form for hours.
 own choices: `checkInhibition()` compares the kept end (`plasmanotifyrc [DoNotDisturb] Until`) with
 the time on every wall-clock minute and inhibits or releases the server. The tile's choices only
 write the end (`dndUntil()`), and the widget never ends a Do Not Disturb itself, so after a resume
-it ends on the first minute past its end, by the stock applet. Our choices end on whole minutes;
+it ends on the first minute past its end, by the stock applet, and a Do Not Disturb Plasma holds for
+mirrored screens or a focused full-screen window stays on when a timed end passes (the widget's
+own timer lifted the server then, and pop-ups showed over a presentation; checked in the test VM
+with a full-screen Konsole). Our choices end on whole minutes;
 an end between two minutes (another program's) ends on the next one, as in stock Plasma. Tests:
 `tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on
 a private bus with the stock applet's `Globals` beside the service, as in the session, in CI, under
