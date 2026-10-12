@@ -10,13 +10,15 @@ The main page (QuickSettingsMain.qml) on the real Backend, whose services find n
 on the private bus; the widget's two settings keys are stand-ins that take what the page writes,
 as main.qml does. Checks the grid's order and conditions, the pencil, reordering by mouse drag,
 touch drag and keyboard, the Tab order, removing, the tray, adding back, Reset, Done and Escape,
-and the tablet posture's pencil and touch targets.
+and the tablet posture's pencil and touch targets; and the Do Not Disturb choices behind the tile's
+chevron (read when they open, closed with the sheet, a choice counting from the click).
 """
 
 import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 
 # The backend loads Plasma's clipboard module, whose Klipper code asks the offscreen platform for
 # X11 and crashes on the missing connection (pages_test.py does the same); the services' files
@@ -28,7 +30,7 @@ for key in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOM
     os.environ.pop(key, None)
 os.environ["HOME"] = HOME
 
-from PySide6.QtCore import QObject, QPoint, QPointF, Qt, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QDate, QDateTime, QObject, QPoint, QPointF, Qt, QTime, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -343,6 +345,46 @@ click(find("editReset"))
 check(stored() == ([], []) and shown() == DEFAULT + ["devices"] and not find("editReset").isEnabled(),
       "Reset to defaults clears both keys: the default order, every tile")
 click(find("editDone"))
+
+# ---- Do Not Disturb's choices (the tile's chevron): worked out when they open, at the time of
+# their own clock, closed with the sheet and on another page; a choice counts from the click.
+dnd = backend.property("dnd")
+for _ in range(250):
+    if dnd.property("available"):
+        break
+    QTest.qWait(20)
+check(dnd.property("available"), "Do Not Disturb is available (the service runs the notification server)")
+backend.setProperty("popupOpen", True)
+chevron = find("tile-dnd").childItems()[2]  # background, the body's button, the chevron
+click(chevron)
+check(page.property("dndChoicesOpen") and find("dnd-hour") is not None, "the chevron opens the Do Not Disturb choices")
+backend.setProperty("popupOpen", False)
+QTest.qWait(50)
+backend.setProperty("popupOpen", True)
+QTest.qWait(50)
+check(not page.property("dndChoicesOpen") and find("dnd-hour") is None,
+      "closing the sheet closes them: the next opening works them out again")
+click(chevron)
+backend.setProperty("page", "display")
+QTest.qWait(50)
+backend.setProperty("page", "main")
+QTest.qWait(50)
+check(not page.property("dndChoicesOpen"), "another page closes them too")
+click(chevron)
+opened = page.property("dndChoicesNow")
+check(abs(opened - time.time() * 1000) < 5000, "opened again, they are read at the time they open")
+# A Saturday evening on their clock: no "this evening", "Until Monday" offered.
+page.setProperty("dndChoicesNow", float(QDateTime(QDate(2026, 10, 17), QTime(21, 0)).toMSecsSinceEpoch()))
+QTest.qWait(50)
+check(find("dnd-monday") is not None and find("dnd-evening") is None and find("dnd-hour") is not None,
+      "they follow their clock (a Saturday at 21:00: Monday, no evening)")
+click(find("dnd-hour"))
+until = dnd.property("s").property("inhibitedUntil")
+until = until.toMSecsSinceEpoch() if isinstance(until, QDateTime) else -1
+check(abs(until - (time.time() + 3600) * 1000) < 120 * 1000 and not page.property("dndChoicesOpen"),
+      "For 1 hour counts from the click, not from the clock the choices were read at")
+backend.setProperty("popupOpen", False)
+QTest.qWait(50)
 
 # ---- Tablet posture: the pencil is in the tablet row, the targets have touch sizes.
 laptop_height = find("tile-wifi").height()

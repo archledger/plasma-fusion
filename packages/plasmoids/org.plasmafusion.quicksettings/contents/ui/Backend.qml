@@ -642,14 +642,16 @@ Item {
                 s.toggleDnd();
             }
         }
-        // G18 and the stock applet's choices (contents/code/dnd.js): [{id, until}] at this moment.
-        function choices() {
-            return Dnd.choices(new Date());
+        // G18 and the stock applet's choices (contents/code/dnd.js): [{id, until}] at `now` (a Date).
+        function choices(now: var): var {
+            return Dnd.choices(now);
         }
-        function until(date) {
-            if (s) {
-                s.dndUntil(date);
-            }
+        // The choice `id` from this moment, not from when the choices were drawn: "For 1 hour" lasts
+        // an hour from the click, and a choice no longer offered ("this evening" after 20:00) does
+        // nothing.
+        function choose(id: string): bool {
+            const choice = Dnd.choices(new Date()).find(c => c.id === id);
+            return !!choice && !!s && s.dndUntil(choice.until);
         }
         function openSettings() {
             backend.openSettings("kcm_notifications", []);

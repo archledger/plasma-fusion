@@ -979,14 +979,15 @@ them again before Apply, so the dialog never writes back an older order.
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
   shown tiles with the hidden ones keeping their places, the slot under a dragged tile, reset) and
   `tests/tiles_edit_test.py` (in CI), the main page on the real Backend offscreen with the two keys
-  as stand-ins (47 checks: the default grid, the stored order, a conditional tile only while it
+  as stand-ins (54 checks: the default grid, the stored order, a conditional tile only while it
   applies, the pencil, the badges and the resting tile actions, a mouse drag written once on
   release, a touch drag, a drag let go below the grid, Ctrl+arrows, Ctrl+Home / End, the focus keys,
   Tab and Shift+Tab in the order shown, the badge and Delete with the focus kept in the grid, the
   tray in order, adding back to the old place, a hidden conditional tile neither in the grid nor the
   tray while it does not apply and still hidden when it does, Done, Space on the pencil, Escape,
-  closing the sheet, Reset, and in tablet posture the pencil in the tablet row, 44 px targets and a
-  touch drag at the tablet sizes):
+  closing the sheet, Reset, the Do Not Disturb choices (section "Do Not Disturb for a while"), and
+  in tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet
+  sizes):
 
   ```sh
   STAGE=$PWD/build/stage tools/build.sh quicksettings
@@ -1012,8 +1013,17 @@ Monday) and **Until turned off** (a year ahead, as the stock applet keeps it), o
 it is on. One deviation: the stock applet hides "tomorrow morning" until 07:00; here it is always
 offered and, chosen after midnight, ends at the coming 06:00 (the behaviour of the earlier "Until
 tomorrow"). From the keyboard the chevron moves the focus to the first choice, and a choice gives
-it back to the chevron. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
-Friday/Saturday/Sunday).
+it back to the chevron. The choices close with the sheet and when another page opens, so every
+opening works them out at its own time (they stayed open with the times of the first opening: an
+hour later "Until this evening" could still be offered after 20:00, and chosen, it turned Do Not
+Disturb on with an end already passed, which nothing ended). While they stay open they follow the
+wall clock's minutes (Plasma's `Clock`), so "this evening" goes at 20:00; a choice's end is worked
+out at the click ("For 1 hour" is an hour from then), and the service refuses an end that has
+passed. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
+Friday/Saturday/Sunday), `tests/tiles_edit_test.py` (the main page on the real backend: the
+choices close with the sheet and on another page, follow their clock, and "For 1 hour" counts from
+the click) and `tests/notifications_service_test.py` (an end that has passed leaves Do Not Disturb
+off).
 
 ### The "Until" text
 

@@ -144,6 +144,13 @@ service = root.findChild(QObject, "service")
 wait_for(lambda: service.property("serverValid"), "Plasma's notification server did not register on the bus")
 check(bus.name_has_owner("org.freedesktop.Notifications"), "the service's model runs the notification server")
 
+# ---- Do Not Disturb: an end that has passed (choices read long ago) is refused; written, nothing
+# would end it.
+call(root, "untilAt", float(int(time.time() * 1000) - 60 * 1000))
+QTest.qWait(500)
+check(not service.property("dndActive") and call_ms() < time.time() * 1000 - 60 * 1000 - 1000,
+      "an end that has passed is refused: Do Not Disturb stays off")
+
 # ---- Do Not Disturb: the "Until" text follows the wall clock's minutes, and the stock applet ends it.
 def next_minute(margin=3.0):
     """The next whole minute of the wall clock in ms, at least `margin` seconds ahead."""

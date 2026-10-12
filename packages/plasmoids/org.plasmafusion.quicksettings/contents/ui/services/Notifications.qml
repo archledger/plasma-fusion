@@ -78,10 +78,15 @@ Item {
     // choices set it: the notification settings keep the end, and the stock applet (Globals.qml,
     // loaded and hidden) inhibits the server until then and releases it on its first wall-clock
     // minute past the end, also right after a resume. This widget never ends it itself, so the end
-    // has one owner.
-    function dndUntil(until) {
+    // has one owner. An end that has passed (choices read long ago) is refused: written, it would
+    // leave nothing to end and the server as it is.
+    function dndUntil(until): bool {
+        if (!Dnd.valid(until) || until.getTime() <= Date.now()) {
+            return false;
+        }
         settings.notificationsInhibitedUntil = until;
         settings.save();
+        return true;
     }
     // The "Until" text changes on a whole minute (a day before the end, a week before...): Plasma's
     // clock ticks on the wall clock's minutes, also right after a resume or a clock change, where
