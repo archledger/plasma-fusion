@@ -166,8 +166,9 @@ The Global Theme's `contents/logout/` (read by Plasma 6.7): Plasma 6.7.5's Breez
 `LogoutButton.qml` and `timer.js` with one change. Breeze draws the Complementary colours on a black 85 % veil; Plasma
 Fusion Light has the board's light Complementary set (`#f7f8fb`, text `#141827`), which made the
 Breeze screen unreadable (foundation evidence `session-light/light-10-logout.png`). The veil now
-takes the Complementary background: dark in Plasma Fusion Dark, light in Plasma Fusion Light. The
-greeter contract (context properties, signals, keyboard navigation, count-down) is unchanged;
+takes the Complementary background: dark in Plasma Fusion Dark, light in Plasma Fusion Light. As in
+the 6.8 copy below, a screen's count-down also leaves `timer.js`'s shared list when its screen goes.
+The greeter contract (context properties, signals, keyboard navigation, count-down) is unchanged;
 qmllint reports only the same unqualified context-property accesses as the upstream file. There is
 no board for this screen.
 
@@ -187,7 +188,13 @@ are the child objects of the screen that made them, wherever they are shown, so 
 while the greeter is open took them with it and the remaining screens had none (upstream only
 moves existing controls on hover). That screen's root now hands over as it goes: another screen
 makes the controls at once (the one with the pointer, else the first one left), and a hovered
-screen makes them when there are none.
+screen makes them when there are none. And every screen's count-down timer stays in `timer.js`'s
+shared list, which a key press on a button walks to stop all count-downs; after an output was
+unplugged the gone screen's entry threw on its deleted timer and ended the walk, so the other
+screens went on counting to the log-out or shut-down (upstream 6.7 and 6.8 alike: both greeters
+delete the view of a removed screen and share one engine). The timer now takes its entry out when
+it goes, and the walk goes on past an entry that fails. The Global Theme's 6.7 copy has the same
+change.
 
 Test (CI step "Log-out screen on Plasma 6.8"): `packages/lockscreen/test/logout_test.py` loads it
 as the 6.8 greeter does (two views on one engine, Plasma Fusion Light): no QML warnings, the
@@ -196,6 +203,11 @@ and Escape send the greeter's signals, the veil in the Complementary background 
 and with a third view, the controls' screen unplugged (its view deleted): the screen with the
 pointer shows them at once, they follow the pointer, and unplugging their new maker leaves them on
 the third screen (these 3 checks per run fail on the previous package: no controls on any screen).
+In the shut-down run, after that unplug, the gone screen's entry has left the shared list and a key
+pressed on the controls (with a failing entry put first in the list) stops the count-down on both
+screens left; the same for the Global Theme's 6.7 copy (two views on one engine, one unplugged).
+These checks fail on the files before that change (3 entries in the list, the count-down goes on,
+"TypeError: Value is null").
 The 0.5.0 base fails 7 of its 12 checks (controls and count-down on both screens, the
 `screenGeometry` errors); stock 6.8's files fail the veil checks.
 

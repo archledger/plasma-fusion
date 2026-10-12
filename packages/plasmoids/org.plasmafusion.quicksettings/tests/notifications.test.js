@@ -82,10 +82,16 @@ assert.deepStrictEqual(existenceProbe("file:///tmp/a%20b%5B1%5D*.txt"), { folder
                        "the name decoded, wildcard characters literal");
 assert.strictEqual(existenceProbe("smb://server/share/a.txt"), null, "not a local file: not checked");
 assert.strictEqual(existenceProbe(""), null, "nothing");
-// The list on the sheet, which closing it marks read: the main page in the laptop layout only.
+// The list on the sheet, which closing it marks read: the main page in the laptop layout only,
+// with the widget showing notifications, and notifications to list (or the empty list asked for).
 assert.strictEqual(typeof listOnSheet, "function", "notifications.js does not define listOnSheet");
-assert.strictEqual(listOnSheet("main", false), true, "the main page shows the list");
-assert.strictEqual(listOnSheet("clipboard", false), false, "the clipboard sheet (Meta+V) shows none");
-assert.strictEqual(listOnSheet("devices", false), false, "a page opened on its own shows none");
-assert.strictEqual(listOnSheet("main", true), false, "tablet posture: the Notification Centre has the list");
+assert.strictEqual(listOnSheet("main", false, true, 2, false), true, "the main page shows the list");
+assert.strictEqual(listOnSheet("clipboard", false, true, 2, false), false, "the clipboard sheet (Meta+V) shows none");
+assert.strictEqual(listOnSheet("devices", false, true, 2, false), false, "a page opened on its own shows none");
+assert.strictEqual(listOnSheet("main", true, true, 2, false), false, "tablet posture: the Notification Centre has the list");
+assert.strictEqual(listOnSheet("main", false, false, 2, false), false,
+                   "Show notifications off (or no notification service): no list, so nothing is seen");
+assert.strictEqual(listOnSheet("main", false, false, 0, true), false, "... also when the bell asked for the empty list");
+assert.strictEqual(listOnSheet("main", false, true, 0, false), false, "no notifications: no list");
+assert.strictEqual(listOnSheet("main", false, true, 0, true), true, "the bell shows the empty list");
 console.log("notifications: all checks passed");

@@ -10,6 +10,7 @@ import "global"
 import "../code/power.js" as Power
 import "../code/dnd.js" as Dnd
 import "../code/keepawake.js" as Timed
+import "../code/notifications.js" as Notif
 
 // Every data source behind one null-safe object. Each service lives in its own
 // file and is loaded with a Loader, so a missing QML module (no Bluetooth stack,
@@ -1070,6 +1071,9 @@ Item {
         readonly property var model: s ? s.model : null
         readonly property int count: s ? s.count : 0
         readonly property int unread: s ? s.unread : 0
+        // The sheet shows the list (PopupContent.qml); closing it marks them read only then.
+        readonly property bool listShown: Notif.listOnSheet(backend.page, backend.notificationsApart, available, count,
+                                                            backend.showEmptyNotifications)
         // Rows come and go (services/Notifications.qml lastInGroup()).
         readonly property int revision: s ? s.revision : 0
         function lastInGroup(row: int, revision: int): bool {

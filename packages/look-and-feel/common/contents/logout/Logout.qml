@@ -5,9 +5,10 @@
     SPDX-License-Identifier: GPL-2.0-or-later
 
     Plasma Fusion log-out screen: Plasma 6.7.5's Breeze Logout.qml (same contract and behaviour)
-    with one change. Breeze draws the Complementary colours on a black veil; Plasma Fusion Light
+    with two changes. Breeze draws the Complementary colours on a black veil; Plasma Fusion Light
     has a light Complementary set (Colors board), so the veil takes the Complementary background
-    instead: dark in Plasma Fusion Dark, light in Plasma Fusion Light, always readable.
+    instead: dark in Plasma Fusion Dark, light in Plasma Fusion Light, always readable. And the
+    count-down leaves timer.js's shared list when its screen goes (see timer.js).
     Plasma 6.7's greeter reads it from the Global Theme. Plasma 6.8's greeter reads the shell
     package instead, where org.plasmafusion.lockshell carries 6.8's own log-out files with the same
     change (packages/lockscreen/org.plasmafusion.lockshell/contents/logout/).
@@ -98,11 +99,15 @@ Item {
         repeat: true
         interval: 1000
         onTriggered: remainingTime--
+        // Kept to take it out of the shared list again when this screen goes (timer.js).
+        property var cancelCallback: null
         Component.onCompleted: {
-            AutoTriggerTimer.addCancelAutoTriggerCallback(function() {
+            cancelCallback = function() {
                 countDownTimer.running = false;
-            });
+            };
+            AutoTriggerTimer.addCancelAutoTriggerCallback(cancelCallback);
         }
+        Component.onDestruction: AutoTriggerTimer.removeCancelAutoTriggerCallback(cancelCallback)
     }
 
     Rectangle {

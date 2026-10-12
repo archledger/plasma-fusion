@@ -9,7 +9,6 @@ import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasmoid
 
 import "components"
-import "../code/notifications.js" as Notif
 
 // Content of the pop-up: the quick settings page (or one of its drill-down
 // pages) and, below it, the notification list. The frosted card around it is
@@ -243,8 +242,7 @@ Item {
                 id: notifications
                 Layout.fillWidth: true
                 spacing: content.metrics.px(10)
-                visible: Notif.listOnSheet(content.backend.page, content.backend.notificationsApart) && content.backend.notif.available
-                         && (content.backend.notif.count > 0 || content.backend.showEmptyNotifications)
+                visible: content.backend.notif.listShown
 
                 RowLayout {
                     id: notificationHeader

@@ -1216,10 +1216,14 @@ which the button opened before. Meta+V opens it too, on the screen in use (`open
 `clipboard`; the setup's Windows-style shortcut set takes the key from Klipper's pop-up,
 docs/parts/device.md); the button and Meta+V close it again. It shows no notification list, so
 closing it leaves the notifications unread (the bell keeps its dot): the sheet marks them read on
-closing only once the list was on it (the main page in the laptop layout, `notifications.js`
-`listOnSheet`), as the stock applet marks them read when its pop-up, the list, closes. 0.5.0 before
-this cleared the unread count on every close. VM (6.7.5): a Dolphin notification, the clipboard
-sheet opened and closed: 1 unread (0 before), then the main sheet opened and closed: 0.
+closing only once the list was on it (the main page in the laptop layout, with Show notifications
+on and notifications to list: `notifications.js` `listOnSheet`, `Backend.notif.listShown`, the one
+condition of the list and of the closing), as the stock applet marks them read when its pop-up, the
+list, closes. 0.5.0 before this cleared the unread count on every close, and then on every close of
+the main page, also with Show notifications off, where the sheet has no list. VM (6.7.5): a Dolphin
+notification, the clipboard sheet opened and closed: 1 unread (0 before), then the main sheet opened
+and closed: 0. `tests/notifications_card_test.py` checks `listShown` on the real backend (main page,
+Show notifications off, the bell's empty list, the clipboard page).
 
 - **Data:** Plasma's clipboard QML module, the one the stock Clipboard widget and Klipper's pop-up
   use (`org.kde.plasma.private.clipboard`, `HistoryModel`; `services/Clipboard.qml`). It is a view

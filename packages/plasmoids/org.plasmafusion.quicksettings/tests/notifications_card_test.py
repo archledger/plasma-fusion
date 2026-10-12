@@ -584,6 +584,26 @@ try:
     QTest.mouseClick(view, Qt.RightButton, Qt.NoModifier, QPoint(round(item["x"] + 40), round(item["y"] + 40)))
     wait_for(lambda: root.property("menuRequests") == 3, "a right click did not ask for the card's menu")
     check(True, "and a right click")
+
+    # ---- The sheet's list (PopupContent.qml) and the closing that marks the notifications read
+    # (main.qml) follow the same notif.listShown: with Show notifications off the sheet has no list,
+    # so opening and closing it must leave them unread.
+    notif = backend.property("notif")
+    notify("Unseen", "Listed only while the list is on the sheet", entry="org.plasmafusion.notifythird")
+    backend.setProperty("page", "main")
+    backend.setProperty("showEmptyNotifications", False)
+    check(notif.property("listShown") is True, "the main page lists the notifications")
+    backend.setProperty("showNotifications", False)
+    check(notif.property("available") is False and notif.property("listShown") is False,
+          "Show notifications off: no list on the sheet, so nothing counts as seen")
+    backend.setProperty("showEmptyNotifications", True)
+    check(notif.property("listShown") is False, "... also when the bell opened the sheet")
+    backend.setProperty("showEmptyNotifications", False)
+    backend.setProperty("showNotifications", True)
+    check(notif.property("listShown") is True, "Show notifications on again: the list is back")
+    backend.setProperty("page", "clipboard")
+    check(notif.property("listShown") is False, "the clipboard sheet has no list")
+    backend.setProperty("page", "main")
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:

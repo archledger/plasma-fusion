@@ -885,11 +885,11 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
                 wait(200)
             type_secret()
             check("the typed password is in the field and shared with the other screens",
-                  pw.property("text") == "hunter2" and secret() == "hunter2", (len(pw.property("text") or ""), secret() and len(secret())))
+                  pw.property("text") == "hunter2" and secret() == "hunter2", (len(pw.property("text") or ""), len(secret() or "")))
             click("authenticatorLink%d" % FACE)
             wait(500)
             check("Use face: the typed password is gone, on every screen", way() == FACE and pw.property("text") == ""
-                  and secret() == "", (way(), len(pw.property("text") or ""), secret() and len(secret())))
+                  and secret() == "", (way(), len(pw.property("text") or ""), len(secret() or "")))
             click("authenticatorLink%d" % REGULAR)
             wait(500)
             check("Use password again: the field is empty", way() == REGULAR and shown("passwordBox")
