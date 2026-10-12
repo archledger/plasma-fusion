@@ -115,8 +115,10 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   arrive. Enter in the empty field does nothing. The last row, "Search “query” in KRunner" (Every
   search plugin, web shortcuts included), hands the query to the full KRunner (`org.kde.krunner /App
   query`, D-Bus activated) and closes the launcher: Down past the last result, or Down from the field
-  when nothing matches ("No results for “query”" above it), then Enter; or a click. The same row
-  ends the tablet sheet's results. KRunner's own key is Alt+F2 (device.md); the dock's Search button
+  when nothing matches ("No results for “query”" above it), then Enter; or a click. Home, End,
+  Page Up and Page Down move through the results as in Kickoff's lists; End, and Page Down on the
+  last result, select that row, Home and Page Up leave it, so Enter opens the row that looks
+  selected. The same row ends the tablet sheet's results. KRunner's own key is Alt+F2 (device.md); the dock's Search button
   opens this search by default.
 - Hover: a tile, file or result is highlighted and selected only after the pointer moves; items
   that appear or scroll under a resting pointer do not take the selection (so Enter still
@@ -160,7 +162,8 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 - `tests/places.test.js` (node, in the build step): the place kinds from the URL and the path line.
 - `tests/views_test.py` also searches with Kicker's real RunnerModel: Down past the last result to
   the KRunner row, Up back, Enter hands the query over and closes; with no results Down from the
-  field selects the row.
+  field selects the row. End and Page Down reach the row, Home and Page Up leave it, and Enter
+  after Home launches the first result, not KRunner.
 - `tests/views_test.py` also rebuilds the chips under the card: the chosen category stays chosen
   when a chip is added before it, and when it is gone (or it was the last chip) the card shows
   "All", not the next category or an empty grid titled "Pinned".

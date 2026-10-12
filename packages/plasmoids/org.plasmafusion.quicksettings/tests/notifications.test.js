@@ -12,7 +12,8 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "notifications.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown, groupFooter, centreDateFormat, existenceProbe } = globalThis;
+const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown, groupFooter, centreDateFormat, existenceProbe,
+        listOnSheet } = globalThis;
 
 // The body: declaration and wrapper gone, images taken out of the text and kept in order.
 const server = '<?xml version="1.0"?><html>Look <img src="file:///tmp/a.png" alt="a"/> here<br/>'
@@ -81,4 +82,10 @@ assert.deepStrictEqual(existenceProbe("file:///tmp/a%20b%5B1%5D*.txt"), { folder
                        "the name decoded, wildcard characters literal");
 assert.strictEqual(existenceProbe("smb://server/share/a.txt"), null, "not a local file: not checked");
 assert.strictEqual(existenceProbe(""), null, "nothing");
+// The list on the sheet, which closing it marks read: the main page in the laptop layout only.
+assert.strictEqual(typeof listOnSheet, "function", "notifications.js does not define listOnSheet");
+assert.strictEqual(listOnSheet("main", false), true, "the main page shows the list");
+assert.strictEqual(listOnSheet("clipboard", false), false, "the clipboard sheet (Meta+V) shows none");
+assert.strictEqual(listOnSheet("devices", false), false, "a page opened on its own shows none");
+assert.strictEqual(listOnSheet("main", true), false, "tablet posture: the Notification Centre has the list");
 console.log("notifications: all checks passed");

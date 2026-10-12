@@ -14,6 +14,7 @@ import "global"
 import "../code/tiles.js" as Tiles
 import "../code/requests.js" as Requests
 import "../code/shared.js" as Shared
+import "../code/notifications.js" as Notif
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -44,7 +45,7 @@ PlasmoidItem {
     // The output this widget's bar is on: the screen at its containment's screen geometry (right
     // as soon as the bar is placed; the window's Screen attached property named the first screen
     // for a while in a bar made for another screen, so Meta+A went to the wrong widget).
-    readonly property string screenName: {
+    readonly property string screenFromGeometry: {
         const g = Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0);
         if (g.width > 0) {
             for (const screen of Qt.application.screens) {
@@ -53,8 +54,11 @@ PlasmoidItem {
                 }
             }
         }
-        return String(root.Screen.name || "");
+        return "";
     }
+    readonly property string screenName: screenFromGeometry || String(root.Screen.name || "")
+    // Whether screenName is the bar's own output, not yet the window's guess (requests wait for it).
+    readonly property bool screenSettled: screenFromGeometry !== ""
     readonly property bool leader: Instances.leader === root
     readonly property var sharedKeys: ["showKeyboardLayout", "keyboardLayoutAlways", "showKdeConnect", "showClipboard",
         "showBatteryPercent", "popupOnNewDevice", "showNotifications", "popupGap", "popupScreenMargin", "startPage",
@@ -458,9 +462,37 @@ PlasmoidItem {
         }
     }
     function runRequest(mode: string, output: string) {
-        if (!Requests.acts(output, root.screenName, root.leader)) {
+        switch (Requests.decide(output, root.screenName, root.screenSettled, root.leader, false)) {
+        case "wait":
+            // Kept until the bar's output is known (2 s at most, then the guess decides): the
+            // request is written once, and Meta+N, Meta+V or the edge swipe did nothing.
+            waitingRequest = { "mode": mode, "output": output };
+            requestWait.restart();
+            return;
+        case "skip":
             return;
         }
+        performRequest(mode, output);
+    }
+    property var waitingRequest: null
+    function runWaitingRequest(final: bool): void {
+        const request = waitingRequest;
+        if (!request || (!final && !screenSettled)) {
+            return;
+        }
+        waitingRequest = null;
+        requestWait.stop();
+        if (Requests.decide(request.output, screenName, screenSettled, leader, true) === "act") {
+            performRequest(request.mode, request.output);
+        }
+    }
+    onScreenSettledChanged: runWaitingRequest(false)
+    Timer {
+        id: requestWait
+        interval: 2000
+        onTriggered: root.runWaitingRequest(true)
+    }
+    function performRequest(mode: string, output: string): void {
         console.info("quicksettings: openRequest " + mode + (output !== "" ? " on " + output : ""));
         switch (mode) {
         case "sheet":
@@ -552,8 +584,11 @@ PlasmoidItem {
                      + ", power " + backend.profile.subtitle + (backend.profile.note ? " [" + backend.profile.note.replace(/\n/g, " | ") + "]" : "")
                      + ", hotspot " + backend.net.hotspotSubtitle
                      + ", devices " + backend.devices.count
+                     + ", notifications " + backend.notif.count + " (" + backend.notif.unread + " unread"
+                     + (backend.notif.available ? ")" : ", off)")
                      + ", tray " + (backend.trayRevealed.length > 0 ? backend.trayRevealed.join("+") : "-")
-                     + ", screen " + (root.screenName || "?") + (root.leader ? " leader" : "") + " of " + Instances.items.length
+                     + ", screen " + (root.screenName || "?") + (root.screenSettled ? "" : " (guess)")
+                     + (root.leader ? " leader" : "") + " of " + Instances.items.length
                      + ", page " + backend.page + (backend.pageDirect ? " (direct)" : "")
                      + (content && content.pageItem && backend.page === "clipboard"
                         ? " [" + content.pageItem.mode + ", " + content.pageItem.count + " shown of "
@@ -778,9 +813,22 @@ PlasmoidItem {
         }
     }
 
+    // Whether the notification list was on the sheet while it was open: closing it marks the
+    // notifications read only then. Opened on the clipboard page (Meta+V) and closed there, it
+    // cleared the unread count and the bell though no notification had been shown.
+    property bool notificationsSeen: false
+    readonly property bool notificationListShown: popupOpen && Notif.listOnSheet(backend.page, backend.notificationsApart)
+    onNotificationListShownChanged: {
+        if (notificationListShown) {
+            notificationsSeen = true;
+        }
+    }
     onPopupOpenChanged: {
         if (!popupOpen) {
-            backend.notif.markRead();
+            if (notificationsSeen) {
+                backend.notif.markRead();
+            }
+            notificationsSeen = false;
             resetPage.restart();
         }
     }

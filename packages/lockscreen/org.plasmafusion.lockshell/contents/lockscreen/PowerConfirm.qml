@@ -19,7 +19,9 @@ import org.kde.plasma.workspace.dbus as DBus
 // after the session has already closed (systemd 259, "Operation denied due to active block
 // inhibitor"), so while one is held the action stays off and the page says a program is blocking
 // it; for "block-weak" ones it says a program is busy. The list is read again every 2 s while the
-// page is shown.
+// page is shown, and once more when the action is chosen, which acts only on that answer: the first
+// read is still on its way when the page has just opened (Return right after Alt+S), and the last
+// one can be 2 s old.
 //
 // Whoever stands at the locked screen sees this page without unlocking, so it names no program,
 // reason or user: logind lists every user's inhibitors with their holder and reason, and the stock
@@ -40,13 +42,20 @@ FocusScope {
     property var blockers: []
     readonly property bool blocked: blockers.some(b => b.strong)
     property bool requested: false
+    // The action was chosen and logind's list is being read again before it is requested.
+    property bool checking: false
+    // The page left the prompt's stack (Cancel, Escape, the prompt hiding): an answer that comes
+    // in after that requests nothing.
+    property bool dismissed: false
+    T.StackView.onDeactivating: dismissed = true
 
     signal done()
     signal announcement(string text, bool urgent)
 
     focus: true
 
-    function refresh(): void {
+    // Reads logind's inhibitors and hands done() the shutdown blockers.
+    function readBlockers(done: var): void {
         DBus.SystemBus.asyncCall({
             "service": "org.freedesktop.login1",
             "path": "/org/freedesktop/login1",
@@ -54,11 +63,16 @@ FocusScope {
             "member": "ListInhibitors",
             "arguments": []
         }, reply => {
-            root.blockers = root.shutdownBlockers(reply.value);
+            done(root.shutdownBlockers(reply.value));
         }, reply => {
             // Without logind's list (no logind, refused) nothing is known to block.
             console.warn("lockscreen: logind's inhibitors not read: " + reply.error.name);
-            root.blockers = [];
+            done([]);
+        });
+    }
+    function refresh(): void {
+        readBlockers(list => {
+            root.blockers = list;
         });
     }
     // ListInhibitors: a(ssssuu) what (":"-separated), who, why, mode, uid, pid. Plasma's D-Bus
@@ -84,7 +98,18 @@ FocusScope {
         return label.replace(/&(&?)/g, "$1");
     }
     function confirm(): void {
-        if (blocked || requested || !session) {
+        if (blocked || requested || checking || dismissed || !session) {
+            return;
+        }
+        checking = true;
+        readBlockers(list => {
+            root.checking = false;
+            root.blockers = list;
+            root.request();
+        });
+    }
+    function request(): void {
+        if (blocked || requested || dismissed || !session) {
             return;
         }
         requested = true;

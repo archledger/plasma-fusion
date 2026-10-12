@@ -179,7 +179,7 @@ jobs:
 
       - name: Lock screen Restart and Shut Down (offscreen, mock logind and ksmserver)
         run: >-
-          packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy
+          packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy power-early power-late
           power-noreboot power-kiosk power-mnemonic power-repeat power-return
 
       - name: Log-out screen on Plasma 6.8 (offscreen, two screens on one engine)
@@ -192,7 +192,7 @@ jobs:
       - name: Lock screen ways to unlock (offscreen, Plasma 6.8 and 6.7 authenticators)
         run: >-
           packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen-auth" auth68-picker auth68-saved
-          auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-fingerprint auth68-heartbeat
+          auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-switch auth68-fingerprint auth68-heartbeat
           auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed auth67-strings
           wallpaper68
 

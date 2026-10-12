@@ -14,6 +14,8 @@
 #   addfails    the shell cannot make the widget: an error says so;
 #   slow        the new widget is listed 1.5 s late: Apply returns at once and the meters are
 #               placed afterwards;
+#   twobars     two top bars get meters, listed 0.4 s and 1.8 s late: both are placed before
+#               quick settings, not only the first one the shell lists;
 #   off         every meters widget goes.
 #
 #   meters-switch.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
@@ -106,6 +108,16 @@ expect slow "Apply returns at once ($(busy slow) ms with kcmctl's 200 ms pause)"
 expect slow "the meters are placed once the shell lists them" \
   is "$(panel slow 1)" "top 0: appname clockpill systemtray meters quicksettings"
 expect slow "no error" is "$(value slow errorText)" ""
+
+run twobars "{\"insert\": \"end\", \"knownWidgetTypes\": [\"$METERS\"], \"panels\": [
+  {\"listDelayMs\": 400, \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"screen\": 1, \"listDelayMs\": 1800, \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
+  "${ON[@]}" "wait 4500" "get errorText"
+expect twobars "the first bar's meters are placed before quick settings" \
+  is "$(panel twobars 1)" "top 0: appname clockpill systemtray meters quicksettings"
+expect twobars "the second bar's, listed later, too" \
+  is "$(panel twobars 2)" "top 1: appname clockpill meters quicksettings"
+expect twobars "no error" is "$(value twobars errorText)" ""
 
 run off "{\"panels\": [{\"widgets\": [\"$APPNAME\", \"$METERS\", \"$QS\"]}, {\"screen\": 1, \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$METERS\"]}]}" \
   waitshell "get systemMeters" "set systemMeters false" save "wait 300" "get errorText"

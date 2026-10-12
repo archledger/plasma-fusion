@@ -70,6 +70,18 @@ FocusScope {
         function onChosen(): void {
             Qt.callLater(sessionManager.focusPasswordField);
         }
+        // Another way in use (a link, or the fall-back to the password when a way stops
+        // working): what was typed for the old way goes, on every screen (PasswordSync). Kept, it
+        // came back when the password was chosen again, and the smartcard's field would send the
+        // password as its PIN.
+        function onCurrentChanged(): void {
+            sessionManager.clearSecret();
+        }
+    }
+    function clearSecret(): void {
+        passwordBox.text = "";
+        PasswordSync.password = "";
+        passwordBox.text = Qt.binding(() => PasswordSync.password);
     }
 
     // Tablet posture (FusionMetrics.tablet follows KWin): touch-sized controls (TABLET 4.13).

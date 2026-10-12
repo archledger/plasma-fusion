@@ -73,7 +73,9 @@ on every screen (VM 6.7.91 with `[UI] ShowPromptInRegularAuthenticator`: "Passwo
 typed text gone after Cancel; kept now).
 
 What blocks: logind's inhibitors for `shutdown` (`ListInhibitors`, read every 2 s while the
-question is shown). systemd 259 refuses a reboot or power-off outright while a strong `block`
+question is shown, and once more when the action is chosen: it is requested only on that answer,
+so a Return right after Alt+S, before the first answer, or an inhibitor taken since the last read
+cannot slip through; when the question closes before the answer, nothing is requested). systemd 259 refuses a reboot or power-off outright while a strong `block`
 inhibitor is held ("Operation denied due to active block inhibitor"; ksmserver asks without the
 skip flag), after the session has already closed; so while one is held the action stays off and
 the page says "A program is blocking a restart. Try again when it has finished." (shutdown
@@ -134,9 +136,13 @@ too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authent
   icon and "Unlock with your face" (fingerprint, security key) in the same pill, without the focus
   halo; its PAM messages ("Touch your security key") show in the message area and, since nothing
   would be typed, also show the prompt.
-* After a link the field takes the focus again (password, PIN). A way that prompts for more than
-  "Password:" (`showPrompt`: the smartcard's PIN prompt, or the password way with `kscreenlockerrc
-  [UI] ShowPromptInRegularAuthenticator=true`) shows that prompt in the message area, as stock 6.8.
+* After a link the field takes the focus again (password, PIN). Whatever was typed for the old way
+  is cleared whenever another way is in use (a link, or the fall-back to the password when a way
+  stops working), in the field and in `PasswordSync`, so on every screen: kept, a password came
+  back when the password was chosen again, and the smartcard's field sent it as the PIN. A way
+  that prompts for more than "Password:" (`showPrompt`: the smartcard's PIN prompt, or the
+  password way with `kscreenlockerrc [UI] ShowPromptInRegularAuthenticator=true`) shows that
+  prompt in the message area, as stock 6.8.
 * A way that never prompts (`expectingPrompt` false: fingerprint, face, security key) unlocks at
   once, without the explicit Unlock screen, and the greeter's other workers are stopped first
   (`stopAuthenticating`), as stock 6.8 (plasma-desktop e5c3d608).
@@ -181,13 +187,17 @@ too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authent
   password" works and nothing runs while the prompt is hidden.
 
 Tests (CI step "Lock screen ways to unlock"): `test/run.sh OUT auth68-picker auth68-saved
-auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-fingerprint auth68-heartbeat
-auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed auth67-strings` with a
+auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-switch auth68-fingerprint
+auth68-heartbeat auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed
+auth67-strings` with a
 6.8 authenticator (`test/MockAuthenticator68.qml`, the model and enum stubs in `test/imports/`) and
 the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones pass on both.
 `auth68-failed` (a face failure leaves the prompt on, is asked again at once, not while hidden;
 the password keeps its grace; a defunct way's message stays) fails on the previous package;
-`auth67-failed` (6.7 keeps the grace) passes on both.
+`auth67-failed` (6.7 keeps the grace) passes on both. `auth68-switch` (a typed password goes when
+face, the password again or the smartcard is chosen, and when the smartcard stops working; Enter in
+the PIN field sends nothing typed before) fails on the previous package: the password stayed, and
+14 characters went to the smartcard as its PIN.
 
 ## Authentication contract (Plasma 6.7.5, and 6.8 where noted)
 
@@ -359,7 +369,8 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 `offscreen-portrait-900x1440-idle-and-prompt.png`, `greeter-and-envtest-log.txt`, pixel reports).
 
 Restart and Shut Down (0.5.0, CI step "Lock screen Restart and Shut Down"): `test/run.sh OUT power
-power-blocked power-busy power-noreboot power-kiosk power-mnemonic power-repeat power-return`. The harness points the system bus at its
+power-blocked power-busy power-early power-late power-noreboot power-kiosk power-mnemonic
+power-repeat power-return`. The harness points the system bus at its
 private bus, where `mock_services.py power` answers as logind and ksmserver, so Plasma's own session
 backend (not a stand-in) decides what the row shows, and the clicks are real pointer events:
 `power` both buttons shown; Shut Down asks first, Escape back, nothing called; Restart asks, Cancel
@@ -368,7 +379,12 @@ inhibitor reported as "A program is blocking a shutdown…" with no holder, reas
 count on the page, Shut Down off and a click on it calls nothing, the typed-value form of the
 reply read the same (a sleep `delay` and PowerDevil's power-key inhibitor do not count), the action
 on again 2 s after the inhibitor goes; `power-busy` a `block-weak` inhibitor alone leaves Shut Down
-on and is reported as a busy program, unnamed, confirmed calls `logoutAndShutdown`; `power-noreboot` logind
+on and is reported as a busy program, unnamed, confirmed calls `logoutAndShutdown`; `power-early`
+Alt+S and Return while logind's first answer (a `block` inhibitor, 1.5 s late) is on its way call
+nothing; `power-late` an inhibitor taken after the page read the list keeps the confirmed action
+from being requested, which goes ahead once it is gone, and a question closed before logind
+answers requests nothing (both fail on the package before, which acted on the last list read, the
+empty one before the first answer); `power-noreboot` logind
 CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both; `power-mnemonic` Alt+S
 and Alt+R ask, the same chord again calls nothing, the action shows no "&", a deliberate Space
 answers; `power-repeat` Return or Space on a focused power button asks, their repeats (key events

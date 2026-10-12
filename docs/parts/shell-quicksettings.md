@@ -332,9 +332,9 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
 | `tileOrder` | (empty) | StringList: the tiles in the user's order (ids in `contents/code/tiles.js`: `wifi`, `bluetooth`, `nightlight`, `dnd`, `power`, `darkstyle`, `keepawake`, `devices`, `hotspot`, `chargelimit`, `tabletmode`); empty: the default order (section "Editable tiles") |
 | `hiddenTiles` | (empty) | StringList: the tiles taken out of the grid; a conditional tile listed here never shows |
-| `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`, `clipboard` (the clipboard sheet, or closed when it is open: Meta+V); without OUTPUT only the widget on KWin's active screen acts, and only the leader when KWin does not answer or names no output (0.5.0; before, every widget did: the sheet opened on every screen) (`MODE NONCE` accepted too; `contents/code/requests.js`, `tests/requests.test.js`) |
+| `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`, `clipboard` (the clipboard sheet, or closed when it is open: Meta+V); without OUTPUT only the widget on KWin's active screen acts, and only the leader when KWin does not answer or names no output (0.5.0; before, every widget did: the sheet opened on every screen); a widget that does not know its bar's output from the bar's screen geometry yet (its name is then the window's guess, which can name another screen) keeps a request that names an output until it does, 2 s at most, and then decides on the guess, where it decided at once and the request was lost (`MODE NONCE` accepted too; `contents/code/requests.js`, `tests/requests.test.js`) |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
-| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the tablet policy state, the sheet's window against its content (`frame`: window, padding, the content's place, size and wanted size) and, on the clipboard sheet, its mode, entries shown, stars, current row and search; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
+| `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, the history's count and unread count, the output (with "(guess)" while it is not known from the bar's geometry), the tablet policy state, the sheet's window against its content (`frame`: window, padding, the content's place, size and wanted size) and, on the clipboard sheet, its mode, entries shown, stars, current row and search; `keepawake:SECONDS` starts a timed Keep awake that ends after SECONDS (the sheet offers hours) |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
 Dark style: when kdeglobals `[KDE] DefaultLightLookAndFeel` / `DefaultDarkLookAndFeel` pair the two
@@ -1205,7 +1205,12 @@ posture) opens the clipboard sheet: a page of the quick-settings pop-up, in its 
 colours (the Quick Settings and Popups boards' drill-down pages). It replaces Klipper's own pop-up,
 which the button opened before. Meta+V opens it too, on the screen in use (`openRequest`
 `clipboard`; the setup's Windows-style shortcut set takes the key from Klipper's pop-up,
-docs/parts/device.md); the button and Meta+V close it again.
+docs/parts/device.md); the button and Meta+V close it again. It shows no notification list, so
+closing it leaves the notifications unread (the bell keeps its dot): the sheet marks them read on
+closing only once the list was on it (the main page in the laptop layout, `notifications.js`
+`listOnSheet`), as the stock applet marks them read when its pop-up, the list, closes. 0.5.0 before
+this cleared the unread count on every close. VM (6.7.5): a Dolphin notification, the clipboard
+sheet opened and closed: 1 unread (0 before), then the main sheet opened and closed: 0.
 
 - **Data:** Plasma's clipboard QML module, the one the stock Clipboard widget and Klipper's pop-up
   use (`org.kde.plasma.private.clipboard`, `HistoryModel`; `services/Clipboard.qml`). It is a view

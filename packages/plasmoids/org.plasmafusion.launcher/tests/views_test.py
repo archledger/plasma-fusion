@@ -369,7 +369,43 @@ try:
     QTest.qWait(50)
     r = json.loads(call(win, "results"))
     check(not r["handoff"] and r["current"] == r["count"] - 1, "Up goes back to the last result")
+    # Home, End, Page Up and Page Down move on and off the KRunner row too: the row that looks
+    # selected is the one Enter opens.
+    QTest.keyClick(win, Qt.Key_End)
+    QTest.qWait(50)
+    r = json.loads(call(win, "results"))
+    check(r["handoff"], "End selects the KRunner row, the last row")
+    QTest.keyClick(win, Qt.Key_Home)
+    QTest.qWait(50)
+    r = json.loads(call(win, "results"))
+    check(not r["handoff"] and r["current"] == 0, "Home from the KRunner row goes to the first result (%s)" % r)
+    QTest.keyClick(win, Qt.Key_PageDown)
+    for _ in range(r["count"] + 1):
+        QTest.qWait(50)
+        if json.loads(call(win, "results"))["handoff"]:
+            break
+        QTest.keyClick(win, Qt.Key_PageDown)
+    r = json.loads(call(win, "results"))
+    check(r["handoff"], "Page Down past the last result reaches the KRunner row")
+    QTest.keyClick(win, Qt.Key_PageUp)
+    QTest.qWait(50)
+    r = json.loads(call(win, "results"))
+    check(not r["handoff"] and r["current"] == r["count"] - 1, "Page Up from the KRunner row goes back to the results (%s)" % r)
+    QTest.keyClick(win, Qt.Key_End)
+    QTest.keyClick(win, Qt.Key_Home)
+    closed = r["closed"]
+    QTest.keyClick(win, Qt.Key_Return)
+    QTest.qWait(50)
+    r = json.loads(call(win, "results"))
+    check(r["query"] == "" and r["closed"] == closed + 1, "Enter after Home launches the first result, not KRunner (%s)" % r)
+    call(win, "openMode", "home")
+    QTest.qWait(100)
+    type_text(win, "alpha")
+    wait_for(lambda: json.loads(call(win, "results"))["count"] > 0 and not json.loads(call(win, "results"))["querying"],
+             "no search results for \"alpha\"")
+    QTest.qWait(500)
     QTest.keyClick(win, Qt.Key_Down)
+    QTest.keyClick(win, Qt.Key_End)
     QTest.keyClick(win, Qt.Key_Return)
     QTest.qWait(50)
     r = json.loads(call(win, "results"))
