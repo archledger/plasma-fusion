@@ -406,16 +406,20 @@ Rectangle {
         }
 
         // Images in the body (<img src> of local files): below the text, at their own size fitted
-        // to the card's width and the preview strip's height.
+        // to the card's width and the preview strip's height. Decoded at most at that size (in
+        // device pixels): the cards of the history live while the sheet is closed, and a photo
+        // kept at full size in every screen's widget held tens of megabytes for a thumbnail.
         Repeater {
             model: card.bodyParts.images
             delegate: Image {
                 id: bodyImage
                 required property string modelData
                 objectName: "bodyImage"
+                readonly property real room: card.width - 2 * column.anchors.margins
                 readonly property real fit: implicitWidth > 0 && implicitHeight > 0
-                                            ? Math.min(1, (card.width - 2 * column.anchors.margins) / implicitWidth,
-                                                       Kirigami.Units.iconSizes.enormous / implicitHeight) : 0
+                                            ? Math.min(1, room / implicitWidth, Kirigami.Units.iconSizes.enormous / implicitHeight) : 0
+                sourceSize.width: Math.max(1, Math.ceil(room * Screen.devicePixelRatio))
+                sourceSize.height: Math.ceil(Kirigami.Units.iconSizes.enormous * Screen.devicePixelRatio)
                 Layout.preferredWidth: implicitWidth * fit
                 Layout.preferredHeight: implicitHeight * fit
                 Layout.maximumWidth: implicitWidth * fit
@@ -423,7 +427,8 @@ Rectangle {
                 visible: status === Image.Ready
                 source: modelData
                 asynchronous: true
-                fillMode: Image.PreserveAspectFit
+                // Stretch (the default), as the layout keeps the aspect: with PreserveAspectFit an
+                // image decoded for both bounds fills them instead (1200x300 came as 512x128).
                 smooth: true
                 Accessible.role: Accessible.Graphic
                 Accessible.name: i18nc("@info accessible name of an image in a notification", "Image")

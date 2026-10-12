@@ -1086,7 +1086,9 @@ not used). They now follow the stock applet's sizes: the notification's own imag
 `image-path`), or its icon when that is not the app's, beside the text at Plasma's large icon size
 (48 px, its aspect kept, as `Icon.qml`); images in the body (`<img src>`, which the server keeps for
 local files only) below the text, fitted to the card and no taller than the preview strip (the stock
-applet draws them inline at their own size, which can overflow); and the first linked file
+applet draws them inline at their own size, which can overflow), and decoded at that size in device
+pixels (`sourceSize`: the history's cards live while the sheet is closed, so a 4000 × 3000 photo
+was held at full size in every screen's widget); and the first linked file
 (`x-kde-urls`: Spectacle's screenshot, a received file) as a preview strip of Plasma's "enormous"
 icon height (128 px), as `ThumbnailStrip.qml`. The preview is KIO's, made by the stock applet's own
 `Thumbnailer` type (`NotificationPreview.qml`, loaded in the same shell, so videos and documents
@@ -1098,7 +1100,9 @@ preview has an accessible name ("Open screenshot.png"). `contents/code/notificat
 `tests/notifications_card_test.py` (the staged package on Plasma's notification server on a private
 bus, in CI; applications without a desktop file stay out of the history by Plasma's default, so the
 test gives its own one): the image is drawn at 48 px on the right, a 1200 × 300 body image is fitted
-to the card at 4:1, a screenshot is previewed 128 px tall and opens from a click and from Return.
+to the card at 4:1 and decoded at that size, a 300 × 1200 one at the preview strip's height and a
+60 × 40 one at its own, a screenshot is previewed 128 px tall and opens from a click and from
+Return.
 
 ### Inline reply
 
