@@ -66,13 +66,7 @@ test("rate samples bound every rate text", () => {
     }
 });
 
-test("memory: used with one decimal, total rounded up to whole GB from 2 GB", () => {
-    const GiB = 1024 ** 3;
-    assert.deepStrictEqual(M.memory(6.08 * GiB, 15.3 * GiB), { used: 6.1, total: 16, totalDecimals: 0 });
-    assert.deepStrictEqual(M.memory(1 * GiB, 16.02 * GiB), { used: 1, total: 16, totalDecimals: 0 }, "16.02 is 16, not 17");
-    assert.deepStrictEqual(M.memory(0.4 * GiB, 1.5 * GiB), { used: 0.4, total: 1.5, totalDecimals: 1 });
-    assert.strictEqual(M.memory(1, 0), null);
-    assert.strictEqual(M.memory(undefined, 16 * GiB), null);
+test("memory: the fraction in use (the figures: tests/memory.test.js)", () => {
     assert.strictEqual(M.memoryFraction(4, 16), 0.25);
     assert.strictEqual(M.memoryFraction(20, 16), 1);
     assert(Number.isNaN(M.memoryFraction(4, 0)));

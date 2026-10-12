@@ -81,22 +81,6 @@ function memoryFraction(used, total) {
     return Math.max(0, Math.min(1, used / total));
 }
 
-// Memory in GiB for "6.1 / 16 GB" (the system card's text): used with one decimal, the total
-// rounded up to whole GB from 2 GB on, because the kernel reports a little less than the
-// installed modules hold (firmware and graphics reservations: 15.3 GiB for 16 GB).
-var GIB = 1024 * 1024 * 1024;
-function memory(used, total) {
-    if (!valid(used) || !valid(total) || total <= 0) {
-        return null;
-    }
-    var t = total / GIB;
-    return {
-        used: Math.round(Math.max(0, used) / GIB * 10) / 10,
-        total: t >= 2 ? Math.ceil(t - 0.05) : Math.round(t * 10) / 10,
-        totalDecimals: t >= 2 ? 0 : 1
-    };
-}
-
 // A network rate in bytes per second as at most three figures: { value, decimals, unit }, unit
 // one of "B", "kB", "MB", "GB", "TB" (decimal units, as link speeds are counted). Under 10 of a
 // unit one decimal ("1.2 MB/s"), from 10 whole numbers ("12 MB/s", "999 kB/s"); a value that
