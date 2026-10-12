@@ -1189,7 +1189,8 @@ docs/parts/device.md); the button and Meta+V close it again.
   default keeps none). Without the module the button opens Klipper's pop-up, as before.
 - **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
   search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
-  Starred Only"); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
+  Starred Only"; every opening starts on All, so Meta+V then Enter chooses what was copied last,
+  where Klipper's own pop-up keeps the last tab); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
   shows in up to two lines (white space folded, blank text as ␣ ⇥ ↵ as in the stock widget, always
   as plain text), an image as a thumbnail with its size, copied files with the first one's preview
   (Klipper's `klipperpreview` images) and their names.
@@ -1238,11 +1239,12 @@ docs/parts/device.md); the button and Meta+V close it again.
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (46 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (48 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
   the page: focus, arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard,
-  QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode). Both fail without
+  QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode, a new opening on
+  All after the Starred tab). Both fail without
   the sheet (the files do not exist on 0.4.1).
 
 ## The sheet's window and its content (0.5.0)

@@ -415,6 +415,19 @@ check(star.property("toolTip") == "" and star.property("text") != "",
       "in touch mode it has none (a tap would leave it over the row's actions), and keeps its name")
 root.setProperty("touch", False)
 
+# The Starred tab chosen, the sheet closed, something new copied: the next opening is on All, with
+# the new copy current.
+service.setProperty("starredOnly", True)
+QTest.qWait(50)
+check(filtered.rowCount() == service.property("starredCount"), "the Starred tab lists the starred entries")
+root.setProperty("pageShown", False)
+QTest.qWait(50)
+copy("copied while the sheet was closed")
+root.setProperty("pageShown", True)
+QTest.qWait(100)
+lst = root.findChild(QObject, "clipboardList")
+check(not service.property("starredOnly") and rows()[0] == "copied while the sheet was closed" and lst.property("currentIndex") == 0,
+      "the sheet opens on All again, the newest entry current")
 starred = service.property("starredCount")
 call(service, "clearHistory")
 QTest.qWait(200)
