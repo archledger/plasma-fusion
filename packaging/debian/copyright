@@ -13,9 +13,10 @@ Files: packages/navigation-cpp/*
        packages/plasmoids/org.plasmafusion.desktop/*
        packages/lockscreen/org.plasmafusion.lockshell/contents/lockscreen/*
        packages/look-and-feel/common/contents/logout/*
+       packages/lockscreen/org.plasmafusion.lockshell/contents/logout/*
 Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
            KDE contributors (Plasma Mobile, plasma-desktop's Folder View, kscreenlocker's greeter,
-           the logout screen), named in each file's SPDX header
+           the logout screens of Plasma 6.7 and 6.8), named in each file's SPDX header
 License: GPL-2.0-or-later
 Comment: A few of these files are LGPL-2.0-or-later (their SPDX headers say so).
 
