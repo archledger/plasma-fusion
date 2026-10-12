@@ -99,3 +99,23 @@ function groupFooter(inGroup, last, children, expanded, isExpanded) {
     var more = Math.max(0, children - expanded);
     return { shown: !!inGroup && !!last && (more > 0 || !!isExpanded), more: more };
 }
+
+// The Notification Centre's date beside its clock: the region's long date without the year, in
+// the region's order and with its separators ("Sunday, October 11" in en_US, "Sunday 11 October"
+// in en_GB, "Sonntag, 11. Oktober" in de_DE), as the lock screen's clock (PfStyle.qml). The year
+// goes with a quoted literal just before it ("'de' yyyy") and a CJK year suffix.
+function centreDateFormat(longFormat) {
+    var f = String(longFormat || "");
+    var atEnd = /[\s,.\/-]*('[^']*'\s*)?y+(\s*'[^']*')?[年년]?[\s,.\/-]*$/;
+    var atStart = /^y+[年년.\/-]?\s*/;
+    var inside = /[\s,]*('[^']*'\s*)?y+(\s*'[^']*')?[年년]?[\s,]*/;
+    if (atEnd.test(f)) {
+        f = f.replace(atEnd, "");
+    } else if (atStart.test(f)) {
+        f = f.replace(atStart, "");
+    } else {
+        f = f.replace(inside, " ");
+    }
+    f = f.replace(/[\s,]+$/, "").trim();
+    return f.length > 0 ? f : "dddd d MMMM";
+}

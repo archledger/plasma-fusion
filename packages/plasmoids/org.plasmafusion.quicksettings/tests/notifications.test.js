@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "notifications.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown, groupFooter } = globalThis;
+const { splitBody, sideImage, replyMode, jobState, fileActions, summaryShown, groupFooter, centreDateFormat } = globalThis;
 
 // The body: declaration and wrapper gone, images taken out of the text and kept in order.
 const server = '<?xml version="1.0"?><html>Look <img src="file:///tmp/a.png" alt="a"/> here<br/>'
@@ -64,4 +64,13 @@ assert.deepStrictEqual(groupFooter(true, true, 5, 5, true), { shown: true, more:
 assert.deepStrictEqual(groupFooter(true, true, 2, 2, false), { shown: false, more: 0 }, "all shown, not expanded: nothing");
 assert.deepStrictEqual(groupFooter(true, false, 5, 2, false).shown, false, "only under the last card");
 assert.deepStrictEqual(groupFooter(false, true, 0, 0, false).shown, false, "not in a group");
+// The Notification Centre's date: the region's long date without the year, in its own order (the
+// ThinkPad, en_US, showed "Sunday 11 October" from a fixed format).
+assert.strictEqual(centreDateFormat("dddd, MMMM d, yyyy"), "dddd, MMMM d", "en_US: Sunday, October 11");
+assert.strictEqual(centreDateFormat("dddd d MMMM yyyy"), "dddd d MMMM", "en_GB: Sunday 11 October");
+assert.strictEqual(centreDateFormat("dddd, d. MMMM yyyy"), "dddd, d. MMMM", "de_DE: Sonntag, 11. Oktober");
+assert.strictEqual(centreDateFormat("dddd, d 'de' MMMM 'de' yyyy"), "dddd, d 'de' MMMM", "es_ES: the year's literal goes too");
+assert.strictEqual(centreDateFormat("yyyy年M月d日dddd"), "M月d日dddd", "ja_JP: the year in front, with its suffix");
+assert.strictEqual(centreDateFormat("yyyy. MMMM d., dddd"), "MMMM d., dddd", "hu_HU: the year in front");
+assert.strictEqual(centreDateFormat(""), "dddd d MMMM", "no format: the board's");
 console.log("notifications: all checks passed");

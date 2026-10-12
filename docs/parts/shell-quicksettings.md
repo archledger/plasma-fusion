@@ -806,7 +806,9 @@ together (the forced split is itself a known complaint).
   It closes itself when another window becomes active, but not while its own card menu is open (it
   takes the activation back when the menu closes).
 - **Content** (`NotificationCentreContent.qml`): the Tinted backdrop; landscape = the clock (64 px
-  light), the date and a Do Not Disturb chip (tap: off) in a column on the left (28 %, at most 400 px),
+  light), the date (the region's long date without the year, `notifications.js centreDateFormat`:
+  "Sunday, October 11" in en_US, "Sunday 11 October" in en_GB; until 0.5.0 always in the British
+  order) and a Do Not Disturb chip (tap: off) in a column on the left (28 %, at most 400 px),
   the list on the right (at most 760 px) — never a narrow centred column (A-ipad, MacRumors 2023);
   portrait = one column with the clock above. A **Notifications | Controls** segment (44 px) at the top.
   Cards are the quick settings' `NotificationCard` on a **solid** surface (#1b2031 / #ffffff; E-phone
