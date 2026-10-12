@@ -8,7 +8,13 @@
 #   screenless  a top bar of a monitor that was unplugged is still in the layout, on its missing
 #               screen (Plasma 6.8; reading its opacity crashes plasmashell, and the stand-in shell
 #               too): the module reads the shell and changes the top bars' look without touching
-#               it, and the bar on the screen gets the new opacity.
+#               it, and the bar on the screen gets the new opacity;
+#   slowread    the shell answers every script 7 s late (just restarted): the page still reads it;
+#   slowmeters  the shell answers late from the second script on: turning the system meters on
+#               reports no error, the meters are placed, and the page's event loop keeps running
+#               while it waits (a timer ticks during Apply, the page does not freeze);
+#   slowbars    the same for "Top bar on every screen" (a stand-in ensure-topbars.js, then the
+#               panels' look for the new bars).
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -22,7 +28,7 @@ export QT_PLUGIN_PATH=$plugins QT_QPA_PLATFORM=offscreen
 failures=0
 
 APPNAME=org.plasmafusion.appname QS=org.plasmafusion.quicksettings CLOCK=org.plasmafusion.clockpill
-TRAY=org.kde.plasma.systemtray DOCK=org.plasmafusion.dock
+TRAY=org.kde.plasma.systemtray DOCK=org.plasmafusion.dock METERS=org.plasmafusion.meters
 
 # run CASE LAYOUT COMMANDS...: one module session against the stand-in shell. Leaves the kcmctl
 # output in $work/CASE/kcmctl.log, the shell's in $work/CASE/fakeshell.log and the panels in
@@ -33,6 +39,9 @@ run() {
   local w=$work/$name
   mkdir -p "$w/home" "$w/config" "$w/data" "$w/cache" "$w/state" "$w/runtime"
   chmod 700 "$w/runtime"
+  if declare -F "prepare_$name" >/dev/null; then
+    "prepare_$name" "$w"
+  fi
   printf '%s\n' "$layout" >"$w/layout.json"
   printf '%s\n' "$@" >"$w/commands"
   HOME=$w/home XDG_CONFIG_HOME=$w/config XDG_DATA_HOME=$w/data XDG_CACHE_HOME=$w/cache \
@@ -66,6 +75,10 @@ value() { sed -n "s/^kcmctl: $2=//p" "$work/$1/kcmctl.log" | tail -1; }
 panel() { sed -n "$2p" "$work/$1/panels"; }
 is() { [ "$1" = "$2" ]; }
 alive() { ! grep -q "crashed" "$work/$1/fakeshell.log"; }
+# Timer ticks counted by kcmctl's heartbeat (the Nth "beats" line) and the milliseconds Apply took.
+beats() { sed -n 's/^kcmctl: beats=//p' "$work/$1/kcmctl.log" | sed -n "$2p"; }
+busy() { local t; mapfile -t t <"$work/$1/times"; echo $((t[1] - t[0])); }
+SAVE=("sh date +%s%3N >>@W@/times" "beats" save "beats" "sh date +%s%3N >>@W@/times")
 
 run screenless "{\"screens\": 1, \"showOpacity\": true, \"panels\": [
   {\"opacity\": \"translucent\", \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
@@ -79,6 +92,33 @@ expect screenless "the top bar's opacity was read (translucent: not solid next t
 expect screenless "the bar on the screen is adaptive now" is "$(panel screenless 1)" "top 0 adaptive: appname clockpill systemtray quicksettings"
 expect screenless "the bar without a screen keeps its opacity" is "$(panel screenless 3)" "top 1 opaque: appname clockpill quicksettings"
 expect screenless "no error" is "$(value screenless errorText)" ""
+
+run slowread "{\"scriptDelayMs\": 7000, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]}]}" \
+  waitshell "get shellRunning" "get topBarAvailable"
+expect slowread "the page read the shell that answered 7 s late" is "$(value slowread topBarAvailable)" true
+
+run slowmeters "{\"scriptDelayMs\": 7000, \"slowFrom\": 2, \"insert\": \"end\", \"knownWidgetTypes\": [\"$METERS\"], \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]}]}" \
+  waitshell "get systemMeters" "heartbeat 100" "set systemMeters true" "${SAVE[@]}" "wait 9000" "get errorText"
+expect slowmeters "no error although the shell answered 7 s late" is "$(value slowmeters errorText)" ""
+expect slowmeters "the meters are in the bar, before quick settings" \
+  is "$(panel slowmeters 1)" "top 0: appname clockpill systemtray meters quicksettings"
+expect slowmeters "the page's event loop ran while it waited ($(beats slowmeters 2) ticks of 100 ms in $(busy slowmeters) ms)" \
+  test "$(beats slowmeters 2)" -ge 40
+
+prepare_slowbars() {
+  local dir=$1/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts
+  mkdir -p "$dir"
+  printf 'print("top bars: added 0, completed 0");\n' >"$dir/ensure-topbars.js"
+  printf '[TopBar]\nEveryScreen=false\n' >"$1/config/plasmafusionrc"
+}
+run slowbars "{\"scriptDelayMs\": 7000, \"slowFrom\": 2, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]}]}" \
+  waitshell "get topBarScriptAvailable" "get everyScreen" "heartbeat 100" "set everyScreen true" "${SAVE[@]}" "get errorText"
+expect slowbars "the stand-in ensure-topbars.js was found" is "$(value slowbars topBarScriptAvailable)" true
+expect slowbars "no error although the shell answered 7 s late" is "$(value slowbars errorText)" ""
+expect slowbars "the choice is kept" grep -q "EveryScreen=true" "$work/slowbars/config/plasmafusionrc"
+expect slowbars "the page's event loop ran while it waited ($(beats slowbars 2) ticks of 100 ms in $(busy slowbars) ms)" \
+  test "$(beats slowbars 2)" -ge 80
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

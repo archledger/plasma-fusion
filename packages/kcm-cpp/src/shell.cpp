@@ -18,14 +18,15 @@
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QEventLoop>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QProcess>
-#include <QStandardPaths>
 #include <QSet>
+#include <QStandardPaths>
 #include <QThread>
 
 #include <algorithm>
@@ -459,15 +460,31 @@ QString widgetName(const QString &plugin)
 }
 } // namespace
 
-QString PlasmaFusionKcm::evaluateShellScript(const QString &script, bool *ok) const
+// Apply and the actions change the shell step by step, each step on the answer of the one before.
+// The answer is awaited in a local event loop rather than with QDBus::Block: a shell that is slow
+// to answer (just restarted, up to s_shellTimeout) must not freeze the page, and KWin offers to end
+// a window that has not answered its ping for 5 s. User input waits meanwhile, so no other change
+// can start; the page shows that it is busy. A shell state answer arriving meanwhile is read again
+// afterwards (requestShellState).
+QString PlasmaFusionKcm::evaluateShellScript(const QString &script, bool *ok)
 {
-    const QDBusMessage reply = QDBusConnection::sessionBus().call(shellScriptMessage(script), QDBus::Block, s_dbusTimeout);
-    if (reply.type() != QDBusMessage::ReplyMessage) {
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_shellTimeout);
+    if (!call.isFinished()) {
+        QDBusPendingCallWatcher watcher(call);
+        QEventLoop loop;
+        connect(&watcher, &QDBusPendingCallWatcher::finished, &loop, &QEventLoop::quit);
+        const bool wasBusy = m_busy;
+        setBusy(true);
+        loop.exec(QEventLoop::ExcludeUserInputEvents);
+        setBusy(wasBusy);
+    }
+    const QDBusPendingReply<QString> reply = call;
+    if (reply.isError()) {
         *ok = false;
-        return reply.errorMessage();
+        return reply.error().message();
     }
     *ok = true;
-    return lastLine(reply.arguments().value(0).toString());
+    return lastLine(reply.value());
 }
 
 void PlasmaFusionKcm::requestShellState()
@@ -476,13 +493,20 @@ void PlasmaFusionKcm::requestShellState()
     m_shellLoading = true;
     Q_EMIT shellStateChanged();
 
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_readShellScript), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_readShellScript), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *watcher) {
-        if (request == m_shellRequest) {
-            shellStateArrived(watcher);
-        }
         watcher->deleteLater();
+        if (request != m_shellRequest) {
+            return;
+        }
+        if (m_saving || m_busy) {
+            // Inside Apply or an action (waiting in evaluateShellScript): the state may already be
+            // older than the change being made.
+            m_shellStateDeferred = true;
+            return;
+        }
+        shellStateArrived(watcher);
     });
 }
 
@@ -668,7 +692,7 @@ void PlasmaFusionKcm::placeSystemMeters(const QList<int> &ids, int attempt, int 
         list << QString::number(id);
     }
     const QString script = s_placeMetersScript.arg(u'[' + list.join(u',') + u']');
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, ids, attempt, request](QDBusPendingCallWatcher *watcher) {
         const QDBusPendingReply<QString> reply = *watcher;
@@ -834,7 +858,7 @@ void PlasmaFusionKcm::restorePreviousDesktop()
 
 // ---------- Reset Fusion layout ----------
 
-QJsonObject PlasmaFusionKcm::widgetShortcuts(bool *ok) const
+QJsonObject PlasmaFusionKcm::widgetShortcuts(bool *ok)
 {
     const QString result = evaluateShellScript(s_widgetsScript, ok);
     if (!*ok) {
@@ -896,7 +920,7 @@ void PlasmaFusionKcm::pollResetLayout(const QJsonObject &before, int attempt)
     for (const QJsonValue &id : before.value(u"ids"_s).toArray()) {
         oldMax = std::max(oldMax, id.toInt());
     }
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_widgetsScript), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_widgetsScript), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, before, attempt, oldMax](QDBusPendingCallWatcher *watcher) {
         const QDBusPendingReply<QString> reply = *watcher;

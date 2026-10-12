@@ -21,6 +21,7 @@
 #include <QJSEngine>
 #include <QStringList>
 #include <QTextStream>
+#include <QThread>
 
 #include <cstdio>
 #include <cstdlib>
@@ -81,6 +82,9 @@ public:
 public Q_SLOTS:
     Q_SCRIPTABLE QString evaluateScript(const QString &script)
     {
+        // A busy shell answers late and nothing else meanwhile, as plasmashell runs scripts on its
+        // main thread.
+        QThread::msleep(m_engine.globalObject().property(QStringLiteral("nextScriptDelay")).call().toInt());
         m_host.printed.clear();
         // Each script runs in its own function scope, as plasmashell gives each its own context.
         const QJSValue result = m_engine.evaluate(QStringLiteral("(function () {\n") + script + QStringLiteral("\n})();"), QStringLiteral("script.js"));

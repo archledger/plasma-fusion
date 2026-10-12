@@ -757,6 +757,10 @@ void PlasmaFusionKcm::setBusy(bool busy)
     }
     m_busy = busy;
     Q_EMIT busyChanged();
+    if (!busy && !m_saving && m_shellStateDeferred) {
+        m_shellStateDeferred = false;
+        requestShellState();
+    }
 }
 
 void PlasmaFusionKcm::updateDecorationInstalled()
@@ -1295,12 +1299,16 @@ void PlasmaFusionKcm::save()
         loadConfigState(state);
         m_current = state;
         m_saved = state;
-        requestShellState();
+        m_shellStateDeferred = true;
     }
     updateEnvironment();
     emitAll();
     m_saving = false;
     settingsChanged();
+    if (m_shellStateDeferred) {
+        m_shellStateDeferred = false;
+        requestShellState();
+    }
 }
 
 bool PlasmaFusionKcm::runTool(const QString &program, const QStringList &arguments)

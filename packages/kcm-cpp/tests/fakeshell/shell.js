@@ -16,8 +16,11 @@
 //                     writing its opacity crashes the shell (host.crash), as plasmashell crashes on
 //                     the invalid config group of a missing screen
 //   showOpacity       the state file also names each panel's opacity ("top 0 adaptive: ...")
+//   scriptDelayMs     the shell answers a script only this long after it came (a shell that has
+//   slowFrom          just started), from the slowFrom-th script on (default 1: every script)
 
-var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false };
+var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false,
+              scriptDelayMs: 0, slowFrom: 1, scripts: 0 };
 var knownWidgetTypes = [];
 var screenCount = 1;
 
@@ -45,6 +48,8 @@ function loadLayout(text) {
     state.insert = layout.insert || "x";
     state.listDelayMs = layout.listDelayMs || 0;
     state.showOpacity = layout.showOpacity === true;
+    state.scriptDelayMs = layout.scriptDelayMs || 0;
+    state.slowFrom = layout.slowFrom || 1;
     knownWidgetTypes = state.known.slice();
     screenCount = layout.screens !== undefined ? layout.screens : state.panels.reduce(function (n, p) {
         return Math.max(n, p.screen + 1);
@@ -121,6 +126,12 @@ function panelObject(panel) {
             return widgetObject(panel, w);
         }
     };
+}
+
+// How long fakeshell waits before it runs the next script (scriptDelayMs, slowFrom).
+function nextScriptDelay() {
+    state.scripts++;
+    return state.scripts >= state.slowFrom ? state.scriptDelayMs : 0;
 }
 
 function panels() {

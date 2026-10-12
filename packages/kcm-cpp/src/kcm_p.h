@@ -46,7 +46,13 @@ inline const QStringList s_glassWidgets = {
 // QRegularExpression::fromWildcard anchors it, and no file name can be "/".
 inline const QString s_hideAllPattern = u"/"_s;
 
+// D-Bus calls to services that answer at once (KWin's tablet state, kglobalaccel, the shell's
+// wallpaper colour).
 inline constexpr int s_dbusTimeout = 5000;
+// evaluateScript, Qt's default timeout. Right after a plasmashell (re)start a script that adds
+// panels or widgets took longer than 5 s in the test VMs, and the change was still made: with 5 s
+// the page reported an error for it. The page waits without freezing (evaluateShellScript).
+inline constexpr int s_shellTimeout = 25000;
 inline constexpr int s_toolTimeout = 60000;
 
 inline QDBusMessage shellScriptMessage(const QString &script)

@@ -11,6 +11,9 @@
       get PROPERTY         prints PROPERTY=value
       dump                 prints every property of the module, one per line
       sh COMMAND           runs COMMAND with bash -c and waits for it
+      heartbeat MS         counts a timer's ticks every MS milliseconds from now on (the event loop
+                           running, as a page that does not freeze)
+      beats                prints beats=N, the ticks since the last beats, and starts again
       # ...                comment
 
     Output lines start with "kcmctl: "; the first one names the plugin file that was loaded. Exit
@@ -99,6 +102,12 @@ int main(int argc, char **argv)
     out << "kcmctl: plugin " << metaData.fileName() << Qt::endl;
     QMetaObject::invokeMethod(module, "load");
 
+    QTimer heartbeat;
+    int beats = 0;
+    QObject::connect(&heartbeat, &QTimer::timeout, &heartbeat, [&beats] {
+        ++beats;
+    });
+
     QTextStream in(stdin);
     QString line;
     while (in.readLineInto(&line)) {
@@ -149,6 +158,11 @@ int main(int argc, char **argv)
             out << "kcmctl: " << rest << '=' << valueText(module->property(rest.toLatin1().constData())) << Qt::endl;
         } else if (command == QLatin1String("dump")) {
             dump(module);
+        } else if (command == QLatin1String("heartbeat")) {
+            heartbeat.start(rest.toInt());
+        } else if (command == QLatin1String("beats")) {
+            out << "kcmctl: beats=" << beats << Qt::endl;
+            beats = 0;
         } else if (command == QLatin1String("sh")) {
             QProcess process;
             process.setProcessChannelMode(QProcess::ForwardedChannels);
