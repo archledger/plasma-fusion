@@ -30,18 +30,23 @@ Item {
     // The end as it reads: a time ("18:00", within 24 hours), a day and time ("Mon 06:00", within a
     // week), a date, or "" (no end, or "until turned off").
     readonly property string dndUntilText: {
-        if (!dndActive) {
+        if (!dndActive || dndLabel.kind === "none") {
             return "";
         }
+        // In the locale's own words: a format string's names ("ddd", "AP") are always English in
+        // Qt 6, so the day is the locale's short day name, put before or after the time as the
+        // translation says.
         const until = inhibitedUntil;
-        const time = Qt.locale().timeFormat(Locale.ShortFormat);
+        const locale = Qt.locale();
+        const time = until.toLocaleTimeString(locale, Locale.ShortFormat);
         switch (dndLabel.kind) {
         case "time":
-            return Qt.formatTime(until, time);
+            return time;
         case "day":
-            return Qt.formatDateTime(until, "ddd " + time);
+            return i18nc("@info:status Do not disturb end, %1 short weekday name, %2 time", "%1 %2",
+                         locale.dayName(until.getDay(), Locale.ShortFormat), time);
         case "date":
-            return Qt.formatDate(until, Qt.locale().dateFormat(Locale.ShortFormat));
+            return until.toLocaleDateString(locale, Locale.ShortFormat);
         default:
             return "";
         }

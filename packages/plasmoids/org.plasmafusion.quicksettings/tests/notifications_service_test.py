@@ -30,7 +30,7 @@ for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOM
 os.environ["HOME"] = tempfile.mkdtemp(prefix="pf-notifications-")
 
 import dbus  # noqa: E402
-from PySide6.QtCore import QDateTime, QLibraryInfo, QObject, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QDateTime, QLibraryInfo, QLocale, QObject, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -68,6 +68,8 @@ class Context(QObject):
 STOCK = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath), "plasma/applets/org.kde.plasma.notifications.so")
 ctypes.CDLL(str(STOCK), mode=ctypes.RTLD_GLOBAL)
 app = QGuiApplication(sys.argv[:1])
+# A German region: the "Until" text is in its words ("Di. 06:00", not "Tue 06:00").
+QLocale.setDefault(QLocale(QLocale.Language.German, QLocale.Country.Germany))
 engine = QQmlEngine()
 context = Context()
 engine.rootContext().setContextObject(context)
@@ -166,9 +168,11 @@ call(root, "untilAt", minute + 24 * 3600 * 1000.0)
 wait_for(lambda: service.property("dndActive"), "Do Not Disturb did not turn on")
 check(root.property("stockInhibited"), "the stock applet inhibits the server for the end the service wrote")
 end = service.property("inhibitedUntil")
-end = end.toPython() if isinstance(end, QDateTime) else end
+end = end if isinstance(end, QDateTime) else QDateTime(end)
+day = QLocale().dayName(end.date().dayOfWeek(), QLocale.FormatType.ShortFormat)
 text = service.property("dndUntilText")
-check(text.startswith(end.strftime("%a ")), "a day ahead: the end shows its day (%r)" % text)
+check(text == day + " " + QLocale().toString(end.time(), QLocale.FormatType.ShortFormat),
+      "a day ahead: the end shows its day, in the locale's words (%r)" % text)
 wait_for(lambda: service.property("dndUntilText") != text, "the text did not change when the end came within 24 h",
          seconds=minute / 1000 - time.time() + 5)
 check(":" in service.property("dndUntilText") and time.time() >= minute / 1000,

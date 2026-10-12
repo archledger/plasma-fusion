@@ -1029,7 +1029,11 @@ off).
 
 The tile reads `Until 18:00` within 24 hours of the end, `Until Mon 06:00` within a week, the date
 further ahead, and `On` for "until turned off" (more than 100 days ahead, the stock applet's limit
-too). It was read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
+too). The day is the locale's own short day name (`Qt.locale().dayName()`), before or after the
+time as the translation of `%1 %2` puts it, and the time and the date are the locale's short
+formats (`toLocaleTimeString`, `toLocaleDateString`): a format string's `ddd` gave English day
+names in every language ("Mon 06:00" for a German region, where Plasma says "Mo. 06:00"). It was
+read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
 reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
 form applies and when it changes next; while a change is ahead, the service
 (`services/Notifications.qml`) moves its clock on the wall clock's minutes with Plasma's `Clock`
@@ -1045,8 +1049,9 @@ write the end (`dndUntil()`), and the widget never ends a Do Not Disturb itself,
 it ends on the first minute past its end, by the stock applet. Our choices end on whole minutes;
 an end between two minutes (another program's) ends on the next one, as in stock Plasma. Tests:
 `tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on
-a private bus with the stock applet's `Globals` beside the service, as in the session, in CI: a Do
-Not Disturb set a day ahead shows its day, then the time alone from that minute, and one ending
+a private bus with the stock applet's `Globals` beside the service, as in the session, in CI, under
+a German region: a Do Not Disturb set a day ahead shows its day in German, then the time alone from
+that minute, and one ending
 between two minutes is ended by the stock applet on the next minute while the service leaves the
 kept end alone; the run waits for two minutes of the clock).
 
