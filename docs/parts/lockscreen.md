@@ -65,7 +65,12 @@ button that opened the question. Confirmed, it calls `requestReboot` / `requestS
 `logoutAndShutdown`) and asks logind. If the session has not ended after 30 s (an app cancelled the
 log-out; ksmserver says so in a notification) the prompt comes back. The question goes when the
 prompt hides (after 0.5 s hidden: the prompt blinks out for a moment when the page replaces it under
-the pointer).
+the pointer). Back from it (Cancel, Escape, or when it goes) the prompt keeps PAM's messages and
+prompt and the typed password: the stock reset of the field and messages when the prompt's page
+comes back (written for a stack that holds no other page in normal use) wiped a smartcard's PIN
+prompt or pam_faillock's "account locked" message, which PAM does not send again, and the password
+on every screen (VM 6.7.91 with `[UI] ShowPromptInRegularAuthenticator`: "Password:" and the
+typed text gone after Cancel; kept now).
 
 Who blocks, as on the log-out screen: the same "N other users are currently logged in…" warning
 (`SessionsModel`, the 6.7 log-out screen's text and catalogue), and logind's inhibitors for
@@ -343,7 +348,7 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 `offscreen-portrait-900x1440-idle-and-prompt.png`, `greeter-and-envtest-log.txt`, pixel reports).
 
 Restart and Shut Down (0.5.0, CI step "Lock screen Restart and Shut Down"): `test/run.sh OUT power
-power-blocked power-busy power-noreboot power-kiosk power-mnemonic power-repeat`. The harness points the system bus at its
+power-blocked power-busy power-noreboot power-kiosk power-mnemonic power-repeat power-return`. The harness points the system bus at its
 private bus, where `mock_services.py power` answers as logind and ksmserver, so Plasma's own session
 backend (not a stand-in) decides what the row shows, and the clicks are real pointer events:
 `power` both buttons shown; Shut Down asks first, Escape back, nothing called; Restart asks, Cancel
@@ -355,8 +360,10 @@ inhibitor alone leaves Shut Down on, confirmed calls `logoutAndShutdown`; `power
 CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both; `power-mnemonic` Alt+S
 and Alt+R ask, the same chord again calls nothing, the action shows no "&", a deliberate Space
 answers; `power-repeat` Return or Space on a focused power button asks, their repeats (key events
-marked auto-repeat) call nothing, a deliberate Return answers. On the 0.4.1 package four of the
-five first ones fail (no buttons); the last two fail on the package before the mnemonic fix. In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
+marked auto-repeat) call nothing, a deliberate Return answers; `power-return` a PAM error message
+and typed text are still there after Cancel and after the question closes with the prompt. On the
+0.4.1 package four of the five first ones fail (no buttons); the last three fail on the packages
+before their fixes. In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
 uinput pointer): the row shows Sleep, Switch User, Restart, Shut Down; with `systemd-inhibit
 --what=shutdown --mode=block --who=Updater` held by root, Shut Down lists "Updater: Installing
 updates" and is off; Cancel returns; with it released, Restart confirmed restarted the VM (logind

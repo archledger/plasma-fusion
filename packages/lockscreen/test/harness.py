@@ -10,7 +10,7 @@ states and saves one PNG per scenario. Run it on a private bus with fonts from t
   test/run.sh OUTDIR [scenario...]   (a private bus without activation, mock services, no display)
 
 Scenarios: idle, prompt, messages, fperror, focus, nopassword, the Restart / Shut Down checks
-power, power-blocked, power-busy, power-noreboot, power-kiosk, power-mnemonic, power-repeat (Plasma's session backend on the mock
+power, power-blocked, power-busy, power-noreboot, power-kiosk, power-mnemonic, power-repeat, power-return (Plasma's session backend on the mock
 logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check), and the
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
@@ -522,6 +522,37 @@ def power(app, out, view, root, lock_root, scenario):
             wait(800)
             check("a deliberate %s answers it" % ("Space" if key == Qt.Key_Space else "Return"),
                   len(calls()) == 1, calls())
+        elif scenario == "power-return":
+            # Back from the question (Cancel, or the prompt hiding): PAM's message and the typed
+            # password are still there.
+            note = "Account locked: 9 minutes left"
+            lock_ui_auth = view.rootContext().contextProperty("authenticator")
+            lock_ui_auth.setProperty("errorMessage", note)
+            wait(200)
+            pw = item("passwordBox")
+            pw.setProperty("text", "secret")
+            wait(200)
+            message = lambda: root.property("notification") or ""
+            check("PAM's message is shown", note in message(), message())
+            click("restartButton")
+            wait(800)
+            check("Restart asks", confirm_page() is not None)
+            click("powerCancelButton")
+            wait(800)
+            check("after Cancel PAM's message is still shown", confirm_page() is None and note in message(), message())
+            check("after Cancel the typed password is kept", pw.property("text") == "secret", len(pw.property("text") or ""))
+            note = "Account locked: 8 minutes left"
+            lock_ui_auth.setProperty("errorMessage", note)
+            pw.setProperty("text", "secret")
+            wait(200)
+            click("shutdownButton")
+            wait(800)
+            lock_root.setProperty("uiVisible", False)
+            wait(1200)
+            check("the question closes when the prompt hides", confirm_page() is None)
+            check("and PAM's message is still there", note in message(), message())
+            check("and the typed password", pw.property("text") == "secret", len(pw.property("text") or ""))
+            check("nothing called", calls() == [], calls())
         elif scenario == "power-busy":
             click("shutdownButton")
             wait(2500)

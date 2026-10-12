@@ -702,11 +702,14 @@ Item {
                 enabled: !graceLockTimer.running
 
                 StackView.onStatusChanged: {
-                    // prepare for presenting again to the user
+                    // Back on the prompt: the field takes the focus again. The stock lock screen
+                    // also clears the field and the messages here, but pushes no page in normal
+                    // use; this one pushes the Restart / Shut Down question, and after its Cancel,
+                    // or its closing when the prompt hides, PAM's messages and prompt (a
+                    // smartcard's PIN prompt, "account locked", which PAM does not send again) and
+                    // the typed password are still what the user needs.
                     if (StackView.status === StackView.Activating) {
-                        mainPasswordBox.clear();
                         mainPasswordBox.focus = true;
-                        lockScreenUi.lockRoot.notification = "";
                     }
                 }
                 userListModel: users
