@@ -128,6 +128,14 @@ test("covering: a full-screen window covers the bar only while KWin keeps it abo
     assert.strictEqual(M.coveringWindows([], true), 0);
 });
 
+test("a bar is on a screen only while that screen is there", () => {
+    assert.strictEqual(M.barOnScreen(true, 0, 1), true, "the primary screen's bar");
+    assert.strictEqual(M.barOnScreen(true, 1, 2), true, "the second screen's bar");
+    assert.strictEqual(M.barOnScreen(true, -1, 1), false, "Plasma 6.7: a bar left over from a screen that is gone");
+    assert.strictEqual(M.barOnScreen(true, 1, 1), false, "Plasma 6.8: it keeps the gone screen's index");
+    assert.strictEqual(M.barOnScreen(false, -1, 1), true, "no containment (a test window)");
+});
+
 test("pop-up: opens only under a pill shown on a screen", () => {
     assert.strictEqual(M.popupOpens(true, true, true), true);
     assert.strictEqual(M.popupOpens(true, false, true), false,

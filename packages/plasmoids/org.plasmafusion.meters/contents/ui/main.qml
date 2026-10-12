@@ -380,9 +380,10 @@ PlasmoidItem {
         });
     }
 
-    // A bar without a screen (left over from a screen that is gone) keeps a window, but nobody
-    // sees it.
-    readonly property bool onScreen: !Plasmoid.containment || Plasmoid.containment.screen >= 0
+    // A bar without a screen (left over from a screen that is gone; on Plasma 6.8 it keeps that
+    // screen's index) keeps a window, but nobody sees it.
+    readonly property bool onScreen: Meters.barOnScreen(!!Plasmoid.containment, Plasmoid.containment ? Plasmoid.containment.screen : -1,
+                                                        Qt.application.screens.length)
     readonly property bool barSeen: pillShown && onScreen && !budgetHidden && !covered
     readonly property bool sampling: !sessionLocked && (popupOpen || (barSeen && meters.length > 0))
 
