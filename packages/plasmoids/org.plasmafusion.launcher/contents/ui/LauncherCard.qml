@@ -193,6 +193,15 @@ FocusScope {
         footer.firstButton.forceActiveFocus(Qt.TabFocusReason);
     }
 
+    // Down and Tab from the chips: the view's first row (the next grid when the first has none),
+    // or the footer when the view has nothing to focus (Recent with the activity history off or
+    // no app used yet, an empty category), so the keys do not stop on the chips.
+    function focusFromChips(): void {
+        if (!primaryGrid().focusFirst() && !lastGrid().focusFirst()) {
+            focusFooter();
+        }
+    }
+
     Keys.onEscapePressed: handleEscape()
 
     function handleEscape() {
@@ -238,8 +247,9 @@ FocusScope {
                     results.selectHandoff();
                     results.forceActiveFocus(Qt.TabFocusReason);
                 }
-            } else {
-                card.primaryGrid().focusFirst();
+            } else if (!card.primaryGrid().focusFirst() && !card.lastGrid().focusFirst()) {
+                // Nothing to focus in the view (focusFromChips()): the chips below the field.
+                chipRow.forceActiveFocus(Qt.TabFocusReason);
             }
         }
         onAccepted: {
@@ -298,6 +308,7 @@ FocusScope {
         // Category chips. Chips that do not fit move into a round "more" chip with a menu.
         FocusScope {
             id: chipRow
+            objectName: "launcherChips"
             width: parent.width
             height: card.chipHeight
             visible: !card.searching
@@ -376,7 +387,7 @@ FocusScope {
             Keys.onLeftPressed: card.selectChip(Math.max(0, card.chipIndex - 1))
             Keys.onRightPressed: card.selectChip(Math.min(card.chips.length - 1, card.chipIndex + 1))
             Keys.onUpPressed: card.focusSearch()
-            Keys.onDownPressed: card.primaryGrid().focusFirst()
+            Keys.onDownPressed: card.focusFromChips()
             Keys.onPressed: event => {
                 if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
                     if (card.chipIndex >= chipRow.fitCount) {
@@ -395,7 +406,7 @@ FocusScope {
             }
             Keys.onTabPressed: {
                 if (card.view === "category" || card.view === "history" || card.view === "places") {
-                    card.primaryGrid().focusFirst();
+                    card.focusFromChips();
                 } else {
                     topHeader.button.forceActiveFocus(Qt.TabFocusReason);
                 }
@@ -816,6 +827,7 @@ FocusScope {
 
     Footer {
         id: footer
+        objectName: "launcherFooter"
         x: 1
         width: card.width - 2
         height: card.metrics.px(62)
@@ -827,8 +839,9 @@ FocusScope {
         onExitTop: {
             if (card.searching) {
                 results.forceActiveFocus(Qt.BacktabFocusReason);
-            } else {
-                card.lastGrid().focusFirst();
+            } else if (!card.lastGrid().focusFirst() && !card.primaryGrid().focusFirst()) {
+                // Nothing to focus in the view (focusFromChips()): back to the chips.
+                chipRow.forceActiveFocus(Qt.BacktabFocusReason);
             }
         }
         onBacktabFromFirst: exitTop()

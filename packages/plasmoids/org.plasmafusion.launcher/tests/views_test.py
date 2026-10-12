@@ -222,6 +222,31 @@ Window {
     function openMode(mode) { card.openMode(mode, ""); }
     function selectChip(index) { card.selectChip(index); }
     function setChips(list) { mock.chips = JSON.parse(list); }
+    // Recent with nothing in it: the activity history off, or no app used yet.
+    function emptyHistory(on) {
+        mock.recentAppsModel = on ? empty : usage.recentApps;
+        mock.frequentAppsModel = on ? empty : usage.frequentApps;
+    }
+    function focusChips() { find(card, "launcherChips").forceActiveFocus(Qt.TabFocusReason); }
+    // Where the keyboard is: "chips", "footer:first" (the account button), "footer", "grid" or "".
+    function focusAt() {
+        const footer = find(card, "launcherFooter");
+        if (win.activeFocusItem === footer.firstButton) {
+            return "footer:first";
+        }
+        for (let item = win.activeFocusItem; item && item !== card; item = item.parent) {
+            if (item === footer) {
+                return "footer";
+            }
+            if (item.objectName === "launcherChips") {
+                return "chips";
+            }
+            if (item.navCount !== undefined) {
+                return "grid";
+            }
+        }
+        return "";
+    }
     // Ordering (0 Recent, 1 Popular) and shown items (1 OnlyApps) of both lists.
     function orderings() {
         return [usage.recentApps.ordering, usage.frequentApps.ordering, usage.recentApps.shownItems, usage.frequentApps.shownItems].join(" ");
@@ -563,6 +588,57 @@ QtObject {
     QTest.qWait(100)
     s = json.loads(call(win, "state"))
     check(s["view"] == "home" and s["chip"] == 0, "the last chip gone: All, not an empty grid titled Pinned (%s)" % s)
+
+    # An empty view under the chips (Recent with the activity history off or no app used yet, a
+    # category without apps): Tab and Down go on to the footer instead of stopping on the chips,
+    # Shift+Tab and Up from the footer come back to them, and Down from the search field reaches the
+    # chips.
+    call(win, "emptyHistory", True)
+    call(win, "openMode", "history")
+    win.requestActivate()
+    QTest.qWaitForWindowActive(win)
+    QTest.qWait(200)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "history" and s["primaryCount"] == 0 and s["lastCount"] == 0, "Recent with an empty history (%s)" % s)
+    for key, name in ((Qt.Key_Tab, "Tab"), (Qt.Key_Down, "Down")):
+        call(win, "focusChips")
+        QTest.qWait(50)
+        QTest.keyClick(win, key)
+        QTest.qWait(100)
+        where = call(win, "focusAt")
+        check(where == "footer:first", "empty Recent: %s on the chips goes to the footer (%r)" % (name, where))
+    for key, name, modifier in ((Qt.Key_Backtab, "Shift+Tab", Qt.ShiftModifier), (Qt.Key_Up, "Up", Qt.NoModifier)):
+        call(win, "focusChips")
+        QTest.keyClick(win, Qt.Key_Tab)
+        QTest.qWait(50)
+        QTest.keyClick(win, key, modifier)
+        QTest.qWait(100)
+        where = call(win, "focusAt")
+        check(where == "chips", "empty Recent: %s from the footer goes back to the chips (%r)" % (name, where))
+    call(win, "openMode", "history")
+    QTest.qWait(100)
+    QTest.keyClick(win, Qt.Key_Down)
+    QTest.qWait(100)
+    where = call(win, "focusAt")
+    check(where == "chips", "empty Recent: Down from the search field reaches the chips (%r)" % where)
+    call(win, "setChips", json.dumps(fixed + [office]))
+    call(win, "selectChip", 3)
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "category" and s["primaryCount"] == 0, "a category without apps (%s)" % s)
+    call(win, "focusChips")
+    QTest.keyClick(win, Qt.Key_Tab)
+    QTest.qWait(100)
+    where = call(win, "focusAt")
+    check(where == "footer:first", "an empty category: Tab on the chips goes to the footer (%r)" % where)
+    call(win, "emptyHistory", False)
+    call(win, "openMode", "history")
+    QTest.qWait(200)
+    call(win, "focusChips")
+    QTest.keyClick(win, Qt.Key_Tab)
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["primaryFocus"] and call(win, "focusAt") == "grid", "with apps in it, Tab on the chips still goes to the first one")
     print(f"views: {checks} checks passed")
 finally:
     kamd.terminate()

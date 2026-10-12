@@ -147,7 +147,11 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   places row to the recent folders); arrows move
   in grids (the home "Recommended" grid keeps the selection in its four visible files); Up from
   a top row goes back to chips/search; Tab / Shift+Tab walk search, chips,
-  header button, grid, "More", recent files, footer; Left/Right switch chips; Enter/Space
+  header button, grid, "More", recent files, footer (a view with nothing to focus, such as Recent
+  with the activity history off or no app used yet, or an empty category: Tab and Down from the
+  chips go on to the footer, Shift+Tab and Up from the footer come back to the chips, and Down
+  from the search field reaches the chips; 0.5.0 before this kept the keyboard on the chips and
+  in the footer); Left/Right switch chips; Enter/Space
   launch; Menu key opens the item menu; Esc clears the search, then returns to Home, then closes
   (from the search field, the chips, a grid or the result list alike).
   Keyboard focus shows the Controls board's 2 px ring.
@@ -166,7 +170,10 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   after Home launches the first result, not KRunner.
 - `tests/views_test.py` also rebuilds the chips under the card: the chosen category stays chosen
   when a chip is added before it, and when it is gone (or it was the last chip) the card shows
-  "All", not the next category or an empty grid titled "Pinned".
+  "All", not the next category or an empty grid titled "Pinned". With an empty Recent view and an empty
+  category it checks Tab and Down from the chips (the footer's first button), Shift+Tab and Up from
+  the footer (the chips) and Down from the search field (the chips); with apps, Tab still reaches
+  the first one. The empty-view checks fail on the previous card (the keyboard stays on the chips).
 - `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
   with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
   by name, Show, Show All, an app hidden again after an Apply stays hidden at the next one) and
