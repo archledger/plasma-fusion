@@ -1523,10 +1523,18 @@ EOF
 }
 # Registers a command component (its desktop file in ~/.local/share/kglobalaccel/) as System
 # Settings' "Add Command" does (kcm_keys, GlobalAccelModel::addApplication): an action with an empty
-# name makes kglobalaccel read the desktop file and take the file's own _launch action, which starts
-# the command; the empty one is removed again. Registering "_launch" itself, as this did before, put
-# a second _launch that no program owns in place of the file's own one (kglobalacceld's addAction
-# runs after the component was made from the file), so the key did nothing until the next login.
+# name makes kglobalaccel read the desktop file, which gives the component its _launch action,
+# present (its key grabbed) and starting the command; the empty one is removed again. Registering
+# "_launch" itself first, as this did before, made kglobalacceld add a second _launch, not present,
+# in place of the file's own one (its addAction runs after the component was made from the file),
+# so the key did nothing until the next login.
+# kglobalacceld reads the file only when it makes the component. An unregistered _launch (as
+# fusion-restore.sh does) leaves its component without actions, and kglobalacceld forgets such a
+# component only when it next writes its settings, 0.5 s later: a setup in that moment got no
+# _launch from the empty name and set the key on nothing, until the next login. So _launch is
+# registered by name afterwards: that finds the file's own and changes nothing, or makes the missing
+# one, which starts the command as well (kglobalacceld runs the desktop file's command for its
+# component's _launch, KServiceActionComponent) but is not present until command_key_present.
 # $1 component, $2 its name
 register_command_component() {
   [ "$DRY" = 1 ] && return 0
@@ -1535,6 +1543,21 @@ register_command_component() {
     return 0
   fi
   bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$1" "" >/dev/null 2>&1 || true
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$1" _launch "$2" "$2" >/dev/null 2>&1 || true
+}
+# kglobalaccel makes a component it loads at login active; an action registered while it runs stays
+# inactive (no key grab) until the next login. Its keys given again as present (SetPresent 2 |
+# NoAutoloading 4, what a running application does) make the key work at once; given with no key,
+# a key chosen later in System Settings works at once too. $1 component, $2 its name
+command_key_present() {
+  local cur
+  [ "$DRY" = 1 ] && return 0
+  cur=$(shortcut_get "$1" _launch)
+  # shellcheck disable=SC2086
+  set -- "$1" "$2" $cur
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setShortcut asaiu 4 "$1" _launch "$2" "$2" \
+    $(($# - 2)) "${@:3}" 6 >/dev/null 2>&1 ||
+    note "warning: kglobalaccel did not take $1's key as present"
 }
 # $1 claim (the Windows set) or free (only when nothing holds Meta+N)
 ensure_notify_shortcut() {
@@ -1546,17 +1569,18 @@ ensure_notify_shortcut() {
   register_command_component "$NOTIFY_COMPONENT" "Plasma Fusion: Notifications"
   if [ "$mode" = claim ]; then
     shortcut_claim "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
-    return 0
-  fi
-  cur=$(shortcut_get "$NOTIFY_COMPONENT" _launch)
-  if [ -n "$cur" ]; then
-    # shellcheck disable=SC2086
-    note "shortcut $NOTIFY_COMPONENT / _launch = $(keyname $cur) (kept)"
-  elif [ -z "$(key_holders "$NOTIFY_SHORTCUT")" ]; then
-    shortcut_set "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
   else
-    note "notification list: Meta+N is in use (no shortcut set)"
+    cur=$(shortcut_get "$NOTIFY_COMPONENT" _launch)
+    if [ -n "$cur" ]; then
+      # shellcheck disable=SC2086
+      note "shortcut $NOTIFY_COMPONENT / _launch = $(keyname $cur) (kept)"
+    elif [ -z "$(key_holders "$NOTIFY_SHORTCUT")" ]; then
+      shortcut_set "$NOTIFY_COMPONENT" _launch "$NOTIFY_SHORTCUT"
+    else
+      note "notification list: Meta+N is in use (no shortcut set)"
+    fi
   fi
+  command_key_present "$NOTIFY_COMPONENT" "Plasma Fusion: Notifications"
 }
 
 # Copy text from the screen (survey F6; PowerToys Text Extractor, macOS Live Text). Spectacle
@@ -1637,17 +1661,18 @@ ensure_clipboard_shortcut() {
   register_command_component "$CLIPBOARD_COMPONENT" "Plasma Fusion: Clipboard"
   if [ "$mode" = claim ]; then
     shortcut_claim "$CLIPBOARD_COMPONENT" _launch "$CLIPBOARD_SHORTCUT"
-    return 0
-  fi
-  cur=$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)
-  if [ -n "$cur" ]; then
-    # shellcheck disable=SC2086
-    note "shortcut $CLIPBOARD_COMPONENT / _launch = $(keyname $cur) (kept)"
-  elif [ -z "$(key_holders "$CLIPBOARD_SHORTCUT")" ]; then
-    shortcut_set "$CLIPBOARD_COMPONENT" _launch "$CLIPBOARD_SHORTCUT"
   else
-    note "clipboard sheet: Meta+V is in use, by Klipper's pop-up by default (no shortcut set; --shortcuts takes it)"
+    cur=$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)
+    if [ -n "$cur" ]; then
+      # shellcheck disable=SC2086
+      note "shortcut $CLIPBOARD_COMPONENT / _launch = $(keyname $cur) (kept)"
+    elif [ -z "$(key_holders "$CLIPBOARD_SHORTCUT")" ]; then
+      shortcut_set "$CLIPBOARD_COMPONENT" _launch "$CLIPBOARD_SHORTCUT"
+    else
+      note "clipboard sheet: Meta+V is in use, by Klipper's pop-up by default (no shortcut set; --shortcuts takes it)"
+    fi
   fi
+  command_key_present "$CLIPBOARD_COMPONENT" "Plasma Fusion: Clipboard"
 }
 
 # Search: Meta+Space, Meta+S, Alt+Space and KRunner's other keys (Search) activate the launcher

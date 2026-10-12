@@ -7,9 +7,13 @@
 # kglobalaccel: the shortcut helpers, the components and the shell section's choice between the
 # Windows-style set, --keep-shortcuts and a later run are taken out of fusion-config.sh as they
 # are; `bus` and `bus_json` answer from a table of component, action, keys and whether a program
-# owns the action, made the way kglobalacceld 6.7 makes it (a component named *.desktop is read
-# from its desktop file when it is first named, and an action registered under a name it does not
-# know yet replaces the file's own). Test tooling only, not installed; it talks to no bus.
+# is present (its key grabbed), made the way kglobalacceld 6.7 makes it: a component named *.desktop
+# is read from its desktop file when the daemon first meets it in its session, which gives it a
+# present _launch; an action registered under a name it does not know yet is added, not present, in
+# place of one of the same name; an unregistered action goes, and a component left without actions
+# is forgotten only at the daemon's next settings write-out (0.5 s later; the fake's "writeout"
+# call); setShortcut with SetPresent makes an action present. Test tooling only, not installed; it
+# talks to no bus.
 #
 #   shortcut-keys-unit.sh BASE
 #
@@ -49,7 +53,7 @@ LIB=$BASE/lib.sh
   grep -m1 '^UNSET=' "$TOOL" || true
   grep -m1 '^LAUNCHER_ACTION=' "$TOOL" || true
   extract note keyname install_text shortcut_get shortcut_set shortcut_add shortcut_remove key_holders \
-    shortcut_claim register_command_component notify_desktop ensure_notify_shortcut clipboard_desktop \
+    shortcut_claim register_command_component command_key_present notify_desktop ensure_notify_shortcut clipboard_desktop \
     ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade
 } >"$LIB"
 for f in ensure_notify_shortcut ensure_clipboard_shortcut; do
@@ -59,8 +63,11 @@ STEP=$BASE/step.sh
 shell_step >"$STEP"
 grep -q 'ensure_clipboard_shortcut' "$STEP" || { echo "FAIL: the shell section does not set the clipboard key"; exit 1; }
 
-# The fake kglobalaccel: $KGA holds "component<TAB>action<TAB>keys<TAB>owned" lines (keys as Qt key
-# codes, space-separated; owned 1 when the action starts something: a desktop file's _launch).
+# The fake kglobalaccel: $KGA holds "component<TAB>action<TAB>keys<TAB>present" lines (keys as Qt
+# key codes, space-separated; present 1 when the key is grabbed and starts the action: a desktop
+# file's _launch as read from the file, or an action given as present). $KGA.components lists the
+# components the daemon knows (the case's rows at its start, then every one made, until a write-out
+# finds it without actions).
 FAKE=$BASE/fake.sh
 cat >"$FAKE" <<'EOF'
 kga() {
@@ -70,8 +77,13 @@ path, mode, args = sys.argv[1], sys.argv[2], sys.argv[3:]
 rows = []
 for line in open(path).read().splitlines():
     if line:
-        comp, action, keys, owned = (line.split("\t") + ["", ""])[:4]
-        rows.append([comp, action, [int(k) for k in keys.split()], owned == "1"])
+        comp, action, keys, present = (line.split("\t") + ["", ""])[:4]
+        rows.append([comp, action, [int(k) for k in keys.split()], present == "1"])
+known_path = path + ".components"
+if os.path.exists(known_path):
+    known = [c for c in open(known_path).read().splitlines() if c]
+else:
+    known = sorted(set(r[0] for r in rows))
 call = args[args.index("org.kde.KGlobalAccel") + 1]
 rest = args[args.index("org.kde.KGlobalAccel") + 2:]
 def find(comp, action):
@@ -79,8 +91,6 @@ def find(comp, action):
         if r[0] == comp and r[1] == action:
             return r
     return None
-def component_exists(comp):
-    return any(r[0] == comp for r in rows)
 out = None
 if call == "shortcut":
     r = find(rest[2], rest[3])
@@ -96,19 +106,43 @@ elif call == "setForeignShortcut":
     if r is not None:
         r[2] = keys
     out = "ai %d" % (len(keys) if r is not None else 0)
+elif call == "setShortcut":
+    # asaiu 4 COMPONENT ACTION NAME NAME N KEYS... FLAGS: NoAutoloading (4) sets the keys, SetPresent
+    # (2) makes the action present (setShortcutKeys).
+    comp, action, n = rest[2], rest[3], int(rest[6])
+    keys = [int(k) for k in rest[7:7 + n]]
+    flags = int(rest[7 + n])
+    r = find(comp, action)
+    if r is not None:
+        if flags & 4:
+            r[2] = keys
+        if flags & 2:
+            r[3] = True
+    out = "ai %d" % (len(r[2]) if r is not None else 0)
 elif call == "doRegister":
     comp, action = rest[2], rest[3]
-    # kglobalacceld: findAction first; when the component does not exist yet, getOrCreateComponent
-    # reads a *.desktop component's file (its _launch, owned), then addAction adds the named action
-    # as a new one, unowned, in place of one of the same name.
+    # kglobalacceld: findAction first; when the component is not known yet, getOrCreateComponent
+    # reads a *.desktop component's file (its _launch, present), and fails without the file; then
+    # addAction adds the named action anew, not present, in place of one of the same name.
     if find(comp, action) is None:
-        if not component_exists(comp) and comp.endswith(".desktop") and \
-                os.path.isfile(os.path.join(os.environ["HOME"], ".local/share/kglobalaccel", comp)):
-            rows.append([comp, "_launch", [], True])
-        r = find(comp, action)
-        if r is not None:
-            rows.remove(r)
-        rows.append([comp, action, [], False])
+        made = comp in known
+        if not made:
+            if not comp.endswith(".desktop"):
+                made = True
+            elif os.path.isfile(os.path.join(os.environ["HOME"], ".local/share/kglobalaccel", comp)):
+                rows.append([comp, "_launch", [], True])
+                made = True
+            if made:
+                known.append(comp)
+        if made:
+            r = find(comp, action)
+            if r is not None:
+                rows.remove(r)
+            rows.append([comp, action, [], False])
+    out = ""
+elif call == "writeout":
+    # GlobalShortcutsRegistry::writeSettings: a component without actions is dropped.
+    known = [c for c in known if any(r[0] == c for r in rows)]
     out = ""
 elif call == "unregister":
     r = find(rest[1], rest[2])
@@ -120,6 +154,8 @@ else:
 with open(path, "w") as f:
     for r in rows:
         f.write("%s\t%s\t%s\t%d\n" % (r[0], r[1], " ".join(str(k) for k in r[2]), r[3]))
+with open(known_path, "w") as f:
+    f.write("".join(c + "\n" for c in known))
 with open(path + ".calls", "a") as f:
     f.write(call + " " + " ".join(rest) + "\n")
 print(json.dumps(out) if mode == "json" else out)
@@ -136,9 +172,12 @@ fail() { FAIL=$((FAIL + 1)); echo "FAIL $1"; }
 META_V=$((0x10000000 + 0x56)) META_SHIFT_V=$((0x10000000 + 0x02000000 + 0x56)) CTRL_ALT_V=$((0x04000000 + 0x08000000 + 0x56))
 COMP=org.plasmafusion.clipboard.desktop
 
-# CASE NAME; then the run: "notify MODE", "ensure MODE" (Meta+V), "dry MODE" or "step WINDOWS_SET
-# SHORTCUTS" (the shell section); the table before as "component|action|keys|owned" arguments.
-# Leaves $H (the case's HOME).
+# CASE NAME; then the run: "notify MODE", "ensure MODE" (Meta+V), "dry MODE", "step WINDOWS_SET
+# SHORTCUTS" (the shell section), or "again-notify MODE" / "again-ensure MODE" (the step, then what
+# fusion-restore.sh does to the component: its key back to none, _launch unregistered, the desktop
+# file removed; then the step again at once, or with WROTE=1 after kglobalacceld's write-out); the
+# table before as
+# "component|action|keys|present" arguments. Leaves $H (the case's HOME).
 run_case() {
   local name=$1 how=$2 arg1=$3 arg2=$4 row
   shift 4
@@ -148,13 +187,22 @@ run_case() {
   : >"$H/backup/shortcuts"
   for row in "$@"; do printf '%s\n' "$row" | tr '|' '\t' >>"$H/kga"; done
   [ -z "${MARK:-}" ] || printf '[Shortcuts]\nClipboardKey=%s\n' "$MARK" >"$H/plasmafusionrc"
-  env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" KGA="$H/kga" bash -c '
+  env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" KGA="$H/kga" WROTE="${WROTE:-0}" bash -c '
     set -euo pipefail
     . "$1"; . "$2"
     DATA=$HOME/.local/share BACKUP=$HOME/backup CHANGES=0 DRY=0
     case $3 in
       ensure) ensure_clipboard_shortcut "$4" ;;
       notify) ensure_notify_shortcut "$4" ;;
+      again-notify | again-ensure)
+        if [ "$3" = again-notify ]; then comp=$NOTIFY_COMPONENT step=ensure_notify_shortcut; else comp=$CLIPBOARD_COMPONENT step=ensure_clipboard_shortcut; fi
+        "$step" "$4"
+        bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcut asai 4 "$comp" _launch "" "" 0 >/dev/null
+        bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$comp" _launch >/dev/null
+        rm -f "$DATA/kglobalaccel/$comp"
+        [ "$WROTE" != 1 ] || bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel writeout >/dev/null
+        echo "== the step again"
+        "$step" "$4" ;;
       dry) DRY=1; ensure_clipboard_shortcut "$4" ;;
       step | step-notify)
         has_name() { true; }
@@ -185,6 +233,19 @@ NOTIFY=org.plasmafusion.notifications.desktop META_N=$((0x10000000 + 0x4e))
 run_case notify notify claim "" "kwin|Walk Through Windows|"
 expect_keys "the Windows-style set gives Meta+N (and nothing else) to the notification list" "$NOTIFY" _launch "$META_N"
 expect_launches "Meta+N starts the component's command at once (no login needed)" "$NOTIFY"
+# fusion-restore.sh, then the setup again within kglobalacceld's 0.5 s write-out: it still knows
+# the component, without its _launch, so registering it gave no _launch and the key was set on
+# nothing although the step said "none -> Meta+N"; it worked only after the next login.
+run_case notify-again again-notify claim "" "kwin|Walk Through Windows|"
+expect_keys "the setup right after a restore's unregister (within the write-out) gives Meta+N to the notification list" "$NOTIFY" _launch "$META_N"
+expect_launches "  and Meta+N starts the command at once (no login needed)" "$NOTIFY"
+run_case notify-again-free again-notify free ""
+expect_keys "the same with a later run's free Meta+N" "$NOTIFY" _launch "$META_N"
+expect_launches "  starting the command at once" "$NOTIFY"
+# After the write-out the component is made from its file again (the key worked before as well).
+WROTE=1 run_case notify-again-later again-notify claim "" "kwin|Walk Through Windows|"
+expect_keys "the setup again after kglobalacceld's write-out gives Meta+N" "$NOTIFY" _launch "$META_N"
+expect_launches "  and Meta+N starts the command at once" "$NOTIFY"
 # A component kglobalaccel already read at login (its desktop file there before) keeps working.
 run_case notify-known notify claim "" "$NOTIFY|_launch||1"
 expect_launches "an already loaded component keeps its own _launch" "$NOTIFY"
@@ -209,6 +270,16 @@ else
   fail "the component's desktop file: $(ls -l "$f" 2>&1)"
 fi
 expect_launches "Meta+V starts the component's command at once (no login needed)" "$COMP"
+
+# The same for Meta+V: Klipper got it back, the setup right after takes it again.
+run_case claim-again again-ensure claim "" "$KLIPPER"
+expect_keys "the setup right after a restore's unregister gives Meta+V to the clipboard sheet" "$COMP" _launch "$META_V"
+expect_launches "  and Meta+V opens the sheet at once" "$COMP"
+# Without a key (Klipper keeps Meta+V), the component's _launch is there and present, so a key given
+# to it later in System Settings works at once.
+run_case free-again again-ensure free "" "$KLIPPER"
+expect_keys "a later run right after a restore leaves Meta+V to Klipper's pop-up" plasmashell show-on-mouse-pos "$META_V"
+expect_launches "  and the component is there for a key from System Settings" "$COMP"
 
 # Klipper's other keys stay.
 run_case claim-other ensure claim "" "plasmashell|show-on-mouse-pos|$META_V $CTRL_ALT_V"
