@@ -170,11 +170,29 @@ Item {
             if (kind != 0) { // if this is coming from the noninteractive authenticators
                 return;
             }
+            // Plasma 6.8 marks a way defunct before it reports the failure that did it: the defunct
+            // message (AuthenticatorChoice) says what happened and stays.
+            if (mainBlock.choice && !mainBlock.choice.currentFunctional) {
+                return;
+            }
             const msg = i18ndc("plasma_shell_org.kde.plasma.desktop", "@info:status", "Unlocking failed");
             lockScreenUi.handleMessage(msg, true);
-            graceLockTimer.restart();
             notificationRemoveTimer.restart();
-            rejectPasswordAnimation.start();
+            // A refused password or PIN: the shake and the 3 s grace (the prompt off, then a new
+            // conversation). Plasma 6.8 reports a failure of any way in use like this, also of a
+            // face or security key, where nothing was typed: no grace and no shake there (both
+            // turn the prompt off), which would keep "Use password" and the power row off for all
+            // but the moment each attempt takes, and space the failures too far apart for the
+            // greeter to mark a broken way defunct (more than 3, each within 2 s of the last,
+            // kscreenlocker pamauthenticator.cpp). It is asked again at once while the prompt is
+            // shown, as the stock lock screen does, and not while it is hidden (the camera or
+            // reader would run all night); showing the prompt asks again.
+            if (mainBlock.passwordField) {
+                rejectPasswordAnimation.start();
+                graceLockTimer.restart();
+            } else if (lockScreenRoot.uiVisible) {
+                authenticator.startAuthenticating();
+            }
         }
 
         function onSucceeded() {
@@ -684,11 +702,14 @@ Item {
                 enabled: !graceLockTimer.running
 
                 StackView.onStatusChanged: {
-                    // prepare for presenting again to the user
+                    // Back on the prompt: the field takes the focus again. The stock lock screen
+                    // also clears the field and the messages here, but pushes no page in normal
+                    // use; this one pushes the Restart / Shut Down question, and after its Cancel,
+                    // or its closing when the prompt hides, PAM's messages and prompt (a
+                    // smartcard's PIN prompt, "account locked", which PAM does not send again) and
+                    // the typed password are still what the user needs.
                     if (StackView.status === StackView.Activating) {
-                        mainPasswordBox.clear();
                         mainPasswordBox.focus = true;
-                        lockScreenUi.lockRoot.notification = "";
                     }
                 }
                 userListModel: users

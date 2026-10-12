@@ -10,12 +10,13 @@ states and saves one PNG per scenario. Run it on a private bus with fonts from t
   test/run.sh OUTDIR [scenario...]   (a private bus without activation, mock services, no display)
 
 Scenarios: idle, prompt, messages, fperror, focus, nopassword, the Restart / Shut Down checks
-power, power-blocked, power-busy, power-noreboot, power-kiosk (Plasma's session backend on the mock
+power, power-blocked, power-busy, power-noreboot, power-kiosk, power-mnemonic, power-repeat, power-return (Plasma's session backend on the mock
 logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check), and the
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
 auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth68-heartbeat,
-auth68-strings, auth67-picker, auth67-heartbeat, auth67-strings, and wallpaper68 (each writes
+auth68-failed, auth68-strings, auth67-picker, auth67-heartbeat, auth67-failed, auth67-strings, and
+wallpaper68 (each writes
 SCENARIO.json and exits 1 on a failed check).
 Environment:
 PF_LOCALE (default en_GB), PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board
@@ -382,6 +383,16 @@ def power(app, out, view, root, lock_root, scenario):
         page = root.findChild(QQuickItem, "powerConfirm")
         return page if page is not None and page.isVisible() else None
 
+    def page_texts():
+        # Every text the question shows (Repeater delegates are not QObject children).
+        found, todo = [], [confirm_page()] if confirm_page() is not None else []
+        while todo:
+            it = todo.pop()
+            if it.isVisible() and isinstance(it.property("text"), str) and it.property("text"):
+                found.append(it.property("text"))
+            todo.extend(it.childItems())
+        return found
+
     def wait(ms):
         QTest.qWait(ms)
 
@@ -439,20 +450,21 @@ def power(app, out, view, root, lock_root, scenario):
         elif scenario == "power-blocked":
             click("shutdownButton")
             wait(2500)
-            blockers = item("powerConfirmBlockers")
-            texts = [c.property("text") for c in blockers.childItems() if c.property("text")] if blockers else []
-            check("a block inhibitor for shutdown is listed with its reason", "Updater: Installing updates" in texts, texts)
-            check("a block-weak inhibitor is listed", "Backup: Copying files" in texts, texts)
-            check("sleep delay and power-key inhibitors are not listed",
-                  not any("NetworkManager" in x or "PowerDevil" in x for x in texts), texts)
+            texts = page_texts()
+            check("a block inhibitor for shutdown is reported, without its holder or reason",
+                  "A program is blocking a shutdown. Try again when it has finished." in texts, texts)
+            check("no program, reason or user is named on the locked screen",
+                  not any(w in x for x in texts for w in ("Updater", "Installing", "Backup", "Copying", "NetworkManager", "PowerDevil")), texts)
+            check("no count of other logged-in users on the page", item("powerConfirmOtherUsers") is None)
             button = item("powerConfirmButton")
             check("Shut Down is off while blocked", button is not None and not button.property("enabled"))
-            # The greeter on Plasma 6.7.5 gets each field of logind's reply as a typed value.
+            # The greeter on Plasma 6.7.5 gets each field of logind's reply as a typed value; only
+            # the shutdown ones count (the sleep delay and the power-key block do not).
             wrapped = [[{"value": f} for f in entry] for entry in POWER_INHIBITORS[scenario]]
             parsed = QMetaObject.invokeMethod(confirm_page(), "shutdownBlockers", Q_RETURN_ARG("QVariant"), Q_ARG("QVariant", wrapped))
             parsed = parsed.toVariant() if hasattr(parsed, "toVariant") else parsed
             check("logind's fields as typed values ({value: ...}) are read the same",
-                  [(b["who"], b["strong"]) for b in parsed] == [("Updater", True), ("Backup", False)], parsed)
+                  [b["strong"] for b in parsed] == [True, False], parsed)
             view.grabWindow().save(os.path.join(out, "power-blocked.png"))
             click("powerConfirmButton")
             wait(500)
@@ -461,11 +473,106 @@ def power(app, out, view, root, lock_root, scenario):
             wait(2500)
             check("when the inhibitor goes, Shut Down comes back on (read again every 2 s)",
                   button.property("enabled") and not item("powerConfirmBlockers").isVisible())
+        elif scenario in ("power-mnemonic", "power-repeat"):
+            # Alt+S / Alt+R open the question; the same chord again, or a key held (auto-repeat),
+            # must not answer it: the action takes a deliberate second step.
+            from PySide6.QtCore import QEvent
+            from PySide6.QtGui import QGuiApplication, QKeyEvent
+
+            def held(key, text):
+                # What a held key sends after the first press: repeated releases and presses.
+                for _ in range(3):
+                    for kind in (QEvent.KeyRelease, QEvent.KeyPress):
+                        QGuiApplication.sendEvent(view, QKeyEvent(kind, key, Qt.NoModifier, text, True))
+                    wait(40)
+                QGuiApplication.sendEvent(view, QKeyEvent(QEvent.KeyRelease, key, Qt.NoModifier, text, False))
+                wait(300)
+
+            def title():
+                t = item("powerConfirmTitle")
+                return t.property("text") if t is not None and confirm_page() is not None else None
+            if scenario == "power-mnemonic":
+                QTest.keyClick(view, Qt.Key_S, Qt.AltModifier)
+                wait(800)
+                check("Alt+S asks first", title() == "Shut down now?", title())
+                QTest.keyClick(view, Qt.Key_S, Qt.AltModifier)
+                wait(800)
+                check("Alt+S again does not shut down", calls() == [], calls())
+                confirm = item("powerConfirmButton")
+                check("the action shows no mnemonic", confirm is not None and "&" not in confirm.property("text"),
+                      confirm.property("text") if confirm else None)
+                QTest.keyClick(view, Qt.Key_Escape)
+                wait(800)
+                QTest.keyClick(view, Qt.Key_R, Qt.AltModifier)
+                wait(800)
+                check("Alt+R asks first", title() == "Restart now?", title())
+                QTest.keyPress(view, Qt.Key_R, Qt.AltModifier)
+                QTest.keyRelease(view, Qt.Key_R, Qt.AltModifier)
+                wait(500)
+                check("Alt+R again does not restart", calls() == [], calls())
+            else:
+                # Return or Space held on the focused power button: the first press asks, the
+                # repeats reach the question's focused action.
+                item("restartButton").forceActiveFocus(Qt.TabFocusReason)
+                QTest.keyPress(view, Qt.Key_Return)
+                wait(800)
+                check("Return on Restart asks first", title() == "Restart now?", title())
+                held(Qt.Key_Return, "\r")
+                check("Return held does not restart", calls() == [], calls())
+                QTest.keyClick(view, Qt.Key_Escape)
+                wait(800)
+                item("shutdownButton").forceActiveFocus(Qt.TabFocusReason)
+                QTest.keyPress(view, Qt.Key_Space)
+                QTest.keyRelease(view, Qt.Key_Space)
+                wait(800)
+                check("Space on Shut Down asks first", title() == "Shut down now?", title())
+                held(Qt.Key_Space, " ")
+                check("Space held does not shut down", calls() == [], calls())
+            key = Qt.Key_Space if scenario == "power-mnemonic" else Qt.Key_Return
+            QTest.keyClick(view, key)
+            wait(800)
+            check("a deliberate %s answers it" % ("Space" if key == Qt.Key_Space else "Return"),
+                  len(calls()) == 1, calls())
+        elif scenario == "power-return":
+            # Back from the question (Cancel, or the prompt hiding): PAM's message and the typed
+            # password are still there.
+            note = "Account locked: 9 minutes left"
+            lock_ui_auth = view.rootContext().contextProperty("authenticator")
+            lock_ui_auth.setProperty("errorMessage", note)
+            wait(200)
+            pw = item("passwordBox")
+            pw.setProperty("text", "secret")
+            wait(200)
+            message = lambda: root.property("notification") or ""
+            check("PAM's message is shown", note in message(), message())
+            click("restartButton")
+            wait(800)
+            check("Restart asks", confirm_page() is not None)
+            click("powerCancelButton")
+            wait(800)
+            check("after Cancel PAM's message is still shown", confirm_page() is None and note in message(), message())
+            check("after Cancel the typed password is kept", pw.property("text") == "secret", len(pw.property("text") or ""))
+            note = "Account locked: 8 minutes left"
+            lock_ui_auth.setProperty("errorMessage", note)
+            pw.setProperty("text", "secret")
+            wait(200)
+            click("shutdownButton")
+            wait(800)
+            lock_root.setProperty("uiVisible", False)
+            wait(1200)
+            check("the question closes when the prompt hides", confirm_page() is None)
+            check("and PAM's message is still there", note in message(), message())
+            check("and the typed password", pw.property("text") == "secret", len(pw.property("text") or ""))
+            check("nothing called", calls() == [], calls())
         elif scenario == "power-busy":
             click("shutdownButton")
             wait(2500)
             button = item("powerConfirmButton")
             check("a block-weak inhibitor alone leaves Shut Down on", button.property("enabled"))
+            texts = page_texts()
+            check("and is reported as a busy program, unnamed",
+                  "A program is busy. Shutting down now may interrupt it." in texts
+                  and not any("Backup" in x or "Copying" in x for x in texts), texts)
             click("powerConfirmButton")
             wait(800)
             check("Shut Down confirmed: ksmserver logoutAndShutdown", calls() == ["logoutAndShutdown"], calls())
@@ -551,6 +658,8 @@ AUTH_SETUPS = {
     "auth68-prompt": ([REGULAR, SMARTCARD], REGULAR, False),
     "auth68-fingerprint": ([REGULAR, FINGERPRINT, FACE], REGULAR, True),
     "auth68-heartbeat": ([REGULAR], REGULAR, False),
+    "auth68-failed": ([REGULAR, FACE], FACE, False),
+    "auth67-failed": ([], REGULAR, False),
     "auth67-picker": ([], REGULAR, False),
     "auth67-heartbeat": ([], REGULAR, False),
     "auth68-strings": ([REGULAR], REGULAR, False),
@@ -568,7 +677,9 @@ def auth_setup(auth, scenario):
                          "tooltip": tooltip, "showPrompt": show, "functional": True})
         auth.setProperty("ways", rows)
         auth.setProperty("authenticator", start)
+        # The real greeter starts with the saved way loaded, not changed to it.
         auth.setProperty("chosenLog", [])
+        auth.setProperty("crashes", [])
     auth.setProperty("authenticatorTypes", 1 if fingerprint else 0)
     if scenario == "auth68-noprompt":
         auth.setProperty("hadPrompt", False)
@@ -628,6 +739,7 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
         QTest.qWait(ms)
 
     def run():
+        main_block = item("mainBlock")
         lock_root.setProperty("uiVisible", True)
         wait(800)
         if scenario == "auth68-picker":
@@ -719,6 +831,63 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
             start = auth.property("startCount")
             wait(2200)
             check("and not while it is hidden", auth.property("startCount") - start == 0, auth.property("startCount") - start)
+        elif scenario == "auth68-failed":
+            # A way without a field (face) that fails: the 6.8 greeter reports every failure of the
+            # way in use as failed(None), as for a refused password. The prompt stays usable, the
+            # way is asked again at once while the prompt is shown (so the greeter's own check can
+            # see quick failures one after another and mark the way defunct), not while hidden.
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(150)
+            check("a failed face attempt says so", "Unlocking failed" in message(), message())
+            check("and leaves the prompt usable (no 3 s grace)", main_block.property("enabled"))
+            check("the face is asked again at once", auth.property("startCount") - start >= 1,
+                  auth.property("startCount") - start)
+            click("authenticatorLink%d" % REGULAR)
+            wait(400)
+            check("Use password works right after a failure", way() == REGULAR, way())
+            click("authenticatorLink%d" % FACE)
+            wait(400)
+            lock_root.setProperty("uiVisible", False)
+            wait(500)
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(3600)
+            check("with the prompt hidden it is not asked again (no camera all night)",
+                  auth.property("startCount") - start == 0, auth.property("startCount") - start)
+            lock_root.setProperty("uiVisible", True)
+            wait(300)
+            check("showing the prompt asks again", auth.property("startCount") - start >= 1,
+                  auth.property("startCount") - start)
+            click("authenticatorLink%d" % REGULAR)
+            wait(400)
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(300)
+            check("a refused password still has the 3 s grace: the prompt is off", way() == REGULAR
+                  and not main_block.property("enabled") and auth.property("startCount") - start == 0,
+                  (way(), main_block.property("enabled"), auth.property("startCount") - start))
+            wait(3000)
+            check("and asks again when it ends", main_block.property("enabled")
+                  and auth.property("startCount") - start >= 1, auth.property("startCount") - start)
+            # The greeter marks a way defunct (its failure count) and then reports that last
+            # failure: the defunct message stays, without "Unlocking failed" taking it away.
+            click("authenticatorLink%d" % FACE)
+            wait(400)
+            auth.markDefunct(FACE)
+            auth.failAttempt()
+            wait(3500)
+            check("the last failure of a way that went defunct leaves its message", way() == REGULAR
+                  and "not functioning correctly" in message() and "Unlocking failed" not in message(), message())
+        elif scenario == "auth67-failed":
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(300)
+            check("Plasma 6.7: a refused password has the 3 s grace", not main_block.property("enabled")
+                  and auth.property("startCount") - start == 0, auth.property("startCount") - start)
+            wait(3000)
+            check("Plasma 6.7: asked again when it ends", main_block.property("enabled")
+                  and auth.property("startCount") - start == 1, auth.property("startCount") - start)
         elif scenario == "auth67-picker":
             check("Plasma 6.7: no ways to choose", links() == [] and item("authenticatorChoice") is None, links())
             check("Plasma 6.7: the password field", shown("passwordBox") and shown("unlockButton"))
@@ -739,6 +908,11 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
             last = {s: d for d, s in i18n.domains if s in ("&Restart", "&Shut Down")}
             check("Restart and Shut Down come from " + domain, set(last.values()) == {domain} and len(last) == 2, last)
         check("no QML warnings", warnings == [], warnings)
+        if scenario.startswith("auth68"):
+            crashes = auth.property("crashes")
+            crashes = crashes.toVariant() if hasattr(crashes, "toVariant") else crashes
+            check("the greeter never starts a way the model does not offer (the 6.8 greeter crashes)",
+                  list(crashes) == [], crashes)
 
     def finish():
         try:
