@@ -152,7 +152,13 @@ The wallpaper at 1/8 of the item's size, blurred once by one `MultiEffect` (`blu
 480 x 360 item; 180 x 113 for 1440 x 900), shown scaled up with linear filtering, plus the tint (dark
 rgba(12,15,28,.55), light rgba(236,240,248,.60)). With Glass = Solid, or until a picture has loaded,
 only the tint is drawn, at 0.94, and nothing is loaded. Per frame: one textured quad and one
-rectangle. The layer is rebuilt only when the picture, the variant or the size changes; never animate
+rectangle. The small copy's layer follows the glass level, not the picture's loading: Qt reloads an
+Image when the window's device pixel ratio changes, from inside its walk over the window's items,
+and a layer switched off there deleted its effect item, a sibling the walk still visited
+(plasmashell crashed when the tablet launcher sheet or the Notification Centre opened at a
+fractional scale, or the scale changed while one was open; 0.5.0,
+`packages/common/tests/backdrop_reload_test.py`, CI step "Backdrop layer while its picture
+reloads"). The layer is rebuilt only when the picture, the variant or the size changes; never animate
 the item's size.
 
 Sources: `sourceItem` (captured once by a `ShaderEffectSource { live: false }`; call `recapture()`

@@ -210,6 +210,7 @@ Item {
     // --- the blurred copy: small, layered, shown scaled up ---
     Item {
         id: small
+        objectName: "backdropBlur"
         visible: !backdrop.solid
         width: backdrop.smallWidth
         height: backdrop.smallHeight
@@ -217,7 +218,12 @@ Item {
             xScale: backdrop.width / small.width
             yScale: backdrop.height / small.height
         }
-        layer.enabled: visible
+        // The layer follows the glass level only, never the picture's loading: Qt reloads an
+        // Image when the window's device pixel ratio changes, from inside the walk that tells
+        // every item (QQuickWindow::physicalDpiChanged), and a layer switched off there deletes
+        // its effect item, a sibling the walk still visits: plasmashell crashed opening the
+        // tablet launcher sheet or the Notification Centre at the 4/3 scale (ThinkPad).
+        layer.enabled: backdrop.glass !== "solid"
         layer.smooth: true
 
         Image {

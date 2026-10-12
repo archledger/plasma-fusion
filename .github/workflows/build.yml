@@ -187,6 +187,9 @@ jobs:
       - name: Calendar date on app tiles (offscreen Qt)
         run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/calendar_date_test.py
 
+      - name: Backdrop layer while its picture reloads (offscreen Qt)
+        run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/backdrop_reload_test.py
+
       - name: System meters' sensors (libksysguard, a stand-in ksystemstats on a private bus)
         run: |
           set -euo pipefail
