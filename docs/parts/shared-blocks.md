@@ -163,7 +163,12 @@ the item's size.
 
 Sources: `sourceItem` (captured once by a `ShaderEffectSource { live: false }`; call `recapture()`
 after the picture changes), `followWallpaper` (plasmashell's `org.kde.PlasmaShell.wallpaper(screen)`,
-image plugin key `Image`), or `source` (a file, or a wallpaper package folder: `contents/images_dark/`
+image plugin key `Image`; while that key is empty, as on a desktop whose wallpaper was never chosen,
+the Global Theme's default wallpaper that Plasma itself shows then: kdeglobals [KDE]
+`LookAndFeelPackage`, that package's `defaults` [Wallpaper] `Image`, a folder under `wallpapers/`,
+read through QtCore's `Settings`; until 0.5.0 the empty key gave only the tint, so Full glass looked
+like Solid on such desktops; `packages/common/tests/backdrop_wallpaper_test.py`, CI step "Backdrop
+wallpaper, also the Global Theme's default"), or `source` (a file, or a wallpaper package folder: `contents/images_dark/`
 in the dark variant when present, else `contents/images/`, and the `WIDTHxHEIGHT` file closest to the
 item in device pixels, aspect ratio first). The package folder is listed by a `FolderListModel` that
 exists only while it lists (a folder model keeps an inotify instance); a folder model given a folder
