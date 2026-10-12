@@ -7,10 +7,11 @@
     Plasma Fusion log-out screen for Plasma 6.8 and later, whose log-out greeter reads the shell
     package (plasma-workspace 3729037a): plasma-desktop Plasma/6.8's desktoppackage
     contents/logout/ (this file, LogoutControls.qml, LogoutButton.qml, timer.js,
-    controlsowner.js) with the change Plasma Fusion's 6.7 copy in the Global Theme has. Breeze
+    controlsowner.js) with the changes Plasma Fusion's 6.7 copy in the Global Theme has. Breeze
     draws the Complementary colours on a black veil; Plasma Fusion Light has a light
     Complementary set (Colors board), so the veil takes the Complementary background instead:
-    dark in Plasma Fusion Dark, light in Plasma Fusion Light, always readable. As in 6.8, every
+    dark in Plasma Fusion Dark, light in Plasma Fusion Light, always readable. The count-down
+    leaves timer.js's shared list when its screen goes (see timer.js). As in 6.8, every
     screen gets the veil and the count-down, and one set of controls follows the pointer to the
     screen it is on (LogoutControls, owned through controlsowner.js; the greeter's views share
     one engine, so the library is shared too).
@@ -135,11 +136,15 @@ Item {
         repeat: true
         interval: 1000
         onTriggered: remainingTime--
+        // Kept to take it out of the shared list again when this screen goes (timer.js).
+        property var cancelCallback: null
         Component.onCompleted: {
-            AutoTriggerTimer.addCancelAutoTriggerCallback(function() {
+            cancelCallback = function() {
                 countDownTimer.running = false;
-            });
+            };
+            AutoTriggerTimer.addCancelAutoTriggerCallback(cancelCallback);
         }
+        Component.onDestruction: AutoTriggerTimer.removeCancelAutoTriggerCallback(cancelCallback)
     }
 
     Rectangle {

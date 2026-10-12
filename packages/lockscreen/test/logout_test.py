@@ -19,9 +19,9 @@ import os
 import sys
 import tempfile
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt, QUrl, Slot
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, Qt, QUrl, Slot
 from PySide6.QtGui import QColor, QGuiApplication
-from PySide6.QtQml import QQmlEngine, QQmlPropertyMap
+from PySide6.QtQml import QQmlEngine, QQmlExpression, QQmlPropertyMap
 from PySide6.QtQuick import QQuickView
 from PySide6.QtTest import QTest
 
@@ -29,6 +29,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 LOGOUT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else
                          os.path.join(HERE, "..", "org.plasmafusion.lockshell", "contents", "logout"))
+# Plasma 6.7's log-out screen, in the Global Theme.
+LOGOUT67 = os.path.abspath(sys.argv[2] if len(sys.argv) > 2 else
+                           os.path.join(ROOT, "packages", "look-and-feel", "common", "contents", "logout"))
 SHUTDOWN_DEFAULT, SHUTDOWN_NONE, SHUTDOWN_REBOOT, SHUTDOWN_HALT = -1, 0, 1, 2
 fails = []
 
@@ -86,6 +89,12 @@ def item_with_text(view, text):
     return next((it for it in items(view.contentItem()) if it.property("text") == text and it.isVisible()), None)
 
 
+def shared(root, expression):
+    """Evaluates an expression in the scope of a screen's root, where the shared libraries are."""
+    value, error = QQmlExpression(QQmlEngine.contextForObject(root), root, expression).evaluate()
+    return None if error else value
+
+
 def main():
     # The colour scheme the greeter reads (kdeglobals): Plasma Fusion Light, whose light
     # Complementary set made Breeze's black veil unreadable.
@@ -103,12 +112,14 @@ def main():
     app = QGuiApplication(sys.argv[:1])
     for sdtype in (SHUTDOWN_DEFAULT, SHUTDOWN_HALT):
         run(app, sdtype, expected_veil)
+    run67()
     print("logout:", "FAIL" if fails else "PASS", "(%d failed)" % len(fails))
     sys.exit(1 if fails else 0)
 
 
-def run(app, sdtype, expected_veil):
-    label = "default" if sdtype == SHUTDOWN_DEFAULT else "halt"
+def greeter_engine(sdtype):
+    """The greeter's shared engine with its context properties (shutdowndlg.cpp); the objects
+    behind them are returned to be kept alive."""
     engine = QQmlEngine()
     warnings = []
     engine.warnings.connect(lambda ws: [warnings.append(w.toString()) for w in ws])
@@ -129,6 +140,12 @@ def run(app, sdtype, expected_veil):
                        ("rebootToBootLoaderEntry", ""), ("softwareUpdatePending", False),
                        ("bootManager", "None"), ("choose", False), ("rebootOptions", {})):
         ctx.setContextProperty(key, value)
+    return engine, warnings, (i18n, shutdown_type, spd)
+
+
+def run(app, sdtype, expected_veil):
+    label = "default" if sdtype == SHUTDOWN_DEFAULT else "halt"
+    engine, warnings, _kept = greeter_engine(sdtype)
 
     # Two screens side by side, one view each on the shared engine (greeter.cpp).
     views, signals = [], []
@@ -205,6 +222,27 @@ def run(app, sdtype, expected_veil):
     QTest.qWait(1000)
     on = [action in shown_texts(v) for v in (views[1], third)]
     check(label + ": the first screen unplugged: the screen with the pointer still shows the controls", on == [True, False], on)
+    if sdtype == SHUTDOWN_HALT:
+        # A key pressed on the controls stops the count-down on every screen left (timer.js): the
+        # count-down of the screen that went must not keep the others counting to the shut-down.
+        roots = [v.rootObject() for v in (views[1], third)]
+        counting = [r.property("countingDown") for r in roots]
+        check(label + ": the screens left still count down", counting == [True, True], counting)
+        registry = shared(roots[0], "AutoTriggerTimer.callbacks.length")
+        check(label + ": the screen that went took its count-down out of the shared list", registry == 2, registry)
+        # And a callback that fails (such as one left behind) does not stop the ones after it.
+        shared(roots[0], "AutoTriggerTimer.callbacks.unshift(function() { throw new Error('gone'); })")
+        button = item_with_text(views[1], action)
+        if button is not None:
+            views[1].requestActivate()
+            button.forceActiveFocus()
+            QTest.qWait(100)
+            QTest.keyClick(views[1], Qt.Key_Left)
+            QTest.qWait(1300)
+        counting = [r.property("countingDown") for r in roots]
+        times = [r.property("remainingTime") for r in roots]
+        check(label + ": a key pressed after it stops the count-down on every screen left",
+              counting == [False, False], (counting, times))
     QGuiApplication.sendEvent(views[1], QEvent(QEvent.Leave))
     for x in (300, 320, 340):
         QTest.mouseMove(third, QPoint(x, 400))
@@ -220,6 +258,48 @@ def run(app, sdtype, expected_veil):
     check(label + ": no QML warnings", warnings == [], warnings)
     third.close()
     third.deleteLater()
+    QTest.qWait(100)
+
+
+def run67():
+    """Plasma 6.7's greeter reads the Global Theme's copy: one view per screen on one engine as
+    well (QuickViewSharedEngine), each screen with its own controls and count-down, sized by the
+    screenGeometry context property. Only the count-downs' shared list (timer.js) is checked."""
+    engine, warnings, _kept = greeter_engine(SHUTDOWN_HALT)
+    engine.rootContext().setContextProperty("screenGeometry", QRect(0, 0, 1280, 800))
+    views = []
+    for i in range(2):
+        view = QQuickView(engine, None)
+        view.resize(1280, 800)
+        view.setPosition(1280 * i, 0)
+        view.setSource(QUrl.fromLocalFile(os.path.join(LOGOUT67, "Logout.qml")))
+        if view.rootObject() is None:
+            check("6.7: Logout.qml loads", False, [e.toString() for e in view.errors()])
+            return
+        view.show()
+        views.append(view)
+    QTest.qWait(400)
+    # The first screen's output unplugged (greeter.cpp deletes its view), then a key pressed on
+    # the second screen's focused button.
+    views[0].close()
+    views[0].deleteLater()
+    QTest.qWait(500)
+    root = views[1].rootObject()
+    registry = shared(root, "AutoTriggerTimer.callbacks.length")
+    check("6.7: the screen that went took its count-down out of the shared list", registry == 1, registry)
+    views[1].requestActivate()
+    QTest.qWait(200)
+    focused = views[1].activeFocusItem()
+    QTest.keyClick(views[1], Qt.Key_Left)
+    QTest.qWait(100)
+    before = root.property("remainingTime")
+    QTest.qWait(1300)
+    after = root.property("remainingTime")
+    check("6.7: a key pressed after it stops the count-down of the screen left", before == after,
+          (focused.property("text") if focused else None, before, after))
+    check("6.7: no QML warnings", warnings == [], warnings)
+    views[1].close()
+    views[1].deleteLater()
     QTest.qWait(100)
 
 
