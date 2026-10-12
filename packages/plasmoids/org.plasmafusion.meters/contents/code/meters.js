@@ -60,6 +60,18 @@ function coveringWindows(windows, activeAnywhere) {
     return n;
 }
 
+// Whether a bar is on a screen that is there: `screen` is its containment's screen index (-1 when
+// it has none), `screens` how many screens there are. Plasma 6.7 gives a bar left over from a
+// screen that is gone -1; Plasma 6.8 keeps the screen it was on (an index past the last screen),
+// and its window can stay visible although nothing shows it. Without a containment the widget is
+// taken as on a screen (a stand-alone test window).
+function barOnScreen(hasContainment, screen, screens) {
+    if (!hasContainment) {
+        return true;
+    }
+    return screen >= 0 && screen < screens;
+}
+
 // Whether the pop-up opens on a request (a click, Enter, the widget's shortcut): only under the
 // pill while it is shown in a window on a screen. Asked while the width budget or tablet posture
 // took the meters out of the bar, or the bar has no screen, nothing could show the pop-up, and an

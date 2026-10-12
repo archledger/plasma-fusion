@@ -14,7 +14,9 @@
     other screens, and then the main bar's status area: its system tray (with the tray's settings:
     which items are hidden or not loaded) and quick settings (owner decision 2026-10-09: status
     icons, the bell and quick settings on every screen, as macOS shows its menu bar on each
-    display). The pen menu stays in the main bar. A Plasma Fusion bar made before that (app name,
+    display). The system meters come along when the main bar has them (the settings page's "System
+    meters in the top bar" is read from the main bar and puts them right before quick settings in
+    every top bar). The pen menu stays in the main bar. A Plasma Fusion bar made before that (app name,
     menu and clock only) gets the status area once; the bar is marked ([PlasmaFusion] statusItems),
     so what the user removes later stays removed. The main bar is the Plasma Fusion top bar with
     quick settings or a tray on the lowest screen number (the primary screen is 0); with none (all
@@ -77,7 +79,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
 }
 
 (function () {
-    var QS = "org.plasmafusion.quicksettings", TRAY = "org.kde.plasma.systemtray";
+    var QS = "org.plasmafusion.quicksettings", TRAY = "org.kde.plasma.systemtray", METERS = "org.plasmafusion.meters";
     // The settings page's Glass level and top-bar choice (the layout script's fusionLook explains
     // them): a new bar and its quick settings follow them as the page's own bars do.
     var look = ensureTopBarsLook();
@@ -144,6 +146,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     }
     var mainTray = main !== null && has(main, TRAY) ? main.widgets(TRAY)[0] : null;
     var mainQs = main !== null && has(main, QS);
+    var mainMeters = main !== null && has(main, METERS);
     // The tray's item lists and its look. readConfig needs a default of the key's type (null
     // gives undefined): [] for the lists, "" for the others (their text, written back as is).
     var TRAY_LISTS = ["disabledStatusNotifiers", "hiddenItems", "knownItems", "extraItems", "shownItems"];
@@ -217,7 +220,22 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         if (founding && !has(bar, "org.plasmafusion.pen")) {
             add(bar, ["org.plasmafusion.pen"]);
         }
+        // The meters right before quick settings, as the settings page places them: added before
+        // it in a bar that gets it here, else at its place (the panel inserts a widget added at a
+        // position there).
+        var meters = mainMeters && !has(bar, METERS) && known.indexOf(METERS) !== -1;
+        if (meters && has(bar, QS)) {
+            var g = bar.widgets(QS)[0].geometry;
+            var made = g ? bar.addWidget(METERS, Math.max(0, g.x - 2), 1, -1, -1) : bar.addWidget(METERS);
+            if (made && typeof made === "object" && made.type !== undefined) {
+                count++;
+            }
+            meters = false;
+        }
         if ((founding || mainQs) && !has(bar, QS)) {
+            if (meters && add(bar, [METERS])) {
+                count++;
+            }
             var qs = add(bar, [QS]);
             if (qs) {
                 if (look.glass !== "full") {

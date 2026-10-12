@@ -95,6 +95,7 @@ Item {
     Connections {
         target: profilesLoader.item
         function onFailed(profile: string) {
+            backend.profile.requested = "";
             backend.profile.failedProfile = profile;
             profileFailedTimer.restart();
         }
@@ -124,8 +125,9 @@ Item {
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
     Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
     // The panel this widget is in (main.qml): its system tray's hidden stock items are shown
-    // while active (services/TrayItems.qml).
+    // while active (services/TrayItems.qml), until the widget is removed.
     property var containment: null
+    property bool removed: false
     Loader { id: trayItemsLoader; asynchronous: true; source: "services/TrayItems.qml" }
     Binding {
         target: trayItemsLoader.item
@@ -137,6 +139,12 @@ Item {
         target: trayItemsLoader.item
         property: "tablet"
         value: backend.tablet
+        when: trayItemsLoader.item !== null
+    }
+    Binding {
+        target: trayItemsLoader.item
+        property: "removed"
+        value: backend.removed
         when: trayItemsLoader.item !== null
     }
     readonly property var trayRevealed: trayItemsLoader.item ? trayItemsLoader.item.revealed : []
@@ -837,11 +845,21 @@ Item {
         // through Performance. Chosen here, by the user: a profile an application holds for a
         // while (a game's Performance) or PowerDevil's own for the power source is not a choice.
         readonly property string toggleTarget: s ? Power.toggleTarget(s.list, active, inhibitionReason, Instances.lastPowerProfile) : ""
+        // The profile asked for and not active yet. It counts as the last one chosen only once the
+        // daemon has switched to it: one it refused (a failed switch to Performance) left the body
+        // going there instead of back to the profile chosen before.
+        property string requested: ""
+        onActiveChanged: {
+            if (requested !== "" && active === requested) {
+                if (requested !== "balanced") {
+                    Instances.lastPowerProfile = requested;
+                }
+                requested = "";
+            }
+        }
         function switchTo(profile: string) {
             failedProfile = "";
-            if (profile !== "balanced") {
-                Instances.lastPowerProfile = profile;
-            }
+            requested = profile;
             s.setProfile(profile);
         }
         function setProfile(profile: string) {
@@ -1281,6 +1299,8 @@ Item {
     readonly property var clipboard: QtObject {
         readonly property var service: clipboardLoader.item
         readonly property bool available: !!service
+        // Still loading (in the background after the widget starts): a request waits for it.
+        readonly property bool loading: clipboardLoader.status === Loader.Loading
         // Puts the entry on the clipboard and closes the sheet; the on-screen display says how to
         // paste it.
         function choose(uuid: string): void {

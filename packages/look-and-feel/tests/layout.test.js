@@ -127,6 +127,36 @@ test("ensure-topbars: with \"Solid top bar next to windows\" off the new bar is 
     assert.strictEqual(bar.opacity, "translucent");
 });
 
+// The system meters switch is on (the settings page reads it from the main bar, which has them):
+// a bar made or completed later gets them right before quick settings, as the page places them.
+function withMeters(bar) {
+    bar.widgets.splice(2, 0, { id: 7, type: "org.plasmafusion.meters", config: {} });
+    return bar;
+}
+const types = (p) => p.widgets.map((w) => w.type);
+test("ensure-topbars: with the main bar's meters on, a new screen's bar gets them before quick settings", () => {
+    const s = shell({ screens: TWO, files: rc(), panels: [withMeters(mainBar())] });
+    s.run(ENSURE);
+    const bar = tops(s).find((p) => p.screen === 1);
+    const t = types(bar);
+    assert.ok(t.includes("org.plasmafusion.meters"), "meters in the new bar: " + t.join(" "));
+    assert.strictEqual(t.indexOf("org.plasmafusion.meters"), t.indexOf("org.plasmafusion.quicksettings") - 1, t.join(" "));
+});
+test("ensure-topbars: with the main bar's meters on, an older bar completed later gets them too", () => {
+    const old = { id: 20, type: "org.kde.panel", screen: 1, location: "top", opacity: "adaptive", config: {}, widgets: [
+        { id: 21, type: "org.plasmafusion.appname", config: {} },
+        { id: 22, type: "org.plasmafusion.clockpill", config: {} }] };
+    const s = shell({ screens: TWO, files: rc(), panels: [withMeters(mainBar()), old] });
+    s.run(ENSURE);
+    const t = types(tops(s).find((p) => p.id === 20));
+    assert.deepStrictEqual(t.slice(2), ["org.kde.plasma.systemtray", "org.plasmafusion.meters", "org.plasmafusion.quicksettings"]);
+    assert.match(s.output, /completed 1/);
+});
+test("ensure-topbars: without meters in the main bar a new bar gets none", () => {
+    const { bar } = screenTwo(rc());
+    assert.ok(!has(bar, "org.plasmafusion.meters"));
+});
+
 test("ensure-topbars: \"Top bar on every screen\" off adds nothing", () => {
     const s = shell({ screens: TWO, files: rc({ EveryScreen: "false" }), panels: [mainBar()] });
     s.run(ENSURE);

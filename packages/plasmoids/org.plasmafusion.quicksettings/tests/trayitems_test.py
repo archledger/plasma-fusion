@@ -56,10 +56,29 @@ Item {
     QtObject { id: clock; readonly property string pluginName: "org.plasmafusion.clockpill" }
     QtObject { id: panel; readonly property var applets: [clock, tray] }
 
+    // Another panel with its own tray (the widget moved to another bar), and one without a tray.
+    readonly property string shownOther: (otherConfig.shownItems || []).join(",")
+    QtObject {
+        id: otherConfig
+        property var shownItems: []
+        property var disabledStatusNotifiers: ["org.kde.plasma.vault", "org.kde.kscreen"]
+    }
+    QtObject {
+        id: otherTray
+        readonly property string pluginName: "org.kde.plasma.systemtray"
+        readonly property var applets: [vaultApplet, displayApplet]
+        readonly property QtObject configuration: otherConfig
+    }
+    QtObject { id: otherPanel; readonly property var applets: [otherTray] }
+    QtObject { id: bareBar; readonly property var applets: [clock] }
+    property int bar: 0
+    property bool removed: false
+
     TrayItems {
         id: service
-        containment: panel
+        containment: [panel, otherPanel, bareBar][root.bar]
         tablet: root.tablet
+        removed: root.removed
     }
 }
 """ % SERVICES
@@ -119,6 +138,26 @@ root.setProperty("printers", HIDDEN)
 settle()
 check(root.property("revealed") == "org.kde.plasma.vault" and "org.kde.plasma.volume" not in root.property("shown"),
       "an item that is not one of the hidden four (Volume, active) is never put into shownItems")
+# The widget is removed while the vault is open (Plasma's undo notification): the vault leaves the
+# bar, as nothing would take it out later; the removal undone, it is shown again.
+root.setProperty("removed", True)
+settle()
+check(root.property("shown") == "org.example.app" and root.property("revealed") == "",
+      "the widget removed: the open vault is taken out of shownItems, the user's entry kept")
+root.setProperty("removed", False)
+settle()
+check(root.property("shown") == "org.example.app,org.kde.plasma.vault", "the removal undone: the vault is shown again")
+# The widget moves to another bar: the old tray gets its items back, the new one shows the vault.
+root.setProperty("bar", 1)
+settle()
+check(root.property("shown") == "org.example.app" and root.property("shownOther") == "org.kde.plasma.vault",
+      "moved to another bar: the old tray no longer shows the vault, the new tray does")
+root.setProperty("bar", 2)
+settle()
+check(root.property("shownOther") == "" and root.property("revealed") == "",
+      "moved to a bar without a tray: the tray it left no longer shows the vault")
+root.setProperty("bar", 0)
+settle()
 # The user chose a visibility for Vaults in the tray's settings: it left disabledStatusNotifiers.
 root.setDisabled(["org.kde.kscreen", "org.kde.plasma.printmanager"])
 root.setProperty("vault", PASSIVE)

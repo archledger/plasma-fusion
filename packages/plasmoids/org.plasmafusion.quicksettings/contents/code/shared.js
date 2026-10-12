@@ -28,3 +28,19 @@ function adoptFrom(own, others, leader) {
     }
     return best;
 }
+
+// The revision to give the shared settings changed now: the clock's time (`now`, ms), but always
+// above every revision the widgets hold (`revisions`). A clock set back (a wrong time corrected,
+// after a monitor with its bar was unplugged) gave a change a smaller revision than the absent
+// bar's older settings, which then won at the next start; the widgets present hold the newest
+// revision there is (they were all stamped with it), so counting on from it keeps the order.
+function nextRevision(now, revisions) {
+    let next = Number(now) || 0;
+    for (const r of revisions || []) {
+        const value = Number(r) || 0;
+        if (value >= next) {
+            next = value + 1;
+        }
+    }
+    return next;
+}

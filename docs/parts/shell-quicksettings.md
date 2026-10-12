@@ -69,7 +69,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   in this session (Power saver at first), so Balanced to Power saver no longer passes through
   Performance. A profile the user did not choose there is not learned: one an application holds
   for a while (a game's Performance) or PowerDevil's own for the power source (it was, and a
-  click then went to it; test: `tests/tiles_edit_test.py` on a stand-in profiles service). As the stock
+  click then went to it), nor one the daemon refused: a choice counts once the daemon has switched
+  to it (a refused Performance left the body going there instead of back to Power saver; test:
+  `tests/tiles_edit_test.py` on a stand-in profiles service). As the stock
   Power and Battery widget: while the daemon inhibits Performance, the chooser lists it as
   `Unavailable` (it cannot be chosen, and the body skips it) and says why under the list (on a
   lap, too hot), as the tile's tooltip does, with when it may be slower and the applications
@@ -310,7 +312,10 @@ Disks & Devices stays replaced by its page and is not loaded. An id the user mov
 `disabledStatusNotifiers` (any visibility chosen in the tray's settings does that) is the user's:
 this widget neither adds nor removes it, and it never touches other `shownItems` entries. Each
 screen's widget handles its own bar's tray. A stale entry (plasmashell ended while an item was
-shown) is taken out when the widget starts. Nothing is migrated: the layout's lists are unchanged,
+shown) is taken out when the widget starts. When the widget leaves the tray (it is removed, which
+Plasma reports as `Plasma::Applet::destroyedChanged` while its undo notification shows, or it moves
+to another bar) it takes the ids it added out of that tray's `shownItems`, since nothing else would
+and they would stay in the bar for good; an undone removal shows them again. Nothing is migrated: the layout's lists are unchanged,
 so existing layouts get this with the updated widget, at the next login or plasmashell start. A
 pop-up left open when its item hides (a vault locked from its own pop-up) stays open until it is
 closed. Without quick settings in the bar (a tray on its own) the items stay hidden as before.
@@ -390,8 +395,9 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   ```
 
   An active vault or printers needing attention go into `shownItems` and out again when passive,
-  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
-  themselves are `tests/tray.test.js`.
+  the user's own entries and ids stay, the input-method item not in tablet posture; the widget
+  removed (and the removal undone), moved to another bar's tray and to a bar without one, the tray
+  it left gets its items back; the rules themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
@@ -546,8 +552,9 @@ An independent review of the part, integrated with every other part that exists 
   ```
 
   An active vault or printers needing attention go into `shownItems` and out again when passive,
-  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
-  themselves are `tests/tray.test.js`.
+  the user's own entries and ids stay, the input-method item not in tablet posture; the widget
+  removed (and the removal undone), moved to another bar's tray and to a bar without one, the tray
+  it left gets its items back; the rules themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files: no errors; the warnings are `i18n*` calls
   (injected by Plasma), plasma-pa singletons and `ListView.currentItem` methods (static-analysis
@@ -911,7 +918,9 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   the others (a list by its entries: each read gives a new array, which `!==` always takes for a
   change). Each widget keeps when they last changed (`sharedRevision`, ms, set on every change and
   copied with them; the settings page stamps it on Apply, as the dialog writes it after the
-  settings). A new widget takes the newest set among the widgets there before it, or gives its own
+  settings). A new stamp is the clock's time but always above the revision the widgets hold
+  (`nextRevision()`): with the clock set back (a wrong time corrected) while a bar was away, a
+  change got a smaller revision than that bar's older settings, which won when it came back. A new widget takes the newest set among the widgets there before it, or gives its own
   on when they are newer (`contents/code/shared.js` `adoptFrom()`, test `tests/shared.test.js`);
   with equal revisions (widgets from before 0.5.0) it takes the leader's, as before (also when it
   leads at once, as the primary screen's bar made again does). Before, the first widget to load
@@ -1218,7 +1227,10 @@ sheet opened and closed: 1 unread (0 before), then the main sheet opened and clo
   6.5) and the storage (`~/.local/share/klipper/history3.sqlite`) are the stock widget's: a star set
   in the sheet shows in the stock widget and survives a restart. Klipper's settings apply as they
   are; images are kept only when "Always ignore images" is off in Klipper's settings (Plasma's
-  default keeps none). Without the module the button opens Klipper's pop-up, as before.
+  default keeps none). Without the module the button opens Klipper's pop-up, as before. The service
+  loads in the background after the widget starts: the button or Meta+V in those first moments
+  waits for it and then opens the sheet (Klipper's pop-up only when the module could not load,
+  `clipboard.js` `opening()`); before, they opened Klipper's pop-up.
 - **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
   search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
   Starred Only"; every opening starts on All, so Meta+V then Enter chooses what was copied last,

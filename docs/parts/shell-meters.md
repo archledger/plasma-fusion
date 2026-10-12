@@ -128,7 +128,10 @@ cannot be seen, and subscribe nothing, while:
   not the full-screen task, in the model, and sampling is the safe side (the values stay current);
 - the session is locked (`org.freedesktop.ScreenSaver` `ActiveChanged`, as the system card);
 - the width budget took the meters out (below), the pill is not in a visible window, or its bar
-  has no screen (a bar left over from a screen that is gone; its pop-up does not open either);
+  has no screen (a bar left over from a screen that is gone; its pop-up does not open either). Plasma
+  6.7 gives such a bar the screen -1, Plasma 6.8 keeps the index of the screen it was on, so a bar
+  counts as on a screen only while that index is below the number of screens (`meters.js`
+  `barOnScreen`; before, a 6.8 bar of an unplugged monitor kept its sensors subscribed);
 - every meter is turned off.
 
 After a pause (and when the pop-up opens) every tick is taken for 1.5 s, because ksystemstats'

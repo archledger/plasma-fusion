@@ -4,7 +4,8 @@
     SPDX-License-Identifier: GPL-2.0-or-later
 
     The clipboard sheet's text logic (quick settings, ClipboardPage.qml): search, the one-line
-    previews of the entries and the keyboard steps through the list. The entries themselves come
+    previews of the entries and the keyboard steps through the list, and what a request for the
+    sheet does while the clipboard service loads. The entries themselves come
     from Plasma's own clipboard model (services/Clipboard.qml). Tests: tests/clipboard.test.js
     (not installed).
 */
@@ -102,4 +103,16 @@ function typesText(text) {
     }
     var code = text.charCodeAt(0);
     return code >= 32 && code !== 127;
+}
+
+// What a request for the clipboard sheet (the clipboard button, Meta+V) does: "sheet" when the
+// clipboard service (services/Clipboard.qml, loaded in the background after the widget starts) is
+// there, "wait" while it is still loading, "legacy" (Klipper's own pop-up) only when it could not
+// load, Plasma's clipboard module missing. Before, a request in the first moments after the shell
+// started opened Klipper's pop-up although the service was there a moment later.
+function opening(available, loading) {
+    if (available) {
+        return "sheet";
+    }
+    return loading ? "wait" : "legacy";
 }

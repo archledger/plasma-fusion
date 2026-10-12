@@ -7,6 +7,8 @@ import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
 import org.kde.plasma.plasmoid
 
+import "../code/shared.js" as Shared
+
 KCM.SimpleKCM {
     id: page
 
@@ -75,9 +77,10 @@ KCM.SimpleKCM {
     // The shared settings' revision is set by the page, not refreshed: Apply writes the shared
     // settings, so they count as changed now. The dialog writes it after them (main.xml order), and
     // the old revision written back over the widget's own stamp would make the settings just
-    // applied lose to an older set at the next start (main.qml, code/shared.js).
+    // applied lose to an older set at the next start (main.qml, code/shared.js). Above the one the
+    // widget holds, also after the clock was set back.
     function stampSharedRevision() {
-        cfg_sharedRevision = Date.now();
+        cfg_sharedRevision = Shared.nextRevision(Date.now(), [Plasmoid.configuration.sharedRevision]);
     }
 
     Kirigami.FormLayout {

@@ -15,6 +15,7 @@ import "../code/tiles.js" as Tiles
 import "../code/requests.js" as Requests
 import "../code/shared.js" as Shared
 import "../code/notifications.js" as Notif
+import "../code/clipboard.js" as Clip
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -112,9 +113,10 @@ PlasmoidItem {
     }
     // Every widget's revision to now, a moment after the change: a change written by desktop
     // scripting (writeConfig) is read back into the configuration after this handler ran, which
-    // put this widget's revision back as it was.
+    // put this widget's revision back as it was. Never below the revision they hold, also when the
+    // clock was set back (code/shared.js nextRevision).
     function stampSharedRevision(): void {
-        const now = Date.now();
+        const now = Shared.nextRevision(Date.now(), Instances.items.map(widget => widget.sharedRevision));
         Instances.items.forEach(widget => widget.setSharedRevision(now));
     }
     // Airplane mode's radio record (Backend.qml) survives a plasmashell restart: every widget keeps
@@ -174,6 +176,15 @@ PlasmoidItem {
                      + Instances.items.length + " in this shell");
     }
     Component.onDestruction: Instances.forget(root)
+    // The widget was removed (Plasma's undo notification is shown) or the removal undone: the bar's
+    // tray items it shows are given back to the tray (Backend.qml, services/TrayItems.qml).
+    property bool removed: false
+    Connections {
+        target: Plasmoid
+        function onDestroyedChanged(destroyed: bool) {
+            root.removed = destroyed;
+        }
+    }
     // Runs action(widget) for the widget on KWin's active screen (this one when that is unknown).
     function onActiveScreen(action: var): void {
         DBus.SessionBus.asyncCall({
@@ -335,13 +346,21 @@ PlasmoidItem {
         setPopupOpen(!popupOpen);
     }
     // The clipboard sheet (the clipboard button, Meta+V): the pop-up on its clipboard page, or
-    // closed; Klipper's own pop-up where Plasma's clipboard module is missing.
+    // closed; Klipper's own pop-up where Plasma's clipboard module is missing. A request while the
+    // clipboard service is still loading (just after the shell started) waits for it.
     readonly property bool clipboardShown: popupOpen && backend.page === "clipboard"
+    property bool clipboardWaiting: false
     function showClipboard(open: bool): void {
-        if (!backend.clipboard.available) {
+        switch (Clip.opening(backend.clipboard.available, backend.clipboard.loading)) {
+        case "wait":
+            clipboardWaiting = open;
+            return;
+        case "legacy":
+            clipboardWaiting = false;
             backend.clipboard.legacyPopup();
             return;
         }
+        clipboardWaiting = false;
         if (!open) {
             setPopupOpen(false);
             return;
@@ -352,6 +371,25 @@ PlasmoidItem {
         if (wasOpen && popupContent) {
             // Already open on another page: the focus moves to the clipboard at once.
             Qt.callLater(() => root.popupContent.focusFirst());
+        }
+    }
+    // Decided once the loader has settled (its item and status change one after the other).
+    Connections {
+        target: backend.clipboard
+        function onLoadingChanged() {
+            root.clipboardLoaded();
+        }
+        function onAvailableChanged() {
+            root.clipboardLoaded();
+        }
+    }
+    function clipboardLoaded(): void {
+        if (clipboardWaiting && (backend.clipboard.available || !backend.clipboard.loading)) {
+            Qt.callLater(() => {
+                if (root.clipboardWaiting) {
+                    root.showClipboard(true);
+                }
+            });
         }
     }
     // A device was plugged in (popupOnNewDevice): the sheet on the device list, unless the user is
@@ -622,6 +660,7 @@ PlasmoidItem {
         id: backend
         popupOpen: root.popupOpen
         containment: Plasmoid.containment
+        removed: root.removed
         showKeyboardLayout: Plasmoid.configuration.showKeyboardLayout
         keyboardLayoutAlways: Plasmoid.configuration.keyboardLayoutAlways
         showKdeConnect: Plasmoid.configuration.showKdeConnect

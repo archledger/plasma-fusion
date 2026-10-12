@@ -197,10 +197,23 @@ Meta+V to the sheet once, while Klipper's pop-up still has it and the sheet has 
 (plasmafusionrc `[Shortcuts] ClipboardKey`); a key the user gave either of them stays. Meta+N alone
 is not the mark: a run without the set gives the notification list a free Meta+N too, so a
 `--keep-shortcuts` setup whose quick settings lost Meta+N would have lost Meta+V to the sheet.
-Tested by `tests/shortcut-keys-unit.sh` (31 checks against a fake kglobalaccel: the claim, Klipper's
-other keys, the backup record that `fusion-restore.sh` replays, the executable desktop file, the
-Meta+N and Meta+V keys starting their command at once, later runs, a user's own key, a dry run,
-which kind of run claims, the one-time upgrade and the former `--keep-shortcuts` setups).
+The setup run right after the component's `_launch` was unregistered (as `fusion-restore.sh` does)
+lost the key: an unregistered `_launch` leaves its component without actions, kglobalacceld forgets
+such a component only at its next settings write-out (0.5 s later) and reads a component's desktop
+file only when it makes the component, so in that moment the registration gave it no `_launch`, and
+the step reported "none -> Meta+N" for a key bound to nothing until the next login (VM 2, 6.7.5:
+the step 0 s after the unregister lost Meta+N and Meta+V; 2 s after, the component was made from its
+file again and the keys worked). Now `register_command_component` registers `_launch` by name as
+well (it finds the file's own and changes nothing, or makes the missing one, which runs the file's
+command too) and `command_key_present` gives the key as present, as the copy-text step does, so the
+key works at once either way; with no key (Klipper keeps Meta+V) a key chosen later in System
+Settings works at once too.
+Tested by `tests/shortcut-keys-unit.sh` (41 checks against a fake kglobalaccel that models
+kglobalacceld 6.7's components, their write-out, present actions and `setShortcut`: the claim, Klipper's other keys,
+the backup record that `fusion-restore.sh` replays, the executable desktop file, the Meta+N and
+Meta+V keys starting their command at once, also when the setup runs right after a restore's
+unregister or after the write-out, later runs, a user's own key, a dry run, which kind of run claims, the one-time
+upgrade and the former `--keep-shortcuts` setups).
 
 ### Other settings
 

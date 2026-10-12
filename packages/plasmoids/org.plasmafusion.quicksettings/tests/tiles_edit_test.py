@@ -436,7 +436,9 @@ Item {
     property string degradationReason: ""
     property var holds: []
     signal failed(string profile)
-    function setProfile(profile: string) { active = profile; }
+    // The daemon refuses the switch (PowerDevil's profileError).
+    property bool refuse: false
+    function setProfile(profile: string) { if (refuse) { failed(profile); } else { active = profile; } }
 }
 ''')
 loader = next(o for o in backend.findChildren(QObject)
@@ -464,6 +466,21 @@ click(power_body)
 check(power.property("active") == "performance",
       "after an application held Power saver for a while, the body goes to Performance, the user's choice (%s)"
       % power.property("active"))
+click(power_body)
+# Power saver was the last choice; a switch to Performance is refused: the body still goes back to
+# Power saver, the last profile the daemon switched to.
+QMetaObject.invokeMethod(profile, "setProfile", Q_ARG("QString", "power-saver"))
+QTest.qWait(50)
+click(power_body)
+power.setProperty("refuse", True)
+QMetaObject.invokeMethod(profile, "setProfile", Q_ARG("QString", "performance"))
+QTest.qWait(50)
+power.setProperty("refuse", False)
+check(power.property("active") == "balanced" and profile.property("failedProfile") == "performance",
+      "a refused switch to Performance leaves Balanced, and the tile says so")
+click(power_body)
+check(power.property("active") == "power-saver",
+      "after the refused switch the body goes to Power saver, the last profile switched to (%s)" % power.property("active"))
 click(power_body)
 
 # ---- The clipboard sheet opens on All: the Starred tab, the service's, goes back to All when the

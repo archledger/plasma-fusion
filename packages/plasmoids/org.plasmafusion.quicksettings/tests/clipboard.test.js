@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "clipboard.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { matches, preview, fileNames, firstUrl, step, typesText, TEXT, IMAGE, URL } = globalThis;
+const { matches, preview, fileNames, firstUrl, step, typesText, opening, TEXT, IMAGE, URL } = globalThis;
 
 // The entry types Klipper's model reports.
 assert.deepStrictEqual([TEXT, IMAGE, URL], [2, 4, 8], "Klipper's HistoryItemType values");
@@ -66,5 +66,11 @@ assert.ok(typesText("a") && typesText("É") && typesText(" ") && typesText("1"),
 assert.ok(!typesText("") && !typesText("\t") && !typesText("\r") && !typesText("\u001b") && !typesText("\u007f"),
     "Tab, Return, Escape and Delete are not text");
 assert.ok(!typesText(undefined), "no text");
+
+// A request for the sheet while the clipboard service loads waits for it; Klipper's pop-up only
+// when the module could not load.
+assert.strictEqual(opening(true, false), "sheet", "the service is there: the sheet");
+assert.strictEqual(opening(false, true), "wait", "the service is still loading (the shell just started): wait for it");
+assert.strictEqual(opening(false, false), "legacy", "the service could not load: Klipper's own pop-up");
 
 console.log("clipboard: all checks passed");
