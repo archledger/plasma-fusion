@@ -59,6 +59,9 @@ jobs:
       - name: Setup layout migration keeps the user's changes
         run: tools/device/tests/layout-migration-unit.sh build/layout-migration
 
+      - name: Restore releases the keys of widgets it does not bring back (fake kglobalaccel)
+        run: tools/device/tests/restore-keys-unit.sh build/restore-keys
+
       - name: Device tools' --help prints the usage only
         run: tools/device/tests/help-unit.sh
 

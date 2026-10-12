@@ -20,6 +20,7 @@ EFFECTS 8.3 (install side). The login check itself is described in `gate.md`; th
 | `tools/device/backup-profile.sh` | never starts a Qt program without the session's display; more files |
 | `tools/device/restore-profile.sh` | knows the new Plasma Fusion paths |
 | `tools/device/tests/gate-unit.sh` | cases `t`, `t3`, `t4`, `t5` for the new gate parts |
+| `tools/device/tests/restore-keys-unit.sh` | `fusion-restore.sh` releases the keys of widgets the restored layout does not have (0.5.0) |
 | `tools/device/tests/layout-migration-unit.sh` | the in-place layout migration against a scratch HOME: what a later run keeps (0.5.0) |
 
 ## fusion-config.sh
@@ -290,7 +291,12 @@ In addition to what `gate.md` describes, for the chosen backup and every later r
    `~/.local/share/kglobalaccel/org.plasmafusion.copytext.desktop`,
    `~/.local/share/kglobalaccel/org.plasmafusion.clipboard.desktop`,
    `~/.local/libexec/plasma-fusion`);
-6. `daemon-reload`, KWin reconfigure, blur loaded again unless the restored kwinrc turns it off,
+6. widget shortcuts: every plasmashell `activate widget N` action whose widget N is not in the
+   restored layout is unregistered (0.5.0). kglobalaccel keeps a widget's key after the widget is
+   gone, and step 1 gives back only the keys the setup recorded, not the Meta+A that the settings
+   module's "Reset Fusion layout" gave the rebuilt quick settings, so after a restore that key
+   stayed held by nothing (`tests/restore-keys-unit.sh`);
+7. `daemon-reload`, KWin reconfigure, blur loaded again unless the restored kwinrc turns it off,
    `fc-cache`, plasmashell started.
 
 ## Login check additions (gate.md)

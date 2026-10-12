@@ -4,7 +4,8 @@
 // A stand-in for plasmashell's desktop scripting (plasma-workspace 6.7.5 shell/scripting), enough
 // for plasma-fusion-powerfx's widget script and the settings module's scripts (its tests in
 // packages/kcm-cpp/tests): desktops(), panels(), knownWidgetTypes, a containment's widgets([TYPE]),
-// addWidget, id, type, screen, location and opacity, a widget's id, type, index and remove(), and
+// addWidget, id, type, screen, location and opacity, a widget's id, type, globalShortcut, index and
+// remove(), and
 // for both currentConfigGroup, readConfig (converted to the default's type, as
 // KConfigGroup::readEntry does) and writeConfig (stored as KConfig text). A layout is JSON:
 //   {"desktops": [CONTAINMENT, ...], "panels": [CONTAINMENT, ...], "knownWidgetTypes": [...]}
@@ -46,6 +47,8 @@ function wrap(w, list, writes) {
     return {
         get id() { return w.id; },
         get type() { return w.type; },
+        get globalShortcut() { return w.shortcut || ""; },
+        set globalShortcut(k) { w.shortcut = String(k); writes.push(`${w.id} globalShortcut=${k}`); },
         get index() { return list.indexOf(w); },
         set index(i) {
             list.splice(list.indexOf(w), 1);

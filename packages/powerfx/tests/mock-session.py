@@ -5,8 +5,9 @@
 # Test stand-in for KWin's effects interface and plasmashell's scripting on a private session bus
 # (never the user's): org.kde.KWin /Effects (loadEffect, unloadEffect, isEffectLoaded; each call is
 # logged) and org.kde.plasmashell /PlasmaShell evaluateScript, which runs the script with
-# fake-shell.js against a layout JSON file. org.plasmafusion.MockSession on /MockSession plays a
-# plasmashell restart: ReleaseShell drops the name, OwnShell takes it again.
+# fake-shell.js against a layout JSON file, and loadLookAndFeelDefaultLayout, which puts
+# LAYOUT.json.reset in its place when there is one. org.plasmafusion.MockSession on /MockSession
+# plays a plasmashell restart: ReleaseShell drops the name, OwnShell takes it again.
 #
 #   mock-session.py --address ADDRESS --layout LAYOUT.json --log CALLS.log [--node PATH] [--no-shell]
 #                   [--no-kwin]
@@ -26,6 +27,7 @@ XML = """
   </interface>
   <interface name="org.kde.PlasmaShell">
     <method name="evaluateScript"><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
+    <method name="loadLookAndFeelDefaultLayout"><arg type="s" direction="in"/></method>
   </interface>
   <interface name="org.plasmafusion.MockSession">
     <method name="ReleaseShell"/>
@@ -71,6 +73,13 @@ def main():
             else:
                 loaded[effect] = False
                 inv.return_value(None)
+        elif name == "org.kde.PlasmaShell" and method == "loadLookAndFeelDefaultLayout":
+            # The layout the Global Theme builds: LAYOUT.json.reset, when the test gives one.
+            (package,) = params.unpack()
+            log(f"shell loadLookAndFeelDefaultLayout {package}")
+            if os.path.exists(a.layout + ".reset"):
+                os.replace(a.layout + ".reset", a.layout)
+            inv.return_value(None)
         elif name == "org.kde.PlasmaShell":
             (script,) = params.unpack()
             r = subprocess.run([a.node, os.path.join(HERE, "fake-shell.js"), a.layout, a.log + ".writes"],

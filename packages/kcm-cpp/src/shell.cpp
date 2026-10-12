@@ -393,15 +393,15 @@ for (var k = 0; k < cs.length && !found; ++k) {
 print(JSON.stringify({ found: found, key: now }));
 )JS"_s;
 
-// Shortcuts a layout reset gives when the widget had none before (owner decision 6: Meta+A
-// opens quick settings, Meta+Shift+W the pen menu), as tools/device/fusion-config.sh does.
+// Shortcuts a layout reset gives when the widget type had none before (owner decision 6: Meta+A
+// opens quick settings), as tools/device/fusion-config.sh does. The pen menu's Meta+Shift+W is
+// fusion-config.sh --pen's, so it comes back only when the old pen menu had it (keyByType).
 struct DefaultShortcut {
     QString plugin;
     QString key;
 };
 const QList<DefaultShortcut> s_defaultShortcuts = {
     {u"org.plasmafusion.quicksettings"_s, u"Meta+A"_s},
-    {u"org.plasmafusion.pen"_s, u"Meta+Shift+W"_s},
 };
 
 // A key sequence as kglobalaccel's D-Bus type (ai): four Qt key codes.

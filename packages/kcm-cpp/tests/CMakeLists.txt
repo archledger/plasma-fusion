@@ -6,7 +6,7 @@
 # in a scratch HOME: load, read every property, defaults, read them again. Nothing is saved.
 # fuzz-kcmctl.sh runs it with random configuration files and commands, saving included, still in a
 # scratch HOME and with stand-ins for the programs the module starts. run-power-tier.sh runs it
-# with the power service against a stand-in plasmashell.
+# with the power service against a stand-in plasmashell, run-reset-layout.sh its layout reset.
 
 add_executable(kcmctl kcmctl/kcmctl.cpp)
 target_link_libraries(kcmctl PRIVATE Qt6::Core Qt6::Gui Qt6::Qml KF6::CoreAddons KF6::KCMUtilsQuick)
@@ -35,6 +35,11 @@ if(DBUS_RUN_SESSION)
                      COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-power-tier.sh" $<TARGET_FILE:kcmctl> "${CMAKE_BINARY_DIR}/bin"
                              "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-power")
             set_tests_properties(kcmctl-power PROPERTIES TIMEOUT 180)
+            # "Reset Fusion layout" and the shortcuts it gives (run-reset-layout.sh).
+            add_test(NAME kcmctl-reset
+                     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-reset-layout.sh" $<TARGET_FILE:kcmctl> "${CMAKE_BINARY_DIR}/bin"
+                             "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-reset")
+            set_tests_properties(kcmctl-reset PROPERTIES TIMEOUT 180)
         endif()
     endif()
 endif()
