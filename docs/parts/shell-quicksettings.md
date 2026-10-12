@@ -69,7 +69,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   in this session (Power saver at first), so Balanced to Power saver no longer passes through
   Performance. A profile the user did not choose there is not learned: one an application holds
   for a while (a game's Performance) or PowerDevil's own for the power source (it was, and a
-  click then went to it; test: `tests/tiles_edit_test.py` on a stand-in profiles service). As the stock
+  click then went to it), nor one the daemon refused: a choice counts once the daemon has switched
+  to it (a refused Performance left the body going there instead of back to Power saver; test:
+  `tests/tiles_edit_test.py` on a stand-in profiles service). As the stock
   Power and Battery widget: while the daemon inhibits Performance, the chooser lists it as
   `Unavailable` (it cannot be chosen, and the body skips it) and says why under the list (on a
   lap, too hot), as the tile's tooltip does, with when it may be slower and the applications

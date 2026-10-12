@@ -95,6 +95,7 @@ Item {
     Connections {
         target: profilesLoader.item
         function onFailed(profile: string) {
+            backend.profile.requested = "";
             backend.profile.failedProfile = profile;
             profileFailedTimer.restart();
         }
@@ -844,11 +845,21 @@ Item {
         // through Performance. Chosen here, by the user: a profile an application holds for a
         // while (a game's Performance) or PowerDevil's own for the power source is not a choice.
         readonly property string toggleTarget: s ? Power.toggleTarget(s.list, active, inhibitionReason, Instances.lastPowerProfile) : ""
+        // The profile asked for and not active yet. It counts as the last one chosen only once the
+        // daemon has switched to it: one it refused (a failed switch to Performance) left the body
+        // going there instead of back to the profile chosen before.
+        property string requested: ""
+        onActiveChanged: {
+            if (requested !== "" && active === requested) {
+                if (requested !== "balanced") {
+                    Instances.lastPowerProfile = requested;
+                }
+                requested = "";
+            }
+        }
         function switchTo(profile: string) {
             failedProfile = "";
-            if (profile !== "balanced") {
-                Instances.lastPowerProfile = profile;
-            }
+            requested = profile;
             s.setProfile(profile);
         }
         function setProfile(profile: string) {
