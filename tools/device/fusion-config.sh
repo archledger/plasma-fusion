@@ -21,7 +21,9 @@
 #   --no-auto          stop that switching
 #                      (without these a HOME already on Plasma Fusion keeps its variant and its
 #                      automatic switching; any other HOME gets Dark without switching)
-#   --reset-layout     always rebuild the top bar, dock and desktop cards
+#   --reset-layout     always rebuild the top bar, dock and desktop cards (their widgets' own
+#                      settings, quick settings' tiles too, go back to the defaults; the settings
+#                      page's Glass, top-bar and every-screen choices apply to the new layout)
 #   --keep-layout      never touch the panels (appearance and settings only)
 #   --hot-corner       let the top-left screen corner open Overview (off by default)
 #   --fonts            set the Plasma Fusion fonts and cursor again (normally only the first
