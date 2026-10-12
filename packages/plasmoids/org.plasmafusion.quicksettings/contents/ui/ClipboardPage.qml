@@ -15,11 +15,11 @@ import "../code/clipboard.js" as Clip
 // The clipboard sheet (the clipboard button, Meta+V): Klipper's history, newest first, from
 // Plasma's own clipboard model (services/Clipboard.qml), so stars and entries are the stock
 // Clipboard widget's. Search (every word, as plain text), All / Starred as in the stock widget
-// (opening on All), text, images and copied files, star, edit, QR code, Klipper's actions, remove,
-// and Clear all with Klipper's confirmation (starred entries stay). Choosing an entry puts it on
-// the clipboard and closes the sheet; the on-screen hint says to paste with Ctrl+V (there is no
-// paste on choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet"). The Emoji button opens
-// Plasma's emoji selector.
+// (opening on All: Backend.qml), text, images and copied files, star, edit, QR code, Klipper's
+// actions, remove, and Clear all with Klipper's confirmation (starred entries stay). Choosing an
+// entry puts it on the clipboard and closes the sheet; the on-screen hint says to paste with Ctrl+V
+// (there is no paste on choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet"). The Emoji
+// button opens Plasma's emoji selector.
 //
 // Keyboard: the list has the focus with the newest entry current; Up and Down move, Enter or Space
 // chooses, Delete removes, Menu or Right opens the entry's actions (Left and Right move between
@@ -79,17 +79,6 @@ ColumnLayout {
         value: i18nc("@info:search words that find copied files", "file")
         when: page.service !== null
     }
-
-    // Each opening starts on All, so the newest entry is current and Enter chooses what was copied
-    // last: the service, and the Starred tab with it, lives as long as the widget, while a page is
-    // made for each opening.
-    function startOnAll(): void {
-        if (service) {
-            service.starredOnly = false;
-        }
-    }
-    onServiceChanged: startOnAll()
-    Component.onCompleted: startOnAll()
 
     function uuidAt(row: int): string {
         const item = list.itemAtIndex(row) as ClipboardEntry;

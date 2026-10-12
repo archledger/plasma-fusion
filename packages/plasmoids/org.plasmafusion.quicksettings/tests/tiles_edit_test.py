@@ -11,8 +11,9 @@ on the private bus; the widget's two settings keys are stand-ins that take what 
 as main.qml does. Checks the grid's order and conditions, the pencil, reordering by mouse drag,
 touch drag and keyboard, the Tab order, removing, the tray, adding back, Reset, Done and Escape,
 and the tablet posture's pencil and touch targets; and the Do Not Disturb choices behind the tile's
-chevron (read when they open, closed with the sheet, a choice counting from the click), and the
-Power mode tile's body, on a stand-in power profiles service.
+chevron (read when they open, closed with the sheet, a choice counting from the click), the
+Power mode tile's body on a stand-in power profiles service, Keep awake's time left and the
+clipboard sheet's tab.
 """
 
 import os
@@ -462,6 +463,22 @@ check(power.property("active") == "performance",
       "after an application held Power saver for a while, the body goes to Performance, the user's choice (%s)"
       % power.property("active"))
 click(power_body)
+
+# ---- The clipboard sheet opens on All: the Starred tab, the service's, goes back to All when the
+# clipboard page goes (the sheet closed or back to quick settings), before the next page is made.
+clipboard = backend.property("clipboard")
+for _ in range(250):
+    if clipboard.property("service") is not None:
+        break
+    QTest.qWait(20)
+clip_service = clipboard.property("service")
+backend.setProperty("page", "clipboard")
+clip_service.setProperty("starredOnly", True)
+QTest.qWait(50)
+backend.setProperty("page", "main")
+QTest.qWait(50)
+check(clip_service is not None and not clip_service.property("starredOnly"),
+      "the clipboard page gone, its Starred tab is back to All for the next opening")
 
 # ---- Keep awake's time left: the hours and the minutes each in their plural form.
 context.plurals.clear()

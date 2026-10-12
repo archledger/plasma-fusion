@@ -993,7 +993,7 @@ them again before Apply, so the dialog never writes back an older order.
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
   shown tiles with the hidden ones keeping their places, a tile that comes or goes during a drag,
   the slot under a dragged tile, reset) and `tests/tiles_edit_test.py` (in CI), the main page on
-  the real Backend offscreen with the two keys as stand-ins (59 checks: the default grid, the
+  the real Backend offscreen with the two keys as stand-ins (60 checks: the default grid, the
   stored order, a conditional tile only while it applies, the pencil, the badges and the resting
   tile actions, a mouse drag written once on release, a touch drag, a drag let go below the grid,
   Ctrl+arrows, Ctrl+Home / End, the focus keys, Tab and Shift+Tab in the order shown, the badge and
@@ -1001,8 +1001,8 @@ them again before Apply, so the dialog never writes back an older order.
   conditional tile neither in the grid nor the tray while it does not apply and still hidden when
   it does, Done, Space on the pencil, Escape, closing the sheet, Reset, a drag during which Disks &
   Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), the Power mode
-  tile's body after an application held a profile, Keep awake's time left in plural forms, and in
-  tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
+  tile's body after an application held a profile, Keep awake's time left in plural forms, the
+  clipboard sheet's tab back to All, and in tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
 
   ```sh
   STAGE=$PWD/build/stage tools/build.sh quicksettings
@@ -1209,7 +1209,8 @@ docs/parts/device.md); the button and Meta+V close it again.
 - **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
   search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
   Starred Only"; every opening starts on All, so Meta+V then Enter chooses what was copied last,
-  where Klipper's own pop-up keeps the last tab); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
+  where Klipper's own pop-up keeps the last tab: the tab is the long-lived service's, and Backend
+  puts it back when the clipboard page goes; test `tests/tiles_edit_test.py`); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
   shows in up to two lines (white space folded, blank text as ␣ ⇥ ↵ as in the stock widget, always
   as plain text), an image as a thumbnail with its size, copied files with the first one's preview
   (Klipper's `klipperpreview` images) and their names.
@@ -1259,12 +1260,11 @@ docs/parts/device.md); the button and Meta+V close it again.
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (49 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (47 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
   the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by keyboard,
-  QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode, a new opening on
-  All after the Starred tab). Both fail without
+  QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode). Both fail without
   the sheet (the files do not exist on 0.4.1).
 
 ## The sheet's window and its content (0.5.0)

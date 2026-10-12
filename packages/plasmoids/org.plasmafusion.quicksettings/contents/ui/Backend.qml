@@ -1268,6 +1268,16 @@ Item {
     }
 
     // ------------------------------------------------------------------ clipboard
+    // Each clipboard sheet opens on All, so the newest entry is current and Meta+V then Enter
+    // chooses what was copied last. The Starred tab is the clipboard service's, which lives as long
+    // as the widget, so it goes back to All when the page goes (the sheet closed, or back to quick
+    // settings), before the next page is made: set by the new page itself, the tab bar's own index,
+    // still Starred while it was built, wrote Starred back.
+    onPageChanged: {
+        if (page !== "clipboard" && clipboard.service) {
+            clipboard.service.starredOnly = false;
+        }
+    }
     readonly property var clipboard: QtObject {
         readonly property var service: clipboardLoader.item
         readonly property bool available: !!service
