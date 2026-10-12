@@ -5,6 +5,7 @@
 
 import QtQuick
 import org.kde.kwin
+import "Requests.js" as Requests
 
 // Plasma Fusion tablet mode (TABLET.md 3 and 4.2): the single owner of window policy and panel
 // geometry while the device is folded.
@@ -583,9 +584,13 @@ Item {
         mode: ScreenEdgeHandler.Touch
         enabled: root.tablet && root.setting("EdgeRight", false)
         onActivated: {
-            // Quick settings opens on an openRequest "<mode>:<nonce>" (the launcher's form).
+            // Quick settings opens on an openRequest "<mode>:<nonce>:<output>": the widget on the
+            // swiped screen opens (without the output, the one on KWin's active screen did, and
+            // every one when KWin did not answer).
+            const request = Requests.openRequest("sheet", Date.now(),
+                Requests.swipeOutput(Workspace.screens, s => root.internalOutput(s), Workspace.activeScreen));
             quickSettingsCall.arguments = ["panels().forEach(function (p) { p.widgets(\"org.plasmafusion.quicksettings\").forEach(function (w) {"
-                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"openRequest\", \"sheet:\" + Date.now()); }); });"];
+                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"openRequest\", " + JSON.stringify(request) + "); }); });"];
             quickSettingsCall.call();
         }
     }

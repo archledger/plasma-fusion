@@ -12,6 +12,7 @@ import org.kde.plasma.workspace.dbus as DBus
 import "components"
 import "global"
 import "../code/tiles.js" as Tiles
+import "../code/requests.js" as Requests
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -391,17 +392,17 @@ PlasmoidItem {
 
     // ---- openRequest: "<mode>:<nonce>[:<output>]" (or "<mode> <nonce>"), written by other shell
     // parts through desktop scripting (the tablet script's right edge, Meta+N, Meta+V). Without an
-    // output only the widget on KWin's active screen acts.
+    // output only the widget on KWin's active screen acts, and only the leader when that is not
+    // known either (code/requests.js).
     Connections {
         target: Plasmoid.configuration
         function onOpenRequestChanged() {
-            const parts = String(Plasmoid.configuration.openRequest || "").split(/[: ]/);
-            if (parts[0] === "") {
+            const request = Requests.parse(Plasmoid.configuration.openRequest);
+            if (request.mode === "") {
                 return;
             }
-            const output = parts.length > 2 ? parts.slice(2).join(":") : "";
-            if (output !== "") {
-                root.runRequest(parts[0], output);
+            if (request.output !== "") {
+                root.runRequest(request.mode, request.output);
                 return;
             }
             DBus.SessionBus.asyncCall({
@@ -410,12 +411,11 @@ PlasmoidItem {
                 "iface": "org.kde.KWin",
                 "member": "activeOutputName",
                 "arguments": []
-            }, reply => root.runRequest(parts[0], String(reply.value || "")), () => root.runRequest(parts[0], ""));
+            }, reply => root.runRequest(request.mode, String(reply.value || "")), () => root.runRequest(request.mode, ""));
         }
     }
     function runRequest(mode: string, output: string) {
-        const mine = root.screenName;
-        if (output !== "" && mine !== "" && output !== mine) {
+        if (!Requests.acts(output, root.screenName, root.leader)) {
             return;
         }
         console.info("quicksettings: openRequest " + mode + (output !== "" ? " on " + output : ""));

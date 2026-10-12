@@ -27,7 +27,7 @@ package is installed); the login gate switches it off while another Global Theme
 |---|---|---|
 | `WindowMode` | `fullscreen` | `fullscreen`: apps maximized without title bars in tablet mode; `windowed`: windows left as they are (the compiled decoration gives touch-sized title bars) |
 | `DockHiding` | `dodgewindows` | the dock in tablet mode: `dodgewindows` (hides over apps) or `none` (always visible) |
-| `EdgeLeft`, `EdgeRight` | `false` | in tablet mode a swipe in from the left edge opens the launcher (`activateLauncherMenu`), from the right edge quick settings (its `openRequest` = `sheet:<ms>`) |
+| `EdgeLeft`, `EdgeRight` | `false` | in tablet mode a swipe in from the left edge opens the launcher (`activateLauncherMenu`), from the right edge quick settings (its `openRequest` = `sheet:<ms>:<output>`, the output being the built-in screen, which is the touch screen, else KWin's active one: `contents/ui/Requests.js`, tested by `packages/kwin/tests/tablet-requests.test.js`; before 0.5.0 without the output, so the widget on the screen of the pointer or focus opened, and every one when KWin did not answer) |
 | `DisableWindowMove` | `false` | windows cannot be dragged in tablet mode |
 | `InternalOutputs` | `eDP,LVDS,DSI` | name prefixes of built-in screens; window policy only while one of them is the only screen. Tests add `Virtual` (private sessions have virtual outputs only) |
 
