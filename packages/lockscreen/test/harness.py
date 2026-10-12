@@ -568,7 +568,9 @@ def auth_setup(auth, scenario):
                          "tooltip": tooltip, "showPrompt": show, "functional": True})
         auth.setProperty("ways", rows)
         auth.setProperty("authenticator", start)
+        # The real greeter starts with the saved way loaded, not changed to it.
         auth.setProperty("chosenLog", [])
+        auth.setProperty("crashes", [])
     auth.setProperty("authenticatorTypes", 1 if fingerprint else 0)
     if scenario == "auth68-noprompt":
         auth.setProperty("hadPrompt", False)
@@ -739,6 +741,11 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
             last = {s: d for d, s in i18n.domains if s in ("&Restart", "&Shut Down")}
             check("Restart and Shut Down come from " + domain, set(last.values()) == {domain} and len(last) == 2, last)
         check("no QML warnings", warnings == [], warnings)
+        if scenario.startswith("auth68"):
+            crashes = auth.property("crashes")
+            crashes = crashes.toVariant() if hasattr(crashes, "toVariant") else crashes
+            check("the greeter never starts a way the model does not offer (the 6.8 greeter crashes)",
+                  list(crashes) == [], crashes)
 
     def finish():
         try:

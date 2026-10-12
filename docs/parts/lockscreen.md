@@ -124,7 +124,15 @@ too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authent
   screen says the stock "This authentication method is not functioning correctly. Please try another
   method, and check your system configuration." and goes back to the password, where the stock lock
   screen hides the field and waits for another choice. A way that stopped working stays listed in
-  the warning colour and does nothing.
+  the warning colour and does nothing. A saved way the model does not offer is replaced while the
+  views are made (`AuthenticatorChoice` `Component.onCompleted`), not later: the 6.8 greeter starts
+  the saved way from a call it queued before making them, looks the way up in the model and, for
+  one that is not there, dereferences a null entry (`PAMAuthenticatorModel::isFunctional`). The
+  greeter then crashed on every lock until KWin's "The screen locker is broken" screen (VM, Plasma
+  6.7.91, `[Greeter] Authenticator=Face` without `[Authenticators] Face`; the stock 6.8 lock screen
+  crashes the same way, upstream should check the entry). The 6.8 mock records each start of a way
+  the model does not offer; every auth68 scenario checks there is none (`auth68-missing` fails on
+  the previous package).
 * No "Use fingerprint" link while the fingerprint reader runs beside the password: choosing it
   alone would only take the field away; the hint keeps pam_fprintd's guidance. When the fingerprint
   way itself is in use (chosen on the stock lock screen) the hint goes and "Use password" is offered.

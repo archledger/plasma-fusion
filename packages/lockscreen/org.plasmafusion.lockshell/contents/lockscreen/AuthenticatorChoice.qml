@@ -92,7 +92,8 @@ Flow {
 
     // Finds the way in use. The greeter starts with the way that unlocked last time; when the
     // model no longer offers it (turned off since, or its PAM service is gone) or it does not work,
-    // the password is used, so that the screen never waits for a way that cannot unlock.
+    // the password is used, so that the screen never waits for a way that cannot unlock (nor
+    // crashes the greeter, below).
     function sync(): void {
         let found = null;
         let links = 0;
@@ -116,7 +117,13 @@ Flow {
     }
     onCurrentChanged: Qt.callLater(sync)
     onFingerprintBesideChanged: Qt.callLater(sync)
-    Component.onCompleted: Qt.callLater(sync)
+    // At once, not later: the 6.8 greeter starts the saved way's conversation from a call it queued
+    // before it made the lock screen's views, and for a way the model no longer offers it looks up
+    // an entry that is not there and crashes (kscreenlocker PamAuthenticators::startAuthenticating,
+    // PAMAuthenticatorModel::isFunctional), on every lock. A Qt.callLater here would run after that
+    // call; switching to the password while the views are made is in time. The Repeater has made
+    // its delegates by now (the Loader in MainBlock loads synchronously).
+    Component.onCompleted: sync()
 
     Repeater {
         id: ways
