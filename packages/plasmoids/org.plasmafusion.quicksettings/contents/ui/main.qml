@@ -14,7 +14,6 @@ import "global"
 import "../code/tiles.js" as Tiles
 import "../code/requests.js" as Requests
 import "../code/shared.js" as Shared
-import "../code/notifications.js" as Notif
 import "../code/clipboard.js" as Clip
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
@@ -856,7 +855,8 @@ PlasmoidItem {
     // notifications read only then. Opened on the clipboard page (Meta+V) and closed there, it
     // cleared the unread count and the bell though no notification had been shown.
     property bool notificationsSeen: false
-    readonly property bool notificationListShown: popupOpen && Notif.listOnSheet(backend.page, backend.notificationsApart)
+    // The list's own condition: with Show notifications off it is hidden, and so nothing is seen.
+    readonly property bool notificationListShown: popupOpen && backend.notif.listShown
     onNotificationListShownChanged: {
         if (notificationListShown) {
             notificationsSeen = true;
