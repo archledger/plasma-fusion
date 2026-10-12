@@ -108,6 +108,11 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   defined" at every start in tablet posture.
 - The clock's settings open without warnings in the log, and Apply on one of its pages no longer
   writes back a value that another page, or the widget itself, changed while the page was open.
+- A timed Do Not Disturb no longer ends while Plasma itself holds it for a full-screen window or
+  mirrored screens: Plasma's own Notifications applet ends a timed one, and Quick Settings only sets
+  the time (it also refuses a time already past).
+- After a restart, Quick Settings on several screens take the shared settings changed last, not
+  those of whichever widget loaded first.
 - `plasma-fusion update` no longer undoes what you changed in the layout: a top bar you made
   translucent ("Solid top bar next to windows" off), a tray item you set to "Always shown", a pen
   menu you removed and a desktop you switched stay as they are, and an update that has nothing to
