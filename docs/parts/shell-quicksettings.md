@@ -211,6 +211,7 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/PowerPage.qml         Keep awake durations and the sleep blockers (the tile's chevron)
   contents/ui/ClipboardPage.qml     the clipboard sheet: search, All / Starred, the list, editor, QR code
   contents/ui/ClipboardEntry.qml    one clipboard entry (text, image thumbnail, files) and its actions
+  contents/ui/ClipboardQrView.qml   an entry's QR code (Prison; loaded apart, so the sheet loads without it)
   contents/code/clipboard.js        the sheet's search, previews and arrow-key steps (tests/clipboard.test.js)
   contents/code/tiles.js            the tiles' order, hidden tiles and new tiles' places (tests/tiles.test.js)
   contents/ui/NotificationCard.qml  one notification

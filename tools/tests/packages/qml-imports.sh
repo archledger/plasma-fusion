@@ -16,10 +16,12 @@ done
 # screen greeter. Files loaded with a Loader degrade on their own: the quick settings services
 # (services/*.qml; a missing module leaves its tile out: no Bluetooth stack, no KDE Connect, no
 # PowerDevil), the lock screen's network indicator (no plasma-nm), the dock's audio streams and the
-# quick settings' device menu (no plasma-pa: no audio indicator, no ports and profiles menu):
+# quick settings' device menu (no plasma-pa: no audio indicator, no ports and profiles menu), the
+# clipboard sheet's QR code (no Prison) and the notification cards' file preview (the stock
+# Notifications applet's module, registered in plasmashell; a plain image or icon otherwise):
 # reported, not an error.
 inprocess=" org.kde.kwin org.kde.kwin.private.effects org.kde.kscreenlocker "
-loaded='/org\.plasmafusion\.quicksettings/contents/ui/services/|/org\.plasmafusion\.lockshell/contents/lockscreen/NetworkIndicator\.qml$|/org\.plasmafusion\.dock/contents/ui/AudioStreams\.qml$|/org\.plasmafusion\.quicksettings/contents/ui/AudioDeviceMenu\.qml$'
+loaded='/org\.plasmafusion\.quicksettings/contents/ui/services/|/org\.plasmafusion\.lockshell/contents/lockscreen/NetworkIndicator\.qml$|/org\.plasmafusion\.dock/contents/ui/AudioStreams\.qml$|/org\.plasmafusion\.quicksettings/contents/ui/AudioDeviceMenu\.qml$|/org\.plasmafusion\.quicksettings/contents/ui/ClipboardQrView\.qml$|/org\.plasmafusion\.quicksettings/contents/ui/NotificationPreview\.qml$'
 files=$(find /usr/share/plasma/plasmoids/org.plasmafusion.* /usr/share/plasma/shells/org.plasmafusion.* \
   /usr/share/plasma/look-and-feel/org.plasmafusion.* /usr/share/kwin/tabbox/org.plasmafusion.* \
   /usr/share/kwin/scripts/plasmafusion-* /usr/share/kwin/effects/plasmafusion_* \

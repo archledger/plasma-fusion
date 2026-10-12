@@ -7,7 +7,6 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import org.kde.plasma.extras as PlasmaExtras
-import org.kde.prison as Prison
 
 import "components"
 import "components/Icons.js" as Icons
@@ -481,51 +480,31 @@ ColumnLayout {
     }
 
     // ---------------------------------------------------------------- QR code
+    // ClipboardQrView.qml needs Prison's QML module; without it the Loader fails and a note says so.
     Loader {
+        id: qrLoader
         Layout.fillWidth: true
         Layout.fillHeight: true
         Layout.preferredHeight: page.metrics.px(280)
         active: page.mode === "qr"
         visible: active
+        source: "ClipboardQrView.qml"
         onLoaded: {
+            item.pal = Qt.binding(() => page.pal);
+            item.metrics = Qt.binding(() => page.metrics);
+            item.text = Qt.binding(() => page.modeText);
             page.modeFocus = item;
             Qt.callLater(() => page.modeFocus && page.modeFocus.forceActiveFocus(Qt.TabFocusReason));
         }
-        sourceComponent: Item {
-            id: qrView
-            activeFocusOnTab: true
-            Accessible.role: Accessible.Graphic
-            Accessible.name: i18nc("@info QR code of a clipboard entry", "QR code")
-            Accessible.description: page.modeText
-            readonly property bool valid: barcode.implicitWidth > 0 && barcode.implicitHeight > 0
-            readonly property bool fits: barcode.implicitWidth <= barcode.width && barcode.implicitHeight <= barcode.height
-            Rectangle {
-                anchors.centerIn: parent
-                width: Math.min(parent.width, parent.height)
-                height: width
-                radius: 12
-                // The code needs its light background in both styles to be read.
-                color: "#ffffff"
-                opacity: qrView.valid && qrView.fits ? 1 : 0
-                Prison.Barcode {
-                    id: barcode
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    barcodeType: Prison.Barcode.QRCode
-                    content: page.modeText
-                }
-            }
-            FText {
-                anchors.fill: parent
-                visible: !qrView.valid || !qrView.fits
-                pal: page.pal
-                metrics: page.metrics
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                color: page.pal.secondary
-                text: qrView.valid ? i18nc("@info", "This entry is too long for a QR code here")
-                                   : i18nc("@info", "Creating the QR code failed")
-            }
+        FText {
+            anchors.fill: parent
+            visible: qrLoader.status === Loader.Error
+            pal: page.pal
+            metrics: page.metrics
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            color: page.pal.secondary
+            text: i18nc("@info", "QR codes need KDE Frameworks' Prison, which is not installed")
         }
     }
 
