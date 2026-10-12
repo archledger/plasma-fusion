@@ -46,8 +46,16 @@ QtQuickWindow.Window {
         + "then printf 'true\\n'; else printf 'false\\n'; fi; "
         + "kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap --default 6"
 
+    // The gap settings are read when the outline is created and again when KWin reloads its
+    // configuration (Options.configChanged: the snap script's own KWin.readConfig sees new values
+    // from then on too), not each time the outline shows: every read starts a shell and two
+    // kreadconfig6 processes from inside KWin.
+    // Each read is its own source: the engine hands a source that was read moments ago its old
+    // result again instead of running the command.
+    property int settingsReads: 0
     function readSettings() {
-        configReader.connectSource(configCommand);
+        settingsReads += 1;
+        configReader.connectSource(configCommand + " # " + settingsReads);
     }
     function applySettings(text) {
         const values = String(text).trim().split("\n");
@@ -68,6 +76,12 @@ QtQuickWindow.Window {
         }
     }
     Component.onCompleted: readSettings()
+    Connections {
+        target: Options
+        function onConfigChanged() {
+            window.readSettings();
+        }
+    }
 
     Kirigami.Theme.colorSet: Kirigami.Theme.Window
     Kirigami.Theme.inherit: false
@@ -95,7 +109,7 @@ QtQuickWindow.Window {
             const desktop = !win.onAllDesktops && win.desktops.length ? win.desktops[0]
                 : Workspace.currentDesktopForScreen(win.output) || Workspace.currentDesktop;
             const root = tile.parent;
-            if (root.tiles.length === 8 && root !== Workspace.rootTile(win.output, desktop)) {
+            if (SnapGeometry.isQuickRoot(root, Workspace.rootTile(win.output, desktop))) {
                 quickRoots[win.output.name + "|" + (desktop ? desktop.id : "?")] = {root: root, output: win.output.name};
             }
         }
@@ -180,7 +194,6 @@ QtQuickWindow.Window {
 
     onVisibleChanged: {
         if (visible) {
-            readSettings();
             appear.stop();
             zone.opacity = 0;
             if (outline.visualParentGeometry.width > 0 && outline.visualParentGeometry.height > 0) {

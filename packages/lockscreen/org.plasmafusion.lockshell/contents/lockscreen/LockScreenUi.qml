@@ -53,6 +53,14 @@ Item {
     readonly property bool showNotifications: setting("showNotifications", true)
     readonly property bool showNotificationSummaries: setting("showNotificationSummaries", false)
 
+    // Plasma 6.8 and later: the greeter runs one chosen way to unlock (the password, a smartcard,
+    // the fingerprint reader, the face or a security key; kscreenlocker's Authenticators) and
+    // offers the choice (MainBlock's AuthenticatorChoice). Plasma 6.7's authenticator has no
+    // such property and always asks for the password.
+    // qmllint disable unqualified
+    readonly property bool authenticatorChoice: authenticator.authenticator !== undefined
+    // qmllint enable unqualified
+
     function handleMessage(msg, urgent) {
         if (!msg) {
             return;
@@ -87,6 +95,13 @@ Item {
         target: PfStyle
         property: "tint"
         value: accentTint
+    }
+    // The log-out strings' catalogue (PfStyle.logoutDomain): the desktop shell's from Plasma 6.8,
+    // recognised by its authenticator.
+    Binding {
+        target: PfStyle
+        property: "logoutDomain"
+        value: lockScreenUi.authenticatorChoice ? "plasma_shell_org.kde.plasma.desktop" : "plasma_lookandfeel_org.kde.lookandfeel"
     }
 
     // Tablet posture from KWin (TABLET 4.13): touch-sized controls and the prompt higher up.
@@ -163,6 +178,16 @@ Item {
         }
 
         function onSucceeded() {
+            if (lockScreenUi.authenticatorChoice) {
+                // Plasma 6.8: stop the other workers at once (the fingerprint reader beside the
+                // password), and a way that never prompts (face, security key) unlocks without
+                // the explicit Unlock screen, as on the stock lock screen.
+                authenticator.stopAuthenticating();
+                if (mainBlock.choice && !mainBlock.choice.expectingPrompt) {
+                    Qt.quit();
+                    return;
+                }
+            }
             if (authenticator.hadPrompt) {
                 Qt.quit();
             } else {
@@ -179,6 +204,9 @@ Item {
 
         function onInfoMessageChanged() {
             lockScreenUi.handleMessage(authenticator.infoMessage);
+            if (authenticator.infoMessage && !mainBlock.passwordField) {
+                lockScreenRoot.uiVisible = true;
+            }
         }
 
         function onErrorMessageChanged() {
@@ -191,21 +219,32 @@ Item {
         function onPromptForSecretChanged(msg) {
             mainBlock.showPassword = false;
             mainBlock.mainPasswordBox.forceActiveFocus();
-        }
-    }
-
-    // Plasma 6.8 runs one chosen authenticator and starts with the one that unlocked last time
-    // (kscreenlockerrc [Greeter] Authenticator in the state directory), which the stock lock
-    // screen's picker may have set to Fingerprint, Face, Smartcard or a security key. This screen
-    // has no picker, only the password field, so it asks for the password authenticator; the
-    // fingerprint reader still runs next to it. Plasma 6.7 has no such property.
-    Component.onCompleted: {
-        if (authenticator.authenticator !== undefined
-                && authenticator.authenticator !== ScreenLocker.Authenticators.Regular) {
-            authenticator.authenticator = ScreenLocker.Authenticators.Regular;
+            // Plasma 6.8: a way whose prompt says more than "Password:" (a smartcard's PIN, or
+            // the password way with kscreenlockerrc [UI] ShowPromptInRegularAuthenticator) shows
+            // it, as the stock lock screen does.
+            if (mainBlock.choice && mainBlock.choice.showPrompt) {
+                lockScreenUi.handleMessage(authenticator.promptForSecret);
+            }
         }
     }
     // qmllint enable unqualified
+
+    // Plasma 6.8: a way that stopped working says so, and the password is used again
+    // (AuthenticatorChoice switches back); a way without a field shows the prompt when its PAM
+    // module speaks (a face or security-key cue), since nothing would be typed to show it.
+    Connections {
+        target: mainBlock.choice
+        ignoreUnknownSignals: true
+        function onDefunct(message: string): void {
+            lockScreenUi.lockRoot.notification = "";
+            lockScreenUi.handleMessage(message, true);
+            notificationRemoveTimer.stop();
+        }
+        function onChosen(): void {
+            lockScreenUi.lockRoot.notification = "";
+            fadeoutTimer.restart();
+        }
+    }
 
     SessionManagement {
         id: sessionManagement
@@ -459,6 +498,22 @@ Item {
                 }
             }
         }
+        // Plasma 6.8: the greeter starts a way's PAM conversation only when asked, and drops the
+        // request while the way's worker process is still starting ("Worker not ready yet") or
+        // its conversation is running; a failed fingerprint or face attempt is not restarted by
+        // the greeter either. While the prompt is shown, ask again every second, as the stock
+        // lock screen does (not during the grace time after a failed password, which asks itself
+        // when it ends). Plasma 6.7 starts every authenticator itself.
+        Timer {
+            objectName: "authenticatorHeartbeat"
+            interval: 1000
+            repeat: true
+            // qmllint disable unqualified
+            running: lockScreenUi.authenticatorChoice && lockScreenRoot.uiVisible && !authenticator.unlocked
+                     && !graceLockTimer.running
+            onTriggered: authenticator.startAuthenticating()
+            // qmllint enable unqualified
+        }
         Timer {
             id: notificationRemoveTimer
             interval: 3000
@@ -505,9 +560,8 @@ Item {
             id: backdrop
             objectName: "backdrop"
             anchors.fill: parent
-            // qmllint disable unqualified
-            source: typeof wallpaper !== "undefined" && wallpaper ? wallpaper : null
-            // qmllint enable unqualified
+            // This screen's own wallpaper item (LockScreen.qml).
+            source: lockScreenUi.lockRoot ? lockScreenUi.lockRoot.wallpaperItem : null
             factor: lockScreenRoot.promptFactor
         }
 
@@ -617,6 +671,7 @@ Item {
                 id: mainBlock
                 objectName: "mainBlock"
                 lockRoot: lockScreenUi.lockRoot
+                authenticatorChoice: lockScreenUi.authenticatorChoice
                 metrics: lockScreenUi.metrics
                 // qmllint disable unqualified
                 authenticatorObject: authenticator
@@ -676,7 +731,7 @@ Item {
                     PowerButton {
                         objectName: "restartButton"
                         metrics: lockScreenUi.metrics
-                        text: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Restart")
+                        text: i18nd(PfStyle.logoutDomain, "&Restart")
                         iconPath: PfStyle.iconRestart
                         onClicked: lockScreenUi.confirmPower("reboot")
                         visible: sessionManagement.canReboot
@@ -684,7 +739,7 @@ Item {
                     PowerButton {
                         objectName: "shutdownButton"
                         metrics: lockScreenUi.metrics
-                        text: i18nd("plasma_lookandfeel_org.kde.lookandfeel", "&Shut Down")
+                        text: i18nd(PfStyle.logoutDomain, "&Shut Down")
                         iconPath: PfStyle.iconShutDown
                         destructive: true
                         onClicked: lockScreenUi.confirmPower("shutdown")

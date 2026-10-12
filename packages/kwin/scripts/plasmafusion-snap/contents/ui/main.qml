@@ -57,34 +57,25 @@ Item {
         return Workspace.currentDesktopForScreen(win ? win.output : Workspace.activeScreen) || Workspace.currentDesktop;
     }
 
-    // A quick tile is a direct child of a root tile that is not the custom (Meta+T) root.
+    // A quick tile is a direct child of KWin's quick-tile root, not of the custom (Meta+T) root
+    // (SnapGeometry.isQuickRoot: by class name, else by shape).
     function quickRootOf(win) {
         const tile = win ? win.tile : null;
         if (!tile || !tile.parent || tile.parent.parent) {
             return null;
         }
         const quickRoot = tile.parent;
-        const custom = Workspace.rootTile(win.output, desktopOf(win));
-        if (quickRoot === custom || quickRoot.tiles.length !== 8) {
+        if (!SnapGeometry.isQuickRoot(quickRoot, Workspace.rootTile(win.output, desktopOf(win)))) {
             return null;
         }
         quickRoots[keyFor(win.output, desktopOf(win))] = quickRoot;
         return quickRoot;
     }
 
-    // Index of the window's quick tile: 0 left, 1 right, 2 top, 3 bottom, 4..7 quarters.
+    // Role of the window's quick tile: 0 left, 1 right, 2 top, 3 bottom, 4..7 quarters (from its
+    // shape, SnapGeometry.quickRole).
     function quickIndexOf(win) {
-        const quickRoot = quickRootOf(win);
-        if (!quickRoot) {
-            return -1;
-        }
-        const tiles = quickRoot.tiles;
-        for (let i = 0; i < tiles.length; ++i) {
-            if (tiles[i] === win.tile) {
-                return i;
-            }
-        }
-        return -1;
+        return quickRootOf(win) ? SnapGeometry.quickRole(win.tile) : -1;
     }
 
     function applyGap(quickRoot) {
@@ -100,12 +91,13 @@ Item {
     }
 
     function setSplits(quickRoot, horizontal, vertical) {
-        const tiles = quickRoot.tiles;
-        if (horizontal > 0 && Math.abs(tiles[0].relativeGeometry.width - horizontal) > 0.001) {
-            tiles[0].relativeGeometry = Qt.rect(0, 0, horizontal, 1);
+        const left = SnapGeometry.quickTileFor(quickRoot, 0);
+        const top = SnapGeometry.quickTileFor(quickRoot, 2);
+        if (horizontal > 0 && left && Math.abs(left.relativeGeometry.width - horizontal) > 0.001) {
+            left.relativeGeometry = Qt.rect(0, 0, horizontal, 1);
         }
-        if (vertical > 0 && Math.abs(tiles[2].relativeGeometry.height - vertical) > 0.001) {
-            tiles[2].relativeGeometry = Qt.rect(0, 0, 1, vertical);
+        if (vertical > 0 && top && Math.abs(top.relativeGeometry.height - vertical) > 0.001) {
+            top.relativeGeometry = Qt.rect(0, 0, 1, vertical);
         }
     }
 
@@ -127,7 +119,7 @@ Item {
         const key = keyFor(win.output, desktopOf(win));
         const quickRoot = quickRoots[key];
         try {
-            if (quickRoot && quickRoot.tiles && quickRoot.tiles.length === 8) {
+            if (quickRoot && SnapGeometry.isQuickRoot(quickRoot, Workspace.rootTile(win.output, desktopOf(win)))) {
                 return quickRoot;
             }
         } catch (e) {
@@ -153,7 +145,10 @@ Item {
         }
         applyGap(quickRoot);
         setSplits(quickRoot, horizontal, vertical);
-        const tile = quickRoot.tiles[index];
+        const tile = SnapGeometry.quickTileFor(quickRoot, index);
+        if (!tile) {
+            return false;
+        }
         if (win.tile !== tile) {
             return tile.manage(win);
         }
@@ -446,8 +441,8 @@ Item {
         }
         const quickRoot = quickRootOf(win);
         // The other half: left/right (0, 1) or top/bottom (2, 3).
-        const other = quickRoot.tiles[index ^ 1];
-        if (other.windows.length > 0) {
+        const other = SnapGeometry.quickTileFor(quickRoot, index ^ 1);
+        if (!other || other.windows.length > 0) {
             return;
         }
         const candidates = candidatesFor(win, desktopOf(win));

@@ -12,11 +12,32 @@ Item {
     property var script: null
     property var outlineWindow: null
     property var desktop: ({id: "desktop-1"})
-    QtObject {
+    // KWin's quick-tile root with its eight children (quicktile.cpp order: halves, then quarters).
+    QuickRootTile {
         id: quickRoot
-        property var parent: null
-        property var tiles: [tile, {}, {}, {}, {}, {}, {}, {}]
-        property real padding: 6
+        tiles: [tile].concat(harness.quickShapes.slice(1).map(r => harness.shapeTile(r)))
+    }
+    readonly property var quickShapes: [Qt.rect(0, 0, 0.5, 1), Qt.rect(0.5, 0, 0.5, 1),
+        Qt.rect(0, 0, 1, 0.5), Qt.rect(0, 0.5, 1, 0.5), Qt.rect(0, 0, 0.5, 0.5),
+        Qt.rect(0.5, 0, 0.5, 0.5), Qt.rect(0, 0.5, 0.5, 0.5), Qt.rect(0.5, 0.5, 0.5, 0.5)]
+    function shapeTile(r) {
+        return {relativeGeometry: r, absoluteGeometry: Qt.rect(r.x * 1440, 34 + r.y * 866, r.width * 1440, r.height * 866),
+                padding: 6, windows: [], parent: null};
+    }
+    Component {
+        id: quickRootType
+        QuickRootTile {}
+    }
+    Component {
+        id: customRootType
+        RootTile {}
+    }
+    Component {
+        id: plainRootType
+        QtObject {
+            property var parent: null
+            property var tiles: []
+        }
     }
     QtObject {
         id: tile
@@ -87,8 +108,98 @@ Item {
         }
         outlineWindow = outlineComponent.createObject(null);
         outlineWindow.settingsLoadedChanged.connect(() => {
-            if (outlineWindow.settingsLoaded) Qt.callLater(testGeometry);
+            if (outlineWindow.settingsLoaded) Qt.callLater(testQuickRoots);
         });
+    }
+
+    // A window on a given tile of a stand-in root.
+    function windowOn(rootTile, role) {
+        const t = rootTile.tiles.find(c => c.relativeGeometry && Math.abs(c.relativeGeometry.x - quickShapes[role].x) < 0.001
+            && Math.abs(c.relativeGeometry.y - quickShapes[role].y) < 0.001
+            && Math.abs(c.relativeGeometry.width - quickShapes[role].width) < 0.001
+            && Math.abs(c.relativeGeometry.height - quickShapes[role].height) < 0.001);
+        if (t) t.parent = rootTile;
+        return {tile: t, output: win.output, desktops: [desktop], onAllDesktops: false};
+    }
+    function quickChildren(order) {
+        return order.map(i => shapeTile(quickShapes[i]));
+    }
+
+    // KWin's quick-tile root is found by its class name, else by its shape; its tiles by their
+    // shape, not their place among the children (survey B12: the script asked for exactly eight
+    // children in quicktile.cpp's order, which KWin does not document).
+    function testQuickRoots() {
+        check("quick root of a tiled window", script.quickRootOf(win) === quickRoot, script.quickRootOf(win));
+        check("left half is role 0", script.quickIndexOf(win) === 0, script.quickIndexOf(win));
+        const shuffled = quickRootType.createObject(harness, {tiles: quickChildren([7, 3, 5, 1, 0, 6, 2, 4])});
+        check("children in another order: roles from the shape",
+            [0, 1, 2, 3, 4, 5, 6, 7].every(role => script.quickIndexOf(windowOn(shuffled, role)) === role),
+            [0, 1, 2, 3, 4, 5, 6, 7].map(role => script.quickIndexOf(windowOn(shuffled, role))));
+        const nine = quickRootType.createObject(harness, {tiles: quickChildren([0, 1, 2, 3, 4, 5, 6, 7]).concat([shapeTile(Qt.rect(0.25, 0, 0.5, 1))])});
+        check("a ninth child does not hide the quick root", script.quickRootOf(windowOn(nine, 1)) === nine, script.quickRootOf(windowOn(nine, 1)));
+        const unnamed = plainRootType.createObject(harness, {tiles: quickChildren([0, 1, 2, 3, 4, 5, 6, 7])});
+        check("an unnamed root with the quick tiles' shape is the quick root", script.quickRootOf(windowOn(unnamed, 5)) === unnamed,
+            script.quickRootOf(windowOn(unnamed, 5)));
+        const columns = plainRootType.createObject(harness, {tiles: [shapeTile(Qt.rect(0, 0, 0.5, 1)), shapeTile(Qt.rect(0.5, 0, 0.5, 1))]});
+        check("an unnamed root of side-by-side zones is not", script.quickRootOf(windowOn(columns, 0)) === null, script.quickRootOf(windowOn(columns, 0)));
+        const otherCustom = customRootType.createObject(harness, {tiles: quickChildren([0, 1, 2, 3, 4, 5, 6, 7])});
+        check("another desktop's custom root is never the quick root, whatever its children",
+            script.quickRootOf(windowOn(otherCustom, 0)) === null, script.quickRootOf(windowOn(otherCustom, 0)));
+        KW.Workspace.stackingOrder = [windowOn(shuffled, 3)];
+        outlineWindow.quickRoots = ({});
+        outlineWindow.rememberRoots();
+        const record = outlineWindow.quickRoots["Virtual-1|desktop-1"];
+        check("the outline remembers a quick root in another order", record && record.root === shuffled, record);
+        KW.Workspace.stackingOrder = [windowOn(otherCustom, 0)];
+        outlineWindow.quickRoots = ({});
+        outlineWindow.rememberRoots();
+        check("the outline does not take a custom root for one", Object.keys(outlineWindow.quickRoots).length === 0,
+            JSON.stringify(Object.keys(outlineWindow.quickRoots)));
+        KW.Workspace.stackingOrder = KW.Workspace.windows;
+        tile.parent = quickRoot;
+        outlineWindow.quickRoots = ({});
+        Qt.callLater(testOutlineSettings);
+    }
+
+    // The outline reads the gap settings once and again when KWin reloads its configuration,
+    // not each time it shows (survey B12: a shell and two kreadconfig6 inside KWin per show).
+    function testOutlineSettings() {
+        testFiles.writeKwinrc("[Script-plasmafusion-snap]\nGap=12\n");
+        // Later, shown and hidden twice, as KWin does when the pointer reaches an edge.
+        settingsWait.next = () => {
+            for (let i = 0; i < 2; ++i) {
+                outlineWindow.visible = true;
+                outlineWindow.visible = false;
+            }
+            outlineWindow.visible = Qt.binding(() => outline.active);
+            settingsWait.next = checkShown;
+            settingsWait.restart();
+        };
+        settingsWait.restart();
+    }
+    function checkShown() {
+        settingsWait.next = () => {
+            check("showing the outline does not read the settings again", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
+            KW.Options.configChanged();
+            settingsWait.next = () => {
+                check("KWin reloading its configuration reads them again", outlineWindow.configuredGap === 12, outlineWindow.configuredGap);
+                testFiles.writeKwinrc("");
+                KW.Options.configChanged();
+                settingsWait.next = () => {
+                    check("and back to the default", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
+                    testGeometry();
+                };
+                settingsWait.restart();
+            };
+            settingsWait.restart();
+        };
+        settingsWait.next();
+    }
+    Timer {
+        id: settingsWait
+        property var next: null
+        interval: 2500
+        onTriggered: next()
     }
 
     function testGeometry() {

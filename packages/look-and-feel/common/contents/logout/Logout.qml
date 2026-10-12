@@ -8,8 +8,9 @@
     with one change. Breeze draws the Complementary colours on a black veil; Plasma Fusion Light
     has a light Complementary set (Colors board), so the veil takes the Complementary background
     instead: dark in Plasma Fusion Dark, light in Plasma Fusion Light, always readable.
-    Shipped in the Global Theme (Plasma 6.7's greeter reads it from there) and in the
-    org.plasmafusion.lockshell shell package (Plasma 6.8's greeter reads the shell package).
+    Plasma 6.7's greeter reads it from the Global Theme. Plasma 6.8's greeter reads the shell
+    package instead, where org.plasmafusion.lockshell carries 6.8's own log-out files with the same
+    change (packages/lockscreen/org.plasmafusion.lockshell/contents/logout/).
 */
 
 import QtQuick

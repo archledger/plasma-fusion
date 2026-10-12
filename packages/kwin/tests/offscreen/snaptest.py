@@ -30,6 +30,15 @@ class Config(QObject):
         self.settings[key] = value
 
 
+class TestFiles(QObject):
+    """Writes the private kwinrc the outline's settings reader sees."""
+
+    @Slot(str)
+    def writeKwinrc(self, text):
+        with open(os.path.join(config_home.name, "kwinrc"), "w") as f:
+            f.write(text)
+
+
 here = os.path.dirname(os.path.abspath(__file__))
 config_home = tempfile.TemporaryDirectory(prefix="plasmafusion-snap-config-")
 os.environ["XDG_CONFIG_HOME"] = config_home.name
@@ -40,12 +49,14 @@ i18n = I18n()
 engine.rootContext().setContextObject(i18n)
 config = Config()
 engine.rootContext().setContextProperty("KWin", config)
+test_files = TestFiles()
+engine.rootContext().setContextProperty("testFiles", test_files)
 engine.rootContext().setContextProperty("stageHome", os.path.abspath(sys.argv[1]))
 engine.load(QUrl.fromLocalFile(os.path.join(here, "snap-geometry-harness.qml")))
 if not engine.rootObjects():
     raise SystemExit("snap geometry harness failed to load")
 root = engine.rootObjects()[0]
-QTimer.singleShot(5000, app.quit)
+QTimer.singleShot(25000, app.quit)
 getattr(root, "doneChanged").connect(app.quit)
 app.exec()
 if not root.property("done"):

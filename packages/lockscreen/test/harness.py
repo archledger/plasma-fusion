@@ -9,9 +9,15 @@ states and saves one PNG per scenario. Run it on a private bus with fonts from t
 
   test/run.sh OUTDIR [scenario...]   (a private bus without activation, mock services, no display)
 
-Scenarios: idle, prompt, messages, fperror, focus, nopassword, and the Restart / Shut Down checks
+Scenarios: idle, prompt, messages, fperror, focus, nopassword, the Restart / Shut Down checks
 power, power-blocked, power-busy, power-noreboot, power-kiosk (Plasma's session backend on the mock
-logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check). Environment:
+logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check), and the
+checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
+for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
+auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth68-heartbeat,
+auth68-strings, auth67-picker, auth67-heartbeat, auth67-strings, and wallpaper68 (each writes
+SCENARIO.json and exits 1 on a failed check).
+Environment:
 PF_LOCALE (default en_GB), PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board
 wallpaper).
 """
@@ -73,7 +79,12 @@ def fmt(text, args):
 
 
 class I18n(QObject):
-    """The KLocalizedContext functions the lock screen calls (English only)."""
+    """The KLocalizedContext functions the lock screen calls (English only). The catalogue and
+    text of each i18nd/i18ndp call are kept in `domains`."""
+
+    def __init__(self):
+        super().__init__()
+        self.domains = []
 
     @Slot(str, result=str)
     @Slot(str, "QVariant", result=str)
@@ -91,6 +102,7 @@ class I18n(QObject):
     @Slot(str, str, "QVariant", result=str)
     @Slot(str, str, "QVariant", "QVariant", result=str)
     def i18nd(self, domain, text, *args):
+        self.domains.append((domain, text))
         return fmt(text, args)
 
     @Slot(str, str, str, result=str)
@@ -102,6 +114,7 @@ class I18n(QObject):
     @Slot(str, str, str, "QVariant", result=str)
     @Slot(str, str, str, "QVariant", "QVariant", result=str)
     def i18ndp(self, domain, singular, plural, n, *args):
+        self.domains.append((domain, singular))
         return fmt(singular if int(n) == 1 else plural, (n,) + args)
 
 
@@ -166,7 +179,7 @@ def main():
         text += "\n[KDE Action Restrictions]\nlogout=false\n"
     with open(os.path.join(cfg, "kdeglobals"), "w") as f:
         f.write(text)
-    if scenarios[0].startswith("power"):
+    if scenarios[0].startswith("power") or scenarios[0].endswith("-strings"):
         # Plasma's session backend and the lock screen read logind on the system bus: here the
         # private bus, where mock_services.py answers for logind and ksmserver.
         os.environ["DBUS_SYSTEM_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
@@ -200,8 +213,16 @@ def render(app, out, scenario, w, h, wp_path):
     i18n = I18n()
     ctx.setContextObject(i18n)
 
-    auth_comp = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(HERE, "MockAuthenticator.qml")))
+    mock = "MockAuthenticator68.qml" if scenario.startswith("auth68") else "MockAuthenticator.qml"
+    auth_comp = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(HERE, mock)))
     auth = auth_comp.create()
+    if auth is None:
+        print("QML ERROR:", auth_comp.errorString())
+        global AUTH_FAILED
+        AUTH_FAILED = True
+        return
+    if scenario.startswith("auth"):
+        auth_setup(auth, scenario)
     if scenario == "nopassword":
         auth.setProperty("hadPrompt", False)
     config = QQmlPropertyMap()
@@ -225,8 +246,11 @@ def render(app, out, scenario, w, h, wp_path):
     ctx.setContextProperty("wallpaper", wallpaper)
 
     view.resize(w, h)
-    if scenario.startswith("power"):
-        engine.warnings.connect(lambda ws: [print("QML WARNING:", x.toString()) for x in ws])
+    warnings = []
+    if scenario.startswith("power") or scenario.startswith("auth") or scenario == "wallpaper68":
+        engine.warnings.connect(lambda ws: [(print("QML WARNING:", x.toString()), warnings.append(x.toString())) for x in ws])
+    quits = []
+    engine.quit.connect(lambda: quits.append(True))
     view.setSource(QUrl.fromLocalFile(os.path.join(PKG, "LockScreen.qml")))
     for e in view.errors():
         print("QML ERROR:", e.toString())
@@ -288,6 +312,12 @@ def render(app, out, scenario, w, h, wp_path):
         return
     if scenario.startswith("power"):
         power(app, out, view, root, lock_root, scenario)
+        return
+    if scenario.startswith("auth"):
+        authenticators(app, out, view, root, lock_root, scenario, auth, warnings, quits, i18n)
+        return
+    if scenario == "wallpaper68":
+        shared_wallpaper(app, out, view, root, ctx, wallpaper, wp_comp, warnings)
         return
     if scenario == "tablet":
         tablet(app, out, view, root, lock_root, w, h)
@@ -459,6 +489,273 @@ def power(app, out, view, root, lock_root, scenario):
 
 
 POWER_FAILED = False
+AUTH_FAILED = False
+
+
+def shared_wallpaper(app, out, view, root, ctx, wallpaper, wp_comp, warnings):
+    """Plasma 6.8's greeter sets the context property "wallpaper" for each screen in the root
+    context all its views share, so after the second screen it names that screen's item on the
+    first screen too. The backdrop must keep this screen's own wallpaper (the root's child at
+    z -1000), never another window's item. Writes wallpaper68.json."""
+    from PySide6.QtTest import QTest
+    res = {"scenario": "wallpaper68", "checks": []}
+
+    def check(name, ok, detail=None):
+        res["checks"].append({"check": name, "pass": bool(ok), "detail": detail})
+        print(("PASS " if ok else "FAIL ") + "wallpaper68: " + name, "" if detail is None else detail)
+
+    def finish():
+        backdrop = root.findChild(QQuickItem, "backdrop")
+        check("the backdrop draws this screen's wallpaper", backdrop is not None and backdrop.property("source") == wallpaper)
+        # The second screen's view: its wallpaper item lives in another window.
+        other_view = QQuickView()
+        other_view.resize(320, 200)
+        other = wp_comp.create()
+        other.setParentItem(other_view.contentItem())
+        ctx.setContextProperty("wallpaper", other)
+        QTest.qWait(500)
+        check("after the next screen names its own wallpaper, this screen keeps its own",
+              backdrop.property("source") == wallpaper and backdrop.property("source") != other)
+        check("no QML warnings", not [w for w in warnings if "different windows" in w], warnings)
+        res["pass"] = all(c["pass"] for c in res["checks"])
+        with open(os.path.join(out, "wallpaper68.json"), "w") as f:
+            json.dump(res, f, indent=1, default=str)
+        print("wallpaper68:", "PASS" if res["pass"] else "FAIL")
+        global AUTH_FAILED
+        AUTH_FAILED = not res["pass"]
+        view.close()
+        other_view.close()
+        app.quit()
+
+    QTimer.singleShot(1500, finish)
+    app.exec()
+
+# Plasma 6.8's ways to unlock (kscreenlocker's Authenticators enum) and the model's rows as the
+# greeter builds them (pamauthenticatormodel.cpp: icon, password field, prompt expected, tooltip,
+# prompt shown).
+REGULAR, FINGERPRINT, SMARTCARD, FACE, U2F = range(5)
+WAYS = {
+    REGULAR: ("input-keyboard-symbolic", True, True, "Password", False),
+    SMARTCARD: ("secure-card-symbolic", True, True, "Smartcard", True),
+    FINGERPRINT: ("fingerprint-symbolic", False, False, "Fingerprint", True),
+    FACE: ("edit-image-face-detect-symbolic", False, False, "Face", True),
+    U2F: ("database-change-key-symbolic", False, False, "Universal 2 Factor", True),
+}
+AUTH_SETUPS = {
+    # scenario: (the model's ways, the way the greeter starts with, fingerprint reader beside it)
+    "auth68-picker": ([REGULAR, SMARTCARD, FACE, U2F], REGULAR, False),
+    "auth68-saved": ([REGULAR, FACE], FACE, False),
+    "auth68-missing": ([REGULAR, FACE], U2F, False),
+    "auth68-defunct": ([REGULAR, FACE, U2F], FACE, False),
+    "auth68-noprompt": ([REGULAR, FACE], FACE, False),
+    "auth68-prompt": ([REGULAR, SMARTCARD], REGULAR, False),
+    "auth68-fingerprint": ([REGULAR, FINGERPRINT, FACE], REGULAR, True),
+    "auth68-heartbeat": ([REGULAR], REGULAR, False),
+    "auth67-picker": ([], REGULAR, False),
+    "auth67-heartbeat": ([], REGULAR, False),
+    "auth68-strings": ([REGULAR], REGULAR, False),
+    "auth67-strings": ([], REGULAR, False),
+}
+
+
+def auth_setup(auth, scenario):
+    ways, start, fingerprint = AUTH_SETUPS[scenario]
+    if scenario.startswith("auth68"):
+        rows = []
+        for way in ways:
+            icon, field, expecting, tooltip, show = WAYS[way]
+            rows.append({"type": way, "iconName": icon, "passwordField": field, "expectingPrompt": expecting,
+                         "tooltip": tooltip, "showPrompt": show, "functional": True})
+        auth.setProperty("ways", rows)
+        auth.setProperty("authenticator", start)
+        auth.setProperty("chosenLog", [])
+    auth.setProperty("authenticatorTypes", 1 if fingerprint else 0)
+    if scenario == "auth68-noprompt":
+        auth.setProperty("hadPrompt", False)
+
+
+def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, quits, i18n):
+    """Plasma 6.8's choice of how to unlock (survey P6): the other ways as links in the hint line,
+    a click switches the greeter's way, a way without a password field replaces the field with
+    what to do, the way that unlocked last time is kept and one the model no longer offers or
+    that stops working falls back to the password; a way that never prompts unlocks without the
+    Unlock screen; the greeter is asked again every second while the prompt is shown (6.8 only).
+    On Plasma 6.7 (auth67-*) nothing of this appears. Writes SCENARIO.json."""
+    from PySide6.QtCore import QPointF
+    from PySide6.QtTest import QTest
+    res = {"scenario": scenario, "checks": []}
+
+    def items():
+        # Repeater delegates are not QObject children of the scene; walk the visual tree.
+        found, todo = [], [root]
+        while todo:
+            it = todo.pop()
+            found.append(it)
+            todo.extend(it.childItems())
+        return found
+
+    def item(name):
+        return next((c for c in items() if c.objectName() == name), None)
+
+    def check(name, ok, detail=None):
+        res["checks"].append({"check": name, "pass": bool(ok), "detail": detail})
+        print(("PASS " if ok else "FAIL ") + scenario + ": " + name, "" if detail is None else detail)
+
+    def shown(name):
+        it = item(name)
+        return it is not None and it.isVisible()
+
+    def links():
+        return sorted(c.property("text") for c in items()
+                      if c.objectName().startswith("authenticatorLink") and c.isVisible())
+
+    def click(name):
+        it = item(name)
+        p = it.mapToScene(QPointF(it.width() / 2, it.height() / 2))
+        QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier, p.toPoint())
+
+    def way():
+        return auth.property("authenticator")
+
+    def status():
+        it = item("authenticatorStatus")
+        return it.property("text") if it is not None and it.isVisible() else None
+
+    def message():
+        return root.property("notification")
+
+    def wait(ms):
+        QTest.qWait(ms)
+
+    def run():
+        lock_root.setProperty("uiVisible", True)
+        wait(800)
+        if scenario == "auth68-picker":
+            check("the other ways are links: smartcard, face, security key", links() == ["Use face", "Use security key", "Use smartcard"], links())
+            check("the password field is shown for the password way", shown("passwordBox") and status() is None)
+            view.grabWindow().save(os.path.join(out, "auth68-picker.png"))
+            click("authenticatorLink%d" % FACE)
+            wait(500)
+            check("Use face switches the greeter's way to Face", way() == FACE, way())
+            check("the field gives way to what to do", not shown("passwordBox") and not shown("unlockButton")
+                  and status() == "Unlock with your face", status())
+            check("the links now offer the password", links() == ["Use password", "Use security key", "Use smartcard"], links())
+            auth.setProperty("infoMessage", "Looking for your face")
+            wait(300)
+            check("the face module's guidance is shown", "Looking for your face" in message(), message())
+            view.grabWindow().save(os.path.join(out, "auth68-face.png"))
+            lock_root.setProperty("uiVisible", False)
+            wait(400)
+            auth.setProperty("infoMessage", "Look at the camera")
+            wait(300)
+            check("its guidance shows the prompt (nothing would be typed to show it)", lock_root.property("uiVisible"))
+            click("authenticatorLink%d" % SMARTCARD)
+            wait(500)
+            check("Use smartcard: a field for the PIN", way() == SMARTCARD and shown("passwordBox"), way())
+            # The links are reached with Tab and work with Space.
+            link = item("authenticatorLink%d" % REGULAR)
+            link.forceActiveFocus(Qt.TabFocusReason)
+            QTest.keyClick(view, Qt.Key_Space)
+            wait(500)
+            check("Space on Use password switches back", way() == REGULAR, way())
+            pw = item("passwordBox")
+            check("the field has the focus again", pw is not None and pw.property("activeFocus"))
+            log = auth.property("chosenLog")
+            log = log.toVariant() if hasattr(log, "toVariant") else log
+            check("the greeter was asked for each way in turn", list(log) == [FACE, SMARTCARD, REGULAR], log)
+        elif scenario == "auth68-saved":
+            log = auth.property("chosenLog")
+            log = log.toVariant() if hasattr(log, "toVariant") else log
+            check("the way that unlocked last time (Face) is kept", way() == FACE and list(log) == [], (way(), log))
+            check("its status replaces the field", status() == "Unlock with your face" and not shown("passwordBox"), status())
+            check("Use password is offered", links() == ["Use password"], links())
+        elif scenario == "auth68-missing":
+            check("a saved way the model no longer offers falls back to the password", way() == REGULAR, way())
+            check("the field is shown", shown("passwordBox"))
+            check("the offered way is a link", links() == ["Use face"], links())
+        elif scenario == "auth68-defunct":
+            check("starts with the saved way", way() == FACE, way())
+            auth.markDefunct(FACE)
+            wait(600)
+            check("a way that stops working falls back to the password", way() == REGULAR, way())
+            check("and says so", "not functioning correctly" in message(), message())
+            check("the field is back", shown("passwordBox"))
+            link = item("authenticatorLink%d" % FACE)
+            check("its link stays, off", link is not None and link.isVisible() and not link.property("enabled"))
+            view.grabWindow().save(os.path.join(out, "auth68-defunct.png"))
+            click("authenticatorLink%d" % FACE)
+            wait(400)
+            check("a click on it does nothing", way() == REGULAR, way())
+        elif scenario == "auth68-noprompt":
+            auth.succeeded.emit()
+            wait(500)
+            check("a way without a prompt unlocks at once (no Unlock screen)", quits == [True], quits)
+            check("the other workers are stopped", auth.property("stopCount") == 1, auth.property("stopCount"))
+        elif scenario == "auth68-prompt":
+            auth.setProperty("promptForSecret", "Password: ")
+            wait(300)
+            check("the password way does not show its prompt", "Password:" not in message(), message())
+            click("authenticatorLink%d" % SMARTCARD)
+            wait(400)
+            auth.setProperty("promptForSecret", "PIN for Test card: ")
+            wait(300)
+            check("the smartcard's prompt is shown", "PIN for Test card:" in message(), message())
+        elif scenario == "auth68-fingerprint":
+            hints = [c.property("text") for c in items() if c.property("text") == "Use fingerprint" and c.isVisible()]
+            check("the fingerprint reader beside the password keeps its hint, and gets no link of its own",
+                  len(hints) == 1 and links() == ["Use face"], (hints, links()))
+            auth.setProperty("fingerprintInfo", "Place your finger on the reader")
+            wait(300)
+            hints = [c.property("text") for c in items() if c.isVisible() and c.property("text") == "Place your finger on the reader"]
+            check("pam_fprintd's instruction replaces the hint", len(hints) == 1, hints)
+            view.grabWindow().save(os.path.join(out, "auth68-fingerprint.png"))
+        elif scenario == "auth68-heartbeat":
+            start = auth.property("startCount")
+            wait(3300)
+            n = auth.property("startCount") - start
+            check("the greeter is asked again every second while the prompt is shown", 3 <= n <= 4, n)
+            lock_root.setProperty("uiVisible", False)
+            wait(300)
+            start = auth.property("startCount")
+            wait(2200)
+            check("and not while it is hidden", auth.property("startCount") - start == 0, auth.property("startCount") - start)
+        elif scenario == "auth67-picker":
+            check("Plasma 6.7: no ways to choose", links() == [] and item("authenticatorChoice") is None, links())
+            check("Plasma 6.7: the password field", shown("passwordBox") and shown("unlockButton"))
+        elif scenario == "auth67-heartbeat":
+            start = auth.property("startCount")
+            wait(3300)
+            check("Plasma 6.7: the authenticator is not asked again (it starts itself)",
+                  auth.property("startCount") - start == 0, auth.property("startCount") - start)
+        elif scenario in ("auth68-strings", "auth67-strings"):
+            # The power row and its question borrow the log-out screen's strings, whose catalogue
+            # moved to the desktop shell's in Plasma 6.8.
+            domain = ("plasma_shell_org.kde.plasma.desktop" if scenario == "auth68-strings"
+                      else "plasma_lookandfeel_org.kde.lookandfeel")
+            wait(1500)
+            click("restartButton")
+            wait(800)
+            # The text each binding shows is its last lookup.
+            last = {s: d for d, s in i18n.domains if s in ("&Restart", "&Shut Down")}
+            check("Restart and Shut Down come from " + domain, set(last.values()) == {domain} and len(last) == 2, last)
+        check("no QML warnings", warnings == [], warnings)
+
+    def finish():
+        try:
+            run()
+        except Exception as e:  # a missing item on an older package is a failure, not a crash
+            check("no error while running the checks", False, repr(e))
+        res["pass"] = all(c["pass"] for c in res["checks"]) and len(res["checks"]) > 0
+        with open(os.path.join(out, scenario + ".json"), "w") as f:
+            json.dump(res, f, indent=1, default=str)
+        print(scenario + ":", "PASS" if res["pass"] else "FAIL")
+        global AUTH_FAILED
+        AUTH_FAILED = not res["pass"]
+        view.close()
+        app.quit()
+
+    QTimer.singleShot(1200, finish)
+    app.exec()
 
 
 def gpu_ns():
@@ -690,4 +987,4 @@ def tablet(app, out, view, root, lock_root, w, h):
 
 if __name__ == "__main__":
     main()
-    sys.exit(1 if POWER_FAILED else 0)
+    sys.exit(1 if POWER_FAILED or AUTH_FAILED else 0)
