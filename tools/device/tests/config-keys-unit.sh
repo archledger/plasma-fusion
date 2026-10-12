@@ -67,7 +67,9 @@ case_hot "first run turns the corner off" 0 0 7 9
 case_hot "first run with --hot-corner turns it on" 0 1 unset 7
 case_hot "a later run keeps the corner the user turned on" 2 0 7 7
 case_hot "a later run keeps more edges the user set" 2 0 "1,7" "1,7"
-case_hot "a later run sets an unset corner off" 2 0 unset 9
+# An unset key is KWin's default, the top-left corner: System Settings > Screen Edges deletes the
+# key when the user turns that corner on.
+case_hot "a later run keeps an unset key (KWin's default corner, on)" 2 0 unset ""
 case_hot "a later run keeps the corner off" 2 0 9 9
 case_hot "--hot-corner turns an off corner on" 2 1 9 7
 
