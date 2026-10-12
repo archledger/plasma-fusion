@@ -123,7 +123,7 @@ dock.addWidget("org.plasmafusion.dock");
   in step with the windows (`contents/code/previews.js`, `tests/previews.test.js`): a title or
   active-window change sets that card's roles, and every card keeps its stream.
 - **Audio indicator:** a 20 px disc with a speaker glyph inside the icon's top-left corner (the count and
-  progress use the top-right one; inside the icon, because a magnified icon rises past the 10 px above the
+  progress use the right ones; inside the icon, because a magnified icon rises past the 10 px above the
   resting icons where the dock tracks the pointer, so a disc over the edge would move away under it) while the app plays sound (after 2 s, so short sounds do not flash it)
   or is muted (crossed speaker, at once). Clicking it mutes or unmutes all of the app's streams without
   activating the app. Streams are matched as in the stock task manager: the portal app id, the process
@@ -395,7 +395,10 @@ built by the lead directly.
   `AppId`s that carry ".desktop" are stripped before they are used as icon names.
 - **Attention** (G26): one short bounce when an app asks for attention (besides the orange dot).
 - **Unread counts and progress** (G17): `TaskItem` draws the Controls board's badge (20 px, accent,
-  11 px 800, tabular) and a 3 px progress ring on a 20 px disc. The progress of file transfers has a
+  11 px 800, tabular) and a 3 px progress ring on a 20 px disc at the top-right corner. Both show
+  together, as in the stock task manager (its progress overlay and count badge are independent):
+  with a count in that corner the ring moves inside the icon to its bottom-right corner (2 px in),
+  which nothing else uses. Before 0.5.0 the count hid the ring. The progress of file transfers has a
   live source (below); the apps' own counts and progress (Unity LauncherEntry) have none yet, and
   only the test hook `debugAction badge:ROW:COUNT[:PROGRESS]` sets them.
 - **Why Unity LauncherEntry needs a compiled part** (checked 2026-10-11 against plasma-workspace
@@ -430,7 +433,7 @@ built by the lead directly.
   manager (`JobsModelPrivate::updateApplicationPercentage`: the mean percentage of the app's jobs
   that have not stopped, in whole percent; a paused job counts). An app's own Unity progress, when
   there is one, wins; its count stays. The stock task manager also shows the number of jobs as a
-  badge; the dock keeps its badge for unread notifications and shows the ring only.
+  badge; the dock keeps its badge for unread notifications and adds the ring next to it (above).
 - **Motion and accent**: every duration from `Motion` (zoom `popupIn`, press `pressScale`, hover
   colours `hover`, pulse `pulse` with `loops()`, indicator `toggle`); the active fill, ring, pill and
   focus ring follow the user's accent (`FusionAccent`, the board's blues otherwise). The start-up
@@ -460,7 +463,9 @@ the tablet script's window policy switched on for the virtual output): 20/20.
 - File-transfer progress (0.5.0): `tests/jobs.test.js` (node, in the build step) folds jobs per app
   and merges them with the apps' own state; `tests/transfers_test.py` (CI step "Dock file-transfer
   progress") starts Plasma's job server on a private bus through TransferJobs.qml and reports jobs
-  the way KIO does (one copy, a second one, paused, another app, finished). VM 4 (2026-10-11): a
+  the way KIO does (one copy, a second one, paused, another app, finished), and on a staged Dolphin
+  tile (TaskItem.qml) the ring shows alone, then with two unread notifications next to the count,
+  inside the icon and clear of it. VM 4 (2026-10-11): a
   2 GiB file copied in Dolphin onto a USB disk showed the ring on Dolphin's tile (50 % and 83 % in
   the screenshots, `dump-targets` `%0.83`) and none once the copy ended.
 - M3: "Add to Desktop" makes `~/Desktop/org.kde.konsole.desktop` → `/usr/share/applications/…`; a drag

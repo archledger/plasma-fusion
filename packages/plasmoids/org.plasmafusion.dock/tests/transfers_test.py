@@ -11,7 +11,8 @@ TransferJobs.qml's notification model starts libnotificationmanager's job server
 the one KIO reports file copies to. Jobs are started on it the way KIO's job tracker does
 (org.kde.JobViewServerV2.requestView with the app's desktop entry, then JobViewV3 updates), and the
 progress per app must follow: one copy, a second one of the same app (their mean), a suspended job,
-another app, and none once the jobs end.
+another app, and none once the jobs end. On a dock tile (TaskItem.qml, staged with the shared blocks
+as the build does) the progress ring shows next to an unread count, as in the stock task manager.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -19,12 +20,14 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
 
 here = Path(__file__).resolve().parent
-ui = here.parent / "contents/ui"
+package = here.parent
+root = package.parents[2]
 
 home = Path(tempfile.mkdtemp(prefix="pf-dock-transfers-"))
 for key, sub in (("XDG_DATA_HOME", ".local/share"), ("XDG_CONFIG_HOME", ".config"), ("XDG_CACHE_HOME", ".cache")):
@@ -32,6 +35,13 @@ for key, sub in (("XDG_DATA_HOME", ".local/share"), ("XDG_CONFIG_HOME", ".config
     (home / sub).mkdir(parents=True)
 os.environ["HOME"] = str(home)
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+# The stage of the package: contents plus the shared blocks, as tools/build.d/73-dock.sh does.
+stage = home / "stage"
+shutil.copytree(package / "contents", stage / "contents")
+subprocess.run(["bash", str(root / "tools/build-lib/shared-qml.sh"), "install", str(package), str(stage / "contents/ui")],
+               check=True, timeout=120, env=dict(os.environ, ROOT=str(root)))
+ui = stage / "contents/ui"
 
 import dbus  # noqa: E402
 from PySide6.QtCore import Q_RETURN_ARG, QMetaObject, QUrl  # noqa: E402
@@ -70,11 +80,58 @@ def pumped(fn, *args):
 calls = ThreadPoolExecutor(max_workers=1)
 HARNESS = b"""
 import QtQuick
+import "../code/jobs.js" as Jobs
 Item {
+    width: 200
+    height: 120
     TransferJobs {
         id: transfers
     }
     function progress() { return JSON.stringify(transfers.progress); }
+
+    // A Dolphin tile as the dock builds it (main.qml: dockEntries = Jobs.withJobs(...)), with
+    // `unread` notifications not seen yet.
+    property int unread: 0
+    DockPalette {
+        id: palette
+        dark: true
+    }
+    Motion {
+        id: motion
+    }
+    TaskItem {
+        id: tile
+        y: 20
+        height: 90
+        index: 0
+        model: ({ AppId: "org.kde.dolphin", AppName: "Dolphin", decoration: "system-file-manager", IsLauncher: false,
+                  IsStartup: false, IsActive: false, IsDemandingAttention: false })
+        pal: palette
+        motion: motion
+        entry: Jobs.withJobs({}, transfers.progress)["org.kde.dolphin"] ?? null
+        notificationCount: unread
+    }
+    function find(item, name) {
+        if (item.objectName === name) {
+            return item;
+        }
+        for (const child of item.children) {
+            const found = find(child, name);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
+    }
+    function tileState() {
+        const ring = find(tile, "progressRing");
+        const badge = find(tile, "countBadge");
+        const r = ring.mapToItem(tile.iconItem, 0, 0);
+        const b = badge.mapToItem(tile.iconItem, 0, 0);
+        return JSON.stringify({ ring: ring.visible, badge: badge.visible, progress: tile.progress,
+                                ringBox: [r.x, r.y, ring.width, ring.height], badgeBox: [b.x, b.y, badge.width, badge.height],
+                                icon: tile.iconItem.width });
+    }
 }
 """
 
@@ -94,6 +151,12 @@ try:
     def progress():
         return json.loads(QMetaObject.invokeMethod(item, "progress", Q_RETURN_ARG("QVariant")))
 
+    def tile():
+        return json.loads(QMetaObject.invokeMethod(item, "tileState", Q_RETURN_ARG("QVariant")))
+
+    def overlap(a, b):
+        return a[0] < b[0] + b[2] and b[0] < a[0] + a[2] and a[1] < b[1] + b[3] and b[1] < a[1] + a[3]
+
     wait_for(lambda: bus.name_has_owner("org.kde.JobViewServer"), "the job server did not start")
     server = dbus.Interface(pumped(bus.get_object, "org.kde.JobViewServer", "/JobViewServer"), "org.kde.JobViewServerV2")
 
@@ -112,6 +175,15 @@ try:
     update(copy, percent=dbus.UInt32(60))
     wait_for(lambda: progress().get("org.kde.dolphin", {}).get("progress") == 0.6, "the progress did not follow")
     check(True, "the progress follows the copy (60 %)")
+    t = tile()
+    check(t["ring"] and not t["badge"] and t["progress"] == 0.6, "the Dolphin tile shows the ring at 60 %% (%s)" % t)
+    item.setProperty("unread", 2)
+    QTest.qWait(100)
+    t = tile()
+    check(t["badge"] and t["ring"], "with two unread notifications the tile shows the count and the ring (%s)" % t)
+    check(not overlap(t["ringBox"], t["badgeBox"]) and 0 <= t["ringBox"][0] and t["ringBox"][0] + t["ringBox"][2] <= t["icon"]
+          and t["ringBox"][1] + t["ringBox"][3] <= t["icon"], "the ring moves inside the icon, clear of the count (%s)" % t)
+    item.setProperty("unread", 0)
 
     second = start("org.kde.dolphin")
     update(second, percent=dbus.UInt32(21))
