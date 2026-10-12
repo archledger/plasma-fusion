@@ -14,7 +14,7 @@ power, power-blocked, power-busy, power-noreboot, power-kiosk, power-mnemonic, p
 logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check), and the
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
-auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth68-heartbeat,
+auth68-defunct, auth68-noprompt, auth68-prompt, auth68-switch, auth68-fingerprint, auth68-heartbeat,
 auth68-failed, auth68-strings, auth67-picker, auth67-heartbeat, auth67-failed, auth67-strings, and
 wallpaper68 (each writes
 SCENARIO.json and exits 1 on a failed check).
@@ -656,6 +656,7 @@ AUTH_SETUPS = {
     "auth68-defunct": ([REGULAR, FACE, U2F], FACE, False),
     "auth68-noprompt": ([REGULAR, FACE], FACE, False),
     "auth68-prompt": ([REGULAR, SMARTCARD], REGULAR, False),
+    "auth68-switch": ([REGULAR, SMARTCARD, FACE], REGULAR, False),
     "auth68-fingerprint": ([REGULAR, FINGERPRINT, FACE], REGULAR, True),
     "auth68-heartbeat": ([REGULAR], REGULAR, False),
     "auth68-failed": ([REGULAR, FACE], FACE, False),
@@ -812,6 +813,56 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
             auth.setProperty("promptForSecret", "PIN for Test card: ")
             wait(300)
             check("the smartcard's prompt is shown", "PIN for Test card:" in message(), message())
+        elif scenario == "auth68-switch":
+            # What was typed for one way goes when another way is chosen, on every screen
+            # (PasswordSync): it must not come back with the password, nor go to the smartcard as
+            # its PIN.
+            from PySide6.QtQml import QQmlEngine, QQmlExpression
+
+            def secret():
+                # PasswordSync as the prompt's own files see it.
+                block = item("mainBlock")
+                value, _ = QQmlExpression(QQmlEngine.contextForObject(block), block, "PasswordSync.password").evaluate()
+                return value
+            pw = item("passwordBox")
+
+            def type_secret():
+                pw.forceActiveFocus()
+                for ch in "hunter2":
+                    QTest.keyClick(view, ch)
+                wait(200)
+            type_secret()
+            check("the typed password is in the field and shared with the other screens",
+                  pw.property("text") == "hunter2" and secret() == "hunter2", (len(pw.property("text") or ""), secret() and len(secret())))
+            click("authenticatorLink%d" % FACE)
+            wait(500)
+            check("Use face: the typed password is gone, on every screen", way() == FACE and pw.property("text") == ""
+                  and secret() == "", (way(), len(pw.property("text") or ""), secret() and len(secret())))
+            click("authenticatorLink%d" % REGULAR)
+            wait(500)
+            check("Use password again: the field is empty", way() == REGULAR and shown("passwordBox")
+                  and pw.property("text") == "" and secret() == "", (way(), len(pw.property("text") or "")))
+            type_secret()
+            click("authenticatorLink%d" % SMARTCARD)
+            wait(500)
+            check("Use smartcard: the PIN field starts empty", way() == SMARTCARD and shown("passwordBox")
+                  and pw.property("text") == "" and secret() == "", (way(), len(pw.property("text") or "")))
+            pw.forceActiveFocus()
+            QTest.keyClick(view, Qt.Key_Return)
+            wait(300)
+            responses = auth.property("responses")
+            responses = responses.toVariant() if hasattr(responses, "toVariant") else responses
+            check("Enter there does not send the password as the PIN", all(r == "<0 chars>" for r in list(responses or [])), responses)
+            pw.forceActiveFocus()
+            for ch in "1234":
+                QTest.keyClick(view, ch)
+            wait(200)
+            check("the field still takes the PIN", pw.property("text") == "1234" and secret() == "1234",
+                  len(pw.property("text") or ""))
+            auth.markDefunct(SMARTCARD)
+            wait(600)
+            check("the smartcard stops working: back to the password, without the PIN", way() == REGULAR
+                  and pw.property("text") == "" and secret() == "", (way(), len(pw.property("text") or "")))
         elif scenario == "auth68-fingerprint":
             hints = [c.property("text") for c in items() if c.property("text") == "Use fingerprint" and c.isVisible()]
             check("the fingerprint reader beside the password keeps its hint, and gets no link of its own",

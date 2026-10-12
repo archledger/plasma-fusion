@@ -134,9 +134,13 @@ too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authent
   icon and "Unlock with your face" (fingerprint, security key) in the same pill, without the focus
   halo; its PAM messages ("Touch your security key") show in the message area and, since nothing
   would be typed, also show the prompt.
-* After a link the field takes the focus again (password, PIN). A way that prompts for more than
-  "Password:" (`showPrompt`: the smartcard's PIN prompt, or the password way with `kscreenlockerrc
-  [UI] ShowPromptInRegularAuthenticator=true`) shows that prompt in the message area, as stock 6.8.
+* After a link the field takes the focus again (password, PIN). Whatever was typed for the old way
+  is cleared whenever another way is in use (a link, or the fall-back to the password when a way
+  stops working), in the field and in `PasswordSync`, so on every screen: kept, a password came
+  back when the password was chosen again, and the smartcard's field sent it as the PIN. A way
+  that prompts for more than "Password:" (`showPrompt`: the smartcard's PIN prompt, or the
+  password way with `kscreenlockerrc [UI] ShowPromptInRegularAuthenticator=true`) shows that
+  prompt in the message area, as stock 6.8.
 * A way that never prompts (`expectingPrompt` false: fingerprint, face, security key) unlocks at
   once, without the explicit Unlock screen, and the greeter's other workers are stopped first
   (`stopAuthenticating`), as stock 6.8 (plasma-desktop e5c3d608).
@@ -181,13 +185,17 @@ too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authent
   password" works and nothing runs while the prompt is hidden.
 
 Tests (CI step "Lock screen ways to unlock"): `test/run.sh OUT auth68-picker auth68-saved
-auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-fingerprint auth68-heartbeat
-auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed auth67-strings` with a
+auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-switch auth68-fingerprint
+auth68-heartbeat auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed
+auth67-strings` with a
 6.8 authenticator (`test/MockAuthenticator68.qml`, the model and enum stubs in `test/imports/`) and
 the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones pass on both.
 `auth68-failed` (a face failure leaves the prompt on, is asked again at once, not while hidden;
 the password keeps its grace; a defunct way's message stays) fails on the previous package;
-`auth67-failed` (6.7 keeps the grace) passes on both.
+`auth67-failed` (6.7 keeps the grace) passes on both. `auth68-switch` (a typed password goes when
+face, the password again or the smartcard is chosen, and when the smartcard stops working; Enter in
+the PIN field sends nothing typed before) fails on the previous package: the password stayed, and
+14 characters went to the smartcard as its PIN.
 
 ## Authentication contract (Plasma 6.7.5, and 6.8 where noted)
 
