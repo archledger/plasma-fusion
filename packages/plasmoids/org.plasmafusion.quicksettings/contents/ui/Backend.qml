@@ -642,14 +642,16 @@ Item {
                 s.toggleDnd();
             }
         }
-        // G18 and the stock applet's choices (contents/code/dnd.js): [{id, until}] at this moment.
-        function choices() {
-            return Dnd.choices(new Date());
+        // G18 and the stock applet's choices (contents/code/dnd.js): [{id, until}] at `now` (a Date).
+        function choices(now: var): var {
+            return Dnd.choices(now);
         }
-        function until(date) {
-            if (s) {
-                s.dndUntil(date);
-            }
+        // The choice `id` from this moment, not from when the choices were drawn: "For 1 hour" lasts
+        // an hour from the click, and a choice no longer offered ("this evening" after 20:00) does
+        // nothing.
+        function choose(id: string): bool {
+            const choice = Dnd.choices(new Date()).find(c => c.id === id);
+            return !!choice && !!s && s.dndUntil(choice.until);
         }
         function openSettings() {
             backend.openSettings("kcm_notifications", []);
@@ -832,12 +834,15 @@ Item {
         readonly property var options: s ? Power.options(s.list, active, inhibitionReason) : []
         // The tile's body: back to Balanced, or from Balanced to the last other profile chosen
         // (shared by every widget, for this session), so Balanced to Power saver never passes
-        // through Performance.
+        // through Performance. Chosen here, by the user: a profile an application holds for a
+        // while (a game's Performance) or PowerDevil's own for the power source is not a choice.
         readonly property string toggleTarget: s ? Power.toggleTarget(s.list, active, inhibitionReason, Instances.lastPowerProfile) : ""
-        onActiveChanged: {
-            if (active !== "" && active !== "balanced") {
-                Instances.lastPowerProfile = active;
+        function switchTo(profile: string) {
+            failedProfile = "";
+            if (profile !== "balanced") {
+                Instances.lastPowerProfile = profile;
             }
+            s.setProfile(profile);
         }
         function setProfile(profile: string) {
             if (!s || !available) {
@@ -847,8 +852,7 @@ Item {
             // A refused switch shows on the tile and the page for a few seconds.
             const row = options.find(o => o.profile === profile);
             if (row && row.enabled && !row.active) {
-                failedProfile = "";
-                s.setProfile(profile);
+                switchTo(profile);
             }
         }
         function toggle() {
@@ -857,8 +861,7 @@ Item {
                 return;
             }
             if (toggleTarget !== "") {
-                failedProfile = "";
-                s.setProfile(toggleTarget);
+                switchTo(toggleTarget);
             }
         }
         function openSettings() {
@@ -931,15 +934,17 @@ Item {
             keepAwake.refresh();
         }
     }
-    // "45 min", "1 h", "1 h 30 min".
+    // "45 min", "1 h", "1 h 30 min": the hours and the minutes each with their plural form (Polish,
+    // Russian, Czech or Arabic words change with the number), joined by a translatable "%1 %2".
     function durationText(minutes: int): string {
         const h = Math.floor(minutes / 60);
         const m = minutes % 60;
+        const hours = i18ncp("@info remaining time, hours", "%1 h", "%1 h", h);
+        const mins = i18ncp("@info remaining time, minutes", "%1 min", "%1 min", m);
         if (h === 0) {
-            return i18ncp("@info remaining time, minutes", "%1 min", "%1 min", m);
+            return mins;
         }
-        return m === 0 ? i18ncp("@info remaining time, hours", "%1 h", "%1 h", h)
-                       : i18nc("@info remaining time, hours and minutes", "%1 h %2 min", h, m);
+        return m === 0 ? hours : i18nc("@info remaining time, %1 hours part, %2 minutes part", "%1 %2", hours, mins);
     }
 
     // ------------------------------------------------------------------ disks & devices
@@ -1263,6 +1268,16 @@ Item {
     }
 
     // ------------------------------------------------------------------ clipboard
+    // Each clipboard sheet opens on All, so the newest entry is current and Meta+V then Enter
+    // chooses what was copied last. The Starred tab is the clipboard service's, which lives as long
+    // as the widget, so it goes back to All when the page goes (the sheet closed, or back to quick
+    // settings), before the next page is made: set by the new page itself, the tab bar's own index,
+    // still Starred while it was built, wrote Starred back.
+    onPageChanged: {
+        if (page !== "clipboard" && clipboard.service) {
+            clipboard.service.starredOnly = false;
+        }
+    }
     readonly property var clipboard: QtObject {
         readonly property var service: clipboardLoader.item
         readonly property bool available: !!service

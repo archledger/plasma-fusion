@@ -28,11 +28,13 @@ function untilMorning(now) {
     return end;
 }
 
+// `hours` of elapsed time after `now`, in whole minutes: adding to the hour of the day (setHours)
+// made "For 4 hours" last 5 or 3 hours across a daylight saving change. As keep awake's durations.
+// The minute is cut off the time itself: a local setter (setSeconds) in the hour that repeats
+// when the clocks go back moves the time to that hour's first pass.
 function hoursLater(now, hours) {
-    var end = new Date(now.getTime());
-    end.setHours(end.getHours() + hours);
-    end.setSeconds(0, 0);
-    return end;
+    var MINUTE = 60 * 1000;
+    return new Date(Math.floor((now.getTime() + hours * HOUR) / MINUTE) * MINUTE);
 }
 
 // The choices of "Do not disturb for a while" at `now`, in the stock applet's order: a list of
@@ -70,7 +72,7 @@ function valid(date) {
 // that changes: {kind, refreshAt}. kind: "none" (no end to show: none set, passed, or "until turned
 // off"), "time" (within 24 hours: "Until 18:00"), "day" (within a week: "Until Mon 06:00") or
 // "date". refreshAt is the time in ms when the kind changes next (the end itself for "time"), or
-// -1 when it never does.
+// -1 when nothing changes ahead (no end, or "until turned off").
 function untilLabel(until, now) {
     if (!valid(until)) {
         return { kind: "none", refreshAt: -1 };
@@ -89,7 +91,9 @@ function untilLabel(until, now) {
     if (left <= FAR) {
         return { kind: "date", refreshAt: end - 7 * DAY };
     }
-    return { kind: "none", refreshAt: end - FAR };
+    // "Until turned off": nothing to show, and nothing to look at again for it (the sheet reads the
+    // label again whenever Do Not Disturb or its end changes).
+    return { kind: "none", refreshAt: -1 };
 }
 
 // Why Do Not Disturb is on besides a time, in the stock applet's order: a list of {kind, name,

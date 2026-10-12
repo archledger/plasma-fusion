@@ -14,14 +14,14 @@ import "../code/clipboard.js" as Clip
 
 // The clipboard sheet (the clipboard button, Meta+V): Klipper's history, newest first, from
 // Plasma's own clipboard model (services/Clipboard.qml), so stars and entries are the stock
-// Clipboard widget's. Search (every word, as plain text), All / Starred as in the stock widget,
-// text, images and copied files, star, edit, QR code, Klipper's actions, remove, and Clear all
-// with Klipper's confirmation (starred entries stay). Choosing an entry puts it on the clipboard
-// and closes the sheet; the on-screen hint says to paste with Ctrl+V (there is no paste on
-// choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet"). The Emoji button opens
-// Plasma's emoji selector.
+// Clipboard widget's. Search (every word, as plain text), All / Starred as in the stock widget
+// (opening on All: Backend.qml), text, images and copied files, star, edit, QR code, Klipper's
+// actions, remove, and Clear all with Klipper's confirmation (starred entries stay). Choosing an
+// entry puts it on the clipboard and closes the sheet; the on-screen hint says to paste with Ctrl+V
+// (there is no paste on choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet"). The Emoji
+// button opens Plasma's emoji selector.
 //
-// Keyboard: the list has the focus with the newest entry current; Up and Down move, Enter
+// Keyboard: the list has the focus with the newest entry current; Up and Down move, Enter or Space
 // chooses, Delete removes, Menu or Right opens the entry's actions (Left and Right move between
 // them, Enter presses one, Left on the first closes them), typing goes to the search field (Down
 // goes back to the list), Escape closes the editor, the QR code or the actions, then clears the
@@ -335,12 +335,16 @@ ColumnLayout {
                 }
                 break;
             case Qt.Key_Space:
+                // A list item's own key, as on the notification cards and the stock widget's rows:
+                // it presses the action the arrows are on, or chooses the entry (it went to the
+                // search field as a typed space).
                 if (current && current.expanded) {
                     current.pressAction(page.actionIndex);
-                    event.accepted = true;
-                    return;
+                } else {
+                    page.choose(list.currentIndex);
                 }
-                break;
+                event.accepted = true;
+                return;
             case Qt.Key_Backspace:
                 search.text = search.text.slice(0, -1);
                 search.forceActiveFocus(Qt.TabFocusReason);

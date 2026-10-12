@@ -9,19 +9,31 @@ Requires PySide6, python3-dbus and Plasma's org.kde.notificationmanager QML modu
 
 Plasma's notification model registers the notification server (org.freedesktop.Notifications)
 when it is created, so notifications sent on the bus land in the service's history like in the
-session: Do Not Disturb's "Until" text and the applications that hold it are checked here.
+session: Do Not Disturb's "Until" text and the applications that hold it are checked here. The stock
+Notifications applet's Globals (plasma-workspace, its plugin loaded as plasmashell loads it) runs
+beside the service as in the session, where it stays loaded and hidden: it inhibits the server for
+the end the service writes and ends a timed Do Not Disturb on its wall-clock minute. Waits for two
+whole minutes of the clock, so the run takes one to two minutes.
 """
 
+import ctypes
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 
-import dbus
-from PySide6.QtCore import QDateTime, QObject, QUrl, Slot
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtQml import QQmlComponent, QQmlEngine
-from PySide6.QtTest import QTest
+# The notification settings (Do Not Disturb's end) go to a throw-away HOME.
+for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+    os.environ.pop(key, None)
+os.environ["HOME"] = tempfile.mkdtemp(prefix="pf-notifications-")
+
+import dbus  # noqa: E402
+from PySide6.QtCore import QDateTime, QLibraryInfo, QLocale, QObject, QUrl, Slot, qInstallMessageHandler  # noqa: E402
+from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 
 here = Path(__file__).resolve().parent
 bus = dbus.SessionBus()
@@ -51,7 +63,24 @@ class Context(QObject):
         return self.fill(text, [a for a in (a1, a2) if a is not None])
 
 
+# The stock applet's plugin holds its QML module (plasma.applet.org.kde.plasma.notifications) and
+# registers it when loaded.
+STOCK = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath), "plasma/applets/org.kde.plasma.notifications.so")
+ctypes.CDLL(str(STOCK), mode=ctypes.RTLD_GLOBAL)
+# The QML engine's warnings (binding loops) are kept to be checked at the end.
+loops = []
+
+
+def messages(mode, context, text):
+    if "Binding loop" in text:
+        loops.append(text)
+    print(text, file=sys.stderr)
+
+
+qInstallMessageHandler(messages)
 app = QGuiApplication(sys.argv[:1])
+# A German region: the "Until" text is in its words ("Di. 06:00", not "Tue 06:00").
+QLocale.setDefault(QLocale(QLocale.Language.German, QLocale.Country.Germany))
 engine = QQmlEngine()
 context = Context()
 engine.rootContext().setContextObject(context)
@@ -60,14 +89,21 @@ checks = 0
 HARNESS = """
 import QtQuick
 import org.kde.notificationmanager as NotificationManager
+import plasma.applet.org.kde.plasma.notifications as Stock
 import "file://%s" as Services
 Item {
     Services.Notifications { id: service; objectName: "service" }
+    // Reading it makes the stock applet's singleton, as its applet does in the session.
+    readonly property bool stockInhibited: Stock.Globals.inhibited
     function inhibit(on: bool) {
         NotificationManager.Server.inhibited = on;
     }
-    function untilIn(ms: double) {
-        service.dndUntil(new Date(Date.now() + ms));
+    function untilAt(ms: double) {
+        service.dndUntil(new Date(ms));
+    }
+    function untilMs(): double {
+        const until = service.inhibitedUntil;
+        return until && !isNaN(until.getTime()) ? until.getTime() : -1;
     }
 }
 """ % (here.parent / "contents/ui/services")
@@ -106,6 +142,12 @@ def call(obj, name, *args):
     QMetaObject.invokeMethod(obj, name, *[Q_ARG(type(a), a) for a in args])
 
 
+def call_ms():
+    """The end the notification settings keep, in ms (-1: none)."""
+    from PySide6.QtCore import QMetaObject, Q_RETURN_ARG
+    return QMetaObject.invokeMethod(root, "untilMs", Q_RETURN_ARG(float))
+
+
 component = QQmlComponent(engine)
 component.setData(HARNESS.encode(), QUrl.fromLocalFile(str(here / "harness.qml")))
 root = component.create()
@@ -115,21 +157,47 @@ service = root.findChild(QObject, "service")
 wait_for(lambda: service.property("serverValid"), "Plasma's notification server did not register on the bus")
 check(bus.name_has_owner("org.freedesktop.Notifications"), "the service's model runs the notification server")
 
-# ---- Do Not Disturb: the "Until" text follows the clock.
-call(root, "untilIn", 24 * 3600 * 1000.0 + 1500)
+# ---- Do Not Disturb: an end that has passed (choices read long ago) is refused; written, nothing
+# would end it.
+call(root, "untilAt", float(int(time.time() * 1000) - 60 * 1000))
+QTest.qWait(500)
+check(not service.property("dndActive") and call_ms() < time.time() * 1000 - 60 * 1000 - 1000,
+      "an end that has passed is refused: Do Not Disturb stays off")
+
+# ---- Do Not Disturb: the "Until" text follows the wall clock's minutes, and the stock applet ends it.
+def next_minute(margin=3.0):
+    """The next whole minute of the wall clock in ms, at least `margin` seconds ahead."""
+    now = time.time()
+    if 60 - now % 60 < margin:
+        time.sleep(60 - now % 60 + 0.1)
+        now = time.time()
+    return (now // 60 + 1) * 60 * 1000.0
+
+
+minute = next_minute()
+call(root, "untilAt", minute + 24 * 3600 * 1000.0)
 wait_for(lambda: service.property("dndActive"), "Do Not Disturb did not turn on")
+check(root.property("stockInhibited"), "the stock applet inhibits the server for the end the service wrote")
 end = service.property("inhibitedUntil")
-end = end.toPython() if isinstance(end, QDateTime) else end
+end = end if isinstance(end, QDateTime) else QDateTime(end)
+day = QLocale().dayName(end.date().dayOfWeek(), QLocale.FormatType.ShortFormat)
 text = service.property("dndUntilText")
-check(text.startswith(end.strftime("%a ")), "a day ahead: the end shows its day (%r)" % text)
+check(text == day + " " + QLocale().toString(end.time(), QLocale.FormatType.ShortFormat),
+      "a day ahead: the end shows its day, in the locale's words (%r)" % text)
 wait_for(lambda: service.property("dndUntilText") != text, "the text did not change when the end came within 24 h",
-         seconds=4)
-check(":" in service.property("dndUntilText") and service.property("dndUntilText") != text,
-      "within 24 hours: the time alone (%r), without anything else changing" % service.property("dndUntilText"))
-call(root, "untilIn", 1200.0)
-wait_for(lambda: service.property("dndUntilText") != "", "a short Do Not Disturb shows no end")
-wait_for(lambda: not service.property("dndActive"), "Do Not Disturb did not end on time", seconds=3)
-check(not service.property("dndActive") and service.property("dndUntilText") == "", "it ends on time, by itself")
+         seconds=minute / 1000 - time.time() + 5)
+check(":" in service.property("dndUntilText") and time.time() >= minute / 1000,
+      "within 24 hours, from that minute of the clock: the time alone (%r)" % service.property("dndUntilText"))
+# An end between two minutes (another program's, or the stock applet's own choices, which keep the
+# milliseconds): the stock applet ends it on the first minute past it, and the service leaves it.
+minute = next_minute(margin=4.0)
+short = float(int(time.time() * 1000) + 1500)
+call(root, "untilAt", short)
+wait_for(lambda: service.property("dndUntilText") != "" and call_ms() == short, "a short Do Not Disturb did not show its end")
+wait_for(lambda: not service.property("dndActive"), "Do Not Disturb did not end", seconds=minute / 1000 - time.time() + 5)
+check(time.time() >= minute / 1000 and service.property("dndUntilText") == "",
+      "it ends on the first minute past its end, by the stock applet")
+check(call_ms() == short, "the service left the end to the stock applet (it wrote nothing when it passed)")
 
 # ---- Do Not Disturb held by an application: its name and reason, the stock applet's wording.
 call(root, "inhibit", True)
@@ -138,6 +206,10 @@ wait_for(lambda: prop(service, "dndReasons"), "the inhibiting application was no
 reasons = list(prop(service, "dndReasons"))
 check(reasons == ["While Kdenlive is active (Rendering)"] or reasons == ["While org.kde.kdenlive is active (Rendering)"],
       "an app that holds it is named with its reason: %r" % reasons)
+# An end chosen while the application holds it: the "Until" text's minute clock starts then.
+call(root, "untilAt", float(int(time.time() * 1000) + 2 * 3600 * 1000))
+wait_for(lambda: service.property("dndUntilText") != "", "an end set while an application holds it shows no time")
+check(not loops, "no binding loop when the minute clock starts (%s)" % loops)
 holder.stdin.close()
 wait_for(lambda: holder.poll() is not None, "the inhibiting client did not finish")
 wait_for(lambda: not service.property("inhibitedByApp"), "the application's inhibition was not released")

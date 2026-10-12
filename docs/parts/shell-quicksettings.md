@@ -65,8 +65,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   the **Power mode** chooser (`ProfilesPage.qml`): the profiles the daemon offers with the active
   one checked, a click switches straight to one, `Power settings` opens the power management
   settings. The body is on in any profile but Balanced, as GNOME's Power Mode toggle: a click goes
-  back to Balanced, and from Balanced to the last other profile active in this session (Power
-  saver at first), so Balanced to Power saver no longer passes through Performance. As the stock
+  back to Balanced, and from Balanced to the last other profile chosen in a Quick Settings widget
+  in this session (Power saver at first), so Balanced to Power saver no longer passes through
+  Performance. A profile the user did not choose there is not learned: one an application holds
+  for a while (a game's Performance) or PowerDevil's own for the power source (it was, and a
+  click then went to it; test: `tests/tiles_edit_test.py` on a stand-in profiles service). As the stock
   Power and Battery widget: while the daemon inhibits Performance, the chooser lists it as
   `Unavailable` (it cannot be chosen, and the body skips it) and says why under the list (on a
   lap, too hot), as the tile's tooltip does, with when it may be slower and the applications
@@ -80,7 +83,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   `For 1 hour`, `For 4 hours`, `Until…` a time of day (a quarter-hour chooser in the locale's time
   format, starting at the quarter hour after an hour from now; a time already passed means
   tomorrow) or `Until turned off`, as Caffeine, Amphetamine and PowerToys Awake offer; the page
-  says `On until 21:37 (1 h left)`. The end is a wall-clock time kept for every widget of the
+  says `On until 21:37 (1 h left)` (the hours and the minutes each in their plural form, joined by
+  a translatable `%1 %2`, `Backend.qml` `durationText()`; test: `tests/tiles_edit_test.py`). The
+  end is a wall-clock time kept for every widget of the
   shell (`Instances`), so the timer runs with the sheet closed and after a suspend still ends it
   (at most a minute late; `contents/code/keepawake.js`, tested by `tests/keepawake.test.js`);
   turning it off, here or in the hidden battery applet, drops the end. Across a plasmashell
@@ -902,11 +907,17 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   pop-up gap, the new-device pop-up, the keyboard policy, the tablet notifications, the light and
   dark themes, the tiles' order and hidden tiles) are copied from a widget whose settings change to
   the others (a list by its entries: each read gives a new array, which `!==` always takes for a
-  change); a new widget takes the
-  settings of the leader there before it (also when it leads at once, as the primary screen's
-  bar made again does), and pushes nothing before that (while it loads its settings change too, and
-  pushing those defaults reset the others: found by the two-screen test). A value equal to the
-  default is not stored, so a script reads it as empty.
+  change). Each widget keeps when they last changed (`sharedRevision`, ms, set on every change and
+  copied with them; the settings page stamps it on Apply, as the dialog writes it after the
+  settings). A new widget takes the newest set among the widgets there before it, or gives its own
+  on when they are newer (`contents/code/shared.js` `adoptFrom()`, test `tests/shared.test.js`);
+  with equal revisions (widgets from before 0.5.0) it takes the leader's, as before (also when it
+  leads at once, as the primary screen's bar made again does). Before, the first widget to load
+  after a restart won: a bar whose screen was away while the user changed the tiles kept the old
+  ones in its config, and loaded first it gave them back to the main bar. A new widget pushes
+  nothing before it has joined (while it loads its settings change too, and pushing those defaults
+  reset the others: found by the two-screen test). A value equal to the default is not stored, so
+  a script reads it as empty.
 - Disks & Devices reads the engine's devices once when it is created (`Devices.qml`): a widget made
   after the engine knew its devices (the second bar's) listed none before.
 - Notifications pop up once: the stock Notifications applet in every tray shares its Globals (one
@@ -967,7 +978,10 @@ them again before Apply, so the dialog never writes back an older order.
   order. A hidden tile whose condition does not hold is in neither the grid nor the tray, and shows
   in the tray once it applies (plug in a USB stick to bring Disks & Devices back). Only the shown
   tiles take part in a move: the hidden ones and those that do not apply now keep their places
-  (`tiles.js` `arrange`).
+  (`tiles.js` `arrange`). A tile that comes or goes during a drag (a USB stick plugged in, the
+  Wi‑Fi radio gone) joins the dragged order at its place or leaves it (`rebase`), and only the
+  tiles shown both at the start and at the drop move, each once; before, the stored order lost one
+  tile and held another twice.
 - **New tiles in later releases:** `tiles.js` lists every tile in the default order. An empty
   `tileOrder` (a user who never moved a tile) is the default order of the running release. A
   stored order keeps the user's tiles in the user's order; a tile it lacks goes right after the
@@ -977,16 +991,18 @@ them again before Apply, so the dialog never writes back an older order.
   next to Wi‑Fi for everyone, and a user who hid tiles gets it all the same.
 - Tests: `tests/tiles.test.js` (run by `tools/build.sh quicksettings`: the merge rule with new tiles
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
-  shown tiles with the hidden ones keeping their places, the slot under a dragged tile, reset) and
-  `tests/tiles_edit_test.py` (in CI), the main page on the real Backend offscreen with the two keys
-  as stand-ins (47 checks: the default grid, the stored order, a conditional tile only while it
-  applies, the pencil, the badges and the resting tile actions, a mouse drag written once on
-  release, a touch drag, a drag let go below the grid, Ctrl+arrows, Ctrl+Home / End, the focus keys,
-  Tab and Shift+Tab in the order shown, the badge and Delete with the focus kept in the grid, the
-  tray in order, adding back to the old place, a hidden conditional tile neither in the grid nor the
-  tray while it does not apply and still hidden when it does, Done, Space on the pencil, Escape,
-  closing the sheet, Reset, and in tablet posture the pencil in the tablet row, 44 px targets and a
-  touch drag at the tablet sizes):
+  shown tiles with the hidden ones keeping their places, a tile that comes or goes during a drag,
+  the slot under a dragged tile, reset) and `tests/tiles_edit_test.py` (in CI), the main page on
+  the real Backend offscreen with the two keys as stand-ins (60 checks: the default grid, the
+  stored order, a conditional tile only while it applies, the pencil, the badges and the resting
+  tile actions, a mouse drag written once on release, a touch drag, a drag let go below the grid,
+  Ctrl+arrows, Ctrl+Home / End, the focus keys, Tab and Shift+Tab in the order shown, the badge and
+  Delete with the focus kept in the grid, the tray in order, adding back to the old place, a hidden
+  conditional tile neither in the grid nor the tray while it does not apply and still hidden when
+  it does, Done, Space on the pencil, Escape, closing the sheet, Reset, a drag during which Disks &
+  Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), the Power mode
+  tile's body after an application held a profile, Keep awake's time left in plural forms, the
+  clipboard sheet's tab back to All, and in tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
 
   ```sh
   STAGE=$PWD/build/stage tools/build.sh quicksettings
@@ -1005,28 +1021,59 @@ loaded and hidden: it still owns the pop-ups and the Do Not Disturb bookkeeping.
 ### Do Not Disturb for a while
 
 The tile's chevron offers the stock applet's choices (`FullRepresentation.qml`), worked out in
-`contents/code/dnd.js` `choices()` when the choices open: **For 1 hour**, **For 4 hours** (both in
-whole minutes), **Until this evening** (20:00, offered before 20:00), **Until tomorrow morning**
+`contents/code/dnd.js` `choices()` when the choices open: **For 1 hour**, **For 4 hours** (both
+elapsed time in whole minutes, also across a daylight saving change, as keep awake's durations;
+the stock applet adds to the hour of the day, so its "For 4 hours" lasts 5 hours in the night the
+clocks go back), **Until this evening** (20:00, offered before 20:00), **Until tomorrow morning**
 (06:00), **Until Monday** (06:00, offered on Fridays and Saturdays; on Sundays tomorrow morning is
 Monday) and **Until turned off** (a year ahead, as the stock applet keeps it), or **Turn off** while
 it is on. One deviation: the stock applet hides "tomorrow morning" until 07:00; here it is always
 offered and, chosen after midnight, ends at the coming 06:00 (the behaviour of the earlier "Until
 tomorrow"). From the keyboard the chevron moves the focus to the first choice, and a choice gives
-it back to the chevron. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
-Friday/Saturday/Sunday).
+it back to the chevron. The choices close with the sheet and when another page opens, so every
+opening works them out at its own time (they stayed open with the times of the first opening: an
+hour later "Until this evening" could still be offered after 20:00, and chosen, it turned Do Not
+Disturb on with an end already passed, which nothing ended). While they stay open they follow the
+wall clock's minutes (Plasma's `Clock`), so "this evening" goes at 20:00; a choice's end is worked
+out at the click ("For 1 hour" is an hour from then), and the service refuses an end that has
+passed. Tests: `tests/dnd.test.js` (node; ids and ends at given times, month ends,
+Friday/Saturday/Sunday, both daylight saving changes in Europe/Berlin), `tests/tiles_edit_test.py` (the main page on the real backend: the
+choices close with the sheet and on another page, follow their clock, and "For 1 hour" counts from
+the click) and `tests/notifications_service_test.py` (an end that has passed leaves Do Not Disturb
+off).
 
 ### The "Until" text
 
 The tile reads `Until 18:00` within 24 hours of the end, `Until Mon 06:00` within a week, the date
 further ahead, and `On` for "until turned off" (more than 100 days ahead, the stock applet's limit
-too). It was read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
+too). The day is the locale's own short day name (`Qt.locale().dayName()`), before or after the
+time as the translation of `%1 %2` puts it, and the time and the date are the locale's short
+formats (`toLocaleTimeString`, `toLocaleDateString`): a format string's `ddd` gave English day
+names in every language ("Mon 06:00" for a German region, where Plasma says "Mo. 06:00"). It was
+read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
 reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
-form applies and when it changes next; one single-shot timer (`services/Notifications.qml`
-`dndClock`) moves the service's clock then, which also ends the Do Not Disturb on time (the
-check every minute is gone, and nothing wakes up for "until turned off"). Tests:
-`tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on a
-private bus, in CI: a Do Not Disturb set 24 h and 1.5 s ahead shows its day, then the time alone
-without anything else changing, and a short one ends by itself).
+form applies and when it changes next; while a change is ahead, the service
+(`services/Notifications.qml`) moves its clock on the wall clock's minutes with Plasma's `Clock`
+(`org.kde.plasma.clock`, a `CLOCK_REALTIME` timer that also fires right after a resume or a clock
+change, and the one the stock applet's own minute check runs on). Nothing listens for "until
+turned off". A `Timer` set to the next change, as before, counts only the time the machine is
+awake, so after a suspend the text kept its old form for hours.
+
+**Who ends it.** The stock applet (`global/Globals.qml`, loaded and hidden) owns the end, as for its
+own choices: `checkInhibition()` compares the kept end (`plasmanotifyrc [DoNotDisturb] Until`) with
+the time on every wall-clock minute and inhibits or releases the server. The tile's choices only
+write the end (`dndUntil()`), and the widget never ends a Do Not Disturb itself, so after a resume
+it ends on the first minute past its end, by the stock applet, and a Do Not Disturb Plasma holds for
+mirrored screens or a focused full-screen window stays on when a timed end passes (the widget's
+own timer lifted the server then, and pop-ups showed over a presentation; checked in the test VM
+with a full-screen Konsole). Our choices end on whole minutes;
+an end between two minutes (another program's) ends on the next one, as in stock Plasma. Tests:
+`tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on
+a private bus with the stock applet's `Globals` beside the service, as in the session, in CI, under
+a German region: a Do Not Disturb set a day ahead shows its day in German, then the time alone from
+that minute, and one ending
+between two minutes is ended by the stock applet on the next minute while the service leaves the
+kept end alone; the run waits for two minutes of the clock).
 
 ### Who holds Do Not Disturb
 
@@ -1048,7 +1095,9 @@ not used). They now follow the stock applet's sizes: the notification's own imag
 `image-path`), or its icon when that is not the app's, beside the text at Plasma's large icon size
 (48 px, its aspect kept, as `Icon.qml`); images in the body (`<img src>`, which the server keeps for
 local files only) below the text, fitted to the card and no taller than the preview strip (the stock
-applet draws them inline at their own size, which can overflow); and the first linked file
+applet draws them inline at their own size, which can overflow), and decoded at that size in device
+pixels (`sourceSize`: the history's cards live while the sheet is closed, so a 4000 × 3000 photo
+was held at full size in every screen's widget); and the first linked file
 (`x-kde-urls`: Spectacle's screenshot, a received file) as a preview strip of Plasma's "enormous"
 icon height (128 px), as `ThumbnailStrip.qml`. The preview is KIO's, made by the stock applet's own
 `Thumbnailer` type (`NotificationPreview.qml`, loaded in the same shell, so videos and documents
@@ -1060,7 +1109,9 @@ preview has an accessible name ("Open screenshot.png"). `contents/code/notificat
 `tests/notifications_card_test.py` (the staged package on Plasma's notification server on a private
 bus, in CI; applications without a desktop file stay out of the history by Plasma's default, so the
 test gives its own one): the image is drawn at 48 px on the right, a 1200 × 300 body image is fitted
-to the card at 4:1, a screenshot is previewed 128 px tall and opens from a click and from Return.
+to the card at 4:1 and decoded at that size, a 300 × 1200 one at the preview strip's height and a
+60 × 40 one at its own, a screenshot is previewed 128 px tall and opens from a click and from
+Return.
 
 ### Inline reply
 
@@ -1157,7 +1208,9 @@ docs/parts/device.md); the button and Meta+V close it again.
   default keeps none). Without the module the button opens Klipper's pop-up, as before.
 - **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
   search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
-  Starred Only"); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
+  Starred Only"; every opening starts on All, so Meta+V then Enter chooses what was copied last,
+  where Klipper's own pop-up keeps the last tab: the tab is the long-lived service's, and Backend
+  puts it back when the clipboard page goes; test `tests/tiles_edit_test.py`); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
   shows in up to two lines (white space folded, blank text as ␣ ⇥ ↵ as in the stock widget, always
   as plain text), an image as a thumbnail with its size, copied files with the first one's preview
   (Klipper's `klipperpreview` images) and their names.
@@ -1179,7 +1232,8 @@ docs/parts/device.md); the button and Meta+V close it again.
   keeps the starred entries, as in stock Plasma.
 - **Keyboard:** the list has the focus with the newest entry current (no ring until a key is used);
   Up and Down move (Up on the first entry goes to the search field, Down there comes back), Home,
-  End, Page Up and Page Down, Enter chooses, Delete removes, typing goes to the search field (Ctrl+F
+  End, Page Up and Page Down, Enter or Space chooses (as on the notification cards and the stock
+  widget's rows; Space went to the search field before), Delete removes, typing goes to the search field (Ctrl+F
   selects it; Enter there chooses the current or first match). Right or Menu opens the entry's
   actions; Left and Right then move between them (the list keeps the focus, the ring marks the
   action) and Enter or Space presses one; Left on the first closes them. Escape closes the editor,
@@ -1206,10 +1260,10 @@ docs/parts/device.md); the button and Meta+V close it again.
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (46 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (47 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
-  the page: focus, arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard,
+  the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by keyboard,
   QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode). Both fail without
   the sheet (the files do not exist on 0.4.1).
 

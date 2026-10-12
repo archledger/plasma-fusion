@@ -13,6 +13,7 @@ import "components"
 import "global"
 import "../code/tiles.js" as Tiles
 import "../code/requests.js" as Requests
+import "../code/shared.js" as Shared
 
 // Plasma Fusion quick settings: the right side of the top bar (keyboard layout,
 // phone, clipboard, status pill, notification bell) and a floating pop-up with
@@ -62,6 +63,16 @@ PlasmoidItem {
     function sharedValue(key: string): var {
         return Plasmoid.configuration[key];
     }
+    // When the shared settings last changed (ms; 0 before 0.5.0), so the newest set wins when the
+    // widgets meet again after a restart (code/shared.js).
+    readonly property double sharedRevision: Number(Plasmoid.configuration.sharedRevision) || 0
+    // The shared settings as last seen once this widget joined.
+    property var lastShared: null
+    function setSharedRevision(revision: double): void {
+        if (sharedRevision !== revision) {
+            Plasmoid.configuration.sharedRevision = revision;
+        }
+    }
     // A list (the tiles' order) is compared by its entries: each read gives a new array, which
     // `!==` always takes for a change, so an equal order would be written to every widget again.
     function setShared(key: string, value: var): void {
@@ -77,11 +88,30 @@ PlasmoidItem {
         if (Instances.items.indexOf(root) === -1) {
             return;
         }
+        // The list is made again whenever any key of the configuration changes (the revision's
+        // own write too): only a changed value is a change.
+        const changed = !lastShared || sharedKeys.some((key, i) => {
+            const value = sharedSettings[i];
+            const list = typeof value === "object" && value !== null;
+            return list ? !Tiles.same(lastShared[i], value) : lastShared[i] !== value;
+        });
+        lastShared = sharedSettings;
+        if (!changed) {
+            return;
+        }
         for (const other of Instances.items) {
             if (other !== root) {
                 sharedKeys.forEach((key, i) => other.setShared(key, sharedSettings[i]));
             }
         }
+        Qt.callLater(stampSharedRevision);
+    }
+    // Every widget's revision to now, a moment after the change: a change written by desktop
+    // scripting (writeConfig) is read back into the configuration after this handler ran, which
+    // put this widget's revision back as it was.
+    function stampSharedRevision(): void {
+        const now = Date.now();
+        Instances.items.forEach(widget => widget.setSharedRevision(now));
     }
     // Airplane mode's radio record (Backend.qml) survives a plasmashell restart: every widget keeps
     // a copy in its settings, and the first to start after a restart gives it back, once the
@@ -115,12 +145,25 @@ PlasmoidItem {
         function onAirplaneChanged() { root.adoptAirplaneRecord(); }
     }
     Component.onCompleted: {
-        // The leader before this widget joins: a widget on a lower screen number (the primary
-        // screen's bar made again) leads at once, and must still take the others' settings first.
-        const lead = Instances.leader;
-        if (lead) {
-            sharedKeys.forEach(key => setShared(key, lead.sharedValue(key)));
+        // The newest shared settings among the widgets there before this one joins, else the
+        // leader's (equal revisions): a widget on a lower screen number (the primary screen's bar
+        // made again) leads at once and still takes the others' first. A bar whose screen was away
+        // after a restart kept its old settings; loaded first, it no longer gives them to the
+        // others. When this widget's own are the newest, it gives them on.
+        const others = Instances.items;
+        const from = Shared.adoptFrom(sharedRevision, others.map(w => w.sharedRevision), others.indexOf(Instances.leader));
+        if (from >= 0) {
+            const source = others[from];
+            sharedKeys.forEach(key => setShared(key, source.sharedValue(key)));
+            setSharedRevision(source.sharedRevision);
+        } else if (others.length > 0) {
+            const revision = sharedRevision;
+            for (const other of others) {
+                sharedKeys.forEach((key, i) => other.setShared(key, sharedSettings[i]));
+                other.setSharedRevision(revision);
+            }
         }
+        lastShared = sharedSettings;
         Instances.adopt(root);
         adoptAirplaneRecord();
         console.info("quicksettings: widget on " + (screenName || "?") + " (screen " + screenIndex + "), "

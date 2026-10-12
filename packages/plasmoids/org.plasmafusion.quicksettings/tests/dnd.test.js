@@ -47,6 +47,26 @@ assert.ok(!ids(at(11, 12, 0)).includes("monday"), "Sunday: tomorrow morning is M
 assert.ok(!ids(at(12, 12, 0)).includes("monday"), "Monday: no Monday choice");
 assert.deepStrictEqual(end(at(14, 10, 15), "off"), new Date(2027, 9, 14, 10, 15), "until turned off: a year ahead");
 
+// "For 1 hour" and "For 4 hours" are elapsed time across a daylight saving change (Berlin: clocks go
+// back at 03:00 CEST on 2026-10-25 and forward at 02:00 CET on 2026-03-29).
+const zone = process.env.TZ;
+process.env.TZ = "Europe/Berlin";
+if (new Date(2026, 9, 25, 12, 0).getTimezoneOffset() === -60 && new Date(2026, 9, 24, 12, 0).getTimezoneOffset() === -120) {
+    const lasts = (now, id) => hours(now, end(now, id));
+    assert.strictEqual(lasts(new Date(2026, 9, 25, 0, 30), "hours4"), 4, "for 4 hours over the change to winter time: 4 hours, not 5");
+    assert.strictEqual(lasts(new Date(2026, 9, 25, 2, 30), "hour"), 1, "for 1 hour in the repeated hour: 1 hour, not 2");
+    assert.strictEqual(lasts(new Date(2026, 2, 29, 0, 30), "hours4"), 4, "for 4 hours over the change to summer time: 4 hours, not 3");
+    assert.deepStrictEqual(end(new Date(2026, 2, 29, 1, 30, 42), "hour"), new Date(2026, 2, 29, 3, 30), "whole minutes still (01:30:42 CET: 03:30 CEST)");
+    assert.strictEqual(end(new Date(2026, 9, 25, 2, 30), "hour").getTimezoneOffset(), -60, "the repeated hour's second pass (02:30 CEST: 02:30 CET)");
+} else {
+    throw new Error("no time zone data for Europe/Berlin: the daylight saving checks cannot run");
+}
+if (zone === undefined) {
+    delete process.env.TZ;
+} else {
+    process.env.TZ = zone;
+}
+
 // The end shown, and when it has to be shown again.
 const now = at(14, 10, 0).getTime();
 const label = (d) => untilLabel(d, now);
@@ -60,7 +80,7 @@ assert.deepStrictEqual(label(at(25, 6, 0)).kind, "date", "eleven days ahead: the
 assert.deepStrictEqual(label(at(25, 6, 0)).refreshAt, at(18, 6, 0).getTime(), "the date until a week before");
 const year = new Date(2027, 9, 14, 10, 0);
 assert.deepStrictEqual(label(year).kind, "none", "until turned off: no end shown");
-assert.ok(label(year).refreshAt > now, "until turned off: looked at again only 100 days before");
+assert.strictEqual(label(year).refreshAt, -1, "until turned off: nothing to look at again (no daily wake-up)");
 // The subtitle follows the clock: a Do Not Disturb until Monday shows the day, then the time.
 const monday = end(at(16, 9, 0), "monday");
 const first = untilLabel(monday, at(16, 9, 0).getTime());

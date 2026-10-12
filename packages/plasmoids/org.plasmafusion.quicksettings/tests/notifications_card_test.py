@@ -351,6 +351,23 @@ try:
     check(inset > 8 and abs(body["width"] - (body["cardWidth"] - 2 * inset)) < 1,
           "an image in the body is fitted to the card (%g px of %g)" % (body["width"], body["cardWidth"]))
     check(abs(body["width"] / body["height"] - 4) < 0.05, "its aspect kept (%gx%g)" % (body["width"], body["height"]))
+    decoded = info("Body image", "bodyImage", "implicitWidth", "implicitHeight")
+    check(decoded["implicitWidth"] <= body["width"] + 1 and decoded["implicitHeight"] <= body["height"] + 1,
+          "decoded at the size it is drawn, not at its own 1200x300 (%gx%g)" % (decoded["implicitWidth"], decoded["implicitHeight"]))
+    tall = png("tall.png", 300, 1200, "#aaaa33")
+    notify("Tall body image", 'Poster: <img src="%s" alt="tall"/>' % QUrl.fromLocalFile(str(tall)).toString())
+    wait_for(lambda: (info("Tall body image", "bodyImage") or {}).get("visible"), "the tall body image is not drawn")
+    QTest.qWait(100)
+    poster = info("Tall body image", "bodyImage", "implicitWidth", "implicitHeight")
+    check(poster["implicitHeight"] <= poster["height"] + 1 and abs(poster["width"] / poster["height"] - 0.25) < 0.05,
+          "a tall one is decoded at the height it is drawn, its aspect kept (%gx%g)" % (poster["implicitWidth"], poster["implicitHeight"]))
+    small = png("small.png", 60, 40, "#aa33aa")
+    notify("Small body image", 'Icon: <img src="%s" alt="small"/>' % QUrl.fromLocalFile(str(small)).toString())
+    wait_for(lambda: (info("Small body image", "bodyImage") or {}).get("visible"), "the small body image is not drawn")
+    QTest.qWait(100)
+    little = info("Small body image", "bodyImage", "implicitWidth", "implicitHeight")
+    check(little["implicitWidth"] == 60 and little["implicitHeight"] == 40 and abs(little["width"] - 60) < 1,
+          "a smaller one keeps its own size, not scaled up (%gx%g)" % (little["width"], little["height"]))
     text = json.loads(QMetaObject.invokeMethod(root, "info", Q_RETURN_ARG("QVariant"), Q_ARG("QVariant", "Body image"),
                                                Q_ARG("QVariant", ""), Q_ARG("QVariant", ["bodyText"])) or "{}")
     check("<img" not in text.get("bodyText", "<img") and "Look:" in text.get("bodyText", ""), "the text is drawn without the tag")

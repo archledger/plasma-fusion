@@ -8,6 +8,7 @@ import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.clock
 
 import "components"
 import "components/Icons.js" as Icons
@@ -39,8 +40,20 @@ ColumnLayout {
 
     readonly property bool tablet: pal.tablet
     readonly property var tabletPolicy: backend.tabletPolicy
-    // The Do Not Disturb durations are shown (the tile's chevron).
+    // The Do Not Disturb durations are shown (the tile's chevron), as of dndChoicesNow (ms): the time
+    // they open at, moved on with the wall clock's minutes while they stay open, so "this evening"
+    // goes at 20:00 and "Monday" follows the day. They close with the sheet and on another page.
     property bool dndChoicesOpen: false
+    property double dndChoicesNow: Date.now()
+    onDndChoicesOpenChanged: dndChoicesNow = Date.now()
+    Loader {
+        // Out of the column's layout (it holds no item).
+        visible: false
+        active: page.dndChoicesOpen
+        sourceComponent: Clock {
+            onDateTimeChanged: page.dndChoicesNow = Date.now()
+        }
+    }
     property bool chargeChoicesOpen: false
 
     spacing: metrics.px(14)
@@ -517,8 +530,14 @@ ColumnLayout {
     // sheet keeps it and the other screens' widgets follow; the mode ends when the sheet closes or
     // another page opens.
     property bool editing: false
-    // While a tile is dragged: the shown tiles as they would be if it were let go now.
+    // While a tile is dragged: the shown tiles as they would be if it were let go now. A tile that
+    // comes or goes meanwhile (a USB stick, the Wi-Fi radio) joins it at its place or leaves it.
     property var dragOrder: null
+    onShownTilesChanged: {
+        if (dragOrder) {
+            dragOrder = Tiles.rebase(dragOrder, shownTiles);
+        }
+    }
     function setEditing(on: bool, fromKeyboard: bool): void {
         const keyboard = fromKeyboard || editButton.visualFocus || tabletEditButton.visualFocus || editDone.visualFocus;
         editing = on;
@@ -535,11 +554,15 @@ ColumnLayout {
         function onPopupOpenChanged() {
             if (!page.backend.popupOpen) {
                 page.editing = false;
+                page.dndChoicesOpen = false;
+                page.chargeChoicesOpen = false;
             }
         }
         function onPageChanged() {
             if (page.backend.page !== "main") {
                 page.editing = false;
+                page.dndChoicesOpen = false;
+                page.chargeChoicesOpen = false;
             }
         }
     }
@@ -1113,8 +1136,8 @@ ColumnLayout {
         }
         Repeater {
             id: dndChoiceButtons
-            // Read when the choices open: "this evening" and "Monday" depend on the time.
-            model: page.dndChoicesOpen ? page.backend.dnd.choices() : []
+            // "This evening" and "Monday" depend on the time.
+            model: page.dndChoicesOpen ? page.backend.dnd.choices(new Date(page.dndChoicesNow)) : []
             delegate: TextButton {
                 required property var modelData
                 required property int index
@@ -1145,7 +1168,7 @@ ColumnLayout {
                     if (modelData.id === "off") {
                         page.backend.dnd.toggle();
                     } else {
-                        page.backend.dnd.until(modelData.until);
+                        page.backend.dnd.choose(modelData.id);
                     }
                     page.dndChoicesOpen = false;
                     if (visualFocus) {

@@ -3,6 +3,7 @@
 
 import QtQuick
 import org.kde.notificationmanager as NotificationManager
+import org.kde.plasma.clock
 import org.kde.plasma.workspace.dbus as DBus
 
 import "../../code/dnd.js" as Dnd
@@ -22,25 +23,30 @@ Item {
     readonly property var inhibitedUntil: settings.notificationsInhibitedUntil
     readonly property bool inhibitedByApp: settings.notificationsInhibitedByApplication
     readonly property bool dndActive: NotificationManager.Server.inhibited
-    // The clock the "Until" text is read at: moved on by dndClock when the text changes (Date.now()
-    // in a binding is read once, so the text stayed as it was when Do Not Disturb was turned on).
+    // The clock the "Until" text is read at: moved on by the minute clock below (Date.now() in a
+    // binding is read once, so the text stayed as it was when Do Not Disturb was turned on).
     property double dndNow: Date.now()
     readonly property var dndLabel: Dnd.untilLabel(inhibitedUntil, dndNow)
     // The end as it reads: a time ("18:00", within 24 hours), a day and time ("Mon 06:00", within a
     // week), a date, or "" (no end, or "until turned off").
     readonly property string dndUntilText: {
-        if (!dndActive) {
+        if (!dndActive || dndLabel.kind === "none") {
             return "";
         }
+        // In the locale's own words: a format string's names ("ddd", "AP") are always English in
+        // Qt 6, so the day is the locale's short day name, put before or after the time as the
+        // translation says.
         const until = inhibitedUntil;
-        const time = Qt.locale().timeFormat(Locale.ShortFormat);
+        const locale = Qt.locale();
+        const time = until.toLocaleTimeString(locale, Locale.ShortFormat);
         switch (dndLabel.kind) {
         case "time":
-            return Qt.formatTime(until, time);
+            return time;
         case "day":
-            return Qt.formatDateTime(until, "ddd " + time);
+            return i18nc("@info:status Do not disturb end, %1 short weekday name, %2 time", "%1 %2",
+                         locale.dayName(until.getDay(), Locale.ShortFormat), time);
         case "date":
-            return Qt.formatDate(until, Qt.locale().dateFormat(Locale.ShortFormat));
+            return until.toLocaleDateString(locale, Locale.ShortFormat);
         default:
             return "";
         }
@@ -73,32 +79,35 @@ Item {
         });
     }
 
-    // Do Not Disturb until a time (G18: the "for a while" choices). The notification settings keep
-    // the time; the server is inhibited at once and released when it passes.
-    function dndUntil(until) {
+    // Do Not Disturb until a time (G18: the "for a while" choices), as the stock applet's own
+    // choices set it: the notification settings keep the end, and the stock applet (Globals.qml,
+    // loaded and hidden) inhibits the server until then and releases it on its first wall-clock
+    // minute past the end, also right after a resume. This widget never ends it itself, so the end
+    // has one owner. An end that has passed (choices read long ago) is refused: written, it would
+    // leave nothing to end and the server as it is.
+    function dndUntil(until): bool {
+        if (!Dnd.valid(until) || until.getTime() <= Date.now()) {
+            return false;
+        }
         settings.notificationsInhibitedUntil = until;
         settings.save();
-        NotificationManager.Server.inhibited = true;
-        dndNow = Date.now();
+        return true;
     }
-    // One shot at the next moment the "Until" text changes or the time runs out, instead of a check
-    // every minute: the text is right on time and nothing wakes up for an "until turned off".
-    Timer {
-        id: dndClock
-        running: notif.dndActive && notif.dndLabel.refreshAt > 0
-        // Repeating, so that a new interval (set from the moved clock) starts it again. Timer
-        // intervals are ints: at most a day, then it looks again.
-        repeat: true
-        interval: Math.max(50, Math.min(24 * 3600 * 1000, notif.dndLabel.refreshAt - notif.dndNow + 50))
-        onTriggered: {
-            notif.dndNow = Date.now();
-            const until = notif.inhibitedUntil;
-            if (until && !isNaN(until.getTime()) && until.getTime() <= notif.dndNow && !notif.inhibitedByApp) {
-                settings.notificationsInhibitedUntil = undefined;
-                settings.save();
-                NotificationManager.Server.inhibited = false;
-            }
+    // The "Until" text changes on a whole minute (a day before the end, a week before...): Plasma's
+    // clock ticks on the wall clock's minutes, also right after a resume or a clock change, where
+    // a Timer would go on counting the time the machine was awake. It is the timer the stock
+    // applet's minute check runs on, shared in the shell, and it is not listened to while nothing
+    // is ahead ("until turned off").
+    // The clock reports the time once as it is made, which happens while dndLabel is worked out
+    // (it starts the Loader): the clock is moved a moment later, not inside that binding.
+    Loader {
+        active: notif.dndActive && notif.dndLabel.refreshAt > 0
+        sourceComponent: Clock {
+            onDateTimeChanged: Qt.callLater(notif.tick)
         }
+    }
+    function tick(): void {
+        dndNow = Date.now();
     }
     onDndActiveChanged: dndNow = Date.now()
     onInhibitedUntilChanged: dndNow = Date.now()

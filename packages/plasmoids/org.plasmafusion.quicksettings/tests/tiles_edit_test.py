@@ -10,13 +10,17 @@ The main page (QuickSettingsMain.qml) on the real Backend, whose services find n
 on the private bus; the widget's two settings keys are stand-ins that take what the page writes,
 as main.qml does. Checks the grid's order and conditions, the pencil, reordering by mouse drag,
 touch drag and keyboard, the Tab order, removing, the tray, adding back, Reset, Done and Escape,
-and the tablet posture's pencil and touch targets.
+and the tablet posture's pencil and touch targets; and the Do Not Disturb choices behind the tile's
+chevron (read when they open, closed with the sheet, a choice counting from the click), the
+Power mode tile's body on a stand-in power profiles service, Keep awake's time left and the
+clipboard sheet's tab.
 """
 
 import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 
 # The backend loads Plasma's clipboard module, whose Klipper code asks the offscreen platform for
 # X11 and crashes on the missing connection (pages_test.py does the same); the services' files
@@ -28,7 +32,7 @@ for key in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOM
     os.environ.pop(key, None)
 os.environ["HOME"] = HOME
 
-from PySide6.QtCore import QObject, QPoint, QPointF, Qt, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QDate, QDateTime, QMetaObject, QObject, QPoint, QPointF, Q_ARG, Q_RETURN_ARG, Qt, QTime, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -56,7 +60,11 @@ class Context(QObject):
     @Slot(str, str, str, "QVariant", result=str)
     @Slot(str, str, str, "QVariant", "QVariant", result=str)
     def i18ncp(self, context, singular, plural, count, *args):
+        self.plurals.append((context, count))
         return fill(singular if count == 1 else plural, (count,) + args)
+
+    # The plural lookups asked for: (context, number).
+    plurals = []
 
 
 UI = Path(sys.argv[1]).resolve() / ".local/share/plasma/plasmoids/org.plasmafusion.quicksettings/contents/ui"
@@ -343,6 +351,141 @@ click(find("editReset"))
 check(stored() == ([], []) and shown() == DEFAULT + ["devices"] and not find("editReset").isEnabled(),
       "Reset to defaults clears both keys: the default order, every tile")
 click(find("editDone"))
+
+# A USB stick plugged in during a drag: Disks & Devices keeps its place and no tile is written twice.
+NO_DEVICES = {"devices": False, "hotspot": False, "chargelimit": False, "tabletmode": False}
+page.setProperty("tileConditions", NO_DEVICES)
+root.setProperty("tileOrder", ["devices"] + DEFAULT)
+QTest.qWait(100)
+click(pencil)
+start, target = centre(find("edit-keepawake")), centre(find("tile-wifi"))
+QTest.mousePress(view, Qt.LeftButton, Qt.NoModifier, start)
+for n in range(1, 9):
+    QTest.mouseMove(view, QPoint(start.x() + (target.x() - start.x()) * n // 8, start.y() + (target.y() - start.y()) * n // 8))
+    QTest.qWait(20)
+page.setProperty("tileConditions", dict(NO_DEVICES, devices=True))
+QTest.qWait(50)
+# Still over the first cell, which the new tile takes for the moment.
+for n in range(1, 5):
+    QTest.mouseMove(view, QPoint(target.x() + n, target.y()))
+    QTest.qWait(20)
+QTest.mouseRelease(view, Qt.LeftButton, Qt.NoModifier, QPoint(target.x() + 4, target.y()))
+QTest.qWait(250)
+order = stored()[0]
+check(sorted(order) == sorted(set(order)) and "devices" in order and order[0] == "keepawake",
+      "a tile that appears during a drag: each tile stored once, Disks & Devices kept (%s)" % order)
+check(shown()[:2] == ["keepawake", "devices"], "and the grid shows the drop (%s)" % shown()[:3])
+click(find("editDone"))
+page.setProperty("tileConditions", NO_DEVICES)
+root.setProperty("tileOrder", [])
+QTest.qWait(100)
+
+# ---- Do Not Disturb's choices (the tile's chevron): worked out when they open, at the time of
+# their own clock, closed with the sheet and on another page; a choice counts from the click.
+dnd = backend.property("dnd")
+for _ in range(250):
+    if dnd.property("available"):
+        break
+    QTest.qWait(20)
+check(dnd.property("available"), "Do Not Disturb is available (the service runs the notification server)")
+backend.setProperty("popupOpen", True)
+chevron = find("tile-dnd").childItems()[2]  # background, the body's button, the chevron
+click(chevron)
+check(page.property("dndChoicesOpen") and find("dnd-hour") is not None, "the chevron opens the Do Not Disturb choices")
+backend.setProperty("popupOpen", False)
+QTest.qWait(50)
+backend.setProperty("popupOpen", True)
+QTest.qWait(50)
+check(not page.property("dndChoicesOpen") and find("dnd-hour") is None,
+      "closing the sheet closes them: the next opening works them out again")
+click(chevron)
+backend.setProperty("page", "display")
+QTest.qWait(50)
+backend.setProperty("page", "main")
+QTest.qWait(50)
+check(not page.property("dndChoicesOpen"), "another page closes them too")
+click(chevron)
+opened = page.property("dndChoicesNow")
+check(abs(opened - time.time() * 1000) < 5000, "opened again, they are read at the time they open")
+# A Saturday evening on their clock: no "this evening", "Until Monday" offered.
+page.setProperty("dndChoicesNow", float(QDateTime(QDate(2026, 10, 17), QTime(21, 0)).toMSecsSinceEpoch()))
+QTest.qWait(50)
+check(find("dnd-monday") is not None and find("dnd-evening") is None and find("dnd-hour") is not None,
+      "they follow their clock (a Saturday at 21:00: Monday, no evening)")
+click(find("dnd-hour"))
+until = dnd.property("s").property("inhibitedUntil")
+until = until.toMSecsSinceEpoch() if isinstance(until, QDateTime) else -1
+check(abs(until - (time.time() + 3600) * 1000) < 120 * 1000 and not page.property("dndChoicesOpen"),
+      "For 1 hour counts from the click, not from the clock the choices were read at")
+backend.setProperty("popupOpen", False)
+QTest.qWait(50)
+
+# ---- The Power mode tile's body goes from Balanced to the last other profile the user chose: not
+# to one an application held for a while. The power profiles service is a stand-in (the private
+# bus has no PowerDevil or power-profiles-daemon).
+Path(HOME, "PowerStandIn.qml").write_text('''
+import QtQuick
+Item {
+    property bool silent: false
+    property var list: ["power-saver", "balanced", "performance"]
+    readonly property bool available: true
+    property string active: "balanced"
+    property string inhibitionReason: ""
+    property string degradationReason: ""
+    property var holds: []
+    signal failed(string profile)
+    function setProfile(profile: string) { active = profile; }
+}
+''')
+loader = next(o for o in backend.findChildren(QObject)
+              if o.metaObject().className() == "QQuickLoader" and str(o.property("source").toString()).endswith("services/PowerProfiles.qml"))
+loader.setProperty("source", QUrl.fromLocalFile(str(Path(HOME, "PowerStandIn.qml"))))
+profile = backend.property("profile")
+for _ in range(250):
+    if profile.property("available"):
+        break
+    QTest.qWait(20)
+power = loader.property("item")
+power_body = find("tile-power").childItems()[1]  # background, the body's button, the chevron
+QMetaObject.invokeMethod(profile, "setProfile", Q_ARG("QString", "performance"))
+QTest.qWait(50)
+click(power_body)
+check(power.property("active") == "balanced", "the body goes back to Balanced from Performance, chosen on the page")
+# An application holds Power saver for a while (a battery saver tool), then lets go.
+power.setProperty("holds", [{"Name": "Saver", "Profile": "power-saver"}])
+power.setProperty("active", "power-saver")
+QTest.qWait(50)
+power.setProperty("holds", [])
+power.setProperty("active", "balanced")
+QTest.qWait(50)
+click(power_body)
+check(power.property("active") == "performance",
+      "after an application held Power saver for a while, the body goes to Performance, the user's choice (%s)"
+      % power.property("active"))
+click(power_body)
+
+# ---- The clipboard sheet opens on All: the Starred tab, the service's, goes back to All when the
+# clipboard page goes (the sheet closed or back to quick settings), before the next page is made.
+clipboard = backend.property("clipboard")
+for _ in range(250):
+    if clipboard.property("service") is not None:
+        break
+    QTest.qWait(20)
+clip_service = clipboard.property("service")
+backend.setProperty("page", "clipboard")
+clip_service.setProperty("starredOnly", True)
+QTest.qWait(50)
+backend.setProperty("page", "main")
+QTest.qWait(50)
+check(clip_service is not None and not clip_service.property("starredOnly"),
+      "the clipboard page gone, its Starred tab is back to All for the next opening")
+
+# ---- Keep awake's time left: the hours and the minutes each in their plural form.
+context.plurals.clear()
+left = QMetaObject.invokeMethod(backend, "durationText", Q_RETURN_ARG(str), Q_ARG(int, 125))
+check(left == "2 h 5 min" and ("@info remaining time, hours", 2) in context.plurals
+      and ("@info remaining time, minutes", 5) in context.plurals,
+      "2 h 5 min: both numbers go through the plural forms (%r, %r)" % (left, context.plurals))
 
 # ---- Tablet posture: the pencil is in the tablet row, the targets have touch sizes.
 laptop_height = find("tile-wifi").height()

@@ -92,19 +92,34 @@ function addable(order, hidden, conditions) {
     return list(order).filter(id => off.indexOf(id) !== -1 && applies(id, conditions));
 }
 
-// The full order after the shown tiles were rearranged to `next` (the same ids in a new order):
-// the places the shown tiles had in the full order take them in the new order, and every other
-// tile (hidden, or not applying now) keeps its place.
+// The full order after the shown tiles `before` were rearranged to `next`: the places they had in
+// the full order take them in the new order, and every other tile (hidden, or not applying now)
+// keeps its place. Only the tiles in both lists move, each once, so a tile that came or went while
+// `next` was made (a USB stick plugged in during a drag) keeps its place and none is written
+// twice.
 function arrange(order, before, next) {
     const out = list(order);
     const was = list(before);
-    const now = list(next);
+    const now = known(next, out).filter(id => was.indexOf(id) !== -1);
     let k = 0;
     for (let i = 0; i < out.length && k < now.length; ++i) {
-        if (was.indexOf(out[i]) !== -1) {
+        if (now.indexOf(out[i]) !== -1) {
             out[i] = now[k++];
         }
     }
+    return out;
+}
+
+// A drag's order `items` after the shown tiles became `current`: the tiles that went away are
+// taken out, and those that came in at their places in `current`.
+function rebase(items, current) {
+    const now = list(current);
+    const out = list(items).filter(id => now.indexOf(id) !== -1);
+    now.forEach((id, i) => {
+        if (out.indexOf(id) === -1) {
+            out.splice(Math.min(i, out.length), 0, id);
+        }
+    });
     return out;
 }
 
