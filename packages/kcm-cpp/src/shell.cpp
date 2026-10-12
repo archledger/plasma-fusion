@@ -18,14 +18,15 @@
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QEventLoop>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QProcess>
-#include <QStandardPaths>
 #include <QSet>
+#include <QStandardPaths>
 #include <QThread>
 
 #include <algorithm>
@@ -39,7 +40,9 @@ namespace
 // Reads the shell state in one call: the dock's keys, the top bar (the panel holding
 // org.plasmafusion.appname; the one with quick settings when there are several) and whether it
 // has the system meters, the quick settings' keyboard policy and the Folder View desktop's filter
-// and icon size.
+// and icon size. A panel's opacity and sizes are read only while its screen is there: for a
+// panel of a monitor that was unplugged (Plasma 6.8 keeps it on that screen) plasmashell reads
+// them from an invalid config group and crashes (WorkspaceScripting::Panel, KConfigGroup).
 const QString s_readShellScript =
     uR"JS(
 function bool(v, d) {
@@ -53,7 +56,7 @@ var state = { docks: 0, magnify: true, magnifiedSize: 62, homeIndicator: true,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
               folders: 0, filterMode: 0, filterPattern: "*", iconSize: 3 };
-var mainTopBar = false;
+var mainTopBar = false, chosenTopBar = false;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
     var p = ps[i];
@@ -76,11 +79,13 @@ for (var i = 0; i < ps.length; ++i) {
         ++state.quickSettings;
     }
     if (p.widgets("org.plasmafusion.appname").length > 0) {
-        if (state.topBars === 0 || (!mainTopBar && qs.length > 0)) {
+        var onScreen = p.screen >= 0 && p.screen < screenCount;
+        if (onScreen && (!chosenTopBar || (!mainTopBar && qs.length > 0))) {
             state.menu = p.widgets("org.kde.plasma.appmenu").length > 0;
             state.meters = p.widgets("org.plasmafusion.meters").length > 0;
             state.topOpacity = String(p.opacity);
             mainTopBar = qs.length > 0;
+            chosenTopBar = true;
         }
         ++state.topBars;
     }
@@ -255,8 +260,11 @@ print(placed);
 )JS"_s;
 
 // %1 top-bar opacity, %2 dock opacity, %3 the widgets' glass value or null (leave them), %4 the
-// widget types that have a glass key. Only panels holding Plasma Fusion widgets change.
-const QString s_panelsScript = uR"JS(
+// widget types that have a glass key. Only panels holding Plasma Fusion widgets change; a panel
+// whose screen is gone keeps its opacity (reading or writing it crashes plasmashell 6.8, see
+// s_readShellScript), its widgets get the glass value.
+const QString s_panelsScript =
+    uR"JS(
 var topOpacity = %1, dockOpacity = %2, glass = %3, glassTypes = %4;
 var result = { panels: 0, widgets: 0 };
 function glassFor(c) {
@@ -280,7 +288,7 @@ for (var i = 0; i < ps.length; ++i) {
         || p.widgets("org.plasmafusion.quicksettings").length > 0;
     var dock = p.widgets("org.plasmafusion.dock").length > 0;
     var want = top ? topOpacity : dock ? dockOpacity : "";
-    if (want !== "" && String(p.opacity) !== want) {
+    if (want !== "" && p.screen >= 0 && p.screen < screenCount && String(p.opacity) !== want) {
         p.opacity = want;
         ++result.panels;
     }
@@ -452,15 +460,31 @@ QString widgetName(const QString &plugin)
 }
 } // namespace
 
-QString PlasmaFusionKcm::evaluateShellScript(const QString &script, bool *ok) const
+// Apply and the actions change the shell step by step, each step on the answer of the one before.
+// The answer is awaited in a local event loop rather than with QDBus::Block: a shell that is slow
+// to answer (just restarted, up to s_shellTimeout) must not freeze the page, and KWin offers to end
+// a window that has not answered its ping for 5 s. User input waits meanwhile, so no other change
+// can start; the page shows that it is busy. A shell state answer arriving meanwhile is read again
+// afterwards (requestShellState).
+QString PlasmaFusionKcm::evaluateShellScript(const QString &script, bool *ok)
 {
-    const QDBusMessage reply = QDBusConnection::sessionBus().call(shellScriptMessage(script), QDBus::Block, s_dbusTimeout);
-    if (reply.type() != QDBusMessage::ReplyMessage) {
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_shellTimeout);
+    if (!call.isFinished()) {
+        QDBusPendingCallWatcher watcher(call);
+        QEventLoop loop;
+        connect(&watcher, &QDBusPendingCallWatcher::finished, &loop, &QEventLoop::quit);
+        const bool wasBusy = m_busy;
+        setBusy(true);
+        loop.exec(QEventLoop::ExcludeUserInputEvents);
+        setBusy(wasBusy);
+    }
+    const QDBusPendingReply<QString> reply = call;
+    if (reply.isError()) {
         *ok = false;
-        return reply.errorMessage();
+        return reply.error().message();
     }
     *ok = true;
-    return lastLine(reply.arguments().value(0).toString());
+    return lastLine(reply.value());
 }
 
 void PlasmaFusionKcm::requestShellState()
@@ -469,13 +493,20 @@ void PlasmaFusionKcm::requestShellState()
     m_shellLoading = true;
     Q_EMIT shellStateChanged();
 
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_readShellScript), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_readShellScript), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *watcher) {
-        if (request == m_shellRequest) {
-            shellStateArrived(watcher);
-        }
         watcher->deleteLater();
+        if (request != m_shellRequest) {
+            return;
+        }
+        if (m_saving || m_busy) {
+            // Inside Apply or an action (waiting in evaluateShellScript): the state may already be
+            // older than the change being made.
+            m_shellStateDeferred = true;
+            return;
+        }
+        shellStateArrived(watcher);
     });
 }
 
@@ -661,7 +692,7 @@ void PlasmaFusionKcm::placeSystemMeters(const QList<int> &ids, int attempt, int 
         list << QString::number(id);
     }
     const QString script = s_placeMetersScript.arg(u'[' + list.join(u',') + u']');
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(script), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, ids, attempt, request](QDBusPendingCallWatcher *watcher) {
         const QDBusPendingReply<QString> reply = *watcher;
@@ -827,7 +858,7 @@ void PlasmaFusionKcm::restorePreviousDesktop()
 
 // ---------- Reset Fusion layout ----------
 
-QJsonObject PlasmaFusionKcm::widgetShortcuts(bool *ok) const
+QJsonObject PlasmaFusionKcm::widgetShortcuts(bool *ok)
 {
     const QString result = evaluateShellScript(s_widgetsScript, ok);
     if (!*ok) {
@@ -889,7 +920,7 @@ void PlasmaFusionKcm::pollResetLayout(const QJsonObject &before, int attempt)
     for (const QJsonValue &id : before.value(u"ids"_s).toArray()) {
         oldMax = std::max(oldMax, id.toInt());
     }
-    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_widgetsScript), s_dbusTimeout);
+    const QDBusPendingCall call = QDBusConnection::sessionBus().asyncCall(shellScriptMessage(s_widgetsScript), s_shellTimeout);
     auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, before, attempt, oldMax](QDBusPendingCallWatcher *watcher) {
         const QDBusPendingReply<QString> reply = *watcher;

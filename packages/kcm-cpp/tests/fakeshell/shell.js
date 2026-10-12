@@ -11,9 +11,18 @@
 //   insert            "x" (default: before the widget at the x given, as a drop there) or "end"
 //   listDelayMs       a new widget is listed by widgets() only this long after addWidget() (a QML
 //                     widget the shell loads for the first time is listed once it is built)
+//   screens           the number of screens (default: one more than the highest panel screen). A
+//                     panel on a screen that is not there behaves as in Plasma 6.8: reading or
+//                     writing its opacity crashes the shell (host.crash), as plasmashell crashes on
+//                     the invalid config group of a missing screen
+//   showOpacity       the state file also names each panel's opacity ("top 0 adaptive: ...")
+//   scriptDelayMs     the shell answers a script only this long after it came (a shell that has
+//   slowFrom          just started), from the slowFrom-th script on (default 1: every script)
 
-var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0 };
+var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false,
+              scriptDelayMs: 0, slowFrom: 1, scripts: 0 };
 var knownWidgetTypes = [];
+var screenCount = 1;
 
 function makeWidget(type) {
     var w = { id: state.nextId++, type: type, listedAt: 0, config: {} };
@@ -38,7 +47,13 @@ function loadLayout(text) {
     state.failAdd = layout.failAdd || [];
     state.insert = layout.insert || "x";
     state.listDelayMs = layout.listDelayMs || 0;
+    state.showOpacity = layout.showOpacity === true;
+    state.scriptDelayMs = layout.scriptDelayMs || 0;
+    state.slowFrom = layout.slowFrom || 1;
     knownWidgetTypes = state.known.slice();
+    screenCount = layout.screens !== undefined ? layout.screens : state.panels.reduce(function (n, p) {
+        return Math.max(n, p.screen + 1);
+    }, 1);
 }
 
 function listed(w) {
@@ -77,11 +92,19 @@ function widgetObject(panel, w) {
     return o;
 }
 
+// The panel's window settings, which plasmashell reads from the config of the panel's screen.
+function view(panel, what) {
+    if (panel.screen >= screenCount) {
+        host.crash("the " + what + " of a panel on missing screen " + panel.screen);
+    }
+}
+
 function panelObject(panel) {
     return {
         get location() { return panel.location; },
         get screen() { return panel.screen; },
-        get opacity() { return panel.opacity; },
+        get opacity() { view(panel, "opacity"); return panel.opacity; },
+        set opacity(value) { view(panel, "opacity"); panel.opacity = value; },
         widgets: function (type) {
             return panel.items.filter(function (w) {
                 return listed(w) && (!type || w.type === type);
@@ -105,6 +128,12 @@ function panelObject(panel) {
     };
 }
 
+// How long fakeshell waits before it runs the next script (scriptDelayMs, slowFrom).
+function nextScriptDelay() {
+    state.scripts++;
+    return state.scripts >= state.slowFrom ? state.scriptDelayMs : 0;
+}
+
 function panels() {
     return state.panels.map(panelObject);
 }
@@ -117,10 +146,11 @@ function print(text) {
     host.print(String(text));
 }
 
-// One line per panel: "top 0: appname quicksettings ..." with the plugin ids shortened.
+// One line per panel: "top 0: appname quicksettings ..." with the plugin ids shortened (and the
+// opacity after the screen with showOpacity).
 function dumpLayout() {
     return state.panels.map(function (p) {
-        return p.location + " " + p.screen + ": " + p.items.map(function (w) {
+        return p.location + " " + p.screen + (state.showOpacity ? " " + p.opacity : "") + ": " + p.items.map(function (w) {
             return w.type.replace(/^org\.(plasmafusion|kde\.plasma)\./, "");
         }).join(" ");
     }).join("\n") + "\n";

@@ -384,14 +384,14 @@ private:
     void reapplyPowerTier();
     bool applyDesktop(const State &before, const State &after);
     bool applyWidgetKey(const QString &plugin, const QString &key, const QString &jsValue, const QString &what);
-    QString evaluateShellScript(const QString &script, bool *ok) const;
+    QString evaluateShellScript(const QString &script, bool *ok);
     bool runTool(const QString &program, const QStringList &arguments);
     bool currentVariantIsLight() const;
     void updateDecorationInstalled();
     QString topBarScriptPath() const;
 
     // Global shortcuts of widgets (Reset Fusion layout).
-    QJsonObject widgetShortcuts(bool *ok) const;
+    QJsonObject widgetShortcuts(bool *ok);
     QString giveWidgetShortcut(int widgetId, const QString &key, const QList<int> &liveWidgetIds);
     void finishResetLayout(const QJsonObject &before);
     void pollResetLayout(const QJsonObject &before, int attempt);
@@ -417,6 +417,8 @@ private:
     QString m_errorText;
     QString m_infoText;
     int m_shellRequest = 0;
+    // A shell state answer that came while the page was applying or busy; read again after.
+    bool m_shellStateDeferred = false;
     int m_metersPlacement = 0;
     // The dock and top-bar switches are read again when the Plasma shell (re)starts.
     QDBusServiceWatcher *m_shellWatcher = nullptr;
