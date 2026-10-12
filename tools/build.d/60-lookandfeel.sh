@@ -46,20 +46,35 @@ echo "look-and-feel: $(ls "$DEST" | tr '\n' ' ')"
 #   $STAGE/.local/share/plasma/layout-templates/org.plasmafusion.panel.{topbar,dock}/
 TEMPLATES=$STAGE/.local/share/plasma/layout-templates
 # The top-bar template and ensure-topbars.js set up a first bar's tray with the layout script's
-# lists: the same lists.
+# lists: the same lists; the three and the dock template apply the settings page's look with the
+# same function.
 python3 - "$SRC/common/contents/layouts/org.kde.plasma.desktop-layout.js" \
   "$SRC/layout-templates/org.plasmafusion.panel.topbar/contents/layout.js" \
-  "$SRC/common/contents/layouts/ensure-topbars.js" <<'PY'
+  "$SRC/common/contents/layouts/ensure-topbars.js" "$SRC/layout-templates/org.plasmafusion.panel.dock/contents/layout.js" <<'PY'
 import re, sys
 layout = open(sys.argv[1], encoding="utf-8").read()
 for other in sys.argv[2:]:
     text = open(other, encoding="utf-8").read()
-    for name in ("TRAY_ITEMS_REPLACED", "TRAY_ITEMS_UNLOADED", "TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS", "TRAY_ITEMS_HIDDEN"):
+    dock = other.endswith("org.plasmafusion.panel.dock/contents/layout.js")
+    for name in () if dock else ("TRAY_ITEMS_REPLACED", "TRAY_ITEMS_UNLOADED", "TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS", "TRAY_ITEMS_HIDDEN"):
         pattern = r"^var %s = (\[.*?\]);" % name
         a, b = re.search(pattern, layout, re.S | re.M), re.search(pattern, text, re.S | re.M)
         assert a and b and re.findall(r'"([^"]+)"', a[1]) == re.findall(r'"([^"]+)"', b[1]), \
             "%s differs between the layout script and %s" % (name, other.rsplit("/", 2)[-2] + "/" + other.rsplit("/", 1)[-1])
+    # The settings page's look for the bars and widgets each one makes: the same function.
+    def look(text, name):
+        m = re.search(r"^function %s\(\) \{.*?\n\}" % name, text, re.S | re.M)
+        assert m, "%s() not found in %s" % (name, other)
+        return re.sub(r"^function \w+", "function f", m[0]).replace("  // identical to the layout script's fusionLook()", "")
+    name = "ensureTopBarsLook" if other.endswith("ensure-topbars.js") else "fusionLook"
+    assert look(text, name) == look(layout, "fusionLook").replace("  // identical in ensure-topbars.js (ensureTopBarsLook)", ""), \
+        "%s() differs between the layout script and %s" % (name, other)
 PY
+# The layout scripts against a stand-in of the scripting runtime (packages/look-and-feel/tests; not
+# installed), when node is installed (the package build has none).
+if command -v node >/dev/null 2>&1; then
+  node "$SRC/tests/layout.test.js" >/dev/null
+fi
 for id in org.plasmafusion.panel.topbar org.plasmafusion.panel.dock; do
   src=$SRC/layout-templates/$id
   python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); assert d["KPlugin"]["Id"] == sys.argv[2] and d["KPackageStructure"] == "Plasma/LayoutTemplate" and "panel" in d["X-Plasma-ContainmentCategories"]' "$src/metadata.json" "$id"

@@ -7,10 +7,12 @@
 
     Top bar: a 34 px, full-width, non-floating panel at the top edge (34 px at the design's
     9.75 pt UI font, scaled with the user's text size at layout time), solid next to a maximized
-    window and frosted over the desktop (owner decision 5):
+    window and frosted over the desktop (owner decision 5; the settings page's Glass and top-bar
+    choices in plasmafusionrc apply, fusionLook below):
         app name | global menu | spacer | clock pill | spacer | system tray | pen | quick settings
     Every other screen gets its own top bar with the app name, the global menu of its own windows
-    and the clock pill (owner decision 8; ensure-topbars.js does the same for screens added later).
+    and the clock pill (owner decision 8; ensure-topbars.js does the same for screens added later),
+    unless the settings page's "Top bar on every screen" is off.
     Dock: a floating, fit-content, centred panel at the bottom edge, 72 px thick (the visible
         dock; the Plasma style keeps 16 px of transparent headroom above it in the panel window,
         so magnified icons can grow above the dock), hidden when a window covers it.
@@ -36,6 +38,36 @@ function textScale() {
     return Math.max(0.85, Math.min(1.6, s));
 }
 var TS = textScale();
+
+// The settings page's look (docs/parts/kcm-cpp.md), kept in plasmafusionrc for the bars and widgets
+// made later: [Effects] Glass Full, Reduced or Solid and [TopBar] SolidNextToWindows. Reduced glass
+// makes the Fusion panels opaque; otherwise the top bar is adaptive (solid next to a maximized
+// window, owner decision 5) unless the page turned that off (translucent), and the dock
+// translucent. Reduced and Solid also go into the glass key of the Fusion widgets that have one,
+// as the page writes it. Unset (a HOME the page never changed) is Full and adaptive.
+function fusionLook() {  // identical in ensure-topbars.js (ensureTopBarsLook)
+    var glass = String(ConfigFile("plasmafusionrc", "Effects").readEntry("Glass")).toLowerCase();
+    if (glass !== "reduced" && glass !== "solid") {
+        glass = "full";
+    }
+    var solidNextToWindows = String(ConfigFile("plasmafusionrc", "TopBar").readEntry("SolidNextToWindows")) !== "false";
+    return {
+        glass: glass,
+        topOpacity: glass === "reduced" ? "opaque" : solidNextToWindows ? "adaptive" : "translucent",
+        dockOpacity: glass === "reduced" ? "opaque" : "translucent"
+    };
+}
+var LOOK = fusionLook();
+// The glass key of a new Plasma Fusion widget that has one (dock, quick settings, launcher, system
+// card), when the level is not the widgets' own default.
+function withGlass(widget) {
+    if (widget && LOOK.glass !== "full") {
+        widget.currentConfigGroup = ["General"];
+        widget.writeConfig("glass", LOOK.glass);
+        widget.currentConfigGroup = [];
+    }
+    return widget;
+}
 
 // The bar holds text: 34 px at the design font, scaled with it (whole logical px: the scripting
 // engine does not know the screen's scale, so the widgets snap their own pills).
@@ -159,8 +191,9 @@ topBar.floating = false;
 topBar.lengthMode = "fill";
 topBar.alignment = "center";
 topBar.hiding = "none";
-// Solid while a window is maximized or touches it, frosted over the desktop (owner decision 5).
-topBar.opacity = "adaptive";
+// Solid while a window is maximized or touches it, frosted over the desktop (owner decision 5), or
+// as the settings page chose (fusionLook).
+topBar.opacity = LOOK.topOpacity;
 
 var hasAppName = installed("org.plasmafusion.appname");
 var hasLauncher = installed("org.plasmafusion.launcher");
@@ -199,7 +232,7 @@ var tray = addFirst(topBar, ["org.kde.plasma.systemtray"]);
 if (installed("org.plasmafusion.pen")) {
     addFirst(topBar, ["org.plasmafusion.pen"]);
 }
-var quickSettings = addFirst(topBar, ["org.plasmafusion.quicksettings"]);
+var quickSettings = withGlass(addFirst(topBar, ["org.plasmafusion.quicksettings"]));
 
 // The tray's items: the ones quick settings replaces and the passive ones hidden, the ones with no
 // use not loaded (the lists above). The same for the tray of every top bar.
@@ -243,13 +276,13 @@ dock.floating = true;
 dock.lengthMode = "fit";
 dock.alignment = "center";
 dock.hiding = "dodgewindows";
-dock.opacity = "translucent";
+dock.opacity = LOOK.dockOpacity;
 
 // The centred launcher answers the Meta key and the dock's Start button only while it sits in
 // a panel; the dock looks for it in its own panel. Next to the Fusion dock it has no button of
 // its own (the dock draws Start); without the Fusion dock it is the Start tile.
 if (hasLauncher && !launcherPlaced) {
-    var launcher = addFirst(dock, ["org.plasmafusion.launcher"]);
+    var launcher = withGlass(addFirst(dock, ["org.plasmafusion.launcher"]));
     if (launcher && hasDock) {
         launcher.currentConfigGroup = ["General"];
         launcher.writeConfig("buttonStyle", "hidden");
@@ -258,7 +291,7 @@ if (hasLauncher && !launcherPlaced) {
 } else if (!hasLauncher && hasAppName) {
     addFirst(dock, ["org.kde.plasma.kickoff"]);
 }
-if (!addFirst(dock, ["org.plasmafusion.dock"])) {
+if (!withGlass(addFirst(dock, ["org.plasmafusion.dock"]))) {
     addFirst(dock, ["org.kde.plasma.icontasks", "org.kde.plasma.taskmanager"]);
 }
 
@@ -271,8 +304,12 @@ if (!addFirst(dock, ["org.plasmafusion.dock"])) {
 // connected later by ensure-topbars.js (fusion-config.sh --screens, KWin's plasmafusion-snap), which
 // marks a bar it gives the status area ([PlasmaFusion] statusItems); these bars are marked too.
 // The primary screen is screen 0 in Plasma 6 (a panel created here has no screen yet: its
-// `screen` is not 0 while the script runs, so it cannot tell which screen it is on).
-for (var sc = 1; sc < screenCount; ++sc) {
+// `screen` is not 0 while the script runs, so it cannot tell which screen it is on). None while the
+// settings page's "Top bar on every screen" is off (plasmafusionrc [TopBar] EveryScreen=false), as
+// in ensure-topbars.js: a layout rebuilt outside the page (fusion-config.sh, System Settings'
+// Global Theme with its desktop layout) brought them back before 0.5.0.
+var everyScreen = String(ConfigFile("plasmafusionrc", "TopBar").readEntry("EveryScreen")) !== "false";
+for (var sc = 1; everyScreen && sc < screenCount; ++sc) {
     var bar = new Panel;
     bar.screen = sc;
     ConfigFile(ConfigFile("plasmashellrc", "PlasmaViews"), "Panel " + bar.id).writeEntry("floatingApplets", 1);
@@ -282,7 +319,7 @@ for (var sc = 1; sc < screenCount; ++sc) {
     bar.lengthMode = "fill";
     bar.alignment = "center";
     bar.hiding = "none";
-    bar.opacity = "adaptive";
+    bar.opacity = LOOK.topOpacity;
     addFirst(bar, ["org.plasmafusion.appname", "org.kde.plasma.kickoff"]);
     appMenuForOwnScreen(addFirst(bar, ["org.kde.plasma.appmenu"]));
     addFirst(bar, ["org.kde.plasma.panelspacer"]);
@@ -297,7 +334,7 @@ for (var sc = 1; sc < screenCount; ++sc) {
         }
     }
     if (quickSettings) {
-        addFirst(bar, ["org.plasmafusion.quicksettings"]);
+        withGlass(addFirst(bar, ["org.plasmafusion.quicksettings"]));
     }
     bar.currentConfigGroup = ["PlasmaFusion"];
     bar.writeConfig("statusItems", true);
@@ -508,6 +545,9 @@ if (cardDesktop !== null) {
         }
         here[h].widget = widget;
         widget.userBackgroundHints = "StandardBackground";
+        if (here[h].card.plugin === "org.plasmafusion.systemcard") {
+            withGlass(widget);
+        }
         if (here[h].card.monitor && here[h].card.plugin === "org.kde.plasma.systemmonitor") {
             configure(widget, MONITOR_CONFIG);
         }

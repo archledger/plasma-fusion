@@ -1,0 +1,165 @@
+// SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// The Global Theme's desktop layout script and ensure-topbars.js against layout-shell.js (the
+// layout scripting runtime): the settings page's choices kept in plasmafusionrc, which both read
+// for the bars and widgets they make ("Top bar on every screen", Glass, "Solid top bar next to
+// windows"). Run: node packages/look-and-feel/tests/layout.test.js (60-lookandfeel.sh runs it).
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const assert = require("assert");
+const { shell } = require("./layout-shell.js");
+
+const dir = path.join(__dirname, "..", "common", "contents", "layouts");
+const LAYOUT = fs.readFileSync(path.join(dir, "org.kde.plasma.desktop-layout.js"), "utf8");
+const ENSURE = fs.readFileSync(path.join(dir, "ensure-topbars.js"), "utf8");
+const TWO = [[1920, 1080], [1280, 1024]];
+
+const has = (p, type) => p.widgets.some((w) => w.type === type);
+const tops = (s) => s.panels.filter((p) => p.location === "top");
+const docks = (s) => s.panels.filter((p) => p.location === "bottom");
+const all = (s, type) => s.panels.concat(s.desktops).flatMap((c) => c.widgets).filter((w) => w.type === type);
+const glass = (w) => ((w.config || {}).General || {}).glass;
+function rc(topBar, effects) {
+    const f = { plasmafusionrc: {} };
+    if (topBar)
+        f.plasmafusionrc.TopBar = topBar;
+    if (effects)
+        f.plasmafusionrc.Effects = effects;
+    return f;
+}
+
+let n = 0, failed = 0;
+function test(name, f) {
+    n++;
+    try {
+        f();
+        console.log("ok " + n + " " + name);
+    } catch (e) {
+        failed++;
+        console.log("not ok " + n + " " + name + ": " + e.message);
+    }
+}
+
+// ---- the layout script (a layout reset, fusion-config.sh's rebuild, the Global Theme's layout)
+test("layout: a fresh HOME gets a top bar on every screen, adaptive, and no glass keys", () => {
+    const s = shell({ screens: TWO, files: rc() });
+    s.run(LAYOUT);
+    assert.strictEqual(tops(s).length, 2);
+    assert.deepStrictEqual(tops(s).map((p) => p.opacity), ["adaptive", "adaptive"]);
+    assert.strictEqual(docks(s)[0].opacity, "translucent");
+    assert.strictEqual(all(s, "org.plasmafusion.quicksettings").length, 2);
+    for (const t of ["org.plasmafusion.quicksettings", "org.plasmafusion.dock", "org.plasmafusion.launcher", "org.plasmafusion.systemcard"])
+        assert.ok(all(s, t).every((w) => glass(w) === undefined), t);
+});
+
+test("layout: \"Top bar on every screen\" off gives only the main screen a top bar", () => {
+    const s = shell({ screens: TWO, files: rc({ EveryScreen: "false" }) });
+    s.run(LAYOUT);
+    assert.strictEqual(tops(s).length, 1, "top bars: " + tops(s).length);
+    assert.ok(has(tops(s)[0], "org.plasmafusion.quicksettings"));
+    assert.ok(has(tops(s)[0], "org.kde.plasma.systemtray"));
+});
+
+test("layout: Glass Solid reaches every new widget with a glass key", () => {
+    const s = shell({ screens: TWO, files: rc(null, { Glass: "Solid" }) });
+    s.run(LAYOUT);
+    for (const t of ["org.plasmafusion.quicksettings", "org.plasmafusion.dock", "org.plasmafusion.launcher", "org.plasmafusion.systemcard"]) {
+        assert.ok(all(s, t).length > 0, t + " is in the layout");
+        assert.ok(all(s, t).every((w) => glass(w) === "solid"), t + ": " + all(s, t).map(glass));
+    }
+    assert.deepStrictEqual(tops(s).map((p) => p.opacity), ["adaptive", "adaptive"], "Solid glass keeps the adaptive bar");
+});
+
+test("layout: Glass Reduced makes the bars and the dock opaque", () => {
+    const s = shell({ screens: TWO, files: rc({ SolidNextToWindows: "false" }, { Glass: "Reduced" }) });
+    s.run(LAYOUT);
+    assert.deepStrictEqual(tops(s).map((p) => p.opacity), ["opaque", "opaque"]);
+    assert.strictEqual(docks(s)[0].opacity, "opaque");
+    assert.ok(all(s, "org.plasmafusion.quicksettings").every((w) => glass(w) === "reduced"));
+});
+
+test("layout: \"Solid top bar next to windows\" off makes the bars translucent", () => {
+    const s = shell({ screens: TWO, files: rc({ SolidNextToWindows: "false" }, { Glass: "Full" }) });
+    s.run(LAYOUT);
+    assert.deepStrictEqual(tops(s).map((p) => p.opacity), ["translucent", "translucent"]);
+    assert.strictEqual(docks(s)[0].opacity, "translucent");
+    assert.ok(all(s, "org.plasmafusion.quicksettings").every((w) => glass(w) === undefined), "Full writes no key");
+});
+
+// ---- ensure-topbars.js (a screen connected later; --screens; the settings page)
+function mainBar() {
+    return { id: 2, type: "org.kde.panel", screen: 0, location: "top", opacity: "adaptive", config: {}, widgets: [
+        { id: 3, type: "org.plasmafusion.appname", config: {} },
+        { id: 6, type: "org.kde.plasma.systemtray", config: { General: { hiddenItems: ["org.kde.kscreen"] } } },
+        { id: 8, type: "org.plasmafusion.quicksettings", config: { General: { glass: "solid" } } }] };
+}
+function screenTwo(files) {
+    const s = shell({ screens: TWO, files: files, panels: [mainBar()] });
+    s.run(ENSURE);
+    const bar = tops(s).find((p) => p.screen === 1);
+    assert.ok(bar, "a bar on the second screen: " + s.output);
+    return { s, bar, qs: bar.widgets.find((w) => w.type === "org.plasmafusion.quicksettings") };
+}
+
+test("ensure-topbars: a new screen's bar with the page's defaults is adaptive", () => {
+    const { bar, qs } = screenTwo(rc());
+    assert.strictEqual(bar.opacity, "adaptive");
+    assert.ok(qs, "quick settings in the new bar");
+    assert.strictEqual(glass(qs), undefined);
+});
+
+test("ensure-topbars: with Glass Solid the new bar's quick settings is solid", () => {
+    const { bar, qs } = screenTwo(rc(null, { Glass: "Solid" }));
+    assert.strictEqual(glass(qs), "solid");
+    assert.strictEqual(bar.opacity, "adaptive");
+});
+
+test("ensure-topbars: with Glass Reduced the new bar is opaque", () => {
+    const { bar, qs } = screenTwo(rc(null, { Glass: "Reduced" }));
+    assert.strictEqual(bar.opacity, "opaque");
+    assert.strictEqual(glass(qs), "reduced");
+});
+
+test("ensure-topbars: with \"Solid top bar next to windows\" off the new bar is translucent", () => {
+    const { bar } = screenTwo(rc({ SolidNextToWindows: "false" }));
+    assert.strictEqual(bar.opacity, "translucent");
+});
+
+test("ensure-topbars: \"Top bar on every screen\" off adds nothing", () => {
+    const s = shell({ screens: TWO, files: rc({ EveryScreen: "false" }), panels: [mainBar()] });
+    s.run(ENSURE);
+    assert.strictEqual(tops(s).length, 1);
+    assert.match(s.output, /top bars: off/);
+});
+
+// ---- the Add Panel templates
+const TEMPLATES = path.join(__dirname, "..", "layout-templates");
+const TOPBAR = fs.readFileSync(path.join(TEMPLATES, "org.plasmafusion.panel.topbar", "contents", "layout.js"), "utf8");
+const DOCK = fs.readFileSync(path.join(TEMPLATES, "org.plasmafusion.panel.dock", "contents", "layout.js"), "utf8");
+
+test("Add Panel: the top bar follows Glass Reduced (opaque, quick settings reduced)", () => {
+    const s = shell({ screens: TWO, files: rc(null, { Glass: "Reduced" }) });
+    s.run(TOPBAR);
+    assert.strictEqual(tops(s)[0].opacity, "opaque");
+    assert.strictEqual(glass(all(s, "org.plasmafusion.quicksettings")[0]), "reduced");
+});
+
+test("Add Panel: the top bar with the page's defaults is adaptive", () => {
+    const s = shell({ screens: TWO, files: rc() });
+    s.run(TOPBAR);
+    assert.strictEqual(tops(s)[0].opacity, "adaptive");
+    assert.strictEqual(glass(all(s, "org.plasmafusion.quicksettings")[0]), undefined);
+});
+
+test("Add Panel: the dock and its launcher follow Glass Solid", () => {
+    const s = shell({ screens: TWO, files: rc(null, { Glass: "Solid" }) });
+    s.run(DOCK);
+    assert.strictEqual(docks(s)[0].opacity, "translucent");
+    assert.strictEqual(glass(all(s, "org.plasmafusion.dock")[0]), "solid");
+    assert.strictEqual(glass(all(s, "org.plasmafusion.launcher")[0]), "solid");
+});
+
+console.log(failed ? `${failed} of ${n} failed` : `all ${n} passed`);
+process.exit(failed ? 1 : 0);
