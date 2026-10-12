@@ -73,6 +73,10 @@ FocusScope {
         }
         return out;
     }
+    // A label without its "&" mnemonic marker ("&&" is a literal "&").
+    function plainLabel(label: string): string {
+        return label.replace(/&(&?)/g, "$1");
+    }
     function confirm(): void {
         if (blocked || requested || !session) {
             return;
@@ -256,8 +260,12 @@ FocusScope {
             PillButton {
                 id: confirmButton
                 objectName: "powerConfirmButton"
-                text: root.reboot ? i18nd(PfStyle.logoutDomain, "&Restart")
-                                  : i18nd(PfStyle.logoutDomain, "&Shut Down")
+                // The log-out screen's strings without their mnemonic: Alt+R / Alt+S open this
+                // question from the power row, and the same chord pressed again or held (key
+                // repeat) would answer it at once. Return, Space or a click answer it.
+                text: root.plainLabel(root.reboot ? i18nd(PfStyle.logoutDomain, "&Restart")
+                                                  : i18nd(PfStyle.logoutDomain, "&Shut Down"))
+                mnemonic: false
                 fill: root.reboot ? PfStyle.accentStrong : PfStyle.shutDownFill
                 hoverFill: root.reboot ? PfStyle.accentStrongHover : PfStyle.shutDownFillHover
                 foreground: root.reboot ? PfStyle.textOnAccent : "#ffffff"
@@ -276,6 +284,8 @@ FocusScope {
         property color fill: PfStyle.chipFill
         property color hoverFill: PfStyle.chipFillHover
         property color foreground: PfStyle.text
+        // Kirigami's mnemonic underline (the button's own Alt+letter comes from an "&" in text).
+        property bool mnemonic: true
 
         width: Math.max(root.metrics.px(140), label.implicitWidth + root.metrics.px(40))
         height: root.metrics.tablet ? 48 : 44
@@ -285,7 +295,7 @@ FocusScope {
 
         Accessible.name: Kirigami.MnemonicData.plainTextLabel
 
-        Kirigami.MnemonicData.enabled: enabled && visible
+        Kirigami.MnemonicData.enabled: mnemonic && enabled && visible
         Kirigami.MnemonicData.controlType: Kirigami.MnemonicData.SecondaryControl
         Kirigami.MnemonicData.label: text
 
@@ -314,7 +324,24 @@ FocusScope {
             font.styleName: PfStyle.bold
         }
 
-        Keys.onEnterPressed: clicked()
-        Keys.onReturnPressed: clicked()
+        // Only a fresh press counts: the repeats of a key held on the power button that opened
+        // the question (Return, Space) reach this button once it has the focus, and must not
+        // answer it.
+        Keys.onEnterPressed: event => {
+            if (!event.isAutoRepeat) {
+                clicked();
+            }
+        }
+        Keys.onReturnPressed: event => {
+            if (!event.isAutoRepeat) {
+                clicked();
+            }
+        }
+        Keys.onSpacePressed: event => {
+            event.accepted = event.isAutoRepeat;
+        }
+        Keys.onReleased: event => {
+            event.accepted = event.key === Qt.Key_Space && event.isAutoRepeat;
+        }
     }
 }

@@ -10,7 +10,7 @@ states and saves one PNG per scenario. Run it on a private bus with fonts from t
   test/run.sh OUTDIR [scenario...]   (a private bus without activation, mock services, no display)
 
 Scenarios: idle, prompt, messages, fperror, focus, nopassword, the Restart / Shut Down checks
-power, power-blocked, power-busy, power-noreboot, power-kiosk (Plasma's session backend on the mock
+power, power-blocked, power-busy, power-noreboot, power-kiosk, power-mnemonic, power-repeat (Plasma's session backend on the mock
 logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed check), and the
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
@@ -462,6 +462,66 @@ def power(app, out, view, root, lock_root, scenario):
             wait(2500)
             check("when the inhibitor goes, Shut Down comes back on (read again every 2 s)",
                   button.property("enabled") and not item("powerConfirmBlockers").isVisible())
+        elif scenario in ("power-mnemonic", "power-repeat"):
+            # Alt+S / Alt+R open the question; the same chord again, or a key held (auto-repeat),
+            # must not answer it: the action takes a deliberate second step.
+            from PySide6.QtCore import QEvent
+            from PySide6.QtGui import QGuiApplication, QKeyEvent
+
+            def held(key, text):
+                # What a held key sends after the first press: repeated releases and presses.
+                for _ in range(3):
+                    for kind in (QEvent.KeyRelease, QEvent.KeyPress):
+                        QGuiApplication.sendEvent(view, QKeyEvent(kind, key, Qt.NoModifier, text, True))
+                    wait(40)
+                QGuiApplication.sendEvent(view, QKeyEvent(QEvent.KeyRelease, key, Qt.NoModifier, text, False))
+                wait(300)
+
+            def title():
+                t = item("powerConfirmTitle")
+                return t.property("text") if t is not None and confirm_page() is not None else None
+            if scenario == "power-mnemonic":
+                QTest.keyClick(view, Qt.Key_S, Qt.AltModifier)
+                wait(800)
+                check("Alt+S asks first", title() == "Shut down now?", title())
+                QTest.keyClick(view, Qt.Key_S, Qt.AltModifier)
+                wait(800)
+                check("Alt+S again does not shut down", calls() == [], calls())
+                confirm = item("powerConfirmButton")
+                check("the action shows no mnemonic", confirm is not None and "&" not in confirm.property("text"),
+                      confirm.property("text") if confirm else None)
+                QTest.keyClick(view, Qt.Key_Escape)
+                wait(800)
+                QTest.keyClick(view, Qt.Key_R, Qt.AltModifier)
+                wait(800)
+                check("Alt+R asks first", title() == "Restart now?", title())
+                QTest.keyPress(view, Qt.Key_R, Qt.AltModifier)
+                QTest.keyRelease(view, Qt.Key_R, Qt.AltModifier)
+                wait(500)
+                check("Alt+R again does not restart", calls() == [], calls())
+            else:
+                # Return or Space held on the focused power button: the first press asks, the
+                # repeats reach the question's focused action.
+                item("restartButton").forceActiveFocus(Qt.TabFocusReason)
+                QTest.keyPress(view, Qt.Key_Return)
+                wait(800)
+                check("Return on Restart asks first", title() == "Restart now?", title())
+                held(Qt.Key_Return, "\r")
+                check("Return held does not restart", calls() == [], calls())
+                QTest.keyClick(view, Qt.Key_Escape)
+                wait(800)
+                item("shutdownButton").forceActiveFocus(Qt.TabFocusReason)
+                QTest.keyPress(view, Qt.Key_Space)
+                QTest.keyRelease(view, Qt.Key_Space)
+                wait(800)
+                check("Space on Shut Down asks first", title() == "Shut down now?", title())
+                held(Qt.Key_Space, " ")
+                check("Space held does not shut down", calls() == [], calls())
+            key = Qt.Key_Space if scenario == "power-mnemonic" else Qt.Key_Return
+            QTest.keyClick(view, key)
+            wait(800)
+            check("a deliberate %s answers it" % ("Space" if key == Qt.Key_Space else "Return"),
+                  len(calls()) == 1, calls())
         elif scenario == "power-busy":
             click("shutdownButton")
             wait(2500)

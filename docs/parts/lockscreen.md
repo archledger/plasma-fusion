@@ -41,7 +41,8 @@ media buttons; focused controls get the Controls board's dark-scheme focus ring 
 accent gets its own lighter shade). Screen readers hear every PAM message as it arrives (face and fingerprint
 guidance, errors; `Accessible.announce`), and the full screen is named "Lock screen". Alt+P,
 Alt+H, Alt+U keep the stock mnemonics, Alt+R and Alt+S are the log-out screen's (Restart, Shut
-Down). Escape hides the prompt and clears the password.
+Down); they open the question, whose action has no mnemonic, so the same chord pressed again or
+held does not answer it. Escape hides the prompt and clears the password.
 
 ## Restart and Shut Down (0.5.0)
 
@@ -55,7 +56,11 @@ logout=false` hides both). The log-out screen itself cannot open over the lock s
 the prompt's stack: a 64 px circle with the board's icon, "Restart now?" / "Shut down now?", "Open
 apps are closed first. An app with unsaved work waits until you unlock and answer it.", Cancel (a
 chip pill) and the action (accent fill, or the board's red for Shut Down; it has the focus, as on
-the log-out screen; Escape cancels). Confirmed, it calls `requestReboot` / `requestShutdown` with
+the log-out screen; Escape cancels). The action is the log-out screen's "&Restart" / "&Shut Down"
+without the "&": both Qt Quick buttons took Alt+R / Alt+S, so pressing it twice, or holding it
+past the key repeat delay, restarted or powered off at once (VM 6.7.91: Alt+R twice rebooted).
+Only a fresh press of Return, Enter or Space answers it, not the repeats of a key held on the power
+button that opened the question. Confirmed, it calls `requestReboot` / `requestShutdown` with
 `ConfirmationMode.Skip`: ksmserver closes the session (`org.kde.Shutdown.logoutAndReboot` /
 `logoutAndShutdown`) and asks logind. If the session has not ended after 30 s (an app cancelled the
 log-out; ksmserver says so in a notification) the prompt comes back. The question goes when the
@@ -338,7 +343,7 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscree
 `offscreen-portrait-900x1440-idle-and-prompt.png`, `greeter-and-envtest-log.txt`, pixel reports).
 
 Restart and Shut Down (0.5.0, CI step "Lock screen Restart and Shut Down"): `test/run.sh OUT power
-power-blocked power-busy power-noreboot power-kiosk`. The harness points the system bus at its
+power-blocked power-busy power-noreboot power-kiosk power-mnemonic power-repeat`. The harness points the system bus at its
 private bus, where `mock_services.py power` answers as logind and ksmserver, so Plasma's own session
 backend (not a stand-in) decides what the row shows, and the clicks are real pointer events:
 `power` both buttons shown; Shut Down asks first, Escape back, nothing called; Restart asks, Cancel
@@ -347,8 +352,11 @@ inhibitor and a `block-weak` one listed with their reasons, a sleep `delay` and 
 power-key inhibitor not, Shut Down off and a click on it calls nothing, the typed-value form of the
 reply read the same, the action on again 2 s after the inhibitor goes; `power-busy` a `block-weak`
 inhibitor alone leaves Shut Down on, confirmed calls `logoutAndShutdown`; `power-noreboot` logind
-CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both. On the 0.4.1 package
-four of the five fail (no buttons). In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
+CanReboot `na` hides Restart only; `power-kiosk` `logout=false` hides both; `power-mnemonic` Alt+S
+and Alt+R ask, the same chord again calls nothing, the action shows no "&", a deliberate Space
+answers; `power-repeat` Return or Space on a focused power button asks, their repeats (key events
+marked auto-repeat) call nothing, a deliberate Return answers. On the 0.4.1 package four of the
+five first ones fail (no buttons); the last two fail on the package before the mnemonic fix. In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
 uinput pointer): the row shows Sleep, Switch User, Restart, Shut Down; with `systemd-inhibit
 --what=shutdown --mode=block --who=Updater` held by root, Shut Down lists "Updater: Installing
 updates" and is off; Cancel returns; with it released, Restart confirmed restarted the VM (logind

@@ -169,7 +169,9 @@ jobs:
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/devices_service_test.py
 
       - name: Lock screen Restart and Shut Down (offscreen, mock logind and ksmserver)
-        run: packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy power-noreboot power-kiosk
+        run: >-
+          packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen" power power-blocked power-busy
+          power-noreboot power-kiosk power-mnemonic power-repeat
 
       - name: Log-out screen on Plasma 6.8 (offscreen, two screens on one engine)
         run: |
