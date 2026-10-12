@@ -1212,7 +1212,8 @@ docs/parts/device.md); the button and Meta+V close it again.
   keeps the starred entries, as in stock Plasma.
 - **Keyboard:** the list has the focus with the newest entry current (no ring until a key is used);
   Up and Down move (Up on the first entry goes to the search field, Down there comes back), Home,
-  End, Page Up and Page Down, Enter chooses, Delete removes, typing goes to the search field (Ctrl+F
+  End, Page Up and Page Down, Enter or Space chooses (as on the notification cards and the stock
+  widget's rows; Space went to the search field before), Delete removes, typing goes to the search field (Ctrl+F
   selects it; Enter there chooses the current or first match). Right or Menu opens the entry's
   actions; Left and Right then move between them (the list keeps the focus, the ring marks the
   action) and Enter or Space presses one; Left on the first closes them. Escape closes the editor,
@@ -1239,10 +1240,10 @@ docs/parts/device.md); the button and Meta+V close it again.
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (48 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (49 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
-  the page: focus, arrows, type to search, Enter, Escape, Delete, Tab, the action row by keyboard,
+  the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by keyboard,
   QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode, a new opening on
   All after the Starred tab). Both fail without
   the sheet (the files do not exist on 0.4.1).

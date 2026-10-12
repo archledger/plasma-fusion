@@ -333,6 +333,12 @@ QTest.keyClick(view, Qt.Key_Escape)
 QTest.qWait(50)
 check(search.property("text") == "" and filtered.rowCount() > 1, "Escape clears the search")
 check(lst.property("activeFocus"), "... and goes back to the list")
+lst.setProperty("currentIndex", 1)
+spaced = rows()[1]
+QTest.keyClick(view, Qt.Key_Space)
+QTest.qWait(150)
+check(app.clipboard().text() == spaced and root.property("closes") == 2 and search.property("text") == "",
+      "Space chooses the current entry, as Enter (not a space typed into the search)")
 
 before = filtered.rowCount()
 lst.setProperty("currentIndex", 1)

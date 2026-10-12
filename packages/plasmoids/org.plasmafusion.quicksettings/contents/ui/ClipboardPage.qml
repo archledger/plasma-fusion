@@ -21,7 +21,7 @@ import "../code/clipboard.js" as Clip
 // paste on choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet"). The Emoji button opens
 // Plasma's emoji selector.
 //
-// Keyboard: the list has the focus with the newest entry current; Up and Down move, Enter
+// Keyboard: the list has the focus with the newest entry current; Up and Down move, Enter or Space
 // chooses, Delete removes, Menu or Right opens the entry's actions (Left and Right move between
 // them, Enter presses one, Left on the first closes them), typing goes to the search field (Down
 // goes back to the list), Escape closes the editor, the QR code or the actions, then clears the
@@ -346,12 +346,16 @@ ColumnLayout {
                 }
                 break;
             case Qt.Key_Space:
+                // A list item's own key, as on the notification cards and the stock widget's rows:
+                // it presses the action the arrows are on, or chooses the entry (it went to the
+                // search field as a typed space).
                 if (current && current.expanded) {
                     current.pressAction(page.actionIndex);
-                    event.accepted = true;
-                    return;
+                } else {
+                    page.choose(list.currentIndex);
                 }
-                break;
+                event.accepted = true;
+                return;
             case Qt.Key_Backspace:
                 search.text = search.text.slice(0, -1);
                 search.forceActiveFocus(Qt.TabFocusReason);
