@@ -15,7 +15,8 @@ logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed ch
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
 auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth68-heartbeat,
-auth68-strings, auth67-picker, auth67-heartbeat, auth67-strings, and wallpaper68 (each writes
+auth68-failed, auth68-strings, auth67-picker, auth67-heartbeat, auth67-failed, auth67-strings, and
+wallpaper68 (each writes
 SCENARIO.json and exits 1 on a failed check).
 Environment:
 PF_LOCALE (default en_GB), PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board
@@ -551,6 +552,8 @@ AUTH_SETUPS = {
     "auth68-prompt": ([REGULAR, SMARTCARD], REGULAR, False),
     "auth68-fingerprint": ([REGULAR, FINGERPRINT, FACE], REGULAR, True),
     "auth68-heartbeat": ([REGULAR], REGULAR, False),
+    "auth68-failed": ([REGULAR, FACE], FACE, False),
+    "auth67-failed": ([], REGULAR, False),
     "auth67-picker": ([], REGULAR, False),
     "auth67-heartbeat": ([], REGULAR, False),
     "auth68-strings": ([REGULAR], REGULAR, False),
@@ -630,6 +633,7 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
         QTest.qWait(ms)
 
     def run():
+        main_block = item("mainBlock")
         lock_root.setProperty("uiVisible", True)
         wait(800)
         if scenario == "auth68-picker":
@@ -721,6 +725,63 @@ def authenticators(app, out, view, root, lock_root, scenario, auth, warnings, qu
             start = auth.property("startCount")
             wait(2200)
             check("and not while it is hidden", auth.property("startCount") - start == 0, auth.property("startCount") - start)
+        elif scenario == "auth68-failed":
+            # A way without a field (face) that fails: the 6.8 greeter reports every failure of the
+            # way in use as failed(None), as for a refused password. The prompt stays usable, the
+            # way is asked again at once while the prompt is shown (so the greeter's own check can
+            # see quick failures one after another and mark the way defunct), not while hidden.
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(150)
+            check("a failed face attempt says so", "Unlocking failed" in message(), message())
+            check("and leaves the prompt usable (no 3 s grace)", main_block.property("enabled"))
+            check("the face is asked again at once", auth.property("startCount") - start >= 1,
+                  auth.property("startCount") - start)
+            click("authenticatorLink%d" % REGULAR)
+            wait(400)
+            check("Use password works right after a failure", way() == REGULAR, way())
+            click("authenticatorLink%d" % FACE)
+            wait(400)
+            lock_root.setProperty("uiVisible", False)
+            wait(500)
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(3600)
+            check("with the prompt hidden it is not asked again (no camera all night)",
+                  auth.property("startCount") - start == 0, auth.property("startCount") - start)
+            lock_root.setProperty("uiVisible", True)
+            wait(300)
+            check("showing the prompt asks again", auth.property("startCount") - start >= 1,
+                  auth.property("startCount") - start)
+            click("authenticatorLink%d" % REGULAR)
+            wait(400)
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(300)
+            check("a refused password still has the 3 s grace: the prompt is off", way() == REGULAR
+                  and not main_block.property("enabled") and auth.property("startCount") - start == 0,
+                  (way(), main_block.property("enabled"), auth.property("startCount") - start))
+            wait(3000)
+            check("and asks again when it ends", main_block.property("enabled")
+                  and auth.property("startCount") - start >= 1, auth.property("startCount") - start)
+            # The greeter marks a way defunct (its failure count) and then reports that last
+            # failure: the defunct message stays, without "Unlocking failed" taking it away.
+            click("authenticatorLink%d" % FACE)
+            wait(400)
+            auth.markDefunct(FACE)
+            auth.failAttempt()
+            wait(3500)
+            check("the last failure of a way that went defunct leaves its message", way() == REGULAR
+                  and "not functioning correctly" in message() and "Unlocking failed" not in message(), message())
+        elif scenario == "auth67-failed":
+            start = auth.property("startCount")
+            auth.failAttempt()
+            wait(300)
+            check("Plasma 6.7: a refused password has the 3 s grace", not main_block.property("enabled")
+                  and auth.property("startCount") - start == 0, auth.property("startCount") - start)
+            wait(3000)
+            check("Plasma 6.7: asked again when it ends", main_block.property("enabled")
+                  and auth.property("startCount") - start == 1, auth.property("startCount") - start)
         elif scenario == "auth67-picker":
             check("Plasma 6.7: no ways to choose", links() == [] and item("authenticatorChoice") is None, links())
             check("Plasma 6.7: the password field", shown("passwordBox") and shown("unlockButton"))

@@ -38,6 +38,7 @@ Flow {
     readonly property bool passwordField: !currentWay || currentWay.passwordField
     readonly property bool expectingPrompt: !currentWay || currentWay.expectingPrompt
     readonly property bool showPrompt: !!currentWay && currentWay.showPrompt
+    readonly property bool currentFunctional: !currentWay || currentWay.functional
     readonly property string currentIcon: currentWay ? currentWay.iconName : ""
     readonly property string statusText: currentWay ? statusFor(currentWay.type, currentWay.tooltip) : ""
     readonly property int count: ways.count

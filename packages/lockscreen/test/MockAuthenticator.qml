@@ -44,4 +44,6 @@ QtObject {
     function stopAuthenticating() { state = 0; }
     function respond(password) { responses = responses.concat(["<" + password.length + " chars>"]); }
     function cancel() { }
+    // The way in use refused the attempt (kscreenlocker: failed(None, …), for every way on 6.8).
+    function failAttempt() { failed(0, null); }
 }

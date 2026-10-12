@@ -144,12 +144,29 @@ too. Now (`AuthenticatorChoice.qml`, loaded by `MainBlock` only when the authent
   cannot authenticate." for both workers right after the start) or a conversation is running, and
   does not restart a failed fingerprint or face attempt by itself. Plasma 6.7's authenticators start
   themselves and are not asked again.
+* A failed attempt of a way without a field (face, security key, fingerprint way) shows "Unlocking
+  failed" but neither shakes nor starts the 3 s grace: the 6.8 greeter reports every failure of the
+  way in use as `failed(None)`, like a refused password, and the grace (with the shake) turned the
+  whole prompt off, "Use password" and the power row included, for all but the moment each attempt
+  took, and spaced the failures 3 s apart, so the greeter's own check (more than 3 failures, each
+  within 2 s of the last, `pamauthenticator.cpp`) never marked a broken way defunct. Such a way is
+  asked again at once while the prompt is shown (as the stock lock screen does) and not while it
+  is hidden, so a camera or key reader is not driven all night; showing the prompt asks again. The
+  failure the greeter reports right after marking a way defunct adds nothing to the defunct
+  message. A refused password or PIN keeps the shake and the grace. VM (Plasma 6.7.91, a test
+  `kde-face` PAM service that always fails after 0.3 s): before, an attempt every 3.3 s for good,
+  "Use password" ignored 5 clicks, 6 attempts in 20 s with the prompt hidden; after, defunct after
+  4 attempts in 1.5 s and back on the password with the message; with 2.5 s failures "Use
+  password" works and nothing runs while the prompt is hidden.
 
 Tests (CI step "Lock screen ways to unlock"): `test/run.sh OUT auth68-picker auth68-saved
 auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-fingerprint auth68-heartbeat
-auth67-picker auth67-heartbeat` with a
+auth68-failed auth68-strings auth67-picker auth67-heartbeat auth67-failed auth67-strings` with a
 6.8 authenticator (`test/MockAuthenticator68.qml`, the model and enum stubs in `test/imports/`) and
 the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones pass on both.
+`auth68-failed` (a face failure leaves the prompt on, is asked again at once, not while hidden;
+the password keeps its grace; a defunct way's message stays) fails on the previous package;
+`auth67-failed` (6.7 keeps the grace) passes on both.
 
 ## Authentication contract (Plasma 6.7.5, and 6.8 where noted)
 
@@ -157,7 +174,7 @@ the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones
 `/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen/LockScreenUi.qml`:
 
 * `authenticator` (PamAuthenticators): `onFailed(kind)` (only `kind == 0` shows `Unlocking failed`,
-  starts the 3 s grace timer and the reject animation), `onSucceeded` (`Qt.quit()` only when
+  starts the 3 s grace timer and the reject animation; on 6.8 only for a way with a field, above), `onSucceeded` (`Qt.quit()` only when
   `hadPrompt`, otherwise the explicit Unlock screen `NoPasswordUnlock.qml`), `onInfoMessageChanged`,
   `onErrorMessageChanged`, `onPromptChanged` (all into the message area through the stock
   `handleMessage` with repeat bounce), `onPromptForSecretChanged` (focus the field, hide the text),
