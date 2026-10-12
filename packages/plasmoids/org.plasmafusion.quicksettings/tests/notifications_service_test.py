@@ -30,7 +30,7 @@ for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOM
 os.environ["HOME"] = tempfile.mkdtemp(prefix="pf-notifications-")
 
 import dbus  # noqa: E402
-from PySide6.QtCore import QDateTime, QLibraryInfo, QLocale, QObject, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QDateTime, QLibraryInfo, QLocale, QObject, QUrl, Slot, qInstallMessageHandler  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -67,6 +67,17 @@ class Context(QObject):
 # registers it when loaded.
 STOCK = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath), "plasma/applets/org.kde.plasma.notifications.so")
 ctypes.CDLL(str(STOCK), mode=ctypes.RTLD_GLOBAL)
+# The QML engine's warnings (binding loops) are kept to be checked at the end.
+loops = []
+
+
+def messages(mode, context, text):
+    if "Binding loop" in text:
+        loops.append(text)
+    print(text, file=sys.stderr)
+
+
+qInstallMessageHandler(messages)
 app = QGuiApplication(sys.argv[:1])
 # A German region: the "Until" text is in its words ("Di. 06:00", not "Tue 06:00").
 QLocale.setDefault(QLocale(QLocale.Language.German, QLocale.Country.Germany))
@@ -195,6 +206,10 @@ wait_for(lambda: prop(service, "dndReasons"), "the inhibiting application was no
 reasons = list(prop(service, "dndReasons"))
 check(reasons == ["While Kdenlive is active (Rendering)"] or reasons == ["While org.kde.kdenlive is active (Rendering)"],
       "an app that holds it is named with its reason: %r" % reasons)
+# An end chosen while the application holds it: the "Until" text's minute clock starts then.
+call(root, "untilAt", float(int(time.time() * 1000) + 2 * 3600 * 1000))
+wait_for(lambda: service.property("dndUntilText") != "", "an end set while an application holds it shows no time")
+check(not loops, "no binding loop when the minute clock starts (%s)" % loops)
 holder.stdin.close()
 wait_for(lambda: holder.poll() is not None, "the inhibiting client did not finish")
 wait_for(lambda: not service.property("inhibitedByApp"), "the application's inhibition was not released")

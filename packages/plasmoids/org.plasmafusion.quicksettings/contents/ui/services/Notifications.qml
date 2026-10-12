@@ -98,11 +98,16 @@ Item {
     // a Timer would go on counting the time the machine was awake. It is the timer the stock
     // applet's minute check runs on, shared in the shell, and it is not listened to while nothing
     // is ahead ("until turned off").
+    // The clock reports the time once as it is made, which happens while dndLabel is worked out
+    // (it starts the Loader): the clock is moved a moment later, not inside that binding.
     Loader {
         active: notif.dndActive && notif.dndLabel.refreshAt > 0
         sourceComponent: Clock {
-            onDateTimeChanged: notif.dndNow = Date.now()
+            onDateTimeChanged: Qt.callLater(notif.tick)
         }
+    }
+    function tick(): void {
+        dndNow = Date.now();
     }
     onDndActiveChanged: dndNow = Date.now()
     onInhibitedUntilChanged: dndNow = Date.now()
