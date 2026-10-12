@@ -811,7 +811,9 @@ together (the forced split is itself a known complaint).
   It closes itself when another window becomes active, but not while its own card menu is open (it
   takes the activation back when the menu closes).
 - **Content** (`NotificationCentreContent.qml`): the Tinted backdrop; landscape = the clock (64 px
-  light), the date and a Do Not Disturb chip (tap: off) in a column on the left (28 %, at most 400 px),
+  light), the date (the region's long date without the year, `notifications.js centreDateFormat`:
+  "Sunday, October 11" in en_US, "Sunday 11 October" in en_GB; until 0.5.0 always in the British
+  order) and a Do Not Disturb chip (tap: off) in a column on the left (28 %, at most 400 px),
   the list on the right (at most 760 px) — never a narrow centred column (A-ipad, MacRumors 2023);
   portrait = one column with the clock above. A **Notifications | Controls** segment (44 px) at the top.
   Cards are the quick settings' `NotificationCard` on a **solid** surface (#1b2031 / #ffffff; E-phone
@@ -1136,12 +1138,18 @@ suspended and **Cancel** when it can be killed; a finished copy of one file offe
 as on the Popups board) and **Open Containing Folder**, which shows the file selected in the file
 manager (`org.freedesktop.FileManager1.ShowItems`, KIO's highlightInFileManager), and a copy of
 several files offers **Open Containing Folder** for the destination folder (the job's
-`effectiveDestUrl`, empty after an error or in the trash). Opening lets the notification expire and
-closes the sheet. A summary that only repeats the app's name is left out (the stock rule).
-`notifications.js` `jobState()`, `fileActions()`, `summaryShown()`; `tests/notify_client.py job`
-reports a copy as KIO does (`org.kde.JobViewServerV2`) and `tests/notifications_card_test.py`
-checks the one-file, several-file, failed and running cases (Open, the folder through a stand-in
-file manager, the error text, Pause/Resume/Cancel reaching the job).
+`effectiveDestUrl`, empty after an error or in the trash). Neither is offered when that file or
+folder no longer exists (the stock JobItem's FileInfo rule): Dolphin reports a cancelled copy as
+finished without an error, so the card said "Copying (Finished)" with Open for a file KIO had
+removed (ThinkPad, 0.5.0 round); a finished local job's parent folder is listed with a filter on the
+name (`notifications.js existenceProbe()`, a FolderListModel while the card shows), remote URLs are
+not checked. Opening lets the notification expire and closes the sheet. A summary that only repeats
+the app's name is left out (the stock rule).
+`notifications.js` `jobState()`, `fileActions()`, `existenceProbe()`, `summaryShown()`;
+`tests/notify_client.py job` reports a copy as KIO does (`org.kde.JobViewServerV2`) and
+`tests/notifications_card_test.py` checks the one-file, several-file, gone-file, failed and running
+cases (Open, the folder through a stand-in file manager, nothing for a file that is gone, the error
+text, Pause/Resume/Cancel reaching the job).
 
 ### Grouped by app
 
@@ -1213,7 +1221,8 @@ docs/parts/device.md); the button and Meta+V close it again.
   puts it back when the clipboard page goes; test `tests/tiles_edit_test.py`); the entries; "Clipboard settings" (Klipper's settings dialog) at the bottom. Text
   shows in up to two lines (white space folded, blank text as ␣ ⇥ ↵ as in the stock widget, always
   as plain text), an image as a thumbnail with its size, copied files with the first one's preview
-  (Klipper's `klipperpreview` images) and their names.
+  (Klipper's `klipperpreview` images, asked for at the tile's width and height: given only a height
+  the provider answers an empty picture) and their names.
 - **Search** matches every word of the query in any order, ignoring case and accents, as plain text
   (the stock widget takes the query as a regular expression, so `f(1` or `c++` found nothing);
   images are also found by "image" or "picture", copied files by their names and "file"
@@ -1260,12 +1269,13 @@ docs/parts/device.md); the button and Meta+V close it again.
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (47 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (49 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
-  the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by keyboard,
-  QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode). Both fail without
-  the sheet (the files do not exist on 0.4.1).
+  the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by
+  keyboard, QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode, a copied
+  file's row with a non-empty preview). Both fail without the sheet (the files do not exist on
+  0.4.1); the file preview check fails on 2a872e3 (0x0 picture).
 
 ## The sheet's window and its content (0.5.0)
 

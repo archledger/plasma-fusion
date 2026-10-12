@@ -35,7 +35,7 @@ Path(HOME, ".config", APP + "rc").write_text(
 # Klipper keeps no images by default ("Always ignore images"); the user turns that off.
 Path(HOME, ".config", "klipperrc").write_text("[General]\nIgnoreImages=false\n")
 
-from PySide6.QtCore import QMetaObject, QObject, QSortFilterProxyModel, Q_ARG, Q_RETURN_ARG, Qt, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QMetaObject, QMimeData, QObject, QSortFilterProxyModel, Q_ARG, Q_RETURN_ARG, Qt, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QColor, QCursor, QImage  # noqa: E402
 from PySide6.QtQml import QQmlComponent  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
@@ -420,6 +420,26 @@ QTest.qWait(50)
 check(star.property("toolTip") == "" and star.property("text") != "",
       "in touch mode it has none (a tap would leave it over the row's actions), and keeps its name")
 root.setProperty("touch", False)
+
+# A copied file: its row shows the file's preview from Klipper's preview provider, which answers
+# an empty picture unless it is asked for a width and a height (the ThinkPad showed an empty tile).
+shot = Path(HOME, "shot.png")
+picture = QImage(64, 48, QImage.Format_RGB32)
+picture.fill(QColor("#3b56a0"))
+picture.save(str(shot))
+files = QMimeData()
+files.setUrls([QUrl.fromLocalFile(str(shot))])
+app.clipboard().setMimeData(files)
+wait_for(lambda: filtered.data(filtered.index(0, 0), 259) == 8, "Klipper's model did not take the copied file")
+lst.setProperty("currentIndex", 0)
+file_row = QMetaObject.invokeMethod(lst, "itemAtIndex", Q_RETURN_ARG(QQuickItem), Q_ARG(int, 0))
+preview = file_row.findChild(QObject, "clipboardThumbnail")
+check(preview is not None and preview.property("visible"), "a copied file's row has a preview")
+# (the Image's status enum does not reach Python; its progress does)
+wait_for(lambda: preview.property("progress") == 1.0, "the file's preview did not load")
+QTest.qWait(200)
+check(preview.property("implicitWidth") > 0 and preview.property("implicitHeight") > 0,
+      "the preview has a picture (%sx%s)" % (preview.property("implicitWidth"), preview.property("implicitHeight")))
 
 starred = service.property("starredCount")
 call(service, "clearHistory")

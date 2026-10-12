@@ -196,6 +196,19 @@ jobs:
       - name: Scroll safety of the bar's wheel controls (offscreen Qt)
         run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/wheel_guard_test.py
 
+      - name: Calendar date on app tiles (offscreen Qt)
+        run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/calendar_date_test.py
+
+      - name: Backdrop layer while its picture reloads (offscreen Qt)
+        run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/backdrop_reload_test.py
+
+      - name: Backdrop wallpaper, also the Global Theme's default (offscreen, private bus)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/common/tests/backdrop_wallpaper_test.py
+
       - name: System meters' sensors (libksysguard, a stand-in ksystemstats on a private bus)
         run: |
           set -euo pipefail

@@ -99,3 +99,44 @@ function groupFooter(inGroup, last, children, expanded, isExpanded) {
     var more = Math.max(0, children - expanded);
     return { shown: !!inGroup && !!last && (more > 0 || !!isExpanded), more: more };
 }
+
+// The Notification Centre's date beside its clock: the region's long date without the year, in
+// the region's order and with its separators ("Sunday, October 11" in en_US, "Sunday 11 October"
+// in en_GB, "Sonntag, 11. Oktober" in de_DE), as the lock screen's clock (PfStyle.qml). The year
+// goes with a quoted literal just before it ("'de' yyyy") and a CJK year suffix.
+function centreDateFormat(longFormat) {
+    var f = String(longFormat || "");
+    var atEnd = /[\s,.\/-]*('[^']*'\s*)?y+(\s*'[^']*')?[年년]?[\s,.\/-]*$/;
+    var atStart = /^y+[年년.\/-]?\s*/;
+    var inside = /[\s,]*('[^']*'\s*)?y+(\s*'[^']*')?[年년]?[\s,]*/;
+    if (atEnd.test(f)) {
+        f = f.replace(atEnd, "");
+    } else if (atStart.test(f)) {
+        f = f.replace(atStart, "");
+    } else {
+        f = f.replace(inside, " ");
+    }
+    f = f.replace(/[\s,]+$/, "").trim();
+    return f.length > 0 ? f : "dddd d MMMM";
+}
+
+// Where to look for a finished job's result before offering Open and Open Containing Folder, as
+// the stock applet's JobItem hides them for a file that does not exist (a cancelled copy, which
+// Dolphin reports as finished without an error, or a file moved or deleted since): {folder, filter}
+// for a FolderListModel of the parent folder with a name filter that matches exactly that name
+// (wildcard characters taken literally); null for a URL that is not a local file (not checked).
+function existenceProbe(url) {
+    var u = String(url || "").replace(/\/+$/, "");
+    if (u.indexOf("file:///") !== 0) {
+        return null;
+    }
+    var slash = u.lastIndexOf("/");
+    var name = u.slice(slash + 1);
+    if (name === "") {
+        return null;
+    }
+    var filter = decodeURIComponent(name).replace(/[\[\]*?]/g, function (c) {
+        return "[" + c + "]";
+    });
+    return { folder: u.slice(0, slash) || "file:///", filter: filter };
+}

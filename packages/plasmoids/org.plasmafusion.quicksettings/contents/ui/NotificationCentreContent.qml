@@ -9,6 +9,7 @@ import QtQuick.Layouts
 import QtQuick.Templates as T
 import org.kde.plasma.extras as PlasmaExtras
 import "components"
+import "../code/notifications.js" as Notes
 
 // The Notification Centre in tablet posture (TABLET2 S1): the notification history on its own
 // full-screen sheet under the top bar, apart from the controls (the quick-settings sheet), as on
@@ -303,7 +304,8 @@ FocusScope {
             }
             Text {
                 width: parent.width
-                text: Qt.formatDate(new Date(centre.now), "dddd d MMMM")
+                // The region's long date without the year ("Sunday, October 11" in en_US).
+                text: Qt.formatDate(new Date(centre.now), Notes.centreDateFormat(Qt.locale().dateFormat(Locale.LongFormat)))
                 color: centre.pal.text
                 font.pixelSize: centre.metrics.font(centre.landscape ? 20 : 17)
                 font.weight: Font.DemiBold

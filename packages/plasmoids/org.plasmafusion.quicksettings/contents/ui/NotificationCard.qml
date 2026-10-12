@@ -6,6 +6,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import Qt.labs.folderlistmodel
 import org.kde.kirigami as Kirigami
 
 import "components"
@@ -61,9 +62,38 @@ Rectangle {
     // "running", "paused", "failed", "finished" or "" (contents/code/notifications.js).
     readonly property string jobState: Notes.jobState(entry?.type, entry?.jobState, entry?.jobError)
     readonly property var jobDetails: entry?.jobDetails ?? null
-    // A finished file job's Open and Open Containing Folder (the stock applet's JobItem).
-    readonly property var fileActions: Notes.fileActions(jobState, jobDetails ? Number(jobDetails.totalFiles) : 0,
-                                                         jobDetails ? String(jobDetails.effectiveDestUrl) : "")
+    // A finished file job's Open and Open Containing Folder (the stock applet's JobItem), not for
+    // a result that is no longer there (fileGone, below).
+    readonly property var fileActions: fileGone ? Notes.fileActions("", 0, "")
+        : Notes.fileActions(jobState, jobDetails ? Number(jobDetails.totalFiles) : 0,
+                            jobDetails ? String(jobDetails.effectiveDestUrl) : "")
+    // The job's result (the copied file, or the destination folder of several) does not exist:
+    // the stock applet's JobItem hides its file buttons then (FileInfo.error). Its parent folder
+    // is listed with a filter on the name while the card shows a finished local job; a folder
+    // model given a folder that does not exist keeps its previous folder, so a model that does not
+    // list the asked folder means the folder is gone too. Remote URLs are not checked.
+    readonly property var fileProbe: jobState === "finished" && jobDetails
+        ? Notes.existenceProbe(String(jobDetails.effectiveDestUrl)) : null
+    readonly property bool fileGone: {
+        const model = fileCheck.item as FolderListModel;
+        if (!fileProbe || !model || model.status !== FolderListModel.Ready) {
+            return false;
+        }
+        return String(model.folder) !== fileProbe.folder || model.count === 0;
+    }
+    Loader {
+        id: fileCheck
+        active: card.fileProbe !== null
+        sourceComponent: FolderListModel {
+            folder: card.fileProbe ? card.fileProbe.folder : ""
+            nameFilters: card.fileProbe ? [card.fileProbe.filter] : []
+            showDirs: true
+            showHidden: true
+            showDotAndDotDot: false
+            showOnlyReadable: false
+            caseSensitive: true
+        }
+    }
     // The summary as the stock applet's Summary.qml words it: a job's state after its name, and
     // nothing when an app sends its own name as the summary.
     readonly property string summaryText: {
