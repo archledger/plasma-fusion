@@ -33,11 +33,14 @@
 #include <QEventLoop>
 #include <QGuiApplication>
 #include <QMetaProperty>
-#include <QProcess>
 #include <QTextStream>
+#include <QThread>
 #include <QTimer>
 
 #include <cstdio>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace
 {
@@ -164,11 +167,24 @@ int main(int argc, char **argv)
             out << "kcmctl: beats=" << beats << Qt::endl;
             beats = 0;
         } else if (command == QLatin1String("sh")) {
-            QProcess process;
-            process.setProcessChannelMode(QProcess::ForwardedChannels);
-            process.start(QStringLiteral("bash"), {QStringLiteral("-c"), rest});
-            while (!process.waitForFinished(50)) {
-                QCoreApplication::processEvents();
+            // Plain fork and exec, not QProcess: in a sanitizer build (tools/sanitizers/run.sh) a
+            // QProcess::start can leave QTextStream unable to see the end of stdin, after which
+            // readLineInto spins in QFSFileEnginePrivate::nativeRead once the commands run out
+            // (reproduced with a minimal Qt program under libasan; the plain build is fine). The
+            // command runs the same otherwise: bash -c, our channels, the event loop turning while
+            // it runs.
+            const QByteArray script = rest.toLocal8Bit();
+            const pid_t child = fork();
+            if (child == 0) {
+                execlp("bash", "bash", "-c", script.constData(), static_cast<char *>(nullptr));
+                _exit(127);
+            }
+            if (child > 0) {
+                int status = 0;
+                while (waitpid(child, &status, WNOHANG) == 0) {
+                    QCoreApplication::processEvents();
+                    QThread::msleep(50);
+                }
             }
         } else {
             out << "kcmctl: unknown command " << command << Qt::endl;
