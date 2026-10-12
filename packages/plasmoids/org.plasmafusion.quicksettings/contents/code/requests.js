@@ -25,3 +25,15 @@ function acts(output, mine, leader) {
     }
     return mine === "" || output === mine;
 }
+
+// What the widget does with a request now: "act", "skip", or "wait". `settled` is whether its own
+// output name comes from its bar's screen geometry; until then (a bar just made for a screen, or
+// moved) the name is the window's first guess, which can name another screen. Deciding on that
+// guess lost a request for the widget's real output, or acted on another screen's, so a request
+// that names an output waits for the name, until `final` (the wait is over: the guess decides).
+function decide(output, mine, settled, leader, final) {
+    if (output !== "" && !settled && !final) {
+        return "wait";
+    }
+    return acts(output, mine, leader) ? "act" : "skip";
+}
