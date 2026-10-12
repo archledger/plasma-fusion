@@ -967,7 +967,10 @@ them again before Apply, so the dialog never writes back an older order.
   order. A hidden tile whose condition does not hold is in neither the grid nor the tray, and shows
   in the tray once it applies (plug in a USB stick to bring Disks & Devices back). Only the shown
   tiles take part in a move: the hidden ones and those that do not apply now keep their places
-  (`tiles.js` `arrange`).
+  (`tiles.js` `arrange`). A tile that comes or goes during a drag (a USB stick plugged in, the
+  Wi‑Fi radio gone) joins the dragged order at its place or leaves it (`rebase`), and only the
+  tiles shown both at the start and at the drop move, each once; before, the stored order lost one
+  tile and held another twice.
 - **New tiles in later releases:** `tiles.js` lists every tile in the default order. An empty
   `tileOrder` (a user who never moved a tile) is the default order of the running release. A
   stored order keeps the user's tiles in the user's order; a tile it lacks goes right after the
@@ -977,17 +980,17 @@ them again before Apply, so the dialog never writes back an older order.
   next to Wi‑Fi for everyone, and a user who hid tiles gets it all the same.
 - Tests: `tests/tiles.test.js` (run by `tools/build.sh quicksettings`: the merge rule with new tiles
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
-  shown tiles with the hidden ones keeping their places, the slot under a dragged tile, reset) and
-  `tests/tiles_edit_test.py` (in CI), the main page on the real Backend offscreen with the two keys
-  as stand-ins (54 checks: the default grid, the stored order, a conditional tile only while it
-  applies, the pencil, the badges and the resting tile actions, a mouse drag written once on
-  release, a touch drag, a drag let go below the grid, Ctrl+arrows, Ctrl+Home / End, the focus keys,
-  Tab and Shift+Tab in the order shown, the badge and Delete with the focus kept in the grid, the
-  tray in order, adding back to the old place, a hidden conditional tile neither in the grid nor the
-  tray while it does not apply and still hidden when it does, Done, Space on the pencil, Escape,
-  closing the sheet, Reset, the Do Not Disturb choices (section "Do Not Disturb for a while"), and
-  in tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet
-  sizes):
+  shown tiles with the hidden ones keeping their places, a tile that comes or goes during a drag,
+  the slot under a dragged tile, reset) and `tests/tiles_edit_test.py` (in CI), the main page on
+  the real Backend offscreen with the two keys as stand-ins (56 checks: the default grid, the
+  stored order, a conditional tile only while it applies, the pencil, the badges and the resting
+  tile actions, a mouse drag written once on release, a touch drag, a drag let go below the grid,
+  Ctrl+arrows, Ctrl+Home / End, the focus keys, Tab and Shift+Tab in the order shown, the badge and
+  Delete with the focus kept in the grid, the tray in order, adding back to the old place, a hidden
+  conditional tile neither in the grid nor the tray while it does not apply and still hidden when
+  it does, Done, Space on the pencil, Escape, closing the sheet, Reset, a drag during which Disks &
+  Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), and in tablet
+  posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
 
   ```sh
   STAGE=$PWD/build/stage tools/build.sh quicksettings

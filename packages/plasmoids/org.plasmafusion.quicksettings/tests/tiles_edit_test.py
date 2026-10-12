@@ -346,6 +346,34 @@ check(stored() == ([], []) and shown() == DEFAULT + ["devices"] and not find("ed
       "Reset to defaults clears both keys: the default order, every tile")
 click(find("editDone"))
 
+# A USB stick plugged in during a drag: Disks & Devices keeps its place and no tile is written twice.
+NO_DEVICES = {"devices": False, "hotspot": False, "chargelimit": False, "tabletmode": False}
+page.setProperty("tileConditions", NO_DEVICES)
+root.setProperty("tileOrder", ["devices"] + DEFAULT)
+QTest.qWait(100)
+click(pencil)
+start, target = centre(find("edit-keepawake")), centre(find("tile-wifi"))
+QTest.mousePress(view, Qt.LeftButton, Qt.NoModifier, start)
+for n in range(1, 9):
+    QTest.mouseMove(view, QPoint(start.x() + (target.x() - start.x()) * n // 8, start.y() + (target.y() - start.y()) * n // 8))
+    QTest.qWait(20)
+page.setProperty("tileConditions", dict(NO_DEVICES, devices=True))
+QTest.qWait(50)
+# Still over the first cell, which the new tile takes for the moment.
+for n in range(1, 5):
+    QTest.mouseMove(view, QPoint(target.x() + n, target.y()))
+    QTest.qWait(20)
+QTest.mouseRelease(view, Qt.LeftButton, Qt.NoModifier, QPoint(target.x() + 4, target.y()))
+QTest.qWait(250)
+order = stored()[0]
+check(sorted(order) == sorted(set(order)) and "devices" in order and order[0] == "keepawake",
+      "a tile that appears during a drag: each tile stored once, Disks & Devices kept (%s)" % order)
+check(shown()[:2] == ["keepawake", "devices"], "and the grid shows the drop (%s)" % shown()[:3])
+click(find("editDone"))
+page.setProperty("tileConditions", NO_DEVICES)
+root.setProperty("tileOrder", [])
+QTest.qWait(100)
+
 # ---- Do Not Disturb's choices (the tile's chevron): worked out when they open, at the time of
 # their own clock, closed with the sheet and on another page; a choice counts from the click.
 dnd = backend.property("dnd")

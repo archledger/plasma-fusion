@@ -530,8 +530,14 @@ ColumnLayout {
     // sheet keeps it and the other screens' widgets follow; the mode ends when the sheet closes or
     // another page opens.
     property bool editing: false
-    // While a tile is dragged: the shown tiles as they would be if it were let go now.
+    // While a tile is dragged: the shown tiles as they would be if it were let go now. A tile that
+    // comes or goes meanwhile (a USB stick, the Wi-Fi radio) joins it at its place or leaves it.
     property var dragOrder: null
+    onShownTilesChanged: {
+        if (dragOrder) {
+            dragOrder = Tiles.rebase(dragOrder, shownTiles);
+        }
+    }
     function setEditing(on: bool, fromKeyboard: bool): void {
         const keyboard = fromKeyboard || editButton.visualFocus || tabletEditButton.visualFocus || editDone.visualFocus;
         editing = on;

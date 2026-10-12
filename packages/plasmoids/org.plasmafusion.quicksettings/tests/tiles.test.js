@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "tiles.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { DEFAULT_ORDER, list, same, known, merge, shown, addable, arrange, moveTo, moveBy, slotAt, setHidden, isDefault } = globalThis;
+const { DEFAULT_ORDER, list, same, known, merge, shown, addable, arrange, rebase, moveTo, moveBy, slotAt, setHidden, isDefault } = globalThis;
 
 // ---- The settings' lists
 assert.deepStrictEqual(list(undefined), [], "no value: an empty list");
@@ -62,6 +62,22 @@ assert.deepStrictEqual(arrange(DEFAULT_ORDER, before, moved),
                        ["hotspot", "wifi", "nightlight", "bluetooth", "dnd", "power", "darkstyle", "devices", "keepawake", "chargelimit", "tabletmode"],
                        "the full order: the shown tiles take their places in the new order, hidden and absent ones keep theirs");
 assert.deepStrictEqual(shown(arrange(DEFAULT_ORDER, before, moved), ["nightlight"], conditions), moved, "the grid shows the new order");
+// A tile that comes or goes during a drag (a USB stick plugged in, the Wi-Fi radio gone): the order
+// stays whole, each tile once, and that tile keeps its place.
+const userOrder = merge(["devices", "wifi", "bluetooth", "nightlight", "dnd", "power", "darkstyle", "keepawake", "hotspot"]);
+const atStart = shown(userOrder, [], { devices: false, chargelimit: false, tabletmode: false });
+const dragged = moveTo(atStart, "keepawake", 0);
+const plugged = shown(userOrder, [], { devices: true, chargelimit: false, tabletmode: false });
+assert.deepStrictEqual(arrange(userOrder, plugged, dragged),
+                       ["devices", "keepawake", "wifi", "bluetooth", "nightlight", "dnd", "power", "darkstyle", "hotspot", "chargelimit", "tabletmode"],
+                       "a tile that came in during the drag keeps its place, none is written twice");
+assert.deepStrictEqual(arrange(userOrder, atStart.filter(id => id !== "hotspot"), dragged),
+                       ["devices", "keepawake", "wifi", "bluetooth", "nightlight", "dnd", "power", "darkstyle", "hotspot", "chargelimit", "tabletmode"],
+                       "a tile that went away during the drag keeps its place");
+assert.deepStrictEqual(rebase(dragged, plugged), ["devices", "keepawake", "wifi", "bluetooth", "nightlight", "dnd", "power", "darkstyle", "hotspot"],
+                       "the drag's order: a tile that came in at its place in the grid");
+assert.deepStrictEqual(rebase(dragged, atStart.filter(id => id !== "wifi")), ["keepawake", "bluetooth", "nightlight", "dnd", "power", "darkstyle", "hotspot"],
+                       "the drag's order: a tile that went away taken out");
 assert.deepStrictEqual(moveBy(["a", "b", "c", "d"], "b", 1), ["a", "c", "b", "d"], "one place later");
 assert.deepStrictEqual(moveBy(["a", "b", "c", "d"], "b", -1), ["b", "a", "c", "d"], "one place earlier");
 assert.deepStrictEqual(moveBy(["a", "b", "c", "d"], "a", 2), ["b", "c", "a", "d"], "a row down in two columns");
