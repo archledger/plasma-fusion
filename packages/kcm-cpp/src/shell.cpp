@@ -40,7 +40,8 @@ namespace
 // org.plasmafusion.appname; the one with quick settings when there are several) and whether it
 // has the system meters, the quick settings' keyboard policy and the Folder View desktop's filter
 // and icon size.
-const QString s_readShellScript = uR"JS(
+const QString s_readShellScript =
+    uR"JS(
 function bool(v, d) {
     if (v === undefined || v === null || v === "") {
         return d;
@@ -168,7 +169,8 @@ print(changed);
 // %1: true (add the system meters to every top bar that has none, right before quick settings)
 // or false (remove every meters widget from the panels). As the global menu, the widget is added
 // at the position just left of quick settings, so the panel inserts it there directly.
-const QString s_metersScript = uR"JS(
+const QString s_metersScript =
+    uR"JS(
 var want = %1;
 var changed = 0;
 var ps = panels();
@@ -197,7 +199,8 @@ print(changed);
 
 // Checks that the system meters sit right before quick settings and moves them there if not (a
 // second call, as for the global menu).
-const QString s_placeMetersScript = uR"JS(
+const QString s_placeMetersScript =
+    uR"JS(
 var placed = 0;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
