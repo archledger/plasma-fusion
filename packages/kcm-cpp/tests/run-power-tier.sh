@@ -11,7 +11,7 @@
 #   - at critical, a Glass level and dock magnification chosen on the page leave the held widgets
 #     and blur alone, and are what the service gives back when the battery recovers (the widgets'
 #     glass, the dock's magnification, blur on again);
-#   - system meters turned on in saver ask the service to apply its tier to them.
+#   - system meters turned on in saver ask the service to apply its tier to them (and not at full).
 # Needs node and python3 with GObject introspection (mock-session.py).
 #
 #   run-power-tier.sh KCMCTL PLUGIN_DIR WORKDIR
@@ -92,6 +92,23 @@ check "recovered: the page's choices are forgotten" [ "$(rc plasmafusionrc Power
 module waitshell "get glass" "get magnify"
 check "the page reads Reduced and magnification off again" \
   [ "$(tail -n 4 "$work/kcmctl.log" | grep -E '^kcmctl: (glass|magnify)=' | tr '\n' ' ')" = "kcmctl: glass=1 kcmctl: magnify=false " ]
+
+# ---- saver: system meters turned on get the tier ----
+pfx --apply saver
+: >"$work/programs.log"
+module waitshell "set systemMeters true" save "get systemMeters"
+check "meters added to the top bar, before quick settings" [ "$(python3 -c 'import json,sys
+print(",".join(w["type"].rsplit(".", 1)[1] for w in json.load(open(sys.argv[1]))["panels"][0]["widgets"]))' "$work/layout.json")" = appname,meters,quicksettings ]
+check "in saver the module asks the service to apply its tier again" \
+  grep -qx 'systemctl --user try-reload-or-restart plasma-fusion-powerfx.service' "$work/programs.log"
+pfx --apply saver
+meters=$(python3 -c 'import json,sys
+print([w["id"] for w in json.load(open(sys.argv[1]))["panels"][0]["widgets"] if w["type"] == "org.plasmafusion.meters"][0])' "$work/layout.json")
+check "and the service's run gives the new meters powerTier 1" [ "$(cfg "$meters" General powerTier)" = 1 ]
+pfx --apply full
+: >"$work/programs.log"
+module waitshell "set systemMeters false" save "set systemMeters true" save
+check "at full tier the module leaves the service alone" bash -c "! grep -q systemctl '$work/programs.log'"
 
 kill "$mock" 2>/dev/null
 echo "$((N - FAIL)) of $N passed"

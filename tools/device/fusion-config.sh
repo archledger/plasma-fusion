@@ -2309,7 +2309,13 @@ if [ "$SCREENS" = 1 ]; then
     else
       note "run $topbars_js in plasmashell"
       CHANGES=$((CHANGES + 1))
-      plasmashell_eval "$(cat "$topbars_js")" | sed 's/^/  /' || note "warning: ensure-topbars.js failed"
+      topbars_out=$(plasmashell_eval "$(cat "$topbars_js")") || note "warning: ensure-topbars.js failed"
+      [ -z "${topbars_out:-}" ] || note "$topbars_out"
+      # The power service sets its tier's keys on new widgets only when it applies the tier again.
+      if [[ ${topbars_out:-} =~ added\ ([0-9]+),\ completed\ ([0-9]+) ]] &&
+        [ $((BASH_REMATCH[1] + BASH_REMATCH[2])) -gt 0 ] && session_manager; then
+        systemctl --user try-reload-or-restart plasma-fusion-powerfx.service 2>/dev/null || true
+      fi
     fi
   else
     note "note: ensure-topbars.js is not installed (Global Theme $LNF); top bars on other screens not checked"

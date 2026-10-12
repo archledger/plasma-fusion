@@ -378,6 +378,7 @@ private:
     bool applySystemMeters(bool on);
     bool applyPanels(int glass, bool solidTopBar, bool widgetGlass);
     bool applyEveryScreen(bool on);
+    void reapplyPowerTier();
     bool applyDesktop(const State &before, const State &after);
     bool applyWidgetKey(const QString &plugin, const QString &key, const QString &jsValue, const QString &what);
     QString evaluateShellScript(const QString &script, bool *ok) const;

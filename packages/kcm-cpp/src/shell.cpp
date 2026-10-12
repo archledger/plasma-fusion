@@ -614,13 +614,30 @@ bool PlasmaFusionKcm::applySystemMeters(bool on)
             QThread::msleep(300);
             const QString placed = evaluateShellScript(s_placeMetersScript, &ok);
             if (ok && placed.toInt() > 0) {
+                reapplyPowerTier();
                 return true;
             }
         }
+        reapplyPowerTier();
         addError(i18nc("@info", "The system meters could not be placed before quick settings."));
         return false;
     }
     return true;
+}
+
+// The power service sets a tier's keys (the meters' and cards' powerTier, the glass held at
+// critical) on the widgets there are when the tier changes or plasmashell starts; a widget added
+// later would run at full rate until the next change. Its reload (SIGHUP) applies the tier again;
+// try-reload-or-restart does nothing when the service is not running.
+void PlasmaFusionKcm::reapplyPowerTier()
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    const QString tier = KConfigGroup(fusion, u"Power"_s).readEntry("Tier", QString());
+    if (tier.isEmpty() || tier.compare(u"full"_s, Qt::CaseInsensitive) == 0) {
+        return;
+    }
+    QProcess::startDetached(u"systemctl"_s, {u"--user"_s, u"try-reload-or-restart"_s, u"plasma-fusion-powerfx.service"_s});
 }
 
 // EFFECTS.md 3.3: Reduced makes both Fusion panels opaque; otherwise the top bar is adaptive
@@ -704,8 +721,10 @@ bool PlasmaFusionKcm::applyEveryScreen(bool on)
         addError(i18nc("@info", "The top bars could not be added: %1", result));
         return false;
     }
-    // New bars take the glass level and the top-bar opacity of the page.
-    return applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    // New bars take the glass level and the top-bar opacity of the page, and the power tier.
+    const bool panels = applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    reapplyPowerTier();
+    return panels;
 }
 
 bool PlasmaFusionKcm::applyDesktop(const State &before, const State &after)

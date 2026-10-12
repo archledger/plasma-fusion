@@ -121,8 +121,16 @@ monitors); `Restart=on-failure`, `RestartSec=5`; `Slice=background.slice`, `Nice
 - **plasmashell restart or late start.** A new owner of `org.kde.plasmashell` is given 2 s, then
   the widget part is applied again (up to 15 tries, 2 s apart, while it has not loaded a layout).
   New widgets (a layout reset) are remembered with their own values and set. A layout reset inside a
-  running plasmashell keeps the same owner: the settings module's Reset (and `fusion-config.sh
-  --reset-layout`) should `systemctl --user reload` the service (see "Needs").
+  running plasmashell keeps the same owner: the settings module's Reset restarts the service when the
+  tier is not full (`fusion-config.sh --reset-layout` restarts plasmashell).
+- **Widgets added later.** The service has no watch for new widgets, so whoever adds Fusion widgets
+  in a running plasmashell asks it to apply the tier again with `systemctl --user
+  try-reload-or-restart plasma-fusion-powerfx.service` (nothing when it is not running): the settings
+  module after "System meters in the top bar" and "Top bar on every screen" are turned on while the
+  tier is not full (0.5.0; before, meters added in power saver polled at the full rate until the
+  next tier change), KWin's plasmafusion-snap after `ensure-topbars.js` added or completed a bar
+  (systemd's `ReloadOrTryRestartUnit` over D-Bus), and `fusion-config.sh --screens` likewise.
+  Widgets added from Add Widgets wait for the next tier change or plasmashell start.
 - **Journal.** One line per tier change, `logger -t plasma-fusion-powerfx`, for example
   `tier critical (on battery, 8 %, warning level 1, profile balanced): blur off, 7 widget setting(s)`,
   and one when plasmashell came back and something had to be set.
