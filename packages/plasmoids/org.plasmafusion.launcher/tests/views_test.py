@@ -401,6 +401,8 @@ Window {
         cfg_hiddenApplications: ["pf-test-alpha.desktop", "pf-test-gamma.desktop", "pf-removed-app.desktop"]
     }
     function hidden() { return JSON.stringify(Array.from(page.cfg_hiddenApplications)); }
+    // saveConfig() with this live list (the page reads it from Plasmoid.configuration).
+    function save(live) { page.saveHidden(JSON.parse(live)); }
     function names() { return JSON.stringify(page.hiddenIds.map(id => page.appInfo(id).name)); }
 }
 """
@@ -422,6 +424,15 @@ Window {
     QMetaObject.invokeMethod(buttons["unhideAll"], "click")
     QTest.qWait(100)
     check(json.loads(call(settings, "hidden")) == [], "Show All empties the hidden list")
+
+    # Apply with the dialog left open (Show All above), then the launcher hides two of those apps
+    # again: the next Apply or OK keeps them hidden. `save` is saveConfig() with the live list the
+    # launcher's configuration holds.
+    call(settings, "save", json.dumps(["pf-test-alpha.desktop", "pf-test-gamma.desktop", "pf-removed-app.desktop"]))
+    check(json.loads(call(settings, "hidden")) == [], "Apply after Show All writes an empty list")
+    call(settings, "save", json.dumps(["pf-test-alpha.desktop", "pf-test-gamma.desktop"]))
+    check(json.loads(call(settings, "hidden")) == ["pf-test-alpha.desktop", "pf-test-gamma.desktop"],
+          "apps hidden in the launcher after that Apply stay hidden at the next Apply")
 
     # Kicker reads hiddenApplications (and offers Hide Application) through
     # `appletInterface.configuration`, which a Plasma 6 PlasmoidItem does not have: main.qml must

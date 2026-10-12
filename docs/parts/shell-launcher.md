@@ -128,7 +128,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   the list had no effect (seen in the VM, 2026-10-11). The settings page shows the hidden apps by
   name and icon (Kicker's SimpleFavoritesModel; an app that is no longer installed by its id), each
   with a Show button, and Show All; on Apply an app the launcher hid while the dialog was open stays
-  hidden (`Launcher.withoutUnhidden` over the live list).
+  hidden (`Launcher.withoutUnhidden` over the live list). The apps shown again are forgotten once
+  saved (`saveHidden`), so an app shown and applied, then hidden again in the launcher while the
+  dialog stays open, stays hidden at the next Apply or OK.
 - Footer: face image (`~/.face.icon` via KUser) or the first letter on #7b5cd6, full name
   (login name when the full name is empty), "Local account". The account row opens a menu, as the
   Windows account menu and the stock launcher's leave entries: Account Settings… (Users settings),
@@ -164,7 +166,8 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   "All", not the next category or an empty grid titled "Pinned".
 - `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
   with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
-  by name, Show, Show All) and shows that Kicker's RootModel honours `hiddenApplications` only when
+  by name, Show, Show All, an app hidden again after an Apply stays hidden at the next one) and
+  shows that Kicker's RootModel honours `hiddenApplications` only when
   `appletInterface` has `configuration`, which main.qml must declare.
 - `qmllint` on every file: only the usual unqualified-`i18n` notes and three type-inference notes.
 - `kpackagetool6 -t Plasma/Applet -i` and `--show` in a sandbox HOME: installs and reads the metadata.

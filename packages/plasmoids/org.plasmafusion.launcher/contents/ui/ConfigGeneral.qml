@@ -54,9 +54,17 @@ KCMUtils.SimpleKCM {
         cfg_favoritesPortedToKAstats = config.favoritesPortedToKAstats;
         cfg_favoritesClientId = config.favoritesClientId;
         cfg_openRequest = config.openRequest;
-        cfg_hiddenApplications = Launcher.withoutUnhidden(config.hiddenApplications, page.unhidden);
+        saveHidden(config.hiddenApplications);
         // written by the settings module and the power service
         cfg_glass = config.glass;
+    }
+
+    // The hidden list to write: the live one (the launcher may have hidden apps meanwhile)
+    // without the apps shown again since the last save. They are forgotten once saved, so an app
+    // the launcher hides again after an Apply stays hidden at the next Apply or OK.
+    function saveHidden(live: var): void {
+        cfg_hiddenApplications = Launcher.withoutUnhidden(live, unhidden);
+        unhidden = [];
     }
 
     // Shows hidden apps again (ids as Kicker stores them, "org.kde.kcalc.desktop").
