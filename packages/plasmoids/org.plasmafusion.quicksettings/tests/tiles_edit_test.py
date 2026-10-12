@@ -31,7 +31,7 @@ for key in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOM
     os.environ.pop(key, None)
 os.environ["HOME"] = HOME
 
-from PySide6.QtCore import QDate, QDateTime, QMetaObject, QObject, QPoint, QPointF, Q_ARG, Qt, QTime, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QDate, QDateTime, QMetaObject, QObject, QPoint, QPointF, Q_ARG, Q_RETURN_ARG, Qt, QTime, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -59,7 +59,11 @@ class Context(QObject):
     @Slot(str, str, str, "QVariant", result=str)
     @Slot(str, str, str, "QVariant", "QVariant", result=str)
     def i18ncp(self, context, singular, plural, count, *args):
+        self.plurals.append((context, count))
         return fill(singular if count == 1 else plural, (count,) + args)
+
+    # The plural lookups asked for: (context, number).
+    plurals = []
 
 
 UI = Path(sys.argv[1]).resolve() / ".local/share/plasma/plasmoids/org.plasmafusion.quicksettings/contents/ui"
@@ -458,6 +462,13 @@ check(power.property("active") == "performance",
       "after an application held Power saver for a while, the body goes to Performance, the user's choice (%s)"
       % power.property("active"))
 click(power_body)
+
+# ---- Keep awake's time left: the hours and the minutes each in their plural form.
+context.plurals.clear()
+left = QMetaObject.invokeMethod(backend, "durationText", Q_RETURN_ARG(str), Q_ARG(int, 125))
+check(left == "2 h 5 min" and ("@info remaining time, hours", 2) in context.plurals
+      and ("@info remaining time, minutes", 5) in context.plurals,
+      "2 h 5 min: both numbers go through the plural forms (%r, %r)" % (left, context.plurals))
 
 # ---- Tablet posture: the pencil is in the tablet row, the targets have touch sizes.
 laptop_height = find("tile-wifi").height()

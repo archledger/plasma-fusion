@@ -934,15 +934,17 @@ Item {
             keepAwake.refresh();
         }
     }
-    // "45 min", "1 h", "1 h 30 min".
+    // "45 min", "1 h", "1 h 30 min": the hours and the minutes each with their plural form (Polish,
+    // Russian, Czech or Arabic words change with the number), joined by a translatable "%1 %2".
     function durationText(minutes: int): string {
         const h = Math.floor(minutes / 60);
         const m = minutes % 60;
+        const hours = i18ncp("@info remaining time, hours", "%1 h", "%1 h", h);
+        const mins = i18ncp("@info remaining time, minutes", "%1 min", "%1 min", m);
         if (h === 0) {
-            return i18ncp("@info remaining time, minutes", "%1 min", "%1 min", m);
+            return mins;
         }
-        return m === 0 ? i18ncp("@info remaining time, hours", "%1 h", "%1 h", h)
-                       : i18nc("@info remaining time, hours and minutes", "%1 h %2 min", h, m);
+        return m === 0 ? hours : i18nc("@info remaining time, %1 hours part, %2 minutes part", "%1 %2", hours, mins);
     }
 
     // ------------------------------------------------------------------ disks & devices

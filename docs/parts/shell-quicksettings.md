@@ -83,7 +83,9 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   `For 1 hour`, `For 4 hours`, `Until…` a time of day (a quarter-hour chooser in the locale's time
   format, starting at the quarter hour after an hour from now; a time already passed means
   tomorrow) or `Until turned off`, as Caffeine, Amphetamine and PowerToys Awake offer; the page
-  says `On until 21:37 (1 h left)`. The end is a wall-clock time kept for every widget of the
+  says `On until 21:37 (1 h left)` (the hours and the minutes each in their plural form, joined by
+  a translatable `%1 %2`, `Backend.qml` `durationText()`; test: `tests/tiles_edit_test.py`). The
+  end is a wall-clock time kept for every widget of the
   shell (`Instances`), so the timer runs with the sheet closed and after a suspend still ends it
   (at most a minute late; `contents/code/keepawake.js`, tested by `tests/keepawake.test.js`);
   turning it off, here or in the hidden battery applet, drops the end. Across a plasmashell
@@ -985,7 +987,7 @@ them again before Apply, so the dialog never writes back an older order.
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
   shown tiles with the hidden ones keeping their places, a tile that comes or goes during a drag,
   the slot under a dragged tile, reset) and `tests/tiles_edit_test.py` (in CI), the main page on
-  the real Backend offscreen with the two keys as stand-ins (58 checks: the default grid, the
+  the real Backend offscreen with the two keys as stand-ins (59 checks: the default grid, the
   stored order, a conditional tile only while it applies, the pencil, the badges and the resting
   tile actions, a mouse drag written once on release, a touch drag, a drag let go below the grid,
   Ctrl+arrows, Ctrl+Home / End, the focus keys, Tab and Shift+Tab in the order shown, the badge and
@@ -993,8 +995,8 @@ them again before Apply, so the dialog never writes back an older order.
   conditional tile neither in the grid nor the tray while it does not apply and still hidden when
   it does, Done, Space on the pencil, Escape, closing the sheet, Reset, a drag during which Disks &
   Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), the Power mode
-  tile's body after an application held a profile, and in tablet
-  posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
+  tile's body after an application held a profile, Keep awake's time left in plural forms, and in
+  tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
 
   ```sh
   STAGE=$PWD/build/stage tools/build.sh quicksettings
