@@ -74,21 +74,43 @@ Item {
     function ensureControlsExist() {
         if (!ControlsOwner.controls) {
             ControlsOwner.controls = controlsComponent.createObject(root);
+            ControlsOwner.maker = root;
         }
     }
+    readonly property bool pointerHere: hover.hovered
 
-    Component.onCompleted: ensureControlsExist()
+    Component.onCompleted: {
+        ControlsOwner.roots.push(root);
+        ensureControlsExist();
+    }
+    // The controls are the children of the screen that made them, wherever they are shown, so they
+    // go when that screen goes (an output unplugged while the greeter is open). Another screen
+    // makes them again at once: the one with the pointer, or the first one left. (Upstream 6.8
+    // only reparents them on hover, so the remaining screens kept none.)
+    Component.onDestruction: {
+        ControlsOwner.roots = ControlsOwner.roots.filter(other => other !== root);
+        if (ControlsOwner.maker === root) {
+            ControlsOwner.controls = null;
+            ControlsOwner.maker = null;
+            const next = ControlsOwner.roots.find(other => other.pointerHere) ?? ControlsOwner.roots[0];
+            if (next) {
+                next.ensureControlsExist();
+            }
+        }
+    }
 
     // Not MouseArea: hovering a LogoutButton steals
     // the pointer from it, so containsMouse would flicker and the row would
     // flash in and out. HoverHandler is non-blocking, so it just tracks the
     // pointer position and stays accurate.
     HoverHandler {
+        id: hover
         onHoveredChanged: {
             if (hovered) {
                 if (root.Window.window) {
                     root.Window.window.requestActivate();
                 }
+                root.ensureControlsExist();
                 if (ControlsOwner.controls && ControlsOwner.controls.parent !== root) {
                     ControlsOwner.controls.parent = root;
                 }

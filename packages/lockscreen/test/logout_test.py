@@ -187,10 +187,39 @@ def run(app, sdtype, expected_veil):
     QTest.keyClick(views[0], Qt.Key_Escape)
     QTest.qWait(200)
     check(label + ": Escape sends cancelRequested", (0, "cancelRequested") in signals, signals)
+
+    # An output unplugged while the greeter is open (its view goes): the controls are the children
+    # of the first screen's root, which made them, also while they are shown on the other screen.
+    # The screen left shows them at once, without the pointer moving; and when that view goes too
+    # with the pointer on a third screen, the third shows them.
+    pointer_to(1)
+    third = QQuickView(engine, None)
+    third.setResizeMode(QQuickView.SizeRootObjectToView)
+    third.resize(1280, 800)
+    third.setPosition(2560, 0)
+    third.setSource(QUrl.fromLocalFile(os.path.join(LOGOUT, "Logout.qml")))
+    third.show()
+    QTest.qWait(400)
+    views[0].close()
+    views[0].deleteLater()
+    QTest.qWait(1000)
+    on = [action in shown_texts(v) for v in (views[1], third)]
+    check(label + ": the first screen unplugged: the screen with the pointer still shows the controls", on == [True, False], on)
+    QGuiApplication.sendEvent(views[1], QEvent(QEvent.Leave))
+    for x in (300, 320, 340):
+        QTest.mouseMove(third, QPoint(x, 400))
+        QTest.qWait(50)
+    QTest.qWait(600)
+    on = [action in shown_texts(v) for v in (views[1], third)]
+    check(label + ": and they follow the pointer to the third screen", on == [False, True], on)
+    views[1].close()
+    views[1].deleteLater()
+    QTest.qWait(1000)
+    check(label + ": the screen that made them again unplugged: the third shows them", action in shown_texts(third),
+          shown_texts(third))
     check(label + ": no QML warnings", warnings == [], warnings)
-    for view in views:
-        view.close()
-        view.deleteLater()
+    third.close()
+    third.deleteLater()
     QTest.qWait(100)
 
 

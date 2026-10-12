@@ -182,12 +182,20 @@ one set of controls (`LogoutControls`, owned through the shared `controlsowner.j
 views share one engine) is shown on the screen with the pointer, fades in there and follows the
 pointer to another screen; the active screen's window takes the keyboard. The strings are in the
 desktop shell's catalogue (`plasma_shell_org.kde.plasma.desktop`), as in 6.8; a key press on a
-button no longer swallows the key (6.8's `LogoutButton`).
+button no longer swallows the key (6.8's `LogoutButton`). One change from upstream: the controls
+are the child objects of the screen that made them, wherever they are shown, so an output unplugged
+while the greeter is open took them with it and the remaining screens had none (upstream only
+moves existing controls on hover). That screen's root now hands over as it goes: another screen
+makes the controls at once (the one with the pointer, else the first one left), and a hovered
+screen makes them when there are none.
 
 Test (CI step "Log-out screen on Plasma 6.8"): `packages/lockscreen/test/logout_test.py` loads it
 as the 6.8 greeter does (two views on one engine, Plasma Fusion Light): no QML warnings, the
 controls shown once and on the pointer's screen, following it, the count-down with them, Log Out
-and Escape send the greeter's signals, the veil in the Complementary background on every screen.
+and Escape send the greeter's signals, the veil in the Complementary background on every screen,
+and with a third view, the controls' screen unplugged (its view deleted): the screen with the
+pointer shows them at once, they follow the pointer, and unplugging their new maker leaves them on
+the third screen (these 3 checks per run fail on the previous package: no controls on any screen).
 The 0.5.0 base fails 7 of its 12 checks (controls and count-down on both screens, the
 `screenGeometry` errors); stock 6.8's files fail the veil checks.
 
