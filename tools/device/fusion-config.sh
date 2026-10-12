@@ -941,14 +941,24 @@ if (best !== null) { var g = screenGeometry(best.screen); print(Math.round(g.wid
 # Migrate the layout file while plasmashell is stopped (or print what it would do): everything a
 # fresh layout gets from the Global Theme's layout script that an existing one lacks. Panels, pins,
 # cards and their places are kept; a value the user changed is kept. $1 "W H" of the card screen
+# Steps 1, 3, 4 (the hidden tray items) and 6 bring a layout made before configuration version 2
+# up to it, so they run only on such a HOME (PREV_VERSION 0 or 1): from version 2 on, what they
+# would change again is the user's (a top bar the settings page made translucent, a tray item set
+# to "Always shown", the pen menu or desktop the user removed or changed). Step 4's Disks & Devices
+# part (0.4.0) runs once, recorded in plasmafusionrc [Setup] TrayDevices.
 migrate_layout() {
-  local out rc=0
+  local out rc=0 solid devices
+  solid=$(kreadconfig6 --file plasmafusionrc --group TopBar --key SolidNextToWindows 2>/dev/null || true)
+  devices=$(kreadconfig6 --file plasmafusionrc --group Setup --key TrayDevices 2>/dev/null || true)
   out=$(python3 - "$CONFIG" "$DRY" "${1:-}" "$(installed_previews)" "$(package_dir plasma/plasmoids "$PEN_WIDGET" >/dev/null && echo 1 || echo 0)" \
-    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" <<'PY'
+    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" \
+    "$PREV_VERSION" "$solid" "$devices" <<'PY'
 import re, subprocess, sys
 
-config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed = sys.argv[1:9]
+config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed, prev, solid, devices = sys.argv[1:12]
 dry = dry == "1"
+# The steps that bring a layout up to configuration version 2 (see above).
+first = not prev.isdigit() or int(prev) < 2
 APPLETSRC = "plasma-org.kde.plasma.desktop-appletsrc"
 
 def parse(path):
@@ -1018,6 +1028,9 @@ for c in sorted(desktops, key=int):
     plugin = kv.get("plugin")
     if plugin == target:
         note("desktop %s: %s (unchanged)" % (c, plugin))
+        continue
+    if not first:
+        note("desktop %s: %s (kept: the user's)" % (c, plugin))
         continue
     write(APPLETSRC, ["Containments", c], "plugin", target, plugin)
     if plugin != "org.kde.desktopcontainment":
@@ -1101,13 +1114,15 @@ for c, kv in sorted(conts.items(), key=lambda i: int(i[0]) if i[0].isdigit() els
 
 # 3. Top bar solid next to maximized windows (owner decision 5): adaptive (0) instead of the
 #    translucent (2) the earlier layout set; another value is the user's.
+#    Translucent is also what the settings page sets for "Solid top bar next to windows" off
+#    ([TopBar] SolidNextToWindows=false), and from version 2 on it is the user's.
 if top is not None:
     view = shellrc.get(("PlasmaViews", "Panel %s" % top), {})
     cur = view.get("panelOpacity")
-    if cur == "2":
+    if cur == "2" and first and solid != "false":
         write("plasmashellrc", ["PlasmaViews", "Panel %s" % top], "panelOpacity", "0", cur)
     else:
-        note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque"}.get(cur, cur))
+        note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque", "2": "translucent"}.get(cur, cur))
 
 # 4. Tray items hidden (no expander arrow), in every top bar's tray; 5. app menus for their own
 #    screen only.
@@ -1120,13 +1135,18 @@ for c, kv in conts.items():
             for key in ("hiddenItems", "disabledStatusNotifiers"):
                 items = [i for i in general.get(key, "").split(",") if i]
                 add = [i for i in tray_hide.split() if i not in items]
-                if add:
+                if add and first:
                     write(APPLETSRC, ["Containments", c, "Applets", a, "General"], key, ",".join(items + add), general.get(key))
+                elif add:
+                    note("tray %s %s: %s left out (kept: the user's)" % (a, key, ",".join(add)))
                 else:
                     note("tray %s %s (unchanged)" % (a, key))
             # Disks & Devices: the quick-settings page replaces the stock item, which is not loaded
-            # (known, not extra), as the desktop layout does for a new bar.
-            if "org.plasmafusion.quicksettings" in applets(c).values():
+            # (known, not extra), as the desktop layout does for a new bar. Once: an item the user
+            # turned on again in the tray's settings stays.
+            if devices == "done":
+                note("tray %s Disks & Devices: as the user has it (kept)" % a)
+            elif "org.plasmafusion.quicksettings" in applets(c).values():
                 known = [i for i in general.get("knownItems", "").split(",") if i]
                 extra = [i for i in general.get("extraItems", "").split(",") if i]
                 dn = "org.kde.plasma.devicenotifier"
@@ -1148,6 +1168,8 @@ if top is not None and pen_installed == "1":
     have = applets(top)
     if "org.plasmafusion.pen" in have.values():
         note("pen widget in the top bar (unchanged)")
+    elif not first:
+        note("pen widget not in the top bar (kept: the user's)")
     else:
         ids = [int(x) for g in rc for x in g if x.isdigit()]
         new = str(max(ids) + 1 if ids else 1)
@@ -1816,10 +1838,11 @@ if has_name org.kde.plasmashell && fusion_layout_present; then
 fi
 # An existing Plasma Fusion layout (kept): migrated in place while plasmashell is stopped, in the
 # restart that applies the steps above (one restart for all of it).
-migrate=0 card_size=
+migrate=0 card_size='' layout_checked=0
 if [ "$LAYOUT" = auto ] && [ "$reset" = 0 ] && has_name org.kde.plasmashell; then
   card_size=$(card_screen_size)
   layout_needs_migration "$card_size" && migrate=1
+  layout_checked=1
 fi
 if [ "$migrate" = 1 ]; then
   say "Desktop and top bar (existing layout, kept)"
@@ -1839,6 +1862,11 @@ elif [ -n "$restart_why" ]; then
 fi
 if [ "$DRY" = 0 ] && has_name org.kde.plasmashell && fusion_layout_present; then
   note "panel thickness: $(fix_panel_thickness)"
+fi
+# The trays' Disks & Devices are as Plasma Fusion sets them now (migrated, or a new layout): from
+# here on the user's (migrate_layout).
+if [ "$layout_checked" = 1 ] || [ "$reset" = 1 ]; then
+  set_key plasmafusionrc Setup TrayDevices "done"
 fi
 set_key kdeglobals KDE DefaultDarkLookAndFeel "$DARK"
 set_key kdeglobals KDE DefaultLightLookAndFeel "$LIGHT"

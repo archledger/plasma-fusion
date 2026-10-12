@@ -56,6 +56,9 @@ jobs:
       - name: Setup config keys that keep the user's choice
         run: tools/device/tests/config-keys-unit.sh build/config-keys
 
+      - name: Setup layout migration keeps the user's changes
+        run: tools/device/tests/layout-migration-unit.sh build/layout-migration
+
       - name: Device tools' --help prints the usage only
         run: tools/device/tests/help-unit.sh
 

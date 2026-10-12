@@ -20,6 +20,7 @@ EFFECTS 8.3 (install side). The login check itself is described in `gate.md`; th
 | `tools/device/backup-profile.sh` | never starts a Qt program without the session's display; more files |
 | `tools/device/restore-profile.sh` | knows the new Plasma Fusion paths |
 | `tools/device/tests/gate-unit.sh` | cases `t`, `t3`, `t4`, `t5` for the new gate parts |
+| `tools/device/tests/layout-migration-unit.sh` | the in-place layout migration against a scratch HOME: what a later run keeps (0.5.0) |
 
 ## fusion-config.sh
 
@@ -102,15 +103,23 @@ plasmashell is stopped (it writes the layout file when it quits), the files are 
 
 | Change | Only when |
 |---|---|
-| desktop containment `org.kde.desktopcontainment` or `org.kde.plasma.folder` becomes `org.plasmafusion.desktop` (Folder View with the tablet home screen, TABLET2 H1, `docs/parts/desktop.md`; Folder View's keys, so applets and their `ItemGeometries*` keys stay); without that package `org.kde.desktopcontainment` becomes `org.kde.plasma.folder` (desktop icons, BACKLOG M1), and a desktop naming the missing package becomes `org.kde.plasma.folder` | the plugin is another of the three |
+| desktop containment `org.kde.desktopcontainment` or `org.kde.plasma.folder` becomes `org.plasmafusion.desktop` (Folder View with the tablet home screen, TABLET2 H1, `docs/parts/desktop.md`; Folder View's keys, so applets and their `ItemGeometries*` keys stay); without that package `org.kde.desktopcontainment` becomes `org.kde.plasma.folder` (desktop icons, BACKLOG M1), and a desktop naming the missing package becomes `org.kde.plasma.folder` | the plugin is another of the three, on a HOME below configuration version 2 |
 | the `[General]` keys below | the plugin was `org.kde.desktopcontainment` (a Folder View keeps its own) |
 | `[General]` `url=desktop:/ sortMode=-1 arrangement=1 alignment=0 iconSize=2 popups=false toolTips=false selectionMarkers=true useTypeAhead=true previewPlugins=` (the installed ones of imagethumbnail, jpegthumbnail, svgthumbnail, gsthumbnail, opendocumentthumbnail, ffmpegthumbs) | per key, when the key is not set |
 | portrait card positions `ItemGeometries-<H>x<W>` and `ItemGeometriesVertical`: the first two cards side by side under the bar, right-aligned on the 16 px grid, the rest under the right one (the CPU/memory card hides itself in portrait, CARD-2) | neither key exists; sizes from the landscape positions; screen size from the shell |
-| top bar `plasmashellrc [PlasmaViews][Panel <id>] panelOpacity` 2 (translucent) becomes 0 (adaptive: solid next to maximized windows, decision 5) | it is still 2 |
-| tray: `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager`, `org.kde.plasma.manage-inputmethod` added to `hiddenItems` and `disabledStatusNotifiers` (no expander arrow; quick settings has its own keyboard button) | missing from the list |
-| tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems` |
+| top bar `plasmashellrc [PlasmaViews][Panel <id>] panelOpacity` 2 (translucent) becomes 0 (adaptive: solid next to maximized windows, decision 5) | it is still 2, on a HOME below configuration version 2, and the settings page has not chosen translucent (`[TopBar] SolidNextToWindows=false`) |
+| tray: `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager`, `org.kde.plasma.manage-inputmethod` added to `hiddenItems` and `disabledStatusNotifiers` (no expander arrow; quick settings has its own keyboard button) | missing from the list, on a HOME below configuration version 2 |
+| tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems`; once (plasmafusionrc `[Setup] TrayDevices=done`, written after the first run that looked at the layout or built a new one) |
 | every app menu `[Configuration][Appearance] allScreens=false` (decision 8) | the key is not set |
-| pen widget `org.plasmafusion.pen` added to the top bar between the tray and quick settings (next free applet id, `AppletOrder`) | the widget is installed and not in the bar |
+| pen widget `org.plasmafusion.pen` added to the top bar between the tray and quick settings (next free applet id, `AppletOrder`) | the widget is installed and not in the bar, on a HOME below configuration version 2 |
+
+The rows "below configuration version 2" bring a layout from before 0.2.0 up to it; every release
+since ran them at its first run. Until 0.5.0 they ran at every run, so each `plasma-fusion update`
+made the settings page's translucent top bar adaptive again, put a tray item the user set to
+"Always shown" back into the hidden lists (quick settings then hid it again while passive), added
+back a removed pen menu or desktop, and, since such a change is a migration, stopped and started
+plasmashell (ending Keep awake). Now a later run finds nothing to migrate on a layout the user
+left alone, and changes nothing the user changed (`tools/device/tests/layout-migration-unit.sh`).
 
 The landscape card positions are not touched. After the 4/3 scale change the shell reads
 `ItemGeometries-1440x900`, which does not exist, and falls back to `ItemGeometriesHorizontal`
