@@ -215,8 +215,11 @@ key, a dry run, which kind of run claims, and the one-time upgrade).
   plasma-fusion-navigation package is installed, then loaded through `org.kde.kwin.Effects.loadEffect`
   (KWin's reconfigure does not load a newly enabled effect; private session `n5`: unset -> true, loaded).
 - **On-screen keyboard** (T6): in laptop posture `kwinrc [Wayland] InputMethod=` (empty) unless the
-  user chose another input method; in tablet posture left alone. Quick settings switches it with the
-  posture afterwards. `plasmakeyboardrc [General] diacriticsPopupEnabled=false` (TABLET2 P0):
+  user chose another input method or quick settings' keyboard policy is "On touch" (asked of the
+  running plasmashell, else read from the layout file; 0.5.0: before, every run turned the
+  keyboard off for that policy until the next login or posture change, since quick settings
+  writes the key only when the posture or the policy changes); in tablet posture left alone. Quick
+  settings switches it with the posture afterwards (`tests/config-keys-unit.sh` covers the step). `plasmakeyboardrc [General] diacriticsPopupEnabled=false` (TABLET2 P0):
   plasma-keyboard 6.7 shows an accent pop-up when a physical key is held 600 ms while it runs,
   which broke password entry for users (Fedora discussion 194845); the on-screen keys keep their
   long-press accents. The file is in the backup (`fusion-restore.sh` removes it if it was absent;

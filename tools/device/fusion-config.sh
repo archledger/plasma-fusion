@@ -103,8 +103,8 @@
 #   Window switcher    kwinrc [TabBox] DelayTime 120 (a quick Alt+Tab shows no switcher)
 #   KWin tablet        kwinrc [Plugins] plasmafusion-tabletEnabled; plasmafusion_navigationEnabled
 #                      (the compiled tablet navigation effect, when its package is installed)
-#   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture (quick settings writes it
-#                      from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
+#   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture, unless quick settings'
+#                      keyboard policy is On touch (quick settings writes it from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
 #                      accent pop-up on a held physical key)
 #   Text rendering     greyscale antialiasing, slight hinting: ~/.config/fontconfig/fonts.conf and
 #                      kdeglobals [General] Xft* as System Settings > Fonts writes them (GTK too)
@@ -897,6 +897,28 @@ for (var i = 0; i < ps.length; i++) {
     if (w) { w.globalShortcut = \"$text\"; }
 }" >/dev/null
   done
+}
+
+# True when a quick settings widget's keyboard policy is "touch" (the on-screen keyboard on a touch
+# or pen tap in every posture): asked of the running plasmashell (the layout file may lag behind a
+# change just made), else read from the layout file.
+keyboard_policy_touch() {
+  local out='' appletsrc=$CONFIG/plasma-org.kde.plasma.desktop-appletsrc
+  if has_name org.kde.plasmashell; then
+    out=$(plasmashell_eval '
+      var touch = false, ps = panels();
+      for (var i = 0; i < ps.length; i++) {
+          var ws = ps[i].widgets("org.plasmafusion.quicksettings");
+          for (var j = 0; j < ws.length; j++) {
+              ws[j].currentConfigGroup = ["General"];
+              if (String(ws[j].readConfig("keyboardPolicy", "tablet")) === "touch") touch = true;
+          }
+      }
+      print(touch ? "touch" : "");') || out=''
+  elif [ -r "$appletsrc" ]; then
+    grep -qx 'keyboardPolicy=touch' "$appletsrc" && out='touch'
+  fi
+  [ "$out" = touch ]
 }
 
 # ---------- in-place migration of an existing Plasma Fusion layout ----------
@@ -2043,9 +2065,15 @@ else
   note "note: $OUTLINE_QML is not installed yet; KWin keeps its own snap-zone outline"
 fi
 # On-screen keyboard (TABLET T6): off in laptop posture; from then on quick settings switches it with
-# the posture. In tablet posture it stays as it is. Another input method the user chose is kept.
+# the posture. In tablet posture it stays as it is. Another input method the user chose is kept, and
+# so is the keyboard while quick settings' keyboard policy (the settings page's "On-screen
+# keyboard") is "On touch": that policy wants it in laptop posture too, and quick settings writes
+# the key only when the posture or the policy changes, so a blank key would stay until the next
+# login.
 if bus get-property org.kde.KWin /org/kde/KWin org.kde.KWin.TabletModeManager tabletMode 2>/dev/null | grep -q true; then
   note "kwinrc [Wayland] InputMethod: tablet posture, left on (quick settings switches it)"
+elif keyboard_policy_touch; then
+  note "kwinrc [Wayland] InputMethod: quick settings' keyboard policy is On touch (left as it is)"
 else
   osk=$(system_data_path applications/org.kde.plasma.keyboard.desktop) || osk=$OSK_DESKTOP
   managed_key kwinrc Wayland InputMethod "" "$osk" "$OSK_DESKTOP"
