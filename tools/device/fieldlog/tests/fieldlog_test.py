@@ -372,6 +372,11 @@ class Journal(unittest.TestCase):
         os.environ["XDG_STATE_HOME"] = str(state)
         f = fl.FieldLog()
         f.state["last_dump_us"] = 0
+        # The fixture is of 2026-10-02 and stays that date; the recording window must admit it
+        # (note_login drops a login older than the window, so this test went red once real time
+        # moved more than a replay window past the fixture's date - it did so unnoticed in CI until
+        # 2026-10-12; the other fixture lines have no window guard).
+        f.state["since"] = 1790950000 - 1
         for line in journal_lines(os.environ["HOME"]):
             fl.handle_journal_line(f, line)
         f.log.flush()
