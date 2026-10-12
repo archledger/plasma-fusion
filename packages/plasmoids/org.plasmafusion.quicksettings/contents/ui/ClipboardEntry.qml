@@ -121,6 +121,7 @@ ColumnLayout {
                 color: entry.pal.overlay(0.06)
                 clip: true
                 Image {
+                    objectName: "clipboardThumbnail"
                     anchors.fill: parent
                     visible: thumbnail.visible
                     asynchronous: true
@@ -128,6 +129,10 @@ ColumnLayout {
                     // the same).
                     cache: false
                     fillMode: thumbnail.isImage ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+                    // Klipper's preview provider answers an empty picture unless it is asked for
+                    // both sides (the stock widget asks for both), so a file gets a square; an
+                    // image keeps its width free for the crop.
+                    sourceSize.width: thumbnail.isFiles ? Math.ceil(thumbnail.width * entry.metrics.dpr) : 0
                     sourceSize.height: Math.ceil(thumbnail.height * entry.metrics.dpr)
                     source: thumbnail.isImage ? (entry.model.decoration || "")
                           : thumbnail.isFiles ? "image://klipperpreview/" + Clip.firstUrl(entry.display) : ""
