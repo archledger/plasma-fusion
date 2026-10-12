@@ -1678,15 +1678,18 @@ apply_krunner_key_upgrade() {
 }
 
 # Meta+V for the clipboard sheet (0.5.0) on a HOME an earlier Plasma Fusion configured with the
-# Windows-style set, which does not run again there: Meta+N being the notification list's is that
-# set's mark (--keep-shortcuts leaves it to quick settings). Once (plasmafusionrc [Shortcuts]
-# ClipboardKey), and only while Klipper's pop-up still holds Meta+V and the sheet has no key: a
-# key the user gave either of them since stays. Otherwise the sheet gets Meta+V only when nothing
-# holds it.
+# Windows-style set, which does not run again there. That set's mark is Meta+N on the notification
+# list together with Meta+S on the launcher: a run without the set also gives the notification list
+# Meta+N when nothing holds it (a --keep-shortcuts setup whose quick settings lost its Meta+N), but
+# only the set gives the launcher Meta+S. Read before this run's ensure_notify_shortcut. Once
+# (plasmafusionrc [Shortcuts] ClipboardKey), and only while Klipper's pop-up still holds Meta+V and
+# the sheet has no key: a key the user gave either of them since stays. Otherwise the sheet gets
+# Meta+V only when nothing holds it.
 apply_clipboard_key_upgrade() {
   read_key plasmafusionrc Shortcuts ClipboardKey
   if [ "$REPLY" != "$CLIPBOARD_KEY_VERSION" ] &&
     [ "$(shortcut_get "$NOTIFY_COMPONENT" _launch)" = "$NOTIFY_SHORTCUT" ] &&
+    key_holders $((META + 0x53)) | grep -qxF "plasmashell"$'\t'"$LAUNCHER_ACTION" &&
     key_holders "$CLIPBOARD_SHORTCUT" | grep -qxF "plasmashell"$'\t'"show-on-mouse-pos" &&
     [ -z "$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)" ]; then
     note "the clipboard sheet gets Meta+V from Klipper's pop-up (earlier Plasma Fusion setup)"
@@ -2180,8 +2183,9 @@ if has_name org.kde.plasmashell; then
   else
     # A widget made by a later layout rebuild gets its key again, when nothing else took it.
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "" free
-    ensure_notify_shortcut free
+    # The clipboard upgrade first: it reads the Meta+N that ensure_notify_shortcut may give.
     apply_clipboard_key_upgrade
+    ensure_notify_shortcut free
   fi
 else
   note "quick settings: plasmashell is not running (no shortcut set)"
