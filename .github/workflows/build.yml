@@ -171,7 +171,7 @@ jobs:
         run: >-
           packages/lockscreen/test/run.sh "$RUNNER_TEMP/lockscreen-auth" auth68-picker auth68-saved
           auth68-missing auth68-defunct auth68-noprompt auth68-prompt auth68-fingerprint auth68-heartbeat
-          auth68-strings auth67-picker auth67-heartbeat auth67-strings
+          auth68-strings auth67-picker auth67-heartbeat auth67-strings wallpaper68
 
       - name: Scroll safety of the bar's wheel controls (offscreen Qt)
         run: QT_QPA_PLATFORM=offscreen python3 packages/common/tests/wheel_guard_test.py

@@ -175,6 +175,16 @@ the 6.7 one. On the 0.5.0 base 8 of the 8 auth68 scenarios fail; the auth67 ones
   typed during PAM's failure delay behind `authenticator.pamTimeout`, a property the 6.8 greeter does
   not have (it is `inPasswordDelay`); the grace timer is kept here, so a password is never typed into
   a conversation that is not waiting for one.
+* The wallpaper: each screen's root keeps its own wallpaper item (`LockScreen.qml`
+  `wallpaperItem`: the root's child at z -1000, where both greeters put that screen's item). The
+  6.8 greeter also sets the context property `wallpaper` for each screen, but in the root context
+  that all its views share, so after the second screen it names that screen's item on every screen
+  (6.7's views each had their own context). Following it put another window's item into the first
+  screen's backdrop ("QQuickItem: Cannot use same item on different windows at the same time"):
+  that screen stayed black, and with two screens the greeter crashed while closing after every
+  correct password (segmentation fault in `QQuickWindowPrivate::cleanup` from `~UnlockApp`), so
+  KWin restarted the lock and a second unlock was needed (VM 7, 6.7.91, two outputs: 4 of 4 cycles;
+  stock 6.8's lock screen closes cleanly). Scenario `wallpaper68` (fails on the 0.5.0 base).
 * A QML load error still falls back to kscreenlocker's built-in lock screen (greeter behaviour);
   the package can never unlock without authentication (the greeter checks `isUnlocked()` on quit).
 

@@ -15,8 +15,8 @@ logind of mock_services.py; each writes SCENARIO.json and exits 1 on a failed ch
 checks of Plasma 6.8's choice of how to unlock, with a 6.8 authenticator (MockAuthenticator68.qml)
 for the auth68-* ones and the 6.7 one for auth67-*: auth68-picker, auth68-saved, auth68-missing,
 auth68-defunct, auth68-noprompt, auth68-prompt, auth68-fingerprint, auth68-heartbeat,
-auth68-strings, auth67-picker, auth67-heartbeat, auth67-strings (each writes SCENARIO.json and
-exits 1 on a failed check).
+auth68-strings, auth67-picker, auth67-heartbeat, auth67-strings, and wallpaper68 (each writes
+SCENARIO.json and exits 1 on a failed check).
 Environment:
 PF_LOCALE (default en_GB), PF_SIZE (default 1440x900), PF_WALLPAPER (PNG; default: the Lock board
 wallpaper).
@@ -247,7 +247,7 @@ def render(app, out, scenario, w, h, wp_path):
 
     view.resize(w, h)
     warnings = []
-    if scenario.startswith("power") or scenario.startswith("auth"):
+    if scenario.startswith("power") or scenario.startswith("auth") or scenario == "wallpaper68":
         engine.warnings.connect(lambda ws: [(print("QML WARNING:", x.toString()), warnings.append(x.toString())) for x in ws])
     quits = []
     engine.quit.connect(lambda: quits.append(True))
@@ -315,6 +315,9 @@ def render(app, out, scenario, w, h, wp_path):
         return
     if scenario.startswith("auth"):
         authenticators(app, out, view, root, lock_root, scenario, auth, warnings, quits, i18n)
+        return
+    if scenario == "wallpaper68":
+        shared_wallpaper(app, out, view, root, ctx, wallpaper, wp_comp, warnings)
         return
     if scenario == "tablet":
         tablet(app, out, view, root, lock_root, w, h)
@@ -487,6 +490,45 @@ def power(app, out, view, root, lock_root, scenario):
 
 POWER_FAILED = False
 AUTH_FAILED = False
+
+
+def shared_wallpaper(app, out, view, root, ctx, wallpaper, wp_comp, warnings):
+    """Plasma 6.8's greeter sets the context property "wallpaper" for each screen in the root
+    context all its views share, so after the second screen it names that screen's item on the
+    first screen too. The backdrop must keep this screen's own wallpaper (the root's child at
+    z -1000), never another window's item. Writes wallpaper68.json."""
+    from PySide6.QtTest import QTest
+    res = {"scenario": "wallpaper68", "checks": []}
+
+    def check(name, ok, detail=None):
+        res["checks"].append({"check": name, "pass": bool(ok), "detail": detail})
+        print(("PASS " if ok else "FAIL ") + "wallpaper68: " + name, "" if detail is None else detail)
+
+    def finish():
+        backdrop = root.findChild(QQuickItem, "backdrop")
+        check("the backdrop draws this screen's wallpaper", backdrop is not None and backdrop.property("source") == wallpaper)
+        # The second screen's view: its wallpaper item lives in another window.
+        other_view = QQuickView()
+        other_view.resize(320, 200)
+        other = wp_comp.create()
+        other.setParentItem(other_view.contentItem())
+        ctx.setContextProperty("wallpaper", other)
+        QTest.qWait(500)
+        check("after the next screen names its own wallpaper, this screen keeps its own",
+              backdrop.property("source") == wallpaper and backdrop.property("source") != other)
+        check("no QML warnings", not [w for w in warnings if "different windows" in w], warnings)
+        res["pass"] = all(c["pass"] for c in res["checks"])
+        with open(os.path.join(out, "wallpaper68.json"), "w") as f:
+            json.dump(res, f, indent=1, default=str)
+        print("wallpaper68:", "PASS" if res["pass"] else "FAIL")
+        global AUTH_FAILED
+        AUTH_FAILED = not res["pass"]
+        view.close()
+        other_view.close()
+        app.quit()
+
+    QTimer.singleShot(1500, finish)
+    app.exec()
 
 # Plasma 6.8's ways to unlock (kscreenlocker's Authenticators enum) and the model's rows as the
 # greeter builds them (pamauthenticatormodel.cpp: icon, password field, prompt expected, tooltip,

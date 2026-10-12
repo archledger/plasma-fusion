@@ -560,9 +560,8 @@ Item {
             id: backdrop
             objectName: "backdrop"
             anchors.fill: parent
-            // qmllint disable unqualified
-            source: typeof wallpaper !== "undefined" && wallpaper ? wallpaper : null
-            // qmllint enable unqualified
+            // This screen's own wallpaper item (LockScreen.qml).
+            source: lockScreenUi.lockRoot ? lockScreenUi.lockRoot.wallpaperItem : null
             factor: lockScreenRoot.promptFactor
         }
 
