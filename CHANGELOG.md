@@ -77,6 +77,19 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   wherever the session may restart or shut down (the log-out screen's rule). Both ask first, say
   when other users are logged in, and stay off while a program holds logind's block on shutdown,
   naming it and its reason (KDE wishlist 336369).
+- On Plasma 6.8 the lock screen offers the other ways to unlock the system has (**smartcard,
+  fingerprint, face, security key**) as links under the password field; the way used last time is
+  kept, and one that stops working falls back to the password with a message. Before, the password
+  was forced. It also asks the greeter to authenticate again while the prompt is shown, so a quick
+  key press after locking no longer leaves the password field unanswered, and Restart and Shut Down
+  are translated there.
+- With two or more screens on Plasma 6.8, the first correct password unlocks: the screen locker
+  crashed while closing and locked once more, and one screen showed no wallpaper.
+- On Plasma 6.8 the log-out screen shows its buttons on the screen with the pointer only and moves
+  them with it, as Plasma 6.8 does, without its errors about the screen size.
+- Snapping recognises KWin's quick tiles without relying on their number or order (ready for
+  Plasma 6.8's tiles), and the snap preview no longer starts processes inside KWin each time it
+  appears.
 - **Meta+Shift+T**, and a button next to the screenshot button in Quick Settings, copy text from the
   screen: Spectacle's area selection opens, and Extract Text copies the text. The key is set only
   when nothing else uses it; restoring removes it.
