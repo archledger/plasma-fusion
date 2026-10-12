@@ -56,8 +56,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   pop-up for a few more values and System Monitor. They are off: turn them on with "System meters
   in the top bar" in the Plasma Fusion settings, or add "Plasma Fusion System Meters" from Add
   Widgets, and choose the meters in its settings. They read Plasma's own sensors, read nothing
-  while a full-screen window covers the bar, the screen is locked or the bar has no room for them,
-  and update half as often in power saver and a quarter as often on a nearly empty battery.
+  while an active full-screen window covers the bar, the screen is locked or the bar has no room
+  for them, and update half as often in power saver and a quarter as often on a nearly empty
+  battery.
 - The launcher has a **Recent** chip with the apps used last and the most used ones ("Recently
   used", "Often used"), from the same history as Kicker's, and a **Places** chip with the file
   manager's places, the removable drives (a click mounts and opens one) and the recent folders, as
@@ -74,9 +75,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 - The dock shows the **progress of file transfers** on the app's icon: a copy in Dolphin, a download
   or any other job Plasma's notifications track, as the stock task manager does.
 - The lock screen offers **Restart** and **Shut Down** next to Sleep, Hibernate and Switch User,
-  wherever the session may restart or shut down (the log-out screen's rule). Both ask first, say
-  when other users are logged in, and stay off while a program holds logind's block on shutdown,
-  naming it and its reason (KDE wishlist 336369).
+  wherever the session may restart or shut down (the log-out screen's rule). Both ask first and
+  stay off while a program holds logind's block on shutdown; the question names no program or user,
+  since anyone at the locked screen can open it (KDE wishlist 336369).
 - On Plasma 6.8 the lock screen offers the other ways to unlock the system has (**smartcard,
   fingerprint, face, security key**) as links under the password field; the way used last time is
   kept, and one that stops working falls back to the password with a message. Before, the password
@@ -107,6 +108,30 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   defined" at every start in tablet posture.
 - The clock's settings open without warnings in the log, and Apply on one of its pages no longer
   writes back a value that another page, or the widget itself, changed while the page was open.
+- `plasma-fusion update` no longer undoes what you changed in the layout: a top bar you made
+  translucent ("Solid top bar next to windows" off), a tray item you set to "Always shown", a pen
+  menu you removed and a desktop you switched stay as they are, and an update that has nothing to
+  migrate no longer restarts the Plasma shell (which also ended Keep awake). Disks & Devices turned
+  back on in the tray stays on after the update that first hid it.
+- A Glass level or dock magnification chosen in the Plasma Fusion settings while the battery is
+  nearly empty is now what the widgets and blur get when the battery recovers; before, they got
+  the level from before and blur could stay off.
+- Top bars added for a newly connected screen, by "Top bar on every screen", by `plasma-fusion setup
+  --screens` and by Add Panel follow the Glass level and "Solid top bar next to windows" (with Glass
+  Solid or High contrast their Notification Centre was blurred), and a layout rebuilt by the setup
+  or by System Settings' Global Theme follows them and "Top bar on every screen" too. Top bars
+  added in power saver or on a nearly empty battery get the lighter tier at once.
+- The on-screen keyboard stays available after an update when its policy is "On touch".
+- "Reset Fusion layout" gives the pen menu Meta+Shift+W only when it had it, and `plasma-fusion
+  restore` frees the keys of widgets the restored layout does not have.
+- A swipe from the right edge in tablet posture opens Quick Settings on the touch screen, and no
+  request opens it on every screen at once any more.
+- The desktop's CPU and memory card shows memory in binary units as System Monitor does ("6.1 /
+  15.3 GiB"), like the new system meters; before, it showed GiB labelled "GB" with the total
+  rounded up, so a full memory read "15.3 / 16 GB" next to 100 %.
+- Uninstalling restores the login screen also when Plasma Fusion's look was written without its
+  mark (into a file that had a [Greeter] group, or rewritten since by the Login Screen settings),
+  and `plasma-fusion restore --help` shows its usage instead of the whole script.
 - Glass set to Solid in the Plasma Fusion settings (also chosen by High contrast, and by the power
   service on a nearly empty battery) now reaches the tablet launcher sheet and the Notification
   Centre: they show a plain tint instead of the blurred wallpaper. Before, the setting was written
