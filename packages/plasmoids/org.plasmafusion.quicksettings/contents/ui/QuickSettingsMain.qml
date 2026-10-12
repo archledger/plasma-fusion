@@ -39,6 +39,12 @@ ColumnLayout {
     readonly property alias audioDetails: audioChevron
 
     readonly property bool tablet: pal.tablet
+    // The header's buttons keep their 34 px in laptop posture also after a touch (Kirigami's
+    // transient touch input makes every IconButton a 44 px target): the battery chip and six
+    // 44 px buttons do not fit the laptop card's 329 px, so the card widened, the Power button
+    // lay outside it and the right column of tiles was cut. Tablet posture draws them at 44 px
+    // in its wider card, with the pencil in the tablet row.
+    readonly property real headerHitSize: tablet ? 44 : 0
     readonly property var tabletPolicy: backend.tabletPolicy
     // The Do Not Disturb durations are shown (the tile's chevron), as of dndChoicesNow (ms): the time
     // they open at, moved on with the wall clock's minutes while they stay open, so "this evening"
@@ -145,6 +151,7 @@ ColumnLayout {
             visible: !tabletRow.visible
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.editTiles
             toggleOn: page.editing
             text: i18nc("@action:button", "Edit the tiles")
@@ -157,6 +164,7 @@ ColumnLayout {
             id: screenshotButton
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.screenshot
             text: i18nc("@action:button", "Take a screenshot")
             onClicked: page.backend.session.screenshot()
@@ -165,6 +173,7 @@ ColumnLayout {
             objectName: "copyTextButton"
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.copyText
             text: i18nc("@action:button", "Copy text from the screen")
             onClicked: page.backend.session.copyText()
@@ -172,6 +181,7 @@ ColumnLayout {
         IconButton {
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.settings
             text: i18nc("@action:button", "System Settings")
             onClicked: page.backend.session.openSystemSettings()
@@ -179,6 +189,7 @@ ColumnLayout {
         IconButton {
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.lock
             text: i18nc("@action:button", "Lock the screen")
             enabled: page.backend.session.canLock
@@ -187,6 +198,7 @@ ColumnLayout {
         IconButton {
             pal: page.pal
             size: page.tablet ? 44 : 34
+            hitSize: page.headerHitSize
             iconPath: Icons.power
             text: i18nc("@action:button", "Shut down, restart or log out…")
             onClicked: page.backend.session.leave()

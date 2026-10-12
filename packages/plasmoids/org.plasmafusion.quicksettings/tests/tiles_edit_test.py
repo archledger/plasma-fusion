@@ -86,7 +86,9 @@ Item {
     property int writes: 0
     // Tablet posture's sizes, as main.qml sets them on the palette.
     property bool tablet: false
-    Binding { target: backend.pal; property: "touch"; value: root.tablet }
+    // Kirigami's transient touch input in laptop posture.
+    property bool forceTouch: false
+    Binding { target: backend.pal; property: "touch"; value: root.tablet || root.forceTouch }
     Binding { target: backend.pal; property: "tablet"; value: root.tablet }
     Backend {
         id: backend
@@ -486,6 +488,21 @@ left = QMetaObject.invokeMethod(backend, "durationText", Q_RETURN_ARG(str), Q_AR
 check(left == "2 h 5 min" and ("@info remaining time, hours", 2) in context.plurals
       and ("@info remaining time, minutes", 5) in context.plurals,
       "2 h 5 min: both numbers go through the plural forms (%r, %r)" % (left, context.plurals))
+
+# ---- Laptop posture after a touch (Kirigami's transient touch input): the header still fits.
+root.setProperty("forceTouch", True)
+QTest.qWait(150)
+power_button = next(i for i in items(page) if i.property("text") == "Shut down, restart or log out…" and i.isVisible())
+# The header row's own wish sets the sheet's width (here the page is held at the card's content
+# width, so an overflowing row squeezes its buttons over the battery chip instead).
+header_row = power_button.parentItem()
+check(header_row.implicitWidth() <= page.width() + 0.5 and power_button.width() < 44,
+      "touch in laptop posture: the header asks for no more than the card (%.1f of %.1f; buttons %.0f px)"
+      % (header_row.implicitWidth(), page.width(), power_button.width()))
+check(find("tile-bluetooth").mapToItem(page, QPointF(find("tile-bluetooth").width(), 0)).x() <= page.width() + 0.5,
+      "touch in laptop posture: the right column of tiles is not cut")
+root.setProperty("forceTouch", False)
+QTest.qWait(100)
 
 # ---- Tablet posture: the pencil is in the tablet row, the targets have touch sizes.
 laptop_height = find("tile-wifi").height()
