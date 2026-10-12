@@ -11,7 +11,8 @@ on the private bus; the widget's two settings keys are stand-ins that take what 
 as main.qml does. Checks the grid's order and conditions, the pencil, reordering by mouse drag,
 touch drag and keyboard, the Tab order, removing, the tray, adding back, Reset, Done and Escape,
 and the tablet posture's pencil and touch targets; and the Do Not Disturb choices behind the tile's
-chevron (read when they open, closed with the sheet, a choice counting from the click).
+chevron (read when they open, closed with the sheet, a choice counting from the click), and the
+Power mode tile's body, on a stand-in power profiles service.
 """
 
 import os
@@ -30,7 +31,7 @@ for key in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOM
     os.environ.pop(key, None)
 os.environ["HOME"] = HOME
 
-from PySide6.QtCore import QDate, QDateTime, QObject, QPoint, QPointF, Qt, QTime, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QDate, QDateTime, QMetaObject, QObject, QPoint, QPointF, Q_ARG, Qt, QTime, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -413,6 +414,50 @@ check(abs(until - (time.time() + 3600) * 1000) < 120 * 1000 and not page.propert
       "For 1 hour counts from the click, not from the clock the choices were read at")
 backend.setProperty("popupOpen", False)
 QTest.qWait(50)
+
+# ---- The Power mode tile's body goes from Balanced to the last other profile the user chose: not
+# to one an application held for a while. The power profiles service is a stand-in (the private
+# bus has no PowerDevil or power-profiles-daemon).
+Path(HOME, "PowerStandIn.qml").write_text('''
+import QtQuick
+Item {
+    property bool silent: false
+    property var list: ["power-saver", "balanced", "performance"]
+    readonly property bool available: true
+    property string active: "balanced"
+    property string inhibitionReason: ""
+    property string degradationReason: ""
+    property var holds: []
+    signal failed(string profile)
+    function setProfile(profile: string) { active = profile; }
+}
+''')
+loader = next(o for o in backend.findChildren(QObject)
+              if o.metaObject().className() == "QQuickLoader" and str(o.property("source").toString()).endswith("services/PowerProfiles.qml"))
+loader.setProperty("source", QUrl.fromLocalFile(str(Path(HOME, "PowerStandIn.qml"))))
+profile = backend.property("profile")
+for _ in range(250):
+    if profile.property("available"):
+        break
+    QTest.qWait(20)
+power = loader.property("item")
+power_body = find("tile-power").childItems()[1]  # background, the body's button, the chevron
+QMetaObject.invokeMethod(profile, "setProfile", Q_ARG("QString", "performance"))
+QTest.qWait(50)
+click(power_body)
+check(power.property("active") == "balanced", "the body goes back to Balanced from Performance, chosen on the page")
+# An application holds Power saver for a while (a battery saver tool), then lets go.
+power.setProperty("holds", [{"Name": "Saver", "Profile": "power-saver"}])
+power.setProperty("active", "power-saver")
+QTest.qWait(50)
+power.setProperty("holds", [])
+power.setProperty("active", "balanced")
+QTest.qWait(50)
+click(power_body)
+check(power.property("active") == "performance",
+      "after an application held Power saver for a while, the body goes to Performance, the user's choice (%s)"
+      % power.property("active"))
+click(power_body)
 
 # ---- Tablet posture: the pencil is in the tablet row, the targets have touch sizes.
 laptop_height = find("tile-wifi").height()

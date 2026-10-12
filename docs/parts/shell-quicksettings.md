@@ -65,8 +65,11 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   the **Power mode** chooser (`ProfilesPage.qml`): the profiles the daemon offers with the active
   one checked, a click switches straight to one, `Power settings` opens the power management
   settings. The body is on in any profile but Balanced, as GNOME's Power Mode toggle: a click goes
-  back to Balanced, and from Balanced to the last other profile active in this session (Power
-  saver at first), so Balanced to Power saver no longer passes through Performance. As the stock
+  back to Balanced, and from Balanced to the last other profile chosen in a Quick Settings widget
+  in this session (Power saver at first), so Balanced to Power saver no longer passes through
+  Performance. A profile the user did not choose there is not learned: one an application holds
+  for a while (a game's Performance) or PowerDevil's own for the power source (it was, and a
+  click then went to it; test: `tests/tiles_edit_test.py` on a stand-in profiles service). As the stock
   Power and Battery widget: while the daemon inhibits Performance, the chooser lists it as
   `Unavailable` (it cannot be chosen, and the body skips it) and says why under the list (on a
   lap, too hot), as the tile's tooltip does, with when it may be slower and the applications
@@ -982,14 +985,15 @@ them again before Apply, so the dialog never writes back an older order.
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
   shown tiles with the hidden ones keeping their places, a tile that comes or goes during a drag,
   the slot under a dragged tile, reset) and `tests/tiles_edit_test.py` (in CI), the main page on
-  the real Backend offscreen with the two keys as stand-ins (56 checks: the default grid, the
+  the real Backend offscreen with the two keys as stand-ins (58 checks: the default grid, the
   stored order, a conditional tile only while it applies, the pencil, the badges and the resting
   tile actions, a mouse drag written once on release, a touch drag, a drag let go below the grid,
   Ctrl+arrows, Ctrl+Home / End, the focus keys, Tab and Shift+Tab in the order shown, the badge and
   Delete with the focus kept in the grid, the tray in order, adding back to the old place, a hidden
   conditional tile neither in the grid nor the tray while it does not apply and still hidden when
   it does, Done, Space on the pencil, Escape, closing the sheet, Reset, a drag during which Disks &
-  Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), and in tablet
+  Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), the Power mode
+  tile's body after an application held a profile, and in tablet
   posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
 
   ```sh

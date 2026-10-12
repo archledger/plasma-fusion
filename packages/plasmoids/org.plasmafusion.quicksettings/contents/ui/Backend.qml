@@ -834,12 +834,15 @@ Item {
         readonly property var options: s ? Power.options(s.list, active, inhibitionReason) : []
         // The tile's body: back to Balanced, or from Balanced to the last other profile chosen
         // (shared by every widget, for this session), so Balanced to Power saver never passes
-        // through Performance.
+        // through Performance. Chosen here, by the user: a profile an application holds for a
+        // while (a game's Performance) or PowerDevil's own for the power source is not a choice.
         readonly property string toggleTarget: s ? Power.toggleTarget(s.list, active, inhibitionReason, Instances.lastPowerProfile) : ""
-        onActiveChanged: {
-            if (active !== "" && active !== "balanced") {
-                Instances.lastPowerProfile = active;
+        function switchTo(profile: string) {
+            failedProfile = "";
+            if (profile !== "balanced") {
+                Instances.lastPowerProfile = profile;
             }
+            s.setProfile(profile);
         }
         function setProfile(profile: string) {
             if (!s || !available) {
@@ -849,8 +852,7 @@ Item {
             // A refused switch shows on the tile and the page for a few seconds.
             const row = options.find(o => o.profile === profile);
             if (row && row.enabled && !row.active) {
-                failedProfile = "";
-                s.setProfile(profile);
+                switchTo(profile);
             }
         }
         function toggle() {
@@ -859,8 +861,7 @@ Item {
                 return;
             }
             if (toggleTarget !== "") {
-                failedProfile = "";
-                s.setProfile(toggleTarget);
+                switchTo(toggleTarget);
             }
         }
         function openSettings() {

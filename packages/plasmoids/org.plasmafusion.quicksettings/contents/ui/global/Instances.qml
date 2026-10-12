@@ -39,8 +39,9 @@ QtObject {
     // The radios to bring back when airplane mode ends ({wifi, wwan, bluetooth}), whichever screen's
     // widget switches it off: plasma-nm's handlers each keep their own copy (Backend.qml).
     property var airplaneRestore: null
-    // The last power profile other than Balanced that was active (Backend.qml): the Power mode
-    // tile's body goes back to it from Balanced, as GNOME's toggle does. For this session only.
+    // The last power profile other than Balanced the user chose in a widget (Backend.qml): the
+    // Power mode tile's body goes back to it from Balanced, as GNOME's toggle does. For this
+    // session only.
     property string lastPowerProfile: ""
     // The keep-awake request's one timeout (a widget's own timer could end another widget's request early).
     readonly property Timer keepAwakeTimeout: Timer {
