@@ -112,9 +112,10 @@ PlasmoidItem {
     }
     // Every widget's revision to now, a moment after the change: a change written by desktop
     // scripting (writeConfig) is read back into the configuration after this handler ran, which
-    // put this widget's revision back as it was.
+    // put this widget's revision back as it was. Never below the revision they hold, also when the
+    // clock was set back (code/shared.js nextRevision).
     function stampSharedRevision(): void {
-        const now = Date.now();
+        const now = Shared.nextRevision(Date.now(), Instances.items.map(widget => widget.sharedRevision));
         Instances.items.forEach(widget => widget.setSharedRevision(now));
     }
     // Airplane mode's radio record (Backend.qml) survives a plasmashell restart: every widget keeps

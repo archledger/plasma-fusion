@@ -916,7 +916,9 @@ applets into one QML engine, which the stock notifications applet's Globals reli
   the others (a list by its entries: each read gives a new array, which `!==` always takes for a
   change). Each widget keeps when they last changed (`sharedRevision`, ms, set on every change and
   copied with them; the settings page stamps it on Apply, as the dialog writes it after the
-  settings). A new widget takes the newest set among the widgets there before it, or gives its own
+  settings). A new stamp is the clock's time but always above the revision the widgets hold
+  (`nextRevision()`): with the clock set back (a wrong time corrected) while a bar was away, a
+  change got a smaller revision than that bar's older settings, which won when it came back. A new widget takes the newest set among the widgets there before it, or gives its own
   on when they are newer (`contents/code/shared.js` `adoptFrom()`, test `tests/shared.test.js`);
   with equal revisions (widgets from before 0.5.0) it takes the leader's, as before (also when it
   leads at once, as the primary screen's bar made again does). Before, the first widget to load
