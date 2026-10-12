@@ -30,6 +30,8 @@ python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$src"
 # installed (the package build has none).
 if command -v node >/dev/null 2>&1; then
   node "$src/tests/meters.test.js" >/dev/null
+  # The memory figures, and the system card's copy of memory.js is the same file.
+  node "$src/tests/memory.test.js" >/dev/null
 fi
 
 rm -rf "$dest"

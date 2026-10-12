@@ -39,6 +39,35 @@ function valid(value) {
     return typeof value === "number" && isFinite(value);
 }
 
+// The windows that cover the top bar, of `windows` ({fullScreen, active}: this screen's windows on
+// the current desktop and activity). KWin draws a full-screen window above the panels only while
+// it is the active window or while the active window is on another screen; otherwise it sits in
+// the normal layer, under the bar (kwin 6.7, Window::belongsToLayer() and isActiveFullScreen()).
+// `activeAnywhere`: a window of the session is active. When none is (a panel, a pop-up or the
+// desktop has the focus) no full-screen window is above the bar.
+function coveringWindows(windows, activeAnywhere) {
+    var activeHere = false;
+    for (var i = 0; i < windows.length; ++i) {
+        activeHere = activeHere || windows[i].active === true;
+    }
+    var n = 0;
+    for (var j = 0; j < windows.length; ++j) {
+        var w = windows[j];
+        if (w.fullScreen === true && (w.active === true || (activeAnywhere && !activeHere))) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+// Whether the pop-up opens on a request (a click, Enter, the widget's shortcut): only under the
+// pill while it is shown in a window on a screen. Asked while the width budget or tablet posture
+// took the meters out of the bar, or the bar has no screen, nothing could show the pop-up, and an
+// "open" state would keep every sensor subscribed until the shortcut is pressed again.
+function popupOpens(wanted, pillShown, onScreen) {
+    return wanted === true && pillShown === true && onScreen === true;
+}
+
 // Whole percent, 0 to 100; NaN when there is no value.
 function percent(value) {
     return valid(value) ? Math.round(Math.max(0, Math.min(100, value))) : NaN;
@@ -50,22 +79,6 @@ function memoryFraction(used, total) {
         return NaN;
     }
     return Math.max(0, Math.min(1, used / total));
-}
-
-// Memory in GiB for "6.1 / 16 GB" (the system card's text): used with one decimal, the total
-// rounded up to whole GB from 2 GB on, because the kernel reports a little less than the
-// installed modules hold (firmware and graphics reservations: 15.3 GiB for 16 GB).
-var GIB = 1024 * 1024 * 1024;
-function memory(used, total) {
-    if (!valid(used) || !valid(total) || total <= 0) {
-        return null;
-    }
-    var t = total / GIB;
-    return {
-        used: Math.round(Math.max(0, used) / GIB * 10) / 10,
-        total: t >= 2 ? Math.ceil(t - 0.05) : Math.round(t * 10) / 10,
-        totalDecimals: t >= 2 ? 0 : 1
-    };
 }
 
 // A network rate in bytes per second as at most three figures: { value, decimals, unit }, unit

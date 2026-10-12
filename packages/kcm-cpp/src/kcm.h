@@ -376,6 +376,9 @@ private:
     bool applyMagnifiedSize(int size);
     bool applyGlobalMenu(bool on);
     bool applySystemMeters(bool on);
+    // Moves the meters widgets `ids` just added before quick settings, asking again (from the
+    // event loop) until the shell lists them; `request` is m_metersPlacement when it started.
+    void placeSystemMeters(const QList<int> &ids, int attempt, int request);
     bool applyPanels(int glass, bool solidTopBar, bool widgetGlass);
     bool applyEveryScreen(bool on);
     bool applyDesktop(const State &before, const State &after);
@@ -413,6 +416,7 @@ private:
     QString m_errorText;
     QString m_infoText;
     int m_shellRequest = 0;
+    int m_metersPlacement = 0;
     // The dock and top-bar switches are read again when the Plasma shell (re)starts.
     QDBusServiceWatcher *m_shellWatcher = nullptr;
     QTimer m_shellRetryTimer;

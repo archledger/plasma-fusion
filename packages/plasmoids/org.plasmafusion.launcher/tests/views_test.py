@@ -221,6 +221,7 @@ Window {
     // The card's typed functions, for Python (which passes QVariant arguments).
     function openMode(mode) { card.openMode(mode, ""); }
     function selectChip(index) { card.selectChip(index); }
+    function setChips(list) { mock.chips = JSON.parse(list); }
     // Ordering (0 Recent, 1 Popular) and shown items (1 OnlyApps) of both lists.
     function orderings() {
         return [usage.recentApps.ordering, usage.frequentApps.ordering, usage.recentApps.shownItems, usage.frequentApps.shownItems].join(" ");
@@ -229,7 +230,7 @@ Window {
         const grid = card.primaryGrid();
         const last = card.lastGrid();
         return JSON.stringify({
-            view: card.view, chip: card.chipIndex,
+            view: card.view, chip: card.chipIndex, chipKey: card.chips[card.chipIndex] ? card.chips[card.chipIndex].key : "",
             primaryModel: grid.model === usage.recentApps ? "recent" : grid.model === usage.frequentApps ? "frequent"
                 : grid.model === usage.places ? "places" : "other",
             primaryCount: grid.count, primaryFocus: grid.activeFocus, primaryCurrent: grid.currentIndex,
@@ -400,6 +401,8 @@ Window {
         cfg_hiddenApplications: ["pf-test-alpha.desktop", "pf-test-gamma.desktop", "pf-removed-app.desktop"]
     }
     function hidden() { return JSON.stringify(Array.from(page.cfg_hiddenApplications)); }
+    // saveConfig() with this live list (the page reads it from Plasmoid.configuration).
+    function save(live) { page.saveHidden(JSON.parse(live)); }
     function names() { return JSON.stringify(page.hiddenIds.map(id => page.appInfo(id).name)); }
 }
 """
@@ -421,6 +424,15 @@ Window {
     QMetaObject.invokeMethod(buttons["unhideAll"], "click")
     QTest.qWait(100)
     check(json.loads(call(settings, "hidden")) == [], "Show All empties the hidden list")
+
+    # Apply with the dialog left open (Show All above), then the launcher hides two of those apps
+    # again: the next Apply or OK keeps them hidden. `save` is saveConfig() with the live list the
+    # launcher's configuration holds.
+    call(settings, "save", json.dumps(["pf-test-alpha.desktop", "pf-test-gamma.desktop", "pf-removed-app.desktop"]))
+    check(json.loads(call(settings, "hidden")) == [], "Apply after Show All writes an empty list")
+    call(settings, "save", json.dumps(["pf-test-alpha.desktop", "pf-test-gamma.desktop"]))
+    check(json.loads(call(settings, "hidden")) == ["pf-test-alpha.desktop", "pf-test-gamma.desktop"],
+          "apps hidden in the launcher after that Apply stay hidden at the next Apply")
 
     # Kicker reads hiddenApplications (and offers Hide Application) through
     # `appletInterface.configuration`, which a Plasma 6 PlasmoidItem does not have: main.qml must
@@ -487,6 +499,34 @@ QtObject {
     call(win, "selectChip", 1)
     QTest.qWait(100)
     check(json.loads(call(win, "state"))["view"] == "history", "the second chip is Recent")
+
+    # The chips are rebuilt when the menu changes (Hide Application on the last app of a category
+    # drops its chip): the chosen category stays chosen by key, and a category that is gone gives
+    # way to "All" instead of the next category, or an empty grid titled "Pinned".
+    fixed = [{"key": "all", "label": "All", "row": -1, "view": "home"},
+             {"key": "recentapps", "label": "Recent", "row": -1, "view": "history"},
+             {"key": "places", "label": "Places", "row": -1, "view": "places"}]
+    office = {"key": "office", "label": "Office", "row": 3, "view": "category"}
+    call(win, "selectChip", 3)
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "category" and s["chip"] == 3 and s["chipKey"] == "office", "the Office chip is chosen")
+    call(win, "setChips", json.dumps(fixed + [{"key": "education", "label": "Education", "row": 2, "view": "category"},
+                                              dict(office, row=4)]))
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "category" and s["chip"] == 4 and s["chipKey"] == "office",
+          "a chip added before it: Office stays chosen at its new place (%s)" % s)
+    call(win, "setChips", json.dumps(fixed + [{"key": "graphics", "label": "Graphics", "row": 2, "view": "category"}]))
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "home" and s["chip"] == 0, "its category gone: back to All, not the next chip (%s)" % s)
+    call(win, "setChips", json.dumps(fixed + [office]))
+    call(win, "selectChip", 3)
+    call(win, "setChips", json.dumps(fixed))
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "home" and s["chip"] == 0, "the last chip gone: All, not an empty grid titled Pinned (%s)" % s)
     print(f"views: {checks} checks passed")
 finally:
     kamd.terminate()

@@ -78,7 +78,10 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 - Chips: "All", "Recent", "Places", then every non-empty XDG menu category, identified by its directory icon
   (locale independent), duplicates and "Lost & Found" dropped, ordered Development, Graphics,
   Internet, Multimedia, Office, System, then Games, Education, Science, Utilities, Settings, Help.
-  Chips that do not fit go into a round "..." chip with a menu.
+  Chips that do not fit go into a round "..." chip with a menu. The chips are rebuilt when the menu
+  changes (an app hidden, installed or removed); the card keeps the chosen chip by its key
+  (`LauncherCard.chipKey`), so a category stays chosen when one before it comes or goes, and when
+  the chosen category itself is gone (its last app hidden) the card goes back to "All".
 - Recent (the `history` view, a chip like the categories: Kickoff has History and Frequently Used,
   Kicker "Recent Applications" and "Often Used"; the boards have no such view, so it reuses the
   board's section header and app tiles): "Recently used", one row of the apps started last (as
@@ -125,7 +128,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   the list had no effect (seen in the VM, 2026-10-11). The settings page shows the hidden apps by
   name and icon (Kicker's SimpleFavoritesModel; an app that is no longer installed by its id), each
   with a Show button, and Show All; on Apply an app the launcher hid while the dialog was open stays
-  hidden (`Launcher.withoutUnhidden` over the live list).
+  hidden (`Launcher.withoutUnhidden` over the live list). The apps shown again are forgotten once
+  saved (`saveHidden`), so an app shown and applied, then hidden again in the launcher while the
+  dialog stays open, stays hidden at the next Apply or OK.
 - Footer: face image (`~/.face.icon` via KUser) or the first letter on #7b5cd6, full name
   (login name when the full name is empty), "Local account". The account row opens a menu, as the
   Windows account menu and the stock launcher's leave entries: Account Settings… (Users settings),
@@ -156,9 +161,13 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 - `tests/views_test.py` also searches with Kicker's real RunnerModel: Down past the last result to
   the KRunner row, Up back, Enter hands the query over and closes; with no results Down from the
   field selects the row.
+- `tests/views_test.py` also rebuilds the chips under the card: the chosen category stays chosen
+  when a chip is added before it, and when it is gone (or it was the last chip) the card shows
+  "All", not the next category or an empty grid titled "Pinned".
 - `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
   with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
-  by name, Show, Show All) and shows that Kicker's RootModel honours `hiddenApplications` only when
+  by name, Show, Show All, an app hidden again after an Apply stays hidden at the next one) and
+  shows that Kicker's RootModel honours `hiddenApplications` only when
   `appletInterface` has `configuration`, which main.qml must declare.
 - `qmllint` on every file: only the usual unqualified-`i18n` notes and three type-inference notes.
 - `kpackagetool6 -t Plasma/Applet -i` and `--show` in a sandbox HOME: installs and reads the metadata.

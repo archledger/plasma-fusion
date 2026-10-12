@@ -23,7 +23,9 @@ test VM, dark and light. Last edited 2026-10-11.
 | `.../contents/ui/LineIcon.qml`, `FusionText.qml` | line glyphs on the 24 grid and board text (copies of quick settings' and the clock pill's) |
 | `.../contents/code/meters.js` | formats, limits, the update interval (no Qt; node tests) |
 | `.../contents/code/glyphs.js` | the meters' line glyphs |
+| `.../contents/code/memory.js` | the pop-up's memory figures in binary units (the same file as the system card's) |
 | `.../tests/meters.test.js` | node tests of `meters.js` (not installed) |
+| `.../tests/memory.test.js` | node tests of `memory.js`, and that the system card's copy is the same (not installed) |
 | `.../tests/readings_test.py`, `tests/mock_ksystemstats.py` | PySide6 test of `Readings.qml` on the real sensor module against a stand-in ksystemstats on a private bus (not installed) |
 | `.../tests/vm_meters.py` | test tool for a real session: add or remove the widget, write keys, dump, measure plasmashell's CPU, busy loops, light/dark |
 | `tools/build.d/77-meters.sh` | checks the metadata, the config XML and the settings page's keys, runs the node tests when node is installed, stages the package with the shared QML blocks it uses (FusionMetrics, Motion, FusionTablet, FusionAccent) |
@@ -96,12 +98,16 @@ cards by running `nvidia-smi`, and Intel graphics through a helper that needs ex
 
 An own `PlasmaCore.AppletPopup` under the pill (10 px gap, all corners rounded, the Plasma style's
 frosted dialog), 260 px content in the desktop system card's style: "System" (15 px 800); CPU
-with its 5 px teal bar (#3cc4b0) and the core count; memory "1.5 / 3 GB" (the card's text) with
+with its 5 px teal bar (#3cc4b0) and the core count; memory "1.5 / 2.8 GiB" (binary units as
+System Monitor and the system card show it, `contents/code/memory.js`) with
 its blue bar (#5b9dff) and "51% in use"; download and upload rates; the CPU temperature ("Hottest
 core") where there is a reading; a full-width "Open System Monitor" button (32 px, ink .08, the
 keyboard focus when the pop-up opens). Bars at a warning level take the warning colour. It shows
 every value, whichever meters are in the bar, and its rows never change its height (a value not
-there yet keeps its row). Esc closes it, as does a click outside. Built on its first open.
+there yet keeps its row). Esc closes it, as does a click outside. Built on its first open. It
+opens only under a pill shown in a window on a screen (`meters.js` `popupOpens`): the widget's
+shortcut while the width budget or tablet posture took the meters out of the bar does nothing,
+rather than leave an "open" state that nothing shows and that keeps every sensor subscribed.
 
 ### When the sensors run
 
@@ -112,8 +118,14 @@ subscribed only while its meter is in the bar (or the pop-up is open) and the me
 libksysguard unsubscribes a disabled sensor and ksystemstats then stops reading it. The meters
 cannot be seen, and subscribe nothing, while:
 
-- a full-screen window covers the bar (a `TasksModel` of the bar's screen, current virtual desktop
-  and activity, as the system card's; a maximized window leaves the bar visible);
+- an active full-screen window covers the bar (a `TasksModel` of the bar's screen, current virtual
+  desktop and activity, as the system card's, and `meters.js` `coveringWindows`). KWin raises a
+  full-screen window above the panels only while it is the active window, or while the active
+  window is on another screen (kwin 6.7 `Window::belongsToLayer()`, `isActiveFullScreen()`); an
+  inactive one is drawn under the bar, which then keeps sampling. A maximized window leaves the bar
+  visible. When a pop-up or a panel of another screen has the focus, or a dialog of the full-screen
+  window, the meters sample although KWin keeps the window above the bar: those are not tasks, or
+  not the full-screen task, in the model, and sampling is the safe side (the values stay current);
 - the session is locked (`org.freedesktop.ScreenSaver` `ActiveChanged`, as the system card);
 - the width budget took the meters out (below), the pill is not in a visible window, or its bar
   has no screen (a bar left over from a screen that is gone; its pop-up does not open either);
@@ -140,8 +152,13 @@ tiers"): 2 s, 4 s and 8 s at the default interval. The user's keys are never wri
 
 - `node packages/plasmoids/org.plasmafusion.meters/tests/meters.test.js` (also in `tools/build.sh
   meters` and CI): percent, rate (unit boundaries, rounding up into the next unit, at most three
-  figures over 15 decades), memory text, temperature (0 is no reading, Fahrenheit), the limits
-  with the 5 point fall-back, the interval with the power tiers, the meters' order.
+  figures over 15 decades), memory fraction, temperature (0 is no reading, Fahrenheit), the limits
+  with the 5 point fall-back, the interval with the power tiers, the meters' order, which
+  full-screen windows cover the bar (active, active window on another screen, none active), and
+  when the pop-up may open.
+- `node packages/plasmoids/org.plasmafusion.meters/tests/memory.test.js` (also in `tools/build.sh
+  meters` and CI): the memory figures in binary units as KFormat and System Monitor print them
+  (15.3 GiB, 4.1 GiB, MiB under 1 GiB), a full memory, and the system card's copy of `memory.js`.
 - `readings_test.py` (CI, build.yml; `QT_QPA_PLATFORM=offscreen dbus-run-session
   --config-file=packages/kwin/tests/offscreen/session-bus.conf -- python3 <it>`): `Readings.qml` on Plasma's sensor module against a stand-in ksystemstats that
   counts subscriptions: nothing subscribed while every meter is off or the meters cannot be seen,

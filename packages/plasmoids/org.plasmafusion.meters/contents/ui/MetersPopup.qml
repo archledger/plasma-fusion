@@ -14,6 +14,7 @@ import QtQuick.Templates as T
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasmoid
 
+import "../code/memory.js" as Memory
 import "../code/meters.js" as Meters
 
 // The meters' pop-up: a few more values than the bar has room for, in the style of the desktop
@@ -72,11 +73,27 @@ FocusScope {
 
     Keys.onEscapePressed: card.closeRequested()
 
-    readonly property var memoryValue: Meters.memory(readings.memoryUsed, readings.memoryTotal)
+    // "6.1 / 15.3 GiB" in binary units, as System Monitor and the system card show it (memory.js).
+    readonly property var memoryValue: Memory.memory(readings.memoryUsed, readings.memoryTotal)
+    function memoryUnitText(unit: string): string {
+        switch (unit) {
+        case "KiB":
+            return i18nc("@label memory unit, kibibytes", "KiB");
+        case "MiB":
+            return i18nc("@label memory unit, mebibytes", "MiB");
+        case "GiB":
+            return i18nc("@label memory unit, gibibytes", "GiB");
+        case "TiB":
+            return i18nc("@label memory unit, tebibytes", "TiB");
+        case "PiB":
+            return i18nc("@label memory unit, pebibytes", "PiB");
+        }
+        return i18nc("@label memory unit, bytes", "B");
+    }
     readonly property string memoryText: memoryValue
-        ? i18nc("@label used / total memory in GB, e.g. 6.1 / 16 GB", "%1 / %2 GB",
-                Qt.locale().toString(memoryValue.used, "f", 1),
-                Qt.locale().toString(memoryValue.total, "f", memoryValue.totalDecimals))
+        ? i18nc("@label used / total memory and its unit, e.g. 6.1 / 15.3 GiB", "%1 / %2 %3",
+                Qt.locale().toString(memoryValue.used, "f", memoryValue.decimals),
+                Qt.locale().toString(memoryValue.total, "f", memoryValue.decimals), memoryUnitText(memoryValue.unit))
         : "–"
 
     component Label: FusionText {

@@ -28,10 +28,22 @@ FocusScope {
     // home | history (recently and often used apps) | places | category | apps | recent (files)
     property string view: "home"
     property int chipIndex: 0
+    // The chosen chip's key. The launcher rebuilds its chips when the menu changes (hiding or
+    // removing the last app of a category takes that category's chip away), so the index is found
+    // again by key; a category that is gone gives way to "All", the home view.
+    property string chipKey: "all"
     readonly property bool searching: search.text.length > 0
     // Enter was pressed before the first search results arrived: launch the top one when they do.
     property bool launchWhenReady: false
     readonly property var chips: launcher ? launcher.chips : []
+    onChipsChanged: {
+        const index = chips.findIndex(c => c.key === chipKey);
+        if (index >= 0) {
+            chipIndex = index;
+        } else {
+            selectChip(0);
+        }
+    }
     readonly property var categoryModel: launcher && view === "category" && chipIndex > 0 && chipIndex < chips.length
         && chips[chipIndex].row >= 0 ? launcher.rootModel.modelForRow(chips[chipIndex].row) : null
     readonly property var allAppsModel: launcher && view === "apps" ? launcher.allAppsModel() : null
@@ -64,6 +76,7 @@ FocusScope {
         launchWhenReady = false;
         view = "home";
         chipIndex = 0;
+        chipKey = "all";
         for (const g of [pinnedGrid, docGrid, mainGrid, recentGrid, recentAppsGrid, frequentGrid, placesGrid, foldersGrid]) {
             g.currentIndex = -1;
             g.keyboardNavigation = false;
@@ -97,6 +110,7 @@ FocusScope {
             return;
         }
         chipIndex = index;
+        chipKey = chips[index].key;
         view = chips[index].view || "category";
         for (const g of [mainGrid, recentAppsGrid, frequentGrid, placesGrid, foldersGrid]) {
             g.currentIndex = -1;
