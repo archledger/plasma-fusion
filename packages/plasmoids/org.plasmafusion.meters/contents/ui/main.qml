@@ -460,7 +460,7 @@ PlasmoidItem {
     property bool popupOpen: false
     property bool openOnPress: false
     function setPopupOpen(open: bool): void {
-        popupOpen = open;
+        popupOpen = Meters.popupOpens(open, pillShown, onScreen);
     }
     Connections {
         target: Plasmoid

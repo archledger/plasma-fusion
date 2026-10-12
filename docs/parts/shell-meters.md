@@ -101,7 +101,10 @@ its blue bar (#5b9dff) and "51% in use"; download and upload rates; the CPU temp
 core") where there is a reading; a full-width "Open System Monitor" button (32 px, ink .08, the
 keyboard focus when the pop-up opens). Bars at a warning level take the warning colour. It shows
 every value, whichever meters are in the bar, and its rows never change its height (a value not
-there yet keeps its row). Esc closes it, as does a click outside. Built on its first open.
+there yet keeps its row). Esc closes it, as does a click outside. Built on its first open. It
+opens only under a pill shown in a window on a screen (`meters.js` `popupOpens`): the widget's
+shortcut while the width budget or tablet posture took the meters out of the bar does nothing,
+rather than leave an "open" state that nothing shows and that keeps every sensor subscribed.
 
 ### When the sensors run
 
@@ -147,8 +150,9 @@ tiers"): 2 s, 4 s and 8 s at the default interval. The user's keys are never wri
 - `node packages/plasmoids/org.plasmafusion.meters/tests/meters.test.js` (also in `tools/build.sh
   meters` and CI): percent, rate (unit boundaries, rounding up into the next unit, at most three
   figures over 15 decades), memory text, temperature (0 is no reading, Fahrenheit), the limits
-  with the 5 point fall-back, the interval with the power tiers, the meters' order, and which
-  full-screen windows cover the bar (active, active window on another screen, none active).
+  with the 5 point fall-back, the interval with the power tiers, the meters' order, which
+  full-screen windows cover the bar (active, active window on another screen, none active), and
+  when the pop-up may open.
 - `readings_test.py` (CI, build.yml; `QT_QPA_PLATFORM=offscreen dbus-run-session
   --config-file=packages/kwin/tests/offscreen/session-bus.conf -- python3 <it>`): `Readings.qml` on Plasma's sensor module against a stand-in ksystemstats that
   counts subscriptions: nothing subscribed while every meter is off or the meters cannot be seen,

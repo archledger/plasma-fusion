@@ -60,6 +60,14 @@ function coveringWindows(windows, activeAnywhere) {
     return n;
 }
 
+// Whether the pop-up opens on a request (a click, Enter, the widget's shortcut): only under the
+// pill while it is shown in a window on a screen. Asked while the width budget or tablet posture
+// took the meters out of the bar, or the bar has no screen, nothing could show the pop-up, and an
+// "open" state would keep every sensor subscribed until the shortcut is pressed again.
+function popupOpens(wanted, pillShown, onScreen) {
+    return wanted === true && pillShown === true && onScreen === true;
+}
+
 // Whole percent, 0 to 100; NaN when there is no value.
 function percent(value) {
     return valid(value) ? Math.round(Math.max(0, Math.min(100, value))) : NaN;

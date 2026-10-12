@@ -134,4 +134,13 @@ test("covering: a full-screen window covers the bar only while KWin keeps it abo
     assert.strictEqual(M.coveringWindows([], true), 0);
 });
 
+test("pop-up: opens only under a pill shown on a screen", () => {
+    assert.strictEqual(M.popupOpens(true, true, true), true);
+    assert.strictEqual(M.popupOpens(true, false, true), false,
+                       "the shortcut while the width budget or tablet posture hid the meters");
+    assert.strictEqual(M.popupOpens(true, true, false), false, "a bar without a screen");
+    assert.strictEqual(M.popupOpens(false, true, true), false, "closing always works");
+    assert.strictEqual(M.popupOpens(false, false, false), false);
+});
+
 console.log("meters: all " + n + " tests passed");
