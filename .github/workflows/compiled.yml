@@ -57,8 +57,8 @@ jobs:
         package: [navigation-cpp, decoration-cpp, kcm-cpp]
         plasma: [stable, beta]
     steps:
-      - name: Install git, builddep and D-Bus for the tests (checkout runs inside the container)
-        run: dnf install -y -q git dnf-plugins-core rpm-build dbus-daemon
+      - name: Install git, builddep, D-Bus and the power-tier test's tools (checkout runs inside the container)
+        run: dnf install -y -q git dnf-plugins-core rpm-build dbus-daemon nodejs python3-gobject kf6-kconfig systemd
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

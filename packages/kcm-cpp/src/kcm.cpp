@@ -777,7 +777,8 @@ void PlasmaFusionKcm::updateEnvironment()
 
     // The power service (plasma-fusion-powerfx) writes the tier it applies; at "critical" it
     // holds the glass solid and the dock magnification off when LighterOnCritical is set, and
-    // restores the remembered user values ([Power] UserGlass, UserDockMagnify) afterwards.
+    // gives the remembered values back afterwards, or the ones chosen here meanwhile ([Power]
+    // PageGlass, PageDockMagnify).
     KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
     fusion->reparseConfiguration();
     const KConfigGroup power(fusion, u"Power"_s);
@@ -1530,13 +1531,16 @@ void PlasmaFusionKcm::applyGlassConfig(int glass)
     KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
     fusion->reparseConfiguration();
     KConfigGroup(fusion, u"Effects"_s).writeEntry("Glass", s_glassNames.value(glass), KConfig::Notify);
+    KConfigGroup power(fusion, u"Power"_s);
     if (m_powerCritical) {
-        // The power service keeps the glass solid until the battery recovers and then restores
-        // the level it remembered; this is the level it restores now.
-        KConfigGroup(fusion, u"Power"_s).writeEntry("UserGlass", s_glassNames.value(glass), KConfig::Notify);
+        // The power service keeps the glass solid and blur off until the battery recovers; then it
+        // gives the widgets and blur the level chosen here ([Power] PageGlass) instead of the ones
+        // it remembered.
+        power.writeEntry("PageGlass", s_glassNames.value(glass), KConfig::Notify);
         fusion->sync();
         return;
     }
+    power.deleteEntry("PageGlass", KConfig::Notify);
     fusion->sync();
 
     KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);

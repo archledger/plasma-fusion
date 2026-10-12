@@ -19,8 +19,10 @@ const SHELL_JS = m[1];
 function service(layout) {
     const st = { tier: 0, light: false, map: "" };
     const writes = [];
-    function call(apply, tier, light) {
-        const pfx = `var PFX = {apply: ${apply}, tier: ${tier}, light: ${light}, prev: ${st.tier}, prevLight: ${st.light}, map: "${st.map}"};\n`;
+    // page: the settings page's choice made while critical ([Power] PageGlass, PageDockMagnify)
+    function call(apply, tier, light, page) {
+        const glass = (page && page.glass) || "", magnify = (page && page.magnify) || "";
+        const pfx = `var PFX = {apply: ${apply}, tier: ${tier}, light: ${light}, prev: ${st.tier}, prevLight: ${st.light}, map: "${st.map}", glass: "${glass}", magnify: "${magnify}"};\n`;
         const out = run(pfx + SHELL_JS, layout, writes);
         const r = out.match(/^found=(\d+);writes=(\d+);dock=([a-z]*);map=([A-Za-z0-9/=,._-]*)$/);
         assert(r, "bad output: " + out);
@@ -30,11 +32,11 @@ function service(layout) {
         writes,
         state: st,
         // plan, store, apply: what apply_shell does
-        set(tier, light) {
-            const plan = call(false, tier, light);
+        set(tier, light, page) {
+            const plan = call(false, tier, light, page);
             const before = writes.length;
             if (plan.writes > 0)
-                call(true, tier, light);
+                call(true, tier, light, page);
             assert.strictEqual(writes.length - before, plan.writes, "the plan counted other writes than it made");
             Object.assign(st, { tier, light, map: plan.map });
             return plan;
@@ -217,6 +219,40 @@ test("a value the map cannot hold is left alone", () => {
     s.set(2, true);
     assert.strictEqual(cfg(l, 14, "General", "glass"), "odd,value");
     assert.ok(!s.state.map.includes("14/"));
+});
+
+test("a Glass level chosen on the settings page while critical is the one given back", () => {
+    const l = layout(), s = service(l);
+    s.set(2, true);
+    // the page stores Reduced ([Power] PageGlass) and leaves the widgets solid
+    const page = { glass: "reduced" };
+    assert.strictEqual(s.set(2, true, page).writes, 0, "still held solid while critical");
+    assert.ok(s.state.map.includes("5/glass=reduced"), "remembered as the user's: " + s.state.map);
+    s.set(0, true, page);
+    for (const id of [30, 5, 12, 14])
+        assert.strictEqual(cfg(l, id, "General", "glass"), "reduced", "widget " + id);
+    assert.strictEqual(cfg(l, 12, "General", "magnify"), "true", "magnification: the remembered value");
+    assert.strictEqual(s.state.map, "");
+});
+
+test("dock magnification turned off on the settings page while critical stays off", () => {
+    const l = layout(), s = service(l);
+    s.set(2, true);
+    const r = s.set(2, true, { magnify: "false" });
+    assert.strictEqual(r.dock, "false", "the page shows the value it chose");
+    s.set(0, true, { magnify: "false" });
+    assert.strictEqual(cfg(l, 12, "General", "magnify"), "false");
+    assert.strictEqual(cfg(l, 5, "General", "glass"), "full", "glass: the remembered value");
+});
+
+test("the page's choice also reaches a widget the service had not held yet", () => {
+    const l = layout(), s = service(l);
+    s.set(2, true);
+    l.panels[0].push({ id: 41, type: "org.plasmafusion.quicksettings", config: {} }); // a new screen's bar
+    s.set(2, true, { glass: "solid" });
+    s.set(0, true, { glass: "solid" });
+    assert.strictEqual(cfg(l, 41, "General", "glass"), "solid");
+    assert.strictEqual(cfg(l, 14, "General", "glass"), "solid");
 });
 
 test("plan mode writes nothing", () => {

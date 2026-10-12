@@ -21,7 +21,9 @@
 #   --no-auto          stop that switching
 #                      (without these a HOME already on Plasma Fusion keeps its variant and its
 #                      automatic switching; any other HOME gets Dark without switching)
-#   --reset-layout     always rebuild the top bar, dock and desktop cards
+#   --reset-layout     always rebuild the top bar, dock and desktop cards (their widgets' own
+#                      settings, quick settings' tiles too, go back to the defaults; the settings
+#                      page's Glass, top-bar and every-screen choices apply to the new layout)
 #   --keep-layout      never touch the panels (appearance and settings only)
 #   --hot-corner       let the top-left screen corner open Overview (off by default)
 #   --fonts            set the Plasma Fusion fonts and cursor again (normally only the first
@@ -103,8 +105,8 @@
 #   Window switcher    kwinrc [TabBox] DelayTime 120 (a quick Alt+Tab shows no switcher)
 #   KWin tablet        kwinrc [Plugins] plasmafusion-tabletEnabled; plasmafusion_navigationEnabled
 #                      (the compiled tablet navigation effect, when its package is installed)
-#   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture (quick settings writes it
-#                      from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
+#   On-screen keyboard kwinrc [Wayland] InputMethod empty in laptop posture, unless quick settings'
+#                      keyboard policy is On touch (quick settings writes it from then on); plasmakeyboardrc [General] diacriticsPopupEnabled false (no
 #                      accent pop-up on a held physical key)
 #   Text rendering     greyscale antialiasing, slight hinting: ~/.config/fontconfig/fonts.conf and
 #                      kdeglobals [General] Xft* as System Settings > Fonts writes them (GTK too)
@@ -899,6 +901,28 @@ for (var i = 0; i < ps.length; i++) {
   done
 }
 
+# True when a quick settings widget's keyboard policy is "touch" (the on-screen keyboard on a touch
+# or pen tap in every posture): asked of the running plasmashell (the layout file may lag behind a
+# change just made), else read from the layout file.
+keyboard_policy_touch() {
+  local out='' appletsrc=$CONFIG/plasma-org.kde.plasma.desktop-appletsrc
+  if has_name org.kde.plasmashell; then
+    out=$(plasmashell_eval '
+      var touch = false, ps = panels();
+      for (var i = 0; i < ps.length; i++) {
+          var ws = ps[i].widgets("org.plasmafusion.quicksettings");
+          for (var j = 0; j < ws.length; j++) {
+              ws[j].currentConfigGroup = ["General"];
+              if (String(ws[j].readConfig("keyboardPolicy", "tablet")) === "touch") touch = true;
+          }
+      }
+      print(touch ? "touch" : "");') || out=''
+  elif [ -r "$appletsrc" ]; then
+    grep -qx 'keyboardPolicy=touch' "$appletsrc" && out='touch'
+  fi
+  [ "$out" = touch ]
+}
+
 # ---------- in-place migration of an existing Plasma Fusion layout ----------
 
 # Folder View (desktop icons) keys for the desktop (BACKLOG M1; LAYOUT-1 writes the same ones into a
@@ -941,14 +965,24 @@ if (best !== null) { var g = screenGeometry(best.screen); print(Math.round(g.wid
 # Migrate the layout file while plasmashell is stopped (or print what it would do): everything a
 # fresh layout gets from the Global Theme's layout script that an existing one lacks. Panels, pins,
 # cards and their places are kept; a value the user changed is kept. $1 "W H" of the card screen
+# Steps 1, 3, 4 (the hidden tray items) and 6 bring a layout made before configuration version 2
+# up to it, so they run only on such a HOME (PREV_VERSION 0 or 1): from version 2 on, what they
+# would change again is the user's (a top bar the settings page made translucent, a tray item set
+# to "Always shown", the pen menu or desktop the user removed or changed). Step 4's Disks & Devices
+# part (0.4.0) runs once, recorded in plasmafusionrc [Setup] TrayDevices.
 migrate_layout() {
-  local out rc=0
+  local out rc=0 solid devices
+  solid=$(kreadconfig6 --file plasmafusionrc --group TopBar --key SolidNextToWindows 2>/dev/null || true)
+  devices=$(kreadconfig6 --file plasmafusionrc --group Setup --key TrayDevices 2>/dev/null || true)
   out=$(python3 - "$CONFIG" "$DRY" "${1:-}" "$(installed_previews)" "$(package_dir plasma/plasmoids "$PEN_WIDGET" >/dev/null && echo 1 || echo 0)" \
-    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" <<'PY'
+    "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" \
+    "$PREV_VERSION" "$solid" "$devices" <<'PY'
 import re, subprocess, sys
 
-config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed = sys.argv[1:9]
+config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed, prev, solid, devices = sys.argv[1:12]
 dry = dry == "1"
+# The steps that bring a layout up to configuration version 2 (see above).
+first = not prev.isdigit() or int(prev) < 2
 APPLETSRC = "plasma-org.kde.plasma.desktop-appletsrc"
 
 def parse(path):
@@ -1018,6 +1052,9 @@ for c in sorted(desktops, key=int):
     plugin = kv.get("plugin")
     if plugin == target:
         note("desktop %s: %s (unchanged)" % (c, plugin))
+        continue
+    if not first:
+        note("desktop %s: %s (kept: the user's)" % (c, plugin))
         continue
     write(APPLETSRC, ["Containments", c], "plugin", target, plugin)
     if plugin != "org.kde.desktopcontainment":
@@ -1101,13 +1138,15 @@ for c, kv in sorted(conts.items(), key=lambda i: int(i[0]) if i[0].isdigit() els
 
 # 3. Top bar solid next to maximized windows (owner decision 5): adaptive (0) instead of the
 #    translucent (2) the earlier layout set; another value is the user's.
+#    Translucent is also what the settings page sets for "Solid top bar next to windows" off
+#    ([TopBar] SolidNextToWindows=false), and from version 2 on it is the user's.
 if top is not None:
     view = shellrc.get(("PlasmaViews", "Panel %s" % top), {})
     cur = view.get("panelOpacity")
-    if cur == "2":
+    if cur == "2" and first and solid != "false":
         write("plasmashellrc", ["PlasmaViews", "Panel %s" % top], "panelOpacity", "0", cur)
     else:
-        note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque"}.get(cur, cur))
+        note("top bar opacity: %s (kept)" % {None: "adaptive (default)", "0": "adaptive", "1": "opaque", "2": "translucent"}.get(cur, cur))
 
 # 4. Tray items hidden (no expander arrow), in every top bar's tray; 5. app menus for their own
 #    screen only.
@@ -1120,13 +1159,18 @@ for c, kv in conts.items():
             for key in ("hiddenItems", "disabledStatusNotifiers"):
                 items = [i for i in general.get(key, "").split(",") if i]
                 add = [i for i in tray_hide.split() if i not in items]
-                if add:
+                if add and first:
                     write(APPLETSRC, ["Containments", c, "Applets", a, "General"], key, ",".join(items + add), general.get(key))
+                elif add:
+                    note("tray %s %s: %s left out (kept: the user's)" % (a, key, ",".join(add)))
                 else:
                     note("tray %s %s (unchanged)" % (a, key))
             # Disks & Devices: the quick-settings page replaces the stock item, which is not loaded
-            # (known, not extra), as the desktop layout does for a new bar.
-            if "org.plasmafusion.quicksettings" in applets(c).values():
+            # (known, not extra), as the desktop layout does for a new bar. Once: an item the user
+            # turned on again in the tray's settings stays.
+            if devices == "done":
+                note("tray %s Disks & Devices: as the user has it (kept)" % a)
+            elif "org.plasmafusion.quicksettings" in applets(c).values():
                 known = [i for i in general.get("knownItems", "").split(",") if i]
                 extra = [i for i in general.get("extraItems", "").split(",") if i]
                 dn = "org.kde.plasma.devicenotifier"
@@ -1148,6 +1192,8 @@ if top is not None and pen_installed == "1":
     have = applets(top)
     if "org.plasmafusion.pen" in have.values():
         note("pen widget in the top bar (unchanged)")
+    elif not first:
+        note("pen widget not in the top bar (kept: the user's)")
     else:
         ids = [int(x) for g in rc for x in g if x.isdigit()]
         new = str(max(ids) + 1 if ids else 1)
@@ -1634,15 +1680,18 @@ apply_krunner_key_upgrade() {
 }
 
 # Meta+V for the clipboard sheet (0.5.0) on a HOME an earlier Plasma Fusion configured with the
-# Windows-style set, which does not run again there: Meta+N being the notification list's is that
-# set's mark (--keep-shortcuts leaves it to quick settings). Once (plasmafusionrc [Shortcuts]
-# ClipboardKey), and only while Klipper's pop-up still holds Meta+V and the sheet has no key: a
-# key the user gave either of them since stays. Otherwise the sheet gets Meta+V only when nothing
-# holds it.
+# Windows-style set, which does not run again there. That set's mark is Meta+N on the notification
+# list together with Meta+S on the launcher: a run without the set also gives the notification list
+# Meta+N when nothing holds it (a --keep-shortcuts setup whose quick settings lost its Meta+N), but
+# only the set gives the launcher Meta+S. Read before this run's ensure_notify_shortcut. Once
+# (plasmafusionrc [Shortcuts] ClipboardKey), and only while Klipper's pop-up still holds Meta+V and
+# the sheet has no key: a key the user gave either of them since stays. Otherwise the sheet gets
+# Meta+V only when nothing holds it.
 apply_clipboard_key_upgrade() {
   read_key plasmafusionrc Shortcuts ClipboardKey
   if [ "$REPLY" != "$CLIPBOARD_KEY_VERSION" ] &&
     [ "$(shortcut_get "$NOTIFY_COMPONENT" _launch)" = "$NOTIFY_SHORTCUT" ] &&
+    key_holders $((META + 0x53)) | grep -qxF "plasmashell"$'\t'"$LAUNCHER_ACTION" &&
     key_holders "$CLIPBOARD_SHORTCUT" | grep -qxF "plasmashell"$'\t'"show-on-mouse-pos" &&
     [ -z "$(shortcut_get "$CLIPBOARD_COMPONENT" _launch)" ]; then
     note "the clipboard sheet gets Meta+V from Klipper's pop-up (earlier Plasma Fusion setup)"
@@ -1816,10 +1865,11 @@ if has_name org.kde.plasmashell && fusion_layout_present; then
 fi
 # An existing Plasma Fusion layout (kept): migrated in place while plasmashell is stopped, in the
 # restart that applies the steps above (one restart for all of it).
-migrate=0 card_size=
+migrate=0 card_size='' layout_checked=0
 if [ "$LAYOUT" = auto ] && [ "$reset" = 0 ] && has_name org.kde.plasmashell; then
   card_size=$(card_screen_size)
   layout_needs_migration "$card_size" && migrate=1
+  layout_checked=1
 fi
 if [ "$migrate" = 1 ]; then
   say "Desktop and top bar (existing layout, kept)"
@@ -1839,6 +1889,11 @@ elif [ -n "$restart_why" ]; then
 fi
 if [ "$DRY" = 0 ] && has_name org.kde.plasmashell && fusion_layout_present; then
   note "panel thickness: $(fix_panel_thickness)"
+fi
+# The trays' Disks & Devices are as Plasma Fusion sets them now (migrated, or a new layout): from
+# here on the user's (migrate_layout).
+if [ "$layout_checked" = 1 ] || [ "$reset" = 1 ]; then
+  set_key plasmafusionrc Setup TrayDevices "done"
 fi
 set_key kdeglobals KDE DefaultDarkLookAndFeel "$DARK"
 set_key kdeglobals KDE DefaultLightLookAndFeel "$LIGHT"
@@ -2015,9 +2070,15 @@ else
   note "note: $OUTLINE_QML is not installed yet; KWin keeps its own snap-zone outline"
 fi
 # On-screen keyboard (TABLET T6): off in laptop posture; from then on quick settings switches it with
-# the posture. In tablet posture it stays as it is. Another input method the user chose is kept.
+# the posture. In tablet posture it stays as it is. Another input method the user chose is kept, and
+# so is the keyboard while quick settings' keyboard policy (the settings page's "On-screen
+# keyboard") is "On touch": that policy wants it in laptop posture too, and quick settings writes
+# the key only when the posture or the policy changes, so a blank key would stay until the next
+# login.
 if bus get-property org.kde.KWin /org/kde/KWin org.kde.KWin.TabletModeManager tabletMode 2>/dev/null | grep -q true; then
   note "kwinrc [Wayland] InputMethod: tablet posture, left on (quick settings switches it)"
+elif keyboard_policy_touch; then
+  note "kwinrc [Wayland] InputMethod: quick settings' keyboard policy is On touch (left as it is)"
 else
   osk=$(system_data_path applications/org.kde.plasma.keyboard.desktop) || osk=$OSK_DESKTOP
   managed_key kwinrc Wayland InputMethod "" "$osk" "$OSK_DESKTOP"
@@ -2124,8 +2185,9 @@ if has_name org.kde.plasmashell; then
   else
     # A widget made by a later layout rebuild gets its key again, when nothing else took it.
     ensure_widget_shortcut org.plasmafusion.quicksettings "$QS_SHORTCUT" "$QS_SHORTCUT_TEXT" "quick settings" "" free
-    ensure_notify_shortcut free
+    # The clipboard upgrade first: it reads the Meta+N that ensure_notify_shortcut may give.
     apply_clipboard_key_upgrade
+    ensure_notify_shortcut free
   fi
 else
   note "quick settings: plasmashell is not running (no shortcut set)"
@@ -2309,7 +2371,13 @@ if [ "$SCREENS" = 1 ]; then
     else
       note "run $topbars_js in plasmashell"
       CHANGES=$((CHANGES + 1))
-      plasmashell_eval "$(cat "$topbars_js")" | sed 's/^/  /' || note "warning: ensure-topbars.js failed"
+      topbars_out=$(plasmashell_eval "$(cat "$topbars_js")") || note "warning: ensure-topbars.js failed"
+      [ -z "${topbars_out:-}" ] || note "$topbars_out"
+      # The power service sets its tier's keys on new widgets only when it applies the tier again.
+      if [[ ${topbars_out:-} =~ added\ ([0-9]+),\ completed\ ([0-9]+) ]] &&
+        [ $((BASH_REMATCH[1] + BASH_REMATCH[2])) -gt 0 ] && session_manager; then
+        systemctl --user try-reload-or-restart plasma-fusion-powerfx.service 2>/dev/null || true
+      fi
     fi
   else
     note "note: ensure-topbars.js is not installed (Global Theme $LNF); top bars on other screens not checked"

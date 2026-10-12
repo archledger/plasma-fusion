@@ -47,6 +47,7 @@ LIB=$BASE/lib.sh
   grep -m1 '^CLIPBOARD_JS=' "$TOOL" || true
   grep -m1 '^CLIPBOARD_KEY_VERSION=' "$TOOL" || true
   grep -m1 '^UNSET=' "$TOOL" || true
+  grep -m1 '^LAUNCHER_ACTION=' "$TOOL" || true
   extract note keyname install_text shortcut_get shortcut_set shortcut_add shortcut_remove key_holders \
     shortcut_claim register_command_component notify_desktop ensure_notify_shortcut clipboard_desktop \
     ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade
@@ -155,10 +156,11 @@ run_case() {
       ensure) ensure_clipboard_shortcut "$4" ;;
       notify) ensure_notify_shortcut "$4" ;;
       dry) DRY=1; ensure_clipboard_shortcut "$4" ;;
-      step)
+      step | step-notify)
         has_name() { true; }
         ensure_widget_shortcut() { :; }
-        ensure_notify_shortcut() { :; }
+        # step-notify runs the Meta+N step as well; step leaves it out.
+        [ "$3" = step-notify ] || ensure_notify_shortcut() { :; }
         WINDOWS_SET=$4 SHORTCUTS=$5 QS_SHORTCUT=0 QS_SHORTCUT_TEXT= QS_OLD_SHORTCUT=0 QS_OLD_SHORTCUT_TEXT=
         . "$6" ;;
     esac' _ "$LIB" "$FAKE" "$how" "$arg1" "$arg2" "$STEP" >"$H/log" 2>&1 || { fail "$name: the step failed: $(tail -3 "$H/log")"; return 0; }
@@ -243,22 +245,34 @@ run_case step-later step 0 auto "$KLIPPER"
 expect_keys "a later run (set applied before) leaves Klipper's Meta+V" plasmashell show-on-mouse-pos "$META_V"
 expect_launches "a later run registers the component (for System Settings)" "$COMP"
 
-# An upgrade from 0.4 (the Windows-style set ran then: Meta+N is the notification list's): Meta+V
-# moves to the sheet once; the mark keeps a later run from taking it again.
-run_case step-upgrade step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1"
+# An upgrade from 0.4 (the Windows-style set ran then: Meta+N is the notification list's and Meta+S
+# the launcher's): Meta+V moves to the sheet once; the mark keeps a later run from taking it again.
+META_S=$((0x10000000 + 0x53))
+LAUNCHER="plasmashell|activate application launcher|$META_S"
+run_case step-upgrade step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1" "$LAUNCHER"
 expect_keys "an upgraded Windows-style setup gives Meta+V to the clipboard sheet" "$COMP" _launch "$META_V"
 expect_keys "  and Klipper's pop-up loses it" plasmashell show-on-mouse-pos ""
 if grep -qx 'ClipboardKey=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  once: the run is marked"; else fail "  the run is not marked"; fi
-MARK=1 run_case step-upgrade-done step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1"
+MARK=1 run_case step-upgrade-done step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1" "$LAUNCHER"
 expect_keys "after the mark Meta+V stays where the user put it" plasmashell show-on-mouse-pos "$META_V"
 # --keep-shortcuts before (Meta+N is quick settings', the notification component has no key):
 # Klipper keeps Meta+V.
 run_case step-upgrade-kept step 0 auto "$KLIPPER" "$NOTIFY|_launch||1"
 expect_keys "a setup made with --keep-shortcuts leaves Meta+V to Klipper's pop-up" plasmashell show-on-mouse-pos "$META_V"
 # A key the user gave the sheet stays.
-run_case step-upgrade-user step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1" "$COMP|_launch|$META_SHIFT_V|1"
+run_case step-upgrade-user step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1" "$LAUNCHER" "$COMP|_launch|$META_SHIFT_V|1"
 expect_keys "the sheet's own key from the user stays" "$COMP" _launch "$META_SHIFT_V"
 expect_keys "  and Klipper keeps Meta+V" plasmashell show-on-mouse-pos "$META_V"
+
+# A former --keep-shortcuts setup whose quick settings lost Meta+N: this run's Meta+N step gives
+# the notification list the free key, which must not count as the Windows-style set's mark.
+run_case step-keep-freed step-notify 0 auto "$KLIPPER"
+expect_keys "a --keep-shortcuts setup with Meta+N freed: the notification list takes Meta+N" "$NOTIFY" _launch "$META_N"
+expect_keys "  but Klipper's pop-up keeps Meta+V" plasmashell show-on-mouse-pos "$META_V"
+# ... and one where an earlier run did that already: Meta+N alone is not the mark.
+run_case step-keep-earlier step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1"
+expect_keys "a --keep-shortcuts setup whose Meta+N went to the notification list earlier keeps Klipper's Meta+V" \
+  plasmashell show-on-mouse-pos "$META_V"
 
 echo "shortcut-keys-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

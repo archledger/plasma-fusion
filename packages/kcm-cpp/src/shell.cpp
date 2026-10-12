@@ -407,15 +407,15 @@ for (var k = 0; k < cs.length && !found; ++k) {
 print(JSON.stringify({ found: found, key: now }));
 )JS"_s;
 
-// Shortcuts a layout reset gives when the widget had none before (owner decision 6: Meta+A
-// opens quick settings, Meta+Shift+W the pen menu), as tools/device/fusion-config.sh does.
+// Shortcuts a layout reset gives when the widget type had none before (owner decision 6: Meta+A
+// opens quick settings), as tools/device/fusion-config.sh does. The pen menu's Meta+Shift+W is
+// fusion-config.sh --pen's, so it comes back only when the old pen menu had it (keyByType).
 struct DefaultShortcut {
     QString plugin;
     QString key;
 };
 const QList<DefaultShortcut> s_defaultShortcuts = {
     {u"org.plasmafusion.quicksettings"_s, u"Meta+A"_s},
-    {u"org.plasmafusion.pen"_s, u"Meta+Shift+W"_s},
 };
 
 // A key sequence as kglobalaccel's D-Bus type (ai): four Qt key codes.
@@ -553,14 +553,20 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
 
 bool PlasmaFusionKcm::applyMagnify(bool on)
 {
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup power(fusion, u"Power"_s);
     if (m_powerCritical) {
-        // The power service keeps the dock still at 10 % battery and restores this value later.
-        KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
-        fusion->reparseConfiguration();
-        KConfigGroup(fusion, u"Power"_s).writeEntry("UserDockMagnify", on, KConfig::Notify);
+        // The power service keeps the dock still at 10 % battery and gives every dock this value
+        // when the battery recovers ([Power] PageDockMagnify); UserDockMagnify is what the page
+        // shows meanwhile.
+        power.writeEntry("UserDockMagnify", on, KConfig::Notify);
+        power.writeEntry("PageDockMagnify", on, KConfig::Notify);
         fusion->sync();
         return true;
     }
+    power.deleteEntry("PageDockMagnify", KConfig::Notify);
+    fusion->sync();
     bool ok = false;
     const QString result = evaluateShellScript(s_magnifyScript.arg(on ? u"true"_s : u"false"_s), &ok);
     if (!ok || result.toInt() < 1) {
@@ -634,6 +640,8 @@ bool PlasmaFusionKcm::applySystemMeters(bool on)
     if (ids.isEmpty()) {
         return m_errorText.isEmpty();
     }
+    // The power service gives the new meters the current tier (they run at full rate otherwise).
+    reapplyPowerTier();
     // Let the panel store its new widget order before moving the meters. A QML widget the shell
     // loads for the first time is listed only once it is built (about 0.5 s in the test VM), so
     // the placement asks again, from the event loop, for up to 3 s.
@@ -672,6 +680,21 @@ void PlasmaFusionKcm::placeSystemMeters(const QList<int> &ids, int attempt, int 
         }
         addError(i18nc("@info", "The system meters could not be placed before quick settings."));
     });
+}
+
+// The power service sets a tier's keys (the meters' and cards' powerTier, the glass held at
+// critical) on the widgets there are when the tier changes or plasmashell starts; a widget added
+// later would run at full rate until the next change. Its reload (SIGHUP) applies the tier again;
+// try-reload-or-restart does nothing when the service is not running.
+void PlasmaFusionKcm::reapplyPowerTier()
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    const QString tier = KConfigGroup(fusion, u"Power"_s).readEntry("Tier", QString());
+    if (tier.isEmpty() || tier.compare(u"full"_s, Qt::CaseInsensitive) == 0) {
+        return;
+    }
+    QProcess::startDetached(u"systemctl"_s, {u"--user"_s, u"try-reload-or-restart"_s, u"plasma-fusion-powerfx.service"_s});
 }
 
 // EFFECTS.md 3.3: Reduced makes both Fusion panels opaque; otherwise the top bar is adaptive
@@ -755,8 +778,10 @@ bool PlasmaFusionKcm::applyEveryScreen(bool on)
         addError(i18nc("@info", "The top bars could not be added: %1", result));
         return false;
     }
-    // New bars take the glass level and the top-bar opacity of the page.
-    return applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    // New bars take the glass level and the top-bar opacity of the page, and the power tier.
+    const bool panels = applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    reapplyPowerTier();
+    return panels;
 }
 
 bool PlasmaFusionKcm::applyDesktop(const State &before, const State &after)

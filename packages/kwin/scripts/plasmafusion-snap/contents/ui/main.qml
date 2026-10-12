@@ -648,6 +648,13 @@ Item {
             } else {
                 topBarsRetry.tries = 0;
             }
+            // New widgets (a bar's quick settings and tray) get the power tier's keys only when
+            // the power service applies its tier again: its reload, which does nothing when the
+            // service is not running.
+            const counts = line.match(/added (\d+), completed (\d+)/);
+            if (counts && (Number(counts[1]) > 0 || Number(counts[2]) > 0)) {
+                powerTierCall.call();
+            }
         }
         // plasmashell not on the bus yet (the session's start): ask again, as above.
         onFailed: {
@@ -657,6 +664,15 @@ Item {
                 topBarsRetry.restart();
             }
         }
+    }
+    DBusCall {
+        id: powerTierCall
+        service: "org.freedesktop.systemd1"
+        path: "/org/freedesktop/systemd1"
+        dbusInterface: "org.freedesktop.systemd1.Manager"
+        method: "ReloadOrTryRestartUnit"
+        arguments: ["plasma-fusion-powerfx.service", "replace"]
+        onFailed: console.info("plasmafusion-snap: the power service was not asked to apply its tier to the new bars")
     }
     Timer {
         id: topBarsRetry

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""A fake `busctl --user [--json=short]` for copytext-unit.sh: the kglobalaccel calls that
-fusion-config.sh and fusion-restore.sh make, against a JSON state file. Test tooling only.
+"""A fake `busctl --user [--json=short]` for copytext-unit.sh and restore-keys-unit.sh: the
+kglobalaccel calls that fusion-config.sh and fusion-restore.sh make, against a JSON state file.
+Test tooling only.
 
   copytext_fakebus.py STATE plain|json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel METHOD SIG ARGS...
+  copytext_fakebus.py STATE plain call org.kde.kglobalaccel /component/NAME org.kde.kglobalaccel.Component shortcutNames
 """
 import json
 import sys
@@ -13,6 +15,14 @@ path, mode, verb = sys.argv[1], sys.argv[2], sys.argv[3]
 args = sys.argv[4:]
 state = json.load(open(path))
 keys = state.setdefault("keys", {})
+if verb == "call" and args[:1] == ["org.kde.kglobalaccel"] and args[1].startswith("/component/") \
+        and args[2:4] == ["org.kde.kglobalaccel.Component", "shortcutNames"]:
+    # the component's action names (registered ones and those holding a key), as busctl prints "as"
+    comp = args[1][len("/component/"):]
+    names = sorted({k.split("|")[1] for k in keys if k.split("|")[0] == comp}
+                   - {u.split("|", 1)[1] for u in state.get("unregistered", []) if u.split("|")[0] == comp})
+    print("as", len(names), " ".join('"%s"' % n for n in names))
+    sys.exit(0)
 if verb != "call" or args[:3] != ["org.kde.kglobalaccel", "/kglobalaccel", "org.kde.KGlobalAccel"]:
     sys.exit("fakebus: unexpected call " + " ".join(sys.argv[3:]))
 method, rest = args[3], args[5:]

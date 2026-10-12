@@ -30,7 +30,9 @@
 #
 # A value is remembered (plasmafusionrc [Power]) when the service first overrides it, so it never
 # records a value it wrote itself. It is given back when no tier overrides it any more, and only if
-# it still holds the service's value: a change the user made meanwhile stays. Changed [Power] options
+# it still holds the service's value: a change the user made meanwhile stays. A Glass level or dock
+# magnification chosen in the settings module while critical ([Power] PageGlass, PageDockMagnify,
+# written by the module) is what the glass and magnify keys get back instead. Changed [Power] options
 # take effect at the next tier change, or at once with `systemctl --user reload` (SIGHUP).
 #
 # The running service follows the power profile (net.hadess.PowerProfiles: power-profiles-daemon or
@@ -68,8 +70,9 @@ SHELL_TRIES=15
 # The widget part, run inside plasmashell (org.kde.PlasmaShell.evaluateScript). The service puts
 # PFX in front: apply (write, or only report what it would write), tier and prev (0 full, 1 saver,
 # 2 critical: the tier to set and the one set before), light and prevLight (glass and magnification
-# overridden at critical, now and before) and map (the user's values the service holds,
-# "WIDGET-ID/key=value,..."). It prints "found=CONTAINMENTS;writes=N;dock=MAGNIFY;map=NEW-MAP".
+# overridden at critical, now and before), map (the user's values the service holds,
+# "WIDGET-ID/key=value,...") and glass and magnify (the settings page's choice made while critical,
+# or ""). It prints "found=CONTAINMENTS;writes=N;dock=MAGNIFY;map=NEW-MAP".
 read -r -d '' SHELL_JS <<'JS'
 var saved = {};
 PFX.map.split(",").forEach(function (e) {
@@ -113,6 +116,12 @@ function handle(w, group, key, def) {
     var had = Object.prototype.hasOwnProperty.call(saved, id);
     var was = had ? forced(key, PFX.prev, PFX.prevLight, saved[id]) : null;
     var user = was !== null ? saved[id] : cur;
+    // The settings page sets these keys on every such widget; chosen there while the service held
+    // them, its value is the user's now (the page only stores it at critical).
+    if (key === "glass" && PFX.glass)
+        user = PFX.glass;
+    else if (key === "magnify" && PFX.magnify)
+        user = PFX.magnify;
     var want = forced(key, PFX.tier, PFX.light, user);
     if (want !== null) {
         keep.push(id + "=" + user);
@@ -234,12 +243,19 @@ compute_tier() {
 
 power_text() { printf '%s, %s %%, warning level %s, profile %s' "$([ "$P_ON_BATTERY" = true ] && echo "on battery" || echo "on AC")" "${P_PERCENT%%.*}" "$P_WARNING" "$P_PROFILE"; }
 
-# read_flags: the user's options and glass level.
+# read_flags: the user's options and glass level, and what the settings page chose while critical
+# (PAGE_GLASS full, reduced or solid; PAGE_MAGNIFY true or false; empty when nothing).
 read_flags() {
-  F_LIGHTER=true F_SHORTER=false GLASS=
+  F_LIGHTER=true F_SHORTER=false GLASS='' PAGE_GLASS='' PAGE_MAGNIFY=''
   ini_get "$RCFILE" Power LighterOnCritical && is_false "$R" && F_LIGHTER=false
   ini_get "$RCFILE" Power ShorterAnimationsOnCritical && is_true "$R" && F_SHORTER=true
   ini_get "$RCFILE" Effects Glass && GLASS=$R
+  if ini_get "$RCFILE" Power PageGlass; then
+    case ${R,,} in full | reduced | solid) PAGE_GLASS=${R,,} ;; esac
+  fi
+  if ini_get "$RCFILE" Power PageDockMagnify; then
+    if is_true "$R"; then PAGE_MAGNIFY=true; elif is_false "$R"; then PAGE_MAGNIFY=false; fi
+  fi
   return 0
 }
 
@@ -266,8 +282,12 @@ apply_kwin() {
       blur_effect unloadEffect || log "KWin is not reachable; blur stays off from its next start"
       DONE+=("blur off")
     fi
-  elif [ "$want" = false ] && is_true "$forced"; then
+  elif [ "$want" = false ] && { is_true "$forced" || [ -n "$PAGE_GLASS" ]; }; then
     st_get UserBlurEnabled absent; user=$R
+    # A Glass level chosen on the settings page while critical: blur as the page sets it outside
+    # critical (on, the key removed, for Full and Reduced; off for Solid, below), whether the
+    # service turned it off or it was off already for an earlier Solid.
+    [ -n "$PAGE_GLASS" ] && user=absent
     cur=absent; ini_get "$CONFIG_HOME/kwinrc" Plugins blurEnabled && cur=$R
     # Glass = Solid in the settings module also means blur off: then it stays off.
     if [ "$GLASS" != Solid ] && is_false "$cur"; then
@@ -310,19 +330,30 @@ apply_kwin() {
   return 0
 }
 
-# js APPLY TIER LIGHT PREV PREV_LIGHT MAP: run SHELL_JS in plasmashell; JS_FOUND, JS_WRITES, JS_DOCK
-# and JS_MAP from its output. 1 (JS_ERROR set) when plasmashell did not answer as expected.
+# js APPLY TIER LIGHT PREV PREV_LIGHT MAP: run SHELL_JS in plasmashell (with PAGE_GLASS and
+# PAGE_MAGNIFY); JS_FOUND, JS_WRITES, JS_DOCK and JS_MAP from its output. 1 (JS_ERROR set) when
+# plasmashell did not answer as expected.
 js() {
   local out
   JS_ERROR=
   if ! out=$(sessioncall "$PLASMASHELL" /PlasmaShell org.kde.PlasmaShell evaluateScript s \
-    "var PFX = {apply: $1, tier: $2, light: $3, prev: $4, prevLight: $5, map: \"$6\"};
+    "var PFX = {apply: $1, tier: $2, light: $3, prev: $4, prevLight: $5, map: \"$6\", glass: \"$PAGE_GLASS\", magnify: \"$PAGE_MAGNIFY\"};
 $SHELL_JS" 2>&1); then
     JS_ERROR=${out//$'\n'/ }
     return 1
   fi
   [[ $out =~ $RE_JS ]] || { JS_ERROR="unexpected answer: ${out:0:200}"; return 1; }
   JS_FOUND=${BASH_REMATCH[1]} JS_WRITES=${BASH_REMATCH[2]} JS_DOCK=${BASH_REMATCH[3]} JS_MAP=${BASH_REMATCH[4]}
+}
+
+# The settings page's choices made while critical are given back with the rest: forgotten once the
+# widgets no longer hold the critical values (unless the page wrote another one meanwhile).
+forget_page_choices() {
+  local was_glass=$PAGE_GLASS was_magnify=$PAGE_MAGNIFY
+  read_flags
+  [ "$PAGE_GLASS" = "$was_glass" ] && st_del PageGlass
+  [ "$PAGE_MAGNIFY" = "$was_magnify" ] && st_del PageDockMagnify
+  return 0
 }
 
 # apply_shell TIER: the Plasma widgets. 0 done, 1 plasmashell is not there or has not loaded yet.
@@ -338,6 +369,7 @@ apply_shell() {
   js false "$t" "$light" "$p" "$pl" "$map" || return 1
   [ "$JS_FOUND" -gt 0 ] || { JS_ERROR="no layout loaded yet"; return 1; }
   if [ "$JS_WRITES" = 0 ] && [ "$JS_MAP" = "$map" ] && [ "$p" = "$t" ] && [ "$pl" = "$light" ]; then
+    [ "$light" = true ] || forget_page_choices
     return 0
   fi
   if [ -n "$JS_MAP" ]; then st_set UserWidgetValues "$JS_MAP"; else st_del UserWidgetValues; fi
@@ -356,6 +388,7 @@ apply_shell() {
     fi
     DONE+=("$writes widget setting(s)")
   fi
+  [ "$light" = true ] || forget_page_choices
   return 0
 }
 
@@ -391,7 +424,7 @@ status() {
     "$P_PROFILE" "$P_ON_BATTERY" "$P_PERCENT" "$P_WARNING" "$TIER"
   printf 'LighterOnCritical=%s\nShorterAnimationsOnCritical=%s\nGlass=%s\n' "$F_LIGHTER" "$F_SHORTER" "${GLASS:-unset}"
   for k in Tier ShellTier ShellLighter ForcedBlur UserBlurEnabled ForcedAnimationDurationFactor \
-    UserAnimationDurationFactor UserDockMagnify UserGlass UserWidgetValues; do
+    UserAnimationDurationFactor UserDockMagnify UserGlass UserWidgetValues PageGlass PageDockMagnify; do
     st_get "$k" -; printf 'state.%s=%s\n' "$k" "$R"
   done
 }

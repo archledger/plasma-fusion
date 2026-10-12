@@ -3,7 +3,8 @@
     the menu of this screen's windows, clock pill, status icons and quick settings (owner decisions
     8 and 2026-10-09: the status area on every screen). The pen menu only when no Plasma Fusion
     quick settings exists yet (it stays in the main bar); a tray elsewhere lends its settings
-    (hidden and unloaded items) to the new one. Sizes as the Global Theme's layout script.
+    (hidden and unloaded items) to the new one. Sizes, and the settings page's Glass level and
+    top-bar choice, as the Global Theme's layout script.
 
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
@@ -16,6 +17,30 @@ function textScale() {
     }
     var s = pt > 0 ? pt / 9.75 : gridUnit / 18;
     return Math.max(0.85, Math.min(1.6, s));
+}
+// The settings page's look (plasmafusionrc [Effects] Glass, [TopBar] SolidNextToWindows), as the
+// Global Theme's layout script applies it (its fusionLook explains it;
+// tools/build.d/60-lookandfeel.sh checks that the function is the same).
+function fusionLook() {
+    var glass = String(ConfigFile("plasmafusionrc", "Effects").readEntry("Glass")).toLowerCase();
+    if (glass !== "reduced" && glass !== "solid") {
+        glass = "full";
+    }
+    var solidNextToWindows = String(ConfigFile("plasmafusionrc", "TopBar").readEntry("SolidNextToWindows")) !== "false";
+    return {
+        glass: glass,
+        topOpacity: glass === "reduced" ? "opaque" : solidNextToWindows ? "adaptive" : "translucent",
+        dockOpacity: glass === "reduced" ? "opaque" : "translucent"
+    };
+}
+var look = fusionLook();
+function withGlass(widget) {
+    if (widget && look.glass !== "full") {
+        widget.currentConfigGroup = ["General"];
+        widget.writeConfig("glass", look.glass);
+        widget.currentConfigGroup = [];
+    }
+    return widget;
 }
 var known = knownWidgetTypes;
 function add(container, candidates) {
@@ -77,7 +102,7 @@ panel.floating = false;
 panel.lengthMode = "fill";
 panel.alignment = "center";
 panel.hiding = "none";
-panel.opacity = "adaptive";
+panel.opacity = look.topOpacity;
 add(panel, ["org.plasmafusion.appname", "org.kde.plasma.kickoff"]);
 var menu = add(panel, ["org.kde.plasma.appmenu"]);
 if (menu) {
@@ -140,7 +165,7 @@ if (tray && otherTray) {
 if (!hasQuickSettings) {
     add(panel, ["org.plasmafusion.pen"]);
 }
-add(panel, ["org.plasmafusion.quicksettings"]);
+withGlass(add(panel, ["org.plasmafusion.quicksettings"]));
 panel.currentConfigGroup = ["PlasmaFusion"];
 panel.writeConfig("statusItems", true);
 panel.currentConfigGroup = [];

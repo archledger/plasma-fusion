@@ -12,7 +12,8 @@
 # newest backup of any kind (undo only the last run). --list shows the backups.
 #
 # It gives the changed shortcuts their old keys back (the Windows-style set of owner decision 6, the
-# quick-settings, pen, Meta+N notification, Meta+V clipboard and Meta+Shift+T copy-text keys),
+# quick-settings, pen, Meta+N notification, Meta+V clipboard and Meta+Shift+T copy-text keys) and
+# releases the keys of widgets that are not in the restored layout,
 # renames the workspaces and removes the ones fusion-config.sh created, for that backup's run and every later one (each run
 # records only what it changed itself), undoes the pen defaults of those runs
 # (tools/pen/pen-defaults.sh --restore), stops the user services they started (plasma-fusion-powerfx
@@ -325,6 +326,32 @@ while read -r state path; do
       ;;
   esac
 done <"$BACKUP/manifest"
+
+# 3a. Widget shortcuts left on widgets the restored layout does not have. kglobalaccel keeps a
+#     widget's "activate widget N" action and its key after the widget is gone; the records above
+#     give back only the keys fusion-config.sh gave, not those of the settings module's "Reset
+#     Fusion layout" (Meta+A for the rebuilt quick settings) or of widgets a layout rebuild
+#     dropped. Such a key would stay taken by nothing. The restored layout is read now, before
+#     plasmashell starts with it.
+echo "Widget shortcuts"
+# A dry run restored nothing: it reads the layout the restore would put back.
+layout=$CONFIG/plasma-org.kde.plasma.desktop-appletsrc
+if [ "$DRY" = 1 ]; then
+  layout=$BACKUP/config/plasma-org.kde.plasma.desktop-appletsrc
+  grep -qx "absent plasma-org.kde.plasma.desktop-appletsrc" "$BACKUP/manifest" && layout=
+fi
+names=$(bus call org.kde.kglobalaccel /component/plasmashell org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
+  python3 -c '
+import shlex, sys
+words = shlex.split(sys.stdin.read())
+for w in words[2:] if words[:1] == ["as"] else []:
+    if w.startswith("activate widget ") and w[16:].isdigit():
+        print(w[16:])' 2>/dev/null || true)
+for wid in $names; do
+  [ -n "$layout" ] && [ -s "$layout" ] && grep -Eq "^\[Containments\]\[$wid\]|^\[Containments\]\[[0-9]+\]\[Applets\]\[$wid\]" "$layout" && continue
+  note "plasmashell / activate widget $wid: unregistered (no such widget in the restored layout)"
+  run bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss plasmashell "activate widget $wid" >/dev/null 2>&1 || true
+done
 
 # 3b. The login check. Backups made before it existed do not list its files, so it goes whenever
 #     the restored state does not have its stub; its records are moot once the files are back.

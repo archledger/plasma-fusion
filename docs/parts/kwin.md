@@ -499,7 +499,10 @@ screen).
   more than 15 s). The text comes from
   `ensureTopBars.js`, which the build generates from the Global Theme's file. (A layout template
   with `loadTemplate()` did not work: plasmashell loads only templates of the panel category,
-  which would also put it into "Add Panel".)
+  which would also put it into "Add Panel".) When the answer says a bar was added or completed, the
+  script asks systemd (`ReloadOrTryRestartUnit plasma-fusion-powerfx.service`) to have the power
+  service apply its tier to the new widgets; nothing happens when the service is not running
+  (docs/parts/powerfx.md).
 - Touchpad, three fingers: up opens Overview, down closes it or shows the desktop
   (`SwipeGestureHandler`, device type touchpad). KWin's own three-finger vertical swipe switches
   between rows of virtual desktops; the Fusion layout has one row. Hand check on the device.
