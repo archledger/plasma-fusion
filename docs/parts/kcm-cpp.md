@@ -65,11 +65,17 @@ control is `ChoiceRow`, an action row `ActionRow`). The keys are the plan's regi
 | | Reset Fusion layout… (confirmation) | `org.kde.PlasmaShell.loadLookAndFeelDefaultLayout` with the Plasma Fusion Global Theme in use (only the layout: no colours, decoration or fonts are applied). The widgets' global shortcuts are read first; the rebuilt layout's widgets get the key their type had (quick settings Meta+A under owner decision 6, Meta+N before it), and quick settings / the pen widget get Meta+A / Meta+Shift+W when their type had none, the way `fusion-config.sh`'s `ensure_widget_shortcut` does: a key still held by a widget of the old layout (an `activate widget N` entry whose widget is gone; old ids are always lower than the new ones) is released with `unregister`, a key another live action holds is left alone and reported, the key is set through the widget and read back. Meta+N for the notification list is a kglobalaccel component of its own (DEVICE-1), not tied to a widget id, so it needs nothing. Then the glass level and the top-bar choice are applied to the new panels, extra top bars are removed when Every screen is off, and a running power service is restarted when its tier is not full, so it applies itself to the new widgets. Disabled without a Plasma Fusion Global Theme or without the shell |
 
 With the power service at its critical tier (plasmafusionrc `[Power] Tier=critical` and
-`LighterOnCritical`), it holds the glass at Solid and dock magnification off and restores the user's
-values it remembered (`[Power] UserGlass`, `UserDockMagnify`) when the battery recovers. The page
-then shows those remembered values (magnification) and notes the state; a change of Glass writes
-`[Effects] Glass` and `UserGlass` and the panel opacity, but leaves blur and the widgets' glass key to
-the service; a change of magnification writes `UserDockMagnify` instead of the dock.
+`LighterOnCritical`), it holds the glass at Solid and dock magnification off and gives the user's
+values back when the battery recovers. The page then shows the magnification the service will give
+back (`[Power] UserDockMagnify`) and notes the state; a change of Glass writes `[Effects] Glass`,
+`[Power] PageGlass` and the panel opacity, but leaves blur and the widgets' glass key to the
+service; a change of magnification writes `UserDockMagnify` and `[Power] PageDockMagnify` instead of
+the dock. At recovery the service gives every glass widget and every dock the page's choice instead
+of its remembered value, and blur as the page sets it (on for Full and Reduced, also when it was off
+for an earlier Solid), then removes the two keys (docs/parts/powerfx.md). Outside critical an
+apply removes them, so an old choice never overrides a newer one. Before 0.5.0 the page wrote
+`UserGlass`, which nothing read: the widgets got their remembered level back and blur could stay
+off.
 
 ## Files
 
@@ -89,7 +95,7 @@ the service; a change of magnification writes `UserDockMagnify` instead of the d
 | `build-remote.sh`, `container-build.sh` | development: build in the container on the ThinkPad and fetch the installed tree (`root/`) for test sessions; the package is built by `packaging/build-rpm.sh --compiled` (system.md) |
 | `LICENSES/` | GPL-2.0-or-later (code), CC-BY-SA-4.0 (icon) |
 | `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh` |
-| `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and drives the module with random commands, saving included, in a scratch HOME with stand-ins for the programs it starts. The `compiled` and `sanitizers` workflows run both (docs/parts/ci.md, "Dynamic analysis") |
+| `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/run-power-tier.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and drives the module with random commands, saving included, in a scratch HOME with stand-ins for the programs it starts. `tests/run-power-tier.sh` (ctest test `kcmctl-power`, with node and python3-gobject) runs the module and the power service against a stand-in plasmashell and KWin (`packages/powerfx/tests/mock-session.py`): the page's choices while a tier is held. The `compiled` and `sanitizers` workflows run all three (docs/parts/ci.md, "Dynamic analysis") |
 
 ## Build
 

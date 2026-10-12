@@ -539,14 +539,20 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
 
 bool PlasmaFusionKcm::applyMagnify(bool on)
 {
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup power(fusion, u"Power"_s);
     if (m_powerCritical) {
-        // The power service keeps the dock still at 10 % battery and restores this value later.
-        KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
-        fusion->reparseConfiguration();
-        KConfigGroup(fusion, u"Power"_s).writeEntry("UserDockMagnify", on, KConfig::Notify);
+        // The power service keeps the dock still at 10 % battery and gives every dock this value
+        // when the battery recovers ([Power] PageDockMagnify); UserDockMagnify is what the page
+        // shows meanwhile.
+        power.writeEntry("UserDockMagnify", on, KConfig::Notify);
+        power.writeEntry("PageDockMagnify", on, KConfig::Notify);
         fusion->sync();
         return true;
     }
+    power.deleteEntry("PageDockMagnify", KConfig::Notify);
+    fusion->sync();
     bool ok = false;
     const QString result = evaluateShellScript(s_magnifyScript.arg(on ? u"true"_s : u"false"_s), &ok);
     if (!ok || result.toInt() < 1) {

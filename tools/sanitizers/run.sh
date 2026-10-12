@@ -5,7 +5,8 @@
 # Builds one compiled part with AddressSanitizer and UndefinedBehaviorSanitizer and runs its tests
 # (ctest) so that a memory error, a leak or undefined behaviour fails. Used by
 # .github/workflows/sanitizers.yml. Locally, in a Fedora 44 container with the part's build
-# requirements (dnf builddep packages/PART/*.spec) and libasan libubsan dbus-daemon binutils:
+# requirements (dnf builddep packages/PART/*.spec) and libasan libubsan dbus-daemon binutils, and
+# nodejs python3-gobject kf6-kconfig systemd for the settings module's power-tier test:
 #
 #   tools/sanitizers/run.sh packages/decoration-cpp BUILD_DIR
 #

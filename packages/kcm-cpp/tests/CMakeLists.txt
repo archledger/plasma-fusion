@@ -5,7 +5,8 @@
 # loads the built module the way System Settings does, and run-kcmctl.sh drives it without a window
 # in a scratch HOME: load, read every property, defaults, read them again. Nothing is saved.
 # fuzz-kcmctl.sh runs it with random configuration files and commands, saving included, still in a
-# scratch HOME and with stand-ins for the programs the module starts.
+# scratch HOME and with stand-ins for the programs the module starts. run-power-tier.sh runs it
+# with the power service against a stand-in plasmashell.
 
 add_executable(kcmctl kcmctl/kcmctl.cpp)
 target_link_libraries(kcmctl PRIVATE Qt6::Core Qt6::Gui Qt6::Qml KF6::CoreAddons KF6::KCMUtilsQuick)
@@ -23,4 +24,17 @@ if(DBUS_RUN_SESSION)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/fuzz-kcmctl.sh" $<TARGET_FILE:kcmctl> "${CMAKE_BINARY_DIR}/bin"
                      "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-fuzz")
     set_tests_properties(kcmctl-fuzz PROPERTIES TIMEOUT 1800)
+    # The module with the power service at a held tier (run-power-tier.sh): a stand-in plasmashell
+    # and KWin from packages/powerfx/tests, which need node and python3's GObject bindings.
+    find_program(NODE_EXECUTABLE node)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(NODE_EXECUTABLE AND Python3_Interpreter_FOUND)
+        execute_process(COMMAND ${Python3_EXECUTABLE} -c "import gi" RESULT_VARIABLE PF_NO_GI OUTPUT_QUIET ERROR_QUIET)
+        if(PF_NO_GI EQUAL 0)
+            add_test(NAME kcmctl-power
+                     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-power-tier.sh" $<TARGET_FILE:kcmctl> "${CMAKE_BINARY_DIR}/bin"
+                             "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-power")
+            set_tests_properties(kcmctl-power PROPERTIES TIMEOUT 180)
+        endif()
+    endif()
 endif()
