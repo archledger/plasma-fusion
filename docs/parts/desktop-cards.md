@@ -392,7 +392,9 @@ Update (round 2 and 2026-10-09): the three, printers and the input-method item a
 and disabled as status notifiers (`TRAY_ITEMS_HIDDEN` in the layout), so they no longer bring up the
 arrow, and Disks & Devices is replaced by the quick-settings page and not loaded where quick
 settings is in the bar (docs/parts/shell-quicksettings.md). The arrow now appears only for passive
-application status icons, such as the XWayland video bridge.
+application status icons, such as the XWayland video bridge. The cost named above holds for the
+others: an open vault, queued print jobs, presentation mode and the input-method switch have no item
+in the bar while active, and quick settings has no page for them yet (only Disks & Devices has one).
 
 In the tray's own settings the ten show as "Show only in popup" (the page reads `hiddenItems`
 first); choosing another visibility there removes the id from all lists, which brings the item

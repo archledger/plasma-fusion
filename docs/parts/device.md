@@ -85,8 +85,10 @@ Settings under the rule: `[TabBox]` and `[TabBoxAlternative]` switcher keys, `[T
 (new, 120), blur strength/noise/saturation, `BorderSizeAuto`, `[Plugins]` script keys (snap,
 attach, tablet, sheet), `[Outline] QmlPath`, `[Wayland] InputMethod`, tooltip delay, OSD,
 notification position and timeout, `krunnerrc FreeFloating`, lock-screen wallpaper, Konsole profile,
-Kate/KWrite colour theme, the three `Xft*` keys. Options the user passes each time (`--light`,
-`--auto`, `--hot-corner`) and the Global Theme defaults stay plain writes.
+Kate/KWrite colour theme, the three `Xft*` keys, and the hot corner when `--hot-corner` is not
+given (`[Effect-overview] BorderActivate=9`: a corner the user turned on since is kept; with
+`--hot-corner` it is written, 7). Options the user passes each time (`--light`, `--auto`) and the
+Global Theme defaults stay plain writes.
 
 ### Layout migration (an existing Plasma Fusion layout)
 

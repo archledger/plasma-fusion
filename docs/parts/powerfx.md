@@ -144,8 +144,10 @@ After full only `Tier`, `ShellTier`, `ShellLighter` remain.
 | dock, systemcard, quicksettings, launcher | `glass` | **String**, hidden, default `full` | `full` / `reduced` / `solid` |
 
 `glass` must be a String entry: `Applet.writeConfig` calls `setProperty` on the schema item, and an
-Enum item would turn `"solid"` into 0. Until a widget declares a key, the service's write is a plain
-config entry that nothing reads.
+Enum item would turn `"solid"` into 0. Quick settings and the launcher declare it and hand it to the
+backdrop of the Notification Centre and of the tablet launcher sheet (`packages/common/tests/
+backdrop_glass_test.py`, in their build steps); the dock and the system card do not read it yet, so
+there the service's write is a plain config entry.
 
 ## Rollback
 
@@ -223,8 +225,9 @@ leaves mode-0 entries). The scenarios send the service's journal lines to `out/j
 - A layout reset inside a running plasmashell during saver or critical leaves the new widgets at
   their defaults until the next tier change, plasmashell start or `systemctl --user reload`.
 - The system card reads `powerTier` since CARD-1 (af0bb47) and the dock for its start-up pulse; the
-  dock has no `glass` (DOCK-2), quick settings and the launcher no `glass` (QS-1, LAUNCH-1): until
-  then only the blur, magnification and pulse parts of the tiers have an effect.
+  dock has no `glass` (DOCK-2): there only the blur, magnification and pulse parts of the tiers
+  have an effect. Quick settings and the launcher read `glass` for their full-screen backdrops
+  (0.4.1). The snap fill picker (KWin) has no widget key and keeps the blurred wallpaper copy.
 - A Glass change in the settings module while critical loads blur again (the service then leaves
   blur alone, since the user changed it); see "Needs".
 - The service reacts to option changes at the next tier change or a reload, not by itself.

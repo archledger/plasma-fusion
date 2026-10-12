@@ -53,6 +53,9 @@ jobs:
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
 
+      - name: Setup config keys that keep the user's choice
+        run: tools/device/tests/config-keys-unit.sh build/config-keys
+
       - name: VM crash collector unit tests
         run: |
           python3 tools/tests/release-vm/test-crash-count.py
@@ -76,6 +79,13 @@ jobs:
           QT_QPA_PLATFORM=offscreen dbus-run-session \
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/keepawake_test.py
+
+      - name: Command runner tests (Plasma's executable engine)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/exec_test.py
 
       - name: Hotspot settings tests (plasma-nm settings in a sandbox)
         run: |

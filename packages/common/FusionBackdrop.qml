@@ -29,6 +29,9 @@
 
       FusionBackdrop { anchors.fill: parent; followWallpaper: true; screenNumber: Plasmoid.containment.screen; dark: palette.dark; glass: Plasmoid.configuration.glass }
 
+    The widget declares glass as a String entry in its config/main.xml (the settings module and
+    the power service write it); packages/common/tests/backdrop_glass_test.py checks both.
+
     The source is packages/common/FusionBackdrop.qml; tools/build-lib/shared-qml.sh copies it
     into every package that uses it (do not edit the copies).
 */

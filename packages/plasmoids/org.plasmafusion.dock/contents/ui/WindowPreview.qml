@@ -14,6 +14,8 @@ import org.kde.pipewire as PipeWire
 import org.kde.plasma.core as PlasmaCore
 import org.kde.taskmanager as TaskManager
 
+import "../code/previews.js" as Previews
+
 // Window previews above a hovered running app (the stock task manager's tooltips): one card per
 // window with the app icon, the window title, a close button and a live thumbnail from KWin's
 // screencast (ScreencastingRequest + PipeWireSourceItem, as the stock tooltips use), or the app
@@ -115,6 +117,13 @@ PlasmaCore.Dialog {
         }
         return out;
     }
+    // The cards' rows, kept in step with shownWindows() (contents/code/previews.js): a window that
+    // stays keeps its card and screencast stream when its title or the active window changes.
+    readonly property ListModel cardModel: ListModel {}
+    readonly property var wantedCards: shownWindows(frame.shown)
+    onWantedCardsChanged: Previews.syncCards(cardModel, wantedCards)
+    Component.onCompleted: Previews.syncCards(cardModel, wantedCards)
+
     function indexFor(child: int): var {
         return child < 0 ? taskModel.makeModelIndex(row) : taskModel.makeModelIndex(row, child);
     }
@@ -177,11 +186,15 @@ PlasmaCore.Dialog {
 
             Repeater {
                 id: cardRepeater
-                model: preview.shownWindows(frame.shown)
+                model: preview.cardModel
 
                 delegate: T.AbstractButton {
                     id: card
-                    required property var modelData
+                    required property int child
+                    required property string title
+                    required property string winId
+                    required property bool active
+                    required property bool minimized
                     readonly property bool live: thumbnail.ready
                     readonly property Item closeTarget: closeButton
 
@@ -189,18 +202,18 @@ PlasmaCore.Dialog {
                     implicitHeight: column.implicitHeight + 2 * m.px(6)
                     hoverEnabled: true
                     focusPolicy: Qt.NoFocus
-                    text: modelData.title
+                    text: card.title
                     Accessible.role: Accessible.Button
-                    Accessible.name: i18nc("@action:button %1 window title", "Switch to %1", modelData.title)
+                    Accessible.name: i18nc("@action:button %1 window title", "Switch to %1", card.title)
                     onClicked: {
-                        preview.taskModel.requestActivate(preview.indexFor(modelData.child));
+                        preview.taskModel.requestActivate(preview.indexFor(card.child));
                         preview.done();
                     }
 
                     background: Rectangle {
                         radius: 10
                         color: card.down ? Qt.rgba(1, 1, 1, 0.14) : card.hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
-                        border.width: card.modelData.active ? 1 : 0
+                        border.width: card.active ? 1 : 0
                         border.color: preview.pal.activeRing
                     }
 
@@ -218,7 +231,7 @@ PlasmaCore.Dialog {
                             }
                             Text {
                                 Layout.fillWidth: true
-                                text: card.modelData.title
+                                text: card.title
                                 elide: Text.ElideRight
                                 color: preview.pal.tipText
                                 font.family: m.family
@@ -233,8 +246,8 @@ PlasmaCore.Dialog {
                                 hoverEnabled: true
                                 focusPolicy: Qt.NoFocus
                                 text: i18nc("@action:button close a window", "Close")
-                                Accessible.name: i18nc("@action:button %1 window title", "Close %1", card.modelData.title)
-                                onClicked: preview.taskModel.requestClose(preview.indexFor(card.modelData.child))
+                                Accessible.name: i18nc("@action:button %1 window title", "Close %1", card.title)
+                                onClicked: preview.taskModel.requestClose(preview.indexFor(card.child))
                                 background: Rectangle {
                                     radius: width / 2
                                     color: closeButton.hovered ? Qt.rgba(1, 1, 1, 0.16) : "transparent"
@@ -263,7 +276,7 @@ PlasmaCore.Dialog {
                             }
                             TaskManager.ScreencastingRequest {
                                 id: cast
-                                uuid: card.modelData.minimized ? "" : card.modelData.winId
+                                uuid: card.minimized ? "" : card.winId
                             }
                             // Stays visible: the item streams only while visible (and draws
                             // nothing before the first frame, so the icon below shows).

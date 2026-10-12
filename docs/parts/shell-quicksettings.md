@@ -45,7 +45,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   recording streams with independent volume, mute and device routing, using the native plasma-pa
   models; it updates when streams start/stop. Virtual microphones such as noise-suppression inputs
   are supported. The existing output controls remain independent;
-* six 60 px tiles, radius 16, accent fill when on:
+* 60 px tiles, radius 16, accent fill when on: seven always (the six below and Keep awake) and four
+  when they apply (Disks & Devices, Wi‑Fi hotspot, Charge limit, Tablet mode):
   Wi-Fi (SSID; body toggles Wi-Fi, chevron opens the network list),
   Bluetooth (`N connected` / device name; body toggles, chevron opens the device list),
   Night light (`From sunset`, `Until sunrise`, `From 19:00`, `Paused`, `Off`; toggles KWin's
@@ -212,6 +213,11 @@ tray.writeConfig("hiddenItems", [
 // optional: a key for the pop-up, e.g. qs.globalShortcut = "Meta+Alt+S";
 ```
 
+This is the minimal placement. The Global Theme's layout script does more: it writes both
+`hiddenItems` and `disabledStatusNotifiers` for fifteen ids (`TRAY_ITEMS_REPLACED` and
+`TRAY_ITEMS_HIDDEN` in `org.kde.plasma.desktop-layout.js`, also used by `ensure-topbars.js`) and
+does not load Disks & Devices where quick settings is in the bar (desktop-cards.md, "Update").
+
 System tray keys (containment config of the tray, group `[General]`):
 
 * `hiddenItems` = the ten ids above. The first six are what the pill, the tiles and the bell
@@ -244,6 +250,7 @@ Widget options (`[General]` of the widget, `contents/config/main.xml`, also in i
 | `startPage` | main | page shown on open: `main`, `wifi`, `bluetooth`, `audio` (settings page: "Page shown when opened") |
 | `keyboardPolicy` | tablet | on-screen keyboard (kwinrc `[Wayland] InputMethod`): `tablet` (tablet posture only; the process stops on the laptop), `touch` (always, KWin shows it on a touch), `never` (settings page: "On-screen keyboard") |
 | `openRequest` | "" | written by other shell parts: `MODE:NONCE[:OUTPUT]` with `sheet`, `notifications`, `toggle`, `close`; without OUTPUT only the widget on KWin's active screen acts (`MODE NONCE` accepted too) |
+| `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the Notification Centre (no wallpaper picture) |
 | `debugAction` | "" | testing only: `dump:TAG` logs the sheet geometry and scrolling, every visible target with its centre and size, and the tablet policy state |
 | `lightLookAndFeel` / `darkLookAndFeel` | `org.plasmafusion.light.desktop` / `org.plasmafusion.dark.desktop` | Dark style fallback targets |
 
@@ -447,8 +454,8 @@ An independent review of the part, integrated with every other part that exists 
   in 6.7.5) and would split keyboard focus; the review agrees with keeping one pop-up.
 * In the integrated session the top bar is 48 px, not 34 (known Plasma style issue, see
   `docs/parts/shell-topbar.md`); this widget follows it (pop-up 10 px below the bar either way).
-* The stock tray next to this widget still shows the media controller and the expander arrow,
-  because the Global Theme layout hides only six items (see "Needs from other parts").
+* The stock tray next to this widget shows the expander arrow only for passive application status
+  icons (desktop-cards.md, "Update"); the media controller and the stock items are hidden.
 
 ### Needs from other parts (added by the review)
 
@@ -535,8 +542,10 @@ the lead directly.
   tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc
   `[Tablet] RotationLocked`); the lock is read back from `kscreen-doctor -j` when the sheet opens in
   tablet posture (outputs with the auto-rotation capability report it).
-- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow" (06:00)
-  and "Until turned off"; the time is kept in the notification settings, a timer releases it.
+- **Do Not Disturb for a while** (G18): the tile's chevron offers "For 1 hour", "Until tomorrow"
+  (the next 06:00: chosen after midnight, the coming morning; `contents/code/dnd.js`,
+  `tests/dnd.test.js`) and "Until turned off"; the time is kept in the notification settings, a
+  timer releases it.
 - **Built on demand** (S2): the sheet's content is a `Loader` built 4 s after start, or at once when the
   pointer reaches the bar or anything opens it; the Bluetooth device model exists only while the
   Bluetooth page is shown (the tile keeps using BluezQt's manager).

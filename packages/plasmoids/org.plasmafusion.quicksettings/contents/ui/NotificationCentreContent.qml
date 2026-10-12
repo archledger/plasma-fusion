@@ -30,6 +30,7 @@ FocusScope {
     // Height of the top bar (the sheet starts under it), the wallpaper's screen, the open state.
     property real topBar: 44
     property int screenNumber: 0
+    property string glass: "full"
     property real progress: 0
     property bool shown: false
 
@@ -251,6 +252,7 @@ FocusScope {
         followWallpaper: true
         screenNumber: centre.screenNumber
         dark: centre.pal.dark
+        glass: centre.glass
         opacity: centre.progress * (1 - Math.min(1, centre.dragY / 400))
     }
     TapHandler {

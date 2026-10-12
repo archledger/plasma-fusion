@@ -26,6 +26,7 @@ KCMUtils.SimpleKCM {
     property string cfg_favoritesClientId
     property string cfg_openRequest
     property var cfg_hiddenApplications
+    property string cfg_glass
 
     // The dialog also passes each key's default value.
     property var cfg_favoritesDefault
@@ -38,6 +39,7 @@ KCMUtils.SimpleKCM {
     property bool cfg_showRecommendedDefault
     property string cfg_openRequestDefault
     property var cfg_hiddenApplicationsDefault
+    property string cfg_glassDefault
 
     function saveConfig() {
         const config = Plasmoid.configuration;
@@ -46,6 +48,8 @@ KCMUtils.SimpleKCM {
         cfg_favoritesClientId = config.favoritesClientId;
         cfg_openRequest = config.openRequest;
         cfg_hiddenApplications = config.hiddenApplications;
+        // written by the settings module and the power service
+        cfg_glass = config.glass;
     }
 
     Kirigami.FormLayout {

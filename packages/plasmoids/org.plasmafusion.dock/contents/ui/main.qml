@@ -909,7 +909,7 @@ PlasmoidItem {
         const shown = preview.item as WindowPreview;
         if (shown && shown.visible) {
             shown.cards().forEach((card, i) => {
-                add("preview" + i + (card.modelData.active ? "*" : "") + (card.live ? "~" : ""), card, card.width, card.height);
+                add("preview" + i + (card.active ? "*" : "") + (card.live ? "~" : ""), card, card.width, card.height);
                 add("previewclose" + i, card.closeTarget, card.closeTarget.width, card.closeTarget.height);
             });
         }
@@ -996,7 +996,8 @@ PlasmoidItem {
 
     // Pins asked for by other shell parts: the launcher's "Keep in Dock" (it finds this applet in
     // its panel, as for the split request), by desktop file id; and the stock task manager's
-    // hasLauncher/addLauncher, the names Kicker calls on task managers it knows.
+    // hasLauncher/addLauncher names. Kicker (Kickoff's "Pin to Task Manager") calls those only
+    // on the stock task managers it knows by plugin id (libkickerplugin 6.7.5), not on this dock.
     // `id`: an app's desktop id, with or without the applications: scheme (Pins.appLauncherUrl).
     function isAppPinned(id: string): bool {
         return id !== "" && tasksModel.launcherPosition(Pins.appLauncherUrl(id)) !== -1;

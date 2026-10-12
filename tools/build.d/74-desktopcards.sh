@@ -41,6 +41,8 @@ PY
   python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$src/contents/config/main.xml"
 
   bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" "desktopcards: $id"
+  # One-page settings: every key and default declared, the ones not edited refreshed.
+  case $id in *.calendarcard | *.systemcard) python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$src" ;; esac
 
   rm -rf "$dest"
   mkdir -p "$dest"

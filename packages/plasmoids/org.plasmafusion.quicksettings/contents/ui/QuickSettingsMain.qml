@@ -13,7 +13,7 @@ import "components"
 import "components/Icons.js" as Icons
 
 // Main page of the pop-up (Quick Settings board): battery chip and header
-// buttons, volume and brightness sliders, six tiles and the media card. In tablet posture
+// buttons, volume and brightness sliders, the tiles and the media card. In tablet posture
 // (TABLET 4.6) the header is 44 px, a tablet row (rotation lock, keyboard, full-screen apps, pen)
 // follows it, the sliders are 44 px bars and a Tablet mode tile joins the tiles; phone and
 // clipboard get rows here when the top bar has no room for them.

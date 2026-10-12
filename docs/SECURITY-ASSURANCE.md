@@ -57,8 +57,9 @@ the session or run before the desktop starts; those are what this case is about.
 - **A password for the charge limit.** Whoever sits at the active local session can change the
   battery charge limit without a password, by design (section 3.1). Remote and inactive sessions
   cannot.
-- **Signed releases or packages.** There are no releases yet, and the RPMs built by CI are not
-  signed ([`GOVERNANCE.md`](../GOVERNANCE.md), "Releases"). Build from a source you trust.
+- **Signed packages from CI.** Releases are signed (the tag and `SHA256SUMS`, checked by the
+  installer; [`GOVERNANCE.md`](../GOVERNANCE.md), "Releases"), but the RPMs the CI workflows build
+  are not. Install a release or build from a source you trust.
 - **Review by more than one person.** One maintainer writes and reviews every change
   ([`GOVERNANCE.md`](../GOVERNANCE.md)). There has been no outside security audit.
 - **Support outside the tested platform.** Plasma Fusion is experimental and tested on Fedora 44

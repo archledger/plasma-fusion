@@ -172,7 +172,8 @@ LAUNCHER_ACTION="activate application launcher"
 OSK_DESKTOP=/usr/share/applications/org.kde.plasma.keyboard.desktop
 # Window switcher: KWin hands every window to org.plasmafusion.switcher (DesktopMode 0), which
 # opens on "This workspace" and filters the list itself; its "All workspaces" tab needs the
-# full list. Alt+Tab and Meta+Tab keep KWin's defaults (both "Walk Through Windows").
+# full list. Alt+Tab keeps KWin's default ("Walk Through Windows"); the Windows-style shortcut set
+# (section 1, unless --keep-shortcuts) gives Meta+Tab to Overview.
 TABBOX_DESKTOP_MODE=0
 TABBOX_ALT_DESKTOP_MODE=0
 OUTLINE_QML=kwin/scripts/plasmafusion-snap/contents/outline/outline.qml
@@ -1790,8 +1791,14 @@ managed_key kwinrc TabBoxAlternative DesktopMode "$TABBOX_ALT_DESKTOP_MODE" "$TA
 managed_key kwinrc TabBoxAlternative HighlightWindows false false
 package_dir kwin/tabbox "$SWITCHER" >/dev/null || package_dir kwin-wayland/tabbox "$SWITCHER" >/dev/null ||
   note "note: window switcher $SWITCHER is not installed yet; KWin uses its default until it is"
-# Hot corner: 9 = no screen edge, 7 = top-left corner.
-set_key kwinrc Effect-overview BorderActivate "$([ "$HOT_CORNER" = 1 ] && echo 7 || echo 9)"
+# Hot corner: 9 = no screen edge, 7 = top-left corner. --hot-corner turns it on. Without it the
+# corner is off on a first run, and a corner the user turned on since (the settings module's Hot
+# corner, System Settings > Screen Edges) is kept on later runs (the upgrade rule).
+if [ "$HOT_CORNER" = 1 ]; then
+  set_key kwinrc Effect-overview BorderActivate 7
+else
+  managed_key kwinrc Effect-overview BorderActivate 9 9
+fi
 managed_key kwinrc Effect-blur BlurStrength "$BLUR_STRENGTH" "$BLUR_STRENGTH"
 managed_key kwinrc Effect-blur NoiseStrength "$BLUR_NOISE" "$BLUR_NOISE"
 managed_key kwinrc Effect-blur Saturation "$BLUR_SATURATION" "$BLUR_SATURATION"

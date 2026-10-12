@@ -21,7 +21,8 @@ boards are pictured in [`design/`](design/README.md), with their canvas sources 
 
 ## Status
 
-Experimental; the first release, 0.2.0, is being prepared. Developed on Fedora 44 KDE (Plasma
+Experimental; released since 0.2.0 (2026-10-03), the latest is on the [releases
+page](https://github.com/archledger/plasma-fusion/releases). Developed on Fedora 44 KDE (Plasma
 6.7.5, KDE Frameworks 6.30, Qt 6.11) on a ThinkPad X13 Yoga Gen 4 convertible and an ASUS Zenbook
 laptop; packaged for Fedora, Arch, Ubuntu 26.10, KDE neon, Debian testing and NixOS, and tested on
 each in a virtual machine before a release. It needs Plasma 6.7. Everything it changes for your

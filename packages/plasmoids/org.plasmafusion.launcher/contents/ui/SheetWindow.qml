@@ -20,6 +20,8 @@ PlasmaCore.Dialog {
     property rect area: Qt.rect(0, 0, 1, 1)
     property real topBar: 44
     property int screenNumber: 0
+    // The widget's glass key (full, reduced, solid) for the sheet's backdrop.
+    property string glass: "full"
     property bool sheetWanted: false
     readonly property TabletSheet sheet: sheetLoader.item as TabletSheet
 
@@ -78,6 +80,7 @@ PlasmaCore.Dialog {
                 motion: motionTokens
                 topBar: window.topBar
                 screenNumber: window.screenNumber
+                glass: window.glass
                 shown: window.visible
                 onCloseRequested: window.closeRequested()
             }

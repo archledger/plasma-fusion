@@ -53,6 +53,7 @@ user/session footer. Plasma 6 applet (QML only), GPL-2.0-or-later.
 | `showRecommended` | true | recent files section |
 | `openRequest` | "" | written by other parts through desktop scripting: `<mode>:<nonce>[:<argument>]`, modes `home`, `search` (argument = query), `apps`, `recent`, `category` (argument = key such as `graphics`) |
 | `hiddenApplications` | [] | Kicker's "Hide Application" list |
+| `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the tablet sheet (no wallpaper picture) |
 
 ### API for other parts
 

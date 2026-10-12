@@ -36,6 +36,6 @@ person: expect an answer within a week. Fixes are made on `main`; there is no bo
 
 ## Supported versions
 
-Only the current `main` branch and the packages built from it. There are no releases yet; this
-section will say which releases get fixes once there are some. Problems in KDE Plasma itself
-belong to KDE: https://kde.org/info/security/
+The latest release and the current `main` branch. Fixes go into `main` and the next release; an
+older release gets no fixes of its own (every channel updates to the latest). Problems in KDE Plasma
+itself belong to KDE: https://kde.org/info/security/

@@ -387,6 +387,19 @@ consent() {
   case $answer in y | Y | yes | Yes) : ;; *) say "Declined; nothing was changed."; exit 4 ;; esac
 }
 
+# The system-wide looks applied by the package's root tools, which an uninstall undoes before the
+# packages (and the tools, the Global Theme and the wallpaper the greeter would point at) are gone:
+# the login screen (greeter-apply.sh writes a marked block into plasmalogin.conf) and the boot
+# splash (plymouth-install.sh copies its theme into Plymouth's themes).
+SYS_TOOLS=/usr/share/plasma-fusion/tools/system
+greeter_styled() {
+  [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] &&
+    $SUDO grep -qs '^# Plasma Fusion: login screen wallpaper' "$TEST_ROOT/etc/plasmalogin.conf"
+}
+splash_installed() {
+  [ -x "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" ] && [ -d "$TEST_ROOT/usr/share/plymouth/themes/plasma-fusion" ]
+}
+
 status() {
   echo "system: $OS_PRETTY_NAME (channel: $LANE)"
   echo "Plasma: ${PLASMA:-not installed}${KWIN:+, KWin $KWIN}"
@@ -471,6 +484,10 @@ main() {
   if [ "$MODE" = uninstall ]; then
     say "Plan:"
     [ "$PACKAGE_ONLY" = 1 ] || echo "  plasma-fusion restore   (your desktop as it was before Plasma Fusion)" >&2
+    if [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && [ -e "$TEST_ROOT/etc/plasmalogin.conf" ]; then
+      echo "  sudo $SYS_TOOLS/greeter-restore.sh   (the login screen, if Plasma Fusion styled it)" >&2
+    fi
+    splash_installed && echo "  sudo $SYS_TOOLS/plymouth-uninstall.sh   (the boot splash)" >&2
     case $LANE in
       copr) echo "  sudo dnf -y remove $PKGS" >&2 ;;
       aur) echo "  sudo pacman -Rns $PKGS plasma-fusion-debug (the ones installed)" >&2 ;;
@@ -482,6 +499,14 @@ main() {
       plasma-fusion restore </dev/null || die "restoring your desktop stopped; the packages stay installed."
     fi
     $SUDO -v || die "sudo failed."
+    if greeter_styled; then
+      $SUDO "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" </dev/null ||
+        die "restoring the login screen stopped; the packages stay installed."
+    fi
+    if splash_installed; then
+      $SUDO "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" </dev/null ||
+        die "removing the boot splash stopped; the packages stay installed."
+    fi
     installed_pkgs=
     # An AUR helper also installs the debug package makepkg builds by default; pacman does not
     # remove it with the others (dnf and apt remove their debug packages as dependents).
@@ -531,7 +556,13 @@ main() {
   plasma-fusion "$SETUP_CMD" $SETUP_FLAGS </dev/null ||
     die "the setup stopped; your previous desktop is in the backup: plasma-fusion restore --latest"
   say "Done. Log out and back in once."
-  say "Optional: the login screen (sudo /usr/share/plasma-fusion/tools/system/greeter-apply.sh) and, on Fedora, the boot splash (sudo /usr/share/plasma-fusion/tools/system/plymouth-install.sh)."
+  # greeter-apply.sh styles plasma-login-manager only; plymouth-install.sh needs dracut (Fedora).
+  if [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || [ -d "$TEST_ROOT/usr/lib/plasmalogin" ]; then
+    say "Optional: the login screen (sudo $SYS_TOOLS/greeter-apply.sh)."
+  fi
+  if [ "$LANE" = copr ]; then
+    say "Optional: the boot splash (sudo $SYS_TOOLS/plymouth-install.sh)."
+  fi
 }
 
 # Runs only once the whole script has been read: a truncated download does nothing.

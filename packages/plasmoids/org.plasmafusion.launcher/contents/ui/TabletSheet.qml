@@ -33,6 +33,7 @@ FocusScope {
     // Height of the top bar (the sheet starts under it) and the wallpaper's screen.
     property real topBar: 44
     property int screenNumber: 0
+    property string glass: "full"
     // Shown (the icon delegates exist only then).
     property bool shown: false
     property real progress: 0
@@ -101,6 +102,7 @@ FocusScope {
         followWallpaper: true
         screenNumber: sheet.screenNumber
         dark: sheet.pal.dark
+        glass: sheet.glass
         opacity: sheet.progress * (1 - Math.min(1, sheet.dragDown / 400))
     }
     TapHandler {

@@ -20,6 +20,10 @@ assert "org.kde.plasma.launchermenu" in meta.get("X-Plasma-Provides", []), "miss
 PY
 
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" launcher
+# The tablet sheet's backdrop follows the widget's glass key (Glass = Solid, high contrast).
+python3 -B "$ROOT/packages/common/tests/backdrop_glass_test.py" "$src"
+# The settings page declares every key and default and refreshes the ones it does not edit.
+python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$src"
 
 if command -v node >/dev/null 2>&1; then
   node "$src/tests/date-timer.test.js" >/dev/null

@@ -7,7 +7,8 @@ stamped copy as `install.sh`:
 ```sh
 curl -fsSL https://github.com/archledger/plasma-fusion/releases/latest/download/install.sh | sh
 curl -fsSL .../install.sh | sh -s -- update        # new packages, then plasma-fusion update
-curl -fsSL .../install.sh | sh -s -- uninstall     # plasma-fusion restore, then remove the packages
+curl -fsSL .../install.sh | sh -s -- uninstall     # plasma-fusion restore, the login screen and
+                                                   # boot splash looks, then remove the packages
 curl -fsSL .../install.sh | sh -s -- status
 curl -fsSL .../install.sh | sh -s -- --dry-run     # every check and the plan; nothing changes
 ```
@@ -93,8 +94,12 @@ Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing change
 - No downgrade: a release `.deb` older than the installed package is refused.
 - The whole script is one function called on its last line, so a truncated download does nothing.
 - It installs no Plasma, writes no package holds and touches no other user's home. Optional next
-  steps it prints but never runs: the login screen (`greeter-apply.sh`) and on Fedora the boot
-  splash (`plymouth-install.sh`).
+  steps it prints but never runs: the login screen (`greeter-apply.sh`, only where
+  plasma-login-manager is installed) and on Fedora the boot splash (`plymouth-install.sh`).
+- Uninstall undoes those two first, when they were applied, because the greeter would otherwise
+  point at the removed Global Theme and wallpaper: `greeter-restore.sh` when `/etc/plasmalogin.conf`
+  holds greeter-apply.sh's marked block, `plymouth-uninstall.sh` when Plymouth's themes hold
+  `plasma-fusion`. If either stops, the packages stay installed.
 - The setup step runs as the user in the session (`plasma-fusion setup`, which backs up first);
   when it stops, the installer names `plasma-fusion restore --latest` and leaves the packages.
 
@@ -109,9 +114,10 @@ PKGBUILD, `_RELEASE_BASE` a release URL), `_ROOT` (a directory with `etc/os-rele
 `tools/tests/installer/run.sh` runs the installer under dash and bash against fake systems (one
 os-release file per system), fake package managers that only log their calls, and a fake release
 signed with a throwaway key: every channel and refusal above, the session checks, update and
-uninstall, the signature and checksum failures, no downgrade, truncated downloads (seven cut
-points) and a stamped copy that must ignore test endpoints in the environment (154 checks,
-2026-10-02). The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
+uninstall (with the login screen and boot splash undone first), the signature and checksum failures,
+no downgrade, truncated downloads (seven cut points) and a stamped copy that must ignore test
+endpoints in the environment (154 checks, 2026-10-02; 8 more for the uninstall and the optional
+steps, 2026-10-11). The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon
 and Debian testing, with the channels served from the test host.

@@ -15,11 +15,16 @@ DEST=$STAGE/.local/share/plasma/plasmoids/$ID
 
 python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$SRC/metadata.json"
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$SRC" quicksettings
-# The Disks & Devices list and power mode logic (contents/code/devices.js and power.js; the tests are
-# not installed), when node is installed (the package build has none).
+# The Notification Centre's backdrop follows the widget's glass key (Glass = Solid, high contrast).
+python3 -B "$ROOT/packages/common/tests/backdrop_glass_test.py" "$SRC"
+# The settings page declares every key and default and refreshes the ones it does not edit.
+python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$SRC"
+# The Disks & Devices list, power mode and Do Not Disturb logic (contents/code/devices.js, power.js
+# and dnd.js; the tests are not installed), when node is installed (the package build has none).
 if command -v node >/dev/null 2>&1; then
   node "$SRC/tests/devices.test.js" >/dev/null
   node "$SRC/tests/power.test.js" >/dev/null
+  node "$SRC/tests/dnd.test.js" >/dev/null
 fi
 
 rm -rf "$DEST"

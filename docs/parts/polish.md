@@ -316,8 +316,9 @@ stage applied with `fusion-config.sh --install`, real input through KWin EIS). E
 
 ### Left as they are (not this part, or accepted)
 
-- The tray expander arrow is still visible at the current revision (Vaults, Disks & Devices and
-  Display Configuration are passive items in the tray's pop-up): desktop-cards part.
+- The tray expander arrow was still visible at that revision (Vaults, Disks & Devices and Display
+  Configuration were passive items in the tray's pop-up); since hidden: desktop-cards part,
+  "Update".
 - Date and time in the clock pill sit 1 px lower / higher than on the board (the two fonts'
   line boxes, centred separately); within the 1 px tolerance of the phase-1 reviews.
 - The light global-menu pill (accent instead of the board's grey) and the rest colour stay the

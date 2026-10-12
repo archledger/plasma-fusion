@@ -233,6 +233,35 @@ for SHNAME in "${shells[@]}"; do
   VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-decoration=0.2.0 plasma-fusion-debug=0.2.0" run "$sh" $AUR -- uninstall --yes --package-only
   expect "Arch uninstall also removes the AUR helper's debug package" has_log "pacman -Rns --noconfirm plasma-fusion plasma-fusion-decoration plasma-fusion-debug"
   osr fedora "" 44 "" "Fedora Linux 44"
+  # uninstall undoes the login screen and boot splash looks first (they point at package files)
+  SYSD=$CASE/root/usr/share/plasma-fusion/tools/system
+  mkdir -p "$SYSD" "$CASE/root/usr/share/plymouth/themes/plasma-fusion"
+  for t in greeter-restore.sh plymouth-uninstall.sh; do
+    printf '#!/bin/sh\nprintf "%%s\\n" "%s $*" >>"$FAKE_LOG"\nexit ${FAKE_SYS_RC:-0}\n' "$t" >"$SYSD/$t"
+    chmod +x "$SYSD/$t"
+  done
+  printf '[General]\nNumlock=none\n\n# Plasma Fusion: login screen wallpaper (greeter-apply.sh; undo: greeter-restore.sh)\n[Greeter]\nWallpaperPlugin=org.kde.image\n' \
+    >"$CASE/root/etc/plasmalogin.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "uninstall restores a login screen Plasma Fusion styled" has_log "greeter-restore.sh"
+  expect "  and removes the boot splash" has_log "plymouth-uninstall.sh"
+  expect "  both before the packages go" bash -c 'g=$(grep -n "^greeter-restore.sh" <<<"$0" | cut -d: -f1); r=$(grep -n "^dnf -y remove" <<<"$0" | cut -d: -f1); [ -n "$g" ] && [ -n "$r" ] && [ "$g" -lt "$r" ]' "$LOG"
+  expect "  and the plan says so" has_out "greeter-restore.sh   (the login screen"
+  EXTRA_ENV="FAKE_SYS_RC=1" VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "a failed login screen restore keeps the packages" bash -c '[ "$1" = 1 ] && ! grep -q "^dnf -y remove" <<<"$0"' "$LOG" "$RC"
+  printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
+  rm -r "$CASE/root/usr/share/plymouth/themes/plasma-fusion"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "an unstyled login screen and no splash are left alone" bash -c '! grep -qE "greeter-restore|plymouth-uninstall" <<<"$0"' "$LOG"
+  # the optional system steps are offered where they apply
+  rm -f "$CASE/root/etc/plasmalogin.conf"
+  run "$sh" $FED -- --yes
+  expect "without plasma-login-manager no login screen step is offered" bash -c '! grep -q "greeter-apply" <<<"$0"' "$OUT"
+  expect "  the Fedora boot splash is" has_out "plymouth-install.sh"
+  mkdir -p "$CASE/root/usr/lib/plasmalogin"
+  run "$sh" $FED -- --yes
+  expect "with plasma-login-manager the login screen step is offered" has_out "greeter-apply.sh"
+  rm -rf "$CASE/root/usr/lib/plasmalogin" "$CASE/root/usr/share/plasma-fusion" "$CASE/root/usr/share/plymouth"
   # setup failure
   EXTRA_ENV="FAKE_SETUP_RC=1" run "$sh" $FED -- --yes
   expect "a failed setup exits 1" [ "$RC" = 1 ]

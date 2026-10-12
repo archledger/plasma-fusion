@@ -7,6 +7,31 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## Unreleased
+
+- Glass set to Solid in the Plasma Fusion settings (also chosen by High contrast, and by the power
+  service on a nearly empty battery) now reaches the tablet launcher sheet and the Notification
+  Centre: they show a plain tint instead of the blurred wallpaper. Before, the setting was written
+  to the widgets but neither of them read it.
+- The Overview hot corner turned on in the Plasma Fusion settings (or under System Settings >
+  Screen Edges) stays on when the setup runs again; before, every run without `--hot-corner`
+  turned it off.
+- Do Not Disturb "Until tomorrow" chosen after midnight ends at 06:00 that morning, not at 06:00 the
+  day after (29 hours from 01:00).
+- The dock's window previews no longer flicker and restart their live thumbnails whenever a
+  window title or the active window changes while they are shown (a terminal printing, a browser
+  loading a page): only the card that changed is updated.
+- Uninstalling with the installer also puts back the login screen and removes the boot splash when
+  Plasma Fusion's root tools applied them, before the packages go; before, the login screen was
+  left pointing at the removed theme and wallpaper. The installer offers the login screen step only
+  where plasma-login-manager is installed (not on SDDM systems, where the tool stops).
+- Quick settings, its tablet policy and the pen menu run a command again when the same one is still
+  running, and every caller gets its answer: before, the second run was dropped, and at start-up in
+  tablet posture one of the two reads of the window mode and the tablet mode never answered.
+- The settings dialogs of quick settings and the dock open without warnings in the log again, and
+  Apply in quick settings' dialog no longer writes back a value another part changed while it was
+  open (the airplane-mode radios, the glass level).
+
 ## 0.4.0 (2026-10-09)
 
 Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch), like 0.3.1.

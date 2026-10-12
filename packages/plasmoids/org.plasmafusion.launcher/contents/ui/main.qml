@@ -585,6 +585,7 @@ PlasmoidItem {
     SheetWindow {
         id: sheetWindow
         launcher: root
+        glass: Plasmoid.configuration.glass
         visible: false
         property bool wasActive: false
         onSheetReady: {
