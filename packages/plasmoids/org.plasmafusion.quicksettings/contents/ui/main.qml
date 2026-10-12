@@ -174,6 +174,15 @@ PlasmoidItem {
                      + Instances.items.length + " in this shell");
     }
     Component.onDestruction: Instances.forget(root)
+    // The widget was removed (Plasma's undo notification is shown) or the removal undone: the bar's
+    // tray items it shows are given back to the tray (Backend.qml, services/TrayItems.qml).
+    property bool removed: false
+    Connections {
+        target: Plasmoid
+        function onDestroyedChanged(destroyed: bool) {
+            root.removed = destroyed;
+        }
+    }
     // Runs action(widget) for the widget on KWin's active screen (this one when that is unknown).
     function onActiveScreen(action: var): void {
         DBus.SessionBus.asyncCall({
@@ -622,6 +631,7 @@ PlasmoidItem {
         id: backend
         popupOpen: root.popupOpen
         containment: Plasmoid.containment
+        removed: root.removed
         showKeyboardLayout: Plasmoid.configuration.showKeyboardLayout
         keyboardLayoutAlways: Plasmoid.configuration.keyboardLayoutAlways
         showKdeConnect: Plasmoid.configuration.showKdeConnect

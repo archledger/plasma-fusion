@@ -310,7 +310,10 @@ Disks & Devices stays replaced by its page and is not loaded. An id the user mov
 `disabledStatusNotifiers` (any visibility chosen in the tray's settings does that) is the user's:
 this widget neither adds nor removes it, and it never touches other `shownItems` entries. Each
 screen's widget handles its own bar's tray. A stale entry (plasmashell ended while an item was
-shown) is taken out when the widget starts. Nothing is migrated: the layout's lists are unchanged,
+shown) is taken out when the widget starts. When the widget leaves the tray (it is removed, which
+Plasma reports as `Plasma::Applet::destroyedChanged` while its undo notification shows, or it moves
+to another bar) it takes the ids it added out of that tray's `shownItems`, since nothing else would
+and they would stay in the bar for good; an undone removal shows them again. Nothing is migrated: the layout's lists are unchanged,
 so existing layouts get this with the updated widget, at the next login or plasmashell start. A
 pop-up left open when its item hides (a vault locked from its own pop-up) stays open until it is
 closed. Without quick settings in the bar (a tray on its own) the items stay hidden as before.
@@ -390,8 +393,9 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   ```
 
   An active vault or printers needing attention go into `shownItems` and out again when passive,
-  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
-  themselves are `tests/tray.test.js`.
+  the user's own entries and ids stay, the input-method item not in tablet posture; the widget
+  removed (and the removal undone), moved to another bar's tray and to a bar without one, the tray
+  it left gets its items back; the rules themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files of the package: no errors; the remaining warnings are static-analysis
   limits (types and singletons that plasma-pa registers from C++, `ListView.currentItem` methods,
@@ -546,8 +550,9 @@ An independent review of the part, integrated with every other part that exists 
   ```
 
   An active vault or printers needing attention go into `shownItems` and out again when passive,
-  the user's own entries and ids stay, the input-method item not in tablet posture; the rules
-  themselves are `tests/tray.test.js`.
+  the user's own entries and ids stay, the input-method item not in tablet posture; the widget
+  removed (and the removal undone), moved to another bar's tray and to a bar without one, the tray
+  it left gets its items back; the rules themselves are `tests/tray.test.js`.
 
 * `qmllint` (Qt 6.11.2) over all 37 QML files: no errors; the warnings are `i18n*` calls
   (injected by Plasma), plasma-pa singletons and `ListView.currentItem` methods (static-analysis

@@ -124,8 +124,9 @@ Item {
     Loader { id: tabletLoader; asynchronous: true; source: "services/TabletPolicy.qml" }
     Loader { id: chargeLoader; asynchronous: true; source: "services/ChargeLimit.qml" }
     // The panel this widget is in (main.qml): its system tray's hidden stock items are shown
-    // while active (services/TrayItems.qml).
+    // while active (services/TrayItems.qml), until the widget is removed.
     property var containment: null
+    property bool removed: false
     Loader { id: trayItemsLoader; asynchronous: true; source: "services/TrayItems.qml" }
     Binding {
         target: trayItemsLoader.item
@@ -137,6 +138,12 @@ Item {
         target: trayItemsLoader.item
         property: "tablet"
         value: backend.tablet
+        when: trayItemsLoader.item !== null
+    }
+    Binding {
+        target: trayItemsLoader.item
+        property: "removed"
+        value: backend.removed
         when: trayItemsLoader.item !== null
     }
     readonly property var trayRevealed: trayItemsLoader.item ? trayItemsLoader.item.revealed : []
