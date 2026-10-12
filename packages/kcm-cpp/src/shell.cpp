@@ -39,7 +39,9 @@ namespace
 // Reads the shell state in one call: the dock's keys, the top bar (the panel holding
 // org.plasmafusion.appname; the one with quick settings when there are several) and whether it
 // has the system meters, the quick settings' keyboard policy and the Folder View desktop's filter
-// and icon size.
+// and icon size. A panel's opacity and sizes are read only while its screen is there: for a
+// panel of a monitor that was unplugged (Plasma 6.8 keeps it on that screen) plasmashell reads
+// them from an invalid config group and crashes (WorkspaceScripting::Panel, KConfigGroup).
 const QString s_readShellScript =
     uR"JS(
 function bool(v, d) {
@@ -53,7 +55,7 @@ var state = { docks: 0, magnify: true, magnifiedSize: 62, homeIndicator: true,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
               folders: 0, filterMode: 0, filterPattern: "*", iconSize: 3 };
-var mainTopBar = false;
+var mainTopBar = false, chosenTopBar = false;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
     var p = ps[i];
@@ -76,11 +78,13 @@ for (var i = 0; i < ps.length; ++i) {
         ++state.quickSettings;
     }
     if (p.widgets("org.plasmafusion.appname").length > 0) {
-        if (state.topBars === 0 || (!mainTopBar && qs.length > 0)) {
+        var onScreen = p.screen >= 0 && p.screen < screenCount;
+        if (onScreen && (!chosenTopBar || (!mainTopBar && qs.length > 0))) {
             state.menu = p.widgets("org.kde.plasma.appmenu").length > 0;
             state.meters = p.widgets("org.plasmafusion.meters").length > 0;
             state.topOpacity = String(p.opacity);
             mainTopBar = qs.length > 0;
+            chosenTopBar = true;
         }
         ++state.topBars;
     }
@@ -255,8 +259,11 @@ print(placed);
 )JS"_s;
 
 // %1 top-bar opacity, %2 dock opacity, %3 the widgets' glass value or null (leave them), %4 the
-// widget types that have a glass key. Only panels holding Plasma Fusion widgets change.
-const QString s_panelsScript = uR"JS(
+// widget types that have a glass key. Only panels holding Plasma Fusion widgets change; a panel
+// whose screen is gone keeps its opacity (reading or writing it crashes plasmashell 6.8, see
+// s_readShellScript), its widgets get the glass value.
+const QString s_panelsScript =
+    uR"JS(
 var topOpacity = %1, dockOpacity = %2, glass = %3, glassTypes = %4;
 var result = { panels: 0, widgets: 0 };
 function glassFor(c) {
@@ -280,7 +287,7 @@ for (var i = 0; i < ps.length; ++i) {
         || p.widgets("org.plasmafusion.quicksettings").length > 0;
     var dock = p.widgets("org.plasmafusion.dock").length > 0;
     var want = top ? topOpacity : dock ? dockOpacity : "";
-    if (want !== "" && String(p.opacity) !== want) {
+    if (want !== "" && p.screen >= 0 && p.screen < screenCount && String(p.opacity) !== want) {
         p.opacity = want;
         ++result.panels;
     }

@@ -122,6 +122,15 @@ back a removed pen menu or desktop, and, since such a change is a migration, sto
 plasmashell (ending Keep awake). Now a later run finds nothing to migrate on a layout the user
 left alone, and changes nothing the user changed (`tools/device/tests/layout-migration-unit.sh`).
 
+Whether the layout is a Plasma Fusion one (a full-width top panel and a floating, fit-content
+bottom panel), the top bars that get `floatingApplets` and the bar thickness the run sets are read
+from the panels on the screens that are there (0.5.0). A panel of a monitor that was unplugged
+stays on its missing screen in Plasma 6.8, and reading its length mode, floating or height crashed
+plasmashell (`docs/parts/kwin-tablet.md`, "Panels without a screen"); the layout check then
+answered "no", and a run in the default layout mode would have built a new layout over the
+user's. `tools/device/tests/panel-scripts-unit.sh` (build workflow) runs the three scripts against
+a model of desktop scripting with such a panel (the scripts of 8cf0b3d fail 4 of its 6 checks).
+
 The landscape card positions are not touched. After the 4/3 scale change the shell reads
 `ItemGeometries-1440x900`, which does not exist, and falls back to `ItemGeometriesHorizontal`
 (`x=1232`, 16 px from the right edge at 1440 px). LAYOUT-1 owns card geometry for fresh layouts;

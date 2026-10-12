@@ -40,17 +40,25 @@ def run(*args, timeout=60, check=True):
 
 
 def session_env():
-    """The live session's D-Bus and Wayland variables, from plasmashell (or KWin) environment."""
+    """The live session's D-Bus and Wayland variables, from plasmashell (or KWin) environment.
+    KWin's environment cannot be read when it has capabilities, and plasmashell may be down (a
+    crash): then the systemd user session's defaults (the bus in XDG_RUNTIME_DIR, wayland-0)."""
     for name in ("plasmashell", "kwin_wayland"):
-        pids = run("pgrep", "-u", str(os.getuid()), "-x", name, check=False).split()
-        if pids:
-            break
-    else:
+        for pid in run("pgrep", "-u", str(os.getuid()), "-x", name, check=False).split():
+            try:
+                environ = Path(f"/proc/{pid}/environ").read_bytes()
+            except OSError:
+                continue
+            for entry in environ.split(b"\0"):
+                key, sep, value = entry.partition(b"=")
+                if sep and key.decode() in {"DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY"}:
+                    os.environ[key.decode()] = value.decode()
+            return
+    runtime = f"/run/user/{os.getuid()}"
+    if not run("pgrep", "-u", str(os.getuid()), "-x", "kwin_wayland", check=False) or not os.path.exists(runtime + "/bus"):
         raise RuntimeError("no Plasma session of this user")
-    for entry in Path(f"/proc/{pids[0]}/environ").read_bytes().split(b"\0"):
-        key, sep, value = entry.partition(b"=")
-        if sep and key.decode() in {"DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY"}:
-            os.environ[key.decode()] = value.decode()
+    os.environ.update(XDG_RUNTIME_DIR=runtime, DBUS_SESSION_BUS_ADDRESS=f"unix:path={runtime}/bus",
+                      WAYLAND_DISPLAY=os.environ.get("WAYLAND_DISPLAY", "wayland-0"))
 
 
 def js(script, timeout=60):
@@ -81,10 +89,12 @@ def journal_after(c):
 
 
 def panels():
-    """[{id, location, screen, height, hiding, widgets: [type]}] of every panel."""
+    """[{id, location, screen, height, hiding, widgets: [type]}] of every panel. A panel whose
+    screen is gone has height and hiding None: reading them crashes plasmashell 6.8."""
     out = js('''var r = [];
 panels().forEach(function (p) {
-    r.push({id: p.id, location: p.location, screen: p.screen, height: p.height, hiding: p.hiding,
+    var on = p.screen >= 0 && p.screen < screenCount;
+    r.push({id: p.id, location: p.location, screen: p.screen, height: on ? p.height : null, hiding: on ? p.hiding : null,
             widgets: p.widgets().map(function (w) { return w.type; })});
 });
 print(JSON.stringify(r));''')

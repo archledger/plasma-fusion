@@ -6,9 +6,9 @@
 # in a scratch HOME: load, read every property, defaults, read them again. Nothing is saved.
 # fuzz-kcmctl.sh runs it with random configuration files and commands, saving included, still in a
 # scratch HOME and with stand-ins for the programs the module starts. meters-switch.sh turns the
-# system meters switch on and off against fakeshell, a stand-in Plasma shell; run-power-tier.sh
-# runs the module with the power service against a stand-in plasmashell, run-reset-layout.sh its
-# layout reset.
+# system meters switch on and off against fakeshell, a stand-in Plasma shell, and shell-panels.sh
+# changes the panels against it; run-power-tier.sh runs the module with the power service against
+# a stand-in plasmashell, run-reset-layout.sh its layout reset.
 
 add_executable(kcmctl kcmctl/kcmctl.cpp)
 # A stand-in Plasma shell for the switches that change panels (meters-switch.sh).
@@ -35,6 +35,11 @@ if(DBUS_RUN_SESSION)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/meters-switch.sh" $<TARGET_FILE:kcmctl> $<TARGET_FILE:fakeshell>
                      "${CMAKE_BINARY_DIR}/bin" "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-meters")
     set_tests_properties(kcmctl-meters PROPERTIES TIMEOUT 300)
+    # The panel changes against the stand-in shell (shell-panels.sh): a top bar without a screen.
+    add_test(NAME kcmctl-panels
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/shell-panels.sh" $<TARGET_FILE:kcmctl> $<TARGET_FILE:fakeshell>
+                     "${CMAKE_BINARY_DIR}/bin" "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-panels")
+    set_tests_properties(kcmctl-panels PROPERTIES TIMEOUT 300)
     # The module with the power service at a held tier (run-power-tier.sh): a stand-in plasmashell
     # and KWin from packages/powerfx/tests, which need node and python3's GObject bindings.
     find_program(NODE_EXECUTABLE node)

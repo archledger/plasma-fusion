@@ -618,12 +618,17 @@ plasmashell_eval() { # $1 script; prints the script's print() output
 }
 
 # The Plasma Fusion layout is in place when plasmashell shows a full-width top panel and a
-# floating, fit-content bottom panel (the shape its layout script builds).
+# floating, fit-content bottom panel (the shape its layout script builds). The scripts here read a
+# panel's length mode, floating and height only while its screen is there: for a panel of a
+# monitor that was unplugged (Plasma 6.8 keeps it on that screen) plasmashell reads them from an
+# invalid config group and crashes (WorkspaceScripting::Panel), which made this check answer "no"
+# and an automatic setup reset the layout.
 fusion_layout_present() {
   has_name org.kde.plasmashell || return 1
   [ "$(plasmashell_eval '
 var top = false, dock = false, ps = panels();
 for (var i = 0; i < ps.length; i++) {
+    if (!(ps[i].screen >= 0 && ps[i].screen < screenCount)) continue;
     if (ps[i].location === "top" && ps[i].lengthMode === "fill") top = true;
     if (ps[i].location === "bottom" && ps[i].floating && ps[i].lengthMode === "fit") dock = true;
 }
@@ -747,17 +752,19 @@ var top = Math.round(34 * textScale());
 var ps = panels(), fixed = [];
 for (var i = 0; i < ps.length; i++) {
     var p = ps[i];
+    if (!(p.screen >= 0 && p.screen < screenCount)) continue;
     if (p.location === "top" && p.lengthMode === "fill" && p.height !== top) { p.height = top; fixed.push("top bar " + top); }
     if (p.location === "bottom" && p.floating && p.lengthMode === "fit" && p.height !== 72) { p.height = 72; fixed.push("dock 72"); }
 }
 print(fixed.length ? "set " + fixed.join(", ") : "as designed");'
 }
 
-# Ids of the full-width top panels (the Plasma Fusion top bar).
+# Ids of the full-width top panels (the Plasma Fusion top bar) on the screens that are there.
 top_panel_ids() {
   plasmashell_eval '
 var ids = [], ps = panels();
 for (var i = 0; i < ps.length; i++) {
+    if (!(ps[i].screen >= 0 && ps[i].screen < screenCount)) continue;
     if (ps[i].location === "top" && ps[i].lengthMode === "fill") ids.push(ps[i].id);
 }
 print(ids.join(" "));' || true

@@ -3,8 +3,8 @@
     org.kde.plasmashell on the (private) session bus and answers org.kde.PlasmaShell.evaluateScript
     by running the script in a QJSEngine against shell.js, a small model of the desktop scripting
     API (panels(), widgets(), addWidget(), the widgets' index and configuration, knownWidgetTypes,
-    print()). The layout comes from a JSON file; after every script the panels are written to the
-    state file, one line per panel, so a test can check where the widgets went.
+    screenCount, print()). The layout comes from a JSON file; after every script the panels are
+    written to the state file, one line per panel, so a test can check where the widgets went.
 
       fakeshell SHELL_JS LAYOUT_JSON STATE_FILE
 
@@ -23,6 +23,7 @@
 #include <QTextStream>
 
 #include <cstdio>
+#include <cstdlib>
 
 namespace
 {
@@ -45,6 +46,14 @@ public:
     Q_INVOKABLE void print(const QString &text)
     {
         printed << text;
+    }
+    // What plasmashell does on a read it cannot do (shell.js says when): it is gone at once,
+    // without an answer.
+    Q_INVOKABLE void crash(const QString &what)
+    {
+        std::fprintf(stderr, "fakeshell: crashed reading %s\n", qPrintable(what));
+        std::fflush(stderr);
+        std::_Exit(139);
     }
 };
 

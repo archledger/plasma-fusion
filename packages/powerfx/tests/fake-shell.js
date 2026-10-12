@@ -4,7 +4,8 @@
 // A stand-in for plasmashell's desktop scripting (plasma-workspace 6.7.5 shell/scripting), enough
 // for plasma-fusion-powerfx's widget script and the settings module's scripts (its tests in
 // packages/kcm-cpp/tests): desktops(), panels(), knownWidgetTypes, a containment's widgets([TYPE]),
-// addWidget, id, type, screen, location and opacity, a widget's id, type, globalShortcut, index and
+// addWidget, id, type, screen, location and opacity, screenCount (the layout's "screens", default
+// one more than the highest panel screen), a widget's id, type, globalShortcut, index and
 // remove(), and
 // for both currentConfigGroup, readConfig (converted to the default's type, as
 // KConfigGroup::readEntry does) and writeConfig (stored as KConfig text). A layout is JSON:
@@ -124,8 +125,10 @@ function run(script, layout, writes) {
         print: (s) => { out += String(s); },
     };
     const known = layout.knownWidgetTypes || [];
+    const screens = layout.screens !== undefined ? layout.screens
+        : (layout.panels || []).reduce((n, c) => Math.max(n, (Array.isArray(c) ? 0 : c.screen || 0) + 1), 1);
     // eslint-disable-next-line no-new-func
-    new Function("desktops", "panels", "print", "knownWidgetTypes", script)(api.desktops, api.panels, api.print, known);
+    new Function("desktops", "panels", "print", "knownWidgetTypes", "screenCount", script)(api.desktops, api.panels, api.print, known, screens);
     return out;
 }
 
