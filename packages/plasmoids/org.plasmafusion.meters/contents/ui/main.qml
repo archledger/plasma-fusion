@@ -290,7 +290,10 @@ PlasmoidItem {
     // Set by the pill: shown in a visible window.
     property bool pillShown: false
     // A full-screen window on this bar's screen (current virtual desktop and activity) covers the
-    // bar; a maximized one leaves it visible. The same model as the system card's.
+    // bar while KWin keeps it above the panels: while it is the active window, or while the active
+    // window is on another screen (meters.js coveringWindows). An inactive one is drawn under the
+    // bar, and a maximized one leaves it visible. The system card's model; the card counts every
+    // full-screen window, since any window covers the desktop.
     TaskManager.ActivityInfo {
         id: activityInfo
     }
@@ -306,10 +309,19 @@ PlasmoidItem {
         screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
         activity: activityInfo.currentActivity
     }
+    // Whether any window of the session is active, whichever screen it is on.
+    TaskManager.TasksModel {
+        id: allWindows
+        groupMode: TaskManager.TasksModel.GroupDisabled
+        sortMode: TaskManager.TasksModel.SortDisabled
+        onActiveTaskChanged: Qt.callLater(root.countCovering)
+    }
     component WindowState: QtObject {
         required property var model
-        readonly property bool covers: model.IsFullScreen === true
-        onCoversChanged: Qt.callLater(root.countCovering)
+        readonly property bool fullScreen: model.IsFullScreen === true
+        readonly property bool active: model.IsActive === true
+        onFullScreenChanged: Qt.callLater(root.countCovering)
+        onActiveChanged: Qt.callLater(root.countCovering)
     }
     Instantiator {
         id: windowStates
@@ -321,14 +333,14 @@ PlasmoidItem {
     }
     property int coveringWindows: 0
     function countCovering(): void {
-        let n = 0;
+        const windows = [];
         for (let i = 0; i < windowStates.count; ++i) {
             const w = windowStates.objectAt(i) as WindowState;
-            if (w && w.covers) {
-                ++n;
+            if (w) {
+                windows.push({ fullScreen: w.fullScreen, active: w.active });
             }
         }
-        coveringWindows = n;
+        coveringWindows = Meters.coveringWindows(windows, allWindows.activeTask.valid);
     }
     readonly property bool covered: coveringWindows > 0 && !KWindowSystem.showingDesktop
 

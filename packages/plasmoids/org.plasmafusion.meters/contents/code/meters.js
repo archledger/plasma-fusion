@@ -39,6 +39,27 @@ function valid(value) {
     return typeof value === "number" && isFinite(value);
 }
 
+// The windows that cover the top bar, of `windows` ({fullScreen, active}: this screen's windows on
+// the current desktop and activity). KWin draws a full-screen window above the panels only while
+// it is the active window or while the active window is on another screen; otherwise it sits in
+// the normal layer, under the bar (kwin 6.7, Window::belongsToLayer() and isActiveFullScreen()).
+// `activeAnywhere`: a window of the session is active. When none is (a panel, a pop-up or the
+// desktop has the focus) no full-screen window is above the bar.
+function coveringWindows(windows, activeAnywhere) {
+    var activeHere = false;
+    for (var i = 0; i < windows.length; ++i) {
+        activeHere = activeHere || windows[i].active === true;
+    }
+    var n = 0;
+    for (var j = 0; j < windows.length; ++j) {
+        var w = windows[j];
+        if (w.fullScreen === true && (w.active === true || (activeAnywhere && !activeHere))) {
+            ++n;
+        }
+    }
+    return n;
+}
+
 // Whole percent, 0 to 100; NaN when there is no value.
 function percent(value) {
     return valid(value) ? Math.round(Math.max(0, Math.min(100, value))) : NaN;

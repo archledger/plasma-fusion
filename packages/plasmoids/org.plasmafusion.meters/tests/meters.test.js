@@ -120,4 +120,18 @@ test("shown: the bar's order, only the meters turned on", () => {
     assert.deepStrictEqual(M.shown(false, false, false, false), []);
 });
 
+test("covering: a full-screen window covers the bar only while KWin keeps it above the panels", () => {
+    const fs = (active) => ({ fullScreen: true, active: active });
+    const win = (active) => ({ fullScreen: false, active: active });
+    assert.strictEqual(M.coveringWindows([fs(true), win(false)], true), 1, "the active full-screen window");
+    assert.strictEqual(M.coveringWindows([fs(false), win(true)], true), 0,
+                       "another window on this screen is active: the full-screen one is under the bar");
+    assert.strictEqual(M.coveringWindows([fs(false), win(false)], true), 1,
+                       "the active window is on another screen: the full-screen one stays above");
+    assert.strictEqual(M.coveringWindows([fs(false)], false), 0,
+                       "no window active (a pop-up, a panel or the desktop has the focus)");
+    assert.strictEqual(M.coveringWindows([win(true)], true), 0, "a maximized or normal window never covers it");
+    assert.strictEqual(M.coveringWindows([], true), 0);
+});
+
 console.log("meters: all " + n + " tests passed");

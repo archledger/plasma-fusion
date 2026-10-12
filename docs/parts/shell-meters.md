@@ -112,8 +112,14 @@ subscribed only while its meter is in the bar (or the pop-up is open) and the me
 libksysguard unsubscribes a disabled sensor and ksystemstats then stops reading it. The meters
 cannot be seen, and subscribe nothing, while:
 
-- a full-screen window covers the bar (a `TasksModel` of the bar's screen, current virtual desktop
-  and activity, as the system card's; a maximized window leaves the bar visible);
+- an active full-screen window covers the bar (a `TasksModel` of the bar's screen, current virtual
+  desktop and activity, as the system card's, and `meters.js` `coveringWindows`). KWin raises a
+  full-screen window above the panels only while it is the active window, or while the active
+  window is on another screen (kwin 6.7 `Window::belongsToLayer()`, `isActiveFullScreen()`); an
+  inactive one is drawn under the bar, which then keeps sampling. A maximized window leaves the bar
+  visible. When a pop-up or a panel of another screen has the focus, or a dialog of the full-screen
+  window, the meters sample although KWin keeps the window above the bar: those are not tasks, or
+  not the full-screen task, in the model, and sampling is the safe side (the values stay current);
 - the session is locked (`org.freedesktop.ScreenSaver` `ActiveChanged`, as the system card);
 - the width budget took the meters out (below), the pill is not in a visible window, or its bar
   has no screen (a bar left over from a screen that is gone; its pop-up does not open either);
@@ -141,7 +147,8 @@ tiers"): 2 s, 4 s and 8 s at the default interval. The user's keys are never wri
 - `node packages/plasmoids/org.plasmafusion.meters/tests/meters.test.js` (also in `tools/build.sh
   meters` and CI): percent, rate (unit boundaries, rounding up into the next unit, at most three
   figures over 15 decades), memory text, temperature (0 is no reading, Fahrenheit), the limits
-  with the 5 point fall-back, the interval with the power tiers, the meters' order.
+  with the 5 point fall-back, the interval with the power tiers, the meters' order, and which
+  full-screen windows cover the bar (active, active window on another screen, none active).
 - `readings_test.py` (CI, build.yml; `QT_QPA_PLATFORM=offscreen dbus-run-session
   --config-file=packages/kwin/tests/offscreen/session-bus.conf -- python3 <it>`): `Readings.qml` on Plasma's sensor module against a stand-in ksystemstats that
   counts subscriptions: nothing subscribed while every meter is off or the meters cannot be seen,
