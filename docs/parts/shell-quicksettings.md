@@ -1021,12 +1021,24 @@ The tile reads `Until 18:00` within 24 hours of the end, `Until Mon 06:00` withi
 further ahead, and `On` for "until turned off" (more than 100 days ahead, the stock applet's limit
 too). It was read once when Do Not Disturb was turned on (`Date.now()` in a binding is not
 reactive), so a Do Not Disturb until Monday kept saying `On`. `dnd.js` `untilLabel()` says which
-form applies and when it changes next; one single-shot timer (`services/Notifications.qml`
-`dndClock`) moves the service's clock then, which also ends the Do Not Disturb on time (the
-check every minute is gone, and nothing wakes up for "until turned off"). Tests:
-`tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on a
-private bus, in CI: a Do Not Disturb set 24 h and 1.5 s ahead shows its day, then the time alone
-without anything else changing, and a short one ends by itself).
+form applies and when it changes next; while a change is ahead, the service
+(`services/Notifications.qml`) moves its clock on the wall clock's minutes with Plasma's `Clock`
+(`org.kde.plasma.clock`, a `CLOCK_REALTIME` timer that also fires right after a resume or a clock
+change, and the one the stock applet's own minute check runs on). Nothing listens for "until
+turned off". A `Timer` set to the next change, as before, counts only the time the machine is
+awake, so after a suspend the text kept its old form for hours.
+
+**Who ends it.** The stock applet (`global/Globals.qml`, loaded and hidden) owns the end, as for its
+own choices: `checkInhibition()` compares the kept end (`plasmanotifyrc [DoNotDisturb] Until`) with
+the time on every wall-clock minute and inhibits or releases the server. The tile's choices only
+write the end (`dndUntil()`), and the widget never ends a Do Not Disturb itself, so after a resume
+it ends on the first minute past its end, by the stock applet. Our choices end on whole minutes;
+an end between two minutes (another program's) ends on the next one, as in stock Plasma. Tests:
+`tests/dnd.test.js` and `tests/notifications_service_test.py` (Plasma's own notification server on
+a private bus with the stock applet's `Globals` beside the service, as in the session, in CI: a Do
+Not Disturb set a day ahead shows its day, then the time alone from that minute, and one ending
+between two minutes is ended by the stock applet on the next minute while the service leaves the
+kept end alone; the run waits for two minutes of the clock).
 
 ### Who holds Do Not Disturb
 

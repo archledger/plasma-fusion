@@ -70,7 +70,7 @@ function valid(date) {
 // that changes: {kind, refreshAt}. kind: "none" (no end to show: none set, passed, or "until turned
 // off"), "time" (within 24 hours: "Until 18:00"), "day" (within a week: "Until Mon 06:00") or
 // "date". refreshAt is the time in ms when the kind changes next (the end itself for "time"), or
-// -1 when it never does.
+// -1 when nothing changes ahead (no end, or "until turned off").
 function untilLabel(until, now) {
     if (!valid(until)) {
         return { kind: "none", refreshAt: -1 };
@@ -89,7 +89,9 @@ function untilLabel(until, now) {
     if (left <= FAR) {
         return { kind: "date", refreshAt: end - 7 * DAY };
     }
-    return { kind: "none", refreshAt: end - FAR };
+    // "Until turned off": nothing to show, and nothing to look at again for it (the sheet reads the
+    // label again whenever Do Not Disturb or its end changes).
+    return { kind: "none", refreshAt: -1 };
 }
 
 // Why Do Not Disturb is on besides a time, in the stock applet's order: a list of {kind, name,

@@ -60,7 +60,7 @@ assert.deepStrictEqual(label(at(25, 6, 0)).kind, "date", "eleven days ahead: the
 assert.deepStrictEqual(label(at(25, 6, 0)).refreshAt, at(18, 6, 0).getTime(), "the date until a week before");
 const year = new Date(2027, 9, 14, 10, 0);
 assert.deepStrictEqual(label(year).kind, "none", "until turned off: no end shown");
-assert.ok(label(year).refreshAt > now, "until turned off: looked at again only 100 days before");
+assert.strictEqual(label(year).refreshAt, -1, "until turned off: nothing to look at again (no daily wake-up)");
 // The subtitle follows the clock: a Do Not Disturb until Monday shows the day, then the time.
 const monday = end(at(16, 9, 0), "monday");
 const first = untilLabel(monday, at(16, 9, 0).getTime());
