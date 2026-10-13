@@ -399,6 +399,13 @@ PY
     if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0) { w.close(); } }
     report('kcalc closed before the cycle');" >>"$OUT/place.log"
   sleep 2
+  # A window maximized before the posture switch (a title bar in laptop posture): the policy makes
+  # it borderless when the option goes on, and un-maximizing it in tablet must still give the bar
+  # back at leave().
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0) { w.setMaximize(true, true); } }
+    report('dolphin maximized before the second cycle');" >>"$OUT/place.log"
+  sleep 1.5
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0) { if (w.tile) { w.tile.unmanage(w); } w.noBorder = true; } }
     report('$THIRD borderless as the user set it');" >>"$OUT/place.log"
@@ -429,6 +436,10 @@ PY
     if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
     report('untiled kcalc: ' + out);" >>"$OUT/place.log"
   sleep 1.5
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('dolphin un-maximized in the second cycle');" >>"$OUT/place.log"
+  sleep 1.5
   pfv_tablet off; sleep 5
   state tab4; shot tab-userborderless
   python3 - "$OUT/state-tab4.json" "$THIRD" >>"$CHK" <<'PY'
@@ -440,6 +451,9 @@ print(("PASS" if ok else "FAIL") + f" T19: a window the user made borderless kee
 x = [w for w in d["windows"] if "kcalc" in w["cls"]]
 ok = len(x) == 1 and not x[0]["tiled"] and x[0]["max"] != 3 and x[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window opened in tablet under a no-titlebar rule keeps it: {[(w['cls'], w['max'], w['nb']) for w in x]}")
+m = [w for w in d["windows"] if "dolphin" in w["cls"]]
+ok = len(m) == 1 and not m[0]["tiled"] and m[0]["max"] != 3 and not m[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window maximized before the cycle got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in m]}")
 PY
 else
   fail "T19: no window left for the user-borderless case"

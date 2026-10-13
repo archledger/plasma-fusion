@@ -190,6 +190,17 @@ Item {
         busy = true;
         laptopPlacement = Options.placement;
         laptopBorderless = Options.borderlessMaximizedWindows;
+        const ws = Workspace.stackingOrder;
+        // Snapshot every window's no-title-bar state before the policy touches anything: a bar the
+        // user removed themselves (a no-titlebar rule) stays theirs, and leave() must not claim it
+        // back. Enabling the option below already makes the windows that are maximized now
+        // borderless, so the snapshot cannot wait until the loop below.
+        for (let i = 0; i < ws.length; ++i) {
+            const w = ws[i];
+            if (eligible(w)) {
+                laptopNoBorder[key(w)] = w.noBorder;
+            }
+        }
         Options.placement = placementMaximizing;
         Options.borderlessMaximizedWindows = true;
         moveChanged = setting("DisableWindowMove", false);
@@ -198,7 +209,6 @@ Item {
             Options.interactiveWindowMoveEnabled = false;
         }
         applied = true;
-        const ws = Workspace.stackingOrder;
         let maximized = 0, tiles = 0;
         for (let i = 0; i < ws.length; ++i) {
             const w = ws[i];
@@ -206,9 +216,6 @@ Item {
                 continue;
             }
             follow(w);
-            // A title bar the user removed themselves (a no-titlebar rule) stays theirs: the policy
-            // keeps the window borderless, but leave() must not claim it back.
-            laptopNoBorder[key(w)] = w.noBorder;
             if (w.tile) {
                 if (!w.noBorder) {
                     w.noBorder = true;
