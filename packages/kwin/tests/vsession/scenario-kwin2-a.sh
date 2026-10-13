@@ -212,6 +212,10 @@ inside land1 "M14 back in landscape (fix 24)"
 grep -a 'plasmafusion-snap: screens changed' "$KLOG" | tail -1 >>"$CHK"
 
 # ---- 5. tablet posture: the picker's touch sizes, the switcher's close button
+# The laptop setting keeps maximized windows borderless: the tablet section's last checks use it to
+# cover a re-maximized window through leave() (T19).
+kwriteconfig6 --file kwinrc --group Windows --key BorderlessMaximizedWindows true
+qdbus org.kde.KWin /KWin reconfigure; sleep 1
 pfv_tablet on; sleep 6
 state tab0
 K run "workspace.activeWindow = workspace.windowList().filter(function (w) { return w.normalWindow && String(w.resourceClass).indexOf('kwrite') >= 0; })[0]; report('kwrite active');" >>"$OUT/place.log"
@@ -306,6 +310,21 @@ f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 an
 ok = len(tiled) == 1 and len(f) == 1 and f[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window tiled and untiled again keeps no title bar: {[(w['cls'], w['nb']) for w in f]}")
 PY
+  # Re-maximize it and leave it maximized: the laptop setting keeps maximized windows borderless,
+  # so it must still be borderless now, and stay that way through leave() (the floating state is
+  # forgotten when the window is maximized again).
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0) { w.setMaximize(true, true); workspace.activeWindow = w; } }
+    report('$FLOATING maximized again to leave it maximized');" >>"$OUT/place.log"
+  sleep 1.5
+  state tab2g
+  python3 - "$OUT/state-tab2g.json" "$FLOATING" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
+f = [w for w in d["windows"] if want in w["cls"]]
+ok = len(f) == 1 and f[0]["max"] == 3 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a floating window maximized again is borderless under the laptop setting: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+PY
 else
   fail "T19: no maximized window to un-maximize, so the tile round trip cannot run"
 fi
@@ -314,11 +333,15 @@ p=$!
 sleep 1.3; shot tab-sw; wait $p; sleep 1
 pfv_tablet off; sleep 5
 state tab3; shot tab-off
-python3 - "$OUT/state-tab3.json" >>"$CHK" <<'PY'
+python3 - "$OUT/state-tab3.json" "$FLOATING" >>"$CHK" <<'PY'
 import json, sys
-d = json.load(open(sys.argv[1]))
-nb = [w["cls"] for w in d["windows"] if w["nb"]]
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
+# Maximized windows may keep no title bar: the laptop setting above asks for that.
+nb = [w["cls"] for w in d["windows"] if w["nb"] and w["max"] != 3]
 print(("PASS" if not nb else "FAIL") + f" T18: after leaving tablet posture every window has its title bar again (without: {nb})")
+f = [w for w in d["windows"] if want and want in w["cls"]]
+ok = len(f) == 1 and f[0]["max"] == 3 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: the re-maximized window stayed borderless through leave: {[(w['cls'], w['max'], w['nb']) for w in f]}")
 PY
 
 # ---- 6. health
