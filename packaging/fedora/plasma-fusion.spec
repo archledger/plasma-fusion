@@ -426,7 +426,7 @@ done
 %endif
 
 %changelog
-* Wed Oct 14 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.5.0-1
+* Mon Oct 12 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.5.0-1
 - Clipboard sheet with Meta+V, editable Quick Settings, notifications
   grouped by app, Do not disturb durations, Power mode chooser, timed
   Keep awake, system meters, launcher Recent and Places, dock transfer

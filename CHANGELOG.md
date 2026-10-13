@@ -7,7 +7,7 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
-## 0.5.0 (2026-10-14)
+## 0.5.0 (2026-10-12)
 
 Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch); the final
 6.8.0 verification lands before the tag.
