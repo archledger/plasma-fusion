@@ -37,6 +37,8 @@ CC0-1.0, fonts OFL-1.1; the design boards in `design/` decide every colour, size
 - **Never weaken a check to pass.** Do not delete, skip or rewrite tests, add `qmllint`,
   ESLint or ShellCheck suppressions, loosen CI, or silence a warning at the source of the check.
   Fix the cause; if the check itself is wrong, say so with evidence in the pull request.
+- **Report security problems privately**: follow [`SECURITY.md`](SECURITY.md); never open a
+  public issue for a vulnerability.
 - **A behaviour change updates the same change's part page** in `docs/parts/` and needs a test
   that fails without it (the test policy is [`docs/parts/coverage.md`](docs/parts/coverage.md),
   "Test policy").
@@ -53,6 +55,24 @@ CC0-1.0, fonts OFL-1.1; the design boards in `design/` decide every colour, size
 | `design/` | the 25 design boards — the reference; the boards decide visuals, not the code |
 | `packaging/` | `fedora/`, `arch/`, `debian/`, `nix/`, `check-version.sh`, `release-assets.sh` |
 | `fuzz/` | the fuzz targets (`app_icons`, `keyboard_keys`, `previous_theme`) |
+
+If you are not sure where a task lives, the part pages map it: widgets and the shell are under
+`docs/parts/shell-*.md` (top bar, dock, launcher, quick settings, meters); the theme, icons,
+cursors and wallpapers have their generator pages (`plasma-style.md`, `consistency.md`, `icons.md`,
+`app-icons.md`, `cursors.md`); packaging and installs are `system.md`, `installer.md`, `nixos.md`;
+the device scripts are `device.md`, the login check `gate.md`, the test harnesses `testing.md` and
+`ci.md`, the VM harness `release-tests.md`.
+
+## Generated outputs: change the source, regenerate
+
+Most drawings that ship in `packages/` — the Plasma styles' SVGs, the icon themes, cursors,
+wallpapers — are **generated** from the design boards (`design/boards/*.dc.html`) by the scripts in
+`generators/`; the part's page in `docs/parts/` names the generator, its inputs, its command and
+its own tests (for example `generators/plasma-style/gen_plasma_style.py` writes complete theme
+packages). Do not hand-edit generated files: change the generator, regenerate, and run the
+generator's tests and the part's suite over the output. Some files are deliberately kept by hand
+(for example the Breeze fallback set) — the part page says which. The boards decide every colour,
+size and drawing: do not introduce values the boards do not have.
 
 ## Build and check (exactly these commands)
 
@@ -74,7 +94,21 @@ CC0-1.0, fonts OFL-1.1; the design boards in `design/` decide every colour, size
   builder in `tools/tests/packages/`.
 
 Run the checks a change touches locally before proposing it. CI runs all of them; a red check is
-never waved through.
+never waved through. CI runs in Fedora 44 containers; a Fedora 44 KDE machine with `podman` can run
+everything except the VM harness, which needs QEMU with KVM and the images its page describes. The
+compiled parts need the dependencies their part page lists (`dnf builddep`).
+
+## What every change arrives with
+
+- A test in an automated suite that fails without the change — new behaviour and every bug fix
+  ([`docs/parts/coverage.md`](docs/parts/coverage.md), "Test policy").
+- The part's page in `docs/parts/` updated in the same change when behaviour changes.
+- The checks that cover it run locally, with the commands and their results named in the pull
+  request (the house style: what was verified, how, and what was not).
+- One subject per pull request; commits with exactly one DCO trailer and a signature. The required
+  checks are `DCO and attribution`, `REUSE compliance` and `plasma-fusion RPM (Fedora 44)`;
+  changes to compiled parts also wait for `compiled` and, where it applies, `sanitizers`. The
+  maintainer reviews and merges.
 
 ## Conventions
 
@@ -96,7 +130,9 @@ never waved through.
 Prove the logic offline; use the lower rungs only for what genuinely needs a desktop.
 
 1. **Offline** — the part's suites (`docs/parts/<part>.md`, `docs/parts/ci.md`), `tools/build.sh`
-   with its QML lints, and the C++ parts' ctest suites. Nothing here touches a session; start here.
+   with its QML lints, and the C++ parts' ctest suites. Nothing here touches a session; start
+   here. (The separate regression harnesses — icon positions, the performance gate, the adaptive
+   matrix — are [`docs/parts/testing.md`](docs/parts/testing.md).)
 2. **An isolated session on this machine** — `tools/vsession/vsession.sh NAME SCENARIO [WxH]
    [TIMEOUT]` runs a headless Plasma session (its own D-Bus bus and Wayland socket; it never
    touches the logged-in desktop) and sources `SCENARIO`, a bash file, inside it; the scenario can
