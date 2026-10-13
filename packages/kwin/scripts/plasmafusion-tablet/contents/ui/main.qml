@@ -363,7 +363,13 @@ Item {
             // tiles the same way).
             if (!w.noBorder) {
                 w.noBorder = true;
-                borderlessTiles[k] = true;
+                // Only claim the bar when the window is not one whose borderless state is the
+                // user's: a record of true means the window was already borderless on its own, and
+                // KWin may have put a bar back in between (an un-maximize), so removing it again is
+                // not ours to restore.
+                if (laptopNoBorder[k] !== true) {
+                    borderlessTiles[k] = true;
+                }
             } else if (laptopNoBorder[k] === false) {
                 borderlessTiles[k] = true;
             }
