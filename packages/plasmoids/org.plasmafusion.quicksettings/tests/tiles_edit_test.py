@@ -152,6 +152,47 @@ def key(k, modifiers=Qt.NoModifier):
     QTest.qWait(60)
 
 
+# The touch minimum (ADAPTIVE 5.3): a target is at least 44 x 44 in touch mode, 48 px on a screen
+# edge; the sheet is a floating card, so 44 applies. Laptop posture keeps its 34 px header by the
+# O1 decision, so only the tablet posture's sweep fails; the laptop one is reported.
+TOUCH_MIN = 44.0
+# The Qt Quick Controls the user taps, by the C++ base their meta object chain carries: the sheet's
+# buttons, switches, sliders and delegates. Not asserted on: mouse areas, which are often the hit
+# surface inside a larger control (they are reported).
+CONTROLS = ("QQuickAbstractButton", "QQuickItemDelegate", "QQuickCheckBox", "QQuickRadioButton",
+            "QQuickSwitch", "QQuickSlider", "QQuickSpinBox", "QQuickComboBox", "QQuickDial",
+            "QQuickTextField", "QQuickTextArea", "QQuickTextInput")
+REPORTED = CONTROLS + ("QQuickMouseArea",)
+
+
+def interactive(it, classes):
+    """Whether `it`'s meta object chain includes one of the C++ `classes`."""
+    mo = it.metaObject()
+    while mo is not None:
+        if mo.className() in classes:
+            return True
+        mo = mo.superClass()
+    return False
+
+
+def small_targets(item, classes=CONTROLS):
+    """(name, width, height) of every visible, enabled interactive control under `item` that is
+    smaller than the touch minimum in either direction."""
+    found = []
+    for it in items(item):
+        if not it.isVisible() or it.property("enabled") is False:
+            continue
+        if not interactive(it, classes):
+            continue
+        if it.width() + 0.5 < TOUCH_MIN or it.height() + 0.5 < TOUCH_MIN:
+            name = (it.objectName() or str(it.property("text") or "")[:28]
+                    or it.metaObject().className())
+            parent = it.parentItem()
+            where = (parent.objectName() or parent.metaObject().className()) if parent else "-"
+            found.append((name, round(it.width(), 1), round(it.height(), 1), where))
+    return found
+
+
 def shown():
     """The tile ids in the grid as drawn: by row, then column."""
     tiles = [i for i in items(find("tileGrid")) if i.objectName().startswith("tile-") and i.isVisible()]
@@ -539,6 +580,8 @@ check(header_row.implicitWidth() <= page.width() + 0.5 and power_button.width() 
       % (header_row.implicitWidth(), page.width(), power_button.width()))
 check(find("tile-bluetooth").mapToItem(page, QPointF(find("tile-bluetooth").width(), 0)).x() <= page.width() + 0.5,
       "touch in laptop posture: the right column of tiles is not cut")
+print("INFO touch in laptop posture: controls under %d px: %r"
+      % (TOUCH_MIN, small_targets(page, REPORTED)))
 root.setProperty("forceTouch", False)
 QTest.qWait(100)
 
@@ -546,6 +589,10 @@ QTest.qWait(100)
 laptop_height = find("tile-wifi").height()
 root.setProperty("tablet", True)
 QTest.qWait(150)
+tablet_small = small_targets(page)
+check(not tablet_small,
+      "tablet posture: every control in the sheet reaches 44 x 44 (%r)" % (tablet_small,))
+
 if find("tabletRow-rotation") is not None:
     check(find("editTilesButton") is None and find("tabletRow-edit") is not None,
           "tablet posture: the pencil is in the tablet row (the header has no room)")
