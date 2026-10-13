@@ -16,8 +16,9 @@ T.AbstractButton {
     property bool selected: false
     property bool showFocus: visualFocus
 
-    implicitWidth: label.implicitWidth + metrics.px(28)
-    implicitHeight: metrics.px(30)
+    implicitWidth: Math.max(label.implicitWidth + metrics.px(28), metrics.touch ? 44 : 0)
+    // The touch minimum in touch mode (ADAPTIVE 5.3); the drawn pill follows the text size.
+    implicitHeight: Math.max(metrics.px(30), metrics.touch ? 44 : 0)
     focusPolicy: Qt.NoFocus
     hoverEnabled: true
 
