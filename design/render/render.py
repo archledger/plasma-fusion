@@ -18,7 +18,7 @@ Runtime.evaluate (a board that does not finish, or whose template expressions fa
 run), and captures that same page at twice its canvas size, which becomes a WebP preview, like
 the ones the tool produced.
 
-Requires: google-chrome (or CHROME=...), Pillow.
+Requires: google-chrome or chromium (or CHROME=...), Pillow.
 """
 import argparse
 import base64
@@ -42,7 +42,12 @@ DESIGN = Path(__file__).resolve().parents[1]
 REPO = DESIGN.parent
 BOARDS = DESIGN / "boards"
 OUT = DESIGN / "previews"
-CHROME = os.environ.get("CHROME", "google-chrome")
+# The browser: CHROME=... wins, then the usual names (Fedora's chromium package installs
+# chromium-browser, Debian's chromium); an empty CHROME counts as unset.
+CHROME = (os.environ.get("CHROME")
+          or shutil.which("google-chrome") or shutil.which("chromium-browser")
+          or shutil.which("chromium") or shutil.which("google-chrome-stable")
+          or "google-chrome")
 SCALE = int(os.environ.get("RENDER_SCALE", "2"))
 QUALITY = int(os.environ.get("RENDER_QUALITY", "90"))
 MAD_LIMIT = 12
@@ -149,14 +154,25 @@ class DevTools:
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             cmd.append("--no-sandbox")
         sh = 'exec "$0" "$@" 3<&%d 4>&%d' % (r_in, w_out)
-        # Its own process group: Chrome starts helpers, and the group is what close() reaps.
+        # Its own process group: Chrome starts helpers, and the group is what close() reaps. Its
+        # diagnostics land next to the profile, so a browser that cannot start says why.
+        self.log = open(work / "chrome.log", "wb")
         self.proc = subprocess.Popen(["sh", "-c", sh, *cmd], pass_fds=(r_in, w_out),
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                     start_new_session=True)
+                                     stdout=self.log, stderr=self.log, start_new_session=True)
         os.close(r_in)
         os.close(w_out)
         self._id = 0
         self._buf = b""
+
+    def why(self) -> str:
+        """Chrome's last words, for an error message."""
+        try:
+            self.log.flush()
+            with open(self.log.name, "rb") as f:
+                tail = f.read()[-2000:].decode(errors="replace")
+            return tail.strip() or "(no diagnostics)"
+        except OSError:
+            return "(no diagnostics)"
 
     def close(self) -> None:
         try:
@@ -171,6 +187,7 @@ class DevTools:
             except ProcessLookupError:
                 pass
             self.proc.wait(timeout=10)
+        self.log.close()
 
     def _send(self, message: dict) -> None:
         os.write(self.w_in, json.dumps(message).encode() + b"\0")
@@ -179,7 +196,7 @@ class DevTools:
         while b"\0" not in self._buf:
             chunk = os.read(self.r_out, 65536)
             if not chunk:
-                raise RuntimeError("Chrome closed the debugging pipe")
+                raise RuntimeError("Chrome closed the debugging pipe: " + self.why())
             self._buf += chunk
         line, self._buf = self._buf.split(b"\0", 1)
         return json.loads(line)
