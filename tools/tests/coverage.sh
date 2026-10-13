@@ -42,8 +42,9 @@
 # Results: OUT/summary.md and OUT/summary.json (tools/tests/coverage_summary.py: per language and
 # area, product code, maintainer tools and test tooling apart, and every test's exit status), the
 # tools' own reports in OUT/python/html, OUT/shell/merged (kcov), OUT/js (lcov), OUT/cpp-PACKAGE
-# (gcovr), and each test's output in OUT/logs. Exit status 0 when the measurement finished (also
-# when a test failed: see the summary), 1 when it did not, 2 for a usage error or a missing tool.
+# (gcovr), and each test's output in OUT/logs. Exit status 0 when the measurement finished and every
+# test passed (a failed test's row fails the run too: tools/tests/coverage_status.sh), 1 when a test
+# or the measurement failed, 2 for a usage error or a missing tool.
 set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=$ROOT/build/coverage
@@ -225,11 +226,6 @@ python3 "$ROOT/tools/tests/coverage_summary.py" --root "$ROOT" --out "$OUT" || s
 # A test that failed fails this run too: the rows in tests.tsv are the suites' own results (a red
 # one had gone unnoticed until a later reading, 2026-10-12), while a low coverage number does not.
 if [ -f "$OUT/tests.tsv" ]; then
-  failed=$(awk -F'\t' '$2 != 0 { print $1 " (exit " $2 ")" }' "$OUT/tests.tsv")
-  if [ -n "$failed" ]; then
-    echo "coverage.sh: these tests failed:" >&2
-    printf '  %s\n' $failed >&2
-    status=1
-  fi
+  bash "$ROOT/tools/tests/coverage_status.sh" "$OUT/tests.tsv" || status=1
 fi
 exit "$status"
