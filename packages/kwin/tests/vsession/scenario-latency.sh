@@ -8,7 +8,7 @@
 # came from), and the clipboard sheet by Meta+V (the kept page, PR #33); each a few times.
 # Run on the ThinkPad with a fusion-config seed (the KWIN-2 recipe):
 #   tools/vsession/remote.sh lat-1 packages/kwin/tests/vsession/scenario-latency.sh SEED 1920x1200 300
-set -u
+set -euo pipefail
 PLOG=$OUT/plasmashell.log
 CHK=$OUT/checks.txt
 pass() { echo "PASS $*" >>"$CHK"; }
@@ -18,8 +18,9 @@ info() { echo "INFO $*" >>"$CHK"; }
 # The shell's own widgets through the desktop scripting; the script prints its result (the
 # fusion-config.sh pattern: busctl's reply carries the print() output).
 script() {
+  # A failed call is the caller's to notice (its section fails): tolerate it here.
   busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s "$1" 2>/dev/null |
-    python3 -c 'import sys,shlex; s=sys.stdin.read().strip(); print(shlex.split(s[2:])[0] if s.startswith("s ") else "")'
+    python3 -c 'import sys,shlex; s=sys.stdin.read().strip(); print(shlex.split(s[2:])[0] if s.startswith("s ") else "")' || true
 }
 
 sleep 8
@@ -47,11 +48,11 @@ if [ -n "$pill" ]; then
     pfinput "tap 600 700 0.15"   # outside the sheet: it closes on deactivation
     sleep 1.2
   done
-  opens=$(grep -c 'quicksettings: sheet .*first frame after' "$PLOG")
+  opens=$(grep -c 'quicksettings: sheet .*first frame after' "$PLOG" || true)
   info "sheet first-frame lines: $opens"
   [ "$opens" -ge 3 ] && pass "the sheet's touch taps measured first frames ($opens)" || fail "only $opens sheet opens were measured"
-  info "sheet first frames: $(grep -o 'first frame after [0-9]* ms' "$PLOG" | tail -5 | tr '\n' ' ')"
-  info "sheet settled: $(grep -o 'sheet settled, [0-9]* frames in 500 ms' "$PLOG" | tail -3 | tr '\n' ' ')"
+  info "sheet first frames: $(grep -o 'first frame after [0-9]* ms' "$PLOG" | tail -5 | tr '\n' ' ' || true)"
+  info "sheet settled: $(grep -o 'sheet settled, [0-9]* frames in 500 ms' "$PLOG" | tail -3 | tr '\n' ' ' || true)"
 else
   fail "the quick settings pill's geometry was not found"
 fi
@@ -86,19 +87,22 @@ print("launchers: " + out);' >>"$CHK"
   pfinput 'key esc'
   sleep 1
 done
-lopens=$(grep -c 'launcher: .*first frame after' "$PLOG")
+lopens=$(grep -c 'launcher: .*first frame after' "$PLOG" || true)
 info "launcher first-frame lines: $lopens"
 [ "$lopens" -ge 2 ] && pass "the launcher's requests measured first frames ($lopens)" || fail "only $lopens launcher opens were measured"
-info "launcher first frames: $(grep -o 'launcher: [a-z ]*, first frame after [0-9]* ms' "$PLOG" | tail -4 | tr '\n' ' ')"
+info "launcher first frames: $(grep -o 'launcher: [a-z ]*, first frame after [0-9]* ms' "$PLOG" | tail -4 | tr '\n' ' ' || true)"
 
 # ---- The clipboard sheet (Meta+V, the kept page): its first frame and settle.
-before=$(grep -c 'first frame after' "$PLOG")
+before=$(grep -c 'first frame after' "$PLOG" || true)
 for _ in 1 2 3; do
   pfinput 'key meta+v'
   sleep 1.5
   pfinput 'key esc'
   sleep 1
 done
-info "clipboard opens: $(( $(grep -c 'first frame after' "$PLOG") - before ))"
-info "clipboard settles: $(grep -o 'sheet settled, [0-9]* frames in 500 ms' "$PLOG" | tail -3 | tr '\n' ' ')"
+copens=$(( $(grep -c 'first frame after' "$PLOG" || true) - before ))
+info "clipboard opens: $copens"
+[ "$copens" -ge 1 ] && pass "the clipboard sheet's Meta+V opens were measured ($copens)" \
+  || fail "only $copens clipboard opens were measured"
+info "clipboard settles: $(grep -o 'sheet settled, [0-9]* frames in 500 ms' "$PLOG" | tail -3 | tr '\n' ' ' || true)"
 info "scenario done"
