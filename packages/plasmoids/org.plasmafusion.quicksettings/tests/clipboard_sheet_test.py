@@ -168,6 +168,21 @@ service = root.findChild(QObject, "clipboardService")
 filtered = model_of(root, "clipboardFiltered")
 
 
+def items(item):
+    yield item
+    for child in item.childItems():
+        yield from items(child)
+
+
+def classes(item):
+    """The item's meta object chain (its C++ bases included)."""
+    names, mo = [], item.metaObject()
+    while mo is not None:
+        names.append(mo.className())
+        mo = mo.superClass()
+    return names
+
+
 def rows():
     return [filtered.data(filtered.index(i, 0)) for i in range(filtered.rowCount())]
 
@@ -354,6 +369,17 @@ lst.setProperty("currentIndex", 0)
 QTest.keyClick(view, Qt.Key_Right)
 QTest.qWait(50)
 check(page.property("expandedUuid") == uuid(0), "Right opens the current entry's actions")
+# ---- The open entry's action buttons reach the touch minimum in touch mode (the sheet is the
+# touch surface in tablet posture; the actions come from TextButton.qml, whose target grows there).
+root.setProperty("touch", True)
+QTest.qWait(100)
+buttons = [i for i in items(page) if i.isVisible() and "QQuickAbstractButton" in classes(i)]
+small = [(i.objectName() or str(i.property("text") or "")[:24], round(i.width(), 1), round(i.height(), 1))
+         for i in buttons if i.width() + 0.5 < 44 or i.height() + 0.5 < 44]
+check(len(buttons) >= 3 and not small,
+      "touch mode: the entry's action buttons reach 44 x 44 (%d buttons, small: %r)" % (len(buttons), small))
+root.setProperty("touch", False)
+QTest.qWait(50)
 starred_before = service.property("starredCount")
 QTest.keyClick(view, Qt.Key_Return)
 QTest.qWait(50)

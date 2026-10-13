@@ -23,7 +23,9 @@ T.AbstractButton {
     // (the clipboard sheet's row actions, chosen with the arrow keys on the list).
     property bool highlighted: false
 
-    implicitHeight: metrics.px(26)
+    // In touch mode the target is at least 44 px (ADAPTIVE 5.3), the drawn shape keeps the text
+    // size's height: IconButton and the sheet's other controls grow the same way.
+    implicitHeight: Math.max(metrics.px(26), pal.touch ? 44 : 0)
     implicitWidth: label.implicitWidth + 2 * sidePadding + (iconPath.length > 0 ? metrics.px(20) : 0)
     focusPolicy: Qt.TabFocus
     hoverEnabled: true

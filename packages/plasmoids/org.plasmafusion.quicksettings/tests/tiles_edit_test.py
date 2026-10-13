@@ -103,6 +103,15 @@ Item {
         }
     }
     FusionMetrics { id: metrics }
+    // A bare TextButton off the sheet: the component's own touch sizing (the sheet's pages give
+    // their buttons room through layouts, which a layout-free caller cannot rely on).
+    TextButton {
+        objectName: "probe-textbutton"
+        x: 1000
+        pal: backend.pal
+        metrics: metrics
+        text: "Disconnect"
+    }
     QuickSettingsMain {
         id: page
         objectName: "page"
@@ -166,13 +175,15 @@ REPORTED = CONTROLS + ("QQuickMouseArea",)
 
 
 def interactive(it, classes):
-    """Whether `it`'s meta object chain includes one of the C++ `classes`."""
+    """Whether `it` is one of the C++ `classes` (its meta object chain) or owns a tap handler (a
+    handler is a child object, not an item: the battery chip and the album art are rectangles
+    with one, so their items never match a class)."""
     mo = it.metaObject()
     while mo is not None:
         if mo.className() in classes:
             return True
         mo = mo.superClass()
-    return False
+    return any(o.metaObject().className() == "QQuickTapHandler" for o in it.children())
 
 
 def small_targets(item, classes=CONTROLS):
@@ -189,8 +200,13 @@ def small_targets(item, classes=CONTROLS):
                     or it.metaObject().className())
             parent = it.parentItem()
             where = (parent.objectName() or parent.metaObject().className()) if parent else "-"
-            found.append((name, round(it.width(), 1), round(it.height(), 1), where))
+            found.append((it, name, round(it.width(), 1), round(it.height(), 1), where))
     return found
+
+
+def describe(found):
+    """The (name, size, parent) form for messages."""
+    return [(name, w, h, where) for _, name, w, h, where in found]
 
 
 def shown():
@@ -580,8 +596,13 @@ check(header_row.implicitWidth() <= page.width() + 0.5 and power_button.width() 
       % (header_row.implicitWidth(), page.width(), power_button.width()))
 check(find("tile-bluetooth").mapToItem(page, QPointF(find("tile-bluetooth").width(), 0)).x() <= page.width() + 0.5,
       "touch in laptop posture: the right column of tiles is not cut")
-print("INFO touch in laptop posture: controls under %d px: %r"
-      % (TOUCH_MIN, small_targets(page, REPORTED)))
+# The O1 decision keeps the six header buttons at 34 px in laptop posture (the card cannot fit
+# them at 44 with the battery chip); every other control still reaches the touch minimum.
+header_row = find("editTilesButton").parentItem() if find("editTilesButton") else None
+laptop_small = [f for f in small_targets(page, REPORTED) if f[0].parentItem() is not header_row]
+check(not laptop_small,
+      "touch in laptop posture: every control outside the header reaches 44 x 44 (%r)"
+      % (describe(laptop_small),))
 root.setProperty("forceTouch", False)
 QTest.qWait(100)
 
@@ -589,9 +610,12 @@ QTest.qWait(100)
 laptop_height = find("tile-wifi").height()
 root.setProperty("tablet", True)
 QTest.qWait(150)
+probe = find("probe-textbutton")
+check(probe is not None and probe.height() >= 44,
+      "touch mode: a TextButton on its own reaches 44 px (%r)" % (probe.height() if probe else None,))
 tablet_small = small_targets(page)
 check(not tablet_small,
-      "tablet posture: every control in the sheet reaches 44 x 44 (%r)" % (tablet_small,))
+      "tablet posture: every control in the sheet reaches 44 x 44 (%r)" % (describe(tablet_small),))
 
 if find("tabletRow-rotation") is not None:
     check(find("editTilesButton") is None and find("tabletRow-edit") is not None,
