@@ -383,7 +383,7 @@ if [ -n "$THIRD" ]; then
   kwriteconfig6 --file kwinrulesrc --group 1 --key wmclass kcalc
   kwriteconfig6 --file kwinrulesrc --group 1 --key wmclassmatch 2
   kwriteconfig6 --file kwinrulesrc --group 1 --key noborder true
-  kwriteconfig6 --file kwinrulesrc --group 1 --key noborderrule 1
+  kwriteconfig6 --file kwinrulesrc --group 1 --key noborderrule 3 # Rules::Apply: only after the initial mapping
   qdbus org.kde.KWin /KWin reconfigure; sleep 1
   kcalc >/dev/null 2>&1 &
   sleep 3
