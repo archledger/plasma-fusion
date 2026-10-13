@@ -62,29 +62,39 @@ checker sees them.
 | `fuzz/` | the fuzz targets (`app_icons`, `keyboard_keys`, `previous_theme`) |
 
 If you are not sure where a task lives, the part pages map it: widgets and the shell are under
-`docs/parts/shell-*.md` (top bar, dock, launcher, quick settings, meters); the theme, icons,
-cursors and wallpapers have their generator pages (`plasma-style.md`, `consistency.md`, `icons.md`,
-`app-icons.md`, `cursors.md`); packaging and installs are `system.md`, `installer.md`, `nixos.md`;
+`docs/parts/shell-*.md` (top bar, dock, launcher, quick settings, meters); the theme, icons and
+cursors have their generator pages (`plasma-style.md`, `consistency.md`, `icons.md`,
+`app-icons.md`, `cursors.md`), wallpapers are `foundation.md`; packaging and installs are
+`system.md`, `installer.md`, `nixos.md`;
 the device scripts are `device.md`, the login check `gate.md`, the terminal and editor themes
 and the shared foundations `foundation.md`, the test harnesses `testing.md` and `ci.md`, the VM
 harness `release-tests.md`.
 
 ## Generated outputs: change the source, regenerate
 
-Most drawings that ship in `packages/` — the Plasma styles' SVGs, the icon themes, cursors,
-wallpapers — are **generated** from the design boards (`design/boards/*.dc.html`) by the scripts in
-`generators/`; the part's page in `docs/parts/` names the generator, its inputs, its command and
-its own tests (for example `generators/plasma-style/gen_plasma_style.py` writes complete theme
-packages). Do not hand-edit generated files: change the generator, regenerate, and run the
-generator's tests and the part's suite over the output. Some files are deliberately kept by hand
-(for example the Breeze fallback set) — the part page says which. The boards decide every colour,
-size and drawing: do not introduce values the boards do not have.
+Most of the drawings the desktop ships — the Plasma styles' SVGs, the icon themes, cursors,
+wallpapers — are **generated** from the design boards (`design/boards/*.dc.html`) and the sources
+in `generators/` (the wallpaper SVGs under `generators/wallpapers/svg/`); the build scripts write
+them into the staged tree (`STAGE`), not into the source `packages/` directory (only some art,
+such as the Global Theme previews, is committed). The part's page in `docs/parts/` names the
+generator, its inputs, its command and its own tests (for example
+`generators/plasma-style/gen_plasma_style.py` writes complete theme packages). Do not hand-edit
+generated files: change the generator, regenerate, and run the generator's tests and the part's
+suite over the output. Some files are deliberately kept by hand
+(for example the Breeze fallback set) — the part page says which. The boards decide the style,
+but part pages also define work derived in that style rather than drawn on a board (the derived
+icon and cursor sets, documented deviations — docs/parts/icons.md and cursors.md): maintain those
+as their pages prescribe, and do not invent values beyond the boards and those derived sets.
 
 ## Build and check (exactly these commands)
 
-- `tools/build.sh [PART...]` — build all parts (or named ones) into a HOME tree under `STAGE`
-  (default `stage/home`); it first runs the QML lints in `tools/checks/` (motion, a11y, id scope,
-  calendar tile; `PF_LINTS=fail|warn|off`, default fail).
+- `tools/build.sh [NAME...]` — build the staged parts into a HOME tree under `STAGE` (default
+  `stage/home`); it first runs the QML lints in `tools/checks/` (motion, a11y, id scope, calendar
+  tile; `PF_LINTS=fail|warn|off`, default fail). `NAME` is a script in `tools/build.d/`
+  (`ls tools/build.d/` lists them); a name without one builds nothing and still exits 0. The
+  three compiled parts (`decoration-cpp`, `kcm-cpp`, `navigation-cpp`) are CMake projects with
+  ctest suites, packaged with `packaging/build-rpm.sh --compiled` — their part page has the
+  details.
 - `tools/checks/tests/run.sh` — the lints' own fixtures.
 - `tools/checks/shellcheck.sh` — ShellCheck over every script.
 - `ruff check` — Python, configuration in `ruff.toml`.
@@ -128,8 +138,10 @@ part page lists (`dnf builddep`).
 
 - English, plain sentences, **why-first comments**, wrapped at 100 columns; the style of the
   surrounding code wins. QML: 4 spaces. Shell: bash with `set -euo pipefail` and an SPDX header —
-  except `scripts/install.sh`, which is POSIX `sh` by contract (parsed and tested with dash and
-  BusyBox; docs/parts/installer.md): never turn it into a bash script or add `pipefail` to it.
+  except the scripts that are POSIX `sh` by contract: `scripts/install.sh` (parsed and tested with
+  dash and BusyBox; docs/parts/installer.md) and the pacman hook
+  `packaging/arch/plasma-fusion-rebuild` (ShellCheck reads its shebang). Keep their interpreters;
+  never add `pipefail` to them.
 - QML rules the lints enforce: no literal animation durations and no endless animations
   (`motion-lint`), every interactive item has an accessible name (`a11y-lint.py`), an `id` is used
   only inside the component that declares it (`id-scope-lint.py`).
