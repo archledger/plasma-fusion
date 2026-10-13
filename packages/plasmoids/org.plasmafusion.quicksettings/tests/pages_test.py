@@ -164,10 +164,23 @@ Item {
         id: backend
         property QtObject audio: QtObject {
             readonly property var cardModel: ListModel {}
-            readonly property var sinkModel: ListModel {}
+            readonly property var sinkModel: ListModel {
+                ListElement { Name: "Built-in audio"; Description: "Built-in audio"; Index: 0 }
+            }
             readonly property var sourceModel: ListModel {}
+            readonly property var playbackModel: [{
+                PulseObject: ({ volume: 0.5, muted: false, deviceIndex: 0 }),
+                Client: ({ name: "Test application" }),
+                Name: "Test application"
+            }]
+            readonly property var recordingModel: []
+            readonly property real normal: 1
+            readonly property int maximum: 100
             function setDefault() {}
             function openSettings() {}
+            function toggleStreamMute() {}
+            function setStreamVolume() {}
+            function routeStream() {}
         }
         property QtObject devices: QtObject {
             readonly property var list: ListModel {
@@ -399,6 +412,12 @@ check(root.property("px44") < 40, "the suite runs at the minimum text scale (px(
 root.setProperty("touch", True)
 QTest.qWait(150)
 touch_assert(root, find(root, "audioPage"), "the Audio page")
+# The applications tab and its stream row (the routing combo) exist only when a stream plays.
+audio = find(root, "audioPage")
+apps = next(i for i in items(audio) if i.property("text") == "Applications")
+apps.clicked.emit()
+QTest.qWait(120)
+touch_assert(root, find(root, "audioPage"), "the Audio page (Applications tab)")
 touch_assert(root, find(root, "devicesPage"), "the Devices page")
 touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page")
 wifi = find(root, "wifiPage")
@@ -407,9 +426,13 @@ for row in [i for i in items(wifi) if i.objectName() == "wifi-row"]:
 QTest.qWait(80)
 field = next(i for i in items(wifi) if "QQuickTextField" in classes(i))
 field.setProperty("text", "secret123")
+edit = next(i for i in items(wifi) if i.property("text") == "Change name and password…")
+edit.clicked.emit()
+QTest.qWait(120)
+touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page (row expanded, hotspot editing)")
 root.setProperty("hotspotOn", True)
 QTest.qWait(120)
-touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page (row expanded, hotspot on)")
+touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page (hotspot on)")
 rows = [i for i in items(wifi) if i.objectName() == "wifi-row"] if wifi else []
 check(rows and all(r.height() + 0.5 >= 44 for r in rows),
       "touch mode: the Wi-Fi network rows reach 44 x 44 (%d rows)" % len(rows))

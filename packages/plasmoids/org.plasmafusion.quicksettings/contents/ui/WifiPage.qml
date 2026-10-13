@@ -682,6 +682,7 @@ ColumnLayout {
         QQC2.TextField {
             id: hotspotName
             Layout.fillWidth: true
+            Layout.preferredHeight: page.pal.touch ? Math.max(44, implicitHeight) : implicitHeight
             visible: hotspotBox.editing && !page.backend.net.hotspotActive
             placeholderText: i18nc("@info:placeholder", "Hotspot network name")
             Accessible.name: i18nc("@label:textbox", "Hotspot network name")
@@ -690,6 +691,7 @@ ColumnLayout {
         PlasmaExtras.PasswordField {
             id: hotspotPassword
             Layout.fillWidth: true
+            Layout.preferredHeight: page.pal.touch ? Math.max(44, implicitHeight) : implicitHeight
             visible: hotspotBox.editing && !page.backend.net.hotspotActive
             placeholderText: i18nc("@info:placeholder", "New password, 8–63 characters (empty keeps the current one)")
             Accessible.name: i18nc("@label:textbox", "Hotspot password")

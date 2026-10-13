@@ -1362,17 +1362,22 @@ touch floor:
   `px(48)` the same way (41 px at the minimum 0.85 text scale before); the Audio page's tabs
   take the clipboard sheet's `contentHeight: pal.touch ? 44 : ...`; the Wi-Fi password field
   takes the search field's `Layout.preferredHeight: pal.touch ? Math.max(44, implicitHeight) :
-  implicitHeight`. The field's built-in reveal action is `PlasmaExtras.ActionTextField`'s
+  implicitHeight`; the hotspot's editing fields (name and password) and the applications tab's
+  stream row take it too, and `FusionSlider` floors its compact variant at 44 in touch (the
+  board's 28 px height stays on the laptop). The field's built-in reveal action is `PlasmaExtras.ActionTextField`'s
   internal (`InlineActionIcon`): a page cannot size it, so the sweep skips it and the field is
   the 44 px target; replacing it with the sheet's own touch-sized button is an open follow-up
   (a board-level change).
 
 Tests: `tests/pages_test.py` sweeps all five sub-pages with the touch flag on and the text scale
-pinned to its minimum (0.85, guarded by its own check), each with a minimal service stand-in:
-Profiles 4 controls, Bluetooth 6, Audio 5, Devices 3, Wi-Fi 8, plus the Wi-Fi rows. Without the
+pinned to its minimum (0.85, guarded by its own check), each with a minimal service stand-in, and
+drives the states a default sweep cannot see (the Applications tab with a playing stream, the
+secured Wi-Fi row expanded with a valid password, the hotspot's editing state, the hotspot on):
+Profiles 4 controls, Bluetooth 6, Audio 6, Audio Applications 6, Devices 3, Wi-Fi 8, Wi-Fi row
+expanded and editing 11, Wi-Fi hotspot on 10, plus the Wi-Fi rows. Without the
 changes the sweeps name the gaps (Devices' open button 356 x 41; Wi-Fi's Disconnect 80 x 24,
 Start hotspot 98 x 26, Change name and password 165 x 26, Hidden network... 99 x 27, Network
 settings 147 x 27; the Bluetooth batch's rows 356 x 41 and buttons 119 x 30 / 163 x 30 on the
-first red run); with them 27 checks pass. The runs are in the CI-exact Fedora 44 container
+first red run); with them 30 checks pass. The runs are in the CI-exact Fedora 44 container
 (`localhost/pf-suites-f44`); the tiles, clipboard and notification suites stay green (68, 53 and
 64 checks).
