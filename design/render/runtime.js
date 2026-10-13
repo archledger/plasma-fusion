@@ -130,12 +130,16 @@
   async function expandFor(node, scope) {
     const list = resolveValue(node.getAttribute("list"), scope) || [];
     const asName = node.getAttribute("as") || "x";
-    const tmpl = document.createElement("template");
-    tmpl.innerHTML = node.innerHTML;
+    // Clone the original children: a sc-for may sit inside an <svg> (the AppIcon component's
+    // extras layers), and reparsing innerHTML would put the clones in the HTML namespace, where
+    // the browser does not draw them.
+    const originals = Array.from(node.childNodes).map((n) => n.cloneNode(true));
     const parent = node.parentNode;
     for (const item of list) {
       const holder = document.createElement("div");
-      holder.appendChild(tmpl.content.cloneNode(true));
+      for (const n of originals) {
+        holder.appendChild(n.cloneNode(true));
+      }
       await processNode(holder, Object.assign(Object.create(scope), { [asName]: item }));
       while (holder.firstChild) {
         parent.insertBefore(holder.firstChild, node);
@@ -188,7 +192,8 @@
   async function renderBoard() {
     const xdc = document.querySelector("x-dc");
     if (!xdc) {
-      console.warn("render-runtime: no <x-dc> found");
+      // A standalone board (plain HTML/CSS, like the tablet ones): nothing to resolve.
+      document.documentElement.dataset.boardRendered = "1";
       return;
     }
     moveHelmet(document);

@@ -3,7 +3,9 @@
 The Plasma Fusion design concept, one board per surface. Every colour, size and drawing in the
 theme comes from these boards. `boards/` holds the canvas sources (`.dc.html`, opened in the
 design canvas they were made with); `previews/` holds a picture of each board, shown below. These
-are the design, not screenshots of the running desktop.
+are the design, not screenshots of the running desktop. The previews are rendered from these
+sources by `render/render.py`; [`docs/parts/boards.md`](../docs/parts/boards.md) has the
+commands, the bundled fonts, the tile emitter and the tests.
 
 ## Contents
 
