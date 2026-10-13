@@ -52,7 +52,7 @@ checker sees them.
 
 | Path | What |
 | --- | --- |
-| `packages/` | the parts: `plasmoids/` (the bar and its widgets, dock, launcher, quick settings, meters, ...), `lockscreen/`, `kwin/` (the snap script and the effects), `decoration-cpp/`, `navigation-cpp/`, `kcm-cpp/` (the settings module), `power/`, `powerfx/`, `appicons/`, `keyboard/`, `gtk/`, `color-schemes/`, `look-and-feel/`, `plymouth/`, `compat/`, `common/` — many carry their own `tests/`; the part's page in `docs/parts/` lists the part's tests (several parts have none, e.g. the navigation effect) |
+| `packages/` | the parts: `plasmoids/` (the bar and its widgets, dock, launcher, quick settings, meters, ...), `lockscreen/`, `kwin/` (the snap script and the effects), `decoration-cpp/`, `navigation-cpp/`, `kcm-cpp/` (the settings module), `power/`, `powerfx/`, `appicons/`, `keyboard/`, `gtk/`, `konsole/`, `ktexteditor/`, `color-schemes/`, `look-and-feel/`, `plymouth/`, `compat/`, `common/` — many carry their own `tests/`; the part's page in `docs/parts/` lists the part's tests (several parts have none, e.g. the navigation effect) |
 | `generators/` | the design sources: `plasma-style/`, `icons/`, `cursors/`, `wallpapers/`, `fonts/`, `decoration/`, `look-and-feel/`, `plymouth/` — the drawing pipeline from the boards |
 | `tools/` | `build.sh` and `build.d/` (one script per part), `checks/` (the lints and their fixtures), `device/` (setup, restore, field log, gate — machine-facing tools), `tests/` (the packaging and release-VM harnesses), `plasma-fusion/` (the command-line tool) |
 | `scripts/` | `install.sh` — the one-line installer (its test mode is also what the release VMs install from) |
@@ -65,8 +65,9 @@ If you are not sure where a task lives, the part pages map it: widgets and the s
 `docs/parts/shell-*.md` (top bar, dock, launcher, quick settings, meters); the theme, icons,
 cursors and wallpapers have their generator pages (`plasma-style.md`, `consistency.md`, `icons.md`,
 `app-icons.md`, `cursors.md`); packaging and installs are `system.md`, `installer.md`, `nixos.md`;
-the device scripts are `device.md`, the login check `gate.md`, the test harnesses `testing.md` and
-`ci.md`, the VM harness `release-tests.md`.
+the device scripts are `device.md`, the login check `gate.md`, the terminal and editor themes
+and the shared foundations `foundation.md`, the test harnesses `testing.md` and `ci.md`, the VM
+harness `release-tests.md`.
 
 ## Generated outputs: change the source, regenerate
 
@@ -97,14 +98,19 @@ size and drawing: do not introduce values the boards do not have.
   (e.g. the calendar-date, backdrop-reload and wheel-guard checks). A bare `python3 <suite>.py`
   on a live display is never the right run. The JavaScript suites run with `node`; the C++ parts
   run their ctest suites, which CI runs under the `sanitizers` workflow's flags.
-- Packaging a snapshot: `packaging/build-rpm.sh`; the other distribution channels have
+- Packaging a snapshot: `packaging/build-rpm.sh` (add `--compiled` to include the three
+  compiled parts; the default builds the shared part only); the other distribution channels have
   container-driven builders in `tools/tests/packages/`. NixOS is the exception: it is the flake
-  (`packaging/nix/`, checked with `nix flake check` — docs/parts/nixos.md).
+  (`packaging/nix/`, checked with `nix flake check` locally — no CI job runs Nix —
+  docs/parts/nixos.md).
 
-Run the checks a change touches locally before proposing it. CI runs all of them; a red check is
-never waved through. CI runs in Fedora 44 containers; a Fedora 44 KDE machine with `podman` can run
-everything except the VM harness, which needs QEMU with KVM and the images its page describes. The
-compiled parts need the dependencies their part page lists (`dnf builddep`).
+Run the checks a change touches locally before proposing it. CI covers them (a red check is never
+waved through), with one exception: `nix flake check` is local-only — no workflow runs Nix. The
+Fedora jobs run in Fedora 44 containers, the package-channel jobs in a container of their target
+system (Arch, Debian testing, Ubuntu, KDE neon) and several other workflows on Ubuntu runners; a
+Fedora 44 KDE machine with `podman` can reproduce all of them except the VM harness, which needs
+QEMU with KVM and the images its page describes. The compiled parts need the dependencies their
+part page lists (`dnf builddep`).
 
 ## What every change arrives with
 
@@ -147,9 +153,10 @@ Prove the logic offline; use the lower rungs only for what genuinely needs a des
    [TIMEOUT]` runs a headless Plasma session (its own D-Bus bus and Wayland socket; it never
    touches the logged-in desktop) and sources `SCENARIO`, a bash file, inside it; the scenario can
    `shot NAME` screenshots, and everything lands under `/var/tmp/pfv-NAME` (`PFV_BASE` overrides).
-   `tools/vsession/cvsession.sh` runs the same scenario in a Plasma test container (build the image
-   with `tools/container/test/build.sh BASE TAG`; the base images cover Fedora 44's Plasma and the
-   beta COPR — docs/parts/containers.md), results in `./vsession-out/NAME`. This is the cheapest
+   `tools/vsession/cvsession.sh NAME SCENARIO SEED_DIR [WxH] [TIMEOUT]` runs the same scenario in a
+   Plasma test container (the seed directory is required; build the image with
+   `tools/container/test/build.sh BASE TAG`; the base images cover Fedora 44's Plasma and the beta
+   COPR — docs/parts/containers.md), results in `./vsession-out/NAME`. This is the cheapest
    rung that shows QML under a real plasmashell and KWin.
 3. **A VM** — `tools/tests/release-vm/`: provision a system once (`provision.sh`), drive it
    (`vm.sh create|start|wait|ssh|shot|stop`), run the end-to-end installer and login check
@@ -168,8 +175,10 @@ Prove the logic offline; use the lower rungs only for what genuinely needs a des
    (`journalctl --user -f`, `coredumpctl`) for errors. Leave the machine as you found it, and
    never leave a test in a state the next person cannot undo.
 
-The test containers and the VM harness both come with a stable and a beta Plasma lane: when a
-change touches a part that depends on Plasma internals, test it on the series it is built for.
+The test containers and the `compiled` workflow's beta build are the stable and beta Plasma
+lanes; the release-VM harness runs each system's own (stable) Plasma. When a change touches a part
+that depends on Plasma internals, test it on the series it is built for — the beta lane is the
+container and compiled-build one.
 
 ## Releases
 
