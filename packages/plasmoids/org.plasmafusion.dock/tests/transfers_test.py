@@ -111,6 +111,40 @@ Item {
         entry: Jobs.withJobs({}, transfers.progress)["org.kde.dolphin"] ?? null
         notificationCount: unread
     }
+    // The dock's tablet tile (main.qml: 56 px in tablet posture, never below 44): its interactive
+    // surface must reach the touch minimum too.
+    TaskItem {
+        id: tabletTile
+        x: 400
+        width: 56
+        height: 90
+        tablet: true
+        iconSize: 56
+        index: 1
+        model: ({ AppId: "org.kde.dolphin", AppName: "Dolphin", decoration: "system-file-manager", IsLauncher: false,
+                  IsStartup: false, IsActive: false, IsDemandingAttention: false })
+        pal: palette
+        motion: motion
+        entry: null
+        notificationCount: 0
+    }
+    // The tile's mouse area (its interactive surface), found by the property only it declares.
+    function touchTarget(item) {
+        for (const child of item.children) {
+            if (child.pressPoint !== undefined) {
+                return child;
+            }
+            const found = touchTarget(child);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
+    }
+    function tabletTarget() {
+        const a = touchTarget(tabletTile);
+        return a ? JSON.stringify([Math.round(a.width), Math.round(a.height)]) : "null";
+    }
     function find(item, name) {
         if (item.objectName === name) {
             return item;
@@ -202,6 +236,13 @@ try:
         pumped(view.terminate, dbus.UInt32(0), "", dbus.Dictionary({}, signature="sv"))
     wait_for(lambda: progress() == {}, "finished jobs still show progress")
     check(True, "finished jobs show no progress")
+    def tablet_target():
+        return json.loads(QMetaObject.invokeMethod(item, "tabletTarget", Q_RETURN_ARG("QVariant")))
+
+    target = tablet_target()
+    check(target is not None and target[0] >= 44 and target[1] >= 44,
+          "the tablet tile's touch target reaches 44 x 44 (%r)" % (target,))
+
     print(f"transfers: {checks} checks passed")
 finally:
     calls.shutdown(wait=False)
