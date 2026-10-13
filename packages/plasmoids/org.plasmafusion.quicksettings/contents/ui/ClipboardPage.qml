@@ -132,6 +132,23 @@ ColumnLayout {
         }
         list.forceActiveFocus(Qt.TabFocusReason);
     }
+    // Back to the state a fresh page had, for the kept instance: the sheet keeps this page
+    // instantiated between opens (PopupContent, survey 4 2026-10-12), so every open resets here.
+    function reset(): void {
+        mode = "list";
+        modeUuid = "";
+        modeText = "";
+        modeFocus = null;
+        expandedUuid = "";
+        actionIndex = 0;
+        keyboardMode = false;
+        search.text = "";
+        search.cursorPosition = 0;
+        if (list.count > 0) {
+            list.currentIndex = 0;
+            list.positionViewAtBeginning();
+        }
+    }
     // Typing on the list goes to the search field.
     function typeToSearch(text: string): void {
         search.text += text;

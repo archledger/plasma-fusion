@@ -40,6 +40,32 @@ Item {
     readonly property alias scroller: scroller
     // The drill-down page shown (null on quick settings).
     readonly property var pageItem: subPage.pageItem
+    // The pages loader follows backend.page: from the Connections below and once at completion. A
+    // subpage can be requested before this content is created (this loader is asynchronous - a
+    // Meta+V during the first seconds after login), and that first change would otherwise be
+    // missed (review 4253399257). The clipboard page is kept between opens and reset per open.
+    function syncPage(): void {
+        const name = content.backend.page;
+        if (name === "main") {
+            if (subPage.wantedComponent !== clipboardComponent) {
+                subPage.wantedComponent = null;
+            }
+        } else {
+            const wanted = subPage.componentFor(name);
+            if (wanted !== subPage.wantedComponent) {
+                subPage.wantedComponent = wanted;
+            }
+            if (name === "clipboard") {
+                // The item may be created just now (first open): reset once it exists.
+                Qt.callLater(() => {
+                    if (subPage.item) {
+                        subPage.item.reset();
+                    }
+                });
+            }
+        }
+    }
+    Component.onCompleted: syncPage()
     FusionMetrics {
         id: fusionMetrics
         area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
@@ -206,14 +232,23 @@ Item {
                     readonly property var pageItem: item
                     width: parent.width
                     height: parent.height
-                    active: content.backend.page !== "main"
+                    // The clipboard page stays instantiated once it was opened: constructing it
+                    // dominated the clipboard sheet's open time (160-216 ms measured against the
+                    // main sheet's 8-35; survey 4, 2026-10-12), and kept, its height is known
+                    // before the window maps, so the sheet does not resize after its first frame.
+                    // Every other page keeps the old behavior (destroyed when it is left).
+                    property var wantedComponent: null
+                    active: wantedComponent !== null
+                    visible: content.backend.page !== "main"
                     opacity: status === Loader.Ready ? 1 : 0
                     Behavior on opacity {
                         enabled: content.pal.motion.animate
                         NumberAnimation { duration: content.pal.motion.toggle }
                     }
-                    sourceComponent: {
-                        switch (content.backend.page) {
+                    sourceComponent: wantedComponent
+
+                    function componentFor(name) {
+                        switch (name) {
                         case "wifi":
                             return wifiComponent;
                         case "bluetooth":
@@ -233,6 +268,12 @@ Item {
                         default:
                             return null;
                         }
+                    }
+                }
+                Connections {
+                    target: content.backend
+                    function onPageChanged() {
+                        content.syncPage();
                     }
                 }
             }
