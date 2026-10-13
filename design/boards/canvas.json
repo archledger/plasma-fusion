@@ -193,7 +193,7 @@
       "title": "24 · Tablet home",
       "w": 1440,
       "x": 0,
-      "y": 2880
+      "y": 3060
     },
     "TabletLight.dc.html": {
       "h": 900,
@@ -201,7 +201,7 @@
       "title": "25 · Tablet home, light",
       "w": 1440,
       "x": 0,
-      "y": 2880
+      "y": 3060
     },
     "TabsSnap.dc.html": {
       "h": 1360,
