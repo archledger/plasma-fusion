@@ -107,10 +107,12 @@ as their pages prescribe, and do not invent values beyond the boards and those d
 - `ruff check` — Python, configuration in `ruff.toml`.
 - `git clang-format --diff main` — C++, KDE's style (`.clang-format`).
 - `packaging/check-version.sh` — `VERSION` against the spec, the PKGBUILD and the Debian changelog.
-- A part's own suites, listed on its `docs/parts/<part>.md` page. CI runs most of them; a suite
-  with no workflow (the plasma-style generator's `tests/`, for example) is yours to run. The QML
-  suites are Python and run offscreen; the suite's usage comment or its part page names the exact
-  command — several need a private bus
+- A part's own suites, listed on the part's page in `docs/parts/` — the build names are not all page
+  names (`dock` → `shell-dock.md`, `desktopcards` → `desktop-cards.md`, `keyboard-keys` →
+  `keyboard.md`; the routing above maps the rest). CI runs most of them; a suite with no workflow
+  (the plasma-style generator's `tests/`, for example) is yours to run. The QML suites are Python
+  and run offscreen; the suite's usage comment or its part page names the exact command —
+  several need a private bus
   (`cd packages/<...>/tests && QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 <suite>.py <stage-home>`,
   e.g. the quick-settings and dock suites), others run with `QT_QPA_PLATFORM=offscreen` alone
   (e.g. the calendar-date, backdrop-reload and wheel-guard checks). A bare `python3 <suite>.py`
