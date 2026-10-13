@@ -21,9 +21,11 @@ CC0-1.0, fonts OFL-1.1; the design boards in `design/` decide every colour, size
 
 ## Hard rules (CI enforces them; never work around them)
 
-- **One trailer per commit: the DCO.** Every commit carries exactly one
-  `Signed-off-by: Wisbendji Fimerlus <archledger236@gmail.com>` (`git commit -s`) and no other
-  trailer. A squash merge satisfies it only when the pull request body carries the trailer.
+- **One trailer per commit: the DCO, in the author's own name.** Every commit carries exactly one
+  `Signed-off-by` trailer — the *author's* name and email, which `git commit -s` fills in from the
+  git configuration (for example `Signed-off-by: Jane Doe <jane@example.com>`). Commit under your
+  own identity and never sign off as anyone else. No other trailer. A squash merge satisfies the
+  check only when the pull request body carries the contributor's trailer.
 - **No AI attribution, anywhere in git or on GitHub.** Commit messages, branch and tag names,
   pull request and issue titles and bodies, review comments and release notes must not name or
   credit an AI agent, model or harness, must not link to AI products or sessions, and must not
