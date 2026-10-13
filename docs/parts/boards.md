@@ -41,7 +41,8 @@ plain HTML with the tile drawings embedded (they render without the component ru
 The seam rule is `apptiles/kit.py`'s: a layer drawn in the tile's own base colour keeps that colour
 and gains a second pass with the sheen gradient, so the sheen band continues over it without a
 seam. The component draws that pass from each entry's `seams` list; the tablet boards embed the
-drawings as `tile_svg()` produces them. `generators/icons/tests/emit_board_tiles_test.py` fails
+drawings as `tile_svg()` produces them (through `art_tiles` for the board tiles, so the
+calendar's month and date labels come along, and through the kit for the app tiles). `generators/icons/tests/emit_board_tiles_test.py` fails
 when either falls out of sync or the seam rule regresses.
 
 ## Tests and CI

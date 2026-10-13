@@ -67,8 +67,11 @@ RENDERED_MARKER = "data-board-rendered"
 WAIT_FOR_MARKER = (
     "new Promise((resolve, reject) => {"
     "  const t0 = Date.now();"
+    # The marker says the template is resolved; the bundled fonts load asynchronously (a fresh
+    # profile every time), so wait for them before the capture paints.
+    "  const done = () => document.fonts.ready.then(() => resolve('rendered'), reject);"
     "  const tick = () => {"
-    f"    if (document.documentElement.dataset.boardRendered === '1') {{ resolve('rendered'); }}"
+    f"    if (document.documentElement.dataset.boardRendered === '1') {{ done(); }}"
     f"    else if (Date.now() - t0 > {RENDER_TIMEOUT_MS}) {{ reject(new Error('the board did not finish rendering')); }}"
     "    else { setTimeout(tick, 50); }"
     "  };"
@@ -190,9 +193,16 @@ def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
                      {"width": w, "height": h, "deviceScaleFactor": SCALE, "mobile": False},
                      session=session)
             cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}/boards/{name}"}, session=session)
-            cdp.call("Runtime.evaluate",
-                     {"expression": WAIT_FOR_MARKER, "awaitPromise": True, "returnByValue": True},
-                     session=session)
+            waited = cdp.call("Runtime.evaluate",
+                              {"expression": WAIT_FOR_MARKER, "awaitPromise": True, "returnByValue": True},
+                              session=session)
+            # A rejected promise comes back in a successful response's exceptionDetails; a board
+            # whose template failed must not be captured.
+            if "exceptionDetails" in waited:
+                reason = waited["exceptionDetails"].get("exception", {}).get("description", "no detail")
+                raise RuntimeError(f"{name}: the board did not finish rendering ({reason})")
+            if waited.get("result", {}).get("value") != "rendered":
+                raise RuntimeError(f"{name}: the render wait returned {waited.get('result')}")
             shot = cdp.call("Page.captureScreenshot",
                             {"format": "png", "captureBeyondViewport": False}, session=session)
         finally:

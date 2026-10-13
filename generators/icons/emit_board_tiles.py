@@ -112,11 +112,18 @@ def block() -> str:
     return "\n".join(lines)
 
 
-def tile_svg_markup(tile, px: int) -> str:
-    """One tile as the boards embed it: a single-line <svg> at the board's pixel size."""
-    from apptiles import kit  # noqa: E402
+def tile_svg_markup(tile, px: int, source: str = "app", key: str = "") -> str:
+    """One tile as the boards embed it: a single-line <svg> at the board's pixel size. A board tile
+    comes from art_tiles (which draws the calendar's month/date labels); an app tile through the
+    kit (the seam rule and the x extras)."""
+    if source == "board":
+        import art_tiles  # noqa: E402
 
-    svg = kit.tile_svg(tile)
+        svg = art_tiles.tile_svg(key)
+    else:
+        from apptiles import kit  # noqa: E402
+
+        svg = kit.tile_svg(tile)
     inner = svg[svg.index(">") + 1:svg.rindex("</svg>")]
     inner = re.sub(r"\s*\n\s*", "", inner)
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="{px}" height="{px}" viewBox="0 0 64 64">{inner}</svg>'
@@ -132,7 +139,7 @@ def tablet_html(path: str) -> str:
 
         def repl(m, source=source, key=key):
             width = int(re.search(r'width="(\d+)"', m.group(2)).group(1))
-            return m.group(1) + tile_svg_markup(tile_of(source, key), width) + m.group(3)
+            return m.group(1) + tile_svg_markup(tile_of(source, key), width, source, key) + m.group(3)
 
         html, n = pattern.subn(repl, html)
         if n == 0:
