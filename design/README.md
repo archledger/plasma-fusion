@@ -52,6 +52,7 @@ are the design, not screenshots of the running desktop.
 <table>
 <tr>
 <td valign="top"><a href="previews/Tablet.webp"><img src="previews/Tablet.webp" width="420" alt="Tablet home"></a><br><b>Tablet home</b><br><a href="boards/Tablet.dc.html">source</a></td>
+<td valign="top"><a href="previews/TabletLight.webp"><img src="previews/TabletLight.webp" width="420" alt="Tablet home, light"></a><br><b>Tablet home, light</b><br><a href="boards/TabletLight.dc.html">source</a></td>
 </tr>
 </table>
 

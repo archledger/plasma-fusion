@@ -195,6 +195,14 @@
       "x": 0,
       "y": 2880
     },
+    "TabletLight.dc.html": {
+      "h": 900,
+      "page": "light",
+      "title": "25 · Tablet home, light",
+      "w": 1440,
+      "x": 0,
+      "y": 2880
+    },
     "TabsSnap.dc.html": {
       "h": 1360,
       "page": "theme",
@@ -292,6 +300,7 @@
     "QuickSettingsLight.dc.html",
     "AltTabLight.dc.html",
     "PopupsLight.dc.html",
+    "TabletLight.dc.html",
     "Colors.dc.html",
     "Controls.dc.html",
     "Windows.dc.html",
