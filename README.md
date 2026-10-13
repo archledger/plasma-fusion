@@ -13,9 +13,13 @@ with a tablet posture for convertibles.
 <td><a href="design/previews/Main.webp"><img src="design/previews/Main.webp" width="420" alt="Plasma Fusion desktop, dark"></a></td>
 <td><a href="design/previews/MainLight.webp"><img src="design/previews/MainLight.webp" width="420" alt="Plasma Fusion desktop, light"></a></td>
 </tr>
+<tr>
+<td><a href="design/previews/Tablet.webp"><img src="design/previews/Tablet.webp" width="420" alt="Plasma Fusion tablet posture, dark"></a></td>
+<td><a href="design/previews/TabletLight.webp"><img src="design/previews/TabletLight.webp" width="420" alt="Plasma Fusion tablet posture, light"></a></td>
+</tr>
 </table>
 
-These are design boards, the reference for every colour, size and drawing used here. All 25
+These are design boards, the reference for every colour, size and drawing used here. All 27
 boards are pictured in [`design/`](design/README.md), with their canvas sources in
 `design/boards/`.
 
