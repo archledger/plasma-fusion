@@ -16,8 +16,11 @@ A KDE Plasma 6 desktop built from the Plasma Fusion design concept (macOS, GNOME
 ideas on Plasma's Global Theme structure): themes, widgets, KWin scripts and effects, a lock
 shell, a launcher, a dock, installers and per-channel packaging, in one source tree. Plasma 6.7 is
 supported; Plasma 6.8 is tested from the beta through the parts that do not exist in 6.7 (they
-load only where the API is there). The code is GPL-2.0-or-later, art and docs CC-BY-SA-4.0, data
-CC0-1.0, fonts OFL-1.1; the design boards in `design/` decide every colour, size and drawing.
+load only where the API is there). Project-authored code is GPL-2.0-or-later; files kept from
+KDE's own sources (parts of the desktop, lock screen and task switcher) keep their original
+licence (GPL-2.0-or-later or LGPL-2.0-or-later); artwork and documentation are CC-BY-SA-4.0,
+data CC0-1.0, fonts OFL-1.1 — README.md has the table. The design boards in `design/` decide
+every colour, size and drawing.
 
 ## Hard rules (never work around them)
 
@@ -92,19 +95,21 @@ as their pages prescribe, and do not invent values beyond the boards and those d
 
 - `tools/build.sh [NAME...]` — build the staged parts into a HOME tree under `STAGE` (default
   `stage/home`); it first runs the QML lints in `tools/checks/` (motion, a11y, id scope, calendar
-  tile; `PF_LINTS=fail|warn|off`, default fail). `NAME` is a script in `tools/build.d/`
-  (`ls tools/build.d/` lists them); a name without one builds nothing and still exits 0. The
-  three compiled parts (`decoration-cpp`, `kcm-cpp`, `navigation-cpp`) are CMake projects with
-  ctest suites, packaged with `packaging/build-rpm.sh --compiled` — their part page has the
-  details.
+  tile; `PF_LINTS=fail|warn|off`, default fail). `NAME` is a part name: a `tools/build.d/` script
+  without its numeric prefix and `.sh` (`20-plasma-style.sh` builds as `plasma-style`; `ls
+  tools/build.d/` lists them). An unknown name builds nothing and still exits 0 — the `== NAME`
+  lines say what ran. The three compiled parts (`decoration-cpp`, `kcm-cpp`, `navigation-cpp`) are
+  CMake projects with ctest suites, packaged with `packaging/build-rpm.sh --compiled` — their part
+  page has the details.
 - `tools/checks/tests/run.sh` — the lints' own fixtures.
 - `tools/checks/shellcheck.sh` — ShellCheck over every script.
 - `ruff check` — Python, configuration in `ruff.toml`.
 - `git clang-format --diff main` — C++, KDE's style (`.clang-format`).
 - `packaging/check-version.sh` — `VERSION` against the spec, the PKGBUILD and the Debian changelog.
-- A part's own suites, listed on its `docs/parts/<part>.md` page and run by CI: the QML suites are
-  Python and run offscreen; the suite's usage comment or its part page names the exact command —
-  several need a private bus
+- A part's own suites, listed on its `docs/parts/<part>.md` page. CI runs most of them; a suite
+  with no workflow (the plasma-style generator's `tests/`, for example) is yours to run. The QML
+  suites are Python and run offscreen; the suite's usage comment or its part page names the exact
+  command — several need a private bus
   (`cd packages/<...>/tests && QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 <suite>.py <stage-home>`,
   e.g. the quick-settings and dock suites), others run with `QT_QPA_PLATFORM=offscreen` alone
   (e.g. the calendar-date, backdrop-reload and wheel-guard checks). A bare `python3 <suite>.py`
@@ -116,13 +121,14 @@ as their pages prescribe, and do not invent values beyond the boards and those d
   (`packaging/nix/`, checked with `nix flake check` locally — no CI job runs Nix —
   docs/parts/nixos.md).
 
-Run the checks a change touches locally before proposing it. CI covers them (a red check is never
-waved through), with one exception: `nix flake check` is local-only — no workflow runs Nix. The
-Fedora jobs run in Fedora 44 containers, the package-channel jobs in a container of their target
-system (Arch, Debian testing, Ubuntu, KDE neon) and several other workflows on Ubuntu runners; a
-Fedora 44 KDE machine with `podman` can reproduce all of them except the VM harness, which needs
-QEMU with KVM and the images its page describes. The compiled parts need the dependencies their
-part page lists (`dnf builddep`).
+Run the checks a change touches locally before proposing it. CI covers the checks that have jobs
+(a red check is never waved through), but not every suite does: `nix flake check` is local-only —
+no workflow runs Nix — and a part suite without a workflow (the plasma-style generator's `tests/`,
+for example) is local-only too. The Fedora jobs run in Fedora 44 containers, the package-channel
+jobs in a container of their target system (Arch, Debian testing, Ubuntu, KDE neon) and several
+other workflows on Ubuntu runners; a Fedora 44 KDE machine with `podman` can reproduce all of them
+except the VM harness, which needs QEMU with KVM and the images its page describes. The compiled
+parts need the dependencies their part page lists (`dnf builddep`).
 
 ## What every change arrives with
 
