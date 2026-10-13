@@ -168,11 +168,6 @@ Item {
             root.openedWindows = [];
             for (let i = 0; i < list.length; ++i) {
                 const w = list[i];
-                // First sight of a window opened while the policy runs, after its initial mapping:
-                // a no-titlebar rule has applied by now (windowAdded can be before that), so what
-                // is seen here is what the window keeps. KWin does not expose rules to scripts, so
-                // a borderless state that could be the policy's own option is taken as the user's.
-                root.laptopNoBorder[root.key(w)] = w.noBorder;
                 if (root.applied && root.eligible(w) && w.maximizeMode !== 3 && !w.tile && root.fitsMaximized(w)) {
                     root.maximizedByUs[root.key(w)] = true;
                     w.setMaximize(true, true);
@@ -331,9 +326,19 @@ Item {
         const onMaximize = function () {
             root.maximizeChanged(w);
         };
+        // The first time a window becomes borderless while the policy runs (a no-titlebar rule at
+        // its initial mapping, or the option when it is maximized) is the state it keeps: KWin does
+        // not expose window rules to scripts, so it is taken as the user's (see the part page).
+        // Only windows without a snapshot are recorded: the ones present at enter() have theirs.
+        const onDecoration = function () {
+            if (w.noBorder && !(key(w) in root.laptopNoBorder)) {
+                root.laptopNoBorder[key(w)] = true;
+            }
+        };
         w.tileChanged.connect(onTile);
         w.maximizedChanged.connect(onMaximize);
-        tileHandlers[k] = [w, onTile, onMaximize];
+        w.decorationPolicyChanged.connect(onDecoration);
+        tileHandlers[k] = [w, onTile, onMaximize, onDecoration];
     }
     function unfollowAll() {
         for (const k in tileHandlers) {
@@ -341,6 +346,7 @@ Item {
             if (entry[0] && !entry[0].deleted) {
                 entry[0].tileChanged.disconnect(entry[1]);
                 entry[0].maximizedChanged.disconnect(entry[2]);
+                entry[0].decorationPolicyChanged.disconnect(entry[3]);
             }
         }
         tileHandlers = ({});
