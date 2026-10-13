@@ -624,7 +624,12 @@ PlasmoidItem {
         }
         onCloseRequested: root.close()
         onFrameSwapped: {
-            root.framesDrawn++;
+            // The "frames" testing hook counts only an open's frames, never the open window's idle
+            // repaints (the search field's cursor blinks about twice a second) and never the close
+            // animation (closeSheet starts this same animation with closing set; review 4253399263).
+            if (root.sheetStarted > 0 && !sheetAnimation.closing) {
+                root.framesDrawn++;
+            }
             root.sheetFrames++;
         }
         // Another window took the focus (an app started, the dock, a click on the top bar).
@@ -695,20 +700,27 @@ PlasmoidItem {
                 root.syncExpanded();
             }
         }
-        // The time from the open request to the card's first frame (the budget is 50 ms).
+        // The time from the open request to the card's first frame. The plan's 50 ms budget was not
+        // met and stands as documented (docs/parts/shell-launcher.md: open-to-settled under 300 ms);
+        // the ThinkPad measures 75-91 ms to the first frame, stable (survey 4, 2026-10-12).
         onFrameSwapped: {
-            root.framesDrawn++;
+            if (root.openStarted > 0 || Date.now() < root.settleUntil) {
+                root.framesDrawn++;
+            }
             if (root.openStarted > 0 && visible) {
                 console.info("launcher: " + (root.firstShown ? "open" : "first open") + ", first frame after "
                              + (Date.now() - root.openStarted) + " ms");
                 root.openStarted = 0;
+                root.settleUntil = Date.now() + 300; // the open's remaining frames, not idle repaints
                 root.firstShown = true;
             }
         }
     }
 
-    // Testing: frames drawn by the launcher window since the last "frames" request (openRequest).
+    // Testing: the launcher's animation frames since the last "frames" request (openRequest): a
+    // frame swap of either window while an open is in flight (see onFrameSwapped).
     property int framesDrawn: 0
+    property real settleUntil: 0
     function reportFrames() {
         const card = launcherWindow.card;
         const sheet = sheetWindow.sheet;

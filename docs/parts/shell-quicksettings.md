@@ -746,7 +746,12 @@ the lead directly.
 - First frame of the sheet (A/B `q1b`, the same timing log in HEAD's package, click on the pill): first
   open 96, 111, 103 ms with QS-1 against 85, 94 ms with HEAD (the pop-up window is created on its first
   show; the settings re-read was moved after the first frame); later opens 5-6 ms in both. The first open
-  is about 12 ms slower in these few runs.
+  is about 12 ms slower in these few runs. Since survey 4 (2026-10-12) each open also logs `sheet
+  settled, N frames in 500 ms`: the frames swapped in the half second after the first frame (the open
+  animation runs 200-250 ms), for smoothness checks the frame count alone cannot show. The ThinkPad
+  measures 8-35 ms to the first frame warm; the clipboard sheet's first open was 160-216 ms until its
+  page was kept instantiated between opens (survey 4; it was the page construction, and the kept page
+  also lets the sheet size itself before its window maps).
 - No plasmashell crash; no QML warnings from the widget; the one KWin core dump of a run before the exit
   fix was removed.
 - Not in QS-1: a swipe up on the sheet to close it (Esc, a tap outside and the pill close it), the icon

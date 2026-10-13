@@ -136,7 +136,10 @@ Item {{
             function openEmoji() {{ root.emojis++; stubBackend.closeRequested(); }}
         }}
     }}
-    // The sheet makes a new page each time it opens (PopupContent.qml): so does the test.
+    // The sheet used to make a new page each time it opens; it now keeps the clipboard page and
+    // resets it (PopupContent.qml, survey 4 2026-10-12). The test keeps a fresh page per show to
+    // test the page itself; reset() is what the kept page gets on every open (checked below where
+    // the page's state is driven).
     property bool pageShown: false
     Loader {{
         anchors.fill: parent
@@ -446,4 +449,17 @@ call(service, "clearHistory")
 QTest.qWait(200)
 check(filtered.rowCount() == starred and service.property("starredCount") == starred,
       "Clear all (after Klipper's confirmation) keeps the starred entries")
+
+# The kept page's per-open reset(): the sheet calls it when the page becomes visible again
+# (PopupContent.qml); a fresh page had all of this by construction.
+copy("reset probe")
+search = root.findChild(QObject, "clipboardSearch")
+call(search, "insert", 0, "sum")
+call(page, "openMode", "edit", 0)
+QTest.qWait(100)
+call(page, "reset")
+QTest.qWait(100)
+check(search.property("text") == "", "reset(): the search is cleared")
+check(page.property("mode") == "list", "reset(): the page is back in list mode")
+check(lst.property("currentIndex") == 0, "reset(): the newest entry is current")
 print(f"Clipboard sheet: {checks} checks, 0 failures")

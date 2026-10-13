@@ -893,6 +893,9 @@ PlasmoidItem {
     }
     property real openStarted: 0
     property bool contentShown: false
+    // Frames swapped in the 500 ms after the open's first frame (the "sheet settled" line; survey
+    // 4: the sheet had no frame count, only the first-frame latency). -1 while not counting.
+    property int openSettleFrames: -1
     // Reads the tablet settings again once the sheet is up (processes and D-Bus calls would
     // delay its first frame).
     Timer {
@@ -985,15 +988,30 @@ PlasmoidItem {
         }
         Connections {
             target: popup
-            enabled: root.openStarted > 0
+            enabled: root.openStarted > 0 || root.openSettleFrames >= 0
             function onFrameSwapped() {
                 if (!popup.visible) {
+                    return;
+                }
+                if (root.openStarted === 0) {
+                    root.openSettleFrames++;
                     return;
                 }
                 console.info("quicksettings: sheet " + (root.contentShown ? "open" : "first open") + ", first frame after "
                              + (Date.now() - root.openStarted) + " ms");
                 root.openStarted = 0;
                 root.contentShown = true;
+                root.openSettleFrames = 0;
+                openSettle.restart();
+            }
+        }
+        // The open animation runs 200-250 ms (Motion popupIn/surface): 500 ms of frames cover it.
+        Timer {
+            id: openSettle
+            interval: 500
+            onTriggered: {
+                console.info("quicksettings: sheet settled, " + root.openSettleFrames + " frames in 500 ms");
+                root.openSettleFrames = -1;
             }
         }
     }
