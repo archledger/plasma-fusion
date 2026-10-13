@@ -30,7 +30,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 </svg>
 
 <!-- Page 1: the pinned apps (the launcher's list), over the wallpaper -->
-<div aria-label="Home screen, page 1" style="position:absolute;left:48px;top:24px;width:1120px;display:grid;grid-template-columns:repeat(5, minmax(0, 1fr));grid-auto-rows:142px;justify-items:center">
+<div aria-label="Home screen, page 1" style="position:absolute;left:48px;top:68px;width:1120px;display:grid;grid-template-columns:repeat(5, minmax(0, 1fr));grid-auto-rows:133px;justify-items:center">
 
 <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:100%">
 <button aria-label="Dolphin" class="tile" style="width:72px;height:72px;border-radius:19px"><svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 64 64"><path d="M15 0h34a15 15 0 0 1 15 15v34a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-34a15 15 0 0 1 15 -15z" fill="#2b5db5"/><path d="M15 0h34a15 15 0 0 1 15 15v30a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-30a15 15 0 0 1 15 -15z" fill="#3f7fe0"/><path d="M15 0h34a15 15 0 0 1 15 15v13H0V15A15 15 0 0 1 15 0z" fill="#ffffff" fill-opacity="0.09"/><path d="M13 19a4 4 0 0 1 4-4h9l4 4h17a4 4 0 0 1 4 4v19H13z" fill="#bcd4ff"/><path fill-rule="evenodd" d="M17 24h30a4 4 0 0 1 4 4v14a4 4 0 0 1 -4 4h-30a4 4 0 0 1 -4 -4v-14a4 4 0 0 1 4 -4z" fill="#ffffff"/><path fill-rule="evenodd" d="M16.5 44.5c3-7 10-11.5 18.5-12.5 4-.4 7.5.3 10.5 1.6l4.5-.4-3.4 2.8c-4.4-.7-9 0-13 2-3.6 1.8-6.5 4.4-8.5 7.4l-1.9-3.4c-2.4 1.5-4.6 2.3-6.7 2.5zM31.5 32.6l3.6-5.6 2.8 5.1zM37 37.2l-1.8 4.6 5.6-4.1z" fill="#3f7fe0"/><path d="M16.5 44.5c3-7 10-11.5 18.5-12.5 4-.4 7.5.3 10.5 1.6l4.5-.4-3.4 2.8c-4.4-.7-9 0-13 2-3.6 1.8-6.5 4.4-8.5 7.4l-1.9-3.4c-2.4 1.5-4.6 2.3-6.7 2.5zM31.5 32.6l3.6-5.6 2.8 5.1zM37 37.2l-1.8 4.6 5.6-4.1z" fill="url(#pf-sheen)" fill-rule="evenodd"/><path d="M15 0.5h34a14.5 14.5 0 0 1 14.5 14.5v34a14.5 14.5 0 0 1 -14.5 14.5h-34a14.5 14.5 0 0 1 -14.5 -14.5v-34a14.5 14.5 0 0 1 14.5 -14.5z" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter"/></svg></button>
@@ -109,7 +109,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 
 </div>
 <!-- The cards on page 1 (the containment's widgets), in the columns the grid leaves -->
-<div style="position:absolute;left:1224px;top:24px;width:192px;display:flex;flex-direction:column;gap:16px">
+<div style="position:absolute;left:1224px;top:68px;width:192px;display:flex;flex-direction:column;gap:16px">
 <div aria-label="Weather widget" style="height:128px;box-sizing:border-box;padding:14px 16px;border-radius:18px;background:rgba(255,255,255,0.62);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(20,24,39,0.1);display:flex;flex-direction:column;gap:6px">
 <div style="display:flex;align-items:center;justify-content:space-between">
 <span style="font-size:12px;font-weight:700;color:#5b6278">Local weather</span>
@@ -145,7 +145,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 <div style="height:5px;border-radius:3px;background:rgba(20,24,39,0.1)"><div style="width:23%;height:5px;border-radius:3px;background:#3cc4b0"></div></div>
 </div>
 <div style="display:flex;flex-direction:column;gap:5px">
-<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#5b6278;font-weight:700">Memory</span><span style="font-weight:700">6.1 / 16 GB</span></div>
+<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:#5b6278;font-weight:700">Memory</span><span style="font-weight:700">6.1 / 15.3 GiB</span></div>
 <div style="height:5px;border-radius:3px;background:rgba(20,24,39,0.1)"><div style="width:38%;height:5px;border-radius:3px;background:#5b9dff"></div></div>
 </div>
 </div>
@@ -153,21 +153,22 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 
 <!-- Top bar (tablet): avatar, app name and menu; clock; status -->
 <header style="position:absolute;left:0;top:0;width:1440px;height:44px;box-sizing:border-box;padding:0 10px;display:flex;align-items:center;justify-content:space-between;background:rgba(250,251,255,0.74);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);border-bottom:1px solid rgba(20,24,39,0.06);font-size:13px">
-<div style="width:470px;display:flex;align-items:center;gap:2px">
-<button aria-label="User" style="width:32px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center">
+<div style="width:470px;display:flex;align-items:center">
+<div aria-label="Desktop" style="display:flex;align-items:center;gap:8px;height:32px;padding:0 14px;border-radius:16px;background:rgba(20,24,39,0.08)">
 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="5.5" fill="#5b9dff" fill-opacity="0.9"></circle><circle cx="8" cy="15" r="5.5" fill="#f2a65a" fill-opacity="0.9"></circle><circle cx="16" cy="15" r="5.5" fill="#3cc4b0" fill-opacity="0.85"></circle></svg>
-</button>
-<span style="padding:0 10px 0 6px;font-weight:800">Plasma Fusion</span>
-<button aria-label="Menu" style="width:28px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#3a4157"><svg class="i" width="17" height="17" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+<span style="font-size:14px;font-weight:800">Desktop</span>
+</div>
 </div>
 <div style="display:flex;align-items:center;gap:12px;height:32px;padding:0 16px;border-radius:16px;background:rgba(20,24,39,0.08)">
-<span style="font-weight:700">Mon 12 Oct</span>
-<span style="font-family:'Space Grotesk',sans-serif;font-weight:600">14:49</span>
+<span style="font-size:14px;font-weight:800">Mon 12 Oct</span>
+<span style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:800">14:49</span>
 </div>
-<div style="width:470px;display:flex;align-items:center;justify-content:flex-end;gap:6px;color:#28304a">
-<button aria-label="Network connected" style="width:28px;height:26px;display:flex;align-items:center;justify-content:center"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg></button>
-<button aria-label="Brightness" style="width:28px;height:26px;display:flex;align-items:center;justify-content:center"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg></button>
-<button aria-label="Battery at 82%" style="display:flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:13px;background:rgba(20,24,39,0.08)"><svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M4 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM22 11v2"></path><path d="M5 10h9v4H5z" style="fill:currentColor;stroke:none"></path></svg><span style="font-size:12px;font-weight:700">82%</span></button>
+<div style="width:470px;display:flex;align-items:center;justify-content:flex-end;gap:8px;color:#28304a">
+<div aria-label="System status" style="display:flex;align-items:center;gap:12px;height:32px;padding:0 16px;border-radius:16px;background:rgba(20,24,39,0.08)">
+<svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"></path></svg>
+<svg class="i" width="18" height="18" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"></path></svg>
+<span style="display:flex;align-items:center;gap:5px"><svg class="i" width="20" height="20" viewBox="0 0 24 24"><path d="M4 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM22 11v2"></path><path d="M5 10h9v4H5z" style="fill:currentColor;stroke:none"></path></svg><span style="font-size:14px;font-weight:800">82%</span></span>
+</div>
 <button aria-label="Notifications, 2 unread" style="width:30px;height:26px;border-radius:13px;display:flex;align-items:center;justify-content:center;position:relative"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"></path></svg><span style="position:absolute;right:6px;top:4px;width:7px;height:7px;border-radius:4px;background:#f2a65a"></span></button>
 </div>
 </header>
@@ -185,14 +186,14 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 <svg width="32" height="32" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="5.5" fill="#5b9dff" fill-opacity="0.9"></circle><circle cx="8" cy="15" r="5.5" fill="#f2a65a" fill-opacity="0.9"></circle><circle cx="16" cy="15" r="5.5" fill="#3cc4b0" fill-opacity="0.85"></circle></svg>
 </button>
 <button aria-label="Overview" style="width:56px;height:56px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:rgba(20,24,39,0.08);color:#28304a"><svg class="i" width="28" height="28" viewBox="0 0 24 24"><path d="M4 5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 19h12a1 1 0 0 0 1-1V9"></path></svg></button>
-<span style="width:1px;height:36px;margin:0 4px 6px;background:rgba(20,24,39,0.16)"></span>
+<span style="width:1px;height:40px;margin:0 6px 6px;background:rgba(20,24,39,0.16)"></span>
 <div style="position:relative;display:flex;flex-direction:column;align-items:center">
 <button aria-label="Dolphin" style="display:block;width:56px;height:56px;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.35))"><svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 64 64"><defs><linearGradient id="pf-sheen" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="64"><stop offset="0" stop-color="#ffffff" stop-opacity="0.09"/><stop offset="0.4375" stop-color="#ffffff" stop-opacity="0.09"/><stop offset="0.4375" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs><path d="M15 0h34a15 15 0 0 1 15 15v34a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-34a15 15 0 0 1 15 -15z" fill="#2b5db5"/><path d="M15 0h34a15 15 0 0 1 15 15v30a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-30a15 15 0 0 1 15 -15z" fill="#3f7fe0"/><path d="M15 0h34a15 15 0 0 1 15 15v13H0V15A15 15 0 0 1 15 0z" fill="#ffffff" fill-opacity="0.09"/><path d="M13 19a4 4 0 0 1 4-4h9l4 4h17a4 4 0 0 1 4 4v19H13z" fill="#bcd4ff"/><path fill-rule="evenodd" d="M17 24h30a4 4 0 0 1 4 4v14a4 4 0 0 1 -4 4h-30a4 4 0 0 1 -4 -4v-14a4 4 0 0 1 4 -4z" fill="#ffffff"/><path fill-rule="evenodd" d="M16.5 44.5c3-7 10-11.5 18.5-12.5 4-.4 7.5.3 10.5 1.6l4.5-.4-3.4 2.8c-4.4-.7-9 0-13 2-3.6 1.8-6.5 4.4-8.5 7.4l-1.9-3.4c-2.4 1.5-4.6 2.3-6.7 2.5zM31.5 32.6l3.6-5.6 2.8 5.1zM37 37.2l-1.8 4.6 5.6-4.1z" fill="#3f7fe0"/><path d="M16.5 44.5c3-7 10-11.5 18.5-12.5 4-.4 7.5.3 10.5 1.6l4.5-.4-3.4 2.8c-4.4-.7-9 0-13 2-3.6 1.8-6.5 4.4-8.5 7.4l-1.9-3.4c-2.4 1.5-4.6 2.3-6.7 2.5zM31.5 32.6l3.6-5.6 2.8 5.1zM37 37.2l-1.8 4.6 5.6-4.1z" fill="url(#pf-sheen)" fill-rule="evenodd"/><path d="M15 0.5h34a14.5 14.5 0 0 1 14.5 14.5v34a14.5 14.5 0 0 1 -14.5 14.5h-34a14.5 14.5 0 0 1 -14.5 -14.5v-34a14.5 14.5 0 0 1 14.5 -14.5z" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter"/></svg></button>
-<span style="position:absolute;bottom:-9px;height:4px;border-radius:2px;width:16px;background:#2f6fdf"></span>
+<span style="position:absolute;bottom:-8px;height:4px;border-radius:2px;width:18px;background:#2f6fdf"></span>
 </div>
 <div style="position:relative;display:flex;flex-direction:column;align-items:center">
 <button aria-label="Firefox" style="display:block;width:56px;height:56px;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.35))"><svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 64 64"><path d="M15 0h34a15 15 0 0 1 15 15v34a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-34a15 15 0 0 1 15 -15z" fill="#3e1e70"/><path d="M15 0h34a15 15 0 0 1 15 15v30a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-30a15 15 0 0 1 15 -15z" fill="#5a2ca0"/><path d="M15 0h34a15 15 0 0 1 15 15v13H0V15A15 15 0 0 1 15 0z" fill="#ffffff" fill-opacity="0.09"/><path d="M20.5 31a12.5 12.5 0 1 0 25 0a12.5 12.5 0 1 0 -25 0z" fill="#8f63e8"/><path fill-rule="evenodd" d="M13.5 31a18.5 18.5 0 1 0 37 0a18.5 18.5 0 1 0 -37 0zM24.5 25a13.5 13.5 0 1 0 27 0a13.5 13.5 0 1 0 -27 0z" fill="#ff8a1f"/><path fill-rule="evenodd" d="M44 17.5l3.5-9 2.5 11zM18 39c3 5 8 8 14 8.5-7 1-13-2-16-6z" fill="#ffc23d"/><path d="M15 0.5h34a14.5 14.5 0 0 1 14.5 14.5v34a14.5 14.5 0 0 1 -14.5 14.5h-34a14.5 14.5 0 0 1 -14.5 -14.5v-34a14.5 14.5 0 0 1 14.5 -14.5z" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter"/></svg></button>
-<span style="position:absolute;bottom:-9px;height:4px;border-radius:2px;width:5px;background:rgba(20,24,39,0.6)"></span>
+<span style="position:absolute;bottom:-8px;height:4px;border-radius:2px;width:6px;background:rgba(20,24,39,0.6)"></span>
 </div>
 <div style="position:relative;display:flex;flex-direction:column;align-items:center">
 <button aria-label="Konsole" style="display:block;width:56px;height:56px;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.35))"><svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 64 64"><path d="M15 0h34a15 15 0 0 1 15 15v34a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-34a15 15 0 0 1 15 -15z" fill="#131726"/><path d="M15 0h34a15 15 0 0 1 15 15v30a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-30a15 15 0 0 1 15 -15z" fill="#262c42"/><path d="M15 0h34a15 15 0 0 1 15 15v13H0V15A15 15 0 0 1 15 0z" fill="#ffffff" fill-opacity="0.09"/><path d="M32 38h10a2 2 0 0 1 2 2v0a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v0a2 2 0 0 1 2 -2z" fill="#e8ebf4"/><path fill-rule="evenodd" d="M15 13a2 2 0 1 0 4 0a2 2 0 1 0 -4 0zM21 13a2 2 0 1 0 4 0a2 2 0 1 0 -4 0zM27 13a2 2 0 1 0 4 0a2 2 0 1 0 -4 0z" fill="#5d6680"/><path d="M18 25l8 7-8 7" fill="none" stroke="#3cc4b0" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 0.5h34a14.5 14.5 0 0 1 14.5 14.5v34a14.5 14.5 0 0 1 -14.5 14.5h-34a14.5 14.5 0 0 1 -14.5 -14.5v-34a14.5 14.5 0 0 1 14.5 -14.5z" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter"/></svg></button>
@@ -202,9 +203,9 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 </div>
 <div style="position:relative;display:flex;flex-direction:column;align-items:center">
 <button aria-label="System Settings" style="display:block;width:56px;height:56px;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.35))"><svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 64 64"><path d="M15 0h34a15 15 0 0 1 15 15v34a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-34a15 15 0 0 1 15 -15z" fill="#262b38"/><path d="M15 0h34a15 15 0 0 1 15 15v30a15 15 0 0 1 -15 15h-34a15 15 0 0 1 -15 -15v-30a15 15 0 0 1 15 -15z" fill="#3b4255"/><path d="M15 0h34a15 15 0 0 1 15 15v13H0V15A15 15 0 0 1 15 0z" fill="#ffffff" fill-opacity="0.09"/><path d="M15.25 20h33.5a2.25 2.25 0 0 1 2.25 2.25v0a2.25 2.25 0 0 1 -2.25 2.25h-33.5a2.25 2.25 0 0 1 -2.25 -2.25v0a2.25 2.25 0 0 1 2.25 -2.25zM15.25 35h33.5a2.25 2.25 0 0 1 2.25 2.25v0a2.25 2.25 0 0 1 -2.25 2.25h-33.5a2.25 2.25 0 0 1 -2.25 -2.25v0a2.25 2.25 0 0 1 2.25 -2.25z" fill="#6b7490"/><path fill-rule="evenodd" d="M15.25 20h19.5a2.25 2.25 0 0 1 2.25 2.25v0a2.25 2.25 0 0 1 -2.25 2.25h-19.5a2.25 2.25 0 0 1 -2.25 -2.25v0a2.25 2.25 0 0 1 2.25 -2.25zM15.25 35h6.5a2.25 2.25 0 0 1 2.25 2.25v0a2.25 2.25 0 0 1 -2.25 2.25h-6.5a2.25 2.25 0 0 1 -2.25 -2.25v0a2.25 2.25 0 0 1 2.25 -2.25z" fill="#5b9dff"/><path fill-rule="evenodd" d="M31.5 22.25a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0zM18.5 37.25a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0z" fill="#ffffff"/><path d="M15 0.5h34a14.5 14.5 0 0 1 14.5 14.5v34a14.5 14.5 0 0 1 -14.5 14.5h-34a14.5 14.5 0 0 1 -14.5 -14.5v-34a14.5 14.5 0 0 1 14.5 -14.5z" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter"/></svg></button>
-<span style="position:absolute;bottom:-9px;height:4px;border-radius:2px;width:16px;background:#2f6fdf"></span>
+<span style="position:absolute;bottom:-8px;height:4px;border-radius:2px;width:6px;background:rgba(20,24,39,0.6)"></span>
 </div>
-<span style="width:1px;height:36px;margin:0 4px 6px;background:rgba(20,24,39,0.16)"></span>
+<span style="width:1px;height:40px;margin:0 6px 6px;background:rgba(20,24,39,0.16)"></span>
 <button aria-label="Downloads" style="width:56px;height:56px;border-radius:15px;background:rgba(20,24,39,0.08);color:#28304a;display:flex;align-items:center;justify-content:center"><svg class="i" width="28" height="28" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg></button>
 <button aria-label="Trash" style="width:56px;height:56px;border-radius:15px;background:rgba(20,24,39,0.08);color:#28304a;display:flex;align-items:center;justify-content:center"><svg class="i" width="28" height="28" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"></path></svg></button>
 </nav>
