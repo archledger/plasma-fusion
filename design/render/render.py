@@ -26,6 +26,7 @@ import http.server
 import json
 import os
 import re
+import select
 import shutil
 import signal
 import socketserver
@@ -52,8 +53,10 @@ SCALE = int(os.environ.get("RENDER_SCALE", "2"))
 QUALITY = int(os.environ.get("RENDER_QUALITY", "90"))
 MAD_LIMIT = 12
 WINDOW = 32
+WINDOW_STEP = WINDOW // 2   # sliding, so a small change cannot straddle every window
 WINDOW_LIMIT = 20
 RENDER_TIMEOUT_MS = 20000
+RECEIVE_TIMEOUT = 120     # seconds to wait for one answer from the browser
 
 # The fonts the boards ask Google for, served from this repository instead: same files, so an
 # offline render (and --check) is stable across network state and upstream stylesheet changes.
@@ -71,20 +74,16 @@ FONT_CSS = "<style>" + "".join(
     f"@font-face{{font-family:'{fam}';font-weight:{weight};src:url('/{path}')}}" for fam, weight, path in FONTS
 ) + "</style>"
 GOOGLE_FONTS_LINK = re.compile(r"<link[^>]*fonts\.googleapis\.com[^>]*>")
-RENDERED_MARKER = "data-board-rendered"
-WAIT_FOR_MARKER = (
-    "new Promise((resolve, reject) => {"
-    "  const t0 = Date.now();"
-    # The marker says the template is resolved; the bundled fonts load asynchronously (a fresh
-    # profile every time), so wait for them before the capture paints.
-    "  const done = () => document.fonts.ready.then(() => resolve('rendered'), reject);"
-    "  const tick = () => {"
-    f"    if (document.documentElement.dataset.boardRendered === '1') {{ done(); }}"
-    f"    else if (Date.now() - t0 > {RENDER_TIMEOUT_MS}) {{ reject(new Error('the board did not finish rendering')); }}"
-    "    else { setTimeout(tick, 50); }"
-    "  };"
-    "  tick();"
-    "})"
+# The probe runs from here, one short evaluation at a time: a long-lived promise inside the page
+# can hang when the navigation replaces the document under it, and documentElement is null while
+# the new document is coming up. The marker says the template is resolved; the bundled fonts load
+# asynchronously (a fresh profile every time), so their status is part of the answer.
+PROBE = (
+    "(() => {"
+    "  const el = document.documentElement;"
+    "  if (!el || el.dataset.boardRendered !== '1') { return 'pending'; }"
+    "  return document.fonts.status === 'loaded' ? 'rendered' : 'fonts';"
+    "})()"
 )
 
 
@@ -194,6 +193,8 @@ class DevTools:
 
     def _recv(self) -> dict:
         while b"\0" not in self._buf:
+            if not select.select([self.r_out], [], [], RECEIVE_TIMEOUT)[0]:
+                raise RuntimeError("Chrome stopped answering: " + self.why())
             chunk = os.read(self.r_out, 65536)
             if not chunk:
                 raise RuntimeError("Chrome closed the debugging pipe: " + self.why())
@@ -240,16 +241,17 @@ def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
                      {"width": w, "height": h, "deviceScaleFactor": SCALE, "mobile": False},
                      session=session)
             cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}/boards/{name}"}, session=session)
-            waited = cdp.call("Runtime.evaluate",
-                              {"expression": WAIT_FOR_MARKER, "awaitPromise": True, "returnByValue": True},
-                              session=session)
-            # A rejected promise comes back in a successful response's exceptionDetails; a board
-            # whose template failed must not be captured.
-            if "exceptionDetails" in waited:
-                reason = waited["exceptionDetails"].get("exception", {}).get("description", "no detail")
-                raise RuntimeError(f"{name}: the board did not finish rendering ({reason})")
-            if waited.get("result", {}).get("value") != "rendered":
-                raise RuntimeError(f"{name}: the render wait returned {waited.get('result')}")
+            deadline = time.time() + RENDER_TIMEOUT_MS / 1000
+            while True:
+                probe = cdp.call("Runtime.evaluate", {"expression": PROBE, "returnByValue": True},
+                                 session=session)
+                value = probe.get("result", {}).get("value")
+                if value == "rendered":
+                    break
+                if time.time() > deadline:
+                    raise RuntimeError(f"{name}: the board did not finish rendering"
+                                       f" ({value if value else probe.get('exceptionDetails')})")
+                time.sleep(0.1)
             shot = cdp.call("Page.captureScreenshot",
                             {"format": "png", "captureBeyondViewport": False}, session=session)
         finally:
@@ -270,8 +272,8 @@ def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
 def compare(name: str, got: Path, want: Path) -> bool:
     """Print the difference of a fresh render against the committed preview; False when the
     committed preview is missing, has another size, or is stale - globally (mean limit MAD_LIMIT)
-    or in any fixed WINDOW x WINDOW pixel area (limit WINDOW_LIMIT), so a change confined to even
-    a small element, like a 14 px icon, fails the check."""
+    or in any WINDOW x WINDOW pixel window of the sliding grid (limit WINDOW_LIMIT), so a change
+    confined to even a small element, like a 14 px icon, fails the check wherever it sits."""
     if not want.exists():
         print(f"{name}: no committed preview to check against")
         return False
@@ -284,8 +286,8 @@ def compare(name: str, got: Path, want: Path) -> bool:
     mad = sum(ImageStat.Stat(diff).mean) / 3
     worst = 0.0
     w, h = a.size
-    for y in range(0, h, WINDOW):
-        for x in range(0, w, WINDOW):
+    for y in range(0, h, WINDOW_STEP):
+        for x in range(0, w, WINDOW_STEP):
             box = (x, y, min(x + WINDOW, w), min(y + WINDOW, h))
             worst = max(worst, sum(ImageStat.Stat(diff.crop(box)).mean) / 3)
     print(f"{name}: mean abs difference {mad:.1f}, worst {WINDOW} px window {worst:.1f} over {w}x{h}")

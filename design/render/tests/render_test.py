@@ -56,9 +56,14 @@ with tempfile.TemporaryDirectory(prefix="render-test-") as td:
     icon = Image.new("RGB", (2048, 1280), (10, 20, 30))
     icon.paste((255, 255, 255), (700, 700, 714, 714))     # a 14 px icon on a board-sized render
     icon.save(td / "icon.png")
-    check(render.compare("tiny", write(td / "base2048.png", (2048, 1280), (10, 20, 30)),
-                         td / "icon.png") is False,
+    base = write(td / "base2048.png", (2048, 1280), (10, 20, 30))
+    check(render.compare("tiny", base, td / "icon.png") is False,
           "a change the size of a 14 px icon fails the check on a board-sized render")
+    corner = Image.new("RGB", (2048, 1280), (10, 20, 30))
+    corner.paste((255, 255, 255), (25, 25, 39, 39))       # the same size, on a window boundary
+    corner.save(td / "corner.png")
+    check(render.compare("boundary", base, td / "corner.png") is False,
+          "a 14 px change on a window boundary fails the check too")
     check(render.compare("size", got, write(td / "wrong.png", (32, 24), (10, 20, 30))) is False,
           "a committed preview of another size fails the check")
     check(render.compare("missing", got, td / "absent.png") is False,

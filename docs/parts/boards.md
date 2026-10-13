@@ -24,9 +24,10 @@ process owns the whole render over Chrome's remote-debugging pipe: it navigates,
 runtime's `data-board-rendered` marker through `Runtime.evaluate` (a board that does not finish, or
 one whose template expressions fail, fails the run) and captures that same page, so the picture
 cannot come from a page that was not validated. `--check` exits nonzero for a missing committed
-preview, a size mismatch, a mean per-channel difference over 12, or a worst 32 x 32 pixel
-window mean over 20 - the window test catches a stale preview whose change is confined to a
-small area, down to a 14 px icon. A board
+preview, a size mismatch, a mean per-channel difference over 12, or a worst window mean over
+20 (32 x 32 pixel windows, sliding in 16 px steps, so a small change cannot straddle every
+window) - the window test catches a stale preview whose change is confined to a small area, down
+to a 14 px icon. A board
 change re-renders the affected previews with this tool; `--check` over all 27 boards is the
 fidelity gate ([`docs/parts/icons.md`](icons.md) lists what the drawings mean).
 
