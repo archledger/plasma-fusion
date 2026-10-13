@@ -9,8 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## 0.5.0 (2026-10-12)
 
-Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch); the final
-6.8.0 verification lands before the tag.
+Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch).
+Plasma 6.8 support comes from that beta testing; anything Plasma 6.8.0 final needs will come in a
+follow-up release.
 Packaged as before for Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian testing and
 KDE neon (.deb) and NixOS (flake); on an untested Plasma series the parts that depend on Plasma
 internals stay off until an update.
