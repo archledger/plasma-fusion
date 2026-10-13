@@ -222,4 +222,14 @@ for part in "${parts[@]}"; do
 done
 python3 "$ROOT/tools/tests/coverage_summary.py" --root "$ROOT" --out "$OUT" || status=1
 [ -f "$OUT/summary.md" ] && cat "$OUT/summary.md"
+# A test that failed fails this run too: the rows in tests.tsv are the suites' own results (a red
+# one had gone unnoticed until a later reading, 2026-10-12), while a low coverage number does not.
+if [ -f "$OUT/tests.tsv" ]; then
+  failed=$(awk -F'\t' '$2 != 0 { print $1 " (exit " $2 ")" }' "$OUT/tests.tsv")
+  if [ -n "$failed" ]; then
+    echo "coverage.sh: these tests failed:" >&2
+    printf '  %s\n' $failed >&2
+    status=1
+  fi
+fi
 exit "$status"

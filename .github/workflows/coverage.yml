@@ -5,7 +5,8 @@
 # Fedora 44 (docs/parts/coverage.md): Python (coverage.py), shell (kcov) and JavaScript (node) over
 # the build and the offline tests, and each compiled part (gcov and gcovr) over its tests. Each job
 # writes its table to the job summary and keeps the reports as an artifact. It measures and
-# reports; it fails only when the measurement itself fails, not on a low number.
+# reports; a test that fails fails the run (its rows are the suites' own results), a low number
+# does not.
 
 name: coverage
 

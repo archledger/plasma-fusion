@@ -38,8 +38,8 @@ The parts are `scripts` (Python, shell and JavaScript in one pass, about 4 minut
 a minute to about 4 minutes each, plus the installation). Results go to `build/coverage` unless
 `--out` says otherwise: `summary.md`, `summary.json`, each test's output in `logs/`, and the
 tools' own reports (`python/html`, `shell/merged`, `js/lcov.info`, `cpp-PACKAGE/gcovr.*`). The
-exit status is 0 when the measurement finished, also when a test failed; the summary lists every
-test's exit status.
+exit status is 0 when the measurement finished and every test passed; a test that failed fails
+the run too (the summary lists every test's exit status).
 
 ## What is measured, and how
 
