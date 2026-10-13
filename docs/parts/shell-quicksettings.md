@@ -686,10 +686,12 @@ the lead directly.
   radius 18, 12 apart; a **Tablet mode** tile (Automatic / On / Off, kwinrc `[Input] TabletMode`) where
   the posture can change by itself or the setting is not automatic; media card 72 px.
 - **Touch sizes** (ADAPTIVE 5.3, touch mode = tablet posture or a recent touch): every icon button's
-  target at least 44 x 44 (drawn size unchanged), tile chevrons 44 wide, switch 48 x 28, slider knob
-  28, notification actions 44 tall (radius 12), the notification close button always shown (32 drawn,
-  44 target) beside the time, and a horizontal swipe dismisses a card (40 % of its width or 800 px/s;
-  the card follows the finger). A long press on an icon button shows its label.
+  target at least 44 x 44 (drawn size unchanged), text buttons 44 tall (the drawn pill keeps the
+  text height), tile chevrons 44 wide, switch 48 x 28, slider knob 28, notification actions 44 tall
+  (radius 12), the notification close button always shown (32 drawn, 44 target) beside the time,
+  and a horizontal swipe dismisses a card (40 % of its width or 800 px/s; the card follows the
+  finger). A target that owns a tap handler but is no control - the battery chip, the media card's
+  album art - is at least 44 x 44 too. A long press on an icon button shows its label.
 - **One Flickable** (ADAPTIVE 5.3): the page and the notification list scroll together when they are
   taller than the screen allows; the maximum height comes from the available area (the dock's reserve
   excluded). Before, only the list shrank and the rest was cut off.
@@ -1009,7 +1011,7 @@ them again before Apply, so the dialog never writes back an older order.
   first, in the middle and as neighbours, hidden and conditional tiles, the tray, rearranging the
   shown tiles with the hidden ones keeping their places, a tile that comes or goes during a drag,
   the slot under a dragged tile, reset) and `tests/tiles_edit_test.py` (in CI), the main page on
-  the real Backend offscreen with the two keys as stand-ins (60 checks: the default grid, the
+  the real Backend offscreen with the two keys as stand-ins (68 checks: the default grid, the
   stored order, a conditional tile only while it applies, the pencil, the badges and the resting
   tile actions, a mouse drag written once on release, a touch drag, a drag let go below the grid,
   Ctrl+arrows, Ctrl+Home / End, the focus keys, Tab and Shift+Tab in the order shown, the badge and
@@ -1018,7 +1020,10 @@ them again before Apply, so the dialog never writes back an older order.
   it does, Done, Space on the pencil, Escape, closing the sheet, Reset, a drag during which Disks &
   Devices appears, the Do Not Disturb choices (section "Do Not Disturb for a while"), the Power mode
   tile's body after an application held a profile, Keep awake's time left in plural forms, the
-  clipboard sheet's tab back to All, and in tablet posture the pencil in the tablet row, 44 px targets and a touch drag at the tablet sizes):
+  clipboard sheet's tab back to All, and in tablet posture the pencil in the tablet row, 44 px
+  targets and a touch drag at the tablet sizes; the touch-target sweeps (laptop-touch asserts
+  outside the header's O1 exception, tablet asserts everything, tap-handler owners included) and
+  a bare TextButton's touch height):
 
   ```sh
   STAGE=$PWD/build/stage tools/build.sh quicksettings
@@ -1295,13 +1300,14 @@ Show notifications off, the bell's empty list, the clipboard page).
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (49 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (53 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
   the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by
   keyboard, QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode, a copied
-  file's row with a non-empty preview). Both fail without the sheet (the files do not exist on
-  0.4.1); the file preview check fails on 2a872e3 (0x0 picture).
+  file's row with a non-empty preview, the entry's action buttons at 44 px with touch input). Both
+  fail without the sheet (the files do not exist on 0.4.1); the file preview check fails on 2a872e3
+  (0x0 picture).
 
 ## The sheet's window and its content (0.5.0)
 
