@@ -37,7 +37,7 @@ a{color:#8ab8ff}a:hover{color:#b9d4ff}
 <span style="font-size:12.5px;color:#a3abc2">Files · 64-unit grid</span>
 </div>
 <div style="align-self:center;position:relative;width:320px;height:320px;margin:4px 0">
-<dc-import name="AppIcon" app="files" size="320" hint-size="320px,320px"></dc-import>
+<dc-import name="AppIcon" app="dolphin" size="320" hint-size="320px,320px"></dc-import>
 <svg width="320" height="320" viewBox="0 0 64 64" aria-hidden="true" style="position:absolute;left:0;top:0;overflow:visible">
 <path d="M8 0V64M16 0V64M24 0V64M32 0V64M40 0V64M48 0V64M56 0V64M0 8H64M0 16H64M0 24H64M0 32H64M0 40H64M0 48H64M0 56H64" stroke="#ffffff" stroke-opacity="0.22" stroke-width="0.15"></path>
 <rect x="0" y="0" width="64" height="64" rx="15" fill="none" stroke="#8ab8ff" stroke-width="0.35" stroke-dasharray="1.2 0.8"></rect>
@@ -79,7 +79,7 @@ a{color:#8ab8ff}a:hover{color:#b9d4ff}
 <div style="display:flex;align-items:flex-end;gap:24px;margin-top:auto">
 <sc-for list="{{ramp}}" as="r" hint-placeholder-count="7">
 <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
-<dc-import name="AppIcon" app="browser" size="{{r.s}}" hint-size="{{r.s}}px,{{r.s}}px"></dc-import>
+<dc-import name="AppIcon" app="firefox" size="{{r.s}}" hint-size="{{r.s}}px,{{r.s}}px"></dc-import>
 <span style="font-size:11.5px;font-weight:700;color:#a3abc2">{{r.s}}</span>
 </div>
 </sc-for>
@@ -127,12 +127,12 @@ a{color:#8ab8ff}a:hover{color:#b9d4ff}
 class Component extends DCLogic {
   renderVals() {
     const apps = [
-      ['files', 'Files'], ['browser', 'Browser'], ['terminal', 'Terminal'], ['mail', 'Mail'], ['code', 'Code'], ['music', 'Music'],
-      ['photos', 'Photos'], ['settings', 'Settings'], ['calendar', 'Calendar'], ['notes', 'Notes'], ['calculator', 'Calculator'], ['software', 'Software'],
-      ['videos', 'Videos'], ['chat', 'Chat'], ['maps', 'Maps'], ['weather', 'Weather'], ['monitor', 'Monitor'], ['screenshot', 'Screenshot']
+      ['dolphin', 'Dolphin'], ['firefox', 'Firefox'], ['terminal', 'Konsole'], ['kmail', 'KMail'], ['kate', 'Kate'], ['elisa', 'Elisa'],
+      ['gwenview', 'Gwenview'], ['systemsettings', 'System Settings'], ['calendar', 'KOrganizer'], ['marknote', 'Marknote'], ['calculator', 'KCalc'], ['software', 'Discover'],
+      ['haruna', 'Haruna'], ['chat', 'NeoChat'], ['marble', 'Marble'], ['weather', 'Weather'], ['monitor', 'System Monitor'], ['screenshot', 'Spectacle']
     ].map(x => ({ key: x[0], label: x[1] }));
     const ramp = [16, 24, 32, 48, 64, 96, 128].map(s => ({ s }));
-    const check = ['files', 'terminal', 'calendar', 'notes', 'calculator', 'mail', 'weather'];
+    const check = ['dolphin', 'terminal', 'merkuro', 'marknote', 'calculator', 'kmail', 'weather'];
     const symbolic = [
       ['Search', 'M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4'],
       ['Overview', 'M4 5h11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM8 19h12a1 1 0 0 0 1-1V9'],

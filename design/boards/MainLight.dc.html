@@ -137,7 +137,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 <!-- Appearance settings (focused) -->
 <section aria-label="Appearance settings" style="position:absolute;left:548px;top:262px;width:652px;height:506px;box-sizing:border-box;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;background:#ffffff;border:1px solid rgba(20,24,39,0.14);box-shadow:0 34px 90px rgba(20,24,39,0.22)">
 <div style="height:50px;flex-shrink:0;box-sizing:border-box;padding:0 10px 0 16px;display:flex;align-items:center;gap:10px;background:#eceff6;border-bottom:1px solid rgba(20,24,39,0.06)">
-<dc-import name="AppIcon" app="settings" size="26" hint-size="26px,26px"></dc-import>
+<dc-import name="AppIcon" app="systemsettings" size="26" hint-size="26px,26px"></dc-import>
 <span style="font-size:14px;font-weight:800">Appearance</span>
 <span style="flex-grow:1"></span>
 <button aria-label="Search settings" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#3a4157"><svg class="i" width="17" height="17" viewBox="0 0 24 24"><path d="M4 11a7 7 0 1 0 14 0a7 7 0 1 0-14 0M20 20l-4-4"></path></svg></button>
@@ -308,15 +308,15 @@ class Component extends DCLogic {
         running: !!o.run, tip: !!o.tip, indW: o.act ? 16 : 5, indC: o.act ? '#2f6fdf' : 'rgba(20,24,39,0.6)' };
     };
     const dock = [
-      mk('Files', 'folder', '#3f7fe0', '#ffffff', { run: true, s: 54 }),
-      mk('Browser', 'globe', '#e8743b', '#ffffff', { run: true, s: 62, tip: true }),
-      mk('Terminal', 'terminal', '#23293d', '#141827', { s: 54 }),
-      mk('Mail', 'mail', '#1f9e8f', '#ffffff'),
-      mk('Code', 'code', '#7b5cd6', '#ffffff', { run: true }),
-      mk('Music', 'music', '#d6457a', '#ffffff', { run: true }),
-      mk('Photos', 'photos', '#3aa65b', '#ffffff'),
-      mk('Calendar', 'calendar', '#f0b429', '#3a2a00'),
-      mk('Settings', 'settings', '#5b6478', '#ffffff', { run: true, act: true })
+      mk('Dolphin', 'dolphin', '#3f7fe0', '#ffffff', { run: true, s: 54 }),
+      mk('Firefox', 'firefox', '#e8743b', '#ffffff', { run: true, s: 62, tip: true }),
+      mk('Konsole', 'terminal', '#23293d', '#141827', { s: 54 }),
+      mk('KMail', 'kmail', '#1f9e8f', '#ffffff'),
+      mk('Kate', 'kate', '#7b5cd6', '#ffffff', { run: true }),
+      mk('Elisa', 'elisa', '#d6457a', '#ffffff', { run: true }),
+      mk('Gwenview', 'gwenview', '#3aa65b', '#ffffff'),
+      mk('KOrganizer', 'calendar', '#f0b429', '#3a2a00'),
+      mk('System Settings', 'systemsettings', '#5b6478', '#ffffff', { run: true, act: true })
     ];
     const P = [
       ['Dusk Ridge', '#1a2140', '#f2a65a', '#9bb2e0', '#5a7fd6'],

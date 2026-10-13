@@ -83,6 +83,14 @@ jobs:
           python3 tools/tests/release-vm/test-run-all.py
           python3 tools/tests/release-vm/test-vm-cleanup.py
 
+      - name: Design boards (tile emitters in sync, check mode, the board runtime)
+        run: |
+          set -euo pipefail
+          dnf install -y -q python3-pillow chromium
+          python3 design/render/tests/render_test.py
+          python3 generators/icons/tests/emit_board_tiles_test.py
+          CHROME=$(command -v chromium-browser || command -v chromium) python3 design/render/tests/runtime_test.py
+
       - name: One version everywhere (VERSION, spec, PKGBUILD, Debian changelog)
         run: packaging/check-version.sh
 
