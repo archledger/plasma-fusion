@@ -111,15 +111,17 @@ Item {
         entry: Jobs.withJobs({}, transfers.progress)["org.kde.dolphin"] ?? null
         notificationCount: unread
     }
-    // The dock's tablet tile (main.qml: 56 px in tablet posture, never below 44): its interactive
-    // surface must reach the touch minimum too.
+    // The dock's tablet tile at its boundary (main.qml: minTaskTile is 44 in tablet posture when
+    // the dock is crowded, with the tablet bottom padding): its icon and interactive surface must
+    // reach the touch minimum there, so a regression below 44 fails tightly.
     TaskItem {
         id: tabletTile
         x: 400
-        width: 56
+        width: 44
         height: 90
         tablet: true
-        iconSize: 56
+        iconSize: 44
+        bottomPad: 12
         index: 1
         model: ({ AppId: "org.kde.dolphin", AppName: "Dolphin", decoration: "system-file-manager", IsLauncher: false,
                   IsStartup: false, IsActive: false, IsDemandingAttention: false })
@@ -143,7 +145,8 @@ Item {
     }
     function tabletTarget() {
         const a = touchTarget(tabletTile);
-        return a ? JSON.stringify([Math.round(a.width), Math.round(a.height)]) : "null";
+        return a ? JSON.stringify([Math.round(a.width), Math.round(a.height),
+                                   Math.round(tabletTile.iconItem.width)]) : "null";
     }
     function find(item, name) {
         if (item.objectName === name) {
@@ -240,8 +243,8 @@ try:
         return json.loads(QMetaObject.invokeMethod(item, "tabletTarget", Q_RETURN_ARG("QVariant")))
 
     target = tablet_target()
-    check(target is not None and target[0] >= 44 and target[1] >= 44,
-          "the tablet tile's touch target reaches 44 x 44 (%r)" % (target,))
+    check(target is not None and min(target) >= 44,
+          "the tablet tile's touch target and icon reach 44 px at the boundary (%r)" % (target,))
 
     print(f"transfers: {checks} checks passed")
 finally:
