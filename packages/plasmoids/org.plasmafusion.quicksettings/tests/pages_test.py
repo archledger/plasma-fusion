@@ -95,8 +95,9 @@ Item {
     property string calls: ""
     property bool active: false
     property bool timed: false
+    property bool touch: false
     function log(text: string) { root.calls += (root.calls ? "; " : "") + text; }
-    FusionPalette { id: pal }
+    FusionPalette { id: pal; touch: root.touch }
     FusionMetrics { id: metrics }
     QtObject {
         id: backend
@@ -113,6 +114,24 @@ Item {
             function untilTurnedOff() { root.log("until turned off"); }
             function setAllowed(a: string, r: string, allowed: bool) {}
         }
+        property QtObject bt: QtObject {
+            readonly property bool available: true
+            readonly property bool enabled: true
+            readonly property var devicesModel: ListModel {
+                ListElement { Device: "WH-1000XM4"; Ubi: "/org/bluez/hci0/dev_1"; Connected: true }
+                ListElement { Device: "MX Keys"; Ubi: "/org/bluez/hci0/dev_2"; Connected: false }
+            }
+            function toggleDevice(device: string, ubi: string, connected: bool) { root.log("toggle " + device); }
+            function setEnabled(on: bool) { root.log("enable " + on); }
+        }
+    }
+    BluetoothPage {
+        objectName: "bluetoothPage"
+        x: 400
+        width: root.width
+        backend: backend
+        pal: pal
+        metrics: metrics
     }
     PowerPage {
         width: root.width
@@ -226,6 +245,30 @@ root.setProperty("timed", False)
 QTest.qWait(50)
 check(state.property("text") == "On until turned off" and find(root, "keepawake-off").property("primary"),
       "untimed: the page says until turned off and marks that choice")
+# ---- Touch mode: every control on the Bluetooth page reaches 44 x 44 (ADAPTIVE 5.3).
+root.setProperty("touch", True)
+QTest.qWait(120)
+CONTROLS = ("QQuickAbstractButton", "QQuickItemDelegate", "QQuickSwitch", "QQuickSlider",
+            "QQuickComboBox", "QQuickTextField", "QQuickTextArea", "QQuickTextInput")
+
+
+def classes(item):
+    names, mo = [], item.metaObject()
+    while mo is not None:
+        names.append(mo.className())
+        mo = mo.superClass()
+    return names
+
+
+bluetooth = find(root, "bluetoothPage")
+found = [i for i in items(bluetooth)
+         if bluetooth is not None and i.isVisible() and i.property("enabled") is not False
+         and any(c in CONTROLS for c in classes(i))]
+small = [(i.objectName() or str(i.property("text") or "")[:24], round(i.width(), 1), round(i.height(), 1))
+         for i in found if i.width() + 0.5 < 44 or i.height() + 0.5 < 44]
+check(len(found) >= 3 and not small,
+      "touch mode: the Bluetooth page's controls reach 44 x 44 (%d controls, small: %r)" % (len(found), small))
+root.setProperty("touch", False)
 view.close()
 
 print(f"Quick settings pages: {checks} checks, 0 failures")

@@ -1343,3 +1343,27 @@ after a live scale change with only the padding fixed; with the change it passes
 1920 x 1200 and 1280 x 800 at scales 1, 1.25 and 1.5, with and without a scrolling notification
 list. Screenshots: `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/shellfixes-shots/`
 (`base-*` before, `fix-*` after).
+
+## Sub-pages' touch targets (0.6.0)
+
+The sub-pages' audit against ADAPTIVE 5.3 (every target at least 44 x 44 in touch mode) found the
+page header already correct and two real gaps:
+
+- The header's back button (`IconButton`, `hitSize` 44 in touch) and switch (`FusionSwitch`,
+  48 x 44) grow on their own; the first audit reading (32 x 32 and 40 x 22) was the harness's,
+  whose palette was not bound to the touch flag.
+- The Bluetooth, Audio, Devices and Profiles pages' text buttons passed
+  `implicitHeight: metrics.px(32)`, overriding `TextButton`'s own touch sizing: 32 px tall in
+  touch, 30 px at the container's 0.9375 text scale. They now use the house pattern
+  (`pal.touch ? Math.max(44, metrics.px(32)) : metrics.px(32)`, as `NotificationCard.qml`
+  already did).
+- `ListRow` was `metrics.px(44)`, which falls below 44 at a text scale under 1 (41 px at
+  0.9375); it is now `Math.max(metrics.px(44), pal.touch ? 44 : 0)`, the floor `TextButton`
+  applies.
+
+Tests: `tests/pages_test.py` adds a Bluetooth stand-in (two devices) and a sweep over it with
+the touch flag on: six controls - the header's back button and switch, two device rows, the two
+text buttons - all at least 44 x 44. Without the fixes it fails naming exactly the four real
+gaps (rows 356 x 41, buttons 119 x 30 and 163 x 30); with them 21 checks pass. Both runs in the
+CI-exact Fedora 44 container (`localhost/pf-suites-f44`); the tiles, clipboard and notification
+suites stay green (68, 53 and 64 checks).
