@@ -300,7 +300,7 @@ PY
   state tab2e
   K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
-    report('untilied the tiled window: ' + out);" >>"$OUT/place.log"
+    report('untiled the tiled window: ' + out);" >>"$OUT/place.log"
   sleep 1.5
   state tab2f; shot tab-untile2
   python3 - "$OUT/state-tab2e.json" "$OUT/state-tab2f.json" "$FLOATING" >>"$CHK" <<'PY'
@@ -320,7 +320,7 @@ PY
   case "$FLOATING" in *konsole*) SECOND=kwrite ;; esac
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0 && w.tile) { w.tile.unmanage(w); } }
-    report('untilied $SECOND for the maximized-again case');" >>"$OUT/place.log"
+    report('untiled $SECOND for the maximized-again case');" >>"$OUT/place.log"
   sleep 1.2
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0) { w.setMaximize(true, true); } }
@@ -365,6 +365,43 @@ fl = [w for w in d["windows"] if floating and floating in w["cls"]]
 ok = len(fl) == 1 and fl[0]["max"] != 3 and not fl[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: the floating window is still floating and got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in fl]}")
 PY
+
+# ---- 5b. a window the user made borderless themselves (a no-titlebar rule) is not claimed by the
+# policy: tiling and untiling it in a second tablet cycle must not hand it a title bar at leave().
+THIRD=""
+for C in dolphin konsole kwrite; do
+  case "$FLOATING" in *"$C"*) continue ;; esac
+  case "$SECOND" in *"$C"*) continue ;; esac
+  THIRD=$C; break
+done
+if [ -n "$THIRD" ]; then
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0) { if (w.tile) { w.tile.unmanage(w); } w.noBorder = true; } }
+    report('$THIRD borderless as the user set it');" >>"$OUT/place.log"
+  sleep 1
+  pfv_tablet on; sleep 6
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('$THIRD un-maximized in the second cycle');" >>"$OUT/place.log"
+  sleep 1.2
+  qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+  sleep 1.5
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0 && w.tile) { w.tile.unmanage(w); } }
+    report('$THIRD untiled in the second cycle');" >>"$OUT/place.log"
+  sleep 1.5
+  pfv_tablet off; sleep 5
+  state tab4; shot tab-userborderless
+  python3 - "$OUT/state-tab4.json" "$THIRD" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
+f = [w for w in d["windows"] if want and want in w["cls"]]
+ok = len(f) == 1 and not f[0]["tiled"] and f[0]["max"] != 3 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window the user made borderless keeps no title bar after leave: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+PY
+else
+  fail "T19: no window left for the user-borderless case"
+fi
 
 # ---- 6. health
 grep -aE 'plasmafusion-snap|org\.plasmafusion\.switcher|plasmafusion-tablet' "$KLOG" | grep -aiE 'error|TypeError|ReferenceError|Unable to assign|Binding loop|is not defined|Cannot' | sort | uniq -c | head -30 >"$OUT/warnings.txt"

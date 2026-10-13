@@ -112,7 +112,8 @@ Item {
     property var maximizedByUs: ({}) // internalId -> true: maximized by enter()
     property var openedInTablet: ({}) // internalId -> true: opened (maximized) while applied
     property var borderlessTiles: ({}) // internalId -> true: title bar removed from a tiled window
-    property var borderlessFloating: ({}) // internalId -> true: user un-maximized; no title bar
+    property var borderlessFloating: ({}) // internalId -> true: floating window without a title bar
+    property var laptopNoBorder: ({}) // internalId -> true: no title bar before the policy took over
     property var tileHandlers: ({}) // internalId -> [window, handler]
 
     function key(w) {
@@ -205,6 +206,9 @@ Item {
                 continue;
             }
             follow(w);
+            // A title bar the user removed themselves (a no-titlebar rule) stays theirs: the policy
+            // keeps the window borderless, but leave() must not claim it back.
+            laptopNoBorder[key(w)] = w.noBorder;
             if (w.tile) {
                 if (!w.noBorder) {
                     w.noBorder = true;
@@ -288,6 +292,7 @@ Item {
         openedInTablet = ({});
         borderlessTiles = ({});
         borderlessFloating = ({});
+        laptopNoBorder = ({});
         applied = false;
         busy = false;
         log("leave: restored " + restored + ", placed " + placed + ", tiles with title bar " + tiles
@@ -298,8 +303,9 @@ Item {
     // Tiled windows follow their tile while window policy is applied: quick-tiling a borderless
     // maximized window gives it its title bar back, so a tile gets noBorder again (TABLET 4.2).
     // Maximize changes are followed too: a window the user un-maximizes (the window card's
-    // "Full screen" switch, LEAD-1 resolution 11) keeps its title bar and is left alone until
-    // the next fold; one that never had a laptop geometry gets 70 % of the work area.
+    // "Full screen" switch, LEAD-1 resolution 11) keeps its size but not its title bar until
+    // tablet posture ends (the appname pill is its title bar and menu); one that never had a
+    // laptop geometry gets 70 % of the work area.
     function follow(w) {
         const k = key(w);
         if (tileHandlers[k]) {
@@ -331,10 +337,16 @@ Item {
         }
         const k = key(w);
         if (w.tile) {
+            // A tile is drawn without a title bar. Claim it when this script takes the bar now, or
+            // when the window is only borderless because of the policy: a window the user made
+            // borderless themselves keeps that state and is not claimed (enter() tracks its own
+            // tiles the same way).
             if (!w.noBorder) {
                 w.noBorder = true;
+                borderlessTiles[k] = true;
+            } else if (!laptopNoBorder[k]) {
+                borderlessTiles[k] = true;
             }
-            borderlessTiles[k] = true;
         } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
             delete borderlessTiles[k];
             // A window that leaves its tile is floating in tablet posture: like one the user
@@ -381,10 +393,12 @@ Item {
             }
             // In tablet posture the appname pill is the window's title bar and menu, so the window
             // stays without one (owner decision 2026-10-13); KWin restored the title bar on the
-            // un-maximize above, while borderlessMaximizedWindows is set. Only a bar this step
-            // removed is remembered: a window the user made borderless themselves keeps that state.
+            // un-maximize above, while borderlessMaximizedWindows is set. Only a bar the policy
+            // took is remembered: a window the user made borderless themselves keeps that state.
             if (!w.noBorder) {
                 w.noBorder = true;
+            }
+            if (!laptopNoBorder[k]) {
                 borderlessFloating[k] = true;
             }
             log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", no title bar");
