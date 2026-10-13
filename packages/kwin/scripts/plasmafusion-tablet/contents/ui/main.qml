@@ -344,7 +344,7 @@ Item {
             if (!w.noBorder) {
                 w.noBorder = true;
                 borderlessTiles[k] = true;
-            } else if (!laptopNoBorder[k]) {
+            } else if (laptopNoBorder[k] === false) {
                 borderlessTiles[k] = true;
             }
         } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
@@ -398,7 +398,7 @@ Item {
             if (!w.noBorder) {
                 w.noBorder = true;
             }
-            if (!laptopNoBorder[k]) {
+            if (laptopNoBorder[k] === false) {
                 borderlessFloating[k] = true;
             }
             log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", no title bar");
@@ -424,6 +424,9 @@ Item {
             }
             if (root.eligible(w)) {
                 root.follow(w);
+                // First sight of a window opened while the policy runs: a no-titlebar rule is
+                // already on it, so its borderless state is the user's, not the policy's.
+                root.laptopNoBorder[root.key(w)] = w.noBorder;
                 root.openedWindows.push(w);
                 openedCheck.restart();
             }

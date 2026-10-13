@@ -57,7 +57,10 @@ needed.
   every eligible window (normal, maximizable, not full screen, minimized, skip-taskbar, transient or
   modal, on the built-in screen) is maximized; tiled windows keep their tile and lose their title bar,
   and keep following `tileChanged`: a new tile loses the title bar, and an untiled window floats
-  without one (recorded like a window the user un-maximized, so leave() gives the bar back). New
+  without one (recorded like a window the user un-maximized, so leave() gives the bar back). A title
+  bar the user removed themselves (a no-titlebar rule) is never claimed: `enter()` snapshots each
+  window's state before the policy runs (a window opened later is snapshotted when it appears) and
+  leave() restores only bars the policy took. New
   windows
   open maximized by placement; resizable dialogs and transients too (owner decision 2), fixed-size
   dialogs stay centred and framed. Placement skips a window that comes with its own position (an X11
