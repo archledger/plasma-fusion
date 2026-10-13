@@ -2,7 +2,8 @@
 
 Plasma Fusion is maintained by one person. Bug reports, fixes and ideas are welcome. Everyone
 taking part follows the [code of conduct](CODE_OF_CONDUCT.md); how decisions are made is in
-[`GOVERNANCE.md`](GOVERNANCE.md).
+[`GOVERNANCE.md`](GOVERNANCE.md). If you use a coding agent or automate changes,
+[`AGENTS.md`](AGENTS.md) has the hard rules, the exact commands and where the facts live.
 
 ## Reporting
 
