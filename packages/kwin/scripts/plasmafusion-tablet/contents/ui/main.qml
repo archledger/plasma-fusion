@@ -262,7 +262,7 @@ Item {
                 w.noBorder = false;
                 tiles++;
             }
-            if (borderlessFloating[k] && w.noBorder) {
+            if (borderlessFloating[k] && w.noBorder && w.maximizeMode !== 3) {
                 w.noBorder = false;
                 floats++;
             }
@@ -336,8 +336,12 @@ Item {
             }
             borderlessTiles[k] = true;
         } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
-            w.noBorder = false;
             delete borderlessTiles[k];
+            // A window the user un-maximized earlier in this posture keeps no title bar
+            // (borderlessFloating): the tile's own bar comes back, that window's does not.
+            if (!borderlessFloating[k]) {
+                w.noBorder = false;
+            }
         }
     }
 
@@ -345,7 +349,13 @@ Item {
     // un-maximizes first) has its tile by then and enter()/leave() are over.
     property var unmaximized: [] // windows un-maximized outside enter()/leave()
     function maximizeChanged(w) {
-        if (!applied || busy || !w || w.deleted || w.maximizeMode === 3) {
+        if (!applied || busy || !w || w.deleted) {
+            return;
+        }
+        if (w.maximizeMode === 3) {
+            // Maximized again (the user's switch): the window is a maximized window now, so leave()
+            // must not treat it as the floating one this script recorded earlier.
+            delete borderlessFloating[key(w)];
             return;
         }
         unmaximized.push(w);
@@ -368,11 +378,12 @@ Item {
             }
             // In tablet posture the appname pill is the window's title bar and menu, so the window
             // stays without one (owner decision 2026-10-13); KWin restored the title bar on the
-            // un-maximize above, while borderlessMaximizedWindows is set.
+            // un-maximize above, while borderlessMaximizedWindows is set. Only a bar this step
+            // removed is remembered: a window the user made borderless themselves keeps that state.
             if (!w.noBorder) {
                 w.noBorder = true;
+                borderlessFloating[k] = true;
             }
-            borderlessFloating[k] = true;
             log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", no title bar");
         }
     }

@@ -258,6 +258,27 @@ f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3]
 ok = len(f) >= 1 and all(w["nb"] for w in f)
 print(("PASS" if ok else "FAIL") + f" T19: a window un-maximized in tablet posture keeps no title bar: {[(w['cls'], w['geo'], w['nb']) for w in f]}")
 PY
+# The floating window keeps no title bar through a tile round trip: quick-tile it, then untile it.
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+  if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0) { workspace.activeWindow = w; } }
+  report('dolphin active for the tile round trip');" >>"$OUT/place.log"
+sleep 0.8
+qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+sleep 1.5
+state tab2c
+K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
+  if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+  report('untiled the floating window: ' + out);" >>"$OUT/place.log"
+sleep 1.5
+state tab2d; shot tab-untile
+python3 - "$OUT/state-tab2c.json" "$OUT/state-tab2d.json" >>"$CHK" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1])); d = json.load(open(sys.argv[2]))
+tiled = [w for w in c["windows"] if "dolphin" in w["cls"] and w["tiled"]]
+f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 and "dolphin" in w["cls"]]
+ok = len(tiled) == 1 and len(f) == 1 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: after a tile round trip the un-maximized window keeps no title bar: {[(w['cls'], w['nb']) for w in f]}")
+PY
 pfinput 'keydown alt' 'key tab' 'sleep 2.6' 'keyup alt' &
 p=$!
 sleep 1.3; shot tab-sw; wait $p; sleep 1
