@@ -18,11 +18,14 @@ The boards in `design/boards/` decide every colour, size and drawing of the them
     design/render/render.py --check           # diff fresh renders against the committed previews
 
 Requires `google-chrome` (or `CHROME=...`) and Pillow, and no network: each board is served with
-the fonts this repository bundles (`fonts/`) in place of its Google Fonts stylesheet, and the run
-waits for the runtime's `data-board-rendered` marker on `<html>` before the screenshot, so a board
-that does not finish rendering fails instead of producing a partial picture. `--check` exits
-nonzero for a missing committed preview, a size mismatch, or a mean per-channel difference over 12.
-A board change re-renders the affected previews with this tool; `--check` over all 27 boards is the
+the fonts this repository bundles (`fonts/`) in place of its Google Fonts stylesheet. One browser
+process owns the whole render over Chrome's remote-debugging pipe: it navigates, waits for the
+runtime's `data-board-rendered` marker through `Runtime.evaluate` (a board that does not finish, or
+one whose template expressions fail, fails the run) and captures that same page, so the picture
+cannot come from a page that was not validated. `--check` exits nonzero for a missing committed
+preview, a size mismatch, a mean per-channel difference over 12, or a worst 16 x 16-block mean over
+16 - the block test catches a stale preview whose change is confined to a small area. A board
+change re-renders the affected previews with this tool; `--check` over all 27 boards is the
 fidelity gate ([`docs/parts/icons.md`](icons.md) lists what the drawings mean).
 
 ## Per-app tiles

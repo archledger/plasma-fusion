@@ -44,9 +44,15 @@ with tempfile.TemporaryDirectory(prefix="render-test-") as td:
     check(render.compare("identical", got, write(td / "same.png", (64, 48), (10, 20, 30))) is True,
           "an identical preview passes")
     check(render.compare("close", got, write(td / "close.png", (64, 48), (13, 23, 33))) is True,
-          "a preview within the limit passes")
+          "a preview within the limits passes")
     check(render.compare("stale", got, write(td / "far.png", (64, 48), (60, 20, 30))) is False,
-          "a preview past the limit fails the check")
+          "a preview past the global limit fails the check")
+    local = Image.new("RGB", (256, 256), (10, 20, 30))
+    local.paste((255, 255, 255), (0, 0, 32, 32))
+    local.save(td / "local.png")
+    check(render.compare("localized", write(td / "base256.png", (256, 256), (10, 20, 30)),
+                         td / "local.png") is False,
+          "a change confined to one small area fails the check")
     check(render.compare("size", got, write(td / "wrong.png", (32, 24), (10, 20, 30))) is False,
           "a committed preview of another size fails the check")
     check(render.compare("missing", got, td / "absent.png") is False,

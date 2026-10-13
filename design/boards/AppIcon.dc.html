@@ -145,6 +145,7 @@ class Component extends DCLogic {
       sheenD: 'M15 0h34a15 15 0 0 1 15 15v13H0V15A15 15 0 0 1 15 0z',
       edgeD: rr(0.5, 0.5, 63, 63, 14.5),
       extras: (i.xs || []).map((p) => ({ d: p[0], c: p[1] })),
+      seams: i.seams || [],
       g1: i.g1 || '', c1: i.c1 || 'none',
       g2: i.g2 || '', c2: i.c2 || 'none',
       g3: i.g3 || '', c3: i.c3 || 'none',

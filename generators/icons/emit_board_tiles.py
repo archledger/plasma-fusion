@@ -52,7 +52,7 @@ END = "  // END per-app tiles"
 TABLET_APPS = {
     "Dolphin": ("app", "dolphin"), "Firefox": ("app", "firefox"),
     "Konsole": ("board", "terminal"), "KMail": ("app", "kmail"), "Kate": ("app", "kate"),
-    "Elisa": ("app", "elisa"), "Gwenview": ("app", "gwenview"), "Merkuro": ("app", "merkuro"),
+    "Elisa": ("app", "elisa"), "Gwenview": ("app", "gwenview"), "KOrganizer": ("board", "calendar"),
     "System Settings": ("app", "systemsettings"), "KWrite": ("app", "kwrite"),
     "VLC": ("app", "vlc"), "NeoChat": ("board", "chat"), "Discover": ("board", "software"),
     "Okular": ("app", "okular"), "Weather": ("board", "weather"),

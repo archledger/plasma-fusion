@@ -33,11 +33,17 @@
     }
   }
 
+  // A template expression that throws is a broken board, not an empty value: remember it so the
+  // completion marker is never published (the renderer fails the board instead of writing a
+  // partial preview).
+  let evaluationFailed = false;
+
   function evalExpr(expr, scope) {
     try {
       return new Function("__scope", "with(__scope){ return (" + expr + "); }")(scope);
     } catch (e) {
       console.warn("render-runtime: cannot evaluate", JSON.stringify(expr), e.message);
+      evaluationFailed = true;
       return "";
     }
   }
@@ -76,6 +82,7 @@
       return new (factory(DCLogic))(props).renderVals() || {};
     } catch (e) {
       console.warn("render-runtime: cannot run the component script", e);
+      evaluationFailed = true;
       return {};
     }
   }
@@ -199,6 +206,10 @@
     moveHelmet(document);
     const vals = renderVals(document.querySelector('script[type="text/x-dc"]'), {});
     await processNode(xdc, vals);
+    if (evaluationFailed) {
+      console.error("render-runtime: the board has expressions that did not evaluate");
+      return;
+    }
     document.documentElement.dataset.boardRendered = "1";
   }
 

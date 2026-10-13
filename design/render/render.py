@@ -6,20 +6,22 @@
     design/render/render.py                 every board of design/boards/canvas.json, in canvas order
     design/render/render.py NAME.dc.html ...  only the named boards
     design/render/render.py --check         render to a scratch directory and diff against the
-                                            committed previews (mean absolute difference per channel);
-                                            a missing preview or a size mismatch fails the check
+                                            committed previews; a missing preview, a size mismatch,
+                                            a mean per-channel difference over 12 or a worst
+                                            16x16-block mean over 16 fails the check
 
 Each board is served over a local HTTP server (dc-import fetches its component, which file://
 blocks) with the fonts this repository bundles (fonts/, so rendering is offline and does not move
-with fonts.googleapis.com), the board is opened in headless Chrome at twice its canvas size with
-design/render/runtime.js resolving the template language (the authoring tool's runtime is not part
-of this repository), the runtime's data-board-rendered marker is waited for (a board that does not
-finish rendering fails the run), and the screenshot becomes a WebP preview, like the ones the tool
-produced.
+with fonts.googleapis.com). One headless Chrome drives the page over its remote-debugging pipe:
+the renderer navigates, waits for the runtime's data-board-rendered marker through
+Runtime.evaluate (a board that does not finish, or whose template expressions fail, fails the
+run), and captures that same page at twice its canvas size, which becomes a WebP preview, like
+the ones the tool produced.
 
 Requires: google-chrome (or CHROME=...), Pillow.
 """
 import argparse
+import base64
 import http.server
 import json
 import os
@@ -41,6 +43,9 @@ CHROME = os.environ.get("CHROME", "google-chrome")
 SCALE = int(os.environ.get("RENDER_SCALE", "2"))
 QUALITY = int(os.environ.get("RENDER_QUALITY", "90"))
 MAD_LIMIT = 12
+BLOCK_LIMIT = 16
+BLOCKS = 16
+RENDER_TIMEOUT_MS = 20000
 
 # The fonts the boards ask Google for, served from this repository instead: same files, so an
 # offline render (and --check) is stable across network state and upstream stylesheet changes.
@@ -58,7 +63,18 @@ FONT_CSS = "<style>" + "".join(
     f"@font-face{{font-family:'{fam}';font-weight:{weight};src:url('/{path}')}}" for fam, weight, path in FONTS
 ) + "</style>"
 GOOGLE_FONTS_LINK = re.compile(r"<link[^>]*fonts\.googleapis\.com[^>]*>")
-RENDERED_MARKER = 'data-board-rendered="1"'
+RENDERED_MARKER = "data-board-rendered"
+WAIT_FOR_MARKER = (
+    "new Promise((resolve, reject) => {"
+    "  const t0 = Date.now();"
+    "  const tick = () => {"
+    f"    if (document.documentElement.dataset.boardRendered === '1') {{ resolve('rendered'); }}"
+    f"    else if (Date.now() - t0 > {RENDER_TIMEOUT_MS}) {{ reject(new Error('the board did not finish rendering')); }}"
+    "    else { setTimeout(tick, 50); }"
+    "  };"
+    "  tick();"
+    "})"
+)
 
 
 def boards() -> dict:
@@ -109,23 +125,80 @@ def serve() -> tuple[socketserver.TCPServer, int]:
     return srv, srv.server_address[1]
 
 
-def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
-    url = f"http://127.0.0.1:{port}/boards/{name}"
-    with tempfile.TemporaryDirectory(prefix="board-render-") as td:
-        work = Path(td)
-        common = [
+class DevTools:
+    """The smallest CDP client that fits: Chrome's remote-debugging pipe (fd 3 in, fd 4 out,
+    NUL-separated JSON), so one browser process owns the whole render - the page that passes the
+    marker check is the page the screenshot comes from."""
+
+    def __init__(self, work: Path):
+        r_in, self.w_in = os.pipe()
+        self.r_out, w_out = os.pipe()
+        cmd = [
             CHROME, "--headless", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
-            f"--user-data-dir={work / 'chrome'}",
-            f"--force-device-scale-factor={SCALE}", f"--window-size={w},{h}",
-            "--virtual-time-budget=20000",
+            f"--user-data-dir={work / 'chrome'}", "--remote-debugging-pipe", "about:blank",
         ]
-        dom = subprocess.run(common + ["--dump-dom", url], check=True, capture_output=True,
-                             timeout=300).stdout
-        if RENDERED_MARKER.encode() not in dom:
-            raise RuntimeError(f"{name}: the board did not finish rendering (no {RENDERED_MARKER})")
-        png = work / (name + ".png")
-        subprocess.run(common + [f"--screenshot={png}", url], check=True, capture_output=True,
-                       timeout=300)
+        sh = 'exec "$0" "$@" 3<&%d 4>&%d' % (r_in, w_out)
+        self.proc = subprocess.Popen(["sh", "-c", sh, *cmd], pass_fds=(r_in, w_out),
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        os.close(r_in)
+        os.close(w_out)
+        self._id = 0
+        self._buf = b""
+
+    def close(self) -> None:
+        self.proc.terminate()
+        try:
+            self.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            self.proc.kill()
+
+    def _send(self, message: dict) -> None:
+        os.write(self.w_in, json.dumps(message).encode() + b"\0")
+
+    def _recv(self) -> dict:
+        while b"\0" not in self._buf:
+            chunk = os.read(self.r_out, 65536)
+            if not chunk:
+                raise RuntimeError("Chrome closed the debugging pipe")
+            self._buf += chunk
+        line, self._buf = self._buf.split(b"\0", 1)
+        return json.loads(line)
+
+    def call(self, method: str, params: dict | None = None, session: str | None = None) -> dict:
+        self._id += 1
+        message = {"id": self._id, "method": method}
+        if params:
+            message["params"] = params
+        if session:
+            message["sessionId"] = session
+        self._send(message)
+        while True:
+            reply = self._recv()
+            if reply.get("id") == self._id:
+                if "error" in reply:
+                    raise RuntimeError(f"{method}: {reply['error']}")
+                return reply.get("result", {})
+
+
+def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
+    with tempfile.TemporaryDirectory(prefix="board-render-") as td:
+        cdp = DevTools(Path(td))
+        try:
+            target = cdp.call("Target.createTarget", {"url": "about:blank"})["targetId"]
+            session = cdp.call("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
+            cdp.call("Emulation.setDeviceMetricsOverride",
+                     {"width": w, "height": h, "deviceScaleFactor": SCALE, "mobile": False},
+                     session=session)
+            cdp.call("Page.navigate", {"url": f"http://127.0.0.1:{port}/boards/{name}"}, session=session)
+            cdp.call("Runtime.evaluate",
+                     {"expression": WAIT_FOR_MARKER, "awaitPromise": True, "returnByValue": True},
+                     session=session)
+            shot = cdp.call("Page.captureScreenshot",
+                            {"format": "png", "captureBeyondViewport": False}, session=session)
+        finally:
+            cdp.close()
+        png = Path(td) / (name + ".png")
+        png.write_bytes(base64.b64decode(shot["data"]))
         dest.parent.mkdir(parents=True, exist_ok=True)
         im = Image.open(png)
         if im.size != (w * SCALE, h * SCALE):
@@ -137,7 +210,8 @@ def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
 
 def compare(name: str, got: Path, want: Path) -> bool:
     """Print the difference of a fresh render against the committed preview; False when the
-    committed preview is missing, has another size, or is too different (a stale preview)."""
+    committed preview is missing, has another size, or is stale - globally or in any of the
+    BLOCKS x BLOCKS tiles, so a change confined to a small area still fails the check."""
     if not want.exists():
         print(f"{name}: no committed preview to check against")
         return False
@@ -146,9 +220,16 @@ def compare(name: str, got: Path, want: Path) -> bool:
     if a.size != b.size:
         print(f"{name}: size {a.size} vs {b.size}")
         return False
-    mad = sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3
-    print(f"{name}: mean abs difference {mad:.1f} over {a.size[0]}x{a.size[1]}")
-    return mad <= MAD_LIMIT
+    diff = ImageChops.difference(a, b)
+    mad = sum(ImageStat.Stat(diff).mean) / 3
+    worst = 0.0
+    w, h = a.size
+    for by in range(BLOCKS):
+        for bx in range(BLOCKS):
+            box = (bx * w // BLOCKS, by * h // BLOCKS, (bx + 1) * w // BLOCKS, (by + 1) * h // BLOCKS)
+            worst = max(worst, sum(ImageStat.Stat(diff.crop(box)).mean) / 3)
+    print(f"{name}: mean abs difference {mad:.1f}, worst block {worst:.1f} over {w}x{h}")
+    return mad <= MAD_LIMIT and worst <= BLOCK_LIMIT
 
 
 def main() -> int:
