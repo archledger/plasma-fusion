@@ -15,26 +15,30 @@ pass() { echo "PASS $*" >>"$CHK"; }
 fail() { echo "FAIL $*" >>"$CHK"; }
 info() { echo "INFO $*" >>"$CHK"; }
 
-# The shell's own widgets through the desktop scripting.
-script() { qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "$1" 2>/dev/null | tr -d '"'; }
+# The shell's own widgets through the desktop scripting; the script prints its result (the
+# fusion-config.sh pattern: busctl's reply carries the print() output).
+script() {
+  busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s "$1" 2>/dev/null |
+    python3 -c 'import sys,shlex; s=sys.stdin.read().strip(); print(shlex.split(s[2:])[0] if s.startswith("s ") else "")'
+}
 
 sleep 8
 
 # ---- The quick settings pill: a one-finger touch tap (pfinput), the sheet's own first-frame line.
-# The desktop scripting takes an expression (a bare return is a syntax error there), so an IIFE.
 pill=$(script '
-(function () {
-  var p = panels()[0], ws = p.widgets();
-  for (var i = 0; i < ws.length; ++i) {
-    if (String(ws[i].type).indexOf("quicksettings") >= 0) {
-      return JSON.stringify(ws[i].geometry);
+var ps = panels();
+for (var p = 0; p < ps.length; ++p) {
+    var ws = ps[p].widgets();
+    for (var w = 0; w < ws.length; ++w) {
+        if (ws[w].type === "org.plasmafusion.quicksettings") {
+            var g = ws[w].geometry;
+            print(JSON.stringify({x: g.x, y: g.y, width: g.width, height: g.height}));
+        }
     }
-  }
-  return "";
-})()')
+}')
 info "quick settings pill: ${pill:-not found}"
 if [ -n "$pill" ]; then
-  read -r PX PY PW PH <<<"$(python3 -c "import json,sys; g=json.loads(sys.argv[1]); print(g['x'], g['y'], g['width'], g['height'])" "$pill")"
+  read -r PX PY PW PH <<<"$(python3 -c "import json,sys; g=json.loads(sys.argv[1]); print(int(g['x']), int(g['y']), int(g['width']), int(g['height']))" "$pill")"
   TX=$((PX + PW / 2)); TY=$((PY + PH / 2))
   info "pill centre: $TX $TY"
   for _ in 1 2 3 4 5; do
@@ -54,12 +58,30 @@ fi
 
 # ---- The launcher by its request (the audit's path), then Escape.
 for _ in 1 2 3; do
-  script "(function () {
-    var p = panels()[0], ws = p.widgets();
-    for (var i = 0; i < ws.length; ++i) {
-      if (String(ws[i].type).indexOf('launcher') >= 0) { ws[i].writeConfig('openRequest', 'home:' + Date.now()); }
+  # The launcher is a desktop widget, not a panel one (the dock's icon is the dock's own).
+  script '
+var ds = desktops(), ps = panels(), out = 0;
+for (var d = 0; d < ds.length; ++d) {
+    var ws = ds[d].widgets();
+    for (var w = 0; w < ws.length; ++w) {
+        if (ws[w].type === "org.plasmafusion.launcher") {
+            ws[w].currentConfigGroup = ["General"];
+            ws[w].writeConfig("openRequest", "home:" + Date.now());
+            out++;
+        }
     }
-  })()" >/dev/null
+}
+for (var p = 0; p < ps.length; ++p) {
+    var pw = ps[p].widgets();
+    for (var q = 0; q < pw.length; ++q) {
+        if (pw[q].type === "org.plasmafusion.launcher") {
+            pw[q].currentConfigGroup = ["General"];
+            pw[q].writeConfig("openRequest", "home:" + Date.now());
+            out++;
+        }
+    }
+}
+print("launchers: " + out);' >>"$CHK"
   sleep 1.5
   pfinput 'key esc'
   sleep 1
