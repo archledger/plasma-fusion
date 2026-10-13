@@ -243,6 +243,21 @@ PY
 else
   fail "T18: no picker in tablet posture"
 fi
+# A window the user un-maximizes in tablet posture keeps no title bar: the appname pill is the
+# window's title bar and menu (owner decision 2026-10-13).
+K run "var l = workspace.windowList(), out = 0;
+  for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && w.maximizeMode === 3 && !w.tile && String(w.resourceClass) !== '') { w.setMaximize(false, false); workspace.activeWindow = w; out++; break; } }
+  report('un-maximized in tablet ' + out);" >>"$OUT/place.log"
+sleep 1.5
+state tab2b; shot tab-float
+python3 - "$OUT/state-tab2b.json" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3]
+ok = len(f) >= 1 and all(w["nb"] for w in f)
+print(("PASS" if ok else "FAIL") + f" T19: a window un-maximized in tablet posture keeps no title bar: {[(w['cls'], w['geo'], w['nb']) for w in f]}")
+PY
 pfinput 'keydown alt' 'key tab' 'sleep 2.6' 'keyup alt' &
 p=$!
 sleep 1.3; shot tab-sw; wait $p; sleep 1

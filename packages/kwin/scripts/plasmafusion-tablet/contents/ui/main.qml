@@ -21,7 +21,9 @@ import "Requests.js" as Requests
 //   with WindowMode = fullscreen.
 // - Leaving: windows this script maximized are restored (KWin gives back their laptop geometry);
 //   windows first opened in tablet mode get 70 % of the work area, centred; the options come back.
-//   Windows the user un-maximized in tablet mode are not touched.
+//   A window the user un-maximizes in tablet mode (the window card's Full screen switch) keeps its
+//   size but not its title bar: in tablet posture the appname pill is the window's title bar and
+//   menu (owner decision 2026-10-13), and leave() gives the title bar back with the rest.
 // - A KWin reconfigure reloads the options from kwinrc; they are set again at once (synchronously,
 //   so KWin does not give every maximized window its frame back).
 // - Disabling the script (the kill switch) leaves tablet mode for the windows first.
@@ -110,6 +112,7 @@ Item {
     property var maximizedByUs: ({}) // internalId -> true: maximized by enter()
     property var openedInTablet: ({}) // internalId -> true: opened (maximized) while applied
     property var borderlessTiles: ({}) // internalId -> true: title bar removed from a tiled window
+    property var borderlessFloating: ({}) // internalId -> true: user un-maximized; no title bar
     property var tileHandlers: ({}) // internalId -> [window, handler]
 
     function key(w) {
@@ -239,7 +242,7 @@ Item {
     function leave() {
         busy = true;
         const ws = Workspace.stackingOrder;
-        let restored = 0, placed = 0, tiles = 0;
+        let restored = 0, placed = 0, tiles = 0, floats = 0;
         // Un-maximize first, while borderless is still on: KWin gives the title bar back on
         // un-maximize only while the option is set.
         for (let i = 0; i < ws.length; ++i) {
@@ -258,6 +261,10 @@ Item {
             if (borderlessTiles[k] && w.noBorder) {
                 w.noBorder = false;
                 tiles++;
+            }
+            if (borderlessFloating[k] && w.noBorder) {
+                w.noBorder = false;
+                floats++;
             }
         }
         unfollowAll();
@@ -280,9 +287,11 @@ Item {
         maximizedByUs = ({});
         openedInTablet = ({});
         borderlessTiles = ({});
+        borderlessFloating = ({});
         applied = false;
         busy = false;
         log("leave: restored " + restored + ", placed " + placed + ", tiles with title bar " + tiles
+            + ", floated with title bar " + floats
             + ", placement " + Options.placement + ", borderless " + Options.borderlessMaximizedWindows);
     }
 
@@ -357,7 +366,14 @@ Item {
             if (placed) {
                 w.frameGeometry = restoreRect(w);
             }
-            log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", title bar " + !w.noBorder);
+            // In tablet posture the appname pill is the window's title bar and menu, so the window
+            // stays without one (owner decision 2026-10-13); KWin restored the title bar on the
+            // un-maximize above, while borderlessMaximizedWindows is set.
+            if (!w.noBorder) {
+                w.noBorder = true;
+            }
+            borderlessFloating[k] = true;
+            log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", no title bar");
         }
     }
 

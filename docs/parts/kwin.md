@@ -531,14 +531,16 @@ PFK_PACKAGES=$PWD/$P PFK_TMP=$PWD/build/k2 packages/kwin/tests/offscreen/run.sh 
 
 Private sessions on the ThinkPad (seed from `fusion-config.sh --install`):
 
-- `scenario-kwin2-a.sh` (1920x1200 at 4/3), 19 checks PASS:
+- `scenario-kwin2-a.sh` (1920x1200 at 4/3), 19 checks PASS on 2026-10-02, 20 since T19
+  (2026-10-13):
   - flyout centre against the maximize button: compiled decoration right 1061.5 / 1061.25 and
     left 378.5 / 378.5, Aurorae `-Left` 378.5 / 378.5, Aurorae right 1061.5 / 1061.25;
   - switcher: hover selects, a resting pointer does not, click activates;
   - halves with the 6 px gap and the picker; M09 rows (top half, bottom half offered, bottom
     third 461 px of a 1406 px area); M14 every window inside the work area after rotating and
     back; T18 split in tablet posture (picker, two tiles without title bars, title bars back
-    after leaving);
+    after leaving); T19 a window un-maximized in tablet posture keeps no title bar (and gets it
+    back on leave);
   - no QML warnings from the scripts, no KWin or plasmashell crash.
 - `scenario-kwin2-b.sh` (two outputs, the second disabled before the install and enabled after):
   M23 PASS: "top bars: screens 2, added 1", one top bar per screen, none added on a second

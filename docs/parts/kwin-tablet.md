@@ -1,7 +1,7 @@
 # Part: tablet-mode window and panel policy (`plasmafusion-tablet`, KWIN-1)
 
 Status: built and tested in private sessions on the ThinkPad (see "Verification"); not deployed. The
-lead built it directly (work package KWIN-1 of the 2026-09-30 one-pass plan). Last edited 2026-09-30.
+lead built it directly (work package KWIN-1 of the 2026-09-30 one-pass plan). Last edited 2026-10-13.
 
 Spec: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-tablet/TABLET.md` sections 3.1-3.6 and
 4.2 with the review corrections, owner decision 2 (apps full screen without title bars, large dialogs
@@ -68,15 +68,19 @@ needed.
   un-maximized (KWin puts back their laptop geometry); windows first opened in tablet mode, dialogs
   included, get `setMaximize(false, false, rect)` with 70 % of the work area, centred (on the parent
   for dialogs); tiles get their title bar back; then the options are restored, and windows still
-  maximized get their title bar back as `Workspace::slotReconfigure` does. Windows the user
-  un-maximized in tablet mode are not touched. Focus, stacking, desktop, activity and minimized state
-  never change.
-- **Windowed by the user** (TOP-2, LEAD-1 resolution 11): the script follows `maximizedChanged` of the
-  windows it follows. When the user un-maximizes one in tablet mode (the window card's Full screen
-  switch, a shortcut), one event-loop turn later (a quick tile un-maximizes first and has its tile by
-  then) the window leaves the script's lists, so leaving tablet mode does not touch it; a window first
-  opened in tablet mode is placed at 70 % of the work area (it has no laptop geometry). KWin gives the
-  title bar back itself. The next fold maximizes it again like any other window.
+  maximized get their title bar back as `Workspace::slotReconfigure` does. A window the user
+  un-maximized in tablet mode keeps its size and place and gets its title bar back too (the script
+  removed it in tablet posture). Focus, stacking, desktop, activity and minimized state never change.
+- **Windowed by the user** (TOP-2, LEAD-1 resolution 11; no title bar since 2026-10-13): the script
+  follows `maximizedChanged` of the windows it follows. When the user un-maximizes one in tablet mode
+  (the window card's Full screen switch, a shortcut), one event-loop turn later (a quick tile
+  un-maximizes first and has its tile by then) the window leaves the script's lists, so leaving
+  tablet mode does not touch its size or place; a window first opened in tablet mode is placed at
+  70 % of the work area (it has no laptop geometry). It keeps no title bar: in tablet posture the
+  appname pill is the window's title bar and menu (owner decision 2026-10-13, KWIN-2 T19), so
+  `settleUnmaximized` removes the frame KWin gave back on the un-maximize (remembered in
+  `borderlessFloating`) and the leave step gives it back with the tiles'. The next fold maximizes it
+  again like any other window.
 - **KWin reconfigure** reloads the options from kwinrc (also once about 0.2 s after every session
   start): the script sets them again inside the change handler (synchronously, so KWin does not give
   every maximized window its frame back); the reloaded values become the laptop values.
@@ -110,6 +114,11 @@ Private sessions on the ThinkPad (1920 x 1200 at 4/3), `build/kt/` (scenarios `s
   without title bar or maximized.
 - T18: two windows split left and right keep their tiles without title bars; on leave both get them
   back.
+- T19 (2026-10-13): a maximized window the user un-maximizes in tablet posture (the window card's
+  Full screen switch) keeps no title bar; on leave it gets it back. `scenario-kwin2-a.sh`
+  un-maximizes a maximized window in tablet posture and checks `noBorder` stays set, and the T18
+  leave check covers the way back; the previous script fails the check (the window has its frame
+  again).
 - Rotation in tablet mode (part of T19): maximized windows follow the portrait work area (within
   the device grid's 0.25 px). The rotation lock itself belongs to quick settings (QS-1) and the hand
   check H3.
