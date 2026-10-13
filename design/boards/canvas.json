@@ -187,6 +187,14 @@
       "x": 1520,
       "y": 0
     },
+    "Tablet.dc.html": {
+      "h": 900,
+      "page": "dark",
+      "title": "24 · Tablet home",
+      "w": 1440,
+      "x": 0,
+      "y": 2880
+    },
     "TabsSnap.dc.html": {
       "h": 1360,
       "page": "theme",
@@ -277,6 +285,7 @@
     "QuickSettings.dc.html",
     "AltTab.dc.html",
     "Popups.dc.html",
+    "Tablet.dc.html",
     "MainLight.dc.html",
     "LauncherLight.dc.html",
     "OverviewLight.dc.html",

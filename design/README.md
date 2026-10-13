@@ -47,6 +47,14 @@ are the design, not screenshots of the running desktop.
 </tr>
 </table>
 
+## Tablet
+
+<table>
+<tr>
+<td valign="top"><a href="previews/Tablet.webp"><img src="previews/Tablet.webp" width="420" alt="Tablet home"></a><br><b>Tablet home</b><br><a href="boards/Tablet.dc.html">source</a></td>
+</tr>
+</table>
+
 ## Theme parts
 
 <table>
