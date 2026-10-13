@@ -244,41 +244,48 @@ else
   fail "T18: no picker in tablet posture"
 fi
 # A window the user un-maximizes in tablet posture keeps no title bar: the appname pill is the
-# window's title bar and menu (owner decision 2026-10-13).
-K run "var l = workspace.windowList(), out = 0;
+# window's title bar and menu (owner decision 2026-10-13). Its class carries the round trip below.
+FLOATING=$(K run "var l = workspace.windowList(), pick = null;
   for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && w.maximizeMode === 3 && !w.tile && String(w.resourceClass) !== '') { w.setMaximize(false, false); workspace.activeWindow = w; out++; break; } }
-  report('un-maximized in tablet ' + out);" >>"$OUT/place.log"
+    if (w.normalWindow && w.maximizeMode === 3 && !w.tile && String(w.resourceClass) !== '') { pick = w; break; } }
+  if (pick) { pick.setMaximize(false, false); workspace.activeWindow = pick; }
+  report(pick ? String(pick.resourceClass) : '');" | tr -d '"')
+echo "un-maximized in tablet: ${FLOATING:-none}" >>"$OUT/place.log"
 sleep 1.5
 state tab2b; shot tab-float
-python3 - "$OUT/state-tab2b.json" >>"$CHK" <<'PY'
+python3 - "$OUT/state-tab2b.json" "$FLOATING" >>"$CHK" <<'PY'
 import json, sys
-d = json.load(open(sys.argv[1]))
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
 f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3]
-ok = len(f) >= 1 and all(w["nb"] for w in f)
+ok = want != "" and len(f) >= 1 and all(w["nb"] for w in f) and any(want in w["cls"] for w in f)
 print(("PASS" if ok else "FAIL") + f" T19: a window un-maximized in tablet posture keeps no title bar: {[(w['cls'], w['geo'], w['nb']) for w in f]}")
 PY
-# The floating window keeps no title bar through a tile round trip: quick-tile it, then untile it.
-K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-  if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0) { workspace.activeWindow = w; } }
-  report('dolphin active for the tile round trip');" >>"$OUT/place.log"
-sleep 0.8
-qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
-sleep 1.5
-state tab2c
-K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
-  if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
-  report('untiled the floating window: ' + out);" >>"$OUT/place.log"
-sleep 1.5
-state tab2d; shot tab-untile
-python3 - "$OUT/state-tab2c.json" "$OUT/state-tab2d.json" >>"$CHK" <<'PY'
+# The floating window keeps no title bar through a tile round trip: quick-tile the window T19
+# un-maximized and untile it again.
+if [ -n "$FLOATING" ]; then
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0) { workspace.activeWindow = w; } }
+    report('$FLOATING active for the tile round trip');" >>"$OUT/place.log"
+  sleep 0.5
+  qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+  sleep 1.5
+  state tab2c
+  K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+    report('untiled the floating window: ' + out);" >>"$OUT/place.log"
+  sleep 1.5
+  state tab2d; shot tab-untile
+  python3 - "$OUT/state-tab2c.json" "$OUT/state-tab2d.json" "$FLOATING" >>"$CHK" <<'PY'
 import json, sys
-c = json.load(open(sys.argv[1])); d = json.load(open(sys.argv[2]))
-tiled = [w for w in c["windows"] if "dolphin" in w["cls"] and w["tiled"]]
-f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 and "dolphin" in w["cls"]]
+c = json.load(open(sys.argv[1])); d = json.load(open(sys.argv[2])); want = sys.argv[3]
+tiled = [w for w in c["windows"] if want in w["cls"] and w["tiled"]]
+f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 and want in w["cls"]]
 ok = len(tiled) == 1 and len(f) == 1 and f[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: after a tile round trip the un-maximized window keeps no title bar: {[(w['cls'], w['nb']) for w in f]}")
 PY
+else
+  fail "T19: no maximized window to un-maximize, so the tile round trip cannot run"
+fi
 pfinput 'keydown alt' 'key tab' 'sleep 2.6' 'keyup alt' &
 p=$!
 sleep 1.3; shot tab-sw; wait $p; sleep 1
