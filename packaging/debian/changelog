@@ -1,3 +1,13 @@
+plasma-fusion (0.5.0-1) unstable; urgency=medium
+
+  * Clipboard sheet with Meta+V, editable Quick Settings, notifications
+    grouped by app, Do not disturb durations, Power mode chooser, timed
+    Keep awake, system meters, launcher Recent and Places, dock transfer
+    progress, and Plasma 6.8 lock screen, log-out and snap support; the
+    bug-hunt fixes and a faster clipboard sheet.
+
+ -- Wisbendji Fimerlus <archledger236@gmail.com>  Mon, 12 Oct 2026 16:00:00 +0000
+
 plasma-fusion (0.4.0-1) unstable; urgency=medium
 
   * Stock Plasma parity: Disks & Devices, keep awake and sleep blockers,

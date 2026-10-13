@@ -18,7 +18,7 @@
 %endif
 
 Name:           plasma-fusion
-Version:        0.4.0
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
@@ -426,6 +426,13 @@ done
 %endif
 
 %changelog
+* Mon Oct 12 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.5.0-1
+- Clipboard sheet with Meta+V, editable Quick Settings, notifications
+  grouped by app, Do not disturb durations, Power mode chooser, timed
+  Keep awake, system meters, launcher Recent and Places, dock transfer
+  progress, and Plasma 6.8 lock screen, log-out and snap support; the
+  bug-hunt fixes and a faster clipboard sheet
+
 * Fri Oct 09 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.4.0-1
 - Stock Plasma parity: Disks & Devices, keep awake and sleep blockers,
   Wi-Fi hotspot, airplane mode and VPN, input and app volume, calendar
