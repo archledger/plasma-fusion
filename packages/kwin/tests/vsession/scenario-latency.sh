@@ -23,9 +23,15 @@ script() {
     python3 -c 'import sys,shlex; s=sys.stdin.read().strip(); print(shlex.split(s[2:])[0] if s.startswith("s ") else "")' || true
 }
 
-sleep 8
+# The Fusion layout first (the KWIN-2 recipe): without it the session keeps the seed's stock
+# panels, the launcher applet does not exist and the pill sits in a different bar.
+bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
+info "fusion-config rc=$?"
+pfv_restart_shell 12
+sleep 6
 
-# ---- The quick settings pill: a one-finger touch tap (pfinput), the sheet's own first-frame line.
+# ---- The quick settings pill: a pointer click and a one-finger touch tap (pfinput), the sheet's
+# own first-frame line each.
 pill=$(script '
 var ps = panels();
 for (var p = 0; p < ps.length; ++p) {
@@ -42,15 +48,24 @@ if [ -n "$pill" ]; then
   read -r PX PY PW PH <<<"$(python3 -c "import json,sys; g=json.loads(sys.argv[1]); print(int(g['x']), int(g['y']), int(g['width']), int(g['height']))" "$pill")"
   TX=$((PX + PW / 2)); TY=$((PY + PH / 2))
   info "pill centre: $TX $TY"
-  for _ in 1 2 3 4 5; do
+  for _ in 1 2 3; do
+    pfinput "click $TX $TY left"
+    sleep 1.5
+    pfinput "click 600 700 left"   # outside the sheet: it closes on deactivation
+    sleep 1.2
+  done
+  clicks=$(grep -c 'quicksettings: sheet .*first frame after' "$PLOG" || true)
+  info "sheet first-frame lines after clicks: $clicks"
+  [ "$clicks" -ge 2 ] && pass "the sheet's pointer clicks measured first frames ($clicks)" || fail "only $clicks sheet opens by click were measured"
+  for _ in 1 2 3; do
     pfinput "tap $TX $TY 0.15"
     sleep 1.5
     pfinput "tap 600 700 0.15"   # outside the sheet: it closes on deactivation
     sleep 1.2
   done
   opens=$(grep -c 'quicksettings: sheet .*first frame after' "$PLOG" || true)
-  info "sheet first-frame lines: $opens"
-  [ "$opens" -ge 3 ] && pass "the sheet's touch taps measured first frames ($opens)" || fail "only $opens sheet opens were measured"
+  info "sheet first-frame lines after taps: $opens"
+  [ "$opens" -ge "$((clicks + 2))" ] && pass "the sheet's touch taps measured first frames ($((opens - clicks)))" || fail "the touch taps added no sheet opens"
   info "sheet first frames: $(grep -o 'first frame after [0-9]* ms' "$PLOG" | tail -5 | tr '\n' ' ' || true)"
   info "sheet settled: $(grep -o 'sheet settled, [0-9]* frames in 500 ms' "$PLOG" | tail -3 | tr '\n' ' ' || true)"
 else
