@@ -225,7 +225,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 </div>
 
 <div style="height:64px;box-sizing:border-box;padding:0 10px;border-radius:16px;background:rgba(20,24,39,0.06);display:flex;align-items:center;gap:12px">
-<dc-import name="AppIcon" app="music" size="44" hint-size="44px,44px"></dc-import>
+<dc-import name="AppIcon" app="elisa" size="44" hint-size="44px,44px"></dc-import>
 <div style="flex-grow:1;display:flex;flex-direction:column;gap:2px"><span style="font-weight:800">Music</span><span style="font-size:11.5px;color:#5b6278">Paused</span></div>
 <button aria-label="Previous" style="width:32px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#2a3044"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M18 6l-8 6 8 6zM6 6v12"></path></svg></button>
 <button aria-label="Play" style="width:36px;height:36px;border-radius:18px;background:#141827;color:#ffffff;display:flex;align-items:center;justify-content:center"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" style="fill:currentColor"></path></svg></button>
@@ -241,7 +241,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 </div>
 <div style="box-sizing:border-box;padding:14px;border-radius:18px;display:flex;flex-direction:column;gap:6px;background:rgba(255,255,255,0.88);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);border:1px solid rgba(20,24,39,0.12);box-shadow:0 16px 40px rgba(20,24,39,0.14)">
 <div style="display:flex;align-items:center;gap:8px">
-<dc-import name="AppIcon" app="calendar" size="22" hint-size="22px,22px"></dc-import>
+<dc-import name="AppIcon" app="merkuro" size="22" hint-size="22px,22px"></dc-import>
 <span style="font-size:11.5px;font-weight:800;color:#5b6278;flex-grow:1">Calendar</span>
 <span style="font-size:11.5px;color:#6b7288">in 10 min</span>
 </div>
@@ -341,15 +341,15 @@ class Component extends DCLogic {
     };
     const mk = (name, key, bg, fg, run) => ({ name, key, d: I[key], s: 48, r: 13, ic: 25, bg, fg, running: !!run, indW: 5, indC: 'rgba(20,24,39,0.6)' });
     const dock = [
-      mk('Files', 'folder', '#3f7fe0', '#ffffff', true),
-      mk('Browser', 'globe', '#e8743b', '#ffffff', true),
-      mk('Terminal', 'terminal', '#23293d', '#141827'),
-      mk('Mail', 'mail', '#1f9e8f', '#ffffff'),
-      mk('Code', 'code', '#7b5cd6', '#ffffff', true),
-      mk('Music', 'music', '#d6457a', '#ffffff', true),
-      mk('Photos', 'photos', '#3aa65b', '#ffffff'),
-      mk('Calendar', 'calendar', '#f0b429', '#3a2a00'),
-      mk('Settings', 'settings', '#5b6478', '#ffffff')
+      mk('Dolphin', 'dolphin', '#3f7fe0', '#ffffff', true),
+      mk('Firefox', 'firefox', '#e8743b', '#ffffff', true),
+      mk('Konsole', 'terminal', '#23293d', '#141827'),
+      mk('KMail', 'kmail', '#1f9e8f', '#ffffff'),
+      mk('Kate', 'kate', '#7b5cd6', '#ffffff', true),
+      mk('Elisa', 'elisa', '#d6457a', '#ffffff', true),
+      mk('Gwenview', 'gwenview', '#3aa65b', '#ffffff'),
+      mk('Merkuro', 'merkuro', '#f0b429', '#3a2a00'),
+      mk('System Settings', 'systemsettings', '#5b6478', '#ffffff')
     ];
     return { dock };
   }

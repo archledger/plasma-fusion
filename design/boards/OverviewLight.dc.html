@@ -95,7 +95,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 </div>
 </div>
 <div style="height:28px;box-sizing:border-box;padding:0 12px 0 4px;border-radius:14px;background:rgba(255,255,255,0.85);display:flex;align-items:center;gap:8px">
-<dc-import name="AppIcon" app="files" size="22" hint-size="22px,22px"></dc-import>
+<dc-import name="AppIcon" app="dolphin" size="22" hint-size="22px,22px"></dc-import>
 <span style="font-weight:700">Files — Wallpapers</span>
 </div>
 </div>
@@ -129,7 +129,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 <button aria-label="Close Browser" style="position:absolute;right:-12px;top:-12px;width:30px;height:30px;border-radius:15px;background:#d9434b;color:#ffffff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(20,24,39,0.16)"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"></path></svg></button>
 </div>
 <div style="height:28px;box-sizing:border-box;padding:0 12px 0 4px;border-radius:14px;background:#2f6fdf;display:flex;align-items:center;gap:8px;color:#ffffff">
-<dc-import name="AppIcon" app="browser" size="22" hint-size="22px,22px"></dc-import>
+<dc-import name="AppIcon" app="firefox" size="22" hint-size="22px,22px"></dc-import>
 <span style="font-weight:800">Browser — Fusion theme notes</span>
 </div>
 </div>
@@ -174,7 +174,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 </div>
 </div>
 <div style="height:28px;box-sizing:border-box;padding:0 12px 0 4px;border-radius:14px;background:rgba(255,255,255,0.85);display:flex;align-items:center;gap:8px">
-<dc-import name="AppIcon" app="mail" size="22" hint-size="22px,22px"></dc-import>
+<dc-import name="AppIcon" app="kmail" size="22" hint-size="22px,22px"></dc-import>
 <span style="font-weight:700">Mail — Inbox</span>
 </div>
 </div>
@@ -201,7 +201,7 @@ a{color:#2f6fdf}a:hover{color:#2359c4}
 </div>
 </div>
 <div style="height:28px;box-sizing:border-box;padding:0 12px 0 4px;border-radius:14px;background:rgba(255,255,255,0.85);display:flex;align-items:center;gap:8px">
-<dc-import name="AppIcon" app="code" size="22" hint-size="22px,22px"></dc-import>
+<dc-import name="AppIcon" app="kate" size="22" hint-size="22px,22px"></dc-import>
 <span style="font-weight:700">Code — fusion-theme.qml</span>
 </div>
 </div>
@@ -276,15 +276,15 @@ class Component extends DCLogic {
     };
     const mk = (name, key, bg, fg, run) => ({ name, key, d: I[key], s: 48, r: 13, ic: 25, bg, fg, running: !!run, indW: 5, indC: 'rgba(20,24,39,0.6)' });
     const dock = [
-      mk('Files', 'folder', '#3f7fe0', '#ffffff', true),
-      mk('Browser', 'globe', '#e8743b', '#ffffff', true),
-      mk('Terminal', 'terminal', '#23293d', '#141827', true),
-      mk('Mail', 'mail', '#1f9e8f', '#ffffff', true),
-      mk('Code', 'code', '#7b5cd6', '#ffffff', true),
-      mk('Music', 'music', '#d6457a', '#ffffff', true),
-      mk('Photos', 'photos', '#3aa65b', '#ffffff'),
-      mk('Calendar', 'calendar', '#f0b429', '#3a2a00'),
-      mk('Settings', 'settings', '#5b6478', '#ffffff', true)
+      mk('Dolphin', 'dolphin', '#3f7fe0', '#ffffff', true),
+      mk('Firefox', 'firefox', '#e8743b', '#ffffff', true),
+      mk('Konsole', 'terminal', '#23293d', '#141827', true),
+      mk('KMail', 'kmail', '#1f9e8f', '#ffffff', true),
+      mk('Kate', 'kate', '#7b5cd6', '#ffffff', true),
+      mk('Elisa', 'elisa', '#d6457a', '#ffffff', true),
+      mk('Gwenview', 'gwenview', '#3aa65b', '#ffffff'),
+      mk('Merkuro', 'merkuro', '#f0b429', '#3a2a00'),
+      mk('System Settings', 'systemsettings', '#5b6478', '#ffffff', true)
     ];
     const sp = (name, key, sky, sun, m1, m2, wins, active) => ({
       name, key, sky, sun, m1, m2, wins,

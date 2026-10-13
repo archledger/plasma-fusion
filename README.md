@@ -17,11 +17,19 @@ with a tablet posture for convertibles.
 <td><a href="design/previews/Tablet.webp"><img src="design/previews/Tablet.webp" width="420" alt="Plasma Fusion tablet posture, dark"></a></td>
 <td><a href="design/previews/TabletLight.webp"><img src="design/previews/TabletLight.webp" width="420" alt="Plasma Fusion tablet posture, light"></a></td>
 </tr>
+<tr>
+<td><a href="design/previews/Launcher.webp"><img src="design/previews/Launcher.webp" width="420" alt="Launcher — start menu + search"></a></td>
+<td><a href="design/previews/QuickSettings.webp"><img src="design/previews/QuickSettings.webp" width="420" alt="Quick settings, notifications, snap layouts"></a></td>
+</tr>
+<tr>
+<td><a href="design/previews/Lock.webp"><img src="design/previews/Lock.webp" width="420" alt="Lock screen"></a></td>
+<td><a href="design/previews/Login.webp"><img src="design/previews/Login.webp" width="420" alt="Login screen (SDDM)"></a></td>
+</tr>
 </table>
 
-These are design boards, the reference for every colour, size and drawing used here. All 27
-boards are pictured in [`design/`](design/README.md), with their canvas sources in
-`design/boards/`.
+These are design boards, the reference for every colour, size and drawing used here — the desktop,
+the launcher and quick settings, the lock and login screens, the tablet home. All 27 boards are
+pictured in [`design/`](design/README.md), with their canvas sources in `design/boards/`.
 
 ## Status
 
