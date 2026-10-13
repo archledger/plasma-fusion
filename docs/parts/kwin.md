@@ -531,7 +531,7 @@ PFK_PACKAGES=$PWD/$P PFK_TMP=$PWD/build/k2 packages/kwin/tests/offscreen/run.sh 
 
 Private sessions on the ThinkPad (seed from `fusion-config.sh --install`):
 
-- `scenario-kwin2-a.sh` (1920x1200 at 4/3), 19 checks PASS on 2026-10-02, 25 since the T19
+- `scenario-kwin2-a.sh` (1920x1200 at 4/3), 19 checks PASS on 2026-10-02, 26 since the T19
   checks (2026-10-13):
   - flyout centre against the maximize button: compiled decoration right 1061.5 / 1061.25 and
     left 378.5 / 378.5, Aurorae `-Left` 378.5 / 378.5, Aurorae right 1061.5 / 1061.25;
