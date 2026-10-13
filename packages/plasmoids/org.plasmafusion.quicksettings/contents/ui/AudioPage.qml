@@ -47,9 +47,12 @@ ColumnLayout {
         id: tabs
         Layout.fillWidth: true
         currentIndex: page.initialTab
-        QQC2.TabButton { text: i18nc("@title:tab", "Output") }
-        QQC2.TabButton { text: i18nc("@title:tab", "Input") }
-        QQC2.TabButton { text: i18nc("@title:tab", "Applications") }
+        // The bar gives its buttons its content height: 44 px tabs in touch mode (as the
+        // clipboard sheet's tabs).
+        contentHeight: page.pal.touch ? 44 : Math.max(outputTab.implicitHeight, inputTab.implicitHeight, appsTab.implicitHeight)
+        QQC2.TabButton { id: outputTab; text: i18nc("@title:tab", "Output") }
+        QQC2.TabButton { id: inputTab; text: i18nc("@title:tab", "Input") }
+        QQC2.TabButton { id: appsTab; text: i18nc("@title:tab", "Applications") }
     }
 
     ListView {
@@ -140,7 +143,7 @@ ColumnLayout {
         TextButton {
             pal: page.pal
             metrics: page.metrics
-            implicitHeight: page.pal.touch ? Math.max(44, page.metrics.px(32)) : page.metrics.px(32)
+            targetHeight: page.metrics.px(32)
             radius: height / 2
             sidePadding: page.metrics.px(14)
             fill: page.pal.overlay(0.08)

@@ -23,7 +23,9 @@ ColumnLayout {
     // 4.5 rows, so a cut row shows that the list scrolls (rows follow the text size)
     property real listMaxHeight: 4.5 * rowHeight + 4 * 2
     // Height of a network row: 44 px on the board, scaled with the text.
-    readonly property real rowHeight: metrics.px(44)
+    // The network rows are the tap target; like ListRow they follow the text scale, floored at
+    // the touch minimum (ADAPTIVE 5.3).
+    readonly property real rowHeight: Math.max(metrics.px(44), pal.touch ? 44 : 0)
 
     signal back()
 
@@ -213,7 +215,7 @@ ColumnLayout {
                     TextButton {
                         pal: page.pal
                         metrics: page.metrics
-                        implicitHeight: page.metrics.px(28)
+                        targetHeight: page.metrics.px(28)
                         fill: page.pal.overlay(0.12)
                         textColor: page.pal.activeCardTitle
                         text: i18nc("@action:button", "Disconnect")
@@ -286,6 +288,7 @@ ColumnLayout {
 
         delegate: Item {
             id: row
+            objectName: "wifi-row"
             required property var model
             required property int index
 
@@ -405,7 +408,7 @@ ColumnLayout {
                     pal: page.pal
                     metrics: page.metrics
                     primary: true
-                    implicitHeight: page.metrics.px(30)
+                    targetHeight: page.metrics.px(30)
                     radius: 10
                     text: i18nc("@action:button", "Connect")
                     enabled: passwordField.text.length >= (row.model.SecurityType === 1 ? 5 : 8)
@@ -616,7 +619,7 @@ ColumnLayout {
                 pal: page.pal
                 metrics: page.metrics
                 primary: !page.backend.net.hotspotActive
-                implicitHeight: page.metrics.px(30)
+                targetHeight: page.metrics.px(30)
                 radius: 10
                 text: page.backend.net.hotspotActive ? i18nc("@action:button", "Stop hotspot")
                                                      : i18nc("@action:button", "Start hotspot")
@@ -648,7 +651,7 @@ ColumnLayout {
             TextButton {
                 pal: page.pal
                 metrics: page.metrics
-                implicitHeight: page.metrics.px(30)
+                targetHeight: page.metrics.px(30)
                 fill: "transparent"
                 textColor: page.pal.link
                 fontSize: 12.5
@@ -661,7 +664,7 @@ ColumnLayout {
             visible: !page.backend.net.hotspotActive && !hotspotBox.editing
             pal: page.pal
             metrics: page.metrics
-            implicitHeight: page.metrics.px(30)
+            targetHeight: page.metrics.px(30)
             sidePadding: 0
             fill: "transparent"
             textColor: page.pal.link
@@ -705,7 +708,7 @@ ColumnLayout {
             visible: page.backend.net.wifiDevice
             pal: page.pal
             metrics: page.metrics
-            implicitHeight: page.metrics.px(32)
+            targetHeight: page.metrics.px(32)
             sidePadding: 0
             fill: "transparent"
             textColor: page.pal.link
@@ -719,7 +722,7 @@ ColumnLayout {
         TextButton {
             pal: page.pal
             metrics: page.metrics
-            implicitHeight: page.metrics.px(32)
+            targetHeight: page.metrics.px(32)
             radius: height / 2
             sidePadding: page.metrics.px(14)
             fill: page.pal.overlay(0.08)

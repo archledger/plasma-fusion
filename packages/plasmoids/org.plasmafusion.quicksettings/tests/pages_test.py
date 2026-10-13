@@ -18,7 +18,7 @@ import tempfile
 os.environ["QT_QPA_OFFSCREEN_NO_GLX"] = "1"
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 from PySide6.QtCore import QObject, QPoint, QPointF, Qt, QUrl, Slot  # noqa: E402
-from PySide6.QtGui import QGuiApplication  # noqa: E402
+from PySide6.QtGui import QFont, QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
@@ -55,7 +55,8 @@ Item {
     property var list: ["performance", "balanced", "power-saver"]
     property string active: "balanced"
     property string reason: "lap-detected"
-    FusionPalette { id: pal }
+    property bool touch: false
+    FusionPalette { id: pal; touch: root.touch }
     FusionMetrics { id: metrics }
     QtObject {
         id: backend
@@ -74,6 +75,7 @@ Item {
     }
     ProfilesPage {
         id: page
+        objectName: "profilesPage"
         width: root.width
         backend: backend
         pal: pal
@@ -142,6 +144,104 @@ Item {
 }
 """
 
+# The other sub-pages with minimal service stand-ins, for the touch sweep: each page's controls
+# take their touch floor from TextButton/ListRow, so the sweep fails without those.
+SUBPAGES = """
+import QtQuick
+import "%(ui)s"
+import "%(ui)s/components"
+
+Item {
+    id: root
+    width: 356
+    height: 560
+    property bool touch: false
+    readonly property real px44: metrics.px(44)
+    FusionPalette { id: pal; touch: root.touch }
+    FusionMetrics { id: metrics }
+    QtObject {
+        id: backend
+        property QtObject audio: QtObject {
+            readonly property var cardModel: ListModel {}
+            readonly property var sinkModel: ListModel {}
+            readonly property var sourceModel: ListModel {}
+            function setDefault() {}
+            function openSettings() {}
+        }
+        property QtObject devices: QtObject {
+            readonly property var list: ListModel {
+                ListElement { name: "Test device"; udi: "/org/test/1"; icon: ""; openPredicate: "open";
+                              mounted: false; mountable: false; optical: false; busy: false;
+                              message: ""; messageIsError: false }
+            }
+            function open() {}
+            function mount() {}
+            function unmount() {}
+            function openSettings() {}
+            function refresh() {}
+        }
+        property QtObject net: QtObject {
+            readonly property bool wifiEnabled: true
+            readonly property bool wifiHwEnabled: true
+            readonly property string wifiDevice: "wlan0"
+            readonly property bool airplane: false
+            readonly property bool airplaneAvailable: true
+            readonly property int vpnCount: 0
+            readonly property var vpnModel: ListModel {}
+            readonly property bool hotspotActive: false
+            readonly property bool hotspotStarting: false
+            readonly property bool hotspotReady: true
+            readonly property string hotspotError: ""
+            readonly property string hotspotHint: "Share this connection with other devices"
+            readonly property string hotspotName: "Fusion"
+            readonly property string hotspotPassword: "12345678"
+            readonly property var activeModel: ListModel {
+                ListElement { Name: "Home"; Ssid: "Home"; ConnectionState: 2; SecurityType: 1;
+                              Uuid: "u1"; ConnectionPath: "/c/1"; DevicePath: "/d/1"; SpecificPath: "/s/1";
+                              Signal: 80; RxBytes: 1024; TxBytes: 2048; ItemUniqueName: "w0" }
+            }
+            readonly property var otherModel: ListModel {
+                ListElement { Name: "Neighbour"; Ssid: "Neighbour"; ConnectionState: 0; SecurityType: 1;
+                              Uuid: ""; ConnectionPath: "/c/2"; DevicePath: "/d/1"; SpecificPath: "/s/2";
+                              Signal: 40; RxBytes: 0; TxBytes: 0; ItemUniqueName: "w1" }
+            }
+            function setWifiEnabled() {}
+            function setAirplaneMode() {}
+            function activate() {}
+            function deactivate() {}
+            function addAndActivate() {}
+            function configureHotspot() {}
+            function toggleHotspot() {}
+            function openSettings() {}
+            function setStatistics() {}
+        }
+    }
+    AudioPage {
+        objectName: "audioPage"
+        width: root.width
+        backend: backend
+        pal: pal
+        metrics: metrics
+    }
+    DevicesPage {
+        objectName: "devicesPage"
+        x: 400
+        width: root.width
+        backend: backend
+        pal: pal
+        metrics: metrics
+    }
+    WifiPage {
+        objectName: "wifiPage"
+        x: 800
+        width: root.width
+        backend: backend
+        pal: pal
+        metrics: metrics
+    }
+}
+"""
+
 checks = 0
 
 
@@ -168,6 +268,34 @@ def click(view, item):
     QTest.qWait(50)
 
 
+# The touch minimum (ADAPTIVE 5.3): every visible enabled control reaches 44 x 44 in touch mode.
+CONTROLS = ("QQuickAbstractButton", "QQuickItemDelegate", "QQuickSwitch", "QQuickSlider",
+            "QQuickComboBox", "QQuickTextField", "QQuickTextArea", "QQuickTextInput")
+
+
+def classes(item):
+    names, mo = [], item.metaObject()
+    while mo is not None:
+        names.append(mo.className())
+        mo = mo.superClass()
+    return names
+
+
+def touch_assert(root, page, what):
+    """Every visible, enabled control under `page` is at least 44 x 44 with the harness's touch
+    flag on (the pages' controls take the touch floor from TextButton and ListRow)."""
+    if page is None:
+        check(False, "touch mode: %s not found" % what)
+        return
+    found = [i for i in items(page)
+             if i.isVisible() and i.property("enabled") is not False
+             and any(c in CONTROLS for c in classes(i))]
+    small = [(i.objectName() or str(i.property("text") or "")[:24], round(i.width(), 1), round(i.height(), 1))
+             for i in found if i.width() + 0.5 < 44 or i.height() + 0.5 < 44]
+    check(len(found) >= 3 and not small,
+          "touch mode: %s reaches 44 x 44 (%d controls, small: %r)" % (what, len(found), small))
+
+
 def load(text):
     tmp = tempfile.NamedTemporaryFile("w", suffix=".qml", delete=False)
     tmp.write(text % {"ui": UI.as_uri()})
@@ -186,6 +314,9 @@ def load(text):
 
 
 app = QGuiApplication(sys.argv[:1])
+# Pin the text scale to its minimum (FusionMetrics.ts clamps to 0.85): the touch floors are raw
+# 44 px, so the sweeps must hold at the strictest scale, not the container's default.
+app.setFont(QFont(app.font().family(), 8))
 context = Context()
 
 # ---- Power mode chooser (P7)
@@ -213,6 +344,11 @@ check(root.property("calls").endswith("set performance"), "a click on Performanc
 root.setProperty("list", ["balanced", "power-saver"])
 QTest.qWait(50)
 check(find(root, "profile-performance") is None, "a profile the daemon does not offer is not listed")
+# ---- Touch mode: the Profiles page's controls reach 44 x 44 (ADAPTIVE 5.3).
+root.setProperty("touch", True)
+QTest.qWait(120)
+touch_assert(root, find(root, "profilesPage"), "the Profiles page")
+root.setProperty("touch", False)
 view.close()
 
 # ---- Keep awake for a while (F7)
@@ -248,27 +384,22 @@ check(state.property("text") == "On until turned off" and find(root, "keepawake-
 # ---- Touch mode: every control on the Bluetooth page reaches 44 x 44 (ADAPTIVE 5.3).
 root.setProperty("touch", True)
 QTest.qWait(120)
-CONTROLS = ("QQuickAbstractButton", "QQuickItemDelegate", "QQuickSwitch", "QQuickSlider",
-            "QQuickComboBox", "QQuickTextField", "QQuickTextArea", "QQuickTextInput")
-
-
-def classes(item):
-    names, mo = [], item.metaObject()
-    while mo is not None:
-        names.append(mo.className())
-        mo = mo.superClass()
-    return names
-
-
-bluetooth = find(root, "bluetoothPage")
-found = [i for i in items(bluetooth)
-         if bluetooth is not None and i.isVisible() and i.property("enabled") is not False
-         and any(c in CONTROLS for c in classes(i))]
-small = [(i.objectName() or str(i.property("text") or "")[:24], round(i.width(), 1), round(i.height(), 1))
-         for i in found if i.width() + 0.5 < 44 or i.height() + 0.5 < 44]
-check(len(found) >= 3 and not small,
-      "touch mode: the Bluetooth page's controls reach 44 x 44 (%d controls, small: %r)" % (len(found), small))
+touch_assert(root, find(root, "bluetoothPage"), "the Bluetooth page")
 root.setProperty("touch", False)
+
+# ---- Touch mode: the other sub-pages' controls reach 44 x 44 (ADAPTIVE 5.3).
+view, root = load(SUBPAGES)
+# The text scale pinned above is what makes the sweeps strict: 44 x 0.85 snaps to 37.
+check(root.property("px44") < 40, "the suite runs at the minimum text scale (px(44) = %s)" % root.property("px44"))
+root.setProperty("touch", True)
+QTest.qWait(150)
+touch_assert(root, find(root, "audioPage"), "the Audio page")
+touch_assert(root, find(root, "devicesPage"), "the Devices page")
+touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page")
+wifi = find(root, "wifiPage")
+rows = [i for i in items(wifi) if i.objectName() == "wifi-row"] if wifi else []
+check(rows and all(r.height() + 0.5 >= 44 for r in rows),
+      "touch mode: the Wi-Fi network rows reach 44 x 44 (%d rows)" % len(rows))
 view.close()
 
 print(f"Quick settings pages: {checks} checks, 0 failures")
