@@ -215,6 +215,16 @@ inside land1 "M14 back in landscape (fix 24)"
 grep -a 'plasmafusion-snap: screens changed' "$KLOG" | tail -1 >>"$CHK"
 
 # ---- 5. tablet posture: the picker's touch sizes, the switcher's close button
+# A window already maximized with the laptop setting off: only the policy's option can make it
+# borderless here, and un-maximizing it in tablet posture must still give the bar back at leave().
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+  if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0) { w.setMaximize(true, true); } }
+  report('dolphin maximized before the first cycle');" >>"$OUT/place.log"
+sleep 1.5
+# The laptop setting keeps maximized windows borderless: the tablet section's last checks use it to
+# cover a re-maximized window through leave() (T19).
+kwriteconfig6 --file kwinrc --group Windows --key BorderlessMaximizedWindows true
+qdbus org.kde.KWin /KWin reconfigure; sleep 1
 pfv_tablet on; sleep 6
 state tab0
 K run "workspace.activeWindow = workspace.windowList().filter(function (w) { return w.normalWindow && String(w.resourceClass).indexOf('kwrite') >= 0; })[0]; report('kwrite active');" >>"$OUT/place.log"
@@ -246,17 +256,227 @@ PY
 else
   fail "T18: no picker in tablet posture"
 fi
+# A window the user un-maximizes in tablet posture keeps no title bar: the appname pill is the
+# window's title bar and menu (owner decision 2026-10-13). Its class carries the round trip below.
+FLOATING=$(K run "var l = workspace.windowList(), pick = null;
+  for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && w.maximizeMode === 3 && !w.tile && String(w.resourceClass) !== '') { pick = w; break; } }
+  if (pick) { pick.setMaximize(false, false); workspace.activeWindow = pick; }
+  report(pick ? String(pick.resourceClass) : '');" | tr -d '"')
+echo "un-maximized in tablet: ${FLOATING:-none}" >>"$OUT/place.log"
+SECOND="" # the maximized-again case's window; set below when there is a floating one
+sleep 1.5
+state tab2b; shot tab-float
+python3 - "$OUT/state-tab2b.json" "$FLOATING" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
+f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3]
+ok = want != "" and len(f) >= 1 and all(w["nb"] for w in f) and any(want in w["cls"] for w in f)
+print(("PASS" if ok else "FAIL") + f" T19: a window un-maximized in tablet posture keeps no title bar: {[(w['cls'], w['geo'], w['nb']) for w in f]}")
+PY
+# The floating window keeps no title bar through a tile round trip: quick-tile the window T19
+# un-maximized and untile it again.
+if [ -n "$FLOATING" ]; then
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0) { workspace.activeWindow = w; } }
+    report('$FLOATING active for the tile round trip');" >>"$OUT/place.log"
+  sleep 0.5
+  qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+  sleep 1.5
+  state tab2c
+  K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+    report('untiled the floating window: ' + out);" >>"$OUT/place.log"
+  sleep 1.5
+  state tab2d; shot tab-untile
+  python3 - "$OUT/state-tab2c.json" "$OUT/state-tab2d.json" "$FLOATING" >>"$CHK" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1])); d = json.load(open(sys.argv[2])); want = sys.argv[3]
+tiled = [w for w in c["windows"] if want in w["cls"] and w["tiled"]]
+f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 and want in w["cls"]]
+ok = len(tiled) == 1 and len(f) == 1 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: after a tile round trip the un-maximized window keeps no title bar: {[(w['cls'], w['nb']) for w in f]}")
+PY
+  # A window that goes maximized -> quick-tiled -> untiled in the same posture keeps no title bar
+  # too: settleUnmaximized() never saw it (the tile was set first), so this is the untiled path's
+  # own bar.
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0) { w.setMaximize(true, true); workspace.activeWindow = w; } }
+    report('$FLOATING maximized again for the tiled-untile case');" >>"$OUT/place.log"
+  sleep 1.5
+  qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+  sleep 1.5
+  state tab2e
+  K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+    report('untiled the tiled window: ' + out);" >>"$OUT/place.log"
+  sleep 1.5
+  state tab2f; shot tab-untile2
+  python3 - "$OUT/state-tab2e.json" "$OUT/state-tab2f.json" "$FLOATING" >>"$CHK" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1])); d = json.load(open(sys.argv[2])); want = sys.argv[3]
+tiled = [w for w in c["windows"] if want in w["cls"] and w["tiled"]]
+f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 and want in w["cls"]]
+ok = len(tiled) == 1 and len(f) == 1 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window tiled and untiled again keeps no title bar: {[(w['cls'], w['nb']) for w in f]}")
+PY
+  # A second window through the exit: the split's other side is untiled (it floats, recorded),
+  # maximized, un-maximized again (recorded) and maximized again. The laptop setting keeps
+  # maximized windows borderless, so it must be borderless in posture and stay so through leave();
+  # the floating window above still exercises leave()'s restore of a floating window's title bar.
+  # Konsole unless Konsole is the floating window, so the two subjects are always distinct.
+  SECOND=konsole
+  case "$FLOATING" in *konsole*) SECOND=kwrite ;; esac
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0 && w.tile) { w.tile.unmanage(w); } }
+    report('untiled $SECOND for the maximized-again case');" >>"$OUT/place.log"
+  sleep 1.2
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0) { w.setMaximize(true, true); } }
+    report('$SECOND maximized for the maximized-again case');" >>"$OUT/place.log"
+  sleep 1.2
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('$SECOND un-maximized (recorded) for the maximized-again case');" >>"$OUT/place.log"
+  sleep 1.5
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0) { w.setMaximize(true, true); workspace.activeWindow = w; } }
+    report('$SECOND maximized again to leave it maximized');" >>"$OUT/place.log"
+  sleep 1.5
+  state tab2g
+  python3 - "$OUT/state-tab2g.json" "$SECOND" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
+f = [w for w in d["windows"] if want in w["cls"]]
+ok = len(f) == 1 and f[0]["max"] == 3 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window ({want}) maximized again is borderless under the laptop setting: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+PY
+else
+  fail "T19: no maximized window to un-maximize, so the tile round trip cannot run"
+fi
 pfinput 'keydown alt' 'key tab' 'sleep 2.6' 'keyup alt' &
 p=$!
 sleep 1.3; shot tab-sw; wait $p; sleep 1
 pfv_tablet off; sleep 5
 state tab3; shot tab-off
-python3 - "$OUT/state-tab3.json" >>"$CHK" <<'PY'
+python3 - "$OUT/state-tab3.json" "$FLOATING" "$SECOND" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); floating = sys.argv[2]; second = sys.argv[3]
+# Maximized windows may keep no title bar: the laptop setting above asks for that. Every other
+# window (the floating one included) got its title bar back in leave().
+nb = [w["cls"] for w in d["windows"] if w["nb"] and w["max"] != 3]
+print(("PASS" if not nb else "FAIL") + f" T18: after leaving tablet posture every window has its title bar again (without: {nb})")
+f = [w for w in d["windows"] if second and second in w["cls"]]
+ok = len(f) == 1 and f[0]["max"] == 3 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: the re-maximized window stayed borderless through leave: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+# The floating window is still floating (the two subjects stayed distinct) and got its bar back.
+fl = [w for w in d["windows"] if floating and floating in w["cls"]]
+ok = len(fl) == 1 and fl[0]["max"] != 3 and not fl[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: the floating window is still floating and got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in fl]}")
+PY
+
+# ---- 5b. a window the user made borderless themselves (a no-titlebar rule) is not claimed by the
+# policy: tiling and untiling it in a second tablet cycle must not hand it a title bar at leave().
+THIRD=""
+for C in dolphin konsole kwrite; do
+  case "$FLOATING" in *"$C"*) continue ;; esac
+  case "$SECOND" in *"$C"*) continue ;; esac
+  THIRD=$C; break
+done
+if [ -n "$THIRD" ]; then
+  # The no-titlebar rule for the window opened in tablet, checked in laptop posture first so a
+  # setup failure does not read as a pass.
+  kwriteconfig6 --file kwinrulesrc --group General --key count 1
+  kwriteconfig6 --file kwinrulesrc --group General --key rules 1
+  kwriteconfig6 --file kwinrulesrc --group 1 --key Description "KWIN-2: no title bar for kcalc"
+  kwriteconfig6 --file kwinrulesrc --group 1 --key wmclass kcalc
+  kwriteconfig6 --file kwinrulesrc --group 1 --key wmclassmatch 2
+  kwriteconfig6 --file kwinrulesrc --group 1 --key noborder true
+  kwriteconfig6 --file kwinrulesrc --group 1 --key noborderrule 3 # Rules::Apply: only after the initial mapping
+  qdbus org.kde.KWin /KWin reconfigure; sleep 1
+  kcalc >/dev/null 2>&1 &
+  sleep 3
+  state rule0
+  python3 - "$OUT/state-rule0.json" >>"$CHK" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-nb = [w["cls"] for w in d["windows"] if w["nb"]]
-print(("PASS" if not nb else "FAIL") + f" T18: after leaving tablet posture every window has its title bar again (without: {nb})")
+f = [w for w in d["windows"] if "kcalc" in w["cls"]]
+ok = len(f) == 1 and f[0]["nb"] and f[0]["max"] != 3
+print(("PASS" if ok else "FAIL") + f" T19: the no-titlebar rule applies before the cycle: {[(w['cls'], w['max'], w['nb']) for w in f]}")
 PY
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0) { w.closeWindow(); } }
+    report('kcalc closed before the cycle');" >>"$OUT/place.log"
+  sleep 2
+  state rule0b
+  python3 - "$OUT/state-rule0b.json" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+f = [w for w in d["windows"] if "kcalc" in w["cls"]]
+print(("PASS" if not f else "FAIL") + f" T19: the rule probe's window is gone before the cycle: {[(w['cls'], w['nb']) for w in f]}")
+PY
+  # A window maximized before the posture switch, of its own class so it is distinct from the
+  # three the cycle's other cases use (and one the test image has: gwenview, as kcalc): the laptop
+  # setting makes it borderless while maximized, and un-maximizing it in tablet must still give the
+  # bar back at leave().
+  gwenview >/dev/null 2>&1 &
+  sleep 4
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('gwenview') >= 0) { w.setMaximize(true, true); } }
+    report('gwenview maximized before the second cycle');" >>"$OUT/place.log"
+  sleep 1.5
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0) { if (w.tile) { w.tile.unmanage(w); } w.noBorder = true; } }
+    report('$THIRD borderless as the user set it');" >>"$OUT/place.log"
+  sleep 1
+  pfv_tablet on; sleep 6
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('$THIRD un-maximized in the second cycle');" >>"$OUT/place.log"
+  sleep 1.2
+  qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+  sleep 1.5
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0 && w.tile) { w.tile.unmanage(w); } }
+    report('$THIRD untiled in the second cycle');" >>"$OUT/place.log"
+  sleep 1.5
+  # The window opened in tablet posture under the rule: tiling and untiling it must not hand it a
+  # title bar at leave() either.
+  kcalc >/dev/null 2>&1 &
+  sleep 4
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0) { workspace.activeWindow = w;
+      report('kcalc opened in tablet: noBorder ' + w.noBorder + ', max ' + w.maximizeMode + ', tile ' + !!w.tile
+        + ', normal ' + w.normalWindow + ', maximizable ' + w.maximizable); } }" >>"$OUT/place.log"
+  sleep 0.5
+  qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+  sleep 1.5
+  K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+    report('untiled kcalc: ' + out);" >>"$OUT/place.log"
+  sleep 1.5
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('gwenview') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('gwenview un-maximized in the second cycle');" >>"$OUT/place.log"
+  sleep 1.5
+  pfv_tablet off; sleep 5
+  state tab4; shot tab-userborderless
+  python3 - "$OUT/state-tab4.json" "$THIRD" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
+f = [w for w in d["windows"] if want and want in w["cls"]]
+ok = len(f) == 1 and not f[0]["tiled"] and f[0]["max"] != 3 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window the user made borderless keeps no title bar after leave: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+x = [w for w in d["windows"] if "kcalc" in w["cls"]]
+ok = len(x) == 1 and not x[0]["tiled"] and x[0]["max"] != 3 and x[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window opened in tablet under a no-titlebar rule keeps it: {[(w['cls'], w['max'], w['nb']) for w in x]}")
+m = [w for w in d["windows"] if "gwenview" in w["cls"]]
+ok = len(m) == 1 and not m[0]["tiled"] and m[0]["max"] != 3 and not m[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window maximized before the cycle got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in m]}")
+PY
+else
+  fail "T19: no window left for the user-borderless case"
+fi
 
 # ---- 6. health
 grep -aE 'plasmafusion-snap|org\.plasmafusion\.switcher|plasmafusion-tablet' "$KLOG" | grep -aiE 'error|TypeError|ReferenceError|Unable to assign|Binding loop|is not defined|Cannot' | sort | uniq -c | head -30 >"$OUT/warnings.txt"

@@ -21,7 +21,9 @@ import "Requests.js" as Requests
 //   with WindowMode = fullscreen.
 // - Leaving: windows this script maximized are restored (KWin gives back their laptop geometry);
 //   windows first opened in tablet mode get 70 % of the work area, centred; the options come back.
-//   Windows the user un-maximized in tablet mode are not touched.
+//   A window the user un-maximizes in tablet mode (the window card's Full screen switch) keeps its
+//   size but not its title bar: in tablet posture the appname pill is the window's title bar and
+//   menu (owner decision 2026-10-13), and leave() gives the title bar back with the rest.
 // - A KWin reconfigure reloads the options from kwinrc; they are set again at once (synchronously,
 //   so KWin does not give every maximized window its frame back).
 // - Disabling the script (the kill switch) leaves tablet mode for the windows first.
@@ -110,6 +112,8 @@ Item {
     property var maximizedByUs: ({}) // internalId -> true: maximized by enter()
     property var openedInTablet: ({}) // internalId -> true: opened (maximized) while applied
     property var borderlessTiles: ({}) // internalId -> true: title bar removed from a tiled window
+    property var borderlessFloating: ({}) // internalId -> true: floating window without a title bar
+    property var laptopNoBorder: ({}) // internalId -> true: no title bar before the policy took over
     property var tileHandlers: ({}) // internalId -> [window, handler]
 
     function key(w) {
@@ -186,6 +190,19 @@ Item {
         busy = true;
         laptopPlacement = Options.placement;
         laptopBorderless = Options.borderlessMaximizedWindows;
+        const ws = Workspace.stackingOrder;
+        // Snapshot every window's no-title-bar state before the policy touches anything: a bar the
+        // user removed themselves (a no-titlebar rule) stays theirs, and leave() must not claim it
+        // back. Enabling the option below already makes the windows that are maximized now
+        // borderless, so the snapshot cannot wait until the loop below.
+        for (let i = 0; i < ws.length; ++i) {
+            const w = ws[i];
+            if (eligible(w)) {
+                // A maximized window's missing title bar is the laptop setting's doing while that
+                // setting is on (an un-maximize brings the bar back), not a state the user keeps.
+                laptopNoBorder[key(w)] = w.noBorder && !(w.maximizeMode === 3 && laptopBorderless);
+            }
+        }
         Options.placement = placementMaximizing;
         Options.borderlessMaximizedWindows = true;
         moveChanged = setting("DisableWindowMove", false);
@@ -194,7 +211,6 @@ Item {
             Options.interactiveWindowMoveEnabled = false;
         }
         applied = true;
-        const ws = Workspace.stackingOrder;
         let maximized = 0, tiles = 0;
         for (let i = 0; i < ws.length; ++i) {
             const w = ws[i];
@@ -239,7 +255,7 @@ Item {
     function leave() {
         busy = true;
         const ws = Workspace.stackingOrder;
-        let restored = 0, placed = 0, tiles = 0;
+        let restored = 0, placed = 0, tiles = 0, floats = 0;
         // Un-maximize first, while borderless is still on: KWin gives the title bar back on
         // un-maximize only while the option is set.
         for (let i = 0; i < ws.length; ++i) {
@@ -258,6 +274,10 @@ Item {
             if (borderlessTiles[k] && w.noBorder) {
                 w.noBorder = false;
                 tiles++;
+            }
+            if (borderlessFloating[k] && w.noBorder && w.maximizeMode !== 3) {
+                w.noBorder = false;
+                floats++;
             }
         }
         unfollowAll();
@@ -280,17 +300,21 @@ Item {
         maximizedByUs = ({});
         openedInTablet = ({});
         borderlessTiles = ({});
+        borderlessFloating = ({});
+        laptopNoBorder = ({});
         applied = false;
         busy = false;
         log("leave: restored " + restored + ", placed " + placed + ", tiles with title bar " + tiles
+            + ", floated with title bar " + floats
             + ", placement " + Options.placement + ", borderless " + Options.borderlessMaximizedWindows);
     }
 
     // Tiled windows follow their tile while window policy is applied: quick-tiling a borderless
     // maximized window gives it its title bar back, so a tile gets noBorder again (TABLET 4.2).
     // Maximize changes are followed too: a window the user un-maximizes (the window card's
-    // "Full screen" switch, LEAD-1 resolution 11) keeps its title bar and is left alone until
-    // the next fold; one that never had a laptop geometry gets 70 % of the work area.
+    // "Full screen" switch, LEAD-1 resolution 11) keeps its size but not its title bar until
+    // tablet posture ends (the appname pill is its title bar and menu); one that never had a
+    // laptop geometry gets 70 % of the work area.
     function follow(w) {
         const k = key(w);
         if (tileHandlers[k]) {
@@ -302,9 +326,19 @@ Item {
         const onMaximize = function () {
             root.maximizeChanged(w);
         };
+        // The first time a window becomes borderless while the policy runs (a no-titlebar rule at
+        // its initial mapping, or the option when it is maximized) is the state it keeps: KWin does
+        // not expose window rules to scripts, so it is taken as the user's (see the part page).
+        // Only windows without a snapshot are recorded: the ones present at enter() have theirs.
+        const onDecoration = function () {
+            if (w.noBorder && !(key(w) in root.laptopNoBorder)) {
+                root.laptopNoBorder[key(w)] = true;
+            }
+        };
         w.tileChanged.connect(onTile);
         w.maximizedChanged.connect(onMaximize);
-        tileHandlers[k] = [w, onTile, onMaximize];
+        w.decorationPolicyChanged.connect(onDecoration);
+        tileHandlers[k] = [w, onTile, onMaximize, onDecoration];
     }
     function unfollowAll() {
         for (const k in tileHandlers) {
@@ -312,6 +346,7 @@ Item {
             if (entry[0] && !entry[0].deleted) {
                 entry[0].tileChanged.disconnect(entry[1]);
                 entry[0].maximizedChanged.disconnect(entry[2]);
+                entry[0].decorationPolicyChanged.disconnect(entry[3]);
             }
         }
         tileHandlers = ({});
@@ -322,13 +357,32 @@ Item {
         }
         const k = key(w);
         if (w.tile) {
+            // A tile is drawn without a title bar. Claim it when this script takes the bar now, or
+            // when the window is only borderless because of the policy: a window the user made
+            // borderless themselves keeps that state and is not claimed (enter() tracks its own
+            // tiles the same way).
+            if (!w.noBorder) {
+                w.noBorder = true;
+                // Only claim the bar when the window is not one whose borderless state is the
+                // user's: a record of true means the window was already borderless on its own, and
+                // KWin may have put a bar back in between (an un-maximize), so removing it again is
+                // not ours to restore.
+                if (laptopNoBorder[k] !== true) {
+                    borderlessTiles[k] = true;
+                }
+            } else if (laptopNoBorder[k] === false) {
+                borderlessTiles[k] = true;
+            }
+        } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
+            delete borderlessTiles[k];
+            // A window that leaves its tile is floating in tablet posture: like one the user
+            // un-maximized, it keeps no title bar (the appname pill is its title bar and menu,
+            // owner decision 2026-10-13) and is recorded so leave() gives the bar back with the
+            // rest. settleUnmaximized() never saw it when a quick tile un-maximized it first.
             if (!w.noBorder) {
                 w.noBorder = true;
             }
-            borderlessTiles[k] = true;
-        } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
-            w.noBorder = false;
-            delete borderlessTiles[k];
+            borderlessFloating[k] = true;
         }
     }
 
@@ -336,7 +390,13 @@ Item {
     // un-maximizes first) has its tile by then and enter()/leave() are over.
     property var unmaximized: [] // windows un-maximized outside enter()/leave()
     function maximizeChanged(w) {
-        if (!applied || busy || !w || w.deleted || w.maximizeMode === 3) {
+        if (!applied || busy || !w || w.deleted) {
+            return;
+        }
+        if (w.maximizeMode === 3) {
+            // Maximized again (the user's switch): the window is a maximized window now, so leave()
+            // must not treat it as the floating one this script recorded earlier.
+            delete borderlessFloating[key(w)];
             return;
         }
         unmaximized.push(w);
@@ -357,7 +417,17 @@ Item {
             if (placed) {
                 w.frameGeometry = restoreRect(w);
             }
-            log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", title bar " + !w.noBorder);
+            // In tablet posture the appname pill is the window's title bar and menu, so the window
+            // stays without one (owner decision 2026-10-13); KWin restored the title bar on the
+            // un-maximize above, while borderlessMaximizedWindows is set. Only a bar the policy
+            // took is remembered: a window the user made borderless themselves keeps that state.
+            if (!w.noBorder) {
+                w.noBorder = true;
+            }
+            if (laptopNoBorder[k] === false) {
+                borderlessFloating[k] = true;
+            }
+            log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", no title bar");
         }
     }
 
