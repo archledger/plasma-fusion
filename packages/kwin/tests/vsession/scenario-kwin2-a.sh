@@ -149,8 +149,10 @@ t = sorted([w for w in d["windows"] if w["tiled"]], key=lambda w: w["geo"]["x"])
 if len(t) != 2:
     print(f"FAIL halves: {len(t)} tiled windows: {d['windows']}"); sys.exit()
 l, r = t[0]["geo"], t[1]["geo"]
-ok = abs(l["x"] - (a["x"] + 6)) <= 1 and abs(r["x"] - (l["x"] + l["w"] + 6)) <= 1 and abs(r["x"] + r["w"] - (a["x"] + a["w"] - 6)) <= 1
-print(("PASS" if ok else "FAIL") + f" halves with the 6 px gap: {t[0]['cls']} {l}, {t[1]['cls']} {r}, area {a}")
+ok = (abs(l["x"] - a["x"]) <= 1 and abs(l["y"] - a["y"]) <= 1 and abs(l["h"] - a["h"]) <= 1.5
+      and abs(r["x"] - (l["x"] + l["w"] + 6)) <= 1.5 and abs(r["x"] + r["w"] - (a["x"] + a["w"])) <= 1
+      and abs(r["y"] - a["y"]) <= 1 and abs(r["h"] - a["h"]) <= 1.5)
+print(("PASS" if ok else "FAIL") + f" halves flush with a 6 px inner gap: {t[0]['cls']} {l}, {t[1]['cls']} {r}, area {a}")
 PY
 
 # ---- 4. portrait (M09/M14): clamp, row layouts, the switcher's wrapped hints
@@ -171,8 +173,9 @@ python3 - "$OUT/state-port1.json" >>"$CHK" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1])); a = d["area"]
 k = [w for w in d["windows"] if "kwrite" in w["cls"]][0]; g = k["geo"]
-ok = k["tiled"] and abs(g["x"] - (a["x"] + 6)) <= 1 and abs(g["w"] - (a["w"] - 12)) <= 1 and abs(g["y"] - (a["y"] + 6)) <= 1 and abs(g["h"] - (a["h"] / 2 - 9)) <= 1.5
-print(("PASS" if ok else "FAIL") + f" M09 row layout: top half {g} in {a}, tiled {k['tiled']}")
+ok = (k["tiled"] and abs(g["x"] - a["x"]) <= 1 and abs(g["w"] - a["w"]) <= 1
+      and abs(g["y"] - a["y"]) <= 1 and abs(g["h"] - ((a["h"] - 6) / 2)) <= 1.5)
+print(("PASS" if ok else "FAIL") + f" M09 row layout (flush, 6 px gap): top half {g} in {a}, tiled {k['tiled']}")
 PY
 pfinput 'key return'; sleep 1.5
 shot port-tiles; state port2
@@ -183,7 +186,7 @@ t = sorted([w for w in d["windows"] if w["tiled"]], key=lambda w: w["geo"]["y"])
 if len(t) != 2:
     print(f"FAIL M09 top/bottom: {len(t)} tiled windows: {d['windows']}"); sys.exit()
 u, b = t[0]["geo"], t[1]["geo"]
-ok = abs(b["y"] - (u["y"] + u["h"] + 6)) <= 1 and abs(b["y"] + b["h"] - (a["y"] + a["h"] - 6)) <= 1
+ok = abs(b["y"] - (u["y"] + u["h"] + 6)) <= 1 and abs(b["y"] + b["h"] - (a["y"] + a["h"])) <= 1.5
 print(("PASS" if ok else "FAIL") + f" M09 the other half is the bottom: {t[0]['cls']} {u}, {t[1]['cls']} {b}")
 PY
 # three rows: the last zone of the last layout (Left from the first zone wraps backwards)
@@ -197,9 +200,9 @@ python3 - "$OUT/state-port3.json" >>"$CHK" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1])); a = d["area"]
 k = [w for w in d["windows"] if "konsole" in w["cls"]][0]; g = k["geo"]
-h = (a["h"] - 24) / 3
-ok = abs(g["h"] - h) <= 1.5 and abs(g["y"] + g["h"] - (a["y"] + a["h"] - 6)) <= 1.5 and abs(g["w"] - (a["w"] - 12)) <= 1
-print(("PASS" if ok else "FAIL") + f" M09 three rows: bottom third {g} in {a} (row height {h:.1f})")
+h = (a["h"] - 12) / 3
+ok = abs(g["h"] - h) <= 1.5 and abs(g["y"] + g["h"] - (a["y"] + a["h"])) <= 1.5 and abs(g["w"] - a["w"]) <= 1
+print(("PASS" if ok else "FAIL") + f" M09 three rows (flush, two 6 px gaps): bottom third {g} in {a} (row height {h:.1f})")
 PY
 pfinput 'move 450 1300' 'keydown alt' 'key tab' 'sleep 2.6' 'keyup alt' &
 p=$!
