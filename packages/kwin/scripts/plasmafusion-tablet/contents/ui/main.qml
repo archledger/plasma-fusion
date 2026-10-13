@@ -168,6 +168,11 @@ Item {
             root.openedWindows = [];
             for (let i = 0; i < list.length; ++i) {
                 const w = list[i];
+                // First sight of a window opened while the policy runs, after its initial mapping:
+                // a no-titlebar rule has applied by now (windowAdded can be before that), so what
+                // is seen here is what the window keeps. KWin does not expose rules to scripts, so
+                // a borderless state that could be the policy's own option is taken as the user's.
+                root.laptopNoBorder[root.key(w)] = w.noBorder;
                 if (root.applied && root.eligible(w) && w.maximizeMode !== 3 && !w.tile && root.fitsMaximized(w)) {
                     root.maximizedByUs[root.key(w)] = true;
                     w.setMaximize(true, true);
@@ -433,9 +438,6 @@ Item {
             }
             if (root.eligible(w)) {
                 root.follow(w);
-                // First sight of a window opened while the policy runs: a no-titlebar rule is
-                // already on it, so its borderless state is the user's, not the policy's.
-                root.laptopNoBorder[root.key(w)] = w.noBorder;
                 root.openedWindows.push(w);
                 openedCheck.restart();
             }
