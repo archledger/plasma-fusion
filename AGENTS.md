@@ -31,8 +31,9 @@ checker sees them.
   `Signed-off-by` trailer — the *author's* name and email, which `git commit -s` fills in from the
   git configuration (for example `Signed-off-by: Jane Doe <jane@example.com>`). Commit under your
   own identity and never sign off as anyone else. No other trailer. The `commits` workflow counts
-  the trailers of every proposed commit (and of a squash merge as the one commit it makes), so an
-  unsigned commit fails before a merge.
+  the trailers of every non-merge commit proposed (a squash merge counts as the one commit it
+  makes), so an unsigned commit fails before a merge; a merge commit made while merging the base
+  branch in is skipped by that check, but the rule still applies to it.
 - **No AI attribution, anywhere in git or on GitHub.** Commit messages, branch and tag names,
   pull request and issue titles and bodies, review comments and release notes must not name or
   credit an AI agent, model or harness, must not link to AI products or sessions, and must not
@@ -156,8 +157,10 @@ parts need the dependencies their part page lists (`dnf builddep`).
   after errors and always exit 0 (the login check; CONTRIBUTING.md exempts it too), so it states
   that in a comment instead of setting `-e`; do not add strict mode there either.
 - QML rules the lints enforce: no literal animation durations and no endless animations
-  (`motion-lint`), every interactive item has an accessible name (`a11y-lint.py`), an `id` is used
-  only inside the component that declares it (`id-scope-lint.py`).
+  (`motion-lint`; the login splash, `packages/look-and-feel/common/contents/splash/Splash.qml`, is
+  exempt — it runs only while logging in), every interactive item has an accessible name
+  (`a11y-lint.py`), an `id` is used only inside the component that declares it
+  (`id-scope-lint.py`).
 - Commits: one subject each; a short imperative title, a blank line, a wrapped body that says why,
   then the DCO trailer. No tool banners, no emoji, no attribution lines.
 - Keep diffs to the change: no unrelated cleanup, no reformatting of neighbours. Preserve public
