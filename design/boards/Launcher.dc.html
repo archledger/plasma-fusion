@@ -196,7 +196,7 @@ class Component extends DCLogic {
       ['Marble', 'pin', '#4a8f3a', '#ffffff'], ['Weather', 'cloud', '#3a7bd5', '#ffffff'],
       ['System Monitor', 'cpu', '#475069', '#ffffff'], ['Spectacle', 'crop', '#9b3fb5', '#ffffff']
     ];
-    const apps = A.map((x, i) => ({ name: x[0], key: x[1] === 'calc' ? 'calculator' : x[1] === 'bag' ? 'software' : x[1] === 'play' ? 'haruna' : x[1] === 'pin' ? 'marble' : x[1] === 'cloud' ? 'weather' : x[1] === 'cpu' ? 'monitor' : x[1] === 'crop' ? 'screenshot' : x[1] === 'folder' ? 'dolphin' : x[1] === 'globe' ? 'firefox' : x[1], d: I[x[1]], bg: x[2], fg: x[3], hov: i === 1 ? 'rgba(255,255,255,0.09)' : 'transparent' }));
+    const apps = A.map((x, i) => ({ name: x[0], key: x[1] === 'calc' ? 'calculator' : x[1] === 'bag' ? 'software' : x[1] === 'play' ? 'haruna' : x[1] === 'pin' ? 'marble' : x[1] === 'cloud' ? 'weather' : x[1] === 'cpu' ? 'monitor' : x[1] === 'crop' ? 'screenshot' : x[1] === 'folder' ? 'dolphin' : x[1] === 'globe' ? 'firefox' : x[1] === 'mail' ? 'kmail' : x[1] === 'code' ? 'kate' : x[1] === 'music' ? 'elisa' : x[1] === 'photos' ? 'gwenview' : x[1] === 'settings' ? 'systemsettings' : x[1] === 'notes' ? 'marknote' : x[1], d: I[x[1]], bg: x[2], fg: x[3], hov: i === 1 ? 'rgba(255,255,255,0.09)' : 'transparent' }));
     const mk = (name, key, bg, fg, run) => ({ name, key, d: I[key], s: 48, r: 13, ic: 25, bg, fg, running: !!run, indW: 5, indC: 'rgba(255,255,255,0.6)' });
     const dock = [
       mk('Dolphin', 'dolphin', '#3f7fe0', '#ffffff', true),

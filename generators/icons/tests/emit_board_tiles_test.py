@@ -47,5 +47,27 @@ for path in emit.TABLET:
     check(emit.tablet_html(path) == Path(path).read_text(),
           f"{Path(path).name} carries the drawings the theme ships")
 
+# The launcher grid's entries draw through AppIcon: each pinned app's tile key must be the one the
+# theme ships for it (the board's mapping translates the drawing keys used by the grid template).
+LAUNCHER = [ROOT / "design" / "boards" / "Launcher.dc.html",
+            ROOT / "design" / "boards" / "LauncherLight.dc.html"]
+PIN_TILES = {
+    "Dolphin": "dolphin", "Firefox": "firefox", "Konsole": "terminal", "KMail": "kmail",
+    "Kate": "kate", "Elisa": "elisa", "Gwenview": "gwenview", "System Settings": "systemsettings",
+    "KOrganizer": "calendar", "Marknote": "marknote", "KCalc": "calculator", "Discover": "software",
+    "Haruna": "haruna", "NeoChat": "chat", "Marble": "marble", "Weather": "weather",
+    "System Monitor": "monitor", "Spectacle": "screenshot",
+}
+import re  # noqa: E402
+
+for path in LAUNCHER:
+    html = path.read_text()
+    grid = html.split("const A = [", 1)[1].split("];", 1)[0]
+    mapping = dict(re.findall(r"x\[1\] === '([^']+)' \? '([^']+)'", html))
+    for name, key in re.findall(r"\['([^']+)', '([^']+)', '#", grid):
+        want = PIN_TILES.get(name)
+        got = mapping.get(key, key)
+        check(want == got, f"{path.name}: {name} draws {got} (expected {want})")
+
 print(f"board tile emitter test: {checks - len(failures)}/{checks} passed")
 sys.exit(1 if failures else 0)
