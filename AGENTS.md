@@ -19,19 +19,24 @@ supported; Plasma 6.8 is tested from the beta through the parts that do not exis
 load only where the API is there). The code is GPL-2.0-or-later, art and docs CC-BY-SA-4.0, data
 CC0-1.0, fonts OFL-1.1; the design boards in `design/` decide every colour, size and drawing.
 
-## Hard rules (CI enforces them; never work around them)
+## Hard rules (never work around them)
+
+Some of these are checks (a red check blocks a merge); the rest are project policy even where no
+checker sees them.
 
 - **One trailer per commit: the DCO, in the author's own name.** Every commit carries exactly one
   `Signed-off-by` trailer — the *author's* name and email, which `git commit -s` fills in from the
   git configuration (for example `Signed-off-by: Jane Doe <jane@example.com>`). Commit under your
-  own identity and never sign off as anyone else. No other trailer. A squash merge satisfies the
-  check only when the pull request body carries the contributor's trailer.
+  own identity and never sign off as anyone else. No other trailer. The `commits` workflow counts
+  the trailers of every proposed commit (and of a squash merge as the one commit it makes), so an
+  unsigned commit fails before a merge.
 - **No AI attribution, anywhere in git or on GitHub.** Commit messages, branch and tag names,
   pull request and issue titles and bodies, review comments and release notes must not name or
   credit an AI agent, model or harness, must not link to AI products or sessions, and must not
   carry `Co-Authored-By`, `Generated-by`, `Claude-Session` or similar lines. This is a project
   rule checked by the `commits` workflow: the Signed-off-by trailer is the only one allowed.
-- **Sign your commits.** The repository's history is signed; keep it that way.
+- **Sign your commits** (project policy; no workflow checks signatures). The repository's history
+  is signed; keep it that way when you work in this repository's checkouts.
 - **Stay REUSE-compliant**: every new file gets an SPDX header or a `REUSE.toml` entry;
   `reuse lint` must pass.
 - **Never weaken a check to pass.** Do not delete, skip or rewrite tests, add `qmllint`,
@@ -47,7 +52,7 @@ CC0-1.0, fonts OFL-1.1; the design boards in `design/` decide every colour, size
 
 | Path | What |
 | --- | --- |
-| `packages/` | the parts: `plasmoids/` (the bar and its widgets, dock, launcher, quick settings, meters, ...), `lockscreen/`, `kwin/` (the snap script and the effects), `decoration-cpp/`, `navigation-cpp/`, `kcm-cpp/` (the settings module), `power/`, `powerfx/`, `appicons/`, `keyboard/`, `gtk/`, `color-schemes/`, `look-and-feel/`, `plymouth/`, `compat/`, `common/` — each with its own `tests/` |
+| `packages/` | the parts: `plasmoids/` (the bar and its widgets, dock, launcher, quick settings, meters, ...), `lockscreen/`, `kwin/` (the snap script and the effects), `decoration-cpp/`, `navigation-cpp/`, `kcm-cpp/` (the settings module), `power/`, `powerfx/`, `appicons/`, `keyboard/`, `gtk/`, `color-schemes/`, `look-and-feel/`, `plymouth/`, `compat/`, `common/` — many carry their own `tests/`; the part's page in `docs/parts/` lists the part's tests (several parts have none, e.g. the navigation effect) |
 | `generators/` | the design sources: `plasma-style/`, `icons/`, `cursors/`, `wallpapers/`, `fonts/`, `decoration/`, `look-and-feel/`, `plymouth/` — the drawing pipeline from the boards |
 | `tools/` | `build.sh` and `build.d/` (one script per part), `checks/` (the lints and their fixtures), `device/` (setup, restore, field log, gate — machine-facing tools), `tests/` (the packaging and release-VM harnesses), `plasma-fusion/` (the command-line tool) |
 | `scripts/` | `install.sh` — the one-line installer (its test mode is also what the release VMs install from) |
@@ -85,13 +90,16 @@ size and drawing: do not introduce values the boards do not have.
 - `git clang-format --diff main` — C++, KDE's style (`.clang-format`).
 - `packaging/check-version.sh` — `VERSION` against the spec, the PKGBUILD and the Debian changelog.
 - A part's own suites, listed on its `docs/parts/<part>.md` page and run by CI: the QML suites are
-  Python, run offscreen on a private bus exactly like CI —
-  `cd packages/<...>/tests && QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 <suite>.py <stage-home>`
-  (a plain `python3 <suite>.py` without the private bus is not a valid run); the JavaScript suites
-  run with `node`; the C++ parts run their ctest suites, which CI runs under the `sanitizers`
-  workflow's flags.
-- Packaging a snapshot: `packaging/build-rpm.sh`; every other channel has a container-driven
-  builder in `tools/tests/packages/`.
+  Python and run offscreen; the suite's usage comment or its part page names the exact command —
+  several need a private bus
+  (`cd packages/<...>/tests && QT_QPA_PLATFORM=offscreen dbus-run-session -- python3 <suite>.py <stage-home>`,
+  e.g. the quick-settings and dock suites), others run with `QT_QPA_PLATFORM=offscreen` alone
+  (e.g. the calendar-date, backdrop-reload and wheel-guard checks). A bare `python3 <suite>.py`
+  on a live display is never the right run. The JavaScript suites run with `node`; the C++ parts
+  run their ctest suites, which CI runs under the `sanitizers` workflow's flags.
+- Packaging a snapshot: `packaging/build-rpm.sh`; the other distribution channels have
+  container-driven builders in `tools/tests/packages/`. NixOS is the exception: it is the flake
+  (`packaging/nix/`, checked with `nix flake check` — docs/parts/nixos.md).
 
 Run the checks a change touches locally before proposing it. CI runs all of them; a red check is
 never waved through. CI runs in Fedora 44 containers; a Fedora 44 KDE machine with `podman` can run
@@ -113,7 +121,9 @@ compiled parts need the dependencies their part page lists (`dnf builddep`).
 ## Conventions
 
 - English, plain sentences, **why-first comments**, wrapped at 100 columns; the style of the
-  surrounding code wins. QML: 4 spaces. Shell: bash with `set -euo pipefail` and an SPDX header.
+  surrounding code wins. QML: 4 spaces. Shell: bash with `set -euo pipefail` and an SPDX header —
+  except `scripts/install.sh`, which is POSIX `sh` by contract (parsed and tested with dash and
+  BusyBox; docs/parts/installer.md): never turn it into a bash script or add `pipefail` to it.
 - QML rules the lints enforce: no literal animation durations and no endless animations
   (`motion-lint`), every interactive item has an accessible name (`a11y-lint.py`), an `id` is used
   only inside the component that declares it (`id-scope-lint.py`).
@@ -150,11 +160,13 @@ Prove the logic offline; use the lower rungs only for what genuinely needs a des
 4. **Real hardware** — a convertible or touch device answers what emulation cannot: touches, pen,
    postures, brightness, suspend, hotspots. The device scripts (`tools/device/`, the
    `plasma-fusion setup|update|status|restore` command, docs/parts/device.md) are built for that.
-   `plasma-fusion update` and a shell restart (`systemctl --user restart plasma-plasmashell`) make
-   staged files take effect; the login screen, splash and fonts need a logout. Take a screenshot
-   for a visual change and read the journal (`journalctl --user -f`, `coredumpctl`) for errors.
-   Leave the machine as you found it, and never leave a test in a state the next person cannot
-   undo.
+   To validate a freshly built `stage/home` there, **deploy it first**:
+   `tools/device/fusion-config.sh --install stage/home`, then restart the shell
+   (`systemctl --user restart plasma-plasmashell`). `plasma-fusion update` is for an installed
+   package after an upgrade and does *not* deploy a stage; the login screen, splash and fonts
+   need a logout. Take a screenshot for a visual change and read the journal
+   (`journalctl --user -f`, `coredumpctl`) for errors. Leave the machine as you found it, and
+   never leave a test in a state the next person cannot undo.
 
 The test containers and the VM harness both come with a stable and a beta Plasma lane: when a
 change touches a part that depends on Plasma internals, test it on the series it is built for.
