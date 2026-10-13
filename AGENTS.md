@@ -39,9 +39,11 @@ checker sees them.
   is signed; keep it that way when you work in this repository's checkouts.
 - **Stay REUSE-compliant**: every new file gets an SPDX header or a `REUSE.toml` entry;
   `reuse lint` must pass.
-- **Never weaken a check to pass.** Do not delete, skip or rewrite tests, add `qmllint`,
-  ESLint or ShellCheck suppressions, loosen CI, or silence a warning at the source of the check.
-  Fix the cause; if the check itself is wrong, say so with evidence in the pull request.
+- **Never weaken a check to pass.** Do not delete, skip or rewrite tests, loosen CI, or silence a
+  warning the check is right about — fix the cause; if the check itself is wrong, say so with
+  evidence in the pull request. A warning that genuinely does not apply takes the repository's
+  documented narrow suppression instead (for ShellCheck, a `# shellcheck disable=SCxxxx` line with
+  the reason in a comment — [`docs/parts/ci.md`](docs/parts/ci.md)), never a blanket exemption.
 - **Report security problems privately**: follow [`SECURITY.md`](SECURITY.md); never open a
   public issue for a vulnerability.
 - **A behaviour change updates the same change's part page** in `docs/parts/` and needs a test
@@ -124,7 +126,10 @@ part page lists (`dnf builddep`).
 
 ## What every change arrives with
 
-- A test in an automated suite that fails without the change — new behaviour and every bug fix
+- A test in an automated suite that fails without the change — new behaviour and every bug fix. The
+  test policy's two exceptions carry over: behaviour only a person can judge (a look against the
+  design boards) is stated in the pull request with the screenshots, and a bug that cannot be
+  reproduced without hardware or inside Plasma says why
   ([`docs/parts/coverage.md`](docs/parts/coverage.md), "Test policy").
 - The part's page in `docs/parts/` updated in the same change when behaviour changes.
 - The checks that cover it run locally, with the commands and their results named in the pull
@@ -137,11 +142,13 @@ part page lists (`dnf builddep`).
 ## Conventions
 
 - English, plain sentences, **why-first comments**, wrapped at 100 columns; the style of the
-  surrounding code wins. QML: 4 spaces. Shell: bash with `set -euo pipefail` and an SPDX header —
-  except the scripts that are POSIX `sh` by contract: `scripts/install.sh` (parsed and tested with
-  dash and BusyBox; docs/parts/installer.md) and the pacman hook
-  `packaging/arch/plasma-fusion-rebuild` (ShellCheck reads its shebang). Keep their interpreters;
-  never add `pipefail` to them.
+  surrounding code wins. QML: 4 spaces. Shell: bash with `set -euo pipefail` and an SPDX header.
+  Three scripts are exempt by contract. The two POSIX `sh` scripts — `scripts/install.sh` (parsed
+  and tested with dash and BusyBox; docs/parts/installer.md) and the pacman hook
+  `packaging/arch/plasma-fusion-rebuild` (ShellCheck reads its shebang) — keep their interpreters
+  and never gain `pipefail`. `tools/device/gate/plasma-fusion-gate.sh` is bash but must continue
+  after errors and always exit 0 (the login check; CONTRIBUTING.md exempts it too), so it states
+  that in a comment instead of setting `-e`; do not add strict mode there either.
 - QML rules the lints enforce: no literal animation durations and no endless animations
   (`motion-lint`), every interactive item has an accessible name (`a11y-lint.py`), an `id` is used
   only inside the component that declares it (`id-scope-lint.py`).
