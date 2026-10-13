@@ -111,6 +111,43 @@ Item {
         entry: Jobs.withJobs({}, transfers.progress)["org.kde.dolphin"] ?? null
         notificationCount: unread
     }
+    // The dock's tablet tile at its boundary (main.qml: minTaskTile is 44 in tablet posture when
+    // the dock is crowded, with the tablet bottom padding): its icon and interactive surface must
+    // reach the touch minimum there, so a regression below 44 fails tightly.
+    TaskItem {
+        id: tabletTile
+        x: 400
+        width: 44
+        height: 90
+        tablet: true
+        iconSize: 44
+        bottomPad: 12
+        index: 1
+        model: ({ AppId: "org.kde.dolphin", AppName: "Dolphin", decoration: "system-file-manager", IsLauncher: false,
+                  IsStartup: false, IsActive: false, IsDemandingAttention: false })
+        pal: palette
+        motion: motion
+        entry: null
+        notificationCount: 0
+    }
+    // The tile's mouse area (its interactive surface), found by the property only it declares.
+    function touchTarget(item) {
+        for (const child of item.children) {
+            if (child.pressPoint !== undefined) {
+                return child;
+            }
+            const found = touchTarget(child);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
+    }
+    function tabletTarget() {
+        const a = touchTarget(tabletTile);
+        return a ? JSON.stringify([Math.round(a.width), Math.round(a.height),
+                                   Math.round(tabletTile.iconItem.width)]) : "null";
+    }
     function find(item, name) {
         if (item.objectName === name) {
             return item;
@@ -202,6 +239,13 @@ try:
         pumped(view.terminate, dbus.UInt32(0), "", dbus.Dictionary({}, signature="sv"))
     wait_for(lambda: progress() == {}, "finished jobs still show progress")
     check(True, "finished jobs show no progress")
+    def tablet_target():
+        return json.loads(QMetaObject.invokeMethod(item, "tabletTarget", Q_RETURN_ARG("QVariant")))
+
+    target = tablet_target()
+    check(target is not None and min(target) >= 44,
+          "the tablet tile's touch target and icon reach 44 px at the boundary (%r)" % (target,))
+
     print(f"transfers: {checks} checks passed")
 finally:
     calls.shutdown(wait=False)

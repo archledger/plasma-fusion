@@ -6,8 +6,9 @@
 import QtQuick
 import QtQuick.Templates as T
 
-// Category chip: 30 px pill, 14 px side padding, 12 px text (800 when selected, 700 otherwise),
-// scaled with the user's text size.
+// Category chip: a 30 px pill, 14 px side padding, 12 px text (800 when selected, 700 otherwise),
+// scaled with the user's text size. In touch mode the target is at least 44 x 44 (ADAPTIVE 5.3)
+// while the drawn pill keeps the text size's size, as IconButton keeps its circle.
 T.AbstractButton {
     id: chip
 
@@ -16,8 +17,11 @@ T.AbstractButton {
     property bool selected: false
     property bool showFocus: visualFocus
 
-    implicitWidth: label.implicitWidth + metrics.px(28)
-    implicitHeight: metrics.px(30)
+    readonly property real drawnWidth: Math.max(label.implicitWidth + metrics.px(28), drawnHeight)
+    readonly property real drawnHeight: metrics.px(30)
+
+    implicitWidth: Math.max(drawnWidth, metrics.touch ? 44 : 0)
+    implicitHeight: Math.max(drawnHeight, metrics.touch ? 44 : 0)
     focusPolicy: Qt.NoFocus
     hoverEnabled: true
 
@@ -26,13 +30,17 @@ T.AbstractButton {
     Accessible.checked: selected
 
     background: Rectangle {
-        radius: height / 2
+        // The drawing, not the target: touch mode's 44 px box keeps the text-sized pill inside.
+        anchors.centerIn: parent
+        width: chip.drawnWidth
+        height: chip.drawnHeight
+        radius: chip.drawnHeight / 2
         color: chip.selected ? chip.pal.accent : (chip.hovered ? chip.pal.chipHover : chip.pal.chip)
         antialiasing: true
 
         FocusRing {
             visible: chip.showFocus
-            baseRadius: chip.height / 2
+            baseRadius: chip.drawnHeight / 2
             ringColor: chip.pal.focusRing
         }
     }

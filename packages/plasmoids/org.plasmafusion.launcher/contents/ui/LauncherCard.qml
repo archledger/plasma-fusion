@@ -50,7 +50,9 @@ FocusScope {
 
     // Board rows (px, before the text scale): chips 30, header 26, gaps 16, app tiles 84 with a
     // 4 px gap, recent-file rows 52 with a 6 px gap.
-    readonly property real chipHeight: metrics.px(30)
+    // The category chips grow to the touch minimum in touch mode (ADAPTIVE 5.3); the header's
+    // spacing follows them.
+    readonly property real chipHeight: Math.max(metrics.px(30), metrics.touch ? 44 : 0)
     readonly property real sectionGap: metrics.px(16)
     readonly property real headerHeight: metrics.px(26)
     readonly property real headerY: chipHeight + sectionGap

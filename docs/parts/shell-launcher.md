@@ -174,6 +174,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   category it checks Tab and Down from the chips (the footer's first button), Shift+Tab and Up from
   the footer (the chips) and Down from the search field (the chips); with apps, Tab still reaches
   the first one. The empty-view checks fail on the previous card (the keyboard stays on the chips).
+  With touch input (tablet posture's metrics) every chip reaches 44 x 44: the drawn pill follows the
+  text size and the target grows to the touch minimum (`Chip.qml`; before, a short-label chip was
+  41 x 28).
 - `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
   with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
   by name, Show, Show All, an app hidden again after an Apply stays hidden at the next one) and

@@ -200,6 +200,24 @@ Window {
     }
     function names(which) { return column(which, Qt.DisplayRole); }
     function icons(which) { return column(which, Qt.DecorationRole); }
+    // Tablet posture's touch sizing (FusionMetrics.touch follows tablet): the category chips grow
+    // to 44 px, and this reports what the flow lays out.
+    function setTablet(on) {
+        metrics.tablet = on;
+    }
+    function chipSizes() {
+        const flow = find(card, "launcherChips");
+        const out = [];
+        (function walk(item) {
+            for (const child of item.children) {
+                if (child.selected !== undefined && child.width > 0) {
+                    out.push([Math.round(child.width), Math.round(child.height)]);
+                }
+                walk(child);
+            }
+        })(flow);
+        return JSON.stringify(out);
+    }
     function find(item, name) {
         if (item.objectName === name) {
             return item;
@@ -639,6 +657,12 @@ QtObject {
     QTest.qWait(100)
     s = json.loads(call(win, "state"))
     check(s["primaryFocus"] and call(win, "focusAt") == "grid", "with apps in it, Tab on the chips still goes to the first one")
+    call(win, "setTablet", True)
+    QTest.qWait(80)
+    chips = json.loads(call(win, "chipSizes"))
+    check(len(chips) >= 3 and all(w >= 44 and h >= 44 for w, h in chips),
+          "touch mode: the category chips reach 44 x 44 (%r)" % (chips,))
+
     print(f"views: {checks} checks passed")
 finally:
     kamd.terminate()
