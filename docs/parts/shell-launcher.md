@@ -367,7 +367,9 @@ EFFECTS 5), built by the lead directly.
   and untouched launcher draws no frames.
 - **Recent files** (M8): the menu of a recent file says "Hide from Recent Files" and "Clear Recent Files"
   (Kicker's forget actions).
-- Test hook: `openRequest` `frames:NONCE` logs the frames drawn since the last request, the geometry,
+- Test hook: `openRequest` `frames:NONCE` logs the animation frames since the last request (a frame
+  swap of either window while an open is in flight, never an open window's idle cursor-blink
+  repaints; survey 4, 2026-10-12), the geometry,
   pinned rows, columns and the pinned tiles' centres; log lines for the first frame of each open and the
   first search results.
 
