@@ -7,7 +7,13 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
-## Unreleased
+## 0.5.0 (2026-10-14)
+
+Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch); the final
+6.8.0 verification lands before the tag.
+Packaged as before for Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian testing and
+KDE neon (.deb) and NixOS (flake); on an untested Plasma series the parts that depend on Plasma
+internals stay off until an update.
 
 - A **clipboard sheet** in Quick Settings, opened by the clipboard button and **Meta+V**, replaces
   Klipper's pop-up: Klipper's history, newest first, with search (every word, as plain text),
