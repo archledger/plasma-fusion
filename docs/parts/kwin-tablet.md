@@ -56,7 +56,9 @@ needed.
   and a built-in screen as the only screen: placement "Maximizing" and borderless maximized windows;
   every eligible window (normal, maximizable, not full screen, minimized, skip-taskbar, transient or
   modal, on the built-in screen) is maximized; tiled windows keep their tile and lose their title bar,
-  and keep following `tileChanged` (a new tile: no title bar; untiled: the title bar back). New windows
+  and keep following `tileChanged`: a new tile loses the title bar, and an untiled window floats
+  without one (recorded like a window the user un-maximized, so leave() gives the bar back). New
+  windows
   open maximized by placement; resizable dialogs and transients too (owner decision 2), fixed-size
   dialogs stay centred and framed. Placement skips a window that comes with its own position (an X11
   app with position hints, such as Chrome restoring its last window): 200 ms after it appears, an

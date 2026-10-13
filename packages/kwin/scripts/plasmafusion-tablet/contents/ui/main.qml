@@ -337,11 +337,14 @@ Item {
             borderlessTiles[k] = true;
         } else if (borderlessTiles[k] && w.maximizeMode !== 3) {
             delete borderlessTiles[k];
-            // A window the user un-maximized earlier in this posture keeps no title bar
-            // (borderlessFloating): the tile's own bar comes back, that window's does not.
-            if (!borderlessFloating[k]) {
-                w.noBorder = false;
+            // A window that leaves its tile is floating in tablet posture: like one the user
+            // un-maximized, it keeps no title bar (the appname pill is its title bar and menu,
+            // owner decision 2026-10-13) and is recorded so leave() gives the bar back with the
+            // rest. settleUnmaximized() never saw it when a quick tile un-maximized it first.
+            if (!w.noBorder) {
+                w.noBorder = true;
             }
+            borderlessFloating[k] = true;
         }
     }
 

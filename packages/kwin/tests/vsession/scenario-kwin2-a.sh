@@ -283,6 +283,29 @@ f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 an
 ok = len(tiled) == 1 and len(f) == 1 and f[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: after a tile round trip the un-maximized window keeps no title bar: {[(w['cls'], w['nb']) for w in f]}")
 PY
+  # A window that goes maximized -> quick-tiled -> untiled in the same posture keeps no title bar
+  # too: settleUnmaximized() never saw it (the tile was set first), so this is the untiled path's
+  # own bar.
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0) { w.setMaximize(true, true); workspace.activeWindow = w; } }
+    report('$FLOATING maximized again for the tiled-untile case');" >>"$OUT/place.log"
+  sleep 1.5
+  qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
+  sleep 1.5
+  state tab2e
+  K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+    report('untilied the tiled window: ' + out);" >>"$OUT/place.log"
+  sleep 1.5
+  state tab2f; shot tab-untile2
+  python3 - "$OUT/state-tab2e.json" "$OUT/state-tab2f.json" "$FLOATING" >>"$CHK" <<'PY'
+import json, sys
+c = json.load(open(sys.argv[1])); d = json.load(open(sys.argv[2])); want = sys.argv[3]
+tiled = [w for w in c["windows"] if want in w["cls"] and w["tiled"]]
+f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3 and want in w["cls"]]
+ok = len(tiled) == 1 and len(f) == 1 and f[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window tiled and untiled again keeps no title bar: {[(w['cls'], w['nb']) for w in f]}")
+PY
 else
   fail "T19: no maximized window to un-maximize, so the tile round trip cannot run"
 fi
