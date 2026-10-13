@@ -38,30 +38,35 @@ Item {
     // "Text scale"): gaps, headers and rows next to text follow it; the card padding does not.
     readonly property alias metrics: fusionMetrics
     readonly property alias scroller: scroller
-    // The drill-down page shown (null on quick settings).
-    readonly property var pageItem: subPage.pageItem
-    // The pages loader follows backend.page: from the Connections below and once at completion. A
-    // subpage can be requested before this content is created (this loader is asynchronous - a
-    // Meta+V during the first seconds after login), and that first change would otherwise be
-    // missed (review 4253399257). The clipboard page is kept between opens and reset per open.
+    // The item of the subpage shown: the clipboard's kept page or the disposable loader's item.
+    readonly property var pageItem: content.backend.page === "clipboard" ? clipboardPage.item : subPage.pageItem
+    // The pages follow backend.page: from the Connections below and once at completion. A subpage
+    // can be requested before this content is created (this loader is asynchronous - a Meta+V
+    // during the first seconds after login), and that first change would otherwise be missed
+    // (review 4253399257). The clipboard page lives in its own loader, kept once opened, so that
+    // visiting another subpage cannot destroy it (review 4253488183), and it is reset
+    // synchronously here - before the popup's own focusFirst() pass against a stale editor or QR
+    // view (review 4253488189).
     function syncPage(): void {
         const name = content.backend.page;
-        if (name === "main") {
-            if (subPage.wantedComponent !== clipboardComponent) {
+        if (name === "clipboard") {
+            if (!clipboardPage.active) {
+                clipboardPage.active = true; // creates the kept page once (synchronously)
+            }
+            if (clipboardPage.item) {
+                clipboardPage.item.reset();
+            }
+            if (subPage.wantedComponent !== null) {
+                subPage.wantedComponent = null;
+            }
+        } else if (name === "main") {
+            if (subPage.wantedComponent !== null) {
                 subPage.wantedComponent = null;
             }
         } else {
             const wanted = subPage.componentFor(name);
             if (wanted !== subPage.wantedComponent) {
                 subPage.wantedComponent = wanted;
-            }
-            if (name === "clipboard") {
-                // The item may be created just now (first open): reset once it exists.
-                Qt.callLater(() => {
-                    if (subPage.item) {
-                        subPage.item.reset();
-                    }
-                });
             }
         }
     }
@@ -111,14 +116,14 @@ Item {
         backend.pageDirect = false;
         backend.page = name;
         Qt.callLater(() => {
-            const pageItem = subPage.pageItem;
+            const pageItem = content.pageItem;
             if (pageItem && pageItem.firstFocusItem) {
                 pageItem.firstFocusItem.forceActiveFocus(reason);
             }
         });
     }
     function closePage(fromKeyboard: bool) {
-        const pageItem = subPage.pageItem;
+        const pageItem = content.pageItem;
         const keyboard = fromKeyboard || !!(pageItem && pageItem.firstFocusItem && pageItem.firstFocusItem.visualFocus);
         backend.page = "main";
         backend.pageDirect = false;
@@ -128,7 +133,7 @@ Item {
         pageOpener = null;
     }
     function focusFirst() {
-        const pageItem = subPage.pageItem;
+        const pageItem = content.pageItem;
         if (backend.page !== "main" && pageItem && pageItem.firstFocusItem) {
             pageItem.firstFocusItem.forceActiveFocus(Qt.OtherFocusReason);
         } else {
@@ -206,7 +211,7 @@ Item {
                 id: pageArea
                 Layout.fillWidth: true
                 readonly property real mainHeight: mainPage.implicitHeight
-                readonly property real subHeight: subPage.pageItem ? subPage.pageItem.implicitHeight : 0
+                readonly property real subHeight: content.pageItem ? content.pageItem.implicitHeight : 0
                 // The clipboard sheet takes its own height (it opens on its own, and its list fits
                 // the screen); the other pages keep at least the quick settings' height.
                 Layout.preferredHeight: content.backend.page === "main" ? mainHeight
@@ -227,19 +232,34 @@ Item {
                     onOpenPage: (name, opener) => content.openPage(name, opener)
                 }
 
+                // The clipboard page is kept for the process in its own loader: constructing it
+                // dominated the clipboard sheet's open time (160-216 ms measured against the
+                // main sheet's 8-35; survey 4, 2026-10-12) and, kept, its height is known before
+                // the window maps, so the sheet does not resize after its first frame. Its own
+                // loader keeps the page alive even when another subpage is visited in between
+                // (review 4253488183).
+                Loader {
+                    id: clipboardPage
+                    width: parent.width
+                    height: parent.height
+                    active: false
+                    visible: content.backend.page === "clipboard"
+                    opacity: status === Loader.Ready ? 1 : 0
+                    Behavior on opacity {
+                        enabled: content.pal.motion.animate
+                        NumberAnimation { duration: content.pal.motion.toggle }
+                    }
+                    sourceComponent: clipboardComponent
+                }
                 Loader {
                     id: subPage
                     readonly property var pageItem: item
                     width: parent.width
                     height: parent.height
-                    // The clipboard page stays instantiated once it was opened: constructing it
-                    // dominated the clipboard sheet's open time (160-216 ms measured against the
-                    // main sheet's 8-35; survey 4, 2026-10-12), and kept, its height is known
-                    // before the window maps, so the sheet does not resize after its first frame.
                     // Every other page keeps the old behavior (destroyed when it is left).
                     property var wantedComponent: null
                     active: wantedComponent !== null
-                    visible: content.backend.page !== "main"
+                    visible: content.backend.page !== "main" && content.backend.page !== "clipboard"
                     opacity: status === Loader.Ready ? 1 : 0
                     Behavior on opacity {
                         enabled: content.pal.motion.animate
@@ -263,8 +283,6 @@ Item {
                             return devicesComponent;
                         case "display":
                             return displayComponent;
-                        case "clipboard":
-                            return clipboardComponent;
                         default:
                             return null;
                         }
