@@ -9,7 +9,11 @@
 #   tools/tests/coverage_status.sh TESTS_TSV
 # Exit status: 0 every test passed, 1 one or more failed, 2 usage error or no such table.
 set -euo pipefail
-TSV=${1:?usage: coverage_status.sh TESTS_TSV}
+if [ $# -lt 1 ]; then
+  echo "coverage_status.sh: usage: coverage_status.sh TESTS_TSV" >&2
+  exit 2
+fi
+TSV=$1
 [ -f "$TSV" ] || { echo "coverage_status.sh: no such file: $TSV" >&2; exit 2; }
 failed=$(awk -F'\t' '$2 != 0 { print "  " $1 " (exit " $2 ")" }' "$TSV")
 if [ -n "$failed" ]; then

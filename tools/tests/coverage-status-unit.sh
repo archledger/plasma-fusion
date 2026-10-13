@@ -43,4 +43,10 @@ rc=$?
 set -e
 [ "$rc" = 2 ] && pass "a missing table: exit 2" || fail "missing table: exit $rc"
 
+set +e
+bash "$HERE/coverage_status.sh" >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" = 2 ] && pass "no argument: exit 2" || fail "no argument: exit $rc"
+
 echo "coverage-status: $checks checks passed"
