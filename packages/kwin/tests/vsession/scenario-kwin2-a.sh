@@ -396,9 +396,16 @@ ok = len(f) == 1 and f[0]["nb"] and f[0]["max"] != 3
 print(("PASS" if ok else "FAIL") + f" T19: the no-titlebar rule applies before the cycle: {[(w['cls'], w['max'], w['nb']) for w in f]}")
 PY
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0) { w.close(); } }
+    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0) { w.closeWindow(); } }
     report('kcalc closed before the cycle');" >>"$OUT/place.log"
   sleep 2
+  state rule0b
+  python3 - "$OUT/state-rule0b.json" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+f = [w for w in d["windows"] if "kcalc" in w["cls"]]
+print(("PASS" if not f else "FAIL") + f" T19: the rule probe's window is gone before the cycle: {[(w['cls'], w['nb']) for w in f]}")
+PY
   # A window maximized before the posture switch (a title bar in laptop posture): the policy makes
   # it borderless when the option goes on, and un-maximizing it in tablet must still give the bar
   # back at leave().
