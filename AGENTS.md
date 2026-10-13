@@ -91,14 +91,37 @@ never waved through.
   actual sources for the version at hand before relying on them; say what was verified and what
   is inference.
 
-## Testing on a real desktop
+## Testing: offline first, then a session, a VM, or hardware
 
-- In a session, staged files take effect with `plasma-fusion update` and a shell restart
-  (`systemctl --user restart plasma-plasmashell`); the login screen, splashes and fonts need a
-  logout. `plasma-fusion status` reports what the running system has.
-- Never drive the lock screen, log-out or power actions destructively on a machine you cannot
-  recover unattended. The VM harnesses in `tools/tests/release-vm/` exist for that
-  (`build-all.sh`, `run-all.sh`, `vmtest.sh`), and every release runs them on all systems.
+Prove the logic offline; use the lower rungs only for what genuinely needs a desktop.
+
+1. **Offline** — the part's suites (`docs/parts/<part>.md`, `docs/parts/ci.md`), `tools/build.sh`
+   with its QML lints, and the C++ parts' ctest suites. Nothing here touches a session; start here.
+2. **An isolated session on this machine** — `tools/vsession/vsession.sh NAME SCENARIO [WxH]
+   [TIMEOUT]` runs a headless Plasma session (its own D-Bus bus and Wayland socket; it never
+   touches the logged-in desktop) and sources `SCENARIO`, a bash file, inside it; the scenario can
+   `shot NAME` screenshots, and everything lands under `/var/tmp/pfv-NAME` (`PFV_BASE` overrides).
+   `tools/vsession/cvsession.sh` runs the same scenario in a Plasma test container (build the image
+   with `tools/container/test/build.sh BASE TAG`; the base images cover Fedora 44's Plasma and the
+   beta COPR — docs/parts/containers.md), results in `./vsession-out/NAME`. This is the cheapest
+   rung that shows QML under a real plasmashell and KWin.
+3. **A VM** — `tools/tests/release-vm/`: provision a system once (`provision.sh`), drive it
+   (`vm.sh create|start|wait|ssh|shot|stop`), run the end-to-end installer and login check
+   (`vmtest.sh NAME LANE`), and the release matrix (`build-all.sh`, `channels.sh`, `run-all.sh`;
+   docs/parts/release-tests.md). Use it for install, upgrade, uninstall and login paths, and for
+   anything that ends the session — never experiment with a logout, lock screen or power action on
+   a machine you cannot recover unattended.
+4. **Real hardware** — a convertible or touch device answers what emulation cannot: touches, pen,
+   postures, brightness, suspend, hotspots. The device scripts (`tools/device/`, the
+   `plasma-fusion setup|update|status|restore` command, docs/parts/device.md) are built for that.
+   `plasma-fusion update` and a shell restart (`systemctl --user restart plasma-plasmashell`) make
+   staged files take effect; the login screen, splash and fonts need a logout. Take a screenshot
+   for a visual change and read the journal (`journalctl --user -f`, `coredumpctl`) for errors.
+   Leave the machine as you found it, and never leave a test in a state the next person cannot
+   undo.
+
+The test containers and the VM harness both come with a stable and a beta Plasma lane: when a
+change touches a part that depends on Plasma internals, test it on the series it is built for.
 
 ## Releases
 
