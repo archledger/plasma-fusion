@@ -37,7 +37,7 @@ import apptiles  # noqa: E402
 # The keys the boards use that have a per-app tile (the launcher's default pins, the docks).
 KEYS = [
     "dolphin", "firefox", "kmail", "kate", "elisa", "gwenview", "merkuro",
-    "systemsettings", "marknote", "haruna", "marble",
+    "systemsettings", "marknote", "haruna", "marble", "libreoffice-writer",
 ]
 
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -101,7 +101,8 @@ def entry(key: str) -> str:
     seams = seam_entries(tile)
     if seams:
         fields.append("seams: [" + ", ".join(seams) + "]")
-    return f"  {key}: {{ {', '.join(fields)} }},"
+    name = key if key.isidentifier() else f"'{key}'"
+    return f"  {name}: {{ {', '.join(fields)} }},"
 
 
 def block() -> str:

@@ -53,6 +53,12 @@ with tempfile.TemporaryDirectory(prefix="render-test-") as td:
     check(render.compare("localized", write(td / "base256.png", (256, 256), (10, 20, 30)),
                          td / "local.png") is False,
           "a change confined to one small area fails the check")
+    icon = Image.new("RGB", (2048, 1280), (10, 20, 30))
+    icon.paste((255, 255, 255), (700, 700, 714, 714))     # a 14 px icon on a board-sized render
+    icon.save(td / "icon.png")
+    check(render.compare("tiny", write(td / "base2048.png", (2048, 1280), (10, 20, 30)),
+                         td / "icon.png") is False,
+          "a change the size of a 14 px icon fails the check on a board-sized render")
     check(render.compare("size", got, write(td / "wrong.png", (32, 24), (10, 20, 30))) is False,
           "a committed preview of another size fails the check")
     check(render.compare("missing", got, td / "absent.png") is False,

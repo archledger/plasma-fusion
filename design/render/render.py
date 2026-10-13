@@ -26,11 +26,14 @@ import http.server
 import json
 import os
 import re
+import shutil
+import signal
 import socketserver
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageStat
@@ -43,8 +46,8 @@ CHROME = os.environ.get("CHROME", "google-chrome")
 SCALE = int(os.environ.get("RENDER_SCALE", "2"))
 QUALITY = int(os.environ.get("RENDER_QUALITY", "90"))
 MAD_LIMIT = 12
-BLOCK_LIMIT = 16
-BLOCKS = 16
+WINDOW = 32
+WINDOW_LIMIT = 20
 RENDER_TIMEOUT_MS = 20000
 
 # The fonts the boards ask Google for, served from this repository instead: same files, so an
@@ -138,22 +141,36 @@ class DevTools:
         self.r_out, w_out = os.pipe()
         cmd = [
             CHROME, "--headless", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
+            # The shared-memory default fails in small containers, which also run as root and
+            # then need the sandbox off (the CI's chromium).
+            "--disable-dev-shm-usage",
             f"--user-data-dir={work / 'chrome'}", "--remote-debugging-pipe", "about:blank",
         ]
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            cmd.append("--no-sandbox")
         sh = 'exec "$0" "$@" 3<&%d 4>&%d' % (r_in, w_out)
+        # Its own process group: Chrome starts helpers, and the group is what close() reaps.
         self.proc = subprocess.Popen(["sh", "-c", sh, *cmd], pass_fds=(r_in, w_out),
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
         os.close(r_in)
         os.close(w_out)
         self._id = 0
         self._buf = b""
 
     def close(self) -> None:
-        self.proc.terminate()
+        try:
+            os.killpg(self.proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
         try:
             self.proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
-            self.proc.kill()
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            self.proc.wait(timeout=10)
 
     def _send(self, message: dict) -> None:
         os.write(self.w_in, json.dumps(message).encode() + b"\0")
@@ -183,8 +200,21 @@ class DevTools:
                 return reply.get("result", {})
 
 
+def _remove_work(path: Path) -> None:
+    """Chrome's helpers can outlive the killpg by a moment and still write into the profile, so
+    the cleanup retries briefly instead of failing a render that already succeeded."""
+    for _ in range(25):
+        try:
+            shutil.rmtree(path)
+            return
+        except OSError:
+            time.sleep(0.2)
+    shutil.rmtree(path, ignore_errors=True)
+
+
 def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
-    with tempfile.TemporaryDirectory(prefix="board-render-") as td:
+    td = Path(tempfile.mkdtemp(prefix="board-render-"))
+    try:
         cdp = DevTools(Path(td))
         try:
             target = cdp.call("Target.createTarget", {"url": "about:blank"})["targetId"]
@@ -215,13 +245,16 @@ def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
             print(f"warning: {name}: {im.size} rendered, canvas says {w * SCALE}x{h * SCALE}",
                   file=sys.stderr)
         im.convert("RGB").save(dest, "WEBP", quality=QUALITY, method=6)
+    finally:
+        _remove_work(td)
     return dest
 
 
 def compare(name: str, got: Path, want: Path) -> bool:
     """Print the difference of a fresh render against the committed preview; False when the
-    committed preview is missing, has another size, or is stale - globally or in any of the
-    BLOCKS x BLOCKS tiles, so a change confined to a small area still fails the check."""
+    committed preview is missing, has another size, or is stale - globally (mean limit MAD_LIMIT)
+    or in any fixed WINDOW x WINDOW pixel area (limit WINDOW_LIMIT), so a change confined to even
+    a small element, like a 14 px icon, fails the check."""
     if not want.exists():
         print(f"{name}: no committed preview to check against")
         return False
@@ -234,12 +267,12 @@ def compare(name: str, got: Path, want: Path) -> bool:
     mad = sum(ImageStat.Stat(diff).mean) / 3
     worst = 0.0
     w, h = a.size
-    for by in range(BLOCKS):
-        for bx in range(BLOCKS):
-            box = (bx * w // BLOCKS, by * h // BLOCKS, (bx + 1) * w // BLOCKS, (by + 1) * h // BLOCKS)
+    for y in range(0, h, WINDOW):
+        for x in range(0, w, WINDOW):
+            box = (x, y, min(x + WINDOW, w), min(y + WINDOW, h))
             worst = max(worst, sum(ImageStat.Stat(diff.crop(box)).mean) / 3)
-    print(f"{name}: mean abs difference {mad:.1f}, worst block {worst:.1f} over {w}x{h}")
-    return mad <= MAD_LIMIT and worst <= BLOCK_LIMIT
+    print(f"{name}: mean abs difference {mad:.1f}, worst {WINDOW} px window {worst:.1f} over {w}x{h}")
+    return mad <= MAD_LIMIT and worst <= WINDOW_LIMIT
 
 
 def main() -> int:

@@ -12,6 +12,7 @@ The boards in `design/boards/` decide every colour, size and drawing of the them
 | `design/render/render.py` | renders the boards to `design/previews/` (headless Chrome at 2x, WebP out); `--check` renders to a scratch directory and diffs against the committed previews |
 | `design/render/runtime.js` | the board template language in a plain browser (`x-dc`, `helmet`, `sc-for`, `sc-if`, `{{...}}`, `dc-import`, `DCLogic`) — the authoring canvas's runtime is not in this repository |
 | `design/render/tests/render_test.py` | check mode's comparison contract (identical, close, stale, size-mismatched and missing previews) |
+| `design/render/tests/runtime_test.py` | the board runtime in a browser: loops, conditions, imports, SVG namespaces and the failure propagation (needs Chrome, like rendering) |
 
     design/render/render.py                   # every board, in canvas order
     design/render/render.py NAME.dc.html ...  # only the named boards
@@ -23,8 +24,9 @@ process owns the whole render over Chrome's remote-debugging pipe: it navigates,
 runtime's `data-board-rendered` marker through `Runtime.evaluate` (a board that does not finish, or
 one whose template expressions fail, fails the run) and captures that same page, so the picture
 cannot come from a page that was not validated. `--check` exits nonzero for a missing committed
-preview, a size mismatch, a mean per-channel difference over 12, or a worst 16 x 16-block mean over
-16 - the block test catches a stale preview whose change is confined to a small area. A board
+preview, a size mismatch, a mean per-channel difference over 12, or a worst 32 x 32 pixel
+window mean over 20 - the window test catches a stale preview whose change is confined to a
+small area, down to a 14 px icon. A board
 change re-renders the affected previews with this tool; `--check` over all 27 boards is the
 fidelity gate ([`docs/parts/icons.md`](icons.md) lists what the drawings mean).
 
@@ -47,10 +49,11 @@ when either falls out of sync or the seam rule regresses.
 
 ## Tests and CI
 
-Both suites run offline (the `build` workflow's Fedora 44 job installs Pillow for the first):
+The suites run in the `build` workflow's Fedora 44 job (it installs Pillow and chromium):
 
-    python3 design/render/tests/render_test.py
+    python3 design/render/tests/render_test.py             # Pillow only, no browser
     python3 generators/icons/tests/emit_board_tiles_test.py
+    python3 design/render/tests/runtime_test.py            # browser-backed, CHROME=chromium
 
 Rendering itself needs Chrome, so it runs on a developer machine rather than in CI; the two suites
 above are what CI checks, and they fail when the component table or the tablet boards no longer
