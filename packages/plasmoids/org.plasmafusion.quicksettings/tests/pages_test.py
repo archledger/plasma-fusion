@@ -156,6 +156,7 @@ Item {
     width: 356
     height: 560
     property bool touch: false
+    property bool hotspotOn: false
     readonly property real px44: metrics.px(44)
     FusionPalette { id: pal; touch: root.touch }
     FusionMetrics { id: metrics }
@@ -188,7 +189,7 @@ Item {
             readonly property bool airplaneAvailable: true
             readonly property int vpnCount: 0
             readonly property var vpnModel: ListModel {}
-            readonly property bool hotspotActive: false
+            readonly property bool hotspotActive: root.hotspotOn
             readonly property bool hotspotStarting: false
             readonly property bool hotspotReady: true
             readonly property string hotspotError: ""
@@ -283,13 +284,17 @@ def classes(item):
 
 def touch_assert(root, page, what):
     """Every visible, enabled control under `page` is at least 44 x 44 with the harness's touch
-    flag on (the pages' controls take the touch floor from TextButton and ListRow)."""
+    flag on (the pages' controls take the touch floor from TextButton and ListRow).
+
+    The password field's built-in reveal action is skipped: it is
+    PlasmaExtras.ActionTextField's internal (`InlineActionIcon`), which a page cannot size; the
+    field itself is the target that reaches 44 (see docs/parts/shell-quicksettings.md)."""
     if page is None:
         check(False, "touch mode: %s not found" % what)
         return
     found = [i for i in items(page)
              if i.isVisible() and i.property("enabled") is not False
-             and any(c in CONTROLS for c in classes(i))]
+             and any(c in CONTROLS for c in classes(i)) and "InlineActionIcon" not in classes(i)]
     small = [(i.objectName() or str(i.property("text") or "")[:24], round(i.width(), 1), round(i.height(), 1))
              for i in found if i.width() + 0.5 < 44 or i.height() + 0.5 < 44]
     check(len(found) >= 3 and not small,
@@ -397,6 +402,14 @@ touch_assert(root, find(root, "audioPage"), "the Audio page")
 touch_assert(root, find(root, "devicesPage"), "the Devices page")
 touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page")
 wifi = find(root, "wifiPage")
+for row in [i for i in items(wifi) if i.objectName() == "wifi-row"]:
+    row.setProperty("expanded", True)
+QTest.qWait(80)
+field = next(i for i in items(wifi) if "QQuickTextField" in classes(i))
+field.setProperty("text", "secret123")
+root.setProperty("hotspotOn", True)
+QTest.qWait(120)
+touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page (row expanded, hotspot on)")
 rows = [i for i in items(wifi) if i.objectName() == "wifi-row"] if wifi else []
 check(rows and all(r.height() + 0.5 >= 44 for r in rows),
       "touch mode: the Wi-Fi network rows reach 44 x 44 (%d rows)" % len(rows))

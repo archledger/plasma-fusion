@@ -396,6 +396,9 @@ ColumnLayout {
                 PlasmaExtras.PasswordField {
                     id: passwordField
                     Layout.fillWidth: true
+                    // The field is a touch target too: 44 px tall in touch (the clipboard sheet's
+                    // search field).
+                    Layout.preferredHeight: page.pal.touch ? Math.max(44, implicitHeight) : implicitHeight
                     placeholderText: i18nc("@info:placeholder", "Password")
                     onAccepted: connectButton.clicked()
                     Keys.onEscapePressed: event => {

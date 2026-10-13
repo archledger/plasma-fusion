@@ -1360,7 +1360,12 @@ touch floor:
 - `ListRow` and the Wi-Fi page's network rows floor their text-scaled height at 44 in touch
   (`Math.max(metrics.px(44), pal.touch ? 44 : 0)`); the Devices page's open button floors its
   `px(48)` the same way (41 px at the minimum 0.85 text scale before); the Audio page's tabs
-  take the clipboard sheet's `contentHeight: pal.touch ? 44 : ...`.
+  take the clipboard sheet's `contentHeight: pal.touch ? 44 : ...`; the Wi-Fi password field
+  takes the search field's `Layout.preferredHeight: pal.touch ? Math.max(44, implicitHeight) :
+  implicitHeight`. The field's built-in reveal action is `PlasmaExtras.ActionTextField`'s
+  internal (`InlineActionIcon`): a page cannot size it, so the sweep skips it and the field is
+  the 44 px target; replacing it with the sheet's own touch-sized button is an open follow-up
+  (a board-level change).
 
 Tests: `tests/pages_test.py` sweeps all five sub-pages with the touch flag on and the text scale
 pinned to its minimum (0.85, guarded by its own check), each with a minimal service stand-in:
