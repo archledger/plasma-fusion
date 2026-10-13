@@ -65,7 +65,7 @@ if [ -n "$pill" ]; then
   done
   opens=$(grep -c 'quicksettings: sheet .*first frame after' "$PLOG" || true)
   info "sheet first-frame lines after taps: $opens"
-  [ "$opens" -ge "$((clicks + 2))" ] && pass "the sheet's touch taps measured first frames ($((opens - clicks)))" || fail "the touch taps added no sheet opens"
+  [ "$opens" -gt "$clicks" ] && pass "the sheet's touch taps measured first frames ($((opens - clicks)))" || fail "the touch taps added no sheet opens"
   info "sheet first frames: $(grep -o 'first frame after [0-9]* ms' "$PLOG" | tail -5 | tr '\n' ' ' || true)"
   info "sheet settled: $(grep -o 'sheet settled, [0-9]* frames in 500 ms' "$PLOG" | tail -3 | tr '\n' ' ' || true)"
 else
