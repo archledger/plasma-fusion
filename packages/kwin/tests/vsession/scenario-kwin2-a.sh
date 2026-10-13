@@ -255,6 +255,7 @@ FLOATING=$(K run "var l = workspace.windowList(), pick = null;
   if (pick) { pick.setMaximize(false, false); workspace.activeWindow = pick; }
   report(pick ? String(pick.resourceClass) : '');" | tr -d '"')
 echo "un-maximized in tablet: ${FLOATING:-none}" >>"$OUT/place.log"
+SECOND="" # the maximized-again case's window; set below when there is a floating one
 sleep 1.5
 state tab2b; shot tab-float
 python3 - "$OUT/state-tab2b.json" "$FLOATING" >>"$CHK" <<'PY'
@@ -356,7 +357,7 @@ d = json.load(open(sys.argv[1])); floating = sys.argv[2]; second = sys.argv[3]
 # window (the floating one included) got its title bar back in leave().
 nb = [w["cls"] for w in d["windows"] if w["nb"] and w["max"] != 3]
 print(("PASS" if not nb else "FAIL") + f" T18: after leaving tablet posture every window has its title bar again (without: {nb})")
-f = [w for w in d["windows"] if second in w["cls"]]
+f = [w for w in d["windows"] if second and second in w["cls"]]
 ok = len(f) == 1 and f[0]["max"] == 3 and f[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: the re-maximized window stayed borderless through leave: {[(w['cls'], w['max'], w['nb']) for w in f]}")
 # The floating window is still floating (the two subjects stayed distinct) and got its bar back.
