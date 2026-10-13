@@ -212,6 +212,12 @@ inside land1 "M14 back in landscape (fix 24)"
 grep -a 'plasmafusion-snap: screens changed' "$KLOG" | tail -1 >>"$CHK"
 
 # ---- 5. tablet posture: the picker's touch sizes, the switcher's close button
+# A window already maximized with the laptop setting off: only the policy's option can make it
+# borderless here, and un-maximizing it in tablet posture must still give the bar back at leave().
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+  if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0) { w.setMaximize(true, true); } }
+  report('dolphin maximized before the first cycle');" >>"$OUT/place.log"
+sleep 1.5
 # The laptop setting keeps maximized windows borderless: the tablet section's last checks use it to
 # cover a re-maximized window through leave() (T19).
 kwriteconfig6 --file kwinrc --group Windows --key BorderlessMaximizedWindows true
@@ -406,12 +412,14 @@ d = json.load(open(sys.argv[1]))
 f = [w for w in d["windows"] if "kcalc" in w["cls"]]
 print(("PASS" if not f else "FAIL") + f" T19: the rule probe's window is gone before the cycle: {[(w['cls'], w['nb']) for w in f]}")
 PY
-  # A window maximized before the posture switch (a title bar in laptop posture): the policy makes
-  # it borderless when the option goes on, and un-maximizing it in tablet must still give the bar
-  # back at leave().
+  # A window maximized before the posture switch, of its own class so it is distinct from the
+  # three the cycle's other cases use: the laptop setting makes it borderless while maximized, and
+  # un-maximizing it in tablet must still give the bar back at leave().
+  kate >/dev/null 2>&1 &
+  sleep 4
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0) { w.setMaximize(true, true); } }
-    report('dolphin maximized before the second cycle');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('kate') >= 0) { w.setMaximize(true, true); } }
+    report('kate maximized before the second cycle');" >>"$OUT/place.log"
   sleep 1.5
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0) { if (w.tile) { w.tile.unmanage(w); } w.noBorder = true; } }
@@ -444,8 +452,8 @@ PY
     report('untiled kcalc: ' + out);" >>"$OUT/place.log"
   sleep 1.5
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
-    report('dolphin un-maximized in the second cycle');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('kate') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('kate un-maximized in the second cycle');" >>"$OUT/place.log"
   sleep 1.5
   pfv_tablet off; sleep 5
   state tab4; shot tab-userborderless
@@ -458,7 +466,7 @@ print(("PASS" if ok else "FAIL") + f" T19: a window the user made borderless kee
 x = [w for w in d["windows"] if "kcalc" in w["cls"]]
 ok = len(x) == 1 and not x[0]["tiled"] and x[0]["max"] != 3 and x[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window opened in tablet under a no-titlebar rule keeps it: {[(w['cls'], w['max'], w['nb']) for w in x]}")
-m = [w for w in d["windows"] if "dolphin" in w["cls"]]
+m = [w for w in d["windows"] if "kate" in w["cls"]]
 ok = len(m) == 1 and not m[0]["tiled"] and m[0]["max"] != 3 and not m[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window maximized before the cycle got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in m]}")
 PY

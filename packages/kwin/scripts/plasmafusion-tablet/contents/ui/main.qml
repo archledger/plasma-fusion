@@ -198,7 +198,9 @@ Item {
         for (let i = 0; i < ws.length; ++i) {
             const w = ws[i];
             if (eligible(w)) {
-                laptopNoBorder[key(w)] = w.noBorder;
+                // A maximized window's missing title bar is the laptop setting's doing while that
+                // setting is on (an un-maximize brings the bar back), not a state the user keeps.
+                laptopNoBorder[key(w)] = w.noBorder && !(w.maximizeMode === 3 && laptopBorderless);
             }
         }
         Options.placement = placementMaximizing;
