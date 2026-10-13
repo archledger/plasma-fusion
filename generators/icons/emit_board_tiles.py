@@ -24,7 +24,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import apptiles  # noqa: E402
-from apptiles import kit  # noqa: E402
 
 # The keys the boards use that have a per-app tile (the launcher's default pins, the docks).
 KEYS = [

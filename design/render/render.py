@@ -16,7 +16,6 @@ repository), and the screenshot becomes a WebP preview, like the ones the tool p
 Requires: google-chrome (or CHROME=...), Pillow.
 """
 import argparse
-import functools
 import http.server
 import json
 import os
