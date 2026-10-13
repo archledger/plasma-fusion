@@ -12,7 +12,11 @@ T.AbstractButton {
     required property FusionPalette pal
     required property FusionMetrics metrics
     property bool primary: false
-    property real radius: height / 2
+    // The drawn shape keeps the text size's height while the target may be 44 px tall in touch
+    // mode; the radius follows the shape, so an enlarged target does not turn a button into a pill
+    // (IconButton keeps its circle the same way).
+    readonly property real drawnHeight: metrics.px(26)
+    property real radius: drawnHeight / 2
     property real sidePadding: metrics.px(12)
     property real fontSize: 12
     property int fontWeight: Font.Bold
@@ -25,7 +29,7 @@ T.AbstractButton {
 
     // In touch mode the target is at least 44 px (ADAPTIVE 5.3), the drawn shape keeps the text
     // size's height: IconButton and the sheet's other controls grow the same way.
-    implicitHeight: Math.max(metrics.px(26), pal.touch ? 44 : 0)
+    implicitHeight: Math.max(drawnHeight, pal.touch ? 44 : 0)
     implicitWidth: label.implicitWidth + 2 * sidePadding + (iconPath.length > 0 ? metrics.px(20) : 0)
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
@@ -37,6 +41,10 @@ T.AbstractButton {
     Keys.onEnterPressed: button.clicked()
 
     background: Rectangle {
+        // The drawing, not the target: touch mode's 44 px box keeps a text-height pill inside.
+        anchors.verticalCenter: parent.verticalCenter
+        width: parent.width
+        height: button.drawnHeight
         radius: button.radius
         color: {
             if (button.primary) {
