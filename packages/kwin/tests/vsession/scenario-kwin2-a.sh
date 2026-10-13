@@ -413,13 +413,14 @@ f = [w for w in d["windows"] if "kcalc" in w["cls"]]
 print(("PASS" if not f else "FAIL") + f" T19: the rule probe's window is gone before the cycle: {[(w['cls'], w['nb']) for w in f]}")
 PY
   # A window maximized before the posture switch, of its own class so it is distinct from the
-  # three the cycle's other cases use: the laptop setting makes it borderless while maximized, and
-  # un-maximizing it in tablet must still give the bar back at leave().
-  kate >/dev/null 2>&1 &
+  # three the cycle's other cases use (and one the test image has: gwenview, as kcalc): the laptop
+  # setting makes it borderless while maximized, and un-maximizing it in tablet must still give the
+  # bar back at leave().
+  gwenview >/dev/null 2>&1 &
   sleep 4
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('kate') >= 0) { w.setMaximize(true, true); } }
-    report('kate maximized before the second cycle');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('gwenview') >= 0) { w.setMaximize(true, true); } }
+    report('gwenview maximized before the second cycle');" >>"$OUT/place.log"
   sleep 1.5
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0) { if (w.tile) { w.tile.unmanage(w); } w.noBorder = true; } }
@@ -452,8 +453,8 @@ PY
     report('untiled kcalc: ' + out);" >>"$OUT/place.log"
   sleep 1.5
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('kate') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
-    report('kate un-maximized in the second cycle');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('gwenview') >= 0 && w.maximizeMode === 3 && !w.tile) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('gwenview un-maximized in the second cycle');" >>"$OUT/place.log"
   sleep 1.5
   pfv_tablet off; sleep 5
   state tab4; shot tab-userborderless
@@ -466,7 +467,7 @@ print(("PASS" if ok else "FAIL") + f" T19: a window the user made borderless kee
 x = [w for w in d["windows"] if "kcalc" in w["cls"]]
 ok = len(x) == 1 and not x[0]["tiled"] and x[0]["max"] != 3 and x[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window opened in tablet under a no-titlebar rule keeps it: {[(w['cls'], w['max'], w['nb']) for w in x]}")
-m = [w for w in d["windows"] if "kate" in w["cls"]]
+m = [w for w in d["windows"] if "gwenview" in w["cls"]]
 ok = len(m) == 1 and not m[0]["tiled"] and m[0]["max"] != 3 and not m[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window maximized before the cycle got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in m]}")
 PY
