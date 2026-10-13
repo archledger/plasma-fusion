@@ -375,6 +375,30 @@ for C in dolphin konsole kwrite; do
   THIRD=$C; break
 done
 if [ -n "$THIRD" ]; then
+  # The no-titlebar rule for the window opened in tablet, checked in laptop posture first so a
+  # setup failure does not read as a pass.
+  kwriteconfig6 --file kwinrulesrc --group General --key count 1
+  kwriteconfig6 --file kwinrulesrc --group General --key rules 1
+  kwriteconfig6 --file kwinrulesrc --group 1 --key Description "KWIN-2: no title bar for kcalc"
+  kwriteconfig6 --file kwinrulesrc --group 1 --key wmclass kcalc
+  kwriteconfig6 --file kwinrulesrc --group 1 --key wmclassmatch 2
+  kwriteconfig6 --file kwinrulesrc --group 1 --key noborder true
+  kwriteconfig6 --file kwinrulesrc --group 1 --key noborderrule 1
+  qdbus org.kde.KWin /KWin reconfigure; sleep 1
+  kcalc >/dev/null 2>&1 &
+  sleep 3
+  state rule0
+  python3 - "$OUT/state-rule0.json" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+f = [w for w in d["windows"] if "kcalc" in w["cls"]]
+ok = len(f) == 1 and f[0]["nb"] and f[0]["max"] != 3
+print(("PASS" if ok else "FAIL") + f" T19: the no-titlebar rule applies before the cycle: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+PY
+  K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0) { w.close(); } }
+    report('kcalc closed before the cycle');" >>"$OUT/place.log"
+  sleep 2
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0) { if (w.tile) { w.tile.unmanage(w); } w.noBorder = true; } }
     report('$THIRD borderless as the user set it');" >>"$OUT/place.log"
@@ -390,26 +414,20 @@ if [ -n "$THIRD" ]; then
     if (w.normalWindow && String(w.resourceClass).indexOf('$THIRD') >= 0 && w.tile) { w.tile.unmanage(w); } }
     report('$THIRD untiled in the second cycle');" >>"$OUT/place.log"
   sleep 1.5
-  # A window opened in tablet posture under a no-titlebar rule: its borderless state is the
-  # user's, so tiling and untiling it must not hand it a title bar at leave() either.
-  kwriteconfig6 --file kwinrulesrc --group General --key count 1
-  kwriteconfig6 --file kwinrulesrc --group 1 --key Description "KWIN-2: no title bar for xmessage"
-  kwriteconfig6 --file kwinrulesrc --group 1 --key wmclass xmessage
-  kwriteconfig6 --file kwinrulesrc --group 1 --key wmclassmatch 2
-  kwriteconfig6 --file kwinrulesrc --group 1 --key noborder true
-  kwriteconfig6 --file kwinrulesrc --group 1 --key noborderrule 1
-  qdbus org.kde.KWin /KWin reconfigure; sleep 1
-  xmessage -buttons OK "KWIN-2 no-titlebar window" >/dev/null 2>&1 &
+  # The window opened in tablet posture under the rule: tiling and untiling it must not hand it a
+  # title bar at leave() either.
+  kcalc >/dev/null 2>&1 &
   sleep 4
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('xmessage') >= 0) { workspace.activeWindow = w;
-      report('xmessage on open: noBorder ' + w.noBorder + ', max ' + w.maximizeMode + ', tile ' + !!w.tile); } }" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0) { workspace.activeWindow = w;
+      report('kcalc opened in tablet: noBorder ' + w.noBorder + ', max ' + w.maximizeMode + ', tile ' + !!w.tile
+        + ', normal ' + w.normalWindow + ', maximizable ' + w.maximizable); } }" >>"$OUT/place.log"
   sleep 0.5
   qdbus org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.invokeShortcut "Window Quick Tile Left"
   sleep 1.5
   K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('xmessage') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
-    report('untiled xmessage: ' + out);" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('kcalc') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+    report('untiled kcalc: ' + out);" >>"$OUT/place.log"
   sleep 1.5
   pfv_tablet off; sleep 5
   state tab4; shot tab-userborderless
@@ -419,7 +437,7 @@ d = json.load(open(sys.argv[1])); want = sys.argv[2]
 f = [w for w in d["windows"] if want and want in w["cls"]]
 ok = len(f) == 1 and not f[0]["tiled"] and f[0]["max"] != 3 and f[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window the user made borderless keeps no title bar after leave: {[(w['cls'], w['max'], w['nb']) for w in f]}")
-x = [w for w in d["windows"] if "xmessage" in w["cls"]]
+x = [w for w in d["windows"] if "kcalc" in w["cls"]]
 ok = len(x) == 1 and not x[0]["tiled"] and x[0]["max"] != 3 and x[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window opened in tablet under a no-titlebar rule keeps it: {[(w['cls'], w['max'], w['nb']) for w in x]}")
 PY
