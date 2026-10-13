@@ -314,29 +314,32 @@ PY
   # maximized, un-maximized again (recorded) and maximized again. The laptop setting keeps
   # maximized windows borderless, so it must be borderless in posture and stay so through leave();
   # the floating window above still exercises leave()'s restore of a floating window's title bar.
+  # Konsole unless Konsole is the floating window, so the two subjects are always distinct.
+  SECOND=konsole
+  case "$FLOATING" in *konsole*) SECOND=kwrite ;; esac
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('konsole') >= 0 && w.tile) { w.tile.unmanage(w); } }
-    report('untilied konsole for the maximized-again case');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0 && w.tile) { w.tile.unmanage(w); } }
+    report('untilied $SECOND for the maximized-again case');" >>"$OUT/place.log"
   sleep 1.2
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('konsole') >= 0) { w.setMaximize(true, true); } }
-    report('konsole maximized for the maximized-again case');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0) { w.setMaximize(true, true); } }
+    report('$SECOND maximized for the maximized-again case');" >>"$OUT/place.log"
   sleep 1.2
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('konsole') >= 0) { w.setMaximize(false, false); workspace.activeWindow = w; } }
-    report('konsole un-maximized (recorded) for the maximized-again case');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0) { w.setMaximize(false, false); workspace.activeWindow = w; } }
+    report('$SECOND un-maximized (recorded) for the maximized-again case');" >>"$OUT/place.log"
   sleep 1.5
   K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
-    if (w.normalWindow && String(w.resourceClass).indexOf('konsole') >= 0) { w.setMaximize(true, true); workspace.activeWindow = w; } }
-    report('konsole maximized again to leave it maximized');" >>"$OUT/place.log"
+    if (w.normalWindow && String(w.resourceClass).indexOf('$SECOND') >= 0) { w.setMaximize(true, true); workspace.activeWindow = w; } }
+    report('$SECOND maximized again to leave it maximized');" >>"$OUT/place.log"
   sleep 1.5
   state tab2g
-  python3 - "$OUT/state-tab2g.json" >>"$CHK" <<'PY'
+  python3 - "$OUT/state-tab2g.json" "$SECOND" >>"$CHK" <<'PY'
 import json, sys
-d = json.load(open(sys.argv[1]))
-f = [w for w in d["windows"] if "konsole" in w["cls"]]
+d = json.load(open(sys.argv[1])); want = sys.argv[2]
+f = [w for w in d["windows"] if want in w["cls"]]
 ok = len(f) == 1 and f[0]["max"] == 3 and f[0]["nb"]
-print(("PASS" if ok else "FAIL") + f" T19: a window maximized again is borderless under the laptop setting: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+print(("PASS" if ok else "FAIL") + f" T19: a window ({want}) maximized again is borderless under the laptop setting: {[(w['cls'], w['max'], w['nb']) for w in f]}")
 PY
 else
   fail "T19: no maximized window to un-maximize, so the tile round trip cannot run"
@@ -346,16 +349,20 @@ p=$!
 sleep 1.3; shot tab-sw; wait $p; sleep 1
 pfv_tablet off; sleep 5
 state tab3; shot tab-off
-python3 - "$OUT/state-tab3.json" >>"$CHK" <<'PY'
+python3 - "$OUT/state-tab3.json" "$FLOATING" "$SECOND" >>"$CHK" <<'PY'
 import json, sys
-d = json.load(open(sys.argv[1]))
+d = json.load(open(sys.argv[1])); floating = sys.argv[2]; second = sys.argv[3]
 # Maximized windows may keep no title bar: the laptop setting above asks for that. Every other
 # window (the floating one included) got its title bar back in leave().
 nb = [w["cls"] for w in d["windows"] if w["nb"] and w["max"] != 3]
 print(("PASS" if not nb else "FAIL") + f" T18: after leaving tablet posture every window has its title bar again (without: {nb})")
-f = [w for w in d["windows"] if "konsole" in w["cls"]]
+f = [w for w in d["windows"] if second in w["cls"]]
 ok = len(f) == 1 and f[0]["max"] == 3 and f[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: the re-maximized window stayed borderless through leave: {[(w['cls'], w['max'], w['nb']) for w in f]}")
+# The floating window is still floating (the two subjects stayed distinct) and got its bar back.
+fl = [w for w in d["windows"] if floating and floating in w["cls"]]
+ok = len(fl) == 1 and fl[0]["max"] != 3 and not fl[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: the floating window is still floating and got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in fl]}")
 PY
 
 # ---- 6. health
