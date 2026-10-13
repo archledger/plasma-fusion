@@ -260,9 +260,10 @@ def render(name: str, w: int, h: int, port: int, dest: Path) -> Path:
         png.write_bytes(base64.b64decode(shot["data"]))
         dest.parent.mkdir(parents=True, exist_ok=True)
         im = Image.open(png)
+        # A preview with other dimensions than canvas.json claims would contradict the board
+        # metadata; that is a failed render, not a warning to commit past.
         if im.size != (w * SCALE, h * SCALE):
-            print(f"warning: {name}: {im.size} rendered, canvas says {w * SCALE}x{h * SCALE}",
-                  file=sys.stderr)
+            raise RuntimeError(f"{name}: rendered {im.size}, canvas.json says {w * SCALE}x{h * SCALE}")
         im.convert("RGB").save(dest, "WEBP", quality=QUALITY, method=6)
     finally:
         _remove_work(td)

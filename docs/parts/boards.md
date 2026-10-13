@@ -22,7 +22,8 @@ Requires `google-chrome` (or `CHROME=...`) and Pillow, and no network: each boar
 the fonts this repository bundles (`fonts/`) in place of its Google Fonts stylesheet. One browser
 process owns the whole render over Chrome's remote-debugging pipe: it navigates, waits for the
 runtime's `data-board-rendered` marker through `Runtime.evaluate` (a board that does not finish, or
-one whose template expressions fail, fails the run) and captures that same page, so the picture
+one whose template expressions fail, or one whose picture does not match canvas.json's dimensions,
+fails the run) and captures that same page, so the picture
 cannot come from a page that was not validated. `--check` exits nonzero for a missing committed
 preview, a size mismatch, a mean per-channel difference over 12, or a worst window mean over
 20 (32 x 32 pixel windows, sliding in 16 px steps, so a small change cannot straddle every
