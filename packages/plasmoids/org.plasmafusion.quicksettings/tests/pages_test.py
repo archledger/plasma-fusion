@@ -169,7 +169,7 @@ Item {
             }
             readonly property var sourceModel: ListModel {}
             readonly property var playbackModel: [{
-                PulseObject: ({ volume: 0.5, muted: false, deviceIndex: 0 }),
+                PulseObject: ({ volume: 0.5, muted: false, deviceIndex: 0, hasVolume: true }),
                 Client: ({ name: "Test application" }),
                 Name: "Test application"
             }]
@@ -414,9 +414,14 @@ QTest.qWait(150)
 touch_assert(root, find(root, "audioPage"), "the Audio page")
 # The applications tab and its stream row (the routing combo) exist only when a stream plays.
 audio = find(root, "audioPage")
-apps = next(i for i in items(audio) if i.property("text") == "Applications")
-apps.clicked.emit()
+tabs = next(i for i in items(audio) if "QQuickTabBar" in classes(i))
+tabs.setProperty("currentIndex", 2)
 QTest.qWait(120)
+row = next((i for i in items(audio) if i.property("text") == "Test application"), None)
+check(row is not None and row.isVisible(), "the applications tab shows the playing stream's row")
+slider = next((i for i in items(audio) if "QQuickSlider" in classes(i)), None)
+check(slider is not None and slider.isVisible() and slider.isEnabled() and slider.height() + 0.5 >= 44,
+      "the stream row's volume slider is enabled and 44 px tall (%s)" % (round(slider.height(), 1) if slider else None))
 touch_assert(root, find(root, "audioPage"), "the Audio page (Applications tab)")
 touch_assert(root, find(root, "devicesPage"), "the Devices page")
 touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page")
