@@ -16,6 +16,9 @@ T.AbstractButton {
     // mode; the radius follows the shape, so an enlarged target does not turn a button into a pill
     // (IconButton keeps its circle the same way).
     readonly property real drawnHeight: metrics.px(26)
+    // The caller's target height (the drawn shape keeps `drawnHeight`): callers pass their board
+    // value here instead of overriding `implicitHeight`, so the touch floor below always applies.
+    property real targetHeight: drawnHeight
     property real radius: drawnHeight / 2
     property real sidePadding: metrics.px(12)
     property real fontSize: 12
@@ -29,7 +32,7 @@ T.AbstractButton {
 
     // In touch mode the target is at least 44 px (ADAPTIVE 5.3), the drawn shape keeps the text
     // size's height: IconButton and the sheet's other controls grow the same way.
-    implicitHeight: Math.max(drawnHeight, pal.touch ? 44 : 0)
+    implicitHeight: Math.max(targetHeight, pal.touch ? 44 : 0)
     implicitWidth: label.implicitWidth + 2 * sidePadding + (iconPath.length > 0 ? metrics.px(20) : 0)
     focusPolicy: Qt.TabFocus
     hoverEnabled: true

@@ -23,7 +23,9 @@ T.Slider {
     focusPolicy: Qt.StrongFocus
     hoverEnabled: true
     implicitWidth: 200
-    implicitHeight: bar ? 44 : Math.max(28, knobSize)
+    // Touch mode floors every slider at 44 px (ADAPTIVE 5.3); the board's compact variant keeps
+    // its 28 px height on the laptop.
+    implicitHeight: (bar || pal.touch) ? 44 : Math.max(28, knobSize)
     wheelEnabled: false
 
     // The last wheel or key step (signed), 0 for a pointer press or drag: an owner whose model can

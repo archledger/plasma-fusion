@@ -100,7 +100,7 @@ ColumnLayout {
         TextButton {
             pal: page.pal
             metrics: page.metrics
-            implicitHeight: page.metrics.px(32)
+            targetHeight: page.metrics.px(32)
             radius: height / 2
             sidePadding: page.metrics.px(14)
             fill: page.pal.overlay(0.08)

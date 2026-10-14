@@ -89,6 +89,8 @@ ColumnLayout {
                 }
                 QQC2.ComboBox {
                     Layout.fillWidth: true
+                    // A touch target like the fields: 44 px tall in touch.
+                    Layout.preferredHeight: streams.pal.touch ? Math.max(44, implicitHeight) : implicitHeight
                     model: group.devices
                     textRole: "Description"
                     valueRole: "Index"

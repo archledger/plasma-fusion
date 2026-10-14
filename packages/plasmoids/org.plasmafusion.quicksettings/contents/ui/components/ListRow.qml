@@ -26,7 +26,9 @@ T.AbstractButton {
     property string menuText: ""
     signal menuRequested(Item from)
 
-    implicitHeight: metrics.px(44)
+    // The row follows the user's text scale, floored at the touch minimum (ADAPTIVE 5.3): at a
+    // small text scale the row must not drop below the 44 px target, as TextButton already does.
+    implicitHeight: Math.max(metrics.px(44), pal.touch ? 44 : 0)
     focusPolicy: Qt.TabFocus
     hoverEnabled: true
     Accessible.name: text

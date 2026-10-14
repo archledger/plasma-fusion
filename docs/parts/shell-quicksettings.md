@@ -1343,3 +1343,41 @@ after a live scale change with only the padding fixed; with the change it passes
 1920 x 1200 and 1280 x 800 at scales 1, 1.25 and 1.5, with and without a scrolling notification
 list. Screenshots: `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/shellfixes-shots/`
 (`base-*` before, `fix-*` after).
+
+## Sub-pages' touch targets (0.6.0)
+
+The sub-pages' audit against ADAPTIVE 5.3 (every target at least 44 x 44 in touch mode) found the
+page header already correct and one class of gap, the caller's height overriding the component's
+touch floor:
+
+- The header's back button (`IconButton`, `hitSize` 44 in touch) and switch (`FusionSwitch`,
+  48 x 44) grow on their own; the first audit reading (32 x 32 and 40 x 22) was the harness's,
+  whose palette was not bound to the touch flag.
+- `TextButton` now takes the caller's height as `targetHeight` and owns `implicitHeight`
+  (`Math.max(targetHeight, pal.touch ? 44 : 0)`), so a caller's board value can no longer
+  undercut the target: the Bluetooth, Audio, Devices, Profiles and Wi-Fi pages' twelve text
+  buttons pass `targetHeight: metrics.px(28...32)` and reach 44 in touch (24-30 px before).
+- `ListRow` and the Wi-Fi page's network rows floor their text-scaled height at 44 in touch
+  (`Math.max(metrics.px(44), pal.touch ? 44 : 0)`); the Devices page's open button floors its
+  `px(48)` the same way (41 px at the minimum 0.85 text scale before); the Audio page's tabs
+  take the clipboard sheet's `contentHeight: pal.touch ? 44 : ...`; the Wi-Fi password field
+  takes the search field's `Layout.preferredHeight: pal.touch ? Math.max(44, implicitHeight) :
+  implicitHeight`; the hotspot's editing fields (name and password) and the applications tab's
+  stream row take it too, and `FusionSlider` floors its compact variant at 44 in touch (the
+  board's 28 px height stays on the laptop). The field's built-in reveal action is `PlasmaExtras.ActionTextField`'s
+  internal (`InlineActionIcon`): a page cannot size it, so the sweep skips it and the field is
+  the 44 px target; replacing it with the sheet's own touch-sized button is an open follow-up
+  (a board-level change).
+
+Tests: `tests/pages_test.py` sweeps all five sub-pages with the touch flag on and the text scale
+pinned to its minimum (0.85, guarded by its own check), each with a minimal service stand-in, and
+drives the states a default sweep cannot see (the Applications tab with a playing stream, the
+secured Wi-Fi row expanded with a valid password, the hotspot's editing state, the hotspot on):
+Profiles 4 controls, Bluetooth 6, Audio 6, Audio Applications 6, Devices 3, Wi-Fi 8, Wi-Fi row
+expanded and editing 11, Wi-Fi hotspot on 10, plus the Wi-Fi rows. Without the
+changes the sweeps name the gaps (Devices' open button 356 x 41; Wi-Fi's Disconnect 80 x 24,
+Start hotspot 98 x 26, Change name and password 165 x 26, Hidden network... 99 x 27, Network
+settings 147 x 27; the Bluetooth batch's rows 356 x 41 and buttons 119 x 30 / 163 x 30 on the
+first red run); with them 30 checks pass. The runs are in the CI-exact Fedora 44 container
+(`localhost/pf-suites-f44`); the tiles, clipboard and notification suites stay green (68, 53 and
+64 checks).
