@@ -34,7 +34,7 @@ os.environ.setdefault("QT_QUICK_BACKEND", "software")
 data_home = Path(tempfile.mkdtemp(prefix="pf-notify-data-"))
 (data_home / "applications").mkdir()
 for entry, name in (("org.plasmafusion.notifytest", "Notify test"), ("org.plasmafusion.notifyother", "Other test"),
-                    ("org.plasmafusion.notifythird", "Third test")):
+                    ("org.plasmafusion.notifythird", "Third test"), ("org.plasmafusion.notifyfourth", "Fourth test")):
     (data_home / "applications" / (entry + ".desktop")).write_text(
         "[Desktop Entry]\nType=Application\nName=%s\nExec=true\nIcon=dialog-information\n" % name)
 os.environ["XDG_DATA_HOME"] = str(data_home)
@@ -125,6 +125,7 @@ Item {
     // The tablet Notification Centre's content: the same rows in its own scrolling list. Made when
     // the overlap section turns it on, so it lists the notifications that arrive after it.
     property bool centreOn: false
+    property real centreHeight: 1400
     // The backend under another name: inside the Centre's declaration `backend` is its own property.
     readonly property var backendItem: backend
     C.Motion { id: centreMotion }
@@ -133,7 +134,7 @@ Item {
         objectName: "centre"
         active: root.centreOn
         width: root.width
-        height: root.height
+        height: root.centreHeight
         sourceComponent: UI.NotificationCentreContent {
             backend: root.backendItem
             metrics: fusionMetrics
@@ -141,11 +142,32 @@ Item {
             shown: true
         }
     }
-    // The Centre's row items (its Flickable holds a NotificationList; a ListView in the red run).
+    // The Centre's list (a ListView) and the row items it made.
+    function centreView() {
+        return centre.item ? findIn(centre.item, "notificationCentreList") : null;
+    }
     function centreRows() {
-        const flick = centre.item ? findIn(centre.item, "notificationCentreList") : null;
-        const rows = flick ? flick.contentItem.children[0] : null;
-        return rows ? (rows.contentItem ? rows.contentItem.children : rows.children) : [];
+        const view = centreView();
+        if (!view) {
+            return [];
+        }
+        // A ListView's rows are its contentItem's children; a Flickable holding a Column (as this PR
+        // first had it; its red run) has the Column there.
+        const kids = view.contentItem.children;
+        return kids.length === 1 && kids[0].isGroup === undefined ? kids[0].children : kids;
+    }
+    function sheetRowCount() {
+        return Array.from(listRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry).length;
+    }
+    // The row at the top of the Centre's view (what someone reading it sees first).
+    function centreTopRow() {
+        const view = centreView();
+        const item = view ? view.itemAt(view.width / 2, view.contentY + 10) : null;
+        return item && item.entry ? (item.isGroup ? "group:" + item.entry.applicationName : String(item.entry.summary)) : "";
+    }
+    function centreScroll(offset) {
+        const view = centreView();
+        view.contentY = view.originY + offset;
     }
 
     function centreLoaded() {
@@ -370,7 +392,7 @@ def job(title, *options, entry="org.plasmafusion.notifytest"):
 
 def notify(summary, body, *options, entry="org.plasmafusion.notifytest"):
     app = {"org.plasmafusion.notifytest": "Notify test", "org.plasmafusion.notifyother": "Other test",
-           "org.plasmafusion.notifythird": "Third test"}[entry]
+           "org.plasmafusion.notifythird": "Third test", "org.plasmafusion.notifyfourth": "Fourth test"}[entry]
     proc = subprocess.Popen([sys.executable, "-B", str(here / "notify_client.py"), "notify", summary, body,
                              "--entry", entry, "--app", app, *options],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
@@ -678,14 +700,16 @@ try:
     root.setProperty("centreOn", True)
     wait_for(lambda: root.centreLoaded(), "the Notification Centre did not load")
     # In the order of the report: a one-line card, then two from one app (the group forms while the
-    # list shows), then the wrapping card, which arrives on top and moves every row under it.
+    # list shows), then the wrapping card, which arrives on top and moves every row under it - from an
+    # app with no notification yet, so it is the lists' first row, the one ListView's transitions
+    # dropped the size changes of.
     notify("Could not connect to device", "", entry="org.plasmafusion.notifythird")
     for n in (1, 2):
         notify("Service Crash %d" % n, "/usr/bin/bash has encountered a fatal error and was closed.",
                "--action", "details=Details", entry="org.plasmafusion.notifyother")
     notify("Remote control enabled: Plasma Fusion project settings",
            "Your session is ready to control from your phone or another computer.",
-           "--image", str(png("wrap-thumb.png", 96, 96, "#e07040")))
+           "--image", str(png("wrap-thumb.png", 96, 96, "#e07040")), entry="org.plasmafusion.notifyfourth")
     QTest.qWait(600)
     problems = json.loads(root.layoutProblems("sheet"))
     check(problems == [], "wrapped cards and a group: no row draws over another (%s)" % ("; ".join(problems) or "clean"))
@@ -699,8 +723,27 @@ try:
     problems = json.loads(root.layoutProblems("sheet"))
     check(problems == [], "after the sheet narrows: no row draws over another (%s)" % ("; ".join(problems) or "clean"))
     root.setProperty("width", 380)
-    root.setProperty("centreOn", False)
     QTest.qWait(400)
+    # The Centre scrolls a long history itself (review, PR #47): a virtualised ListView, which makes
+    # only the rows it shows and keeps a reader's place when a notification arrives on top.
+    root.setProperty("centreHeight", 600)
+    for n in range(1, 11):
+        notify("Filler %d" % n, "An older notification", entry="org.plasmafusion.notifytest")
+    QTest.qWait(400)
+    made, listed = root.centreRowCount(), root.sheetRowCount()
+    check(0 < made < listed, "the Notification Centre makes only the rows it shows (%d of %d)" % (made, listed))
+    root.centreScroll(400)
+    QTest.qWait(200)
+    top = root.centreTopRow()
+    # From the app whose group is on top already: a row inserted above the view (a notification of an
+    # app further down moves its whole group to the top, rows in view with it - ListView's own way).
+    notify("Arrives while reading", "A new notification on top", entry="org.plasmafusion.notifytest")
+    QTest.qWait(400)
+    check(top != "" and root.centreTopRow() == top,
+          "a notification arriving on top leaves the reader's place (%r, now %r)" % (top, root.centreTopRow()))
+    root.setProperty("centreOn", False)
+    root.setProperty("centreHeight", 1400)
+    QTest.qWait(200)
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:

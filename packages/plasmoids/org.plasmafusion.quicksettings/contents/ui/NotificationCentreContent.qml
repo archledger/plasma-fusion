@@ -381,8 +381,12 @@ FocusScope {
                 textFormat: Text.PlainText
             }
 
-            // The history scrolls; its rows are a Column (NotificationList.qml says why not a ListView).
-            Flickable {
+            // A ListView, so the long history is virtualised and keeps a reader's place and its bounds as
+            // rows come and go - but without view transitions: ListView ignores a size change of its
+            // first row while that row's transition runs, and the newest notification is the first row,
+            // which settles its height after it is placed (NotificationList.qml, the sheet's rows, has
+            // the details). Rows here move without the slide.
+            ListView {
                 id: list
                 objectName: "notificationCentreList"
                 y: header.height + 8
@@ -391,27 +395,23 @@ FocusScope {
                 clip: true
                 visible: !centre.pendingClear
                 boundsBehavior: Flickable.StopAtBounds
-                contentWidth: width
-                contentHeight: rows.height
+                model: centre.notif.available ? centre.notif.model : null
                 Accessible.role: Accessible.List
                 Accessible.name: i18nc("@title", "Notifications")
 
-                NotificationList {
-                    id: rows
-                    width: list.width
-                    spacing: 12
-                    notif: centre.notif
+                spacing: 12
+                delegate: NotificationEntry {
+                    width: ListView.view.width
                     pal: centre.pal
                     metrics: centre.metrics
-                    motion: centre.motion
+                    notif: centre.notif
                     now: centre.now
                     surface: centre.cardSurface
                     edge: centre.cardEdge
                     stackEdges: true
                     menus: true
-                    fadeIn: false
                     onDone: centre.closeRequested()
-                    onMenuRequested: (card, at, index, model) => {
+                    onMenuRequested: (card, at) => {
                         centre.menuRow = index;
                         centre.menuEntry = String(model.desktopEntry || "");
                         centre.menuApp = String(model.applicationName || "");
