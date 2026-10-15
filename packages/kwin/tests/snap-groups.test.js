@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-snap", "contents", "ui", "Groups.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { groupOf, leave, join, partners, fillOrder, inZone, prune, joined, left } = globalThis;
+const { groupOf, leave, join, partners, fillOrder, inZone, prune, joined, left, sameRect, sharedActivity, holds, fillValid } = globalThis;
 
 // Windows are opaque objects compared by identity.
 const a = { n: "a" };
@@ -88,5 +88,39 @@ assert.ok(!inZone({ x: 40, y: 32, width: 476, height: 868 }, zone), "moved away"
 assert.ok(!inZone({ x: 0, y: 32, width: 900, height: 868 }, zone), "wider than its zone");
 assert.ok(!inZone({ x: 0, y: 32, width: 200, height: 400 }, zone), "far smaller: not the zone's window any more");
 assert.ok(inZone({ x: 6, y: 32, width: 476, height: 868 }, zone, 8), "a custom tolerance");
+
+// ---- asked at use: does a window still hold its zone, does a sequence still stand
+const third = { x: 482, y: 34, width: 476, height: 866 };
+const geoZone = { tile: null, rect: third, place: "eDP-1|1|*" };
+const tileA = { n: "tileA" };
+const quickZone = { tile: tileA, rect: null, place: "eDP-1|1|*" };
+const snap = (o) => Object.assign({ tile: null, frame: third, place: "eDP-1|1|*", maximized: false, fullScreen: false, settled: true }, o);
+assert.ok(holds(geoZone, snap({})), "in its third");
+assert.ok(!holds(geoZone, snap({ frame: { x: 380, y: 220, width: 620, height: 420 } })), "moved out by an app or a script, settled");
+assert.ok(holds(geoZone, snap({ frame: { x: 160, y: 110, width: 640, height: 420 }, settled: false })), "not settled yet: the old geometry may still show");
+assert.ok(!holds(geoZone, snap({ tile: tileA })), "tiled since");
+assert.ok(!holds(geoZone, snap({ place: "eDP-1|2|*" })), "another desktop");
+assert.ok(!holds(geoZone, snap({ place: "eDP-1|1|act-b" })), "another activity");
+assert.ok(!holds(geoZone, snap({ maximized: true })), "maximized");
+assert.ok(holds(quickZone, snap({ tile: tileA, frame: { x: 0, y: 0, width: 1, height: 1 } })), "a quick tile is its tile, whatever the geometry");
+assert.ok(!holds(quickZone, snap({ tile: { n: "tileB" } })), "another tile");
+assert.ok(!holds(undefined, snap({})), "no zone");
+
+const area = { x: 0, y: 34, width: 1440, height: 866 };
+const rec = { zone: geoZone, desktop: "1", activity: "act-a", area: area, family: "columns" };
+const now = (o) => Object.assign(snap({}), { desktop: "1", activity: "act-a", area: { x: 0, y: 34, width: 1440, height: 866 }, family: "columns" }, o);
+assert.ok(fillValid(rec, now({})), "the sequence stands");
+assert.ok(!fillValid(rec, now({ activity: "act-b" })), "another activity became current (a switch in the settle)");
+assert.ok(!fillValid(rec, now({ desktop: "2" })), "another desktop became current");
+assert.ok(!fillValid(rec, now({ family: "rows", area: { x: 0, y: 34, width: 900, height: 1406 } })), "a rotation: rows now");
+assert.ok(!fillValid(rec, now({ area: { x: 0, y: 34, width: 1440, height: 836 } })), "the work area changed");
+assert.ok(!fillValid(rec, now({ frame: { x: 300, y: 200, width: 700, height: 450 } })), "the first window moved by a script, settled");
+assert.ok(!fillValid(rec, now({ place: "HDMI-1|1|*" })), "the first window on another screen");
+assert.ok(sameRect(area, { x: 0, y: 34, width: 1440, height: 866 }) && !sameRect(area, null));
+
+// ---- a window of another activity is not there to see; empty lists mean all activities
+assert.ok(sharedActivity([], ["a"]) && sharedActivity(["a"], []), "on all activities");
+assert.ok(sharedActivity(["a", "b"], ["b"]));
+assert.ok(!sharedActivity(["a"], ["b"]), "only another activity");
 
 console.log("snap-groups.test.js: ok");

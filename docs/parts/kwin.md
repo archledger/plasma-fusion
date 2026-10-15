@@ -194,14 +194,17 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   that layout in turn, in zone order after the chosen one and wrapping (`Groups.fillOrder`), with
   the windows not placed yet. A zone already holding a window is skipped: a quick tile with
   windows, or for thirds (plain geometry, not KWin tiles) a zone any window of the desktop already
-  sits in - also one the switcher skips or a minimised one, which comes back there (`Groups.inZone`: top-left within 4 px, no larger than the zone and at least half its
+  sits in - also one the switcher skips or a minimised one, which comes back there, but not one of
+  another activity (`Groups.inZone`: top-left within 4 px, no larger than the zone and at least half its
   size - a terminal rounds its size to whole cells). The empty zones are worked out again before
   every offer: a window picked out of another zone of the layout leaves that zone empty, and it is
   offered in its turn (a zone this sequence filled counts as held while the window placed there is
   still in it - not closed, re-tiled, maximized or moved to another desktop - whatever its geometry
-  says while it answers its resize; a zone it left is offered again). Esc, a click elsewhere, a workspace switch, the first window
+  says while it answers its resize - asked again once 1.5 s have passed since that placement; a
+  zone it left is offered again). Esc, a click elsewhere, a workspace switch, the first window
   leaving its zone (another tile, out of its rectangle, maximized or full screen, another desktop,
-  screen or activity - with a picker open or in the settle before the next one) or closing, or a pick that cannot be placed (the window closed while the
+  screen or activity - with a picker open or in the settle before the next one) or closing, the
+  current desktop or activity changing, a screen change (a rotation turns columns into rows), or a pick that cannot be placed (the window closed while the
   picker was open, or KWin refused the tile) end the sequence; what was placed stays. Halves from
   an edge drag or Meta+Left/Right keep the single offer above.
 - Snap groups (Windows' snap groups; GNOME Tiling Assistant's tile groups raise together too):
@@ -216,7 +219,14 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   have passed since its placement, so an app or a script moving it counts too), goes to another
   desktop, screen or activity, is
   maximized or made full screen, or closes; a
-  group left with one window ends. `PairWindows=false` forms no groups.
+  group left with one window ends. `PairWindows=false` forms no groups. A placement KWin refuses
+  puts the picked window's old group back as it was.
+- Asked at use: handlers end a sequence early and close its picker, but every decision reads the
+  windows as they are then - before each offer and each placement the sequence is checked
+  (`Groups.fillValid`: the first window holds its zone, same desktop, activity, work area and
+  layout family), and before a group minimises, restores or raises, every member is checked
+  (`Groups.holds`). So a change no handler sees (an app or a script moving a window within its
+  placement's settle, a switch in the 220 ms between two offers) still counts.
 - Gaps: 6 px between halves and quarters, with the outer edges flush to the work area (panels
   remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
   native quick-tile padding at the configured gap and fills only each window's outer edges
@@ -323,7 +333,9 @@ Offline (laptop):
 - `node packages/kwin/tests/snap-groups.test.js` (the build runs it when node is installed): snap
   groups - forming a group from the picks, a window in one group at most (joining another
   arrangement moves it), membership and zones changing together (a window left alone by a transfer
-  is forgotten with its zone), leaving and a group of one ending, the zones' fill order (wrapping,
+  is forgotten with its zone), leaving and a group of one ending, the checks asked at use
+  (`holds`: tile, settled rectangle, place, maximized; `fillValid`: desktop, activity, work area,
+  layout family; `sharedActivity`), the zones' fill order (wrapping,
   skipping held zones) and the thirds' zone test (a terminal a few px smaller still counts).
 - Offscreen renders with a stand-in `org.kde.kwin` module (`packages/kwin/tests/offscreen/`,
   PySide6 + private Xvfb display, private HOME): `run.sh STAGE_HOME switcher-harness.qml OUT.png
@@ -372,7 +384,11 @@ and pointer drags inside the private session only).
   the picker is open ends the sequence; thirds members sent to another desktop or activity leave
   their group; a window the sequence placed that closes before the layout is full leaves its zone
   to be offered again; a minimised member of another group picked for a new layout is restored
-  alone; a thirds member moved by a script leaves its group; the halves picker
+  alone; a thirds member moved by a script leaves its group, also when the move comes within its
+  placement's settle (asked at the group's next use); the first window moved by a script while the
+  picker is open ends the sequence; a window of another activity does not hold a third; a placed
+  window moved out of its third by a script while a later picker is open leaves the third to be
+  offered again; the halves picker
   after Meta+Left still pairs its two windows.
 - `scenario-placement.sh` (strict mode; a step that fails is written to the checks; every check
   runs and the scenario's status - "scenario rc" in the session log - is non-zero when any check

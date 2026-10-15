@@ -548,29 +548,42 @@ Item {
     function fillWith(snapped, tile, zoneRect, win) {
         // A pick that cannot be placed (the window closed or changed while the picker was open, or
         // KWin refused the tile) ends a fill sequence: nothing would offer its next zone, and the
-        // halves picker must not be held back for this window.
+        // halves picker must not be held back for this window. A sequence that no longer stands
+        // (fillStillValid) places nothing more either.
         const inSequence = fill !== null && fill.anchor === snapped;
-        if ((!tile && !zoneRect) || !usable(win)) {
+        if ((!tile && !zoneRect) || !usable(win) || (inSequence && !fillStillValid(fill, false))) {
             if (inSequence) {
                 endFill();
             }
             return;
         }
         // The picked window belongs to this arrangement now: it leaves its old group before it is
-        // restored, so restoring it does not bring the rest of that group back.
+        // restored, so restoring it does not bring the rest of that group back. Should KWin refuse
+        // the placement, the old group is put back as it was, and the window minimised again.
+        const before = { groups: groups, zones: memberZones };
+        const wasMinimized = win.minimized;
         leaveGroup(win);
-        if (win.minimized) {
+        if (wasMinimized) {
             win.minimized = false;
         }
+        let placed = true;
         if (tile) {
-            if (!tile.manage(win)) {
-                if (inSequence) {
-                    endFill();
-                }
-                return;
-            }
+            placed = tile.manage(win);
         } else {
             placeByGeometry(win, zoneRect);
+        }
+        if (!placed) {
+            groups = before.groups;
+            memberZones = before.zones;
+            if (wasMinimized) {
+                syncing = true;
+                win.minimized = true;
+                syncing = false;
+            }
+            if (inSequence) {
+                endFill();
+            }
+            return;
         }
         Workspace.activeWindow = win;
         if (snapped && !snapped.deleted && setting("PairWindows", true)) {
@@ -580,7 +593,7 @@ Item {
         if (inSequence && fill) {
             fill.placed.push(win);
             fill.filled.push(fill.current);
-            fill.filledBy.push({ win: win, tile: tile });
+            fill.filledBy.push({ win: win, at: Date.now(), zone: { tile: tile, rect: tile ? null : zoneRect, place: fill.zone.place } });
             fillSettle.restart();
         }
     }
@@ -592,6 +605,11 @@ Item {
     // worked out again before every offer: a picked window may come out of another zone of the
     // layout, which is then empty and offered in its turn. Halves snapped by an edge drag or
     // Meta+Left/Right keep windowSnapped's single offer.
+    //
+    // Everything is asked again where it is used (fillStillValid before every offer and every
+    // placement, Groups.holds for the zones): handlers end a sequence early and close its picker,
+    // but a change no handler sees - an app or a script moving a window, a switch in the settle
+    // between two offers - still counts.
     property var fill: null
 
     Timer {
@@ -603,6 +621,57 @@ Item {
     function endFill() {
         fill = null;
         fillSettle.stop();
+    }
+
+    // A placement is answered late by a Wayland client (its geometry is the old one until then):
+    // a plain-geometry zone's rectangle is asked only once this has passed since the placement, or
+    // when an interactive move ends.
+    readonly property int placementSettleMillis: 1500
+
+    function currentDesktopId() {
+        return Workspace.currentDesktop ? String(Workspace.currentDesktop.id) : "";
+    }
+
+    function familyOf(win) {
+        return layoutsFor(win) === rowLayouts ? "rows" : "columns";
+    }
+
+    function plainRect(r) {
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+    }
+
+    function activitiesOf(win) {
+        const list = [];
+        for (let a = 0; a < win.activities.length; ++a) {
+            list.push(String(win.activities[a]));
+        }
+        return list;
+    }
+
+    // The window as it is now, for Groups.holds/fillValid (since: when it was placed).
+    function snapshotOf(win, since, moveEnded) {
+        return {
+            tile: win.tile,
+            frame: plainRect(win.frameGeometry),
+            place: placeOf(win),
+            maximized: win.maximizeMode !== 0,
+            fullScreen: win.fullScreen,
+            settled: !win.move && !win.resize && (moveEnded || Date.now() - since >= placementSettleMillis)
+        };
+    }
+
+    // Whether the sequence still stands (Groups.fillValid): its first window holds the chosen
+    // zone, on the desktop, activity, work area and layout family the sequence started with.
+    function fillStillValid(f, moveEnded) {
+        if (!f || !f.anchor || f.anchor.deleted) {
+            return false;
+        }
+        const now = snapshotOf(f.anchor, f.startedAt, moveEnded);
+        now.desktop = currentDesktopId();
+        now.activity = String(Workspace.currentActivity);
+        now.area = plainRect(Workspace.clientArea(Workspace.MaximizeArea, f.anchor));
+        now.family = familyOf(f.anchor);
+        return Groups.fillValid({ zone: f.zone, desktop: f.desktop, activity: f.activity, area: f.area, family: f.family }, now);
     }
 
     // Whether zone z of the anchor's layout already holds a window: a quick tile with windows, or
@@ -624,11 +693,14 @@ Item {
         return false;
     }
 
-    // Every window that can sit in a zone of the anchor's desktop - not only the picker's
-    // candidates: a window the switcher skips (a window rule) still holds its zone, and so does a
-    // minimised one (it comes back to that spot, as a minimised window keeps its quick tile).
+    // Every window that can sit in a zone of the anchor's desktop on the current activity - not
+    // only the picker's candidates: a window the switcher skips (a window rule) still holds its
+    // zone, and so does a minimised one (it comes back to that spot, as a minimised window keeps
+    // its quick tile). A window of another activity is not there to see; the current activity is
+    // the reference, not the anchor's list (an anchor on all activities shares every activity).
     function occupantsOf(anchor, desktop) {
         const list = [];
+        const current = [String(Workspace.currentActivity)];
         const order = Workspace.stackingOrder;
         for (let i = 0; i < order.length; ++i) {
             const w = order[i];
@@ -639,7 +711,7 @@ Item {
             for (let d = 0; d < w.desktops.length && !here; ++d) {
                 here = w.desktops[d] === desktop;
             }
-            if (here) {
+            if (here && Groups.sharedActivity(activitiesOf(w), current)) {
                 list.push(w);
             }
         }
@@ -655,14 +727,19 @@ Item {
         if (!setting("FillOtherHalf", true)) {
             return;
         }
+        const anchorRect = quick ? null : targetRect(win, layoutIndex, zoneIndex);
         fill = {
             anchor: win,
             layoutIndex: layoutIndex,
             chosen: zoneIndex,
             quick: quick,
-            anchorTile: quick ? win.tile : null,
-            anchorPlace: placeOf(win),
-            anchorRect: quick ? null : targetRect(win, layoutIndex, zoneIndex),
+            anchorRect: anchorRect,
+            zone: { tile: quick ? win.tile : null, rect: anchorRect, place: placeOf(win) },
+            desktop: currentDesktopId(),
+            activity: String(Workspace.currentActivity),
+            area: plainRect(Workspace.clientArea(Workspace.MaximizeArea, win)),
+            family: familyOf(win),
+            startedAt: Date.now(),
             filled: [],
             filledBy: [],
             current: -1,
@@ -675,30 +752,31 @@ Item {
         fillSettle.restart();
     }
 
-    // The anchor left its chosen zone (another tile, out of its rectangle when a move ends,
-    // maximized or full screen, another desktop, screen or activity) while no picker was open - during the settle before the next
-    // offer: the sequence ends, as it does when that happens with a picker open. Its own
-    // placement happens before the sequence starts, so it never ends one.
+    // Something changed about the anchor (its tile, a move that ended, its geometry, maximized or
+    // full screen, another desktop, screen or activity): a sequence that no longer stands ends now
+    // and its picker closes. Its own placement happens before the sequence starts.
     function fillAnchorChanged(win, moveEnded) {
         const f = fill;
         if (!f || f.anchor !== win) {
             return;
         }
-        let stays = win.maximizeMode === 0 && !win.fullScreen && placeOf(win) === f.anchorPlace;
-        if (stays && f.quick) {
-            stays = win.tile === f.anchorTile;
-        } else if (stays) {
-            stays = !win.tile && (!moveEnded || Groups.inZone(win.frameGeometry, f.anchorRect));
+        if (!fillStillValid(f, moveEnded)) {
+            pickerLoader.active = false;
+            endFill();
         }
-        if (!stays) {
+    }
+
+    // The workspace changed under an open sequence (a desktop or activity switch, a screen change):
+    // it ends.
+    function workspaceChangedDuringFill() {
+        if (fill) {
             pickerLoader.active = false;
             endFill();
         }
     }
 
     // The zones of the sequence's layout still to offer, in fill order: neither filled by this
-    // sequence and still held by the window placed there (a geometry zone's window may not have
-    // answered its resize yet, so its rectangle is not asked) nor holding another window. A window
+    // sequence and still held by the window placed there nor holding another window. A window
     // placed by the sequence that closed or left its zone leaves the zone to be offered again.
     function emptyZones(f) {
         const count = layoutsFor(f.anchor)[f.layoutIndex].zones.length;
@@ -714,17 +792,13 @@ Item {
         if (i < 0) {
             return false;
         }
-        const w = f.filledBy[i].win;
-        const tile = f.filledBy[i].tile;
-        if (!w || w.deleted || w.maximizeMode !== 0 || w.fullScreen || placeOf(w) !== f.anchorPlace) {
-            return false;
-        }
-        return tile ? w.tile === tile : !w.tile;
+        const e = f.filledBy[i];
+        return !!e.win && !e.win.deleted && Groups.holds(e.zone, snapshotOf(e.win, e.at, false));
     }
 
     function offerNextZone() {
         const f = fill;
-        if (!f || !f.anchor || f.anchor.deleted || flyoutLoader.active || pickerLoader.active) {
+        if (!f || flyoutLoader.active || pickerLoader.active || !fillStillValid(f, false)) {
             endFill();
             return;
         }
@@ -763,7 +837,8 @@ Item {
 
     property var groups: []
     // internalId -> the zone a group member was placed in: {tile} for a quick tile, {rect} for a
-    // plain-geometry zone. A member that leaves its zone leaves its group.
+    // plain-geometry zone, with its place and placement time. A member that leaves its zone
+    // leaves its group.
     property var memberZones: ({})
     property bool syncing: false
 
@@ -781,10 +856,7 @@ Item {
         }
         const desktops = win.onAllDesktops ? "*" : ids.sort().join(",");
         // An empty activity list means all activities.
-        const activities = [];
-        for (let a = 0; a < win.activities.length; ++a) {
-            activities.push(String(win.activities[a]));
-        }
+        const activities = activitiesOf(win);
         return (win.output ? win.output.name : "?") + "|" + desktops + "|" + (activities.length > 0 ? activities.sort().join(",") : "*");
     }
 
@@ -795,23 +867,20 @@ Item {
             return { tile: tile, rect: null, place: place, placedAt: placedAt };
         }
         if (zoneRect) {
-            return { tile: null, rect: zoneRect, place: place, placedAt: placedAt };
+            return { tile: null, rect: plainRect(zoneRect), place: place, placedAt: placedAt };
         }
         return win.tile ? { tile: win.tile, rect: null, place: place, placedAt: placedAt }
-                        : { tile: null, rect: win.frameGeometry, place: place, placedAt: placedAt };
+                        : { tile: null, rect: plainRect(win.frameGeometry), place: place, placedAt: placedAt };
     }
 
     // A plain-geometry member moved by anything but the user (an app moving itself, another
-    // script) leaves its zone too: its geometry is asked on every change - once the placement has
-    // had time to settle (a Wayland client answers its resize late) and never during an
-    // interactive move, which is asked when it ends.
-    readonly property int placementSettleMillis: 1500
+    // script) leaves its zone too: its geometry is asked on every change once its placement has
+    // settled. (A move within the settle is asked at the group's next use, validateGroupOf.)
     function geometryChangedMember(win) {
         const zone = win && !win.deleted ? memberZones[keyOf(win)] : undefined;
-        if (!zone || !zone.rect || win.move || win.resize || Date.now() - zone.placedAt < placementSettleMillis) {
-            return;
+        if (zone && zone.rect) {
+            checkMember(win, false);
         }
-        checkMember(win, true);
     }
 
     // Membership and zones change together (Groups.joined/left), so a window left alone by a
@@ -831,24 +900,29 @@ Item {
         groups = next.groups;
     }
 
-    // A member stays while it sits in its zone: its quick tile, or for a plain-geometry zone not
-    // tiled and still in the rectangle, on the screen and desktops it was placed on; maximized or
-    // full screen, it leaves. The rectangle is
-    // tested only when a move ends (moveEnded): right after a placement a Wayland window's
-    // geometry is still the old one until the client answers.
+    // A member stays while it holds its zone (Groups.holds): its quick tile, or for a
+    // plain-geometry zone not tiled and in the rectangle once settled; on the screen, desktops and
+    // activities it was placed on; not maximized or full screen.
     function checkMember(win, moveEnded) {
         if (!win || win.deleted || Groups.groupOf(groups, win) < 0) {
             return;
         }
         const zone = memberZones[keyOf(win)];
-        let stays = zone !== undefined && win.maximizeMode === 0 && !win.fullScreen && placeOf(win) === zone.place;
-        if (stays && zone.tile) {
-            stays = win.tile === zone.tile;
-        } else if (stays) {
-            stays = !win.tile && (!moveEnded || Groups.inZone(win.frameGeometry, zone.rect));
-        }
-        if (!stays) {
+        if (!zone || !Groups.holds(zone, snapshotOf(win, zone.placedAt, moveEnded))) {
             leaveGroup(win);
+        }
+    }
+
+    // A group action asks every member first, so a window that left its zone in a way no handler
+    // saw (or within its placement's settle) is not taken along.
+    function validateGroupOf(win) {
+        const i = Groups.groupOf(groups, win);
+        if (i < 0) {
+            return;
+        }
+        const members = groups[i].slice();
+        for (let k = 0; k < members.length; ++k) {
+            checkMember(members[k], false);
         }
     }
 
@@ -856,6 +930,7 @@ Item {
         if (syncing) {
             return;
         }
+        validateGroupOf(win);
         const others = Groups.partners(groups, win);
         if (others.length === 0) {
             return;
@@ -872,7 +947,11 @@ Item {
     Connections {
         target: Workspace
         function onWindowActivated(win) {
-            const others = win ? Groups.partners(root.groups, win) : [];
+            if (!win) {
+                return;
+            }
+            root.validateGroupOf(win);
+            const others = Groups.partners(root.groups, win);
             if (others.length === 0) {
                 return;
             }
@@ -896,6 +975,10 @@ Item {
             flyoutLoader.active = false;
             pickerLoader.active = false;
             root.endFill();
+        }
+        function onCurrentActivityChanged() {
+            flyoutLoader.active = false;
+            root.workspaceChangedDuringFill();
         }
     }
 
@@ -1012,9 +1095,11 @@ Item {
     Connections {
         target: Workspace
         function onScreensChanged() {
+            root.workspaceChangedDuringFill();
             screensSettled.restart();
         }
         function onVirtualScreenGeometryChanged() {
+            root.workspaceChangedDuringFill();
             screensSettled.restart();
         }
     }
@@ -1100,6 +1185,7 @@ Item {
                 function onFrameGeometryChanged() {
                     watcher.fit();
                     root.geometryChangedMember(watcher.window);
+                    root.fillAnchorChanged(watcher.window, false);
                 }
                 function onInteractiveMoveResizeFinished() {
                     watcher.fit();

@@ -118,3 +118,49 @@ function inZone(rect, zone, tolerance) {
         && rect.width <= zone.width + t && rect.height <= zone.height + t
         && rect.width >= zone.width / 2 && rect.height >= zone.height / 2;
 }
+
+// ---- validating at use: the decisions read the windows as they are now, so a change no handler
+// saw (an app or a script moving a window, a switch in the settle between two offers) still
+// counts. The values are plain snapshots taken by main.qml.
+
+function sameRect(a, b) {
+    return !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+// Whether two windows share an activity; an empty list means all activities.
+function sharedActivity(a, b) {
+    if (!a || !b || a.length === 0 || b.length === 0) {
+        return true;
+    }
+    for (let i = 0; i < a.length; ++i) {
+        if (b.indexOf(a[i]) >= 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Whether a window still holds the zone it was placed in. zone: {tile, rect, place}; now: {tile,
+// frame, place, maximized, fullScreen, settled}. A plain-geometry zone is asked only once the
+// window has settled (a Wayland client answers its resize late; an interactive move is asked when
+// it ends).
+function holds(zone, now) {
+    if (!zone || now.maximized || now.fullScreen || now.place !== zone.place) {
+        return false;
+    }
+    if (zone.tile) {
+        return now.tile === zone.tile;
+    }
+    return !now.tile && (!now.settled || inZone(now.frame, zone.rect));
+}
+
+// Whether a fill sequence still stands: its first window holds its chosen zone, and the workspace
+// is the one it started on - the same desktop and activity, the same work area and layout family
+// (a rotation turns columns into rows). rec: {zone, desktop, activity, area, family}; now: the
+// first window's snapshot (holds) plus {desktop, activity, area, family}.
+function fillValid(rec, now) {
+    if (now.desktop !== rec.desktop || now.activity !== rec.activity || now.family !== rec.family || !sameRect(now.area, rec.area)) {
+        return false;
+    }
+    return holds(rec.zone, now);
+}

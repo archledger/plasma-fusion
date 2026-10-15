@@ -25,7 +25,12 @@
 #  15. a window the sequence placed that closes before the layout is full leaves its zone to be
 #      offered again (all four quarters end up filled);
 #  16. a minimised member of another group picked for a new layout is restored alone;
-#  17. a thirds member moved by a script (not by the user) leaves its group.
+#  17. a thirds member moved by a script (not by the user) leaves its group, also when the move
+#      comes within its placement's settle (asked at the group's next use);
+#  18. the first window moved by a script while the picker is open ends the sequence (no placement);
+#  20. a window of another activity sitting in a third does not hold it;
+#  21. a placed window moved out of its third by a script while a later picker is open leaves the
+#      third to be offered again.
 # Run: tools/vsession/remote.sh sg-1 packages/kwin/tests/vsession/scenario-snapgroups.sh SEED 1440x900 420
 exec 2>&1
 export OUT
@@ -130,6 +135,13 @@ elif kind == "emptythirds":       # LABEL: nothing (untiled, not minimised) in t
     there = [w["cls"] for w in wins if not w["tiled"] and not w["min"] and abs(w["y"] - area["y"]) <= 4
              and any(abs(w["x"] - s) <= 4 for s in starts) and w["w"] <= size + 4]
     out(not there, args[0], "in the second or third third %s" % there)
+elif kind == "thirdother":        # LABEL NAME: a window other than NAME sits in the middle third
+    g = 6
+    size = (area["w"] - 2 * g) / 3
+    x1 = round(area["x"] + size + g)
+    there = [w["cls"] for w in wins if not w["tiled"] and not w["min"] and abs(w["x"] - x1) <= 4
+             and abs(w["y"] - area["y"]) <= 4 and w["w"] <= size + 4 and args[1] not in w["cls"]]
+    out(len(there) >= 1, args[0], "in the middle third besides %s: %s" % (args[1], there))
 elif kind == "thirds":            # NAMES...: not tiled, each in a different third (top-left within 4 px)
     g = 6
     size = (area["w"] - 2 * g) / 3
@@ -674,6 +686,123 @@ if [ -n "$moved" ]; then
 else
   fail "a member moved by a script left its group: no partner in the middle third"
 fi
+
+# The class of the window in the middle third right now (or none).
+middle_window() { # STATE
+  python3 -c 'import json,sys
+d = json.load(open(sys.argv[1])); a = d["area"]; g = 6; size = (a["w"] - 2 * g) / 3
+x1 = round(a["x"] + size + g)
+hits = [w["cls"] for w in d["wins"] if not w["tiled"] and not w["min"] and abs(w["x"] - x1) <= 4 and abs(w["y"] - a["y"]) <= 4]
+print(hits[-1] if hits else "")' "$1"
+}
+move_away() { # EXACT_CLASS: a script moves the window out of its zone (as an app can move itself)
+  K run "var l = workspace.windowList();
+    for (var i = 0; i < l.length; ++i) { if (String(l[i].resourceClass) === '$1') { l[i].frameGeometry = {x: 380, y: 220, width: 620, height: 420}; } }
+    report(true);" >>"$OUT/act.log"
+}
+
+# ---- 17b. the same, but the script moves the partner right after its placement (within the
+# settle, no geometry change after it): the group's next use asks it, and it is left out
+reset_tiles
+sleep 2
+act kwrite
+sleep 0.3
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 4' 'sleep 0.5' 'key enter'
+sleep 1.5
+# KWrite (the first card) goes to the middle third and is moved away at once, inside the settle.
+pfinput 'key enter'
+move_away org.kde.kwrite
+sleep 0.4
+pfinput 'key esc'
+quick=org.kde.kwrite
+state "$OUT/s24.json"
+info "moved within the settle: $quick"
+if [ -n "$quick" ]; then
+  sleep 2.5
+  minimize konsole true
+  sleep 1.5
+  state "$OUT/s25.json"
+  judge minimized "$OUT/s25.json" "a member moved within its placement's settle is left out of the next group action" false "$quick"
+  minimize konsole false
+  sleep 1
+else
+  fail "a member moved within its placement's settle is left out of the next group action: no partner in the middle third"
+fi
+
+# ---- 18. Konsole (first third) is moved by a script while the picker is open, after the settle:
+# the sequence ends, the next Enters place nothing
+reset_tiles
+sleep 2
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 4' 'sleep 0.5' 'key enter'
+sleep 2
+move_away org.kde.konsole
+sleep 1
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+state "$OUT/s26.json"
+judge emptythirds "$OUT/s26.json" "the first window moved by a script while the picker is open ends the sequence"
+
+# ---- 20. Okular sits in the middle third on another activity: from this activity the third is
+# empty, so it is offered (Konsole's first pick lands there)
+reset_tiles
+sleep 2
+other=${activity:-}
+[ -n "$other" ] || other=$(qdbus org.kde.ActivityManager /ActivityManager/Activities org.kde.ActivityManager.Activities.AddActivity two 2>>"$OUT/errors.log" || true)
+# shellcheck disable=SC2046 # "X Y W H"
+geometry okular $(middle_third)
+sleep 1
+K run "var l = workspace.windowList();
+  for (var i = 0; i < l.length; ++i) { if (String(l[i].resourceClass).indexOf('okular') >= 0) { l[i].activities = ['$other']; } }
+  report(true);" >>"$OUT/act.log"
+sleep 1.5
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 4' 'sleep 0.5' 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key esc'
+sleep 1.5
+state "$OUT/s27.json"
+judge thirdother "$OUT/s27.json" "a window of another activity does not hold the third (it is offered)" okular
+K run "var l = workspace.windowList();
+  for (var i = 0; i < l.length; ++i) { if (String(l[i].resourceClass).indexOf('okular') >= 0) { l[i].activities = []; } }
+  report(true);" >>"$OUT/act.log"
+sleep 1
+
+# ---- 21. the window placed in the middle third is moved out by a script while the picker for the
+# last third is open (after its settle): after the next pick, the middle third is offered again
+reset_tiles
+sleep 2
+act kate
+sleep 0.3
+act kwrite
+sleep 0.3
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 4' 'sleep 0.5' 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 2.5
+state "$OUT/s28.json"
+first=$(middle_window "$OUT/s28.json")
+info "placed in the middle third first: ${first:-none}"
+[ -n "$first" ] && move_away "$first"
+sleep 1
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key esc'
+sleep 1.5
+state "$OUT/s29.json"
+judge thirdother "$OUT/s29.json" "a third whose window a script moved out is offered again" "${first:-none}"
 
 grep -a 'plasmafusion-snap' "$OUT/kwin.log" | grep -aE 'Error|error:' | tail -5 >>"$CHK" || true
 # The verdict: every check runs, and the scenario's status says whether any failed.
