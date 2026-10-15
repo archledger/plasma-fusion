@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PlasmaFusionPlacementConfig</class>
+ <widget class="QWidget" name="PlasmaFusionPlacementConfig">
+  <layout class="QFormLayout" name="formLayout">
+   <item row="0" column="1">
+    <widget class="QCheckBox" name="kcfg_RememberSize">
+     <property name="text">
+      <string>Give back the remembered size too, not only the position</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="ignoreAppsLabel">
+     <property name="text">
+      <string>Leave these apps alone (window classes or app ids, comma-separated):</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QLineEdit" name="kcfg_IgnoreApps"/>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

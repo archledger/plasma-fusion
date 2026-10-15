@@ -1,0 +1,175 @@
+// SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+// SPDX-License-Identifier: GPL-2.0-or-later
+.pragma library
+
+// Pure logic of the window placement memory: plain objects in, plain objects out, no KWin types,
+// so the node suite (packages/kwin/tests/placement.test.js) drives every rule. main.qml owns the
+// KWin objects and the memory file.
+
+// The identity a window is remembered under: the app's desktop file when it has one (its stable
+// name), else the window class. Lowercased, so `konsole` and `org.kde.konsole` compare.
+function appId(resourceClass, desktopFileName) {
+    let id = String(desktopFileName || "");
+    if (id !== "") {
+        const slash = id.lastIndexOf("/");
+        if (slash >= 0) {
+            id = id.slice(slash + 1);
+        }
+        id = id.replace(/\.desktop$/, "");
+    } else {
+        id = String(resourceClass || "");
+    }
+    return id.toLowerCase();
+}
+
+// A rectangle the memory may hold: four finite numbers at a sane size. Returns the rounded copy,
+// or null (a record with a broken value is dropped rather than trusted).
+function valid(rect) {
+    if (!rect || typeof rect !== "object") {
+        return null;
+    }
+    const x = Number(rect.x);
+    const y = Number(rect.y);
+    const width = Number(rect.width);
+    const height = Number(rect.height);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+        return null;
+    }
+    if (width < 50 || height < 50 || width > 20000 || height > 20000) {
+        return null;
+    }
+    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+}
+
+// The memory file's text -> app id -> rectangle. Anything unreadable is an empty memory.
+function parse(text) {
+    const apps = {};
+    if (typeof text !== "string" || text === "") {
+        return apps;
+    }
+    let data = null;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        return apps;
+    }
+    if (!data || typeof data !== "object" || !data.apps || typeof data.apps !== "object") {
+        return apps;
+    }
+    for (const id in data.apps) {
+        const rect = valid(data.apps[id]);
+        if (rect) {
+            apps[id] = rect;
+        }
+    }
+    return apps;
+}
+
+function serialize(apps) {
+    return JSON.stringify({ v: 1, apps: apps });
+}
+
+// Whether the window floats on the desktop (the states in which the memory is recorded): not
+// maximized, full screen or tiled. state: {fullScreen, tiled, minimized, maximizeMode, ...}.
+function floating(state) {
+    return !state.fullScreen && !state.tiled && !state.minimized && state.maximizeMode !== 3;
+}
+
+// The windows the memory touches at all: ordinary app windows that float; dialogs, transient and
+// modal windows keep their own placement (KWin places them against their parent).
+function eligible(state) {
+    return state.normal && !state.transient && !state.modal && floating(state);
+}
+
+// IgnoreApps: exact app id, or the entry as the last dot-separated part (`konsole` matches
+// `org.kde.konsole`); case-insensitive.
+function ignored(id, list) {
+    const entries = String(list || "").toLowerCase().split(",");
+    for (let i = 0; i < entries.length; ++i) {
+        const entry = entries[i].trim();
+        if (entry === "") {
+            continue;
+        }
+        if (id === entry || id.endsWith("." + entry)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// The remembered rectangle's centre must lie on a screen the session has now; a spot on a monitor
+// that is gone is left to KWin's placement.
+function onScreen(rect, screens) {
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    for (let i = 0; i < screens.length; ++i) {
+        const s = screens[i];
+        if (cx >= s.x && cx < s.x + s.width && cy >= s.y && cy < s.y + s.height) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Whether two windows are on a common desktop. The stack guard (and only the guard) is scoped to
+// the desktop, so a window of the app that lives on another desktop does not keep a new one from
+// the remembered spot. Plain views: {allDesktops, desktops} (desktop identities compared as is).
+function sameDesktop(a, b) {
+    if (a.allDesktops || b.allDesktops) {
+        return true;
+    }
+    for (let i = 0; i < a.desktops.length; ++i) {
+        if (b.desktops.indexOf(a.desktops[i]) >= 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// A window of the same app already sits (about) on the remembered spot on the same desktop:
+// KWin's own placement takes the new window instead, which offsets it, instead of stacking it
+// exactly.
+function collides(rect, others, tolerance) {
+    const t = tolerance === undefined ? 8 : tolerance;
+    for (let i = 0; i < others.length; ++i) {
+        if (Math.abs(others[i].x - rect.x) <= t && Math.abs(others[i].y - rect.y) <= t) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// The rectangle to give back: the remembered one, or its position with the size the window opened
+// with (RememberSize off).
+function restoreRect(saved, current, rememberSize) {
+    if (rememberSize) {
+        return { x: saved.x, y: saved.y, width: saved.width, height: saved.height };
+    }
+    return { x: saved.x, y: saved.y, width: current.width, height: current.height };
+}
+
+// The whole restore decision: the rectangle to apply, or null when the window keeps KWin's
+// placement. `others` are the open windows of the same app on the same desktop.
+function restoreFor(id, state, saved, screens, others, list, rememberSize, current) {
+    if (!eligible(state) || ignored(id, list) || !saved) {
+        return null;
+    }
+    if (!onScreen(saved, screens) || collides(saved, others)) {
+        return null;
+    }
+    return restoreRect(saved, current, rememberSize);
+}
+
+function same(a, b) {
+    return !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+// Remember rect for id; true when the memory changed (the caller then writes the file).
+function remember(apps, id, rect) {
+    const clean = valid(rect);
+    if (!clean || same(apps[id], clean)) {
+        return false;
+    }
+    apps[id] = clean;
+    return true;
+}

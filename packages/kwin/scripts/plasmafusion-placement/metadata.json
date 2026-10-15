@@ -1,0 +1,22 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "Apps open where and as you left them: each window's position and size are remembered and given back, skipping screens you no longer have",
+        "EnabledByDefault": false,
+        "Icon": "preferences-system-windows",
+        "Id": "plasmafusion-placement",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Window Placement Memory",
+        "Version": "1.0"
+    },
+    "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
+    "X-Plasma-API": "declarativescript",
+    "X-Plasma-MainScript": "ui/main.qml"
+}
