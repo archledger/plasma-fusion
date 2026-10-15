@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, valid, parse, serialize, floating, eligible, ignored, onScreen, collides, sameDesktop, restoreRect, restoreFor, remember } = globalThis;
+const { appId, valid, parse, serialize, floating, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreRect, restoreFor, remember } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -47,7 +47,9 @@ assert.deepStrictEqual(parse('{"v":1,"apps":{"a":{"x":1,"y":2,"width":640,"heigh
 
 // ---- floating and eligible
 assert.ok(floating(desktop()));
-assert.ok(!floating({ ...desktop(), maximizeMode: 3 }));
+assert.ok(!floating({ ...desktop(), maximizeMode: 3 }), "fully maximized");
+assert.ok(!floating({ ...desktop(), maximizeMode: 1 }), "vertically maximized");
+assert.ok(!floating({ ...desktop(), maximizeMode: 2 }), "horizontally maximized");
 assert.ok(!floating({ ...desktop(), tiled: true }));
 assert.ok(!floating({ ...desktop(), fullScreen: true }));
 assert.ok(!floating({ ...desktop(), minimized: true }));
@@ -86,6 +88,11 @@ assert.ok(!sameDesktop({ allDesktops: false, desktops: [1] }, { allDesktops: fal
 assert.ok(sameDesktop({ allDesktops: true, desktops: [] }, { allDesktops: false, desktops: [3] }), "an all-desktops window");
 assert.ok(!sameDesktop({ allDesktops: false, desktops: [] }, { allDesktops: false, desktops: [] }), "no desktop known");
 
+// ---- the guard's activity scope (KWin's list: empty means all activities)
+assert.ok(sameActivity({ activities: ["a", "b"] }, { activities: ["b"] }), "a shared activity");
+assert.ok(!sameActivity({ activities: ["a"] }, { activities: ["b", "c"] }), "other activities only");
+assert.ok(sameActivity({ activities: [] }, { activities: ["b"] }), "an all-activities window");
+
 // ---- the rectangle given back
 assert.deepStrictEqual(restoreRect(rect(5, 6, 640, 480), rect(0, 0, 800, 600), true), rect(5, 6, 640, 480));
 assert.deepStrictEqual(restoreRect(rect(5, 6, 640, 480), rect(0, 0, 800, 600), false), rect(5, 6, 800, 600), "the size the window opened with");
@@ -101,6 +108,13 @@ assert.strictEqual(restoreFor("konsole", desktop(), rect(4000, 100, 640, 480), s
 assert.strictEqual(restoreFor("konsole", desktop(), saved, screens, [rect(103, 97, 800, 500)], "", true, current), null, "an instance already holds the spot");
 assert.strictEqual(restoreFor("konsole", { ...desktop(), maximizeMode: 3 }, saved, screens, [], "", true, current), null, "opened maximized keeps KWin's placement");
 assert.strictEqual(restoreFor("konsole", { ...desktop(), transient: true }, saved, screens, [], "", true, current), null, "a dialog keeps its parent placement");
+assert.strictEqual(restoreFor("", desktop(), saved, screens, [], "", true, current), null, "no identity, no memory");
+// RememberSize off: the rectangle handed back is position + current size, and THAT rectangle must
+// still be usable: a wide saved window whose centre was on-screen can leave a narrow new one off
+// the edge.
+const wideSaved = rect(-1200, 100, 3000, 500);
+assert.deepStrictEqual(restoreFor("kate", desktop(), wideSaved, screens, [], "", true, current), wideSaved, "the saved centre is on-screen");
+assert.strictEqual(restoreFor("kate", desktop(), wideSaved, screens, [], "", false, rect(0, 0, 400, 500)), null, "the size-only rectangle would be off-screen");
 
 // ---- remembering
 const apps = {};
@@ -111,5 +125,7 @@ assert.strictEqual(remember(apps, "konsole", rect(100.2, 100.3, 640, 480)), fals
 assert.strictEqual(remember(apps, "konsole", rect(101, 100, 640, 480)), true);
 assert.strictEqual(remember(apps, "konsole", rect(0, 0, 1, 1)), false, "never an invalid record");
 assert.strictEqual(apps.konsole.x, 101, "the invalid write left the record alone");
+assert.strictEqual(remember(apps, "", rect(100, 100, 640, 480)), false, "no identity, no record");
+assert.deepStrictEqual(Object.keys(apps), ["konsole"], "nothing was stored for the anonymous window");
 
 console.log("placement.test.js: ok");

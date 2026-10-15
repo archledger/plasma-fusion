@@ -70,9 +70,10 @@ function serialize(apps) {
 }
 
 // Whether the window floats on the desktop (the states in which the memory is recorded): not
-// maximized, full screen or tiled. state: {fullScreen, tiled, minimized, maximizeMode, ...}.
+// maximized in any way (full, vertical-only or horizontal-only - mode 0 means restore), not full
+// screen and not tiled. state: {fullScreen, tiled, minimized, maximizeMode, ...}.
 function floating(state) {
-    return !state.fullScreen && !state.tiled && !state.minimized && state.maximizeMode !== 3;
+    return !state.fullScreen && !state.tiled && !state.minimized && state.maximizeMode === 0;
 }
 
 // The windows the memory touches at all: ordinary app windows that float; dialogs, transient and
@@ -126,6 +127,20 @@ function sameDesktop(a, b) {
     return false;
 }
 
+// The same for activities: views {activities}; KWin's list is empty when the window is on all
+// activities, so an empty list on either side means "shared".
+function sameActivity(a, b) {
+    if (a.activities.length === 0 || b.activities.length === 0) {
+        return true;
+    }
+    for (let i = 0; i < a.activities.length; ++i) {
+        if (b.activities.indexOf(a.activities[i]) >= 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // A window of the same app already sits (about) on the remembered spot on the same desktop:
 // KWin's own placement takes the new window instead, which offsets it, instead of stacking it
 // exactly.
@@ -149,23 +164,29 @@ function restoreRect(saved, current, rememberSize) {
 }
 
 // The whole restore decision: the rectangle to apply, or null when the window keeps KWin's
-// placement. `others` are the open windows of the same app on the same desktop.
+// placement. `others` are the open windows of the same app on the same desktop and activity; a
+// window without an identity (no desktop file, no class) is never restored or remembered.
 function restoreFor(id, state, saved, screens, others, list, rememberSize, current) {
-    if (!eligible(state) || ignored(id, list) || !saved) {
+    if (id === "" || !eligible(state) || ignored(id, list) || !saved) {
         return null;
     }
-    if (!onScreen(saved, screens) || collides(saved, others)) {
+    const rect = restoreRect(saved, current, rememberSize);
+    if (!onScreen(rect, screens) || collides(rect, others)) {
         return null;
     }
-    return restoreRect(saved, current, rememberSize);
+    return rect;
 }
 
 function same(a, b) {
     return !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
-// Remember rect for id; true when the memory changed (the caller then writes the file).
+// Remember rect for id; true when the memory changed (the caller then writes the file). A window
+// without an identity is not remembered.
 function remember(apps, id, rect) {
+    if (id === "") {
+        return false;
+    }
     const clean = valid(rect);
     if (!clean || same(apps[id], clean)) {
         return false;

@@ -245,14 +245,19 @@ effect dims the parent (Windows board's dimmed parent).
 Each ordinary window is remembered where and as big as it floated last and, when its app opens it
 again, set back to that rectangle: KWin's `windowAdded` fires after its own placement (Wayland and
 X11), so the assignment wins. The record is per app - its desktop file when it has one (the stable
-name across Wayland and X11), else the window class. A window is only touched while it floats (not
-maximized, full screen or tiled, not a dialog, transient or modal, not minimized); a window opened
-maximized keeps its last floating record. One second after an open the geometry the window settled
-at is recorded (the restored spot unless the app moved itself again), and every later floating
-change updates it; the quiet second keeps the restore itself and an app's late repositioning out of
-the record. A remembered spot is given back only while its centre still lies on a screen the session
-has; when a window of the same app already sits (within 8 px) on the spot on the same desktop,
-KWin's own placement takes the new window instead (it offsets it) and the held record stays.
+name across Wayland and X11), else the window class; a window with neither is left alone. A window
+is only touched while it floats (not maximized in any way, not full screen or tiled, not a dialog,
+transient or modal, not minimized); a window opened maximized keeps its last floating record. One
+second after an open the geometry the window settled at is recorded (the restored spot unless the
+app moved itself again), and every later floating change updates it; the quiet second keeps the
+restore itself and an app's late repositioning out of the record. Windows already open when the
+script is enabled or reloaded (the Fusion setup enables it in a running session; a reconfigure can
+reload it) are watched like new ones - their moves and closes are remembered - but never moved by
+the script itself. A remembered spot is given back only while the centre of the rectangle to apply
+still lies on a screen the session has (with `RememberSize` off that is the saved position with
+the size the window opens with); when a window of the same app already sits (within 8 px) on the
+spot on the same desktop and activity, KWin's own placement takes the new window instead (it
+offsets it) and the held record stays.
 
 The memory file is `~/.config/plasmafusion-placementrc`, one JSON text under `[Windows] windows`
 (`{"v":1,"apps":{"<app id>":{"x":…,"y":…,"width":…,"height":…}}}`). Both directions run through
@@ -307,10 +312,11 @@ and pointer drags inside the private session only).
   bar and following its window when it moves.
 - `scenario-evidence.sh`: the same on the Plasma Fusion desktop (Global Theme layout script and
   wallpaper), 5 windows, dark and light, plus pair minimise/restore.
-- `scenario-placement.sh`: a window moved to a distinctive spot and closed comes back there on its
-  next open (the memory file carries the entry); a spot moved off every screen is not restored (the
-  window lands on-screen by KWin's placement); a second window of the same app is not stacked
-  exactly on the held spot; `IgnoreApps` leaves that app's window alone.
+- `scenario-placement.sh`: a window opened before the script is enabled is adopted (its move is
+  remembered, the script never moves it); a window moved to a distinctive spot and closed comes
+  back there on its next open (the memory file carries the entry); a spot moved off every screen
+  is not restored (the window lands on-screen by KWin's placement); a second window of the same
+  app is not stacked exactly on the held spot; `IgnoreApps` leaves that app's window alone.
 - Journal (`journalctl --user`, the private sessions log there): no messages from these packages.
   Libplasma prints "Member visible of the object PlasmaQuick::Dialog overrides a member of the
   base object" once per process that uses PlasmaCore.Dialog (plasmashell, the stock thumbnail_grid

@@ -5,6 +5,8 @@
 #
 # Window placement memory (plasmafusion-placement) in a private session. The script is enabled like
 # the Fusion setup leaves it and loaded by a reconfigure; then:
+#   0. a window opened BEFORE the script is enabled is adopted: its later move is remembered and
+#      the script never moves it itself;
 #   1. a window is moved to a distinctive spot and closed - the memory file carries the entry;
 #   2. reopening it gives the spot and the size back (the seed's Centered placement would put it at
 #      the middle of the screen, so the two outcomes cannot be confused);
@@ -17,7 +19,6 @@ export OUT
 set -x
 CHK=$OUT/checks.txt
 KLOG=$OUT/kwin.log
-PLOG=$OUT/plasmashell.log
 pass() { echo "PASS $*" >>"$CHK"; }
 fail() { echo "FAIL $*" >>"$CHK"; }
 info() { echo "INFO $*" >>"$CHK"; }
@@ -110,6 +111,12 @@ wait_file_rect() { # X Y W H LABEL: a write is coalesced (~2 s), so poll before 
   fail "$5: the memory file did not carry the entry"
 }
 
+# ---- a window opened before the script is enabled (how a Fusion setup finds a running session):
+# it must be adopted - watched, never moved by the script - and its later moves remembered.
+konsole >/dev/null 2>&1 &
+sleep 4
+info "konsole opened before the script: $(geom konsole)"
+
 # ---- the script, enabled like the Fusion setup leaves it and loaded by the reconfigure
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
 info "fusion-config rc=$?"
@@ -122,6 +129,15 @@ sleep 3
 loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-placement)
 [ "$loaded" = "true" ] && pass "the placement script is loaded" || fail "the placement script is not loaded"
 grep -a 'plasmafusion-placement' "$KLOG" | tail -3 >>"$CHK" 2>/dev/null || true
+
+# ---- 0. the window that predated the script: adopted, and its move is remembered
+place konsole 233 171 500 400
+sleep 1
+check_geom konsole 233 171 500 400 "the pre-existing window sits where it was placed"
+wait_file_rect 233 171 500 400 "the pre-existing window was adopted (its move was remembered)"
+close_class konsole
+sleep 2
+shot 00-adopted
 
 # ---- 1. the write path: a placed window's rectangle lands in the memory file
 kwrite >/dev/null 2>&1 &

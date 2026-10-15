@@ -211,12 +211,15 @@ Item {
         return out;
     }
 
-    // The desktop view the pure guard takes (Placement.sameDesktop).
+    // The desktop and activity views the pure guard takes (Placement.sameDesktop/sameActivity).
     function desktopView(w) {
         return { allDesktops: w.onAllDesktops, desktops: w.desktops };
     }
+    function activityView(w) {
+        return { activities: w.activities };
+    }
 
-    // The open windows of the same app on the same desktop (the stack guard's input).
+    // The open windows of the same app on the same desktop and activity (the stack guard's input).
     function siblings(id, w) {
         const out = [];
         const windows = Workspace.stackingOrder;
@@ -225,7 +228,7 @@ Item {
             if (o === w || o.deleted || !o.normalWindow || appIdOf(o) !== id) {
                 continue;
             }
-            if (!Placement.sameDesktop(desktopView(w), desktopView(o))) {
+            if (!Placement.sameDesktop(desktopView(w), desktopView(o)) || !Placement.sameActivity(activityView(w), activityView(o))) {
                 continue;
             }
             out.push(frameRect(o));
@@ -252,7 +255,7 @@ Item {
         record(entry.w, appIdOf(entry.w));
     }
 
-    function windowOpened(w) {
+    function windowOpened(w, restoreAllowed) {
         const key = String(w.internalId);
         if (watched[key]) {
             return;
@@ -266,19 +269,24 @@ Item {
         w.frameGeometryChanged.connect(onGeometry);
         watched[key] = entry;
 
-        if (loaded && !Placement.ignored(id, ignoreList()) && Placement.eligible(stateOf(w))) {
+        if (restoreAllowed && loaded && id !== "" && !Placement.ignored(id, ignoreList()) && Placement.eligible(stateOf(w))) {
             const saved = apps[id];
+            const current = frameRect(w);
             const screens = screenRects();
             const others = siblings(id, w);
-            const rect = Placement.restoreFor(id, stateOf(w), saved, screens, others, ignoreList(), rememberSize(), frameRect(w));
+            const rect = Placement.restoreFor(id, stateOf(w), saved, screens, others, ignoreList(), rememberSize(), current);
             if (rect) {
                 entry.quietUntil = Date.now() + quietMillis;
                 w.frameGeometry = Qt.rect(rect.x, rect.y, rect.width, rect.height);
                 log("restored " + id + " to " + rect.x + "," + rect.y + " " + rect.width + "x" + rect.height);
-            } else if (saved && Placement.onScreen(saved, screens) && Placement.collides(saved, others)) {
-                // Another instance of the app holds the remembered spot: its record stays, and so
-                // does this window's placement (the user's own moves are remembered from here).
-                entry.settleSkip = true;
+            } else if (saved) {
+                // Another instance of the app holds the spot: its record stays, and this window's
+                // placement is not recorded as the new one. (When the spot itself is unusable -
+                // off a screen - the settle pass heals the record to where KWin placed it.)
+                const finalRect = Placement.restoreRect(saved, current, rememberSize());
+                if (Placement.onScreen(finalRect, screens) && Placement.collides(finalRect, others)) {
+                    entry.settleSkip = true;
+                }
             }
         }
         settling.push(w);
@@ -306,7 +314,7 @@ Item {
             if (!w || w.deleted || !w.normalWindow || w.transient || w.modal) {
                 return;
             }
-            root.windowOpened(w);
+            root.windowOpened(w, true);
         }
         function onWindowRemoved(w) {
             if (w) {
@@ -342,6 +350,24 @@ Item {
     Component.onCompleted: {
         log("started");
         read();
+        // Windows already open when the script (re)loads - a Fusion setup enables it in a running
+        // session, a reconfigure can reload it - are watched so their moves and closes are
+        // remembered; they are never moved by the script itself (KWin placed them already).
+        const windows = Workspace.stackingOrder;
+        let adopted = 0;
+        for (let i = 0; i < windows.length; ++i) {
+            const w = windows[i];
+            if (!w || w.deleted || !w.normalWindow || w.transient || w.modal) {
+                continue;
+            }
+            if (!watched[String(w.internalId)]) {
+                windowOpened(w, false);
+                adopted++;
+            }
+        }
+        if (adopted > 0) {
+            log("adopted " + adopted + " open window(s)");
+        }
     }
 
     // Disabled or KWin going away: the pending record goes out one last time, best effort (the
