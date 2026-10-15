@@ -81,7 +81,8 @@
 #   Blur               kwinrc [Effect-blur] BlurStrength 13, NoiseStrength 0, Saturation 140
 #   Title bar          kwinrc [org.kde.kdecoration2] BorderSizeAuto false (theme border size)
 #   KWin scripts       kwinrc [Plugins] plasmafusion-snapEnabled, plasmafusion-attachEnabled,
-#                      sheetEnabled; [Outline] QmlPath (snap-zone preview of plasmafusion-snap)
+#                      plasmafusion-placementEnabled (window placement memory), sheetEnabled;
+#                      [Outline] QmlPath (snap-zone preview of plasmafusion-snap)
 #   Lock screen        tools/device/lockscreen-enable.sh (org.plasmafusion.lockshell);
 #                      kscreenlockerrc [Greeter] wallpaper PlasmaFusion
 #   Tooltips           plasmarc [PlasmaToolTips] Delay 300
@@ -136,7 +137,7 @@ set -euo pipefail
 DARK=org.plasmafusion.dark.desktop
 LIGHT=org.plasmafusion.light.desktop
 SWITCHER=org.plasmafusion.switcher
-KWIN_SCRIPTS=(plasmafusion-snap plasmafusion-attach plasmafusion-tablet)
+KWIN_SCRIPTS=(plasmafusion-snap plasmafusion-attach plasmafusion-tablet plasmafusion-placement)
 DESKTOP_NAMES=(Work Design Media Chat)
 TILE_PADDING=6
 BLUR_STRENGTH=13
