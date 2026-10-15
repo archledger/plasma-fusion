@@ -106,7 +106,7 @@ KWIN_SWITCHER=thumbnail_grid
 DESKTOP=org.plasmafusion.desktop
 FOLDER=org.kde.plasma.folder
 APPLETSRC=plasma-org.kde.plasma.desktop-appletsrc
-PARTS=(lockscreen decoration navigation desktop snap attach outline switcher tablet inputmethod powerfx pengarage)
+PARTS=(lockscreen decoration navigation desktop snap attach placement outline switcher tablet inputmethod powerfx pengarage)
 # The on-screen keyboard values the Fusion keyboard policy writes (quick settings, fusion-config.sh):
 # empty (keyboard off in laptop posture) and plasma-keyboard's desktop file in a system data
 # directory (/usr/share/applications on Fedora). Any other input method is the user's.
@@ -162,6 +162,7 @@ org.kde.kdecoration2|ButtonsOnLeft
 org.kde.kdecoration2|ButtonsOnRight
 Plugins|plasmafusion-snapEnabled
 Plugins|plasmafusion-attachEnabled
+Plugins|plasmafusion-placementEnabled
 Plugins|plasmafusion-tabletEnabled
 Plugins|plasmafusion_navigationEnabled
 Wayland|InputMethod
@@ -332,7 +333,7 @@ ini_edit() { # FILE OPS... (each "group<TAB>key<TAB>state")
 RECS=()
 RECS_CHANGED=0
 valid_part() {
-  case $1 in lockscreen | decoration | navigation | desktop | snap | attach | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
+  case $1 in lockscreen | decoration | navigation | desktop | snap | attach | placement | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
   return 1
 }
 load_recs() {
@@ -457,6 +458,7 @@ part_on() {
     decoration) eff kwinrc org.kde.kdecoration2 library && [ "$REPLY" = "$CPP_DECO" ] ;;
     snap) eff kwinrc Plugins plasmafusion-snapEnabled && [ "$REPLY" = true ] ;;
     attach) eff kwinrc Plugins plasmafusion-attachEnabled && [ "$REPLY" = true ] ;;
+    placement) eff kwinrc Plugins plasmafusion-placementEnabled && [ "$REPLY" = true ] ;;
     outline) eff kwinrc Outline QmlPath && [[ $REPLY == *plasmafusion* ]] ;;
     switcher)
       { eff kwinrc TabBox LayoutName && [ "$REPLY" = "$SWITCHER" ]; } ||
@@ -559,6 +561,7 @@ off_powerfx() { off_link powerfx "$1"; }
 off_pengarage() { off_link pengarage "$1"; }
 off_snap() { set_rec snap "$1" kwinrc Plugins plasmafusion-snapEnabled -; DID+=("KWin script plasmafusion-snap off"); }
 off_attach() { set_rec attach "$1" kwinrc Plugins plasmafusion-attachEnabled -; DID+=("KWin script plasmafusion-attach off"); }
+off_placement() { set_rec placement "$1" kwinrc Plugins plasmafusion-placementEnabled -; DID+=("KWin script plasmafusion-placement off"); }
 off_outline() { set_rec outline "$1" kwinrc Outline QmlPath -; DID+=("snap-zone outline: KWin's own"); }
 off_switcher() {
   local g

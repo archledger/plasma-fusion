@@ -1,4 +1,4 @@
-# KWin packages: window switcher, snap layouts, attached dialogs, snap-zone outline
+# KWin packages: window switcher, snap layouts, attached dialogs, window placement memory, snap-zone outline
 
 Status: built, checked offline and in private virtual sessions on the ThinkPad (dark and light,
 1440x900); reviewed and fixed (see "Review" at the end). KWIN-2 (2026-09-30) changed the switcher's
@@ -14,6 +14,7 @@ they differ. Last edited 2026-09-30.
 | `plasmafusion-snap` | KWin/Script (declarative) | Meta+Z snap-layouts flyout (QuickSettings board), "Pick a window for this side" after snapping a half (TabsSnap board), 6 px gaps for snapped halves and quarters, pairs that minimise and restore together; "Plasma Fusion: Activate Dock Entry 1..9" (Meta+Alt+1..9 from setup), passed to the dock as its `activateRequest` key, since Plasma 6.8 gives plasmashell's task manager entries to the stock task manager only |
 | (in `plasmafusion-snap`) `contents/outline/outline.qml` | KWin outline QML | blue snap-zone preview of the TabsSnap board (drag to an edge, Shift+drag custom zones, Meta+Z zone preview) |
 | `plasmafusion-attach` | KWin/Script (JavaScript) | modal dialogs placed centred on their window, just under its title bar, and moving with it (Windows board, "Dialogs · Attached to the parent window") |
+| `plasmafusion-placement` | KWin/Script (declarative) | window placement memory: each app's window is remembered where and as big as it was left and given back on the next open (bug 15329, the most-duplicated open Plasma wish); a spot on a screen that is gone is left to KWin's placement |
 
 No compiled code. Everything uses the KWin 6.7.5 QML/JS script API (verified against the v6.7.5
 sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) and QtQuick.Effects.
@@ -39,7 +40,11 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `.../contents/outline/outline.qml` | snap-zone outline |
 | `packages/kwin/scripts/plasmafusion-attach/metadata.json` | KPackage metadata (KWin/Script, javascript, config KCM) |
 | `.../contents/code/main.js`, `contents/config/main.xml`, `contents/ui/config.ui` | script and settings |
-| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the three packages into the stage, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
+| `packages/kwin/scripts/plasmafusion-placement/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM) |
+| `.../contents/ui/main.qml` | the script: window watch, restore and record, the memory file through plasmashell |
+| `.../contents/ui/Placement.js` | the pure rules (identity, file format, on-screen and stack guard, record); node-tested |
+| `.../contents/config/main.xml`, `contents/ui/config.ui` | `RememberSize` and `IgnoreApps` (System Settings > Window Management > KWin Scripts) |
+| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the four packages into the stage, runs the placement rules' node suite when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
 | `packages/kwin/tests/` | test tooling only, not installed (see Verification) |
 
 ## Build and install
@@ -77,6 +82,7 @@ HighlightWindows=false
 [Plugins]
 plasmafusion-snapEnabled=true
 plasmafusion-attachEnabled=true
+plasmafusion-placementEnabled=true  # window placement memory
 sheetEnabled=true          # stock "sheet" effect: modal dialogs unfold from the parent's top edge
                            # (dialogparent, on by default, dims the parent: keep it)
 
@@ -90,7 +96,7 @@ other keys cannot come from a Global Theme and belong in `tools/device/fusion-co
 To undo: delete the keys (or set `plasmafusion-*Enabled=false`, `sheetEnabled=false`, remove
 `[Outline] QmlPath`) and reconfigure. Loaded scripts can be stopped at once with
 `qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-snap` (same for
-`plasmafusion-attach`); `isScriptLoaded <id>` checks them.
+`plasmafusion-attach` and `plasmafusion-placement`); `isScriptLoaded <id>` checks them.
 
 The Meta+Z shortcut is registered by the script under the KWin component with the action name
 `Plasma Fusion: Snap Layouts` (visible text the same). It can be invoked from anywhere, e.g. a
@@ -109,6 +115,8 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 | `[Script-plasmafusion-attach] DetachOnMove` | true | dragging a dialog yourself detaches it (false: it snaps back) |
 | `[Script-plasmafusion-attach] TitleBarGap` | 0 | px between the parent's title bar and the dialog |
 | `[Script-plasmafusion-attach] HideDialogTitleBar` | false | board "sheet" look without a dialog title bar (also drops its shadow, see deviations) |
+| `[Script-plasmafusion-placement] RememberSize` | true | give the remembered size back too (false: only the position, with the size the window opens with) |
+| `[Script-plasmafusion-placement] IgnoreApps` | (empty) | app ids or window classes the memory leaves alone (comma-separated; `konsole` matches `org.kde.konsole`; a window matches by its app id or its class) |
 
 ## Behaviour
 
@@ -232,12 +240,59 @@ it. Client-side-decorated parents (GTK/libadwaita) keep KWin's placement. With `
 stock sheet effect animates the dialog out of the parent's top edge and the stock dialogparent
 effect dims the parent (Windows board's dimmed parent).
 
+### Window placement memory
+
+Each ordinary window is remembered where and as big as it floated last and, when its app opens it
+again, set back to that rectangle: KWin's `windowAdded` fires after its own placement (Wayland and
+X11), so the assignment wins. The record is per app - its desktop file when it has one (the stable
+name across Wayland and X11), else the window class; a window with neither is left alone. A window
+is only touched while it floats (not maximized in any way, not full screen or tiled, not a dialog,
+transient or modal, not minimized); a window opened maximized keeps its last floating record. A
+window KWin holds in place - a window rule that forces its position (KWin's `moveable` is false
+then), or moving switched off - is left to KWin entirely: assigning `frameGeometry` goes straight to
+`Window::moveResize` and would bypass the rule. A forced or fixed size keeps the window's own size
+on a restore. One second after an open the geometry the window settled at is recorded (the restored
+spot unless the app moved itself again), every later floating change updates it, and so does the
+close: KWin marks a closing window deleted before `windowRemoved`, and the script reads its frame
+geometry and state as they were (a deleted window's tile request is a no-op, so the tile stays). The
+quiet second keeps the restore itself and an app's late repositioning out of the record. Windows
+already open when the script is enabled or reloaded (the Fusion setup enables it in a running
+session; a reconfigure can reload it) are watched - their moves and closes are remembered - but
+neither moved nor recorded on loading: recording every open window then would replace the records
+the user left. A remembered spot is given back only while the centre of the rectangle to apply
+still lies on a screen the session has (with `RememberSize` off that is the saved position with
+the size the window opens with); when a window of the same app already sits (within 8 px) on the
+spot on the same desktop and activity, KWin's own placement takes the new window instead (it
+offsets it) and the held record stays - the new window's own geometry changes in its first second
+are not recorded either, while the user's later moves are.
+
+The memory file is `~/.config/plasmafusion-placementrc`, one JSON text under `[Windows] windows`
+(`{"v":1,"apps":{"<app id>":{"x":…,"y":…,"width":…,"height":…}}}`). Both directions run through
+plasmashell's desktop scripting (`ConfigFile`, the same bridge the tablet script's panel policy
+uses): the KWin scripting API has `readConfig` and no file write at all, and plasmashell's
+`evaluateScript` answers with what the script printed, which carries the file's text back. Writes
+are coalesced (two seconds after the last change, one retry when a change races the write); the file
+is read once at start with a few retries while plasmashell comes up - windows opened before that
+answer keep KWin's placement - and written once more when the script is disabled or KWin quits
+(also when a write is still in flight then: it carries an older snapshot). On that teardown the
+script disconnects the geometry handlers it put on the windows: KWin keeps one QML engine for its
+scripts and the windows outlive the script, so a handler left connected would call into a destroyed
+context, and each disable/enable cycle would add another. A profile snapshot carries the memory
+file (`tools/device/backup-profile.sh`, see device.md).
+No timer runs while the desktop is idle.
+
 ## Verification
 
 Offline (laptop):
 - `qmllint` on every QML file (only the expected "org.kde.kwin not found" import notes: KWin
   registers that module at runtime); `node --check` on main.js; XML parse of main.xml/config.ui;
   the build script checks ids and structures. Build is deterministic (plain copies).
+- `node packages/kwin/tests/placement.test.js` (the build runs it when node is installed): the
+  placement rules - identity (desktop file over class, lowered), the file's round trip and broken
+  records, the centre test (a between-screens gap, a screen left of the origin), the 8 px stack
+  guard, size-only mode, the ignore list (app id and window class), windows held by a rule (forced
+  position, forced or fixed size), the teardown write (a change made while a write was in flight)
+  and the record's rounding.
 - Offscreen renders with a stand-in `org.kde.kwin` module (`packages/kwin/tests/offscreen/`,
   PySide6 + private Xvfb display, private HOME): `run.sh STAGE_HOME switcher-harness.qml OUT.png
   [dark=false count=N otherDesktop=N current=N]`, `snap-harness.qml mode=flyout|picker`. Measured
@@ -271,6 +326,19 @@ and pointer drags inside the private session only).
   bar and following its window when it moves.
 - `scenario-evidence.sh`: the same on the Plasma Fusion desktop (Global Theme layout script and
   wallpaper), 5 windows, dark and light, plus pair minimise/restore.
+- `scenario-placement.sh` (strict mode; a step that fails is written to the checks; every check
+  runs and the scenario's status - "scenario rc" in the session log - is non-zero when any check
+  failed, after a verdict line): windows
+  opened before the script is enabled are adopted - not moved, nothing recorded on loading (an
+  earlier record stays), a move remembered, a close without a move recorded where the window was
+  left; a window moved to a distinctive spot and closed comes
+  back there on its next open (the memory file carries the entry); a spot moved off every screen
+  is not restored (the window lands on-screen by KWin's placement); a second window of the same
+  app is not stacked exactly on the held spot, and when it moves itself while it opens the held
+  record stays; `IgnoreApps` leaves that app's window alone; a
+  window rule that forces the position wins (the window opens at the rule's spot, the record
+  stays); a disable/enable cycle with a window open leaves no errors from the unloaded instance and
+  the new instance remembers the next move.
 - Journal (`journalctl --user`, the private sessions log there): no messages from these packages.
   Libplasma prints "Member visible of the object PlasmaQuick::Dialog overrides a member of the
   base object" once per process that uses PlasmaCore.Dialog (plasmashell, the stock thumbnail_grid

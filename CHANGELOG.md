@@ -7,6 +7,16 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## Unreleased
+
+- New KWin script **window placement memory** (`plasmafusion-placement`, on with the Fusion
+  setup): each app's window is remembered where and as big as you left it, and opens there
+  again - the desktop's most-duplicated open wish (bug 15329). A spot on a screen that is gone
+  is left to KWin's placement, a second window of an app is not stacked exactly on the spot the
+  first one holds, a KWin window rule that forces a window's position still wins, and System
+  Settings > Window Management > KWin Scripts offers "Remember size" and a list of apps to leave
+  alone (app ids or window classes). The memory lives in `~/.config/plasmafusion-placementrc`.
+
 ## 0.5.0 (2026-10-12)
 
 Tested with Plasma 6.7 (6.7.5) and the Plasma 6.8 beta (6.7.91 on Fedora 44 and Arch).

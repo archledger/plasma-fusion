@@ -272,7 +272,7 @@ for p in plasma/look-and-feel/org.plasmafusion.dark.desktop plasma/look-and-feel
          plasma/shells/org.plasmafusion.lockshell \
          plasma/layout-templates/org.plasmafusion.panel.topbar plasma/layout-templates/org.plasmafusion.panel.dock \
          kwin/tabbox/org.plasmafusion.switcher kwin/scripts/plasmafusion-snap kwin/scripts/plasmafusion-attach \
-         kwin/scripts/plasmafusion-tablet; do
+         kwin/scripts/plasmafusion-tablet kwin/scripts/plasmafusion-placement; do
   test -s "%{buildroot}%{_datadir}/$p/metadata.json"
 done
 for t in PlasmaFusion PlasmaFusion-Dark PlasmaFusion-cursors PlasmaFusion-Light-cursors; do
@@ -363,6 +363,7 @@ done
 %{_datadir}/kwin/scripts/plasmafusion-attach/
 %{_datadir}/kwin/scripts/plasmafusion-snap/
 %{_datadir}/kwin/scripts/plasmafusion-tablet/
+%{_datadir}/kwin/scripts/plasmafusion-placement/
 # Konsole colour schemes and profile, Kate/KWrite colour themes
 %dir %{_datadir}/konsole
 %{_datadir}/konsole/PlasmaFusionDark.colorscheme

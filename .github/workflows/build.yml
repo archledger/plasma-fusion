@@ -68,6 +68,9 @@ jobs:
       - name: Restore releases the keys of widgets it does not bring back (fake kglobalaccel)
         run: tools/device/tests/restore-keys-unit.sh build/restore-keys
 
+      - name: Profile snapshots carry the window placement memory and its script
+        run: tools/device/tests/profile-unit.sh build/profile
+
       - name: Device tools' --help prints the usage only
         run: tools/device/tests/help-unit.sh
 

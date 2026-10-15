@@ -34,6 +34,7 @@ ADDED=(
   .local/share/aurorae/themes/PlasmaFusionDark-Left .local/share/aurorae/themes/PlasmaFusionLight-Left
   .local/share/kwin/tabbox/org.plasmafusion.switcher .local/share/kwin/scripts/plasmafusion-snap
   .local/share/kwin/scripts/plasmafusion-attach .local/share/kwin/scripts/plasmafusion-tablet
+  .local/share/kwin/scripts/plasmafusion-placement .config/plasmafusion-placementrc
   .local/share/fonts/plasma-fusion .local/share/plasma-fusion
   .local/share/kglobalaccel/org.plasmafusion.notifications.desktop
   .local/share/kglobalaccel/org.plasmafusion.copytext.desktop
@@ -61,6 +62,15 @@ if [ "$DRY" != --dry-run ]; then
     SHELL_UNIT=
   fi
   sleep 2
+fi
+# The window placement memory lives in its running KWin script as well as in its file: unloaded now
+# (the shell is stopped, so the script's last write goes nowhere), it cannot write its newer map
+# over the restored file later; the reconfigure at the end loads it again when the restored kwinrc
+# enables it, and it reads the restored file.
+if [ "$DRY" = --dry-run ]; then
+  echo "would: unload the KWin script plasmafusion-placement"
+else
+  qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-placement >/dev/null 2>&1 || true
 fi
 # The power service gives its values back when it stops (and is not started again once its
 # files are gone).

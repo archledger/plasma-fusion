@@ -349,7 +349,14 @@ It started `kscreen-doctor -j` and `plasmashell --version` unconditionally; over
   `QT_QPA_PLATFORM=offscreen`);
 - more paths: `plasmafusionrc`, `krunnerrc`, the Plasma Fusion user units and their wants links,
   `libwacom`, `~/.local/share/kglobalaccel`, `~/.local/libexec/plasma-fusion`;
-- its work directory is below the destination, not in `/tmp`.
+- its work directory is below the destination, not in `/tmp`;
+- the window placement memory (`plasmafusion-placementrc`). `restore-profile.sh` removes it and
+  the `plasmafusion-placement` script package when the snapshot had neither, and unloads the
+  running placement script before it restores anything (the shell is stopped then, so the script's
+  last write goes nowhere): a script left running would write its newer map over the restored file.
+  The closing reconfigure loads it again when the restored `kwinrc` enables it.
+  `tests/profile-unit.sh` checks both sides in throw-away HOMEs (`env -i`, the restore with
+  `--dry-run`; in CI).
 
 ## Commands for DEPLOY-1
 
