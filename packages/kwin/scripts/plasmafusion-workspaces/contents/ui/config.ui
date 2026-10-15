@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PlasmaFusionWorkspacesConfig</class>
+ <widget class="QWidget" name="PlasmaFusionWorkspacesConfig">
+  <layout class="QFormLayout" name="formLayout">
+   <item row="0" column="0">
+    <widget class="QLabel" name="keepFirstLabel">
+     <property name="text">
+      <string>Always keep the first workspaces, even when empty:</string>
+     </property>
+     <property name="buddy">
+      <cstring>kcfg_KeepFirst</cstring>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QSpinBox" name="kcfg_KeepFirst">
+     <property name="specialValueText">
+      <string>None</string>
+     </property>
+     <property name="minimum">
+      <number>0</number>
+     </property>
+     <property name="maximum">
+      <number>24</number>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

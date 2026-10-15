@@ -1,0 +1,22 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "archledger236@gmail.com",
+                "Name": "Wisbendji Fimerlus"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "Workspaces come and go as you need them: there is always one empty workspace at the end, and an empty workspace goes once you leave it",
+        "EnabledByDefault": false,
+        "Icon": "preferences-system-windows",
+        "Id": "plasmafusion-workspaces",
+        "License": "GPL-2.0-or-later",
+        "Name": "Plasma Fusion Dynamic Workspaces",
+        "Version": "1.0"
+    },
+    "X-KDE-ConfigModule": "kwin/effects/configs/kcm_kwin4_genericscripted",
+    "X-Plasma-API": "declarativescript",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

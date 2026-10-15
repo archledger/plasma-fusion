@@ -9,6 +9,15 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- New KWin script **dynamic workspaces** (`plasmafusion-workspaces`), off until you turn it on in
+  System Settings > Window Management > KWin Scripts: workspaces come and go as you need them, the
+  way GNOME does it. There is always one empty workspace at the end - move a window there, or open
+  one on it, and the next one appears - and an empty workspace goes once nothing shows it, without
+  cutting the switch animation short. Workspaces it adds are called "Workspace N" and keep their
+  numbers in order; names you or the Fusion setup gave are never changed, and "Always keep the
+  first workspaces" keeps as many as you like (for example the setup's Work, Design, Media and
+  Chat). The top bar's workspace dots follow along. While it is on, the Fusion setup creates no
+  workspaces of its own.
 - **Snap groups**: after you choose a zone in the snap layouts flyout (Meta+Z, or holding the
   maximize button), every other empty zone of that layout offers your other windows in turn - the
   quarters, the 2:1 split and the thirds now fill like the halves did. The windows you snap
