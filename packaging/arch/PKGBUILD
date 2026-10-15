@@ -54,6 +54,7 @@ package_plasma-fusion() {
               'xournalpp: notes and whiteboard tiles of the pen menu'
               'kate: the design'\''s Code app' 'marknote: the design'\''s Notes app' 'konsole: terminal theme'
               'libnotify: login check notification'
+              'tesseract: copy text from the screen in one step (with a tesseract-data-* language)'
               'plasma-nm: network tile' 'plasma-pa: volume tile' 'bluedevil: Bluetooth tile'
               'powerdevil: brightness, battery and power profile tiles' 'kdeconnect: phone tile')
   cd plasma-fusion

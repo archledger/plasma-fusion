@@ -80,6 +80,12 @@ jobs:
       - name: Copy-text shortcut set up and undone (fake kglobalaccel)
         run: tools/device/tests/copytext-unit.sh build/copytext
 
+      - name: Copy text from the screen in one step (stand-ins, a private bus, real Tesseract)
+        run: |
+          set -euo pipefail
+          dnf install -y -q tesseract tesseract-langpack-eng python3-pillow
+          PLASMA_FUSION_REQUIRE=bus,ocr packages/copytext/tests/helper-unit.sh build/copytext-helper
+
       - name: Setup command shortcuts (against a fake kglobalaccel)
         run: tools/device/tests/shortcut-keys-unit.sh build/shortcut-keys
 

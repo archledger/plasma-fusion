@@ -1,0 +1,137 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion's copy text from the screen in one step (survey F6; PowerToys Text Extractor,
+# macOS Live Text): Meta+Shift+T and quick settings' header button run it. Select an area and its
+# text is on the clipboard, with a notification: no Spectacle window, no Extract Text button, no
+# screenshot left behind.
+#
+# Spectacle (6.7, 6.8) recognises text only in its own window; it has no command line or D-Bus way
+# from a region to the text (KDE bug 516767). So Spectacle only captures: in background mode
+# (-b -n -r -o FILE) it lets the user select the area and saves it to FILE alone (its "save
+# automatically" and "copy to clipboard" settings do not apply in background mode), here in a
+# private directory removed on exit. Tesseract, the engine of Spectacle's Extract Text, reads the
+# image with Spectacle's rules (OcrManager.cpp): the languages chosen in Spectacle's settings
+# (spectaclerc [General] ocrLanguages: the installed ones, not osd, at most four; else the first
+# installed language), automatic page segmentation, each line trimmed, empty lines dropped. The text
+# goes to Klipper (so the clipboard history has it too), else to wl-copy.
+#
+# Spectacle runs once per session: a request goes to the Spectacle already open, which drops its
+# window for the new capture (as its own Rectangular Region key does) and, for a background
+# request, quits after saving (SpectacleCore::activate, 6.7.5). So with Spectacle open the helper
+# leaves the capture to it (spectacle --region): the area opens in Spectacle's window, where Extract
+# Text copies the text with one more click - as without the tesseract command (Fedora: tesseract;
+# Debian: tesseract-ocr; Arch: tesseract). Without any language data it says which package to
+# install. A second press while the area is being chosen does nothing.
+set -euo pipefail
+
+APP="Plasma Fusion"
+ICON=document-scan
+
+bus() { busctl --user "$@"; }
+
+# Text is UTF-8 (Tesseract's output, D-Bus strings): counted and cut in characters, also when the
+# session names no UTF-8 locale.
+case ${LC_ALL:-${LC_CTYPE:-${LANG:-}}} in
+  *[Uu][Tt][Ff]-8* | *[Uu][Tt][Ff]8*) ;;
+  *) export LC_ALL=C.UTF-8 ;;
+esac
+
+# $1 summary, $2 body, $3 transient (1: not kept in the notification history). Best effort.
+notify() {
+  local hints=(0)
+  if [ "${3:-0}" = 1 ]; then
+    hints=(1 transient b true)
+  fi
+  bus -- call org.freedesktop.Notifications /org/freedesktop/Notifications org.freedesktop.Notifications Notify \
+    'susssasa{sv}i' "$APP" 0 "$ICON" "$1" "$2" 0 "${hints[@]}" -1 >/dev/null 2>&1 || true
+}
+
+# The notification body is markup: &, < and > as entities.
+markup() {
+  local s=${1//&/"&amp;"}
+  s=${s//</"&lt;"}
+  printf '%s' "${s//>/"&gt;"}"
+}
+
+run=${XDG_RUNTIME_DIR:-}
+[ -n "$run" ] && [ -d "$run" ] && [ -w "$run" ] || run=${TMPDIR:-/tmp}
+# One at a time; the lock is not handed on to Spectacle (fd 9 closed for it).
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$run/plasma-fusion-copytext.lock"
+  flock -n 9 || exit 0
+fi
+
+# Spectacle open in this session: its unique name on the session bus (KDBusService::Unique).
+spectacle_open() {
+  local owned
+  owned=$(bus -- call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s org.kde.spectacle 2>/dev/null) || true
+  [ "$owned" = "b true" ]
+}
+if ! command -v tesseract >/dev/null 2>&1 || spectacle_open; then
+  exec spectacle --region 9>&-
+fi
+
+# The languages, as Spectacle chooses them.
+installed=()
+while IFS= read -r l; do
+  case $l in '' | *' '* | *: | osd) continue ;; esac
+  installed+=("$l")
+done < <(tesseract --list-langs 2>/dev/null || true)
+if [ ${#installed[@]} = 0 ]; then
+  notify "No text recognition languages" "Install Tesseract's data for a language, for English: \
+tesseract-langpack-eng (Fedora), tesseract-ocr-eng (Debian, Ubuntu), tesseract-data-eng (Arch)."
+  echo "plasma-fusion-copytext: tesseract has no language data" >&2
+  exit 1
+fi
+langs=()
+wanted=$(kreadconfig6 --file spectaclerc --group General --key ocrLanguages 2>/dev/null) || wanted=
+IFS=, read -r -a wanted_list <<<"$wanted" || true
+for w in "${wanted_list[@]}"; do
+  for l in "${installed[@]}"; do
+    if [ "$w" = "$l" ] && [ ${#langs[@]} -lt 4 ]; then
+      case " ${langs[*]} " in *" $w "*) ;; *) langs+=("$w") ;; esac
+    fi
+  done
+done
+[ ${#langs[@]} -gt 0 ] || langs=("${installed[0]}")
+printf -v lang '%s+' "${langs[@]}"
+lang=${lang%+}
+
+dir=$(mktemp -d "$run/plasma-fusion-copytext.XXXXXX")
+trap 'rm -rf -- "$dir"' EXIT
+img=$dir/region.png
+spectacle -b -n -r -o "$img" >/dev/null 2>&1 9>&- || true
+# Cancelled (Esc): nothing to say.
+[ -s "$img" ] || exit 0
+
+if ! raw=$(tesseract "$img" stdout -l "$lang" --psm 3 2>/dev/null); then
+  notify "Could not read the text" "Tesseract failed on the selected area." 1
+  echo "plasma-fusion-copytext: tesseract failed" >&2
+  exit 1
+fi
+text=$(printf '%s\n' "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d')
+if [ -z "$text" ]; then
+  notify "No text found" "No text was found in the selected area." 1
+  exit 0
+fi
+
+if ! bus -- call org.kde.klipper /klipper org.kde.klipper.klipper setClipboardContents s "$text" >/dev/null 2>&1; then
+  if ! command -v wl-copy >/dev/null 2>&1 || ! printf '%s' "$text" | wl-copy >/dev/null 2>&1; then
+    notify "Could not copy the text" "Neither the clipboard service (Klipper) nor wl-copy took it." 1
+    echo "plasma-fusion-copytext: no clipboard" >&2
+    exit 1
+  fi
+fi
+
+first=${text%%$'\n'*}
+[ ${#first} -le 80 ] || first="${first:0:79}…"
+lines=$(printf '%s\n' "$text" | wc -l)
+body=$(markup "$first")
+if [ "$lines" = 2 ]; then
+  body+=" (and 1 more line)"
+elif [ "$lines" -gt 2 ]; then
+  body+=" (and $((lines - 1)) more lines)"
+fi
+notify "Text copied" "$body" 1

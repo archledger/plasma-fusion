@@ -9,6 +9,13 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Copy text from the screen** (Meta+Shift+T, and the button next to the screenshot button in Quick
+  Settings) now takes one step: select an area and its text is on the clipboard, with a
+  notification - no Spectacle window, no Extract Text click, no screenshot left behind. The text is
+  read with Tesseract in the languages chosen in Spectacle's settings. It needs the `tesseract`
+  command (Fedora `tesseract`, Debian and Ubuntu `tesseract-ocr`, Arch `tesseract`; the packages
+  recommend it); without it, or while Spectacle is open, the key opens Spectacle's area selection
+  as before. `plasma-fusion update` switches the key over.
 - **Notifications**: in the quick-settings sheet and the tablet Notification Centre, a new
   notification whose text wraps no longer has the row under it drawn over its bottom (a group's
   header over a card, or one card of a group over another), also after the sheet is opened again.

@@ -1261,6 +1261,13 @@ Item {
     }
 
     // ------------------------------------------------------------------ session / header buttons
+    // Copy text from the screen: the helper from the places the setup looks in, in its order
+    // (tools/device/fusion-config.sh, HELPER_DIRS), else Spectacle's region capture, where Extract
+    // Text copies the selection's text (the tools run from a source tree, an older package).
+    readonly property string copyTextCommand: "sh -c 'for d in \"$HOME/.local/libexec/plasma-fusion\" /usr/local/libexec/plasma-fusion "
+        + "/usr/libexec/plasma-fusion /usr/lib/plasma-fusion /run/current-system/sw/libexec/plasma-fusion; do "
+        + "if [ -x \"$d/plasma-fusion-copytext\" ]; then exec \"$d/plasma-fusion-copytext\"; fi; done; "
+        + "exec spectacle --region' >/dev/null 2>&1 &"
     readonly property var session: QtObject {
         readonly property var s: sessionLoader.item
         readonly property bool canLock: s ? s.canLock : false
@@ -1268,10 +1275,9 @@ Item {
             backend.closeRequested();
             screenshotTimer.restart();
         }
-        // Copy text from the screen (survey F6): Spectacle's region capture, where Extract Text
-        // copies the selected text, as the Meta+Shift+T key the setup gives the same command
-        // (tools/device/fusion-config.sh, ensure_copytext_shortcut). Spectacle has no way to go
-        // straight from a region to the text.
+        // Copy text from the screen (survey F6): the area the user selects goes to the clipboard as
+        // text (plasma-fusion-copytext, packages/copytext), the command Meta+Shift+T runs as well
+        // (tools/device/fusion-config.sh, ensure_copytext_shortcut).
         function copyText() {
             backend.closeRequested();
             copyTextTimer.restart();
@@ -1340,7 +1346,7 @@ Item {
         id: copyTextTimer
         // As for the screenshot: the pop-up closes first.
         interval: 250
-        onTriggered: backend.run("sh -c 'spectacle --region >/dev/null 2>&1 &'")
+        onTriggered: backend.run(backend.copyTextCommand)
     }
     Timer {
         id: screenshotTimer

@@ -59,7 +59,7 @@ Depends: ${misc:Depends},
          systemd,
          librsvg2-bin | python3-pyside6.qtsvg
 Recommends: plasma-fusion-decoration, plasma-fusion-settings, libnotify-bin, powerdevil, plasma-nm,
-            plasma-pa, bluedevil
+            plasma-pa, bluedevil, tesseract-ocr
 Suggests: plasma-fusion-navigation, xournalpp, kate, konsole, python3-pyside6.qtsvg
 Description: Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
  Plasma Fusion is a desktop for KDE Plasma 6 in a dark and a light variant:
