@@ -195,42 +195,51 @@ quits after saving (`SpectacleCore::activate`, 6.7.5). So while Spectacle is ope
 Spectacle's window, where **Extract Text** on the selection's toolbar copies the text; the window
 stays afterwards unless its "Close after extraction" setting (`spectaclerc [General] closeAfterOcr`)
 is on. A second press while the area is being chosen does nothing (a lock in the runtime directory,
-not handed on to Spectacle). The packages recommend Tesseract (Fedora `tesseract`, Debian
-`tesseract-ocr`, Arch's optional `tesseract` with a `tesseract-data-*` language); on NixOS add
-`pkgs.tesseract` to the system packages. The setup's component runs the helper by its path (in
-double quotes when the path holds a space; a path with `"`, `` ` ``, `$` or `\` is not used) and
-`spectacle --region` when no helper is installed (the tools run from a source tree); `plasma-fusion
-update` after an upgrade writes the component again. Quick settings' button runs the helper from the
-same places in the same order (`Backend.copyTextCommand`), else `spectacle --region`. Meta+Shift+T
-was free in KWin, Plasma and Spectacle 6.7.5 and in the Windows-style set (`globalShortcutsByKey`
-empty in the parity VM). kglobalaccel makes a component it loads at login active but leaves one
-registered while it runs inactive (`isActive` false, no key grab) until the next login, so the setup
-gives the key again as present (`setShortcut` with SetPresent | NoAutoloading, as a running
-application does): the key works at once. `fusion-restore.sh` gives the key back (none), unregisters
-the component and removes its desktop file (an `absent-file` entry of the backup). Tests:
-`tools/device/tests/copytext-unit.sh` (CI, 19 checks) runs the setup step and the restore's sections
-against a fake kglobalaccel: a free key set and given as present, the old key recorded, a second run
-unchanged, a key in use left with its action, the user's own key kept, nothing without Spectacle,
-and the restore; the component's command (the helper, quoted for a path with a space, not used for
-one with a `$`, `spectacle --region` without it, a 0.5.0 file written again); quick settings'
-command run as Plasma's executable source runs it (the helper, else `spectacle --region`; its places
-and their order against `HELPER_DIRS`). `packages/copytext/tests/helper-unit.sh` (CI, 27 checks)
-runs the helper itself with a PATH of stand-ins (Spectacle, Tesseract, kreadconfig6, busctl,
-wl-copy): the capture's arguments and its directory, the text Klipper gets, the notifications,
-nothing left behind, Esc, Spectacle open, a second press, the language choice, no language data, no
-`tesseract` command, no text, Tesseract failing, text that starts with a dash or holds markup, a
-long line cut in characters, wl-copy, no clipboard; then on a private bus with the real `busctl`
-(`fake_session.py` owns Klipper's and the notification server's names; text that starts like an
-option), and real Tesseract on a line drawn in Manrope at 14 px.
-`packages/copytext/tests/vsession/scenario-copytext.sh` (a private session, 22 checks; KWin and
+not handed on to Spectacle or wl-copy, which stay). The packages recommend Tesseract (Fedora
+`tesseract`, Debian `tesseract-ocr`, Arch's optional `tesseract` with a `tesseract-data-*`
+language); on NixOS add `pkgs.tesseract` to the system packages. The setup's component runs the
+helper by its path (in double quotes when the path holds a space; a path with `"`, `` ` ``, `$`, `\`
+or `%` is not used) and `spectacle --region` when no helper is installed (the tools run from a
+source tree). kglobalaccel launches a component with the command it read when it loaded it
+(`KServiceActionComponent` keeps its `KService`, kglobalacceld 6.7), so when the setup changes the
+command of a loaded component (`plasma-fusion update` in a running session after 0.5.0), it
+unregisters `_launch` - kglobalacceld drops a component left without actions when it writes its
+settings, 500 ms later - and registers it again, which makes the component from the new file; the
+keys it had are given back as they were (not recorded as a change). Quick settings' button runs the
+helper from the same places in the same order (`Backend.copyTextCommand`), else `spectacle
+--region`. Meta+Shift+T was free in KWin, Plasma and Spectacle 6.7.5 and in the Windows-style set
+(`globalShortcutsByKey` empty in the parity VM). kglobalaccel makes a component it loads at login
+active but leaves one registered while it runs inactive (`isActive` false, no key grab) until the
+next login, so the setup gives the key again as present (`setShortcut` with SetPresent |
+NoAutoloading, as a running application does): the key works at once. `fusion-restore.sh` gives the
+key back (none), unregisters the component and removes its desktop file (an `absent-file` entry of
+the backup). Tests: `tools/device/tests/copytext-unit.sh` (CI, 24 checks) runs the setup step and
+the restore's sections against a fake kglobalaccel: a free key set and given as present, the old key
+recorded, a second run unchanged, a key in use left with its action, the user's own key kept,
+nothing without Spectacle, and the restore; the component's command (the helper, quoted for a path
+with a space, not used for one with a `$` or a `%`, `spectacle --region` without it, a 0.5.0 file
+written again); a loaded 0.5.0 component made again with the user's key kept and no change recorded,
+and no reload on a second run; quick settings' command run as Plasma's executable source runs it
+(the helper, else `spectacle --region`; its places and their order against `HELPER_DIRS`).
+`packages/copytext/tests/helper-unit.sh` (CI, 28 checks) runs the helper itself with a PATH of
+stand-ins (Spectacle, Tesseract, kreadconfig6, busctl, wl-copy): the capture's arguments and its
+directory, the text Klipper gets, the notifications, nothing left behind, Esc, Spectacle open, a
+second press, the language choice, no language data, no `tesseract` command, no text, Tesseract
+failing, text that starts with a dash or holds markup, a long line cut in characters, wl-copy
+(without the helper's lock: it stays to serve the clipboard), no clipboard; then on a private bus
+with the real `busctl` (`fake_session.py` owns Klipper's and the notification server's names; text
+that starts like an option), and real Tesseract on a line drawn in Manrope at 14 px.
+`packages/copytext/tests/vsession/scenario-copytext.sh` (a private session, 25 checks; KWin and
 Spectacle 6.7.5, Tesseract 5.5.3) drives the real Spectacle, Tesseract and Klipper with KWin's
-emulated keys and pointer: Meta+Shift+T and a drag around a line put exactly that line on Klipper's
-clipboard with a "Text copied" notification, no image left and no Spectacle left running; Esc copies
-and says nothing; with Spectacle's window open the area goes to that Spectacle, which keeps running
-with it, and the helper copies nothing; a second line follows (both in Klipper's history); quick
-settings' button does the same as the key. VM (0.5.0, real keys from a uinput keyboard): after the
-setup Meta+Shift+T started `spectacle --region` without a new login, the header button too; after
-the restore the key holds nothing and starts nothing.
+emulated keys and pointer: 0.5.0's component, loaded first, starts `spectacle --region` from
+Meta+Shift+T; the setup makes it again with the helper and keeps the key (without that, the key went
+on starting `spectacle --region` and nothing was copied); then Meta+Shift+T and a drag around a line
+put exactly that line on Klipper's clipboard with a "Text copied" notification, no image left and no
+Spectacle left running; Esc copies and says nothing; with Spectacle's window open the area goes to
+that Spectacle, which keeps running with it, and the helper copies nothing; a second line follows
+(both in Klipper's history); quick settings' button does the same as the key. VM (0.5.0, real keys
+from a uinput keyboard): after the setup Meta+Shift+T started `spectacle --region` without a new
+login, the header button too; after the restore the key holds nothing and starts nothing.
 
 Widget keys (quick settings, pen) are also set on later runs when the widget has none (a layout
 rebuild drops them; a dead entry of a dropped widget is cleared first), but then only when the key is

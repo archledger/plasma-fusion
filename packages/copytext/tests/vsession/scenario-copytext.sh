@@ -4,9 +4,12 @@
 # shellcheck shell=bash
 #
 # Copy text from the screen in one step (plasma-fusion-copytext) in a private session: the real
-# Spectacle, Tesseract, Klipper and notification server, keys and a pointer drag through KWin. The
-# Fusion setup runs first (Meta+Shift+T's component now runs the helper); a maximized window shows
-# two known lines (where KWin placed its content: the drags follow); then:
+# Spectacle, Tesseract, Klipper and notification server, keys and a pointer drag through KWin. First
+# the session holds 0.5.0's Meta+Shift+T component (spectacle --region), as after an update in a
+# running session: its key starts Spectacle's region capture. The Fusion setup then makes the
+# component again with the helper (kglobalaccel keeps a loaded component's command otherwise),
+# keeping the key. A maximized window shows two known lines (where KWin placed its content: the
+# drags follow); then:
 #   1. Meta+Shift+T, an area dragged around the first line, Return: Klipper's clipboard holds the
 #      line, "Text copied" is notified, no image is left (runtime directory, Pictures), no Spectacle
 #      keeps running;
@@ -74,15 +77,46 @@ select_line() { # 1|2: Meta+Shift+T, a drag around the line (the content's 160,2
   pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20" 'sleep 0.6' 'key return'
 }
 
+# ---- 0.5.0's component, loaded and given Meta+Shift+T as 0.5.0's setup did
+COMP=$HOME/.local/share/kglobalaccel/org.plasmafusion.copytext.desktop
+mkdir -p "$(dirname "$COMP")"
+cat >"$COMP" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Plasma Fusion: Copy Text from Screen
+Comment=Select an area with Spectacle and choose Extract Text to copy its text (installed by Plasma Fusion's fusion-config.sh, removed by fusion-restore.sh)
+Icon=document-scan
+Exec=spectacle --region
+StartupNotify=false
+EOF
+chmod 0755 "$COMP"
+KEY=$((0x10000000 + 0x02000000 + 0x54))
+NAME="Plasma Fusion: Copy Text from Screen"
+busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 org.plasmafusion.copytext.desktop _launch "$NAME" "$NAME"
+busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcut asai 4 org.plasmafusion.copytext.desktop _launch "" "" 1 "$KEY"
+busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setShortcut asaiu 4 org.plasmafusion.copytext.desktop _launch "$NAME" "$NAME" 1 "$KEY" 6 >/dev/null
+sleep 1
+pfinput 'key meta+shift+t'
+sleep 5
+[ -n "$(procs 'spectacle --region')" ] && pass "0: before the setup, 0.5.0's Meta+Shift+T starts spectacle --region" ||
+  fail "0: 0.5.0's key did not start spectacle --region ($(procs spectacle | tr '\n' ' '))"
+pfinput 'key escape'
+sleep 2
+for p in $(procs spectacle); do kill "$p" 2>/dev/null || true; done
+sleep 1
+
 # ---- the Fusion setup
 fc_rc=0
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc_rc=$?
 info "fusion-config rc=$fc_rc"
 grep -a 'copy text\|copytext' "$OUT/fc.log" >>"$CHK" || true
-COMP=$HOME/.local/share/kglobalaccel/org.plasmafusion.copytext.desktop
 HELPER=$HOME/.local/libexec/plasma-fusion/plasma-fusion-copytext
 grep -qx "Exec=$HELPER" "$COMP" && pass "Meta+Shift+T's component runs the helper ($HELPER)" ||
   fail "the component's command: $(grep '^Exec=' "$COMP" 2>&1)"
+grep -qa 'reload org.plasmafusion.copytext.desktop' "$OUT/fc.log" && pass "the setup made the loaded 0.5.0 component again" ||
+  fail "the setup did not reload the component"
+keys=$(busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel shortcut as 4 org.plasmafusion.copytext.desktop _launch "" "")
+[ "$keys" = "ai 1 $KEY" ] && pass "Meta+Shift+T is kept through the reload" || fail "the key after the setup: $keys"
 sleep 3
 qdbus | grep -qx ' *org.kde.klipper' && pass "Klipper is on the session bus" || fail "no Klipper on the session bus"
 info "tesseract: $(tesseract --version 2>&1 | head -1); languages: $(tesseract --list-langs 2>/dev/null | tail -n +2 | tr '\n' ' ')"

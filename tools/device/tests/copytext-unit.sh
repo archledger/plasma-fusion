@@ -39,7 +39,7 @@ LIB=$BASE/lib.sh
   grep -m1 '^COPYTEXT_SHORTCUT=' "$TOOL" || true
   awk '/^HELPER_DIRS=\(/ { on = 1 } on { print } on && /\)$/ { exit }' "$TOOL"
   extract note keyname install_text shortcut_get shortcut_set key_holders helper_path copytext_exec copytext_desktop \
-    ensure_copytext_shortcut
+    component_loaded ensure_copytext_shortcut
 } >"$LIB"
 grep -q '^ensure_copytext_shortcut() {' "$LIB" || { echo "FAIL: ensure_copytext_shortcut was not found in fusion-config.sh"; exit 1; }
 # fusion-restore.sh: the shortcut records and the components (section 1), and the files of the
@@ -156,6 +156,32 @@ setup_case dollar '{}' 'home$x'
 add_helper
 run_step >/dev/null
 grep -qxF "Exec=$NO_HELPER" "$CHOME/$FILE" && ok "a helper path with a \$ is not used" || bad "a helper path with a \$: $(grep '^Exec=' "$CHOME/$FILE")"
+setup_case percent '{}' 'home%q'
+add_helper
+run_step >/dev/null
+grep -qxF "Exec=$NO_HELPER" "$CHOME/$FILE" && ok "a helper path with a % (a field code) is not used" || bad "a helper path with a %: $(grep '^Exec=' "$CHOME/$FILE")"
+
+# 1c. An update in a running session: kglobalaccel holds the 0.5.0 component (spectacle --region)
+#     with the user's own key. The component is made again from the new file (unregistered, then
+#     registered), and the key is the same afterwards; the backup records no change of key.
+ALT_T=$((0x10000000 + 0x08000000 + 0x54))
+setup_case reload "{\"keys\": {\"org.plasmafusion.copytext.desktop|_launch\": [$ALT_T]}, \"loaded\": [\"org.plasmafusion.copytext.desktop|_launch\"]}"
+mkdir -p "$(dirname "$CHOME/$FILE")"
+printf '[Desktop Entry]\nExec=spectacle --region\n' >"$CHOME/$FILE"
+add_helper
+out=$(run_step)
+[ "$(state 's.get("unregistered")')" = "['org.plasmafusion.copytext.desktop|_launch']" ] &&
+  [ "$(state 's.get("loaded")')" = "['org.plasmafusion.copytext.desktop|_launch']" ] &&
+  case $out in *"reload org.plasmafusion.copytext.desktop"*) true ;; *) false ;; esac &&
+  ok "a loaded component with an old command is made again (unregistered, registered)" ||
+  bad "the reload: unregistered $(state 's.get("unregistered")'), loaded $(state 's.get("loaded")') / $out"
+[ "$(state 's["keys"].get("org.plasmafusion.copytext.desktop|_launch")')" = "[$ALT_T]" ] && [ ! -s "$CASE/backup/shortcuts" ] &&
+  ok "the reload keeps the user's key (Meta+Alt+T) and records no change" ||
+  bad "after the reload: $(state 's.get("keys")'), backup $(cat "$CASE/backup/shortcuts")"
+grep -qx "Exec=$CHOME/$HELPER_REL" "$CHOME/$FILE" && ok "the reloaded component's file runs the helper" || bad "the file: $(grep '^Exec=' "$CHOME/$FILE")"
+out=$(run_step)
+[ "$(state 'len(s.get("unregistered", []))')" = 1 ] && ok "a second run does not reload (the command is the same)" ||
+  bad "a second run reloaded again: $(state 's.get("unregistered")')"
 
 # 2. Another action holds Meta+Shift+T: it keeps it, the component gets no key.
 setup_case taken "{\"keys\": {\"kwin|Some Action\": [$KEY]}}"

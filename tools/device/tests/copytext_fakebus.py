@@ -7,8 +7,13 @@ Test tooling only.
 
   copytext_fakebus.py STATE plain|json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel METHOD SIG ARGS...
   copytext_fakebus.py STATE plain call org.kde.kglobalaccel /component/NAME org.kde.kglobalaccel.Component shortcutNames
+
+"loaded" lists the actions of the components kglobalaccel holds ("comp|action"): doRegister adds
+one; unregister takes it out with its keys, as kglobalacceld's next settings write drops a
+component left without actions; allComponents lists the components that still have one.
 """
 import json
+import re
 import sys
 
 path, mode, verb = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -41,8 +46,16 @@ elif method == "setShortcut":       # asaiu 4 comp action name name N keys... fl
     out = {"type": "ai", "data": [k]}
 elif method == "doRegister":         # as 4 comp action name name
     state.setdefault("registered", []).append(rest[1] + "|" + rest[2])
+    if rest[1] + "|" + rest[2] not in state.setdefault("loaded", []):
+        state["loaded"].append(rest[1] + "|" + rest[2])
 elif method == "unregister":         # ss comp action
     state.setdefault("unregistered", []).append(rest[0] + "|" + rest[1])
+    if rest[0] + "|" + rest[1] in state.get("loaded", []):
+        state["loaded"].remove(rest[0] + "|" + rest[1])
+        keys[rest[0] + "|" + rest[1]] = []
+elif method == "allComponents":      # -> ao
+    names = sorted({a.split("|")[0] for a in state.get("loaded", [])})
+    out = {"type": "ao", "data": [["/component/" + re.sub(r"[^A-Za-z0-9_]", "_", n) for n in names]]}
 elif method == "globalShortcutsByKey":  # (ai)(i) 4 key 0 0 0 0 -> a(ssssssaiai)
     key = int(rest[1])
     holders = [[k.split("|")[1], k.split("|")[1], k.split("|")[0], k.split("|")[0], "default", "default", v, []]

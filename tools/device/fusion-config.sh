@@ -1595,7 +1595,8 @@ ensure_notify_shortcut() {
 # capture. Without the helper (the tools run from a source tree) the key opens Spectacle's region
 # capture (--region) itself, where "Extract Text" on the selection's toolbar copies the text.
 # Quick settings' header has the same action. The command of the component's desktop file: the
-# helper's path, quoted when it holds a space; one the desktop entry would have to escape is not used.
+# helper's path, quoted when it holds a space; one the desktop entry would have to escape (", `, $,
+# \, and % that would read as a field code) is not used.
 copytext_exec() {
   local h
   if ! h=$(helper_path plasma-fusion-copytext); then
@@ -1603,7 +1604,7 @@ copytext_exec() {
     return 0
   fi
   case $h in
-    *[\"\`\$\\]*) echo "spectacle --region" ;;
+    *[\"\`\$\\%]*) echo "spectacle --region" ;;
     *[!A-Za-z0-9/._+-]*) printf '"%s"\n' "$h" ;;
     *) printf '%s\n' "$h" ;;
   esac
@@ -1622,20 +1623,54 @@ Exec=$exec
 StartupNotify=false
 EOF
 }
+# True while kglobalaccel has the component loaded. $1 component
+component_loaded() {
+  bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel allComponents 2>/dev/null |
+    python3 -c 'import json, re, sys; sys.exit(0 if "/component/" + re.sub(r"[^A-Za-z0-9_]", "_", sys.argv[1]) in json.load(sys.stdin)["data"][0] else 1)' \
+      "$1" 2>/dev/null
+}
 # Meta+Shift+T only when nothing holds it; a key the user gave the action is kept.
 ensure_copytext_shortcut() {
-  local cur
+  local cur held="" reload=0 file=$DATA/kglobalaccel/$COPYTEXT_COMPONENT i
   if ! command -v spectacle >/dev/null 2>&1; then
     note "copy text from the screen: Spectacle is not installed (no shortcut)"
     return 0
   fi
+  # kglobalaccel launches a component with the command it read when it loaded the component
+  # (KServiceActionComponent keeps its KService, kglobalacceld 6.7): a changed command (0.5.0's
+  # spectacle --region, the helper's place) reaches it only when the component is made again. It
+  # drops a component whose last action was unregistered when it writes its settings (500 ms
+  # later, with the component's keys), and registering the action again makes it from the file.
+  if [ -f "$file" ] && [ "$(cat "$file")" != "$(copytext_desktop)" ] && component_loaded "$COPYTEXT_COMPONENT"; then
+    reload=1
+    held=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
+  fi
   # Executable, as the Meta+N component (KDE runs a desktop file outside the system directories
   # only when it has the executable bit).
   install_text "$DATA/kglobalaccel/$COPYTEXT_COMPONENT" "$(copytext_desktop)" 0755 || true
+  if [ "$reload" = 1 ] && [ "$DRY" = 0 ]; then
+    note "reload $COPYTEXT_COMPONENT (its new command)"
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$COPYTEXT_COMPONENT" _launch >/dev/null 2>&1 || true
+    for ((i = 0; i < 50; i++)); do
+      component_loaded "$COPYTEXT_COMPONENT" || break
+      sleep 0.1
+    done
+    if component_loaded "$COPYTEXT_COMPONENT"; then
+      note "warning: kglobalaccel kept $COPYTEXT_COMPONENT; its new command applies from the next login"
+    fi
+  fi
   if [ "$DRY" = 0 ]; then
     bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$COPYTEXT_COMPONENT" _launch \
       "Plasma Fusion: Copy Text from Screen" "Plasma Fusion: Copy Text from Screen" >/dev/null 2>&1 ||
       note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT"
+  fi
+  # The keys it had before the reload, back as they were (not a change of the setup's: nothing for
+  # the backup).
+  if [ -n "$held" ] && [ "$DRY" = 0 ] && [ -z "$(shortcut_get "$COPYTEXT_COMPONENT" _launch)" ]; then
+    # shellcheck disable=SC2086
+    set -- $held
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcut asai 4 "$COPYTEXT_COMPONENT" _launch "" "" \
+      $# "$@" >/dev/null 2>&1 || note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT's keys back"
   fi
   cur=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
   if [ -n "$cur" ]; then

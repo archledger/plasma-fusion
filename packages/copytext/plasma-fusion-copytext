@@ -57,7 +57,8 @@ markup() {
 
 run=${XDG_RUNTIME_DIR:-}
 [ -n "$run" ] && [ -d "$run" ] && [ -w "$run" ] || run=${TMPDIR:-/tmp}
-# One at a time; the lock is not handed on to Spectacle (fd 9 closed for it).
+# One at a time; the lock is not handed on to the programs that stay (Spectacle, wl-copy: fd 9
+# closed for them).
 if command -v flock >/dev/null 2>&1; then
   exec 9>"$run/plasma-fusion-copytext.lock"
   flock -n 9 || exit 0
@@ -118,7 +119,8 @@ if [ -z "$text" ]; then
 fi
 
 if ! bus -- call org.kde.klipper /klipper org.kde.klipper.klipper setClipboardContents s "$text" >/dev/null 2>&1; then
-  if ! command -v wl-copy >/dev/null 2>&1 || ! printf '%s' "$text" | wl-copy >/dev/null 2>&1; then
+  # wl-copy stays in the background to serve the clipboard: without the lock (fd 9).
+  if ! command -v wl-copy >/dev/null 2>&1 || ! printf '%s' "$text" | wl-copy >/dev/null 2>&1 9>&-; then
     notify "Could not copy the text" "Neither the clipboard service (Klipper) nor wl-copy took it." 1
     echo "plasma-fusion-copytext: no clipboard" >&2
     exit 1

@@ -95,6 +95,8 @@ exit 0
 EOF
   cat >"$1/wl-copy" <<'EOF'
 #!/bin/bash
+# It stays in the background to serve the clipboard: it must not hold the helper's lock.
+[ ! -e /proc/$$/fd/9 ] || echo "fd 9 open: wl-copy" >>"$T/fd9"
 cat >"$T/wlcopy.txt"
 EOF
   chmod +x "$1"/*
@@ -243,6 +245,7 @@ run_helper FAKE_KLIPPER=0 || true
 [ "$(cat "$CASE/wlcopy.txt" 2>/dev/null)" = "$(printf 'Hello Plasma Fusion\nsecond line')" ] &&
   case $(calls Notify) in "Text copied|"*) true ;; *) false ;; esac &&
   ok "no Klipper: wl-copy takes the text" || bad "no Klipper: $(cat "$CASE/wlcopy.txt" 2>/dev/null) / $(calls Notify)"
+[ ! -e "$CASE/fd9" ] && ok "wl-copy, which stays to serve the clipboard, does not hold the helper's lock" || bad "wl-copy: $(cat "$CASE/fd9")"
 setup_case noclipboard
 rm "$CASE/bin/wl-copy"
 rc=0; run_helper FAKE_KLIPPER=0 || rc=$?
