@@ -16,7 +16,9 @@
 #      itself while it opens the held record stays;
 #   5. IgnoreApps leaves that app alone (nothing recorded, nothing restored);
 #   6. a window rule that forces the position wins: the window opens at the rule's spot and the
-#      forced spot is not recorded.
+#      forced spot is not recorded;
+#   7. a disable/enable cycle with a window open: the unloaded instance's geometry handlers go with
+#      it (no errors from its context afterwards) and the new instance remembers the next move.
 # Run: tools/vsession/remote.sh place-1 packages/kwin/tests/vsession/scenario-placement.sh SEED 1440x900 300
 exec 2>&1
 export OUT
@@ -332,6 +334,34 @@ sleep 3
 wait_file_rect 137 93 640 420 "the forced spot is not recorded (the record stays)"
 rm -f "$HOME/.config/kwinrulesrc"
 qdbus org.kde.KWin /KWin reconfigure
+
+# ---- 7. a disable/enable cycle with a window open (KWin keeps one QML engine for its scripts; a
+# handler the unloaded instance left on the window would call into its destroyed context)
+kwrite >/dev/null 2>&1 &
+sleep 4
+script_errors() { grep -a 'plasmafusion-placement' "$KLOG" | grep -acE 'Error|error:' || true; }
+errors_before=$(script_errors)
+kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-placementEnabled false
+qdbus org.kde.KWin /KWin reconfigure
+sleep 2
+loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-placement)
+[ "$loaded" = false ] && pass "disabled: the script is unloaded" || fail "disabled: the script is still loaded ($loaded)"
+kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-placementEnabled true
+qdbus org.kde.KWin /KWin reconfigure
+sleep 3
+loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-placement)
+[ "$loaded" = true ] && pass "enabled again: the script is loaded" || fail "enabled again: the script is not loaded ($loaded)"
+place kwrite 311 151 600 400
+sleep 1
+place kwrite 329 163 600 400
+sleep 1
+wait_file_rect 329 163 600 400 "a move after the cycle is remembered by the new instance"
+errors_after=$(script_errors)
+[ "$errors_after" = "$errors_before" ] && pass "no errors from the unloaded instance's handlers ($errors_after before and after)" ||
+  fail "the unloaded instance's handlers raised errors ($errors_before before, $errors_after after)"
+grep -a 'plasmafusion-placement' "$KLOG" | grep -aE 'Error|error:' | tail -4 >>"$CHK" || true
+close_class kwrite
+sleep 2
 
 cp "$HOME/.config/plasmafusion-placementrc" "$OUT/memory-final.rc" 2>/dev/null || true
 info "memory file saved to memory-final.rc"

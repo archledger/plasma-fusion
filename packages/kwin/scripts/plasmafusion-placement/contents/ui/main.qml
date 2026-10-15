@@ -396,12 +396,22 @@ Item {
         }
     }
 
-    // Disabled or KWin going away: the pending record goes out one last time, best effort (the
-    // D-Bus message is on its way before the object dies).
+    // Disabled or KWin going away: the newest record goes out one last time, best effort (the D-Bus
+    // message is on its way before the object dies) - also when an earlier write is still in
+    // flight, as that one carries an older snapshot. Then the geometry handlers are disconnected:
+    // KWin keeps one QML engine for its scripts and the windows outlive this object, so a handler
+    // left connected would call into a destroyed context, and every disable/enable cycle would add
+    // another.
     Component.onDestruction: {
-        if (loaded && revision !== sentRevision && !sending) {
+        if (Placement.teardownWrite(loaded, revision, sentRevision, sending, sendingRevision)) {
             writeCall.arguments = [writeScript(Placement.serialize(apps))];
             writeCall.call();
+        }
+        for (const key in watched) {
+            const entry = watched[key];
+            if (entry.w && entry.onGeometry) {
+                entry.w.frameGeometryChanged.disconnect(entry.onGeometry);
+            }
         }
     }
 }

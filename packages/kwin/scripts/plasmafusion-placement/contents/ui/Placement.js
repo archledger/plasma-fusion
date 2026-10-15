@@ -201,6 +201,16 @@ function same(a, b) {
     return !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
+// Whether the script's teardown must write the memory once more: the newest revision is neither
+// written nor on its way. A write in flight carries the revision it started with, so a change made
+// while it was sent still needs its own write.
+function teardownWrite(loaded, revision, sentRevision, sending, sendingRevision) {
+    if (!loaded) {
+        return false;
+    }
+    return sending ? revision !== sendingRevision : revision !== sentRevision;
+}
+
 // Remember rect for id; true when the memory changed (the caller then writes the file). A window
 // without an identity is not remembered.
 function remember(apps, id, rect) {

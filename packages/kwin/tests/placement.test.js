@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, identities, valid, parse, serialize, floating, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember } = globalThis;
+const { appId, identities, valid, parse, serialize, floating, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember, teardownWrite } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -148,5 +148,12 @@ assert.strictEqual(remember(apps, "konsole", rect(0, 0, 1, 1)), false, "never an
 assert.strictEqual(apps.konsole.x, 101, "the invalid write left the record alone");
 assert.strictEqual(remember(apps, "", rect(100, 100, 640, 480)), false, "no identity, no record");
 assert.deepStrictEqual(Object.keys(apps), ["konsole"], "nothing was stored for the anonymous window");
+
+// ---- the teardown write: the newest revision goes out unless it is written or on its way
+assert.ok(teardownWrite(true, 3, 2, true, 2), "a change made while a write was in flight");
+assert.ok(!teardownWrite(true, 2, 1, true, 2), "the write in flight carries the newest revision");
+assert.ok(teardownWrite(true, 3, 2, false, 2), "an unsent change");
+assert.ok(!teardownWrite(true, 2, 2, false, 2), "everything written");
+assert.ok(!teardownWrite(false, 3, 0, false, -1), "the memory was never read: nothing to write");
 
 console.log("placement.test.js: ok");

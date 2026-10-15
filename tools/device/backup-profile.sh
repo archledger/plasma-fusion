@@ -29,7 +29,7 @@ CONFIG_FILES=(
   kscreenlockerrc plasmarc plasmashellrc plasma-org.kde.plasma.desktop-appletsrc
   plasma-localerc plasmanotifyrc breezerc klaunchrc kactivitymanagerdrc dolphinrc konsolerc
   katerc kwriterc spectaclerc systemsettingsrc kwinoutputconfig.json knighttimerc krunnerrc
-  plasmafusionrc gtkrc gtkrc-2.0 Trolltech.conf xsettingsd
+  plasmafusionrc plasmafusion-placementrc gtkrc gtkrc-2.0 Trolltech.conf xsettingsd
   systemd/user/plasma-fusion-gate-notify.service systemd/user/plasma-fusion-powerfx.service
   systemd/user/plasma-fusion-pen-garage.service
 )

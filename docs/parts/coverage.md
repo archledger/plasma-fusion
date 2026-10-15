@@ -196,7 +196,9 @@ to it as well:
   `plasma-apply-*` and plasmashell's scripting. The private-session suites run
   `fusion-config.sh` (`tools/tests/icons`, `tools/tests/matrix`, `tools/tests/perf`, the gate
   scenarios in `tools/device/tests/vsession/`, which also run `fusion-restore.sh`), on the
-  ThinkPad or in the Plasma test containers, without coverage.
+  ThinkPad or in the Plasma test containers, without coverage; `profile-unit.sh` runs
+  `backup-profile.sh` and a dry-run `restore-profile.sh` in throw-away HOMEs (CI), also without
+  coverage.
 - **The root scripts** (`tools/system/`: greeter and Plymouth install and removal, 586 lines).
   They change `/etc` and `/usr/share/plymouth`; `generators/plymouth/tests/vmtest.sh` tests the
   boot splash in a throw-away VM on the test device, outside this measurement.

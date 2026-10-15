@@ -273,7 +273,12 @@ uses): the KWin scripting API has `readConfig` and no file write at all, and pla
 `evaluateScript` answers with what the script printed, which carries the file's text back. Writes
 are coalesced (two seconds after the last change, one retry when a change races the write); the file
 is read once at start with a few retries while plasmashell comes up - windows opened before that
-answer keep KWin's placement - and written once more when the script is disabled or KWin quits.
+answer keep KWin's placement - and written once more when the script is disabled or KWin quits
+(also when a write is still in flight then: it carries an older snapshot). On that teardown the
+script disconnects the geometry handlers it put on the windows: KWin keeps one QML engine for its
+scripts and the windows outlive the script, so a handler left connected would call into a destroyed
+context, and each disable/enable cycle would add another. A profile snapshot carries the memory
+file (`tools/device/backup-profile.sh`, see device.md).
 No timer runs while the desktop is idle.
 
 ## Verification
@@ -286,7 +291,8 @@ Offline (laptop):
   placement rules - identity (desktop file over class, lowered), the file's round trip and broken
   records, the centre test (a between-screens gap, a screen left of the origin), the 8 px stack
   guard, size-only mode, the ignore list (app id and window class), windows held by a rule (forced
-  position, forced or fixed size) and the record's rounding.
+  position, forced or fixed size), the teardown write (a change made while a write was in flight)
+  and the record's rounding.
 - Offscreen renders with a stand-in `org.kde.kwin` module (`packages/kwin/tests/offscreen/`,
   PySide6 + private Xvfb display, private HOME): `run.sh STAGE_HOME switcher-harness.qml OUT.png
   [dark=false count=N otherDesktop=N current=N]`, `snap-harness.qml mode=flyout|picker`. Measured
@@ -331,7 +337,8 @@ and pointer drags inside the private session only).
   app is not stacked exactly on the held spot, and when it moves itself while it opens the held
   record stays; `IgnoreApps` leaves that app's window alone; a
   window rule that forces the position wins (the window opens at the rule's spot, the record
-  stays).
+  stays); a disable/enable cycle with a window open leaves no errors from the unloaded instance and
+  the new instance remembers the next move.
 - Journal (`journalctl --user`, the private sessions log there): no messages from these packages.
   Libplasma prints "Member visible of the object PlasmaQuick::Dialog overrides a member of the
   base object" once per process that uses PlasmaCore.Dialog (plasmashell, the stock thumbnail_grid
