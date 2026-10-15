@@ -381,7 +381,8 @@ FocusScope {
                 textFormat: Text.PlainText
             }
 
-            ListView {
+            // The history scrolls; its rows are a Column (NotificationList.qml says why not a ListView).
+            Flickable {
                 id: list
                 objectName: "notificationCentreList"
                 y: header.height + 8
@@ -390,23 +391,27 @@ FocusScope {
                 clip: true
                 visible: !centre.pendingClear
                 boundsBehavior: Flickable.StopAtBounds
-                model: centre.notif.available ? centre.notif.model : null
+                contentWidth: width
+                contentHeight: rows.height
                 Accessible.role: Accessible.List
                 Accessible.name: i18nc("@title", "Notifications")
 
-                spacing: 12
-                delegate: NotificationEntry {
-                    width: ListView.view.width
+                NotificationList {
+                    id: rows
+                    width: list.width
+                    spacing: 12
+                    notif: centre.notif
                     pal: centre.pal
                     metrics: centre.metrics
-                    notif: centre.notif
+                    motion: centre.motion
                     now: centre.now
                     surface: centre.cardSurface
                     edge: centre.cardEdge
                     stackEdges: true
                     menus: true
+                    fadeIn: false
                     onDone: centre.closeRequested()
-                    onMenuRequested: (card, at) => {
+                    onMenuRequested: (card, at, index, model) => {
                         centre.menuRow = index;
                         centre.menuEntry = String(model.desktopEntry || "");
                         centre.menuApp = String(model.applicationName || "");
@@ -414,11 +419,6 @@ FocusScope {
                         centre.menuAt = at;
                         centre.openCardMenu();
                     }
-                }
-
-                displaced: Transition {
-                    enabled: centre.motion.animate
-                    NumberAnimation { property: "y"; duration: centre.motion.toggle; easing.type: centre.motion.standardEasing }
                 }
             }
 

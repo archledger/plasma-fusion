@@ -105,30 +105,65 @@ Item {
     property int menuRequests: 0
     UI.Backend { id: backend; objectName: "backend" }
     C.FusionMetrics { id: fusionMetrics }
-    // The sheet's list (PopupContent.qml): the same card and the same calls.
-    ListView {
+    // The sheet's list (PopupContent.qml and the tablet Notification Centre use the same component):
+    // the same rows, transitions and calls.
+    UI.NotificationList {
         id: list
         objectName: "list"
-        anchors.fill: parent
-        anchors.margins: 12
+        x: 12
+        y: 12
+        width: root.width - 24
         spacing: 10
-        interactive: false
-        model: backend.notif.model
-        delegate: UI.NotificationEntry {
-            width: ListView.view.width
-            pal: backend.pal
+        notif: backend.notif
+        pal: backend.pal
+        metrics: fusionMetrics
+        motion: backend.pal.motion
+        menus: root.menusOn
+        onDone: ++root.closes
+        onMenuRequested: ++root.menuRequests
+    }
+    // The tablet Notification Centre's content: the same rows in its own scrolling list. Made when
+    // the overlap section turns it on, so it lists the notifications that arrive after it.
+    property bool centreOn: false
+    // The backend under another name: inside the Centre's declaration `backend` is its own property.
+    readonly property var backendItem: backend
+    C.Motion { id: centreMotion }
+    Loader {
+        id: centre
+        objectName: "centre"
+        active: root.centreOn
+        width: root.width
+        height: root.height
+        sourceComponent: UI.NotificationCentreContent {
+            backend: root.backendItem
             metrics: fusionMetrics
-            notif: backend.notif
-            menus: root.menusOn
-            onDone: ++root.closes
-            onMenuRequested: ++root.menuRequests
+            motion: centreMotion
+            shown: true
         }
+    }
+    // The Centre's row items (its Flickable holds a NotificationList; a ListView in the red run).
+    function centreRows() {
+        const flick = centre.item ? findIn(centre.item, "notificationCentreList") : null;
+        const rows = flick ? flick.contentItem.children[0] : null;
+        return rows ? (rows.contentItem ? rows.contentItem.children : rows.children) : [];
+    }
+
+    function centreLoaded() {
+        return centre.status === Loader.Ready && centre.item !== null;
+    }
+    function centreRowCount() {
+        return Array.from(centreRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry).length;
     }
 
     // Lookups for the test, in QML (walking the item tree from Python trips over some types).
+    // The list's row items: the Column's children (a ListView keeps them in its contentItem; the red
+    // run of the overlap check stages the old ListView in this component).
+    function listRows() {
+        return list.contentItem ? list.contentItem.children : list.children;
+    }
     // The card of a notification, or with `group` the header row of an app's group.
     function cardOf(summary) {
-        for (const item of list.contentItem.children) {
+        for (const item of listRows()) {
             if (item.card !== undefined && item.card && item.card.entry && item.card.entry.summary === summary) {
                 return item.card;
             }
@@ -136,7 +171,7 @@ Item {
         return null;
     }
     function groupOf(appName) {
-        for (const item of list.contentItem.children) {
+        for (const item of listRows()) {
             if (item.isGroup === true && item.entry && item.entry.applicationName === appName) {
                 return item;
             }
@@ -146,12 +181,44 @@ Item {
     // The rows as the list shows them, top to bottom: "group:App" or the summary.
     function rows() {
         const result = [];
-        const items = list.contentItem.children.filter(item => item.isGroup !== undefined && item.visible && item.entry)
+        const items = Array.from(listRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry)
                                                .sort((a, b) => a.y - b.y);
         for (const item of items) {
             result.push(item.isGroup ? "group:" + item.entry.applicationName : String(item.entry.summary));
         }
         return JSON.stringify(result);
+    }
+    // What the list would draw over itself: a row that starts inside the one above it, a card that
+    // runs into the next row, a summary or body whose wrapped lines are taller than its box. Each
+    // problem is a sentence with the numbers; an empty list is a clean layout.
+    function layoutProblems(which) {
+        const problems = [];
+        const items = Array.from(which === "centre" ? centreRows() : listRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry)
+                                               .sort((a, b) => a.y - b.y);
+        const label = item => item.isGroup ? "the " + item.entry.applicationName + " header" : '"' + item.entry.summary + '"';
+        for (let i = 0; i < items.length; ++i) {
+            const item = items[i];
+            const next = items[i + 1];
+            if (next && next.y < item.y + item.height - 0.5) {
+                problems.push(label(next) + " starts " + Math.round(item.y + item.height - next.y) + " px inside " + label(item));
+            }
+            const card = item.card;
+            if (!card || !card.visible) {
+                continue;
+            }
+            const cardBottom = item.y + card.mapToItem(item, 0, 0).y + card.height;
+            if (next && cardBottom > next.y + 0.5) {
+                problems.push("the card " + label(item) + " runs " + Math.round(cardBottom - next.y) + " px into " + label(next));
+            }
+            for (const name of ["summary", "body"]) {
+                const text = findIn(card, name);
+                if (text && text.visible && text.contentHeight > text.height + 0.5) {
+                    problems.push(name + " of " + label(item) + ": " + Math.round(text.contentHeight) + " px of text in a "
+                                  + Math.round(text.height) + " px box (" + text.lineCount + " lines)");
+                }
+            }
+        }
+        return JSON.stringify(problems);
     }
     function groupInfo(appName, name) {
         const group = groupOf(appName);
@@ -166,7 +233,7 @@ Item {
     // The footer ("Show N More") under the last listed card of an app.
     function footerOf(appName) {
         let last = null;
-        for (const item of list.contentItem.children) {
+        for (const item of listRows()) {
             if (item.isGroup === false && item.entry && item.entry.isInGroup && item.entry.applicationName === appName
                     && item.footer.shown) {
                 last = item;
@@ -604,6 +671,36 @@ try:
     backend.setProperty("page", "clipboard")
     check(notif.property("listShown") is False, "the clipboard sheet has no list")
     backend.setProperty("page", "main")
+    # ---- Rows never draw over each other (owner report 2026-10-15, the sheet's list): a card whose
+    # summary and body each wrap to a second line, next to its image, ran into the next row - the
+    # header of a group - and two grouped cards with a wrapped body and an action overlapped.
+    # The tablet Notification Centre lists the same history with the same rows: on before they arrive.
+    root.setProperty("centreOn", True)
+    wait_for(lambda: root.centreLoaded(), "the Notification Centre did not load")
+    # In the order of the report: a one-line card, then two from one app (the group forms while the
+    # list shows), then the wrapping card, which arrives on top and moves every row under it.
+    notify("Could not connect to device", "", entry="org.plasmafusion.notifythird")
+    for n in (1, 2):
+        notify("Service Crash %d" % n, "/usr/bin/bash has encountered a fatal error and was closed.",
+               "--action", "details=Details", entry="org.plasmafusion.notifyother")
+    notify("Remote control enabled: Plasma Fusion project settings",
+           "Your session is ready to control from your phone or another computer.",
+           "--image", str(png("wrap-thumb.png", 96, 96, "#e07040")))
+    QTest.qWait(600)
+    problems = json.loads(root.layoutProblems("sheet"))
+    check(problems == [], "wrapped cards and a group: no row draws over another (%s)" % ("; ".join(problems) or "clean"))
+    centre_rows = root.centreRowCount()
+    check(centre_rows >= 4, "the Notification Centre lists them too (%d rows)" % centre_rows)
+    problems = json.loads(root.layoutProblems("centre"))
+    check(problems == [], "the same in the Notification Centre's list (%s)" % ("; ".join(problems) or "clean"))
+    # A narrower sheet wraps more lines: the rows follow.
+    root.setProperty("width", 320)
+    QTest.qWait(400)
+    problems = json.loads(root.layoutProblems("sheet"))
+    check(problems == [], "after the sheet narrows: no row draws over another (%s)" % ("; ".join(problems) or "clean"))
+    root.setProperty("width", 380)
+    root.setProperty("centreOn", False)
+    QTest.qWait(400)
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:

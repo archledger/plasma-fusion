@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Notifications**: in quick settings and the tablet Notification Centre, a new notification whose
+  text wraps no longer has the row under it drawn over its bottom (a group's header over a card,
+  or one card of a group over another), also after the sheet is opened again.
 - New KWin script **dynamic workspaces** (`plasmafusion-workspaces`), off until you turn it on in
   System Settings > Window Management > KWin Scripts: workspaces come and go as you need them, the
   way GNOME does it. There is always one empty workspace at the end - move a window there, or open

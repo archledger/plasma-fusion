@@ -344,39 +344,20 @@ Item {
                                                      : i18nc("@info", "No notifications")
                 }
 
-                // At its full height: the sheet's Flickable scrolls it with the page.
-                ListView {
+                // At its full height: the sheet's Flickable scrolls it with the page. A Column of rows
+                // (NotificationList.qml says why not a ListView).
+                NotificationList {
                     id: notificationList
                     visible: count > 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: contentHeight
                     spacing: content.metrics.px(10)
-                    interactive: false
-                    model: content.backend.notif.available ? content.backend.notif.model : null
-
-                    delegate: NotificationEntry {
-                        id: noteEntry
-                        width: ListView.view.width
-                        pal: content.pal
-                        metrics: content.metrics
-                        notif: content.backend.notif
-                        now: content.now
-                        onFocusInsideChanged: {
-                            if (focusInside) {
-                                content.ensureVisible(noteEntry);
-                            }
-                        }
-                        onDone: content.backend.closeRequested()
-                    }
-
-                    add: Transition {
-                        enabled: content.pal.motion.animate
-                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: content.pal.motion.toggle }
-                    }
-                    displaced: Transition {
-                        enabled: content.pal.motion.animate
-                        NumberAnimation { property: "y"; duration: content.pal.motion.toggle; easing.type: content.pal.motion.standardEasing }
-                    }
+                    notif: content.backend.notif
+                    pal: content.pal
+                    metrics: content.metrics
+                    motion: content.pal.motion
+                    now: content.now
+                    onEntryFocused: entry => content.ensureVisible(entry)
+                    onDone: content.backend.closeRequested()
                 }
             }
         }
