@@ -78,7 +78,8 @@ jobs:
 
       - name: Install the QML modules and plugins Quick Look's viewers test loads
         if: matrix.package == 'quicklook-cpp'
-        run: sed -n 's/^# viewers test needs: //p' packages/quicklook-cpp/tests/CMakeLists.txt | xargs dnf install -y -q
+        run: |
+          sed -n 's/^# viewers test needs: //p' packages/quicklook-cpp/tests/CMakeLists.txt | xargs dnf install -y -q
 
       - name: Configure, build and test
         env:
