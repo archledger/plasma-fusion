@@ -26,7 +26,8 @@
       packages = forAllSystems (pkgs:
         let pf = packagesFor pkgs; in
         {
-          inherit (pf) plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation;
+          inherit (pf) plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation
+            plasma-fusion-quicklook;
           default = pf.plasma-fusion;
         });
 

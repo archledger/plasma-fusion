@@ -18,6 +18,7 @@ on:
       - "packages/navigation-cpp/**"
       - "packages/decoration-cpp/**"
       - "packages/kcm-cpp/**"
+      - "packages/quicklook-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
       - "packaging/fedora/plasma-fusion.spec"
@@ -28,6 +29,7 @@ on:
       - "packages/navigation-cpp/**"
       - "packages/decoration-cpp/**"
       - "packages/kcm-cpp/**"
+      - "packages/quicklook-cpp/**"
       - "packages/color-schemes/*.colors"
       - "tools/tests/ctest-required.sh"
       - "packaging/fedora/plasma-fusion.spec"
@@ -54,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [navigation-cpp, decoration-cpp, kcm-cpp]
+        package: [navigation-cpp, decoration-cpp, kcm-cpp, quicklook-cpp]
         plasma: [stable, beta]
     steps:
       - name: Install git, builddep, D-Bus and the power-tier test's tools (checkout runs inside the container)
@@ -73,6 +75,11 @@ jobs:
 
       - name: Install the build requirements from the spec
         run: dnf builddep -y -q packaging/fedora/plasma-fusion.spec
+
+      - name: Install the QML modules and plugins Quick Look's viewers test loads
+        if: matrix.package == 'quicklook-cpp'
+        run: |
+          sed -n 's/^# viewers test needs: //p' packages/quicklook-cpp/tests/CMakeLists.txt | xargs dnf install -y -q
 
       - name: Configure, build and test
         env:

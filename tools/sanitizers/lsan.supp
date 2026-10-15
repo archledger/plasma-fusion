@@ -2,3 +2,13 @@
 # SPDX-License-Identifier: CC0-1.0
 #
 # LeakSanitizer suppressions for tools/sanitizers/run.sh.
+
+# Mesa's Vulkan driver (llvmpipe), started by FFmpeg's hardware probe when Qt Multimedia loads
+# (Quick Look's media viewer: QFFmpeg::loadHWContext, av_hwdevice_ctx_create, libavutil's
+# vulkan_device_create_internal): 128 bytes allocated once inside the driver (under pthread_once),
+# reported at exit after the driver was unloaded again (its frames are "<unknown module>"). Seen on
+# GitHub's ubuntu-24.04 runner (sanitizers run 38816106967, 2026-10-15), not in the same Fedora 44
+# container on minihost with the same packages (mesa-vulkan-drivers 26.2.4, libavutil-free 8.1.3,
+# Qt 6.11.2), where FFmpeg creates the same llvmpipe device. Nothing of Plasma Fusion calls FFmpeg
+# or Vulkan; only leaks allocated below libavutil's Vulkan device creation are suppressed.
+leak:vulkan_device_create_internal

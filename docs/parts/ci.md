@@ -15,7 +15,7 @@ do when one of them speaks up. Set up 2026-10-01 (CI) and 2026-10-02 (automation
 | `coverage` | weekly (Wednesdays 06:10 UTC), by hand | `tools/tests/coverage.sh` in fedora:44: statement coverage of Python, shell and JavaScript over the build and the offline tests, and of each compiled part over its tests; the tables in the job summary, the reports as artifacts (docs/parts/coverage.md). It fails when a test fails (its `tests.tsv` row) or the measurement itself does |
 | `workflow-audit` | changes to workflows | zizmor (security) and actionlint (correctness) over the workflows |
 | `style` | push, pull request | Python: `ruff check` with `ruff.toml`; C++: `git clang-format` over the C++ lines the change touches, against `.clang-format` (KDE's style); shell: ShellCheck at severity warning (`tools/checks/shellcheck.sh`). See "Coding style" |
-| `sanitizers` | changes to the compiled parts, weekly | the three compiled parts built with AddressSanitizer and UndefinedBehaviorSanitizer and their tests run, the random tests among them (a fixed seed on pull requests, a new seed and more runs weekly), so that a memory error, a leak or undefined behaviour fails the job (`tools/sanitizers/run.sh`). See "Dynamic analysis" |
+| `sanitizers` | changes to the compiled parts, weekly | the four compiled parts built with AddressSanitizer and UndefinedBehaviorSanitizer and their tests run, the random tests among them (a fixed seed on pull requests, a new seed and more runs weekly), so that a memory error, a leak or undefined behaviour fails the job (`tools/sanitizers/run.sh`). See "Dynamic analysis" |
 | `codeql` | push, pull request, weekly | CodeQL over the workflows, the C++ parts (without building), the shell's JavaScript and the Python tools; results in the Security tab |
 | `plasma-watch` | daily 06:25 UTC, by hand | Fedora 44's versions (stable updates and updates-testing) of the packages the login check watches, against `packaging/tested-versions.txt`; opens or updates one issue labelled `plasma-update` when Fedora has a newer one |
 | `scorecard` | push to `main`, weekly, branch-protection changes | OpenSSF Scorecard: findings in the Security tab, published score for the README badge |
@@ -245,8 +245,9 @@ and pushes that change one, and every Wednesday. The script:
   schemes are missing, and ctest would then pass with ECM's appstream test alone;
 - runs the part's tests (ctest) with `ASAN_OPTIONS=halt_on_error=1:abort_on_error=1:detect_leaks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1`
   and `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`: the first error of either sanitizer, or a
-  leak at exit, fails the test. LeakSanitizer suppressions go in `tools/sanitizers/lsan.supp` (none
-  so far).
+  leak at exit, fails the test. LeakSanitizer suppressions go in `tools/sanitizers/lsan.supp` (one:
+  Mesa's Vulkan driver below FFmpeg's hardware probe, which Qt Multimedia runs for Quick Look's
+  media viewer; seen on GitHub's runner only, the file says why).
 
 The tests (also run by the `compiled` workflow, without sanitizers):
 

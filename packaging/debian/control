@@ -33,6 +33,9 @@ Build-Depends: debhelper-compat (= 13),
                libkf6colorscheme-dev,
                libkf6globalaccel-dev,
                libkf6i18n-dev,
+               libkf6dbusaddons-dev,
+               libkf6kio-dev,
+               libkf6service-dev,
                libkf6windowsystem-dev,
                libkf6package-dev,
                libkf6kcmutils-dev,
@@ -58,8 +61,8 @@ Depends: ${misc:Depends},
          python3-pil,
          systemd,
          librsvg2-bin | python3-pyside6.qtsvg
-Recommends: plasma-fusion-decoration, plasma-fusion-settings, libnotify-bin, powerdevil, plasma-nm,
-            plasma-pa, bluedevil, tesseract-ocr
+Recommends: plasma-fusion-decoration, plasma-fusion-settings, plasma-fusion-quicklook, libnotify-bin,
+            powerdevil, plasma-nm, plasma-pa, bluedevil, tesseract-ocr
 Suggests: plasma-fusion-navigation, xournalpp, kate, konsole, python3-pyside6.qtsvg
 Description: Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
  Plasma Fusion is a desktop for KDE Plasma 6 in a dark and a light variant:
@@ -91,6 +94,20 @@ Description: Plasma Fusion settings page for System Settings
  light, dark or automatic style, the accent color, the window-button layout,
  dock magnification, the global menu, snap layouts, the glass level, high
  contrast, reduced motion, tablet mode and two ways to start over.
+
+Package: plasma-fusion-quicklook
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version}),
+         qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window,
+         qml6-module-org-kde-kirigami, qml6-module-org-kde-desktop | kf6-qqc2-desktop-style,
+         qml6-module-qtquick-pdf, qml6-module-qtmultimedia, qml6-module-org-kde-syntaxhighlighting
+Recommends: kio-extras, kimageformat6-plugins, qt6-image-formats-plugins, qt6-svg-plugins, dolphin
+Description: Plasma Fusion Quick Look: preview files without opening them
+ Select files in Dolphin and press Space to see what is in them: pictures,
+ PDF documents, text and code with its colors, songs and videos, the size of
+ a folder; any other file shows its thumbnail. The arrow keys go through the
+ selected files, Enter opens the shown one, Space or Esc closes the preview.
+ "Quick Look" is in the context menus of Dolphin and the desktop as well.
 
 Package: plasma-fusion-navigation
 Architecture: any

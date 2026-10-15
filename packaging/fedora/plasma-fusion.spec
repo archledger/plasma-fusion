@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Plasma Fusion for Fedora, from one source tarball: the shared part (plasma-fusion: themes,
-# widgets, icons, fonts, KWin scripts, setup tools) and the three compiled parts (-decoration,
-# -settings, -navigation). Copr builds releases through Packit (.packit.yaml); packaging/build-rpm.sh
+# widgets, icons, fonts, KWin scripts, setup tools) and the four compiled parts (-decoration,
+# -settings, -navigation, -quicklook). Copr builds releases through Packit (.packit.yaml); packaging/build-rpm.sh
 # builds snapshots of a working tree (rpmbuild --without compiled: the shared part only). Every
 # package records nothing in a home directory: each user runs "plasma-fusion setup" in their Plasma
 # session (docs/parts/system.md).
@@ -58,14 +58,19 @@ BuildRequires:  cmake(Qt6DBus)
 BuildRequires:  cmake(Qt6Gui)
 BuildRequires:  cmake(Qt6Qml)
 BuildRequires:  cmake(Qt6Quick)
+BuildRequires:  cmake(Qt6QuickControls2)
+BuildRequires:  cmake(Qt6Widgets)
 BuildRequires:  cmake(KF6ColorScheme)
 BuildRequires:  cmake(KF6Config)
 BuildRequires:  cmake(KF6ConfigWidgets)
 BuildRequires:  cmake(KF6CoreAddons)
+BuildRequires:  cmake(KF6DBusAddons)
 BuildRequires:  cmake(KF6GlobalAccel)
 BuildRequires:  cmake(KF6I18n)
 BuildRequires:  cmake(KF6KCMUtils)
+BuildRequires:  cmake(KF6KIO)
 BuildRequires:  cmake(KF6Package)
+BuildRequires:  cmake(KF6Service)
 BuildRequires:  cmake(KF6WindowSystem)
 %endif
 
@@ -98,11 +103,12 @@ Suggests:       python3-pyside6
 # Copy text from the screen in one step (plasma-fusion-copytext): the tesseract command reads the
 # area Spectacle captures; without it the key opens Spectacle's own Extract Text.
 Recommends:     tesseract
-# The compiled parts of the same build: the window decoration and the settings page by default,
-# the tablet gestures for convertibles.
+# The compiled parts of the same build: the window decoration, the settings page and Quick Look
+# by default, the tablet gestures for convertibles.
 %if %{with compiled}
 Recommends:     %{name}-decoration%{?_isa} = %{version}-%{release}
 Recommends:     %{name}-settings%{?_isa} = %{version}-%{release}
+Recommends:     %{name}-quicklook%{?_isa} = %{version}-%{release}
 Suggests:       %{name}-navigation%{?_isa} = %{version}-%{release}
 %endif
 # The design's Code and Notes apps, the terminal whose theme is included, the login screen
@@ -189,6 +195,34 @@ or swipe along the bottom edge for the previous app. The app follows the
 finger. A key press on a hardware keyboard hides the on-screen keyboard.
 Laptop posture keeps KWin's own edges. Derived from Plasma Mobile's task
 switcher.
+
+%package quicklook
+Summary:        Plasma Fusion Quick Look: preview files without opening them
+License:        GPL-2.0-or-later
+# The setup gives Quick Look Space in Dolphin; the package works without it (the context menu).
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+# The viewers' QML modules: the window, PDF pages, sound and video, highlighted text.
+Requires:       qt6-qtdeclarative
+Requires:       kf6-kirigami
+Requires:       kf6-qqc2-desktop-style
+Requires:       qt6-qtpdf
+Requires:       qt6-qtmultimedia
+Requires:       kf6-syntax-highlighting
+# Thumbnails of other files (documents, fonts, archives...) and more picture formats.
+Recommends:     kio-extras
+Recommends:     kf6-kimageformats
+Recommends:     qt6-qtimageformats
+Recommends:     qt6-qtsvg
+Recommends:     dolphin
+
+%description quicklook
+Quick Look for the Plasma Fusion desktop: select files in Dolphin and press
+Space to see what is in them without opening them - pictures (moving ones
+play), PDF documents, text and code with its colors, songs and videos, the
+size of a folder; any other file shows its thumbnail. The arrow keys go
+through the selected files, Enter opens the shown one in its application,
+Space or Esc closes the preview. "Quick Look" is in the context menus of
+Dolphin and the desktop as well.
 %endif
 
 %prep
@@ -211,6 +245,16 @@ for part in decoration navigation; do
   %cmake -S packages/$part-cpp -B _build/$part -G Ninja -DBUILD_TESTING=OFF -DKDE_INSTALL_USE_QT_SYS_PATHS=ON
   %__cmake --build _build/$part %{?_smp_mflags} --verbose
 done
+# Quick Look's QML is compiled into its program, as the settings page's (below): a stamp derived
+# from its sources too.
+(
+  cd packages/quicklook-cpp
+  SOURCE_DATE_EPOCH=$(( 1700000000 + 0x$(cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/qml/*.qml | sha256sum | cut -c1-6) ))
+  export SOURCE_DATE_EPOCH QT_RCC_SOURCE_DATE_OVERRIDE=$SOURCE_DATE_EPOCH
+  echo "Quick Look QML time stamp: $SOURCE_DATE_EPOCH"
+  %cmake_kf6 -S . -B ../../_build/quicklook -G Ninja -DBUILD_TESTING=OFF
+  %__cmake --build ../../_build/quicklook %{?_smp_mflags} --verbose
+)
 # rcc stamps every QML file of the settings page with SOURCE_DATE_EPOCH, and Qt's QML disk cache
 # (~/.cache/systemsettings/qmlcache, ~/.cache/kcmshell6/qmlcache) reuses a compiled file whose
 # source time stamp is unchanged: two builds from the same day would share the stamp, and an update
@@ -231,7 +275,7 @@ bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion
   --destdir %{buildroot} --prefix %{_prefix} --libexecdir %{_libexecdir}
 mkdir -p %{buildroot}%{_datadir}/plasma-fusion/built-against
 %if %{with compiled}
-for part in decoration settings navigation; do
+for part in decoration settings navigation quicklook; do
   DESTDIR=%{buildroot} %__cmake --install _build/$part
 done
 %endif
@@ -317,7 +361,7 @@ find %{buildroot} -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -
     fi
   done
 %if %{with compiled}
-for part in decoration settings navigation; do
+for part in decoration settings navigation quicklook; do
   test -s %{buildroot}%{_datadir}/plasma-fusion/built-against/$part
 done
 %endif
@@ -430,6 +474,13 @@ done
 %{_datadir}/kwin/effects/plasmafusion_navigation/
 %{_qt6_qmldir}/org/plasmafusion/navigation/
 %{_datadir}/plasma-fusion/built-against/navigation
+
+%files quicklook
+%license LICENSES/GPL-2.0-or-later.txt
+%{_bindir}/plasma-fusion-quicklook
+%{_kf6_datadir}/applications/org.plasmafusion.quicklook.desktop
+%{_kf6_datadir}/kio/servicemenus/plasma-fusion-quicklook.desktop
+%{_datadir}/plasma-fusion/built-against/quicklook
 %endif
 
 %changelog

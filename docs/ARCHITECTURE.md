@@ -6,8 +6,9 @@ page links them. The names and install paths of every part are in the naming tab
 [`PLAN.md`](PLAN.md).
 
 Plasma Fusion is not a program of its own. It is a set of KDE Plasma 6 add-ons (themes, widgets,
-KWin scripts, a lock screen, a few small services and three compiled plugins) that Plasma, KWin,
-System Settings, the screen locker and Plymouth load in their usual places. It changes the look
+KWin scripts, a lock screen, a few small services, three compiled plugins and a Quick Look
+program) that Plasma, KWin, System Settings, Dolphin, the screen locker and Plymouth load in their
+usual places. It changes the look
 and the shell; it does not replace Plasma.
 
 ## Layers
@@ -70,7 +71,7 @@ files: icon themes ([`parts/icons.md`](parts/icons.md)), cursor themes
 
 ### Compiled parts
 
-Three C++ plugins, each with a CMake project and a spec file, built in a Fedora 44 container
+Three C++ plugins and a C++ program, each with a CMake project, built in a Fedora 44 container
 (`tools/container/`) or by the `compiled` workflow ([`parts/ci.md`](parts/ci.md)). The decoration
 and the settings module have test tools in their `tests/` directories (an offline renderer, scripted
 private sessions):
@@ -80,6 +81,7 @@ private sessions):
 | `packages/decoration-cpp`: KDecoration3 window decoration "Plasma Fusion" | KWin | KDecoration3 6.7 | [`decoration-cpp.md`](parts/decoration-cpp.md) |
 | `packages/kcm-cpp`: settings module `kcm_plasmafusion` | System Settings | KDE Frameworks | [`kcm-cpp.md`](parts/kcm-cpp.md) |
 | `packages/navigation-cpp`: tablet gestures, a KWin effect derived from Plasma Mobile's task switcher | KWin | KWin's internal library, exact version | [`packages/navigation-cpp/README.md`](../packages/navigation-cpp/README.md) |
+| `packages/quicklook-cpp`: Quick Look, `plasma-fusion-quicklook` (a program; its service menu) | Dolphin (Space, context menu), the desktop's context menu | KDE Frameworks | [`quicklook-cpp.md`](parts/quicklook-cpp.md) |
 
 The navigation effect stays idle when the running KWin is not the one it was built against
 (`packages/navigation-cpp/src/plugin/fusionnavigation.cpp`, the version check at start).
@@ -106,8 +108,8 @@ and writes only below `$STAGE` (default `stage/home`), in the paths the naming t
   Arch PKGBUILD, the Debian packaging, the Nix packages) runs the same build and installs the stage
   with `packaging/install-tree.sh` under `/usr/share` and the helper directory, with the polkit
   action and the `plasma-fusion` command. The compiled parts (`plasma-fusion-decoration`,
-  `plasma-fusion-settings`, `plasma-fusion-navigation`) come from the same source, installed into
-  Qt's plugin directories. `scripts/install.sh` picks the channel; each user runs
+  `plasma-fusion-settings`, `plasma-fusion-navigation`, `plasma-fusion-quicklook`) come from the
+  same source, installed into Qt's plugin directories (Quick Look: a program and a service menu). `scripts/install.sh` picks the channel; each user runs
   `plasma-fusion setup` once ([`parts/system.md`](parts/system.md),
   [`parts/installer.md`](parts/installer.md)).
 - **As root, optional:** `tools/system/greeter-apply.sh` styles the plasma-login-manager greeter

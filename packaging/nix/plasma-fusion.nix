@@ -17,7 +17,7 @@ let
   pythonRuntime = pkgs.python3.withPackages (ps: [ ps.pillow ]);
   # NixOS links environment.systemPackages here; /usr/share and /usr/libexec do not exist.
   sw = "/run/current-system/sw";
-  compiled = { pname, version, dir, buildInputs, cmakeFlags ? [ ] }:
+  compiled = { pname, version, dir, buildInputs, cmakeFlags ? [ ], app ? false }:
     stdenv.mkDerivation {
       inherit pname version buildInputs cmakeFlags;
       src = "${src}/packages/${dir}";
@@ -26,9 +26,11 @@ let
         cp -r ${src}/packages/common "$sourceRoot/common"
         chmod -R u+w "$sourceRoot/common"
       '';
-      nativeBuildInputs = [ pkgs.cmake pkgs.ninja pkgs.pkg-config kdePackages.extra-cmake-modules ];
-      # Plugins loaded by KWin and System Settings: nothing to wrap.
-      dontWrapQtApps = true;
+      nativeBuildInputs = [ pkgs.cmake pkgs.ninja pkgs.pkg-config kdePackages.extra-cmake-modules ]
+        ++ lib.optionals app [ kdePackages.wrapQtAppsHook ];
+      # Plugins loaded by KWin and System Settings: nothing to wrap. A program (Quick Look) gets the
+      # Qt plugins and QML modules of its buildInputs through the wrapper.
+      dontWrapQtApps = !app;
     };
 in
 rec {
@@ -100,6 +102,15 @@ rec {
   plasma-fusion-settings = compiled {
     pname = "plasma-fusion-settings"; inherit version; dir = "kcm-cpp";
     buildInputs = with kdePackages; [ qtbase qtdeclarative kconfig kcoreaddons ki18n kcmutils ];
+    cmakeFlags = [ "-DBUILD_TESTING=OFF" ];
+  };
+
+  # Quick Look: a program, wrapped with the QML modules its viewers import (the window, PDF pages,
+  # sound and video, highlighted text) and the picture formats and thumbnailers it shows.
+  plasma-fusion-quicklook = compiled {
+    pname = "plasma-fusion-quicklook"; inherit version; dir = "quicklook-cpp"; app = true;
+    buildInputs = with kdePackages; [ qtbase qtdeclarative qtmultimedia qtwebengine qtsvg qtimageformats kio kdbusaddons
+      kservice kwindowsystem ki18n kcoreaddons kirigami qqc2-desktop-style syntax-highlighting kimageformats kio-extras ];
     cmakeFlags = [ "-DBUILD_TESTING=OFF" ];
   };
 

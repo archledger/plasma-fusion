@@ -62,9 +62,10 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
   build time (`use_source_date_epoch_as_buildtime`) and clamps the files' times to it, and the
   build host is recorded as `reproducible`.
 * `%build` runs `tools/build.sh` into `_stage/` (no display, `QT_QPA_PLATFORM=offscreen`, session
-  variables removed) and the Plymouth generator; with the compiled parts, the three CMake builds
-  (the settings page's QML gets a time stamp derived from its sources, kcm-cpp.md).
-* `%install` runs `packaging/install-tree.sh` and `cmake --install` of the three parts; then every
+  variables removed) and the Plymouth generator; with the compiled parts, the four CMake builds
+  (the settings page's and Quick Look's QML get a time stamp derived from their sources,
+  kcm-cpp.md).
+* `%install` runs `packaging/install-tree.sh` and `cmake --install` of the four parts; then every
   QML/JS file of all four packages gets a time derived from its content, before the clamp date.
   Qt's QML disk caches (`~/.cache/kwin/qmlcache`, `~/.cache/plasmashell/qmlcache`, ...) reuse a
   compiled file while its source's time is unchanged, and the clamp to the `%changelog` day gave
