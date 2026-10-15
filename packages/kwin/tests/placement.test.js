@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-placement", "contents", "ui", "Placement.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { appId, valid, parse, serialize, floating, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreRect, restoreFor, remember } = globalThis;
+const { appId, identities, valid, parse, serialize, floating, eligible, ignored, onScreen, collides, sameDesktop, sameActivity, restoreSize, restoreRect, restoreFor, remember } = globalThis;
 
 const rect = (x, y, width, height) => ({ x, y, width, height });
 const desktop = () => ({ normal: true, transient: false, modal: false, fullScreen: false, tiled: false, minimized: false, maximizeMode: 0 });
@@ -25,6 +25,12 @@ assert.strictEqual(appId("konsole", "org.kde.konsole"), "org.kde.konsole", "the 
 assert.strictEqual(appId("konsole", "/usr/share/applications/org.kde.konsole.desktop"), "org.kde.konsole", "path and .desktop suffix stripped");
 assert.strictEqual(appId("", ""), "");
 assert.strictEqual(appId(null, undefined), "");
+
+// ---- the names IgnoreApps matches: the app id, plus the window class when it differs
+assert.deepStrictEqual(identities("LibreOffice", "libreoffice-writer"), ["libreoffice-writer", "libreoffice"]);
+assert.deepStrictEqual(identities("org.kde.konsole", "org.kde.konsole"), ["org.kde.konsole"], "a Wayland app's class is its id");
+assert.deepStrictEqual(identities("kcalc", ""), ["kcalc"]);
+assert.deepStrictEqual(identities("", ""), [""]);
 
 // ---- a held rectangle: four finite numbers at a sane size, rounded
 assert.deepStrictEqual(valid(rect(1.4, 2.6, 640, 480)), rect(1, 3, 640, 480));
@@ -93,6 +99,19 @@ assert.ok(sameActivity({ activities: ["a", "b"] }, { activities: ["b"] }), "a sh
 assert.ok(!sameActivity({ activities: ["a"] }, { activities: ["b", "c"] }), "other activities only");
 assert.ok(sameActivity({ activities: [] }, { activities: ["b"] }), "an all-activities window");
 
+// ---- IgnoreApps against a window's identities: the class form works when a desktop file exists
+assert.ok(ignored(identities("LibreOffice", "libreoffice-writer"), "LibreOffice"), "the window class form");
+assert.ok(ignored(identities("LibreOffice", "libreoffice-writer"), "libreoffice-writer"), "the app id form");
+assert.ok(!ignored(identities("LibreOffice", "libreoffice-writer"), "kate, konsole"), "other apps");
+assert.ok(ignored(identities("org.kde.konsole", "org.kde.konsole"), "konsole"), "the last part of an id, as before");
+
+// ---- a window KWin holds in place (a forced-position rule) is left alone
+assert.ok(!eligible({ ...desktop(), movable: false }), "a forced position");
+assert.ok(eligible({ ...desktop(), movable: true }));
+assert.ok(restoreSize(desktop(), true), "RememberSize on");
+assert.ok(!restoreSize(desktop(), false), "RememberSize off");
+assert.ok(!restoreSize({ ...desktop(), resizable: false }, true), "a forced or fixed size keeps the window's own");
+
 // ---- the rectangle given back
 assert.deepStrictEqual(restoreRect(rect(5, 6, 640, 480), rect(0, 0, 800, 600), true), rect(5, 6, 640, 480));
 assert.deepStrictEqual(restoreRect(rect(5, 6, 640, 480), rect(0, 0, 800, 600), false), rect(5, 6, 800, 600), "the size the window opened with");
@@ -109,6 +128,8 @@ assert.strictEqual(restoreFor("konsole", desktop(), saved, screens, [rect(103, 9
 assert.strictEqual(restoreFor("konsole", { ...desktop(), maximizeMode: 3 }, saved, screens, [], "", true, current), null, "opened maximized keeps KWin's placement");
 assert.strictEqual(restoreFor("konsole", { ...desktop(), transient: true }, saved, screens, [], "", true, current), null, "a dialog keeps its parent placement");
 assert.strictEqual(restoreFor("", desktop(), saved, screens, [], "", true, current), null, "no identity, no memory");
+assert.strictEqual(restoreFor("konsole", { ...desktop(), movable: false }, saved, screens, [], "", true, current), null, "a window rule holds the position");
+assert.deepStrictEqual(restoreFor("konsole", { ...desktop(), resizable: false }, saved, screens, [], "", true, current), rect(100, 100, 800, 600), "a fixed size: the spot, the window's own size");
 // RememberSize off: the rectangle handed back is position + current size, and THAT rectangle must
 // still be usable: a wide saved window whose centre was on-screen can leave a narrow new one off
 // the edge.

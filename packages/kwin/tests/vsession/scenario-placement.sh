@@ -5,23 +5,30 @@
 #
 # Window placement memory (plasmafusion-placement) in a private session. The script is enabled like
 # the Fusion setup leaves it and loaded by a reconfigure; then:
-#   0. a window opened BEFORE the script is enabled is adopted: its later move is remembered and
-#      the script never moves it itself;
+#   0. windows opened BEFORE the script is enabled are adopted: the script neither moves them nor
+#      records them on loading (an earlier record stays), a later move is remembered, and closing
+#      one without a move records where it was left;
 #   1. a window is moved to a distinctive spot and closed - the memory file carries the entry;
 #   2. reopening it gives the spot and the size back (the seed's Centered placement would put it at
 #      the middle of the screen, so the two outcomes cannot be confused);
 #   3. a record moved off every screen is not given back (the window lands on-screen by KWin);
 #   4. a second window of the same app is not stacked exactly on the held spot;
-#   5. IgnoreApps leaves that app alone (nothing recorded, nothing restored).
+#   5. IgnoreApps leaves that app alone (nothing recorded, nothing restored);
+#   6. a window rule that forces the position wins: the window opens at the rule's spot and the
+#      forced spot is not recorded.
 # Run: tools/vsession/remote.sh place-1 packages/kwin/tests/vsession/scenario-placement.sh SEED 1440x900 300
 exec 2>&1
 export OUT
+set -euo pipefail
 set -x
 CHK=$OUT/checks.txt
 KLOG=$OUT/kwin.log
 pass() { echo "PASS $*" >>"$CHK"; }
 fail() { echo "FAIL $*" >>"$CHK"; }
 info() { echo "INFO $*" >>"$CHK"; }
+# A step that fails stops the scenario (strict mode); the reason lands in the checks, so a stopped
+# run never reads as a clean one.
+trap 'fail "the scenario stopped at line $LINENO: $BASH_COMMAND"' ERR
 K() { python3 "$HOME/pf-tools/tests/lib/pfkwin.py" "$@" 2>>"$OUT/errors.log"; }
 
 # The newest normal window whose class contains CLASS, as "x y w h" (or "none").
@@ -78,6 +85,22 @@ print(("PASS" if ok else "FAIL") + f" {label}: got {gx},{gy} (not {wx},{wy} eith
 PY
 }
 
+check_pos() { # CLASS X Y LABEL: the newest window of CLASS is at (X, Y) within 8 px
+  local got
+  got=$(geom "$1")
+  python3 - "$2" "$3" "$got" "$4" "$1" >>"$CHK" <<'PY'
+import sys
+wx, wy = int(sys.argv[1]), int(sys.argv[2])
+label, klass = sys.argv[4], sys.argv[5]
+parts = sys.argv[3].split()
+if parts == ["none"]:
+    print(f"FAIL {label}: no {klass} window"); raise SystemExit
+gx, gy = int(parts[0]), int(parts[1])
+ok = abs(gx - wx) <= 8 and abs(gy - wy) <= 8
+print(("PASS" if ok else "FAIL") + f" {label}: got {gx},{gy}, wanted {wx},{wy}")
+PY
+}
+
 on_screen() { # CLASS LABEL: the newest window's centre lies on the 1440x900 screen
   local got
   got=$(geom "$1")
@@ -111,15 +134,43 @@ wait_file_rect() { # X Y W H LABEL: a write is coalesced (~2 s), so poll before 
   fail "$5: the memory file did not carry the entry"
 }
 
-# ---- a window opened before the script is enabled (how a Fusion setup finds a running session):
-# it must be adopted - watched, never moved by the script - and its later moves remembered.
+memory_is() { # JSON LABEL: the memory file's apps are exactly JSON (polls past a coalesced write)
+  local _
+  for _ in $(seq 1 6); do
+    if kreadconfig6 --file "$HOME/.config/plasmafusion-placementrc" --group Windows --key windows |
+      python3 -c 'import json, sys
+want = json.loads(sys.argv[1])
+try: apps = json.load(sys.stdin).get("apps", {})
+except Exception: apps = {}
+sys.exit(0 if apps == want else 1)' "$1"; then
+      pass "$2"; return 0
+    fi
+    sleep 1
+  done
+  fail "$2: the memory is $(kreadconfig6 --file "$HOME/.config/plasmafusion-placementrc" --group Windows --key windows)"
+}
+
+# ---- the memory as an earlier session left it: a Konsole record at a spot of its own
+R0='{"org.kde.konsole":{"x":300,"y":200,"width":520,"height":380}}'
+kwriteconfig6 --file plasmafusion-placementrc --group Windows --key windows "{\"v\":1,\"apps\":$R0}"
+
+# ---- windows opened before the script is enabled (how a Fusion setup finds a running session):
+# they must be adopted - watched, never moved or recorded by the script on loading - and their
+# later moves and closes remembered.
 konsole >/dev/null 2>&1 &
 sleep 4
-info "konsole opened before the script: $(geom konsole)"
+kwrite >/dev/null 2>&1 &
+sleep 4
+KG=$(geom konsole)
+WG=$(geom kwrite)
+info "opened before the script: konsole $KG, kwrite $WG"
+[ "$KG" != none ] && [ "$WG" != none ] && pass "both windows opened before the script" ||
+  fail "a window did not open before the script (konsole $KG, kwrite $WG)"
 
 # ---- the script, enabled like the Fusion setup leaves it and loaded by the reconfigure
-bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
-info "fusion-config rc=$?"
+fc_rc=0
+bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc_rc=$?
+info "fusion-config rc=$fc_rc"
 # The settings the tests need (read per decision by the running script, so the same reconfigure
 # that loads the script makes IgnoreApps live).
 kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-placementEnabled true
@@ -130,13 +181,27 @@ loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded pla
 [ "$loaded" = "true" ] && pass "the placement script is loaded" || fail "the placement script is not loaded"
 grep -a 'plasmafusion-placement' "$KLOG" | tail -3 >>"$CHK" 2>/dev/null || true
 
-# ---- 0. the window that predated the script: adopted, and its move is remembered
+# ---- 0. the windows that predated the script: adopted, not moved, nothing recorded on loading
+# (the settling pass and a write would have run within 3 s)
+sleep 4
+# shellcheck disable=SC2086 # KG/WG are "x y w h"
+check_geom konsole $KG "an adopted window is not moved by the script"
+# shellcheck disable=SC2086
+check_geom kwrite $WG "the other adopted window is not moved either"
+memory_is "$R0" "loading records nothing from the adopted windows (the earlier Konsole record stays)"
+
+# an adopted window's move is remembered
 place konsole 233 171 500 400
 sleep 1
 check_geom konsole 233 171 500 400 "the pre-existing window sits where it was placed"
 wait_file_rect 233 171 500 400 "the pre-existing window was adopted (its move was remembered)"
 close_class konsole
 sleep 2
+# an adopted window closed without a move: its place at close is the record
+close_class kwrite
+sleep 1
+# shellcheck disable=SC2086
+wait_file_rect $WG "an adopted window closed unmoved is recorded where it was left"
 shot 00-adopted
 
 # ---- 1. the write path: a placed window's rectangle lands in the memory file
@@ -217,6 +282,29 @@ PY
 shot 50-ignored-open
 close_class kcalc
 sleep 1
+
+# ---- 6. a window rule that forces the position wins over the memory
+kwrite >/dev/null 2>&1 &
+sleep 4
+place kwrite 137 93 640 420
+sleep 3
+close_class kwrite
+sleep 2
+wait_file_rect 137 93 640 420 "the record before the rule"
+# KWin's rule format (src/rulesettings.kcfg): positionrule 2 = Force, wmclassmatch 2 = substring.
+printf '%s\n' '[General]' 'count=1' 'rules=pfplace' '' '[pfplace]' 'Description=placement test' \
+  'position=50,50' 'positionrule=2' 'wmclass=kwrite' 'wmclassmatch=2' >"$HOME/.config/kwinrulesrc"
+qdbus org.kde.KWin /KWin reconfigure
+sleep 2
+kwrite >/dev/null 2>&1 &
+sleep 4
+check_pos kwrite 50 50 "the forced position wins over the remembered spot"
+shot 60-rule
+close_class kwrite
+sleep 3
+wait_file_rect 137 93 640 420 "the forced spot is not recorded (the record stays)"
+rm -f "$HOME/.config/kwinrulesrc"
+qdbus org.kde.KWin /KWin reconfigure
 
 cp "$HOME/.config/plasmafusion-placementrc" "$OUT/memory-final.rc" 2>/dev/null || true
 info "memory file saved to memory-final.rc"

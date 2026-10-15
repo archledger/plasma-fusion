@@ -16,14 +16,17 @@ import "Placement.js" as Placement
 //   Several windows of one app share the record - the one the user moves (or closes) last sets
 //   it, and a new window is not stacked exactly on the remembered spot when an instance of the
 //   app already holds it (KWin's own placement then offsets it, and that record stays).
-// - A window is remembered while it floats (not maximized, full screen or tiled) and once shortly
-//   after it opens; a window opened maximized keeps its last floating record.
+// - A window is remembered while it floats (not maximized, full screen or tiled), once shortly
+//   after it opens and where it was when it closes; a window opened maximized keeps its last
+//   floating record. A window KWin holds in place (a window rule that forces its position) is
+//   left to KWin: the script's geometry write would bypass the rule.
 // - The memory lives in ~/.config/plasmafusion-placementrc [Windows] and is written and read
 //   through plasmashell's desktop scripting: the KWin scripting API has no file write (only
 //   readConfig). The file is read once at start (with a few retries while plasmashell comes up);
 //   windows opened before that answer keep KWin's placement.
 // - Settings (kwinrc [Script-plasmafusion-placement], contents/config/main.xml): RememberSize and
-//   IgnoreApps. The KWin Scripts KCM writes them; KWin's reconfigure reloads them in place.
+//   IgnoreApps (app ids or window classes). The KWin Scripts KCM writes them; KWin's reconfigure
+//   reloads them in place.
 //
 // No timer runs while idle: one shot per window open, one for a pending memory write.
 Item {
@@ -188,7 +191,9 @@ Item {
             fullScreen: w.fullScreen,
             tiled: !!w.tile,
             minimized: w.minimized,
-            maximizeMode: w.maximizeMode
+            maximizeMode: w.maximizeMode,
+            movable: w.moveable,
+            resizable: w.resizeable
         };
     }
 
@@ -199,6 +204,11 @@ Item {
 
     function appIdOf(w) {
         return Placement.appId(String(w.resourceClass || ""), String(w.desktopFileName || ""));
+    }
+
+    // IgnoreApps is matched against the app id and the window class (Placement.identities).
+    function ignoredWindow(w) {
+        return Placement.ignored(Placement.identities(String(w.resourceClass || ""), String(w.desktopFileName || "")), ignoreList());
     }
 
     function screenRects() {
@@ -236,8 +246,10 @@ Item {
         return out;
     }
 
+    // The callers decide whether the window may still be read: the close path records a window KWin
+    // already marked deleted (its geometry and state stay readable for the close animation).
     function record(w, id) {
-        if (!loaded || !w || w.deleted || Placement.ignored(id, ignoreList()) || !Placement.eligible(stateOf(w))) {
+        if (!loaded || !w || ignoredWindow(w) || !Placement.eligible(stateOf(w))) {
             return;
         }
         if (Placement.remember(apps, id, frameRect(w))) {
@@ -261,7 +273,9 @@ Item {
             return;
         }
         const id = appIdOf(w);
-        const entry = { w: w, quietUntil: 0, settleSkip: false };
+        // held: KWin holds the window in place (a forced-position rule), taken now because an X11
+        // window's rules are already dropped when it closes.
+        const entry = { w: w, quietUntil: 0, settleSkip: false, held: w.moveable === false };
         const onGeometry = function () {
             root.geometryChanged(key);
         };
@@ -269,7 +283,7 @@ Item {
         w.frameGeometryChanged.connect(onGeometry);
         watched[key] = entry;
 
-        if (restoreAllowed && loaded && id !== "" && !Placement.ignored(id, ignoreList()) && Placement.eligible(stateOf(w))) {
+        if (restoreAllowed && loaded && id !== "" && !ignoredWindow(w) && Placement.eligible(stateOf(w))) {
             const saved = apps[id];
             const current = frameRect(w);
             const screens = screenRects();
@@ -283,14 +297,19 @@ Item {
                 // Another instance of the app holds the spot: its record stays, and this window's
                 // placement is not recorded as the new one. (When the spot itself is unusable -
                 // off a screen - the settle pass heals the record to where KWin placed it.)
-                const finalRect = Placement.restoreRect(saved, current, rememberSize());
+                const finalRect = Placement.restoreRect(saved, current, Placement.restoreSize(stateOf(w), rememberSize()));
                 if (Placement.onScreen(finalRect, screens) && Placement.collides(finalRect, others)) {
                     entry.settleSkip = true;
                 }
             }
         }
-        settling.push(w);
-        settle.restart();
+        // An adopted window is not settled: the user has not touched it, and recording every open
+        // window when the script loads would replace the records they left (the last window of an
+        // app in stacking order winning). Its moves and its close record it.
+        if (restoreAllowed) {
+            settling.push(w);
+            settle.restart();
+        }
     }
 
     function windowClosed(w) {
@@ -299,10 +318,13 @@ Item {
         if (!entry) {
             return;
         }
-        if (!w.deleted && loaded && Date.now() >= entry.quietUntil) {
-            record(w, appIdOf(w)); // the last place before the window went
+        // The last place before the window went. KWin marks a closing window deleted before
+        // windowRemoved (Wayland and X11), so the window is read as it is: its frame geometry,
+        // maximize mode and tile stay as they were (requestTile is a no-op once deleted).
+        if (loaded && !entry.held && Date.now() >= entry.quietUntil) {
+            record(w, appIdOf(w));
         }
-        if (entry.onGeometry && !w.deleted) {
+        if (entry.onGeometry) {
             w.frameGeometryChanged.disconnect(entry.onGeometry);
         }
         delete watched[key];
@@ -352,7 +374,8 @@ Item {
         read();
         // Windows already open when the script (re)loads - a Fusion setup enables it in a running
         // session, a reconfigure can reload it - are watched so their moves and closes are
-        // remembered; they are never moved by the script itself (KWin placed them already).
+        // remembered; they are never moved by the script itself (KWin placed them already) and not
+        // recorded until the user moves or closes them.
         const windows = Workspace.stackingOrder;
         let adopted = 0;
         for (let i = 0; i < windows.length; ++i) {

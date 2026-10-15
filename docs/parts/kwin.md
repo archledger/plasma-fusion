@@ -116,7 +116,7 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 | `[Script-plasmafusion-attach] TitleBarGap` | 0 | px between the parent's title bar and the dialog |
 | `[Script-plasmafusion-attach] HideDialogTitleBar` | false | board "sheet" look without a dialog title bar (also drops its shadow, see deviations) |
 | `[Script-plasmafusion-placement] RememberSize` | true | give the remembered size back too (false: only the position, with the size the window opens with) |
-| `[Script-plasmafusion-placement] IgnoreApps` | (empty) | app ids or window classes the memory leaves alone (comma-separated; `konsole` matches `org.kde.konsole`) |
+| `[Script-plasmafusion-placement] IgnoreApps` | (empty) | app ids or window classes the memory leaves alone (comma-separated; `konsole` matches `org.kde.konsole`; a window matches by its app id or its class) |
 
 ## Behaviour
 
@@ -247,13 +247,19 @@ again, set back to that rectangle: KWin's `windowAdded` fires after its own plac
 X11), so the assignment wins. The record is per app - its desktop file when it has one (the stable
 name across Wayland and X11), else the window class; a window with neither is left alone. A window
 is only touched while it floats (not maximized in any way, not full screen or tiled, not a dialog,
-transient or modal, not minimized); a window opened maximized keeps its last floating record. One
-second after an open the geometry the window settled at is recorded (the restored spot unless the
-app moved itself again), and every later floating change updates it; the quiet second keeps the
-restore itself and an app's late repositioning out of the record. Windows already open when the
-script is enabled or reloaded (the Fusion setup enables it in a running session; a reconfigure can
-reload it) are watched like new ones - their moves and closes are remembered - but never moved by
-the script itself. A remembered spot is given back only while the centre of the rectangle to apply
+transient or modal, not minimized); a window opened maximized keeps its last floating record. A
+window KWin holds in place - a window rule that forces its position (KWin's `moveable` is false
+then), or moving switched off - is left to KWin entirely: assigning `frameGeometry` goes straight to
+`Window::moveResize` and would bypass the rule. A forced or fixed size keeps the window's own size
+on a restore. One second after an open the geometry the window settled at is recorded (the restored
+spot unless the app moved itself again), every later floating change updates it, and so does the
+close: KWin marks a closing window deleted before `windowRemoved`, and the script reads its frame
+geometry and state as they were (a deleted window's tile request is a no-op, so the tile stays). The
+quiet second keeps the restore itself and an app's late repositioning out of the record. Windows
+already open when the script is enabled or reloaded (the Fusion setup enables it in a running
+session; a reconfigure can reload it) are watched - their moves and closes are remembered - but
+neither moved nor recorded on loading: recording every open window then would replace the records
+the user left. A remembered spot is given back only while the centre of the rectangle to apply
 still lies on a screen the session has (with `RememberSize` off that is the saved position with
 the size the window opens with); when a window of the same app already sits (within 8 px) on the
 spot on the same desktop and activity, KWin's own placement takes the new window instead (it
@@ -278,7 +284,8 @@ Offline (laptop):
 - `node packages/kwin/tests/placement.test.js` (the build runs it when node is installed): the
   placement rules - identity (desktop file over class, lowered), the file's round trip and broken
   records, the centre test (a between-screens gap, a screen left of the origin), the 8 px stack
-  guard, size-only mode, the ignore list and the record's rounding.
+  guard, size-only mode, the ignore list (app id and window class), windows held by a rule (forced
+  position, forced or fixed size) and the record's rounding.
 - Offscreen renders with a stand-in `org.kde.kwin` module (`packages/kwin/tests/offscreen/`,
   PySide6 + private Xvfb display, private HOME): `run.sh STAGE_HOME switcher-harness.qml OUT.png
   [dark=false count=N otherDesktop=N current=N]`, `snap-harness.qml mode=flyout|picker`. Measured
@@ -312,11 +319,15 @@ and pointer drags inside the private session only).
   bar and following its window when it moves.
 - `scenario-evidence.sh`: the same on the Plasma Fusion desktop (Global Theme layout script and
   wallpaper), 5 windows, dark and light, plus pair minimise/restore.
-- `scenario-placement.sh`: a window opened before the script is enabled is adopted (its move is
-  remembered, the script never moves it); a window moved to a distinctive spot and closed comes
+- `scenario-placement.sh` (strict mode; a step that fails is written to the checks): windows
+  opened before the script is enabled are adopted - not moved, nothing recorded on loading (an
+  earlier record stays), a move remembered, a close without a move recorded where the window was
+  left; a window moved to a distinctive spot and closed comes
   back there on its next open (the memory file carries the entry); a spot moved off every screen
   is not restored (the window lands on-screen by KWin's placement); a second window of the same
-  app is not stacked exactly on the held spot; `IgnoreApps` leaves that app's window alone.
+  app is not stacked exactly on the held spot; `IgnoreApps` leaves that app's window alone; a
+  window rule that forces the position wins (the window opens at the rule's spot, the record
+  stays).
 - Journal (`journalctl --user`, the private sessions log there): no messages from these packages.
   Libplasma prints "Member visible of the object PlasmaQuick::Dialog overrides a member of the
   base object" once per process that uses PlasmaCore.Dialog (plasmashell, the stock thumbnail_grid

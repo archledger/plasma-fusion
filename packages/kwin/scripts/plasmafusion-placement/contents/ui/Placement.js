@@ -22,6 +22,15 @@ function appId(resourceClass, desktopFileName) {
     return id.toLowerCase();
 }
 
+// The names IgnoreApps is matched against: the app id and, when it differs, the window class - the
+// setting promises both forms, and an X11 app's class (`LibreOffice`) often differs from its desktop
+// file (`libreoffice-writer`).
+function identities(resourceClass, desktopFileName) {
+    const id = appId(resourceClass, desktopFileName);
+    const windowClass = appId(resourceClass, "");
+    return windowClass !== "" && windowClass !== id ? [id, windowClass] : [id];
+}
+
 // A rectangle the memory may hold: four finite numbers at a sane size. Returns the rounded copy,
 // or null (a record with a broken value is dropped rather than trusted).
 function valid(rect) {
@@ -77,22 +86,27 @@ function floating(state) {
 }
 
 // The windows the memory touches at all: ordinary app windows that float; dialogs, transient and
-// modal windows keep their own placement (KWin places them against their parent).
+// modal windows keep their own placement (KWin places them against their parent). A window KWin
+// holds in place (`movable` false: a window rule that forces its position, or moving switched off)
+// is left to KWin - the script's geometry write would bypass the rule.
 function eligible(state) {
-    return state.normal && !state.transient && !state.modal && floating(state);
+    return state.normal && !state.transient && !state.modal && state.movable !== false && floating(state);
 }
 
 // IgnoreApps: exact app id, or the entry as the last dot-separated part (`konsole` matches
-// `org.kde.konsole`); case-insensitive.
-function ignored(id, list) {
+// `org.kde.konsole`); case-insensitive. `ids` is one name or a window's identities.
+function ignored(ids, list) {
+    const names = Array.isArray(ids) ? ids : [ids];
     const entries = String(list || "").toLowerCase().split(",");
     for (let i = 0; i < entries.length; ++i) {
         const entry = entries[i].trim();
         if (entry === "") {
             continue;
         }
-        if (id === entry || id.endsWith("." + entry)) {
-            return true;
+        for (let j = 0; j < names.length; ++j) {
+            if (names[j] === entry || names[j].endsWith("." + entry)) {
+                return true;
+            }
         }
     }
     return false;
@@ -154,6 +168,12 @@ function collides(rect, others, tolerance) {
     return false;
 }
 
+// Whether the remembered size is given back: RememberSize on and a window that can be resized (a
+// window rule that forces its size, or a fixed-size window, keeps the size it opened with).
+function restoreSize(state, rememberSize) {
+    return !!rememberSize && state.resizable !== false;
+}
+
 // The rectangle to give back: the remembered one, or its position with the size the window opened
 // with (RememberSize off).
 function restoreRect(saved, current, rememberSize) {
@@ -170,7 +190,7 @@ function restoreFor(id, state, saved, screens, others, list, rememberSize, curre
     if (id === "" || !eligible(state) || ignored(id, list) || !saved) {
         return null;
     }
-    const rect = restoreRect(saved, current, rememberSize);
+    const rect = restoreRect(saved, current, restoreSize(state, rememberSize));
     if (!onScreen(rect, screens) || collides(rect, others)) {
         return null;
     }
