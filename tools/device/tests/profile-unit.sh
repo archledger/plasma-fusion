@@ -6,7 +6,8 @@
 # placement memory: a snapshot carries ~/.config/plasmafusion-placementrc and puts it back, and a
 # restore of a snapshot taken before Plasma Fusion removes the memory file and the KWin script
 # package; the running script is unloaded first, so it cannot write its newer map over the restored
-# file. Runs in throw-away HOME trees with `env -i` (no session bus, no display); the restore runs
+# file. The dynamic workspaces' script package goes the same way, and that script is unloaded first
+# too (KWin writes its desktops to kwinrc at every change the script makes). Runs in throw-away HOME trees with `env -i` (no session bus, no display); the restore runs
 # with --dry-run only, so nothing is stopped, started or written outside BASE. Test tooling only,
 # not installed.
 #
@@ -62,6 +63,7 @@ check "a: the snapshot holds the memory as it was" \
 printf '[Windows]\nwindows={"v":1,"apps":{}}\n' >"$A/.config/plasmafusion-placementrc"
 in_home "$A" bash "$RESTORE" "$snap_a" --dry-run >"$BASE/restore-a.txt" 2>&1
 check "a: the restore unloads the running script first" grep -qx 'would: unload the KWin script plasmafusion-placement' "$BASE/restore-a.txt"
+check "a: ...and the dynamic workspaces" grep -qx 'would: unload the KWin script plasmafusion-workspaces' "$BASE/restore-a.txt"
 check "a: the restore puts the memory back" grep -qE '^would: cp -a .*/\.config/plasmafusion-placementrc \.config/plasmafusion-placementrc$' "$BASE/restore-a.txt"
 check "a: the restore does not remove the memory it puts back" \
   bash -c '! grep -qx "would: rm -rf -- .config/plasmafusion-placementrc" "$1"' _ "$BASE/restore-a.txt"
@@ -74,11 +76,15 @@ snap_b=$(in_home "$B" bash "$BACKUP" "$BASE/snap-b" 2>"$BASE/backup-b.err")
 check "b: the snapshot was written" test -s "$snap_b"
 mkdir -p "$B/.local/share/kwin/scripts/plasmafusion-placement/contents/ui"
 printf '{}\n' >"$B/.local/share/kwin/scripts/plasmafusion-placement/metadata.json"
+mkdir -p "$B/.local/share/kwin/scripts/plasmafusion-workspaces/contents/ui"
+printf '{}\n' >"$B/.local/share/kwin/scripts/plasmafusion-workspaces/metadata.json"
 printf '[Windows]\nwindows=%s\n' "$memory" >"$B/.config/plasmafusion-placementrc"
 in_home "$B" bash "$RESTORE" "$snap_b" --dry-run >"$BASE/restore-b.txt" 2>&1
 check "b: the restore unloads the running script first" grep -qx 'would: unload the KWin script plasmafusion-placement' "$BASE/restore-b.txt"
 check "b: the memory file is removed" grep -qx 'would: rm -rf -- .config/plasmafusion-placementrc' "$BASE/restore-b.txt"
 check "b: the script package is removed" grep -qx 'would: rm -rf -- .local/share/kwin/scripts/plasmafusion-placement' "$BASE/restore-b.txt"
+check "b: the dynamic workspaces are unloaded first" grep -qx 'would: unload the KWin script plasmafusion-workspaces' "$BASE/restore-b.txt"
+check "b: the dynamic workspaces package is removed" grep -qx 'would: rm -rf -- .local/share/kwin/scripts/plasmafusion-workspaces' "$BASE/restore-b.txt"
 check "b: the dry run changed nothing" test -s "$B/.config/plasmafusion-placementrc"
 
 echo "== $passed passed, $failed failed"

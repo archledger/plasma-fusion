@@ -69,7 +69,9 @@
 #                      "Copy Text from Screen", Spectacle's region capture, where its Extract Text
 #                      copies the selected text (a kglobalaccel component in
 #                      ~/.local/share/kglobalaccel/, removed by fusion-restore.sh)
-#   Workspaces         four virtual desktops Work, Design, Media, Chat in one row
+#   Workspaces         four virtual desktops Work, Design, Media, Chat in one row (with the
+#                      dynamic workspaces on, kwinrc [Plugins] plasmafusion-workspacesEnabled,
+#                      only the existing ones are named: none is created)
 #   Shortcuts          Meta+1..4 switch workspace (added to "Switch to Desktop 1..4", removed
 #                      from "activate task manager entry 1..4")
 #   Window switcher    kwinrc [TabBox] and [TabBoxAlternative] LayoutName, DesktopMode 0 (the
@@ -1976,8 +1978,18 @@ fi
 say "Workspaces"
 desktops_json=$(bus_json get-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager desktops)
 count=$(printf '%s' "$desktops_json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]))')
+# With dynamic workspaces on (the plasmafusion-workspaces KWin script, off unless the user turned it
+# on) the workspaces follow the windows: the missing named ones are not created - the script would
+# remove them again, empty, and every run would count them as changes. The existing ones are named.
+read_key kwinrc Plugins plasmafusion-workspacesEnabled
+DYNAMIC_WORKSPACES=0
+[ "$REPLY" = true ] && DYNAMIC_WORKSPACES=1
 for i in "${!DESKTOP_NAMES[@]}"; do
   name=${DESKTOP_NAMES[$i]}
+  if [ "$i" -ge "$count" ] && [ "$DYNAMIC_WORKSPACES" = 1 ]; then
+    note "workspace $((i + 1)) \"$name\": not created (dynamic workspaces are on: workspaces come as windows need them)"
+    continue
+  fi
   if [ "$i" -ge "$count" ]; then
     note "create workspace $((i + 1)) \"$name\""
     CHANGES=$((CHANGES + 1))

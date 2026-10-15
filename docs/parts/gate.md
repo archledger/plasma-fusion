@@ -81,7 +81,7 @@ it starts KWin; `kwinrc` is read by KWin when it starts.
 | decoration | effective `kwinrc [org.kde.kdecoration2] library=org.plasmafusion.decoration` (user file or kdedefaults) | tested versions |
 | navigation (TABLET2 N1) | effective `kwinrc [Plugins] plasmafusion_navigationEnabled=true` (the compiled tablet navigation effect, built against KWin's internal classes) | Fusion theme, tested versions |
 | desktop (TABLET2 H1) | a top-level `[Containments][N]` group of the user's `plasma-org.kde.plasma.desktop-appletsrc` has `plugin=org.plasmafusion.desktop` (the Folder View fork, `docs/parts/desktop.md`) | Fusion theme, tested versions, the package installed |
-| snap, attach, placement | `kwinrc [Plugins] plasmafusion-snapEnabled` / `plasmafusion-attachEnabled` / `plasmafusion-placementEnabled` = true | Fusion theme |
+| snap, attach, placement, workspaces | `kwinrc [Plugins] plasmafusion-snapEnabled` / `plasmafusion-attachEnabled` / `plasmafusion-placementEnabled` / `plasmafusion-workspacesEnabled` = true (the dynamic workspaces only where the user turned them on) | Fusion theme |
 | outline | `kwinrc [Outline] QmlPath` contains `plasmafusion` | Fusion theme |
 | switcher | effective `kwinrc [TabBox]` or `[TabBoxAlternative] LayoutName=org.plasmafusion.switcher` | Fusion theme |
 | tablet (DEVICE-1) | effective `kwinrc [Plugins] plasmafusion-tabletEnabled=true` | Fusion theme |
@@ -110,7 +110,7 @@ Switching off (recorded first in `gate/off`, then written):
 |---|---|
 | lock screen | drop-in moved to `gate/saved/` (as `lockscreen-disable.sh` removes it), empty directory removed |
 | decoration | when `~/.config/kdedefaults` (the Global Theme) names `org.kde.kwin.aurorae.v2` with `__aurorae__svg__PlasmaFusion{Dark,Light}`: the user's `library` and `theme` keys are removed, so the title bars follow a light/dark switch startplasma makes after the check (with Follow sunset it writes only kdedefaults). Otherwise user `kwinrc` `library=org.kde.kwin.aurorae.v2`, `theme=__aurorae__svg__PlasmaFusion{Dark,Light}` (variant from the Global Theme, else the colour scheme's name or window colour); with `plasmafusionrc [Decoration] ButtonStyle=LeftCircles` the `-Left` theme and `ButtonsOnLeft=XIA`, `ButtonsOnRight=_` as the settings module does; Breeze if the Aurorae themes are missing |
-| snap, attach, placement | the `[Plugins]` key removed (the scripts are `EnabledByDefault: false`) |
+| snap, attach, placement, workspaces | the `[Plugins]` key removed (the scripts are `EnabledByDefault: false`) |
 | outline | `[Outline] QmlPath` removed (KWin's own outline) |
 | switcher | `LayoutName` removed, or set to KWin's default `thumbnail_grid` where kdedefaults still names the Fusion switcher (a Global Theme without a switcher of its own, such as Breeze, leaves it there); `DesktopMode=0` and `HighlightWindows=false` (fusion-config.sh's values for the Fusion switcher) removed |
 | tablet | `plasmafusion-tabletEnabled=false` written (not removed: the script's EnabledByDefault is not the check's to know) |
