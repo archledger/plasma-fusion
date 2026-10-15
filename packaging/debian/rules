@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Plasma Fusion: the shared part (tools/build.sh, packaging/install-tree.sh) and the three compiled
+# Plasma Fusion: the shared part (tools/build.sh, packaging/install-tree.sh) and the four compiled
 # parts (CMake) from one source; see docs/parts/system.md.
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
@@ -29,6 +29,10 @@ override_dh_auto_configure:
 	stamp=$$(( 1700000000 + 0x$$(cd packages/kcm-cpp && cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/*.json src/ui/*.qml ../common/*.qml | sha256sum | cut -c1-6) )); \
 	  echo $$stamp >_kcm-stamp; \
 	  SOURCE_DATE_EPOCH=$$stamp dh_auto_configure --sourcedirectory=packages/kcm-cpp --builddirectory=_build/settings -- $(CMAKE_FLAGS)
+	# Quick Look's QML is compiled into its program as well: a stamp derived from its sources too.
+	stamp=$$(( 1700000000 + 0x$$(cd packages/quicklook-cpp && cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/qml/*.qml | sha256sum | cut -c1-6) )); \
+	  echo $$stamp >_quicklook-stamp; \
+	  SOURCE_DATE_EPOCH=$$stamp dh_auto_configure --sourcedirectory=packages/quicklook-cpp --builddirectory=_build/quicklook -- $(CMAKE_FLAGS)
 
 override_dh_auto_build:
 	STAGE=$(CURDIR)/_stage bash tools/build.sh
@@ -36,6 +40,7 @@ override_dh_auto_build:
 	dh_auto_build --builddirectory=_build/decoration
 	dh_auto_build --builddirectory=_build/navigation
 	SOURCE_DATE_EPOCH=$$(cat _kcm-stamp) QT_RCC_SOURCE_DATE_OVERRIDE=$$(cat _kcm-stamp) dh_auto_build --builddirectory=_build/settings
+	SOURCE_DATE_EPOCH=$$(cat _quicklook-stamp) QT_RCC_SOURCE_DATE_OVERRIDE=$$(cat _quicklook-stamp) dh_auto_build --builddirectory=_build/quicklook
 
 override_dh_auto_test:
 
@@ -46,6 +51,7 @@ override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/plasma-fusion-decoration cmake --install _build/decoration
 	DESTDIR=$(CURDIR)/debian/plasma-fusion-settings cmake --install _build/settings
 	DESTDIR=$(CURDIR)/debian/plasma-fusion-navigation cmake --install _build/navigation
+	DESTDIR=$(CURDIR)/debian/plasma-fusion-quicklook cmake --install _build/quicklook
 	# Every icon link resolves in the package or in the installed Breeze (hicolor and Flatpak names
 	# are those of apps that need not be installed).
 	ln -s /usr/share/icons/breeze debian/plasma-fusion/usr/share/icons/breeze

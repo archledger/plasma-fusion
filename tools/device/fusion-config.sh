@@ -70,6 +70,10 @@
 #                      (plasma-fusion-copytext; Spectacle's region capture and its Extract Text
 #                      without the tesseract command) (a kglobalaccel component in
 #                      ~/.local/share/kglobalaccel/, removed by fusion-restore.sh)
+#   Quick Look         Space in Dolphin previews the selected files (with the plasma-fusion-quicklook
+#                      package; "Select Files and Folders" keeps its button but not Space; a Space
+#                      the user gave an action is kept) (~/.local/share/kxmlgui5/dolphin/dolphinui.rc,
+#                      put back by fusion-restore.sh)
 #   Workspaces         four virtual desktops Work, Design, Media, Chat in one row (with the
 #                      dynamic workspaces on, kwinrc [Plugins] plasmafusion-workspacesEnabled,
 #                      only the existing ones are named: none is created)
@@ -365,6 +369,93 @@ libreoffice_installed() {
   done
   return 1
 }
+# Quick Look (packages/quicklook-cpp, the plasma-fusion-quicklook package): its service menu is
+# in Dolphin's shortcuts (Dolphin 26.04 and later) under this name.
+QUICKLOOK_ACTION="servicemenu_plasma-fusion-quicklook.desktop::quicklook"
+quicklook_installed() {
+  command -v plasma-fusion-quicklook >/dev/null 2>&1 && data_path kio/servicemenus/plasma-fusion-quicklook.desktop >/dev/null
+}
+# Dolphin's interface file with Space given to Quick Look. $1 the user's copy
+# (~/.local/share/kxmlgui5/dolphin/dolphinui.rc, which may not exist). Prints a status line, then
+# the file to write:
+#   set       Space given to Quick Look and taken from "Select Files and Folders" (its default key)
+#   kept      Quick Look already has an entry (an earlier run, or a key the user chose)
+#   taken:A   the user gave Space to action A: nothing changes
+# Without a copy: a file of version 0, older than Dolphin's, which KXmlGui merges into Dolphin's
+# interface keeping only its shortcuts (KXmlGuiVersionHandler), so menus and toolbars stay Dolphin's.
+# Two actions on Space would be ambiguous and neither would run, hence selection mode loses it.
+dolphin_ui_with_quicklook() {
+  python3 - "$1" "$QUICKLOOK_ACTION" <<'PY'
+import os
+import sys
+from xml.dom import minidom
+
+path, action = sys.argv[1], sys.argv[2]
+if os.path.exists(path):
+    doc = minidom.parse(path)
+else:
+    doc = minidom.parseString('<!DOCTYPE gui SYSTEM "kpartgui.dtd">\n<gui name="dolphin" version="0"/>')
+gui = doc.documentElement
+props = next((e for e in gui.childNodes if e.nodeType == e.ELEMENT_NODE and e.tagName == "ActionProperties"), None)
+if props is None:
+    props = doc.createElement("ActionProperties")
+    props.setAttribute("scheme", "Default")
+    gui.appendChild(props)
+entries = {e.getAttribute("name"): e for e in props.getElementsByTagName("Action")}
+
+
+def keys(element):
+    return [k.strip() for k in element.getAttribute("shortcut").split(";") if k.strip()]
+
+
+def add(name, shortcut):
+    element = doc.createElement("Action")
+    element.setAttribute("name", name)
+    element.setAttribute("shortcut", shortcut)
+    props.appendChild(element)
+
+
+if action in entries:
+    print("kept")
+    sys.exit(0)
+taken = sorted(n for n, e in entries.items() if e.hasAttribute("shortcut") and "Space" in keys(e))
+if taken:
+    print("taken:" + taken[0])
+    sys.exit(0)
+add(action, "Space")
+selection = entries.get("toggle_selection_mode")
+if selection is None or not selection.hasAttribute("shortcut"):
+    add("toggle_selection_mode", "")
+print("set")
+print(doc.toxml())
+PY
+}
+# Space in Dolphin shows the selected files in Quick Look. Only with Dolphin and Quick Look
+# installed; Dolphin reads the file when it starts.
+ensure_quicklook_space() {
+  local file=$DATA/kxmlgui5/dolphin/dolphinui.rc out status
+  if ! command -v dolphin >/dev/null 2>&1; then
+    note "Quick Look: Dolphin is not installed"
+    return 0
+  fi
+  if ! quicklook_installed; then
+    note "Quick Look is not installed (the plasma-fusion-quicklook package): Dolphin's Space is left as it is"
+    return 0
+  fi
+  if ! out=$(dolphin_ui_with_quicklook "$file" 2>/dev/null); then
+    note "warning: $file could not be read; Dolphin's Space is left as it is"
+    return 0
+  fi
+  status=${out%%$'\n'*}
+  case $status in
+    kept) note "Dolphin: Quick Look's key (kept)" ;;
+    taken:*) note "Dolphin: Space belongs to ${status#taken:} (a key you chose); Quick Look stays in the context menu" ;;
+    set)
+      install_text "$file" "${out#*$'\n'}" || true
+      note "Dolphin: Space shows Quick Look, from Dolphin's next start"
+      ;;
+  esac
+}
 # Per-user configuration files (GTK stylesheets): from the build with --install, otherwise the
 # templates of a system-wide install (/usr/share/plasma-fusion/config).
 CONFIG_SRC=
@@ -416,9 +507,10 @@ BACKUP_FILES=(
 # Files below $HOME outside ~/.config (restored or removed the same way).
 LO_GUARD_REL=.local/bin/libreoffice
 LO_ENTRY_REL=.local/share/applications/soffice.desktop
+DOLPHIN_UI_REL=.local/share/kxmlgui5/dolphin/dolphinui.rc
 BACKUP_HOME=(".local/share/kglobalaccel/$NOTIFY_COMPONENT" ".local/share/kglobalaccel/$COPYTEXT_COMPONENT"
   ".local/share/kglobalaccel/$CLIPBOARD_COMPONENT"
-  .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL")
+  .local/libexec/plasma-fusion "$LO_GUARD_REL" "$LO_ENTRY_REL" "$DOLPHIN_UI_REL")
 # Configuration files the build or the system templates would install are saved as well.
 if [ -n "$CONFIG_SRC" ]; then
   while IFS= read -r -d '' f; do
@@ -2423,6 +2515,11 @@ if libreoffice_installed; then
     fi
   fi
 fi
+
+# ---------- 7d3. Quick Look in Dolphin ----------
+
+say "Quick Look"
+ensure_quicklook_space
 
 # ---------- 7e. pen (--pen) ----------
 

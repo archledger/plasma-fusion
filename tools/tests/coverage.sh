@@ -8,7 +8,7 @@
 #   tools/tests/coverage.sh [--out DIR] [--deps] [scripts] [cpp:PACKAGE ...]
 #
 #   scripts        Python (coverage.py), shell (kcov) and JavaScript (node) in one pass (default)
-#   cpp:PACKAGE    a compiled part (decoration-cpp, kcm-cpp or navigation-cpp): built with gcc
+#   cpp:PACKAGE    a compiled part (decoration-cpp, kcm-cpp, navigation-cpp or quicklook-cpp): built with gcc
 #                  --coverage, its tests run, the lines of its src/ reported by gcovr
 #   --out DIR      results (default build/coverage); an earlier result there is replaced, any
 #                  other non-empty directory is refused
@@ -55,7 +55,7 @@ while [ $# -gt 0 ]; do
     --out) OUT=${2:?--out needs a directory}; shift ;;
     --deps) DEPS=1 ;;
     -h|--help) sed -n '5,44p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    scripts|cpp:decoration-cpp|cpp:kcm-cpp|cpp:navigation-cpp) parts+=("$1") ;;
+    scripts|cpp:decoration-cpp|cpp:kcm-cpp|cpp:navigation-cpp|cpp:quicklook-cpp) parts+=("$1") ;;
     *) echo "coverage.sh: unknown argument '$1' (--help)" >&2; exit 2 ;;
   esac
   shift
@@ -78,6 +78,11 @@ if [ "$DEPS" = 1 ]; then
       cpp:*)
         dnf install -y -q dnf-plugins-core rpm-build gcovr dbus-daemon python3 git-core
         dnf builddep -y -q "$ROOT/packaging/fedora/plasma-fusion.spec"
+        # Quick Look's viewers test loads QML modules no build needs.
+        if [ "$part" = cpp:quicklook-cpp ]; then
+          # shellcheck disable=SC2046 # one package name per word
+          dnf install -y -q $(sed -n 's/^# viewers test needs: //p' "$ROOT/packages/quicklook-cpp/tests/CMakeLists.txt")
+        fi
         ;;
     esac
   done

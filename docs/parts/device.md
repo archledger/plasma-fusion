@@ -241,6 +241,29 @@ that Spectacle, which keeps running with it, and the helper copies nothing; a se
 from a uinput keyboard): after the setup Meta+Shift+T started `spectacle --region` without a new
 login, the header button too; after the restore the key holds nothing and starts nothing.
 
+**Quick Look in Dolphin** (2026-10-15; docs/parts/quicklook-cpp.md). With Dolphin and the
+`plasma-fusion-quicklook` package installed (its program in PATH and its service menu in a data
+directory), the setup gives Space in Dolphin to Quick Look: Dolphin lists the service-menu action
+among its shortcuts (`servicemenu_plasma-fusion-quicklook.desktop::quicklook`, Dolphin 26.04 and
+later) and keeps the user's shortcuts in `~/.local/share/kxmlgui5/dolphin/dolphinui.rc`
+(`ActionProperties`). Without that file the setup writes one of version 0 holding only the two
+entries (Quick Look `Space`, "Select Files and Folders" `toggle_selection_mode` none): it is older
+than Dolphin's own interface, so KXmlGui merges its shortcuts into Dolphin's file and keeps nothing
+else (`KXmlGuiVersionHandler`, kxmlgui master), and the menus and toolbars stay Dolphin's. With the
+file (the user changed shortcuts or toolbars) the two entries are added to its `ActionProperties`
+and the rest is kept. Selection mode loses Space only while it has its default key (two actions
+on Space would be ambiguous and neither would run); its button and menu entry stay. A Space the
+user gave an action, a key the user gave Quick Look, or an earlier run's entry is kept; a file that
+is not XML is left alone with a warning. Dolphin reads the file when it starts. The file is in the
+backup (`absent-file` or `present-file`), so `fusion-restore.sh` removes it or puts it back. Test:
+`tools/device/tests/quicklook-keys-unit.sh` (CI, 16 checks) runs the step in a throw-away HOME with
+stand-ins for Dolphin and Quick Look and the restore's file loop: nothing without Dolphin or Quick
+Look; a new file of version 0 with only the two entries, unchanged on a second run, removed by the
+restore; Dolphin's own merged file keeping the user's keys, menus, toolbars and version, put back
+as it was by the restore; selection mode on the user's own key keeping it; a Space the user gave
+selection mode or another action left alone; the user's own key for Quick Look kept; an unreadable
+file left alone.
+
 Widget keys (quick settings, pen) are also set on later runs when the widget has none (a layout
 rebuild drops them; a dead entry of a dropped widget is cleared first), but then only when the key is
 free. With `--keep-shortcuts` quick settings keeps Meta+N, as before, and Klipper's pop-up keeps
@@ -369,7 +392,7 @@ In addition to what `gate.md` describes, for the chosen backup and every later r
    `$HOME` (`~/.local/share/kglobalaccel/org.plasmafusion.notifications.desktop`,
    `~/.local/share/kglobalaccel/org.plasmafusion.copytext.desktop`,
    `~/.local/share/kglobalaccel/org.plasmafusion.clipboard.desktop`,
-   `~/.local/libexec/plasma-fusion`);
+   `~/.local/libexec/plasma-fusion`, `~/.local/share/kxmlgui5/dolphin/dolphinui.rc`);
 6. widget shortcuts: every plasmashell `activate widget N` action whose widget N is not in the
    restored layout is unregistered (0.5.0). kglobalaccel keeps a widget's key after the widget is
    gone, and step 1 gives back only the keys the setup recorded, not the Meta+A that the settings

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# The Quick Look window's name and icon (its Wayland application id). Not in the menus: Quick Look
+# starts from Dolphin (Space) and from the context menus (plasma-fusion-quicklook.desktop).
+[Desktop Entry]
+Type=Application
+Name=Quick Look
+Comment=Preview files without opening them
+Exec=plasma-fusion-quicklook %F
+Icon=document-preview
+NoDisplay=true
+Terminal=false
+Categories=Qt;KDE;Utility;

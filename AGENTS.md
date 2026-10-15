@@ -99,7 +99,7 @@ as their pages prescribe, and do not invent values beyond the boards and those d
   tile; `PF_LINTS=fail|warn|off`, default fail). `NAME` is a part name: a `tools/build.d/` script
   without its numeric prefix and `.sh` (`20-plasma-style.sh` builds as `plasma-style`; `ls
   tools/build.d/` lists them). An unknown name builds nothing and still exits 0 — the `== NAME`
-  lines say what ran. The three compiled parts (`decoration-cpp`, `kcm-cpp`, `navigation-cpp`) are
+  lines say what ran. The four compiled parts (`decoration-cpp`, `kcm-cpp`, `navigation-cpp`, `quicklook-cpp`) are
   CMake projects with ctest suites, packaged with `packaging/build-rpm.sh --compiled` — their part
   page has the details.
 - `tools/checks/tests/run.sh` — the lints' own fixtures.
@@ -118,7 +118,7 @@ as their pages prescribe, and do not invent values beyond the boards and those d
   (e.g. the calendar-date, backdrop-reload and wheel-guard checks). A bare `python3 <suite>.py`
   on a live display is never the right run. The JavaScript suites run with `node`; the C++ parts
   run their ctest suites, which CI runs under the `sanitizers` workflow's flags.
-- Packaging a snapshot: `packaging/build-rpm.sh` (add `--compiled` to include the three
+- Packaging a snapshot: `packaging/build-rpm.sh` (add `--compiled` to include the four
   compiled parts; the default builds the shared part only); the other distribution channels have
   container-driven builders in `tools/tests/packages/`. NixOS is the exception: it is the flake
   (`packaging/nix/`, checked with `nix flake check` locally — no CI job runs Nix —

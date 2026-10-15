@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# "Quick Look" in the context menus of Dolphin and the desktop, for every local file and folder.
+# Dolphin (26.04 and later) lists the action among its shortcuts as
+# servicemenu_plasma-fusion-quicklook.desktop::quicklook; the Plasma Fusion setup gives it Space.
+[Desktop Entry]
+Type=Service
+MimeType=all/all;
+Actions=quicklook;
+X-KDE-Priority=TopLevel
+X-KDE-Protocols=file
+
+[Desktop Action quicklook]
+Name=Quick Look
+Icon=document-preview
+Exec=plasma-fusion-quicklook %F

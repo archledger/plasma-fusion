@@ -1,7 +1,7 @@
 # Part: NixOS
 
 Plasma Fusion on NixOS through a Nix package and a NixOS module in `packaging/nix/`: the shared
-part (what `tools/build.sh` stages) and the three compiled parts, built from the system's own
+part (what `tools/build.sh` stages) and the four compiled parts, built from the system's own
 `kdePackages`, so every `nixos-rebuild` builds them against the KWin it ships.
 
 ## Requirements
@@ -15,7 +15,7 @@ do not support (`find_package(KWin 6.7)`; 6.7-only QML interfaces), so until a N
 
 | File | What |
 |---|---|
-| `packaging/nix/plasma-fusion.nix` | `{ pkgs, src, version }` → `plasma-fusion` (the shared part), `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation` |
+| `packaging/nix/plasma-fusion.nix` | `{ pkgs, src, version }` → `plasma-fusion` (the shared part), `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation`, `plasma-fusion-quicklook` (a program: wrapped with the QML modules of its viewers) |
 | `packaging/nix/module.nix` | `programs.plasma-fusion = { enable; src; compiledParts; plymouth; }` |
 
 The shared package is installed by `packaging/install-tree.sh`, as on every channel
@@ -61,7 +61,8 @@ With flakes, add the input and the module (pin a tag once releases exist):
 ```
 
 `flake.nix` also offers the packages (`packages.<system>.{plasma-fusion, plasma-fusion-decoration,
-plasma-fusion-settings, plasma-fusion-navigation}`), and `nix flake check` builds them. Its own
+plasma-fusion-settings, plasma-fusion-navigation, plasma-fusion-quicklook}`), and `nix flake check`
+builds them. Its own
 `nixpkgs` input follows nixos-unstable; with `follows` the system's nixpkgs is used instead.
 
 Without flakes, in the system configuration, for example `/etc/nixos/plasma-fusion.nix` imported from

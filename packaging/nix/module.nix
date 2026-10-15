@@ -49,7 +49,8 @@ in
       # The login check's notification and fusion-config.sh run in the user's session with its PATH:
       # notify-send and gdbus as on Fedora, where they are part of every Plasma install.
       environment.systemPackages = [ pf.plasma-fusion pkgs.libnotify pkgs.glib.bin ]
-        ++ lib.optionals cfg.compiledParts [ pf.plasma-fusion-decoration pf.plasma-fusion-settings pf.plasma-fusion-navigation ];
+        ++ lib.optionals cfg.compiledParts [ pf.plasma-fusion-decoration pf.plasma-fusion-settings pf.plasma-fusion-navigation
+          pf.plasma-fusion-quicklook ];
       environment.pathsToLink = [ "/libexec/plasma-fusion" ];
       # Manrope and Space Grotesk for every user (fontconfig reads fonts.packages).
       fonts.packages = [ pf.plasma-fusion ];

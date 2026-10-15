@@ -80,6 +80,9 @@ jobs:
       - name: Copy-text shortcut set up and undone (fake kglobalaccel)
         run: tools/device/tests/copytext-unit.sh build/copytext
 
+      - name: Setup gives Space in Dolphin to Quick Look (Dolphin's interface file, the restore)
+        run: tools/device/tests/quicklook-keys-unit.sh build/quicklook-keys
+
       - name: Copy text from the screen in one step (stand-ins, a private bus, real Tesseract)
         run: |
           set -euo pipefail
