@@ -348,9 +348,13 @@ issues the traps - nothing is taken from it. The rules are in `Workspaces.js`:
   (the empty one to move windows to), the one each screen shows (KWin 6.7's per-screen desktops
   give every screen its own; `currentDesktopForScreen`) and the first `KeepFirst`. KWin moves a
   window off a removed desktop rather than losing it, but the script only removes empty ones.
-- After removals the script's own "Workspace N" names follow their positions; every other name -
-  the setup's Work, Design, Media and Chat, a name the user gave, KWin's "Desktop N" - is never
-  touched.
+- After removals the script's own "Workspace N" names follow their positions. Ownership is kept by
+  desktop id: only a workspace this instance of the script added, and that still carries the name
+  it gave, is renamed. Every other name - the setup's Work, Design, Media and Chat, a name the user
+  gave (also one like "Workspace 3"), KWin's "Desktop N" - is never touched. KWin scripts cannot
+  write a file, so the ownership does not outlive the script: after a KWin restart or a
+  disable/enable, the names from before stay as they are, even when a later removal puts them out
+  of order.
 - Timing: KWin's slide effect ends a desktop switch animation at once when a desktop is added or
   removed (`desktopAdded`/`desktopRemoved` -> `finishedSwitching`; its spring settles in about
   0.7 s at the default speed), so nothing changes until a second after the last switch. Removals
@@ -370,8 +374,8 @@ Around it: the setup (`tools/device/fusion-config.sh`, "Workspaces") names the e
 but creates none while the script is on - it would remove them again and every run would count
 changes; the login check switches the script off with the other Fusion KWin scripts when the
 Global Theme is not Plasma Fusion (`docs/parts/gate.md`); a profile restore unloads it before it
-puts files back, because KWin writes its whole `[Desktops]` group at every change
-(`docs/parts/device.md`). On teardown the script disconnects the handlers it put on the windows.
+puts files back and keeps it from loading again until the next login, because KWin writes its whole
+`[Desktops]` group at every change (`docs/parts/device.md`). On teardown the script disconnects the handlers it put on the windows.
 
 Known limits: a workspace that holds another activity's window stays; a window whose session data
 names a workspace that was removed (empty) comes back on the shown one, as in GNOME; with several
@@ -394,7 +398,8 @@ Offline (laptop):
   cases, an empty one in the middle, the shown one, each screen's shown one, `KeepFirst` and its
   bounds, KWin's ceiling with removals making room), 5000 random states (never an occupied, shown,
   kept or the trailing empty workspace removed, one always left, a second pass a no-op), the
-  timing gates and the numbered names.
+  timing gates, the numbered names and their ownership (a user's "Workspace 3", a name changed
+  since, another desktop's id).
 - `node packages/kwin/tests/snap-groups.test.js` (the build runs it when node is installed): snap
   groups - forming a group from the picks, a window in one group at most (joining another
   arrangement moves it), membership and zones changing together (a window left alone by a transfer
@@ -477,7 +482,8 @@ and pointer drags inside the private session only).
   empty workspace stays while shown and goes when left; a window on every desktop, or kept out of
   the pager, holds nothing; a close removes the extra empty one a second later; the setup run again
   creates no workspace; a workspace the user adds empty goes again unless `KeepFirst` keeps it; a
-  name the user gives stays; a disable/enable cycle leaves no errors and the new instance works.
+  name the user gives in the script's own form ("Workspace 7" in second place) stays after a pass and
+  after a restart; a disable/enable cycle leaves no errors and the new instance works.
   The times come from the script's own log lines.
 - Journal (`journalctl --user`, the private sessions log there): no messages from these packages.
   Libplasma prints "Member visible of the object PlasmaQuick::Dialog overrides a member of the

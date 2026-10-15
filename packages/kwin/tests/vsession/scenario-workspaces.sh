@@ -18,7 +18,8 @@
 #      a window removes its workspace a second after the close;
 #   7. the Fusion setup run again while the script is on creates no workspace;
 #   8. KeepFirst keeps the first workspaces, even empty;
-#   9. a name of the user's (or the setup's) is never changed;
+#   9. a name of the user's (or the setup's) is never changed - also one in the script's own
+#      "Workspace N" form, after a pass and after the restart in 10;
 #  10. a disable/enable cycle: the unloaded instance changes nothing more and leaves no errors from
 #      its handlers; the new instance works.
 # Every add and remove is logged by the script with the time since the last switch and close.
@@ -259,20 +260,24 @@ qdbus org.kde.KWin /KWin reconfigure
 sleep 4
 case $(desks) in *Extra*) fail "KeepFirst 0 again: Extra stayed ($(desks))" ;; *) pass "KeepFirst 0 again: the empty Extra went ($(desks))" ;; esac
 
-# ---- 9. a name of the user's stays (the setup's Design stayed through the removal in 3; the
-# script renames only its own "Workspace N" names)
+# ---- 9. a name of the user's stays (the setup's Design stayed through the removal in 3). The user
+# names the last workspace "Workspace 7": the script's own form, at the wrong position. The script
+# renames only workspaces it added that keep its name, so neither a pass now nor the restart in 10
+# renames it.
 switch_to 0
 sleep 2
 info "before the rename: $(desks)"
 id=$(K run "var d = workspace.desktops; report(String(d[d.length - 1].id));" | python3 -c 'import json, sys; print(json.load(sys.stdin))')
-qdbus org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager.setDesktopName "$id" Notes >/dev/null
-sleep 2
-case $(desks) in *\|Notes) pass "a name the user gives the empty last workspace stays: $(desks)" ;; *) fail "the user's name changed: $(desks)" ;; esac
+qdbus org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager.setDesktopName "$id" "Workspace 7" >/dev/null
+sleep 1
+# A window opening runs a pass.
+kwrite >/dev/null 2>&1 &
+sleep 4
+case $(desks) in *\|"Workspace 7") pass "a name the user gives in the script's own form stays after a pass: $(desks)" ;;
+  *) fail "the user's name changed: $(desks)" ;; esac
 shot 90-names
 
 # ---- 10. disable/enable: the old instance stops, leaves no errors, the new one works
-kwrite >/dev/null 2>&1 &
-sleep 4
 enable false
 loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-workspaces)
 [ "$loaded" = false ] && pass "disabled: the script is unloaded" || fail "disabled: the script is still loaded ($loaded)"
@@ -287,6 +292,8 @@ loaded=$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded pla
 grown=$(desks)
 [ "$(echo "$grown" | tr '|' '\n' | wc -l)" = $(( count_before + 1 )) ] && pass "enabled again: the empty one at the end is added ($grown)" ||
   fail "enabled again: $grown (had $off_before)"
+case $grown in *"|Workspace 7|"*) pass "the restarted script leaves the user's \"Workspace 7\" alone: $grown" ;;
+  *) fail "after the restart the user's name changed: $grown" ;; esac
 errors_end=$(script_errors)
 [ "$errors_end" = "$errors_start" ] && pass "no errors from the script's handlers ($errors_end before and after the cycle)" ||
   fail "the script's handlers raised errors ($errors_start at the start, $errors_end at the end)"

@@ -140,10 +140,22 @@ assert.strictEqual(numberOf("Workspace 26", numbered), 0, "beyond KWin's ceiling
 assert.strictEqual(nameFor(2, numbered), "Workspace 3");
 assert.strictEqual(nameFor(25, numbered), "");
 const named = (...names) => names.map((name, i) => ({ id: "d" + i, name }));
-assert.deepStrictEqual(renames(named("Work", "Workspace 3", "Workspace 4"), numbered),
+const own = (desktops) => Object.fromEntries(desktops.map(d => [d.id, d.name]));
+// The workspaces the script named (all of them here): after the second one went.
+let ws = named("Work", "Workspace 3", "Workspace 4");
+assert.deepStrictEqual(renames(ws, numbered, own(ws.slice(1))),
     [{ id: "d1", name: "Workspace 2" }, { id: "d2", name: "Workspace 3" }], "after the second desktop went");
-assert.deepStrictEqual(renames(named("Work", "Design", "Workspace 3"), numbered), [], "in step: nothing");
-assert.deepStrictEqual(renames(named("Workspace 2", "Desktop 5", "Notes"), numbered), [{ id: "d0", name: "Workspace 1" }], "only the script's own names move");
-assert.deepStrictEqual(renames([], numbered), []);
+ws = named("Work", "Design", "Workspace 3");
+assert.deepStrictEqual(renames(ws, numbered, own(ws)), [], "in step: nothing");
+ws = named("Workspace 2", "Desktop 5", "Notes");
+assert.deepStrictEqual(renames(ws, numbered, own(ws)), [{ id: "d0", name: "Workspace 1" }], "only numbered names move");
+assert.deepStrictEqual(renames([], numbered, {}), []);
+// Ownership: a name the script did not give, or one changed since, is never touched.
+ws = named("Work", "Workspace 3");
+assert.deepStrictEqual(renames(ws, numbered, {}), [], "a user's \"Workspace 3\" in second place stays");
+assert.deepStrictEqual(renames(ws, numbered, undefined), [], "no ownership known: nothing");
+assert.deepStrictEqual(renames(ws, numbered, { d1: "Workspace 5" }), [], "renamed since the script named it: the user's now");
+assert.deepStrictEqual(renames(ws, numbered, { d1: "Workspace 3" }), [{ id: "d1", name: "Workspace 2" }], "still the script's name");
+assert.deepStrictEqual(renames(named("Work", "Workspace 3"), numbered, { gone: "Workspace 3" }), [], "ownership is per id: another desktop's name is not enough");
 
 console.log("workspaces.test.js: ok");

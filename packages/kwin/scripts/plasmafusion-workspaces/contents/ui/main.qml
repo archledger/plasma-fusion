@@ -22,8 +22,10 @@ import "Workspaces.js" as Workspaces
 //   window closes and ten seconds after the script starts (a session restore brings windows back
 //   to their desktops by id).
 // - A workspace the script adds is called "Workspace N" for its position, and after removals those
-//   names follow their positions. No other name is ever changed (Fusion's Work, Design, Media and
-//   Chat, the user's own, KWin's "Desktop N").
+//   names follow their positions while they keep the name the script gave. Ownership is kept by
+//   desktop id for this instance only - KWin scripts cannot write a file - so after a KWin restart or
+//   a disable/enable the earlier names stay as they are. No other name is ever changed (Fusion's
+//   Work, Design, Media and Chat, the user's own - also one like "Workspace 3" - KWin's "Desktop N").
 //
 // No timer runs while idle: one shot per burst of changes.
 Item {
@@ -34,6 +36,8 @@ Item {
     property real lastCloseAt: -Infinity
     // internalId -> {w, onChange}: the windows whose desktop moves are watched.
     property var watched: ({})
+    // desktop id -> the name this instance gave it: the only workspaces it renames (Workspaces.renames).
+    property var owned: ({})
 
     function log(message) {
         console.info("plasmafusion-workspaces: " + message);
@@ -143,22 +147,33 @@ Item {
             if (Workspaces.canAdd(count)) {
                 const name = Workspaces.nameFor(count, numbered);
                 Workspace.createDesktop(count, name);
+                const added = Workspace.desktops[count];
+                if (added && Workspace.desktops.length === count + 1 && String(added.name) === name) {
+                    owned[String(added.id)] = name;
+                }
                 log("added workspace \"" + name + "\" at position " + (count + 1) + " (" + since + ")");
             }
         }
 
         const after = Workspace.desktops;
         const current = [];
+        const kept = {};
         for (let i = 0; i < after.length; ++i) {
-            current.push({ id: String(after[i].id), name: String(after[i].name) });
+            const id = String(after[i].id);
+            current.push({ id: id, name: String(after[i].name) });
+            if (owned[id] !== undefined) {
+                kept[id] = owned[id];
+            }
         }
-        const changes = Workspaces.renames(current, numbered);
+        owned = kept; // removed workspaces leave the map
+        const changes = Workspaces.renames(current, numbered, owned);
         const afterIds = idsOf(after);
         for (let i = 0; i < changes.length; ++i) {
             const index = afterIds.indexOf(changes[i].id);
             if (index >= 0) {
                 log("renamed workspace \"" + after[index].name + "\" to \"" + changes[i].name + "\"");
                 after[index].name = changes[i].name;
+                owned[changes[i].id] = changes[i].name;
             }
         }
 

@@ -134,15 +134,23 @@ function nameFor(position, numbered) {
 }
 
 // Renames that keep the script's numbered names in step with their positions after removals:
-// desktops [{id, name}] in KWin's order -> [{id, name}] to set. Any other name is never touched.
-function renames(desktops, numbered) {
+// desktops [{id, name}] in KWin's order -> [{id, name}] to set. owned maps the id of each workspace
+// this instance of the script added to the name it gave; only a workspace that still carries that
+// name is renamed. Ownership is never guessed from a name: a user's "Workspace 3", a name the user or
+// the setup gave since, and the workspaces of an earlier instance (a KWin restart, a disable/enable)
+// are left as they are.
+function renames(desktops, numbered, owned) {
     const out = [];
     for (let i = 0; i < desktops.length; ++i) {
-        const number = numberOf(desktops[i].name, numbered);
+        const d = desktops[i];
+        if (!owned || owned[d.id] === undefined || owned[d.id] !== String(d.name)) {
+            continue;
+        }
+        const number = numberOf(d.name, numbered);
         if (number > 0 && number !== i + 1) {
             const name = nameFor(i, numbered);
             if (name !== "") {
-                out.push({ id: desktops[i].id, name: name });
+                out.push({ id: d.id, name: name });
             }
         }
     }
