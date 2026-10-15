@@ -39,7 +39,7 @@
    <item row="2" column="1">
     <widget class="QCheckBox" name="kcfg_FillOtherHalf">
      <property name="text">
-      <string>Offer other windows for the empty half after snapping</string>
+      <string>Offer other windows for the empty half or layout zones after snapping</string>
      </property>
      <property name="checked">
       <bool>true</bool>
@@ -49,7 +49,7 @@
    <item row="3" column="1">
     <widget class="QCheckBox" name="kcfg_PairWindows">
      <property name="text">
-      <string>Windows placed side by side minimize and restore together</string>
+      <string>Windows snapped together form a group (minimize, restore and come up together)</string>
      </property>
      <property name="checked">
       <bool>true</bool>

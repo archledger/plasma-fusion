@@ -20,11 +20,11 @@
       <default>true</default>
     </entry>
     <entry name="FillOtherHalf" type="Bool">
-      <label>After snapping a window to one half, offer other windows for the empty half</label>
+      <label>After snapping a window, offer other windows for the empty half (or the empty zones of a layout chosen in the flyout)</label>
       <default>true</default>
     </entry>
     <entry name="PairWindows" type="Bool">
-      <label>Windows placed side by side minimize and restore together</label>
+      <label>Windows snapped together form a group: they minimize, restore and come to the front together</label>
       <default>true</default>
     </entry>
   </group>

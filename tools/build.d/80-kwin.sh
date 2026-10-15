@@ -13,7 +13,8 @@
 #   $STAGE/.local/share/kwin/scripts/plasmafusion-placement/
 # The switcher and the snap script get copies of the shared QML blocks they use (packages/common/*.qml,
 # tools/build-lib/shared-qml.sh) in contents/ui. The placement script's pure rules (contents/ui/
-# Placement.js) are tested by packages/kwin/tests/placement.test.js when node is installed.
+# Placement.js) are tested by packages/kwin/tests/placement.test.js, the snap script's snap groups
+# (contents/ui/Groups.js) by packages/kwin/tests/snap-groups.test.js, when node is installed.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
@@ -54,9 +55,11 @@ test -f "$SRC/scripts/plasmafusion-snap/contents/outline/outline.qml"
 test -f "$SRC/scripts/plasmafusion-attach/contents/code/main.js"
 test -f "$SRC/scripts/plasmafusion-placement/contents/ui/main.qml"
 
-# The placement rules (contents/ui/Placement.js) against the node suite, when node is installed.
+# The placement rules and the snap groups (Placement.js, Groups.js) against their node suites, when
+# node is installed.
 if command -v node >/dev/null 2>&1; then
   node "$ROOT/packages/kwin/tests/placement.test.js" >/dev/null
+  node "$ROOT/packages/kwin/tests/snap-groups.test.js" >/dev/null
 fi
 
 install_package "$SRC/switcher/org.plasmafusion.switcher" "$STAGE/.local/share/kwin/tabbox/org.plasmafusion.switcher"

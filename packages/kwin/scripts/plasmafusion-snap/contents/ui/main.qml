@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.kwin
 import "ensureTopBars.js" as EnsureTopBars
+import "Groups.js" as Groups
 import "SnapGeometry.js" as SnapGeometry
 
 // Plasma Fusion snapping (boards QuickSettings.dc.html "Snap layouts", TabsSnap.dc.html).
@@ -15,10 +16,13 @@ import "SnapGeometry.js" as SnapGeometry
 // - Meta+Z ("Plasma Fusion: Snap Layouts") opens a flyout near the active window's maximize
 //   button with four layouts; a click on a zone places the window there.
 // - After a window is snapped to the left or right half, the other half offers the remaining
-//   windows ("Pick a window for this side"). Esc, a click elsewhere or any focus change
-//   dismisses it; it also closes itself after a minute without input.
+//   windows ("Pick a window for this side"). After a zone is chosen in the flyout, every other
+//   empty zone of that layout is offered in turn (Snap Assist for every layout). Esc, a click
+//   elsewhere or any focus change dismisses it; it also closes itself after a minute without
+//   input.
 // - Snapped halves and quarters get a 6 px inner gap, with no work-area edge inset.
-// - Windows picked for the other half form a pair: they minimise and restore together.
+// - Windows snapped together through the picker form a group (snap groups, Groups.js): they
+//   minimise and restore together, and activating one brings the others up with it.
 //
 // Halves, 2:1 and quarters use KWin's own quick tiles (so they stay tiled, share their edge
 // when resized and restore their size when dragged out); thirds are placed by geometry.
@@ -210,27 +214,42 @@ Item {
         return zoneRect(area, z[0], z[1], z[2], z[3], g);
     }
 
+    // The flyout's zone choice: the window goes there, then the picker offers the layout's other
+    // empty zones in turn (startFill). A window that was already in its quick tile (e.g. 2:1 ->
+    // halves) gets no tileChanged, so the offer cannot wait for one.
     function placeInZone(win, layoutIndex, zoneIndex) {
         if (!usable(win)) {
             return;
         }
+        // A layout choice is a new arrangement: the window leaves the group it was in (a move
+        // between plain-geometry zones, or into the quick tile it already holds, changes no tile).
+        leaveGroup(win);
         const layout = layoutsFor(win)[layoutIndex];
+        let quick = false;
         if (layout.quick.length > 0) {
-            if (quickTile(win, layout.quick[zoneIndex], layout.h, layout.v)) {
-                // A window that was already in this quick tile (e.g. 2:1 -> halves) gets no
-                // tileChanged, but the other side may just have become free: offer it anyway.
-                windowSnapped(win);
-                return;
+            quick = quickTile(win, layout.quick[zoneIndex], layout.h, layout.v);
+            if (quick) {
+                const quickRoot = quickRootOf(win);
+                if (quickRoot) {
+                    applyGap(quickRoot);
+                }
             }
         }
-        // Thirds (and a fallback when tiling is refused): plain geometry.
+        if (!quick) {
+            // Thirds (and a fallback when tiling is refused): plain geometry.
+            placeByGeometry(win, targetRect(win, layoutIndex, zoneIndex));
+        }
+        startFill(win, layoutIndex, zoneIndex, quick);
+    }
+
+    function placeByGeometry(win, rect) {
         if (win.tile) {
             win.tile.unmanage(win);
         }
         if (win.maximizeMode !== 0) {
             win.setMaximize(false, false);
         }
-        win.frameGeometry = targetRect(win, layoutIndex, zoneIndex);
+        win.frameGeometry = rect;
     }
 
     function usable(win) {
@@ -284,6 +303,7 @@ Item {
                 return;
             }
             pickerLoader.active = false;
+            root.endFill();
             flyoutLoader.target = win;
             flyoutLoader.layouts = root.layoutsFor(win);
             flyoutLoader.active = true;
@@ -435,6 +455,10 @@ Item {
         if (!win || win.deleted || win.move || win.resize || flyoutLoader.active || pickerLoader.active) {
             return;
         }
+        // A flyout choice fills its whole layout (startFill) instead.
+        if (fill && fill.anchor === win) {
+            return;
+        }
         const index = quickIndexOf(win);
         if (index < 0 || index > 3) {
             return;
@@ -461,7 +485,12 @@ Item {
     Instantiator {
         id: pickerLoader
         property var snapped: null
+        // The zone to fill: a quick tile, or for plain-geometry zones (thirds) its rectangle.
         property var tile: null
+        property var zoneRect: null
+        // Set by a pick: the picker hides as the picked window takes the focus, and the
+        // dismissal that follows must not end a fill sequence that just moved on.
+        property bool picked: false
         // Kept after closing: the picker's wallpaper must never see a null screen.
         property var output: null
         property var desktop: null
@@ -474,17 +503,27 @@ Item {
             output: pickerLoader.output
             desktop: pickerLoader.desktop
             onPicked: win => {
+                pickerLoader.picked = true;
                 const tile = pickerLoader.tile;
+                const zoneRect = pickerLoader.zoneRect;
                 const snapped = pickerLoader.snapped;
                 root.closePicker();
-                root.fillWith(snapped, tile, win);
+                root.fillWith(snapped, tile, zoneRect, win);
             }
-            onDismissed: root.closePicker()
+            onDismissed: {
+                if (!pickerLoader.picked) {
+                    root.endFill();
+                }
+                root.closePicker();
+            }
         }
         onActiveChanged: {
-            if (!active) {
+            if (active) {
+                picked = false;
+            } else {
                 snapped = null;
                 tile = null;
+                zoneRect = null;
                 candidates = [];
             }
         }
@@ -498,81 +537,254 @@ Item {
         enabled: pickerLoader.active
         function onTileChanged() {
             pickerLoader.active = false;
+            root.endFill();
         }
         function onClosed() {
             pickerLoader.active = false;
+            root.endFill();
         }
     }
 
-    function fillWith(snapped, tile, win) {
-        if (!tile || !usable(win)) {
+    function fillWith(snapped, tile, zoneRect, win) {
+        if ((!tile && !zoneRect) || !usable(win)) {
             return;
         }
         if (win.minimized) {
             win.minimized = false;
         }
-        if (!tile.manage(win)) {
-            return;
+        if (tile) {
+            if (!tile.manage(win)) {
+                return;
+            }
+        } else {
+            placeByGeometry(win, zoneRect);
         }
         Workspace.activeWindow = win;
-        if (snapped && setting("PairWindows", true)) {
-            pairs = pairs.concat([{ a: snapped, b: win }]);
+        if (snapped && !snapped.deleted && setting("PairWindows", true)) {
+            joinGroup(snapped, win, tile, zoneRect);
+        }
+        // A fill sequence goes on with its next zone once KWin has settled.
+        if (fill && fill.anchor === snapped) {
+            fill.placed.push(win);
+            fill.zones.shift();
+            fillSettle.restart();
         }
     }
 
-    // ---------------------------------------------------------------- pairs
+    // ---------------------------------------------------------------- fill every zone
 
-    property var pairs: []
+    // The sequence after a flyout choice: the anchor window, its layout, the zones still to offer
+    // (Groups.fillOrder) and the windows placed so far (never offered again). Halves snapped by
+    // an edge drag or Meta+Left/Right keep windowSnapped's single offer.
+    property var fill: null
+
+    Timer {
+        id: fillSettle
+        interval: 220
+        onTriggered: root.offerNextZone()
+    }
+
+    function endFill() {
+        fill = null;
+        fillSettle.stop();
+    }
+
+    // Whether zone z of the anchor's layout already holds a window: a quick tile with windows, or
+    // a plain-geometry zone another window of the desktop sits in (Groups.inZone).
+    function zoneHeld(anchor, layoutIndex, z, quick) {
+        const layout = layoutsFor(anchor)[layoutIndex];
+        if (quick) {
+            const quickRoot = quickRootOf(anchor) || cachedQuickRoot(anchor);
+            const tile = quickRoot ? SnapGeometry.quickTileFor(quickRoot, layout.quick[z]) : null;
+            return tile !== null && tile.windows.length > 0;
+        }
+        const zone = targetRect(anchor, layoutIndex, z);
+        const others = candidatesFor(anchor, desktopOf(anchor));
+        for (let i = 0; i < others.length; ++i) {
+            if (!others[i].minimized && !others[i].tile && Groups.inZone(others[i].frameGeometry, zone)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function startFill(win, layoutIndex, zoneIndex, quick) {
+        endFill();
+        if (pendingSnap === win) {
+            pendingSnap = null;
+            snapSettle.stop();
+        }
+        if (!setting("FillOtherHalf", true)) {
+            return;
+        }
+        const count = layoutsFor(win)[layoutIndex].zones.length;
+        const occupied = [];
+        for (let z = 0; z < count; ++z) {
+            occupied.push(z !== zoneIndex && zoneHeld(win, layoutIndex, z, quick));
+        }
+        const zones = Groups.fillOrder(count, zoneIndex, occupied);
+        if (zones.length === 0) {
+            return;
+        }
+        fill = {
+            anchor: win,
+            layoutIndex: layoutIndex,
+            quick: quick,
+            anchorRect: quick ? null : targetRect(win, layoutIndex, zoneIndex),
+            zones: zones,
+            placed: [win]
+        };
+        fillSettle.restart();
+    }
+
+    function offerNextZone() {
+        const f = fill;
+        if (!f || !f.anchor || f.anchor.deleted || flyoutLoader.active || pickerLoader.active) {
+            endFill();
+            return;
+        }
+        // A zone that filled meanwhile (the user put a window there) is skipped.
+        while (f.zones.length > 0 && zoneHeld(f.anchor, f.layoutIndex, f.zones[0], f.quick)) {
+            f.zones.shift();
+        }
+        const candidates = candidatesFor(f.anchor, desktopOf(f.anchor)).filter(w => f.placed.indexOf(w) < 0);
+        if (f.zones.length === 0 || candidates.length === 0) {
+            endFill();
+            return;
+        }
+        const z = f.zones[0];
+        const layout = layoutsFor(f.anchor)[f.layoutIndex];
+        let tile = null;
+        let rect = null;
+        if (f.quick) {
+            const quickRoot = quickRootOf(f.anchor) || cachedQuickRoot(f.anchor);
+            tile = quickRoot ? SnapGeometry.quickTileFor(quickRoot, layout.quick[z]) : null;
+            if (!tile) {
+                endFill();
+                return;
+            }
+        } else {
+            rect = targetRect(f.anchor, f.layoutIndex, z);
+        }
+        pickerLoader.snapped = f.anchor;
+        pickerLoader.tile = tile;
+        pickerLoader.zoneRect = rect;
+        pickerLoader.output = f.anchor.output;
+        pickerLoader.desktop = desktopOf(f.anchor);
+        pickerLoader.area = tile ? tileWindowRect(tile, Workspace.clientArea(Workspace.MaximizeArea, f.anchor)) : rect;
+        pickerLoader.candidates = candidates;
+        pickerLoader.active = true;
+    }
+
+    // ---------------------------------------------------------------- snap groups
+
+    property var groups: []
+    // internalId -> the zone a group member was placed in: {tile} for a quick tile, {rect} for a
+    // plain-geometry zone. A member that leaves its zone leaves its group.
+    property var memberZones: ({})
     property bool syncing: false
 
-    function partnerOf(win) {
-        for (let i = 0; i < pairs.length; ++i) {
-            if (pairs[i].a === win) {
-                return pairs[i].b;
-            }
-            if (pairs[i].b === win) {
-                return pairs[i].a;
-            }
-        }
-        return null;
+    function keyOf(win) {
+        return String(win.internalId);
     }
 
-    function unpair(win) {
-        const kept = pairs.filter(p => p.a !== win && p.b !== win);
-        if (kept.length !== pairs.length) {
-            pairs = kept;
+    function zoneOf(win, tile, zoneRect) {
+        if (tile) {
+            return { tile: tile, rect: null };
+        }
+        if (zoneRect) {
+            return { tile: null, rect: zoneRect };
+        }
+        return win.tile ? { tile: win.tile, rect: null } : { tile: null, rect: win.frameGeometry };
+    }
+
+    function joinGroup(anchor, win, tile, zoneRect) {
+        if (!memberZones[keyOf(anchor)]) {
+            const f = fill;
+            memberZones[keyOf(anchor)] = zoneOf(anchor, null, f && f.anchor === anchor ? f.anchorRect : null);
+        }
+        memberZones[keyOf(win)] = zoneOf(win, tile, zoneRect);
+        groups = Groups.join(groups, anchor, win);
+    }
+
+    function leaveGroup(win) {
+        if (Groups.groupOf(groups, win) < 0) {
+            return;
+        }
+        groups = Groups.leave(groups, win);
+        // Forget the zones of windows no longer in any group (the last partner of a group of two).
+        for (const key in memberZones) {
+            let kept = false;
+            for (let i = 0; i < groups.length && !kept; ++i) {
+                for (let j = 0; j < groups[i].length; ++j) {
+                    if (!groups[i][j].deleted && keyOf(groups[i][j]) === key) {
+                        kept = true;
+                        break;
+                    }
+                }
+            }
+            if (!kept) {
+                delete memberZones[key];
+            }
         }
     }
 
-    function pairMinimizedChanged(win) {
-        const partner = partnerOf(win);
-        if (!partner || syncing || partner.deleted) {
+    // A member stays while it sits in its zone: its quick tile, or for a plain-geometry zone not
+    // tiled and still in the rectangle; maximized or full screen, it leaves. The rectangle is
+    // tested only when a move ends (moveEnded): right after a placement a Wayland window's
+    // geometry is still the old one until the client answers.
+    function checkMember(win, moveEnded) {
+        if (!win || win.deleted || Groups.groupOf(groups, win) < 0) {
+            return;
+        }
+        const zone = memberZones[keyOf(win)];
+        let stays = zone !== undefined && win.maximizeMode === 0 && !win.fullScreen;
+        if (stays && zone.tile) {
+            stays = win.tile === zone.tile;
+        } else if (stays) {
+            stays = !win.tile && (!moveEnded || Groups.inZone(win.frameGeometry, zone.rect));
+        }
+        if (!stays) {
+            leaveGroup(win);
+        }
+    }
+
+    function groupMinimizedChanged(win) {
+        if (syncing) {
+            return;
+        }
+        const others = Groups.partners(groups, win);
+        if (others.length === 0) {
             return;
         }
         syncing = true;
-        if (partner.minimized !== win.minimized) {
-            partner.minimized = win.minimized;
+        for (let i = 0; i < others.length; ++i) {
+            if (!others[i].deleted && others[i].minimized !== win.minimized) {
+                others[i].minimized = win.minimized;
+            }
         }
         syncing = false;
-    }
-
-    function pairTileChanged(win) {
-        if (partnerOf(win) && quickIndexOf(win) < 0) {
-            unpair(win);
-        }
     }
 
     Connections {
         target: Workspace
         function onWindowActivated(win) {
-            const partner = root.partnerOf(win);
-            if (partner && !partner.deleted && !partner.minimized) {
-                Workspace.raiseWindow(partner);
-                Workspace.raiseWindow(win);
+            const others = win ? Groups.partners(root.groups, win) : [];
+            if (others.length === 0) {
+                return;
             }
+            for (let i = 0; i < others.length; ++i) {
+                if (!others[i].deleted && !others[i].minimized) {
+                    Workspace.raiseWindow(others[i]);
+                }
+            }
+            Workspace.raiseWindow(win);
         }
         function onWindowRemoved(win) {
-            root.unpair(win);
+            root.leaveGroup(win);
+            if (root.fill && root.fill.anchor === win) {
+                root.endFill();
+            }
             if (win === flyoutLoader.target) {
                 flyoutLoader.active = false;
             }
@@ -580,6 +792,7 @@ Item {
         function onCurrentDesktopChanged() {
             flyoutLoader.active = false;
             pickerLoader.active = false;
+            root.endFill();
         }
     }
 
@@ -752,7 +965,7 @@ Item {
         onFailed: Workspace.slotToggleShowDesktop()
     }
 
-    // One watcher per window for snaps and pair changes.
+    // One watcher per window for snaps and snap-group changes.
     Instantiator {
         model: WindowModel {}
         delegate: QtObject {
@@ -777,7 +990,7 @@ Item {
                 target: watcher.window
                 function onTileChanged() {
                     root.windowSnapped(watcher.window);
-                    root.pairTileChanged(watcher.window);
+                    root.checkMember(watcher.window, false);
                     watcher.fit();
                 }
                 function onFrameGeometryChanged() {
@@ -785,9 +998,16 @@ Item {
                 }
                 function onInteractiveMoveResizeFinished() {
                     watcher.fit();
+                    root.checkMember(watcher.window, true);
+                }
+                function onMaximizedChanged() {
+                    root.checkMember(watcher.window, false);
+                }
+                function onFullScreenChanged() {
+                    root.checkMember(watcher.window, false);
                 }
                 function onMinimizedChanged() {
-                    root.pairMinimizedChanged(watcher.window);
+                    root.groupMinimizedChanged(watcher.window);
                 }
             }
         }

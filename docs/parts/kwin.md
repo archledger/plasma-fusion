@@ -30,7 +30,8 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `.../contents/ui/Hint.qml`, `Kbd.qml` | hint bar items and key caps |
 | `.../contents/ui/FusionPalette.qml` | board colours, dark/light |
 | `packages/kwin/scripts/plasmafusion-snap/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM) |
-| `.../contents/ui/main.qml` | shortcut, quick-tile logic, gaps, picker trigger, pairs |
+| `.../contents/ui/main.qml` | shortcut, quick-tile logic, gaps, picker trigger, filling a layout's zones, snap groups |
+| `.../contents/ui/Groups.js` | snap groups' pure rules (join, leave, partners, the zones' fill order, the thirds' zone test); node-tested |
 | `.../contents/ui/SnapFlyout.qml` | Meta+Z flyout |
 | `.../contents/ui/DecorationSide.qml` | which side the maximize button is on (reads the decoration settings with `kreadconfig6`) |
 | `.../contents/ui/ensureTopBars.js` | generated at build from `packages/look-and-feel/common/contents/layouts/ensure-topbars.js`: the script text the hot-plug handler sends to plasmashell (not in the source tree) |
@@ -44,7 +45,7 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `.../contents/ui/main.qml` | the script: window watch, restore and record, the memory file through plasmashell |
 | `.../contents/ui/Placement.js` | the pure rules (identity, file format, on-screen and stack guard, record); node-tested |
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | `RememberSize` and `IgnoreApps` (System Settings > Window Management > KWin Scripts) |
-| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the four packages into the stage, runs the placement rules' node suite when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
+| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the four packages into the stage, runs the placement rules' and snap groups' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
 | `packages/kwin/tests/` | test tooling only, not installed (see Verification) |
 
 ## Build and install
@@ -109,8 +110,8 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 |---|---|---|
 | `[Script-plasmafusion-snap] Gap` | 6 | logical px between snapped windows (0-48); no gap at work-area edges |
 | `[Script-plasmafusion-snap] QuickTileGaps` | true | apply the gap to KWin's quick tiles (edge snapping, Meta+arrow, Meta+Z halves/quarters) |
-| `[Script-plasmafusion-snap] FillOtherHalf` | true | offer the other windows after a window is snapped to a half |
-| `[Script-plasmafusion-snap] PairWindows` | true | windows placed side by side through the picker minimise/restore/raise together |
+| `[Script-plasmafusion-snap] FillOtherHalf` | true | offer the other windows after a window is snapped to a half, and for every empty zone of a layout chosen in the flyout |
+| `[Script-plasmafusion-snap] PairWindows` | true | snap groups: windows snapped together through the picker minimise/restore/raise together |
 | `[Script-plasmafusion-attach] FollowParent` | true | dialogs move with their window |
 | `[Script-plasmafusion-attach] DetachOnMove` | true | dragging a dialog yourself detaches it (false: it snaps back) |
 | `[Script-plasmafusion-attach] TitleBarGap` | 0 | px between the parent's title bar and the dialog |
@@ -188,8 +189,24 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   comes back for the new empty half) or closing, a workspace switch, or 60 s without input closes
   it. Nothing appears when there are no other windows. Choosing a half in the Meta+Z flyout for a
   window that already sits in that quick tile (e.g. 2:1 then halves) also offers the picker.
-- Pairs (windows placed through the picker): minimising one minimises the other, restoring one
-  restores the other, activating one raises the other. A pair ends when either leaves its half.
+- Every layout (Windows' Snap Assist after a layout choice): a zone chosen in the Meta+Z flyout
+  (or the maximize button's hold/hover) starts a sequence - the picker covers each other zone of
+  that layout in turn, in zone order after the chosen one and wrapping (`Groups.fillOrder`), with
+  the windows not placed yet. A zone already holding a window is skipped: a quick tile with
+  windows, or for thirds (plain geometry, not KWin tiles) a zone a window of the desktop already
+  sits in (`Groups.inZone`: top-left within 4 px, no larger than the zone and at least half its
+  size - a terminal rounds its size to whole cells). Esc, a click elsewhere, a workspace switch or
+  the first window changing its tile or closing end the sequence; what was placed stays. Halves
+  from an edge drag or Meta+Left/Right keep the single offer above.
+- Snap groups (Windows' snap groups; GNOME Tiling Assistant's tile groups raise together too):
+  the first window and every window picked for its layout form one group (two for the halves).
+  Minimising one minimises the others, restoring one restores the others, activating one raises
+  the others under it - so a member chosen from the dock or Alt+Tab brings its whole arrangement
+  back. A window is in one group at most; picking it for another arrangement moves it there, and a
+  zone chosen for it in the flyout is a new arrangement (it leaves its old group first). A
+  member leaves when it leaves its zone (a quick-tile member's tile changes; a thirds member is
+  no longer in its rectangle when a move ends), is maximized or made full screen, or closes; a
+  group left with one window ends. `PairWindows=false` forms no groups.
 - Gaps: 6 px between halves and quarters, with the outer edges flush to the work area (panels
   remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
   native quick-tile padding at the configured gap and fills only each window's outer edges
@@ -293,6 +310,10 @@ Offline (laptop):
   guard, size-only mode, the ignore list (app id and window class), windows held by a rule (forced
   position, forced or fixed size), the teardown write (a change made while a write was in flight)
   and the record's rounding.
+- `node packages/kwin/tests/snap-groups.test.js` (the build runs it when node is installed): snap
+  groups - forming a group from the picks, a window in one group at most (joining another
+  arrangement moves it), leaving and a group of one ending, the zones' fill order (wrapping,
+  skipping held zones) and the thirds' zone test (a terminal a few px smaller still counts).
 - Offscreen renders with a stand-in `org.kde.kwin` module (`packages/kwin/tests/offscreen/`,
   PySide6 + private Xvfb display, private HOME): `run.sh STAGE_HOME switcher-harness.qml OUT.png
   [dark=false count=N otherDesktop=N current=N]`, `snap-harness.qml mode=flyout|picker`. Measured
@@ -326,6 +347,13 @@ and pointer drags inside the private session only).
   bar and following its window when it moves.
 - `scenario-evidence.sh`: the same on the Plasma Fusion desktop (Global Theme layout script and
   wallpaper), 5 windows, dark and light, plus pair minimise/restore.
+- `scenario-snapgroups.sh` (strict mode, verdict at the end, real keys through `pfinput`): Meta+Z
+  -> quarters -> Enter, then Enter for each of the other three quarters fills all four; minimising
+  one minimises the group, restoring one restores it; activating a member raises the group above a
+  covering window; a member moved out of its quarter leaves (the group minimises without it);
+  Meta+Z -> thirds fills all three thirds and that group minimises together; a window placed anew
+  through the flyout (another third) leaves that group; the halves picker
+  after Meta+Left still pairs its two windows.
 - `scenario-placement.sh` (strict mode; a step that fails is written to the checks; every check
   runs and the scenario's status - "scenario rc" in the session log - is non-zero when any check
   failed, after a verdict line): windows
