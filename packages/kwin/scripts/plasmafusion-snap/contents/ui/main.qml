@@ -374,13 +374,15 @@ Item {
 
     // ---------------------------------------------------------------- fill the other half
 
-    // Windows that could go into the empty half, most recently used first.
+    // Windows that could go into the empty half, most recently used first - those of this desktop
+    // and the current activity (a window of another activity placed here would stay hidden).
     function candidatesFor(snapped, desktop) {
         const list = [];
+        const current = [String(Workspace.currentActivity)];
         const order = Workspace.stackingOrder;
         for (let i = order.length - 1; i >= 0; --i) {
             const w = order[i];
-            if (w === snapped || !usable(w) || w.skipSwitcher || w.transient) {
+            if (w === snapped || !usable(w) || w.skipSwitcher || w.transient || !Groups.sharedActivity(activitiesOf(w), current)) {
                 continue;
             }
             if (!w.onAllDesktops) {
@@ -557,6 +559,14 @@ Item {
             }
             return;
         }
+        // The offered zone filled while the picker was open (an app or a script put a window
+        // there): nothing is placed over it - a sequence offers its next empty zone instead.
+        if (tile ? zoneTileHeld(tile, win) : (inSequence && zoneHeld(fill.anchor, fill.layoutIndex, fill.current, false, win))) {
+            if (inSequence) {
+                fillSettle.restart();
+            }
+            return;
+        }
         // The picked window belongs to this arrangement now: it leaves its old group before it is
         // restored, so restoring it does not bring the rest of that group back. Should KWin refuse
         // the placement, the old group is put back as it was, and the window minimised again.
@@ -596,6 +606,15 @@ Item {
             fill.filledBy.push({ win: win, at: Date.now(), zone: { tile: tile, rect: tile ? null : zoneRect, place: fill.zone.place } });
             fillSettle.restart();
         }
+    }
+
+    function zoneTileHeld(tile, except) {
+        for (let i = 0; i < tile.windows.length; ++i) {
+            if (tile.windows[i] !== except) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---------------------------------------------------------------- fill every zone
@@ -674,23 +693,32 @@ Item {
         return Groups.fillValid({ zone: f.zone, desktop: f.desktop, activity: f.activity, area: f.area, family: f.family }, now);
     }
 
-    // Whether zone z of the anchor's layout already holds a window: a quick tile with windows, or
-    // a plain-geometry zone another window of the desktop sits in (Groups.inZone).
-    function zoneHeld(anchor, layoutIndex, z, quick) {
+    // Whether zone z of the anchor's layout already holds a window other than `except`: a quick
+    // tile with windows, or a plain-geometry zone a window of the desktop fills
+    // (Groups.zoneOccupied - a window in a matching custom tile counts too).
+    function zoneHeld(anchor, layoutIndex, z, quick, except) {
         const layout = layoutsFor(anchor)[layoutIndex];
         if (quick) {
             const quickRoot = quickRootOf(anchor) || cachedQuickRoot(anchor);
             const tile = quickRoot ? SnapGeometry.quickTileFor(quickRoot, layout.quick[z]) : null;
-            return tile !== null && tile.windows.length > 0;
+            if (!tile) {
+                return false;
+            }
+            for (let i = 0; i < tile.windows.length; ++i) {
+                if (tile.windows[i] !== except) {
+                    return true;
+                }
+            }
+            return false;
         }
-        const zone = targetRect(anchor, layoutIndex, z);
+        const frames = [];
         const others = occupantsOf(anchor, desktopOf(anchor));
         for (let i = 0; i < others.length; ++i) {
-            if (!others[i].tile && Groups.inZone(others[i].frameGeometry, zone)) {
-                return true;
+            if (others[i] !== except) {
+                frames.push(plainRect(others[i].frameGeometry));
             }
         }
-        return false;
+        return Groups.zoneOccupied(plainRect(targetRect(anchor, layoutIndex, z)), frames);
     }
 
     // Every window that can sit in a zone of the anchor's desktop on the current activity - not
@@ -704,7 +732,9 @@ Item {
         const order = Workspace.stackingOrder;
         for (let i = 0; i < order.length; ++i) {
             const w = order[i];
-            if (!w || w === anchor || w.deleted || !w.normalWindow) {
+            // A popup is no arranged window - and KWin reports its own internal windows, this
+            // script's picker included (it covers the offered zone), as normal ones.
+            if (!w || w === anchor || w.deleted || !w.normalWindow || w.popupWindow) {
                 continue;
             }
             let here = w.onAllDesktops;

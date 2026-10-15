@@ -194,9 +194,13 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   that layout in turn, in zone order after the chosen one and wrapping (`Groups.fillOrder`), with
   the windows not placed yet. A zone already holding a window is skipped: a quick tile with
   windows, or for thirds (plain geometry, not KWin tiles) a zone any window of the desktop already
-  sits in - also one the switcher skips or a minimised one, which comes back there, but not one of
-  another activity (`Groups.inZone`: top-left within 4 px, no larger than the zone and at least half its
-  size - a terminal rounds its size to whole cells). The empty zones are worked out again before
+  sits in - also one the switcher skips, a minimised one, which comes back there, or one in a
+  matching custom tile, but not one of another activity (`Groups.zoneOccupied`/`inZone`: top-left
+  within 4 px, no larger than the zone and smaller by at most 32 px - a terminal rounds its size to
+  whole cells - so a window merely starting at a zone's corner does not fill it). The picker offers
+  the windows of this desktop and the current activity, and a zone that filled while it was open
+  (an app or a script put a window there) gets no pick placed over it - the next empty zone is
+  offered instead. The empty zones are worked out again before
   every offer: a window picked out of another zone of the layout leaves that zone empty, and it is
   offered in its turn (a zone this sequence filled counts as held while the window placed there is
   still in it - not closed, re-tiled, maximized or moved to another desktop - whatever its geometry
@@ -388,7 +392,8 @@ and pointer drags inside the private session only).
   placement's settle (asked at the group's next use); the first window moved by a script while the
   picker is open ends the sequence; a window of another activity does not hold a third; a placed
   window moved out of its third by a script while a later picker is open leaves the third to be
-  offered again; the halves picker
+  offered again; a window of another activity is not offered; a window moved into the offered third
+  while the picker is open is not covered by the pick; the halves picker
   after Meta+Left still pairs its two windows.
 - `scenario-placement.sh` (strict mode; a step that fails is written to the checks; every check
   runs and the scenario's status - "scenario rc" in the session log - is non-zero when any check

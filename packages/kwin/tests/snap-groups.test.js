@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-snap", "contents", "ui", "Groups.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { groupOf, leave, join, partners, fillOrder, inZone, prune, joined, left, sameRect, sharedActivity, holds, fillValid } = globalThis;
+const { groupOf, leave, join, partners, fillOrder, inZone, zoneOccupied, prune, joined, left, sameRect, sharedActivity, holds, fillValid } = globalThis;
 
 // Windows are opaque objects compared by identity.
 const a = { n: "a" };
@@ -88,6 +88,14 @@ assert.ok(!inZone({ x: 40, y: 32, width: 476, height: 868 }, zone), "moved away"
 assert.ok(!inZone({ x: 0, y: 32, width: 900, height: 868 }, zone), "wider than its zone");
 assert.ok(!inZone({ x: 0, y: 32, width: 200, height: 400 }, zone), "far smaller: not the zone's window any more");
 assert.ok(inZone({ x: 6, y: 32, width: 476, height: 868 }, zone, 8), "a custom tolerance");
+assert.ok(!inZone({ x: 0, y: 32, width: 300, height: 600 }, zone), "starting at the zone's corner, much smaller: not filling it");
+assert.ok(!inZone({ x: 0, y: 32, width: 440, height: 868 }, zone), "36 px narrower: beyond rounding");
+assert.ok(inZone({ x: 0, y: 32, width: 446, height: 840 }, zone), "within 32 px (two terminal cells or lines)");
+
+// ---- occupancy of a plain-geometry zone: any window filling it, tiled or not
+assert.ok(zoneOccupied(zone, [{ x: 600, y: 32, width: 400, height: 400 }, { x: 0, y: 32, width: 476, height: 868 }]), "a window in a matching custom tile counts");
+assert.ok(!zoneOccupied(zone, []), "nothing there");
+assert.ok(!zoneOccupied(zone, [{ x: 0, y: 32, width: 238, height: 434 }]), "a small window at its corner does not fill it");
 
 // ---- asked at use: does a window still hold its zone, does a sequence still stand
 const third = { x: 482, y: 34, width: 476, height: 866 };

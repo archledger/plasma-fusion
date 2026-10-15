@@ -109,14 +109,27 @@ function fillOrder(count, chosen, occupied) {
     return out;
 }
 
-// Whether a window's rectangle still sits in a plain-geometry zone (the thirds, which are not KWin
-// tiles): its top-left corner within tolerance and no larger than the zone. A window may be a
-// little smaller than its zone (a terminal rounds its size to whole character cells).
-function inZone(rect, zone, tolerance) {
+// Whether a window's rectangle sits in a plain-geometry zone (the thirds, which are not KWin
+// tiles): its top-left corner within tolerance and its size the zone's - no larger, and smaller by
+// at most `slack` px (a terminal rounds its size to whole character cells; 32 px is about two
+// cells or lines), so a window that merely starts at a zone's corner does not fill it.
+function inZone(rect, zone, tolerance, slack) {
     const t = tolerance === undefined ? 4 : tolerance;
+    const s = slack === undefined ? 32 : slack;
     return Math.abs(rect.x - zone.x) <= t && Math.abs(rect.y - zone.y) <= t
         && rect.width <= zone.width + t && rect.height <= zone.height + t
-        && rect.width >= zone.width / 2 && rect.height >= zone.height / 2;
+        && rect.width >= zone.width - s && rect.height >= zone.height - s;
+}
+
+// Whether any of these window rectangles fills a plain-geometry zone - a tiled window included (a
+// custom KWin tile can match a third; a quick tile never has a third's shape).
+function zoneOccupied(zone, frames) {
+    for (let i = 0; i < frames.length; ++i) {
+        if (inZone(frames[i], zone)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---- validating at use: the decisions read the windows as they are now, so a change no handler

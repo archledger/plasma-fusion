@@ -30,7 +30,9 @@
 #  18. the first window moved by a script while the picker is open ends the sequence (no placement);
 #  20. a window of another activity sitting in a third does not hold it;
 #  21. a placed window moved out of its third by a script while a later picker is open leaves the
-#      third to be offered again.
+#      third to be offered again;
+#  22. a window of another activity is not offered by the picker;
+#  23. a window moved into the offered third while the picker is open is not covered by the pick.
 # Run: tools/vsession/remote.sh sg-1 packages/kwin/tests/vsession/scenario-snapgroups.sh SEED 1440x900 420
 exec 2>&1
 export OUT
@@ -803,6 +805,53 @@ pfinput 'key esc'
 sleep 1.5
 state "$OUT/s29.json"
 judge thirdother "$OUT/s29.json" "a third whose window a script moved out is offered again" "${first:-none}"
+
+# ---- 22. Okular, the most recent window, lives on another activity: the picker does not offer it
+# (its first card is another window, which lands visibly in the middle third)
+reset_tiles
+sleep 2
+other=${activity:-}
+[ -n "$other" ] || other=$(qdbus org.kde.ActivityManager /ActivityManager/Activities org.kde.ActivityManager.Activities.AddActivity two 2>>"$OUT/errors.log" || true)
+act okular
+sleep 0.5
+K run "var l = workspace.windowList();
+  for (var i = 0; i < l.length; ++i) { if (String(l[i].resourceClass).indexOf('okular') >= 0) { l[i].activities = ['$other']; } }
+  report(true);" >>"$OUT/act.log"
+sleep 1
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 4' 'sleep 0.5' 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key esc'
+sleep 1.5
+state "$OUT/s30.json"
+judge thirdother "$OUT/s30.json" "a window of another activity is not offered (another window lands in the third)" okular
+K run "var l = workspace.windowList();
+  for (var i = 0; i < l.length; ++i) { if (String(l[i].resourceClass).indexOf('okular') >= 0) { l[i].activities = []; } }
+  report(true);" >>"$OUT/act.log"
+sleep 1
+
+# ---- 23. while the picker offers the middle third, a script moves Dolphin there: the pick
+# (KWrite, the first card) is not placed over it
+reset_tiles
+sleep 2
+act kwrite
+sleep 0.3
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 4' 'sleep 0.5' 'key enter'
+sleep 1.5
+# shellcheck disable=SC2046 # "X Y W H"
+geometry dolphin $(middle_third)
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key esc'
+sleep 1.5
+state "$OUT/s31.json"
+judge thirdalone "$OUT/s31.json" "a window moved into the offered third is not covered by the pick" dolphin
 
 grep -a 'plasmafusion-snap' "$OUT/kwin.log" | grep -aE 'Error|error:' | tail -5 >>"$CHK" || true
 # The verdict: every check runs, and the scenario's status says whether any failed.
