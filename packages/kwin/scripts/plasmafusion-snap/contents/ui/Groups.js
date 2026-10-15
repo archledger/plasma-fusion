@@ -39,19 +39,54 @@ function join(groups, anchor, win) {
     }
     const rest = leave(groups, win);
     const out = [];
-    let joined = false;
+    let added = false;
     for (let i = 0; i < rest.length; ++i) {
         if (rest[i].indexOf(anchor) >= 0) {
             out.push(rest[i].concat([win]));
-            joined = true;
+            added = true;
         } else {
             out.push(rest[i].slice());
         }
     }
-    if (!joined) {
+    if (!added) {
         out.push([anchor, win]);
     }
     return out;
+}
+
+// The groups together with the zone each member was placed in: {groups, zones}, zones keyed by
+// key(win). Zones are kept only for windows that are in a group; a window left alone (the last
+// partner of a group of two) is forgotten, so a stale zone can never stand for a later one.
+function prune(groups, zones, key) {
+    const kept = {};
+    for (let i = 0; i < groups.length; ++i) {
+        for (let j = 0; j < groups[i].length; ++j) {
+            const k = key(groups[i][j]);
+            if (zones[k] !== undefined) {
+                kept[k] = zones[k];
+            }
+        }
+    }
+    return kept;
+}
+
+// win joins anchor's group with the zone it was placed in. win leaves its old group first (its
+// former partners' bookkeeping with it); an anchor that is in no group yet starts one with the
+// zone it holds now, one already in a group keeps the zone it was placed in.
+function joined(state, anchor, win, anchorZone, winZone, key) {
+    const rest = leave(state.groups, win);
+    const zones = prune(rest, state.zones, key);
+    if (groupOf(rest, anchor) < 0) {
+        zones[key(anchor)] = anchorZone;
+    }
+    zones[key(win)] = winZone;
+    return { groups: join(rest, anchor, win), zones: zones };
+}
+
+// win leaves its group (and the zones of windows left alone are forgotten).
+function left(state, win, key) {
+    const groups = leave(state.groups, win);
+    return { groups: groups, zones: prune(groups, state.zones, key) };
 }
 
 // The other members of win's group (empty when it has none).

@@ -546,7 +546,14 @@ Item {
     }
 
     function fillWith(snapped, tile, zoneRect, win) {
+        // A pick that cannot be placed (the window closed or changed while the picker was open, or
+        // KWin refused the tile) ends a fill sequence: nothing would offer its next zone, and the
+        // halves picker must not be held back for this window.
+        const inSequence = fill !== null && fill.anchor === snapped;
         if ((!tile && !zoneRect) || !usable(win)) {
+            if (inSequence) {
+                endFill();
+            }
             return;
         }
         if (win.minimized) {
@@ -554,6 +561,9 @@ Item {
         }
         if (tile) {
             if (!tile.manage(win)) {
+                if (inSequence) {
+                    endFill();
+                }
                 return;
             }
         } else {
@@ -564,18 +574,20 @@ Item {
             joinGroup(snapped, win, tile, zoneRect);
         }
         // A fill sequence goes on with its next zone once KWin has settled.
-        if (fill && fill.anchor === snapped) {
+        if (inSequence && fill) {
             fill.placed.push(win);
-            fill.zones.shift();
+            fill.filled.push(fill.current);
             fillSettle.restart();
         }
     }
 
     // ---------------------------------------------------------------- fill every zone
 
-    // The sequence after a flyout choice: the anchor window, its layout, the zones still to offer
-    // (Groups.fillOrder) and the windows placed so far (never offered again). Halves snapped by
-    // an edge drag or Meta+Left/Right keep windowSnapped's single offer.
+    // The sequence after a flyout choice: the anchor window, its layout and chosen zone, the zones
+    // this sequence filled and the windows it placed (never offered again). The empty zones are
+    // worked out again before every offer: a picked window may come out of another zone of the
+    // layout, which is then empty and offered in its turn. Halves snapped by an edge drag or
+    // Meta+Left/Right keep windowSnapped's single offer.
     property var fill: null
 
     Timer {
@@ -617,24 +629,32 @@ Item {
         if (!setting("FillOtherHalf", true)) {
             return;
         }
-        const count = layoutsFor(win)[layoutIndex].zones.length;
-        const occupied = [];
-        for (let z = 0; z < count; ++z) {
-            occupied.push(z !== zoneIndex && zoneHeld(win, layoutIndex, z, quick));
-        }
-        const zones = Groups.fillOrder(count, zoneIndex, occupied);
-        if (zones.length === 0) {
-            return;
-        }
         fill = {
             anchor: win,
             layoutIndex: layoutIndex,
+            chosen: zoneIndex,
             quick: quick,
             anchorRect: quick ? null : targetRect(win, layoutIndex, zoneIndex),
-            zones: zones,
+            filled: [],
+            current: -1,
             placed: [win]
         };
+        if (emptyZones(fill).length === 0) {
+            fill = null;
+            return;
+        }
         fillSettle.restart();
+    }
+
+    // The zones of the sequence's layout still to offer, in fill order: neither filled by this
+    // sequence (a geometry zone's window may not have answered its resize yet) nor holding a window.
+    function emptyZones(f) {
+        const count = layoutsFor(f.anchor)[f.layoutIndex].zones.length;
+        const occupied = [];
+        for (let z = 0; z < count; ++z) {
+            occupied.push(f.filled.indexOf(z) >= 0 || (z !== f.chosen && zoneHeld(f.anchor, f.layoutIndex, z, f.quick)));
+        }
+        return Groups.fillOrder(count, f.chosen, occupied);
     }
 
     function offerNextZone() {
@@ -643,16 +663,14 @@ Item {
             endFill();
             return;
         }
-        // A zone that filled meanwhile (the user put a window there) is skipped.
-        while (f.zones.length > 0 && zoneHeld(f.anchor, f.layoutIndex, f.zones[0], f.quick)) {
-            f.zones.shift();
-        }
+        const zones = emptyZones(f);
         const candidates = candidatesFor(f.anchor, desktopOf(f.anchor)).filter(w => f.placed.indexOf(w) < 0);
-        if (f.zones.length === 0 || candidates.length === 0) {
+        if (zones.length === 0 || candidates.length === 0) {
             endFill();
             return;
         }
-        const z = f.zones[0];
+        const z = zones[0];
+        f.current = z;
         const layout = layoutsFor(f.anchor)[f.layoutIndex];
         let tile = null;
         let rect = null;
@@ -698,35 +716,21 @@ Item {
         return win.tile ? { tile: win.tile, rect: null } : { tile: null, rect: win.frameGeometry };
     }
 
+    // Membership and zones change together (Groups.joined/left), so a window left alone by a
+    // transfer (the last partner of a group of two) never keeps a zone that could stand for a
+    // later arrangement.
     function joinGroup(anchor, win, tile, zoneRect) {
-        if (!memberZones[keyOf(anchor)]) {
-            const f = fill;
-            memberZones[keyOf(anchor)] = zoneOf(anchor, null, f && f.anchor === anchor ? f.anchorRect : null);
-        }
-        memberZones[keyOf(win)] = zoneOf(win, tile, zoneRect);
-        groups = Groups.join(groups, anchor, win);
+        const f = fill;
+        const anchorZone = zoneOf(anchor, null, f && f.anchor === anchor ? f.anchorRect : null);
+        const next = Groups.joined({ groups: groups, zones: memberZones }, anchor, win, anchorZone, zoneOf(win, tile, zoneRect), keyOf);
+        memberZones = next.zones;
+        groups = next.groups;
     }
 
     function leaveGroup(win) {
-        if (Groups.groupOf(groups, win) < 0) {
-            return;
-        }
-        groups = Groups.leave(groups, win);
-        // Forget the zones of windows no longer in any group (the last partner of a group of two).
-        for (const key in memberZones) {
-            let kept = false;
-            for (let i = 0; i < groups.length && !kept; ++i) {
-                for (let j = 0; j < groups[i].length; ++j) {
-                    if (!groups[i][j].deleted && keyOf(groups[i][j]) === key) {
-                        kept = true;
-                        break;
-                    }
-                }
-            }
-            if (!kept) {
-                delete memberZones[key];
-            }
-        }
+        const next = Groups.left({ groups: groups, zones: memberZones }, win, keyOf);
+        memberZones = next.zones;
+        groups = next.groups;
     }
 
     // A member stays while it sits in its zone: its quick tile, or for a plain-geometry zone not

@@ -11,7 +11,11 @@
 #   4. a member moved out of its quarter leaves: the group minimises without it;
 #   5. Meta+Z -> thirds fills all three thirds (plain geometry), and that group minimises together;
 #      a window placed anew through the flyout leaves that group;
-#   6. the halves flow from an edge snap (Meta+Left) still pairs its two windows.
+#   6. the halves flow from an edge snap (Meta+Left) still pairs its two windows;
+#   7. a window that already holds a zone can be picked for another one: the zone it leaves is
+#      offered in its turn, and all four quarters end up filled;
+#   8. a pick that cannot be placed (the window closed while the picker was open) ends the
+#      sequence: the halves picker still works for that window afterwards.
 # Run: tools/vsession/remote.sh sg-1 packages/kwin/tests/vsession/scenario-snapgroups.sh SEED 1440x900 420
 exec 2>&1
 export OUT
@@ -85,6 +89,17 @@ elif kind == "above":             # LABEL COVER NAMES...: every NAME stacks abov
     label, cover = args[0], find(args[1])
     bad = [n for n in args[2:] if not find(n) or not cover or find(n)["z"] < cover["z"]]
     out(cover is not None and not bad, label, "below %s: %s" % (args[1], bad) if bad else "")
+elif kind == "quartersfilled":     # LABEL: four tiled quarter-sized windows, one in each quarter
+    label = args[0]
+    seen = set()
+    for w in wins:
+        if w["tiled"] and not w["min"] and w["w"] < area["w"] * 0.6 and w["h"] < area["h"] * 0.6:
+            seen.add((w["x"] + w["w"] / 2 >= area["x"] + area["w"] / 2, w["y"] + w["h"] / 2 >= area["y"] + area["h"] / 2))
+    out(len(seen) == 4, label, "quarters %d" % len(seen))
+elif kind == "halves":            # LABEL NAME: two tiled half-sized windows, NAME one of them
+    label, name = args[0], args[1]
+    halves = [w["cls"] for w in wins if w["tiled"] and not w["min"] and w["w"] > area["w"] * 0.4 and w["h"] > area["h"] * 0.9]
+    out(len(halves) == 2 and any(name in c for c in halves), label, "halves %s" % halves)
 elif kind == "thirds":            # NAMES...: not tiled, each in a different third (top-left within 4 px)
     g = 6
     size = (area["w"] - 2 * g) / 3
@@ -241,6 +256,70 @@ state "$OUT/s9.json"
 judge minimized "$OUT/s9.json" "the halves pair minimises together" true $pair
 minimize dolphin false
 sleep 1
+
+# Every window out of its tile and restored, for the sections that need an empty layout.
+reset_tiles() {
+  K run "var l = workspace.windowList();
+    for (var i = 0; i < l.length; ++i) { var w = l[i]; if (!w.normalWindow) { continue; }
+      if (w.tile) { w.tile.unmanage(w); } w.minimized = false; }
+    report(true);" >>"$OUT/act.log"
+}
+
+# ---- 7. Kate holds the top-right quarter; Konsole's quarters fill the bottom-left first, Kate (the
+# most recent window) is picked for it, and the top-right quarter it leaves is offered in its turn
+reset_tiles
+sleep 1.5
+act kate
+sleep 0.5
+K run "workspace.slotWindowQuickTileTopRight(); report(true);" >>"$OUT/act.log"
+sleep 1.5
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 3' 'sleep 0.5' 'key enter'
+sleep 1.5
+shot 70-held-zone-picker
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 2
+shot 71-held-zone-filled
+state "$OUT/s10.json"
+judge quartersfilled "$OUT/s10.json" "the zone a picked window left is offered in its turn (four quarters filled)"
+
+# ---- 8. a pick that cannot be placed ends the sequence; the halves picker still works afterwards
+reset_tiles
+sleep 1.5
+kcharselect >/dev/null 2>&1 &
+sleep 3
+act kcharselect
+sleep 0.5
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 3' 'sleep 0.5' 'key enter'
+sleep 1.5
+shot 80-picker-before-close
+# KCharSelect, the first card, closes while the picker is open; Enter then picks the closed window
+K run "var l = workspace.windowList();
+  for (var i = 0; i < l.length; ++i) { if (String(l[i].resourceClass).indexOf('kcharselect') >= 0) { l[i].closeWindow(); } }
+  report(true);" >>"$OUT/act.log"
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+# Meta+Left on a window in the top-left quarter keeps it there (KWin's quick-tile combination), so
+# the windows float first; a sequence left stuck by the rejected pick would survive this.
+reset_tiles
+sleep 1.5
+act konsole
+sleep 0.5
+pfinput 'key meta+left'
+sleep 1.5
+shot 81-halves-after-rejected
+pfinput 'key enter'
+sleep 2
+state "$OUT/s11.json"
+judge halves "$OUT/s11.json" "after a rejected pick the halves picker still fills the other half" konsole
 
 grep -a 'plasmafusion-snap' "$OUT/kwin.log" | grep -aE 'Error|error:' | tail -5 >>"$CHK" || true
 # The verdict: every check runs, and the scenario's status says whether any failed.

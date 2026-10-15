@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-snap", "contents", "ui", "Groups.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { groupOf, leave, join, partners, fillOrder, inZone } = globalThis;
+const { groupOf, leave, join, partners, fillOrder, inZone, prune, joined, left } = globalThis;
 
 // Windows are opaque objects compared by identity.
 const a = { n: "a" };
@@ -51,6 +51,25 @@ const before = join([], a, b);
 const after = leave(before, c);
 assert.notStrictEqual(after, before, "a new list every time (QML sees the assignment)");
 assert.deepStrictEqual(shape(after), [["a", "b"]], "leaving without a group changes nothing");
+
+// ---- membership and zones change together (no stale zone survives a transfer)
+const key = (w) => w.n;
+let s = joined({ groups: [], zones: {} }, a, b, "a@left", "b@right", key);
+assert.deepStrictEqual(shape(s.groups), [["a", "b"]]);
+assert.deepStrictEqual(s.zones, { a: "a@left", b: "b@right" });
+s = joined(s, c, b, "c@q0", "b@q1", key);
+assert.deepStrictEqual(shape(s.groups), [["c", "b"]], "b picked for c's arrangement: a's pair ended");
+assert.deepStrictEqual(s.zones, { c: "c@q0", b: "b@q1" }, "a, left alone, is forgotten with its zone");
+s = joined(s, a, d, "a@third0", "d@third1", key);
+assert.strictEqual(s.zones.a, "a@third0", "a starts a new arrangement with the zone it holds now, never the stale one");
+s = joined(s, a, e, "a@elsewhere", "e@third2", key);
+assert.strictEqual(s.zones.a, "a@third0", "an anchor already in a group keeps the zone it was placed in");
+assert.deepStrictEqual(shape(s.groups), [["c", "b"], ["a", "d", "e"]]);
+s = left(s, d, key);
+assert.deepStrictEqual(Object.keys(s.zones).sort(), ["a", "b", "c", "e"], "d's zone goes with it");
+s = left(s, e, key);
+assert.deepStrictEqual(Object.keys(s.zones).sort(), ["b", "c"], "a, left alone again, is forgotten");
+assert.deepStrictEqual(prune([[a, b]], { a: 1, b: 2, x: 3 }, key), { a: 1, b: 2 }, "prune keeps group members only");
 
 // ---- the order the picker offers a layout's other zones
 assert.deepStrictEqual(fillOrder(4, 0, []), [1, 2, 3], "quarters from the top-left");
