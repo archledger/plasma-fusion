@@ -295,11 +295,14 @@ Item {
                 log("restored " + id + " to " + rect.x + "," + rect.y + " " + rect.width + "x" + rect.height);
             } else if (saved) {
                 // Another instance of the app holds the spot: its record stays, and this window's
-                // placement is not recorded as the new one. (When the spot itself is unusable -
-                // off a screen - the settle pass heals the record to where KWin placed it.)
+                // placement is not recorded as the new one - neither by the settling pass nor by
+                // the window's own geometry changes while it opens (the quiet second, as after a
+                // restore); the user's later moves are. (When the spot itself is unusable - off a
+                // screen - the settle pass heals the record to where KWin placed it.)
                 const finalRect = Placement.restoreRect(saved, current, Placement.restoreSize(stateOf(w), rememberSize()));
                 if (Placement.onScreen(finalRect, screens) && Placement.collides(finalRect, others)) {
                     entry.settleSkip = true;
+                    entry.quietUntil = Date.now() + quietMillis;
                 }
             }
         }

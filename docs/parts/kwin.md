@@ -263,7 +263,8 @@ the user left. A remembered spot is given back only while the centre of the rect
 still lies on a screen the session has (with `RememberSize` off that is the saved position with
 the size the window opens with); when a window of the same app already sits (within 8 px) on the
 spot on the same desktop and activity, KWin's own placement takes the new window instead (it
-offsets it) and the held record stays.
+offsets it) and the held record stays - the new window's own geometry changes in its first second
+are not recorded either, while the user's later moves are.
 
 The memory file is `~/.config/plasmafusion-placementrc`, one JSON text under `[Windows] windows`
 (`{"v":1,"apps":{"<app id>":{"x":…,"y":…,"width":…,"height":…}}}`). Both directions run through
@@ -319,13 +320,16 @@ and pointer drags inside the private session only).
   bar and following its window when it moves.
 - `scenario-evidence.sh`: the same on the Plasma Fusion desktop (Global Theme layout script and
   wallpaper), 5 windows, dark and light, plus pair minimise/restore.
-- `scenario-placement.sh` (strict mode; a step that fails is written to the checks): windows
+- `scenario-placement.sh` (strict mode; a step that fails is written to the checks; every check
+  runs and the scenario's status - "scenario rc" in the session log - is non-zero when any check
+  failed, after a verdict line): windows
   opened before the script is enabled are adopted - not moved, nothing recorded on loading (an
   earlier record stays), a move remembered, a close without a move recorded where the window was
   left; a window moved to a distinctive spot and closed comes
   back there on its next open (the memory file carries the entry); a spot moved off every screen
   is not restored (the window lands on-screen by KWin's placement); a second window of the same
-  app is not stacked exactly on the held spot; `IgnoreApps` leaves that app's window alone; a
+  app is not stacked exactly on the held spot, and when it moves itself while it opens the held
+  record stays; `IgnoreApps` leaves that app's window alone; a
   window rule that forces the position wins (the window opens at the rule's spot, the record
   stays).
 - Journal (`journalctl --user`, the private sessions log there): no messages from these packages.

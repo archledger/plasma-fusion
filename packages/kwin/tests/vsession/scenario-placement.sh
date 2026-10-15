@@ -12,7 +12,8 @@
 #   2. reopening it gives the spot and the size back (the seed's Centered placement would put it at
 #      the middle of the screen, so the two outcomes cannot be confused);
 #   3. a record moved off every screen is not given back (the window lands on-screen by KWin);
-#   4. a second window of the same app is not stacked exactly on the held spot;
+#   4. a second window of the same app is not stacked exactly on the held spot, and when it moves
+#      itself while it opens the held record stays;
 #   5. IgnoreApps leaves that app alone (nothing recorded, nothing restored);
 #   6. a window rule that forces the position wins: the window opens at the rule's spot and the
 #      forced spot is not recorded.
@@ -237,10 +238,26 @@ on_screen kwrite "the reopened window is placed on a screen by KWin"
 shot 30-offscreen-skipped
 info "memory: $(kreadconfig6 --file "$HOME/.config/plasmafusion-placementrc" --group Windows --key windows)"
 
-# ---- 4. the stack guard: a second instance is not stacked exactly on the held spot
+# ---- 4. the stack guard: a second instance is not stacked exactly on the held spot, and its own
+# geometry changes while it opens (an app positioning itself) do not replace the held record. The
+# move is made by a test script after the windowAdded emission - a JS script's handler would run
+# before the placement script's, so the change goes through an async D-Bus round trip first.
 place kwrite 137 93 640 420
 sleep 3
+K run "workspace.windowAdded.connect(function (w) {
+    if (!w.normalWindow || String(w.resourceClass).indexOf('kwrite') < 0) { return; }
+    callDBus('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'GetId', function () {
+      // copy the numbers: frameGeometry is a value-type reference that reads through after the move
+      var g = w.frameGeometry, x = g.x, y = g.y, width = g.width, height = g.height;
+      w.frameGeometry = {x: x + 40, y: y + 30, width: width, height: height};
+      report({opened: [x, y], moved: [x + 40, y + 30]});
+    });
+  });" >"$OUT/selfmove.json" &
+selfmove=$!
+sleep 1
 kwrite >/dev/null 2>&1 &
+wait "$selfmove"
+info "the second instance moved itself while opening: $(tr -d ' \n' <"$OUT/selfmove.json")"
 sleep 4
 K run "var l = workspace.windowList(), out = [];
   for (var i = 0; i < l.length; ++i) { var c = l[i]; if (c.normalWindow && String(c.resourceClass).indexOf('kwrite') >= 0) { var g = c.frameGeometry; out.push({x: g.x, y: g.y, w: g.width, h: g.height}); } }
@@ -253,6 +270,16 @@ if len(d) != 2:
 spot = [w for w in d if abs(w["x"] - 137) <= 8 and abs(w["y"] - 93) <= 8]
 stacked = [w for w in d if w not in spot and spot and abs(w["x"] - spot[0]["x"]) <= 8 and abs(w["y"] - spot[0]["y"]) <= 8]
 print(("PASS" if len(spot) == 1 and not stacked else "FAIL") + f" the second instance keeps KWin's placement ({d})")
+PY
+python3 - >>"$CHK" <<'PY'
+import json, os, subprocess
+text = subprocess.run(["kreadconfig6", "--file", os.path.expanduser("~/.config/plasmafusion-placementrc"), "--group", "Windows", "--key", "windows"], capture_output=True, text=True).stdout
+try:
+    got = json.loads(text).get("apps", {}).get("org.kde.kwrite")
+except Exception:
+    got = None
+want = {"x": 137, "y": 93, "width": 640, "height": 420}
+print(("PASS" if got == want else "FAIL") + f" the held record stays while the second instance moves itself (kwrite {got})")
 PY
 shot 40-pair
 close_class kwrite
@@ -309,4 +336,12 @@ qdbus org.kde.KWin /KWin reconfigure
 cp "$HOME/.config/plasmafusion-placementrc" "$OUT/memory-final.rc" 2>/dev/null || true
 info "memory file saved to memory-final.rc"
 info "placement log lines:"; grep -a 'plasmafusion-placement' "$KLOG" | tail -15 >>"$CHK" 2>/dev/null || true
+# The verdict: every check runs (a red run lists each failing behaviour), and the scenario's own
+# status says whether any failed - the session log keeps it as "scenario rc". remote.sh's status
+# stays what its header says (the session ran and the results were fetched).
+failed=$(grep -c '^FAIL' "$CHK" || true)
+info "verdict: $(grep -c '^PASS' "$CHK" || true) passed, $failed failed"
 info "done"
+trap - ERR
+set +e
+[ "$failed" = 0 ]
