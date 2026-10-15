@@ -381,6 +381,11 @@ FocusScope {
                 textFormat: Text.PlainText
             }
 
+            // A ListView, so the long history is virtualised and keeps a reader's place and its bounds as
+            // rows come and go - but without view transitions: ListView ignores a size change of its
+            // first row while that row's transition runs, and the newest notification is the first row,
+            // which settles its height after it is placed (NotificationList.qml, the sheet's rows, has
+            // the details). Rows here move without the slide.
             ListView {
                 id: list
                 objectName: "notificationCentreList"
@@ -414,11 +419,6 @@ FocusScope {
                         centre.menuAt = at;
                         centre.openCardMenu();
                     }
-                }
-
-                displaced: Transition {
-                    enabled: centre.motion.animate
-                    NumberAnimation { property: "y"; duration: centre.motion.toggle; easing.type: centre.motion.standardEasing }
                 }
             }
 

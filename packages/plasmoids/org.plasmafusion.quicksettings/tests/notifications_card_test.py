@@ -34,7 +34,7 @@ os.environ.setdefault("QT_QUICK_BACKEND", "software")
 data_home = Path(tempfile.mkdtemp(prefix="pf-notify-data-"))
 (data_home / "applications").mkdir()
 for entry, name in (("org.plasmafusion.notifytest", "Notify test"), ("org.plasmafusion.notifyother", "Other test"),
-                    ("org.plasmafusion.notifythird", "Third test")):
+                    ("org.plasmafusion.notifythird", "Third test"), ("org.plasmafusion.notifyfourth", "Fourth test")):
     (data_home / "applications" / (entry + ".desktop")).write_text(
         "[Desktop Entry]\nType=Application\nName=%s\nExec=true\nIcon=dialog-information\n" % name)
 os.environ["XDG_DATA_HOME"] = str(data_home)
@@ -105,30 +105,87 @@ Item {
     property int menuRequests: 0
     UI.Backend { id: backend; objectName: "backend" }
     C.FusionMetrics { id: fusionMetrics }
-    // The sheet's list (PopupContent.qml): the same card and the same calls.
-    ListView {
+    // The sheet's list (PopupContent.qml and the tablet Notification Centre use the same component):
+    // the same rows, transitions and calls.
+    UI.NotificationList {
         id: list
         objectName: "list"
-        anchors.fill: parent
-        anchors.margins: 12
+        x: 12
+        y: 12
+        width: root.width - 24
         spacing: 10
-        interactive: false
-        model: backend.notif.model
-        delegate: UI.NotificationEntry {
-            width: ListView.view.width
-            pal: backend.pal
+        notif: backend.notif
+        pal: backend.pal
+        metrics: fusionMetrics
+        motion: backend.pal.motion
+        menus: root.menusOn
+        onDone: ++root.closes
+        onMenuRequested: ++root.menuRequests
+    }
+    // The tablet Notification Centre's content: the same rows in its own scrolling list. Made when
+    // the overlap section turns it on, so it lists the notifications that arrive after it.
+    property bool centreOn: false
+    property real centreHeight: 1400
+    // The backend under another name: inside the Centre's declaration `backend` is its own property.
+    readonly property var backendItem: backend
+    C.Motion { id: centreMotion }
+    Loader {
+        id: centre
+        objectName: "centre"
+        active: root.centreOn
+        width: root.width
+        height: root.centreHeight
+        sourceComponent: UI.NotificationCentreContent {
+            backend: root.backendItem
             metrics: fusionMetrics
-            notif: backend.notif
-            menus: root.menusOn
-            onDone: ++root.closes
-            onMenuRequested: ++root.menuRequests
+            motion: centreMotion
+            shown: true
         }
+    }
+    // The Centre's list (a ListView) and the row items it made.
+    function centreView() {
+        return centre.item ? findIn(centre.item, "notificationCentreList") : null;
+    }
+    function centreRows() {
+        const view = centreView();
+        if (!view) {
+            return [];
+        }
+        // A ListView's rows are its contentItem's children; a Flickable holding a Column (as this PR
+        // first had it; its red run) has the Column there.
+        const kids = view.contentItem.children;
+        return kids.length === 1 && kids[0].isGroup === undefined ? kids[0].children : kids;
+    }
+    function sheetRowCount() {
+        return Array.from(listRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry).length;
+    }
+    // The row at the top of the Centre's view (what someone reading it sees first).
+    function centreTopRow() {
+        const view = centreView();
+        const item = view ? view.itemAt(view.width / 2, view.contentY + 10) : null;
+        return item && item.entry ? (item.isGroup ? "group:" + item.entry.applicationName : String(item.entry.summary)) : "";
+    }
+    function centreScroll(offset) {
+        const view = centreView();
+        view.contentY = view.originY + offset;
+    }
+
+    function centreLoaded() {
+        return centre.status === Loader.Ready && centre.item !== null;
+    }
+    function centreRowCount() {
+        return Array.from(centreRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry).length;
     }
 
     // Lookups for the test, in QML (walking the item tree from Python trips over some types).
+    // The list's row items: the Column's children (a ListView keeps them in its contentItem; the red
+    // run of the overlap check stages the old ListView in this component).
+    function listRows() {
+        return list.contentItem ? list.contentItem.children : list.children;
+    }
     // The card of a notification, or with `group` the header row of an app's group.
     function cardOf(summary) {
-        for (const item of list.contentItem.children) {
+        for (const item of listRows()) {
             if (item.card !== undefined && item.card && item.card.entry && item.card.entry.summary === summary) {
                 return item.card;
             }
@@ -136,7 +193,7 @@ Item {
         return null;
     }
     function groupOf(appName) {
-        for (const item of list.contentItem.children) {
+        for (const item of listRows()) {
             if (item.isGroup === true && item.entry && item.entry.applicationName === appName) {
                 return item;
             }
@@ -146,12 +203,44 @@ Item {
     // The rows as the list shows them, top to bottom: "group:App" or the summary.
     function rows() {
         const result = [];
-        const items = list.contentItem.children.filter(item => item.isGroup !== undefined && item.visible && item.entry)
+        const items = Array.from(listRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry)
                                                .sort((a, b) => a.y - b.y);
         for (const item of items) {
             result.push(item.isGroup ? "group:" + item.entry.applicationName : String(item.entry.summary));
         }
         return JSON.stringify(result);
+    }
+    // What the list would draw over itself: a row that starts inside the one above it, a card that
+    // runs into the next row, a summary or body whose wrapped lines are taller than its box. Each
+    // problem is a sentence with the numbers; an empty list is a clean layout.
+    function layoutProblems(which) {
+        const problems = [];
+        const items = Array.from(which === "centre" ? centreRows() : listRows()).filter(item => item.isGroup !== undefined && item.visible && item.entry)
+                                               .sort((a, b) => a.y - b.y);
+        const label = item => item.isGroup ? "the " + item.entry.applicationName + " header" : '"' + item.entry.summary + '"';
+        for (let i = 0; i < items.length; ++i) {
+            const item = items[i];
+            const next = items[i + 1];
+            if (next && next.y < item.y + item.height - 0.5) {
+                problems.push(label(next) + " starts " + Math.round(item.y + item.height - next.y) + " px inside " + label(item));
+            }
+            const card = item.card;
+            if (!card || !card.visible) {
+                continue;
+            }
+            const cardBottom = item.y + card.mapToItem(item, 0, 0).y + card.height;
+            if (next && cardBottom > next.y + 0.5) {
+                problems.push("the card " + label(item) + " runs " + Math.round(cardBottom - next.y) + " px into " + label(next));
+            }
+            for (const name of ["summary", "body"]) {
+                const text = findIn(card, name);
+                if (text && text.visible && text.contentHeight > text.height + 0.5) {
+                    problems.push(name + " of " + label(item) + ": " + Math.round(text.contentHeight) + " px of text in a "
+                                  + Math.round(text.height) + " px box (" + text.lineCount + " lines)");
+                }
+            }
+        }
+        return JSON.stringify(problems);
     }
     function groupInfo(appName, name) {
         const group = groupOf(appName);
@@ -166,7 +255,7 @@ Item {
     // The footer ("Show N More") under the last listed card of an app.
     function footerOf(appName) {
         let last = null;
-        for (const item of list.contentItem.children) {
+        for (const item of listRows()) {
             if (item.isGroup === false && item.entry && item.entry.isInGroup && item.entry.applicationName === appName
                     && item.footer.shown) {
                 last = item;
@@ -303,7 +392,7 @@ def job(title, *options, entry="org.plasmafusion.notifytest"):
 
 def notify(summary, body, *options, entry="org.plasmafusion.notifytest"):
     app = {"org.plasmafusion.notifytest": "Notify test", "org.plasmafusion.notifyother": "Other test",
-           "org.plasmafusion.notifythird": "Third test"}[entry]
+           "org.plasmafusion.notifythird": "Third test", "org.plasmafusion.notifyfourth": "Fourth test"}[entry]
     proc = subprocess.Popen([sys.executable, "-B", str(here / "notify_client.py"), "notify", summary, body,
                              "--entry", entry, "--app", app, *options],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
@@ -604,6 +693,57 @@ try:
     backend.setProperty("page", "clipboard")
     check(notif.property("listShown") is False, "the clipboard sheet has no list")
     backend.setProperty("page", "main")
+    # ---- Rows never draw over each other (owner report 2026-10-15, the sheet's list): a card whose
+    # summary and body each wrap to a second line, next to its image, ran into the next row - the
+    # header of a group - and two grouped cards with a wrapped body and an action overlapped.
+    # The tablet Notification Centre lists the same history with the same rows: on before they arrive.
+    root.setProperty("centreOn", True)
+    wait_for(lambda: root.centreLoaded(), "the Notification Centre did not load")
+    # In the order of the report: a one-line card, then two from one app (the group forms while the
+    # list shows), then the wrapping card, which arrives on top and moves every row under it - from an
+    # app with no notification yet, so it is the lists' first row, the one ListView's transitions
+    # dropped the size changes of.
+    notify("Could not connect to device", "", entry="org.plasmafusion.notifythird")
+    for n in (1, 2):
+        notify("Service Crash %d" % n, "/usr/bin/bash has encountered a fatal error and was closed.",
+               "--action", "details=Details", entry="org.plasmafusion.notifyother")
+    notify("Remote control enabled: Plasma Fusion project settings",
+           "Your session is ready to control from your phone or another computer.",
+           "--image", str(png("wrap-thumb.png", 96, 96, "#e07040")), entry="org.plasmafusion.notifyfourth")
+    QTest.qWait(600)
+    problems = json.loads(root.layoutProblems("sheet"))
+    check(problems == [], "wrapped cards and a group: no row draws over another (%s)" % ("; ".join(problems) or "clean"))
+    centre_rows = root.centreRowCount()
+    check(centre_rows >= 4, "the Notification Centre lists them too (%d rows)" % centre_rows)
+    problems = json.loads(root.layoutProblems("centre"))
+    check(problems == [], "the same in the Notification Centre's list (%s)" % ("; ".join(problems) or "clean"))
+    # A narrower sheet wraps more lines: the rows follow.
+    root.setProperty("width", 320)
+    QTest.qWait(400)
+    problems = json.loads(root.layoutProblems("sheet"))
+    check(problems == [], "after the sheet narrows: no row draws over another (%s)" % ("; ".join(problems) or "clean"))
+    root.setProperty("width", 380)
+    QTest.qWait(400)
+    # The Centre scrolls a long history itself (review, PR #47): a virtualised ListView, which makes
+    # only the rows it shows and keeps a reader's place when a notification arrives on top.
+    root.setProperty("centreHeight", 600)
+    for n in range(1, 11):
+        notify("Filler %d" % n, "An older notification", entry="org.plasmafusion.notifytest")
+    QTest.qWait(400)
+    made, listed = root.centreRowCount(), root.sheetRowCount()
+    check(0 < made < listed, "the Notification Centre makes only the rows it shows (%d of %d)" % (made, listed))
+    root.centreScroll(400)
+    QTest.qWait(200)
+    top = root.centreTopRow()
+    # From the app whose group is on top already: a row inserted above the view (a notification of an
+    # app further down moves its whole group to the top, rows in view with it - ListView's own way).
+    notify("Arrives while reading", "A new notification on top", entry="org.plasmafusion.notifytest")
+    QTest.qWait(400)
+    check(top != "" and root.centreTopRow() == top,
+          "a notification arriving on top leaves the reader's place (%r, now %r)" % (top, root.centreTopRow()))
+    root.setProperty("centreOn", False)
+    root.setProperty("centreHeight", 1400)
+    QTest.qWait(200)
     print(f"Notification cards: {checks} checks, 0 failures")
 finally:
     for proc in clients:

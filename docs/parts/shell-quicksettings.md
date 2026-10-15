@@ -214,6 +214,8 @@ packages/plasmoids/org.plasmafusion.quicksettings/
   contents/ui/DisplayPage.qml       brightness of every display and the keyboard backlight
   contents/ui/NotificationEntry.qml one row of the history: an app's group header or a card,
                                     and "Show N More" (the sheet and the Notification Centre)
+  contents/ui/NotificationList.qml  the sheet's history rows as a Column, with their add and move
+                                    transitions
   contents/ui/ProfilesPage.qml      Power mode chooser (the Power mode tile's chevron)
   contents/ui/PowerPage.qml         Keep awake durations and the sleep blockers (the tile's chevron)
   contents/ui/ClipboardPage.qml     the clipboard sheet: search, All / Starred, the list, editor, QR code
@@ -1189,6 +1191,46 @@ while unread, two and **Show 2 More** once read, all four and **Show Fewer** aft
 again after another, none after Close Group, and Clear all removes a collapsed group's hidden ones.
 Live (VM 2, tablet posture forced with kwinrc `[Input] TabletMode=on`): the Centre's Konsole group
 with three new cards, the stack edges and **Show 4 More**, expanded by a tap.
+
+### Rows that never draw over each other (2026-10-15)
+
+Owner report (0.5.0, laptop at 150 %): in the sheet, a group's header was drawn over the bottom of
+the card above it, and two cards of one group overlapped. The sheet's list was a ListView with add
+and displaced transitions, and ListView ignores a size change of its first row while that row's
+transition is scheduled or running: `QQuickListViewPrivate::itemGeometryChanged` returns early
+(`transitionScheduledOrRunning()`, qquicklistview.cpp in Qt 6.11.2 and 6.12.0) and lays the rows out
+again only at the next change of the model. The newest notification is the first row, and its
+height settles just after it is placed (its text wraps at the row's width), so the rows under it
+stayed where its first height put them - also after the sheet was closed and opened again. It shows
+when notifications arrive while the sheet is open; without the transitions the rows were right.
+
+The sheet's rows are now `NotificationList.qml`: a Column with a Repeater of `NotificationEntry`
+rows. A positioner places its rows again after every size change of a child, and its `add` (the
+fade-in) and `move` (the slide, also when a row above changes its height) transitions animate as
+before; the rows there when the list is made appear without a transition (`populate`). Every row
+existed before as well: the sheet's list was as tall as its content, and the sheet's Flickable
+scrolls it.
+
+The tablet Notification Centre scrolls a long history itself, so it keeps its ListView, which makes
+only the rows it shows, keeps a reader's place as notifications arrive above the view and stays in
+its bounds as rows go. It drops its displaced transition instead: with it, the same overlap showed
+there when a new card arrived as the first row. Its rows now move without the slide.
+
+`tests/notifications_card_test.py` loads the real component and the Centre's content and sends
+notifications in the reported order - a one-line card, two cards of one app with a wrapped body and
+an action (the group forms while the list shows), then a card whose summary and body wrap, with an
+image, which arrives on top - and checks that no row starts inside the one above it, no card runs
+into the next row and no summary or body has more text than its box, in the sheet, in the Centre
+(which must list the rows) and after the sheet narrows; the wrapping card comes from an app with no
+notification yet, so it is the first row. Red runs: with the old ListView staged in the component
+the sheet's check fails (the group header starts 14 px inside the new card); with the Centre as it
+was (its displaced transition) the Centre's check fails by 12 px. The Centre's checks also guard its
+ListView: with a long history it makes fewer rows than the sheet lists (a Flickable around a Column,
+this change's first version, made all 22 of 22), and a notification arriving above the view leaves
+the row at the top of the view in place. A private
+session (KWin 6.7.5, 2880x1800 at 150 %, the notifications sent while the sheet is open) showed the
+overlap with the old list and clean rows with this one, also after closing and opening the sheet
+again.
 
 ### Configure
 
