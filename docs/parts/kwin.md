@@ -193,13 +193,14 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   (or the maximize button's hold/hover) starts a sequence - the picker covers each other zone of
   that layout in turn, in zone order after the chosen one and wrapping (`Groups.fillOrder`), with
   the windows not placed yet. A zone already holding a window is skipped: a quick tile with
-  windows, or for thirds (plain geometry, not KWin tiles) a zone a window of the desktop already
-  sits in (`Groups.inZone`: top-left within 4 px, no larger than the zone and at least half its
+  windows, or for thirds (plain geometry, not KWin tiles) a zone any window of the desktop already
+  sits in - also one the switcher skips (`Groups.inZone`: top-left within 4 px, no larger than the zone and at least half its
   size - a terminal rounds its size to whole cells). The empty zones are worked out again before
   every offer: a window picked out of another zone of the layout leaves that zone empty, and it is
   offered in its turn (the zones this sequence filled count as held, whatever a window's geometry
   says while it answers its resize). Esc, a click elsewhere, a workspace switch, the first window
-  changing its tile or closing, or a pick that cannot be placed (the window closed while the
+  leaving its zone (another tile, out of its rectangle, maximized or full screen - with a picker
+  open or in the settle before the next one) or closing, or a pick that cannot be placed (the window closed while the
   picker was open, or KWin refused the tile) end the sequence; what was placed stays. Halves from
   an edge drag or Meta+Left/Right keep the single offer above.
 - Snap groups (Windows' snap groups; GNOME Tiling Assistant's tile groups raise together too):
@@ -209,7 +210,8 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   back. A window is in one group at most; picking it for another arrangement moves it there, and a
   zone chosen for it in the flyout is a new arrangement (it leaves its old group first). A
   member leaves when it leaves its zone (a quick-tile member's tile changes; a thirds member is
-  no longer in its rectangle when a move ends), is maximized or made full screen, or closes; a
+  no longer in its rectangle when a move ends), goes to another desktop or screen, is maximized or
+  made full screen, or closes; a
   group left with one window ends. `PairWindows=false` forms no groups.
 - Gaps: 6 px between halves and quarters, with the outer edges flush to the work area (panels
   remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
@@ -360,7 +362,9 @@ and pointer drags inside the private session only).
   through the flyout (another third) leaves that group; a window that already holds a quarter can
   be picked for another, and the quarter it leaves is offered in its turn (all four filled); a pick
   of a window that closed while the picker was open ends the sequence (the halves picker still
-  works for that window afterwards); the halves picker
+  works for that window afterwards); the first window moved out of its quarter right after its
+  placement ends the sequence (no picker); a window the switcher skips keeps its third (nothing is
+  placed over it); a thirds member sent to another desktop leaves its group; the halves picker
   after Meta+Left still pairs its two windows.
 - `scenario-placement.sh` (strict mode; a step that fails is written to the checks; every check
   runs and the scenario's status - "scenario rc" in the session log - is non-zero when any check

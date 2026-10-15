@@ -15,7 +15,10 @@
 #   7. a window that already holds a zone can be picked for another one: the zone it leaves is
 #      offered in its turn, and all four quarters end up filled;
 #   8. a pick that cannot be placed (the window closed while the picker was open) ends the
-#      sequence: the halves picker still works for that window afterwards.
+#      sequence: the halves picker still works for that window afterwards;
+#   9. the first window leaving its zone before the next offer ends the sequence (no picker);
+#  10. a window the switcher skips still holds its third (nothing is placed over it);
+#  11. a thirds member sent to another desktop leaves its group.
 # Run: tools/vsession/remote.sh sg-1 packages/kwin/tests/vsession/scenario-snapgroups.sh SEED 1440x900 420
 exec 2>&1
 export OUT
@@ -100,6 +103,16 @@ elif kind == "halves":            # LABEL NAME: two tiled half-sized windows, NA
     label, name = args[0], args[1]
     halves = [w["cls"] for w in wins if w["tiled"] and not w["min"] and w["w"] > area["w"] * 0.4 and w["h"] > area["h"] * 0.9]
     out(len(halves) == 2 and any(name in c for c in halves), label, "halves %s" % halves)
+elif kind == "untiled":           # LABEL: no window is tiled
+    tiled = [w["cls"] for w in wins if w["tiled"] and not w["min"]]
+    out(not tiled, args[0], "tiled %s" % tiled)
+elif kind == "thirdalone":        # LABEL NAME: NAME is the only window in the middle third
+    g = 6
+    size = (area["w"] - 2 * g) / 3
+    x1 = round(area["x"] + size + g)
+    there = [w["cls"] for w in wins if not w["tiled"] and not w["min"] and abs(w["x"] - x1) <= 4
+             and abs(w["y"] - area["y"]) <= 4 and w["w"] <= size + 4]
+    out(len(there) == 1 and args[1] in there[0], args[0], "in the middle third %s" % there)
 elif kind == "thirds":            # NAMES...: not tiled, each in a different third (top-left within 4 px)
     g = 6
     size = (area["w"] - 2 * g) / 3
@@ -257,12 +270,15 @@ judge minimized "$OUT/s9.json" "the halves pair minimises together" true $pair
 minimize dolphin false
 sleep 1
 
-# Every window out of its tile and restored, for the sections that need an empty layout.
+# Every window out of its tile, restored and cascaded to a spot of its own (no zone of any layout),
+# for the sections that need an empty layout: a window left in a third by an earlier section would
+# otherwise still hold it.
 reset_tiles() {
-  K run "var l = workspace.windowList();
+  K run "var l = workspace.windowList(), n = 0;
     for (var i = 0; i < l.length; ++i) { var w = l[i]; if (!w.normalWindow) { continue; }
-      if (w.tile) { w.tile.unmanage(w); } w.minimized = false; }
-    report(true);" >>"$OUT/act.log"
+      if (w.tile) { w.tile.unmanage(w); } w.minimized = false;
+      w.frameGeometry = {x: 160 + 28 * n, y: 110 + 24 * n, width: 640, height: 420}; ++n; }
+    report(n);" >>"$OUT/act.log"
 }
 
 # ---- 7. Kate holds the top-right quarter; Konsole's quarters fill the bottom-left first, Kate (the
@@ -320,6 +336,83 @@ pfinput 'key enter'
 sleep 2
 state "$OUT/s11.json"
 judge halves "$OUT/s11.json" "after a rejected pick the halves picker still fills the other half" konsole
+
+# ---- 9. the first window leaves its quarter right after its placement (a test script moves it,
+# through an async D-Bus round trip, inside the settle before the next offer): the sequence ends
+reset_tiles
+sleep 1.5
+act konsole
+sleep 0.5
+K run "var w = workspace.activeWindow, done = false;
+  w.tileChanged.connect(function () {
+    if (done || !w.tile) { return; }
+    done = true;
+    callDBus('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'GetId', function () {
+      if (w.tile) { w.tile.unmanage(w); }
+      w.frameGeometry = {x: 260, y: 160, width: 760, height: 520};
+      report(String(w.resourceClass));
+    });
+  });" >"$OUT/anchormove.json" &
+mover=$!
+sleep 1
+pfinput 'key meta+z' 'sleep 1' 'key 3' 'sleep 0.5' 'key enter'
+wait "$mover"
+sleep 1.5
+shot 90-anchor-moved
+# A picker that still came would take this Enter and tile a window.
+pfinput 'key enter'
+sleep 1.5
+state "$OUT/s12.json"
+judge untiled "$OUT/s12.json" "the sequence ends when its first window leaves the zone before the next offer"
+
+# ---- 10. Okular holds the middle third and the switcher skips it (as a window rule can make it):
+# the thirds offer skips that third, nothing is placed over Okular
+reset_tiles
+sleep 1.5
+K run "var a = workspace.clientArea(KWin.MaximizeArea, workspace.activeScreen, workspace.currentDesktop);
+  var size = (a.width - 12) / 3, x1 = Math.round(a.x + size + 6), x2 = Math.round(a.x + 2 * size + 6);
+  var l = workspace.windowList(), w = null;
+  for (var i = 0; i < l.length; ++i) { if (l[i].normalWindow && String(l[i].resourceClass).indexOf('okular') >= 0) { w = l[i]; } }
+  if (w) { w.skipSwitcher = true; w.frameGeometry = {x: x1, y: a.y, width: x2 - x1, height: a.height}; }
+  report(w ? [x1, a.y, x2 - x1, a.height] : null);" >"$OUT/occupant.json"
+sleep 1.5
+act konsole
+sleep 0.5
+pfinput 'key meta+z' 'sleep 1' 'key 4' 'sleep 0.5' 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+pfinput 'key enter'
+sleep 1.5
+shot 100-occupied-third
+state "$OUT/s13.json"
+judge thirdalone "$OUT/s13.json" "a window the switcher skips keeps its third (nothing placed over it)" okular
+K run "var l = workspace.windowList();
+  for (var i = 0; i < l.length; ++i) { if (String(l[i].resourceClass).indexOf('okular') >= 0) { l[i].skipSwitcher = false; } }
+  report(true);" >>"$OUT/act.log"
+
+# ---- 11. the window in the third third (Konsole's partner) goes to a second desktop: it leaves
+# the group, so minimising Konsole leaves it alone
+third=$(python3 -c 'import json,sys
+d = json.load(open(sys.argv[1])); a = d["area"]; g = 6; size = (a["w"] - 2 * g) / 3
+x2 = round(a["x"] + 2 * (size + g))
+print(" ".join(w["cls"] for w in d["wins"] if not w["tiled"] and not w["min"] and abs(w["x"] - x2) <= 4
+               and abs(w["y"] - a["y"]) <= 4))' "$OUT/s13.json")
+third=${third%% *}
+info "the third-third window: ${third:-none}"
+K run "if (workspace.desktops.length < 2) { workspace.createDesktop(1, 'two'); }
+  var l = workspace.windowList(), w = null;
+  for (var i = 0; i < l.length; ++i) { if (l[i].normalWindow && '${third:-none}' !== 'none' && String(l[i].resourceClass) === '${third:-none}') { w = l[i]; } }
+  if (w && workspace.desktops.length > 1) { w.desktops = [workspace.desktops[1]]; }
+  report(w ? workspace.desktops.length : null);" >>"$OUT/act.log"
+sleep 1.5
+minimize konsole true
+sleep 1.5
+state "$OUT/s14.json"
+# shellcheck disable=SC2086 # one class name, or none (then the check fails: no windows)
+judge minimized "$OUT/s14.json" "a member sent to another desktop left its group" false ${third:+$third}
+minimize konsole false
+sleep 1
 
 grep -a 'plasmafusion-snap' "$OUT/kwin.log" | grep -aE 'Error|error:' | tail -5 >>"$CHK" || true
 # The verdict: every check runs, and the scenario's status says whether any failed.
