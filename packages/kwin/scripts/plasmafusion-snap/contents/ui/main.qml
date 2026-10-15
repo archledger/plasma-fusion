@@ -556,6 +556,9 @@ Item {
             }
             return;
         }
+        // The picked window belongs to this arrangement now: it leaves its old group before it is
+        // restored, so restoring it does not bring the rest of that group back.
+        leaveGroup(win);
         if (win.minimized) {
             win.minimized = false;
         }
@@ -577,6 +580,7 @@ Item {
         if (inSequence && fill) {
             fill.placed.push(win);
             fill.filled.push(fill.current);
+            fill.filledBy.push({ win: win, tile: tile });
             fillSettle.restart();
         }
     }
@@ -621,13 +625,14 @@ Item {
     }
 
     // Every window that can sit in a zone of the anchor's desktop - not only the picker's
-    // candidates: a window the switcher skips (a window rule) still holds its zone.
+    // candidates: a window the switcher skips (a window rule) still holds its zone, and so does a
+    // minimised one (it comes back to that spot, as a minimised window keeps its quick tile).
     function occupantsOf(anchor, desktop) {
         const list = [];
         const order = Workspace.stackingOrder;
         for (let i = 0; i < order.length; ++i) {
             const w = order[i];
-            if (!w || w === anchor || w.deleted || !w.normalWindow || w.minimized) {
+            if (!w || w === anchor || w.deleted || !w.normalWindow) {
                 continue;
             }
             let here = w.onAllDesktops;
@@ -656,8 +661,10 @@ Item {
             chosen: zoneIndex,
             quick: quick,
             anchorTile: quick ? win.tile : null,
+            anchorPlace: placeOf(win),
             anchorRect: quick ? null : targetRect(win, layoutIndex, zoneIndex),
             filled: [],
+            filledBy: [],
             current: -1,
             placed: [win]
         };
@@ -669,7 +676,7 @@ Item {
     }
 
     // The anchor left its chosen zone (another tile, out of its rectangle when a move ends,
-    // maximized or full screen) while no picker was open - during the settle before the next
+    // maximized or full screen, another desktop, screen or activity) while no picker was open - during the settle before the next
     // offer: the sequence ends, as it does when that happens with a picker open. Its own
     // placement happens before the sequence starts, so it never ends one.
     function fillAnchorChanged(win, moveEnded) {
@@ -677,7 +684,7 @@ Item {
         if (!f || f.anchor !== win) {
             return;
         }
-        let stays = win.maximizeMode === 0 && !win.fullScreen;
+        let stays = win.maximizeMode === 0 && !win.fullScreen && placeOf(win) === f.anchorPlace;
         if (stays && f.quick) {
             stays = win.tile === f.anchorTile;
         } else if (stays) {
@@ -690,14 +697,29 @@ Item {
     }
 
     // The zones of the sequence's layout still to offer, in fill order: neither filled by this
-    // sequence (a geometry zone's window may not have answered its resize yet) nor holding a window.
+    // sequence and still held by the window placed there (a geometry zone's window may not have
+    // answered its resize yet, so its rectangle is not asked) nor holding another window. A window
+    // placed by the sequence that closed or left its zone leaves the zone to be offered again.
     function emptyZones(f) {
         const count = layoutsFor(f.anchor)[f.layoutIndex].zones.length;
         const occupied = [];
         for (let z = 0; z < count; ++z) {
-            occupied.push(f.filled.indexOf(z) >= 0 || (z !== f.chosen && zoneHeld(f.anchor, f.layoutIndex, z, f.quick)));
+            occupied.push(filledStillHeld(f, z) || (z !== f.chosen && zoneHeld(f.anchor, f.layoutIndex, z, f.quick)));
         }
         return Groups.fillOrder(count, f.chosen, occupied);
+    }
+
+    function filledStillHeld(f, z) {
+        const i = f.filled.lastIndexOf(z);
+        if (i < 0) {
+            return false;
+        }
+        const w = f.filledBy[i].win;
+        const tile = f.filledBy[i].tile;
+        if (!w || w.deleted || w.maximizeMode !== 0 || w.fullScreen || placeOf(w) !== f.anchorPlace) {
+            return false;
+        }
+        return tile ? w.tile === tile : !w.tile;
     }
 
     function offerNextZone() {
@@ -749,26 +771,47 @@ Item {
         return String(win.internalId);
     }
 
-    // Where a window is: its screen and desktops. A member sent to another desktop or screen has
-    // left the arrangement (a plain-geometry zone keeps the same rectangle there).
+    // Where a window is: its screen, desktops and activities. A member sent to another desktop,
+    // screen or activity has left the arrangement (a plain-geometry zone keeps the same rectangle
+    // there).
     function placeOf(win) {
         const ids = [];
         for (let d = 0; d < win.desktops.length; ++d) {
             ids.push(String(win.desktops[d].id));
         }
         const desktops = win.onAllDesktops ? "*" : ids.sort().join(",");
-        return (win.output ? win.output.name : "?") + "|" + desktops;
+        // An empty activity list means all activities.
+        const activities = [];
+        for (let a = 0; a < win.activities.length; ++a) {
+            activities.push(String(win.activities[a]));
+        }
+        return (win.output ? win.output.name : "?") + "|" + desktops + "|" + (activities.length > 0 ? activities.sort().join(",") : "*");
     }
 
     function zoneOf(win, tile, zoneRect) {
         const place = placeOf(win);
+        const placedAt = Date.now();
         if (tile) {
-            return { tile: tile, rect: null, place: place };
+            return { tile: tile, rect: null, place: place, placedAt: placedAt };
         }
         if (zoneRect) {
-            return { tile: null, rect: zoneRect, place: place };
+            return { tile: null, rect: zoneRect, place: place, placedAt: placedAt };
         }
-        return win.tile ? { tile: win.tile, rect: null, place: place } : { tile: null, rect: win.frameGeometry, place: place };
+        return win.tile ? { tile: win.tile, rect: null, place: place, placedAt: placedAt }
+                        : { tile: null, rect: win.frameGeometry, place: place, placedAt: placedAt };
+    }
+
+    // A plain-geometry member moved by anything but the user (an app moving itself, another
+    // script) leaves its zone too: its geometry is asked on every change - once the placement has
+    // had time to settle (a Wayland client answers its resize late) and never during an
+    // interactive move, which is asked when it ends.
+    readonly property int placementSettleMillis: 1500
+    function geometryChangedMember(win) {
+        const zone = win && !win.deleted ? memberZones[keyOf(win)] : undefined;
+        if (!zone || !zone.rect || win.move || win.resize || Date.now() - zone.placedAt < placementSettleMillis) {
+            return;
+        }
+        checkMember(win, true);
     }
 
     // Membership and zones change together (Groups.joined/left), so a window left alone by a
@@ -1056,6 +1099,7 @@ Item {
                 }
                 function onFrameGeometryChanged() {
                     watcher.fit();
+                    root.geometryChangedMember(watcher.window);
                 }
                 function onInteractiveMoveResizeFinished() {
                     watcher.fit();
@@ -1072,9 +1116,15 @@ Item {
                 }
                 function onDesktopsChanged() {
                     root.checkMember(watcher.window, false);
+                    root.fillAnchorChanged(watcher.window, false);
                 }
                 function onOutputChanged() {
                     root.checkMember(watcher.window, false);
+                    root.fillAnchorChanged(watcher.window, false);
+                }
+                function onActivitiesChanged() {
+                    root.checkMember(watcher.window, false);
+                    root.fillAnchorChanged(watcher.window, false);
                 }
                 function onMinimizedChanged() {
                     root.groupMinimizedChanged(watcher.window);
