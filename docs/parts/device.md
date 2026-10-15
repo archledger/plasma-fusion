@@ -158,31 +158,88 @@ file, so `fusion-restore.sh` gives every key back.
 | Meta+Alt+1..9 | `kwin` / `Plasma Fusion: Activate Dock Entry 1..9` (the snap KWin script; the dock's `activateTaskAtIndex` through its `activateRequest` key, on Plasma 6.7 and 6.8); plasmashell's `activate task manager entry 1..9` lose Meta+5..9, and a Meta+Alt+N an earlier version gave them moves to the new action |
 | Meta+1..4 | `kwin` / `Switch to Desktop 1..4` (unchanged) |
 | Meta+Shift+W (with `--pen`) | the pen widget's "activate widget <id>", only when free |
-| Meta+Shift+T (every run, not part of the Windows set) | `org.plasmafusion.copytext.desktop` / `_launch` (0.5.0): copy text from the screen, a component like Meta+N whose command is `spectacle --region`; set only when no action holds the key, a key the user gave it is kept, nothing without Spectacle |
+| Meta+Shift+T (every run, not part of the Windows set) | `org.plasmafusion.copytext.desktop` / `_launch` (0.5.0): copy text from the screen, a component like Meta+N whose command is the helper `plasma-fusion-copytext` (`spectacle --region` without the helper, and in 0.5.0); set only when no action holds the key, a key the user gave it is kept, nothing without Spectacle |
 
 **Copy text from the screen** (survey F6; PowerToys Text Extractor's Win+Shift+T, macOS Live Text).
-Spectacle 6.7.5 (OCR since 6.6, Tesseract) recognises text only in its own window: `spectacle
---help` and its D-Bus interface (`org.kde.Spectacle`: FullScreen, CurrentScreen, ActiveWindow,
-WindowUnderCursor, RectangularRegion, Record*, OpenWithoutScreenshot) have no text option, and
-neither has Plasma 6.8's or master's command line. Its background mode (`-b -n -r`) saved a PNG to
-Pictures/Screenshots and exited without the text (VM, 2026-10-11). So the key and quick settings'
-header button open Spectacle's region capture (`--region`, GUI mode): select the area, then
-**Extract Text** on the selection's toolbar copies the text to the clipboard and a notification says
-so (VM: "Hello Plasma Fusion OCR test 12345" from a Konsole line). The gap to PowerToys: one more
-click (Extract Text; it has no key), and Spectacle's viewer opens afterwards unless its "Close after
-extraction" setting (`spectaclerc [General] closeAfterOcr`) is on; Plasma Fusion leaves that setting
-to the user. Meta+Shift+T was free in KWin, Plasma and Spectacle 6.7.5 and in the Windows-style set
+Meta+Shift+T, or the button next to the screenshot button in quick settings' header: select an area,
+and its text is on the clipboard, with a "Text copied" notification that shows its first line
+(2026-10-15; in 0.5.0 Spectacle's window opened and Extract Text took one more click). Spectacle
+6.7.5 (OCR since 6.6, Tesseract) recognises text only in its own window: `spectacle --help` and its
+D-Bus interface (`org.kde.Spectacle`: FullScreen, CurrentScreen, ActiveWindow, WindowUnderCursor,
+RectangularRegion, Record*, OpenWithoutScreenshot) have no text option, and neither has Plasma 6.8's
+or master's command line (KDE bug 516767 asks for it). Its background mode saves the chosen area to
+a file and exits: without `-o` into Pictures/Screenshots (VM, 2026-10-11), with `-o FILE` to FILE
+alone, as its "save automatically" and "copy to clipboard" settings are not applied in background
+mode (`SpectacleCore.cpp`, 6.7.5). So the helper `plasma-fusion-copytext` (`packages/copytext/`; in
+the helper directory: `/usr/libexec/plasma-fusion`, `/usr/lib/plasma-fusion` on Arch, the system
+profile on NixOS, `~/.local/libexec/plasma-fusion` with `--install`) does it in four steps:
+
+1. capture: `spectacle -b -n -r -o $XDG_RUNTIME_DIR/plasma-fusion-copytext.XXXXXX/region.png`, the
+   directory removed when the helper ends; Esc ends it without a word;
+2. read: `tesseract FILE stdout -l LANGS --psm 3` with the languages Spectacle would use
+   (`OcrManager.cpp`: `spectaclerc [General] ocrLanguages`, the installed ones in its order, no osd,
+   no repeats, at most four; else the first installed language other than osd), so the languages
+   chosen in Spectacle's settings apply; each line trimmed and empty lines dropped, as Extract Text
+   joins them;
+3. copy: Klipper's `setClipboardContents` (the clipboard history keeps the text), else `wl-copy`;
+4. say so: "Text copied" (the first line, at most 80 characters, and how many lines follow), "No
+   text found", "Could not read the text" or "Could not copy the text" - transient notifications,
+   not kept in the history - and "No text recognition languages" with the package names when
+   Tesseract has no language data (then nothing is captured).
+
+Spectacle runs once per session: a request goes to the Spectacle already open, which drops its
+window for the new capture (as its own Rectangular Region key does) and, for a background request,
+quits after saving (`SpectacleCore::activate`, 6.7.5). So while Spectacle is open
+(`org.kde.spectacle` on the session bus) the helper leaves the capture to it, and where the
+`tesseract` command is missing it opens Spectacle as before: `spectacle --region`, the area in
+Spectacle's window, where **Extract Text** on the selection's toolbar copies the text; the window
+stays afterwards unless its "Close after extraction" setting (`spectaclerc [General] closeAfterOcr`)
+is on. A second press while the area is being chosen does nothing (a lock in the runtime directory,
+not handed on to Spectacle or wl-copy, which stay). The packages recommend Tesseract (Fedora
+`tesseract`, Debian `tesseract-ocr`, Arch's optional `tesseract` with a `tesseract-data-*`
+language); on NixOS add `pkgs.tesseract` to the system packages. The setup's component runs the
+helper by its path (in double quotes when the path holds a space; a path with `"`, `` ` ``, `$`, `\`
+or `%` is not used) and `spectacle --region` when no helper is installed (the tools run from a
+source tree). kglobalaccel launches a component with the command it read when it loaded it
+(`KServiceActionComponent` keeps its `KService`, kglobalacceld 6.7), so when the setup changes the
+command of a loaded component (`plasma-fusion update` in a running session after 0.5.0), it
+unregisters `_launch` - kglobalacceld drops a component left without actions when it writes its
+settings, 500 ms later - and registers it again, which makes the component from the new file; the
+keys it had are given back as they were (not recorded as a change). Quick settings' button runs the
+helper from the same places in the same order (`Backend.copyTextCommand`), else `spectacle
+--region`. Meta+Shift+T was free in KWin, Plasma and Spectacle 6.7.5 and in the Windows-style set
 (`globalShortcutsByKey` empty in the parity VM). kglobalaccel makes a component it loads at login
 active but leaves one registered while it runs inactive (`isActive` false, no key grab) until the
 next login, so the setup gives the key again as present (`setShortcut` with SetPresent |
 NoAutoloading, as a running application does): the key works at once. `fusion-restore.sh` gives the
 key back (none), unregisters the component and removes its desktop file (an `absent-file` entry of
-the backup). Test: `tools/device/tests/copytext-unit.sh` (CI) runs the setup step and the restore's
-sections against a fake kglobalaccel: a free key set and given as present, the old key recorded, a
-second run unchanged, a key in use left with its action, the user's own key kept, nothing without
-Spectacle, and the restore. VM (real keys from a uinput keyboard): after the setup Meta+Shift+T
-started `spectacle --region` without a new login, the header button too; after the restore the key
-holds nothing and starts nothing.
+the backup). Tests: `tools/device/tests/copytext-unit.sh` (CI, 24 checks) runs the setup step and
+the restore's sections against a fake kglobalaccel: a free key set and given as present, the old key
+recorded, a second run unchanged, a key in use left with its action, the user's own key kept,
+nothing without Spectacle, and the restore; the component's command (the helper, quoted for a path
+with a space, not used for one with a `$` or a `%`, `spectacle --region` without it, a 0.5.0 file
+written again); a loaded 0.5.0 component made again with the user's key kept and no change recorded,
+and no reload on a second run; quick settings' command run as Plasma's executable source runs it
+(the helper, else `spectacle --region`; its places and their order against `HELPER_DIRS`).
+`packages/copytext/tests/helper-unit.sh` (CI, 28 checks) runs the helper itself with a PATH of
+stand-ins (Spectacle, Tesseract, kreadconfig6, busctl, wl-copy): the capture's arguments and its
+directory, the text Klipper gets, the notifications, nothing left behind, Esc, Spectacle open, a
+second press, the language choice, no language data, no `tesseract` command, no text, Tesseract
+failing, text that starts with a dash or holds markup, a long line cut in characters, wl-copy
+(without the helper's lock: it stays to serve the clipboard), no clipboard; then on a private bus
+with the real `busctl` (`fake_session.py` owns Klipper's and the notification server's names; text
+that starts like an option), and real Tesseract on a line drawn in Manrope at 14 px.
+`packages/copytext/tests/vsession/scenario-copytext.sh` (a private session, 25 checks; KWin and
+Spectacle 6.7.5, Tesseract 5.5.3) drives the real Spectacle, Tesseract and Klipper with KWin's
+emulated keys and pointer: 0.5.0's component, loaded first, starts `spectacle --region` from
+Meta+Shift+T; the setup makes it again with the helper and keeps the key (without that, the key went
+on starting `spectacle --region` and nothing was copied); then Meta+Shift+T and a drag around a line
+put exactly that line on Klipper's clipboard with a "Text copied" notification, no image left and no
+Spectacle left running; Esc copies and says nothing; with Spectacle's window open the area goes to
+that Spectacle, which keeps running with it, and the helper copies nothing; a second line follows
+(both in Klipper's history); quick settings' button does the same as the key. VM (0.5.0, real keys
+from a uinput keyboard): after the setup Meta+Shift+T started `spectacle --region` without a new
+login, the header button too; after the restore the key holds nothing and starts nothing.
 
 Widget keys (quick settings, pen) are also set on later runs when the widget has none (a layout
 rebuild drops them; a dead entry of a dropped widget is cleared first), but then only when the key is

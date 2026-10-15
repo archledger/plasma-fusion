@@ -66,8 +66,9 @@
 #                      (the dead entry of a widget dropped by an earlier layout rebuild is removed
 #                      first); a key the user chose is kept
 #   Copy text          Meta+Shift+T (when no other action holds it; a key the user chose is kept):
-#                      "Copy Text from Screen", Spectacle's region capture, where its Extract Text
-#                      copies the selected text (a kglobalaccel component in
+#                      "Copy Text from Screen", the selected area's text to the clipboard
+#                      (plasma-fusion-copytext; Spectacle's region capture and its Extract Text
+#                      without the tesseract command) (a kglobalaccel component in
 #                      ~/.local/share/kglobalaccel/, removed by fusion-restore.sh)
 #   Workspaces         four virtual desktops Work, Design, Media, Chat in one row (with the
 #                      dynamic workspaces on, kwinrc [Plugins] plasmafusion-workspacesEnabled,
@@ -180,7 +181,7 @@ PEN_SHORTCUT_TEXT=Meta+Shift+W
 NOTIFY_COMPONENT=org.plasmafusion.notifications.desktop
 NOTIFY_SHORTCUT=$((META + 0x4e))
 # Meta+Shift+T (PowerToys' Text Extractor key; no KWin, Plasma or Spectacle default holds it in 6.7):
-# copy text from the screen with Spectacle's OCR, a component made the same way.
+# copy text from the screen (Spectacle's area selection and Tesseract), a component made the same way.
 COPYTEXT_COMPONENT=org.plasmafusion.copytext.desktop
 COPYTEXT_SHORTCUT=$((META + SHIFT + 0x54))
 # Meta+V: the same kind of component for quick settings' clipboard sheet ("clipboard:<ms>"). Plasma
@@ -1587,37 +1588,89 @@ ensure_notify_shortcut() {
 }
 
 # Copy text from the screen (survey F6; PowerToys Text Extractor, macOS Live Text). Spectacle
-# (6.6 and later) recognises text only from its own capture: there is no command line or D-Bus way to
-# go straight from a region to the clipboard, and its background mode (-b -r) saves an image and
-# exits without the text. So the key opens Spectacle's region capture (--region), where "Extract
-# Text" on the selection's toolbar copies the text and says so in a notification; Spectacle's viewer
-# opens afterwards unless its "Close after extraction" setting is on. Quick settings' header has the
-# same action.
+# (6.6 and later) recognises text only in its own window, with no command line or D-Bus way from a
+# region to the clipboard, so the helper plasma-fusion-copytext (packages/copytext) does it in one
+# step: Spectacle's area selection, Tesseract (the engine of Spectacle's Extract Text, with its
+# languages), Klipper, a notification; without the tesseract command it opens Spectacle's region
+# capture. Without the helper (the tools run from a source tree) the key opens Spectacle's region
+# capture (--region) itself, where "Extract Text" on the selection's toolbar copies the text.
+# Quick settings' header has the same action. The command of the component's desktop file: the
+# helper's path, quoted when it holds a space; one the desktop entry would have to escape (", `, $,
+# \, and % that would read as a field code) is not used.
+copytext_exec() {
+  local h
+  if ! h=$(helper_path plasma-fusion-copytext); then
+    echo "spectacle --region"
+    return 0
+  fi
+  case $h in
+    *[\"\`\$\\%]*) echo "spectacle --region" ;;
+    *[!A-Za-z0-9/._+-]*) printf '"%s"\n' "$h" ;;
+    *) printf '%s\n' "$h" ;;
+  esac
+}
 copytext_desktop() {
+  local exec comment="Select an area to copy its text"
+  exec=$(copytext_exec)
+  [ "$exec" != "spectacle --region" ] || comment="Select an area with Spectacle and choose Extract Text to copy its text"
   cat <<EOF
 [Desktop Entry]
 Type=Application
 Name=Plasma Fusion: Copy Text from Screen
-Comment=Select an area with Spectacle and choose Extract Text to copy its text (installed by Plasma Fusion's fusion-config.sh, removed by fusion-restore.sh)
+Comment=$comment (installed by Plasma Fusion's fusion-config.sh, removed by fusion-restore.sh)
 Icon=document-scan
-Exec=spectacle --region
+Exec=$exec
 StartupNotify=false
 EOF
 }
+# True while kglobalaccel has the component loaded. $1 component
+component_loaded() {
+  bus_json call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel allComponents 2>/dev/null |
+    python3 -c 'import json, re, sys; sys.exit(0 if "/component/" + re.sub(r"[^A-Za-z0-9_]", "_", sys.argv[1]) in json.load(sys.stdin)["data"][0] else 1)' \
+      "$1" 2>/dev/null
+}
 # Meta+Shift+T only when nothing holds it; a key the user gave the action is kept.
 ensure_copytext_shortcut() {
-  local cur
+  local cur held="" reload=0 file=$DATA/kglobalaccel/$COPYTEXT_COMPONENT i
   if ! command -v spectacle >/dev/null 2>&1; then
     note "copy text from the screen: Spectacle is not installed (no shortcut)"
     return 0
   fi
+  # kglobalaccel launches a component with the command it read when it loaded the component
+  # (KServiceActionComponent keeps its KService, kglobalacceld 6.7): a changed command (0.5.0's
+  # spectacle --region, the helper's place) reaches it only when the component is made again. It
+  # drops a component whose last action was unregistered when it writes its settings (500 ms
+  # later, with the component's keys), and registering the action again makes it from the file.
+  if [ -f "$file" ] && [ "$(cat "$file")" != "$(copytext_desktop)" ] && component_loaded "$COPYTEXT_COMPONENT"; then
+    reload=1
+    held=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
+  fi
   # Executable, as the Meta+N component (KDE runs a desktop file outside the system directories
   # only when it has the executable bit).
   install_text "$DATA/kglobalaccel/$COPYTEXT_COMPONENT" "$(copytext_desktop)" 0755 || true
+  if [ "$reload" = 1 ] && [ "$DRY" = 0 ]; then
+    note "reload $COPYTEXT_COMPONENT (its new command)"
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss "$COPYTEXT_COMPONENT" _launch >/dev/null 2>&1 || true
+    for ((i = 0; i < 50; i++)); do
+      component_loaded "$COPYTEXT_COMPONENT" || break
+      sleep 0.1
+    done
+    if component_loaded "$COPYTEXT_COMPONENT"; then
+      note "warning: kglobalaccel kept $COPYTEXT_COMPONENT; its new command applies from the next login"
+    fi
+  fi
   if [ "$DRY" = 0 ]; then
     bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel doRegister as 4 "$COPYTEXT_COMPONENT" _launch \
       "Plasma Fusion: Copy Text from Screen" "Plasma Fusion: Copy Text from Screen" >/dev/null 2>&1 ||
       note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT"
+  fi
+  # The keys it had before the reload, back as they were (not a change of the setup's: nothing for
+  # the backup).
+  if [ -n "$held" ] && [ "$DRY" = 0 ] && [ -z "$(shortcut_get "$COPYTEXT_COMPONENT" _launch)" ]; then
+    # shellcheck disable=SC2086
+    set -- $held
+    bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcut asai 4 "$COPYTEXT_COMPONENT" _launch "" "" \
+      $# "$@" >/dev/null 2>&1 || note "warning: kglobalaccel did not take $COPYTEXT_COMPONENT's keys back"
   fi
   cur=$(shortcut_get "$COPYTEXT_COMPONENT" _launch)
   if [ -n "$cur" ]; then

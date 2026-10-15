@@ -27,11 +27,12 @@ waves, battery fill, charging bolt, 30 % / 10 % warning colours).
 style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come from the Plasma style):
 
 * battery chip (`82%`, 34 px, radius 17) and five 34 px round buttons: screenshot (Spectacle's
-  rectangular-region shortcut), copy text from the screen (0.5.0: `spectacle --region` after the
-  pop-up closes, where Extract Text copies the selection's text; the same command as Meta+Shift+T,
-  docs/parts/device.md), System Settings, lock, leave (logout / restart / shut down prompt); to
-  their left the pencil that edits the tiles (0.5.0, section "Editable tiles"; in tablet posture it
-  is in the tablet row);
+  rectangular-region shortcut), copy text from the screen (after the pop-up closes: the selected
+  area's text to the clipboard with `plasma-fusion-copytext`, found in the setup's helper
+  directories in their order, else `spectacle --region`, where Extract Text copies it; the same as
+  Meta+Shift+T, docs/parts/device.md), System Settings, lock, leave (logout / restart / shut down
+  prompt); to their left the pencil that edits the tiles (0.5.0, section "Editable tiles"; in tablet
+  posture it is in the tablet row);
 * volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
   Plasma's "Raise maximum volume", `plasmaparc` read through plasma-pa's `GlobalConfig`; a volume
   set above the limit elsewhere is kept by a step up, and every wheel or key step counts from the

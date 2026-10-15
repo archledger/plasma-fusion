@@ -95,6 +95,9 @@ Requires:       /usr/bin/setpriv
 Requires:       python3-pillow
 Requires:       (librsvg2-tools or python3-pyside6)
 Suggests:       python3-pyside6
+# Copy text from the screen in one step (plasma-fusion-copytext): the tesseract command reads the
+# area Spectacle captures; without it the key opens Spectacle's own Extract Text.
+Recommends:     tesseract
 # The compiled parts of the same build: the window decoration and the settings page by default,
 # the tablet gestures for convertibles.
 %if %{with compiled}
@@ -284,7 +287,7 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 # templates, the login check, the top-bar script of the Global Themes, the font fallback.
 test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
 test -s %{buildroot}%{_datadir}/plasma-fusion/appicons/plasma-fusion-app-icons.service
-for h in powerfx libreoffice charge-limit keyboard-keys app-icons; do
+for h in powerfx libreoffice charge-limit keyboard-keys app-icons copytext; do
   test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-$h
 done
 grep -qF '%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit</annotate>' \
@@ -398,13 +401,14 @@ done
 # The helpers: power tiers (started per user by plasma-fusion setup; nothing is enabled by the
 # package), the battery charge limit of the quick settings (pkexec, polkit action
 # org.plasmafusion.charge-limit), Esc/Tab/arrows on the on-screen keyboard, the familiar app icons,
-# the LibreOffice scale guard
+# the LibreOffice scale guard, copy text from the screen
 %dir %{_libexecdir}/plasma-fusion
 %{_libexecdir}/plasma-fusion/plasma-fusion-powerfx
 %{_libexecdir}/plasma-fusion/plasma-fusion-libreoffice
 %{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit
 %{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
 %{_libexecdir}/plasma-fusion/plasma-fusion-app-icons
+%{_libexecdir}/plasma-fusion/plasma-fusion-copytext
 %{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 
 %if %{with compiled}
