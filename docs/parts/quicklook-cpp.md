@@ -13,11 +13,11 @@ opening them.
 | Kind (`QuickLookItem::kind`) | How it is decided | Viewer |
 |---|---|---|
 | `image`, `animation` | an `image/*` type (or one a Qt image plugin reads, Krita's for one) that `QImageReader` can read; more than one frame: `animation` | `ImageViewer.qml`: centred, scaled down to fit, never up, decoded at the shown size; GIF/WebP animations play |
-| `pdf` | `application/pdf` | `PdfViewer.qml`: Qt PDF (PDFium), the pages one under the other at the window's width |
-| `text` | inherits `text/plain` and has no NUL byte in its first 8 KiB | `TextViewer.qml`: fixed-width font, KSyntaxHighlighting colours for the file name's language (dark or light theme by the window's colours), the first 512 KiB (ending at a line break) with a note when cut; UTF-8, else Latin-1 |
+| `pdf` | `application/pdf` | `PdfViewer.qml`: Qt PDF (PDFium), the pages one under the other at the window's width, fitted again when the window is resized until the user zooms (a pinch) |
+| `text` | inherits `text/plain` and has no NUL byte in its first 8 KiB | `TextViewer.qml`: fixed-width font, KSyntaxHighlighting colours for the file name's language (dark or light theme by the window's colours), the first 512 KiB (ending at a line break; one longer line ends before the character the limit cut) with a note when cut; UTF-8, else Latin-1 |
 | `audio`, `video` | `audio/*`, `video/*` | `MediaViewer.qml`: Qt Multimedia, plays at once; a song shows its cover (KIO's thumbnail) or icon; play/pause and the position |
 | `folder` | a directory | `FolderViewer.qml`: icon and name; the details give the items in it and KIO's size of everything below |
-| `file` | anything else | `FileViewer.qml`: KIO's thumbnail (the thumbnailers Dolphin uses: documents, fonts, comics...) or the type's icon, the name and type |
+| `file` | anything else | `FileViewer.qml`: KIO's thumbnail (the thumbnailers Dolphin uses: documents, fonts, comics...) or the type's icon, the name and type; also in place of a viewer whose Qt module is missing (a PDF without Qt PDF), asking KIO for the thumbnail then |
 | `missing` | gone since it was selected | `FileViewer.qml`: "This file is no longer there" |
 
 The window's title is the file's name ("beta.txt (2 of 5) — Quick Look" with several files).
@@ -27,8 +27,11 @@ Below: the type, the image size, the size, the modified time, and the viewer's o
 lines, the length of a song).
 
 Keys: Space or Esc closes, Left/Up and Right/Down go through the files (round), Enter opens the
-shown one. The keyboard stays with the window: the text area takes no focus (the mouse still
-selects text to copy).
+shown one, Ctrl+C copies the text selected in the text view. The keyboard stays with the window:
+the text area takes no focus (the mouse still selects text, and the window's Copy key copies it).
+
+The thumbnails KIO made are kept while their file is in the preview (`Thumbnails`, the image
+provider's store) and dropped with it, when another selection replaces it.
 
 One preview at a time (`KDBusService::Unique`): a second start hands its files to the first, and
 the same files again close it, so Space on the same selection in Dolphin closes the preview as in
@@ -97,25 +100,34 @@ DBusAddons, I18n, KIO, Service, WindowSystem); at run time the QML modules of Ki
 style, Qt PDF, Qt Multimedia and KSyntaxHighlighting. Packages: Fedora `plasma-fusion-quicklook`
 (Requires those modules, Recommends kio-extras, kf6-kimageformats, qt6-qtimageformats, qt6-qtsvg,
 dolphin; the spec gives its QML a time stamp derived from its sources, as the settings page's,
-docs/parts/system.md); Debian `plasma-fusion-quicklook` (the qml6-module-* packages); Arch
+docs/parts/system.md); Debian `plasma-fusion-quicklook` (the qml6-module-* packages; KDE neon has
+the desktop style's module in `kf6-qqc2-desktop-style`, the alternative it depends on there); Arch
 `plasma-fusion-quicklook` (Qt PDF comes with qt6-webengine there, so it is optional: without it a
 PDF shows its thumbnail, the viewer's loader falling back); Nix `plasma-fusion-quicklook` (wrapped
 with its QML modules). The main package recommends it (Arch: optdepends).
 
 ## Tests
 
-- `quicklook-model` (`tests/quicklooktest.cpp`, ctest; CI `compiled` and `sanitizers`; 21 QTest
+- `quicklook-model` (`tests/quicklooktest.cpp`, ctest; CI `compiled` and `sanitizers`; 23 QTest
   results, all pass): every kind
   (PNG, SVG, text, Python, JSON, a `.txt` holding a NUL, PDF, WAV, MP4, ZIP, a folder), the image
-  size in the details, UTF-8 and Latin-1 text, the 512 KiB limit ending at a line break, a folder's
-  3 items and KIO's 9 B in all, a missing file, the session (a second Space on the same files,
-  next/previous round, another selection, relative paths and file: URLs, remote ones left out).
-- `quicklook-viewers` (`tests/run-viewers.sh`, ctest with dbus-run-session; 24 checks, all pass):
+  size in the details, UTF-8 and Latin-1 text, the 512 KiB limit ending at a line break, one longer
+  line cut inside a UTF-8 character (still UTF-8, the cut character left out, no replacement
+  character: `QStringDecoder` is stateful and keeps an unfinished character as its state), a
+  folder's 3 items and KIO's 9 B in all, a missing file, the session (a second Space on the same
+  files, next/previous round, another selection, relative paths and file: URLs, remote ones left
+  out), a text file's thumbnail asked for once by the file view and dropped from the store with
+  the next selection (skipped without kio-extras' text thumbnailer).
+- `quicklook-viewers` (`tests/run-viewers.sh`, ctest with dbus-run-session; 30 checks, all pass):
   the program offscreen with `--test-report` shows eleven samples in turn and reports what each
-  viewer showed: the PNG at 64 x 48, a two-frame GIF playing, the SVG drawn, the text's length and
-  its 2 lines, Python highlighting, the PDF's one page ("1 page"), the WAV's 1000 ms, the folder's
-  "3 items", the ZIP in the file view, an OpenDocument text's thumbnail of its first page (KIO, from
-  kio-extras), the missing file. CI installs the run-time modules from the line in
+  viewer showed, again in a window 240 px wider and, for the PDF, after a zoom and the window
+  narrowed back: the PNG at 64 x 48, a two-frame GIF playing, the SVG drawn, the text's length and
+  its 2 lines, the text view's selection copied to the clipboard, Python highlighting, the PDF's one
+  page ("1 page") as wide as the window when shown and after the resize (560 and 800 px) and a zoom
+  kept when the window narrows, the WAV's 1000 ms, the folder's "3 items", the ZIP in the file view,
+  an OpenDocument text's thumbnail of its first page (KIO, from kio-extras), the missing file; a
+  second run with `--test-unavailable text` (the text viewer taken as missing) shows the text file's
+  KIO thumbnail in the file view. CI installs the run-time modules from the line in
   `tests/CMakeLists.txt`.
 - Both pass with `-Werror` and under AddressSanitizer and UndefinedBehaviorSanitizer with leak
   detection (`tools/sanitizers/run.sh`); `packaging/build-rpm.sh --compiled` builds the package
@@ -131,7 +143,20 @@ with its QML modules). The main package recommends it (Arch: optdepends).
   again in Dolphin on the same files closes the preview; `fusion-restore.sh` removes the file and
   Space opens nothing after Dolphin starts again. Red runs: no setup (Dolphin's own keys) and Space
   on both actions (ambiguous): Space opens nothing. Screenshots in the evidence folder.
+  2026-10-15, review round 1, private sessions on the Fedora 44 test laptop (the same versions),
+  1440x900: 13 checks pass, the new one: the text file's two lines selected with a mouse drag in
+  the Quick Look window and Ctrl+C put them on the clipboard (`wl-paste`). `~/ql-mode` "removed":
+  after Quick Look is removed and the setup runs again, Dolphin's file keeps its own interface
+  without the two entries and Space opens selection mode (Dolphin's view changes, its selection
+  bars in the screenshot). Red runs: "removed-red" (no second setup: the entries stay, Space does
+  nothing) and a program without the Copy shortcut (the text selected, the clipboard empty).
 - Red runs of the unit suites: eight single changes (no binary check, no second-Space check, no
   line-end cut, no Latin-1, no animation, remote files kept, no 512 KiB limit, lines counted by the
   text area) each fail their check; five of the setup step's rules undone each fail
+  `quicklook-keys-unit.sh`. Review round 1 (2026-10-15): a stateless UTF-8 decoding
+  (`QString::fromUtf8`), thumbnails not dropped, a text file asking for a thumbnail, no thumbnail
+  for the file view in place of a viewer, the PDF fitted before Qt's page view sets its scale back
+  to 1 for a new document (`PdfMultiPageView` does so when the source changes: the page stayed at
+  scale 1), no fit on resize, a fit on resize after a zoom, and no copy each fail their check; the
+  setup without the undo once Quick Look is gone, and the undo without its mark, each fail
   `quicklook-keys-unit.sh`.

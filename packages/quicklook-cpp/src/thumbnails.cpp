@@ -27,6 +27,18 @@ QImage Thumbnails::get(const QString &id)
     return s_images.value(id);
 }
 
+void Thumbnails::remove(const QString &id)
+{
+    QMutexLocker locker(&s_lock);
+    s_images.remove(id);
+}
+
+int Thumbnails::count()
+{
+    QMutexLocker locker(&s_lock);
+    return s_images.count();
+}
+
 ThumbnailProvider::ThumbnailProvider()
     : QQuickImageProvider(QQuickImageProvider::Image)
 {

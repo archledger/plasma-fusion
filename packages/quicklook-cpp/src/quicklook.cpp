@@ -13,9 +13,11 @@
 #include <KIO/PreviewJob>
 #include <KLocalizedString>
 
+#include <QClipboard>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -92,6 +94,13 @@ QuickLookItem::QuickLookItem(const QString &path, QObject *parent)
     }
     if (const KService::Ptr service = KApplicationTrader::preferredService(m_mimeType)) {
         m_openWithName = service->name();
+    }
+}
+
+QuickLookItem::~QuickLookItem()
+{
+    if (!m_thumbnailId.isEmpty()) {
+        Thumbnails::remove(m_thumbnailId);
     }
 }
 
@@ -190,8 +199,10 @@ void QuickLookItem::load()
     m_loaded = true;
     if (m_kind == QLatin1String("text")) {
         loadText();
+        m_thumbnailDone = true;
     } else if (m_kind == QLatin1String("folder")) {
         loadFolder();
+        m_thumbnailDone = true;
     } else if (m_kind == QLatin1String("file") || m_kind == QLatin1String("audio")) {
         // Any other file: what Dolphin shows for it (a page of a document, an archive's icon...);
         // a song: its cover.
@@ -199,6 +210,16 @@ void QuickLookItem::load()
     } else {
         m_thumbnailDone = true;
     }
+}
+
+void QuickLookItem::requestThumbnail()
+{
+    if (m_kind == QLatin1String("missing") || m_thumbnailRequested) {
+        return;
+    }
+    m_thumbnailDone = false;
+    Q_EMIT thumbnailChanged();
+    loadThumbnail();
 }
 
 void QuickLookItem::loadText()
@@ -216,6 +237,8 @@ void QuickLookItem::loadText()
             data.truncate(lineEnd + 1);
         }
     }
+    // Stateful: a character the limit cut (one long line) stays in the decoder's state and is left
+    // out, without an error.
     QStringDecoder utf8(QStringDecoder::Utf8);
     QString text = utf8.decode(data);
     if (utf8.hasError()) {
@@ -246,13 +269,18 @@ void QuickLookItem::loadFolder()
 
 void QuickLookItem::loadThumbnail()
 {
+    m_thumbnailRequested = true;
     const KFileItemList items{KFileItem(url(), m_mimeType)};
     const QStringList plugins = KIO::PreviewJob::availablePlugins();
     auto *job = new KIO::PreviewJob(items, QSize(512, 512), &plugins);
     job->setScaleType(KIO::PreviewJob::ScaledAndCached);
     m_job = job;
     connect(job, &KIO::PreviewJob::gotPreview, this, [this](const KFileItem &, const QPixmap &preview) {
-        m_thumbnail = QUrl(QStringLiteral("image://quicklook-thumbnail/") + Thumbnails::add(preview.toImage()));
+        if (!m_thumbnailId.isEmpty()) {
+            Thumbnails::remove(m_thumbnailId);
+        }
+        m_thumbnailId = Thumbnails::add(preview.toImage());
+        m_thumbnail = QUrl(QStringLiteral("image://quicklook-thumbnail/") + m_thumbnailId);
     });
     connect(job, &KJob::result, this, [this] {
         m_thumbnailDone = true;
@@ -351,6 +379,11 @@ void QuickLookSession::writeReport(const QString &file, const QVariantList &entr
     if (out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         out.write(QJsonDocument(QJsonArray::fromVariantList(entries)).toJson());
     }
+}
+
+QString QuickLookSession::clipboardText() const
+{
+    return QGuiApplication::clipboard()->text();
 }
 
 void QuickLookSession::setIndex(int index)

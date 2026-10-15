@@ -13,8 +13,13 @@
 #   3. Ctrl+A, Space: the three files, "1 of 3"; Right shows the second; Esc closes;
 #   4. Space again in Dolphin on the same selection closes the open preview;
 #   5. fusion-restore.sh removes the file, and after Dolphin starts again Space opens nothing.
+# In step 3, with the text file shown, its text selected with the mouse and Ctrl+C put it on the
+# clipboard.
 # ~/ql-mode selects a red run: "none" (no setup: Dolphin's own keys), "ambiguous" (Space on both
-# actions: neither runs).
+# actions: neither runs). "removed": after step 1 Quick Look is removed and the setup runs again:
+# Dolphin's file has neither entry left, and after Dolphin starts again Space toggles selection mode
+# (Dolphin's view changes: its selection bars). "removed-red": Quick Look removed, no second setup:
+# Space does nothing.
 # Run: tools/vsession/vsession.sh ql-1 packages/quicklook-cpp/tests/vsession/scenario-quicklook.sh 1440x900 420
 exec 2>&1
 export OUT
@@ -62,6 +67,24 @@ select_first() {
   dolphin_active
   pfinput 'key ctrl+a' 'sleep 1' 'key end' 'sleep 0.5' 'key home' 'sleep 1.5'
 }
+# A window's frame (x y width height) by its resource class or caption part.
+frame() {
+  K run "var l = workspace.windowList(), g = ''; for (var i = 0; i < l.length; ++i) {
+    if ((String(l[i].resourceClass).indexOf('$1') >= 0 || String(l[i].caption).indexOf('$1') >= 0) && l[i].normalWindow) {
+      var r = l[i].frameGeometry; g = [r.x, r.y, r.width, r.height].map(Math.round).join(' '); } } report(g);" |
+    python3 -c 'import json, sys; print(json.load(sys.stdin))'
+}
+# The share of pixels that differ between two screenshots in a frame (x y width height).
+changed() {
+  python3 - "$OUT/$1.png" "$OUT/$2.png" "$3" <<'PY'
+import sys
+from PIL import Image, ImageChops
+x, y, w, h = map(int, sys.argv[3].split())
+a, b = (Image.open(f).convert("RGB").crop((x, y, x + w, y + h)) for f in sys.argv[1:3])
+diff = ImageChops.difference(a, b).convert("L").point(lambda v: 255 if v > 16 else 0)
+print("%.4f" % (sum(1 for v in diff.getdata() if v) / float(w * h)))
+PY
+}
 xml() { python3 - "$RC" "$1" <<'PY'
 import sys
 from xml.dom import minidom
@@ -93,7 +116,7 @@ if [ "$MODE" != none ]; then
   fc_rc=0
   bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc_rc=$?
   info "fusion-config rc=$fc_rc"
-  grep -a -A2 '== Quick Look' "$OUT/fc.log" >>"$CHK" || true
+  grep -a -x -A2 'Quick Look' "$OUT/fc.log" >>"$CHK" || true
 fi
 if [ "$MODE" = ambiguous ]; then
   mkdir -p "$(dirname "$RC")"
@@ -120,6 +143,42 @@ if [ -z "$MODE" ]; then
     [ "$(xml "actions.get('$ACTION'), actions.get('toggle_selection_mode')")" = "('Space', '')" ] &&
     pass "1: Dolphin merged it into its own interface (version $(xml version), menus and toolbars) and kept the two keys" ||
     fail "1: after Dolphin's start: version $(xml version), keys $(xml "actions.get('$ACTION'), actions.get('toggle_selection_mode')")"
+fi
+
+# ---- removed: Quick Look uninstalled after the setup gave Space
+if [ "$MODE" = removed ] || [ "$MODE" = removed-red ]; then
+  [ "$(xml "actions.get('$ACTION'), actions.get('toggle_selection_mode')")" = "('Space', '')" ] &&
+    info "the two keys are set (version $(xml version))" || fail "removed: the setup did not give the keys"
+  pkill -u "$(id -u)" -x dolphin || true
+  sleep 2
+  rm -f "$HOME/.local/bin/plasma-fusion-quicklook" "$HOME/.local/share/kio/servicemenus/plasma-fusion-quicklook.desktop" \
+    "$HOME/.local/share/applications/org.plasmafusion.quicklook.desktop"
+  if [ "$MODE" = removed ]; then
+    fc_rc=0
+    bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc2.log" 2>&1 || fc_rc=$?
+    info "fusion-config (Quick Look removed) rc=$fc_rc"
+    grep -a -x -A2 'Quick Look' "$OUT/fc2.log" >>"$CHK" || true
+  fi
+  cp "$RC" "$OUT/dolphinui-removed.rc" 2>/dev/null || true
+  [ -f "$RC" ] && [ "$(xml "version != '0' and '<MenuBar' in text, '$ACTION' in actions, 'toggle_selection_mode' in actions")" = "(True, False, False)" ] &&
+    pass "removed: Dolphin's file keeps its own interface (version $(xml version)) without the two entries" ||
+    fail "removed: Dolphin's file: $(xml "version, actions.get('$ACTION'), actions.get('toggle_selection_mode')" 2>/dev/null)"
+  dolphin "$HOME/QL" >>"$OUT/dolphin.log" 2>&1 &
+  sleep 6
+  select_first
+  geo=$(frame dolphin)
+  info "Dolphin's window at $geo"
+  shot 60-before-space
+  pfinput 'key space' 'sleep 2'
+  shot 61-after-space
+  part=$(changed 60-before-space 61-after-space "$geo")
+  info "Dolphin's window changed by $part after Space"
+  python3 -c "import sys; sys.exit(0 if float('$part') > 0.01 else 1)" &&
+    pass "removed: Space toggles selection mode again (Dolphin's view changed by $part, 61-after-space.png)" ||
+    fail "removed: Space changed nothing in Dolphin ($part)"
+  pkill -u "$(id -u)" -x dolphin || true
+  info "done"
+  exit 0
 fi
 
 # ---- 2. one file
@@ -152,6 +211,17 @@ sleep 1
 shot 30-three
 pfinput 'key right'
 wait_caption "beta.txt (2 of 3)" 5 && pass "3: Right shows the second file ($(ql_caption))" || fail "3: Right: '$(ql_caption)'"
+# The text selected with the mouse as a user does, from the start of its first line to past the
+# end of the second (111 and 127 px below the window's corner at 1440x900 and scale 1), then Ctrl+C:
+# the window's Copy key (the text area keeps no focus).
+read -r qx qy qw qh <<<"$(frame '— Quick Look')"
+info "Quick Look's window at $qx $qy $qw $qh"
+pfinput "drag $((qx + 8)) $((qy + 111)) $((qx + 600)) $((qy + 127)) 20" 'sleep 0.5' 'key ctrl+c' 'sleep 1'
+shot 31-text-selected
+copied=$(timeout 5 wl-paste -n 2>>"$OUT/errors.log" || true)
+[ "$copied" = "$(printf 'Plasma Fusion Quick Look\nsecond line')" ] &&
+  pass "3: the text selected with the mouse and Ctrl+C: on the clipboard" ||
+  fail "3: the clipboard after Ctrl+C: '$copied'"
 sleep 1
 shot 31-text
 pfinput 'key right'

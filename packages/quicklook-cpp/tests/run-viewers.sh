@@ -93,7 +93,8 @@ env HOME="$WORK/home" XDG_CONFIG_HOME="$WORK/home/.config" XDG_CACHE_HOME="$WORK
   dbus-run-session -- timeout 120 "$APP" --test-report "$WORK/report.json" "${args[@]}" >"$WORK/app.log" 2>&1 || {
   echo "the application failed:"; cat "$WORK/app.log"; exit 1; }
 
-python3 - "$WORK/report.json" <<'PY'
+first=0
+python3 - "$WORK/report.json" <<'PY' || first=1
 import json, sys
 r = {e["name"]: e for e in json.load(open(sys.argv[1]))}
 failed = 0
@@ -115,12 +116,19 @@ check(rep.get("status") == "ready" and rep.get("animated") is True, "moving.gif:
 rep, _ = entry("drawing.svg", "imageViewer")
 check(rep.get("status") == "ready" and rep.get("paintedWidth", 0) > 0, "drawing.svg: drawn")
 rep, e = entry("notes.txt", "textViewer")
+check(e.get("copied") == "Hello Plasma Fusion\nsecond line \u20ac\n", "notes.txt: Copy puts the selected text on the clipboard (%r)" % e.get("copied"))
 check(rep.get("length") == len("Hello Plasma Fusion\nsecond line €\n") and rep.get("truncated") is False, "notes.txt: all of its text")
 check(rep.get("lines") == 2 and e.get("extra") == "2 lines", "notes.txt: 2 lines (%s, %s)" % (rep.get("lines"), e.get("extra")))
 rep, _ = entry("script.py", "textViewer")
 check(rep.get("definition") == "Python", "script.py: highlighted as Python (%s)" % rep.get("definition"))
 rep, e = entry("page.pdf", "pdfViewer")
 check(rep.get("status") == "ready" and rep.get("pages") == 1 and e.get("extra") == "1 page", "page.pdf: one page")
+for phase, r2 in (("shown", rep), ("wider", e.get("resized", {}))):
+    check(r2.get("width", 0) > 0 and abs(r2.get("pageWidth", 0) - r2.get("width", 0)) < 1,
+          "page.pdf %s: the page as wide as the window (%s of %s, scale %s)" % (phase, r2.get("pageWidth"), r2.get("width"), r2.get("scale")))
+z = e.get("zoomed", {})
+check(abs(z.get("scale", 0) - 1.5 * e.get("resized", {}).get("scale", 0)) < 1e-6 and z.get("width", 0) < e.get("resized", {}).get("width", 0),
+      "page.pdf zoomed: the zoom kept when the window is narrower again (scale %s)" % z.get("scale"))
 rep, e = entry("tone.wav", "mediaViewer")
 check(rep.get("status") == "ready" and 900 <= rep.get("duration", 0) <= 1100 and rep.get("hasAudio") is True,
       "tone.wav: a second of sound (%s ms)" % rep.get("duration"))
@@ -136,3 +144,17 @@ check(len(r) == 11, "every file had its turn (%d)" % len(r))
 print("quicklook-viewers: %d failed" % failed)
 sys.exit(1 if failed else 0)
 PY
+
+# The text viewer taken as missing (as without its Qt module): the file view shows the text file's
+# KIO thumbnail instead (kio-extras' text thumbnailer).
+env HOME="$WORK/home" XDG_CONFIG_HOME="$WORK/home/.config" XDG_CACHE_HOME="$WORK/home/.cache" \
+  XDG_DATA_HOME="$WORK/home/.local/share" QT_QPA_PLATFORM=offscreen LANG=C.UTF-8 QT_FORCE_STDERR_LOGGING=1 \
+  dbus-run-session -- timeout 120 "$APP" --test-report "$WORK/fallback.json" --test-unavailable text "$S/notes.txt" \
+  >"$WORK/fallback.log" 2>&1 || { echo "the application failed (fallback):"; cat "$WORK/fallback.log"; exit 1; }
+python3 - "$WORK/fallback.json" <<'PY' || first=1
+import json, sys
+e = json.load(open(sys.argv[1]))[0]
+ok = e["viewer"] == "fileViewer" and e["ready"] and e["report"].get("thumbnail") is True
+print(("PASS " if ok else "FAIL ") + "notes.txt without its viewer: the file view with KIO's thumbnail (%s)" % json.dumps(e)[:300])
+PY
+exit "$first"

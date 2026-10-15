@@ -15,8 +15,10 @@ QQC2.ApplicationWindow {
 
     // QuickLookSession (quicklook.h).
     required property var session
-    // Tests: where to write what each viewer showed (main.cpp, --test-report).
+    // Tests: where to write what each viewer showed (main.cpp, --test-report), and a kind whose
+    // viewer is taken as missing (--test-unavailable: its Qt module not installed).
     property string testReport: ""
+    property string testUnavailable: ""
     readonly property var item: session.current
 
     width: Math.min(Kirigami.Units.gridUnit * 60, Screen.desktopAvailableWidth * 0.7)
@@ -36,6 +38,9 @@ QQC2.ApplicationWindow {
     }
 
     function viewerFor(kind) {
+        if (kind === testUnavailable) {
+            return "Unavailable.qml";
+        }
         switch (kind) {
         case "image":
         case "animation":
@@ -180,8 +185,17 @@ QQC2.ApplicationWindow {
         sequences: ["Return", "Enter"]
         onActivated: root.openCurrent()
     }
+    // Copy: the text view's selection (the view keeps no focus of its own).
+    Shortcut {
+        id: copy
+        sequences: [StandardKey.Copy]
+        enabled: viewer.item !== null && typeof viewer.item.copySelection === "function"
+        onActivated: viewer.item.copySelection()
+    }
 
-    // ---- tests (--test-report): every file in turn, once its viewer is ready
+    // ---- tests (--test-report): every file in turn, once its viewer is ready: its report, Copy
+    // after the viewer's own test action, its report again in a window 240 px wider and, for a
+    // viewer that zooms (testZoom()), once more after a zoom and the window narrowed back
     property var reports: []
     Timer {
         id: testStep
@@ -189,22 +203,56 @@ QQC2.ApplicationWindow {
         repeat: true
         running: root.testReport.length > 0
         property int waited: 0
+        property var entry: null
+        // 0: waiting for the viewer, 1: wider, 2: zoomed and narrower again.
+        property int phase: 0
         onTriggered: {
-            const ready = viewer.status === Loader.Ready && viewer.item && viewer.item.ready;
             waited += interval;
-            if (!ready && waited < 15000) {
+            if (phase === 0) {
+                const ready = viewer.status === Loader.Ready && viewer.item && viewer.item.ready;
+                if (!ready && waited < 15000) {
+                    return;
+                }
+                if (viewer.item && typeof viewer.item.testAction === "function") {
+                    viewer.item.testAction();
+                }
+                if (copy.enabled) {
+                    viewer.item.copySelection();
+                }
+                entry = {
+                    name: root.item ? root.item.name : "",
+                    kind: root.item ? root.item.kind : "",
+                    viewer: viewer.item ? viewer.item.objectName : "",
+                    ready: !!ready,
+                    details: root.item ? root.item.details : "",
+                    extra: viewer.item && viewer.item.extra ? viewer.item.extra : "",
+                    report: viewer.item && viewer.item.report ? viewer.item.report : ({}),
+                    copied: copy.enabled ? root.session.clipboardText() : ""
+                };
+                root.width = root.width + 240;
+                phase = 1;
+                waited = 0;
                 return;
             }
-            const entry = {
-                name: root.item ? root.item.name : "",
-                kind: root.item ? root.item.kind : "",
-                viewer: viewer.item ? viewer.item.objectName : "",
-                ready: !!ready,
-                details: root.item ? root.item.details : "",
-                extra: viewer.item && viewer.item.extra ? viewer.item.extra : "",
-                report: viewer.item && viewer.item.report ? viewer.item.report : ({})
-            };
+            if (waited < 500) {
+                return;
+            }
+            const report = viewer.item && viewer.item.report ? viewer.item.report : ({});
+            if (phase === 1) {
+                entry.resized = report;
+                root.width = root.width - 240;
+                if (viewer.item && typeof viewer.item.testZoom === "function") {
+                    viewer.item.testZoom();
+                    phase = 2;
+                    waited = 0;
+                    return;
+                }
+            } else {
+                entry.zoomed = report;
+            }
             root.reports = root.reports.concat([entry]);
+            entry = null;
+            phase = 0;
             waited = 0;
             if (root.reports.length < root.session.count) {
                 root.session.next();

@@ -430,8 +430,42 @@ print("set")
 print(doc.toxml())
 PY
 }
+# The entries the setup gave (Quick Look's Space, selection mode's none) taken out again, when
+# Quick Look is no longer installed: Dolphin drops the entry of an action that is gone, but not
+# selection mode's none, and Space would then do nothing. $1 Dolphin's file. Prints "emptied" when
+# nothing else is left in a file of version 0 (it goes), else "removed" and the file to write;
+# nothing when neither entry is there.
+dolphin_ui_without_quicklook() {
+  python3 - "$1" "$QUICKLOOK_ACTION" <<'PY'
+import sys
+from xml.dom import minidom
+
+path, action = sys.argv[1], sys.argv[2]
+doc = minidom.parse(path)
+gui = doc.documentElement
+props = next((e for e in gui.childNodes if e.nodeType == e.ELEMENT_NODE and e.tagName == "ActionProperties"), None)
+if props is None:
+    sys.exit(0)
+removed = False
+for element in list(props.getElementsByTagName("Action")):
+    name, shortcut = element.getAttribute("name"), element.getAttribute("shortcut")
+    if (name == action and shortcut == "Space") or (name == "toggle_selection_mode" and shortcut == ""):
+        props.removeChild(element)
+        removed = True
+if not removed:
+    sys.exit(0)
+others = [e for e in gui.childNodes if e.nodeType == e.ELEMENT_NODE and e is not props]
+if gui.getAttribute("version") == "0" and not others and not props.getElementsByTagName("Action"):
+    print("emptied")
+else:
+    print("removed")
+    print(doc.toxml())
+PY
+}
 # Space in Dolphin shows the selected files in Quick Look. Only with Dolphin and Quick Look
-# installed; Dolphin reads the file when it starts.
+# installed; Dolphin reads the file when it starts. QUICKLOOK_MARK records that the setup gave the
+# keys, so that they are taken back once Quick Look is gone (and only then).
+QUICKLOOK_MARK=$STATE/quicklook-space
 ensure_quicklook_space() {
   local file=$DATA/kxmlgui5/dolphin/dolphinui.rc out status
   if ! command -v dolphin >/dev/null 2>&1; then
@@ -439,7 +473,19 @@ ensure_quicklook_space() {
     return 0
   fi
   if ! quicklook_installed; then
-    note "Quick Look is not installed (the plasma-fusion-quicklook package): Dolphin's Space is left as it is"
+    if [ -f "$QUICKLOOK_MARK" ] && [ -f "$file" ] && out=$(dolphin_ui_without_quicklook "$file" 2>/dev/null) && [ -n "$out" ]; then
+      if [ "$out" = emptied ]; then
+        note "remove $file (Quick Look is gone: Dolphin's own keys)"
+        CHANGES=$((CHANGES + 1))
+        [ "$DRY" = 1 ] || rm -f "$file"
+      else
+        install_text "$file" "${out#removed$'\n'}" || true
+        note "Dolphin: Space is selection mode's again (Quick Look is gone), from Dolphin's next start"
+      fi
+    else
+      note "Quick Look is not installed (the plasma-fusion-quicklook package): Dolphin's Space is left as it is"
+    fi
+    [ "$DRY" = 1 ] || rm -f "$QUICKLOOK_MARK"
     return 0
   fi
   if ! out=$(dolphin_ui_with_quicklook "$file" 2>/dev/null); then
@@ -453,6 +499,9 @@ ensure_quicklook_space() {
     set)
       install_text "$file" "${out#*$'\n'}" || true
       note "Dolphin: Space shows Quick Look, from Dolphin's next start"
+      if [ "$DRY" = 0 ]; then
+        mkdir -p "${QUICKLOOK_MARK%/*}" && : >"$QUICKLOOK_MARK"
+      fi
       ;;
   esac
 }

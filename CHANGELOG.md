@@ -15,7 +15,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   selected files, Enter opens the shown one, and Space or Esc closes the preview. "Quick Look" is in
   the context menus of Dolphin and the desktop too. It is the new `plasma-fusion-quicklook` package,
   which the main package recommends; with it, `plasma-fusion setup` gives Space in Dolphin to Quick
-  Look ("Select Files and Folders" keeps its toolbar button), and `plasma-fusion restore` gives it back.
+  Look ("Select Files and Folders" keeps its toolbar button), and `plasma-fusion restore` gives it back,
+  as does the next `plasma-fusion setup` once the package is removed. Ctrl+C copies the selected text.
 - **Copy text from the screen** (Meta+Shift+T, and the button next to the screenshot button in Quick
   Settings) now takes one step: select an area and its text is on the clipboard, with a
   notification - no Spectacle window, no Extract Text click, no screenshot left behind. The text is

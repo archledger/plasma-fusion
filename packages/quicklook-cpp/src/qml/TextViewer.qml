@@ -31,6 +31,16 @@ ColumnLayout {
     })
     readonly property string extra: i18ncp("@info lines of a text file", "%1 line", "%1 lines", lines)
 
+    // Ctrl+C (the window's Copy, Main.qml): the text area keeps no keyboard focus, so that Space and
+    // the arrow keys stay the window's; the mouse selection is copied from here.
+    function copySelection() {
+        area.copy();
+    }
+    // Tests: select all of it, as a mouse would, before the window's Copy.
+    function testAction() {
+        area.selectAll();
+    }
+
     spacing: 0
 
     Kirigami.InlineMessage {

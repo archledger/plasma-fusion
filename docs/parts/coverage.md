@@ -160,7 +160,7 @@ four measured languages together, and no test measures it yet.
 | decoration-cpp (`src/`) | 1,359 | 1,273 | 93.7 % | `pfdeco-preview`, dark and light, and its random scenes (`pfdeco-fuzz`) |
 | kcm-cpp (`src/`) | 1,355 | 617 | 45.5 % | `kcmctl-load` and the random configuration test `kcmctl-fuzz` (default size) |
 | navigation-cpp (`src/`) | 996 | 0 | 0.0 % | none runs without KWin |
-| quicklook-cpp (`src/`) | 282 | 256 | 90.8 % | `quicklook-model` and `quicklook-viewers` (2026-10-15, Fedora 44 container; `main.cpp` 75.9 %: the second start's hand-over runs only in a session) |
+| quicklook-cpp (`src/`) | 316 | 289 | 91.5 % | `quicklook-model` and `quicklook-viewers` (2026-10-15, Fedora 44 container; `main.cpp` 79.0 %: the second start's hand-over runs only in a session) |
 
 ### QML
 

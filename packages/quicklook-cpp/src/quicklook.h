@@ -44,6 +44,7 @@ public:
     static constexpr qint64 TextLimit = 512 * 1024;
 
     explicit QuickLookItem(const QString &path, QObject *parent = nullptr);
+    ~QuickLookItem() override;
 
     QUrl url() const;
     QString path() const;
@@ -62,6 +63,9 @@ public:
 
     // Fetches what showing the item needs (once).
     void load();
+    // KIO's thumbnail, for a file shown by the file view because its own viewer could not load
+    // (its Qt module missing: a PDF without Qt PDF). Once; nothing for kinds that have one already.
+    Q_INVOKABLE void requestThumbnail();
 
 Q_SIGNALS:
     void detailsChanged();
@@ -86,7 +90,9 @@ private:
     bool m_textTruncated = false;
     QString m_folderSummary;
     QUrl m_thumbnail;
+    QString m_thumbnailId;
     bool m_thumbnailDone = false;
+    bool m_thumbnailRequested = false;
     bool m_loaded = false;
     QPointer<KJob> m_job;
 };
@@ -115,8 +121,10 @@ public:
     Q_INVOKABLE void previous();
     // Opens the shown file in its application, then the preview closes.
     Q_INVOKABLE void openCurrent();
-    // Test mode (--test-report): the JSON of the shown viewers, written at the end.
+    // Test mode (--test-report): the JSON of the shown viewers, written at the end, and the text
+    // on the clipboard (what Ctrl+C copied).
     Q_INVOKABLE void writeReport(const QString &file, const QVariantList &entries);
+    Q_INVOKABLE QString clipboardText() const;
 
 Q_SIGNALS:
     void filesChanged();

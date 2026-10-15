@@ -13,6 +13,9 @@ namespace Thumbnails
 {
 QString add(const QImage &image);
 QImage get(const QString &id);
+// The item that asked for it is gone (another selection): its thumbnail goes too.
+void remove(const QString &id);
+int count();
 }
 
 class ThumbnailProvider : public QQuickImageProvider

@@ -245,8 +245,9 @@ and pushes that change one, and every Wednesday. The script:
   schemes are missing, and ctest would then pass with ECM's appstream test alone;
 - runs the part's tests (ctest) with `ASAN_OPTIONS=halt_on_error=1:abort_on_error=1:detect_leaks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1`
   and `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`: the first error of either sanitizer, or a
-  leak at exit, fails the test. LeakSanitizer suppressions go in `tools/sanitizers/lsan.supp` (none
-  so far).
+  leak at exit, fails the test. LeakSanitizer suppressions go in `tools/sanitizers/lsan.supp` (one:
+  Mesa's Vulkan driver below FFmpeg's hardware probe, which Qt Multimedia runs for Quick Look's
+  media viewer; seen on GitHub's runner only, the file says why).
 
 The tests (also run by the `compiled` workflow, without sanitizers):
 

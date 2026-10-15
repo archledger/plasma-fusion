@@ -6,6 +6,7 @@
 // like text), a folder's count and size, and the session's files (a second Space, the arrow keys).
 
 #include "quicklook.h"
+#include "thumbnails.h"
 
 #include <QDir>
 #include <QFile>
@@ -27,6 +28,8 @@ private Q_SLOTS:
     void text();
     void latin1();
     void truncated();
+    void truncatedOneLine();
+    void thumbnails();
     void folder();
     void missing();
     void session();
@@ -138,6 +141,50 @@ void QuickLookTest::truncated()
     QVERIFY(item.text().size() <= QuickLookItem::TextLimit);
     QVERIFY(item.text().size() > QuickLookItem::TextLimit - line.size());
     QVERIFY(item.text().endsWith(QLatin1Char('\n')));
+}
+
+void QuickLookTest::truncatedOneLine()
+{
+    // One line longer than the limit (a minified file), the limit inside a two-byte character.
+    QByteArray data("a");
+    while (data.size() <= QuickLookItem::TextLimit + 100) {
+        data += "\xc3\xa9";
+    }
+    QuickLookItem item(write(QStringLiteral("oneline.json"), data));
+    QCOMPARE(item.kind(), QStringLiteral("text"));
+    item.load();
+    QVERIFY(item.textTruncated());
+    QVERIFY2(item.text().startsWith(QStringLiteral("a\u00e9")), qPrintable(item.text().left(8)));
+    // Read as UTF-8 up to the last whole character: not as Latin-1 ("\u00c3\u00a9"), no replacement
+    // character for the cut one.
+    QVERIFY(!item.text().contains(QChar(0xC3)));
+    QVERIFY(!item.text().contains(QChar::ReplacementCharacter));
+    QVERIFY(item.text().endsWith(QStringLiteral("\u00e9")));
+}
+
+void QuickLookTest::thumbnails()
+{
+    const int before = Thumbnails::count();
+    QuickLookSession session;
+    QVERIFY(session.setFiles({m_dir.filePath(QStringLiteral("notes.txt"))}, m_dir.path()));
+    QuickLookItem *item = session.current();
+    // A text file has a viewer of its own: no thumbnail is asked for.
+    QVERIFY(item->thumbnailDone());
+    QVERIFY(item->thumbnail().isEmpty());
+    // Its viewer could not load: the file view asks for KIO's thumbnail.
+    item->requestThumbnail();
+    QVERIFY(!item->thumbnailDone());
+    QTRY_VERIFY_WITH_TIMEOUT(item->thumbnailDone(), 30000);
+    if (item->thumbnail().isEmpty()) {
+        QSKIP("no KIO thumbnailer for text files (kio-extras)");
+    }
+    QCOMPARE(Thumbnails::count(), before + 1);
+    // Asked once only.
+    item->requestThumbnail();
+    QVERIFY(item->thumbnailDone());
+    // Another selection: the old item's thumbnail goes with it.
+    QVERIFY(session.setFiles({m_dir.filePath(QStringLiteral("script.py"))}, m_dir.path()));
+    QCOMPARE(Thumbnails::count(), before);
 }
 
 void QuickLookTest::folder()

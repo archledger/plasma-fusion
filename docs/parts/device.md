@@ -255,14 +255,19 @@ and the rest is kept. Selection mode loses Space only while it has its default k
 on Space would be ambiguous and neither would run); its button and menu entry stay. A Space the
 user gave an action, a key the user gave Quick Look, or an earlier run's entry is kept; a file that
 is not XML is left alone with a warning. Dolphin reads the file when it starts. The file is in the
-backup (`absent-file` or `present-file`), so `fusion-restore.sh` removes it or puts it back. Test:
-`tools/device/tests/quicklook-keys-unit.sh` (CI, 16 checks) runs the step in a throw-away HOME with
+backup (`absent-file` or `present-file`), so `fusion-restore.sh` removes it or puts it back. When
+the setup gave the keys it leaves a mark (`quicklook-space` in its state folder); a later run with
+Quick Look no longer installed takes the two entries out again (Dolphin drops the entry of an
+action that is gone, but selection mode would keep none, and Space would do nothing): a file of
+version 0 left with nothing else is removed, another one keeps the rest; without the mark the file
+is left as it is. Test: `tools/device/tests/quicklook-keys-unit.sh` (CI, 20 checks) runs the step in a throw-away HOME with
 stand-ins for Dolphin and Quick Look and the restore's file loop: nothing without Dolphin or Quick
 Look; a new file of version 0 with only the two entries, unchanged on a second run, removed by the
 restore; Dolphin's own merged file keeping the user's keys, menus, toolbars and version, put back
 as it was by the restore; selection mode on the user's own key keeping it; a Space the user gave
 selection mode or another action left alone; the user's own key for Quick Look kept; an unreadable
-file left alone.
+file left alone; after Quick Look is removed, the setup's own file removed and the two entries taken
+out of Dolphin's merged file (the user's keys kept), and a file without the mark left alone.
 
 Widget keys (quick settings, pen) are also set on later runs when the widget has none (a layout
 rebuild drops them; a dead entry of a dropped widget is cleared first), but then only when the key is

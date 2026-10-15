@@ -34,7 +34,9 @@ LIB=$BASE/lib.sh
 {
   grep -m1 '^QUICKLOOK_ACTION=' "$TOOL"
   grep -m1 '^DOLPHIN_UI_REL=' "$TOOL"
-  extract note install_text data_path quicklook_installed dolphin_ui_with_quicklook ensure_quicklook_space
+  grep -m1 '^QUICKLOOK_MARK=' "$TOOL"
+  extract note install_text data_path quicklook_installed dolphin_ui_with_quicklook dolphin_ui_without_quicklook \
+    ensure_quicklook_space
 } >"$LIB"
 grep -q '^ensure_quicklook_space() {' "$LIB" || { echo "FAIL: ensure_quicklook_space was not found in fusion-config.sh"; exit 1; }
 UNDO=$BASE/undo.sh
@@ -44,7 +46,7 @@ grep -q 'present-file' "$UNDO" || { echo "FAIL: the file loop was not found in f
 # The tools the step uses; nothing else of the system is in its PATH (no Dolphin of the machine).
 SYS=$BASE/sys
 mkdir -p "$SYS"
-for t in cat chmod dirname mkdir mv python3 stat; do
+for t in cat chmod dirname mkdir mv python3 rm stat; do
   ln -s "$(command -v "$t")" "$SYS/$t"
 done
 
@@ -84,8 +86,8 @@ backup() { # what the setup's backup does for the file (make_backup, BACKUP_HOME
 run_step() { # the step in the case's HOME; prints its notes
   env -i PATH="$CASE/bin:$SYS" HOME="$CASE/home" /bin/bash -c '
     set -euo pipefail
+    DRY=0 CHANGES=0 DATA=$HOME/.local/share INSTALL= STATE=$HOME/.local/state/plasma-fusion
     . "$1"
-    DRY=0 CHANGES=0 DATA=$HOME/.local/share INSTALL=
     ensure_quicklook_space
     echo "changes=$CHANGES"' _ "$LIB"
 }
@@ -200,6 +202,34 @@ printf 'not xml <' >"$RC"
 out=$(run_step)
 [ "$(cat "$RC")" = "not xml <" ] && case $out in *"could not be read"*) true ;; *) false ;; esac &&
   ok "an unreadable file is left alone, with a warning" || bad "broken: $out"
+
+# 8. Quick Look removed after the setup gave it Space: the setup's own file goes, and the marker.
+MARK_REL=.local/state/plasma-fusion/quicklook-space
+setup_case removed dolphin quicklook
+run_step >/dev/null
+[ -f "$CASE/home/$MARK_REL" ] && ok "the setup marks that it gave the keys" || bad "no marker after setting Space"
+rm -f "$CASE/bin/plasma-fusion-quicklook"
+out=$(run_step)
+[ ! -e "$RC" ] && [ ! -e "$CASE/home/$MARK_REL" ] && case $out in *"Quick Look is gone"*changes=1*) true ;; *) false ;; esac &&
+  ok "Quick Look removed: the setup's own file goes (Dolphin's Space is selection mode's again)" || bad "removed: $out / $(cat "$RC" 2>&1)"
+
+# 9. ... with Dolphin's merged file: only the two entries go, the user's keys and the version stay.
+setup_case removed-merged dolphin quicklook
+mkdir -p "$(dirname "$RC")"
+printf '<!DOCTYPE gui>\n<gui name="dolphin" version="49"><MenuBar><Menu name="file"/></MenuBar><ActionProperties scheme="Default"><Action name="edit_cut" shortcut="Ctrl+Shift+X"/></ActionProperties></gui>\n' >"$RC"
+run_step >/dev/null
+rm -f "$CASE/bin/plasma-fusion-quicklook"
+run_step >/dev/null
+[ "$(xml "version, actions, '<MenuBar' in text")" = "('49', {'edit_cut': 'Ctrl+Shift+X'}, True)" ] && [ ! -e "$CASE/home/$MARK_REL" ] &&
+  ok "Quick Look removed: in Dolphin's own file only the two entries go" || bad "removed, merged: $(xml 'version, actions')"
+
+# 10. No marker (the user cleared selection mode's key themselves): nothing changes.
+setup_case removed-own dolphin
+mkdir -p "$(dirname "$RC")"
+printf '<!DOCTYPE gui>\n<gui name="dolphin" version="49"><ActionProperties scheme="Default"><Action name="toggle_selection_mode" shortcut=""/></ActionProperties></gui>\n' >"$RC"
+before=$(cat "$RC")
+run_step >/dev/null
+[ "$(cat "$RC")" = "$before" ] && ok "without the setup's marker a cleared selection-mode key is the user's: kept" || bad "own clearing changed: $(cat "$RC")"
 
 echo "quicklook-keys-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

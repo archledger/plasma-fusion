@@ -18,6 +18,9 @@ ColumnLayout {
     readonly property var report: ({thumbnail: hasThumbnail, icon: item.iconName})
     readonly property string extra: ""
 
+    // Shown in place of a viewer that could not load (a PDF without Qt PDF): KIO's thumbnail then.
+    Component.onCompleted: viewer.item.requestThumbnail()
+
     Item {
         Layout.fillHeight: true
     }

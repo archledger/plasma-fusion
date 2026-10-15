@@ -24,10 +24,10 @@
 
 namespace
 {
-void addOptions(QCommandLineParser &parser, const QCommandLineOption &report)
+void addOptions(QCommandLineParser &parser, const QList<QCommandLineOption> &options)
 {
     parser.addPositionalArgument(QStringLiteral("files"), i18nc("@info:shell", "The files to preview"), QStringLiteral("[file...]"));
-    parser.addOption(report);
+    parser.addOptions(options);
 }
 }
 
@@ -54,9 +54,15 @@ int main(int argc, char *argv[])
                                     QStringLiteral("Tests: write what the viewers showed to FILE, then quit."),
                                     QStringLiteral("file"));
     reportOption.setFlags(QCommandLineOption::HiddenFromHelp);
+    // Tests: the viewer of this kind is taken as missing (its Qt module not installed).
+    QCommandLineOption unavailableOption(QStringLiteral("test-unavailable"),
+                                         QStringLiteral("Tests: take the viewer of KIND as missing."),
+                                         QStringLiteral("kind"));
+    unavailableOption.setFlags(QCommandLineOption::HiddenFromHelp);
+    const QList<QCommandLineOption> options{reportOption, unavailableOption};
     QCommandLineParser parser;
     about.setupCommandLine(&parser);
-    addOptions(parser, reportOption);
+    addOptions(parser, options);
     parser.process(app);
     about.processCommandLine(&parser);
     const QString report = parser.value(reportOption);
@@ -75,7 +81,9 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     KLocalization::setupLocalizedContext(&engine);
     engine.addImageProvider(QStringLiteral("quicklook-thumbnail"), new ThumbnailProvider);
-    engine.setInitialProperties({{QStringLiteral("session"), QVariant::fromValue(&session)}, {QStringLiteral("testReport"), report}});
+    engine.setInitialProperties({{QStringLiteral("session"), QVariant::fromValue(&session)},
+                                 {QStringLiteral("testReport"), report},
+                                 {QStringLiteral("testUnavailable"), parser.value(unavailableOption)}});
     engine.loadFromModule("org.plasmafusion.quicklook", "Main");
     if (engine.rootObjects().isEmpty()) {
         return 1;
@@ -85,7 +93,7 @@ int main(int argc, char *argv[])
     QObject::connect(&session, &QuickLookSession::closeRequested, &app, &QCoreApplication::quit);
     QObject::connect(&service, &KDBusService::activateRequested, &app, [&](const QStringList &arguments, const QString &workingDirectory) {
         QCommandLineParser second;
-        addOptions(second, reportOption);
+        addOptions(second, options);
         second.parse(arguments);
         if (!session.setFiles(second.positionalArguments(), workingDirectory)) {
             QCoreApplication::quit();

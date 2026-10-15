@@ -99,8 +99,8 @@ Package: plasma-fusion-quicklook
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version}),
          qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window,
-         qml6-module-org-kde-kirigami, qml6-module-org-kde-desktop, qml6-module-qtquick-pdf,
-         qml6-module-qtmultimedia, qml6-module-org-kde-syntaxhighlighting
+         qml6-module-org-kde-kirigami, qml6-module-org-kde-desktop | kf6-qqc2-desktop-style,
+         qml6-module-qtquick-pdf, qml6-module-qtmultimedia, qml6-module-org-kde-syntaxhighlighting
 Recommends: kio-extras, kimageformat6-plugins, qt6-image-formats-plugins, qt6-svg-plugins, dolphin
 Description: Plasma Fusion Quick Look: preview files without opening them
  Select files in Dolphin and press Space to see what is in them: pictures,
