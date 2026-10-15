@@ -35,8 +35,9 @@
 #    is queued for after the desktop is up. The next login with matching versions, or the next
 #    fusion-config.sh run, turns them back on.
 # 2. Switching back. While the Global Theme (kdeglobals [KDE] LookAndFeelPackage) is not Plasma
-#    Fusion Dark or Light, the lock-screen drop-in, the plasmafusion-snap, plasmafusion-attach and
-#    plasmafusion-tablet KWin scripts, the navigation effect, kwinrc [Outline] QmlPath, the Fusion
+#    Fusion Dark or Light, the lock-screen drop-in, the plasmafusion-snap, plasmafusion-attach,
+#    plasmafusion-placement, plasmafusion-workspaces and plasmafusion-tablet KWin scripts, the
+#    navigation effect, kwinrc [Outline] QmlPath, the Fusion
 #    window switcher, the
 #    on-screen keyboard policy's kwinrc [Wayland] InputMethod value (so Fedora's default keyboard
 #    returns) and the plasma-fusion-powerfx and plasma-fusion-pen-garage user services (their
@@ -106,7 +107,7 @@ KWIN_SWITCHER=thumbnail_grid
 DESKTOP=org.plasmafusion.desktop
 FOLDER=org.kde.plasma.folder
 APPLETSRC=plasma-org.kde.plasma.desktop-appletsrc
-PARTS=(lockscreen decoration navigation desktop snap attach placement outline switcher tablet inputmethod powerfx pengarage)
+PARTS=(lockscreen decoration navigation desktop snap attach placement workspaces outline switcher tablet inputmethod powerfx pengarage)
 # The on-screen keyboard values the Fusion keyboard policy writes (quick settings, fusion-config.sh):
 # empty (keyboard off in laptop posture) and plasma-keyboard's desktop file in a system data
 # directory (/usr/share/applications on Fedora). Any other input method is the user's.
@@ -163,6 +164,7 @@ org.kde.kdecoration2|ButtonsOnRight
 Plugins|plasmafusion-snapEnabled
 Plugins|plasmafusion-attachEnabled
 Plugins|plasmafusion-placementEnabled
+Plugins|plasmafusion-workspacesEnabled
 Plugins|plasmafusion-tabletEnabled
 Plugins|plasmafusion_navigationEnabled
 Wayland|InputMethod
@@ -333,7 +335,7 @@ ini_edit() { # FILE OPS... (each "group<TAB>key<TAB>state")
 RECS=()
 RECS_CHANGED=0
 valid_part() {
-  case $1 in lockscreen | decoration | navigation | desktop | snap | attach | placement | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
+  case $1 in lockscreen | decoration | navigation | desktop | snap | attach | placement | workspaces | outline | switcher | tablet | inputmethod | powerfx | pengarage) return 0 ;; esac
   return 1
 }
 load_recs() {
@@ -459,6 +461,7 @@ part_on() {
     snap) eff kwinrc Plugins plasmafusion-snapEnabled && [ "$REPLY" = true ] ;;
     attach) eff kwinrc Plugins plasmafusion-attachEnabled && [ "$REPLY" = true ] ;;
     placement) eff kwinrc Plugins plasmafusion-placementEnabled && [ "$REPLY" = true ] ;;
+    workspaces) eff kwinrc Plugins plasmafusion-workspacesEnabled && [ "$REPLY" = true ] ;;
     outline) eff kwinrc Outline QmlPath && [[ $REPLY == *plasmafusion* ]] ;;
     switcher)
       { eff kwinrc TabBox LayoutName && [ "$REPLY" = "$SWITCHER" ]; } ||
@@ -562,6 +565,7 @@ off_pengarage() { off_link pengarage "$1"; }
 off_snap() { set_rec snap "$1" kwinrc Plugins plasmafusion-snapEnabled -; DID+=("KWin script plasmafusion-snap off"); }
 off_attach() { set_rec attach "$1" kwinrc Plugins plasmafusion-attachEnabled -; DID+=("KWin script plasmafusion-attach off"); }
 off_placement() { set_rec placement "$1" kwinrc Plugins plasmafusion-placementEnabled -; DID+=("KWin script plasmafusion-placement off"); }
+off_workspaces() { set_rec workspaces "$1" kwinrc Plugins plasmafusion-workspacesEnabled -; DID+=("KWin script plasmafusion-workspaces off"); }
 off_outline() { set_rec outline "$1" kwinrc Outline QmlPath -; DID+=("snap-zone outline: KWin's own"); }
 off_switcher() {
   local g

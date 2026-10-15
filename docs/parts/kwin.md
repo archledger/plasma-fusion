@@ -1,4 +1,4 @@
-# KWin packages: window switcher, snap layouts, attached dialogs, window placement memory, snap-zone outline
+# KWin packages: window switcher, snap layouts, attached dialogs, window placement memory, dynamic workspaces, snap-zone outline
 
 Status: built, checked offline and in private virtual sessions on the ThinkPad (dark and light,
 1440x900); reviewed and fixed (see "Review" at the end). KWIN-2 (2026-09-30) changed the switcher's
@@ -15,6 +15,7 @@ they differ. Last edited 2026-09-30.
 | (in `plasmafusion-snap`) `contents/outline/outline.qml` | KWin outline QML | blue snap-zone preview of the TabsSnap board (drag to an edge, Shift+drag custom zones, Meta+Z zone preview) |
 | `plasmafusion-attach` | KWin/Script (JavaScript) | modal dialogs placed centred on their window, just under its title bar, and moving with it (Windows board, "Dialogs · Attached to the parent window") |
 | `plasmafusion-placement` | KWin/Script (declarative) | window placement memory: each app's window is remembered where and as big as it was left and given back on the next open (bug 15329, the most-duplicated open Plasma wish); a spot on a screen that is gone is left to KWin's placement |
+| `plasmafusion-workspaces` | KWin/Script (declarative) | dynamic workspaces, **off until the user turns them on** (System Settings > Window Management > KWin Scripts): workspaces come and go as windows need them, as in GNOME - always one empty workspace at the end, an empty one removed once nothing shows it (bug 446448) |
 
 No compiled code. Everything uses the KWin 6.7.5 QML/JS script API (verified against the v6.7.5
 sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) and QtQuick.Effects.
@@ -45,7 +46,11 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `.../contents/ui/main.qml` | the script: window watch, restore and record, the memory file through plasmashell |
 | `.../contents/ui/Placement.js` | the pure rules (identity, file format, on-screen and stack guard, record); node-tested |
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | `RememberSize` and `IgnoreApps` (System Settings > Window Management > KWin Scripts) |
-| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the four packages into the stage, runs the placement rules' and snap groups' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
+| `packages/kwin/scripts/plasmafusion-workspaces/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM, `EnabledByDefault: false`) |
+| `.../contents/ui/main.qml` | the script: reads the desktops and windows, carries out a pass, watches the windows' desktop moves |
+| `.../contents/ui/Workspaces.js` | the pure rules (which windows hold a workspace, the plan, the timing, the numbered names); node-tested |
+| `.../contents/config/main.xml`, `contents/ui/config.ui` | `KeepFirst` (System Settings > Window Management > KWin Scripts) |
+| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the five packages into the stage, runs the placement rules', snap groups' and dynamic workspaces' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
 | `packages/kwin/tests/` | test tooling only, not installed (see Verification) |
 
 ## Build and install
@@ -84,6 +89,7 @@ HighlightWindows=false
 plasmafusion-snapEnabled=true
 plasmafusion-attachEnabled=true
 plasmafusion-placementEnabled=true  # window placement memory
+plasmafusion-workspacesEnabled=true # dynamic workspaces: off by default, the setup never sets it
 sheetEnabled=true          # stock "sheet" effect: modal dialogs unfold from the parent's top edge
                            # (dialogparent, on by default, dims the parent: keep it)
 
@@ -97,7 +103,7 @@ other keys cannot come from a Global Theme and belong in `tools/device/fusion-co
 To undo: delete the keys (or set `plasmafusion-*Enabled=false`, `sheetEnabled=false`, remove
 `[Outline] QmlPath`) and reconfigure. Loaded scripts can be stopped at once with
 `qdbus6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-snap` (same for
-`plasmafusion-attach` and `plasmafusion-placement`); `isScriptLoaded <id>` checks them.
+`plasmafusion-attach`, `plasmafusion-placement` and `plasmafusion-workspaces`); `isScriptLoaded <id>` checks them.
 
 The Meta+Z shortcut is registered by the script under the KWin component with the action name
 `Plasma Fusion: Snap Layouts` (visible text the same). It can be invoked from anywhere, e.g. a
@@ -118,6 +124,7 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 | `[Script-plasmafusion-attach] HideDialogTitleBar` | false | board "sheet" look without a dialog title bar (also drops its shadow, see deviations) |
 | `[Script-plasmafusion-placement] RememberSize` | true | give the remembered size back too (false: only the position, with the size the window opens with) |
 | `[Script-plasmafusion-placement] IgnoreApps` | (empty) | app ids or window classes the memory leaves alone (comma-separated; `konsole` matches `org.kde.konsole`; a window matches by its app id or its class) |
+| `[Script-plasmafusion-workspaces] KeepFirst` | 0 | the first N workspaces always stay, even when empty (0-24; for example 4 keeps the setup's Work, Design, Media and Chat); applied at the next reconfigure |
 
 ## Behaviour
 
@@ -322,6 +329,58 @@ context, and each disable/enable cycle would add another. A profile snapshot car
 file (`tools/device/backup-profile.sh`, see device.md).
 No timer runs while the desktop is idle.
 
+### Dynamic workspaces
+
+Off until the user turns it on (`EnabledByDefault: false`; the setup's `KWIN_SCRIPTS` does not list
+it): System Settings > Window Management > KWin Scripts > "Plasma Fusion Dynamic Workspaces". The
+reference behaviour is GNOME's (`WorkspaceTracker._checkWorkspaces`, gnome-shell 51.1); the KDE
+Store script "KWin dynamic workspaces" (24,284 downloads, BSD-3-Clause) shows the demand and its
+issues the traps - nothing is taken from it. The rules are in `Workspaces.js`:
+
+- A workspace holds a window when a window of the user's lists it in `desktops`: a managed window,
+  not a special one (panel, notification, OSD, applet popup, tooltip, desktop), not a popup menu,
+  not on every desktop (KWin's own internal windows, such as the snap flyout, are) and not kept out
+  of the pager. Minimized windows count. Windows of every activity count: KWin's desktops are
+  shared by the activities, and removing one would move another activity's windows.
+- When the last workspace holds a window, an empty one is added at the end (up to KWin's 25),
+  named "Workspace N" for its position (Fusion's word, the `plasmafusion` catalogue).
+- Every other empty workspace is removed, except the one right after the last occupied workspace
+  (the empty one to move windows to), the one each screen shows (KWin 6.7's per-screen desktops
+  give every screen its own; `currentDesktopForScreen`) and the first `KeepFirst`. KWin moves a
+  window off a removed desktop rather than losing it, but the script only removes empty ones.
+- After removals the script's own "Workspace N" names follow their positions. Ownership is kept by
+  desktop id: only a workspace this instance of the script added, and that still carries the name
+  it gave, is renamed. Every other name - the setup's Work, Design, Media and Chat, a name the user
+  gave (also one like "Workspace 3"), KWin's "Desktop N" - is never touched. KWin scripts cannot
+  write a file, so the ownership does not outlive the script: after a KWin restart or a
+  disable/enable, the names from before stay as they are, even when a later removal puts them out
+  of order.
+- Timing: KWin's slide effect ends a desktop switch animation at once when a desktop is added or
+  removed (`desktopAdded`/`desktopRemoved` -> `finishedSwitching`; its spring settles in about
+  0.7 s at the default speed), so nothing changes until a second after the last switch. Removals
+  also wait a second after a window that held its workspace closes (a dialog handing over to its
+  app's next window, GNOME's 1000 ms grace) and ten seconds after the script starts: KWin 6.7's
+  Wayland session restore puts windows back on their desktops by id, and a desktop removed before
+  they come back would scatter them. Moving a window past the end within that second finds no next
+  workspace yet. A burst of changes is one pass; the script's own adds and removes only schedule
+  another pass, which finds nothing to do (the rules are a fixed point - the node suite checks it).
+- A reconfigure (the KWin Scripts page applying `KeepFirst`) runs a pass with the new value
+  (`Options.configChanged`).
+- The top bar's workspace dots (`org.plasmafusion.clockpill`, `WorkspaceDots.qml`) and the stock
+  pager read KWin's desktops through `TaskManager.VirtualDesktopInfo`, so they show the workspaces
+  as they come and go without a change of their own.
+
+Around it: the setup (`tools/device/fusion-config.sh`, "Workspaces") names the existing workspaces
+but creates none while the script is on - it would remove them again and every run would count
+changes; the login check switches the script off with the other Fusion KWin scripts when the
+Global Theme is not Plasma Fusion (`docs/parts/gate.md`); a profile restore unloads it before it
+puts files back and keeps it from loading again until the next login, because KWin writes its whole
+`[Desktops]` group at every change (`docs/parts/device.md`). On teardown the script disconnects the handlers it put on the windows.
+
+Known limits: a workspace that holds another activity's window stays; a window whose session data
+names a workspace that was removed (empty) comes back on the shown one, as in GNOME; with several
+rows the workspaces are added and removed in KWin's linear order and the grid reflows.
+
 ## Verification
 
 Offline (laptop):
@@ -334,6 +393,13 @@ Offline (laptop):
   guard, size-only mode, the ignore list (app id and window class), windows held by a rule (forced
   position, forced or fixed size), the teardown write (a change made while a write was in flight)
   and the record's rounding.
+- `node packages/kwin/tests/workspaces.test.js` (the build runs it when node is installed): the
+  dynamic workspaces' rules - which windows hold a workspace (every exclusion), the plan (GNOME's
+  cases, an empty one in the middle, the shown one, each screen's shown one, `KeepFirst` and its
+  bounds, KWin's ceiling with removals making room), 5000 random states (never an occupied, shown,
+  kept or the trailing empty workspace removed, one always left, a second pass a no-op), the
+  timing gates, the numbered names and their ownership (a user's "Workspace 3", a name changed
+  since, another desktop's id).
 - `node packages/kwin/tests/snap-groups.test.js` (the build runs it when node is installed): snap
   groups - forming a group from the picks, a window in one group at most (joining another
   arrangement moves it), membership and zones changing together (a window left alone by a transfer
@@ -408,6 +474,17 @@ and pointer drags inside the private session only).
   window rule that forces the position wins (the window opens at the rule's spot, the record
   stays); a disable/enable cycle with a window open leaves no errors from the unloaded instance and
   the new instance remembers the next move.
+- `scenario-workspaces.sh` (strict mode, verdict and "scenario rc" as above): the setup's four
+  named workspaces and a window on Work, then the script on: nothing removed in the first seconds,
+  then down to Work and Design; a window moved to the last workspace adds "Workspace 3" at once;
+  following it, the empty Work goes a second after the switch and "Workspace 3" becomes
+  "Workspace 2"; a move together with a switch adds the next one only after the switch settled; an
+  empty workspace stays while shown and goes when left; a window on every desktop, or kept out of
+  the pager, holds nothing; a close removes the extra empty one a second later; the setup run again
+  creates no workspace; a workspace the user adds empty goes again unless `KeepFirst` keeps it; a
+  name the user gives in the script's own form ("Workspace 7" in second place) stays after a pass and
+  after a restart; a disable/enable cycle leaves no errors and the new instance works.
+  The times come from the script's own log lines.
 - Journal (`journalctl --user`, the private sessions log there): no messages from these packages.
   Libplasma prints "Member visible of the object PlasmaQuick::Dialog overrides a member of the
   base object" once per process that uses PlasmaCore.Dialog (plasmashell, the stock thumbnail_grid

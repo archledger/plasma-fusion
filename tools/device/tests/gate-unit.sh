@@ -148,6 +148,8 @@ make_home() {
   kw kwinrc Plugins plasmafusion-snapEnabled true
   kw kwinrc Plugins plasmafusion-attachEnabled true
   kw kwinrc Plugins plasmafusion-placementEnabled true
+  # Dynamic workspaces are off by default; this user turned them on.
+  kw kwinrc Plugins plasmafusion-workspacesEnabled true
   kw kwinrc Plugins sheetEnabled true
   kw kwinrc Plugins plasmafusion_navigationEnabled true
   kw kwinrc Outline QmlPath kwin/scripts/plasmafusion-snap/contents/outline/outline.qml
@@ -207,6 +209,7 @@ check "b: decoration theme PlasmaFusionDark" [ "$(keff kwinrc org.kde.kdecoratio
 check "b: user decoration keys removed (kdedefaults gives the Aurorae theme)" [ "$(get kwinrc org.kde.kdecoration2 library)/$(get kwinrc org.kde.kdecoration2 theme)" = "<absent>/<absent>" ]
 check "b: Fusion-only parts untouched (snap on)" [ "$(get kwinrc Plugins plasmafusion-snapEnabled)" = true ]
 check "b: placement memory stays on" [ "$(get kwinrc Plugins plasmafusion-placementEnabled)" = true ]
+check "b: dynamic workspaces stay on" [ "$(get kwinrc Plugins plasmafusion-workspacesEnabled)" = true ]
 check "b: navigation effect off (built against KWin's internals)" [ "$(get kwinrc Plugins plasmafusion_navigationEnabled)" = false ]
 check "b: notification names the gestures" grep -q "KWin's own edges instead of the tablet gestures" "$H/.local/state/plasma-fusion/gate/notify"
 check "b: notification queued" grep -q 'kwin 6.7.5 → 6.8.0, kscreenlocker 6.7.5 → 6.8.0' "$H/.local/state/plasma-fusion/gate/notify"
@@ -403,6 +406,7 @@ gate login
 check "c: snap off" [ "$(get kwinrc Plugins plasmafusion-snapEnabled)" = "<absent>" ]
 check "c: attach off" [ "$(get kwinrc Plugins plasmafusion-attachEnabled)" = "<absent>" ]
 check "c: placement off" [ "$(get kwinrc Plugins plasmafusion-placementEnabled)" = "<absent>" ]
+check "c: dynamic workspaces off" [ "$(get kwinrc Plugins plasmafusion-workspacesEnabled)" = "<absent>" ]
 check "c: outline off" [ "$(get kwinrc Outline QmlPath)" = "<absent>" ]
 check "c: switcher overrides kdedefaults with KWin's" [ "$(get kwinrc TabBox LayoutName)" = thumbnail_grid ]
 check "c: alternative switcher key removed" [ "$(get kwinrc TabBoxAlternative LayoutName)" = "<absent>" ]

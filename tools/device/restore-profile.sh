@@ -35,6 +35,7 @@ ADDED=(
   .local/share/kwin/tabbox/org.plasmafusion.switcher .local/share/kwin/scripts/plasmafusion-snap
   .local/share/kwin/scripts/plasmafusion-attach .local/share/kwin/scripts/plasmafusion-tablet
   .local/share/kwin/scripts/plasmafusion-placement .config/plasmafusion-placementrc
+  .local/share/kwin/scripts/plasmafusion-workspaces
   .local/share/fonts/plasma-fusion .local/share/plasma-fusion
   .local/share/kglobalaccel/org.plasmafusion.notifications.desktop
   .local/share/kglobalaccel/org.plasmafusion.copytext.desktop
@@ -67,11 +68,17 @@ fi
 # (the shell is stopped, so the script's last write goes nowhere), it cannot write its newer map
 # over the restored file later; the reconfigure at the end loads it again when the restored kwinrc
 # enables it, and it reads the restored file.
-if [ "$DRY" = --dry-run ]; then
-  echo "would: unload the KWin script plasmafusion-placement"
-else
-  qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-placement >/dev/null 2>&1 || true
-fi
+# The dynamic workspaces add and remove desktops while they run, and KWin writes its whole
+# [Desktops] group to kwinrc at every change: a running instance could write over the restored
+# desktops. Unloaded as well, and kept from loading again in this session (see the reconfigure
+# at the end).
+for script in plasmafusion-placement plasmafusion-workspaces; do
+  if [ "$DRY" = --dry-run ]; then
+    echo "would: unload the KWin script $script"
+  else
+    qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$script" >/dev/null 2>&1 || true
+  fi
+done
 # The power service gives its values back when it stops (and is not started again once its
 # files are gone).
 if [ "$DRY" != --dry-run ] && ! grep -q '^\.config/systemd/user/plasma-fusion-powerfx\.service$' "$WORK/paths.txt"; then
@@ -92,10 +99,32 @@ while IFS= read -r p; do
   fi
 done <"$WORK/paths.txt"
 
+# The reconfigure below loads every KWin script the restored kwinrc enables (KWin connects its
+# configChanged to Scripting::start). The dynamic workspaces must not run again in this session:
+# they would add and remove desktops on the old session's windows, and KWin writes those over the
+# restored [Desktops]. So while KWin reads the restored kwinrc the script's key is off; then the
+# file is put back exactly as the snapshot has it, and the next login starts the script.
+HOLD_WORKSPACES=0
+if [ -f "$WORK/.config/kwinrc" ] &&
+  [ "$(kreadconfig6 --file "$WORK/.config/kwinrc" --group Plugins --key plasmafusion-workspacesEnabled 2>/dev/null)" = true ]; then
+  HOLD_WORKSPACES=1
+  run kwriteconfig6 --file "$HOME/.config/kwinrc" --group Plugins --key plasmafusion-workspacesEnabled false
+fi
 if [ "$DRY" != --dry-run ]; then
   fc-cache -f >/dev/null 2>&1 || true
   systemctl --user daemon-reload || true
   qdbus-qt6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+  if [ "$HOLD_WORKSPACES" = 1 ]; then
+    # KWin rereads its settings on a 200 ms timer after the call (Workspace::reconfigure); 2 s on,
+    # the reconfigure has run. Should the script be loaded after all, it is unloaded again.
+    sleep 2
+    if [ "$(qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-workspaces 2>/dev/null)" = true ]; then
+      qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-workspaces >/dev/null 2>&1 || true
+    fi
+  fi
   if [ -n "$SHELL_UNIT" ]; then systemctl --user start "$SHELL_UNIT"; else setsid -f plasmashell >/dev/null 2>&1; fi
+fi
+if [ "$HOLD_WORKSPACES" = 1 ]; then
+  run cp -a "$WORK/.config/kwinrc" .config/kwinrc
 fi
 echo "Restored from $TARBALL. The display scale was recorded in kscreen.json inside it; log out and in to finish."

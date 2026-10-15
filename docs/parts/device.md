@@ -354,7 +354,13 @@ It started `kscreen-doctor -j` and `plasmashell --version` unconditionally; over
   the `plasmafusion-placement` script package when the snapshot had neither, and unloads the
   running placement script before it restores anything (the shell is stopped then, so the script's
   last write goes nowhere): a script left running would write its newer map over the restored file.
-  The closing reconfigure loads it again when the restored `kwinrc` enables it.
+  The closing reconfigure loads it again when the restored `kwinrc` enables it. The dynamic
+  workspaces script (`plasmafusion-workspaces`) is unloaded the same way, and its package removed
+  when the snapshot had none: KWin writes its whole `[Desktops]` group to `kwinrc` at every
+  workspace the script adds or removes, which would land over the restored desktops. It must not
+  load again in this session either - the closing reconfigure loads every script the restored
+  `kwinrc` enables - so when the snapshot enables it, its key is off while KWin reads the restored
+  file, and the snapshot's `kwinrc` is copied back exactly afterwards; the next login starts it.
   `tests/profile-unit.sh` checks both sides in throw-away HOMEs (`env -i`, the restore with
   `--dry-run`; in CI).
 

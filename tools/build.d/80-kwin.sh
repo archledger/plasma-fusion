@@ -4,17 +4,21 @@
 #
 # KWin packages: window switcher org.plasmafusion.switcher and the KWin scripts
 # plasmafusion-snap (Meta+Z snap layouts, fill the other half, snap-zone outline),
-# plasmafusion-attach (modal dialogs attached to their window) and plasmafusion-placement
-# (window position and size remembered per app). Installed like
+# plasmafusion-attach (modal dialogs attached to their window), plasmafusion-placement
+# (window position and size remembered per app) and plasmafusion-workspaces (dynamic workspaces,
+# off until turned on). Installed like
 # kpackagetool6 -t KWin/WindowSwitcher|KWin/Script -i would, at
 #   $STAGE/.local/share/kwin/tabbox/org.plasmafusion.switcher/
 #   $STAGE/.local/share/kwin/scripts/plasmafusion-snap/     (outline: contents/outline/outline.qml)
 #   $STAGE/.local/share/kwin/scripts/plasmafusion-attach/
 #   $STAGE/.local/share/kwin/scripts/plasmafusion-placement/
+#   $STAGE/.local/share/kwin/scripts/plasmafusion-workspaces/
 # The switcher and the snap script get copies of the shared QML blocks they use (packages/common/*.qml,
 # tools/build-lib/shared-qml.sh) in contents/ui. The placement script's pure rules (contents/ui/
 # Placement.js) are tested by packages/kwin/tests/placement.test.js, the snap script's snap groups
-# (contents/ui/Groups.js) by packages/kwin/tests/snap-groups.test.js, when node is installed.
+# (contents/ui/Groups.js) by packages/kwin/tests/snap-groups.test.js and the dynamic workspaces'
+# rules (contents/ui/Workspaces.js) by packages/kwin/tests/workspaces.test.js, when node is
+# installed.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 
@@ -49,23 +53,27 @@ check_package "$SRC/switcher/org.plasmafusion.switcher" org.plasmafusion.switche
 check_package "$SRC/scripts/plasmafusion-snap" plasmafusion-snap KWin/Script
 check_package "$SRC/scripts/plasmafusion-attach" plasmafusion-attach KWin/Script
 check_package "$SRC/scripts/plasmafusion-placement" plasmafusion-placement KWin/Script
+check_package "$SRC/scripts/plasmafusion-workspaces" plasmafusion-workspaces KWin/Script
 test -f "$SRC/switcher/org.plasmafusion.switcher/contents/ui/main.qml"
 test -f "$SRC/scripts/plasmafusion-snap/contents/ui/main.qml"
 test -f "$SRC/scripts/plasmafusion-snap/contents/outline/outline.qml"
 test -f "$SRC/scripts/plasmafusion-attach/contents/code/main.js"
 test -f "$SRC/scripts/plasmafusion-placement/contents/ui/main.qml"
+test -f "$SRC/scripts/plasmafusion-workspaces/contents/ui/main.qml"
 
-# The placement rules and the snap groups (Placement.js, Groups.js) against their node suites, when
-# node is installed.
+# The placement rules, the snap groups and the dynamic workspaces' rules (Placement.js, Groups.js,
+# Workspaces.js) against their node suites, when node is installed.
 if command -v node >/dev/null 2>&1; then
   node "$ROOT/packages/kwin/tests/placement.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/snap-groups.test.js" >/dev/null
+  node "$ROOT/packages/kwin/tests/workspaces.test.js" >/dev/null
 fi
 
 install_package "$SRC/switcher/org.plasmafusion.switcher" "$STAGE/.local/share/kwin/tabbox/org.plasmafusion.switcher"
 install_package "$SRC/scripts/plasmafusion-snap" "$STAGE/.local/share/kwin/scripts/plasmafusion-snap"
 install_package "$SRC/scripts/plasmafusion-attach" "$STAGE/.local/share/kwin/scripts/plasmafusion-attach"
 install_package "$SRC/scripts/plasmafusion-placement" "$STAGE/.local/share/kwin/scripts/plasmafusion-placement"
+install_package "$SRC/scripts/plasmafusion-workspaces" "$STAGE/.local/share/kwin/scripts/plasmafusion-workspaces"
 
 # The hot-plug check (KWIN-2): the snap script sends the Global Theme's ensure-topbars.js to
 # plasmashell when screens change. A KWin script cannot read files, so the script's text goes into

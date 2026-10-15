@@ -4,8 +4,8 @@
 #
 # Unit tests of fusion-config.sh's config writes that must keep a user's choice, against a
 # throw-away XDG_CONFIG_HOME: the key helpers (read_key, set_key, managed_key), the hot-corner
-# step and the on-screen keyboard step are taken out of fusion-config.sh as they are and run with
-# the real kreadconfig6 and kwriteconfig6. Test tooling only, not installed; never touches the caller's configuration.
+# step, the on-screen keyboard step and the workspace step are taken out of fusion-config.sh as
+# they are and run with the real kreadconfig6 and kwriteconfig6 (KWin's D-Bus calls are stubbed). Test tooling only, not installed; never touches the caller's configuration.
 #
 #   config-keys-unit.sh BASE
 #
@@ -112,6 +112,47 @@ case_osk "laptop posture, policy On touch: the keyboard stays" 2 touch live "$OS
 case_osk "policy On touch read from the layout file without plasmashell" 2 touch no "$OSK" "$OSK"
 case_osk "policy Never: off" 2 never no "$OSK" ""
 case_osk "another input method the user chose is kept" 2 tablet live /usr/share/applications/fcitx5.desktop /usr/share/applications/fcitx5.desktop
+
+# The workspace step: from its header up to the shortcuts step that follows it.
+workspaces_step() {
+  awk '/^# ---------- 2\. virtual desktops ----------/ { on = 1 } on && /^# ---------- 3\. shortcuts/ { exit } on { print }' "$TOOL"
+}
+WSSTEP=$BASE/workspaces-step.sh
+workspaces_step >"$WSSTEP"
+grep -q 'createDesktop' "$WSSTEP" || { echo "FAIL: the workspace step was not found in fusion-config.sh"; exit 1; }
+# CASE DESCRIPTION, kwinrc [Plugins] plasmafusion-workspacesEnabled (or "unset"), the workspaces
+# KWin is asked to create ("position name;" each, empty for none). KWin has Work and Design.
+case_ws() {
+  local desc=$1 enabled=$2 want=$3 home got
+  home=$BASE/home-$((PASS + FAIL))
+  mkdir -p "$home/backup"
+  [ "$enabled" = unset ] || printf '[Plugins]\nplasmafusion-workspacesEnabled=%s\n' "$enabled" >"$home/kwinrc"
+  printf '{"type":"a(uss)","data":[[0,"id-1","Work"],[1,"id-2","Design"]]}\n' >"$home/backup/desktops.json"
+  got=$(env -i PATH="$PATH" HOME="$home" XDG_CONFIG_HOME="$home" bash -c '
+    set -euo pipefail
+    . "$1"
+    DRY=0 CHANGES=0 BACKUP=$HOME/backup
+    DESKTOP_NAMES=(Work Design Media Chat)
+    say() { :; }
+    bus_json() { cat "$BACKUP/desktops.json"; }
+    bus() {
+      case "$*" in
+        *" rows") echo "u 1" ;;
+        *createDesktop*) shift 5; echo "$2 $3;" >>"$HOME/created" ;;
+        *) echo "$*" >>"$HOME/calls" ;;
+      esac
+    }
+    . "$2" >/dev/null
+    tr -d "\n" <"$HOME/created" 2>/dev/null || true' _ "$LIB" "$WSSTEP" 2>/dev/null) || got="(error)"
+  if [ "$got" = "$want" ]; then
+    PASS=$((PASS + 1)); echo "PASS $desc"
+  else
+    FAIL=$((FAIL + 1)); echo "FAIL $desc: created '$got', want '$want'"
+  fi
+}
+case_ws "the missing named workspaces are created" unset "2 Media;3 Chat;"
+case_ws "dynamic workspaces off: the same" false "2 Media;3 Chat;"
+case_ws "dynamic workspaces on: none is created (the script would remove them again)" true ""
 
 echo "config-keys-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]
