@@ -9,6 +9,11 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Snap groups**: after you choose a zone in the snap layouts flyout (Meta+Z, or holding the
+  maximize button), every other empty zone of that layout offers your other windows in turn - the
+  quarters, the 2:1 split and the thirds now fill like the halves did. The windows you snap
+  together form a group: they minimize and restore together, and activating one (from the dock or
+  Alt+Tab) brings the whole arrangement back. A window that leaves its zone leaves the group.
 - New KWin script **window placement memory** (`plasmafusion-placement`, on with the Fusion
   setup): each app's window is remembered where and as big as you left it, and opens there
   again - the desktop's most-duplicated open wish (bug 15329). A spot on a screen that is gone
