@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.kwin
 import "ensureTopBars.js" as EnsureTopBars
+import "Cycle.js" as Cycle
 import "Groups.js" as Groups
 import "SnapGeometry.js" as SnapGeometry
 
@@ -24,6 +25,8 @@ import "SnapGeometry.js" as SnapGeometry
 //   edge inset.
 // - Windows snapped together through the picker form a group (snap groups, Groups.js): they
 //   minimise and restore together, and activating one brings the others up with it.
+// - "Plasma Fusion: Snap Left/Right" (the setup gives them Meta+Left/Right): pressed again they
+//   step the window through 1/2, 1/3 and 2/3 of that side (Cycle.js).
 //
 // Halves, 2:1 and quarters use KWin's own quick tiles (so they stay tiled, share their edge
 // when resized and restore their size when dragged out); thirds are placed by geometry.
@@ -313,6 +316,72 @@ Item {
                 sideLoader.item.refresh();
             }
         }
+    }
+
+    // ---------------------------------------------------------------- snap sizes from the keyboard
+
+    // "Plasma Fusion: Snap Left/Right" have no key of their own: the setup moves Meta+Left/Right
+    // to them from KWin's "Quick Tile Window to the Left/Right" (two actions cannot share a key).
+    // Pressed again, the window steps through 1/2, 1/3 and 2/3 of that side; after 2/3 it goes to
+    // the screen on that side when there is one (its facing half), as KWin's quick tile did on a
+    // second press, else back to 1/2. The half is KWin's quick tile, as the key gave before (so the
+    // picker still offers the other half); the thirds are plain geometry, as the flyout's thirds.
+    ShortcutHandler {
+        name: "Plasma Fusion: Snap Left"
+        text: i18nd("plasmafusion", "Plasma Fusion: Snap Left (1/2, 1/3, 2/3)")
+        onActivated: root.cycleSnap(Workspace.activeWindow, "left")
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Snap Right"
+        text: i18nd("plasmafusion", "Plasma Fusion: Snap Right (1/2, 1/3, 2/3)")
+        onActivated: root.cycleSnap(Workspace.activeWindow, "right")
+    }
+
+    function screenRect(output) {
+        const g = output.geometry;
+        return { x: g.x, y: g.y, width: g.width, height: g.height };
+    }
+    // The screen next to the window's on SIDE, or null.
+    function neighbourScreen(win, side) {
+        const screens = Array.from(Workspace.screens);
+        const index = Cycle.neighbourOf(screens.map(screenRect), screenRect(win.output), side);
+        return index >= 0 ? screens[index] : null;
+    }
+
+    function cycleSnap(win, side) {
+        if (!usable(win)) {
+            return;
+        }
+        const area = Workspace.clientArea(Workspace.MaximizeArea, win);
+        const g = win.frameGeometry;
+        const step = Cycle.nextStep(Cycle.stepOf({ x: g.x, y: g.y, width: g.width, height: g.height }, area, side),
+                                    neighbourScreen(win, side) !== null);
+        // A new arrangement, as a layout choice: the flyout closes, the window leaves its group.
+        flyoutLoader.active = false;
+        leaveGroup(win);
+        // A half: KWin's quick tile, else its rectangle (KWin refused the tile).
+        const half = (onLeft) => {
+            if (!quickTile(win, onLeft ? 0 : 1, 0.5, 0)) {
+                placeByGeometry(win, zoneRect(Workspace.clientArea(Workspace.MaximizeArea, win), onLeft ? 0 : 0.5, 0, 0.5, 1,
+                                              setting("QuickTileGaps", true) ? gap() : 0));
+            }
+        };
+        if (step === "screen") {
+            Workspace.sendClientToScreen(win, neighbourScreen(win, side));
+            // That screen's facing half, once the window is there.
+            Qt.callLater(() => {
+                if (usable(win)) {
+                    half(side !== "left");
+                }
+            });
+            return;
+        }
+        if (step === "half") {
+            half(side === "left");
+            return;
+        }
+        placeByGeometry(win, step === "third" ? thirdRect(area, side === "left" ? 0 : 2, gap(), false)
+                                              : zoneRect(area, side === "left" ? 0 : 1 / 3, 0, 2 / 3, 1, gap()));
     }
 
     // ---------------------------------------------------------------- the maximize button's side

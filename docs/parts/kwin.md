@@ -260,6 +260,36 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   quick tile's role (left, right, top, bottom, the quarters) comes from its shape, not its place
   among the children; the outline uses the same test.
 
+### Snap sizes from the keyboard
+
+The next queue's item 7 (approved 2026-10-16; the report's "no Rectangle-style keyboard cycling").
+"Plasma Fusion: Snap Left" and "Snap Right" (`ShortcutHandler`s of the snap script, no key of their
+own: the setup moves Meta+Left/Right to them from KWin's `Window Quick Tile Left` / `Right`, as two
+actions cannot share a key; docs/parts/device.md) step the active window through 1/2, 1/3 and 2/3 of
+that side of the work area, then back to 1/2 (`Cycle.js`):
+
+- where the window is comes from its size: the edge on that side within 8 px of the area's, the
+  area's height, and a width of 1/2, 1/3 or 2/3 of the area within 3 % (a terminal sizes itself in
+  character cells); anything else starts at 1/2;
+- 1/2 is KWin's quick tile (`quickTile()`, as the key gave before, so the other half is still
+  offered by the picker), 1/3 and 2/3 plain geometry with the gap (`thirdRect()`, `zoneRect()`, as
+  the flyout's thirds and 2:1 zone); a step leaves the window's snap group, as a layout choice;
+- after 2/3, when a screen lies on that side (`Cycle.neighbourOf()`: the nearest one wholly on that
+  side that shares some height), the window goes there, to that screen's facing half
+  (`sendClientToScreen`, then the quick tile), as KWin's quick tile did on a second press; on one
+  screen it goes back to 1/2. Meta+Shift+Left/Right (KWin's "Window to Previous/Next Screen") move
+  a window between screens at once.
+
+Tests: `tests/snap-cycle.test.js` (node, in the build step): the steps from a window's size on
+both sides and a second screen, the order, and the neighbouring screen;
+`tests/offscreen/snaptest.py` (CI `build`, the real script with stand-in KWin objects): from the left
+half, Snap Left gives the third, the two thirds and the half again with the 6 px gap, Snap Right the
+right half, third and two thirds, and with a screen to the right the window is sent there;
+`tools/device/tests/shortcut-keys-unit.sh` (CI `build`): the setup's key move (with the
+Windows-style set, once on an update while KWin's quick tile holds the key, never after the mark or
+from another action the user chose); `tests/vsession/scenario-snapcycle.sh` (a private session,
+real keys): Meta+Left four times and Meta+Right twice after the setup.
+
 ### Snap-zone outline
 
 `outline.qml` replaces KWin's outline: rounded rectangle radius 14, fill rgba(91,157,255,.28) with a

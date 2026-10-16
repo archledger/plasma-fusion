@@ -14,6 +14,9 @@ QtObject {
     property var currentDesktop: null
     property var activeWindow: null
     property var activeScreen: ({ name: "Virtual-1", geometry: Qt.rect(0, 0, 1440, 900) })
+    property var screens: [activeScreen]
+    // The last sendClientToScreen's screen (the harness checks it).
+    property var sentTo: null
     property rect maximizeArea: Qt.rect(0, 34, 1440, 866)
     property var outlineScreen: null
     property var outputDesktops: ({})
@@ -25,7 +28,7 @@ QtObject {
     signal windowAdded(var window)
     signal windowRemoved(var window)
     signal windowActivated(var window)
-    signal screensChanged()
+    // screensChanged() comes with the screens property.
     signal virtualScreenGeometryChanged()
 
     function screenAt(p) { return outlineScreen || activeScreen; }
@@ -44,4 +47,5 @@ QtObject {
     function slotWindowQuickTileBottomRight() {}
     function rootTile(o, d) { return (o && d && customRoots[o.name + "|" + d.id]) || null; }
     function slotToggleShowDesktop() {}
+    function sendClientToScreen(w, o) { sentTo = o; w.output = o; }
 }

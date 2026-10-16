@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Snap sizes from the keyboard:** pressed again, Meta+Left and Meta+Right step a window through
+  half, a third and two thirds of that side of the screen, then back to half; with a screen on that
+  side, the step after two thirds moves the window there, as before. `plasma-fusion setup` moves
+  Meta+Left/Right to the new actions (on an update, only while KWin's quick tile still holds them).
 - The dock's menu has **End Task…** for an app that does not answer: after a confirmation the app
   is asked to quit and, if it is still running 3 seconds later, ended. The desktop's own windows
   have none.

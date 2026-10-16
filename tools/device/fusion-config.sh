@@ -166,6 +166,7 @@ NOTIFICATION_TIMEOUT=5000
 # Qt key codes (modifiers | key).
 META=$((0x10000000)) ALT=$((0x08000000)) SHIFT=$((0x02000000))
 K_SPACE=$((0x20)) K_TAB=$((0x01000001)) K_UP=$((0x01000013)) K_DOWN=$((0x01000015)) K_F2=$((0x01000031))
+K_LEFT=$((0x01000012)) K_RIGHT=$((0x01000014))
 # Global shortcut for the quick-settings pop-up (org.plasmafusion.quicksettings): Qt key code and
 # QKeySequence text. The Windows-style set (owner decision 6) gives it Meta+A and Meta+N opens it on
 # the notification list; without that set (--keep-shortcuts) it keeps Meta+N, as before.
@@ -2047,6 +2048,42 @@ apply_dock_entry_keys() {
   done
 }
 
+# Snap sizes from the keyboard: Meta+Left/Right move from KWin's "Quick Tile Window to the
+# Left/Right" to the snap KWin script's "Plasma Fusion: Snap Left/Right", which step the window
+# through 1/2, 1/3 and 2/3 of that side (two actions cannot share a key). The actions exist once
+# KWin runs the script, as the dock entries'. $1 claim: the Windows-style set; migrate: once
+# (plasmafusionrc [Shortcuts] SnapCycleKeys), and only a key KWin's quick tile still holds, so a key
+# the user gave either action since stays.
+SNAP_CYCLE="Plasma Fusion: Snap"
+SNAP_CYCLE_KEYS_VERSION=1
+snap_cycle_actions_registered() {
+  bus call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
+    grep -qF "\"$SNAP_CYCLE Left\""
+}
+apply_snap_cycle_keys() {
+  local side key
+  read_key plasmafusionrc Shortcuts SnapCycleKeys
+  if [ "$1" = migrate ] && [ "$REPLY" = "$SNAP_CYCLE_KEYS_VERSION" ]; then
+    note "snap sizes: Meta+Left/Right are as the user has them (kept)"
+    return 0
+  fi
+  if [ "$DRY" = 0 ]; then
+    for _ in $(seq 1 20); do snap_cycle_actions_registered && break; sleep 0.5; done
+    if ! snap_cycle_actions_registered; then
+      note "snap sizes: the snap KWin script's actions are not registered (keys not set)"
+      return 0
+    fi
+  fi
+  for side in Left Right; do
+    if [ "$side" = Left ]; then key=$((META + K_LEFT)); else key=$((META + K_RIGHT)); fi
+    if [ "$1" = migrate ]; then
+      key_holders "$key" | grep -qxF "kwin"$'\t'"Window Quick Tile $side" || continue
+    fi
+    shortcut_claim kwin "$SNAP_CYCLE $side" "$key"
+  done
+  set_key plasmafusionrc Shortcuts SnapCycleKeys "$SNAP_CYCLE_KEYS_VERSION"
+}
+
 # ---------- 0. the look before Plasma Fusion ----------
 
 # Saved once, from the newest backup taken while another Global Theme was active (on a first run,
@@ -2423,8 +2460,10 @@ if [ "$DRY" = 0 ]; then
 fi
 if [ "$WINDOWS_SET" = 1 ]; then
   apply_dock_entry_keys claim
+  apply_snap_cycle_keys claim
 elif [ "$SHORTCUTS" != keep ]; then
   apply_dock_entry_keys migrate
+  apply_snap_cycle_keys migrate
 fi
 
 # Tiling: padding on every screen and workspace, set live through a one-shot KWin script
