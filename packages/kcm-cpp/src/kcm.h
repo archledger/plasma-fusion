@@ -76,6 +76,11 @@ class QDBusServiceWatcher;
       Actions         "Restore my previous desktop" applies org.plasmafusion.previous.desktop;
                       "Reset Fusion layout" rebuilds the panels and desktop from the Global Theme's
                       layout and gives the new widgets the global shortcuts the old ones had.
+      Settings file   "Export my settings…" writes the applied settings above and the panels (the
+                      Global Theme's export-layout.js) to one JSON file; "Import settings…" applies
+                      a file's settings as Apply does and puts its panels in place of the ones there
+                      are (import-layout.js), then gives the widgets their shortcuts as the layout
+                      reset does (settingsfile.cpp).
 */
 class PlasmaFusionKcm : public KQuickManagedConfigModule
 {
@@ -146,6 +151,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool highContrastAvailable READ highContrastAvailable NOTIFY environmentChanged)
     Q_PROPERTY(bool previousDesktopAvailable READ previousDesktopAvailable NOTIFY environmentChanged)
     Q_PROPERTY(bool topBarScriptAvailable READ topBarScriptAvailable NOTIFY environmentChanged)
+    // The Global Theme's export-layout.js and import-layout.js are installed (the settings file).
+    Q_PROPERTY(bool settingsFileAvailable READ settingsFileAvailable NOTIFY environmentChanged)
     // KWin's TabletModeManager: a hinge or tablet switch exists / the effective mode now.
     Q_PROPERTY(bool tabletModeAvailable READ tabletModeAvailable NOTIFY environmentChanged)
     Q_PROPERTY(bool tabletModeActive READ tabletModeActive NOTIFY environmentChanged)
@@ -274,6 +281,7 @@ public:
     bool highContrastAvailable() const;
     bool previousDesktopAvailable() const;
     bool topBarScriptAvailable() const;
+    bool settingsFileAvailable() const;
     bool tabletModeAvailable() const;
     bool tabletModeActive() const;
     bool powerCritical() const;
@@ -296,6 +304,13 @@ public:
     Q_INVOKABLE void resetLayout();
     // System Settings > Screen Locking (kcm_screenlocker): the clock and media card keys.
     Q_INVOKABLE void openScreenLockerSettings();
+
+    // The settings file (a file URL or a path). Export writes the applied settings (a change not
+    // applied yet is not in it) and the panels; false, with the error shown, when it could not.
+    // Import (the page asks first) applies the file's settings and puts its panels in place, at
+    // once; a file that is not a settings file of this version changes nothing.
+    Q_INVOKABLE bool exportSettings(const QString &location);
+    Q_INVOKABLE void importSettings(const QString &location);
 
 public Q_SLOTS:
     void load() override;
@@ -427,12 +442,28 @@ private:
     bool currentVariantIsLight() const;
     void updateDecorationInstalled();
     QString topBarScriptPath() const;
+    // A script of the Global Theme's layout part (contents/layouts/NAME), or "" when not installed.
+    QString layoutScriptPath(const QString &name) const;
 
-    // Global shortcuts of widgets (Reset Fusion layout).
+    // Global shortcuts of widgets (Reset Fusion layout, Import settings).
     QJsonObject widgetShortcuts(bool *ok);
-    QString giveWidgetShortcut(int widgetId, const QString &key, const QList<int> &liveWidgetIds);
-    void finishResetLayout(const QJsonObject &before);
+    QString giveWidgetShortcut(int widgetId, const QString &key, const QList<int> &liveWidgetIds, int newMin);
+    // After the panels were rebuilt: the shortcuts, glass, top bars and docks, power tier.
+    // OUTCOME is the result shown, the shortcuts given follow it; IMPORTED: the panels are a
+    // settings file's (the screens it did not have get their top bars too).
+    void finishResetLayout(const QJsonObject &before, bool imported, const QString &outcome);
     void pollResetLayout(const QJsonObject &before, int attempt);
+
+    // The settings a settings file holds: the property (above) and its field, a number or a flag.
+    struct FileSetting {
+        const char *name;
+        int State::*number;
+        bool State::*flag;
+    };
+    static const QList<FileSetting> &fileSettings();
+    QJsonObject settingsToFile(const State &state) const;
+    // The file's settings put on the page (as if set there); the number of values not taken.
+    int settingsFromFile(const QJsonObject &settings, QStringList *notes);
 
     State m_current;
     State m_saved;

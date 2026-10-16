@@ -88,12 +88,14 @@ Description: Plasma Fusion window decoration for KWin
 Package: plasma-fusion-settings
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version}),
-         systemsettings, qml6-module-org-kde-kirigami, qml6-module-org-kde-kcmutils
+         systemsettings, qml6-module-org-kde-kirigami, qml6-module-org-kde-kcmutils,
+         qml6-module-qtquick-dialogs, qml6-module-qtcore
 Description: Plasma Fusion settings page for System Settings
  The Appearance page of the Plasma Fusion desktop as a System Settings module:
  light, dark or automatic style, the accent color, the window-button layout,
  dock magnification, the global menu, snap layouts, the glass level, high
- contrast, reduced motion, tablet mode and two ways to start over.
+ contrast, reduced motion, tablet mode, a settings file to export and import,
+ and two ways to start over.
 
 Package: plasma-fusion-quicklook
 Architecture: any

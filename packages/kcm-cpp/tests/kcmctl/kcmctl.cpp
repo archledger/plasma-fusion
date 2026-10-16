@@ -6,7 +6,8 @@
       wait MS              run the event loop for MS milliseconds
       load | save | defaults
       set PROPERTY VALUE   true/false, integers, or text
-      call METHOD          an invokable without arguments (resetLayout, restorePreviousDesktop, ...)
+      call METHOD [TEXT]   an invokable without arguments (resetLayout, restorePreviousDesktop, ...),
+                           or with one text argument, the rest of the line (importSettings PATH)
       waitidle             wait (max 90 s) until the module is no longer busy
       get PROPERTY         prints PROPERTY=value
       dump                 prints every property of the module, one per line
@@ -148,7 +149,11 @@ int main(int argc, char **argv)
                 out << "kcmctl: cannot set " << name << Qt::endl;
             }
         } else if (command == QLatin1String("call")) {
-            if (!QMetaObject::invokeMethod(module, rest.toLatin1().constData())) {
+            const QString method = rest.section(QLatin1Char(' '), 0, 0);
+            const QString argument = rest.section(QLatin1Char(' '), 1);
+            const bool called = rest.contains(QLatin1Char(' ')) ? QMetaObject::invokeMethod(module, method.toLatin1().constData(), Q_ARG(QString, argument))
+                                                                : QMetaObject::invokeMethod(module, method.toLatin1().constData());
+            if (!called) {
                 out << "kcmctl: cannot call " << rest << Qt::endl;
             }
             spin(200);

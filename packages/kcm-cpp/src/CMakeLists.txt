@@ -5,7 +5,7 @@ add_definitions(-DTRANSLATION_DOMAIN=\"kcm_plasmafusion\")
 
 # Plugin in plasma/kcms/systemsettings, QML from ui/ compiled in as resources, and
 # kcm_plasmafusion.desktop (Exec=systemsettings kcm_plasmafusion) generated from the JSON.
-kcmutils_add_qml_kcm(kcm_plasmafusion SOURCES kcm.cpp kcm.h kcm_p.h shell.cpp)
+kcmutils_add_qml_kcm(kcm_plasmafusion SOURCES kcm.cpp kcm.h kcm_p.h shell.cpp settingsfile.cpp)
 
 # The shared Plasma Fusion QML the page uses (FusionMetrics), next to the page's own files in the
 # module's resources. Its source is packages/common in the repository (../common from here);

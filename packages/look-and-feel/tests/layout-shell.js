@@ -4,13 +4,13 @@
 // A stand-in for plasmashell's layout scripting (plasma-workspace 6.7.5 shell/scripting), enough
 // for the Global Theme's desktop layout script, ensure-topbars.js and the Add Panel templates: `new
 // Panel` and the panel
-// properties the scripts set (screen, location, height, floating, lengthMode, alignment, hiding,
-// opacity), panels(), panelIds and panelById() (the Add Panel templates), desktops(), desktopsForActivity(), currentActivity(), screenCount,
+// properties the scripts set (screen, location, height, floating, lengthMode, offset, length,
+// minimumLength, maximumLength, alignment, hiding, opacity), panels(), panelIds and panelById() (the Add Panel templates), desktops(), desktopsForActivity(), currentActivity(), screenCount,
 // screenGeometry(), knownWidgetTypes, gridUnit, fileExists(), ConfigFile() (nested too) with
 // readEntry and writeEntry, a containment's id, type, screen, wallpaperPlugin, widgets([TYPE]),
-// addWidget() (an Error for a type in failAdd) and remove(), a widget's id, type and
-// userBackgroundHints, and for both currentConfigGroup, readConfig and writeConfig. Test tooling
-// only.
+// addWidget() (an Error for a type in failAdd) and remove(), a widget's id, type,
+// userBackgroundHints and globalShortcut, and for both currentConfigGroup, configKeys,
+// configGroups, readConfig and writeConfig. Test tooling only.
 //
 //   const { shell } = require("./layout-shell.js");
 //   const s = shell({ screens: [[1920, 1080], [1280, 1024]], files: { plasmafusionrc: { TopBar: {...} } },
@@ -47,6 +47,19 @@ function shell(options) {
             set currentConfigGroup(g) { group = g; },
             // The keys set in the current group (Plasma's Widget.configKeys).
             get configKeys() { return Object.keys((o.config || {})[group.join("][")] || {}); },
+            // The groups below the current one (Plasma's Widget.configGroups).
+            get configGroups() {
+                const prefix = group.length > 0 ? group.join("][") + "][" : "";
+                const names = [];
+                for (const name of Object.keys(o.config || {})) {
+                    if (!name.startsWith(prefix) || name === prefix.slice(0, -2))
+                        continue;
+                    const next = name.slice(prefix.length).split("][")[0];
+                    if (next !== "" && names.indexOf(next) === -1)
+                        names.push(next);
+                }
+                return names;
+            },
             readConfig(key, def) {
                 const g = (o.config || {})[group.join("][")] || {};
                 if (g[key] === undefined)
@@ -69,8 +82,13 @@ function shell(options) {
             get id() { return w.id; },
             get type() { return w.type; },
             get geometry() { return c ? { x: c.widgets.indexOf(w) * 100, y: 0, width: 90, height: 34 } : undefined; },
+            // Its place in the panel (Plasma's Widget.index, from the panel's AppletOrder).
+            get index() { return c ? c.widgets.indexOf(w) : -1; },
             set userBackgroundHints(v) { w.userBackgroundHints = v; },
             get userBackgroundHints() { return w.userBackgroundHints; },
+            // Its global shortcut (Plasma's Widget.globalShortcut), "" for none.
+            set globalShortcut(v) { w.shortcut = String(v); },
+            get globalShortcut() { return w.shortcut || ""; },
         });
     }
     function containment(c) {
@@ -92,7 +110,7 @@ function shell(options) {
             return widget(w, c);
         };
         for (const key of ["screen", "location", "height", "floating", "lengthMode", "alignment", "hiding", "opacity",
-                           "wallpaperPlugin"]) {
+                           "offset", "length", "minimumLength", "maximumLength", "wallpaperPlugin"]) {
             Object.defineProperty(api, key, { get: () => c[key], set: (v) => { c[key] = v; }, enumerable: true });
         }
         // Containment.remove(): the panel goes, with its widgets.

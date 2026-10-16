@@ -17,6 +17,8 @@
 //   node fake-shell.js LAYOUT.json [WRITES.log] < SCRIPT   runs SCRIPT, saves the layout, prints
 //                                                           the script's print() output
 //   require("./fake-shell.js").run(script, layout, writes)  the same in-process
+// A script holding U+2028 or U+2029 as such is refused (a SyntaxError), as plasmashell's QJSEngine
+// refuses them in a string literal (Qt 6.11.2), where JSON put into a script has them.
 "use strict";
 
 function convert(raw, def) {
@@ -76,6 +78,8 @@ function wrap(w, list, writes) {
 }
 
 function run(script, layout, writes) {
+    if (/[\u2028\u2029]/.test(script))
+        throw new SyntaxError("Unexpected token `'");
     let out = "";
     function containment(c, at, kind) {
         // An array is a containment of widgets only; it becomes an object the first time a

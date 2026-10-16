@@ -7,9 +7,11 @@
 
 pragma ComponentBehavior: Bound
 
+import QtCore
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs as QtDialogs
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
 
@@ -772,6 +774,31 @@ KCM.SimpleKCM {
                     ActionRow {
                         Layout.fillWidth: true
                         pal: fusionPalette
+                        text: i18nc("@label", "Export my settings")
+                        description: !kcm.shellRunning ? i18nc("@info", "The Plasma desktop is not running.")
+                            : !kcm.settingsFileAvailable ? i18nc("@info", "The Plasma Fusion Global Theme is not installed.")
+                            : kcm.needsSave ? i18nc("@info", "Changes not applied yet are not saved in the file.")
+                            : i18nc("@info", "Save this page's settings and your top bar, dock and widgets in a file, for another computer or for later.")
+                        buttonText: i18nc("@action:button", "Export…")
+                        buttonIcon: "document-export"
+                        enabled: kcm.shellRunning && kcm.settingsFileAvailable && !kcm.busy
+                        onTriggered: exportFileDialog.open()
+                    }
+                    ActionRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label", "Import settings")
+                        description: !kcm.shellRunning ? i18nc("@info", "The Plasma desktop is not running.")
+                            : !kcm.settingsFileAvailable ? i18nc("@info", "The Plasma Fusion Global Theme is not installed.")
+                            : i18nc("@info", "Use the settings, top bar, dock and widgets saved in a settings file.")
+                        buttonText: i18nc("@action:button", "Import…")
+                        buttonIcon: "document-import"
+                        enabled: kcm.shellRunning && kcm.settingsFileAvailable && !kcm.busy
+                        onTriggered: importFileDialog.open()
+                    }
+                    ActionRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
                         text: i18nc("@label", "Restore my previous desktop")
                         description: kcm.previousDesktopAvailable
                             ? i18nc("@info", "The look you had before Plasma Fusion. Panels and desktop widgets stay as they are.")
@@ -814,6 +841,53 @@ KCM.SimpleKCM {
                 onTriggered: {
                     restoreDialog.close();
                     kcm.restorePreviousDesktop();
+                }
+            }
+        ]
+    }
+
+    // The settings file (kcm.h): a file in Documents by default; an import names the file it
+    // will use before it asks.
+    QtDialogs.FileDialog {
+        id: exportFileDialog
+        title: i18nc("@title:window", "Export Your Settings")
+        fileMode: QtDialogs.FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [i18nc("@item:inlistbox file type", "Plasma Fusion settings (*.json)")]
+        currentFolder: StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
+        selectedFile: currentFolder + "/plasma-fusion-settings.json"
+        onAccepted: kcm.exportSettings(selectedFile.toString())
+    }
+
+    QtDialogs.FileDialog {
+        id: importFileDialog
+        title: i18nc("@title:window", "Import Settings")
+        fileMode: QtDialogs.FileDialog.OpenFile
+        nameFilters: [i18nc("@item:inlistbox file type", "Plasma Fusion settings (*.json)")]
+        currentFolder: StandardPaths.writableLocation(StandardPaths.DocumentsLocation)
+        onAccepted: {
+            importDialog.file = selectedFile;
+            importDialog.open();
+        }
+    }
+
+    Kirigami.PromptDialog {
+        id: importDialog
+        property url file
+        title: i18nc("@title:window", "Import These Settings?")
+        subtitle: i18nc("@info %1 file name",
+                        "The settings on this page, the top bar, the dock and their widgets from %1 take the place of yours. Desktop "
+                        + "widgets and the files on your desktop stay as they are. Panels of screens this computer does not have, and "
+                        + "widgets that are not installed here, are left out.",
+                        decodeURIComponent(file.toString().split("/").pop()))
+        standardButtons: Kirigami.Dialog.Cancel
+        customFooterActions: [
+            Kirigami.Action {
+                text: i18nc("@action:button", "Import")
+                icon.name: "document-import"
+                onTriggered: {
+                    importDialog.close();
+                    kcm.importSettings(importDialog.file.toString());
                 }
             }
         ]
