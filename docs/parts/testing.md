@@ -13,6 +13,9 @@ Two regression gates that run from the laptop against the ThinkPad in private vi
   configuration (sizes, scales, two outputs, lid, tablet, rotation) with layout assertions.
 - **Rubber-band test** (`tools/tests/perf/band.sh`, BACKLOG S5): band selection over 20, 60 and
   100 desktop icons.
+- **Depth features** (`tools/tests/depth/`, 2026-10-16): the session scenarios of the features
+  that set Plasma Fusion apart, in one run with one summary, before every Plasma update and release
+  ("Depth features" below).
 - **Field log** (daily use on the laptop, apart from test noise): [fieldlog.md](fieldlog.md).
 
 Status: built and run on HEAD 282b1a5 (the staged HOME tree is byte-identical to the deployed
@@ -44,6 +47,8 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/tests/` (
 | `tools/tests/matrix/{run.sh,body.sh,mx.py,check.py,configs.txt}` | adaptive matrix (TEST-1): driver, in-session walk, per-configuration steps, layout judge, the configurations |
 | `tools/tests/perf/{band.sh,scen-band.sh,band.py}` | rubber-band selection with 20/60/100 icons (S5): driver, scenario, table and verdict |
 | `tools/tests/lib/slot-test.sh` | self-test of the slot lock semantics on a private lock directory |
+| `tools/tests/depth/run.sh` | the depth features' check: the six features' session scenarios, their seeds, one summary |
+| `tools/tests/depth/run-unit.sh` | its unit test with a stand-in session runner (CI `build`) |
 
 ## Running them
 
@@ -172,6 +177,45 @@ Alt+Tab first frame and animation end, Overview late frames per cycle. Not encod
 the frame-time rows (render p95 during pop-up animations, overview render p95, missed vblanks,
 GUI-thread time per frame), quick settings "first frame at most 50 ms after the release" (only
 "not slower than stock" is), and the device-only and desktop-file rows.
+
+## Depth features (2026-10-16)
+
+The next queue's item 5 (approved 2026-10-16): reliability is part of a depth feature (the
+2026-10-14 report: macOS 27's Spaces regressions dominated an otherwise rich release). Each
+feature the queues added has a session scenario, run when it was built; `tools/tests/depth/run.sh`
+runs them together against one built HOME tree, with one summary:
+
+| Feature | Scenario |
+|---|---|
+| window placement memory | `packages/kwin/tests/vsession/scenario-placement.sh` |
+| snap groups | `packages/kwin/tests/vsession/scenario-snapgroups.sh` |
+| dynamic workspaces | `packages/kwin/tests/vsession/scenario-workspaces.sh` |
+| copy text from the screen | `packages/copytext/tests/vsession/scenario-copytext.sh` |
+| Quick Look | `packages/quicklook-cpp/tests/vsession/scenario-quicklook.sh` |
+| live chips | `packages/plasmoids/org.plasmafusion.livechips/tests/vsession/scenario-livechips.sh` |
+
+    tools/build.sh                                   # the HOME tree, stage/home
+    cmake -S packages/quicklook-cpp -B build/ql && cmake --build build/ql
+    cmake --install build/ql --prefix "$PWD/build/ql-install"
+    tools/tests/depth/run.sh --quicklook build/ql-install        # the test host (ThinkPad)
+    tools/tests/depth/run.sh --image localhost/plasma-fusion-test:f44-6.8beta ...  # the beta lane
+
+- Every feature's seed is the HOME tree at `~/pf-stage` and `tools/` at `~/pf-tools`; the live
+  chips' adds their stand-ins (`fake_status_items.py`, quick settings' `mock_power.py`) and the
+  widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`
+  (`--quicklook`; without it Quick Look is SKIPPED, as tools/build.sh does not build a compiled
+  part).
+- Results: `build/tests/depth/results/<feature>/` (checks, screenshots, logs, core dumps) and
+  `summary.md` / `summary.json`. Exit 0 only when every feature run passed every check; a feature
+  that gives no checks (its session stopped before them) fails.
+- When: before a Plasma update is let onto the test machines (the plasma-watch issue names it) and
+  before a release tag (docs/RELEASING.md, step 2), on the test host and on the beta container.
+- GitHub's runners cannot run it (KWin's session screenshots need a GPU, docs/parts/containers.md);
+  CI runs its unit test, `run-unit.sh`, with a stand-in session runner: every feature passing (exit
+  0), Quick Look skipped without its install, a feature broken on purpose (exit 1, named in the
+  summary), a feature without checks (exit 1), each feature's seed, chosen features only, and an
+  unknown one (exit 2). Without the FAIL count, the empty-feature rule or the live chips' seed
+  extras its cases fail.
 
 ## Harness additions (`tools/vsession`)
 

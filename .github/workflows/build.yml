@@ -92,6 +92,12 @@ jobs:
       - name: Setup command shortcuts (against a fake kglobalaccel)
         run: tools/device/tests/shortcut-keys-unit.sh build/shortcut-keys
 
+      - name: Depth features' check (its driver, with a stand-in session runner)
+        run: |
+          set -euo pipefail
+          command -v rsync >/dev/null || dnf install -y -q rsync
+          tools/tests/depth/run-unit.sh build/depth-unit
+
       - name: VM crash collector unit tests
         run: |
           python3 tools/tests/release-vm/test-crash-count.py
