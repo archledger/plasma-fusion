@@ -204,9 +204,12 @@ test("ensure-topbars: an older bar with a tray of its own gets the chips at the 
         { id: 23, type: "org.kde.plasma.systemtray", config: {} }] };
     const s = shell({ screens: TWO, files: rc(), panels: [withChips(mainBar()), old] });
     s.run(ENSURE);
-    const t = types(tops(s).find((p) => p.id === 20));
-    assert.deepStrictEqual(t, ["org.plasmafusion.appname", "org.plasmafusion.clockpill", CHIPS, "org.kde.plasma.systemtray",
-                               "org.plasmafusion.quicksettings"]);
+    const bar = tops(s).find((p) => p.id === 20);
+    assert.deepStrictEqual(types(bar), ["org.plasmafusion.appname", "org.plasmafusion.clockpill", CHIPS, "org.kde.plasma.systemtray",
+                                        "org.plasmafusion.quicksettings"]);
+    // That tray hides the items the chips replace too.
+    const off = trayOff(bar);
+    assert.ok(CHIPS_ITEMS.every((id) => off.hidden.includes(id) && off.disabled.includes(id)), JSON.stringify(off));
 });
 test("ensure-topbars: without chips in the main bar a new bar gets none", () => {
     const { bar } = screenTwo(rc());

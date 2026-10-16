@@ -186,6 +186,25 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     }
     // As the layout script sets up a tray: the items quick settings replaces and the passive ones
     // hidden, the ones with no use (and Disks & Devices, which quick settings replaces) not loaded.
+    // The items the live chips replace, added to a tray's hidden lists (what it hides already stays).
+    function hideChipItems(tray) {
+        tray.currentConfigGroup = ["General"];
+        var keys = ["disabledStatusNotifiers", "hiddenItems"];
+        for (var k = 0; k < keys.length; ++k) {
+            var list = tray.readConfig(keys[k], []) || [];
+            if (typeof list === "string") {
+                list = list === "" ? [] : list.split(",");
+            }
+            list = list.slice();
+            for (var i = 0; i < TRAY_ITEMS_REPLACED_BY_CHIPS.length; ++i) {
+                if (list.indexOf(TRAY_ITEMS_REPLACED_BY_CHIPS[i]) === -1) {
+                    list.push(TRAY_ITEMS_REPLACED_BY_CHIPS[i]);
+                }
+            }
+            tray.writeConfig(keys[k], list);
+        }
+        tray.currentConfigGroup = [];
+    }
     function defaultTray(tray, withChips) {
         tray.currentConfigGroup = ["General"];
         var off = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED, withChips ? TRAY_ITEMS_REPLACED_BY_CHIPS : []);
@@ -219,10 +238,15 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         // The live chips right before the tray, as the main bar has them (a first bar: when they
         // are installed); before a tray the bar has already, at its place.
         if ((founding ? known.indexOf(CHIPS) !== -1 : mainChips) && !has(bar, CHIPS)) {
-            var tg = has(bar, TRAY) ? bar.widgets(TRAY)[0].geometry : null;
+            var own = has(bar, TRAY) ? bar.widgets(TRAY)[0] : null;
+            var tg = own ? own.geometry : null;
             var chips = tg ? bar.addWidget(CHIPS, Math.max(0, tg.x - 2), 1, -1, -1) : add(bar, [CHIPS]);
             if (chips && typeof chips === "object" && chips.type !== undefined) {
                 count++;
+                // The bar's own tray hides the items the chips replace, as a tray set up here does.
+                if (own) {
+                    hideChipItems(own);
+                }
             }
         }
         if ((founding || mainTray !== null) && !has(bar, TRAY)) {

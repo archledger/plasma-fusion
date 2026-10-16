@@ -40,8 +40,10 @@ RowLayout {
         return parts.join("; ");
     }
 
-    // The capsule, for the hover panel's place (main.qml).
+    // The capsule, for the hover panel's place (main.qml); the chips, for the keyboard test.
     readonly property Item capsuleItem: capsuleChip
+    readonly property Item keepAwakeItem: keepAwakeChip
+    readonly property Item stopItem: stopButton
     readonly property color ink: Kirigami.Theme.textColor
     readonly property real chipHeight: metrics.px(22)
 
@@ -62,6 +64,16 @@ RowLayout {
         const t = Chips.tint(kind, dark);
         return t ? Qt.rgba(t.r, t.g, t.b, t.a) : Qt.rgba(ink.r, ink.g, ink.b, 0.08);
     }
+    // A chip's keyboard focus ring (the panel's buttons draw the same).
+    component FocusRing: Rectangle {
+        anchors.fill: parent
+        anchors.margins: -2
+        radius: height / 2
+        color: "transparent"
+        border.width: 2
+        border.color: Kirigami.Theme.focusColor
+    }
+
     function leftText(left: var): string {
         if (left.hours > 0) {
             return left.minutes > 0 ? i18nc("@info time left of Keep awake, in the bar", "%1 h %2 min", left.hours, left.minutes)
@@ -78,9 +90,16 @@ RowLayout {
         Layout.preferredWidth: awakeContent.implicitWidth + row.metrics.px(18)
         radius: height / 2
         color: Qt.rgba(row.ink.r, row.ink.g, row.ink.b, awakeArea.containsPress ? 0.16 : awakeArea.containsMouse ? 0.12 : 0.08)
+        activeFocusOnTab: visible
         Accessible.role: Accessible.Button
         Accessible.name: i18nc("@action:button %1 time left", "Keep awake, %1 left", awakeText.text)
         Accessible.onPressAction: row.keepAwakeClicked()
+        Keys.onSpacePressed: row.keepAwakeClicked()
+        Keys.onReturnPressed: row.keepAwakeClicked()
+        Keys.onEnterPressed: row.keepAwakeClicked()
+        FocusRing {
+            visible: keepAwakeChip.activeFocus
+        }
 
         RowLayout {
             id: awakeContent
@@ -143,9 +162,16 @@ RowLayout {
                 radius: width / 2
                 color: row.glyphColor("recording")
                 opacity: stopArea.containsPress ? 0.75 : 1
+                activeFocusOnTab: recordingChip.visible
                 Accessible.role: Accessible.Button
                 Accessible.name: i18nc("@action:button", "Stop recording")
                 Accessible.onPressAction: row.stopRecording()
+                Keys.onSpacePressed: row.stopRecording()
+                Keys.onReturnPressed: row.stopRecording()
+                Keys.onEnterPressed: row.stopRecording()
+                FocusRing {
+                    visible: stopButton.activeFocus
+                }
                 Rectangle {
                     anchors.centerIn: parent
                     width: row.metrics.px(6)
@@ -178,9 +204,16 @@ RowLayout {
             const lift = row.panelOpen || capsuleArea.containsPress ? 0.08 : capsuleArea.containsMouse ? 0.04 : 0;
             return Qt.rgba(base.r, base.g, base.b, Math.min(1, base.a + lift));
         }
+        activeFocusOnTab: visible
         Accessible.role: Accessible.Button
         Accessible.name: i18nc("@action:button the live chips' panel", "In use")
         Accessible.onPressAction: row.capsuleClicked()
+        Keys.onSpacePressed: row.capsuleClicked()
+        Keys.onReturnPressed: row.capsuleClicked()
+        Keys.onEnterPressed: row.capsuleClicked()
+        FocusRing {
+            visible: capsuleChip.activeFocus
+        }
 
         RowLayout {
             id: glyphs

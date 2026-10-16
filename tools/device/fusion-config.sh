@@ -1183,6 +1183,10 @@ def write(file, groups, key, value, old=None):
         args += ["--group", g]
     args += ["--key", key, "--", value]
     cmds.append(args)
+    # A later step reads the layout as the queued writes leave it (step 7 rebuilds AppletOrder and
+    # the tray's lists after steps 4 and 6 may have changed them).
+    if file == APPLETSRC:
+        rc.setdefault(tuple(groups), {})[key] = value
 
 rc = parse(config + "/" + APPLETSRC)
 shellrc = parse(config + "/plasmashellrc")
@@ -1192,7 +1196,8 @@ if not rc:
     sys.exit(0)
 
 def fresh_id():
-    """An applet id no group of the layout file and no write queued here uses yet."""
+    """An applet id no group of the layout file and no write queued here uses yet (the queued
+    writes are in rc too; the commands are counted as well)."""
     used = [int(x) for g in rc for x in g if x.isdigit()]
     used += [int(x) for args in cmds for x in args if x.isdigit()]
     return str(max(used) + 1 if used else 1)
@@ -1420,6 +1425,19 @@ PY
   printf '%s\n' "$out" | grep -v '^CHANGES ' || true
   CHANGES=$((CHANGES + $(printf '%s\n' "$out" | sed -n 's/^CHANGES \([0-9][0-9]*\)$/\1/p' | tail -n 1 | grep . || echo 0)))
   return $rc
+}
+
+# The trays' Disks & Devices and the live chips are as Plasma Fusion sets them now (migrated, or a
+# new layout): from here on the user's (migrate_layout's once-only steps). Not when a migration
+# stopped part way: the next run tries again. The live chips' mark only once their widget is
+# installed (a later install still gets them). $1 the layout was looked at (1/0), $2 a new layout
+# was built (1/0), $3 the migration failed (1/0).
+record_layout_marks() {
+  { [ "$1" = 1 ] || [ "$2" = 1 ]; } && [ "$3" = 0 ] || return 0
+  set_key plasmafusionrc Setup TrayDevices "done"
+  if package_dir plasma/plasmoids "$CHIPS_WIDGET" >/dev/null; then
+    set_key plasmafusionrc Setup LiveChips "done"
+  fi
 }
 
 # True when the layout file still has a part the migration would change.
@@ -2141,7 +2159,7 @@ if has_name org.kde.plasmashell && fusion_layout_present; then
 fi
 # An existing Plasma Fusion layout (kept): migrated in place while plasmashell is stopped, in the
 # restart that applies the steps above (one restart for all of it).
-migrate=0 card_size='' layout_checked=0
+migrate=0 card_size='' layout_checked=0 migrate_failed=0
 if [ "$LAYOUT" = auto ] && [ "$reset" = 0 ] && has_name org.kde.plasmashell; then
   card_size=$(card_screen_size)
   layout_needs_migration "$card_size" && migrate=1
@@ -2154,7 +2172,7 @@ if [ "$migrate" = 1 ]; then
     migrate_layout "$card_size" || true
   else
     stop_plasmashell
-    migrate_layout "$card_size" || note "warning: the layout migration stopped; the layout file is as far as it got (the backup has the original)"
+    migrate_layout "$card_size" || { migrate_failed=1; note "warning: the layout migration stopped; the layout file is as far as it got (the backup has the original)"; }
     start_plasmashell
   fi
   note "start plasmashell"
@@ -2166,15 +2184,7 @@ fi
 if [ "$DRY" = 0 ] && has_name org.kde.plasmashell && fusion_layout_present; then
   note "panel thickness: $(fix_panel_thickness)"
 fi
-# The trays' Disks & Devices are as Plasma Fusion sets them now (migrated, or a new layout): from
-# here on the user's (migrate_layout).
-if [ "$layout_checked" = 1 ] || [ "$reset" = 1 ]; then
-  set_key plasmafusionrc Setup TrayDevices "done"
-  # The live chips likewise, once their widget is installed (a later install still gets them).
-  if package_dir plasma/plasmoids "$CHIPS_WIDGET" >/dev/null; then
-    set_key plasmafusionrc Setup LiveChips "done"
-  fi
-fi
+record_layout_marks "$layout_checked" "$reset" "$migrate_failed"
 set_key kdeglobals KDE DefaultDarkLookAndFeel "$DARK"
 set_key kdeglobals KDE DefaultLightLookAndFeel "$LIGHT"
 set_key kdeglobals KDE AutomaticLookAndFeel "$([ "$AUTO" = 1 ] && echo true || echo false)"

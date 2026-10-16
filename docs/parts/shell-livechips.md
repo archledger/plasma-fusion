@@ -41,7 +41,7 @@ Status: new in the release after 0.5.0. Last edited 2026-10-16.
 | Chip | Source | Glyph colour | Action |
 |---|---|---|---|
 | Microphone | plasma-pa's `SourceOutputModel`: every stream that is not virtual, while a microphone exists (plasma-pa's MicrophoneIndicator rule); the app is the stream's client name, else its name | ForegroundNeutral | the panel's **Mute** / **Unmute**: the app's own stream (other apps keep the microphone) |
-| Camera | kpipewire's `MediaMonitor` (role Camera; the same as Plasma's camera indicator) for "in use" and the camera's name; when it changes, one `pw-dump` gives the video streams linked from a camera and their apps | ForegroundPositive | none |
+| Camera | kpipewire's `MediaMonitor` (role Camera; the same as Plasma's camera indicator) for "in use" and the camera's name; `pw-dump` gives the video streams linked from a camera and their apps, when a camera starts, 1.5 s later and every 10 s while one runs (an app that starts or stops reading a running camera changes no node's state) | ForegroundPositive | none |
 | Screen sharing | xdg-desktop-portal-kde's "Screen casting" status item (icon `media-record`, id `xdg-desktop-portal-kde`); the app from its tooltip, a window or the screen from its overlay icon | ForegroundVisited | **Stop sharing**: the item's menu action End (`Session::close`) |
 | Remote control | the portal's "Remote Control" item (icon `krfb`); the app from the tooltip's first line, the pointer and keys or the screen from its lines | ForegroundNegative | **End**, as above |
 | SSH | systemd-logind: sessions with `Remote=yes` (any user) that are not closing; `sshd` and `tailscaled` read as SSH, others as a remote login | ForegroundLink | none |
@@ -63,7 +63,9 @@ Colors board's; the glyphs take the colour scheme's semantic colours (the light 
 ForegroundLink, #2359c4, is a little darker than the board's #2f6fdf: the scheme decides).
 
 The panel opens from the capsule (a click, or the widget's shortcut if the user gives it one) and
-closes when nothing is left in it. Application permissions (System Settings, `kcm_app-permissions`)
+closes when nothing is left in it; on hover it shows as the capsule's interactive tooltip. From the
+keyboard, Tab reaches the Keep awake chip, the recording's stop button and the capsule, and Space or
+Return runs each, as the panel's buttons. Application permissions (System Settings, `kcm_app-permissions`)
 shows only where flatpak-kcm installed it.
 
 ## In the bar
@@ -74,7 +76,9 @@ hides the items it replaces (`TRAY_ITEMS_REPLACED_BY_CHIPS`: `plasmashell_microp
 `disabledStatusNotifiers`, as with the items quick settings replaces. They stay loaded: the volume
 applet still makes the microphone item, and the camera indicator still runs; only the tray shows
 them nowhere. `ensure-topbars.js` and the "Add Panel" top bar do the same, and the build checks
-that the three lists agree. An existing layout gets the widget from the setup once
+that the three lists agree. The package jobs' import check (`tools/tests/packages/qml-imports.sh`)
+counts the microphone and camera sources as optional, as they are loaded with a Loader: without
+plasma-pa or kpipewire those chips are simply missing. An existing layout gets the widget from the setup once
 (`fusion-config.sh` migration step 7, recorded in `plasmafusionrc [Setup] LiveChips`; device.md).
 
 A status item's id is its program's display name: plasmashell's has none, so plasma-pa's item is
@@ -89,14 +93,20 @@ the chip (the chip finds Spectacle's item by its tooltip, not its id).
   the argument, a message of another shape), the portal's two kinds, logind's sessions (remote,
   not closing, oldest first; Tailscale SSH is SSH), the apps reading a camera from a `pw-dump`
   graph (a screen-cast source and an audio stream are not the camera), Keep awake's time left.
+- `tests/chips_qml_test.py` (offscreen Qt, CI `build`, 11 checks): the camera source with a
+  stand-in camera monitor and `Exec`: no `pw-dump` without a running camera, its reader, an app that
+  starts or stops reading the running camera seen at the next look, none once it stops; the chips
+  from the keyboard (Tab and Space or Return on the Keep awake chip, the stop button and the
+  capsule).
 - `packages/look-and-feel/tests/layout.test.js` (node, run by the look-and-feel build): the chips
   right before the tray in every new bar, their items hidden; nothing without the widget;
   `ensure-topbars.js` with the main bar's chips (a new bar, an older bar with its own tray: at the
-  tray's place), without them, and a first bar.
+  tray's place, that tray hiding their items), without them, and a first bar.
 - `tools/device/tests/layout-migration-unit.sh` (CI `build`): step 7 adds the chips before the tray
   of every top bar with distinct ids and hides their items there, once; a bar that has them is
   left; nothing without the widget; the setup's list is the layout script's; a real run writes
-  them.
+  them; in one run with steps 4 and 6 it keeps what they queued (the pen menu in the bar's order,
+  the other hidden items); the once-only marks are not written after a migration that stopped.
 - Session test (`tests/vsession/scenario-livechips.sh`; 2026-10-16, private sessions on the Fedora
   44 test laptop, Plasma 6.7.5, 1440x900; quick settings' stand-in PowerDevil, a private PipeWire
   with a virtual source): **15 checks pass**:

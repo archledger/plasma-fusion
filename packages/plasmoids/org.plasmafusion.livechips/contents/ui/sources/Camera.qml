@@ -7,9 +7,10 @@ import org.kde.pipewire.monitor as Monitor
 import "../../code/chips.js" as Chips
 
 // A camera in use, as Plasma's own camera indicator sees it (kpipewire's camera monitor: camera
-// nodes that run), and which apps read it: kpipewire knows the cameras only, so whenever their
-// state changes one `pw-dump` gives the video streams linked from them (Chips.cameraApps). Without
-// pw-dump (pipewire-utils) the rows name the camera instead. main.qml loads this file with a
+// nodes that run), and which apps read it: kpipewire knows the cameras only, so `pw-dump` gives the
+// video streams linked from them (Chips.cameraApps): when a camera starts, a moment later, and
+// every refreshInterval while one runs (another app can start or stop reading a running camera,
+// which changes no node's state). Without pw-dump (pipewire-utils) the rows name the camera. main.qml loads this file with a
 // Loader, so a system without kpipewire's QML module has no camera chip.
 Item {
     id: camera
@@ -19,6 +20,8 @@ Item {
     property var cameras: []
     // The apps reading them, when pw-dump could tell.
     property var apps: []
+    // How often the readers are looked up again while a camera runs (ms).
+    property int refreshInterval: 10000
 
     function refresh(): void {
         const names = [];
@@ -58,6 +61,12 @@ Item {
     Timer {
         id: again
         interval: 1500
+        onTriggered: camera.lookUp()
+    }
+    Timer {
+        interval: camera.refreshInterval
+        repeat: true
+        running: camera.inUse
         onTriggered: camera.lookUp()
     }
 

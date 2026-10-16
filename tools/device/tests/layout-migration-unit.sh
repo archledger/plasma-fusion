@@ -42,7 +42,7 @@ LIB=$BASE/lib.sh
   awk '/^FOLDER_PREVIEWS=\(/ { on = 1 } on { print } on && /\)$/ { exit }' "$TOOL"
   awk '/^TRAY_HIDE=\(/ { on = 1 } on { print } on && /\)$/ { exit }' "$TOOL"
   awk '/^TRAY_CHIPS=\(/ { on = 1 } on { print } on && /\)$/ { exit }' "$TOOL"
-  extract note installed_previews migrate_layout layout_needs_migration
+  extract note installed_previews migrate_layout layout_needs_migration record_layout_marks
 } >"$LIB"
 grep -q '^migrate_layout() {' "$LIB" || { echo "FAIL: migrate_layout was not found in fusion-config.sh"; exit 1; }
 
@@ -194,6 +194,30 @@ expect "v1, real run: panelOpacity written as 0" [ "$got" = 0 ]
 got=$(env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" kreadconfig6 --file plasma-org.kde.plasma.desktop-appletsrc --group Containments --group 2 --group General --key AppletOrder)
 plugin=$(env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" kreadconfig6 --file plasma-org.kde.plasma.desktop-appletsrc --group Containments --group 2 --group Applets --group 8 --key plugin)
 expect "real run: the live chips written before the tray ($got, applet 8: $plugin)" [ "$got" = "3;8;4;6;5" ] && [ "$plugin" = org.plasmafusion.livechips ]
+
+# ---- steps 4, 6 and 7 in one run: each sees what the one before queued (a layout from before
+# version 2 without the pen menu, with tray items to hide)
+make_case all-steps 1 nopen printers
+env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" bash -c 'set -euo pipefail; package_dir() { return 0; }; . "$1"
+  CONFIG=$HOME DRY=0 CHANGES=0 PREV_VERSION=1; migrate_layout "" >/dev/null' _ "$LIB"
+rd() { env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" kreadconfig6 --file plasma-org.kde.plasma.desktop-appletsrc --group Containments --group 2 "$@"; }
+order=$(rd --group General --key AppletOrder)
+pen=$(rd --group Applets --group 8 --key plugin) chips=$(rd --group Applets --group 9 --key plugin)
+expect "one run: the pen menu (8) and the chips (9) both in the bar's order ($order)" \
+  [ "$order" = "3;9;4;8;5" ] && [ "$pen" = org.plasmafusion.pen ] && [ "$chips" = org.plasmafusion.livechips ]
+hidden=$(rd --group Applets --group 4 --group General --key hiddenItems)
+expect "one run: the tray keeps step 4's items next to the chips' ($hidden)" \
+  sh -c 'case ",$1," in *,org.kde.plasma.printmanager,*plasmashell_microphone,*) exit 0 ;; *) exit 1 ;; esac' _ "$hidden"
+
+# ---- the once-only marks: after a look at the layout or a new one, not after a failed migration
+marks() { # CHECKED RESET FAILED
+  bash -c 'set -euo pipefail; set_key() { echo "set $3=$4"; }; package_dir() { return 0; }; . "$1"; record_layout_marks "$2" "$3" "$4"' \
+    _ "$LIB" "$@" | tr '\n' ' '
+}
+expect "marks: a layout looked at and migrated: both ($(marks 1 0 0))" [ "$(marks 1 0 0)" = "set TrayDevices=done set LiveChips=done " ]
+expect "marks: a new layout: both" [ "$(marks 0 1 0)" = "set TrayDevices=done set LiveChips=done " ]
+expect "marks: a migration that stopped part way: none (the next run tries again)" [ -z "$(marks 1 0 1)" ]
+expect "marks: the layout not looked at: none" [ -z "$(marks 0 0 0)" ]
 
 echo "layout-migration-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]
