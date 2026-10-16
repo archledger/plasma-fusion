@@ -10,7 +10,8 @@
 # a core dump. Checked: the exit status and the summary for each, Quick Look skipped without its
 # install, each feature's seed (the HOME tree and tools for every one, the live chips' stand-ins
 # and debug rule, Quick Look's install), chosen features only, relative paths, and the setup errors
-# (an unknown feature, one given as a pattern or twice, an empty feature list). Test tooling only, not installed.
+# (an unknown feature, one given as a pattern or twice, an empty feature list), one run per work
+# tree, and results only podman's user namespace can remove. Test tooling only, not installed.
 #
 #   run-unit.sh BASE
 #
@@ -31,6 +32,7 @@ cat >"$BASE/runner.sh" <<'EOF'
 #!/bin/bash
 set -euo pipefail
 name=$1 scenario=$2 seed=$3
+[ -z "${UNIT_SLEEP:-}" ] || sleep "$UNIT_SLEEP"
 out=vsession-out/$name
 mkdir -p "$out"
 feature=${name#*-}
@@ -135,6 +137,38 @@ bash "$HERE/run.sh" --stage "$BASE/stage" --name unit --runner "$BASE/runner.sh"
 both_lanes() { [ -f "$DEF/host/results/summary.json" ] && [ -f "$DEF/container-localhost_unit_beta/results/summary.json" ]; }
 expect "  two lanes without --work: each keeps its own summary" both_lanes
 rm -rf "$DEF/host" "$DEF/container-localhost_unit_beta"
+
+# One run per work tree: a second run on the same one is refused while the first runs, which
+# then ends normally.
+UNIT_SLEEP=3 bash "$HERE/run.sh" --stage "$BASE/stage" --work "$BASE/locked" --name unit --runner "$BASE/runner.sh" \
+  --features placement >"$BASE/locked1.log" 2>&1 &
+first=$!
+sleep 1
+RC=0; bash "$HERE/run.sh" --stage "$BASE/stage" --work "$BASE/locked" --name unit2 --runner "$BASE/runner.sh" \
+  --features placement >"$BASE/locked2.log" 2>&1 || RC=$?
+refused() { [ "$RC" = 2 ] && grep -q "another run uses" "$BASE/locked2.log"; }
+expect "a second run on the same work tree: exit 2, saying so" refused
+RC=0; wait "$first" || RC=$?
+expect "  the first one ends normally" [ "$RC" = 0 ]
+# Results the user cannot remove (a rootless container's, owned by subordinate ids; here a
+# directory without write permission): the run clears them through podman's user namespace (a
+# stand-in podman here) and goes on.
+mkdir -p "$BASE/stuck/results/old/inside" "$BASE/bin"
+chmod 555 "$BASE/stuck/results/old"
+cat >"$BASE/bin/podman" <<'POD'
+#!/bin/bash
+echo "$*" >>"${UNIT_PODMAN_LOG:?}"
+[ "$1" = unshare ] || exit 1
+shift
+for a in "$@"; do [ -e "$a" ] && chmod -R u+w "$a"; done
+"$@"
+POD
+chmod +x "$BASE/bin/podman"
+RC=0; PATH=$BASE/bin:$PATH UNIT_PODMAN_LOG=$BASE/podman.log bash "$HERE/run.sh" --stage "$BASE/stage" --work "$BASE/stuck" \
+  --name unit --runner "$BASE/runner.sh" --features placement >"$BASE/stuck.log" 2>&1 || RC=$?
+cleared() { [ "$RC" = 0 ] && [ ! -e "$BASE/stuck/results/old" ]; }
+expect "results the user cannot remove are cleared (podman unshare) and the run goes on" cleared
+chmod -R u+w "$BASE/stuck" 2>/dev/null || true
 
 run unknown --features nosuch
 expect "an unknown feature: exit 2" [ "$RC" = 2 ]

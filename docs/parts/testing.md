@@ -217,6 +217,11 @@ runs them together against one built HOME tree, with one summary:
   shows the SSH chip; a test container has no system bus and so no logind (podman's
   `/run/.containerenv` tells the scenario it is in one), where the widget must say it has no logind
   and show no SSH chip, and the capsule and panel of step 4 come without the login.
+- One run per work tree (a lock on it): a second run on the same tree is refused (exit 2), as it
+  would delete or mix the first one's results; a container run also refuses while a container
+  session of the same name (`pfv68-NAME-<feature>`) is running. Results a rootless container left
+  (owned by subordinate ids, `cvsession.sh` copies them with `cp -a`) are cleared through podman's
+  user namespace (`podman unshare rm`) when a plain `rm` cannot.
 - The two lanes keep their own results: `build/tests/depth/host` and
   `build/tests/depth/container-<image>` unless `--work` says otherwise. The test image
   (`tools/container/test/Containerfile`) has what the six scenarios run besides Plasma: Kate and
@@ -242,7 +247,9 @@ runs them together against one built HOME tree, with one summary:
   each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, an
   unknown feature, one given as a pattern (`[p]lacement`, `place.ent`) or twice, Quick Look's service menu
   executable in its seed, an empty feature list, Quick Look without its install and an option without its value
-  (exit 2), `--help` printing the usage only, and the two lanes keeping their own results. Without
+  (exit 2), `--help` printing the usage only, the two lanes keeping their own results, a second run
+  on the same work tree refused while the first runs, and results the user cannot remove cleared
+  through a stand-in `podman unshare`. Without
   any one of those rules its case fails.
 
 ## Harness additions (`tools/vsession`)

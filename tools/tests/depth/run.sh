@@ -111,7 +111,22 @@ fi
 mkdir -p "$WORK" || exit 2
 WORK=$(cd "$WORK" && pwd)
 RES=$WORK/results
-rm -rf "$RES" "$WORK/vsession-out" "$WORK/seeds"; mkdir -p "$RES" "$WORK/seeds"
+# One run per work tree: a second one would delete or mix the first one's results (two container
+# runs of one image share their default tree).
+exec {worklock}>"$WORK/.run.lock"
+flock -n "$worklock" || { echo "another run uses $WORK (choose another --work)" >&2; exit 2; }
+# A rootless container leaves its results owned by subordinate ids (cvsession.sh copies them with
+# cp -a), which only podman's user namespace can remove.
+clean_tree() {
+  rm -rf -- "$@" 2>/dev/null && return 0
+  command -v podman >/dev/null 2>&1 && podman unshare rm -rf -- "$@" 2>/dev/null
+  local d
+  for d in "$@"; do
+    [ ! -e "$d" ] || { echo "cannot remove $d" >&2; return 1; }
+  done
+}
+clean_tree "$RES" "$WORK/vsession-out" "$WORK/seeds" || exit 2
+mkdir -p "$RES" "$WORK/seeds"
 cd "$WORK" || exit 2
 
 # The seed of one feature: the HOME tree at ~/pf-stage and tools/ at ~/pf-tools (make_seed), and
@@ -144,6 +159,16 @@ SLOT=()
 if [ -z "$RUNNER" ]; then
   # A session slot for every lane (a container's session is a GPU session too).
   slot_prefix one || exit 2
+fi
+if [ -z "$RUNNER" ] && [ -n "$IMAGE" ]; then
+  # A container session of the same name (cvsession.sh names it pfv68-NAME) would collide.
+  running=$(podman ps --format '{{.Names}}' 2>/dev/null) || { echo "podman did not answer" >&2; exit 2; }
+  for id in "${IDS[@]}"; do
+    if grep -qxF -- "pfv68-$NAME-$id" <<<"$running"; then
+      echo "a container session named $NAME-$id is running; choose another --name" >&2
+      exit 2
+    fi
+  done
 fi
 if [ -z "$RUNNER" ] && [ -z "$IMAGE" ]; then
   T0=$(hssh 'date +%s') || { echo "host $HOST not reachable" >&2; exit 2; }
