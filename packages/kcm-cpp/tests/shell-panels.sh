@@ -36,6 +36,7 @@
 #   docksdefaults the same through Defaults (off is the default without a dock too);
 #   docksexternal turned on by another program while the page is open: the page reads it;
 #   docksnotmade ensure-topbars.js says it could not make a dock: an error;
+#   docksskipped ensure-topbars.js says the docks are not on a screen yet: an error;
 #   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
@@ -307,6 +308,17 @@ run docksexternal "{\"screens\": 2, \"panels\": [{\"widgets\": [\"$APPNAME\", \"
   "get everyDock"
 expect docksexternal "off at first" is "$(first docksexternal everyDock)" false
 expect docksexternal "turned on elsewhere: the page shows it on" is "$(value docksexternal everyDock)" true
+
+# ensure-topbars.js finds the docks not on a screen yet ("docks: skipped"): an error says so.
+prepare_docksskipped() {
+  local dir=$1/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts
+  mkdir -p "$dir"
+  printf 'print("top bars: off");\nprint("docks: skipped, 1 dock panel(s) without a screen yet");\n' >"$dir/ensure-topbars.js"
+}
+run docksskipped "{\"screens\": 2, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", \"$DOCK\"]}]}" \
+  waitshell "set everyDock true" save "wait 500" "get errorText"
+expect docksskipped "docks not on a screen yet is an error" bash -c "grep -q '^kcmctl: errorText=.*could not be added yet: 1 dock panel(s) without a screen yet' '$work/docksskipped/kcmctl.log'"
 
 # ensure-topbars.js runs but cannot make a dock ("not made 1"): an error says so.
 prepare_docksnotmade() {

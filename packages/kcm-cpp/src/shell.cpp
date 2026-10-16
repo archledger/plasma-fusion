@@ -1001,6 +1001,13 @@ bool PlasmaFusionKcm::runDockScript(bool *ran)
         return false;
     }
     *ran = true;
+    // The shell had not put the docks on their screens yet ("docks: skipped, ..."): nothing could
+    // be copied.
+    const qsizetype skipped = result.indexOf(u"docks: skipped"_s);
+    if (skipped >= 0) {
+        addError(i18nc("@info %1 the script's reason", "The docks could not be added yet: %1", result.mid(skipped + 15).trimmed()));
+        return false;
+    }
     // The script ran, but the shell could not make some docks ("docks: ..., not made N"): those
     // screens have none.
     const QRegularExpressionMatch notMade = QRegularExpression(u"not made (\\d+)"_s).match(result);

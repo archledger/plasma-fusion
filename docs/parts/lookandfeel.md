@@ -539,7 +539,9 @@ live session gets these changes through DEVICE-1's in-place migration.
   (`[PlasmaFusion] everyScreenCopy`): the settings page removes the copies' panels when the switch
   goes off, and only those, so docks the user made stay; a copy's panel whose dock the user removed
   still counts for its screen. A dock panel of a screen that is not there (Plasma 6.8 keeps it) is
-  left as it is, and the other screens are filled. With the switch off, a dock the settings page
+  left as it is, and the other screens are filled; when every dock is on such a screen (the
+  session's start, before plasmashell has put its panels on their screens) the answer is "docks:
+  skipped", which the snap script asks again and the settings page shows as an error. With the switch off, a dock the settings page
   kept standing in for docks of unplugged screens (`[PlasmaFusion] standInFor`, their panel ids) is
   removed once one of them is on a screen again; with them gone it is the dock now. Every dock then lists only its own screen's windows
   (`showOnlyCurrentScreen`); a dock that is not a copy remembers what it had in `[PlasmaFusion]

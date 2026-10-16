@@ -466,7 +466,9 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         }
     }
     if (main === null) {
-        print("docks: no Plasma Fusion dock to follow");
+        // Docks there are, none on a screen yet (the session's start: plasmashell puts its panels
+        // on their screens a moment later): asked again, as a layout not loaded yet.
+        print(unplaced > 0 ? "docks: skipped, " + unplaced + " dock panel(s) without a screen yet" : "docks: no Plasma Fusion dock to follow");
         return;
     }
     main = main.panel;

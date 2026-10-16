@@ -429,6 +429,14 @@ test("ensure-topbars: switch off, that dock removed: the stand-in is the dock no
     assert.deepStrictEqual(docksOf(s).map((p) => p.id), [80]);
     assert.strictEqual(s.panels.find((p) => p.id === 80).config.PlasmaFusion.standInFor, "", "no longer standing in");
 });
+test("ensure-topbars: the only dock not on a screen yet (the session's start): asked again", () => {
+    const p = dockPanel();
+    p.screen = 2;
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), p] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: skipped, 1 dock panel\(s\) without a screen yet/, s.output);
+    assert.deepStrictEqual(docksOf(s).map((d) => d.id), [40], "no dock made from it");
+});
 test("ensure-topbars: no dock installed, no docks", () => {
     const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.dock"] });
     s.run(ENSURE);

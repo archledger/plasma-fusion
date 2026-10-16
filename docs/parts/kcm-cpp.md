@@ -608,8 +608,8 @@ screen". The new switch under it keeps its choice in plasmafusionrc `[Dock] Ever
   goes and the choice is stored, and so do Defaults and Apply (`docksdefaults`); turned on by
   another program while the page is open (`docksexternal`, `kwriteconfig6 --notify`), the page reads
   it, as plasmafusionrc `[Dock]` is one of the groups it watches; turned on, the choice is kept and
-  ensure-topbars.js runs, and a script that says it could not make a dock (`docksnotmade`) gives an
-  error.
+  ensure-topbars.js runs, and a script that says it could not make a dock (`docksnotmade`) or that
+  the docks are not on a screen yet (`docksskipped`) gives an error.
   The removal of every dock but the lowest screen's (before review) fails `docksoff`, and no
   roll-back fails `docksofffail`. The layout side is tested in
   packages/look-and-feel/tests/layout.test.js.
