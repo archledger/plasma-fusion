@@ -17,7 +17,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "endtask.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { endTaskPids, endTaskCommand, sessionApp, stillOurs } = globalThis;
+const { endTaskPids, endTaskCommand, sessionApp, stillOurs, START_TIME } = globalThis;
 
 assert.deepStrictEqual(endTaskPids([4321, "4321", 0, 1, -7, 3.5, "x", null, 99]), [4321, 99], "whole numbers above 1, once each");
 assert.strictEqual(endTaskCommand([]), "", "no process: no command");
@@ -27,6 +27,21 @@ assert.ok(sessionApp("org.kde.plasmashell") && !sessionApp("org.kde.kwrite") && 
 assert.deepStrictEqual(stillOurs([4321, 4322, 4323], [4322, 4323, 4400]), [4322, 4323], "one quit meanwhile, a new one came: neither");
 assert.deepStrictEqual(stillOurs([4321], []), [], "the app is gone: nothing to end (its number may be another process's now)");
 assert.deepStrictEqual(stillOurs([4321, 0, "x"], [4321]), [4321], "still validated");
+
+// The start time the command keeps for a process is its /proc/PID/stat field 22, also for a
+// process whose name holds spaces and parentheses (the kernel's name, from its file name).
+const oddDir = fs.mkdtempSync(path.join(os.tmpdir(), "pf-endtask-name-"));
+const sleepPath = spawnSync("sh", ["-c", "command -v sleep"], { encoding: "utf8" }).stdout.trim();
+fs.copyFileSync(sleepPath, path.join(oddDir, "a (b) c"));
+fs.chmodSync(path.join(oddDir, "a (b) c"), 0o755);
+const odd = spawn(path.join(oddDir, "a (b) c"), ["5"]);
+const oddStat = fs.readFileSync("/proc/" + odd.pid + "/stat", "utf8");
+assert.ok(oddStat.indexOf("(a (b) c)") > 0, "the process's name has spaces and parentheses: " + oddStat.slice(0, 40));
+const oddStart = spawnSync("sh", ["-c", START_TIME + "st " + odd.pid], { encoding: "utf8" }).stdout.trim();
+assert.strictEqual(oddStart, oddStat.slice(oddStat.lastIndexOf(")") + 2).split(" ")[19], "its start time, field 22");
+assert.ok(/^[0-9]+$/.test(oddStart), "a number (" + oddStart + ")");
+odd.kill("SIGKILL");
+fs.rmSync(oddDir, { recursive: true, force: true });
 
 // The command against real processes.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pf-endtask-"));

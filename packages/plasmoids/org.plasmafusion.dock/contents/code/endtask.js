@@ -43,15 +43,24 @@ function stillOurs(asked, now) {
     });
 }
 
+// A process's identity across the wait: its start time (field 22 of /proc/PID/stat, the 20th after
+// the ") " that ends its name), which a process that takes the same number later does not share.
+var START_TIME = "st() { sed 's/.*) //' /proc/$1/stat 2>/dev/null | cut -d' ' -f20; }; ";
+
 // The shell command (sh -c, the executable engine's) that ends them, or "" when there is none.
+// Each process is taken with its start time before SIGTERM; one still running after the wait gets
+// SIGKILL only while its start time is the same, so a number that went to another process in
+// those seconds is left alone.
 function endTaskCommand(pids) {
     var ok = endTaskPids(pids);
     if (ok.length === 0) {
         return "";
     }
-    return "p=\"" + ok.join(" ") + "\"; s=; for i in $p; do case \"$(cat /proc/$i/comm 2>/dev/null)\" in "
-        + SESSION_PROCESSES.join("|") + "|'') ;; *) s=\"$s $i\" ;; esac; done; [ -n \"$s\" ] || exit 0; "
-        + "kill -TERM $s 2>/dev/null; n=0; while [ $n -lt 30 ]; do a=; for i in $s; do "
-        + "[ -d /proc/$i ] && [ \"$(sed 's/.*) //' /proc/$i/stat 2>/dev/null | cut -c1)\" != Z ] && a=\"$a $i\"; done; "
-        + "[ -n \"$a\" ] || exit 0; sleep 0.1; n=$((n + 1)); done; kill -KILL $a 2>/dev/null; exit 0";
+    return START_TIME + "p=\"" + ok.join(" ") + "\"; s=; for i in $p; do case \"$(cat /proc/$i/comm 2>/dev/null)\" in "
+        + SESSION_PROCESSES.join("|") + "|'') ;; *) t=$(st $i); [ -n \"$t\" ] && s=\"$s $i:$t\" ;; esac; done; "
+        + "[ -n \"$s\" ] || exit 0; for e in $s; do kill -TERM ${e%:*} 2>/dev/null; done; n=0; "
+        + "while [ $n -lt 30 ]; do a=; for e in $s; do i=${e%:*}; "
+        + "[ \"$(st $i)\" = \"${e#*:}\" ] && [ \"$(sed 's/.*) //' /proc/$i/stat 2>/dev/null | cut -c1)\" != Z ] && a=\"$a $e\"; done; "
+        + "[ -n \"$a\" ] || exit 0; sleep 0.1; n=$((n + 1)); done; "
+        + "for e in $a; do i=${e%:*}; [ \"$(st $i)\" = \"${e#*:}\" ] && kill -KILL $i 2>/dev/null; done; exit 0";
 }

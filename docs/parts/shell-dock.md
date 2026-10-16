@@ -595,7 +595,9 @@ got its number since, is never ended:
 
 - SIGTERM to each, which an app that still works answers by quitting;
 - after up to 3 s, SIGKILL to those still running (a process that is gone, or a zombie waiting to be
-  reaped, counts as ended), which no app can refuse;
+  reaped, counts as ended), which no app can refuse; each process is taken with its start time
+  (field 22 of `/proc/PID/stat`) before SIGTERM, and gets SIGKILL only while that is the same, so a
+  number another process took during the wait is left alone;
 - a process named like one of the session's own (`/proc/PID/comm`: plasmashell, kwin_wayland,
   Xwayland, ksmserver, kded6, systemd and the like) is never ended, whatever window it came with.
 
@@ -604,7 +606,8 @@ KWin's own "not responding" dialog sends SIGABRT first so that a crash report is
 
 - `tests/endtask.test.js` (node, in the dock's build step): the process ids taken (whole numbers above
   1, once each), the shell's windows without End Task, the processes still the app's at the click
-  (one that quit and a new one: neither; the app gone: nothing), and the command run with `sh` against stand-in
+  (one that quit and a new one: neither; the app gone: nothing), the start time read for a process
+  whose name holds spaces and parentheses (field 22), and the command run with `sh` against stand-in
   processes: one that quits on SIGTERM at once (the command returns at once, its zombie counted as
   ended), one that ignores SIGTERM (SIGKILL after the wait) and one named `plasmashell` (left alone).
 - `tests/vsession/scenario-endtask.sh` (a private session; the test hook `pick:TEXT` chooses menu
