@@ -78,6 +78,45 @@ bool wholeNumber(const QJsonValue &value)
     return wholeNumber(value, &number);
 }
 
+// Whether CONFIG (valid, of a panel when PANEL is set) holds a key export-layout.js leaves out:
+// the [Applets] groups, a containment's own keys at its top, the ids of widgets, the one-time
+// requests and the power tier, a panel's marks naming other panels (its SKIP, ROOT_SKIP and
+// PANEL_MARKS). Written back, they would name what the new panel gets anew (an old lastScreen
+// moves it to another screen at the next login) or ask a widget for something.
+bool reservedKeys(const QJsonValue &config, bool panel)
+{
+    static const QStringList skip = {u"debugAction"_s,
+                                     u"debugPointerX"_s,
+                                     u"debugHoverIndex"_s,
+                                     u"splitRequest"_s,
+                                     u"activateRequest"_s,
+                                     u"openRequest"_s,
+                                     u"powerTier"_s,
+                                     u"AppletOrder"_s,
+                                     u"ItemsGeometries"_s,
+                                     u"SystrayContainmentId"_s};
+    static const QStringList rootSkip = {u"activityId"_s, u"plugin"_s, u"location"_s, u"formfactor"_s, u"lastScreen"_s};
+    static const QStringList panelMarks = {u"everyScreenCopy"_s, u"standInFor"_s};
+    for (const QJsonValue &value : config.toArray()) {
+        const QJsonObject group = value.toObject();
+        QStringList path;
+        for (const QJsonValue &name : group.value(u"group"_s).toArray()) {
+            path << name.toString();
+        }
+        if (path.contains(u"Applets"_s)) {
+            return true;
+        }
+        const QJsonObject keys = group.value(u"keys"_s).toObject();
+        for (auto it = keys.constBegin(); it != keys.constEnd(); ++it) {
+            if (skip.contains(it.key()) || (path.isEmpty() && rootSkip.contains(it.key()))
+                || (panel && path == QStringList{u"PlasmaFusion"_s} && panelMarks.contains(it.key()))) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // A list of configuration groups (export-layout.js's GROUP), or none.
 bool validConfig(const QJsonValue &config)
 {
@@ -146,6 +185,13 @@ QString layoutProblem(const QJsonObject &layout)
         }
         if (!complete) {
             return i18nc("@info reason", "a panel in it is not complete");
+        }
+        bool reserved = reservedKeys(panel.value(u"config"_s), true);
+        for (const QJsonValue &entry : panel.value(u"widgets"_s).toArray()) {
+            reserved = reserved || reservedKeys(entry.toObject().value(u"config"_s), false);
+        }
+        if (reserved) {
+            return i18nc("@info reason", "a panel in it holds settings a settings file does not carry");
         }
     }
     return {};

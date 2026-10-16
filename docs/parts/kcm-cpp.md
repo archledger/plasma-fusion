@@ -663,7 +663,10 @@ complete is refused with the reason, and nothing changes. Complete means every v
 number, an edge, a whole height above 0, `floating` and `floatingApplets` true or false, one of
 the length modes, alignments, hiding and opacity modes `Panel` knows, the four lengths as whole
 numbers when the length is custom, widgets with a type, a shortcut as text, configuration values
-as text. Then:
+as text. A panel or widget whose configuration holds what `export-layout.js` leaves out (its
+`SKIP`, `ROOT_SKIP` and `PANEL_MARKS` keys, an `[Applets]` group: the ids, place and activity a new
+panel gets anew, an old `lastScreen` that would move it to another screen at the next login, the
+one-time requests, the marks naming other panels) is refused too. Then:
 
 1. the settings are set as if on the page (each setter takes only what the page can show; high
    contrast before the glass, which it would otherwise set to Solid) and applied by Apply's own
@@ -701,7 +704,9 @@ as text. Then:
    containments and widgets, `applet_p.cpp` and `corona.cpp`); the glass and
    the top-bar choice are applied, `ensure-topbars.js` runs with "Top bar on every screen" or
    "Dock on every screen" on (the screens the file had no bars for), and the power service applies
-   its tier to the new widgets.
+   its tier to the new widgets. With "Top bar on every screen" off, a reset removes the bars the
+   layout script put on the other screens; an import keeps the file's, a bar of another screen
+   being one the user had.
 
 The three steps run in one go, waiting as the page waits for the shell (no user input meanwhile)
 rather than from timers of the page: leaving the page or closing System Settings deletes the page,
@@ -740,7 +745,8 @@ Tests:
   widget's key kept (the stand-in session answers as kglobalaccel, `mock-session.py
   --kglobalaccel`, and logs each `unregister`); a FIFO and `/dev/zero` are refused at once and a
   9 MiB file as too large (each kcmctl run is bounded by `timeout`, so a page that hangs fails its
-  checks); imported on a desktop without panels, the file's
+  checks); a file holding any of the 18 settings `export-layout.js` leaves out (the test reads its
+  lists) is refused; with "Top bar on every screen" off the file's bar of a second screen stays; imported on a desktop without panels, the file's
   "Dock on every screen" and top-bar choices are kept and `ensure-topbars.js` runs; values the page does not take are counted and
   left as they were; without `export-layout.js` the action is not offered and an export says why.
   Each of the module's steps fails a check when taken out (the escape too: the stand-in shell

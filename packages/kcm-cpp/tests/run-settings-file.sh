@@ -68,7 +68,8 @@ print(JSON.stringify({ version: 1, screens: 1, left: ["screen", "copy"], panels:
 JS
 cat >"$lf/import-layout.js" <<'JS'
 if (PHASE === "remove") {
-    var ps = panels();
+    // standInKeep (test only): the layout there is stands in for the file's panels.
+    var ps = LAYOUT.standInKeep ? [] : panels();
     for (var i = ps.length - 1; i >= 0; --i) {
         ps[i].remove();
     }
@@ -98,6 +99,7 @@ check() { local d=$1; shift; N=$((N + 1)); if "$@"; then echo "ok $N $d"; else F
 session() {
   local name=$1; shift
   : >"$work/calls.log"
+  : >"$work/calls.log.writes"
   # The last session's output goes first: the stand-in's redirection happens in the background
   # child, so the wait below could see the old "ready" and start the module before the stand-in
   # shell is there (its actions then do nothing).
@@ -236,6 +238,66 @@ check "the file's decoration is not here: the page names it" \
 session nokeys "call importSettings $work/nokeys.json"
 check "a file without keys: none is tried, not Plasma Fusion's Meta+A either" bash -c "
   ! grep -q 'Meta+' '$work/nokeys.log' && grep -q '^kcmctl: errorText=\$' '$work/nokeys.log'"
+
+# ---- Settings a settings file does not carry (export-layout.js leaves them out: its SKIP,
+# ROOT_SKIP and PANEL_MARKS, and [Applets]) make a file one the module refuses, each of them.
+python3 - "$work" "$powerfx/../look-and-feel/common/contents/layouts/export-layout.js" <<'PY'
+import json, re, sys
+work, script = sys.argv[1], open(sys.argv[2]).read()
+lists = {name: re.findall(r'"([^"]+)"', re.search(r"var " + name + r" = \[(.*?)\];", script, re.S).group(1))
+         for name in ("SKIP", "ROOT_SKIP", "PANEL_MARKS")}
+good = json.load(open(f"{work}/good.json"))
+made = []
+def bad(name, where, group, key):
+    f = json.loads(json.dumps(good))
+    panel = f["layout"]["panels"][0]
+    target = panel if where == "panel" else panel["widgets"][0]
+    target.setdefault("config", []).append({"group": group, "keys": {key: "1"}})
+    json.dump(f, open(f"{work}/reserved-{name}.json", "w"))
+    made.append(name)
+for key in lists["SKIP"]:
+    bad(key, "widget", ["General"], key)
+for key in lists["ROOT_SKIP"]:
+    bad(key, "panel", [], key)
+for key in lists["PANEL_MARKS"]:
+    bad(key, "panel", ["PlasmaFusion"], key)
+bad("Applets", "widget", ["Applets", "12"], "plugin")
+open(f"{work}/reserved.list", "w").write("\n".join(made) + "\n")
+PY
+reserved=()
+while read -r key; do reserved+=("call importSettings $work/reserved-$key.json" "get errorText"); done <"$work/reserved.list"
+session reserved "${reserved[@]}"
+check "settings export-layout.js leaves out make a file refused ($(wc -l <"$work/reserved.list") cases)" bash -c "
+  while read -r key; do
+    grep -q \"^kcmctl: errorText=reserved-\$key.json cannot be imported: a panel in it holds settings a settings file does not carry.\" '$work/reserved.log' || { echo \"not refused: \$key\"; exit 1; }
+  done <'$work/reserved.list'"
+check "  and nothing is changed" bash -c "! grep -q importGot '$work/calls.log'"
+
+# ---- "Top bar on every screen" off: the file's bar of another screen stays (a reset removes the
+# bars the layout script put there; a settings file's are the user's). The layout there stands in
+# for the file's panels (standInKeep), two Fusion top bars on two screens.
+cat >"$work/layout-twobars.json" <<'JSON'
+{"knownWidgetTypes": ["org.plasmafusion.appname", "org.plasmafusion.quicksettings"], "screens": 2,
+ "desktops": [{"id": 1, "widgets": []}],
+ "panels": [{"id": 10, "location": "top", "screen": 0, "widgets": [
+               {"id": 11, "type": "org.plasmafusion.appname", "config": {}}, {"id": 12, "type": "org.plasmafusion.quicksettings", "config": {}}]},
+            {"id": 20, "location": "top", "screen": 1, "widgets": [
+               {"id": 21, "type": "org.plasmafusion.appname", "config": {}}, {"id": 22, "type": "org.plasmafusion.quicksettings", "config": {}}]}]}
+JSON
+python3 - "$work" <<'PY'
+import json, sys
+work = sys.argv[1]
+f = json.load(open(f"{work}/good.json"))
+f["settings"]["everyScreen"] = False
+f["layout"]["standInKeep"] = True
+json.dump(f, open(f"{work}/twobars.json", "w"))
+PY
+# Off on this computer already: Apply has nothing to change (turning it off removes the other
+# screens' bars from the layout the import replaces), so only the import's follow-up could.
+kwriteconfig6 --file plasmafusionrc --group TopBar --key EveryScreen false
+LAYOUT=$work/layout-twobars.json session twobars "call importSettings $work/twobars.json"
+check "every screen off: the file's top bar of the second screen stays" bash -c "
+  ! grep -q 'containment 20 removed' '$work/calls.log.writes' && grep -q '\"id\": 20' '$work/layout.json' && grep -q 'The settings of twobars.json are in place' '$work/twobars.log'"
 
 # ---- Imported on a desktop without a dock or a top bar: "Dock on every screen" and the top bar's
 # opacity choice are the file's (Apply alone would leave them, with nothing to apply them to), and

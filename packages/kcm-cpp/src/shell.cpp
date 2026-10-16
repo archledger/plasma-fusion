@@ -1311,7 +1311,9 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before, bool imported
     if (m_saved.glass != GlassFull || !m_saved.solidTopBar) {
         applyPanels(m_saved.glass, m_saved.solidTopBar, m_saved.glass != GlassFull && !m_powerCritical);
     }
-    if (!m_saved.everyScreen) {
+    // Off, a reset removes the bars the layout script put on the other screens; a settings file's
+    // panels are the ones the user had, a bar of another screen too.
+    if (!m_saved.everyScreen && !imported) {
         evaluateShellScript(s_removeExtraTopBarsScript, &ok);
     }
     // The layout makes one dock; with a dock on every screen the others come back (they copy the
