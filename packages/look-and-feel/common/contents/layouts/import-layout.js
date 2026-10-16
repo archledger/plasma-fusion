@@ -9,7 +9,9 @@
     no panel on that edge of it (a dock of a second monitor on a laptop alone), else it is left out
     ("Top bar on every screen" and "Dock on every screen" give the screens there are their bars and
     docks afterwards); a widget that is not installed is left out too. The widgets' shortcuts are
-    the settings page's (it gives the keys the file names, as after a layout reset).
+    the settings page's: it gives each widget made here the key the file names for it ("keys",
+    by the new widget's id, so two widgets of one type keep their own), as a layout reset gives
+    keys.
 
     With var PHASE = "remove" in front too, it only removes the panels there are and prints
     {"removed": N}; with PHASE = "add" it only adds the file's. The settings page runs the two
@@ -18,7 +20,8 @@
     AppletPrivate::cleanUpAndDelete, deleteLater), its configuration already reset, and widgets of
     one kind share their state (quick settings' Instances), so new widgets started next to the old
     ones would count them. Without PHASE it does both. Adding prints one line of JSON:
-      {"panels": N, "widgets": M, "screens": S, "notInstalled": [TYPE, ...], "leftOut": K}
+      {"panels": N, "widgets": M, "screens": S, "notInstalled": [TYPE, ...], "leftOut": K,
+       "keys": [{"id": WIDGET-ID, "type": TYPE, "key": KEY}, ...]}
     In each phase it prints {"error": "..."} when LAYOUT is not a layout of this version or has no
     panel, and changes nothing (the user is not left without panels).
 */
@@ -75,7 +78,7 @@
         edges["0 " + d.location] = true;
         return 0;
     });
-    var result = { panels: 0, widgets: 0, screens: screenCount, notInstalled: [], leftOut: 0 };
+    var result = { panels: 0, widgets: 0, screens: screenCount, notInstalled: [], leftOut: 0, keys: [] };
     for (var p = 0; p < list.length; ++p) {
         var data = list[p];
         if (screens[p] < 0) {
@@ -119,6 +122,9 @@
                 continue;
             }
             configure(widget, widgets[w].config);
+            if (typeof widgets[w].shortcut === "string" && widgets[w].shortcut !== "") {
+                result.keys.push({ id: widget.id, type: String(widget.type), key: widgets[w].shortcut });
+            }
             result.widgets++;
         }
     }

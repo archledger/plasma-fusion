@@ -6,9 +6,11 @@
       {"format": "plasma-fusion-settings", "version": 1, "settings": {...}, "layout": {...}}
     "settings" holds the page's settings by their property names (kcm.h): numbers for the choices
     (the enums there), true/false for the switches, and the accent (accentMode, with accentColor
-    "#rrggbb" for a fixed colour) and fusionDecoration; a setting the file does not name stays as
-    it is. "layout" is what the Global Theme's export-layout.js prints, and import-layout.js puts
-    it in place (both explain it).
+    "#rrggbb" for a fixed colour), fusionDecoration and decoration (the kwinrc
+    [org.kde.kdecoration2] keys library, theme, ButtonsOnLeft and ButtonsOnRight: put back when
+    the file was made with another decoration than Plasma Fusion's); a setting the file does not
+    name stays as it is. "layout" is what the Global Theme's export-layout.js prints, and
+    import-layout.js puts it in place (both explain it).
 
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
@@ -17,7 +19,10 @@
 #include "kcm.h"
 #include "kcm_p.h"
 
+#include <KConfigGroup>
 #include <KLocalizedString>
+#include <KPluginMetaData>
+#include <KSharedConfig>
 
 #include <QFile>
 #include <QFileInfo>
@@ -25,6 +30,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
 
@@ -45,6 +51,22 @@ QString localPath(const QString &location)
 {
     const QUrl url = QUrl::fromUserInput(location, QString(), QUrl::AssumeLocalFile);
     return url.isLocalFile() ? url.toLocalFile() : QString();
+}
+
+// A whole number that fits an int.
+bool wholeNumber(const QJsonValue &value, int *number)
+{
+    const double d = value.toDouble();
+    if (!value.isDouble() || std::floor(d) != d || d < std::numeric_limits<int>::min() || d > std::numeric_limits<int>::max()) {
+        return false;
+    }
+    *number = int(d);
+    return true;
+}
+bool wholeNumber(const QJsonValue &value)
+{
+    int number = 0;
+    return wholeNumber(value, &number);
 }
 
 // A list of configuration groups (export-layout.js's GROUP), or none.
@@ -85,13 +107,28 @@ QString layoutProblem(const QJsonObject &layout)
     if (!panels.isArray() || panels.toArray().isEmpty()) {
         return i18nc("@info reason", "it has no panels");
     }
+    // Every value import-layout.js gives the new panel, as plasma-workspace 6.7.5's Panel
+    // (shell/scripting/panel.cpp) takes it: the panels there are are removed before the file's
+    // are added, so a value that would fail or be taken for another must not get that far.
     static const QStringList locations = {u"top"_s, u"bottom"_s, u"left"_s, u"right"_s};
+    static const QHash<QString, QStringList> choices = {
+        {u"lengthMode"_s, {u"fill"_s, u"fit"_s, u"custom"_s}},
+        {u"alignment"_s, {u"left"_s, u"center"_s, u"right"_s}},
+        {u"hiding"_s, {u"none"_s, u"autohide"_s, u"dodgewindows"_s, u"windowsgobelow"_s}},
+        {u"opacity"_s, {u"adaptive"_s, u"opaque"_s, u"translucent"_s}},
+    };
     for (const QJsonValue &value : panels.toArray()) {
         const QJsonObject panel = value.toObject();
-        bool complete = value.isObject() && panel.value(u"screen"_s).isDouble() && locations.contains(panel.value(u"location"_s).toString())
-            && panel.value(u"height"_s).isDouble() && panel.value(u"widgets"_s).isArray() && validConfig(panel.value(u"config"_s));
-        for (const QString &text : {u"lengthMode"_s, u"alignment"_s, u"hiding"_s, u"opacity"_s}) {
-            complete = complete && panel.value(text).isString();
+        bool complete = value.isObject() && wholeNumber(panel.value(u"screen"_s)) && locations.contains(panel.value(u"location"_s).toString())
+            && wholeNumber(panel.value(u"height"_s)) && panel.value(u"height"_s).toInt() > 0 && panel.value(u"floating"_s).isBool()
+            && panel.value(u"floatingApplets"_s).isBool() && panel.value(u"widgets"_s).isArray() && validConfig(panel.value(u"config"_s));
+        for (auto it = choices.cbegin(); it != choices.cend(); ++it) {
+            complete = complete && it.value().contains(panel.value(it.key()).toString());
+        }
+        if (panel.value(u"lengthMode"_s).toString() == u"custom") {
+            for (const QString &length : {u"offset"_s, u"length"_s, u"minimumLength"_s, u"maximumLength"_s}) {
+                complete = complete && wholeNumber(panel.value(length));
+            }
         }
         for (const QJsonValue &entry : panel.value(u"widgets"_s).toArray()) {
             const QJsonObject widget = entry.toObject();
@@ -130,16 +167,6 @@ QString readSettingsFile(const QString &path, QJsonObject *file)
     return layoutProblem(file->value(u"layout"_s).toObject());
 }
 
-// A whole number that fits an int.
-bool wholeNumber(const QJsonValue &value, int *number)
-{
-    const double d = value.toDouble();
-    if (!value.isDouble() || std::floor(d) != d || d < std::numeric_limits<int>::min() || d > std::numeric_limits<int>::max()) {
-        return false;
-    }
-    *number = int(d);
-    return true;
-}
 } // namespace
 
 const QList<PlasmaFusionKcm::FileSetting> &PlasmaFusionKcm::fileSettings()
@@ -203,6 +230,17 @@ QJsonObject PlasmaFusionKcm::settingsToFile(const State &state) const
         settings.insert(u"accentColor"_s, state.accentColor.name());
     }
     settings.insert(u"fusionDecoration"_s, state.fusionDecoration);
+    // The decoration KWin uses, for a file made with another one than Plasma Fusion's.
+    KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
+    kwin->reparseConfiguration();
+    const KConfigGroup group(kwin, s_kwinDecorationGroup);
+    QJsonObject decoration;
+    for (const char *key : {"library", "theme", "ButtonsOnLeft", "ButtonsOnRight"}) {
+        if (group.hasKey(key)) {
+            decoration.insert(QString::fromLatin1(key), group.readEntry(key, QString()));
+        }
+    }
+    settings.insert(u"decoration"_s, decoration);
     return settings;
 }
 
@@ -250,14 +288,69 @@ int PlasmaFusionKcm::settingsFromFile(const QJsonObject &settings, QStringList *
         ++notTaken;
     }
 
-    if (settings.value(u"fusionDecoration"_s).toBool()) {
+    const QJsonValue fusionDecoration = settings.value(u"fusionDecoration"_s);
+    if (fusionDecoration.toBool()) {
         if (m_decorationInstalled) {
             useFusionDecoration();
         } else {
             notes->append(i18nc("@info", "The Plasma Fusion window decoration is not installed on this computer."));
         }
+    } else if (!fusionDecoration.isUndefined() && !fusionDecoration.isBool()) {
+        ++notTaken;
     }
     return notTaken;
+}
+
+int PlasmaFusionKcm::applyFileDecoration(const QJsonObject &settings, QStringList *notes)
+{
+    if (settings.value(u"fusionDecoration"_s) != QJsonValue(false)) {
+        return 0;
+    }
+    // Apply puts Plasma Fusion's decoration on whenever it is installed; a file made with
+    // another one gets that one back, when it is here (its plugin; an Aurorae SVG theme: the
+    // theme's folder, as applyDecoration checks the fallback's).
+    const QJsonObject decoration = settings.value(u"decoration"_s).toObject();
+    const QString library = decoration.value(u"library"_s).toString();
+    const QString theme = decoration.value(u"theme"_s).toString();
+    bool valid = !library.isEmpty() && library != s_decorationId;
+    for (auto it = decoration.constBegin(); it != decoration.constEnd(); ++it) {
+        valid = valid && it.value().isString();
+    }
+    if (!valid) {
+        return 1;
+    }
+    const bool installed = library.startsWith(u"org.kde.kwin.aurorae"_s) && theme.startsWith(s_auroraeThemePrefix)
+        ? !QStandardPaths::locate(QStandardPaths::GenericDataLocation,
+                                  u"aurorae/themes/"_s + theme.mid(s_auroraeThemePrefix.size()),
+                                  QStandardPaths::LocateDirectory)
+               .isEmpty()
+        : KPluginMetaData::findPluginById(s_decorationNamespace, library).isValid();
+    if (!installed) {
+        notes->append(
+            i18nc("@info %1 decoration", "The window decoration of the file (%1) is not installed on this computer.", theme.isEmpty() ? library : theme));
+        return 0;
+    }
+    KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
+    kwin->reparseConfiguration();
+    KConfigGroup group(kwin, s_kwinDecorationGroup);
+    for (const char *key : {"library", "theme", "ButtonsOnLeft", "ButtonsOnRight"}) {
+        const QJsonValue value = decoration.value(QString::fromLatin1(key));
+        if (value.isString()) {
+            group.writeEntry(key, value.toString(), KConfig::Notify);
+        } else {
+            group.deleteEntry(key, KConfig::Notify);
+        }
+    }
+    group.writeEntry("NoPlugin", false, KConfig::Notify);
+    kwin->sync();
+    reconfigureKWin(false);
+    // The decoration chosen: not put back when "Follow sunset" switches the Global Theme now
+    // (restoreDecorationIfReplaced).
+    m_reapplyDecorationUntil = QDeadlineTimer();
+    m_current.fusionDecoration = false;
+    m_saved.fusionDecoration = false;
+    Q_EMIT buttonStyleChanged();
+    return 0;
 }
 
 bool PlasmaFusionKcm::settingsFileAvailable() const
@@ -361,11 +454,12 @@ void PlasmaFusionKcm::importSettings(const QString &location)
 
     // 1. The settings, as if set on the page, then applied (Apply clears the messages first).
     QStringList notes;
-    const int notTaken = settingsFromFile(file.value(u"settings"_s).toObject(), &notes);
+    const QJsonObject settings = file.value(u"settings"_s).toObject();
+    int notTaken = settingsFromFile(settings, &notes);
     save();
+    notTaken += applyFileDecoration(settings, &notes);
 
-    // 2. The panels. The widgets' keys: the file's for each widget type first, then the ones the
-    //    widgets have now (a layout reset keeps those), then Plasma Fusion's (finishResetLayout).
+    // 2. The panels. The ids there are now: the new widgets' are all above them (finishResetLayout).
     bool ok = false;
     const QJsonObject now = widgetShortcuts(&ok);
     if (!ok) {
@@ -374,19 +468,7 @@ void PlasmaFusionKcm::importSettings(const QString &location)
         return;
     }
     const QJsonObject layout = file.value(u"layout"_s).toObject();
-    QJsonArray keys;
-    for (const QJsonValue &panel : layout.value(u"panels"_s).toArray()) {
-        for (const QJsonValue &widget : panel.toObject().value(u"widgets"_s).toArray()) {
-            const QString key = widget.toObject().value(u"shortcut"_s).toString();
-            if (!key.isEmpty()) {
-                keys.append(QJsonObject{{u"type"_s, widget.toObject().value(u"type"_s)}, {u"key"_s, key}});
-            }
-        }
-    }
-    for (const QJsonValue &widget : now.value(u"widgets"_s).toArray()) {
-        keys.append(widget);
-    }
-    const QJsonObject before{{u"ids"_s, now.value(u"ids"_s)}, {u"widgets"_s, keys}};
+    const QJsonValue ids = now.value(u"ids"_s);
 
     // JSON is JavaScript but for these two characters, which QJSEngine refuses in a string literal
     // (Qt 6.11.2).
@@ -411,7 +493,7 @@ void PlasmaFusionKcm::importSettings(const QString &location)
                        notTaken);
     }
     done << notes;
-    QTimer::singleShot(500, this, [this, layoutLine, importScript, before, done]() mutable {
+    QTimer::singleShot(500, this, [this, layoutLine, importScript, ids, done]() mutable {
         bool ok = false;
         const QString result = evaluateShellScript(layoutLine + u"var PHASE = \"add\";\n"_s + importScript, &ok);
         const QJsonObject answer = QJsonDocument::fromJson(result.toUtf8()).object();
@@ -439,6 +521,8 @@ void PlasmaFusionKcm::importSettings(const QString &location)
                               leftOut);
         }
         outcome << done;
+        // Each widget made gets the key the file gives it (import-layout.js lists them by id).
+        const QJsonObject before{{u"ids"_s, ids}, {u"assign"_s, answer.value(u"keys"_s).toArray()}};
         // As after a layout reset: a moment for the new widgets to start, then their shortcuts.
         QTimer::singleShot(1000, this, [this, before, outcome] {
             finishResetLayout(before, true, outcome.join(u' '));

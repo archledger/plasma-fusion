@@ -449,8 +449,11 @@ private:
     QJsonObject widgetShortcuts(bool *ok);
     QString giveWidgetShortcut(int widgetId, const QString &key, const QList<int> &liveWidgetIds, int newMin);
     // After the panels were rebuilt: the shortcuts, glass, top bars and docks, power tier.
-    // OUTCOME is the result shown, the shortcuts given follow it; IMPORTED: the panels are a
-    // settings file's (the screens it did not have get their top bars too).
+    // OUTCOME is the result shown, the shortcuts given follow it. IMPORTED: the panels are a
+    // settings file's; each widget gets the key the file gives it (BEFORE's "assign": id, type
+    // and key of every widget import-layout.js made with one), and the screens the file did not
+    // have get their top bars too. Otherwise each widget type gets the key it had (BEFORE's
+    // "widgets"), else Plasma Fusion's.
     void finishResetLayout(const QJsonObject &before, bool imported, const QString &outcome);
     void pollResetLayout(const QJsonObject &before, int attempt);
 
@@ -464,6 +467,9 @@ private:
     QJsonObject settingsToFile(const State &state) const;
     // The file's settings put on the page (as if set there); the number of values not taken.
     int settingsFromFile(const QJsonObject &settings, QStringList *notes);
+    // After Apply: the window decoration of a file made with another one than Plasma Fusion's,
+    // when it is installed here; 1 when the file's decoration is not one this version takes.
+    int applyFileDecoration(const QJsonObject &settings, QStringList *notes);
 
     State m_current;
     State m_saved;

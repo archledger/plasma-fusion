@@ -1244,41 +1244,51 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before, bool imported
         }
     }
 
-    // The key each widget type had before (the first widget of the type with a shortcut).
-    QHash<QString, QString> keyByType;
-    for (const QJsonValue &value : before.value(u"widgets"_s).toArray()) {
-        const QJsonObject widget = value.toObject();
-        const QString type = widget.value(u"type"_s).toString();
-        const QString key = widget.value(u"key"_s).toString();
-        if (!key.isEmpty() && !keyByType.contains(type)) {
-            keyByType.insert(type, key);
-        }
-    }
-    for (const DefaultShortcut &shortcut : s_defaultShortcuts) {
-        if (!keyByType.contains(shortcut.plugin)) {
-            keyByType.insert(shortcut.plugin, shortcut.key);
-        }
-    }
-
     QStringList given;
     QStringList failed;
-    QSet<QString> done;
-    for (const QJsonValue &value : now.value(u"widgets"_s).toArray()) {
-        const QJsonObject widget = value.toObject();
-        const QString type = widget.value(u"type"_s).toString();
-        if (done.contains(type) || !keyByType.contains(type)) {
-            continue;
-        }
-        done.insert(type);
-        const QString key = keyByType.value(type);
-        if (!widget.value(u"key"_s).toString().isEmpty()) {
-            continue; // the layout gave it one already
-        }
-        const QString problem = giveWidgetShortcut(widget.value(u"id"_s).toInt(), key, live, newMin);
+    const auto give = [&](int id, const QString &type, const QString &key) {
+        const QString problem = giveWidgetShortcut(id, key, live, newMin);
         if (problem.isEmpty()) {
             given << i18nc("@item %1 key, %2 widget", "%1 %2", QKeySequence::fromString(key).toString(QKeySequence::NativeText), widgetName(type));
         } else {
             failed << i18nc("@item %1 key, %2 widget, %3 reason", "%1 for %2 (%3)", key, widgetName(type), problem);
+        }
+    };
+    if (imported) {
+        // Widget by widget, as the file has them (two widgets of one type keep their own keys); a
+        // widget the file gives no key gets none.
+        for (const QJsonValue &value : before.value(u"assign"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            give(widget.value(u"id"_s).toInt(), widget.value(u"type"_s).toString(), widget.value(u"key"_s).toString());
+        }
+    } else {
+        // The key each widget type had before (the first widget of the type with a shortcut).
+        QHash<QString, QString> keyByType;
+        for (const QJsonValue &value : before.value(u"widgets"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            const QString type = widget.value(u"type"_s).toString();
+            const QString key = widget.value(u"key"_s).toString();
+            if (!key.isEmpty() && !keyByType.contains(type)) {
+                keyByType.insert(type, key);
+            }
+        }
+        for (const DefaultShortcut &shortcut : s_defaultShortcuts) {
+            if (!keyByType.contains(shortcut.plugin)) {
+                keyByType.insert(shortcut.plugin, shortcut.key);
+            }
+        }
+        QSet<QString> done;
+        for (const QJsonValue &value : now.value(u"widgets"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            const QString type = widget.value(u"type"_s).toString();
+            if (done.contains(type) || !keyByType.contains(type)) {
+                continue;
+            }
+            done.insert(type);
+            if (!widget.value(u"key"_s).toString().isEmpty()) {
+                continue; // the layout gave it one already
+            }
+            give(widget.value(u"id"_s).toInt(), type, keyByType.value(type));
         }
     }
 

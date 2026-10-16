@@ -30,6 +30,14 @@ inline const QString s_highContrastScheme = u"PlasmaFusionHighContrast"_s;
 // ~/.config/plasmafusionrc (shared with the decoration, the power service and the layout).
 inline const QString s_fusionConfig = u"plasmafusionrc"_s;
 
+// The Plasma Fusion window decoration (KDecoration3 plugin); the fallback without it, the Aurorae
+// themes of the phase 1 decoration part; KWin's group for the decoration in use (kwinrc).
+inline const QString s_decorationNamespace = u"org.kde.kdecoration3"_s;
+inline const QString s_decorationId = u"org.plasmafusion.decoration"_s;
+inline const QString s_auroraeLibrary = u"org.kde.kwin.aurorae.v2"_s;
+inline const QString s_auroraeThemePrefix = u"__aurorae__svg__"_s;
+inline const QString s_kwinDecorationGroup = u"org.kde.kdecoration2"_s;
+
 // The KWin script of the tablet lane and its shortcut (TABLET.md 4.2).
 inline const QString s_tabletScriptGroup = u"Script-plasmafusion-tablet"_s;
 inline const QString s_tabletShortcut = u"Plasma Fusion: Tablet Window Mode"_s;

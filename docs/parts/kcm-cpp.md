@@ -640,7 +640,10 @@ The file is one JSON object, `{"format": "plasma-fusion-settings", "version": 1,
 
 - `settings`: the page's settings by their property names (`kcm.h`), numbers for the choices (the
   enums there), `true` / `false` for the switches, plus `accentMode`, `accentColor` (`#rrggbb`, for
-  a fixed colour) and `fusionDecoration`. `style` is left out while another Global Theme than
+  a fixed colour), `fusionDecoration` and `decoration`, the decoration KWin uses (kwinrc
+  `[org.kde.kdecoration2]` `library`, `theme`, `ButtonsOnLeft`, `ButtonsOnRight`; Apply always
+  uses Plasma Fusion's when it is installed, so a file made with another one names it).
+  `style` is left out while another Global Theme than
   Plasma Fusion's is in use. These are the applied values: the power service's held values do not
   show on the page (it shows the user's), and neither does a change not applied yet.
 - `layout`: what the Global Theme's `export-layout.js` prints in plasmashell
@@ -650,14 +653,23 @@ The file is one JSON object, `{"format": "plasma-fusion-settings", "version": 1,
   out; the page says how many of the latter.
 
 Import first reads the whole file: one that is not JSON, not of this format or version, without
-panels, or with a panel or widget that is not complete (a location that is not an edge, a
-configuration value that is not text) is refused with the reason, and nothing changes. Then:
+panels, or with a panel or widget that is not complete is refused with the reason, and nothing
+changes. Complete means every value `import-layout.js` gives the new panel as plasma-workspace
+6.7.5's `Panel` takes it (the old panels are gone before the new ones are made): a whole screen
+number, an edge, a whole height above 0, `floating` and `floatingApplets` true or false, one of
+the length modes, alignments, hiding and opacity modes `Panel` knows, the four lengths as whole
+numbers when the length is custom, widgets with a type, a shortcut as text, configuration values
+as text. Then:
 
 1. the settings are set as if on the page (each setter takes only what the page can show; high
    contrast before the glass, which it would otherwise set to Solid) and applied by Apply's own
    code. High contrast without its colour scheme and the Fusion decoration where it is not
    installed are named; a value the page does not take (out of range, or of the wrong type) is
-   counted and left as it was;
+   counted and left as it was. After Apply, a file made with another decoration gets it back
+   (the four kwinrc keys, then KWin reconfigures) when it is installed here (its plugin in
+   `org.kde.kdecoration3`; an Aurorae SVG theme: its theme folder, as Apply checks the fallback's),
+   and the "Follow sunset" watch does not put Plasma Fusion's back over it; one that is not
+   installed is named;
 2. the panels: `import-layout.js` gets the file's layout in front of it (`var LAYOUT = ...;`, the
    JSON with U+2028 and U+2029 escaped: Qt 6.11.2's QJSEngine refuses them in a string literal)
    and puts its panels in place of the ones there are, in two steps half a second apart, as a
@@ -670,9 +682,10 @@ configuration value that is not text) is refused with the reason, and nothing ch
    layout" brings Plasma Fusion's panels back. A panel of a screen this computer does not have
    goes to the first screen when that edge is free there, else it is left out; a widget that is
    not installed is left out; the page names both;
-3. as after "Reset Fusion layout" (`finishResetLayout`): each widget type gets the key the file
-   gives it, else the one it has now, else Plasma Fusion's; a key the removed widgets still hold is
-   released first (the new panels' ids are all higher than every id there was: libplasma 6.7.5
+3. as after "Reset Fusion layout" (`finishResetLayout`): each widget the import made gets the key
+   the file gives it (`import-layout.js` lists the new widgets' ids with their keys, so two
+   widgets of one type keep their own), and a widget the file gives none gets none (no default:
+   the file is what the user had); a key the removed widgets still hold is released first (the new panels' ids are all higher than every id there was: libplasma 6.7.5
    counts one id up for containments and widgets, `applet_p.cpp` and `corona.cpp`); the glass and
    the top-bar choice are applied, `ensure-topbars.js` runs with "Top bar on every screen" or
    "Dock on every screen" on (the screens the file had no bars for), and the power service applies
@@ -695,9 +708,13 @@ Tests:
   change, and the layout the script printed; an import into a fresh HOME applies the settings
   (plasmafusionrc, kwinrc, kdeglobals), hands the file's layout (with a U+2028 in a value) to the
   import script in its two steps (removed first, then added), tries the file's key for quick
-  settings, runs `ensure-topbars.js` and says what was left out; with the add step failing, the
-  page says how to get panels back; seven bad files (not JSON, another format or version, no panels, a panel at no edge,
-  a value that is not text, no file) change nothing; values the page does not take are counted and
+  settings and the second quick settings' own key, puts the file's decoration (another one than
+  Plasma Fusion's) back with its button order, runs `ensure-topbars.js` and says what was left
+  out; with the add step failing, the page says how to get panels back; twelve bad files (not
+  JSON, another format or version, no panels, a panel at no edge, a value that is not text, a
+  custom length without its lengths, `floating` as text, a hiding mode `Panel` does not know, the
+  height as text, no `floatingApplets`, no file) change nothing; a decoration that is not
+  installed is named; a file without keys gets none tried, Plasma Fusion's Meta+A neither; values the page does not take are counted and
   left as they were; without `export-layout.js` the action is not offered and an export says why.
   Each of the module's steps fails a check when taken out (the escape too: the stand-in shell
   refuses an unescaped U+2028 as QJSEngine does).
@@ -705,13 +722,13 @@ Tests:
   (valid, odd and wrongly typed values, cut short, or none), and the commands can import or export.
 - Session test (`tests/scenario-settingsfile.sh`; 2026-10-16, a private session on the Fedora 44
   test laptop with two outputs, Plasma 6.7.5, the module and kcmctl from this change; the real
-  plasmashell, kglobalaccel and the layout part's scripts): **17 checks pass**. The page and the
-  panels changed (Reduced glass, the keyboard on touch, 56 px icons, a dock on every screen, the
-  pen menu removed) and exported: the file holds both screens' bars and the main dock, not the
-  copy, and Meta+A for quick settings; after the settings were changed back and the layout reset,
-  the import brings back the settings (page, plasmafusionrc, the widgets' keys), the same panels
-  with the copy made again, and Meta+A on the new quick settings (the removed one held it), with
-  no error; after a plasmashell restart the panels are still on their screens and Meta+A still
+  plasmashell, kglobalaccel and the layout part's scripts): **20 checks pass** (review round 1).
+  The page and the panels changed (Reduced glass, the keyboard on touch, 56 px icons, a dock on
+  every screen, the pen menu removed, KWin's Breeze decoration) and exported: the file holds both
+  screens' bars and the main dock, not the copy, Breeze, and Meta+A for quick settings; after the
+  settings were changed back, the Plasma Fusion decoration chosen and the layout reset, the
+  import brings back the settings (page, plasmafusionrc, the widgets' keys), Breeze, the same
+  panels with the copy made again, and Meta+A on the new quick settings, with no error; after a plasmashell restart the panels are still on their screens and Meta+A still
   set. Seen in the shell's log: two `TypeError: Value is null and could not be converted to an
   object` from Plasma's D-Bus QML module during the remove step, only when the page has just
   applied changes to those widgets (the import's Apply, then the removal); the same Apply alone,

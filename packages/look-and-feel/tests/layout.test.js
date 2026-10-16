@@ -543,6 +543,22 @@ test("import-layout: a panel of a screen not here goes to the first screen when 
     assert.deepStrictEqual([out.panels, out.leftOut, out.notInstalled], [2, 1, ["org.example.notinstalled"]], JSON.stringify(out));
     assert.deepStrictEqual(to.panels.map((p) => [p.screen, p.location]), [[0, "top"], [0, "bottom"]], "the dock on the first screen, one bar");
 });
+test("import-layout: the keys the file gives, by the new widget's id (two widgets of one type keep their own)", () => {
+    const file = exported(shell({ screens: TWO, files: rc(), panels: transferLayout() }));
+    const bar = file.panels[0];
+    const qs = bar.widgets.find((w) => w.type === "org.plasmafusion.quicksettings");
+    bar.widgets.push(Object.assign({}, qs, { shortcut: "Meta+W" }));
+    qs.shortcut = "Meta+Q";
+    const to = shell({ screens: TWO, files: rc(), panels: [] });
+    const out = JSON.parse(to.run("var LAYOUT = " + JSON.stringify(file) + ";\n" + IMPORT).trim().split("\n").pop());
+    const made = to.panels.find((p) => p.location === "top").widgets.filter((w) => w.type === "org.plasmafusion.quicksettings").map((w) => w.id);
+    assert.strictEqual(made.length, 2);
+    assert.deepStrictEqual(out.keys.filter((k) => k.type === "org.plasmafusion.quicksettings"),
+                           [{ id: made[0], type: "org.plasmafusion.quicksettings", key: "Meta+Q" },
+                            { id: made[1], type: "org.plasmafusion.quicksettings", key: "Meta+W" }]);
+    assert.ok(out.keys.every((k) => k.key !== ""), "no entry for a widget without a key");
+    assert.strictEqual(out.keys.length, 3, "Meta+A of the app name too: " + JSON.stringify(out.keys));
+});
 test("import-layout: PHASE remove only removes the panels there are, add only adds the file's", () => {
     const file = exported(shell({ screens: TWO, files: rc(), panels: transferLayout() }));
     const to = shell({ screens: TWO, files: rc(), panels: [mainBar(), dockPanel()] });

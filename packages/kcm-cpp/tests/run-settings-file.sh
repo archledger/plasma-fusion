@@ -57,14 +57,24 @@ print(JSON.stringify({ version: 1, screens: 1, left: ["screen", "copy"], panels:
       opacity: "adaptive", floatingApplets: true, config: [{ group: ["PlasmaFusion"], keys: { statusItems: "true" } }],
       widgets: [{ type: "org.plasmafusion.quicksettings", shortcut: "Meta+Q",
                   config: [{ group: ["General"], keys: { keyboardPolicy: "touch", note: "a\u2028b" } }] },
+                { type: "org.plasmafusion.quicksettings", shortcut: "Meta+W", config: [] },
                 { type: "org.example.gone", shortcut: "", config: [] }] }] }));
 JS
 cat >"$lf/import-layout.js" <<'JS'
 if (PHASE === "remove") {
     print(JSON.stringify({ removed: 2 }));
 } else {
+    var keys = [], n = 0;
+    LAYOUT.panels.forEach(function (p) {
+        p.widgets.forEach(function (w) {
+            n++;
+            if (w.shortcut) {
+                keys.push({ id: 100 + n, type: w.type, key: w.shortcut });
+            }
+        });
+    });
     print(JSON.stringify({ panels: LAYOUT.panels.length, widgets: 1, screens: 1, notInstalled: ["org.example.gone"], leftOut: 1,
-                           importGot: LAYOUT, phase: PHASE }));
+                           keys: keys, importGot: LAYOUT, phase: PHASE }));
 }
 JS
 
@@ -81,7 +91,10 @@ session() {
   python3 "$powerfx/tests/mock-session.py" --address "$DBUS_SESSION_BUS_ADDRESS" --layout "$work/layout.json" \
     --log "$work/calls.log" --node "$(command -v node)" >"$work/mock-session.out" 2>&1 &
   local mock=$!
-  for _ in $(seq 50); do grep -q ready "$work/mock-session.out" 2>/dev/null && break; sleep 0.1; done
+  # Up to 30 s (a loaded machine, sanitizer builds): a module started before the stand-in shell
+  # reads no shell, and its actions then do nothing.
+  for _ in $(seq 300); do grep -q ready "$work/mock-session.out" 2>/dev/null && break; sleep 0.1; done
+  check "the stand-in shell started ($1)" grep -q ready "$work/mock-session.out"
   printf '%s\n' waitshell "$@" waitidle "get errorText" "get infoText" | "$kcmctl" >"$work/$name.log" 2>&1
   kill "$mock" 2>/dev/null; wait "$mock" 2>/dev/null
 }
@@ -101,6 +114,9 @@ PY
 # ---- Export: the applied settings, not a change still pending, and the layout the script printed.
 export XDG_CONFIG_HOME=$work/config-a
 mkdir -p "$XDG_CONFIG_HOME"
+# Another decoration than Plasma Fusion's (an Aurorae theme of this HOME), with its button order.
+printf '[org.kde.kdecoration2]\nButtonsOnLeft=XIA\nButtonsOnRight=_\nlibrary=org.kde.kwin.aurorae.v2\ntheme=__aurorae__svg__TestTheme\n' >"$XDG_CONFIG_HOME/kwinrc"
+mkdir -p "$XDG_DATA_HOME/aurorae/themes/TestTheme"
 session export "set glass 1" "set hotCorner false" "set reduceMotion true" "set iconsMode 0" save "set magnifiedSize 70" \
   "call exportSettings $work/export.json"
 check "export: the file is written" test -s "$work/export.json"
@@ -108,6 +124,9 @@ check "  as a Plasma Fusion settings file of version 1" test "$(json "$work/expo
 check "  with the applied settings" test "$(json "$work/export.json" '[f["settings"][k] for k in ("glass", "hotCorner", "reduceMotion", "iconsMode")]')" = "[1, False, True, 0]"
 check "  and not the change still pending (magnifiedSize)" test "$(json "$work/export.json" 'f["settings"]["magnifiedSize"]')" = 62
 check "  and the accent and decoration" test "$(json "$work/export.json" '"accentMode" in f["settings"] and "fusionDecoration" in f["settings"]')" = True
+check "  the decoration in use, not Plasma Fusion's: its keys" \
+  test "$(json "$work/export.json" 'f["settings"]["fusionDecoration"], f["settings"]["decoration"]')" = \
+  "(False, {'ButtonsOnLeft': 'XIA', 'ButtonsOnRight': '_', 'library': 'org.kde.kwin.aurorae.v2', 'theme': '__aurorae__svg__TestTheme'})"
 check "  and the layout export-layout.js printed (its last line)" \
   test "$(json "$work/export.json" 'f["layout"]["panels"][0]["widgets"][0]["shortcut"], f["layout"]["left"]')" = "('Meta+Q', ['screen', 'copy'])"
 check "  and the page says where, and that a panel of a screen not connected is not in it" \
@@ -118,6 +137,7 @@ check "  without an error" test -z "$(text export errorText)"
 # had no bars for get theirs from ensure-topbars.js, a stand-in here).
 export XDG_CONFIG_HOME=$work/config-b
 mkdir -p "$XDG_CONFIG_HOME"
+printf '[org.kde.kdecoration2]\nButtonsOnLeft=M\nButtonsOnRight=IAX\nlibrary=org.plasmafusion.decoration\ntheme=\n' >"$XDG_CONFIG_HOME/kwinrc"
 echo 'print("top bars: stand-in ran");' >"$work/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts/ensure-topbars.js"
 session import "call importSettings file://$work/export.json" "get glass" "get hotCorner" "get iconsMode"
 check "import: the settings are on the page" bash -c "grep -q '^kcmctl: glass=1' '$work/import.log' && grep -q '^kcmctl: hotCorner=false' '$work/import.log' && grep -q '^kcmctl: iconsMode=0' '$work/import.log'"
@@ -129,6 +149,11 @@ check "  in two steps: the panels there are removed first, then the file's added
   r=\$(grep -n '\"removed\":2' '$work/calls.log' | head -1 | cut -d: -f1); a=\$(grep -n '\"phase\":\"add\"' '$work/calls.log' | head -1 | cut -d: -f1)
   [ -n \"\$r\" ] && [ -n \"\$a\" ] && [ \"\$r\" -lt \"\$a\" ]"
 check "  the file's key for quick settings is the one tried" grep -q 'Meta+Q for quick settings' "$work/import.log"
+check "  and the second quick settings' own key too" grep -q 'Meta+W for quick settings' "$work/import.log"
+check "  the file's decoration is back, with its button order" bash -c "
+  [ \"\$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key library)\" = org.kde.kwin.aurorae.v2 ] &&
+  [ \"\$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme)\" = __aurorae__svg__TestTheme ] &&
+  [ \"\$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft)\" = XIA ]"
 check "  ensure-topbars.js gives the other screens their top bars" grep -q 'top bars: stand-in ran' "$work/calls.log"
 check "  the page tells what is in place and what was left out" bash -c "
   grep -q 'The settings of export.json are in place. Widgets that are not installed here were left out: org.example.gone. A panel was left out' '$work/import.log'"
@@ -149,10 +174,23 @@ write("nopanels", dict(good, layout=dict(good["layout"], panels=[])))
 bad = json.loads(json.dumps(good)); bad["layout"]["panels"][0]["location"] = "middle"; write("location", bad)
 bad = json.loads(json.dumps(good)); bad["layout"]["panels"][0]["widgets"][0]["config"][0]["keys"]["keyboardPolicy"] = 3; write("keytype", bad)
 bad = json.loads(json.dumps(good)); bad["settings"]["glass"] = 7; bad["settings"]["hotCorner"] = "yes"; write("values", bad)
+def panel(name, change):
+    bad = json.loads(json.dumps(good)); change(bad["layout"]["panels"][0]); write(name, bad)
+panel("customlen", lambda p: p.update(lengthMode="custom"))
+panel("floating", lambda p: p.update(floating="yes"))
+panel("hiding", lambda p: p.update(hiding="sometimes"))
+panel("height", lambda p: p.update(height="34"))
+panel("applets", lambda p: p.pop("floatingApplets"))
+bad = json.loads(json.dumps(good)); bad["settings"]["decoration"] = {"library": "org.example.decoration"}; write("otherdeco", bad)
+bad = json.loads(json.dumps(good))
+for p in bad["layout"]["panels"]:
+    for w in p["widgets"]:
+        w["shortcut"] = ""
+write("nokeys", bad)
 PY
 export XDG_CONFIG_HOME=$work/config-c
 mkdir -p "$XDG_CONFIG_HOME"
-for bad in garbage format version nopanels location keytype missing; do
+for bad in garbage format version nopanels location keytype customlen floating hiding height applets missing; do
   session "bad-$bad" "call importSettings $work/$bad.json" "get glass"
   check "a bad file ($bad) is refused" grep -q "^kcmctl: errorText=$bad.json cannot be imported: " "$work/bad-$bad.log"
   check "  and nothing is changed" bash -c "grep -q '^kcmctl: glass=0' '$work/bad-$bad.log' && ! grep -q importGot '$work/calls.log' && ! test -e '$XDG_CONFIG_HOME/plasmafusionrc'"
@@ -161,6 +199,15 @@ session values "get hotCorner" "call importSettings $work/values.json" "get glas
 check "values a setting does not take are left as they are" bash -c "grep -q '^kcmctl: glass=0' '$work/values.log' && test \$(grep -c '^kcmctl: hotCorner=true' '$work/values.log') = 2"
 check "  and the page says so" grep -q '2 settings in the file have values this version does not take' "$work/values.log"
 check "  the rest of the file is in place" bash -c "grep -q importGot '$work/calls.log' && grep -q '^AppIcons=designs' '$XDG_CONFIG_HOME/plasmafusionrc'"
+
+# ---- A decoration that is not installed here is named; a file without keys gives none (no
+# default either: the file is what the user had).
+session otherdeco "call importSettings $work/otherdeco.json"
+check "the file's decoration is not here: the page names it" \
+  grep -q 'The window decoration of the file (org.example.decoration) is not installed on this computer.' "$work/otherdeco.log"
+session nokeys "call importSettings $work/nokeys.json"
+check "a file without keys: none is tried, not Plasma Fusion's Meta+A either" bash -c "
+  ! grep -q 'Meta+' '$work/nokeys.log' && grep -q '^kcmctl: errorText=\$' '$work/nokeys.log'"
 
 # ---- The panels removed, the file's could not be added: the page says how to get panels back.
 cat >"$work/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts/import-layout.js" <<'JS'

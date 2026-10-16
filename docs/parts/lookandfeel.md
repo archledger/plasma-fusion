@@ -647,11 +647,15 @@ The settings page's "Export my settings…" and "Import settings…" (docs/parts
   script does), its widgets in order with their configuration written back as text. A panel of a
   screen this computer does not have goes to the first screen while the file has no panel at that
   edge of it, else it is left out; a widget that is not installed (or that the shell cannot make)
-  is left out. Nothing is changed for a layout of another version or without panels. The shortcuts
-  are the settings page's. Prints `{"panels", "widgets", "screens", "notInstalled", "leftOut"}`.
+  is left out. Nothing is changed for a layout of another version or without panels (the settings
+  page checks every other value before it runs the script). The shortcuts are the settings
+  page's: the script lists each widget it made that the file gives a key, by the new widget's id
+  (`keys`), and the page gives it that key. Prints `{"panels", "widgets", "screens",
+  "notInstalled", "leftOut", "keys"}`.
 - Tests (`tests/layout.test.js`; the stand-in shell has `configGroups`, a widget's `index` and
   `globalShortcut`, and a panel's custom-length properties): the export with its screens, order,
   groups and left-out keys, panels and marks, a custom length and `floatingApplets`; the user's
   values while keys are held; the copy taken as the dock; an import exporting the same again; the
-  two phases each doing only their part; a missing screen's panel moved or left out and a widget
+  keys listed by the new widgets' ids, two quick settings with their own; the two phases each
+  doing only their part; a missing screen's panel moved or left out and a widget
   not installed skipped; a file of another version or without panels changing nothing. Each rule fails a case when taken out.
