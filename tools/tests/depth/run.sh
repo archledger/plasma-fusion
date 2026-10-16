@@ -95,7 +95,8 @@ if [ "$WANT" != all ]; then
   want=(); IFS=, read -r -a want <<<"$WANT" || true
   [ ${#want[@]} -gt 0 ] || { echo "no features chosen (--features is empty)" >&2; exit 2; }
   for id in "${want[@]}"; do
-    printf '%s\n' "${IDS[@]}" | grep -qx "$id" || { echo "unknown feature $id (--list)" >&2; exit 2; }
+    # A fixed string, the whole line: a name is not a pattern ("[p]lacement" is no feature).
+    printf '%s\n' "${IDS[@]}" | grep -qxF -- "$id" || { echo "unknown feature $id (--list)" >&2; exit 2; }
   done
   IDS=("${want[@]}")
 fi

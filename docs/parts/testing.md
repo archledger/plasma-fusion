@@ -205,6 +205,10 @@ runs them together against one built HOME tree, with one summary:
   widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`
   (`--quicklook`, required while Quick Look is among the features: tools/build.sh does not build a
   compiled part; for the beta lane, Quick Look built in the beta build image).
+- The live chips' first check depends on the lane: on the test host the harness's own SSH login
+  shows the SSH chip; a test container has no system bus and so no logind (podman's
+  `/run/.containerenv` tells the scenario it is in one), where the widget must say it has no logind
+  and show no SSH chip, and the capsule and panel of step 4 come without the login.
 - The two lanes keep their own results: `build/tests/depth/host` and
   `build/tests/depth/container-<image>` unless `--work` says otherwise. The test image
   (`tools/container/test/Containerfile`) has what the six scenarios run besides Plasma: Kate and
@@ -216,7 +220,8 @@ runs them together against one built HOME tree, with one summary:
   the session runner succeeded), every check passed (at least one), and no core dump came from its
   session (on the test host `coredumps.json` must be there and empty). Exit 0 only when every
   feature run passed; 2 for a setup error: an option without its value, an unknown or empty
-  `--features` list, or Quick Look among the features without `--quicklook`. Each session takes a
+  `--features` list (a name is matched whole, as a fixed string: `[p]lacement` is unknown), or
+  Quick Look among the features without `--quicklook`. Each session takes a
   session slot, the container lane's too.
 - When: before a Plasma update is let onto the test machines (the plasma-watch issue names it) and
   before a release tag (docs/RELEASING.md, step 2), on the test host and on the beta container.
@@ -226,7 +231,7 @@ runs them together against one built HOME tree, with one summary:
   summary), a feature without checks (exit 1), a session stopped at its time limit after passing
   checks (exit 1), a runner that fails after a complete-looking session, a core dump (exit 1),
   each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, an
-  unknown or empty feature list, Quick Look without its install and an option without its value
+  unknown feature, one given as a pattern (`[p]lacement`, `place.ent`), an empty feature list, Quick Look without its install and an option without its value
   (exit 2), `--help` printing the usage only, and the two lanes keeping their own results. Without
   any one of those rules its case fails.
 
