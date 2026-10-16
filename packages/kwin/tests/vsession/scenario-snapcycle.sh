@@ -79,5 +79,8 @@ press meta+right
 check "2: again: the right third" right 1/3 0
 shot 20-right-third
 info "done"
-# A failed check fails the scenario (scenario rc), as the other KWin scenarios do.
+# A failed check fails the scenario (scenario rc), as the other KWin scenarios do: without the trap
+# and errexit, so the last test sets the status vsession.sh records instead of ending its shell.
+trap - ERR
+set +e
 [ "$(grep -c '^FAIL' "$CHK" || true)" = 0 ]
