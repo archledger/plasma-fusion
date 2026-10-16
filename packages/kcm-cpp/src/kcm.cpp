@@ -1156,6 +1156,7 @@ void PlasmaFusionKcm::onConfigChanged(const KConfigGroup &group, const QByteArra
         u"Icons"_s,
         u"Power"_s,
         u"TopBar"_s,
+        u"Dock"_s,
     };
     if (watched.contains(name)) {
         m_reloadTimer.start();

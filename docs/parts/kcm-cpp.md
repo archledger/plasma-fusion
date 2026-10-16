@@ -605,7 +605,9 @@ screen". The new switch under it keeps its choice in plasmafusionrc `[Dock] Ever
   too (`docksoffpanel`); with the one original on an unplugged screen (`docksoffunplugged`) the copy
   on screen 0 stays, standing in for the unplugged one, and the unplugged dock gets its value back;
   with every dock widget removed (`docksoffnodock`) the switch still turns off, the copy's panel
-  goes and the choice is stored, and so do Defaults and Apply (`docksdefaults`); turned on, the choice is kept and
+  goes and the choice is stored, and so do Defaults and Apply (`docksdefaults`); turned on by
+  another program while the page is open (`docksexternal`, `kwriteconfig6 --notify`), the page reads
+  it, as plasmafusionrc `[Dock]` is one of the groups it watches; turned on, the choice is kept and
   ensure-topbars.js runs, and a script that says it could not make a dock (`docksnotmade`) gives an
   error.
   The removal of every dock but the lowest screen's (before review) fails `docksoff`, and no

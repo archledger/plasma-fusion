@@ -29,6 +29,8 @@ assert.strictEqual(needsRetry("top bars: off (plasmafusionrc [TopBar] EveryScree
                    "top bars off, the docks skipped (Dock on every screen alone)");
 assert.strictEqual(needsRetry(both("added 0, completed 0", "screens 2, added 0")), false, "an answer");
 assert.strictEqual(needsRetry(""), false, "no answer (the call failing is handled apart)");
+assert.strictEqual(needsRetry(both("added 0, completed 0", "screens 2, added 0, not made 1")), true, "a dock not made: asked again");
+assert.strictEqual(needsRetry(both("added 0, completed 0", "screens 2, added 1")), false, "every dock made: not again");
 // Both at once: the top bars' part skipped (a top panel of an unplugged screen) while the docks'
 // part made a dock. The new dock gets the tier now, and the top bars are asked again.
 assert.deepStrictEqual(afterAnswer("top bars: skipped, 1 top panel(s) without a screen\ndocks: screens 2, added 1"),

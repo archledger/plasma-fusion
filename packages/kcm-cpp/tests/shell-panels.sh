@@ -34,6 +34,7 @@
 #               stays as the dock (standing in for it), the unplugged one gets its value back;
 #   docksoffnodock every dock widget removed while on: it can still be turned off (cleanup);
 #   docksdefaults the same through Defaults (off is the default without a dock too);
+#   docksexternal turned on by another program while the page is open: the page reads it;
 #   docksnotmade ensure-topbars.js says it could not make a dock: an error;
 #   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
 #
@@ -297,6 +298,15 @@ expect docksdefaults "Defaults turns the switch off without a dock" is "$(first 
 expect docksdefaults "  as a change to apply" is "$(first docksdefaults needsSave)" true
 expect docksdefaults "  and Apply removes the copy's panel" is "$(wc -l <"$work/docksdefaults/panels")" 1
 expect docksdefaults "  and stores the choice" grep -q "EveryScreen=false" "$work/docksdefaults/config/plasmafusionrc"
+
+# Another settings window (or fusion-config.sh) turns it on while the page is open: the page reads
+# it (plasmafusionrc [Dock] is a group it watches).
+run docksexternal "{\"screens\": 2, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", \"$DOCK\"]}]}" \
+  waitshell "get everyDock" "sh kwriteconfig6 --file plasmafusionrc --group Dock --key EveryScreen --notify true" "wait 1500" \
+  "get everyDock"
+expect docksexternal "off at first" is "$(first docksexternal everyDock)" false
+expect docksexternal "turned on elsewhere: the page shows it on" is "$(value docksexternal everyDock)" true
 
 # ensure-topbars.js runs but cannot make a dock ("not made 1"): an error says so.
 prepare_docksnotmade() {

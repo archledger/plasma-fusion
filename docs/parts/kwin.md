@@ -764,7 +764,8 @@ screen).
   which would also put it into "Add Panel".) When the answer says a bar was added or completed, or
   a dock was made ("Dock on every screen", a screen plugged in; `contents/ui/Panels.js`
   `addedWidgets()`, tested by `packages/kwin/tests/panels.test.js` in the build; a "skipped" of either
-  part, the top bars' or the docks', is asked again, `needsRetry()`; both can hold at once, a dock
+  part, the top bars' or the docks', or a dock reported not made, is asked again, `needsRetry()`;
+  both can hold at once, a dock
   made while the top bars' part was skipped, and then the tier is asked for before the retry,
   `afterAnswer()`, also checked in the offscreen snap harness), the script asks
   systemd (`ReloadOrTryRestartUnit plasma-fusion-powerfx.service`) to have the power service apply

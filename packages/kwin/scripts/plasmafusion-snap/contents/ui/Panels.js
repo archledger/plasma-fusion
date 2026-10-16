@@ -17,10 +17,11 @@ function addedWidgets(text) {
 }
 
 // Whether to ask ensure-topbars.js again: plasmashell answered before it had loaded its layout or
-// put its panels on their screens ("top bars: skipped" or "docks: skipped", either part).
+// put its panels on their screens ("top bars: skipped" or "docks: skipped", either part), or could
+// not make a dock ("not made N": that screen has none, and a later try may make it).
 function needsRetry(text) {
     var s = String(text || "");
-    return s.indexOf("top bars: skipped") !== -1 || s.indexOf("docks: skipped") !== -1;
+    return s.indexOf("top bars: skipped") !== -1 || s.indexOf("docks: skipped") !== -1 || /docks: [^\n]*not made [1-9]/.test(s);
 }
 
 // What the snap script does with an answer: ask the power service to apply its tier (something was
