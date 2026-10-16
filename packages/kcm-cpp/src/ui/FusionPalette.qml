@@ -50,4 +50,11 @@ Item {
     readonly property color switchOff: dark ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.18)
     readonly property color knobOff: dark ? "#e8ebf4" : "#ffffff"
     readonly property color focusRing: Kirigami.Theme.focusColor
+    // The drop-down and its list (board Gestures.dc.html, from the Controls board: surface2,
+    // border, menuBg, shadow; the chosen option in the accent's soft fill).
+    readonly property color dropBackground: dark ? "#262d4c" : "#eef0f5"
+    readonly property color dropBorder: dark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.14)
+    readonly property color menuBackground: dark ? "#232a47" : "#ffffff"
+    readonly property color menuShadow: dark ? Qt.rgba(0, 0, 0, 0.5) : Qt.rgba(20 / 255, 24 / 255, 39 / 255, 0.18)
+    readonly property color optionSelected: dark ? Qt.alpha(Kirigami.Theme.hoverColor, 0.18) : Qt.alpha(Kirigami.Theme.focusColor, 0.12)
 }

@@ -456,7 +456,84 @@ Item {
             retry.stop();
             retry.tries = 0;
         }
-        Qt.callLater(testEnd);
+        Qt.callLater(testGestures);
+    }
+    // Touchpad gestures (docs/parts/kwin.md, "Touchpad gestures"): an action that opens one of
+    // KWin's effects waits while KWin switches desktops; two in one wait are each invoked once, in
+    // order, after it.
+    function testGestures() {
+        const objs = script.data || [];
+        const handlers = {}, gets = [];
+        let shortcuts = null;
+        for (let i = 0; i < objs.length; ++i) {
+            const o = objs[i];
+            if (!o) {
+                continue;
+            }
+            if (o.fingerCount !== undefined && o.direction !== undefined) {
+                handlers[(o.deviceType !== undefined ? "swipe" : "pinch") + o.direction + "/" + o.fingerCount] = o;
+            } else if (o.method === "invokeShortcut" && (o.arguments || []).length === 0) {
+                shortcuts = o;
+            } else if (o.method === "Get" && String((o.arguments || [])[1]) === "activeEffects") {
+                gets.push(o);
+            }
+        }
+        const left = handlers["swipe" + KW.SwipeGestureHandler.Direction.Left + "/3"];
+        const right = handlers["swipe" + KW.SwipeGestureHandler.Direction.Right + "/3"];
+        const up = handlers["swipe" + KW.SwipeGestureHandler.Direction.Up + "/3"];
+        const pinchIn = handlers["pinch" + KW.PinchGestureHandler.Direction.Contracting + "/4"];
+        const pinchOut = handlers["pinch" + KW.PinchGestureHandler.Direction.Expanding + "/4"];
+        check("gestures: the six handlers and KWin's shortcut call are there",
+              !!(left && right && up && pinchIn && pinchOut && shortcuts) && Object.keys(handlers).length === 6,
+              Object.keys(handlers).join(" ") + " " + !!shortcuts);
+        if (!(left && right && up && shortcuts)) {
+            Qt.callLater(testEnd);
+            return;
+        }
+        KWin.setConfig("GestureSwipeLeft3", "windows");
+        KWin.setConfig("GestureSwipeRight3", "grid");
+        const before = gets.map(g => g.calls);
+        const asked = () => gets.filter((g, i) => g.calls > before[i]);
+        left.activated();
+        const first = asked();
+        check("  three fingers left (All windows): KWin's effects are asked first, nothing invoked yet",
+              first.length === 1 && first[0].calls === before[gets.indexOf(first[0])] + 1 && shortcuts.calls === 0,
+              first.length + " " + shortcuts.calls);
+        if (first.length !== 1) {
+            Qt.callLater(testEnd);
+            return;
+        }
+        const switchCall = first[0];
+        const callsBefore = switchCall.calls;
+        right.activated();
+        check("  three fingers right (the grid) during the wait joins it: no second question",
+              switchCall.calls === callsBefore && shortcuts.calls === 0, switchCall.calls - callsBefore);
+        switchCall.finished([["blur", "slide"]]);
+        check("  KWin still sliding: nothing invoked", shortcuts.calls === 0, shortcuts.calls);
+        gestureWait.next = () => {
+            check("  asked again 100 ms later", switchCall.calls === callsBefore + 1, switchCall.calls - callsBefore);
+            switchCall.finished([["blur"]]);
+            check("  the switch over: All windows, then the grid, each once",
+                  JSON.stringify(shortcuts.callLog) === JSON.stringify([["Expose"], ["Grid View"]]),
+                  JSON.stringify(shortcuts.callLog));
+            switchCall.finished([["blur"]]);
+            check("  a late answer invokes nothing more", shortcuts.calls === 2, shortcuts.calls);
+            up.activated();
+            switchCall.finished([["blur"]]);
+            check("  three fingers up (Overview, the default) with no switch: invoked at once",
+                  JSON.stringify(shortcuts.callLog.slice(2)) === JSON.stringify([["Overview"]]),
+                  JSON.stringify(shortcuts.callLog));
+            KWin.unsetConfig("GestureSwipeLeft3");
+            KWin.unsetConfig("GestureSwipeRight3");
+            Qt.callLater(testEnd);
+        };
+        gestureWait.restart();
+    }
+    Timer {
+        id: gestureWait
+        property var next: null
+        interval: 400
+        onTriggered: next()
     }
     function testEnd() {
         console.log("snap geometry: " + checks + " checks, " + failures + " failures");

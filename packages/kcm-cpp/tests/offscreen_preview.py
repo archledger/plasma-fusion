@@ -5,6 +5,7 @@
 module object, to check the layout against the board without a Plasma session.
 
     tests/offscreen_preview.py OUT.png [dark|light] [--state key=value ...] [--width 468] [--height 560] [--font-pt 9.75] [--report]
+                               [--open-dropdown N]
 
 Uses the system Qt (PySide6 6.11 = Plasma's Qt), Kirigami, KCMUtils QML and the KDE platform
 theme with a private XDG_CONFIG_HOME whose kdeglobals holds the Plasma Fusion colour scheme and
@@ -59,6 +60,13 @@ def main():
     ap.add_argument("--height", type=int, default=560)
     ap.add_argument("--font-pt", type=float, default=9.75, help="UI font size (the text scale is pt / 9.75)")
     ap.add_argument("--report", action="store_true", help="print where the page's content column is")
+    ap.add_argument("--open-dropdown", type=int, default=-1,
+                    help="open the Nth drop-down's list (0: the first) and print where it is (REPORT_DROPDOWN)")
+    ap.add_argument("--gestures", action="store_true",
+                    help="print the touchpad gesture rows: label, choice and note, the one-row switch and the"
+                         " stand-in module's values (REPORT_GESTURES)")
+    ap.add_argument("--key-dropdown", nargs=2, metavar=("N", "KEY"),
+                    help="first give the Nth drop-down the focus and press KEY in it (Qt's key name: Down, Up, End)")
     args = ap.parse_args()
 
     config_home = tempfile.mkdtemp(prefix="pfkm-cfg-", dir=os.environ.get("PFKM_TMP"))
@@ -96,7 +104,10 @@ def main():
              "quickSettingsAvailable": True, "folderAvailable": True, "highContrastAvailable": True,
              "previousDesktopAvailable": True, "topBarScriptAvailable": True, "tabletModeAvailable": True,
              "tabletModeActive": False, "powerCritical": False, "fusionLookAndFeel": True, "busy": False,
-             "settingsFileAvailable": True, "needsSave": False}
+             "settingsFileAvailable": True, "needsSave": False,
+             "gestureSwipeUp": 1, "gestureSwipeDown": 2, "gestureSwipeLeft": 0, "gestureSwipeRight": 0,
+             "gesturePinchIn": 5, "gesturePinchOut": 2, "desktopsInOneRow": True,
+             "gestureSidewaysShared": False, "gestureUpDownShared": False}
     for kv in args.state:
         k, v = kv.split("=", 1)
         cur = state[k]
@@ -177,6 +188,15 @@ def main():
         busy = Property(bool, _get("busy"), notify=changed)
         settingsFileAvailable = Property(bool, _get("settingsFileAvailable"), notify=changed)
         needsSave = Property(bool, _get("needsSave"), notify=changed)
+        gestureSwipeUp = Property(int, _get("gestureSwipeUp"), _set("gestureSwipeUp"), notify=changed)
+        gestureSwipeDown = Property(int, _get("gestureSwipeDown"), _set("gestureSwipeDown"), notify=changed)
+        gestureSwipeLeft = Property(int, _get("gestureSwipeLeft"), _set("gestureSwipeLeft"), notify=changed)
+        gestureSwipeRight = Property(int, _get("gestureSwipeRight"), _set("gestureSwipeRight"), notify=changed)
+        gesturePinchIn = Property(int, _get("gesturePinchIn"), _set("gesturePinchIn"), notify=changed)
+        gesturePinchOut = Property(int, _get("gesturePinchOut"), _set("gesturePinchOut"), notify=changed)
+        desktopsInOneRow = Property(bool, _get("desktopsInOneRow"), _set("desktopsInOneRow"), notify=changed)
+        gestureSidewaysShared = Property(bool, _get("gestureSidewaysShared"), notify=changed)
+        gestureUpDownShared = Property(bool, _get("gestureUpDownShared"), notify=changed)
 
         @Slot()
         def restorePreviousDesktop(self):
@@ -280,6 +300,54 @@ QQC2.ApplicationWindow {
         finally:
             app.quit()
 
+    def open_dropdown():
+        from PySide6.QtCore import QPointF
+        from PySide6.QtQml import QQmlEngine, QQmlExpression
+        from PySide6.QtQuick import QQuickItem
+        drops = [i for i in root.findChildren(QQuickItem) if i.metaObject().className().startswith("DropDown_QMLTYPE")]
+        if args.open_dropdown >= len(drops):
+            print("REPORT_DROPDOWN null")
+            return
+        drop = drops[args.open_dropdown]
+        # QQuickPopup has no Python type: the drop-down opens its list itself.
+        QQmlExpression(QQmlEngine.contextForObject(drop), drop, "popup.open()").evaluate()
+        at = drop.mapToScene(QPointF(0, 0))
+        print("REPORT_DROPDOWN " + json.dumps({"x": at.x(), "y": at.y(), "width": drop.width(), "height": drop.height()}))
+
+    def drop_downs():
+        from PySide6.QtQuick import QQuickItem
+        return [i for i in root.findChildren(QQuickItem) if i.metaObject().className().startswith("DropDown_QMLTYPE")]
+
+    def press_key():
+        from PySide6.QtCore import QEvent, Qt
+        from PySide6.QtGui import QKeyEvent
+        drop = drop_downs()[int(args.key_dropdown[0])]
+        drop.forceActiveFocus()
+        key = getattr(Qt.Key, "Key_" + args.key_dropdown[1])
+        for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+            QGuiApplication.sendEvent(drop, QKeyEvent(kind, key, Qt.KeyboardModifier.NoModifier))
+
+    def gesture_report():
+        from PySide6.QtQuick import QQuickItem
+        items = root.findChildren(QQuickItem)
+        rows = [i for i in items if i.metaObject().className().startswith("DropDownRow_QMLTYPE")]
+        switch = [i for i in items if i.metaObject().className().startswith("ToggleRow_QMLTYPE")
+                  and i.property("text") == "Keep desktops in one row"]
+        names = ("gestureSwipeUp", "gestureSwipeDown", "gestureSwipeLeft", "gestureSwipeRight", "gesturePinchIn",
+                 "gesturePinchOut", "desktopsInOneRow")
+        print("REPORT_GESTURES " + json.dumps({
+            "rows": [{"text": r.property("text"), "index": r.property("currentIndex"), "note": r.property("note")}
+                     for r in rows],
+            "choices": [d.property("displayText") for d in drop_downs()],
+            "oneRow": switch[0].property("checked") if switch else None,
+            "kcm": {n: kcm.s[n] for n in names}}))
+
+    if args.key_dropdown:
+        QTimer.singleShot(600, press_key)
+    if args.gestures:
+        QTimer.singleShot(1000, gesture_report)
+    if args.open_dropdown >= 0:
+        QTimer.singleShot(700, open_dropdown)
     QTimer.singleShot(1200, grab)
     app.exec()
     import shutil

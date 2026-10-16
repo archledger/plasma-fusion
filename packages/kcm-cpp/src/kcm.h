@@ -15,6 +15,7 @@
 #include <QDeadlineTimer>
 #include <QJsonObject>
 #include <QSet>
+#include <QSize>
 #include <QString>
 #include <QTimer>
 
@@ -76,6 +77,11 @@ class QDBusServiceWatcher;
       Actions         "Restore my previous desktop" applies org.plasmafusion.previous.desktop;
                       "Reset Fusion layout" rebuilds the panels and desktop from the Global Theme's
                       layout and gives the new widgets the global shortcuts the old ones had.
+      Gestures        kwinrc [Script-plasmafusion-snap] GestureSwipeUp3, GestureSwipeDown3,
+                      GestureSwipeLeft3, GestureSwipeRight3, GesturePinchIn4, GesturePinchOut4
+                      (what the snap script does on each touchpad gesture), then a KWin
+                      reconfigure; desktops in one row: KWin's rows (D-Bus, and kwinrc [Desktops]
+                      Rows), the previous number kept in plasmafusionrc [Gestures] PreviousRows.
       Settings file   "Export my settings…" writes the applied settings above and the panels (the
                       Global Theme's export-layout.js) to one JSON file; "Import settings…" applies
                       a file's settings as Apply does and puts its panels in place of the ones there
@@ -140,6 +146,18 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool launcherRecentFiles READ launcherRecentFiles WRITE setLauncherRecentFiles NOTIFY stateChanged)
     Q_PROPERTY(bool launcherRecentApps READ launcherRecentApps WRITE setLauncherRecentApps NOTIFY stateChanged)
     Q_PROPERTY(bool launcherPlaces READ launcherPlaces WRITE setLauncherPlaces NOTIFY stateChanged)
+    // What each touchpad gesture does (GestureAction), and KWin's desktops kept in one row.
+    Q_PROPERTY(int gestureSwipeUp READ gestureSwipeUp WRITE setGestureSwipeUp NOTIFY stateChanged)
+    Q_PROPERTY(int gestureSwipeDown READ gestureSwipeDown WRITE setGestureSwipeDown NOTIFY stateChanged)
+    Q_PROPERTY(int gestureSwipeLeft READ gestureSwipeLeft WRITE setGestureSwipeLeft NOTIFY stateChanged)
+    Q_PROPERTY(int gestureSwipeRight READ gestureSwipeRight WRITE setGestureSwipeRight NOTIFY stateChanged)
+    Q_PROPERTY(int gesturePinchIn READ gesturePinchIn WRITE setGesturePinchIn NOTIFY stateChanged)
+    Q_PROPERTY(int gesturePinchOut READ gesturePinchOut WRITE setGesturePinchOut NOTIFY stateChanged)
+    Q_PROPERTY(bool desktopsInOneRow READ desktopsInOneRow WRITE setDesktopsInOneRow NOTIFY stateChanged)
+    // KWin also uses three fingers left and right (more than one column of desktops) / up and down
+    // (more than one row), as the desktops are with the page's choice: both happen then.
+    Q_PROPERTY(bool gestureSidewaysShared READ gestureSidewaysShared NOTIFY stateChanged)
+    Q_PROPERTY(bool gestureUpDownShared READ gestureUpDownShared NOTIFY stateChanged)
     // A section the launcher widgets do not agree on (some show it, some do not; the switch shows
     // it off). Setting its switch then is a change even when it ends where it was, and Apply
     // writes it to every launcher.
@@ -190,6 +208,19 @@ public:
         IconsFamiliar = 1
     };
     Q_ENUM(IconsMode)
+    // In the snap script's order (Gestures.js ACTIONS).
+    enum GestureAction {
+        GestureNone = 0,
+        GestureOverview,
+        GestureShowDesktop,
+        GestureGrid,
+        GestureAllWindows,
+        GestureLauncher,
+        GestureQuickSettings,
+        GestureNotifications,
+        GestureSnapLayouts
+    };
+    Q_ENUM(GestureAction)
 
     explicit PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData);
     ~PlasmaFusionKcm() override;
@@ -274,6 +305,22 @@ public:
     void setLauncherRecentApps(bool value);
     bool launcherPlaces() const;
     void setLauncherPlaces(bool value);
+    int gestureSwipeUp() const;
+    void setGestureSwipeUp(int value);
+    int gestureSwipeDown() const;
+    void setGestureSwipeDown(int value);
+    int gestureSwipeLeft() const;
+    void setGestureSwipeLeft(int value);
+    int gestureSwipeRight() const;
+    void setGestureSwipeRight(int value);
+    int gesturePinchIn() const;
+    void setGesturePinchIn(int value);
+    int gesturePinchOut() const;
+    void setGesturePinchOut(int value);
+    bool desktopsInOneRow() const;
+    void setDesktopsInOneRow(bool value);
+    bool gestureSidewaysShared() const;
+    bool gestureUpDownShared() const;
     bool launcherRecentFilesMixed() const;
     bool launcherRecentAppsMixed() const;
     bool launcherPlacesMixed() const;
@@ -337,6 +384,8 @@ private Q_SLOTS:
     // KWin's TabletModeManager signals (connected by name).
     void onTabletModeSignal(bool active);
     void onTabletModeAvailableSignal(bool available);
+    // KWin's VirtualDesktopManager countChanged and rowsChanged: the gestures' notes.
+    void onDesktopsSignal(uint value);
 
 private:
     struct State {
@@ -380,6 +429,15 @@ private:
         bool launcherRecentFiles = true;
         bool launcherRecentApps = true;
         bool launcherPlaces = true;
+        // Touchpad gestures (the owner's defaults, 2026-10-16) and KWin's desktops in one row, as
+        // the setup puts them (tools/device/fusion-config.sh).
+        int gestureSwipeUp = GestureOverview;
+        int gestureSwipeDown = GestureShowDesktop;
+        int gestureSwipeLeft = GestureNone;
+        int gestureSwipeRight = GestureNone;
+        int gesturePinchIn = GestureLauncher;
+        int gesturePinchOut = GestureShowDesktop;
+        bool desktopsInOneRow = true;
 
         bool sameAccent(const State &other) const;
         bool operator==(const State &other) const;
@@ -423,6 +481,11 @@ private:
     void applyLighterOnCritical(bool on);
     void applyFileContentIndexing(bool on);
     void applyTabletConfig(const State &before, const State &after);
+    // The gestures' kwinrc keys; true when one changed (KWin is then reconfigured).
+    bool applyGestures(const State &before, const State &after);
+    void applyDesktopRows(bool oneRow);
+    // KWin's desktop grid as the desktops are and the page has them (columns, rows).
+    QSize desktopGrid() const;
     bool applyMagnify(bool on);
     bool applyMagnifiedSize(int size);
     bool applyGlobalMenu(bool on);
@@ -496,6 +559,11 @@ private:
     bool m_tabletModeAvailable = false;
     bool m_tabletModeActive = false;
     bool m_powerCritical = false;
+    // kwinrc [Desktops] Number and Rows (KWin's default 2), and the rows the user had before
+    // "desktops in one row" (plasmafusionrc [Gestures] PreviousRows).
+    int m_desktopCount = 1;
+    int m_desktopRows = 2;
+    int m_previousDesktopRows = 2;
     bool m_busy = false;
     bool m_saving = false;
     QString m_errorText;

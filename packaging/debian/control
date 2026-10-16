@@ -89,7 +89,7 @@ Package: plasma-fusion-settings
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version}),
          systemsettings, qml6-module-org-kde-kirigami, qml6-module-org-kde-kcmutils,
-         qml6-module-qtquick-dialogs, qml6-module-qtcore
+         qml6-module-qtquick-dialogs, qml6-module-qtcore, qml6-module-qtquick-shapes
 Description: Plasma Fusion settings page for System Settings
  The Appearance page of the Plasma Fusion desktop as a System Settings module:
  light, dark or automatic style, the accent color, the window-button layout,

@@ -9,6 +9,14 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Touchpad gestures you set:** the Plasma Fusion settings page has a Touchpad gestures group:
+  three fingers up, down, left and right and four fingers pinched in and spread out can each
+  open Overview, show the desktop, open the grid of desktops, All windows, the launcher, quick
+  settings, notifications or snap layouts, or do nothing. By default three fingers up open
+  Overview and down show the desktop, as before, four fingers pinched in open the launcher and
+  spread out show the desktop. Where KWin also uses a gesture (three fingers sideways with
+  several desktops in a row), the row says so and both happen. "Keep desktops in one row" (on,
+  as the setup arranges them) leaves three fingers up and down to the group.
 - **Export and import your settings:** the Plasma Fusion settings page has "Export my settings…"
   and "Import settings…". The file holds the page's settings and your panels: the top bar and dock
   with their widgets, the widgets' settings and keyboard shortcuts. Importing asks first, then puts

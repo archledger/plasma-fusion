@@ -19,10 +19,13 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusServiceWatcher>
+#include <QDBusVariant>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
 #include <QStandardPaths>
+
+#include <algorithm>
 
 using namespace Qt::StringLiterals;
 using namespace PlasmaFusion;
@@ -41,6 +44,12 @@ constexpr int s_hotCornerOn = 7;
 constexpr int s_hotCornerOff = 9;
 
 const QStringList s_buttonStyleNames = {u"RightGlyphs"_s, u"LeftCircles"_s, u"ShowOnHover"_s};
+
+// The snap script's touchpad gestures (its contents/ui/Gestures.js): the kwinrc keys and the names
+// of the actions, in GestureAction's order.
+const QString s_snapScriptGroup = u"Script-plasmafusion-snap"_s;
+const QStringList s_gestureActionNames =
+    {u"none"_s, u"overview"_s, u"desktop"_s, u"grid"_s, u"windows"_s, u"launcher"_s, u"quicksettings"_s, u"notifications"_s, u"snaplayouts"_s};
 const QStringList s_glassNames = {u"Full"_s, u"Reduced"_s, u"Solid"_s};
 
 int buttonStyleFromName(const QString &name)
@@ -115,7 +124,9 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize
         && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters && desktopIcons == other.desktopIcons && iconSize == other.iconSize
         && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator && launcherRecentFiles == other.launcherRecentFiles
-        && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces;
+        && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces && gestureSwipeUp == other.gestureSwipeUp
+        && gestureSwipeDown == other.gestureSwipeDown && gestureSwipeLeft == other.gestureSwipeLeft && gestureSwipeRight == other.gestureSwipeRight
+        && gesturePinchIn == other.gesturePinchIn && gesturePinchOut == other.gesturePinchOut && desktopsInOneRow == other.desktopsInOneRow;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
@@ -202,6 +213,12 @@ PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaDat
                                           u"tabletModeAvailableChanged"_s,
                                           this,
                                           SLOT(onTabletModeAvailableSignal(bool)));
+    // KWin's desktops, for the gestures' notes: KWin writes kwinrc [Desktops] without a change
+    // notification, so a desktop added or removed while the page is open comes by its signals.
+    for (const QString &signal : {u"countChanged"_s, u"rowsChanged"_s}) {
+        QDBusConnection::sessionBus()
+            .connect(u"org.kde.KWin"_s, u"/VirtualDesktopManager"_s, u"org.kde.KWin.VirtualDesktopManager"_s, signal, this, SLOT(onDesktopsSignal(uint)));
+    }
 }
 
 PlasmaFusionKcm::~PlasmaFusionKcm() = default;
@@ -684,6 +701,114 @@ void PlasmaFusionKcm::setLauncherPlaces(bool value)
     setLauncherField(&State::launcherPlaces, u"showPlaces"_s, value);
 }
 
+int PlasmaFusionKcm::gestureSwipeUp() const
+{
+    return m_current.gestureSwipeUp;
+}
+
+void PlasmaFusionKcm::setGestureSwipeUp(int value)
+{
+    if (value >= GestureNone && value <= GestureSnapLayouts) {
+        setField(&State::gestureSwipeUp, value);
+    }
+}
+
+int PlasmaFusionKcm::gestureSwipeDown() const
+{
+    return m_current.gestureSwipeDown;
+}
+
+void PlasmaFusionKcm::setGestureSwipeDown(int value)
+{
+    if (value >= GestureNone && value <= GestureSnapLayouts) {
+        setField(&State::gestureSwipeDown, value);
+    }
+}
+
+int PlasmaFusionKcm::gestureSwipeLeft() const
+{
+    return m_current.gestureSwipeLeft;
+}
+
+void PlasmaFusionKcm::setGestureSwipeLeft(int value)
+{
+    if (value >= GestureNone && value <= GestureSnapLayouts) {
+        setField(&State::gestureSwipeLeft, value);
+    }
+}
+
+int PlasmaFusionKcm::gestureSwipeRight() const
+{
+    return m_current.gestureSwipeRight;
+}
+
+void PlasmaFusionKcm::setGestureSwipeRight(int value)
+{
+    if (value >= GestureNone && value <= GestureSnapLayouts) {
+        setField(&State::gestureSwipeRight, value);
+    }
+}
+
+int PlasmaFusionKcm::gesturePinchIn() const
+{
+    return m_current.gesturePinchIn;
+}
+
+void PlasmaFusionKcm::setGesturePinchIn(int value)
+{
+    if (value >= GestureNone && value <= GestureSnapLayouts) {
+        setField(&State::gesturePinchIn, value);
+    }
+}
+
+int PlasmaFusionKcm::gesturePinchOut() const
+{
+    return m_current.gesturePinchOut;
+}
+
+void PlasmaFusionKcm::setGesturePinchOut(int value)
+{
+    if (value >= GestureNone && value <= GestureSnapLayouts) {
+        setField(&State::gesturePinchOut, value);
+    }
+}
+
+bool PlasmaFusionKcm::desktopsInOneRow() const
+{
+    return m_current.desktopsInOneRow;
+}
+
+void PlasmaFusionKcm::setDesktopsInOneRow(bool value)
+{
+    setField(&State::desktopsInOneRow, value);
+}
+
+// KWin lays the desktops out in its Rows rows (at most one per desktop) and as many columns as
+// they need (KWin 6.7.5 VirtualDesktopManager::load and updateLayout); with "desktops in one row"
+// set on the page there is one row, and turned off the rows come back as they were.
+QSize PlasmaFusionKcm::desktopGrid() const
+{
+    const int count = std::max(1, m_desktopCount);
+    int rows = m_desktopRows;
+    if (m_current.desktopsInOneRow) {
+        rows = 1;
+    } else if (m_saved.desktopsInOneRow) {
+        rows = m_previousDesktopRows;
+    }
+    rows = std::clamp(rows, 1, count);
+    return QSize((count + rows - 1) / rows, rows);
+}
+
+bool PlasmaFusionKcm::gestureSidewaysShared() const
+{
+    return desktopGrid().width() > 1;
+}
+
+bool PlasmaFusionKcm::gestureUpDownShared() const
+{
+    return desktopGrid().height() > 1;
+}
+
 // A launcher switch. While the launchers differ on its key the switch shows it off, and setting
 // it is a change of its own: Apply writes it to every launcher even when it ends where it was
 // (on and back off makes them all off).
@@ -870,6 +995,20 @@ void PlasmaFusionKcm::updateEnvironment()
         m_powerCritical = critical;
         Q_EMIT environmentChanged();
     }
+
+    // KWin's desktops (it writes Number and Rows when they change) for the gestures' notes.
+    KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
+    kwin->reparseConfiguration();
+    const KConfigGroup desktops(kwin, u"Desktops"_s);
+    const int count = desktops.readEntry("Number", 1);
+    const int rows = desktops.readEntry("Rows", 2);
+    const int previousRows = KConfigGroup(fusion, u"Gestures"_s).readEntry("PreviousRows", 2);
+    if (count != m_desktopCount || rows != m_desktopRows || previousRows != m_previousDesktopRows) {
+        m_desktopCount = count;
+        m_desktopRows = rows;
+        m_previousDesktopRows = previousRows;
+        Q_EMIT stateChanged();
+    }
 }
 
 void PlasmaFusionKcm::requestTabletState()
@@ -901,6 +1040,14 @@ void PlasmaFusionKcm::onTabletModeAvailableSignal(bool available)
 {
     m_tabletModeAvailable = available;
     Q_EMIT environmentChanged();
+}
+
+// KWin saves the desktops before it sends countChanged, and just after rowsChanged (KWin 6.7.5
+// virtualdesktops.cpp, dbusinterface.cpp setRows): the reload reads them after its 400 ms.
+void PlasmaFusionKcm::onDesktopsSignal(uint value)
+{
+    Q_UNUSED(value);
+    m_reloadTimer.start();
 }
 
 bool PlasmaFusionKcm::currentVariantIsLight() const
@@ -1012,6 +1159,21 @@ void PlasmaFusionKcm::loadConfigState(State &state) const
     state.tabletDock = tablet.readEntry("DockHiding", QString()) == u"none" ? DockAlwaysShow : DockHideOverApps;
     state.edgeLeft = tablet.readEntry("EdgeLeft", false);
     state.edgeRight = tablet.readEntry("EdgeRight", false);
+
+    // Touchpad gestures (the snap script's keys; a name it does not know is the default, as there)
+    // and KWin's desktops in one row (its [Desktops] Rows, 2 when not set).
+    const KConfigGroup gestures(kwin, s_snapScriptGroup);
+    const auto gesture = [&gestures](const char *key, int fallback) {
+        const int index = s_gestureActionNames.indexOf(gestures.readEntry(key, QString()).trimmed().toLower());
+        return index >= 0 ? index : fallback;
+    };
+    state.gestureSwipeUp = gesture("GestureSwipeUp3", GestureOverview);
+    state.gestureSwipeDown = gesture("GestureSwipeDown3", GestureShowDesktop);
+    state.gestureSwipeLeft = gesture("GestureSwipeLeft3", GestureNone);
+    state.gestureSwipeRight = gesture("GestureSwipeRight3", GestureNone);
+    state.gesturePinchIn = gesture("GesturePinchIn4", GestureLauncher);
+    state.gesturePinchOut = gesture("GesturePinchOut4", GestureShowDesktop);
+    state.desktopsInOneRow = KConfigGroup(kwin, u"Desktops"_s).readEntry("Rows", 2) == 1;
 }
 
 void PlasmaFusionKcm::copyConfigState(const State &from, State &to) const
@@ -1036,6 +1198,13 @@ void PlasmaFusionKcm::copyConfigState(const State &from, State &to) const
     to.tabletDock = from.tabletDock;
     to.edgeLeft = from.edgeLeft;
     to.edgeRight = from.edgeRight;
+    to.gestureSwipeUp = from.gestureSwipeUp;
+    to.gestureSwipeDown = from.gestureSwipeDown;
+    to.gestureSwipeLeft = from.gestureSwipeLeft;
+    to.gestureSwipeRight = from.gestureSwipeRight;
+    to.gesturePinchIn = from.gesturePinchIn;
+    to.gesturePinchOut = from.gesturePinchOut;
+    to.desktopsInOneRow = from.desktopsInOneRow;
 }
 
 void PlasmaFusionKcm::load()
@@ -1151,6 +1320,9 @@ void PlasmaFusionKcm::onConfigChanged(const KConfigGroup &group, const QByteArra
         u"Power"_s,
         u"TopBar"_s,
         u"Dock"_s,
+        s_snapScriptGroup,
+        u"Desktops"_s,
+        u"Gestures"_s,
     };
     if (watched.contains(name)) {
         m_reloadTimer.start();
@@ -1245,7 +1417,8 @@ void PlasmaFusionKcm::save()
     if (!after.sameAccent(before)) {
         applyAccent(after);
     }
-    // 4. KWin: window buttons, snap layouts, hot corner (one reconfigure), glass, tablet.
+    // 4. KWin: window buttons, snap layouts, hot corner, touchpad gestures (one reconfigure),
+    //    desktops in one row, glass, tablet.
     bool reconfigure = false;
     if (decoration) {
         applyDecoration(after.buttonStyle);
@@ -1258,6 +1431,13 @@ void PlasmaFusionKcm::save()
     if (after.hotCorner != before.hotCorner) {
         applyHotCorner(after.hotCorner);
         reconfigure = true;
+    }
+    // The snap script reads its gesture keys when a gesture comes, from KWin's copy of kwinrc.
+    if (applyGestures(before, after)) {
+        reconfigure = true;
+    }
+    if (after.desktopsInOneRow != before.desktopsInOneRow) {
+        applyDesktopRows(after.desktopsInOneRow);
     }
     if (reconfigure) {
         reconfigureKWin(after.hotCorner != before.hotCorner);
@@ -1794,6 +1974,67 @@ void PlasmaFusionKcm::applyFileContentIndexing(bool on)
 
 // TABLET.md 3.2 and 4.15: kwinrc with a notification (KWin's KConfigWatcher reparses it), then the
 // tablet script's shortcut, which reads its keys again and applies them.
+bool PlasmaFusionKcm::applyGestures(const State &before, const State &after)
+{
+    const struct {
+        int State::*field;
+        const char *key;
+    } gestures[] = {
+        {&State::gestureSwipeUp, "GestureSwipeUp3"},
+        {&State::gestureSwipeDown, "GestureSwipeDown3"},
+        {&State::gestureSwipeLeft, "GestureSwipeLeft3"},
+        {&State::gestureSwipeRight, "GestureSwipeRight3"},
+        {&State::gesturePinchIn, "GesturePinchIn4"},
+        {&State::gesturePinchOut, "GesturePinchOut4"},
+    };
+    KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
+    kwin->reparseConfiguration();
+    KConfigGroup group(kwin, s_snapScriptGroup);
+    bool changed = false;
+    for (const auto &gesture : gestures) {
+        if (after.*gesture.field != before.*gesture.field) {
+            group.writeEntry(gesture.key, s_gestureActionNames.value(after.*gesture.field), KConfig::Notify);
+            changed = true;
+        }
+    }
+    if (changed) {
+        kwin->sync();
+    }
+    return changed;
+}
+
+// KWin's desktops in one row, or the rows they had before: its VirtualDesktopManager rows over
+// D-Bus, which lays them out now and saves (a value above the desktop count is refused there, as
+// is one equal to the rows there are), and kwinrc [Desktops] Rows, which it reads when it starts
+// (KWin 6.7.5 dbusinterface.cpp setRows, virtualdesktops.cpp load and save).
+void PlasmaFusionKcm::applyDesktopRows(bool oneRow)
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup kept(fusion, u"Gestures"_s);
+    KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
+    kwin->reparseConfiguration();
+    KConfigGroup desktops(kwin, u"Desktops"_s);
+    const int rowsNow = desktops.readEntry("Rows", 2);
+    int rows = 1;
+    if (oneRow) {
+        if (rowsNow != 1) {
+            kept.writeEntry("PreviousRows", rowsNow, KConfig::Notify);
+        }
+    } else {
+        rows = std::max(2, kept.readEntry("PreviousRows", 2));
+        kept.deleteEntry("PreviousRows", KConfig::Notify);
+    }
+    fusion->sync();
+    desktops.writeEntry("Rows", rows, KConfig::Notify);
+    kwin->sync();
+
+    QDBusMessage message = QDBusMessage::createMethodCall(u"org.kde.KWin"_s, u"/VirtualDesktopManager"_s, u"org.freedesktop.DBus.Properties"_s, u"Set"_s);
+    message << u"org.kde.KWin.VirtualDesktopManager"_s << u"rows"_s << QVariant::fromValue(QDBusVariant(QVariant::fromValue(uint(rows))));
+    QDBusConnection::sessionBus().asyncCall(message, s_dbusTimeout);
+    updateEnvironment();
+}
+
 void PlasmaFusionKcm::applyTabletConfig(const State &before, const State &after)
 {
     const bool mode = after.tabletMode != before.tabletMode;
