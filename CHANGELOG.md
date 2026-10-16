@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- The Plasma Fusion settings page has a **Launcher** group: recent files under the pinned apps, the
+  Recent chip (recently and often used apps) and the Places chip can each be turned off. The
+  launcher's own settings have the same switches.
 - New **live chips** at the start of the top bar's right cluster: a chip shows while an app uses
   the microphone or the camera, shares the screen or controls the computer, while someone is signed
   in over SSH, while Spectacle records the screen (with the time and a stop button) and while a
