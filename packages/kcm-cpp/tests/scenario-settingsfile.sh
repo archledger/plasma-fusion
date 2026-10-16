@@ -12,7 +12,8 @@
 #   2. the page and the layout go back (the settings changed again, the Plasma Fusion decoration,
 #      "Reset Fusion layout");
 #   3. the import brings back the settings, Breeze, the same panels (the copy made again by "Dock
-#      on every screen") and Meta+A on the new quick settings, without an error; after a
+#      on every screen") and Meta+A on the new quick settings, without an error, and the key the
+#      removed app name had (the file gives it none) is no longer kglobalaccel's; after a
 #      plasmashell restart the panels are still on their screens.
 # Run with PFV_OUTPUTS=2 (make-seed.sh ... dark, PF_KCMCTL set; the stage holds this change's
 # look-and-feel part):
@@ -106,6 +107,22 @@ sleep 3
 info "reset layout: $(layout)"
 check "reset: the layout differs" "$([ "$(layout)" != "$changed" ] && echo differs)" "differs"
 check "reset: the Plasma Fusion decoration" "$(ck kwinrc org.kde.kdecoration2 library)" "org.plasmafusion.decoration"
+# A key on the app name of this layout, which the file gives none (kglobalaccel keeps it in
+# kglobalshortcutsrc as "activate widget ID").
+oldapp=$(evaljs - <<'JS'
+var ps = panels(), id = -1;
+for (var i = 0; i < ps.length && id < 0; ++i) {
+    var ws = ps[i].widgets("org.plasmafusion.appname");
+    if (ws.length > 0) {
+        ws[0].globalShortcut = "Meta+Ctrl+F9";
+        id = ws[0].id;
+    }
+}
+print(id);
+JS
+)
+sleep 3
+check "reset: the app name holds Meta+Ctrl+F9" "$(grep -c "^activate widget $oldapp=Meta+Ctrl+F9" "$HOME/.config/kglobalshortcutsrc")" 1
 shot s01-reset
 
 # 3. Imported.
@@ -130,6 +147,7 @@ check "import: applied (plasmafusionrc)" "$(ck plasmafusionrc Effects Glass) $(c
 check "import: the widgets' keys (keyboard, magnified size)" "$(wkey org.plasmafusion.quicksettings keyboardPolicy) $(wkey org.plasmafusion.dock magnifiedSize)" "touch 56"
 check "import: the same panels, the copy made again" "$(layout)" "$changed"
 check "import: Meta+A on the new quick settings" "$(wshortcut org.plasmafusion.quicksettings)" "Meta+A"
+check "import: the removed app name's key is released" "$(grep -c "^activate widget $oldapp=" "$HOME/.config/kglobalshortcutsrc")" 0
 shot s02-imported
 
 # The panels stay on their screens when plasmashell starts again (no screen of the exporting

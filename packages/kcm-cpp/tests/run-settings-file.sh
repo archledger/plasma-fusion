@@ -39,15 +39,21 @@ for tool in systemctl plasma-apply-lookandfeel plasma-apply-colorscheme; do
 done
 export PATH=$work/bin:$PATH
 
-# The stand-in shell's layout: a top bar with quick settings (no key), a dock.
-cat >"$work/layout.json" <<'JSON'
+# The stand-in shell's layout, set up again for each session: a top bar with quick settings
+# (Meta+A), a dock, and a desktop widget with a key of its own (Meta+D, kept by an import).
+cat >"$work/layout-base.json" <<'JSON'
 {"knownWidgetTypes": ["org.plasmafusion.appname", "org.plasmafusion.quicksettings", "org.plasmafusion.dock"],
- "desktops": [{"id": 1, "widgets": []}],
+ "desktops": [{"id": 1, "widgets": [{"id": 7, "type": "org.plasmafusion.calendarcard", "config": {}, "shortcut": "Meta+D"}]}],
  "panels": [{"id": 2, "location": "top", "widgets": [
                {"id": 3, "type": "org.plasmafusion.appname", "config": {}},
-               {"id": 4, "type": "org.plasmafusion.quicksettings", "config": {}}]},
+               {"id": 4, "type": "org.plasmafusion.quicksettings", "config": {}, "shortcut": "Meta+A"}]},
             {"id": 5, "location": "bottom", "opacity": "translucent", "widgets": [
                {"id": 6, "type": "org.plasmafusion.dock", "config": {}}]}]}
+JSON
+# A desktop without panels (no dock, no top bar).
+cat >"$work/layout-nopanels.json" <<'JSON'
+{"knownWidgetTypes": ["org.plasmafusion.appname", "org.plasmafusion.quicksettings", "org.plasmafusion.dock"],
+ "desktops": [{"id": 1, "widgets": []}], "panels": []}
 JSON
 lf=$XDG_DATA_HOME/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts
 mkdir -p "$lf"
@@ -62,7 +68,11 @@ print(JSON.stringify({ version: 1, screens: 1, left: ["screen", "copy"], panels:
 JS
 cat >"$lf/import-layout.js" <<'JS'
 if (PHASE === "remove") {
-    print(JSON.stringify({ removed: 2 }));
+    var ps = panels();
+    for (var i = ps.length - 1; i >= 0; --i) {
+        ps[i].remove();
+    }
+    print(JSON.stringify({ removed: ps.length }));
 } else {
     var keys = [], n = 0;
     LAYOUT.panels.forEach(function (p) {
@@ -92,8 +102,9 @@ session() {
   # child, so the wait below could see the old "ready" and start the module before the stand-in
   # shell is there (its actions then do nothing).
   rm -f "$work/mock-session.out"
+  cp "${LAYOUT:-$work/layout-base.json}" "$work/layout.json"
   python3 "$powerfx/tests/mock-session.py" --address "$DBUS_SESSION_BUS_ADDRESS" --layout "$work/layout.json" \
-    --log "$work/calls.log" --node "$(command -v node)" >"$work/mock-session.out" 2>&1 &
+    --log "$work/calls.log" --node "$(command -v node)" --kglobalaccel >"$work/mock-session.out" 2>&1 &
   local mock=$!
   # Up to 30 s (a loaded machine, sanitizer builds).
   for _ in $(seq 300); do grep -q ready "$work/mock-session.out" 2>/dev/null && break; sleep 0.1; done
@@ -154,6 +165,8 @@ check "  in two steps: the panels there are removed first, then the file's added
   [ -n \"\$r\" ] && [ -n \"\$a\" ] && [ \"\$r\" -lt \"\$a\" ]"
 check "  the file's key for quick settings is the one tried" grep -q 'Meta+Q for quick settings' "$work/import.log"
 check "  and the second quick settings' own key too" grep -q 'Meta+W for quick settings' "$work/import.log"
+check "  the removed quick settings' Meta+A is released, the desktop widget's Meta+D kept" bash -c "
+  grep -q 'kglobalaccel unregister plasmashell activate widget 4' '$work/calls.log' && ! grep -q 'activate widget 7' '$work/calls.log'"
 check "  the file's decoration is back, with its button order" bash -c "
   [ \"\$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key library)\" = org.kde.kwin.aurorae.v2 ] &&
   [ \"\$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme)\" = __aurorae__svg__TestTheme ] &&
@@ -212,6 +225,27 @@ check "the file's decoration is not here: the page names it" \
 session nokeys "call importSettings $work/nokeys.json"
 check "a file without keys: none is tried, not Plasma Fusion's Meta+A either" bash -c "
   ! grep -q 'Meta+' '$work/nokeys.log' && grep -q '^kcmctl: errorText=\$' '$work/nokeys.log'"
+
+# ---- Imported on a desktop without a dock or a top bar: "Dock on every screen" and the top bar's
+# opacity choice are the file's (Apply alone would leave them, with nothing to apply them to), and
+# the docks of the other screens come with the file's dock (ensure-topbars.js runs).
+python3 - "$work" <<'PY'
+import json, sys
+work = sys.argv[1]
+f = json.load(open(f"{work}/good.json"))
+f["settings"]["everyDock"] = True
+f["settings"]["solidTopBar"] = False
+json.dump(f, open(f"{work}/panelchoices.json", "w"))
+PY
+export XDG_CONFIG_HOME=$work/config-d
+mkdir -p "$XDG_CONFIG_HOME"
+LAYOUT=$work/layout-nopanels.json session panelchoices "call importSettings $work/panelchoices.json" "wait 500" "get everyDock" "get solidTopBar"
+check "imported without a dock or top bar: the file's dock and top-bar choices are kept" bash -c "
+  [ \"\$(kreadconfig6 --file plasmafusionrc --group Dock --key EveryScreen)\" = true ] &&
+  [ \"\$(kreadconfig6 --file plasmafusionrc --group TopBar --key SolidNextToWindows)\" = false ] &&
+  grep -q '^kcmctl: everyDock=true' '$work/panelchoices.log' && grep -q '^kcmctl: solidTopBar=false' '$work/panelchoices.log'"
+check "  and ensure-topbars.js runs for the other screens' docks" grep -q 'top bars: stand-in ran' "$work/calls.log"
+export XDG_CONFIG_HOME=$work/config-c
 
 # ---- The page left right after an import, or System Settings closed during it: the file's panels
 # still come (the steps run in one go, not from timers of the page, which would die with it).

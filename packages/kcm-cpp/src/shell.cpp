@@ -1255,6 +1255,21 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before, bool imported
         }
     };
     if (imported) {
+        // The widgets the import removed keep their keys in kglobalaccel: libplasma 6.7.5 releases
+        // only a removed panel's own key (AppletPrivate::cleanUpAndDelete), and deletes its widgets
+        // without (~Applet). Each such key is released, so a key the file gives another widget, or
+        // none, is free again; the desktop's widgets, which an import keeps, are left alone.
+        QDBusConnection bus = QDBusConnection::sessionBus();
+        for (const QJsonValue &value : before.value(u"widgets"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            const int id = widget.value(u"id"_s).toInt();
+            if (widget.value(u"key"_s).toString().isEmpty() || live.contains(id)) {
+                continue;
+            }
+            QDBusMessage release = kglobalaccel(u"unregister"_s);
+            release << u"plasmashell"_s << QString(u"activate widget "_s + QString::number(id));
+            bus.call(release, QDBus::Block, s_dbusTimeout);
+        }
         // Widget by widget, as the file has them (two widgets of one type keep their own keys); a
         // widget the file gives no key gets none.
         for (const QJsonValue &value : before.value(u"assign"_s).toArray()) {

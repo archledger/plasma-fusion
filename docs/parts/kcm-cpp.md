@@ -671,7 +671,10 @@ as text. Then:
    (the four kwinrc keys, then KWin reconfigures) when it is installed here (its plugin in
    `org.kde.kdecoration3`; an Aurorae SVG theme: its theme folder, as Apply checks the fallback's),
    and the "Follow sunset" watch does not put Plasma Fusion's back over it; one that is not
-   installed is named;
+   installed is named. Apply turns "Dock on every screen" on only with a dock to copy and keeps
+   the top bar's opacity choice only with a top bar; on a desktop without them the file's choice
+   is written anyway (plasmafusionrc `[Dock] EveryScreen`, `[TopBar] SolidNextToWindows`), as the
+   file's panels bring them;
 2. the panels: `import-layout.js` gets the file's layout in front of it (`var LAYOUT = ...;`, the
    JSON with U+2028 and U+2029 escaped: Qt 6.11.2's QJSEngine refuses them in a string literal)
    and puts its panels in place of the ones there are, in two steps half a second apart, as a
@@ -687,7 +690,11 @@ as text. Then:
 3. as after "Reset Fusion layout" (`finishResetLayout`): each widget the import made gets the key
    the file gives it (`import-layout.js` lists the new widgets' ids with their keys, so two
    widgets of one type keep their own), and a widget the file gives none gets none (no default:
-   the file is what the user had); a key the removed widgets still hold is released first (the
+   the file is what the user had). First every key the removed widgets held is released
+   (kglobalaccel `unregister` of `plasmashell` / `activate widget ID`): libplasma 6.7.5 releases
+   only a removed panel's own key (`AppletPrivate::cleanUpAndDelete`) and deletes its widgets
+   without (`~Applet`), so their keys stayed taken; the desktop's widgets, which an import keeps,
+   keep theirs. A key a widget of the old layout still holds is released when it is given (the
    new panels' ids are all higher than every id there was: libplasma 6.7.5 counts one id up for
    containments and widgets, `applet_p.cpp` and `corona.cpp`); the glass and
    the top-bar choice are applied, `ensure-topbars.js` runs with "Top bar on every screen" or
@@ -727,7 +734,10 @@ Tests:
   installed is named; a file without keys gets none tried, Plasma Fusion's Meta+A neither; the
   page left right after an import (kcmctl's `unload`) and System Settings closed during it
   (`quitafter`, `QCoreApplication::exit`) still get the file's panels added; an export larger than
-  an import takes is not written; values the page does not take are counted and
+  an import takes is not written; the removed quick settings' Meta+A is released and a desktop
+  widget's key kept (the stand-in session answers as kglobalaccel, `mock-session.py
+  --kglobalaccel`, and logs each `unregister`); imported on a desktop without panels, the file's
+  "Dock on every screen" and top-bar choices are kept and `ensure-topbars.js` runs; values the page does not take are counted and
   left as they were; without `export-layout.js` the action is not offered and an export says why.
   Each of the module's steps fails a check when taken out (the escape too: the stand-in shell
   refuses an unescaped U+2028 as QJSEngine does).
@@ -735,7 +745,9 @@ Tests:
   (valid, odd and wrongly typed values, cut short, or none), and the commands can import or export.
 - Session test (`tests/scenario-settingsfile.sh`; 2026-10-16, a private session on the Fedora 44
   test laptop with two outputs, Plasma 6.7.5, the module and kcmctl from this change; the real
-  plasmashell, kglobalaccel and the layout part's scripts): **20 checks pass** (review round 1).
+  plasmashell, kglobalaccel and the layout part's scripts): **22 checks pass** (review round 3).
+  Before the import the app name of the reset layout gets Meta+Ctrl+F9, which the file does not
+  give: after it, kglobalshortcutsrc has no `activate widget ID` entry for it any more.
   The page and the panels changed (Reduced glass, the keyboard on touch, 56 px icons, a dock on
   every screen, the pen menu removed, KWin's Breeze decoration) and exported: the file holds both
   screens' bars and the main dock, not the copy, Breeze, and Meta+A for quick settings; after the

@@ -7,10 +7,12 @@
 # logged) and org.kde.plasmashell /PlasmaShell evaluateScript, which runs the script with
 # fake-shell.js against a layout JSON file, and loadLookAndFeelDefaultLayout, which puts
 # LAYOUT.json.reset in its place when there is one. org.plasmafusion.MockSession on /MockSession
-# plays a plasmashell restart: ReleaseShell drops the name, OwnShell takes it again.
+# plays a plasmashell restart: ReleaseShell drops the name, OwnShell takes it again. With
+# --kglobalaccel it is org.kde.kglobalaccel too: no key is held (actionList answers none, every
+# key is available) and unregister is logged.
 #
 #   mock-session.py --address ADDRESS --layout LAYOUT.json --log CALLS.log [--node PATH] [--no-shell]
-#                   [--no-kwin]
+#                   [--no-kwin] [--kglobalaccel]
 import argparse
 import os
 import subprocess
@@ -29,6 +31,11 @@ XML = """
     <method name="evaluateScript"><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
     <method name="loadLookAndFeelDefaultLayout"><arg type="s" direction="in"/></method>
   </interface>
+  <interface name="org.kde.KGlobalAccel">
+    <method name="actionList"><arg type="(ai)" direction="in"/><arg type="as" direction="out"/></method>
+    <method name="globalShortcutAvailable"><arg type="(ai)" direction="in"/><arg type="s" direction="in"/><arg type="b" direction="out"/></method>
+    <method name="unregister"><arg type="s" direction="in"/><arg type="s" direction="in"/><arg type="b" direction="out"/></method>
+  </interface>
   <interface name="org.plasmafusion.MockSession">
     <method name="ReleaseShell"/>
     <method name="OwnShell"/>
@@ -46,6 +53,7 @@ def main():
     ap.add_argument("--node", default="node")
     ap.add_argument("--no-shell", action="store_true")
     ap.add_argument("--no-kwin", action="store_true")
+    ap.add_argument("--kglobalaccel", action="store_true")
     a = ap.parse_args()
     node = Gio.DBusNodeInfo.new_for_xml(XML)
     iface = {i.name: i for i in node.interfaces}
@@ -73,6 +81,15 @@ def main():
             else:
                 loaded[effect] = False
                 inv.return_value(None)
+        elif name == "org.kde.KGlobalAccel":
+            if method == "actionList":
+                inv.return_value(GLib.Variant("(as)", ([],)))
+            elif method == "globalShortcutAvailable":
+                inv.return_value(GLib.Variant("(b)", (True,)))
+            else:
+                component, action = params.unpack()
+                log(f"kglobalaccel unregister {component} {action}")
+                inv.return_value(GLib.Variant("(b)", (True,)))
         elif name == "org.kde.PlasmaShell" and method == "loadLookAndFeelDefaultLayout":
             # The layout the Global Theme builds: LAYOUT.json.reset, when the test gives one.
             (package,) = params.unpack()
@@ -105,6 +122,9 @@ def main():
     c.register_object("/PlasmaShell", iface["org.kde.PlasmaShell"], call, None, None)
     c.register_object("/MockSession", iface["org.plasmafusion.MockSession"], call, None, None)
     names = ["org.plasmafusion.MockSession"]
+    if a.kglobalaccel:
+        c.register_object("/kglobalaccel", iface["org.kde.KGlobalAccel"], call, None, None)
+        names.append("org.kde.kglobalaccel")
     if not a.no_kwin:
         names.append("org.kde.KWin")
     if not a.no_shell:

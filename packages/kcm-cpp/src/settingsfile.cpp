@@ -362,6 +362,40 @@ int PlasmaFusionKcm::applyFileDecoration(const QJsonObject &settings, QStringLis
     return 0;
 }
 
+void PlasmaFusionKcm::keepPanelChoices(const QJsonObject &settings)
+{
+    // Apply turns "Dock on every screen" on only with a dock to copy, and keeps the top bar's
+    // opacity choice only with a top bar; on a desktop without them the file's choice would be
+    // lost, though its panels bring them. finishResetLayout and ensure-topbars.js read the choice
+    // from plasmafusionrc once the panels are there.
+    const struct {
+        const char *name;
+        bool State::*field;
+        const char *group;
+        const char *key;
+    } choices[] = {
+        {"everyDock", &State::everyDock, "Dock", "EveryScreen"},
+        {"solidTopBar", &State::solidTopBar, "TopBar", "SolidNextToWindows"},
+    };
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    bool changed = false;
+    for (const auto &choice : choices) {
+        const QJsonValue value = settings.value(QString::fromLatin1(choice.name));
+        if (!value.isBool() || m_saved.*choice.field == value.toBool()) {
+            continue;
+        }
+        KConfigGroup(fusion, QString::fromLatin1(choice.group)).writeEntry(choice.key, value.toBool(), KConfig::Notify);
+        m_current.*choice.field = value.toBool();
+        m_saved.*choice.field = value.toBool();
+        changed = true;
+    }
+    if (changed) {
+        fusion->sync();
+        Q_EMIT stateChanged();
+    }
+}
+
 bool PlasmaFusionKcm::settingsFileAvailable() const
 {
     return !layoutScriptPath(u"export-layout.js"_s).isEmpty() && !layoutScriptPath(u"import-layout.js"_s).isEmpty();
@@ -476,6 +510,7 @@ void PlasmaFusionKcm::importSettings(const QString &location)
     int notTaken = settingsFromFile(settings, &notes);
     save();
     notTaken += applyFileDecoration(settings, &notes);
+    keepPanelChoices(settings);
 
     // 2. The panels. The ids there are now: the new widgets' are all above them (finishResetLayout).
     bool ok = false;
@@ -487,6 +522,7 @@ void PlasmaFusionKcm::importSettings(const QString &location)
     }
     const QJsonObject layout = file.value(u"layout"_s).toObject();
     const QJsonValue ids = now.value(u"ids"_s);
+    const QJsonValue widgetsBefore = now.value(u"widgets"_s);
 
     // JSON is JavaScript but for these two characters, which QJSEngine refuses in a string literal
     // (Qt 6.11.2).
@@ -545,5 +581,5 @@ void PlasmaFusionKcm::importSettings(const QString &location)
     // As after a layout reset: a moment for the new widgets to start, then their shortcuts (each
     // widget made gets the key the file gives it; import-layout.js lists them by id).
     waitWithoutInput(1000);
-    finishResetLayout(QJsonObject{{u"ids"_s, ids}, {u"assign"_s, answer.value(u"keys"_s).toArray()}}, true, outcome.join(u' '));
+    finishResetLayout(QJsonObject{{u"ids"_s, ids}, {u"widgets"_s, widgetsBefore}, {u"assign"_s, answer.value(u"keys"_s).toArray()}}, true, outcome.join(u' '));
 }
