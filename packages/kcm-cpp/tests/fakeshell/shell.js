@@ -5,8 +5,9 @@
 // uses, for fakeshell.cpp. Panels hold widgets in order; a widget's index is its place in that
 // order and setting it moves the widget there (the panel's own rule: taken out, then put in at the
 // index); geometry.x is 100 px per place. Layout file (JSON):
-//   panels            [{ location, screen, opacity, widgets: [plugin id or { type, config }, ...],
-//                     listDelayMs }]; a widget's config maps "Group/key" to a value
+//   panels            [{ location, screen, opacity, config, widgets: [plugin id or { type, config },
+//                     ...], listDelayMs }]; a panel's and a widget's config map "Group/key" to a
+//                     value
 //   knownWidgetTypes  plugin ids addWidget() can make (default: every id in the panels)
 //   failAdd           plugin ids addWidget() fails for (it returns an Error, as plasmashell does)
 //   insert            "x" (default: before the widget at the x given, as a drop there) or "end"
@@ -20,7 +21,8 @@
 //                     the invalid config group of a missing screen
 //   showOpacity       the state file also names each panel's opacity ("top 0 adaptive: ...")
 //   showConfig        the state file also lists each widget's configuration after its id
-//                     ("launcher{General/showPlaces=false}"), keys in order
+//                     ("launcher{General/showPlaces=false}"), keys in order, and a panel's after
+//                     its screen ("bottom 1{PlasmaFusion/everyScreenCopy=true}: ...")
 //   scriptDelayMs     the shell answers a script only this long after it came (a shell that has
 //   slowFrom          just started), from the slowFrom-th script on (default 1: every script)
 //   failScripts       a script holding this text gets an error reply instead (a shell whose script
@@ -45,6 +47,7 @@ function loadLayout(text) {
             location: p.location || "top",
             screen: p.screen === undefined ? 0 : p.screen,
             opacity: p.opacity || "adaptive",
+            config: p.config || {},
             listDelayMs: p.listDelayMs,
             items: (p.widgets || []).map(function (entry) {
                 var type = typeof entry === "string" ? entry : entry.type;
@@ -118,8 +121,17 @@ function view(panel, what) {
 }
 
 function panelObject(panel) {
-    return {
+    var o = {
         get id() { return panel.id; },
+        // The containment's own configuration (not the panel's window settings of view()).
+        currentConfigGroup: [],
+        readConfig: function (key, fallback) {
+            var v = panel.config[o.currentConfigGroup.join("/") + "/" + key];
+            return v === undefined ? fallback : v;
+        },
+        writeConfig: function (key, value) {
+            panel.config[o.currentConfigGroup.join("/") + "/" + key] = value;
+        },
         remove: function () {
             var at = state.panels.indexOf(panel);
             if (at >= 0) {
@@ -151,6 +163,7 @@ function panelObject(panel) {
             return widgetObject(panel, w);
         }
     };
+    return o;
 }
 
 // Whether fakeshell answers SCRIPT with an error (failScripts).
@@ -180,7 +193,10 @@ function print(text) {
 // opacity after the screen with showOpacity).
 function dumpLayout() {
     return state.panels.map(function (p) {
-        return p.location + " " + p.screen + (state.showOpacity ? " " + p.opacity : "") + ": " + p.items.map(function (w) {
+        // With showConfig a panel's own configuration follows its screen when it has any.
+        var own = Object.keys(p.config).sort();
+        var conf = state.showConfig && own.length > 0 ? "{" + own.map(function (k) { return k + "=" + p.config[k]; }).join(",") + "}" : "";
+        return p.location + " " + p.screen + conf + (state.showOpacity ? " " + p.opacity : "") + ": " + p.items.map(function (w) {
             var name = w.type.replace(/^org\.(plasmafusion|kde\.plasma)\./, "");
             var keys = Object.keys(w.config).sort();
             if (!state.showConfig || keys.length === 0) {

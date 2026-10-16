@@ -357,13 +357,17 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     with the main dock's height, hiding and opacity, a hidden launcher of its own (the dock's Start
     opens the launcher of its own panel, so on its own screen) and the main dock's and launcher's
     settings (every [General] key they have set, but the ones that ask for something once: the
-    test hooks and requests). Such a dock is marked as a copy ([PlasmaFusion] everyScreenCopy): when
-    the switch goes off the settings page removes the copies' panels, and only those, so docks the
-    user made stay. Every dock then lists only its own screen's windows (showOnlyCurrentScreen); a
+    test hooks and requests; a key the power service holds while the battery is low gets the user's
+    value from plasmafusionrc [Power] UserWidgetValues). Such a dock and its panel are marked as a
+    copy ([PlasmaFusion] everyScreenCopy): when the switch goes off the settings page removes the
+    copies' panels, and only those, so docks the user made stay; a copy's panel whose dock the user
+    removed still counts for its screen. A dock panel of a screen that is not there is left as it
+    is. Every dock then lists only its own screen's windows (showOnlyCurrentScreen); a
     dock that is not a copy keeps the value it had before in its [PlasmaFusion]
     onlyCurrentScreenBefore, which the settings page puts back. The main dock, the one copied, is
     the one on the lowest screen number that is not a copy. When the shell cannot make the dock or
-    its launcher (addWidget gives an Error), the new panel is removed again. Idempotent; a dock is never removed
+    its launcher (addWidget gives an Error; or the launcher is not installed), the new panel is
+    removed again. Idempotent; a dock is never removed
     here. Prints one line: "docks: screens N, added M" (", not made K" when some could not be).
 */
 (function () {
@@ -403,12 +407,18 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         widget.currentConfigGroup = [];
     }
     var isCopy = function (dock) { return truthy(mark(dock, "everyScreenCopy")); };
+    // A panel made here is marked too: a copy's panel whose dock the user removed is still that
+    // screen's (no second panel for it), and goes when the switch is off.
+    var copyPanel = function (p) { return truthy(mark(p, "everyScreenCopy")); };
     var onScreen = {}, main = null, unplaced = 0;
     for (var i = 0; i < ps.length; ++i) {
         var docks = ps[i].widgets(DOCK);
-        if (docks.length === 0) {
+        var marked = copyPanel(ps[i]);
+        if (docks.length === 0 && !marked) {
             continue;
         }
+        // A dock panel of a screen that is not there (Plasma 6.8 keeps it on that screen) is left
+        // as it is: its sizes cannot be read (they crash plasmashell), and it takes no screen here.
         if (ps[i].screen < 0 || ps[i].screen >= screenCount) {
             unplaced++;
             continue;
@@ -416,22 +426,31 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         if (onScreen[ps[i].screen] === undefined) {
             onScreen[ps[i].screen] = ps[i];
         }
+        if (docks.length === 0) {
+            continue;
+        }
         // An original before a copy, then the lowest screen.
-        var copy = isCopy(docks[0]);
+        var copy = marked || isCopy(docks[0]);
         if (main === null || (main.copy && !copy) || (main.copy === copy && ps[i].screen < main.panel.screen)) {
             main = { panel: ps[i], copy: copy };
         }
-    }
-    if (unplaced > 0) {
-        print("docks: skipped, " + unplaced + " dock panel(s) without a screen");
-        return;
     }
     if (main === null) {
         print("docks: no Plasma Fusion dock to follow");
         return;
     }
     main = main.panel;
-    // FROM's [General] keys onto TO (but SKIP), lists as lists.
+    // While the battery is low the power service holds some keys (dock magnification, glass) and
+    // keeps the user's values in plasmafusionrc [Power] UserWidgetValues ("WIDGET-ID/key=value,...",
+    // plasma-fusion-powerfx): a copy gets the user's value, which the service then holds for it too.
+    var held = {};
+    String(ConfigFile("plasmafusionrc", "Power").readEntry("UserWidgetValues") || "").split(",").forEach(function (e) {
+        var at = e.indexOf("=");
+        if (at > 0) {
+            held[e.slice(0, at)] = e.slice(at + 1);
+        }
+    });
+    // FROM's [General] keys onto TO (but SKIP), lists as lists, held keys with the user's value.
     function copyKeys(from, to) {
         from.currentConfigGroup = ["General"];
         to.currentConfigGroup = ["General"];
@@ -441,7 +460,12 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
             if (SKIP.indexOf(key) !== -1) {
                 continue;
             }
-            to.writeConfig(key, from.readConfig(key, LISTS.indexOf(key) !== -1 ? [] : ""));
+            var user = held[from.id + "/" + key];
+            if (user !== undefined) {
+                to.writeConfig(key, user === "true" ? true : user === "false" ? false : user);
+            } else {
+                to.writeConfig(key, from.readConfig(key, LISTS.indexOf(key) !== -1 ? [] : ""));
+            }
         }
         from.currentConfigGroup = [];
         to.currentConfigGroup = [];
@@ -478,23 +502,25 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         dockPanel.alignment = "center";
         dockPanel.hiding = main.hiding;
         dockPanel.opacity = main.opacity;
-        if (mainLaunchers.length > 0 && knownWidgetTypes.indexOf(LAUNCHER) !== -1) {
-            var launcher = dockPanel.addWidget(LAUNCHER);
-            if (!made(launcher)) {
-                // Without a launcher of its own the dock's Start would open another screen's: no
-                // panel either (a later run tries again).
-                dockPanel.remove();
-                failed++;
-                continue;
-            }
-            copyKeys(mainLaunchers[0], launcher);
-            // Next to the Fusion dock the launcher has no button of its own; its pins are the
-            // shared ones already (no first-run pins again).
-            launcher.currentConfigGroup = ["General"];
-            launcher.writeConfig("buttonStyle", "hidden");
-            launcher.writeConfig("favoritesPortedToKAstats", true);
-            launcher.currentConfigGroup = [];
+        setMark(dockPanel, "everyScreenCopy", true);
+        // A launcher of its own: without one the dock's Start would open another screen's, or
+        // none. When the shell cannot make it (or the launcher is not installed) there is no panel
+        // either (a later run tries again).
+        var launcher = knownWidgetTypes.indexOf(LAUNCHER) !== -1 ? dockPanel.addWidget(LAUNCHER) : null;
+        if (!made(launcher)) {
+            dockPanel.remove();
+            failed++;
+            continue;
         }
+        if (mainLaunchers.length > 0) {
+            copyKeys(mainLaunchers[0], launcher);
+        }
+        // Next to the Fusion dock the launcher has no button of its own; its pins are the shared
+        // ones already (no first-run pins again).
+        launcher.currentConfigGroup = ["General"];
+        launcher.writeConfig("buttonStyle", "hidden");
+        launcher.writeConfig("favoritesPortedToKAstats", true);
+        launcher.currentConfigGroup = [];
         var dock = dockPanel.addWidget(DOCK);
         if (!made(dock)) {
             // No dock: no panel for it (a later run tries again).
@@ -507,10 +533,14 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         onlyThisScreen(dock);
         added++;
     }
-    // Every dock lists its own screen's windows (a second dock of the user's on a screen too).
+    // Every dock lists its own screen's windows (a second dock of the user's on a screen too; one
+    // of a screen that is not there is left as it is).
     var all = panels();
     for (var j = 0; j < all.length; ++j) {
-        all[j].widgets(DOCK).forEach(onlyThisScreen);
+        if (all[j].screen >= 0 && all[j].screen < screenCount) {
+            all[j].widgets(DOCK).forEach(onlyThisScreen);
+        }
     }
-    print("docks: screens " + screenCount + ", added " + added + (failed > 0 ? ", not made " + failed : ""));
+    print("docks: screens " + screenCount + ", added " + added + (failed > 0 ? ", not made " + failed : "")
+          + (unplaced > 0 ? ", " + unplaced + " of a screen not there left as they are" : ""));
 })();

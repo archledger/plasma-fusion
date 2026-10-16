@@ -320,12 +320,13 @@ for (var i = 0; i < ds.length; ++i) {
 print(JSON.stringify(result));
 )JS"_s;
 
-// The docks "Dock on every screen" added (marked [PlasmaFusion] everyScreenCopy by
-// ensure-topbars.js) are removed with their panels (their launchers too); every other dock gets back
-// the showOnlyCurrentScreen it had before (its [PlasmaFusion] onlyCurrentScreenBefore, kept by
-// ensure-topbars.js; then emptied). Docks the user made stay. When no dock but copies is left (the
-// user removed the one there was), the copy on the lowest screen stays as the one dock: no longer a
-// copy, listing every screen's windows. Prints how many panels went.
+// The docks "Dock on every screen" added (their panels and docks marked [PlasmaFusion]
+// everyScreenCopy by ensure-topbars.js) are removed with their panels (their launchers too); every
+// other dock gets back the showOnlyCurrentScreen it had before (its [PlasmaFusion]
+// onlyCurrentScreenBefore, kept by ensure-topbars.js; then emptied). Docks the user made stay. When
+// no dock but copies is left on a screen that is there (the user removed the one there was, or it
+// is on a monitor that is unplugged), the copy on the lowest screen stays as the one dock: no
+// longer a copy, listing every screen's windows. Prints how many panels went.
 const QString s_removeExtraDocksScript =
     uR"JS(
 function mark(w, key) {
@@ -334,24 +335,26 @@ function mark(w, key) {
     w.currentConfigGroup = [];
     return value;
 }
-function isCopy(p) {
-    var docks = p.widgets("org.plasmafusion.dock");
+function isCopy(p, docks) {
+    var copy = mark(p, "everyScreenCopy") === "true";
     for (var j = 0; j < docks.length; ++j) {
-        if (mark(docks[j], "everyScreenCopy") === "true") {
-            return true;
-        }
+        copy = copy || mark(docks[j], "everyScreenCopy") === "true";
     }
-    return false;
+    return copy;
+}
+function shown(p) {
+    return p.screen >= 0 && p.screen < screenCount;
 }
 var removed = 0, keep = null, original = false;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
-    if (ps[i].widgets("org.plasmafusion.dock").length === 0) {
+    var docks = ps[i].widgets("org.plasmafusion.dock");
+    if (docks.length === 0) {
         continue;
     }
-    if (!isCopy(ps[i])) {
-        original = true;
-    } else if (ps[i].screen >= 0 && (keep === null || ps[i].screen < keep.screen)) {
+    if (!isCopy(ps[i], docks)) {
+        original = original || shown(ps[i]);
+    } else if (shown(ps[i]) && (keep === null || ps[i].screen < keep.screen)) {
         keep = ps[i];
     }
 }
@@ -360,10 +363,11 @@ if (original) {
 }
 for (var i = 0; i < ps.length; ++i) {
     var docks = ps[i].widgets("org.plasmafusion.dock");
-    if (docks.length === 0) {
-        continue;
-    }
+    var copy = isCopy(ps[i], docks);
     if (keep !== null && ps[i].id === keep.id) {
+        ps[i].currentConfigGroup = ["PlasmaFusion"];
+        ps[i].writeConfig("everyScreenCopy", "");
+        ps[i].currentConfigGroup = [];
         for (var j = 0; j < docks.length; ++j) {
             docks[j].currentConfigGroup = ["PlasmaFusion"];
             docks[j].writeConfig("everyScreenCopy", "");
@@ -373,7 +377,7 @@ for (var i = 0; i < ps.length; ++i) {
         }
         continue;
     }
-    if (isCopy(ps[i])) {
+    if (copy) {
         ps[i].remove();
         ++removed;
         continue;

@@ -351,6 +351,52 @@ test("ensure-topbars: a launcher the shell cannot make leaves no panel behind ei
     assert.match(s.output, /docks: screens 2, added 0, not made 1/, s.output);
     assert.deepStrictEqual(s.panels.filter((p) => p.location === "bottom").map((p) => p.screen), [0], "no dock without its launcher on screen 1");
 });
+const dockOf = (panel) => panel.widgets.find((w) => w.type === "org.plasmafusion.dock");
+const launcherOf = (panel) => panel.widgets.find((w) => w.type === "org.plasmafusion.launcher");
+test("ensure-topbars: while the power service holds a key, a copy gets the user's value", () => {
+    const f = dockRc("true");
+    f.plasmafusionrc.Power = { UserWidgetValues: "42/magnify=true,42/glass=full,41/glass=full" };
+    const s = shell({ screens: TWO, files: f, panels: [mainBar(), dockPanel({ magnify: false, glass: "solid" })] });
+    s.run(ENSURE);
+    const copy = docksOf(s).find((p) => p.screen === 1);
+    assert.deepStrictEqual([general(dockOf(copy)).magnify, general(dockOf(copy)).glass, general(launcherOf(copy)).glass], [true, "full", "full"],
+                           "the user's magnification and glass, not the held ones");
+});
+test("ensure-topbars: a copy's panel whose dock the user removed still counts for its screen", () => {
+    const left = { id: 60, type: "org.kde.panel", screen: 1, location: "bottom", config: { PlasmaFusion: { everyScreenCopy: true } },
+                   widgets: [{ id: 61, type: "org.plasmafusion.launcher", config: {} }] };
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel(), left] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 0$/m, s.output);
+    assert.deepStrictEqual(s.panels.filter((p) => p.location === "bottom").map((p) => p.id), [40, 60], "no second panel for screen 1");
+});
+test("ensure-topbars: a dock panel of a screen that is not there is left as it is, the others are filled", () => {
+    const gone = dockPanel();
+    gone.id = 70;
+    gone.screen = 2;
+    gone.widgets = gone.widgets.map((w, i) => Object.assign({}, w, { id: 71 + i, config: { General: {} } }));
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel(), gone] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 1, 1 of a screen not there left as they are/, s.output);
+    assert.ok(docksOf(s).some((p) => p.screen === 1), "screen 1 gets its dock");
+    assert.deepStrictEqual(general(dockOf(docksOf(s).find((p) => p.id === 70))), {}, "the one of screen 2 is not touched");
+});
+test("ensure-topbars: without the launcher installed no copy is made", () => {
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.launcher"] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 0, not made 1/, s.output);
+    assert.deepStrictEqual(s.panels.filter((p) => p.location === "bottom").map((p) => p.screen), [0]);
+});
+test("ensure-topbars: a main dock without a launcher of its own still gives each copy one", () => {
+    const p = dockPanel();
+    p.widgets = p.widgets.filter((w) => w.type !== "org.plasmafusion.launcher");
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), p] });
+    s.run(ENSURE);
+    const copy = docksOf(s).find((d) => d.screen === 1);
+    assert.ok(copy && launcherOf(copy), "the copy has its launcher");
+    assert.strictEqual(general(launcherOf(copy)).buttonStyle, "hidden");
+    assert.strictEqual(copy.config.PlasmaFusion.everyScreenCopy, true, "and its panel is marked as a copy");
+});
 test("ensure-topbars: no dock installed, no docks", () => {
     const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.dock"] });
     s.run(ENSURE);
