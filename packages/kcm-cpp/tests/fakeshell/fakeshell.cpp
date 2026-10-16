@@ -17,6 +17,7 @@
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
+#include <QDBusContext>
 #include <QFile>
 #include <QJSEngine>
 #include <QStringList>
@@ -58,7 +59,7 @@ public:
     }
 };
 
-class Shell : public QObject
+class Shell : public QObject, protected QDBusContext
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.kde.PlasmaShell")
@@ -85,6 +86,12 @@ public Q_SLOTS:
         // A busy shell answers late and nothing else meanwhile, as plasmashell runs scripts on its
         // main thread.
         QThread::msleep(m_engine.globalObject().property(QStringLiteral("nextScriptDelay")).call().toInt());
+        // A script the layout says fails (failScripts) gets an error reply, as plasmashell answers a
+        // script that fails (ShellCorona::evaluateScript, plasma-workspace 6.7.5).
+        if (m_engine.globalObject().property(QStringLiteral("failsScript")).call({QJSValue(script)}).toBool()) {
+            sendErrorReply(QDBusError::Failed, QStringLiteral("fakeshell: this script fails (failScripts)"));
+            return {};
+        }
         m_host.printed.clear();
         // Each script runs in its own function scope, as plasmashell gives each its own context.
         const QJSValue result = m_engine.evaluate(QStringLiteral("(function () {\n") + script + QStringLiteral("\n})();"), QStringLiteral("script.js"));

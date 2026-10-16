@@ -371,8 +371,11 @@ sets `plasmafusionrc [Pen] GarageService=true`.
 ### Screens (`--screens`)
 
 Runs `contents/layouts/ensure-topbars.js` of the chosen Global Theme in plasmashell (a top bar on
-every screen, decision 8, with the status area since 2026-10-09) and prints what it prints. When
-it added or completed a bar, the power service is asked to apply its tier to the new widgets
+every screen, decision 8, with the status area since 2026-10-09; and, while the settings page's
+"Dock on every screen" is on, a dock on every screen with each dock listing its own screen's
+windows, docs/parts/lookandfeel.md) and prints what it prints. When it added or completed a bar, or
+made a dock (`layout_made_widgets`, tested by `tests/panel-scripts-unit.sh`), the power service is
+asked to apply its tier to the new widgets
 (`systemctl --user try-reload-or-restart plasma-fusion-powerfx.service`; nothing when it is not
 running). The layout migration keeps the hidden tray items in every Plasma Fusion top bar's tray,
 not only the main one.

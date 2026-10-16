@@ -7,9 +7,10 @@
 // properties the scripts set (screen, location, height, floating, lengthMode, alignment, hiding,
 // opacity), panels(), panelIds and panelById() (the Add Panel templates), desktops(), desktopsForActivity(), currentActivity(), screenCount,
 // screenGeometry(), knownWidgetTypes, gridUnit, fileExists(), ConfigFile() (nested too) with
-// readEntry and writeEntry, a containment's id, type, screen, wallpaperPlugin, widgets([TYPE]) and
-// addWidget(), a widget's id, type and userBackgroundHints, and for both currentConfigGroup,
-// readConfig and writeConfig. Test tooling only.
+// readEntry and writeEntry, a containment's id, type, screen, wallpaperPlugin, widgets([TYPE]),
+// addWidget() (an Error for a type in failAdd) and remove(), a widget's id, type and
+// userBackgroundHints, and for both currentConfigGroup, readConfig and writeConfig. Test tooling
+// only.
 //
 //   const { shell } = require("./layout-shell.js");
 //   const s = shell({ screens: [[1920, 1080], [1280, 1024]], files: { plasmafusionrc: { TopBar: {...} } },
@@ -29,8 +30,10 @@ function shell(options) {
     const opts = options || {};
     const screens = opts.screens || [[1920, 1080]];
     const files = opts.files || {};
-    // The widgets plasmashell knows (opts.without: ones not installed).
+    // The widgets plasmashell knows (opts.without: ones not installed; opts.failAdd: ones it cannot
+    // make, addWidget giving an Error as plasma-workspace 6.7.5's Containment::addWidget does).
     const known = KNOWN.filter((t) => (opts.without || []).indexOf(t) === -1);
+    const failAdd = opts.failAdd || [];
     const panels = opts.panels || [];
     const desktops = opts.desktops || screens.map((s, i) => ({ id: 100 + i, type: "org.plasmafusion.desktop", screen: i, config: {}, widgets: [] }));
     let nextId = 1 + Math.max(0, ...panels.map((p) => p.id), ...panels.flatMap((p) => p.widgets.map((w) => w.id)),
@@ -42,9 +45,15 @@ function shell(options) {
         return {
             get currentConfigGroup() { return group; },
             set currentConfigGroup(g) { group = g; },
+            // The keys set in the current group (Plasma's Widget.configKeys).
+            get configKeys() { return Object.keys((o.config || {})[group.join("][")] || {}); },
             readConfig(key, def) {
                 const g = (o.config || {})[group.join("][")] || {};
-                return g[key] === undefined ? def : g[key];
+                if (g[key] === undefined)
+                    return def;
+                // KConfig converts to the default's type: a list read with a text default comes
+                // back as its comma-joined text (KConfigGroup::readEntry with a QString default).
+                return typeof def === "string" && Array.isArray(g[key]) ? g[key].join(",") : g[key];
             },
             writeConfig(key, value) {
                 const name = group.join("][");
@@ -72,6 +81,8 @@ function shell(options) {
         api.addWidget = (type, x) => {
             if (known.indexOf(type) === -1)
                 return null;
+            if (failAdd.indexOf(type) !== -1)
+                return new Error("Could not create the " + type + " widget!");
             const w = { id: nextId++, type: type, config: {} };
             const at = typeof x === "number" ? c.widgets.findIndex((o, i) => i * 100 > x) : -1;
             if (at === -1)
@@ -84,6 +95,12 @@ function shell(options) {
                            "wallpaperPlugin"]) {
             Object.defineProperty(api, key, { get: () => c[key], set: (v) => { c[key] = v; }, enumerable: true });
         }
+        // Containment.remove(): the panel goes, with its widgets.
+        api.remove = () => {
+            const at = panels.indexOf(c);
+            if (at !== -1)
+                panels.splice(at, 1);
+        };
         Object.defineProperty(api, "id", { get: () => c.id });
         Object.defineProperty(api, "type", { get: () => c.type });
         return api;

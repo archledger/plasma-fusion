@@ -32,7 +32,8 @@
 #                      Meta+Shift+W for the pen widget
 #   --pen-garage       with --pen: also install and enable plasma-fusion-pen-garage.service (only
 #                      after hand check V2 showed that the laptop reports the pen's garage)
-#   --screens          run the Global Theme's ensure-topbars.js: a top bar on every screen
+#   --screens          run the Global Theme's ensure-topbars.js: a top bar on every screen (and a
+#                      dock while the settings page's "Dock on every screen" is on)
 #   --shortcuts        apply the Windows-style shortcut set again (normally once per config version)
 #   --keep-shortcuts   do not apply the Windows-style shortcut set (Meta+N stays quick settings,
 #                      Meta+V Klipper's pop-up)
@@ -2727,21 +2728,30 @@ fi
 
 # ---------- 7f. screens (--screens) ----------
 
+# Whether ensure-topbars.js (what it printed, $1) made or completed a top bar or made a dock: new
+# widgets, which get the power tier's keys only when the power service applies its tier again.
+layout_made_widgets() {
+  local bars='added ([0-9]+), completed ([0-9]+)' docks='docks: screens [0-9]+, added ([0-9]+)'
+  if [[ $1 =~ $bars ]] && [ $((BASH_REMATCH[1] + BASH_REMATCH[2])) -gt 0 ]; then
+    return 0
+  fi
+  [[ $1 =~ $docks ]] && [ "${BASH_REMATCH[1]}" -gt 0 ]
+}
+
 if [ "$SCREENS" = 1 ]; then
   say "Screens"
   if topbars_js=$(package_dir plasma/look-and-feel "$LNF")/contents/layouts/ensure-topbars.js && [ -f "$topbars_js" ]; then
     if ! has_name org.kde.plasmashell; then
       note "note: plasmashell is not running; top bars on other screens not checked"
     elif [ "$DRY" = 1 ]; then
-      note "would run $topbars_js in plasmashell (a top bar on every screen)"
+      note "would run $topbars_js in plasmashell (a top bar on every screen, and docks when chosen)"
     else
       note "run $topbars_js in plasmashell"
       CHANGES=$((CHANGES + 1))
       topbars_out=$(plasmashell_eval "$(cat "$topbars_js")") || note "warning: ensure-topbars.js failed"
       [ -z "${topbars_out:-}" ] || note "$topbars_out"
       # The power service sets its tier's keys on new widgets only when it applies the tier again.
-      if [[ ${topbars_out:-} =~ added\ ([0-9]+),\ completed\ ([0-9]+) ]] &&
-        [ $((BASH_REMATCH[1] + BASH_REMATCH[2])) -gt 0 ] && session_manager; then
+      if layout_made_widgets "${topbars_out:-}" && session_manager; then
         systemctl --user try-reload-or-restart plasma-fusion-powerfx.service 2>/dev/null || true
       fi
     fi

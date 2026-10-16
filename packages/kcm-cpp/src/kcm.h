@@ -55,6 +55,8 @@ class QDBusServiceWatcher;
       Top bar         panel opacity adaptive (solid next to windows) or translucent, kept in
                       plasmafusionrc [TopBar] SolidNextToWindows for opaque (Reduced) bars;
                       [TopBar] EveryScreen with a top bar on every screen (ensure-topbars.js).
+      Dock            plasmafusionrc [Dock] EveryScreen: a dock on every screen (ensure-topbars.js
+                      adds them; off: the docks on the other screens go, s_removeExtraDocksScript).
       Desktop icons   Folder View [General] filterMode=1 with the pattern "/", which matches no
                       file name (positions are kept), and iconSize.
       File drag       kdeglobals [KDE] DndBehavior (AlwaysAsk / MoveIfSameDevice).
@@ -117,6 +119,7 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool solidTopBar READ solidTopBar WRITE setSolidTopBar NOTIFY stateChanged)
     Q_PROPERTY(bool systemMeters READ systemMeters WRITE setSystemMeters NOTIFY stateChanged)
     Q_PROPERTY(bool everyScreen READ everyScreen WRITE setEveryScreen NOTIFY stateChanged)
+    Q_PROPERTY(bool everyDock READ everyDock WRITE setEveryDock NOTIFY stateChanged)
     Q_PROPERTY(bool desktopIcons READ desktopIcons WRITE setDesktopIcons NOTIFY stateChanged)
     Q_PROPERTY(int iconSize READ iconSize WRITE setIconSize NOTIFY stateChanged)
     Q_PROPERTY(int dndBehavior READ dndBehavior WRITE setDndBehavior NOTIFY stateChanged)
@@ -232,6 +235,8 @@ public:
     void setSystemMeters(bool value);
     bool everyScreen() const;
     void setEveryScreen(bool value);
+    bool everyDock() const;
+    void setEveryDock(bool value);
     bool desktopIcons() const;
     void setDesktopIcons(bool value);
     int iconSize() const;
@@ -335,6 +340,8 @@ private:
         bool highContrast = false;
         bool reduceMotion = false;
         bool everyScreen = true;
+        // Off by default: one dock, on the main screen.
+        bool everyDock = false;
         int dndBehavior = DndAsk;
         bool lighterOnCritical = true;
         bool fileContentIndexing = true;
@@ -410,6 +417,8 @@ private:
     void placeSystemMeters(const QList<int> &ids, int attempt, int request);
     bool applyPanels(int glass, bool solidTopBar, bool widgetGlass);
     bool applyEveryScreen(bool on);
+    bool applyEveryDock(bool on);
+    bool runDockScript(bool *ran);
     void reapplyPowerTier();
     bool applyDesktop(const State &before, const State &after);
     bool applyWidgetKey(const QString &plugin, const QString &key, const QString &jsValue, const QString &what);

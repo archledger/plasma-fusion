@@ -86,7 +86,7 @@ def main():
              "fusionDecoration": False,
              "errorText": "", "infoText": "",
              "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62,
-             "solidTopBar": True, "everyScreen": True, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
+             "solidTopBar": True, "everyScreen": True, "everyDock": False, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
              "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
              "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
              "launcherAvailable": True, "launcherRecentFiles": True, "launcherRecentApps": True, "launcherPlaces": True,
@@ -145,6 +145,7 @@ def main():
         magnifiedSize = Property(int, _get("magnifiedSize"), _set("magnifiedSize"), notify=changed)
         solidTopBar = Property(bool, _get("solidTopBar"), _set("solidTopBar"), notify=changed)
         everyScreen = Property(bool, _get("everyScreen"), _set("everyScreen"), notify=changed)
+        everyDock = Property(bool, _get("everyDock"), _set("everyDock"), notify=changed)
         desktopIcons = Property(bool, _get("desktopIcons"), _set("desktopIcons"), notify=changed)
         iconSize = Property(int, _get("iconSize"), _set("iconSize"), notify=changed)
         dndBehavior = Property(int, _get("dndBehavior"), _set("dndBehavior"), notify=changed)

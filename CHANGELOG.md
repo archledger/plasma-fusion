@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Dock on every screen:** a new switch in the Plasma Fusion settings, under "Top bar on every
+  screen", gives each screen a dock of its own that shows that screen's windows. It is off by
+  default (one dock, as before).
 - **Snap sizes from the keyboard:** pressed again, Meta+Left and Meta+Right step a window through
   half, a third and two thirds of that side of the screen, then back to half; with a screen on that
   side, the step after two thirds moves the window there, as before. `plasma-fusion setup` moves

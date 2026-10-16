@@ -25,6 +25,7 @@
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSet>
 #include <QStandardPaths>
 #include <QThread>
@@ -317,6 +318,90 @@ for (var i = 0; i < ds.length; ++i) {
     glassFor(ds[i]);
 }
 print(JSON.stringify(result));
+)JS"_s;
+
+// The docks "Dock on every screen" added (their panels and docks marked [PlasmaFusion]
+// everyScreenCopy by ensure-topbars.js) are removed with their panels (their launchers too); every
+// other dock gets back the showOnlyCurrentScreen it had before (its [PlasmaFusion]
+// onlyCurrentScreenBefore, kept by ensure-topbars.js; then emptied). Docks the user made stay. When
+// no dock but copies is left on a screen that is there (the user removed the one there was, or it
+// is on a monitor that is unplugged), the copy on the lowest screen stays as the one dock: no
+// longer a copy, listing every screen's windows, and standing in for the unplugged screens' docks
+// ([PlasmaFusion] standInFor, their panel ids; ensure-topbars.js removes it when one is back).
+// Prints how many panels went.
+const QString s_removeExtraDocksScript =
+    uR"JS(
+function mark(w, key) {
+    w.currentConfigGroup = ["PlasmaFusion"];
+    var value = String(w.readConfig(key, ""));
+    w.currentConfigGroup = [];
+    return value;
+}
+function isCopy(p, docks) {
+    var copy = mark(p, "everyScreenCopy") === "true";
+    for (var j = 0; j < docks.length; ++j) {
+        copy = copy || mark(docks[j], "everyScreenCopy") === "true";
+    }
+    return copy;
+}
+function shown(p) {
+    return p.screen >= 0 && p.screen < screenCount;
+}
+var removed = 0, keep = null, original = false, away = [];
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var docks = ps[i].widgets("org.plasmafusion.dock");
+    if (docks.length === 0) {
+        continue;
+    }
+    if (!isCopy(ps[i], docks)) {
+        original = original || shown(ps[i]);
+        if (!shown(ps[i])) {
+            away.push(ps[i].id);
+        }
+    } else if (shown(ps[i]) && (keep === null || ps[i].screen < keep.screen)) {
+        keep = ps[i];
+    }
+}
+if (original) {
+    keep = null;
+}
+for (var i = 0; i < ps.length; ++i) {
+    var docks = ps[i].widgets("org.plasmafusion.dock");
+    var copy = isCopy(ps[i], docks);
+    if (keep !== null && ps[i].id === keep.id) {
+        // It stands in for the docks of unplugged screens: ensure-topbars.js removes it when one
+        // of them is on a screen again.
+        ps[i].currentConfigGroup = ["PlasmaFusion"];
+        ps[i].writeConfig("everyScreenCopy", "");
+        ps[i].writeConfig("standInFor", away.join(","));
+        ps[i].currentConfigGroup = [];
+        for (var j = 0; j < docks.length; ++j) {
+            docks[j].currentConfigGroup = ["PlasmaFusion"];
+            docks[j].writeConfig("everyScreenCopy", "");
+            docks[j].currentConfigGroup = ["General"];
+            docks[j].writeConfig("showOnlyCurrentScreen", false);
+            docks[j].currentConfigGroup = [];
+        }
+        continue;
+    }
+    if (copy) {
+        ps[i].remove();
+        ++removed;
+        continue;
+    }
+    for (var j = 0; j < docks.length; ++j) {
+        var before = mark(docks[j], "onlyCurrentScreenBefore");
+        if (before !== "") {
+            docks[j].currentConfigGroup = ["PlasmaFusion"];
+            docks[j].writeConfig("onlyCurrentScreenBefore", "");
+            docks[j].currentConfigGroup = ["General"];
+            docks[j].writeConfig("showOnlyCurrentScreen", before === "true");
+            docks[j].currentConfigGroup = [];
+        }
+    }
+}
+print(removed);
 )JS"_s;
 
 // Top bars on the screens other than the main one are removed. The main one is the top bar with
@@ -857,6 +942,82 @@ bool PlasmaFusionKcm::applyEveryScreen(bool on)
     return panels;
 }
 
+// plasmafusionrc [Dock] EveryScreen, which ensure-topbars.js (also run by KWin when a screen is
+// added and at login) reads: on, it adds the docks now; off, the other docks go.
+bool PlasmaFusionKcm::applyEveryDock(bool on)
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup(fusion, u"Dock"_s).writeEntry("EveryScreen", on, KConfig::Notify);
+    fusion->sync();
+
+    bool ok = false;
+    if (!on) {
+        const QString result = evaluateShellScript(s_removeExtraDocksScript, &ok);
+        if (!ok) {
+            // The docks are still there: the choice stays on, so the page shows it on again and
+            // Apply, the next login or a new screen goes on from there.
+            KConfigGroup(fusion, u"Dock"_s).writeEntry("EveryScreen", true, KConfig::Notify);
+            fusion->sync();
+            addError(i18nc("@info", "The docks could not be changed: %1", result));
+            return false;
+        }
+        qCDebug(KCM_PLASMAFUSION) << "docks removed:" << result;
+        return true;
+    }
+    bool ran = false;
+    if (!runDockScript(&ran)) {
+        return false;
+    }
+    if (!ran) {
+        // Nothing to run yet; the choice is stored for the next login.
+        return true;
+    }
+    // New docks take the glass level and the power tier, as new top bars do.
+    const bool panels = applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    reapplyPowerTier();
+    return panels;
+}
+
+// Runs ensure-topbars.js, which gives every screen without one a dock while [Dock] EveryScreen is
+// true. False, with the error shown, when the script cannot be read or fails, or says it could not
+// make a dock; *ran is false when there is none to run (the Global Theme is not installed).
+bool PlasmaFusionKcm::runDockScript(bool *ran)
+{
+    *ran = false;
+    const QString path = topBarScriptPath();
+    if (path.isEmpty()) {
+        return true;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        addError(i18nc("@info", "%1 could not be read.", path));
+        return false;
+    }
+    bool ok = false;
+    const QString result = evaluateShellScript(QString::fromUtf8(file.readAll()), &ok);
+    if (!ok) {
+        addError(i18nc("@info", "The docks could not be added: %1", result));
+        return false;
+    }
+    *ran = true;
+    // The shell had not put the docks on their screens yet ("docks: skipped, ..."): nothing could
+    // be copied.
+    const qsizetype skipped = result.indexOf(u"docks: skipped"_s);
+    if (skipped >= 0) {
+        addError(i18nc("@info %1 the script's reason", "The docks could not be added yet: %1", result.mid(skipped + 15).trimmed()));
+        return false;
+    }
+    // The script ran, but the shell could not make some docks ("docks: ..., not made N"): those
+    // screens have none.
+    const QRegularExpressionMatch notMade = QRegularExpression(u"not made (\\d+)"_s).match(result);
+    if (notMade.hasMatch()) {
+        addError(i18np("The dock of one screen could not be made.", "The docks of %1 screens could not be made.", notMade.captured(1).toInt()));
+        return false;
+    }
+    return true;
+}
+
 bool PlasmaFusionKcm::applyDesktop(const State &before, const State &after)
 {
     const QString icons = after.desktopIcons == before.desktopIcons ? u"null"_s : after.desktopIcons ? u"true"_s : u"false"_s;
@@ -1117,6 +1278,15 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before)
     }
     if (!m_saved.everyScreen) {
         evaluateShellScript(s_removeExtraTopBarsScript, &ok);
+    }
+    // The layout makes one dock; with a dock on every screen the others come back (they copy the
+    // main dock's look, set above). When they cannot, the page says so: the switch is on but the
+    // other screens have no dock until it is set again.
+    if (m_saved.everyDock) {
+        bool ran = false;
+        if (runDockScript(&ran) && !ran) {
+            addError(i18nc("@info", "The docks of the other screens could not be added back: the Global Theme's ensure-topbars.js is not installed."));
+        }
     }
     // The power service applies its tier to the new widgets when it restarts.
     KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);

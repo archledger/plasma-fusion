@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.kwin
 import "ensureTopBars.js" as EnsureTopBars
+import "Panels.js" as Panels
 import "Cycle.js" as Cycle
 import "Groups.js" as Groups
 import "SnapGeometry.js" as SnapGeometry
@@ -1153,25 +1154,27 @@ Item {
         arguments: [EnsureTopBars.script]
         onFinished: returnValue => {
             const line = String(returnValue.length > 0 ? returnValue[0] : "").trim();
+            const next = Panels.afterAnswer(line);
+            // New widgets (a bar's quick settings and tray, a dock and its launcher) get the power
+            // tier's keys only when the power service applies its tier again: its reload, which
+            // does nothing when the service is not running. Also when the other part is asked again
+            // (a dock made while the top bars' part was skipped).
+            if (next.powerTier) {
+                powerTierCall.call();
+            }
             // At session start plasmashell can answer before it has loaded its layout, or before
-            // it has put its panels on their screens ("skipped"): ask again, with a growing delay
+            // it has put its panels on their screens ("skipped", the top bars' or the docks' part):
+            // ask again, with a growing delay
             // for up to about three minutes (a slow start, the parity VM, took longer than 15 s).
             // Only the first skip of a burst is logged, and the give-up once: the answer repeats
             // identically (a laptop logged ~20 skip lines at every session start, 2026-10-12).
-            if (line.indexOf("top bars: skipped") !== -1) {
+            if (next.retry) {
                 askTopBarsAgain(line);
                 return;
             }
             topBarsRetry.stop();
             topBarsRetry.tries = 0;
             console.info("plasmafusion-snap: " + line);
-            // New widgets (a bar's quick settings and tray) get the power tier's keys only when
-            // the power service applies its tier again: its reload, which does nothing when the
-            // service is not running.
-            const counts = line.match(/added (\d+), completed (\d+)/);
-            if (counts && (Number(counts[1]) > 0 || Number(counts[2]) > 0)) {
-                powerTierCall.call();
-            }
         }
         // plasmashell not on the bus yet (the session's start): ask again, as above.
         onFailed: askTopBarsAgain("plasmashell did not run the top-bar check")
@@ -1199,7 +1202,7 @@ Item {
         dbusInterface: "org.freedesktop.systemd1.Manager"
         method: "ReloadOrTryRestartUnit"
         arguments: ["plasma-fusion-powerfx.service", "replace"]
-        onFailed: console.info("plasmafusion-snap: the power service was not asked to apply its tier to the new bars")
+        onFailed: console.info("plasmafusion-snap: the power service was not asked to apply its tier to the new panels")
     }
     Timer {
         id: topBarsRetry

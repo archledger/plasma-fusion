@@ -526,6 +526,44 @@ live session gets these changes through DEVICE-1's in-place migration.
   layout script's lists, which the build checks are the same, the pen menu and quick settings) and is
   the main bar for the others; existing bars without one are left as they are and unmarked. Note:
   `readConfig` needs a default of the key's type (`[]` for lists; `null` returns undefined).
+- `ensure-topbars.js` also gives every screen a dock (2026-10-16) while plasmafusionrc `[Dock]
+  EveryScreen` is true (the settings page's "Dock on every screen"; off by default): a screen
+  without a dock panel gets one like the layout script's (bottom, floating, fit, centred) with the
+  main dock's height, hiding and opacity, a hidden launcher of its own (the dock's Start opens the
+  launcher of its own panel, on its screen; marked as having its pins, so no first-run pins again)
+  and every `[General]` key the main dock and launcher have set (Plasma's `Widget.configKeys`,
+  checked in plasma-workspace 6.7.5 `shell/scripting/widget.h`), but the test hooks and requests;
+  list keys are copied as lists; a key the power service holds while the battery is low (dock
+  magnification, glass) is copied with the user's value from plasmafusionrc `[Power]
+  UserWidgetValues`, not the held one. Such a dock and its panel are marked as a copy
+  (`[PlasmaFusion] everyScreenCopy`): the settings page removes the copies' panels when the switch
+  goes off, and only those, so docks the user made stay; a copy's panel whose dock the user removed
+  still counts for its screen. A dock panel of a screen that is not there (Plasma 6.8 keeps it) is
+  left as it is, and the other screens are filled; when every dock is on such a screen (the
+  session's start, before plasmashell has put its panels on their screens) the answer is "docks:
+  skipped", which the snap script asks again and the settings page shows as an error. With the switch off, a dock the settings page
+  kept standing in for docks of unplugged screens (`[PlasmaFusion] standInFor`, their panel ids) is
+  removed once one of them is on a screen again; with them gone it is the dock now. Every dock then lists only its own screen's windows
+  (`showOnlyCurrentScreen`); a dock that is not a copy remembers what it had in `[PlasmaFusion]
+  onlyCurrentScreenBefore`. The main dock, the one copied, is the one on the lowest screen number
+  that is not a copy. Every copy gets a launcher of its own; when the shell cannot make the dock or
+  the launcher (`addWidget` gives an Error, as plasma-workspace 6.7.5
+  `shell/scripting/containment.cpp` does, or the launcher is not installed), the new panel is
+  removed again.
+  Prints "docks: screens N, added M" (", not made K"). Tests (`tests/layout.test.js`, whose
+  stand-in shell has `remove()` and an `addWidget` that fails for the types in `failAdd`): the
+  second screen's dock and launcher with the main one's settings (a list as a list, no test hook,
+  no request), marked as a copy, its own screen only, the main dock remembering; one dock without
+  the key; a second run adds nothing and keeps the remembered value; a dock only on screen 1 stays
+  the main one and remembers, the new one on screen 0 is a copy; a second dock of the user's on the
+  main screen gets no copy and remembers too; a dock the shell cannot make leaves no panel, also
+  after a second run, and neither does a launcher it cannot make; held keys copied with the user's
+  value; a copy's panel without its dock keeps its screen; a dock of a screen that is not there is
+  left alone while the others are filled; no copy without the launcher installed; a copy gets a
+  launcher also when the main dock has none; with the switch off a stand-in gives way to the dock
+  back on a screen, stays while that one is still on an unplugged screen, and is the dock once
+  that one is gone; nothing without the dock installed. Without the copy mark, the panel
+  removal, the remembering or the second dock's turn, a case fails.
 - Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
   `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into
   `~/.local/share/plasma/layout-templates/`: "Add Panel" offers the Fusion top bar and dock.

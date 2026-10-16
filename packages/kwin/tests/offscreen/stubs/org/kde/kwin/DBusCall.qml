@@ -11,5 +11,7 @@ QtObject {
     property var arguments: []
     signal finished(var returnValue)
     signal failed()
-    function call() {}
+    // How often the script called it (the harness reads it).
+    property int calls: 0
+    function call() { calls++; }
 }
