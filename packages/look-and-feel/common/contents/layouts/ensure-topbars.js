@@ -55,6 +55,14 @@ var TRAY_ITEMS_HIDDEN = [
     "org.kde.plasma.manage-inputmethod"
 ];
 
+// Tray items the live chips replace, hidden in a tray whose bar has them (the layout script's list).
+var TRAY_ITEMS_REPLACED_BY_CHIPS = [
+    "plasmashell_microphone",
+    "org.kde.plasma.cameraindicator",
+    "xdg-desktop-portal-kde",
+    "Spectacle"
+];
+
 function ensureTopBarsTextScale() {  // identical to the layout script's textScale()
     var pt = NaN;
     var font = ConfigFile("kdeglobals", "General").readEntry("font");
@@ -80,6 +88,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
 
 (function () {
     var QS = "org.plasmafusion.quicksettings", TRAY = "org.kde.plasma.systemtray", METERS = "org.plasmafusion.meters";
+    var CHIPS = "org.plasmafusion.livechips";
     // The settings page's Glass level and top-bar choice (the layout script's fusionLook explains
     // them): a new bar and its quick settings follow them as the page's own bars do.
     var look = ensureTopBarsLook();
@@ -147,6 +156,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     var mainTray = main !== null && has(main, TRAY) ? main.widgets(TRAY)[0] : null;
     var mainQs = main !== null && has(main, QS);
     var mainMeters = main !== null && has(main, METERS);
+    var mainChips = main !== null && has(main, CHIPS);
     // The tray's item lists and its look. readConfig needs a default of the key's type (null
     // gives undefined): [] for the lists, "" for the others (their text, written back as is).
     var TRAY_LISTS = ["disabledStatusNotifiers", "hiddenItems", "knownItems", "extraItems", "shownItems"];
@@ -176,9 +186,9 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     }
     // As the layout script sets up a tray: the items quick settings replaces and the passive ones
     // hidden, the ones with no use (and Disks & Devices, which quick settings replaces) not loaded.
-    function defaultTray(tray) {
+    function defaultTray(tray, withChips) {
         tray.currentConfigGroup = ["General"];
-        var off = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED);
+        var off = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED, withChips ? TRAY_ITEMS_REPLACED_BY_CHIPS : []);
         tray.writeConfig("disabledStatusNotifiers", off);
         tray.writeConfig("hiddenItems", off);
         var knownItems = tray.readConfig("knownItems", []) || [];
@@ -206,13 +216,22 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
             return 0;
         }
         var founding = main === null;
+        // The live chips right before the tray, as the main bar has them (a first bar: when they
+        // are installed); before a tray the bar has already, at its place.
+        if ((founding ? known.indexOf(CHIPS) !== -1 : mainChips) && !has(bar, CHIPS)) {
+            var tg = has(bar, TRAY) ? bar.widgets(TRAY)[0].geometry : null;
+            var chips = tg ? bar.addWidget(CHIPS, Math.max(0, tg.x - 2), 1, -1, -1) : add(bar, [CHIPS]);
+            if (chips && typeof chips === "object" && chips.type !== undefined) {
+                count++;
+            }
+        }
         if ((founding || mainTray !== null) && !has(bar, TRAY)) {
             var tray = add(bar, [TRAY]);
             if (tray) {
                 if (mainTray !== null) {
                     copyTray(mainTray, tray);
                 } else {
-                    defaultTray(tray);
+                    defaultTray(tray, has(bar, CHIPS));
                 }
                 count++;
             }

@@ -83,8 +83,8 @@ existing panels.
 
 | Piece | Settings | Widgets (fallback when a Fusion widget is not installed) |
 |---|---|---|
-| Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity adaptive` (solid next to a maximized window, decision 5) | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu` (`allScreens=false`: the menu of that screen's window), panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.kde.plasma.systemtray`, `org.plasmafusion.pen` (when installed), `org.plasmafusion.quicksettings` |
-| Top bars on the other screens | as above; none while the settings page's "Top bar on every screen" is off (plasmafusionrc `[TopBar] EveryScreen=false`, 0.5.0) | app name, appmenu (`allScreens=false`), clock pill, then the main bar's tray (set up the same way), the system meters when the main bar has them, and quick settings (owner decision 2026-10-09, replacing decision 8's "status icons and quick settings on the main screen only"); no pen menu or dock; marked `[PlasmaFusion] statusItems` |
+| Top bar | `location top`, `height 34`, `floating false`, `lengthMode fill`, `hiding none`, `opacity adaptive` (solid next to a maximized window, decision 5) | `org.plasmafusion.appname` (else `org.plasmafusion.launcher` as a 32 px pill, else Kickoff), `org.kde.plasma.appmenu` (`allScreens=false`: the menu of that screen's window), panelspacer, `org.plasmafusion.clockpill` (else pager + digital clock "ddd d MMM" beside the time), panelspacer, `org.plasmafusion.livechips` (when installed), `org.kde.plasma.systemtray`, `org.plasmafusion.pen` (when installed), `org.plasmafusion.quicksettings` |
+| Top bars on the other screens | as above; none while the settings page's "Top bar on every screen" is off (plasmafusionrc `[TopBar] EveryScreen=false`, 0.5.0) | app name, appmenu (`allScreens=false`), clock pill, then the live chips when the main bar has them, the main bar's tray (set up the same way), the system meters when the main bar has them, and quick settings (owner decision 2026-10-09, replacing decision 8's "status icons and quick settings on the main screen only"); no pen menu or dock; marked `[PlasmaFusion] statusItems` |
 | Dock | `location bottom`, `height 72` (the dock plate; the Plasma style keeps the 16 px headroom above it in the panel window. 88 with the headroom frame until INT-1), `floating true`, `lengthMode fit`, `alignment center`, `hiding dodgewindows`, `opacity translucent` | `org.plasmafusion.launcher` with `[General] buttonStyle=hidden` when the app-name widget holds the top-left corner (the dock finds it in its own panel for Start; Meta finds it in any panel), then `org.plasmafusion.dock` (else Kickoff when there is no Fusion launcher, and `org.kde.plasma.icontasks`) |
 | Desktop | The Plasma Fusion desktop (`org.plasmafusion.desktop`, `docs/parts/desktop.md`: Folder View on the laptop, the home screen in tablet posture; plain `org.kde.plasma.folder` is accepted, BACKLOG M1): `url desktop:/`, `arrangement 1` (columns), `alignment 0` (from the left), `iconSize 2`, `sortMode -1` (free placement), `popups false`, `toolTips false`, `selectionMarkers true`, `useTypeAhead true`, previews for the installed image/SVG/PDF/office/video thumbnailers; `org.kde.image` wallpaper plugin, image left unset (the Global Theme's `PlasmaFusion` default, light/dark by the Plasma style) | the weather, calendar and system cards, see below |
 
@@ -118,6 +118,11 @@ while active (an open vault, queued print jobs, presentation mode or a second sc
 input-method switch outside tablet posture) and takes them out when passive
 (docs/parts/shell-quicksettings.md, "Hidden tray items while active"); the layout writes nothing
 for that, so existing layouts have it as soon as the widget is updated.
+In a bar with the live chips the tray also hides the items they replace
+(`TRAY_ITEMS_REPLACED_BY_CHIPS`: plasma-pa's microphone item, the camera indicator, the portal's
+screen-casting and remote-control items, Spectacle's recording item; docs/parts/shell-livechips.md).
+They stay loaded; the tray shows them nowhere. `ensure-topbars.js` and the "Add Panel" top bar use
+the same list, which the build checks.
 
 Desktop cards: the Plasma Fusion weather, calendar and system cards (`docs/parts/desktop-cards.md`),
 each with the stock widget as fallback when the Fusion one is not installed, on the primary screen.

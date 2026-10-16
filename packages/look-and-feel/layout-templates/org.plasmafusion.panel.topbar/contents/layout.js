@@ -82,6 +82,13 @@ var TRAY_ITEMS_HIDDEN = [
     "org.kde.plasma.printmanager",
     "org.kde.plasma.manage-inputmethod"
 ];
+// Tray items the live chips replace, hidden in a tray whose bar has them (the layout script's list).
+var TRAY_ITEMS_REPLACED_BY_CHIPS = [
+    "plasmashell_microphone",
+    "org.kde.plasma.cameraindicator",
+    "xdg-desktop-portal-kde",
+    "Spectacle"
+];
 
 var hasQuickSettings = false;
 var otherTray = null;
@@ -115,6 +122,8 @@ if (!add(panel, ["org.plasmafusion.clockpill"])) {
     add(panel, ["org.kde.plasma.digitalclock"]);
 }
 add(panel, ["org.kde.plasma.panelspacer"]);
+// The live chips at the start of the right cluster, right before the tray.
+var chips = add(panel, ["org.plasmafusion.livechips"]);
 var tray = add(panel, ["org.kde.plasma.systemtray"]);
 if (tray && otherTray) {
     // The tray's item lists and its look. readConfig needs a default of the key's type (null
@@ -146,7 +155,7 @@ if (tray && otherTray) {
     // The first top bar: the items quick settings replaces and the passive ones hidden, the ones
     // with no use (and Disks & Devices, which quick settings replaces) known and not loaded.
     tray.currentConfigGroup = ["General"];
-    var trayOff = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED);
+    var trayOff = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED, chips ? TRAY_ITEMS_REPLACED_BY_CHIPS : []);
     tray.writeConfig("disabledStatusNotifiers", trayOff);
     tray.writeConfig("hiddenItems", trayOff);
     var knownItems = tray.readConfig("knownItems", []) || [];

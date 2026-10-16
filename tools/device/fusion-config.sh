@@ -175,6 +175,8 @@ QS_SHORTCUT=$((META + 0x41))
 QS_SHORTCUT_TEXT=Meta+A
 # Pen menu widget (org.plasmafusion.pen), with --pen.
 PEN_WIDGET=org.plasmafusion.pen
+# Live chips widget (org.plasmafusion.livechips, docs/parts/shell-livechips.md).
+CHIPS_WIDGET=org.plasmafusion.livechips
 # The desktop containment (TABLET2 H1); the layout migration names it when it is installed.
 DESKTOP_CONTAINMENT=org.plasmafusion.desktop
 PEN_SHORTCUT=$((META + SHIFT + 0x57))
@@ -1087,6 +1089,9 @@ FOLDER_PREVIEWS=(imagethumbnail jpegthumbnail svgthumbnail gsthumbnail opendocum
 # (the tray's shownItems), so a layout migrated here needs nothing more for that.
 TRAY_HIDE=(org.kde.plasma.vault org.kde.plasma.devicenotifier org.kde.kscreen org.kde.plasma.printmanager
   org.kde.plasma.manage-inputmethod)
+# Tray items the live chips replace, hidden in a tray whose bar has them (the layout script's
+# TRAY_ITEMS_REPLACED_BY_CHIPS; tools/device/tests/layout-migration-unit.sh checks they agree).
+TRAY_CHIPS=(plasmashell_microphone org.kde.plasma.cameraindicator xdg-desktop-portal-kde Spectacle)
 
 # Thumbnailers of FOLDER_PREVIEWS that are installed (KIO thumbnail plugins, kf6/thumbcreator).
 installed_previews() {
@@ -1121,17 +1126,21 @@ if (best !== null) { var g = screenGeometry(best.screen); print(Math.round(g.wid
 # up to it, so they run only on such a HOME (PREV_VERSION 0 or 1): from version 2 on, what they
 # would change again is the user's (a top bar the settings page made translucent, a tray item set
 # to "Always shown", the pen menu or desktop the user removed or changed). Step 4's Disks & Devices
-# part (0.4.0) runs once, recorded in plasmafusionrc [Setup] TrayDevices.
+# part (0.4.0) runs once, recorded in plasmafusionrc [Setup] TrayDevices; step 7 (the live chips)
+# runs once too, recorded in [Setup] LiveChips.
 migrate_layout() {
-  local out rc=0 solid devices
+  local out rc=0 solid devices chips
   solid=$(kreadconfig6 --file plasmafusionrc --group TopBar --key SolidNextToWindows 2>/dev/null || true)
   devices=$(kreadconfig6 --file plasmafusionrc --group Setup --key TrayDevices 2>/dev/null || true)
+  chips=$(kreadconfig6 --file plasmafusionrc --group Setup --key LiveChips 2>/dev/null || true)
   out=$(python3 - "$CONFIG" "$DRY" "${1:-}" "$(installed_previews)" "$(package_dir plasma/plasmoids "$PEN_WIDGET" >/dev/null && echo 1 || echo 0)" \
     "${FOLDER_KEYS[*]}" "${TRAY_HIDE[*]}" "$(package_dir plasma/plasmoids "$DESKTOP_CONTAINMENT" >/dev/null && echo 1 || echo 0)" \
-    "$PREV_VERSION" "$solid" "$devices" <<'PY'
+    "$PREV_VERSION" "$solid" "$devices" "$(package_dir plasma/plasmoids "$CHIPS_WIDGET" >/dev/null && echo 1 || echo 0)" \
+    "${TRAY_CHIPS[*]}" "$chips" <<'PY'
 import re, subprocess, sys
 
-config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed, prev, solid, devices = sys.argv[1:12]
+(config, dry, size, previews, pen_installed, folder_keys, tray_hide, desktop_installed, prev, solid, devices,
+ chips_installed, tray_chips, chips) = sys.argv[1:15]
 dry = dry == "1"
 # The steps that bring a layout up to configuration version 2 (see above).
 first = not prev.isdigit() or int(prev) < 2
@@ -1181,6 +1190,12 @@ if not rc:
     note("layout: no %s (nothing to migrate)" % APPLETSRC)
     print("CHANGES 0")
     sys.exit(0)
+
+def fresh_id():
+    """An applet id no group of the layout file and no write queued here uses yet."""
+    used = [int(x) for g in rc for x in g if x.isdigit()]
+    used += [int(x) for args in cmds for x in args if x.isdigit()]
+    return str(max(used) + 1 if used else 1)
 
 def applets(cid):
     """Direct applets of a containment: {id: plugin}."""
@@ -1347,8 +1362,7 @@ if top is not None and pen_installed == "1":
     elif not first:
         note("pen widget not in the top bar (kept: the user's)")
     else:
-        ids = [int(x) for g in rc for x in g if x.isdigit()]
-        new = str(max(ids) + 1 if ids else 1)
+        new = fresh_id()
         write(APPLETSRC, ["Containments", top, "Applets", new], "immutability", "1")
         write(APPLETSRC, ["Containments", top, "Applets", new], "plugin", "org.plasmafusion.pen")
         general = rc.get(("Containments", top, "General"), {})
@@ -1360,6 +1374,39 @@ if top is not None and pen_installed == "1":
         at = order.index(qs[0]) if qs and qs[0] in order else len(order)
         order.insert(at, new)
         write(APPLETSRC, ["Containments", top, "General"], "AppletOrder", ";".join(order), general.get("AppletOrder"))
+
+# 7. The live chips (once, plasmafusionrc [Setup] LiveChips): in every Plasma Fusion top bar with a
+#    tray, right before the tray, and the tray items they replace hidden in that tray. Afterwards
+#    what the user does with them (removed, moved, an item shown again) stays.
+if chips_installed == "1" and chips == "done":
+    note("live chips: as the user has them (kept)")
+elif chips_installed == "1":
+    for c in tops:
+        have = applets(c)
+        trays = [a for a, p in sorted(have.items(), key=lambda i: int(i[0]) if i[0].isdigit() else 0) if p == "org.kde.plasma.systemtray"]
+        if not trays:
+            note("live chips: bar %s has no tray (left as it is)" % c)
+            continue
+        if "org.plasmafusion.livechips" in have.values():
+            note("live chips in bar %s (unchanged)" % c)
+        else:
+            new = fresh_id()
+            write(APPLETSRC, ["Containments", c, "Applets", new], "immutability", "1")
+            write(APPLETSRC, ["Containments", c, "Applets", new], "plugin", "org.plasmafusion.livechips")
+            general = rc.get(("Containments", c, "General"), {})
+            order = [i for i in general.get("AppletOrder", "").split(";") if i]
+            if not order:
+                order = sorted(have, key=lambda i: int(i) if i.isdigit() else 0)
+            order = [i for i in order if i in have]
+            at = order.index(trays[0]) if trays[0] in order else len(order)
+            order.insert(at, new)
+            write(APPLETSRC, ["Containments", c, "General"], "AppletOrder", ";".join(order), general.get("AppletOrder"))
+        general = rc.get(("Containments", c, "Applets", trays[0], "General"), {})
+        for key in ("hiddenItems", "disabledStatusNotifiers"):
+            items = [i for i in general.get(key, "").split(",") if i]
+            add = [i for i in tray_chips.split() if i not in items]
+            if add:
+                write(APPLETSRC, ["Containments", c, "Applets", trays[0], "General"], key, ",".join(items + add), general.get(key))
 
 if not dry:
     for args in cmds:
@@ -2123,6 +2170,10 @@ fi
 # here on the user's (migrate_layout).
 if [ "$layout_checked" = 1 ] || [ "$reset" = 1 ]; then
   set_key plasmafusionrc Setup TrayDevices "done"
+  # The live chips likewise, once their widget is installed (a later install still gets them).
+  if package_dir plasma/plasmoids "$CHIPS_WIDGET" >/dev/null; then
+    set_key plasmafusionrc Setup LiveChips "done"
+  fi
 fi
 set_key kdeglobals KDE DefaultDarkLookAndFeel "$DARK"
 set_key kdeglobals KDE DefaultLightLookAndFeel "$LIGHT"

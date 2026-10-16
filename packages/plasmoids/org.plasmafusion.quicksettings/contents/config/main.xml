@@ -50,7 +50,7 @@
       <default>tablet</default>
     </entry>
     <entry name="openRequest" type="String">
-      <label>Written by other shell parts through desktop scripting: "MODE:NONCE" or "MODE:NONCE:OUTPUT" with MODE sheet (quick settings), notifications (the list, as the bell), toggle or close. Without OUTPUT only the widget on KWin's active screen acts. "MODE NONCE" is accepted too.</label>
+      <label>Written by other shell parts through desktop scripting: "MODE:NONCE" or "MODE:NONCE:OUTPUT" with MODE sheet (quick settings), notifications (the list, as the bell), keepawake (the Keep awake page; the live chips widget), toggle or close. Without OUTPUT only the widget on KWin's active screen acts. "MODE NONCE" is accepted too.</label>
       <default></default>
     </entry>
     <entry name="tabletNotifications" type="String">

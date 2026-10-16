@@ -45,8 +45,9 @@ account can be undone (`plasma-fusion restore`).
 - Global Themes (dark and light), Plasma style, colour schemes, icon and cursor themes,
   wallpapers, fonts (Manrope, Space Grotesk), boot splash and login screen styling
 - Window decoration (Aurorae, and a compiled KDecoration3 plugin)
-- Shell: top bar with a clock pill and app menu, dock, centred launcher, quick settings and
-  Notification Centre, desktop cards
+- Shell: top bar with a clock pill and app menu, live chips (what uses the microphone, the camera
+  or the screen, remote control and SSH logins, a recording, Keep awake), dock, centred launcher,
+  quick settings and Notification Centre, desktop cards
 - Tablet posture: full-screen apps, home screen with app pages, gestures from the bottom edge,
   split screen, on-screen keyboard keys, pen menu
 - App icons: 407 KDE, GNOME and common Linux apps redrawn as Plasma Fusion tiles that keep each app's

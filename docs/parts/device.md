@@ -113,6 +113,7 @@ plasmashell is stopped (it writes the layout file when it quits), the files are 
 | tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems`; once (plasmafusionrc `[Setup] TrayDevices=done`, written after the first run that looked at the layout or built a new one) |
 | every app menu `[Configuration][Appearance] allScreens=false` (decision 8) | the key is not set |
 | pen widget `org.plasmafusion.pen` added to the top bar between the tray and quick settings (next free applet id, `AppletOrder`) | the widget is installed and not in the bar, on a HOME below configuration version 2 |
+| live chips `org.plasmafusion.livechips` added right before the tray of every Plasma Fusion top bar with a tray (a free applet id each, `AppletOrder`), and the tray items they replace (`plasmashell_microphone`, `org.kde.plasma.cameraindicator`, `xdg-desktop-portal-kde`, `Spectacle`) added to that tray's `hiddenItems` and `disabledStatusNotifiers` (docs/parts/shell-livechips.md) | the widget is installed and not in that bar; once (plasmafusionrc `[Setup] LiveChips=done`, written after the first run that looked at the layout or built a new one while the widget was installed) |
 
 The rows "below configuration version 2" bring a layout from before 0.2.0 up to it; every release
 since ran them at its first run. Until 0.5.0 they ran at every run, so each `plasma-fusion update`

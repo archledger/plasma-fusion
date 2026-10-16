@@ -244,6 +244,9 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.meters/tests/readings_test.py
 
+      - name: Live chips' logic (what the chips show from what the sources report)
+        run: node packages/plasmoids/org.plasmafusion.livechips/tests/chips.test.js
+
       - name: Clipboard sheet on Plasma's clipboard model (offscreen, throw-away HOME)
         run: |
           set -euo pipefail

@@ -56,7 +56,8 @@ layout = open(sys.argv[1], encoding="utf-8").read()
 for other in sys.argv[2:]:
     text = open(other, encoding="utf-8").read()
     dock = other.endswith("org.plasmafusion.panel.dock/contents/layout.js")
-    for name in () if dock else ("TRAY_ITEMS_REPLACED", "TRAY_ITEMS_UNLOADED", "TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS", "TRAY_ITEMS_HIDDEN"):
+    for name in () if dock else ("TRAY_ITEMS_REPLACED", "TRAY_ITEMS_UNLOADED", "TRAY_ITEMS_UNLOADED_WITH_QUICK_SETTINGS", "TRAY_ITEMS_HIDDEN",
+                                 "TRAY_ITEMS_REPLACED_BY_CHIPS"):
         pattern = r"^var %s = (\[.*?\]);" % name
         a, b = re.search(pattern, layout, re.S | re.M), re.search(pattern, text, re.S | re.M)
         assert a and b and re.findall(r'"([^"]+)"', a[1]) == re.findall(r'"([^"]+)"', b[1]), \

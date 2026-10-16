@@ -9,6 +9,12 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- New **live chips** at the start of the top bar's right cluster: a chip shows while an app uses
+  the microphone or the camera, shares the screen or controls the computer, while someone is signed
+  in over SSH, while Spectacle records the screen (with the time and a stop button) and while a
+  timed Keep awake runs (the time left). A click on the chips opens a panel that names the apps,
+  with Mute, Stop sharing and End. Nothing in use: the bar is as before. `plasma-fusion setup`
+  adds them to existing top bars once.
 - Snapped windows now meet with no gap between them: two halves side by side, or four quarters,
   fill the screen edge to edge. A gap can still be set in the snap script's settings (System
   Settings, Window Management, KWin Scripts, Plasma Fusion Snap Layouts), from 0 to 48 px.

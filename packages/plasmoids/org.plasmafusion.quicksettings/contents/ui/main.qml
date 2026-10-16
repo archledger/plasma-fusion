@@ -224,8 +224,11 @@ PlasmoidItem {
 
     property bool popupOpen: false
     property bool openOnPress: false
-    // A page the next opening shows instead of the start page (the clipboard sheet).
+    // A page the next opening shows instead of the start page (the clipboard sheet, Keep awake).
     property string requestedPage: ""
+    // The end of a timed Keep awake (ms since the epoch), else 0: the live chips widget in the same
+    // bar reads it from this item (its sources/KeepAwake.qml) for its time-left chip.
+    readonly property double keepAwakeUntil: backend.keepAwake.timed ? backend.keepAwake.until : 0
     property real maxPopupHeight: 820
 
     // The Plasma style's frame padding of the sheet's window, which the content subtracts from the
@@ -475,7 +478,8 @@ PlasmoidItem {
     }
 
     // ---- openRequest: "<mode>:<nonce>[:<output>]" (or "<mode> <nonce>"), written by other shell
-    // parts through desktop scripting (the tablet script's right edge, Meta+N, Meta+V). Without an
+    // parts through desktop scripting (the tablet script's right edge, Meta+N, Meta+V) and by the
+    // live chips widget (keepawake: its Keep awake chip, with this widget's output). Without an
     // output only the widget on KWin's active screen acts, and only the leader when that is not
     // known either (code/requests.js).
     Connections {
@@ -549,6 +553,11 @@ PlasmoidItem {
             break;
         case "clipboard":
             showClipboard(!clipboardShown);
+            break;
+        case "keepawake":
+            // The Keep awake page (the tile's chevron), opened on its own.
+            requestedPage = "power";
+            setPopupOpen(true);
             break;
         case "close":
             if (popupOpen) {
