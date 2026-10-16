@@ -654,9 +654,11 @@ The file is one JSON object, `{"format": "plasma-fusion-settings", "version": 1,
 
 A file larger than an import takes (8 MiB) is not written: the page says how large it would be.
 
-Import first reads the whole file: one that is not JSON, not of this format or version, without
-panels, or with a panel or widget that is not complete is refused with the reason, and nothing
-changes. Complete means every value `import-layout.js` gives the new panel as plasma-workspace
+Import first reads the whole file, a regular file only and no more than 8 MiB of it (a FIFO
+would block the page when it is opened, until something writes to it, and a device such as
+`/dev/zero` has no size and no end; Qt 6.11.2 takes only `S_IFREG` for a file): one that is not
+JSON, not of this format or version, without panels, or with a panel or widget that is not
+complete is refused with the reason, and nothing changes. Complete means every value `import-layout.js` gives the new panel as plasma-workspace
 6.7.5's `Panel` takes it (the old panels are gone before the new ones are made): a whole screen
 number, an edge, a whole height above 0, `floating` and `floatingApplets` true or false, one of
 the length modes, alignments, hiding and opacity modes `Panel` knows, the four lengths as whole
@@ -736,7 +738,9 @@ Tests:
   (`quitafter`, `QCoreApplication::exit`) still get the file's panels added; an export larger than
   an import takes is not written; the removed quick settings' Meta+A is released and a desktop
   widget's key kept (the stand-in session answers as kglobalaccel, `mock-session.py
-  --kglobalaccel`, and logs each `unregister`); imported on a desktop without panels, the file's
+  --kglobalaccel`, and logs each `unregister`); a FIFO and `/dev/zero` are refused at once and a
+  9 MiB file as too large (each kcmctl run is bounded by `timeout`, so a page that hangs fails its
+  checks); imported on a desktop without panels, the file's
   "Dock on every screen" and top-bar choices are kept and `ensure-topbars.js` runs; values the page does not take are counted and
   left as they were; without `export-layout.js` the action is not offered and an export says why.
   Each of the module's steps fails a check when taken out (the escape too: the stand-in shell

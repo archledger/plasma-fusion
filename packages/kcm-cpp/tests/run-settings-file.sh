@@ -110,7 +110,8 @@ session() {
   for _ in $(seq 300); do grep -q ready "$work/mock-session.out" 2>/dev/null && break; sleep 0.1; done
   check "the stand-in shell started ($name)" grep -q ready "$work/mock-session.out"
   grep -q ready "$work/mock-session.out" || sed 's/^/  mock: /' "$work/mock-session.out"
-  printf '%s\n' waitshell "$@" waitidle "get errorText" "get infoText" | "$kcmctl" >"$work/$name.log" 2>&1
+  # Bounded: a module that hangs (an import that blocks) fails its checks instead of the test.
+  printf '%s\n' waitshell "$@" waitidle "get errorText" "get infoText" | timeout 120 "$kcmctl" >"$work/$name.log" 2>&1
   kill "$mock" 2>/dev/null; wait "$mock" 2>/dev/null
 }
 text() { sed -n "s/^kcmctl: $2=//p" "$work/$1.log"; }
@@ -212,6 +213,16 @@ for bad in garbage format version nopanels location keytype customlen floating h
   check "a bad file ($bad) is refused" grep -q "^kcmctl: errorText=$bad.json cannot be imported: " "$work/bad-$bad.log"
   check "  and nothing is changed" bash -c "grep -q '^kcmctl: glass=0' '$work/bad-$bad.log' && ! grep -q importGot '$work/calls.log' && ! test -e '$XDG_CONFIG_HOME/plasmafusionrc'"
 done
+# Not regular files, or one larger than a settings file: refused without being read through (a
+# FIFO would block the page in open(), /dev/zero has no end).
+mkfifo "$work/fifo.json"
+truncate -s 9M "$work/huge.json"
+for special in "$work/fifo.json" /dev/zero; do
+  session special "call importSettings $special"
+  check "$(basename "$special") is refused at once, not read" grep -q "^kcmctl: errorText=$(basename "$special") cannot be imported: it is not a regular file." "$work/special.log"
+done
+session huge "call importSettings $work/huge.json"
+check "a file larger than a settings file is refused" grep -q '^kcmctl: errorText=huge.json cannot be imported: it is not a Plasma Fusion settings file.' "$work/huge.log"
 session values "get hotCorner" "call importSettings $work/values.json" "get glass" "get hotCorner"
 check "values a setting does not take are left as they are" bash -c "grep -q '^kcmctl: glass=0' '$work/values.log' && test \$(grep -c '^kcmctl: hotCorner=true' '$work/values.log') = 2"
 check "  and the page says so" grep -q '2 settings in the file have values this version does not take' "$work/values.log"

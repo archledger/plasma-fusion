@@ -154,15 +154,23 @@ QString layoutProblem(const QJsonObject &layout)
 // The settings file at PATH in *FILE, or why it is not one.
 QString readSettingsFile(const QString &path, QJsonObject *file)
 {
+    // A regular file only, and read no further than a settings file can be: a FIFO blocks the page
+    // in open() until something writes to it, and a device such as /dev/zero has no size and no
+    // end (Qt 6.11.2 takes only S_IFREG for a file, qfilesystemengine_unix.cpp).
+    const QFileInfo info(path);
+    if (!path.isEmpty() && info.exists() && !info.isFile()) {
+        return i18nc("@info reason", "it is not a regular file");
+    }
     QFile in(path);
     if (path.isEmpty() || !in.open(QIODevice::ReadOnly)) {
         return path.isEmpty() ? i18nc("@info reason", "it is not a local file") : in.errorString();
     }
-    if (in.size() > s_maxFileSize) {
+    const QByteArray data = in.read(s_maxFileSize + 1);
+    if (data.size() > s_maxFileSize) {
         return i18nc("@info reason", "it is not a Plasma Fusion settings file");
     }
     QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(in.readAll(), &error);
+    const QJsonDocument document = QJsonDocument::fromJson(data, &error);
     *file = document.object();
     if (error.error != QJsonParseError::NoError || !document.isObject() || file->value(u"format"_s).toString() != s_format) {
         return i18nc("@info reason", "it is not a Plasma Fusion settings file");
