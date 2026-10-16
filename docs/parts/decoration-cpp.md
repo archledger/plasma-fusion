@@ -246,7 +246,8 @@ take effect (cause not investigated); the one-rule file works on both window typ
   converted to QRectF through KWin's registered converter). Elsewhere (settings page preview) the
   properties are simply invalid and the defaults apply. The tile path is needed because KWin reports
   no adjacent screen edges for tiles with padding (`Tile::anchors()` returns nothing when padding
-  > 0, and Plasma Fusion uses 6 px gaps); tile changes arrive as `adjacentScreenEdgesChanged`.
+  > 0, which a gap set for the snap script gives; none by default); tile changes arrive as
+  `adjacentScreenEdgesChanged`.
 - Shadows are rendered once per parameter set (colour, opacity, blur, offset, radius, corner shape)
   and shared by every window (KWin also shares the nine-patch texture per shadow object); the cache
   is dropped with the last decoration. Rebuilt on activation, maximize, tile and palette changes;

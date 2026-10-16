@@ -20,7 +20,8 @@ import "SnapGeometry.js" as SnapGeometry
 //   empty zone of that layout is offered in turn (Snap Assist for every layout). Esc, a click
 //   elsewhere or any focus change dismisses it; it also closes itself after a minute without
 //   input.
-// - Snapped halves and quarters get a 6 px inner gap, with no work-area edge inset.
+// - Snapped halves and quarters meet with no gap (Gap: 0-48 px between them), with no work-area
+//   edge inset.
 // - Windows snapped together through the picker form a group (snap groups, Groups.js): they
 //   minimise and restore together, and activating one brings the others up with it.
 //
@@ -42,7 +43,7 @@ Item {
         return value;
     }
     function gap() {
-        return Math.max(0, Math.min(48, setting("Gap", 6)));
+        return Math.max(0, Math.min(48, setting("Gap", 0)));
     }
 
     // ---------------------------------------------------------------- quick tiles

@@ -72,6 +72,8 @@ PY
 
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
 info "fusion-config rc=$?"
+# These checks measure a 6 px gap between snapped windows (the default is none).
+kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap 6
 kwriteconfig6 --file kwinrc --group Script-plasmafusion-tablet --key InternalOutputs "eDP,LVDS,DSI,Virtual"
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99

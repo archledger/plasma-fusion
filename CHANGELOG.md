@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- Snapped windows now meet with no gap between them: two halves side by side, or four quarters,
+  fill the screen edge to edge. A gap can still be set in the snap script's settings (System
+  Settings, Window Management, KWin Scripts, Plasma Fusion Snap Layouts), from 0 to 48 px.
 - New **Quick Look**: select files in Dolphin and press Space to see what is in them without
   opening them - pictures (moving ones play), PDF documents, text and code with its colours, songs
   and videos, and a folder's size; any other file shows its thumbnail. The arrow keys go through the

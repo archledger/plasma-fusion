@@ -37,14 +37,14 @@ QtQuickWindow.Window {
     property bool animated: false
     property var quickRoots: ({})
     property rect targetGeometry: outline.geometry
-    property real configuredGap: 6
+    property real configuredGap: 0
     property bool quickGaps: true
     property bool settingsLoaded: false
     readonly property real innerGap: quickGaps ? configuredGap : 0
     // kreadconfig's boolean mode reports through its exit status, not stdout.
     readonly property string configCommand: "if kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key QuickTileGaps --type bool --default true; "
         + "then printf 'true\\n'; else printf 'false\\n'; fi; "
-        + "kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap --default 6"
+        + "kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap --default 0"
 
     // The gap settings are read when the outline is created and again when KWin reloads its
     // configuration (Options.configChanged: the snap script's own KWin.readConfig sees new values
@@ -61,7 +61,7 @@ QtQuickWindow.Window {
         const values = String(text).trim().split("\n");
         const value = Number(values[1]);
         quickGaps = String(values[0]).trim() === "true";
-        configuredGap = Math.max(0, Math.min(48, isNaN(value) ? 6 : value));
+        configuredGap = Math.max(0, Math.min(48, isNaN(value) ? 0 : value));
         if (visible) place(outline.geometry, false);
     }
     P5Support.DataSource {
