@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- The dock's menu has **End Task…** for an app that does not answer: after a confirmation the app
+  is asked to quit and, if it is still running 3 seconds later, ended. The desktop's own windows
+  have none.
 - The Plasma Fusion settings page has a **Launcher** group: recent files under the pinned apps, the
   Recent chip (recently and often used apps) and the Places chip can each be turned off. The
   launcher's own settings have the same switches.

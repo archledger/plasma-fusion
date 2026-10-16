@@ -23,6 +23,8 @@ import org.kde.kitemmodels as KItemModels
 import "../code/jobs.js" as Jobs
 import "../code/pins.js" as Pins
 import "../code/date-timer.js" as DateTimer
+import "../code/endtask.js" as EndTask
+import "../code/menu-pick.js" as MenuPick
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
@@ -863,6 +865,22 @@ PlasmoidItem {
         case "downloads-menu": showDownloadsMenu(); break;
         case "trash-menu": showTrashMenu(); break;
         case "close-menu": if (lastMenu) lastMenu.close(); break;
+        // An action of the last menu, by the text it was added with (the rest of the key), as a
+        // click on it; the menu need not be open (DockMenu.actions).
+        case "pick": {
+            const text = parts.slice(1).join(":");
+            const picked = MenuPick.find(lastMenuActions, text);
+            console.info("dock: pick " + text + ": " + (picked ? "run" : "no such entry"));
+            if (picked) {
+                if (lastMenu) {
+                    lastMenu.close();
+                }
+                logNextMenu = true;
+                if (picked.run) {
+                    picked.run();
+                }
+            }
+        } break;
         case "menu": if (item) { logNextMenu = true; showTaskMenu(item); } break;
         case "activate": if (item) activateTask(row, 0); break;
         case "new": if (item) tasksModel.requestNewInstance(tasksModel.makeModelIndex(row)); break;
@@ -1138,6 +1156,8 @@ PlasmoidItem {
     }
 
     property DockMenu lastMenu: null
+    // The last menu's actions, for the test hook pick:TEXT; they outlive the menu (DockMenu.actions).
+    property var lastMenuActions: []
     // A task's menu acts on model indexes taken when it opened: when tasks come, go or move, they
     // may name another task, so the menu closes (open it again for the task).
     function closeTaskMenu(): void {
@@ -1150,6 +1170,7 @@ PlasmoidItem {
         const menu = menuComponent.createObject(root, { visualParent: visualParent }) as DockMenu;
         menu.statusChanged.connect(() => { root.menuOpen = menu.status !== PlasmaExtras.Menu.Closed; });
         lastMenu = menu;
+        lastMenuActions = menu.actions;
         return menu;
     }
 
@@ -1325,6 +1346,12 @@ PlasmoidItem {
             const count = tasksModel.rowCount(index);
             menu.addAction(count > 1 ? i18nc("@action:inmenu", "Close All %1 Windows", count) : i18nc("@action:inmenu", "Close"),
                            "window-close-symbolic", () => tasksModel.requestClose(index), {});
+            // End Task for an app that does not answer Close (not for the shell's own windows).
+            if (!EndTask.sessionApp(item.iconName) && EndTask.endTaskPids(taskPids(row)).length > 0) {
+                const endApp = item.iconName;
+                menu.addAction(i18nc("@action:inmenu end an app that does not respond", "End Task…"), "process-stop-symbolic",
+                               () => Qt.callLater(root.confirmEndTask, row, endApp), {});
+            }
         }
         if (logNextMenu) {
             logNextMenu = false;
@@ -1422,6 +1449,33 @@ PlasmoidItem {
         }
     }
 
+    // A command whose output is wanted: run(COMMAND, DONE) calls DONE with its standard output.
+    // Each run gets a source of its own (the engine's source is the command line).
+    P5Support.DataSource {
+        id: reader
+        engine: "executable"
+        connectedSources: []
+        property var waiting: ({})
+        property int runs: 0
+        onNewData: (sourceName, data) => {
+            const done = waiting[sourceName];
+            delete waiting[sourceName];
+            disconnectSource(sourceName);
+            if (done) {
+                done(String(data["stdout"] || ""));
+            }
+        }
+        function run(command: string, done: var): void {
+            if (command === "") {
+                done("");
+                return;
+            }
+            const source = command + " # " + (++runs);
+            waiting[source] = done;
+            connectSource(source);
+        }
+    }
+
     // ---- Tent posture (TABLET2 N2/N9): tablet posture with the screen upside down puts the
     // bottom edge on the table, where no swipe can start. The tablet script keeps the dock visible
     // while kwinrc [Script-plasmafusion-tablet] TentPosture is true; written after the rotation has
@@ -1468,6 +1522,53 @@ PlasmoidItem {
                        () => Qt.openUrlExternally("trash:/"), {});
         menu.addAction(i18nc("@action:inmenu", "Empty Trash…"), "trash-empty-symbolic",
                        () => Qt.callLater(root.confirmEmptyTrash), { enabled: root.trashFull });
+        menu.openRelative();
+    }
+
+    // End Task's confirmation in the menu's place, as Empty Trash's. The app's processes are read
+    // with their start times first (EndTask.identityCommand(), a moment), and the question opens
+    // once they are, so End Task always has them; it closes when the app's tasks change (a task
+    // menu). At the click only those its windows still have are ended (EndTask.stillOurs()), and
+    // the command ends a process only while it is still the one read (EndTask.endTaskCommand()):
+    // one that quit meanwhile, and a process that got its number since, are left alone.
+    function confirmEndTask(row: int, appId: string): void {
+        // The row as the menu had it: when tasks came, went or moved before this ran, it may be
+        // another app's now, and then nothing is asked.
+        const item = taskRepeater.itemAt(row) as TaskItem;
+        if (!item || item.iconName !== appId) {
+            console.info("dock: end task " + appId + ": its row changed, not asked");
+            return;
+        }
+        const asked = EndTask.endTaskPids(taskPids(row));
+        reader.run(EndTask.identityCommand(asked), out => root.askEndTask(row, appId, asked, EndTask.identities(out)));
+    }
+
+    function askEndTask(row: int, appId: string, asked: var, identities: var): void {
+        const item = taskRepeater.itemAt(row) as TaskItem;
+        if (!item || item.iconName !== appId) {
+            console.info("dock: end task " + appId + ": its row changed, not asked");
+            return;
+        }
+        if (identities.length === 0) {
+            console.info("dock: end task " + appId + " (nothing left to end)");
+            return;
+        }
+        const name = item.name || appId;
+        const menu = openMenu(item.iconItem);
+        menu.taskMenu = true;
+        menu.addHeader(i18nc("@title:menu %1 an app", "End %1? Anything not saved in it is lost.", name));
+        menu.addAction(i18nc("@action:inmenu", "End Task"), "process-stop-symbolic", () => {
+            const ids = EndTask.boundTo(identities, EndTask.stillOurs(asked, appPids(appId)));
+            console.info("dock: end task " + appId + " " + (ids.length > 0 ? ids.join(",") : "(nothing left to end)"));
+            if (ids.length > 0) {
+                executable.run(EndTask.endTaskCommand(ids));
+            }
+        }, {});
+        menu.addAction(i18nc("@action:inmenu", "Cancel"), "dialog-cancel-symbolic", null, {});
+        if (logNextMenu) {
+            logNextMenu = false;
+            console.info("dock: menu " + item.iconName + ": " + menu.entries.join(" | "));
+        }
         menu.openRelative();
     }
 
@@ -2266,6 +2367,17 @@ PlasmoidItem {
             }
         } else {
             take(Number(tasksModel.data(index, atm.AppPid) || 0));
+        }
+        return pids;
+    }
+    // The processes of every task of an app now (by its app id: the rows may have moved).
+    function appPids(appId: string): var {
+        let pids = [];
+        for (let i = 0; i < taskRepeater.count; ++i) {
+            const task = taskRepeater.itemAt(i) as TaskItem;
+            if (task && task.iconName === appId) {
+                pids = pids.concat(taskPids(i));
+            }
         }
         return pids;
     }
