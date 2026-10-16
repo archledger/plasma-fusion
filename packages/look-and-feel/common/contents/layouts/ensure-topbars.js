@@ -357,12 +357,14 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     with the main dock's height, hiding and opacity, a hidden launcher of its own (the dock's Start
     opens the launcher of its own panel, so on its own screen) and the main dock's and launcher's
     settings (every [General] key they have set, but the ones that ask for something once: the
-    test hooks and requests). Every dock then lists only its own screen's windows
-    (showOnlyCurrentScreen); the main dock keeps the value it had before in its [PlasmaFusion]
-    onlyCurrentScreenBefore, which the settings page puts back when the switch goes off and removes
-    the other docks. The main dock is the one on the lowest screen number; when a dock is added on
-    a lower screen than it (none was on screen 0), that new dock is the one the page keeps, and the
-    remembered value moves to it. Idempotent; a dock is never removed here. Prints one line: "docks: screens N, added M".
+    test hooks and requests). Such a dock is marked as a copy ([PlasmaFusion] everyScreenCopy): when
+    the switch goes off the settings page removes the copies' panels, and only those, so docks the
+    user made stay. Every dock then lists only its own screen's windows (showOnlyCurrentScreen); a
+    dock that is not a copy keeps the value it had before in its [PlasmaFusion]
+    onlyCurrentScreenBefore, which the settings page puts back. The main dock, the one copied, is
+    the one on the lowest screen number that is not a copy. When the shell cannot make the dock
+    (addWidget gives an Error), the new panel is removed again. Idempotent; a dock is never removed
+    here. Prints one line: "docks: screens N, added M" (", not made K" when some could not be).
 */
 (function () {
     var DOCK = "org.plasmafusion.dock", LAUNCHER = "org.plasmafusion.launcher";
@@ -388,9 +390,23 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         print("docks: skipped, the layout is not loaded yet");
         return;
     }
+    // A widget's [PlasmaFusion] KEY ("" when not set).
+    function mark(widget, key) {
+        widget.currentConfigGroup = ["PlasmaFusion"];
+        var value = String(widget.readConfig(key, ""));
+        widget.currentConfigGroup = [];
+        return value;
+    }
+    function setMark(widget, key, value) {
+        widget.currentConfigGroup = ["PlasmaFusion"];
+        widget.writeConfig(key, value);
+        widget.currentConfigGroup = [];
+    }
+    var isCopy = function (dock) { return truthy(mark(dock, "everyScreenCopy")); };
     var onScreen = {}, main = null, unplaced = 0;
     for (var i = 0; i < ps.length; ++i) {
-        if (ps[i].widgets(DOCK).length === 0) {
+        var docks = ps[i].widgets(DOCK);
+        if (docks.length === 0) {
             continue;
         }
         if (ps[i].screen < 0 || ps[i].screen >= screenCount) {
@@ -400,8 +416,10 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         if (onScreen[ps[i].screen] === undefined) {
             onScreen[ps[i].screen] = ps[i];
         }
-        if (main === null || ps[i].screen < main.screen) {
-            main = ps[i];
+        // An original before a copy, then the lowest screen.
+        var copy = isCopy(docks[0]);
+        if (main === null || (main.copy && !copy) || (main.copy === copy && ps[i].screen < main.panel.screen)) {
+            main = { panel: ps[i], copy: copy };
         }
     }
     if (unplaced > 0) {
@@ -412,6 +430,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         print("docks: no Plasma Fusion dock to follow");
         return;
     }
+    main = main.panel;
     // FROM's [General] keys onto TO (but SKIP), lists as lists.
     function copyKeys(from, to) {
         from.currentConfigGroup = ["General"];
@@ -427,6 +446,11 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         from.currentConfigGroup = [];
         to.currentConfigGroup = [];
     }
+    function made(widget) {
+        return widget && typeof widget === "object" && widget.type !== undefined;
+    }
+    // Lists only its own screen's windows; a dock that is not a copy remembers what it had (once:
+    // "" too means not remembered, the settings page empties it when it puts the value back).
     function onlyThisScreen(dock) {
         dock.currentConfigGroup = ["General"];
         var before = dock.readConfig("showOnlyCurrentScreen", "");
@@ -434,15 +458,13 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
             dock.writeConfig("showOnlyCurrentScreen", true);
         }
         dock.currentConfigGroup = [];
-        return before;
+        if (!isCopy(dock) && mark(dock, "onlyCurrentScreenBefore") === "") {
+            setMark(dock, "onlyCurrentScreenBefore", truthy(before));
+        }
     }
     var mainDock = main.widgets(DOCK)[0];
     var mainLaunchers = main.widgets(LAUNCHER);
-    var added = 0;
-    // The dock on the lowest screen once every screen has one: the one the settings page keeps
-    // when the switch goes off, so it holds the remembered value (a dock added on a lower screen
-    // than the one there was, with none on screen 0 before, is it).
-    var keepDock = mainDock, keepScreen = main.screen;
+    var added = 0, failed = 0;
     for (var sc = 0; sc < screenCount; ++sc) {
         if (onScreen[sc] !== undefined) {
             continue;
@@ -458,7 +480,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         dockPanel.opacity = main.opacity;
         if (mainLaunchers.length > 0 && knownWidgetTypes.indexOf(LAUNCHER) !== -1) {
             var launcher = dockPanel.addWidget(LAUNCHER);
-            if (launcher && typeof launcher === "object" && launcher.type !== undefined) {
+            if (made(launcher)) {
                 copyKeys(mainLaunchers[0], launcher);
                 // Next to the Fusion dock the launcher has no button of its own; its pins are the
                 // shared ones already (no first-run pins again).
@@ -469,47 +491,21 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
             }
         }
         var dock = dockPanel.addWidget(DOCK);
-        if (dock && typeof dock === "object" && dock.type !== undefined) {
-            copyKeys(mainDock, dock);
-            onlyThisScreen(dock);
-            if (sc < keepScreen) {
-                keepDock = dock;
-                keepScreen = sc;
-            }
+        if (!made(dock)) {
+            // No dock: no panel for it (a later run tries again).
+            dockPanel.remove();
+            failed++;
+            continue;
         }
+        copyKeys(mainDock, dock);
+        setMark(dock, "everyScreenCopy", true);
+        onlyThisScreen(dock);
         added++;
     }
-    function remembered(dock) {
-        dock.currentConfigGroup = ["PlasmaFusion"];
-        // ("" too: the settings page empties it when it puts the value back.)
-        var value = String(dock.readConfig("onlyCurrentScreenBefore", "\u0001unset"));
-        dock.currentConfigGroup = [];
-        return value === "\u0001unset" ? "" : value;
+    // Every dock lists its own screen's windows (a second dock of the user's on a screen too).
+    var all = panels();
+    for (var j = 0; j < all.length; ++j) {
+        all[j].widgets(DOCK).forEach(onlyThisScreen);
     }
-    function remember(dock, value) {
-        dock.currentConfigGroup = ["PlasmaFusion"];
-        dock.writeConfig("onlyCurrentScreenBefore", value);
-        dock.currentConfigGroup = [];
-    }
-    // Every dock lists its own screen's windows; the kept one remembers what the main one had.
-    var value = remembered(mainDock);
-    var unset = value === "";
-    if (added > 0 || unset) {
-        var before = onlyThisScreen(mainDock);
-        if (unset) {
-            value = truthy(before) ? "true" : "false";
-        }
-    }
-    if (keepDock !== mainDock) {
-        remember(keepDock, truthy(value));
-        remember(mainDock, "");
-    } else if (unset) {
-        remember(mainDock, truthy(value));
-    }
-    for (var s2 in onScreen) {
-        if (onScreen[s2] !== main) {
-            onScreen[s2].widgets(DOCK).forEach(onlyThisScreen);
-        }
-    }
-    print("docks: screens " + screenCount + ", added " + added);
+    print("docks: screens " + screenCount + ", added " + added + (failed > 0 ? ", not made " + failed : ""));
 })();

@@ -23,9 +23,11 @@
 //                     ("launcher{General/showPlaces=false}"), keys in order
 //   scriptDelayMs     the shell answers a script only this long after it came (a shell that has
 //   slowFrom          just started), from the slowFrom-th script on (default 1: every script)
+//   failScripts       a script holding this text gets an error reply instead (a shell whose script
+//                     fails or times out), as plasmashell answers a failing script
 
 var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false, showConfig: false,
-              scriptDelayMs: 0, slowFrom: 1, scripts: 0 };
+              scriptDelayMs: 0, slowFrom: 1, scripts: 0, failScripts: "" };
 var knownWidgetTypes = [];
 var screenCount = 1;
 
@@ -65,6 +67,7 @@ function loadLayout(text) {
     state.showConfig = layout.showConfig === true;
     state.scriptDelayMs = layout.scriptDelayMs || 0;
     state.slowFrom = layout.slowFrom || 1;
+    state.failScripts = layout.failScripts || "";
     knownWidgetTypes = state.known.slice();
     screenCount = layout.screens !== undefined ? layout.screens : state.panels.reduce(function (n, p) {
         return Math.max(n, p.screen + 1);
@@ -148,6 +151,11 @@ function panelObject(panel) {
             return widgetObject(panel, w);
         }
     };
+}
+
+// Whether fakeshell answers SCRIPT with an error (failScripts).
+function failsScript(script) {
+    return state.failScripts !== "" && String(script).indexOf(state.failScripts) !== -1;
 }
 
 // How long fakeshell waits before it runs the next script (scriptDelayMs, slowFrom).

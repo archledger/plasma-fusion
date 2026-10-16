@@ -533,16 +533,22 @@ live session gets these changes through DEVICE-1's in-place migration.
   launcher of its own panel, on its screen; marked as having its pins, so no first-run pins again)
   and every `[General]` key the main dock and launcher have set (Plasma's `Widget.configKeys`,
   checked in plasma-workspace 6.7.5 `shell/scripting/widget.h`), but the test hooks and requests;
-  list keys are copied as lists. Every dock then lists only its own screen's windows
-  (`showOnlyCurrentScreen`); the main dock remembers what it had in `[PlasmaFusion]
-  onlyCurrentScreenBefore`. The value is kept on the dock of the lowest screen once every screen has
-  one, the one the settings page keeps when the switch goes off: with a dock only on screen 1, the
-  dock added on screen 0 holds it. Prints "docks: screens N, added M". Tests (`tests/layout.test.js`):
-  the second screen's dock and launcher with the main one's settings (a list as a list, no test hook,
-  no request), its own screen only, the main dock remembering; one dock without the key; a second
-  run adds nothing and keeps the remembered value; a dock only on screen 1: the one added on
-  screen 0 remembers, the other does not, also after a second run; nothing without the dock
-  installed.
+  list keys are copied as lists. Such a dock is marked as a copy (`[PlasmaFusion]
+  everyScreenCopy`): the settings page removes the copies' panels when the switch goes off, and only
+  those, so docks the user made stay. Every dock then lists only its own screen's windows
+  (`showOnlyCurrentScreen`); a dock that is not a copy remembers what it had in `[PlasmaFusion]
+  onlyCurrentScreenBefore`. The main dock, the one copied, is the one on the lowest screen number
+  that is not a copy. When the shell cannot make the dock (`addWidget` gives an Error, as
+  plasma-workspace 6.7.5 `shell/scripting/containment.cpp` does), the new panel is removed again.
+  Prints "docks: screens N, added M" (", not made K"). Tests (`tests/layout.test.js`, whose
+  stand-in shell has `remove()` and an `addWidget` that fails for the types in `failAdd`): the
+  second screen's dock and launcher with the main one's settings (a list as a list, no test hook,
+  no request), marked as a copy, its own screen only, the main dock remembering; one dock without
+  the key; a second run adds nothing and keeps the remembered value; a dock only on screen 1 stays
+  the main one and remembers, the new one on screen 0 is a copy; a second dock of the user's on the
+  main screen gets no copy and remembers too; a dock the shell cannot make leaves no panel, also
+  after a second run; nothing without the dock installed. Without the copy mark, the panel
+  removal, the remembering or the second dock's turn, a case fails.
 - Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
   `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into
   `~/.local/share/plasma/layout-templates/`: "Add Panel" offers the Fusion top bar and dock.

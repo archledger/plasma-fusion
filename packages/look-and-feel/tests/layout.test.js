@@ -282,6 +282,8 @@ test("ensure-topbars: a dock on every screen gives the second screen a dock like
     const main = docksOf(s).find((p) => p.id === 40).widgets[1];
     assert.strictEqual(general(main).showOnlyCurrentScreen, true, "the main dock too");
     assert.strictEqual(main.config.PlasmaFusion.onlyCurrentScreenBefore, false, "  remembering what it had");
+    assert.strictEqual(added.widgets[1].config.PlasmaFusion.everyScreenCopy, true, "the new dock is marked as a copy");
+    assert.strictEqual(main.config.PlasmaFusion.everyScreenCopy, undefined, "  the main one is not");
 });
 test("ensure-topbars: without [Dock] EveryScreen there is one dock", () => {
     const s = shell({ screens: TWO, files: rc(), panels: [mainBar(), dockPanel()] });
@@ -299,23 +301,49 @@ test("ensure-topbars: a dock on every screen, run again: nothing more, the remem
     const main = docksOf(s).find((p) => p.id === 40).widgets[1];
     assert.strictEqual(main.config.PlasmaFusion.onlyCurrentScreenBefore, true, "a main dock that showed its own screen only remembers that");
 });
-test("ensure-topbars: a dock only on the second screen: the one added on the first remembers", () => {
-    // The settings page keeps the dock on the lowest screen when the switch goes off (and puts its
-    // remembered value back), so the dock added on screen 0 holds what the one there was had.
+test("ensure-topbars: a dock only on the second screen: it stays the main one, the new one is a copy", () => {
+    // The settings page removes only the copies when the switch goes off, so the dock there was
+    // stays, with the value it remembers.
     const p = dockPanel();
     p.screen = 1;
     const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), p] });
     s.run(ENSURE);
-    assert.match(s.output, /docks: screens 2, added 1/, s.output);
+    assert.match(s.output, /docks: screens 2, added 1$/m, s.output);
     const dockOf = (panel) => panel.widgets.find((w) => w.type === "org.plasmafusion.dock");
+    const pf = (w) => (w.config || {}).PlasmaFusion || {};
     const first = dockOf(docksOf(s).find((d) => d.screen === 0)), second = dockOf(docksOf(s).find((d) => d.id === 40));
-    assert.strictEqual(((first.config || {}).PlasmaFusion || {}).onlyCurrentScreenBefore, false, "the new dock on screen 0 remembers false");
-    assert.ok(["", undefined].includes(((second.config || {}).PlasmaFusion || {}).onlyCurrentScreenBefore),
-              "the dock on screen 1 remembers nothing (it goes when the switch is off)");
+    assert.deepStrictEqual([pf(first).everyScreenCopy, pf(first).onlyCurrentScreenBefore], [true, undefined],
+                           "the new dock on screen 0: a copy, nothing remembered");
+    assert.deepStrictEqual([pf(second).everyScreenCopy, pf(second).onlyCurrentScreenBefore], [undefined, false],
+                           "the dock on screen 1: no copy, remembers false");
+    assert.strictEqual(general(first).magnifiedSize, 56, "the copy has the original's settings");
     assert.deepStrictEqual([general(first).showOnlyCurrentScreen, general(second).showOnlyCurrentScreen], [true, true], "both list their own screen");
     s.run(ENSURE);
     assert.match(s.output, /docks: screens 2, added 0/, s.output);
-    assert.strictEqual(first.config.PlasmaFusion.onlyCurrentScreenBefore, false, "run again: still remembered on screen 0");
+    assert.deepStrictEqual([pf(first).onlyCurrentScreenBefore, pf(second).onlyCurrentScreenBefore], [undefined, false], "run again: the same");
+});
+test("ensure-topbars: a second dock of the user's on the main screen: no copy made for it, it remembers too", () => {
+    const own = dockPanel({ showOnlyCurrentScreen: true });
+    own.id = 50;
+    own.widgets = own.widgets.map((w, i) => Object.assign({}, w, { id: 51 + i }));
+    own.location = "left";
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel(), own] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 1$/m, s.output);
+    assert.strictEqual(docksOf(s).length, 3, "the two of screen 0 and one copy for screen 1");
+    const ownDock = docksOf(s).find((d) => d.id === 50).widgets.find((w) => w.type === "org.plasmafusion.dock");
+    assert.deepStrictEqual([general(ownDock).showOnlyCurrentScreen, ownDock.config.PlasmaFusion.onlyCurrentScreenBefore], [true, true],
+                           "the user's dock lists its own screen and remembers it already did");
+    assert.strictEqual((ownDock.config.PlasmaFusion || {}).everyScreenCopy, undefined, "it is not a copy");
+});
+test("ensure-topbars: a dock the shell cannot make leaves no panel behind", () => {
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], failAdd: ["org.plasmafusion.dock"] });
+    const bottom = () => s.panels.filter((p) => p.location === "bottom").map((p) => p.screen);
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 0, not made 1/, s.output);
+    assert.deepStrictEqual(bottom(), [0], "no new dock panel (nor its launcher) on screen 1");
+    s.run(ENSURE);
+    assert.deepStrictEqual(bottom(), [0], "a second run neither");
 });
 test("ensure-topbars: no dock installed, no docks", () => {
     const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.dock"] });

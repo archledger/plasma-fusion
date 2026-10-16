@@ -319,39 +319,41 @@ for (var i = 0; i < ds.length; ++i) {
 print(JSON.stringify(result));
 )JS"_s;
 
-// Docks on the screens other than the main one are removed (with their launchers), and the main
-// dock gets back the showOnlyCurrentScreen it had before every screen had a dock (its
-// [PlasmaFusion] onlyCurrentScreenBefore, kept by ensure-topbars.js; then emptied). The main dock is
-// the one on the lowest screen number.
+// The docks "Dock on every screen" added (marked [PlasmaFusion] everyScreenCopy by
+// ensure-topbars.js) are removed with their panels (their launchers too); every other dock gets back
+// the showOnlyCurrentScreen it had before (its [PlasmaFusion] onlyCurrentScreenBefore, kept by
+// ensure-topbars.js; then emptied). Docks the user made stay. Prints how many panels went.
 const QString s_removeExtraDocksScript =
     uR"JS(
-var docks = [], main = null, removed = 0;
+function mark(w, key) {
+    w.currentConfigGroup = ["PlasmaFusion"];
+    var value = String(w.readConfig(key, ""));
+    w.currentConfigGroup = [];
+    return value;
+}
+var removed = 0;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
-    if (ps[i].widgets("org.plasmafusion.dock").length === 0) {
+    var docks = ps[i].widgets("org.plasmafusion.dock");
+    var copy = false;
+    for (var j = 0; j < docks.length; ++j) {
+        copy = copy || mark(docks[j], "everyScreenCopy") === "true";
+    }
+    if (copy) {
+        ps[i].remove();
+        ++removed;
         continue;
     }
-    docks.push(ps[i]);
-    if (ps[i].screen >= 0 && (main === null || ps[i].screen < main.screen)) {
-        main = ps[i];
+    for (var j = 0; j < docks.length; ++j) {
+        var before = mark(docks[j], "onlyCurrentScreenBefore");
+        if (before !== "") {
+            docks[j].currentConfigGroup = ["PlasmaFusion"];
+            docks[j].writeConfig("onlyCurrentScreenBefore", "");
+            docks[j].currentConfigGroup = ["General"];
+            docks[j].writeConfig("showOnlyCurrentScreen", before === "true");
+            docks[j].currentConfigGroup = [];
+        }
     }
-}
-for (var i = 0; main !== null && i < docks.length; ++i) {
-    if (docks[i].id !== main.id) {
-        docks[i].remove();
-        ++removed;
-    }
-}
-if (main !== null) {
-    var d = main.widgets("org.plasmafusion.dock")[0];
-    d.currentConfigGroup = ["PlasmaFusion"];
-    var before = String(d.readConfig("onlyCurrentScreenBefore", ""));
-    if (before !== "") {
-        d.writeConfig("onlyCurrentScreenBefore", "");
-        d.currentConfigGroup = ["General"];
-        d.writeConfig("showOnlyCurrentScreen", before === "true");
-    }
-    d.currentConfigGroup = [];
 }
 print(removed);
 )JS"_s;
@@ -907,6 +909,10 @@ bool PlasmaFusionKcm::applyEveryDock(bool on)
     if (!on) {
         const QString result = evaluateShellScript(s_removeExtraDocksScript, &ok);
         if (!ok) {
+            // The docks are still there: the choice stays on, so the page shows it on again and
+            // Apply, the next login or a new screen goes on from there.
+            KConfigGroup(fusion, u"Dock"_s).writeEntry("EveryScreen", true, KConfig::Notify);
+            fusion->sync();
             addError(i18nc("@info", "The docks could not be changed: %1", result));
             return false;
         }

@@ -24,8 +24,10 @@
 #               off is still a change to apply, and Apply writes off to both (they agree then);
 #   mixedrestart the same, with the shell restarted between the switch and Apply: still a change,
 #               and Apply still writes off to both;
-#   docksoff    a dock on every screen turned off: the second screen's dock goes (its launcher
-#               with it), and the main dock shows every screen's windows again, as before;
+#   docksoff    a dock on every screen turned off: the copy ensure-topbars.js made for the second
+#               screen goes with its panel (its launcher too), a second dock of the user's stays,
+#               and each dock left gets back the showOnlyCurrentScreen it had;
+#   docksofffail the same while the shell fails the removal: an error, and the choice stays on;
 #   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
@@ -198,17 +200,33 @@ expect mixedrestart "and to the second" is "$(panel mixedrestart 2)" "bottom 0: 
 expect mixedrestart "no error" is "$(value mixedrestart errorText)" ""
 
 prepare_docksoff() { printf '[Dock]\nEveryScreen=true\n' >"$1/config/plasmafusionrc"; }
-run docksoff "{\"showConfig\": true, \"screens\": 2, \"panels\": [
+# The main dock, a second dock of the user's on the same screen (on the left), and the copy
+# ensure-topbars.js made for screen 1.
+docks_on_layout() {
+  printf '%s' "{\"showConfig\": true, \"screens\": 2$1, \"panels\": [
   {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
   {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true, \"PlasmaFusion/onlyCurrentScreenBefore\": false}}]},
-  {\"location\": \"bottom\", \"screen\": 1, \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true}}]}]}" \
-  waitshell "get everyDock" "set everyDock false" save "wait 500" "get errorText"
+  {\"location\": \"left\", \"widgets\": [{\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true, \"PlasmaFusion/onlyCurrentScreenBefore\": true}}]},
+  {\"location\": \"bottom\", \"screen\": 1, \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true, \"PlasmaFusion/everyScreenCopy\": true}}]}]}"
+}
+run docksoff "$(docks_on_layout "")" waitshell "get everyDock" "set everyDock false" save "wait 500" "get errorText"
 expect docksoff "the switch reads on (plasmafusionrc [Dock] EveryScreen)" is "$(first docksoff everyDock)" true
-expect docksoff "the second screen's dock panel is gone" is "$(wc -l <"$work/docksoff/panels")" 2
+expect docksoff "the copy's panel is gone, the others stay" is "$(wc -l <"$work/docksoff/panels")" 3
 expect docksoff "the main dock shows every screen's windows again, its remembered value emptied" \
   is "$(panel docksoff 2)" "bottom 0: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/onlyCurrentScreenBefore=}"
+expect docksoff "the user's second dock stays, with what it had (its own screen only)" \
+  is "$(panel docksoff 3)" "left 0: dock{General/showOnlyCurrentScreen=true,PlasmaFusion/onlyCurrentScreenBefore=}"
 expect docksoff "the choice is kept" grep -q "EveryScreen=false" "$work/docksoff/config/plasmafusionrc"
 expect docksoff "no error" is "$(value docksoff errorText)" ""
+
+# The removal fails (the shell answers its script with an error): the choice stays on.
+prepare_docksofffail() { prepare_docksoff "$@"; }
+run docksofffail "$(docks_on_layout ', "failScripts": "everyScreenCopy"')" \
+  waitshell "set everyDock false" save "wait 500" "get everyDock" "get errorText"
+expect docksofffail "an error says so" bash -c "grep -q '^kcmctl: errorText=.*docks could not be changed' '$work/docksofffail/kcmctl.log'"
+expect docksofffail "the choice stays on" grep -q "EveryScreen=true" "$work/docksofffail/config/plasmafusionrc"
+expect docksofffail "  and the page shows it on" is "$(value docksofffail everyDock)" true
+expect docksofffail "every dock panel is still there" is "$(wc -l <"$work/docksofffail/panels")" 4
 
 prepare_dockson() {
   local dir=$1/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts
