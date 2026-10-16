@@ -33,6 +33,16 @@ function endTaskPids(pids) {
     return out;
 }
 
+// The processes still to end at the confirmation's click: those the app had when it was asked
+// (ASKED) that its windows still have (NOW, from the task model again). A process that quit in
+// between, and any other that got its number since, is not among the app's windows: left alone.
+function stillOurs(asked, now) {
+    var current = endTaskPids(now);
+    return endTaskPids(asked).filter(function (p) {
+        return current.indexOf(p) >= 0;
+    });
+}
+
 // The shell command (sh -c, the executable engine's) that ends them, or "" when there is none.
 function endTaskCommand(pids) {
     var ok = endTaskPids(pids);

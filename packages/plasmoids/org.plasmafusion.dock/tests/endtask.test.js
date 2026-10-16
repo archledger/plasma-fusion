@@ -17,12 +17,16 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "endtask.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { endTaskPids, endTaskCommand, sessionApp } = globalThis;
+const { endTaskPids, endTaskCommand, sessionApp, stillOurs } = globalThis;
 
 assert.deepStrictEqual(endTaskPids([4321, "4321", 0, 1, -7, 3.5, "x", null, 99]), [4321, 99], "whole numbers above 1, once each");
 assert.strictEqual(endTaskCommand([]), "", "no process: no command");
 assert.strictEqual(endTaskCommand([0, 1, "x"]), "", "nothing valid: no command");
 assert.ok(sessionApp("org.kde.plasmashell") && !sessionApp("org.kde.kwrite") && !sessionApp(""), "the shell's windows get no End Task");
+// At the confirmation's click: only processes the app had when asked and its windows still have.
+assert.deepStrictEqual(stillOurs([4321, 4322, 4323], [4322, 4323, 4400]), [4322, 4323], "one quit meanwhile, a new one came: neither");
+assert.deepStrictEqual(stillOurs([4321], []), [], "the app is gone: nothing to end (its number may be another process's now)");
+assert.deepStrictEqual(stillOurs([4321, 0, "x"], [4321]), [4321], "still validated");
 
 // The command against real processes.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pf-endtask-"));

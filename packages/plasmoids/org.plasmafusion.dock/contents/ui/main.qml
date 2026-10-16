@@ -1479,20 +1479,26 @@ PlasmoidItem {
         menu.openRelative();
     }
 
-    // End Task's confirmation in the menu's place, as Empty Trash's. The processes are the ones the
-    // app has now; the command waits for them to quit and ends the rest (EndTask.endTaskCommand()).
+    // End Task's confirmation in the menu's place, as Empty Trash's. The processes are the app's
+    // when it asks; at the click only those its windows still have are ended (EndTask.stillOurs():
+    // one that quit meanwhile, and a process that got its number since, are not), and the command
+    // waits for them to quit and ends the rest (EndTask.endTaskCommand()).
     function confirmEndTask(row: int): void {
         const item = taskRepeater.itemAt(row) as TaskItem;
         if (!item) {
             return;
         }
-        const pids = EndTask.endTaskPids(taskPids(row));
-        const name = item.name || item.iconName;
+        const appId = item.iconName;
+        const asked = EndTask.endTaskPids(taskPids(row));
+        const name = item.name || appId;
         const menu = openMenu(item.iconItem);
         menu.addHeader(i18nc("@title:menu %1 an app", "End %1? Anything not saved in it is lost.", name));
         menu.addAction(i18nc("@action:inmenu", "End Task"), "process-stop-symbolic", () => {
-            console.info("dock: end task " + item.iconName + " " + pids.join(","));
-            executable.run(EndTask.endTaskCommand(pids));
+            const pids = EndTask.stillOurs(asked, appPids(appId));
+            console.info("dock: end task " + appId + " " + (pids.length > 0 ? pids.join(",") : "(nothing left to end)"));
+            if (pids.length > 0) {
+                executable.run(EndTask.endTaskCommand(pids));
+            }
         }, {});
         menu.addAction(i18nc("@action:inmenu", "Cancel"), "dialog-cancel-symbolic", null, {});
         if (logNextMenu) {
@@ -2297,6 +2303,17 @@ PlasmoidItem {
             }
         } else {
             take(Number(tasksModel.data(index, atm.AppPid) || 0));
+        }
+        return pids;
+    }
+    // The processes of every task of an app now (by its app id: the rows may have moved).
+    function appPids(appId: string): var {
+        let pids = [];
+        for (let i = 0; i < taskRepeater.count; ++i) {
+            const task = taskRepeater.itemAt(i) as TaskItem;
+            if (task && task.iconName === appId) {
+                pids = pids.concat(taskPids(i));
+            }
         }
         return pids;
     }

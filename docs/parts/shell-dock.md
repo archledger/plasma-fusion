@@ -588,7 +588,10 @@ the panel" is a runner-up in all three desktops' loved lists. A running app's me
 after Close, unless its windows are the shell's own (`EndTask.sessionApp()`: plasmashell, KWin). It
 asks first in the menu's place, as Empty Trash… does: "End APP? Anything not saved in it is lost."
 with End Task and Cancel. End Task runs `EndTask.endTaskCommand()` (`contents/code/endtask.js`)
-with the app's processes as it has them then (every window's `AppPid`, `taskPids()`):
+with the app's processes, checked again at the click (`EndTask.stillOurs()`): only those the app
+had when the confirmation opened and its windows still have then (every window's `AppPid`,
+`taskPids()`, by its app id, `appPids()`), so a process that quit meanwhile, or another one that
+got its number since, is never ended:
 
 - SIGTERM to each, which an app that still works answers by quitting;
 - after up to 3 s, SIGKILL to those still running (a process that is gone, or a zombie waiting to be
@@ -600,7 +603,8 @@ KWin's own "not responding" dialog sends SIGABRT first so that a crash report is
 6.7.5 `src/helpers/killer/killer.cpp`); a chosen End Task is not a crash, so it does not.
 
 - `tests/endtask.test.js` (node, in the dock's build step): the process ids taken (whole numbers above
-  1, once each), the shell's windows without End Task, and the command run with `sh` against stand-in
+  1, once each), the shell's windows without End Task, the processes still the app's at the click
+  (one that quit and a new one: neither; the app gone: nothing), and the command run with `sh` against stand-in
   processes: one that quits on SIGTERM at once (the command returns at once, its zombie counted as
   ended), one that ignores SIGTERM (SIGKILL after the wait) and one named `plasmashell` (left alone).
 - `tests/vsession/scenario-endtask.sh` (a private session; the test hook `pick:TEXT` chooses menu
