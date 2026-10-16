@@ -90,6 +90,7 @@ Item {
         property int maximizeMode: 0
         property bool minimized: false
         property rect frameGeometry: Qt.rect(0, 34, 720, 866)
+        property string internalId: "{cycle}"
         signal closed()
         signal interactiveMoveResizeFinished()
     }
@@ -411,6 +412,25 @@ Item {
         cycleWin.frameGeometry = Qt.rect(300, 200, 600, 400);
         script.cycleSnap(cycleWin, "left");
         rectCheck("Snap Left on a window elsewhere: the left half", cycleWin.frameGeometry, Qt.rect(0, 34, 717, 866));
+        // A client that has not drawn its new size yet: the third was asked, the window still shows
+        // the half; the next press goes on to the two thirds, not to the third again.
+        script.cycleSnap(cycleWin, "left");
+        cycleWin.frameGeometry = Qt.rect(0, 34, 717, 866);
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("  pressed again before the client drew the third: the two thirds", cycleWin.frameGeometry, Qt.rect(0, 34, 957, 866));
+        // The largest gap on a small work area: the steps the script made are still known.
+        KWin.setConfig("Gap", 48);
+        KW.Workspace.maximizeArea = Qt.rect(0, 34, 1024, 700);
+        cycleWin.frameGeometry = Qt.rect(300, 200, 400, 300);
+        script.cyclePending = ({});
+        script.cycleSnap(cycleWin, "left");
+        script.cyclePending = ({});
+        script.cycleSnap(cycleWin, "left");
+        script.cyclePending = ({});
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("a 48 px gap on a 1024 px area: half, third, then the two thirds", cycleWin.frameGeometry, Qt.rect(0, 34, 659, 700));
+        KWin.setConfig("Gap", 6);
+        KW.Workspace.maximizeArea = Qt.rect(0, 34, 1440, 866);
         Qt.callLater(testEnd);
     }
     function testEnd() {

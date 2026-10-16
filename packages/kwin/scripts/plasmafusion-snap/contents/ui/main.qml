@@ -348,14 +348,30 @@ Item {
         return index >= 0 ? screens[index] : null;
     }
 
+    // The step last asked of each window ({ side, step, at }, by internalId): a client that has not
+    // drawn its new size yet still shows the step before (Cycle.currentStep). A move or resize by
+    // the user drops it.
+    property var cyclePending: ({})
+
     function cycleSnap(win, side) {
         if (!usable(win)) {
             return;
         }
         const area = Workspace.clientArea(Workspace.MaximizeArea, win);
         const g = win.frameGeometry;
-        const step = Cycle.nextStep(Cycle.stepOf({ x: g.x, y: g.y, width: g.width, height: g.height }, area, side),
-                                    neighbourScreen(win, side) !== null);
+        const id = String(win.internalId);
+        const pending = win.move || win.resize ? null : cyclePending[id] || null;
+        const measured = Cycle.stepOf({ x: g.x, y: g.y, width: g.width, height: g.height }, area, side,
+                                      gap(), setting("QuickTileGaps", true) ? gap() : 0);
+        const step = Cycle.nextStep(Cycle.currentStep(measured, pending, side, Date.now()), neighbourScreen(win, side) !== null);
+        // (After a move to another screen the window is on the far side there: nothing to keep.)
+        const asked = Object.assign({}, cyclePending);
+        if (step === "screen") {
+            delete asked[id];
+        } else {
+            asked[id] = { side: side, step: step, at: Date.now() };
+        }
+        cyclePending = asked;
         // A new arrangement, as a layout choice: the flyout closes, the window leaves its group.
         flyoutLoader.active = false;
         leaveGroup(win);

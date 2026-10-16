@@ -8,30 +8,51 @@
 // (to that screen's facing half), as KWin's own quick tile does on a second press. Pure logic,
 // plain values in and out (packages/kwin/tests/snap-cycle.test.js); main.qml places the windows.
 
+// The widths the steps give in a work area WIDTH wide, with the gap between snapped windows GAP
+// and HALFGAP for the halves (KWin's quick tiles take the gap only with QuickTileGaps), as the
+// script places them: the half and two thirds inset by half a gap at their inner edge, a third
+// (thirdRect) a third of what the two gaps between three leave.
+function stepWidths(width, gap, halfGap) {
+    return { half: width / 2 - halfGap / 2, third: (width - 2 * gap) / 3, twoThirds: width * 2 / 3 - gap / 2 };
+}
+
 // Where a window is on SIDE ("left" or "right") of the work area AREA ({ x, y, width, height }):
-// "half", "third", "twoThirds", or "" (none of them). The edge on that side must touch the area's
-// edge (within 8 px) and the window span the area's height; its width is measured as a share of
-// the area, within 3 % (a terminal sizes itself in whole character cells).
-function stepOf(rect, area, side) {
+// "half", "third", "twoThirds", or "" (none of them). Its edge on that side and its top must meet
+// the area's (within 8 px) and it must be nearly the area's height (90 %: a terminal sizes itself
+// in whole character cells, so its bottom may stop short); its width is measured against each
+// step's width with the gaps (stepWidths), within 3 % of the area's width (the cells again).
+function stepOf(rect, area, side, gap, halfGap) {
     if (!rect || !area || area.width <= 0) {
         return "";
     }
     const edge = side === "left" ? Math.abs(rect.x - area.x) : Math.abs(rect.x + rect.width - (area.x + area.width));
-    if (edge > 8 || rect.height < area.height * 0.9) {
+    if (edge > 8 || Math.abs(rect.y - area.y) > 8 || rect.height < area.height * 0.9) {
         return "";
     }
-    const share = rect.width / area.width;
-    const near = (want) => Math.abs(share - want) <= 0.03;
-    if (near(1 / 2)) {
+    const widths = stepWidths(area.width, gap || 0, halfGap === undefined ? gap || 0 : halfGap);
+    const near = (want) => Math.abs(rect.width - want) <= area.width * 0.03;
+    if (near(widths.half)) {
         return "half";
     }
-    if (near(1 / 3)) {
+    if (near(widths.third)) {
         return "third";
     }
-    if (near(2 / 3)) {
+    if (near(widths.twoThirds)) {
         return "twoThirds";
     }
     return "";
+}
+
+// The step a window is at, given the last step asked of it (PENDING: { side, step, at } or null)
+// at NOW (ms): a client that has not drawn the new size yet still shows the step before, so for a
+// second after a request on the same side the requested step counts while the size does not show
+// it yet. MEASURED is stepOf's answer. main.qml drops PENDING when the user moves or resizes the
+// window.
+function currentStep(measured, pending, side, now) {
+    if (pending && pending.side === side && now - pending.at < 1000 && measured !== pending.step) {
+        return pending.step;
+    }
+    return measured;
 }
 
 // The step after CURRENT: 1/2, 1/3, 2/3, then "screen" when a screen lies on that side

@@ -268,9 +268,15 @@ own: the setup moves Meta+Left/Right to them from KWin's `Window Quick Tile Left
 actions cannot share a key; docs/parts/device.md) step the active window through 1/2, 1/3 and 2/3 of
 that side of the work area, then back to 1/2 (`Cycle.js`):
 
-- where the window is comes from its size: the edge on that side within 8 px of the area's, the
-  area's height, and a width of 1/2, 1/3 or 2/3 of the area within 3 % (a terminal sizes itself in
-  character cells); anything else starts at 1/2;
+- where the window is comes from its size: its edge on that side and its top within 8 px of the
+  area's, nearly the area's height (90 %), and a width within 3 % of the area's width of a step's
+  width as the script places it, gap included (`Cycle.stepWidths()`: so the largest gap, 48 px, on
+  a small area still gives known steps); a terminal sizes itself in character cells, hence the
+  tolerances; anything else starts at 1/2;
+- a client that has not drawn the new size yet still shows the step before: for a second after a
+  request on the same side, the step asked counts (`Cycle.currentStep()`, `cyclePending` per
+  window), so quick presses and key repeat go on through the steps; a move or resize by the user
+  drops it, and so does a move to another screen;
 - 1/2 is KWin's quick tile (`quickTile()`, as the key gave before, so the other half is still
   offered by the picker), 1/3 and 2/3 plain geometry with the gap (`thirdRect()`, `zoneRect()`, as
   the flyout's thirds and 2:1 zone); a step leaves the window's snap group, as a layout choice;
@@ -284,7 +290,9 @@ Tests: `tests/snap-cycle.test.js` (node, in the build step): the steps from a wi
 both sides and a second screen, the order, and the neighbouring screen;
 `tests/offscreen/snaptest.py` (CI `build`, the real script with stand-in KWin objects): from the left
 half, Snap Left gives the third, the two thirds and the half again with the 6 px gap, Snap Right the
-right half, third and two thirds, and with a screen to the right the window is sent there;
+right half, third and two thirds, and with a screen to the right the window is sent there; a press
+before the client drew the third goes on to the two thirds; with a 48 px gap on a 1024 px area the
+half, third and two thirds follow;
 `tools/device/tests/shortcut-keys-unit.sh` (CI `build`): the setup's key move (with the
 Windows-style set, once on an update while KWin's quick tile holds the key, never after the mark or
 from another action the user chose); `tests/vsession/scenario-snapcycle.sh` (a private session,
