@@ -20,6 +20,8 @@
 #   nolauncher  no launcher widget: the switches are not available and keep their value;
 #   twolaunchers two launchers, the second with the Places chip off: the page shows it off, and
 #               turning it on writes it to both.
+#   mixedoff    the same two launchers: the page says they differ, the switch turned on and back
+#               off is still a change to apply, and Apply writes off to both (they agree then).
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -156,6 +158,20 @@ expect twolaunchers "turning it on writes it to the first launcher" \
   is "$(panel twolaunchers 1)" "top 0: appname launcher{General/showPlaces=true} clockpill systemtray quicksettings"
 expect twolaunchers "and to the second" is "$(panel twolaunchers 2)" "bottom 0: launcher{General/showPlaces=true} dock"
 expect twolaunchers "no error" is "$(value twolaunchers errorText)" ""
+
+run mixedoff "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", {\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"true\"}}, \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "get launcherPlacesMixed" "get launcherRecentAppsMixed" "set launcherPlaces true" "set launcherPlaces false" \
+  "get needsSave" save "wait 500" "get launcherPlacesMixed" "get errorText"
+expect mixedoff "two launchers that differ: the page says the Places chip is mixed" is "$(first mixedoff launcherPlacesMixed)" true
+expect mixedoff "  and not the Recent chip, which they agree on" is "$(value mixedoff launcherRecentAppsMixed)" false
+expect mixedoff "the switch on and back off is still a change to apply" is "$(value mixedoff needsSave)" true
+expect mixedoff "Apply writes off to the first launcher" \
+  is "$(panel mixedoff 1)" "top 0: appname launcher{General/showPlaces=false} clockpill systemtray quicksettings"
+expect mixedoff "and to the second" is "$(panel mixedoff 2)" "bottom 0: launcher{General/showPlaces=false} dock"
+expect mixedoff "after Apply they agree" is "$(value mixedoff launcherPlacesMixed)" false
+expect mixedoff "no error" is "$(value mixedoff errorText)" ""
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

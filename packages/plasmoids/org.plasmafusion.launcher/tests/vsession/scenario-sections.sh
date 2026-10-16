@@ -12,28 +12,33 @@
 #   4. showRecommended off: the home view without the recent files (screenshots).
 # Run: tools/vsession/remote.sh launcher-sections packages/plasmoids/org.plasmafusion.launcher/tests/vsession/scenario-sections.sh SEED 1440x900 240
 export OUT
-set -uo pipefail
+set -euo pipefail
 set -x
 CHK=$OUT/checks.txt
 PLOG=$OUT/plasmashell.log
 pass() { echo "PASS $*" >>"$CHK"; }
 fail() { echo "FAIL $*" >>"$CHK"; }
 info() { echo "INFO $*" >>"$CHK"; }
+# A step that fails stops the scenario (strict mode); the reason lands in the checks.
+trap 'fail "the scenario stopped at line $LINENO: $BASH_COMMAND"' ERR
 launcher_js() { # BODY: run BODY for every launcher widget (w), General group
   evaljs - <<JS
 panels().forEach(function (p) { p.widgets("org.plasmafusion.launcher").forEach(function (w) { w.currentConfigGroup = ["General"]; $1 }); });
 JS
 }
-# The chips of the launcher's last frames report, after asking for one.
+# The chips of the launcher's last frames report, after asking for one (none: empty, which the
+# check after it reports).
 chips() {
   launcher_js "w.writeConfig(\"openRequest\", \"frames:\" + Date.now());" >/dev/null 2>>"$OUT/errors.log"
   sleep 1
-  grep -a "launcher: frames" "$PLOG" | tail -1 | sed -n 's/.*, chips //p'
+  { grep -a "launcher: frames" "$PLOG" || true; } | tail -1 | sed -n 's/.*, chips //p'
 }
 open_home() { launcher_js "w.writeConfig(\"openRequest\", \"home:\" + Date.now());" >/dev/null 2>>"$OUT/errors.log"; sleep 1.5; }
 
-bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
-info "fusion-config rc=$?"
+fc=0
+bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc=$?
+info "fusion-config rc=$fc"
+[ "$fc" = 0 ]
 pfv_restart_shell 12
 info "launchers: $(launcher_js 'print(w.type);' 2>>"$OUT/errors.log" | tr '\n' ' ')"
 
@@ -80,5 +85,9 @@ shot 40-no-recent-files
 launcher_js 'w.writeConfig("showRecommended", true);' >/dev/null 2>>"$OUT/errors.log"
 open_home
 shot 41-recent-files
-grep -a "launcher.*rror\|launcher.*TypeError" "$PLOG" | head -5 | sed 's/^/INFO log: /' >>"$CHK"
+{ grep -a "launcher.*rror\|launcher.*TypeError" "$PLOG" || true; } | head -5 | sed 's/^/INFO log: /' >>"$CHK"
 info "done"
+# A failed check fails the scenario (scenario rc), as the KWin scenarios do.
+trap - ERR
+set +e
+[ "$(grep -c '^FAIL' "$CHK" || true)" = 0 ]

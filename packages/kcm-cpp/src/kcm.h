@@ -14,6 +14,7 @@
 #include <QColor>
 #include <QDeadlineTimer>
 #include <QJsonObject>
+#include <QSet>
 #include <QString>
 #include <QTimer>
 
@@ -131,6 +132,12 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool launcherRecentFiles READ launcherRecentFiles WRITE setLauncherRecentFiles NOTIFY stateChanged)
     Q_PROPERTY(bool launcherRecentApps READ launcherRecentApps WRITE setLauncherRecentApps NOTIFY stateChanged)
     Q_PROPERTY(bool launcherPlaces READ launcherPlaces WRITE setLauncherPlaces NOTIFY stateChanged)
+    // A section the launcher widgets do not agree on (some show it, some do not; the switch shows
+    // it off). Setting its switch then is a change even when it ends where it was, and Apply
+    // writes it to every launcher.
+    Q_PROPERTY(bool launcherRecentFilesMixed READ launcherRecentFilesMixed NOTIFY shellStateChanged)
+    Q_PROPERTY(bool launcherRecentAppsMixed READ launcherRecentAppsMixed NOTIFY shellStateChanged)
+    Q_PROPERTY(bool launcherPlacesMixed READ launcherPlacesMixed NOTIFY shellStateChanged)
 
     // What the session offers (read-only).
     Q_PROPERTY(bool highContrastAvailable READ highContrastAvailable NOTIFY environmentChanged)
@@ -255,6 +262,9 @@ public:
     void setLauncherRecentApps(bool value);
     bool launcherPlaces() const;
     void setLauncherPlaces(bool value);
+    bool launcherRecentFilesMixed() const;
+    bool launcherRecentAppsMixed() const;
+    bool launcherPlacesMixed() const;
 
     bool highContrastAvailable() const;
     bool previousDesktopAvailable() const;
@@ -359,6 +369,7 @@ private:
 
     template<typename T>
     void setField(T State::*field, T value);
+    void setLauncherField(bool State::*field, const QString &key, bool value);
 
     void loadConfigState(State &state) const;
     void copyConfigState(const State &from, State &to) const;
@@ -424,6 +435,10 @@ private:
     bool m_metersAvailable = false;
     bool m_quickSettingsAvailable = false;
     bool m_launcherAvailable = false;
+    // The launcher keys (showRecommended, showRecentApps, showPlaces) the launchers differ on, and
+    // those of them the page set since (written to every launcher on Apply).
+    QSet<QString> m_launcherMixed;
+    QSet<QString> m_launcherMixedSet;
     bool m_folderAvailable = false;
     bool m_decorationInstalled = false;
     bool m_highContrastAvailable = false;

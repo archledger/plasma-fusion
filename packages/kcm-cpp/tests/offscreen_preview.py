@@ -90,6 +90,7 @@ def main():
              "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
              "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
              "launcherAvailable": True, "launcherRecentFiles": True, "launcherRecentApps": True, "launcherPlaces": True,
+             "launcherRecentFilesMixed": False, "launcherRecentAppsMixed": False, "launcherPlacesMixed": False,
              "fileContentIndexing": True,
              "iconsMode": 1, "lockNotifications": True, "lockNotificationSummaries": False,
              "quickSettingsAvailable": True, "folderAvailable": True, "highContrastAvailable": True,
@@ -159,6 +160,9 @@ def main():
         launcherRecentFiles = Property(bool, _get("launcherRecentFiles"), _set("launcherRecentFiles"), notify=changed)
         launcherRecentApps = Property(bool, _get("launcherRecentApps"), _set("launcherRecentApps"), notify=changed)
         launcherPlaces = Property(bool, _get("launcherPlaces"), _set("launcherPlaces"), notify=changed)
+        launcherRecentFilesMixed = Property(bool, _get("launcherRecentFilesMixed"), notify=changed)
+        launcherRecentAppsMixed = Property(bool, _get("launcherRecentAppsMixed"), notify=changed)
+        launcherPlacesMixed = Property(bool, _get("launcherPlacesMixed"), notify=changed)
         quickSettingsAvailable = Property(bool, _get("quickSettingsAvailable"), notify=changed)
         folderAvailable = Property(bool, _get("folderAvailable"), notify=changed)
         highContrastAvailable = Property(bool, _get("highContrastAvailable"), notify=changed)
