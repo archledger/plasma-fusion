@@ -17,7 +17,9 @@
 #               panels' look for the new bars);
 #   launcher    the Launcher switches read from the launcher widget (one key already off, as a
 #               string) and written to it, the keys it does not change left alone;
-#   nolauncher  no launcher widget: the switches are not available and keep their value.
+#   nolauncher  no launcher widget: the switches are not available and keep their value;
+#   twolaunchers two launchers, the second with the Places chip off: the page shows it off, and
+#               turning it on writes it to both.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -144,6 +146,16 @@ run nolauncher "{\"showConfig\": true, \"panels\": [{\"widgets\": [\"$APPNAME\",
 expect nolauncher "no launcher widget: the switches are not available" is "$(value nolauncher launcherAvailable)" false
 expect nolauncher "and keep their value" is "$(value nolauncher launcherRecentFiles)" true
 expect nolauncher "nothing written to the panels" is "$(panel nolauncher 2)" "bottom 0: dock"
+
+run twolaunchers "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", {\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"true\"}}, \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "get launcherPlaces" "set launcherPlaces true" save "wait 500" "get errorText"
+expect twolaunchers "two launchers that differ: the Places chip shows off" is "$(first twolaunchers launcherPlaces)" false
+expect twolaunchers "turning it on writes it to the first launcher" \
+  is "$(panel twolaunchers 1)" "top 0: appname launcher{General/showPlaces=true} clockpill systemtray quicksettings"
+expect twolaunchers "and to the second" is "$(panel twolaunchers 2)" "bottom 0: launcher{General/showPlaces=true} dock"
+expect twolaunchers "no error" is "$(value twolaunchers errorText)" ""
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

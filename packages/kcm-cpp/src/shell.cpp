@@ -71,14 +71,14 @@ for (var i = 0; i < ps.length; ++i) {
         }
         ++state.docks;
     }
+    // A section is on only while every launcher shows it: with launchers that differ, the page
+    // shows it off, and turning it on (or Defaults) writes it to all of them.
     var launchers = p.widgets("org.plasmafusion.launcher");
     for (var j = 0; j < launchers.length; ++j) {
         launchers[j].currentConfigGroup = ["General"];
-        if (state.launchers === 0) {
-            state.recentFiles = bool(launchers[j].readConfig("showRecommended", true), true);
-            state.recentApps = bool(launchers[j].readConfig("showRecentApps", true), true);
-            state.places = bool(launchers[j].readConfig("showPlaces", true), true);
-        }
+        state.recentFiles = state.recentFiles && bool(launchers[j].readConfig("showRecommended", true), true);
+        state.recentApps = state.recentApps && bool(launchers[j].readConfig("showRecentApps", true), true);
+        state.places = state.places && bool(launchers[j].readConfig("showPlaces", true), true);
         ++state.launchers;
     }
     var qs = p.widgets("org.plasmafusion.quicksettings");
