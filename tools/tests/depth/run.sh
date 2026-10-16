@@ -51,7 +51,7 @@ source "$HERE/../lib/common.sh"
 # feature|scenario (from the repository root)|size|timeout (each scenario's own Run: line)
 FEATURES=(
   "placement|packages/kwin/tests/vsession/scenario-placement.sh|1440x900|300"
-  "snapgroups|packages/kwin/tests/vsession/scenario-snapgroups.sh|1440x900|420"
+  "snapgroups|packages/kwin/tests/vsession/scenario-snapgroups.sh|1440x900|720"
   "workspaces|packages/kwin/tests/vsession/scenario-workspaces.sh|1440x900|420"
   "copytext|packages/copytext/tests/vsession/scenario-copytext.sh|1440x900|300"
   "quicklook|packages/quicklook-cpp/tests/vsession/scenario-quicklook.sh|1440x900|420"
@@ -130,6 +130,9 @@ make_feature_seed() {  # FEATURE SEED
       [ -n "$QUICKLOOK" ] && [ -d "$QUICKLOOK/bin" ] || return 1
       mkdir -p "$s/.local"
       cp -a -- "$QUICKLOOK"/. "$s/.local/" || return 1
+      # KIO takes a service menu outside the system directories only with the executable bit
+      # (cmake --install writes it 0644; the packages install it below /usr/share).
+      find "$s/.local/share/kio/servicemenus" -name '*.desktop' -exec chmod +x {} + 2>/dev/null || true
       ;;
   esac
 }

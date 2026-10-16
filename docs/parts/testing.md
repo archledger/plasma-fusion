@@ -200,9 +200,17 @@ runs them together against one built HOME tree, with one summary:
     tools/tests/depth/run.sh --quicklook build/ql-install        # the test host (ThinkPad)
     tools/tests/depth/run.sh --image localhost/plasma-fusion-test:f44-6.8beta --quicklook DIR  # the beta lane
 
+- The test host needs what the test image has for the scenarios besides Plasma: Kate and Okular,
+  Tesseract with its English data, wl-clipboard, dbus-python, PipeWire's Pulse server and tools,
+  and Qt's `qml` tool for copy text's target window (`qml6` on Arch, `qml-qt6` from
+  `qt6-qtdeclarative-devel` on Fedora; the scenario takes either). Without them the features fail
+  where they need them (copy text logs `tesseract: command not found`). Nothing else may log in
+  over SSH during a run: the live chips count the host's SSH logins.
 - Every feature's seed is the HOME tree at `~/pf-stage` and `tools/` at `~/pf-tools`; the live
   chips' adds their stand-ins (`fake_status_items.py`, quick settings' `mock_power.py`) and the
-  widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`
+  widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`, its
+  service menu made executable there (KIO takes one outside the system directories only so;
+  `cmake --install` writes it 0644)
   (`--quicklook`, required while Quick Look is among the features: tools/build.sh does not build a
   compiled part; for the beta lane, Quick Look built in the beta build image).
 - The live chips' first check depends on the lane: on the test host the harness's own SSH login
@@ -231,7 +239,8 @@ runs them together against one built HOME tree, with one summary:
   summary), a feature without checks (exit 1), a session stopped at its time limit after passing
   checks (exit 1), a runner that fails after a complete-looking session, a core dump (exit 1),
   each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, an
-  unknown feature, one given as a pattern (`[p]lacement`, `place.ent`), an empty feature list, Quick Look without its install and an option without its value
+  unknown feature, one given as a pattern (`[p]lacement`, `place.ent`), Quick Look's service menu
+  executable in its seed, an empty feature list, Quick Look without its install and an option without its value
   (exit 2), `--help` printing the usage only, and the two lanes keeping their own results. Without
   any one of those rules its case fails.
 

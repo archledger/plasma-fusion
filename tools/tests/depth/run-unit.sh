@@ -23,6 +23,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "${BASE:?}"
 mkdir -p "$BASE/stage/.local/share/plasma/plasmoids" "$BASE/ql/bin" "$BASE/ql/share/kio/servicemenus"
 echo stand-in >"$BASE/ql/bin/plasma-fusion-quicklook"
+printf '[Desktop Entry]\n' >"$BASE/ql/share/kio/servicemenus/plasma-fusion-quicklook.desktop"
+chmod 644 "$BASE/ql/share/kio/servicemenus/plasma-fusion-quicklook.desktop"
 
 # The stand-in runner: NAME SCENARIO SEED SIZE TIMEOUT, results in ./vsession-out/NAME/.
 cat >"$BASE/runner.sh" <<'EOF'
@@ -80,6 +82,8 @@ done
 expect "  the live chips' seed has their stand-ins" has_both livechips ./pf-chips/fake_status_items.py ./pf-chips/mock_power.py
 expect "  and the widget's debug rule" grep -qx 'QT_LOGGING_RULES=org.plasmafusion.livechips.debug=true' "$W/results/livechips/pfv-env"
 expect "  Quick Look's seed has its install in ~/.local" has quicklook ./.local/bin/plasma-fusion-quicklook
+menu_executable() { [ -x "$W/seeds/quicklook/.local/share/kio/servicemenus/plasma-fusion-quicklook.desktop" ]; }
+expect "  and its service menu is executable there (KIO's rule outside the system directories)" menu_executable
 expect "  the others have no Quick Look" lacks placement quicklook
 
 run noql

@@ -137,7 +137,11 @@ Window {
     Text { x: 160; y: 440; text: "$LINE2"; font.pixelSize: 32; color: "#17181c" }
 }
 EOF
-qml6 "$OUT/target.qml" >"$OUT/target.log" 2>&1 &
+# Qt's qml tool: qml6 on Arch, qml-qt6 on Fedora (qt6-qtdeclarative-devel, which the build and test
+# images have).
+QML=$(command -v qml6 || command -v qml-qt6 || true)
+[ -n "$QML" ] || fail "no qml tool (qml6 or qml-qt6) for the target window"
+"${QML:-qml6}" "$OUT/target.qml" >"$OUT/target.log" 2>&1 &
 TARGET=$!
 sleep 4
 read -r OX OY <<<"$(origin)"
