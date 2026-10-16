@@ -43,21 +43,57 @@ function stillOurs(asked, now) {
     });
 }
 
-// A process's identity across the wait: its start time (field 22 of /proc/PID/stat, the 20th after
-// the ") " that ends its name), which a process that takes the same number later does not share.
+// A process's identity: its start time (field 22 of /proc/PID/stat, the 20th after the ") " that
+// ends its name), which a process that takes the same number later does not share.
 var START_TIME = "st() { sed 's/.*) //' /proc/$1/stat 2>/dev/null | cut -d' ' -f20; }; ";
 
-// The shell command (sh -c, the executable engine's) that ends them, or "" when there is none.
-// Each process is taken with its start time before SIGTERM; one still running after the wait gets
-// SIGKILL only while its start time is the same, so a number that went to another process in
-// those seconds is left alone.
-function endTaskCommand(pids) {
+// The shell command that prints the identity, "PID:START", of each of these processes that is
+// there and not one of the session's own, a line each. The dock runs it when it asks, so the
+// processes ended are the ones the user was asked about, not others that got their numbers since.
+function identityCommand(pids) {
     var ok = endTaskPids(pids);
     if (ok.length === 0) {
         return "";
     }
-    return START_TIME + "p=\"" + ok.join(" ") + "\"; s=; for i in $p; do case \"$(cat /proc/$i/comm 2>/dev/null)\" in "
-        + SESSION_PROCESSES.join("|") + "|'') ;; *) t=$(st $i); [ -n \"$t\" ] && s=\"$s $i:$t\" ;; esac; done; "
+    return START_TIME + "for i in " + ok.join(" ") + "; do case \"$(cat /proc/$i/comm 2>/dev/null)\" in "
+        + SESSION_PROCESSES.join("|") + "|'') ;; *) t=$(st $i); [ -n \"$t\" ] && echo \"$i:$t\" ;; esac; done; exit 0";
+}
+
+// The identities in identityCommand()'s output (or given as a list): "PID:START" with a PID above 1,
+// each PID once.
+function identities(text) {
+    var out = [], seen = [];
+    (Array.isArray(text) ? text : String(text || "").split("\n")).forEach(function (line) {
+        var m = /^([0-9]+):([0-9]+)$/.exec(String(line).trim());
+        if (m && Number(m[1]) > 1 && seen.indexOf(m[1]) < 0) {
+            seen.push(m[1]);
+            out.push(Number(m[1]) + ":" + m[2]);
+        }
+    });
+    return out;
+}
+
+// Of IDENTITIES, those whose process is among PIDS.
+function boundTo(ids, pids) {
+    var keep = endTaskPids(pids);
+    return identities(ids).filter(function (e) {
+        return keep.indexOf(Number(e.split(":")[0])) >= 0;
+    });
+}
+
+// The shell command (sh -c, the executable engine's) that ends the processes with these
+// identities, or "" when there is none. A process gets SIGTERM, and SIGKILL after the wait, only
+// while its start time is still the one taken when the user was asked, and never one with a
+// session process's name, so a number that went to another process since is left alone. (Between
+// that check and the signal itself a few shell steps remain; only a pidfd would close them, which
+// the executable engine has no helper for.)
+function endTaskCommand(ids) {
+    var ok = identities(ids);
+    if (ok.length === 0) {
+        return "";
+    }
+    return START_TIME + "s=; for e in " + ok.join(" ") + "; do i=${e%:*}; case \"$(cat /proc/$i/comm 2>/dev/null)\" in "
+        + SESSION_PROCESSES.join("|") + "|'') ;; *) [ \"$(st $i)\" = \"${e#*:}\" ] && s=\"$s $e\" ;; esac; done; "
         + "[ -n \"$s\" ] || exit 0; for e in $s; do kill -TERM ${e%:*} 2>/dev/null; done; n=0; "
         + "while [ $n -lt 30 ]; do a=; for e in $s; do i=${e%:*}; "
         + "[ \"$(st $i)\" = \"${e#*:}\" ] && [ \"$(sed 's/.*) //' /proc/$i/stat 2>/dev/null | cut -c1)\" != Z ] && a=\"$a $e\"; done; "

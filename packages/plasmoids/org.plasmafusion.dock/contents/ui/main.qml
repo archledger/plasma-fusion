@@ -1448,6 +1448,33 @@ PlasmoidItem {
         }
     }
 
+    // A command whose output is wanted: run(COMMAND, DONE) calls DONE with its standard output.
+    // Each run gets a source of its own (the engine's source is the command line).
+    P5Support.DataSource {
+        id: reader
+        engine: "executable"
+        connectedSources: []
+        property var waiting: ({})
+        property int runs: 0
+        onNewData: (sourceName, data) => {
+            const done = waiting[sourceName];
+            delete waiting[sourceName];
+            disconnectSource(sourceName);
+            if (done) {
+                done(String(data["stdout"] || ""));
+            }
+        }
+        function run(command: string, done: var): void {
+            if (command === "") {
+                done("");
+                return;
+            }
+            const source = command + " # " + (++runs);
+            waiting[source] = done;
+            connectSource(source);
+        }
+    }
+
     // ---- Tent posture (TABLET2 N2/N9): tablet posture with the screen upside down puts the
     // bottom edge on the table, where no swipe can start. The tablet script keeps the dock visible
     // while kwinrc [Script-plasmafusion-tablet] TentPosture is true; written after the rotation has
@@ -1498,9 +1525,11 @@ PlasmoidItem {
     }
 
     // End Task's confirmation in the menu's place, as Empty Trash's. The processes are the app's
-    // when it asks; at the click only those its windows still have are ended (EndTask.stillOurs():
-    // one that quit meanwhile, and a process that got its number since, are not), and the command
-    // waits for them to quit and ends the rest (EndTask.endTaskCommand()).
+    // when it asks, each read with its start time then (EndTask.identityCommand()); the question
+    // closes when the app's tasks change (a task menu). At the click only those its windows still
+    // have are ended (EndTask.stillOurs()), and the command ends a process only while it is still
+    // the one read (EndTask.endTaskCommand()): one that quit meanwhile, and a process that got its
+    // number since, are left alone.
     function confirmEndTask(row: int): void {
         const item = taskRepeater.itemAt(row) as TaskItem;
         if (!item) {
@@ -1508,14 +1537,21 @@ PlasmoidItem {
         }
         const appId = item.iconName;
         const asked = EndTask.endTaskPids(taskPids(row));
+        let identities = null;
+        reader.run(EndTask.identityCommand(asked), out => { identities = EndTask.identities(out); });
         const name = item.name || appId;
         const menu = openMenu(item.iconItem);
+        menu.taskMenu = true;
         menu.addHeader(i18nc("@title:menu %1 an app", "End %1? Anything not saved in it is lost.", name));
         menu.addAction(i18nc("@action:inmenu", "End Task"), "process-stop-symbolic", () => {
-            const pids = EndTask.stillOurs(asked, appPids(appId));
-            console.info("dock: end task " + appId + " " + (pids.length > 0 ? pids.join(",") : "(nothing left to end)"));
-            if (pids.length > 0) {
-                executable.run(EndTask.endTaskCommand(pids));
+            if (identities === null) {
+                console.info("dock: end task " + appId + " (its processes were not read yet)");
+                return;
+            }
+            const ids = EndTask.boundTo(identities, EndTask.stillOurs(asked, appPids(appId)));
+            console.info("dock: end task " + appId + " " + (ids.length > 0 ? ids.join(",") : "(nothing left to end)"));
+            if (ids.length > 0) {
+                executable.run(EndTask.endTaskCommand(ids));
             }
         }, {});
         menu.addAction(i18nc("@action:inmenu", "Cancel"), "dialog-cancel-symbolic", null, {});

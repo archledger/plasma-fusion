@@ -17,11 +17,16 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "endtask.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { endTaskPids, endTaskCommand, sessionApp, stillOurs, START_TIME } = globalThis;
+const { endTaskPids, endTaskCommand, identityCommand, identities, boundTo, sessionApp, stillOurs, START_TIME } = globalThis;
 
 assert.deepStrictEqual(endTaskPids([4321, "4321", 0, 1, -7, 3.5, "x", null, 99]), [4321, 99], "whole numbers above 1, once each");
 assert.strictEqual(endTaskCommand([]), "", "no process: no command");
-assert.strictEqual(endTaskCommand([0, 1, "x"]), "", "nothing valid: no command");
+assert.strictEqual(endTaskCommand(["0:5", "1:5", "x", "12"]), "", "nothing valid: no command");
+assert.strictEqual(identityCommand([0, 1, "x"]), "", "no process to read: no command");
+assert.deepStrictEqual(identities("4321:123\n1:9\nnoise\n4321:555\n 77:8 \n"), ["4321:123", "77:8"],
+                       "identities: PID above 1, START, each PID once");
+assert.deepStrictEqual(boundTo(["4321:123", "77:8"], [77, 99]), ["77:8"], "only those of processes still to end");
+assert.deepStrictEqual(boundTo(["4321:123"], []), [], "none left");
 assert.ok(sessionApp("org.kde.plasmashell") && !sessionApp("org.kde.kwrite") && !sessionApp(""), "the shell's windows get no End Task");
 // At the confirmation's click: only processes the app had when asked and its windows still have.
 assert.deepStrictEqual(stillOurs([4321, 4322, 4323], [4322, 4323, 4400]), [4322, 4323], "one quit meanwhile, a new one came: neither");
@@ -65,9 +70,24 @@ process.on("unhandledRejection", (e) => {
     console.error(String(e && e.stack || e));
     process.exit(1);
 });
+// The identities the dock reads when it asks: "PID:START" for each, but not the session's own.
+const idsOf = (pids) => identities(spawnSync("sh", ["-c", identityCommand(pids)], { encoding: "utf8", timeout: 5000 }).stdout);
+const startOf = (pid) => spawnSync("sh", ["-c", START_TIME + "st " + pid], { encoding: "utf8" }).stdout.trim();
 setTimeout(async () => {
+    const read = idsOf([polite.pid, stubborn.pid, shell.pid, 0]);
+    assert.deepStrictEqual(read, [polite.pid + ":" + startOf(polite.pid), stubborn.pid + ":" + startOf(stubborn.pid)],
+                           "identities read: the two apps with their start times, not the process named plasmashell");
+    // A process whose start time is not the one read (its number went to it later) gets nothing,
+    // not even SIGTERM; nor does one named plasmashell, even with its true identity.
+    const other = spawn(sleepBin, ["60"]);
+    const otherEnd = ended(other);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    spawnSync("sh", ["-c", endTaskCommand([other.pid + ":1", shell.pid + ":" + startOf(shell.pid)])], { timeout: 15000 });
+    assert.strictEqual(await within(otherEnd, 500), "still running", "a process that is not the one read gets no signal");
+    assert.ok(!shellGone, "a process named plasmashell gets none either");
+    other.kill("SIGKILL");
     const start = Date.now();
-    const run = spawnSync("sh", ["-c", endTaskCommand([polite.pid, stubborn.pid, shell.pid, 0])], { encoding: "utf8", timeout: 15000 });
+    const run = spawnSync("sh", ["-c", endTaskCommand(read)], { encoding: "utf8", timeout: 15000 });
     const took = Date.now() - start;
     assert.strictEqual(run.status, 0, "the command succeeds: " + run.stderr);
     assert.strictEqual(await within(politeEnd, 2000), "SIGTERM", "an app that answers SIGTERM quits on it");
@@ -81,7 +101,7 @@ setTimeout(async () => {
     const quickEnd = ended(quick);
     await new Promise((resolve) => setTimeout(resolve, 100));
     const t0 = Date.now();
-    spawnSync("sh", ["-c", endTaskCommand([quick.pid])], { timeout: 15000 });
+    spawnSync("sh", ["-c", endTaskCommand(idsOf([quick.pid]))], { timeout: 15000 });
     assert.strictEqual(await within(quickEnd, 2000), "SIGTERM");
     assert.ok(Date.now() - t0 < 2000, "no wait once the app is gone (" + (Date.now() - t0) + " ms)");
     fs.rmSync(tmp, { recursive: true, force: true });
