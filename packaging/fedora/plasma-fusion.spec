@@ -174,8 +174,9 @@ accent color, the window-button layout of the Plasma Fusion window decoration,
 dock magnification, the global menu in the top bar and the Overview hot corner;
 snap layouts on hold or hover, the glass level, high contrast, reduced motion,
 the top bar next to windows and on every screen, desktop icons, what dragging
-files does, the battery saving at 10 %, tablet mode, and two ways to start over
-(the previous desktop look, a fresh Plasma Fusion layout).
+files does, the battery saving at 10 %, tablet mode, a settings file to export
+and import (the page's settings and the panels), and two ways to start over (the
+previous desktop look, a fresh Plasma Fusion layout).
 
 %package navigation
 Summary:        Plasma Fusion tablet navigation gestures (KWin effect)

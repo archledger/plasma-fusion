@@ -95,7 +95,8 @@ def main():
              "iconsMode": 1, "lockNotifications": True, "lockNotificationSummaries": False,
              "quickSettingsAvailable": True, "folderAvailable": True, "highContrastAvailable": True,
              "previousDesktopAvailable": True, "topBarScriptAvailable": True, "tabletModeAvailable": True,
-             "tabletModeActive": False, "powerCritical": False, "fusionLookAndFeel": True, "busy": False}
+             "tabletModeActive": False, "powerCritical": False, "fusionLookAndFeel": True, "busy": False,
+             "settingsFileAvailable": True, "needsSave": False}
     for kv in args.state:
         k, v = kv.split("=", 1)
         cur = state[k]
@@ -174,6 +175,8 @@ def main():
         powerCritical = Property(bool, _get("powerCritical"), notify=changed)
         fusionLookAndFeel = Property(bool, _get("fusionLookAndFeel"), notify=changed)
         busy = Property(bool, _get("busy"), notify=changed)
+        settingsFileAvailable = Property(bool, _get("settingsFileAvailable"), notify=changed)
+        needsSave = Property(bool, _get("needsSave"), notify=changed)
 
         @Slot()
         def restorePreviousDesktop(self):
@@ -181,6 +184,14 @@ def main():
 
         @Slot()
         def resetLayout(self):
+            pass
+
+        @Slot(str, result=bool)
+        def exportSettings(self, location):
+            return True
+
+        @Slot(str)
+        def importSettings(self, location):
             pass
 
         @Slot()
@@ -211,8 +222,9 @@ def main():
             return text
 
         @Slot(str, str, result=str)
-        def i18nc(self, context, text):
-            return text
+        @Slot(str, str, str, result=str)
+        def i18nc(self, context, text, arg=None):
+            return text if arg is None else text.replace("%1", arg)
 
     import shutil
     ui_dir = os.path.join(config_home, "ui")

@@ -890,10 +890,14 @@ bool PlasmaFusionKcm::applyPanels(int glass, bool solidTopBar, bool widgetGlass)
 
 QString PlasmaFusionKcm::topBarScriptPath() const
 {
-    // The layout part's shared script, installed with both Global Themes.
+    return layoutScriptPath(u"ensure-topbars.js"_s);
+}
+
+QString PlasmaFusionKcm::layoutScriptPath(const QString &name) const
+{
+    // The layout part's shared scripts, installed with both Global Themes.
     for (const QString &theme : {s_darkLookAndFeel, s_lightLookAndFeel}) {
-        const QString path =
-            QStandardPaths::locate(QStandardPaths::GenericDataLocation, u"plasma/look-and-feel/%1/contents/layouts/ensure-topbars.js"_s.arg(theme));
+        const QString path = QStandardPaths::locate(QStandardPaths::GenericDataLocation, u"plasma/look-and-feel/%1/contents/layouts/%2"_s.arg(theme, name));
         if (!path.isEmpty()) {
             return path;
         }
@@ -1142,7 +1146,7 @@ void PlasmaFusionKcm::pollResetLayout(const QJsonObject &before, int attempt)
         if (done) {
             // Give the new widgets a moment to finish starting before their shortcuts are set.
             QTimer::singleShot(1000, this, [this, before] {
-                finishResetLayout(before);
+                finishResetLayout(before, false, i18nc("@info", "The Plasma Fusion layout is back."));
             });
         } else if (attempt < 40) {
             QTimer::singleShot(500, this, [this, before, attempt] {
@@ -1157,18 +1161,14 @@ void PlasmaFusionKcm::pollResetLayout(const QJsonObject &before, int attempt)
 }
 
 // Gives widget `widgetId` the global shortcut `key`. A key still held by a widget of the old
-// layout (an "activate widget N" entry whose widget is gone) is released first, as
-// tools/device/fusion-config.sh does; a key another live action uses is left alone. Returns an
-// empty string on success, otherwise the reason.
-QString PlasmaFusionKcm::giveWidgetShortcut(int widgetId, const QString &key, const QList<int> &liveWidgetIds)
+// layout (an "activate widget N" entry whose widget is gone; the new layout's ids are `newMin` and
+// up) is released first, as tools/device/fusion-config.sh does; a key another live action uses is
+// left alone. Returns an empty string on success, otherwise the reason.
+QString PlasmaFusionKcm::giveWidgetShortcut(int widgetId, const QString &key, const QList<int> &liveWidgetIds, int newMin)
 {
     const QKeySequence sequence = QKeySequence::fromString(key, QKeySequence::PortableText);
     if (sequence.isEmpty()) {
         return i18nc("@info", "not a valid key");
-    }
-    int newMin = std::numeric_limits<int>::max();
-    for (const int id : liveWidgetIds) {
-        newMin = std::min(newMin, id);
     }
     static const QString prefix = u"activate widget "_s;
     const QString ownAction = prefix + QString::number(widgetId);
@@ -1220,7 +1220,7 @@ QString PlasmaFusionKcm::giveWidgetShortcut(int widgetId, const QString &key, co
     return {};
 }
 
-void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before)
+void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before, bool imported, const QString &outcome)
 {
     bool ok = false;
     const QJsonObject now = widgetShortcuts(&ok);
@@ -1229,46 +1229,81 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before)
         setBusy(false);
         return;
     }
+    // New containments and widgets always get new ids (libplasma counts up): the rebuilt panels'
+    // are above every id there was (an import keeps the desktop and its widgets).
+    int oldMax = 0;
+    for (const QJsonValue &id : before.value(u"ids"_s).toArray()) {
+        oldMax = std::max(oldMax, id.toInt());
+    }
     QList<int> live;
+    int newMin = std::numeric_limits<int>::max();
     for (const QJsonValue &id : now.value(u"ids"_s).toArray()) {
         live << id.toInt();
-    }
-
-    // The key each widget type had before (the first widget of the type with a shortcut).
-    QHash<QString, QString> keyByType;
-    for (const QJsonValue &value : before.value(u"widgets"_s).toArray()) {
-        const QJsonObject widget = value.toObject();
-        const QString type = widget.value(u"type"_s).toString();
-        const QString key = widget.value(u"key"_s).toString();
-        if (!key.isEmpty() && !keyByType.contains(type)) {
-            keyByType.insert(type, key);
-        }
-    }
-    for (const DefaultShortcut &shortcut : s_defaultShortcuts) {
-        if (!keyByType.contains(shortcut.plugin)) {
-            keyByType.insert(shortcut.plugin, shortcut.key);
+        if (id.toInt() > oldMax) {
+            newMin = std::min(newMin, id.toInt());
         }
     }
 
     QStringList given;
     QStringList failed;
-    QSet<QString> done;
-    for (const QJsonValue &value : now.value(u"widgets"_s).toArray()) {
-        const QJsonObject widget = value.toObject();
-        const QString type = widget.value(u"type"_s).toString();
-        if (done.contains(type) || !keyByType.contains(type)) {
-            continue;
-        }
-        done.insert(type);
-        const QString key = keyByType.value(type);
-        if (!widget.value(u"key"_s).toString().isEmpty()) {
-            continue; // the layout gave it one already
-        }
-        const QString problem = giveWidgetShortcut(widget.value(u"id"_s).toInt(), key, live);
+    const auto give = [&](int id, const QString &type, const QString &key) {
+        const QString problem = giveWidgetShortcut(id, key, live, newMin);
         if (problem.isEmpty()) {
             given << i18nc("@item %1 key, %2 widget", "%1 %2", QKeySequence::fromString(key).toString(QKeySequence::NativeText), widgetName(type));
         } else {
             failed << i18nc("@item %1 key, %2 widget, %3 reason", "%1 for %2 (%3)", key, widgetName(type), problem);
+        }
+    };
+    if (imported) {
+        // The widgets the import removed keep their keys in kglobalaccel: libplasma 6.7.5 releases
+        // only a removed panel's own key (AppletPrivate::cleanUpAndDelete), and deletes its widgets
+        // without (~Applet). Each such key is released, so a key the file gives another widget, or
+        // none, is free again; the desktop's widgets, which an import keeps, are left alone.
+        QDBusConnection bus = QDBusConnection::sessionBus();
+        for (const QJsonValue &value : before.value(u"widgets"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            const int id = widget.value(u"id"_s).toInt();
+            if (widget.value(u"key"_s).toString().isEmpty() || live.contains(id)) {
+                continue;
+            }
+            QDBusMessage release = kglobalaccel(u"unregister"_s);
+            release << u"plasmashell"_s << QString(u"activate widget "_s + QString::number(id));
+            bus.call(release, QDBus::Block, s_dbusTimeout);
+        }
+        // Widget by widget, as the file has them (two widgets of one type keep their own keys); a
+        // widget the file gives no key gets none.
+        for (const QJsonValue &value : before.value(u"assign"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            give(widget.value(u"id"_s).toInt(), widget.value(u"type"_s).toString(), widget.value(u"key"_s).toString());
+        }
+    } else {
+        // The key each widget type had before (the first widget of the type with a shortcut).
+        QHash<QString, QString> keyByType;
+        for (const QJsonValue &value : before.value(u"widgets"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            const QString type = widget.value(u"type"_s).toString();
+            const QString key = widget.value(u"key"_s).toString();
+            if (!key.isEmpty() && !keyByType.contains(type)) {
+                keyByType.insert(type, key);
+            }
+        }
+        for (const DefaultShortcut &shortcut : s_defaultShortcuts) {
+            if (!keyByType.contains(shortcut.plugin)) {
+                keyByType.insert(shortcut.plugin, shortcut.key);
+            }
+        }
+        QSet<QString> done;
+        for (const QJsonValue &value : now.value(u"widgets"_s).toArray()) {
+            const QJsonObject widget = value.toObject();
+            const QString type = widget.value(u"type"_s).toString();
+            if (done.contains(type) || !keyByType.contains(type)) {
+                continue;
+            }
+            done.insert(type);
+            if (!widget.value(u"key"_s).toString().isEmpty()) {
+                continue; // the layout gave it one already
+            }
+            give(widget.value(u"id"_s).toInt(), type, keyByType.value(type));
         }
     }
 
@@ -1276,15 +1311,18 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before)
     if (m_saved.glass != GlassFull || !m_saved.solidTopBar) {
         applyPanels(m_saved.glass, m_saved.solidTopBar, m_saved.glass != GlassFull && !m_powerCritical);
     }
-    if (!m_saved.everyScreen) {
+    // Off, a reset removes the bars the layout script put on the other screens; a settings file's
+    // panels are the ones the user had, a bar of another screen too.
+    if (!m_saved.everyScreen && !imported) {
         evaluateShellScript(s_removeExtraTopBarsScript, &ok);
     }
     // The layout makes one dock; with a dock on every screen the others come back (they copy the
     // main dock's look, set above). When they cannot, the page says so: the switch is on but the
-    // other screens have no dock until it is set again.
-    if (m_saved.everyDock) {
+    // other screens have no dock until it is set again. A settings file has the top bars of the
+    // screens its computer had; ensure-topbars.js gives the other screens theirs too.
+    if (m_saved.everyDock || (imported && m_saved.everyScreen)) {
         bool ran = false;
-        if (runDockScript(&ran) && !ran) {
+        if (runDockScript(&ran) && !ran && m_saved.everyDock) {
             addError(i18nc("@info", "The docks of the other screens could not be added back: the Global Theme's ensure-topbars.js is not installed."));
         }
     }
@@ -1299,8 +1337,7 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before)
     if (!failed.isEmpty()) {
         addError(i18nc("@info %1 list of shortcuts", "Some widget shortcuts could not be set: %1", failed.join(u", "_s)));
     }
-    setInfoText(given.isEmpty() ? i18nc("@info", "The Plasma Fusion layout is back.")
-                                : i18nc("@info %1 list of shortcuts", "The Plasma Fusion layout is back. Shortcuts: %1.", given.join(u", "_s)));
+    setInfoText(given.isEmpty() ? outcome : outcome + u' ' + i18nc("@info %1 list of shortcuts", "Shortcuts: %1.", given.join(u", "_s)));
     setBusy(false);
     requestShellState();
 }

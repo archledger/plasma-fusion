@@ -450,6 +450,138 @@ test("ensure-topbars: \"Top bar on every screen\" off adds nothing", () => {
     assert.match(s.output, /top bars: off/);
 });
 
+// ---- the settings file's layout: export-layout.js and import-layout.js
+const EXPORT = fs.readFileSync(path.join(dir, "export-layout.js"), "utf8");
+const IMPORT = fs.readFileSync(path.join(dir, "import-layout.js"), "utf8");
+const exported = (s) => JSON.parse(s.run(EXPORT).trim().split("\n").pop());
+// A bar and a dock with what the export must carry: a list, a subgroup, a one-time request, a
+// shortcut; a copy "Dock on every screen" made; a panel of a screen that is not there.
+function transferLayout() {
+    const bar = mainBar();
+    bar.widgets[0].shortcut = "Meta+A";
+    // The bar's own marks and Plasma's keys of the panel (its top group, its widgets' order).
+    bar.config = { "": { plugin: "org.kde.panel", lastScreen: 0, formfactor: 2, immutability: 1 },
+                   General: { AppletOrder: "3;6;8" }, PlasmaFusion: { statusItems: true, standInFor: "12" } };
+    // The tray's own items are listed by its [General] lists; its [Applets] are left out.
+    bar.widgets[1].config["Applets][61"] = { plugin: "org.kde.plasma.battery" };
+    bar.widgets[1].config[""] = { SystrayContainmentId: 7, PreloadWeight: 42 };
+    const dock = dockPanel();
+    dock.widgets[1].config["General][Pins"] = { order: "a,b" };
+    Object.assign(dock, { lengthMode: "custom", offset: 10, length: 800, minimumLength: 600, maximumLength: 900 });
+    const copy = { id: 90, type: "org.kde.panel", screen: 1, location: "bottom", config: { PlasmaFusion: { everyScreenCopy: true } },
+                   widgets: [{ id: 91, type: "org.plasmafusion.dock", config: { PlasmaFusion: { everyScreenCopy: true } } }] };
+    const gone = { id: 95, type: "org.kde.panel", screen: 5, location: "left", config: {}, widgets: [{ id: 96, type: "org.plasmafusion.dock", config: {} }] };
+    return [bar, dock, copy, gone];
+}
+test("export-layout: the panels with their screens, widgets in order, every config group; copies and missing screens left out", () => {
+    const s = shell({ screens: TWO, files: rc(), panels: transferLayout() });
+    s.files.plasmashellrc = { "PlasmaViews][Panel 2": { floatingApplets: "1" } };
+    const out = exported(s);
+    assert.strictEqual(out.version, 1);
+    assert.deepStrictEqual(out.panels.map((p) => [p.screen, p.location]), [[0, "top"], [0, "bottom"]], "the bar and the dock, not the copy nor the other screen's");
+    assert.deepStrictEqual(out.left, ["copy", "screen"]);
+    const dock = out.panels[1];
+    assert.deepStrictEqual(dock.widgets.map((w) => w.type), ["org.plasmafusion.launcher", "org.plasmafusion.dock"], "in the panel's order");
+    const groups = dock.widgets[1].config.map((g) => g.group.join("/"));
+    assert.deepStrictEqual(groups.sort(), ["General", "General/Pins"]);
+    const general = dock.widgets[1].config.find((g) => g.group.join("/") === "General").keys;
+    assert.strictEqual(general.launchers, "applications:a.desktop,applications:b.desktop", "a list as its text");
+    assert.strictEqual(general.debugAction, undefined, "a one-time request is not exported");
+    assert.strictEqual(out.panels[0].widgets[0].shortcut, "Meta+A", "the shortcut");
+    assert.deepStrictEqual([dock.height, dock.hiding, dock.opacity], [72, "dodgewindows", "translucent"], "the panel's look");
+    assert.deepStrictEqual([dock.offset, dock.length, dock.minimumLength, dock.maximumLength], [10, 800, 600, 900], "a custom length");
+    assert.strictEqual(out.panels[0].offset, undefined, "only with a custom length");
+    assert.deepStrictEqual([out.panels[0].floatingApplets, dock.floatingApplets], [true, false], "the panel view's floatingApplets");
+    assert.deepStrictEqual(out.panels[0].config, [{ group: [], keys: { immutability: "1" } }, { group: ["PlasmaFusion"], keys: { statusItems: "true" } }],
+                           "the bar's own configuration, without what names its screen, place, plugin, widgets or other panels");
+    const tray = out.panels[0].widgets[1].config;
+    assert.deepStrictEqual(tray, [{ group: [], keys: { PreloadWeight: "42" } }, { group: ["General"], keys: { hiddenItems: "org.kde.kscreen" } }],
+                           "the tray's lists, not its [Applets] nor the id of a containment");
+});
+test("import-layout: the file's panels take the place of the ones there are, and export the same again", () => {
+    const from = shell({ screens: TWO, files: rc(), panels: transferLayout() });
+    from.files.plasmashellrc = { "PlasmaViews][Panel 2": { floatingApplets: "1" } };
+    const file = exported(from);
+    assert.ok(file.panels[0].floatingApplets);
+    const to = shell({ screens: TWO, files: rc(), panels: [dockPanel()] });
+    const out = JSON.parse(to.run("var LAYOUT = " + JSON.stringify(file) + ";\n" + IMPORT).trim().split("\n").pop());
+    assert.deepStrictEqual([out.panels, out.leftOut, out.notInstalled], [2, 0, []], JSON.stringify(out));
+    const again = exported(to);
+    const strip = (l) => l.panels.map((p) => Object.assign({}, p, { widgets: p.widgets.map((w) => Object.assign({}, w, { shortcut: "" })) }));
+    assert.deepStrictEqual(strip(again), strip(file), "the same panels, widgets and configuration (the page gives the shortcuts)");
+    assert.ok(!to.panels.some((p) => p.id === 40), "the panel there was is gone");
+});
+test("export-layout: while the power service holds a key the user's value is taken, the power tier not at all", () => {
+    const f = rc();
+    f.plasmafusionrc.Power = { UserWidgetValues: "42/magnify=true,42/glass=full" };
+    const s = shell({ screens: TWO, files: f, panels: [dockPanel({ magnify: false, glass: "solid", powerTier: 2 })] });
+    const keys = exported(s).panels[0].widgets[1].config.find((g) => g.group.join("/") === "General").keys;
+    assert.deepStrictEqual([keys.magnify, keys.glass, keys.powerTier], ["true", "full", undefined]);
+});
+test("export-layout: with the main dock on a monitor that is unplugged, the lowest copy is taken as the dock", () => {
+    const gone = dockPanel();
+    gone.screen = 5;
+    const copy = (id, screen) => ({ id, type: "org.kde.panel", screen, location: "bottom", config: { PlasmaFusion: { everyScreenCopy: true } },
+                                    widgets: [{ id: id + 1, type: "org.plasmafusion.launcher", config: {} },
+                                              { id: id + 2, type: "org.plasmafusion.dock",
+                                                config: { General: { showOnlyCurrentScreen: true, magnifiedSize: 56 }, PlasmaFusion: { everyScreenCopy: true } } }] });
+    const s = shell({ screens: TWO, files: rc(), panels: [mainBar(), gone, copy(80, 1), copy(70, 0)] });
+    const out = exported(s);
+    assert.deepStrictEqual(out.panels.map((p) => [p.screen, p.location]), [[0, "top"], [0, "bottom"]], "the bar and the copy of screen 0");
+    assert.deepStrictEqual(out.left, ["screen", "copy"]);
+    const dock = out.panels[1].widgets[1].config;
+    assert.deepStrictEqual(dock.map((g) => g.group.join("/")), ["General"], "no copy mark");
+    assert.deepStrictEqual(dock[0].keys, { showOnlyCurrentScreen: "false", magnifiedSize: "56" }, "every screen's windows");
+});
+test("import-layout: a panel of a screen not here goes to the first screen when that edge is free there, else it is left out", () => {
+    const file = exported(shell({ screens: TWO, files: rc(), panels: transferLayout() }));
+    file.panels[1].screen = 1;
+    file.panels.push(Object.assign({}, file.panels[0], { screen: 1 }));
+    file.panels[0].widgets.push({ type: "org.example.notinstalled", shortcut: "", config: [] });
+    const to = shell({ screens: [[1920, 1080]], files: rc(), panels: [] });
+    const out = JSON.parse(to.run("var LAYOUT = " + JSON.stringify(file) + ";\n" + IMPORT).trim().split("\n").pop());
+    assert.deepStrictEqual([out.panels, out.leftOut, out.notInstalled], [2, 1, ["org.example.notinstalled"]], JSON.stringify(out));
+    assert.deepStrictEqual(to.panels.map((p) => [p.screen, p.location]), [[0, "top"], [0, "bottom"]], "the dock on the first screen, one bar");
+});
+test("import-layout: the keys the file gives, by the new widget's id (two widgets of one type keep their own)", () => {
+    const file = exported(shell({ screens: TWO, files: rc(), panels: transferLayout() }));
+    const bar = file.panels[0];
+    const qs = bar.widgets.find((w) => w.type === "org.plasmafusion.quicksettings");
+    bar.widgets.push(Object.assign({}, qs, { shortcut: "Meta+W" }));
+    qs.shortcut = "Meta+Q";
+    const to = shell({ screens: TWO, files: rc(), panels: [] });
+    const out = JSON.parse(to.run("var LAYOUT = " + JSON.stringify(file) + ";\n" + IMPORT).trim().split("\n").pop());
+    const made = to.panels.find((p) => p.location === "top").widgets.filter((w) => w.type === "org.plasmafusion.quicksettings").map((w) => w.id);
+    assert.strictEqual(made.length, 2);
+    assert.deepStrictEqual(out.keys.filter((k) => k.type === "org.plasmafusion.quicksettings"),
+                           [{ id: made[0], type: "org.plasmafusion.quicksettings", key: "Meta+Q" },
+                            { id: made[1], type: "org.plasmafusion.quicksettings", key: "Meta+W" }]);
+    assert.ok(out.keys.every((k) => k.key !== ""), "no entry for a widget without a key");
+    assert.strictEqual(out.keys.length, 3, "Meta+A of the app name too: " + JSON.stringify(out.keys));
+});
+test("import-layout: PHASE remove only removes the panels there are, add only adds the file's", () => {
+    const file = exported(shell({ screens: TWO, files: rc(), panels: transferLayout() }));
+    const to = shell({ screens: TWO, files: rc(), panels: [mainBar(), dockPanel()] });
+    const removed = JSON.parse(to.run("var LAYOUT = " + JSON.stringify(file) + ";\nvar PHASE = \"remove\";\n" + IMPORT).trim().split("\n").pop());
+    assert.deepStrictEqual([removed, to.panels.length], [{ removed: 2 }, 0], "removed, none added");
+    to.panels.push(dockPanel());
+    const added = JSON.parse(to.run("var LAYOUT = " + JSON.stringify(file) + ";\nvar PHASE = \"add\";\n" + IMPORT).trim().split("\n").pop());
+    assert.deepStrictEqual([added.panels, to.panels.length, to.panels[0].id], [2, 3, 40], "added, none removed");
+    for (const layout of [{ version: 2, panels: [{ screen: 0, location: "top", widgets: [] }] }, { version: 1, panels: [] }]) {
+        const kept = shell({ screens: TWO, files: rc(), panels: [dockPanel()] });
+        assert.ok(JSON.parse(kept.run("var LAYOUT = " + JSON.stringify(layout) + ";\nvar PHASE = \"remove\";\n" + IMPORT).trim().split("\n").pop()).error);
+        assert.deepStrictEqual(kept.panels.map((p) => p.id), [40], "a file that is not one removes nothing");
+    }
+});
+test("import-layout: no layout of this version, or one without panels: nothing is changed", () => {
+    for (const layout of [{ version: 2, panels: [{ screen: 0, location: "top", widgets: [] }] }, { version: 1, panels: [] }, { version: 1 }]) {
+        const to = shell({ screens: TWO, files: rc(), panels: [dockPanel()] });
+        const out = JSON.parse(to.run("var LAYOUT = " + JSON.stringify(layout) + ";\n" + IMPORT).trim().split("\n").pop());
+        assert.ok(out.error, JSON.stringify(out));
+        assert.deepStrictEqual(to.panels.map((p) => p.id), [40], "the panel stays");
+    }
+});
+
 // ---- the Add Panel templates
 const TEMPLATES = path.join(__dirname, "..", "layout-templates");
 const TOPBAR = fs.readFileSync(path.join(TEMPLATES, "org.plasmafusion.panel.topbar", "contents", "layout.js"), "utf8");

@@ -63,7 +63,9 @@ control is `ChoiceRow`, an action row `ActionRow`). The keys are the plan's regi
 | | Swipe from the left / right edge | `[Script-plasmafusion-tablet] EdgeLeft`, `EdgeRight` |
 | | Home indicator | every dock's `[General] homeIndicator` |
 | | (after any of the four script keys) | kglobalaccel `invokeShortcut "Plasma Fusion: Tablet Window Mode"` on `/component/kwin` (the tablet script re-reads its keys; nothing happens without the script) |
-| Start over | Restore my previous desktop… (confirmation) | `plasma-apply-lookandfeel --apply org.plasmafusion.previous.desktop` at once (the gate lane's "My previous desktop"); automatic light/dark switching goes off with it. The login check switches the Fusion lock screen, title bars and KWin scripts off at the next login. Panels and desktop widgets stay (the confirmation says so; `fusion-restore.sh` is the full undo). Disabled when the package does not exist |
+| Start over | Export my settings… (file dialog) | at once, no Apply: a JSON settings file (`src/settingsfile.cpp`; "Settings file" below) with the applied settings of this page (a change not applied yet is not in it; the row says so) and the panels as the Global Theme's `export-layout.js` reads them in plasmashell. Disabled without the shell or without the Global Theme's export and import scripts |
+| | Import settings… (file dialog, confirmation) | at once: a file that is not a Plasma Fusion settings file of this version changes nothing; otherwise its settings are set on the page and applied as Apply does, and its panels take the place of the ones there are (`import-layout.js`), then the widgets get their keys and the panels their glass, top bars and docks as after "Reset Fusion layout" ("Settings file" below). Disabled as Export |
+| | Restore my previous desktop… (confirmation) | `plasma-apply-lookandfeel --apply org.plasmafusion.previous.desktop` at once (the gate lane's "My previous desktop"); automatic light/dark switching goes off with it. The login check switches the Fusion lock screen, title bars and KWin scripts off at the next login. Panels and desktop widgets stay (the confirmation says so; `fusion-restore.sh` is the full undo). Disabled when the package does not exist |
 | | Reset Fusion layout… (confirmation) | `org.kde.PlasmaShell.loadLookAndFeelDefaultLayout` with the Plasma Fusion Global Theme in use (only the layout: no colours, decoration or fonts are applied). The widgets' global shortcuts are read first; the rebuilt layout's widgets get the key their type had (quick settings Meta+A under owner decision 6, Meta+N before it), and quick settings gets Meta+A when its type had none, the way `fusion-config.sh`'s `ensure_widget_shortcut` does (the pen menu gets Meta+Shift+W only when the old one had it: the setup gives it with `--pen` only; before 0.5.0 the reset gave it to every pen menu): a key still held by a widget of the old layout (an `activate widget N` entry whose widget is gone; old ids are always lower than the new ones) is released with `unregister`, a key another live action holds is left alone and reported, the key is set through the widget and read back. Meta+N for the notification list is a kglobalaccel component of its own (DEVICE-1), not tied to a widget id, so it needs nothing. The widgets' own settings go back to their defaults, as the confirmation says (quick settings' tile order and hidden tiles, its other settings and the keyboard policy among them; the page then reads them from the new widgets); what the page keeps in plasmafusionrc stays. Then the glass level and the top-bar choice are applied to the new panels, extra top bars are removed when Every screen is off, and a running power service is restarted when its tier is not full, so it applies itself to the new widgets. Disabled without a Plasma Fusion Global Theme or without the shell |
 
 With the power service at its critical tier (plasmafusionrc `[Power] Tier=critical` and
@@ -86,7 +88,8 @@ off.
 | `packages/kcm-cpp/CMakeLists.txt`, `src/CMakeLists.txt` | ECM / KCMUtils project (`kcmutils_add_qml_kcm`: plugin, QML as resources, generated `kcm_plasmafusion.desktop`) |
 | `src/kcm.h`, `src/kcm.cpp` | `PlasmaFusionKcm`: state, load / save / defaults, the configuration-file writes above |
 | `src/shell.cpp` | everything through the Plasma shell (desktop scripting over `evaluateScript`: dock, top bar, panels, glass keys, Folder View, widget keys) and the two actions (restore, layout reset with the widgets' shortcuts) |
-| `src/kcm_p.h` | names and helpers shared by the two source files |
+| `src/settingsfile.cpp` | the settings file: Export my settings, Import settings ("Settings file" below) |
+| `src/kcm_p.h` | names and helpers shared by the source files |
 | `src/kcm_plasmafusion.json` | plugin metadata: name "Plasma Fusion", icon `plasmafusion-logo`, `X-KDE-System-Settings-Parent-Category: appearance`, weight 1 (first in Appearance & Style), keywords |
 | `src/ui/main.qml` | the page (`KCM.SimpleKCM`) |
 | `src/ui/FusionPalette.qml` | board colours dark / light; accent-dependent ones from the colour scheme |
@@ -97,7 +100,7 @@ off.
 | `build-remote.sh`, `container-build.sh` | development: build in the container on the ThinkPad and fetch the installed tree (`root/`) for test sessions; the package is built by `packaging/build-rpm.sh --compiled` (system.md) |
 | `LICENSES/` | GPL-2.0-or-later (code), CC-BY-SA-4.0 (icon) |
 | `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop; `--report` prints where the content column is), `page_layout_test.py` (the column's place in System Settings' widths, CI `build`), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh`, `scenario-everydock.sh` ("Dock on every screen" on two outputs) |
-| `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/run-power-tier.sh`, `tests/run-reset-layout.sh`, `tests/shell-panels.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and drives the module with random commands, saving included, in a scratch HOME with stand-ins for the programs it starts. `tests/meters-switch.sh` (ctest test `kcmctl-meters`) turns the system meters switch on and off against `fakeshell` (`tests/fakeshell/`: a stand-in Plasma shell answering `evaluateScript` with a QJSEngine model of desktop scripting, `shell.js`, that can list new widgets late, per bar too, add them at the bar's end or fail to make them): meters placed by hand stay, the new ones are placed before quick settings, also on two bars whose meters are listed 0.4 s and 1.8 s late (the module placed only the first bar's before a71fb66), the errors without quick settings and when the widget cannot be made, Apply returning at once while the shell is slow, and off removing every one. `tests/shell-panels.sh` (ctest test `kcmctl-panels`) changes the panels against it: with a top bar on a missing screen (the model crashes on its opacity, as plasmashell 6.8 does) the state is read and the look applied without touching that bar; with a shell that answers 7 s late (`scriptDelayMs`, `slowFrom`) the page reads it, and turning on the system meters or "Top bar on every screen" reports no error while kcmctl's `heartbeat` timer keeps ticking during Apply. `tests/run-power-tier.sh` (ctest test `kcmctl-power`, with node and python3-gobject) runs the module and the power service against a stand-in plasmashell and KWin (`packages/powerfx/tests/mock-session.py`): the page's choices while a tier is held; `tests/run-reset-layout.sh` (`kcmctl-reset`) the layout reset and the keys it gives. The `compiled` and `sanitizers` workflows run all six (docs/parts/ci.md, "Dynamic analysis") |
+| `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/run-power-tier.sh`, `tests/run-reset-layout.sh`, `tests/run-settings-file.sh`, `tests/shell-panels.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and settings files and drives the module with random commands, saving and importing included, in a scratch HOME with stand-ins for the programs it starts. `tests/meters-switch.sh` (ctest test `kcmctl-meters`) turns the system meters switch on and off against `fakeshell` (`tests/fakeshell/`: a stand-in Plasma shell answering `evaluateScript` with a QJSEngine model of desktop scripting, `shell.js`, that can list new widgets late, per bar too, add them at the bar's end or fail to make them): meters placed by hand stay, the new ones are placed before quick settings, also on two bars whose meters are listed 0.4 s and 1.8 s late (the module placed only the first bar's before a71fb66), the errors without quick settings and when the widget cannot be made, Apply returning at once while the shell is slow, and off removing every one. `tests/shell-panels.sh` (ctest test `kcmctl-panels`) changes the panels against it: with a top bar on a missing screen (the model crashes on its opacity, as plasmashell 6.8 does) the state is read and the look applied without touching that bar; with a shell that answers 7 s late (`scriptDelayMs`, `slowFrom`) the page reads it, and turning on the system meters or "Top bar on every screen" reports no error while kcmctl's `heartbeat` timer keeps ticking during Apply. `tests/run-power-tier.sh` (ctest test `kcmctl-power`, with node and python3-gobject) runs the module and the power service against a stand-in plasmashell and KWin (`packages/powerfx/tests/mock-session.py`): the page's choices while a tier is held; `tests/run-reset-layout.sh` (`kcmctl-reset`) the layout reset and the keys it gives, `tests/run-settings-file.sh` (`kcmctl-settingsfile`) the settings file. The `compiled` and `sanitizers` workflows run all seven (docs/parts/ci.md, "Dynamic analysis") |
 
 ## Build
 
@@ -624,3 +627,145 @@ screen". The new switch under it keeps its choice in plasmafusionrc `[Dock] Ever
   reset runs ensure-topbars.js (a stand-in) and reports nothing about the docks; without the script
   it says the other screens' docks could not be added back, and with a script that fails it says
   the docks could not be added. Before, both were silent and the reset said the layout was back.
+
+## Settings file (2026-10-16)
+
+"Export my settings…" and "Import settings…" (at the start of Start over) move this page's
+settings and the panels to another computer or back to later (`src/settingsfile.cpp`). No board has
+them; they are two more `ActionRow`s with the system's file dialog (`QtQuick.Dialogs`), Documents
+and `plasma-fusion-settings.json` by default.
+
+The file is one JSON object, `{"format": "plasma-fusion-settings", "version": 1, "settings": {...},
+"layout": {...}}`:
+
+- `settings`: the page's settings by their property names (`kcm.h`), numbers for the choices (the
+  enums there), `true` / `false` for the switches, plus `accentMode`, `accentColor` (`#rrggbb`, for
+  a fixed colour), `fusionDecoration` and `decoration`, the decoration KWin uses (kwinrc
+  `[org.kde.kdecoration2]` `library`, `theme`, `ButtonsOnLeft`, `ButtonsOnRight`; Apply always
+  uses Plasma Fusion's when it is installed, so a file made with another one names it).
+  `style` is left out while another Global Theme than
+  Plasma Fusion's is in use. These are the applied values: the power service's held values do not
+  show on the page (it shows the user's), and neither does a change not applied yet.
+- `layout`: what the Global Theme's `export-layout.js` prints in plasmashell
+  (docs/parts/lookandfeel.md, "Settings file"): each panel with its screen, place, look and own
+  configuration, its widgets in order with their global shortcut and every configuration group.
+  The docks "Dock on every screen" made and the panels of screens that are not connected are left
+  out; the page says how many of the latter.
+
+A file larger than an import takes (8 MiB) is not written: the page says how large it would be.
+
+Import first reads the whole file, a regular file only and no more than 8 MiB of it (a FIFO
+would block the page when it is opened, until something writes to it, and a device such as
+`/dev/zero` has no size and no end; Qt 6.11.2 takes only `S_IFREG` for a file): one that is not
+JSON, not of this format or version, without panels, or with a panel or widget that is not
+complete is refused with the reason, and nothing changes. Complete means every value `import-layout.js` gives the new panel as plasma-workspace
+6.7.5's `Panel` takes it (the old panels are gone before the new ones are made): a whole screen
+number, an edge, a whole height above 0, `floating` and `floatingApplets` true or false, one of
+the length modes, alignments, hiding and opacity modes `Panel` knows, the four lengths as whole
+numbers when the length is custom, widgets with a type, a shortcut as text, configuration values
+as text. A panel or widget whose configuration holds what `export-layout.js` leaves out (its
+`SKIP`, `ROOT_SKIP` and `PANEL_MARKS` keys, an `[Applets]` group: the ids, place and activity a new
+panel gets anew, an old `lastScreen` that would move it to another screen at the next login, the
+one-time requests, the marks naming other panels) is refused too. Then:
+
+1. the settings are set as if on the page (each setter takes only what the page can show; high
+   contrast before the glass, which it would otherwise set to Solid) and applied by Apply's own
+   code. High contrast without its colour scheme and the Fusion decoration where it is not
+   installed are named; a value the page does not take (out of range, or of the wrong type) is
+   counted and left as it was. After Apply, a file made with another decoration gets it back
+   (the four kwinrc keys, then KWin reconfigures) when it is installed here (its plugin in
+   `org.kde.kdecoration3`; an Aurorae SVG theme: its theme folder, as Apply checks the fallback's),
+   and the "Follow sunset" watch does not put Plasma Fusion's back over it; one that is not
+   installed is named. Apply turns "Dock on every screen" on only with a dock to copy and keeps
+   the top bar's opacity choice only with a top bar; on a desktop without them the file's choice
+   is written anyway (plasmafusionrc `[Dock] EveryScreen`, `[TopBar] SolidNextToWindows`), as the
+   file's panels bring them;
+2. the panels: `import-layout.js` gets the file's layout in front of it (`var LAYOUT = ...;`, the
+   JSON with U+2028 and U+2029 escaped: Qt 6.11.2's QJSEngine refuses them in a string literal)
+   and puts its panels in place of the ones there are, in two steps half a second apart, as a
+   layout reset unloads before it loads: the panels there are go (`PHASE = "remove"`), then the
+   file's come (`"add"`). A removed widget is deleted only on the shell's next turn, its
+   configuration already reset (libplasma 6.7.5 `AppletPrivate::cleanUpAndDelete`), and quick
+   settings' widgets share their state: in one step the new ones counted the old ones too (the
+   session log showed "3 in this shell" for the first new one; in two steps it is 1). When the
+   file's panels cannot be added after the old ones went, the page says that "Reset Fusion
+   layout" brings Plasma Fusion's panels back. A panel of a screen this computer does not have
+   goes to the first screen when that edge is free there, else it is left out; a widget that is
+   not installed is left out; the page names both;
+3. as after "Reset Fusion layout" (`finishResetLayout`): each widget the import made gets the key
+   the file gives it (`import-layout.js` lists the new widgets' ids with their keys, so two
+   widgets of one type keep their own), and a widget the file gives none gets none (no default:
+   the file is what the user had). First every key the removed widgets held is released
+   (kglobalaccel `unregister` of `plasmashell` / `activate widget ID`): libplasma 6.7.5 releases
+   only a removed panel's own key (`AppletPrivate::cleanUpAndDelete`) and deletes its widgets
+   without (`~Applet`), so their keys stayed taken; the desktop's widgets, which an import keeps,
+   keep theirs. A key a widget of the old layout still holds is released when it is given (the
+   new panels' ids are all higher than every id there was: libplasma 6.7.5 counts one id up for
+   containments and widgets, `applet_p.cpp` and `corona.cpp`); the glass and
+   the top-bar choice are applied, `ensure-topbars.js` runs with "Top bar on every screen" or
+   "Dock on every screen" on (the screens the file had no bars for), and the power service applies
+   its tier to the new widgets. With "Top bar on every screen" off, a reset removes the bars the
+   layout script put on the other screens; an import keeps the file's, a bar of another screen
+   being one the user had.
+
+The three steps run in one go, waiting as the page waits for the shell (no user input meanwhile)
+rather than from timers of the page: leaving the page or closing System Settings deletes the page,
+and a timer of it would never fire, leaving no panels between the two steps. Closing System
+Settings ends every event loop at once (Qt 6.11.2 `QCoreApplication::exit`), after which a wait
+returns at once (`QEventLoop::exec`) and the shell's answer is still read (a pending D-Bus
+reply's value waits for it), so the steps run to the end.
+
+The desktop and its widgets are not in the file (only the desktop icon settings, which are this
+page's).
+
+Tests:
+
+- `packages/look-and-feel/tests/layout.test.js` (node), the two scripts against the stand-in
+  shell: the export (panels, widgets in order, every configuration group, the left-out panels and
+  keys, a custom length, the panel view's `floatingApplets`, the user's values while the power
+  service holds keys, the copy taken as the dock when the main dock's screen is unplugged); the
+  import and a second export giving the same; a panel of a missing screen moved to the first
+  screen or left out, a widget not installed skipped; a file of another version or without panels
+  changing nothing. Each rule fails its test when taken out.
+- `tests/run-settings-file.sh` (ctest `kcmctl-settingsfile`), against the stand-in plasmashell
+  with stand-ins for the two scripts: the export writes the applied settings and not a pending
+  change, and the layout the script printed; an import into a fresh HOME applies the settings
+  (plasmafusionrc, kwinrc, kdeglobals), hands the file's layout (with a U+2028 in a value) to the
+  import script in its two steps (removed first, then added), tries the file's key for quick
+  settings and the second quick settings' own key, puts the file's decoration (another one than
+  Plasma Fusion's) back with its button order, runs `ensure-topbars.js` and says what was left
+  out; with the add step failing, the page says how to get panels back; twelve bad files (not
+  JSON, another format or version, no panels, a panel at no edge, a value that is not text, a
+  custom length without its lengths, `floating` as text, a hiding mode `Panel` does not know, the
+  height as text, no `floatingApplets`, no file) change nothing; a decoration that is not
+  installed is named; a file without keys gets none tried, Plasma Fusion's Meta+A neither; the
+  page left right after an import (kcmctl's `unload`) and System Settings closed during it
+  (`quitafter`, `QCoreApplication::exit`) still get the file's panels added; an export larger than
+  an import takes is not written; the removed quick settings' Meta+A is released and a desktop
+  widget's key kept (the stand-in session answers as kglobalaccel, `mock-session.py
+  --kglobalaccel`, and logs each `unregister`); a FIFO and `/dev/zero` are refused at once and a
+  9 MiB file as too large (each kcmctl run is bounded by `timeout`, so a page that hangs fails its
+  checks); a file holding any of the 18 settings `export-layout.js` leaves out (the test reads its
+  lists) is refused; with "Top bar on every screen" off the file's bar of a second screen stays; imported on a desktop without panels, the file's
+  "Dock on every screen" and top-bar choices are kept and `ensure-topbars.js` runs; values the page does not take are counted and
+  left as they were; without `export-layout.js` the action is not offered and an export says why.
+  Each of the module's steps fails a check when taken out (the escape too: the stand-in shell
+  refuses an unescaped U+2028 as QJSEngine does).
+- `tests/fuzz-kcmctl.sh` (ctest `kcmctl-fuzz`): every other round imports a random settings file
+  (valid, odd and wrongly typed values, cut short, or none), and the commands can import or export.
+- Session test (`tests/scenario-settingsfile.sh`; 2026-10-16, a private session on the Fedora 44
+  test laptop with two outputs, Plasma 6.7.5, the module and kcmctl from this change; the real
+  plasmashell, kglobalaccel and the layout part's scripts): **22 checks pass** (review round 3).
+  Before the import the app name of the reset layout gets Meta+Ctrl+F9, which the file does not
+  give: after it, kglobalshortcutsrc has no `activate widget ID` entry for it any more.
+  The page and the panels changed (Reduced glass, the keyboard on touch, 56 px icons, a dock on
+  every screen, the pen menu removed, KWin's Breeze decoration) and exported: the file holds both
+  screens' bars and the main dock, not the copy, Breeze, and Meta+A for quick settings; after the
+  settings were changed back, the Plasma Fusion decoration chosen and the layout reset, the
+  import brings back the settings (page, plasmafusionrc, the widgets' keys), Breeze, the same
+  panels with the copy made again, and Meta+A on the new quick settings, with no error; after a plasmashell restart the panels are still on their screens and Meta+A still
+  set. Seen in the shell's log: two `TypeError: Value is null and could not be converted to an
+  object` from Plasma's D-Bus QML module during the remove step, only when the page has just
+  applied changes to those widgets (the import's Apply, then the removal); the same Apply alone,
+  and removing the panels alone (one at a time, both docks, both top bars), log nothing, and every
+  check passes. Which widget's reply handler it is is a follow-up.

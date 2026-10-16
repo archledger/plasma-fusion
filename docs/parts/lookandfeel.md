@@ -25,6 +25,7 @@ applies appearance only) never changes the layout. `tools/device/fusion-config.s
 | `packages/look-and-feel/org.plasmafusion.{dark,light}.desktop/contents/previews/` | `preview.png` 600x375, `fullscreenpreview.jpg` 1440x900, `splash.png` 300x188 (committed; made by `generators/look-and-feel/previews.py` from the review screenshots of the integrated desktop and the splash) |
 | `packages/look-and-feel/common/contents/layouts/org.kde.plasma.desktop-layout.js` | top bar, dock, desktop cards (copied into both packages) |
 | `packages/look-and-feel/common/contents/layouts/defaults` | title-bar buttons and maximized-window borders (layout defaults) |
+| `packages/look-and-feel/common/contents/layouts/export-layout.js`, `import-layout.js` | the panels of the settings page's settings file, read and put in place in plasmashell ("Settings file" below) |
 | `packages/look-and-feel/common/contents/splash/Splash.qml` | log-in splash (Splash board) |
 | `packages/look-and-feel/common/contents/logout/Logout.qml`, `LogoutButton.qml`, `timer.js` | log-out / shut-down screen: Plasma 6.7.5's Breeze files, with the veil in the Complementary background instead of black (readable in Plasma Fusion Light) |
 | `generators/look-and-feel/splash_background.py` | renders `splash/images/background.png` (the board's blurred Dusk Ridge layer) at build time |
@@ -609,3 +610,52 @@ Private sessions on the ThinkPad (1920 x 1200 at 4/3 unless noted; scratch `buil
   anonymous, +47 / +36 MiB GEM. The cost is upstream Folder View's per-icon cost, not the layout's;
   the budget cannot be met with Folder View. Options: keep the icons (decision M1), or ship icons
   off by default with KCM-1's "Desktop icons" switch.
+
+## Settings file (2026-10-16)
+
+The settings page's "Export my settings…" and "Import settings…" (docs/parts/kcm-cpp.md,
+"Settings file") run two scripts of the layout part in plasmashell; both Global Themes carry them
+(the build copies `common/contents/layouts`).
+
+- `contents/layouts/export-layout.js` prints the panels as one line of JSON: each panel's screen,
+  location, height, floating, length mode (with offset, length, minimum and maximum length when it
+  is custom), alignment, hiding, opacity, the panel view's `floatingApplets` (plasmashellrc
+  `[PlasmaViews][Panel ID]`, kept per panel id) and its own configuration, and its widgets in the
+  panel's order (`Widget.index`) with their global shortcut and every configuration group
+  (`configGroups`, `configKeys`; plasma-workspace 6.7.5 `shell/scripting/applet.h`), each value as
+  the text KConfig keeps. As Plasma's own layout dump (`ShellCorona::dumpCurrentLayoutJS`,
+  `dumpconfigGroupJS`) it leaves out the `[Applets]` groups (the widgets are listed on their own; a
+  system tray, a containment in Plasma 6, makes its items again from its `[General]` lists) and the
+  keys naming what a new panel gets anew: activity, plugin, location, form factor and last screen
+  at a containment's top (an old `lastScreen` would move the panel at the next login), and the ids
+  of its widgets (`AppletOrder`, `ItemsGeometries`, `SystrayContainmentId`). Also left out: the test
+  hooks and requests, the power tier (`powerTier`; the power service sets it again), and a panel's
+  marks that name other panels (`[PlasmaFusion] everyScreenCopy`, `standInFor`); `[PlasmaFusion]
+  statusItems` stays, so `ensure-topbars.js` does not add back a status area the user changed. A
+  key the power service holds while the battery is low is taken with the user's value
+  (plasmafusionrc `[Power] UserWidgetValues`). The docks "Dock on every screen" made and the panels
+  of screens that are not there (their sizes cannot be read) are left out and named in `left`;
+  when no other dock is on a screen that is there, the copy on the lowest screen is taken as the
+  dock, no longer a copy and listing every screen's windows, as the settings page keeps one when
+  the switch goes off.
+- `contents/layouts/import-layout.js` runs with the file's layout in front of it
+  (`var LAYOUT = ...;`) and puts its panels in place of the ones there are; with `var PHASE =
+  "remove"` it only removes the panels there are, with `"add"` it only adds the file's (the
+  settings page runs the two half a second apart: a removed widget is deleted only on the shell's
+  next turn, and widgets of one kind share their state). Each panel goes with its place,
+  look and configuration (the view's `floatingApplets` written before the location, as the layout
+  script does), its widgets in order with their configuration written back as text. A panel of a
+  screen this computer does not have goes to the first screen while the file has no panel at that
+  edge of it, else it is left out; a widget that is not installed (or that the shell cannot make)
+  is left out. Nothing is changed for a layout of another version or without panels (the settings
+  page checks every other value before it runs the script). The shortcuts are the settings
+  page's: the script lists each widget it made that the file gives a key, by the new widget's id
+  (`keys`), and the page gives it that key. Prints `{"panels", "widgets", "screens",
+  "notInstalled", "leftOut", "keys"}`.
+- Tests (`tests/layout.test.js`; the stand-in shell has `configGroups`, a widget's `index` and
+  `globalShortcut`, and a panel's custom-length properties): the export with its screens, order,
+  groups and left-out keys, panels and marks, a custom length and `floatingApplets`; the user's
+  values while keys are held; the copy taken as the dock; an import exporting the same again; the
+  keys listed by the new widgets' ids, two quick settings with their own; the two phases each
+  doing only their part; a missing screen's panel moved or left out and a widget
+  not installed skipped; a file of another version or without panels changing nothing. Each rule fails a case when taken out.

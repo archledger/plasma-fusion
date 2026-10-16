@@ -8,8 +8,10 @@
 #   - writes kdeglobals, kwinrc, plasmafusionrc and baloofilerc with valid, odd and broken values
 #     for the keys the module reads (or leaves a key, a group or a file out), and sometimes adds the
 #     high-contrast scheme and the previous-desktop theme the module looks for;
+#   - writes a settings file for "Import settings…" with valid, odd and wrongly typed values (or
+#     one cut short, or none);
 #   - runs kcmctl with random commands: set (valid and invalid values), get, dump, load, save,
-#     defaults, the module's actions;
+#     defaults, the module's actions (importing that file and exporting included);
 #   - checks that kcmctl exits normally and that every integer property it reports is in range.
 # The programs the module starts (plasma-apply-lookandfeel, plasma-apply-colorscheme, systemctl)
 # are stand-ins that exit with a random status: kcmctl runs with PATH holding only them. As in
@@ -172,16 +174,58 @@ write_config() {
   printf '%s' "$REPLY" >"$work/bin/output"
 }
 
+# REPLY = a JSON value: one of the arguments, or (one time in ten: the file has many of them, and
+# one odd value refuses it) an odd one.
+json_value() {
+  if ((RANDOM % 10 == 0)); then
+    pick '""' '"x"' 0 -1 1.5 2147483648 1e308 true false null '[]' '{}' '"\u2028"' "\"$long\"" '[[[[]]]]' '{"a": {"b": []}}'
+  else
+    pick "$@"
+  fi
+}
+# The settings file importSettings reads (settingsfile.cpp): whole, cut short, or not there.
+write_settings_file() {
+  local f=$work/settings.json format version glass corner accent color lv screen location height mode config type key s
+  json_value '"plasma-fusion-settings"'; format=$REPLY
+  json_value 1; version=$REPLY
+  json_value 0 1 2; glass=$REPLY
+  json_value true false; corner=$REPLY
+  json_value 0 1 2; accent=$REPLY
+  json_value '"#2f6fdf"' '"red"' '"#zz"'; color=$REPLY
+  json_value 1; lv=$REPLY
+  json_value 0 1 5; screen=$REPLY
+  json_value '"top"' '"bottom"' '"left"'; location=$REPLY
+  json_value 34 72; height=$REPLY
+  json_value '"fill"' '"custom"'; mode=$REPLY
+  json_value '[]' '[{"group": ["General"], "keys": {"a": "b"}}]' '[{"group": [], "keys": {}}]'; config=$REPLY
+  json_value '"org.plasmafusion.dock"' '""'; type=$REPLY
+  json_value '"Meta+A"' '""' '"Not a key"'; key=$REPLY
+  s="{\"format\": $format, \"version\": $version, \"settings\": {\"glass\": $glass, \"hotCorner\": $corner, \"accentMode\": $accent,"
+  s+=" \"accentColor\": $color}, \"layout\": {\"version\": $lv, \"panels\": [{\"screen\": $screen, \"location\": $location,"
+  s+=" \"height\": $height, \"floating\": false, \"lengthMode\": $mode, \"alignment\": \"center\", \"hiding\": \"none\","
+  s+=" \"opacity\": \"adaptive\", \"config\": $config, \"widgets\": [{\"type\": $type, \"shortcut\": $key, \"config\": $config}]}]}}"
+  case $((RANDOM % 8)) in
+    0) rm -f "$f" ;;
+    1) printf '%s' "${s:0:$((RANDOM % ${#s}))}" >"$f" ;;
+    *) printf '%s\n' "$s" >"$f" ;;
+  esac
+}
+
 ints=(style buttonStyle snapTrigger glass magnifiedSize iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy)
 bools=(magnify globalMenu hotCorner highContrast reduceMotion solidTopBar everyScreen everyDock desktopIcons lighterOnCritical
   fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters launcherRecentFiles launcherRecentApps launcherPlaces)
 reads=(accentMode accentColor wallpaperColor shellRunning dockAvailable launcherAvailable metersAvailable fusionDecoration errorText infoText
   highContrastAvailable previousDesktopAvailable powerCritical fusionLookAndFeel busy noSuchProperty)
-methods=(setSchemeAccent setWallpaperAccent useFusionDecoration restorePreviousDesktop resetLayout noSuchMethod)
+methods=(setSchemeAccent setWallpaperAccent useFusionDecoration restorePreviousDesktop resetLayout noSuchMethod
+  "importSettings $work/settings.json" "importSettings $work/settings.json" "exportSettings $work/export.json")
 
 write_commands() {
   local n i
   echo waitshell
+  # Every other round starts with importing this round's settings file.
+  if ((RANDOM % 2 == 0)); then
+    echo "call importSettings $work/settings.json"
+  fi
   n=$((RANDOM % 12 + 1))
   for ((i = 0; i < n; i++)); do
     case $((RANDOM % 9)) in
@@ -242,6 +286,7 @@ check_ranges() {
 echo "seed $seed, $rounds rounds (repeat with PF_FUZZ_SEED=$seed PF_FUZZ_COUNT=$rounds)"
 for ((round = 1; round <= rounds; round++)); do
   write_config
+  write_settings_file
   log=$work/logs/round-$round.log
   write_commands >"$work/logs/round-$round.commands"
   status=0

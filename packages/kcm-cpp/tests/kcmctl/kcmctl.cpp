@@ -6,11 +6,16 @@
       wait MS              run the event loop for MS milliseconds
       load | save | defaults
       set PROPERTY VALUE   true/false, integers, or text
-      call METHOD          an invokable without arguments (resetLayout, restorePreviousDesktop, ...)
+      call METHOD [TEXT]   an invokable without arguments (resetLayout, restorePreviousDesktop, ...),
+                           or with one text argument, the rest of the line (importSettings PATH)
       waitidle             wait (max 90 s) until the module is no longer busy
       get PROPERTY         prints PROPERTY=value
       dump                 prints every property of the module, one per line
       sh COMMAND           runs COMMAND with bash -c and waits for it
+      unload               deletes the module, as System Settings does when the page is left (the
+                           commands that need it then say so)
+      quitafter MS         QCoreApplication::exit() MS milliseconds from now, as closing System
+                           Settings ends its event loops: from then on no event loop turns
       heartbeat MS         counts a timer's ticks every MS milliseconds from now on (the event loop
                            running, as a page that does not freeze)
       beats                prints beats=N, the ticks since the last beats, and starts again
@@ -45,6 +50,8 @@
 namespace
 {
 QTextStream out(stdout);
+// quitafter fired: event loops return at once (QEventLoop::exec after QCoreApplication::exit).
+bool quitting = false;
 
 void spin(int ms)
 {
@@ -58,7 +65,7 @@ bool waitFor(QObject *module, const char *property, bool wanted, int maxMs)
     QElapsedTimer timer;
     timer.start();
     while (module->property(property).toBool() != wanted) {
-        if (timer.elapsed() > maxMs) {
+        if (timer.elapsed() > maxMs || quitting) {
             return false;
         }
         spin(50);
@@ -121,6 +128,11 @@ int main(int argc, char **argv)
         const QString command = line.section(QLatin1Char(' '), 0, 0);
         const QString rest = line.section(QLatin1Char(' '), 1);
         out << "kcmctl: > " << line << Qt::endl;
+        static const QStringList withoutModule = {QStringLiteral("wait"), QStringLiteral("sh"), QStringLiteral("beats"), QStringLiteral("quitafter")};
+        if (!module && !withoutModule.contains(command)) {
+            out << "kcmctl: the module is unloaded" << Qt::endl;
+            continue;
+        }
         if (command == QLatin1String("waitshell")) {
             spin(100);
             if (!waitFor(module, "shellLoading", false, 10000)) {
@@ -148,7 +160,11 @@ int main(int argc, char **argv)
                 out << "kcmctl: cannot set " << name << Qt::endl;
             }
         } else if (command == QLatin1String("call")) {
-            if (!QMetaObject::invokeMethod(module, rest.toLatin1().constData())) {
+            const QString method = rest.section(QLatin1Char(' '), 0, 0);
+            const QString argument = rest.section(QLatin1Char(' '), 1);
+            const bool called = rest.contains(QLatin1Char(' ')) ? QMetaObject::invokeMethod(module, method.toLatin1().constData(), Q_ARG(QString, argument))
+                                                                : QMetaObject::invokeMethod(module, method.toLatin1().constData());
+            if (!called) {
                 out << "kcmctl: cannot call " << rest << Qt::endl;
             }
             spin(200);
@@ -161,6 +177,14 @@ int main(int argc, char **argv)
             out << "kcmctl: " << rest << '=' << valueText(module->property(rest.toLatin1().constData())) << Qt::endl;
         } else if (command == QLatin1String("dump")) {
             dump(module);
+        } else if (command == QLatin1String("unload")) {
+            delete module;
+            module = nullptr;
+        } else if (command == QLatin1String("quitafter")) {
+            QTimer::singleShot(rest.toInt(), &app, [] {
+                quitting = true;
+                QCoreApplication::exit(0);
+            });
         } else if (command == QLatin1String("heartbeat")) {
             heartbeat.start(rest.toInt());
         } else if (command == QLatin1String("beats")) {

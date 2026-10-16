@@ -33,14 +33,8 @@ Q_LOGGING_CATEGORY(KCM_PLASMAFUSION, "org.plasmafusion.kcm", QtInfoMsg)
 
 namespace
 {
-// The Plasma Fusion window decoration (KDecoration3 plugin) and its options file.
-const QString s_decorationNamespace = u"org.kde.kdecoration3"_s;
-const QString s_decorationId = u"org.plasmafusion.decoration"_s;
+// The Plasma Fusion decoration's options file (the decoration's names are in kcm_p.h).
 const QString s_decorationConfigGroup = u"Decoration"_s;
-// Fallback without it: the Aurorae themes of the phase 1 decoration part.
-const QString s_auroraeLibrary = u"org.kde.kwin.aurorae.v2"_s;
-const QString s_auroraeThemePrefix = u"__aurorae__svg__"_s;
-const QString s_kwinDecorationGroup = u"org.kde.kdecoration2"_s;
 
 // KWin ElectricBorder values: the top-left corner, and no screen edge.
 constexpr int s_hotCornerOn = 7;

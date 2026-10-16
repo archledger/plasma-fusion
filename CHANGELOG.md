@@ -9,6 +9,11 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Export and import your settings:** the Plasma Fusion settings page has "Export my settings…"
+  and "Import settings…". The file holds the page's settings and your panels: the top bar and dock
+  with their widgets, the widgets' settings and keyboard shortcuts. Importing asks first, then puts
+  them in place of yours; panels of screens the computer does not have go to the first screen when
+  there is room, and widgets that are not installed are left out (the page says which).
 - **Dock on every screen:** a new switch in the Plasma Fusion settings, under "Top bar on every
   screen", gives each screen a dock of its own that shows that screen's windows. It is off by
   default (one dock, as before).

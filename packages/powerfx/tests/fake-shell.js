@@ -5,8 +5,8 @@
 // for plasma-fusion-powerfx's widget script and the settings module's scripts (its tests in
 // packages/kcm-cpp/tests): desktops(), panels(), knownWidgetTypes, a containment's widgets([TYPE]),
 // addWidget, id, type, screen, location and opacity, screenCount (the layout's "screens", default
-// one more than the highest panel screen), a widget's id, type, globalShortcut, index and
-// remove(), and
+// one more than the highest panel screen), a containment's remove(), a widget's id, type,
+// globalShortcut, index and remove(), and
 // for both currentConfigGroup, readConfig (converted to the default's type, as
 // KConfigGroup::readEntry does) and writeConfig (stored as KConfig text). A layout is JSON:
 //   {"desktops": [CONTAINMENT, ...], "panels": [CONTAINMENT, ...], "knownWidgetTypes": [...]}
@@ -17,6 +17,8 @@
 //   node fake-shell.js LAYOUT.json [WRITES.log] < SCRIPT   runs SCRIPT, saves the layout, prints
 //                                                           the script's print() output
 //   require("./fake-shell.js").run(script, layout, writes)  the same in-process
+// A script holding U+2028 or U+2029 as such is refused (a SyntaxError), as plasmashell's QJSEngine
+// refuses them in a string literal (Qt 6.11.2), where JSON put into a script has them.
 "use strict";
 
 function convert(raw, def) {
@@ -76,6 +78,8 @@ function wrap(w, list, writes) {
 }
 
 function run(script, layout, writes) {
+    if (/[\u2028\u2029]/.test(script))
+        throw new SyntaxError("Unexpected token `'");
     let out = "";
     function containment(c, at, kind) {
         // An array is a containment of widgets only; it becomes an object the first time a
@@ -110,6 +114,12 @@ function run(script, layout, writes) {
             set opacity(v) { obj().opacity = String(v); writes.push(`containment ${prop("id", at)} opacity=${v}`); },
             widgets(type) {
                 return list().filter((w) => type === undefined || w.type === type).map((w) => wrap(w, list(), writes));
+            },
+            // The containment goes with its widgets (Containment.remove()). The wrappers of the
+            // containments after it then point one place on: a script removes from the last.
+            remove() {
+                writes.push(`containment ${prop("id", at)} removed`);
+                layout[kind].splice(at, 1);
             },
             addWidget(type) {
                 const w = { id: maxId(layout) + 1, type: String(type), config: {} };

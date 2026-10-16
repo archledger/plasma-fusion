@@ -56,10 +56,17 @@ work=$1 kcmctl=$2 powerfx=$3
 N=0 FAIL=0
 check() { local d=$1; shift; N=$((N + 1)); if "$@"; then echo "ok $N $d"; else FAIL=$((FAIL + 1)); echo "not ok $N $d"; fi; }
 reset() { # NAME: a reset with layout.json and layout.json.reset prepared; the module's error text in $work/NAME.err
+  # The last session's output goes first: the stand-in's redirection happens in the background
+  # child, so the wait below could see the old "ready" and start the module before the stand-in
+  # shell is there (its actions then do nothing).
+  rm -f "$work/mock-session.out"
   python3 "$powerfx/tests/mock-session.py" --address "$DBUS_SESSION_BUS_ADDRESS" --layout "$work/layout.json" \
     --log "$work/calls.log" --node "$(command -v node)" >"$work/mock-session.out" 2>&1 &
   local mock=$!
-  for _ in $(seq 50); do grep -q ready "$work/mock-session.out" 2>/dev/null && break; sleep 0.1; done
+  # Up to 30 s (a loaded machine, sanitizer builds).
+  for _ in $(seq 300); do grep -q ready "$work/mock-session.out" 2>/dev/null && break; sleep 0.1; done
+  check "the stand-in shell started ($1)" grep -q ready "$work/mock-session.out"
+  grep -q ready "$work/mock-session.out" || sed 's/^/  mock: /' "$work/mock-session.out"
   printf '%s\n' waitshell "call resetLayout" waitidle "get errorText" "get infoText" | "$kcmctl" >"$work/$1.log" 2>&1
   kill "$mock" 2>/dev/null; wait "$mock" 2>/dev/null
   sed -n 's/^kcmctl: errorText=//p' "$work/$1.log" >"$work/$1.err"
