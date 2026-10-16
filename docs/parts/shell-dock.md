@@ -598,8 +598,9 @@ got its number since, is never ended:
 
 - SIGTERM to each whose start time is still the one read, which an app that still works answers
   by quitting;
-- after up to 3 s, SIGKILL to those still running (a process that is gone, or a zombie waiting to be
-  reaped, counts as ended), which no app can refuse, again only while the start time is the same;
+- after up to 3 s by the clock (`/proc/uptime`, so a busy machine does not stretch it), SIGKILL to
+  those still running (a process that is gone, or a zombie waiting to be reaped, counts as ended),
+  which no app can refuse, again only while the start time is the same;
   between that check and the signal a few shell steps remain (only a pidfd would close them, which
   the executable engine has no helper for);
 - a process named like one of the session's own (`/proc/PID/comm`: plasmashell, kwin_wayland,

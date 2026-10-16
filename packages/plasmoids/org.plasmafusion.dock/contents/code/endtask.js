@@ -45,7 +45,9 @@ function stillOurs(asked, now) {
 
 // A process's identity: its start time (field 22 of /proc/PID/stat, the 20th after the ") " that
 // ends its name), which a process that takes the same number later does not share.
-var START_TIME = "st() { sed 's/.*) //' /proc/$1/stat 2>/dev/null | cut -d' ' -f20; }; ";
+var START_TIME = "st() { sed 's/.*) //' /proc/$1/stat 2>/dev/null | cut -d' ' -f20; }; "
+    // The time since boot in hundredths of a second (/proc/uptime), for the wait of 3 s.
+    + "cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }; ";
 
 // The shell command that prints the identity, "PID:START", of each of these processes that is
 // there and not one of the session's own, a line each. The dock runs it when it asks, so the
@@ -94,9 +96,9 @@ function endTaskCommand(ids) {
     }
     return START_TIME + "s=; for e in " + ok.join(" ") + "; do i=${e%:*}; case \"$(cat /proc/$i/comm 2>/dev/null)\" in "
         + SESSION_PROCESSES.join("|") + "|'') ;; *) [ \"$(st $i)\" = \"${e#*:}\" ] && s=\"$s $e\" ;; esac; done; "
-        + "[ -n \"$s\" ] || exit 0; for e in $s; do kill -TERM ${e%:*} 2>/dev/null; done; n=0; "
-        + "while [ $n -lt 30 ]; do a=; for e in $s; do i=${e%:*}; "
+        + "[ -n \"$s\" ] || exit 0; for e in $s; do kill -TERM ${e%:*} 2>/dev/null; done; d=$(($(cs) + 300)); "
+        + "while [ $(cs) -lt $d ]; do a=; for e in $s; do i=${e%:*}; "
         + "[ \"$(st $i)\" = \"${e#*:}\" ] && [ \"$(sed 's/.*) //' /proc/$i/stat 2>/dev/null | cut -c1)\" != Z ] && a=\"$a $e\"; done; "
-        + "[ -n \"$a\" ] || exit 0; sleep 0.1; n=$((n + 1)); done; "
+        + "[ -n \"$a\" ] || exit 0; sleep 0.1; done; "
         + "for e in $a; do i=${e%:*}; [ \"$(st $i)\" = \"${e#*:}\" ] && kill -KILL $i 2>/dev/null; done; exit 0";
 }
