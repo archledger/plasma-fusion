@@ -1381,8 +1381,10 @@ if top is not None and pen_installed == "1":
         write(APPLETSRC, ["Containments", top, "General"], "AppletOrder", ";".join(order), general.get("AppletOrder"))
 
 # 7. The live chips (once, plasmafusionrc [Setup] LiveChips): in every Plasma Fusion top bar with a
-#    tray, right before the tray, and the tray items they replace hidden in that tray. Afterwards
-#    what the user does with them (removed, moved, an item shown again) stays.
+#    tray, right before the tray, and the tray items they replace hidden in that tray; a bar that
+#    has them already gets them there too (a run that stopped between writing the widget and the
+#    bar's order left them out of it). Afterwards what the user does with them (removed, moved, an
+#    item shown again) stays.
 if chips_installed == "1" and chips == "done":
     note("live chips: as the user has them (kept)")
 elif chips_installed == "1":
@@ -1392,20 +1394,25 @@ elif chips_installed == "1":
         if not trays:
             note("live chips: bar %s has no tray (left as it is)" % c)
             continue
-        if "org.plasmafusion.livechips" in have.values():
-            note("live chips in bar %s (unchanged)" % c)
+        general = rc.get(("Containments", c, "General"), {})
+        order = [i for i in general.get("AppletOrder", "").split(";") if i]
+        if not order:
+            order = sorted(have, key=lambda i: int(i) if i.isdigit() else 0)
+        order = [i for i in order if i in have]
+        there = [a for a, p in have.items() if p == "org.plasmafusion.livechips"]
+        if there:
+            new = next((i for i in order if i in there), there[0])
         else:
             new = fresh_id()
             write(APPLETSRC, ["Containments", c, "Applets", new], "immutability", "1")
             write(APPLETSRC, ["Containments", c, "Applets", new], "plugin", "org.plasmafusion.livechips")
-            general = rc.get(("Containments", c, "General"), {})
-            order = [i for i in general.get("AppletOrder", "").split(";") if i]
-            if not order:
-                order = sorted(have, key=lambda i: int(i) if i.isdigit() else 0)
-            order = [i for i in order if i in have]
-            at = order.index(trays[0]) if trays[0] in order else len(order)
-            order.insert(at, new)
-            write(APPLETSRC, ["Containments", c, "General"], "AppletOrder", ";".join(order), general.get("AppletOrder"))
+        want = [i for i in order if i != new]
+        at = want.index(trays[0]) if trays[0] in want else len(want)
+        want.insert(at, new)
+        if want == order:
+            note("live chips in bar %s (unchanged)" % c)
+        else:
+            write(APPLETSRC, ["Containments", c, "General"], "AppletOrder", ";".join(want), general.get("AppletOrder"))
         general = rc.get(("Containments", c, "Applets", trays[0], "General"), {})
         for key in ("hiddenItems", "disabledStatusNotifiers"):
             items = [i for i in general.get(key, "").split(",") if i]

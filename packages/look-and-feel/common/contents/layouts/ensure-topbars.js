@@ -254,6 +254,11 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
             if (tray) {
                 if (mainTray !== null) {
                     copyTray(mainTray, tray);
+                    // Next to the chips the copy hides the items they replace, as a tray set up
+                    // here does (one the user shows again in the main tray included).
+                    if (has(bar, CHIPS)) {
+                        hideChipItems(tray);
+                    }
                 } else {
                     defaultTray(tray, has(bar, CHIPS));
                 }

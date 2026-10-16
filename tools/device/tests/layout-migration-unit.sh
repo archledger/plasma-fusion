@@ -56,11 +56,12 @@ fail() { FAIL=$((FAIL + 1)); echo "FAIL $1"; }
 # SolidNextToWindows=false), printers (the user set Printers to "Always shown": out of both lists),
 # nopen (the pen menu removed), folder (the desktop is a plain Folder View), devices (Disks &
 # Devices turned on again in the tray), marked ([Setup] TrayDevices=done), chipsdone ([Setup]
-# LiveChips=done), haschips (the live chips already before the tray), nochips (their widget not
+# LiveChips=done), haschips (the live chips already before the tray), chipsstray (their widget
+# written, the bar's order not: a run that stopped between the two), nochips (their widget not
 # installed), twobars (a second screen's top bar 8: app name 9, tray 10, quick settings 11). Leaves
 # $H and $OUT (the dry run's notes) and $NEEDS (yes/no: layout_needs_migration).
 make_case() {
-  local name=$1 prev=$2 o hidden desktop=org.plasmafusion.desktop extra="" pen=1 chips=0 two=0
+  local name=$1 prev=$2 o hidden desktop=org.plasmafusion.desktop extra="" pen=1 chips=0 stray=0 two=0
   shift 2
   H=$BASE/$name
   mkdir -p "$H"
@@ -72,6 +73,7 @@ make_case() {
       folder) desktop=org.kde.plasma.folder ;;
       devices) extra=org.kde.plasma.devicenotifier ;;
       haschips) chips=1 ;;
+      chipsstray) chips=1 stray=1 ;;
       twobars) two=1 ;;
     esac
   done
@@ -85,7 +87,7 @@ make_case() {
     printf '[Containments][2][Applets][5]\nplugin=org.plasmafusion.quicksettings\n\n'
     [ "$pen" = 0 ] || printf '[Containments][2][Applets][6]\nplugin=org.plasmafusion.pen\n\n'
     [ "$chips" = 0 ] || printf '[Containments][2][Applets][12]\nplugin=org.plasmafusion.livechips\n\n'
-    printf '[Containments][2][General]\nAppletOrder=3;%s4;%s5\n\n' "$([ "$chips" = 0 ] || echo '12;')" "$([ "$pen" = 0 ] || echo '6;')"
+    printf '[Containments][2][General]\nAppletOrder=3;%s4;%s5\n\n' "$([ "$chips" = 0 ] || [ "$stray" = 1 ] || echo '12;')" "$([ "$pen" = 0 ] || echo '6;')"
     printf '[Containments][7]\nlocation=4\nplugin=org.kde.panel\n'
     if [ "$two" = 1 ]; then
       printf '\n[Containments][8]\nlocation=3\nplugin=org.kde.panel\n\n'
@@ -161,7 +163,12 @@ make_case chips-done 2 marked chipsdone
 expect "chips: after that run, what the user did with them stays" has "live chips: as the user has them (kept)"
 expect "  and nothing to migrate" [ "$NEEDS" = no ]
 make_case chips-there 2 marked haschips
-expect "chips: a bar that has them already is left as it is" has "live chips in bar 2 (unchanged)"
+expect "chips: a bar that has them already before its tray is left as it is" has "live chips in bar 2 (unchanged)"
+expect "  its order not written" sh -c '! printf "%s\n" "$1" | grep -qF "[Containments][2][General] AppletOrder"' _ "$OUT"
+make_case chips-stray 2 marked chipsstray
+expect "chips: a widget a stopped run left out of the bar's order is put right before the tray" has "[Containments][2][General] AppletOrder: 3;4;6;5 -> 3;12;4;6;5"
+expect "  not added a second time" sh -c '! printf "%s\n" "$1" | grep -qF "plugin: <unset> -> org.plasmafusion.livechips"' _ "$OUT"
+expect "  so the migration is not done yet" [ "$NEEDS" = yes ]
 make_case chips-none 2 marked nochips
 expect "chips: without the widget nothing is added" sh -c '! printf "%s\n" "$1" | grep -q livechips' _ "$OUT"
 expect "  and nothing to migrate" [ "$NEEDS" = no ]

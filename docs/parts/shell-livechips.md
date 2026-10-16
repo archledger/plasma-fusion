@@ -84,8 +84,9 @@ hides the items it replaces (`TRAY_ITEMS_REPLACED_BY_CHIPS`: `plasmashell_microp
 `org.kde.plasma.cameraindicator`, `xdg-desktop-portal-kde`, `Spectacle`) in `hiddenItems` and
 `disabledStatusNotifiers`, as with the items quick settings replaces. They stay loaded: the volume
 applet still makes the microphone item, and the camera indicator still runs; only the tray shows
-them nowhere. `ensure-topbars.js` and the "Add Panel" top bar do the same, and the build checks
-that the three lists agree. The package jobs' import check (`tools/tests/packages/qml-imports.sh`)
+them nowhere. `ensure-topbars.js` and the "Add Panel" top bar do the same, also in a tray they
+copy from another bar (one the user shows again there is hidden next to the new bar's chips), and
+the build checks that the three lists agree. The package jobs' import check (`tools/tests/packages/qml-imports.sh`)
 counts the microphone and camera sources as optional, as they are loaded with a Loader: without
 plasma-pa or kpipewire those chips are simply missing. An existing layout gets the widget from the setup once
 (`fusion-config.sh` migration step 7, recorded in `plasmafusionrc [Setup] LiveChips`; device.md).
@@ -127,12 +128,13 @@ reaches no journal.
 - `packages/look-and-feel/tests/layout.test.js` (node, run by the look-and-feel build): the chips
   right before the tray in every new bar, their items hidden; nothing without the widget;
   `ensure-topbars.js` with the main bar's chips (a new bar, an older bar with its own tray: at the
-  tray's place, that tray hiding their items), without them, and a first bar; the "Add Panel" top
-  bar that copies another bar's tray hides their items too, and copies it as it is without the
-  widget.
+  tray's place, that tray hiding their items; the tray copied from the main bar hiding them too),
+  without them (the copy as the main tray), and a first bar; the "Add Panel" top bar that copies
+  another bar's tray hides their items too, and copies it as it is without the widget.
 - `tools/device/tests/layout-migration-unit.sh` (CI `build`): step 7 adds the chips before the tray
-  of every top bar with distinct ids and hides their items there, once; a bar that has them is
-  left; nothing without the widget; the setup's list is the layout script's; a real run writes
+  of every top bar with distinct ids and hides their items there, once; a bar that has them before
+  its tray is left; a widget that a stopped run left out of the bar's order is put before the tray
+  (not added again); nothing without the widget; the setup's list is the layout script's; a real run writes
   them; in one run with steps 4 and 6 it keeps what they queued (the pen menu in the bar's order,
   the other hidden items); the once-only marks are not written after a migration that stopped.
 - Session test (`tests/vsession/scenario-livechips.sh`; 2026-10-16, private sessions on the Fedora

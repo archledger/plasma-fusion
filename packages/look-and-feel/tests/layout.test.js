@@ -197,6 +197,18 @@ test("ensure-topbars: with the main bar's chips, a new screen's bar gets them ri
     const t = types(tops(s).find((p) => p.screen === 1));
     assert.strictEqual(t.indexOf(CHIPS), t.indexOf("org.kde.plasma.systemtray") - 1, t.join(" "));
 });
+test("ensure-topbars: the tray copied from the main bar hides the chips' items, which that tray shows", () => {
+    // The main tray hides only one item of the user's: none of those the chips replace.
+    const s = shell({ screens: TWO, files: rc(), panels: [withChips(mainBar())] });
+    s.run(ENSURE);
+    const off = trayOff(tops(s).find((p) => p.screen === 1));
+    assert.ok(off.hidden.includes("org.kde.kscreen"), "the main tray's list is copied: " + JSON.stringify(off));
+    assert.ok(CHIPS_ITEMS.every((id) => off.hidden.includes(id) && off.disabled.includes(id)), JSON.stringify(off));
+});
+test("ensure-topbars: without chips in the main bar the copied tray is as the main one", () => {
+    const { bar } = screenTwo(rc());
+    assert.deepStrictEqual(trayOff(bar), { hidden: ["org.kde.kscreen"], disabled: [] });
+});
 test("ensure-topbars: an older bar with a tray of its own gets the chips at the tray's place", () => {
     const old = { id: 20, type: "org.kde.panel", screen: 1, location: "top", opacity: "adaptive", config: {}, widgets: [
         { id: 21, type: "org.plasmafusion.appname", config: {} },
