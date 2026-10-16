@@ -24,6 +24,7 @@
 #include <KPluginMetaData>
 #include <KSharedConfig>
 
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -51,6 +52,14 @@ QString localPath(const QString &location)
 {
     const QUrl url = QUrl::fromUserInput(location, QString(), QUrl::AssumeLocalFile);
     return url.isLocalFile() ? url.toLocalFile() : QString();
+}
+
+// Waits MS without taking user input, as evaluateShellScript waits for the shell.
+void waitWithoutInput(int ms)
+{
+    QEventLoop loop;
+    QTimer::singleShot(ms, &loop, &QEventLoop::quit);
+    loop.exec(QEventLoop::ExcludeUserInputEvents);
 }
 
 // A whole number that fits an int.
@@ -403,8 +412,17 @@ bool PlasmaFusionKcm::exportSettings(const QString &location)
         {u"settings"_s, settingsToFile(m_saved)},
         {u"layout"_s, layout},
     };
+    // No file an import refuses (readSettingsFile takes at most s_maxFileSize).
+    const QByteArray bytes = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if (bytes.size() > s_maxFileSize) {
+        addError(i18nc("@info %1 size, %2 limit, in MiB",
+                       "The settings were not exported: the file would be %1 MiB, more than the %2 MiB an import takes.",
+                       QString::number(double(bytes.size()) / (1024 * 1024), 'f', 1),
+                       QString::number(s_maxFileSize / (1024 * 1024))));
+        return false;
+    }
     QSaveFile out(path);
-    if (!out.open(QIODevice::WriteOnly) || out.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !out.commit()) {
+    if (!out.open(QIODevice::WriteOnly) || out.write(bytes) < 0 || !out.commit()) {
         addError(i18nc("@info %1 file, %2 reason", "%1 could not be written: %2", path, out.errorString()));
         return false;
     }
@@ -476,7 +494,12 @@ void PlasmaFusionKcm::importSettings(const QString &location)
     json.replace(QChar(0x2028), u"\\u2028"_s).replace(QChar(0x2029), u"\\u2029"_s);
     const QString layoutLine = u"var LAYOUT = "_s + json + u";\n"_s;
     // In two steps, as a layout reset (import-layout.js explains why): the panels there are go, and
-    // a moment later, once the shell has deleted their widgets, the file's come.
+    // a moment later, once the shell has deleted their widgets, the file's come. The steps run in
+    // one go, waiting as evaluateShellScript waits (no user input meanwhile), not from timers of
+    // the page: leaving the page or closing System Settings in between deletes the page, and a
+    // timer of it would never fire, leaving no panels. Closing System Settings ends every event
+    // loop at once (QCoreApplication::exit), so the waits then return at once and the steps
+    // still run, the shell's answers being read as they come.
     const QString result = evaluateShellScript(layoutLine + u"var PHASE = \"remove\";\n"_s + importScript, &ok);
     const QJsonObject removed = QJsonDocument::fromJson(result.toUtf8()).object();
     if (!ok || !removed.value(u"removed"_s).isDouble()) {
@@ -485,47 +508,42 @@ void PlasmaFusionKcm::importSettings(const QString &location)
         requestShellState();
         return;
     }
-    QStringList done{i18nc("@info %1 file name", "The settings of %1 are in place.", name)};
-    if (notTaken > 0) {
-        done << i18ncp("@info",
-                       "One setting in the file has a value this version does not take; it stays as it was.",
-                       "%1 settings in the file have values this version does not take; they stay as they were.",
-                       notTaken);
+    waitWithoutInput(500);
+    const QString added = evaluateShellScript(layoutLine + u"var PHASE = \"add\";\n"_s + importScript, &ok);
+    const QJsonObject answer = QJsonDocument::fromJson(added.toUtf8()).object();
+    if (!ok || !answer.value(u"panels"_s).isDouble()) {
+        addError(i18nc("@info %1 reason",
+                       "The panels of the file could not be added: %1. Reset Fusion layout brings Plasma Fusion's panels back.",
+                       ok ? answer.value(u"error"_s).toString(added) : added));
+        setBusy(false);
+        requestShellState();
+        return;
     }
-    done << notes;
-    QTimer::singleShot(500, this, [this, layoutLine, importScript, ids, done]() mutable {
-        bool ok = false;
-        const QString result = evaluateShellScript(layoutLine + u"var PHASE = \"add\";\n"_s + importScript, &ok);
-        const QJsonObject answer = QJsonDocument::fromJson(result.toUtf8()).object();
-        if (!ok || !answer.value(u"panels"_s).isDouble()) {
-            addError(i18nc("@info %1 reason",
-                           "The panels of the file could not be added: %1. Reset Fusion layout brings Plasma Fusion's panels back.",
-                           ok ? answer.value(u"error"_s).toString(result) : result));
-            setBusy(false);
-            requestShellState();
-            return;
-        }
-        QStringList notInstalled;
-        for (const QJsonValue &type : answer.value(u"notInstalled"_s).toArray()) {
-            notInstalled << type.toString();
-        }
-        QStringList outcome{done.takeFirst()};
-        if (!notInstalled.isEmpty()) {
-            outcome << i18nc("@info %1 list of widget ids", "Widgets that are not installed here were left out: %1.", notInstalled.join(u", "_s));
-        }
-        const int leftOut = answer.value(u"leftOut"_s).toInt();
-        if (leftOut > 0) {
-            outcome << i18ncp("@info",
-                              "A panel was left out: its screen is not connected, and the first screen has a panel at that edge.",
-                              "%1 panels were left out: their screens are not connected, and the first screen has panels at those edges.",
-                              leftOut);
-        }
-        outcome << done;
-        // Each widget made gets the key the file gives it (import-layout.js lists them by id).
-        const QJsonObject before{{u"ids"_s, ids}, {u"assign"_s, answer.value(u"keys"_s).toArray()}};
-        // As after a layout reset: a moment for the new widgets to start, then their shortcuts.
-        QTimer::singleShot(1000, this, [this, before, outcome] {
-            finishResetLayout(before, true, outcome.join(u' '));
-        });
-    });
+
+    QStringList outcome{i18nc("@info %1 file name", "The settings of %1 are in place.", name)};
+    QStringList notInstalled;
+    for (const QJsonValue &type : answer.value(u"notInstalled"_s).toArray()) {
+        notInstalled << type.toString();
+    }
+    if (!notInstalled.isEmpty()) {
+        outcome << i18nc("@info %1 list of widget ids", "Widgets that are not installed here were left out: %1.", notInstalled.join(u", "_s));
+    }
+    const int leftOut = answer.value(u"leftOut"_s).toInt();
+    if (leftOut > 0) {
+        outcome << i18ncp("@info",
+                          "A panel was left out: its screen is not connected, and the first screen has a panel at that edge.",
+                          "%1 panels were left out: their screens are not connected, and the first screen has panels at those edges.",
+                          leftOut);
+    }
+    if (notTaken > 0) {
+        outcome << i18ncp("@info",
+                          "One setting in the file has a value this version does not take; it stays as it was.",
+                          "%1 settings in the file have values this version does not take; they stay as they were.",
+                          notTaken);
+    }
+    outcome << notes;
+    // As after a layout reset: a moment for the new widgets to start, then their shortcuts (each
+    // widget made gets the key the file gives it; import-layout.js lists them by id).
+    waitWithoutInput(1000);
+    finishResetLayout(QJsonObject{{u"ids"_s, ids}, {u"assign"_s, answer.value(u"keys"_s).toArray()}}, true, outcome.join(u' '));
 }

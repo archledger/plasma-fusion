@@ -88,13 +88,17 @@ check() { local d=$1; shift; N=$((N + 1)); if "$@"; then echo "ok $N $d"; else F
 session() {
   local name=$1; shift
   : >"$work/calls.log"
+  # The last session's output goes first: the stand-in's redirection happens in the background
+  # child, so the wait below could see the old "ready" and start the module before the stand-in
+  # shell is there (its actions then do nothing).
+  rm -f "$work/mock-session.out"
   python3 "$powerfx/tests/mock-session.py" --address "$DBUS_SESSION_BUS_ADDRESS" --layout "$work/layout.json" \
     --log "$work/calls.log" --node "$(command -v node)" >"$work/mock-session.out" 2>&1 &
   local mock=$!
-  # Up to 30 s (a loaded machine, sanitizer builds): a module started before the stand-in shell
-  # reads no shell, and its actions then do nothing.
+  # Up to 30 s (a loaded machine, sanitizer builds).
   for _ in $(seq 300); do grep -q ready "$work/mock-session.out" 2>/dev/null && break; sleep 0.1; done
-  check "the stand-in shell started ($1)" grep -q ready "$work/mock-session.out"
+  check "the stand-in shell started ($name)" grep -q ready "$work/mock-session.out"
+  grep -q ready "$work/mock-session.out" || sed 's/^/  mock: /' "$work/mock-session.out"
   printf '%s\n' waitshell "$@" waitidle "get errorText" "get infoText" | "$kcmctl" >"$work/$name.log" 2>&1
   kill "$mock" 2>/dev/null; wait "$mock" 2>/dev/null
 }
@@ -209,6 +213,13 @@ session nokeys "call importSettings $work/nokeys.json"
 check "a file without keys: none is tried, not Plasma Fusion's Meta+A either" bash -c "
   ! grep -q 'Meta+' '$work/nokeys.log' && grep -q '^kcmctl: errorText=\$' '$work/nokeys.log'"
 
+# ---- The page left right after an import, or System Settings closed during it: the file's panels
+# still come (the steps run in one go, not from timers of the page, which would die with it).
+session leave "call importSettings $work/good.json" unload "wait 2500"
+check "the page left after an import: the file's panels are added" grep -q '"phase":"add"' "$work/calls.log"
+session quit "quitafter 1" "call importSettings $work/good.json"
+check "System Settings closed during an import: the file's panels are added" grep -q '"phase":"add"' "$work/calls.log"
+
 # ---- The panels removed, the file's could not be added: the page says how to get panels back.
 cat >"$work/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts/import-layout.js" <<'JS'
 if (PHASE === "remove") {
@@ -222,6 +233,18 @@ session addfail "call importSettings $work/good.json"
 check "the file's panels not added: the page says so, and what brings panels back" bash -c "
   grep -q '^kcmctl: errorText=The panels of the file could not be added: ' '$work/addfail.log' &&
   grep -q \"Reset Fusion layout brings Plasma Fusion's panels back.\" '$work/addfail.log'"
+
+# ---- An export larger than an import takes (8 MiB) is not written.
+cat >"$work/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts/export-layout.js" <<'JS'
+print(JSON.stringify({ version: 1, screens: 1, left: [], panels: [
+    { screen: 0, location: "top", height: 34, floating: false, lengthMode: "fill", alignment: "center", hiding: "none",
+      opacity: "adaptive", floatingApplets: false, config: [],
+      widgets: [{ type: "org.plasmafusion.quicksettings", shortcut: "", config: [{ group: ["General"], keys: { big: "x".repeat(9 * 1024 * 1024) } }] }] }] }));
+JS
+session toolarge "call exportSettings $work/toolarge.json"
+check "an export larger than an import takes is refused, and no file is written" bash -c "
+  grep -q 'The settings were not exported: the file would be 9.0 MiB, more than the 8 MiB an import takes.' '$work/toolarge.log' &&
+  ! test -e '$work/toolarge.json'"
 
 # ---- Without the Global Theme's scripts there is nothing to export or import with.
 rm "$work/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts/export-layout.js"

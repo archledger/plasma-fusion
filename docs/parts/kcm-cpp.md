@@ -652,6 +652,8 @@ The file is one JSON object, `{"format": "plasma-fusion-settings", "version": 1,
   The docks "Dock on every screen" made and the panels of screens that are not connected are left
   out; the page says how many of the latter.
 
+A file larger than an import takes (8 MiB) is not written: the page says how large it would be.
+
 Import first reads the whole file: one that is not JSON, not of this format or version, without
 panels, or with a panel or widget that is not complete is refused with the reason, and nothing
 changes. Complete means every value `import-layout.js` gives the new panel as plasma-workspace
@@ -685,11 +687,19 @@ as text. Then:
 3. as after "Reset Fusion layout" (`finishResetLayout`): each widget the import made gets the key
    the file gives it (`import-layout.js` lists the new widgets' ids with their keys, so two
    widgets of one type keep their own), and a widget the file gives none gets none (no default:
-   the file is what the user had); a key the removed widgets still hold is released first (the new panels' ids are all higher than every id there was: libplasma 6.7.5
-   counts one id up for containments and widgets, `applet_p.cpp` and `corona.cpp`); the glass and
+   the file is what the user had); a key the removed widgets still hold is released first (the
+   new panels' ids are all higher than every id there was: libplasma 6.7.5 counts one id up for
+   containments and widgets, `applet_p.cpp` and `corona.cpp`); the glass and
    the top-bar choice are applied, `ensure-topbars.js` runs with "Top bar on every screen" or
    "Dock on every screen" on (the screens the file had no bars for), and the power service applies
    its tier to the new widgets.
+
+The three steps run in one go, waiting as the page waits for the shell (no user input meanwhile)
+rather than from timers of the page: leaving the page or closing System Settings deletes the page,
+and a timer of it would never fire, leaving no panels between the two steps. Closing System
+Settings ends every event loop at once (Qt 6.11.2 `QCoreApplication::exit`), after which a wait
+returns at once (`QEventLoop::exec`) and the shell's answer is still read (a pending D-Bus
+reply's value waits for it), so the steps run to the end.
 
 The desktop and its widgets are not in the file (only the desktop icon settings, which are this
 page's).
@@ -714,7 +724,10 @@ Tests:
   JSON, another format or version, no panels, a panel at no edge, a value that is not text, a
   custom length without its lengths, `floating` as text, a hiding mode `Panel` does not know, the
   height as text, no `floatingApplets`, no file) change nothing; a decoration that is not
-  installed is named; a file without keys gets none tried, Plasma Fusion's Meta+A neither; values the page does not take are counted and
+  installed is named; a file without keys gets none tried, Plasma Fusion's Meta+A neither; the
+  page left right after an import (kcmctl's `unload`) and System Settings closed during it
+  (`quitafter`, `QCoreApplication::exit`) still get the file's panels added; an export larger than
+  an import takes is not written; values the page does not take are counted and
   left as they were; without `export-layout.js` the action is not offered and an export says why.
   Each of the module's steps fails a check when taken out (the escape too: the stand-in shell
   refuses an unescaped U+2028 as QJSEngine does).
