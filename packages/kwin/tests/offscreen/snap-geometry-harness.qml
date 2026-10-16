@@ -68,6 +68,32 @@ Item {
         signal closed()
         signal interactiveMoveResizeFinished()
     }
+    // Snap sizes from the keyboard: a window on a screen of its own (no quick root cached there, so
+    // the halves fall back to their rectangles), and a second screen to the right of it.
+    readonly property var screenA: ({name: "Virtual-9", geometry: Qt.rect(0, 0, 1440, 900)})
+    readonly property var screenB: ({name: "Virtual-10", geometry: Qt.rect(1440, 0, 1440, 900)})
+    QtObject {
+        id: cycleWin
+        property var tile: null
+        property var output: harness.screenA
+        property var desktops: [desktop]
+        property bool onAllDesktops: false
+        property bool deleted: false
+        property bool normalWindow: true
+        property bool popupWindow: false
+        property bool moveable: true
+        property bool resizeable: true
+        property bool fullScreen: false
+        property bool specialWindow: false
+        property bool move: false
+        property bool resize: false
+        property int maximizeMode: 0
+        property bool minimized: false
+        property rect frameGeometry: Qt.rect(0, 34, 720, 866)
+        property string internalId: "{cycle}"
+        signal closed()
+        signal interactiveMoveResizeFinished()
+    }
     QtObject {
         id: outline
         property rect geometry: Qt.rect(0, 34, 720, 866)
@@ -360,6 +386,54 @@ Item {
     }
     function testUntiled() {
         rectCheck("untiled window left alone", win.frameGeometry, Qt.rect(140, 100, 700, 450));
+        Qt.callLater(testCycle);
+    }
+    // Snap Left/Right (the setup's Meta+Left/Right) from the left half, with the 6 px gap.
+    function testCycle() {
+        KW.Workspace.windows = [win, cycleWin];
+        KW.Workspace.screens = [screenA];
+        KW.Workspace.activeWindow = cycleWin;
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("Snap Left on the left half: the left third", cycleWin.frameGeometry, Qt.rect(0, 34, 476, 866));
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("  again: the left two thirds", cycleWin.frameGeometry, Qt.rect(0, 34, 957, 866));
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("  again, one screen: the left half", cycleWin.frameGeometry, Qt.rect(0, 34, 717, 866));
+        script.cycleSnap(cycleWin, "right");
+        rectCheck("Snap Right from the left half: the right half", cycleWin.frameGeometry, Qt.rect(723, 34, 717, 866));
+        script.cycleSnap(cycleWin, "right");
+        rectCheck("  again: the right third", cycleWin.frameGeometry, Qt.rect(964, 34, 476, 866));
+        script.cycleSnap(cycleWin, "right");
+        rectCheck("  again: the right two thirds", cycleWin.frameGeometry, Qt.rect(483, 34, 957, 866));
+        KW.Workspace.screens = [screenA, screenB];
+        script.cycleSnap(cycleWin, "right");
+        check("  again with a screen to the right: the window goes there", KW.Workspace.sentTo === screenB,
+              KW.Workspace.sentTo ? KW.Workspace.sentTo.name : "nothing");
+        cycleWin.frameGeometry = Qt.rect(300, 200, 600, 400);
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("Snap Left on a window elsewhere: the left half", cycleWin.frameGeometry, Qt.rect(0, 34, 717, 866));
+        // A client that has not drawn its new size yet: the third was asked, the window still shows
+        // the half; the next press goes on to the two thirds, not to the third again.
+        script.cycleSnap(cycleWin, "left");
+        cycleWin.frameGeometry = Qt.rect(0, 34, 717, 866);
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("  pressed again before the client drew the third: the two thirds", cycleWin.frameGeometry, Qt.rect(0, 34, 957, 866));
+        // The largest gap on a small work area: the steps the script made are still known.
+        KWin.setConfig("Gap", 48);
+        KW.Workspace.maximizeArea = Qt.rect(0, 34, 1024, 700);
+        cycleWin.frameGeometry = Qt.rect(300, 200, 400, 300);
+        script.cyclePending = ({});
+        script.cycleSnap(cycleWin, "left");
+        script.cyclePending = ({});
+        script.cycleSnap(cycleWin, "left");
+        script.cyclePending = ({});
+        script.cycleSnap(cycleWin, "left");
+        rectCheck("a 48 px gap on a 1024 px area: half, third, then the two thirds", cycleWin.frameGeometry, Qt.rect(0, 34, 659, 700));
+        KWin.setConfig("Gap", 6);
+        KW.Workspace.maximizeArea = Qt.rect(0, 34, 1440, 866);
+        Qt.callLater(testEnd);
+    }
+    function testEnd() {
         console.log("snap geometry: " + checks + " checks, " + failures + " failures");
         if (outlineWindow) outlineWindow.destroy();
         done = true;

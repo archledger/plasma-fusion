@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Unit tests of fusion-config.sh's command shortcuts (the Meta+N notification and Meta+V clipboard
-# components, kglobalaccel desktop files that ask quick settings to open) against a fake
+# components, kglobalaccel desktop files that ask quick settings to open) and of Meta+Left/Right
+# for the snap script's "Snap Left/Right" (snap sizes from the keyboard) against a fake
 # kglobalaccel: the shortcut helpers, the components and the shell section's choice between the
 # Windows-style set, --keep-shortcuts and a later run are taken out of fusion-config.sh as they
 # are; `bus` and `bus_json` answer from a table of component, action, keys and whether a program
@@ -52,10 +53,14 @@ LIB=$BASE/lib.sh
   grep -m1 '^CLIPBOARD_KEY_VERSION=' "$TOOL" || true
   grep -m1 '^UNSET=' "$TOOL" || true
   grep -m1 '^LAUNCHER_ACTION=' "$TOOL" || true
+  grep -m1 '^K_LEFT=' "$TOOL" || true
+  grep -m1 '^SNAP_CYCLE=' "$TOOL" || true
+  grep -m1 '^SNAP_CYCLE_KEYS_VERSION=' "$TOOL" || true
   extract note keyname install_text shortcut_get shortcut_set shortcut_add shortcut_remove key_holders \
     shortcut_claim register_command_component command_key_present notify_desktop ensure_notify_shortcut clipboard_desktop \
-    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade
+    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade snap_script_reload apply_snap_cycle_keys
 } >"$LIB"
+grep -q '^apply_snap_cycle_keys() {' "$LIB" || { echo "FAIL: apply_snap_cycle_keys was not found in fusion-config.sh"; exit 1; }
 for f in ensure_notify_shortcut ensure_clipboard_shortcut; do
   grep -q "^$f() {" "$LIB" || { echo "FAIL: $f was not found in fusion-config.sh"; exit 1; }
 done
@@ -187,6 +192,7 @@ run_case() {
   : >"$H/backup/shortcuts"
   for row in "$@"; do printf '%s\n' "$row" | tr '|' '\t' >>"$H/kga"; done
   [ -z "${MARK:-}" ] || printf '[Shortcuts]\nClipboardKey=%s\n' "$MARK" >"$H/plasmafusionrc"
+  [ -z "${SNAPMARK:-}" ] || printf '[Shortcuts]\nSnapCycleKeys=%s\n' "$SNAPMARK" >"$H/plasmafusionrc"
   env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" KGA="$H/kga" WROTE="${WROTE:-0}" bash -c '
     set -euo pipefail
     . "$1"; . "$2"
@@ -204,6 +210,31 @@ run_case() {
         echo "== the step again"
         "$step" "$4" ;;
       dry) DRY=1; ensure_clipboard_shortcut "$4" ;;
+      snapcycle)
+        # The script registered its actions (KWin runs it).
+        snap_cycle_actions_registered() { true; }
+        apply_snap_cycle_keys "$4" ;;
+      snapcycle-old)
+        # An older snap script is running (an update in this session): loaded, without the new
+        # actions, which come once it is unloaded and started again (a KWin stand-in in front of
+        # the kglobalaccel one; its calls in $HOME/kwin.calls).
+        eval "fake_$(declare -f bus)"
+        bus() {
+          local a=("$@")
+          [ "${a[0]}" = call ] && a=("${a[@]:1}")
+          if [ "${a[0]}" = org.kde.KWin ]; then
+            echo "${a[3]}" >>"$HOME/kwin.calls"
+            case ${a[3]} in
+              isScriptLoaded) if [ -f "$HOME/unloaded" ]; then echo "b false"; else echo "b true"; fi ;;
+              unloadScript) : >"$HOME/unloaded"; echo "b true" ;;
+              start) [ ! -f "$HOME/unloaded" ] || : >"$HOME/started" ;;
+            esac
+            return 0
+          fi
+          fake_bus "$@"
+        }
+        snap_cycle_actions_registered() { [ -f "$HOME/started" ]; }
+        apply_snap_cycle_keys "$4" ;;
       step | step-notify)
         has_name() { true; }
         ensure_widget_shortcut() { :; }
@@ -344,6 +375,39 @@ expect_keys "  but Klipper's pop-up keeps Meta+V" plasmashell show-on-mouse-pos 
 run_case step-keep-earlier step 0 auto "$KLIPPER" "$NOTIFY|_launch|$META_N|1"
 expect_keys "a --keep-shortcuts setup whose Meta+N went to the notification list earlier keeps Klipper's Meta+V" \
   plasmashell show-on-mouse-pos "$META_V"
+
+# ---- Meta+Left/Right: snap sizes from the keyboard (the snap script's Snap Left/Right)
+META_LEFT=$((0x10000000 + 0x01000012)) META_RIGHT=$((0x10000000 + 0x01000014)) META_SHIFT_LEFT=$((0x10000000 + 0x02000000 + 0x01000012))
+TILE_L="kwin|Window Quick Tile Left|$META_LEFT|1" TILE_R="kwin|Window Quick Tile Right|$META_RIGHT|1"
+SNAP_L="kwin|Plasma Fusion: Snap Left||1" SNAP_R="kwin|Plasma Fusion: Snap Right||1"
+run_case snap-claim snapcycle claim "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "the Windows-style set gives Meta+Left to Snap Left" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
+expect_keys "  and Meta+Right to Snap Right" kwin "Plasma Fusion: Snap Right" "$META_RIGHT"
+expect_keys "  KWin's quick tile left loses it" kwin "Window Quick Tile Left" ""
+expect_keys "  and quick tile right" kwin "Window Quick Tile Right" ""
+if grep -q "Window Quick Tile Left" "$H/backup/shortcuts"; then pass "  the backup records KWin's key (fusion-restore.sh gives it back)"
+else fail "  the backup does not record KWin's key"; fi
+if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  the run is marked"; else fail "  the run is not marked"; fi
+run_case snap-migrate snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "an update (no Windows-style set) moves Meta+Left from KWin's default too, once" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
+expect_keys "  and Meta+Right" kwin "Plasma Fusion: Snap Right" "$META_RIGHT"
+run_case snap-migrate-old snapcycle-old migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "an update while an older snap script runs: it is started again and Meta+Left moves" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
+if [ "$(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)" = "isScriptLoaded unloadScript isScriptLoaded start " ]; then
+  pass "  unloaded, then started once it was gone"
+else
+  fail "  KWin calls: $(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)"
+fi
+if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  and the run is marked"; else fail "  the run is not marked"; fi
+SNAPMARK=1 run_case snap-migrate-done snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "after the mark, Meta+Left the user gave back to KWin's quick tile stays there" kwin "Window Quick Tile Left" "$META_LEFT"
+expect_keys "  and Snap Left gets nothing" kwin "Plasma Fusion: Snap Left" ""
+run_case snap-migrate-user snapcycle migrate "" "kwin|Window Quick Tile Left||1" "kwin|Switch Window Left|$META_LEFT|1" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "an update leaves Meta+Left where the user put it (another action)" kwin "Switch Window Left" "$META_LEFT"
+expect_keys "  Snap Left gets nothing" kwin "Plasma Fusion: Snap Left" ""
+expect_keys "  while Meta+Right, still KWin's, moves" kwin "Plasma Fusion: Snap Right" "$META_RIGHT"
+run_case snap-claim-own snapcycle claim "" "$TILE_L" "$TILE_R" "kwin|Plasma Fusion: Snap Left|$META_SHIFT_LEFT|1" "$SNAP_R"
+expect_keys "the Windows-style set adds Meta+Left to a Snap Left key the user gave (both kept)" kwin "Plasma Fusion: Snap Left" "$META_LEFT $META_SHIFT_LEFT"
 
 echo "shortcut-keys-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]
