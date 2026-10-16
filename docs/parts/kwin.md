@@ -238,15 +238,15 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   layout family), and before a group minimises, restores or raises, every member is checked
   (`Groups.holds`). So a change no handler sees (an app or a script moving a window within its
   placement's settle, a switch in the 220 ms between two offers) still counts.
-- Gaps: none by default: snapped windows meet (Windows board; the owner's decision of 2026-10-16,
-  up to 0.5.0 the default was 6 px). A gap set with `Gap` goes between halves and quarters, with
-  the outer edges flush to the work area (panels remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
-  native quick-tile padding at the configured gap and fills only each window's outer edges
-  after KWin settles. Native padding keeps the inner gap and pointer compensation during split
-  resizing; the outer-edge correction runs during resizing too. Work-area endpoints clamp odd
-  trailing tiles that KWin rounds one pixel too wide or tall. Tile membership, shared splits and
-  restoration on drag remain native.
-  The picker uses the same inner-gap geometry. Meta+T custom zones retain their own padding.
+- Gaps: none by default: snapped windows meet (Windows board; the owner's decision of 2026-10-16, up
+  to 0.5.0 the default was 6 px). A gap set with `Gap` goes between halves and quarters, with the
+  outer edges flush to the work area (panels remain reserved). KWin's scalar tile padding also
+  insets screen edges, so the script leaves native quick-tile padding at the configured gap and
+  fills only each window's outer edges after KWin settles. Native padding keeps the inner gap and
+  pointer compensation during split resizing; the outer-edge correction runs during resizing too.
+  Work-area endpoints clamp odd trailing tiles that KWin rounds one pixel too wide or tall. Tile
+  membership, shared splits and restoration on drag remain native. The picker uses the same
+  inner-gap geometry. Meta+T custom zones retain their own padding.
 - Quick tiles (0.5.0, survey B12): KWin keeps one quick-tile root per screen and desktop
   (`QuickRootTile`, `src/tiles/quicktile.cpp`, the same in Plasma 6.7 and 6.8) beside the custom
   root that `Workspace.rootTile()` returns. Scripts reach it only as a tiled window's
@@ -519,10 +519,11 @@ tools/vsession/remote.sh kw-3 packages/kwin/tests/vsession/scenario-evidence.sh 
   behind the frosted wallpaper, which suits "the empty half".
 - Dim layer with `HighlightWindows=true` (KWin default): KWin fades every other window, including
   the dim layer, so the board's even dim needs `HighlightWindows=false`.
-- Snapped halves: corners stay as the decoration draws them (Aurorae: square client corners); the board's "square inner, rounded outer" corners need the compiled decoration.
-- With a gap set, the first snap on each workspace/screen shows it one step late (the script can only reach
-  KWin's quick-tile root through a tiled window, so it sets the padding right after the first snap).
-  The padding stays until KWin restarts if the script is disabled.
+- Snapped halves: corners stay as the decoration draws them (Aurorae: square client corners); the
+  board's "square inner, rounded outer" corners need the compiled decoration.
+- With a gap set, the first snap on each workspace/screen shows it one step late (the script can
+  only reach KWin's quick-tile root through a tiled window, so it sets the padding right after the
+  first snap). The padding stays until KWin restarts if the script is disabled.
 - 2:1 and quarters are real quick tiles; thirds are plain geometry (KWin's quick tiles have only two
   columns), so thirds do not resize together and do not restore on drag.
 - 150 ms zone delay is visual: KWin still snaps a window dropped before the zone has appeared.
