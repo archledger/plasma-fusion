@@ -4,7 +4,7 @@
 """Test tooling (not installed): render the module's QML offscreen with a stand-in for the C++
 module object, to check the layout against the board without a Plasma session.
 
-    tests/offscreen_preview.py OUT.png [dark|light] [--state key=value ...] [--width 468] [--height 560] [--font-pt 9.75]
+    tests/offscreen_preview.py OUT.png [dark|light] [--state key=value ...] [--width 468] [--height 560] [--font-pt 9.75] [--report]
 
 Uses the system Qt (PySide6 6.11 = Plasma's Qt), Kirigami, KCMUtils QML and the KDE platform
 theme with a private XDG_CONFIG_HOME whose kdeglobals holds the Plasma Fusion colour scheme and
@@ -12,12 +12,15 @@ fonts (packages/color-schemes). Prints the window's QML warnings. --state sets v
 stand-in module (every property of PlasmaFusionKcm, for example style, glass, tabletMode,
 shellRunning, dockAvailable, powerCritical, errorText, infoText). The page's QML and the shared
 packages/common/FusionMetrics.qml are copied into one directory first, as the module's
-resources hold them.
+resources hold them. --report prints, once the page is laid out, where its content column is
+("REPORT {json}": its x and width in the page's content item, that item's width, and its x and
+width in the window).
 Environment: PFKM_TMP (directory for the private configuration, default the system temp
 directory), PFKM_THEME (Qt platform theme, default kde).
 """
 import argparse
 import configparser
+import json
 import os
 import sys
 import tempfile
@@ -55,6 +58,7 @@ def main():
     ap.add_argument("--width", type=int, default=468)
     ap.add_argument("--height", type=int, default=560)
     ap.add_argument("--font-pt", type=float, default=9.75, help="UI font size (the text scale is pt / 9.75)")
+    ap.add_argument("--report", action="store_true", help="print where the page's content column is")
     args = ap.parse_args()
 
     config_home = tempfile.mkdtemp(prefix="pfkm-cfg-", dir=os.environ.get("PFKM_TMP"))
@@ -238,6 +242,17 @@ QQC2.ApplicationWindow {
         try:
             img = win.grabWindow()
             img.save(args.out)
+            if args.report:
+                from PySide6.QtCore import QPointF
+                from PySide6.QtQuick import QQuickItem
+                column = root.findChild(QQuickItem, "pageColumn")
+                if column is None:
+                    print("REPORT null")
+                else:
+                    at = column.mapToScene(QPointF(0, 0))
+                    print("REPORT " + json.dumps({"x": column.x(), "width": column.width(),
+                                                  "parentWidth": column.parentItem().width(),
+                                                  "windowX": at.x(), "windowWidth": win.width()}))
             for w in warnings:
                 print("QML:", w)
         finally:
