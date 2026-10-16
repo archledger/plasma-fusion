@@ -12,7 +12,8 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "chips.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { capsule, argument, portalKind, remoteLogins, cameraApps, timeLeft, tint, GLYPHS, PRIVACY_ORDER } = globalThis;
+const { capsule, argument, portalKind, remoteLogins, cameraApps, timeLeft, tint, GLYPHS, PRIVACY_ORDER,
+        newReads, readStarted, readForgotten, readCurrent, layoutKey } = globalThis;
 
 let checks = 0;
 function check(fn) {
@@ -94,5 +95,25 @@ check(() => assert.deepStrictEqual(timeLeft(24 * 60000, 0), { hours: 0, minutes:
 check(() => assert.deepStrictEqual(timeLeft(30000, 0), { hours: 0, minutes: 1, total: 1 }, "30 s left: 1 min"));
 check(() => assert.deepStrictEqual(timeLeft(65 * 60000, 0), { hours: 1, minutes: 5, total: 65 }, "1 h 5 min"));
 check(() => assert.deepStrictEqual(timeLeft(0, 5000), { hours: 0, minutes: 0, total: 0 }, "ended: nothing left"));
+
+// Status item reads: a reply after the item unregistered is dropped.
+const reads = newReads();
+const first = readStarted(reads, "a/StatusNotifierItem");
+check(() => assert.ok(readCurrent(reads, "a/StatusNotifierItem", first), "a reply to a read of a registered item is taken"));
+const again = readStarted(reads, "a/StatusNotifierItem");
+check(() => assert.ok(readCurrent(reads, "a/StatusNotifierItem", first) && readCurrent(reads, "a/StatusNotifierItem", again),
+    "two reads of the item: both replies are taken (a slow reply is not lost to a newer read)"));
+readForgotten(reads, "a/StatusNotifierItem");
+check(() => assert.ok(!readCurrent(reads, "a/StatusNotifierItem", first), "the item unregistered while it was read: its reply is dropped"));
+const reborn = readStarted(reads, "a/StatusNotifierItem");
+check(() => assert.ok(!readCurrent(reads, "a/StatusNotifierItem", first) && readCurrent(reads, "a/StatusNotifierItem", reborn),
+    "the name registers again: the old read's reply is still dropped, the new one taken"));
+
+// The chips' places change with the set of chips, not with the running time.
+check(() => assert.strictEqual(layoutKey(["ssh"], { time: "0:41" }, false), layoutKey(["ssh"], { time: "0:42" }, false),
+    "the recording's time does not change the layout"));
+check(() => assert.notStrictEqual(layoutKey(["ssh"], null, false), layoutKey(["ssh"], { time: "0:01" }, false),
+    "a recording that starts does"));
+check(() => assert.notStrictEqual(layoutKey(["ssh"], null, false), layoutKey(["microphone", "ssh"], null, false), "a new kind does"));
 
 console.log("chips.test.js: " + checks + " checks passed");

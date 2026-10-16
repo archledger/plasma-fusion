@@ -32,9 +32,11 @@ Status: new in the release after 0.5.0. Last edited 2026-10-16.
 | `.../contents/ui/sources/Exec.qml` | runs `pw-dump` (the executable engine; quick settings' Exec) |
 | `.../contents/code/chips.js` | what the chips show from what the sources report (no QML; node tests) |
 | `.../tests/chips.test.js` | the code's tests (CI `build`) |
+| `.../tests/chips_qml_test.py` | the QML's offscreen tests (CI `build`) |
 | `.../tests/fake_status_items.py` | stand-ins for the portal's and Spectacle's status items (session tests) |
+| `.../tests/fake_watcher.py` | a stand-in status notifier watcher and its items, for the QML tests (a private bus) |
 | `.../tests/vsession/scenario-livechips.sh` | the session test |
-| `tools/build.d/76-livechips.sh` | stages the package with the shared QML blocks it uses |
+| `tools/build.d/76-livechips.sh` | stages the package with the shared QML blocks it uses; checks that it logs through its category |
 
 ## What it shows
 
@@ -47,6 +49,13 @@ Status: new in the release after 0.5.0. Last edited 2026-10-16.
 | SSH | systemd-logind: sessions with `Remote=yes` (any user) that are not closing; `sshd` and `tailscaled` read as SSH, others as a remote login | ForegroundLink | none |
 | Recording | Spectacle's recording item, known by its tooltip title ("Spectacle is Recording"; its id is Spectacle's translated name); the time is Spectacle's own (`KFormat`, `0:42`); while it renders, no chip | ForegroundNegative on its tint | the round button: Activate (Spectacle's `finishRecording`) |
 | Keep awake | quick settings in the same bar: its widget's `keepAwakeUntil` (a timed Keep awake's end, else 0); "until turned off" has no chip (the status pill shows its cup) | text colour | a click opens quick settings on its Keep awake page (`openRequest` `keepawake`, with that widget's output) |
+
+A status item is read again on each of its signals (Spectacle's tooltip changes every second). A
+reply that comes after its item unregistered is dropped (`chips.js` `readStarted()`: a token per
+registration), so an item gone while it was read leaves no chip.
+
+Names that come from other apps and from logins (an app's name, a user, a host) and Spectacle's
+time are shown as plain text, never read as markup.
 
 The apps' messages are translated, so every message the chips read is matched against the same
 message from the sending app's own catalogue (`i18ndc` with `xdg-desktop-portal-kde` or
@@ -86,6 +95,14 @@ A status item's id is its program's display name: plasmashell's has none, so pla
 translated, so in a language that translates it the tray keeps showing Spectacle's item next to
 the chip (the chip finds Spectacle's item by its tooltip, not its id).
 
+## Debug output
+
+`QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true"` makes the widget log what the chips
+show (`livechips: state`), where they are when a chip comes or goes (`chips at`), the panel's rows
+and buttons, the status items and the other sources. The session test reads these lines (its seed
+sets the rule). By default the widget logs only failures (warnings), so a recording's every second
+reaches no journal.
+
 ## Tests
 
 - `tests/chips.test.js` (node, CI `build`): the capsule's order and tint, the board's glyphs and
@@ -93,15 +110,26 @@ the chip (the chip finds Spectacle's item by its tooltip, not its id).
   the argument, a message of another shape), the portal's two kinds, logind's sessions (remote,
   not closing, oldest first; Tailscale SSH is SSH), the apps reading a camera from a `pw-dump`
   graph (a screen-cast source and an audio stream are not the camera), Keep awake's time left.
-- `tests/chips_qml_test.py` (offscreen Qt, CI `build`, 11 checks): the camera source with a
-  stand-in camera monitor and `Exec`: no `pw-dump` without a running camera, its reader, an app that
-  starts or stops reading the running camera seen at the next look, none once it stops; the chips
-  from the keyboard (Tab and Space or Return on the Keep awake chip, the stop button and the
-  capsule).
+- `tests/chips_qml_test.py` (offscreen Qt on a private bus, CI `build`, 22 checks):
+  - the camera source with a stand-in camera monitor and `Exec`: no `pw-dump` without a running
+    camera; its reader; an app that starts or stops reading the running camera seen at the next
+    look; none once it stops;
+  - the chips from the keyboard: Tab and Space or Return on the Keep awake chip, the stop button
+    and the capsule;
+  - names with markup in the panel (an app, a login) and in Spectacle's time, shown as plain text;
+  - the status items, with Plasma's D-Bus module and `fake_watcher.py`:
+    - an item that unregisters while its properties are read is not shown when the reply comes
+      after, while one that stays is shown and goes when it unregisters;
+    - a recording's time runs on with nothing logged;
+    - with the widget's debug output on, the lines the session test reads are there.
+- `tools/build.d/76-livechips.sh`: the widget logs only through its category (`console.debug(log,
+  ...)` and `console.warn(log, ...)`).
 - `packages/look-and-feel/tests/layout.test.js` (node, run by the look-and-feel build): the chips
   right before the tray in every new bar, their items hidden; nothing without the widget;
   `ensure-topbars.js` with the main bar's chips (a new bar, an older bar with its own tray: at the
-  tray's place, that tray hiding their items), without them, and a first bar.
+  tray's place, that tray hiding their items), without them, and a first bar; the "Add Panel" top
+  bar that copies another bar's tray hides their items too, and copies it as it is without the
+  widget.
 - `tools/device/tests/layout-migration-unit.sh` (CI `build`): step 7 adds the chips before the tray
   of every top bar with distinct ids and hides their items there, once; a bar that has them is
   left; nothing without the widget; the setup's list is the layout script's; a real run writes
@@ -109,16 +137,19 @@ the chip (the chip finds Spectacle's item by its tooltip, not its id).
   the other hidden items); the once-only marks are not written after a migration that stopped.
 - Session test (`tests/vsession/scenario-livechips.sh`; 2026-10-16, private sessions on the Fedora
   44 test laptop, Plasma 6.7.5, 1440x900; quick settings' stand-in PowerDevil, a private PipeWire
-  with a virtual source): **15 checks pass**:
+  with a virtual source; the widget's debug output on): **15 checks pass**:
   - the setup puts the chips right before the tray;
   - the harness's own SSH login shows the SSH chip, tinted;
   - a timed Keep awake shows "25 min", and a click opens quick settings' Keep awake page;
   - Spectacle's recording (stand-in) shows its running time, and the chip's button finishes it;
+    while the time runs on (3.5 s), the state is logged each second and the chips' places are
+    not logged again;
   - screen sharing and remote control (stand-ins) give the neutral capsule; hover shows the panel
     as a tooltip and a click opens it; Stop sharing and End end them (the item's menu End);
   - `parecord` as "Zoom" shows the microphone, the panel's Mute mutes its stream, and the chip goes
-    when it stops; the tray shows no microphone item meanwhile (plasma-pa's item, id
-    `plasmashell_microphone`, read from the watcher in the session).
+    when it stops. Meanwhile the watcher lists plasma-pa's item with the id
+    `plasmashell_microphone`, the one the tray hides, and the screenshot shows no microphone item
+    in the tray (an observation, not a check).
 
   The earlier runs of the scenario were red where the widget was wrong: a property named `left` (an
   anchor line in Qt 6.11) kept the widget from loading, and Stop sharing and End failed until the

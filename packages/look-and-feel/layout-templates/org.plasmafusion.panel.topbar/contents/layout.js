@@ -139,7 +139,23 @@ if (tray && otherTray) {
         // A list the user emptied is copied as well (the new tray's own defaults would bring
         // the removed items back); only a list never set is left to the new tray.
         var list = otherTray.readConfig(TRAY_LISTS[k], UNSET);
-        if (list && !(list.length === 1 && list[0] === UNSET[0])) {
+        var copied = list && !(list.length === 1 && list[0] === UNSET[0]);
+        // This bar has the live chips: its tray hides the items they replace, whether the other
+        // tray did (a bar with chips) or not (a bar from before them, or without them).
+        if (chips && (TRAY_LISTS[k] === "disabledStatusNotifiers" || TRAY_LISTS[k] === "hiddenItems")) {
+            var items = [];
+            for (var i = 0; copied && i < list.length; ++i) {
+                items.push(String(list[i]));
+            }
+            for (var c = 0; c < TRAY_ITEMS_REPLACED_BY_CHIPS.length; ++c) {
+                if (items.indexOf(TRAY_ITEMS_REPLACED_BY_CHIPS[c]) === -1) {
+                    items.push(TRAY_ITEMS_REPLACED_BY_CHIPS[c]);
+                }
+            }
+            list = items;
+            copied = true;
+        }
+        if (copied) {
             tray.writeConfig(TRAY_LISTS[k], list);
         }
     }

@@ -13,6 +13,13 @@ import "../../code/chips.js" as Chips
 Item {
     id: logins
 
+    // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true".
+    LoggingCategory {
+        id: log
+        name: "org.plasmafusion.livechips"
+        defaultLogLevel: LoggingCategory.Warning
+    }
+
     // [{ id, user, host, ssh, since (ms) }], oldest first.
     property var sessions: []
     readonly property bool inUse: sessions.length > 0
@@ -68,7 +75,7 @@ Item {
                     }
                 });
             }
-        }, reply => console.info("livechips: no systemd-logind (" + logins.str(reply.error && reply.error.message) + ")"));
+        }, reply => console.debug(log, "livechips: no systemd-logind (" + logins.str(reply.error && reply.error.message) + ")"));
     }
     function publish(run: int, found: var): void {
         if (run !== serial) {
@@ -77,7 +84,7 @@ Item {
         const next = Chips.remoteLogins(found);
         if (JSON.stringify(next) !== JSON.stringify(sessions)) {
             sessions = next;
-            console.info("livechips: remote logins " + JSON.stringify(next));
+            console.debug(log, "livechips: remote logins " + JSON.stringify(next));
         }
     }
 

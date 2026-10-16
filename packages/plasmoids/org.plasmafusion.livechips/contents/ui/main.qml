@@ -21,6 +21,13 @@ import "../code/chips.js" as Chips
 PlasmoidItem {
     id: root
 
+    // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true".
+    LoggingCategory {
+        id: log
+        name: "org.plasmafusion.livechips"
+        defaultLogLevel: LoggingCategory.Warning
+    }
+
     FusionMetrics {
         id: m
         area: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
@@ -62,25 +69,25 @@ PlasmoidItem {
     readonly property bool anything: capsule.kinds.length > 0 || statusItems.recording !== null || keepAwake.inUse
     readonly property bool dark: Kirigami.ColorUtils.brightnessForColor(Kirigami.Theme.backgroundColor) === Kirigami.ColorUtils.Dark
 
-    // What the chips show, for the session tests (journal: "livechips: state ...").
+    // What the chips show, for the session tests ("livechips: state ...", debug output).
     readonly property string summary: JSON.stringify({
         capsule: capsule.kinds,
         tint: capsule.tintKind,
         recording: statusItems.recording ? statusItems.recording.time : null,
         keepAwake: keepAwake.inUse ? keepAwake.remaining.total : 0
     })
-    onSummaryChanged: {
-        console.info("livechips: state " + summary);
-        chipsReport.restart();
-    }
-    // Test hook: the chips' places once the panel has laid the widget out again.
+    onSummaryChanged: console.debug(log, "livechips: state " + summary)
+    // Test hook: the chips' places once the panel has laid the widget out again, when a chip comes
+    // or goes (not when only the recording's time or Keep awake's moves on).
+    readonly property string layoutKey: Chips.layoutKey(capsule.kinds, statusItems.recording, keepAwake.inUse)
+    onLayoutKeyChanged: chipsReport.restart()
     Timer {
         id: chipsReport
         interval: 400
         onTriggered: {
             const row = root.compactRepresentationItem ? root.compactRepresentationItem.chipRow : null;
             if (row) {
-                console.info("livechips: chips at " + row.report());
+                console.debug(log, "livechips: chips at " + row.report());
             }
         }
     }

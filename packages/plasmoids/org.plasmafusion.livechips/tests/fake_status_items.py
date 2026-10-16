@@ -35,13 +35,43 @@ def tooltip(icon, title, subtitle):
                        signature="sa(iiay)ss")
 
 
-class Item(dbus.service.Object):
-    """One status item at /StatusNotifierItem, with its menu at /MenuBar."""
+def base_props():
+    """The properties every KStatusNotifierItem has, with their values when unset."""
+    return {
+        "Category": dbus.String("ApplicationStatus"), "Status": dbus.String("Active"), "WindowId": dbus.Int32(0),
+        "IconPixmap": dbus.Array([], signature="(iiay)"), "OverlayIconName": dbus.String(""),
+        "OverlayIconPixmap": dbus.Array([], signature="(iiay)"), "AttentionIconName": dbus.String(""),
+        "AttentionIconPixmap": dbus.Array([], signature="(iiay)"), "AttentionMovieName": dbus.String(""),
+        "ItemIsMenu": dbus.Boolean(False), "Menu": dbus.ObjectPath("/MenuBar"),
+    }
 
-    def __init__(self, bus, props, on_activate=None):
+
+def screen_props(app, window):
+    """The portal's "Screen casting" item for APP, sharing a window or the screen."""
+    return dict(base_props(), Id=dbus.String("xdg-desktop-portal-kde"), ItemIsMenu=dbus.Boolean(True),
+                Title=dbus.String("Screen casting"), IconName=dbus.String("media-record"),
+                OverlayIconName=dbus.String("window" if window else "monitor"),
+                ToolTip=tooltip("", "Screen casting", "Sharing contents to %s" % app))
+
+
+def recording_props(seconds):
+    """Spectacle's recording item, SECONDS into the recording."""
+    return dict(base_props(), Id=dbus.String("Spectacle"), Category=dbus.String("SystemServices"), Title=dbus.String("Spectacle"),
+                IconName=dbus.String("media-record"), ToolTip=recording_tooltip(seconds))
+
+
+def recording_tooltip(seconds):
+    return tooltip("", "Spectacle is Recording", "Time recorded: %d:%02d\nClick to finish recording" % (seconds // 60, seconds % 60))
+
+
+class Item(dbus.service.Object):
+    """One status item at PATH (/StatusNotifierItem, as KStatusNotifierItem's), with its menu at
+    /MenuBar."""
+
+    def __init__(self, bus, props, on_activate=None, path="/StatusNotifierItem"):
         self.props = props
         self.on_activate = on_activate
-        dbus.service.Object.__init__(self, bus, "/StatusNotifierItem")
+        dbus.service.Object.__init__(self, bus, path)
 
     @dbus.service.method(PROPS, in_signature="ss", out_signature="v")
     def Get(self, interface, name):
@@ -124,22 +154,12 @@ def main():
         print(line, flush=True)
         GLib.timeout_add(200, loop.quit)
 
-    base = {
-        "Category": dbus.String("ApplicationStatus"), "Status": dbus.String("Active"), "WindowId": dbus.Int32(0),
-        "IconPixmap": dbus.Array([], signature="(iiay)"), "OverlayIconName": dbus.String(""),
-        "OverlayIconPixmap": dbus.Array([], signature="(iiay)"), "AttentionIconName": dbus.String(""),
-        "AttentionIconPixmap": dbus.Array([], signature="(iiay)"), "AttentionMovieName": dbus.String(""),
-        "ItemIsMenu": dbus.Boolean(False), "Menu": dbus.ObjectPath("/MenuBar"),
-    }
     if a.kind in ("screen", "remote"):
         app = a.args[0] if a.args else "Firefox"
-        props = dict(base, Id=dbus.String("xdg-desktop-portal-kde"), ItemIsMenu=dbus.Boolean(True))
         if a.kind == "screen":
-            window = (a.args[1] if len(a.args) > 1 else "window") == "window"
-            props.update(Title=dbus.String("Screen casting"), IconName=dbus.String("media-record"),
-                         OverlayIconName=dbus.String("window" if window else "monitor"),
-                         ToolTip=tooltip("", "Screen casting", "Sharing contents to %s" % app))
+            props = screen_props(app, (a.args[1] if len(a.args) > 1 else "window") == "window")
         else:
+            props = dict(base_props(), Id=dbus.String("xdg-desktop-portal-kde"), ItemIsMenu=dbus.Boolean(True))
             text = "%s is exercising remote control privileges:" % app
             if (a.args[1] if len(a.args) > 1 else "input") == "input":
                 text += "\n - Move the pointer and type keystrokes"
@@ -151,17 +171,11 @@ def main():
         Menu(bus, lambda: done("ended " + a.kind))
     else:
         seconds = [int(a.args[0]) if a.args else 0]
-        props = dict(base, Id=dbus.String("Spectacle"), Category=dbus.String("SystemServices"), Title=dbus.String("Spectacle"),
-                     IconName=dbus.String("media-record"))
-
-        def text():
-            return "Time recorded: %d:%02d\nClick to finish recording" % (seconds[0] // 60, seconds[0] % 60)
-        props["ToolTip"] = tooltip("", "Spectacle is Recording", text())
-        item = Item(bus, props, on_activate=lambda: done("activated recording"))
+        item = Item(bus, recording_props(seconds[0]), on_activate=lambda: done("activated recording"))
 
         def tick():
             seconds[0] += 1
-            item.props["ToolTip"] = tooltip("", "Spectacle is Recording", text())
+            item.props["ToolTip"] = recording_tooltip(seconds[0])
             item.NewToolTip()
             return True
         GLib.timeout_add(1000, tick)

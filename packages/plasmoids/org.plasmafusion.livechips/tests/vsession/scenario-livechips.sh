@@ -19,6 +19,8 @@
 #      status items' ids as the watcher lists them (plasma-pa's microphone item), the panel's Mute
 #      mutes the app's stream.
 # The test tool and quick settings' stand-in PowerDevil (Keep awake needs one) are in ~/pf-chips.
+# The checks read the widget's debug output: the seed's ~/.config/pfv-env has
+# QT_LOGGING_RULES=org.plasmafusion.livechips.debug=true.
 # Run: tools/vsession/remote.sh chips-1 packages/plasmoids/org.plasmafusion.livechips/tests/vsession/scenario-livechips.sh SEED 1440x900 360
 export OUT
 set -uo pipefail
@@ -115,7 +117,15 @@ fi
 mark
 python3 "$FAKE" recording 41 --timeout 120 >"$OUT/fake-recording.log" 2>&1 &
 if wait_log 'state .*"recording":"0:4[2-9]"' 10; then pass "3: Spectacle's item shows the recording's time ($(last 'state'))"; else fail "3: no recording chip ($(last 'state'))"; fi
-sleep 2.5
+# The chips' places are logged when a chip comes or goes, not each second the time runs on.
+wait_log 'chips at .*stop ' 5
+mark
+sleep 3.5
+since=$(tail -n +"$((MARK + 1))" "$PLOG")
+places=$(grep -ac 'livechips: chips at' <<<"$since")
+states=$(grep -ac 'livechips: state .*"recording":"' <<<"$since")
+if [ "$places" -eq 0 ] && [ "$states" -ge 3 ]; then pass "3: the time runs on ($states state lines in 3.5 s), no chip places logged again"
+else fail "3: in 3.5 s of recording, $places chip places and $states state lines"; fi
 shot 30-recording
 read -r sx sy <<<"$(chip stop)"
 info "stop button at $sx $sy"

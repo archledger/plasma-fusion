@@ -18,6 +18,15 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["KPlugin"]
 
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" livechips
 
+# The widget logs through its category (org.plasmafusion.livechips, LoggingCategory "log"): its
+# lines for the session tests are debug output, off unless QT_LOGGING_RULES turns them on, so a
+# recording's every second reaches no journal.
+if loose=$(grep -rnE 'console\.(log|info|debug|warn|error)\(' "$src/contents" | grep -vE 'console\.[a-z]+\(log, '); then
+  echo "livechips: log through the widget's category (console.debug(log, ...)):" >&2
+  echo "$loose" >&2
+  exit 1
+fi
+
 rm -rf "$dest"
 mkdir -p "$dest"
 cp -r "$src/metadata.json" "$src/contents" "$dest/"

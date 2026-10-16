@@ -13,6 +13,13 @@ import "../../code/chips.js" as Chips
 Item {
     id: keepAwake
 
+    // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true".
+    LoggingCategory {
+        id: log
+        name: "org.plasmafusion.livechips"
+        defaultLogLevel: LoggingCategory.Warning
+    }
+
     // The applet whose bar this is (main.qml's root).
     required property Item appletRoot
 
@@ -33,7 +40,7 @@ Item {
         }
         return null;
     }
-    onQuickSettingsChanged: console.info("livechips: quick settings " + (quickSettings ? "found in the bar" : "not in the bar"))
+    onQuickSettingsChanged: console.debug(log, "livechips: quick settings " + (quickSettings ? "found in the bar" : "not in the bar"))
     // qmllint disable missing-property
     readonly property double until: quickSettings && quickSettings.keepAwakeUntil > 0 ? quickSettings.keepAwakeUntil : 0
     // qmllint enable missing-property
@@ -45,7 +52,7 @@ Item {
 
     function open(): void {
         if (quickSettings) {
-            console.info("livechips: open Keep awake in quick settings");
+            console.debug(log, "livechips: open Keep awake in quick settings");
             // With the widget's own output: only the widget on KWin's active screen acts on a
             // request without one, and this bar may be on another screen.
             // qmllint disable missing-property

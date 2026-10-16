@@ -253,6 +253,25 @@ test("Add Panel: the top bar with the page's defaults is adaptive", () => {
     assert.strictEqual(glass(all(s, "org.plasmafusion.quicksettings")[0]), undefined);
 });
 
+test("Add Panel: a top bar that copies another bar's tray hides the items its live chips replace", () => {
+    // A bar from before the live chips: its tray hides one item of the user's, and none of theirs.
+    const s = shell({ screens: TWO, files: rc(), panels: [mainBar()] });
+    s.run(TOPBAR);
+    const bar = tops(s).find((p) => p.id !== 2);
+    assert.ok(has(bar, CHIPS), types(bar).join(" "));
+    const off = trayOff(bar);
+    assert.ok(off.hidden.includes("org.kde.kscreen"), "the other tray's list is copied: " + JSON.stringify(off));
+    assert.ok(CHIPS_ITEMS.every((id) => off.hidden.includes(id) && off.disabled.includes(id)), JSON.stringify(off));
+});
+
+test("Add Panel: without the live chips installed the copied tray is as the other one", () => {
+    const s = shell({ screens: TWO, files: rc(), panels: [mainBar()], without: [CHIPS] });
+    s.run(TOPBAR);
+    const bar = tops(s).find((p) => p.id !== 2);
+    assert.ok(!has(bar, CHIPS));
+    assert.deepStrictEqual(trayOff(bar), { hidden: ["org.kde.kscreen"], disabled: [] });
+});
+
 test("Add Panel: the dock and its launcher follow Glass Solid", () => {
     const s = shell({ screens: TWO, files: rc(null, { Glass: "Solid" }) });
     s.run(DOCK);

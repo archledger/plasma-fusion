@@ -147,9 +147,11 @@ RowLayout {
                 radius: width / 2
                 color: row.glyphColor("recording")
             }
+            // Spectacle's text (from its item's tooltip): plain text.
             Text {
                 visible: text !== ""
                 text: row.recording ? row.recording.time : ""
+                textFormat: Text.PlainText
                 color: row.glyphColor("recording")
                 font.family: row.metrics.displayFamily
                 font.weight: Font.DemiBold

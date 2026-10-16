@@ -16,6 +16,13 @@ import "../code/chips.js" as Chips
 ColumnLayout {
     id: panel
 
+    // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true".
+    LoggingCategory {
+        id: log
+        name: "org.plasmafusion.livechips"
+        defaultLogLevel: LoggingCategory.Warning
+    }
+
     required property FusionMetrics metrics
     required property bool dark
     // [{ name, muted, setMuted() }]
@@ -64,7 +71,7 @@ ColumnLayout {
                 parts.push(row.modelData.kind + " " + JSON.stringify(row.modelData.title) + (b.visible ? " " + JSON.stringify(row.modelData.action)
                            + " at " + Math.round(g.x) + "," + Math.round(g.y) : ""));
             }
-            console.info("livechips: " + (panel.hover ? "hover panel " : "panel ") + parts.join("; "));
+            console.debug(log, "livechips: " + (panel.hover ? "hover panel " : "panel ") + parts.join("; "));
         }
     }
 
@@ -174,12 +181,15 @@ ColumnLayout {
                         size: panel.metrics.px(16)
                     }
                 }
+                // Names come from other apps and from logins (an app's name, a user, a host): shown
+                // as they are, never read as markup.
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
                     Text {
                         Layout.fillWidth: true
                         text: rowItem.modelData.title
+                        textFormat: Text.PlainText
                         elide: Text.ElideRight
                         color: panel.ink
                         font.family: panel.metrics.family
@@ -189,6 +199,7 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         text: rowItem.modelData.subtitle
+                        textFormat: Text.PlainText
                         elide: Text.ElideRight
                         color: panel.dim
                         font.family: panel.metrics.family
@@ -262,7 +273,7 @@ ColumnLayout {
         }
     }
     function openPermissions(): void {
-        console.info("livechips: open Application Permissions");
+        console.debug(log, "livechips: open Application Permissions");
         KCMUtils.KCMLauncher.openSystemSettings("kcm_app-permissions");
         closeRequested();
     }

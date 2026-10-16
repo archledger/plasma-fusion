@@ -24,6 +24,16 @@ Item {
     property var known: ({})
     // Items of other apps, not followed.
     property var ignored: ({})
+    // The reads under way, by registration: a reply that comes after its item unregistered is
+    // dropped (Chips.readStarted).
+    readonly property var reads: Chips.newReads()
+
+    // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true".
+    LoggingCategory {
+        id: log
+        name: "org.plasmafusion.livechips"
+        defaultLogLevel: LoggingCategory.Warning
+    }
 
     readonly property string marker: "\u0001"
     readonly property string castPattern: i18ndc("xdg-desktop-portal-kde", "@info:tooltip %1 the app that receives the screencast",
@@ -60,7 +70,8 @@ Item {
             "signature": "(ss)"
         }, reply => {
             const list = (reply.value || []).map(v => statusItems.str(v));
-            for (const key of Object.keys(statusItems.known)) {
+            // Those followed, and those still being read.
+            for (const key of Object.keys(statusItems.known).concat(Object.keys(statusItems.reads.live))) {
                 if (list.indexOf(key) < 0) {
                     statusItems.forget(key);
                 }
@@ -68,7 +79,7 @@ Item {
             for (const key of list) {
                 statusItems.read(key);
             }
-        }, reply => console.info("livechips: no status notifier watcher (" + statusItems.str(reply.error && reply.error.message) + ")"));
+        }, reply => console.debug(log, "livechips: no status notifier watcher (" + statusItems.str(reply.error && reply.error.message) + ")"));
     }
     DBus.SignalWatcher {
         busType: DBus.BusType.Session
@@ -95,6 +106,7 @@ Item {
         if (!where || ignored[key]) {
             return;
         }
+        const token = Chips.readStarted(reads, key);
         DBus.SessionBus.asyncCall({
             "service": where.service,
             "path": where.path,
@@ -102,7 +114,15 @@ Item {
             "member": "GetAll",
             "arguments": [new DBus.string("org.kde.StatusNotifierItem")],
             "signature": "(s)"
-        }, reply => statusItems.take(key, reply.value || {}), () => statusItems.forget(key));
+        }, reply => {
+            if (Chips.readCurrent(statusItems.reads, key, token)) {
+                statusItems.take(key, reply.value || {});
+            }
+        }, () => {
+            if (Chips.readCurrent(statusItems.reads, key, token)) {
+                statusItems.forget(key);
+            }
+        });
     }
     function take(key: string, props: var): void {
         const id = str(props.Id);
@@ -134,6 +154,7 @@ Item {
         update();
     }
     function forget(key: string): void {
+        Chips.readForgotten(reads, key);
         if (ignored[key]) {
             const ignore = Object.assign({}, ignored);
             delete ignore[key];
@@ -199,7 +220,7 @@ Item {
         }
         portal = sessions;
         recording = rec;
-        console.info("livechips: status items " + JSON.stringify({ portal: sessions, recording: rec }));
+        console.debug(log, "livechips: status items " + JSON.stringify({ portal: sessions, recording: rec }));
     }
 
     // ---- actions
@@ -209,7 +230,7 @@ Item {
         if (!where) {
             return;
         }
-        console.info("livechips: finish the recording");
+        console.debug(log, "livechips: finish the recording");
         DBus.SessionBus.asyncCall({
             "service": where.service, "path": where.path, "iface": "org.kde.StatusNotifierItem",
             "member": "Activate", "arguments": [new DBus.int32(0), new DBus.int32(0)], "signature": "(ii)"
@@ -219,11 +240,11 @@ Item {
     function endSession(key: string): void {
         const e = known[key];
         const where = split(key);
-        console.info("livechips: end " + key + " (menu " + (e ? e.menu : "?") + ")");
+        console.debug(log, "livechips: end " + key + " (menu " + (e ? e.menu : "?") + ")");
         if (!e || !where || e.menu === "" || e.menu === "/NO_DBUSMENU") {
             return;
         }
-        const failed = what => reply => console.warn("livechips: " + what + " failed for " + key + ": "
+        const failed = what => reply => console.warn(log, "livechips: " + what + " failed for " + key + ": "
                                                       + statusItems.str(reply.error && reply.error.message));
         const menu = { "service": where.service, "path": e.menu, "iface": "com.canonical.dbusmenu" };
         DBus.SessionBus.asyncCall(Object.assign({ "member": "AboutToShow", "arguments": [new DBus.int32(0)], "signature": "(i)" }, menu), () => {
@@ -233,7 +254,7 @@ Item {
                 "signature": "(iias)"
             }, menu), reply => {
                 const id = statusItems.endAction(reply.values ? reply.values[1] : null);
-                console.info("livechips: end " + key + ": menu item " + id);
+                console.debug(log, "livechips: end " + key + ": menu item " + id);
                 if (id < 0) {
                     return;
                 }

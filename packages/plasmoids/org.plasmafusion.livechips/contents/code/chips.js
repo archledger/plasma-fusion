@@ -144,6 +144,32 @@ function cameraApps(objects) {
     return names;
 }
 
+// The status items being read (StatusItems.qml): a read gets the token of the item's registration,
+// and its reply is taken only while that token is current, so a reply that comes after the item
+// unregistered (readForgotten) is dropped, also when the same name registers again. Replies to
+// reads of one registration all count (D-Bus keeps their order).
+function newReads() {
+    return { serial: 0, live: {} };
+}
+function readStarted(reads, key) {
+    if (!(key in reads.live)) {
+        reads.serial += 1;
+        reads.live[key] = reads.serial;
+    }
+    return reads.live[key];
+}
+function readForgotten(reads, key) {
+    delete reads.live[key];
+}
+function readCurrent(reads, key, token) {
+    return reads.live[key] === token;
+}
+
+// What the chips are, without the running time: the chips' places change only with it.
+function layoutKey(capsuleKinds, recording, keepAwake) {
+    return capsuleKinds.join(",") + "|" + (recording ? "recording" : "") + "|" + (keepAwake ? "keepawake" : "");
+}
+
 // Keep awake's time left as whole hours and minutes, the minutes rounded up (a timer with 30 s
 // left says 1 min, not 0).
 function timeLeft(endMs, nowMs) {

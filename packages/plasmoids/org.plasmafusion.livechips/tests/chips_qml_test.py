@@ -7,17 +7,28 @@
   Exec: the apps reading a camera are looked up again while it runs (an app that starts reading a
   running camera changes no node's state), and none are left once it stops;
 - the chips (ChipRow.qml) from the keyboard: Tab reaches the Keep awake chip, the recording's stop
-  button and the capsule, and Space or Return runs each.
+  button and the capsule, and Space or Return runs each;
+- names from other apps and from logins, and Spectacle's time, shown as plain text (not markup), in
+  the panel (InUsePanel.qml) and the chips;
+- the status items (sources/StatusItems.qml, with Plasma's D-Bus module) against a stand-in
+  watcher and items on a private bus (fake_watcher.py): an item that unregisters while its
+  properties are read is not shown when the reply comes after, one that stays is; a recording's
+  time runs on with nothing logged, and the widget's debug output (for the session tests) has it.
 
   STAGE=$PWD/build/stage tools/build.sh livechips
-  QT_QPA_PLATFORM=offscreen python3 packages/plasmoids/org.plasmafusion.livechips/tests/chips_qml_test.py build/stage
+  QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.livechips/tests/chips_qml_test.py build/stage
 """
+import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
+import threading
 
-from PySide6.QtCore import QEventLoop, QMetaObject, QObject, Qt, QTimer, QUrl, Q_ARG, Slot
+from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, Qt, QTimer, QUrl, Q_ARG, QtMsgType, Slot,
+                            qInstallMessageHandler)
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
@@ -134,6 +145,66 @@ Window {
     function focusFirst() { chips.keepAwakeItem.forceActiveFocus(Qt.TabFocusReason); }
 }
 """
+# Markup in an app's name, a login's user and Spectacle's time.
+TEXT_HARNESS = """import QtQuick
+import QtQuick.Layouts
+import QtQuick.Window
+Window {
+    width: 800
+    height: 400
+    visible: true
+    FusionMetrics { id: m }
+    RowLayout {
+        InUsePanel {
+            id: panel
+            metrics: m
+            dark: true
+            microphoneApps: [{ name: "<b>Zoom</b>", muted: false, setMuted: function (v) {} }]
+            cameraApps: []
+            cameraNames: []
+            cameraInUse: false
+            portalSessions: [{ key: "k", kind: "screen", app: "<i>Meet</i>", window: true, input: false }]
+            logins: [{ id: "1", user: "<u>r</u>", host: "h", ssh: true, since: 0 }]
+        }
+        ChipRow {
+            metrics: m
+            dark: true
+            capsule: ({ kinds: ["microphone"], tintKind: "microphone" })
+            recording: ({ time: "<b>0:42</b>" })
+            keepAwakeOn: false
+            keepAwakeLeft: ({ hours: 0, minutes: 0, total: 0 })
+            panelOpen: false
+        }
+    }
+    TextMetrics { id: measure }
+    // Every Text showing markup: drawn as plain text when it is as wide as its text measured as
+    // plain text (markup read as such draws only the tagged word).
+    property string shown: ""
+    function texts() {
+        const out = [];
+        function walk(item) {
+            if (item instanceof Text && item.text.indexOf("<") >= 0) {
+                measure.font = item.font;
+                measure.text = item.text;
+                out.push({ text: item.text, plain: Math.abs(item.implicitWidth - measure.advanceWidth) <= 2 });
+            }
+            for (const child of item.children) {
+                walk(child);
+            }
+        }
+        walk(contentItem);
+        shown = JSON.stringify(out);
+    }
+}
+"""
+STATUS_HARNESS = """import QtQuick
+import "contents/ui/sources"
+Item {
+    readonly property string portal: JSON.stringify(items.portal.map(s => s.kind + " " + s.app))
+    readonly property string recording: items.recording ? items.recording.time : ""
+    StatusItems { id: items }
+}
+"""
 
 failed = 0
 checks = 0
@@ -156,6 +227,101 @@ def call(obj, name, *args):
     QMetaObject.invokeMethod(obj, name, Qt.DirectConnection, *[Q_ARG("QVariant", a) for a in args])
 
 
+class Fake:
+    """fake_watcher.py, with its output lines."""
+
+    def __init__(self):
+        self.proc = subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_watcher.py")],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.lines = []
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def read(self):
+        for line in self.proc.stdout:
+            self.lines.append(line.strip())
+
+    def send(self, command):
+        self.proc.stdin.write(command + "\n")
+        self.proc.stdin.flush()
+
+    def expect(self, line, ms=3000):
+        for _ in range(ms // 50):
+            if line in self.lines:
+                return True
+            wait(50)
+        return False
+
+    def stop(self):
+        self.proc.stdin.close()
+        self.proc.wait(timeout=5)
+
+
+def until(test, ms=3000):
+    for _ in range(ms // 50):
+        if test():
+            return True
+        wait(50)
+    return test()
+
+
+def status_items(root, i18n):
+    if not os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+        raise SystemExit("the status items part needs a private session bus (dbus-run-session)")
+    fake = Fake()
+    if not fake.expect("ready"):
+        raise SystemExit("fake_watcher.py did not start: %s" % fake.lines)
+    # Messages of the widget's own, from here on.
+    messages = []
+
+    def handler(mode, context, text):
+        if "livechips:" in text:
+            messages.append((mode, context.category, text))
+    qInstallMessageHandler(handler)
+    try:
+        engine = QQmlEngine()
+        engine.rootContext().setContextObject(i18n)
+        component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(root, "status_harness.qml")))
+        harness = component.create()
+        if harness is None:
+            raise SystemExit("status harness: " + "; ".join(e.toString() for e in component.errors()))
+        wait(300)
+
+        def portal():
+            return json.loads(harness.property("portal"))
+        # Item 1 unregisters while its properties are read; their reply comes after.
+        fake.send("add 1 screen hold")
+        check(fake.expect("getall 1"), "a new item is read")
+        fake.send("drop 1")
+        wait(300)
+        fake.send("release 1")
+        check(fake.expect("released 1 1"), "its reply goes once it unregistered")
+        wait(500)
+        check(portal() == [], "an item that unregistered while it was read is not shown (%s)" % portal())
+        # Item 2 stays.
+        fake.send("add 2 screen")
+        check(until(lambda: portal() == ["screen Firefox"]), "an item that stays is shown (%s)" % portal())
+        fake.send("drop 2")
+        check(until(lambda: portal() == []), "and goes when it unregisters (%s)" % portal())
+        # A recording runs on: nothing logged by default.
+        fake.send("add 3 recording")
+        check(until(lambda: harness.property("recording") == "0:41"), "a recording shows its time (%s)" % harness.property("recording"))
+        for _ in range(3):
+            fake.send("tick 3")
+            wait(150)
+        check(until(lambda: harness.property("recording") == "0:44"), "its time runs on (%s)" % harness.property("recording"))
+        quiet = [m for m in messages if m[0] not in (QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg, QtMsgType.QtFatalMsg)]
+        check(quiet == [], "nothing is logged while it runs (%s)" % [m[2] for m in quiet][:3])
+        # The debug output the session tests read.
+        QLoggingCategory.setFilterRules("org.plasmafusion.livechips.debug=true")
+        fake.send("tick 3")
+        check(until(lambda: any('"time":"0:45"' in m[2] and m[1] == "org.plasmafusion.livechips" for m in messages)),
+              "with the widget's debug output on, the status items are logged")
+        QLoggingCategory.setFilterRules("")
+    finally:
+        qInstallMessageHandler(None)
+        fake.stop()
+
+
 def main():
     stage = os.path.abspath(sys.argv[1])
     package = os.path.join(stage, PACKAGE)
@@ -176,6 +342,10 @@ def main():
             f.write(CAMERA_HARNESS)
         with open(os.path.join(root, "contents/ui/keys_harness.qml"), "w") as f:
             f.write(KEYS_HARNESS)
+        with open(os.path.join(root, "contents/ui/text_harness.qml"), "w") as f:
+            f.write(TEXT_HARNESS)
+        with open(os.path.join(root, "status_harness.qml"), "w") as f:
+            f.write(STATUS_HARNESS)
 
         app = QGuiApplication(sys.argv[:1])
         i18n = I18n()
@@ -188,8 +358,6 @@ def main():
         harness = component.create()
         if harness is None:
             raise SystemExit("camera harness: " + "; ".join(e.toString() for e in component.errors()))
-        import json
-
         def apps():
             return json.loads(harness.property("apps"))
         wait(50)
@@ -238,6 +406,22 @@ def main():
         QTest.keyClick(window, Qt.Key_Space)
         wait(50)
         check(window.property("capsules") == 1, "Space on the capsule opens the panel")
+
+        # ---- names as plain text
+        text = QQmlApplicationEngine()
+        text.rootContext().setContextObject(i18n)
+        text.load(QUrl.fromLocalFile(os.path.join(root, "contents/ui/text_harness.qml")))
+        if not text.rootObjects():
+            raise SystemExit("text harness failed to load")
+        wait(200)
+        call(text.rootObjects()[0], "texts")
+        shown = json.loads(text.rootObjects()[0].property("shown") or "[]")
+        check(sorted(t["text"] for t in shown) == ["<b>0:42</b>", "<b>Zoom</b>", "<i>Meet</i>", "<u>r</u> from h"],
+              "the names with markup are on the screen (%s)" % [t["text"] for t in shown])
+        check(shown and all(t["plain"] for t in shown), "names and the recording's time are shown as plain text (%s)" % shown)
+
+        # ---- the status items, on a private bus
+        status_items(root, i18n)
         del app
     finally:
         shutil.rmtree(work, ignore_errors=True)

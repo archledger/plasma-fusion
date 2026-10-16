@@ -15,6 +15,13 @@ import "../../code/chips.js" as Chips
 Item {
     id: camera
 
+    // Debug output for tests: QT_LOGGING_RULES="org.plasmafusion.livechips.debug=true".
+    LoggingCategory {
+        id: log
+        name: "org.plasmafusion.livechips"
+        defaultLogLevel: LoggingCategory.Warning
+    }
+
     readonly property bool inUse: monitor.detectionAvailable && monitor.runningCount > 0
     // The names of the running cameras ("Integrated Camera").
     property var cameras: []
@@ -53,7 +60,7 @@ Item {
                 objects = null;
             }
             camera.apps = Chips.cameraApps(objects);
-            console.info("livechips: camera apps " + JSON.stringify(camera.apps) + " (" + (code === 0 ? "pw-dump" : "no pw-dump") + ")");
+            console.debug(log, "livechips: camera apps " + JSON.stringify(camera.apps) + " (" + (code === 0 ? "pw-dump" : "no pw-dump") + ")");
         });
     }
     onInUseChanged: Qt.callLater(refresh)
