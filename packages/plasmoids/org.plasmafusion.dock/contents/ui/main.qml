@@ -24,6 +24,7 @@ import "../code/jobs.js" as Jobs
 import "../code/pins.js" as Pins
 import "../code/date-timer.js" as DateTimer
 import "../code/endtask.js" as EndTask
+import "../code/menu-pick.js" as MenuPick
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
@@ -864,8 +865,22 @@ PlasmoidItem {
         case "downloads-menu": showDownloadsMenu(); break;
         case "trash-menu": showTrashMenu(); break;
         case "close-menu": if (lastMenu) lastMenu.close(); break;
-        // An entry of the open menu, by its text (the rest of the key), as a click on it.
-        case "pick": if (lastMenu) { logNextMenu = true; lastMenu.pick(parts.slice(1).join(":")); } break;
+        // An action of the last menu, by the text it was added with (the rest of the key), as a
+        // click on it; the menu need not be open (DockMenu.actions).
+        case "pick": {
+            const text = parts.slice(1).join(":");
+            const picked = MenuPick.find(lastMenuActions, text);
+            console.info("dock: pick " + text + ": " + (picked ? "run" : "no such entry"));
+            if (picked) {
+                if (lastMenu) {
+                    lastMenu.close();
+                }
+                logNextMenu = true;
+                if (picked.run) {
+                    picked.run();
+                }
+            }
+        } break;
         case "menu": if (item) { logNextMenu = true; showTaskMenu(item); } break;
         case "activate": if (item) activateTask(row, 0); break;
         case "new": if (item) tasksModel.requestNewInstance(tasksModel.makeModelIndex(row)); break;
@@ -1141,6 +1156,8 @@ PlasmoidItem {
     }
 
     property DockMenu lastMenu: null
+    // The last menu's actions, for the test hook pick:TEXT; they outlive the menu (DockMenu.actions).
+    property var lastMenuActions: []
     // A task's menu acts on model indexes taken when it opened: when tasks come, go or move, they
     // may name another task, so the menu closes (open it again for the task).
     function closeTaskMenu(): void {
@@ -1153,6 +1170,7 @@ PlasmoidItem {
         const menu = menuComponent.createObject(root, { visualParent: visualParent }) as DockMenu;
         menu.statusChanged.connect(() => { root.menuOpen = menu.status !== PlasmaExtras.Menu.Closed; });
         lastMenu = menu;
+        lastMenuActions = menu.actions;
         return menu;
     }
 

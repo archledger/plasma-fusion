@@ -13,11 +13,14 @@ PlasmaExtras.Menu {
 
     placement: PlasmaExtras.Menu.TopPosedLeftAlignedPopup
 
-    // Testing: the entries as added ("> " a submenu, "  " its entries, "[x]" checked), and the
-    // items with the text they were added with, for pick() (the shown text is not it: the menu
-    // gets KAcceleratorManager, which puts an "&" in each item's text when it opens).
+    // Testing: the entries as added ("> " a submenu, "  " its entries, "[x]" checked), and each
+    // action with the text it was added with, for the dock's test hook pick:TEXT (MenuPick.find()).
+    // The dock keeps the actions after the menu is gone: in a session no input has reached yet, Qt
+    // cannot open a grabbing popup and closes the menu at once (qtbase 6.11
+    // qwaylandxdgshellintegration.cpp), and the text an item shows is not the one it was added with
+    // (the menu gets KAcceleratorManager, which puts an "&" into each item's text when it opens).
     property var entries: []
-    property var items: []
+    property var actions: []
     // A task's menu: its window actions hold the task's model index from when it opened.
     property bool taskMenu: false
 
@@ -43,7 +46,7 @@ PlasmaExtras.Menu {
         }
         menu.addMenuItem(item);
         entries.push((item.checked ? "[x] " : "") + text);
-        items.push({ text: text, item: item });
+        actions.push({ text: text, run: callback, enabled: item.enabled !== false });
         return item;
     }
 
@@ -87,17 +90,5 @@ PlasmaExtras.Menu {
 
     function addHeader(text: string): void {
         menu.addSection(text);
-    }
-
-    // Testing (the dock's debugAction "pick:TEXT"): the item with this text, as if it was clicked.
-    function pick(text: string): bool {
-        const entry = items.find(i => i.text === text);
-        const item = entry ? entry.item : null;
-        if (!item || item.enabled === false) {
-            return false;
-        }
-        menu.close();
-        item.clicked();
-        return true;
     }
 }

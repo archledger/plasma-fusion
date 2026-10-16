@@ -68,7 +68,7 @@ dock.addWidget("org.plasmafusion.dock");
 | `showOnlyCurrentDesktop` / `showOnlyCurrentActivity` / `showOnlyCurrentScreen` | true / true / false | task filters, as in the stock task manager |
 | `minimizeActiveTaskOnClick` | `true` | clicking the active app minimizes it |
 | `downloadsFolder` | empty (XDG download dir) | folder of the Downloads stack |
-| `debugHoverIndex`, `debugPointerX`, `debugAction` | off | testing only (not in the settings page): force the hovered task, pretend the pointer rests at a screen x, or run one action (`start`, `search`, `overview`, `downloads-menu`, `trash-menu`, `close-menu`, `configure` (opens the settings dialog), `menu:ROW`, `activate:ROW`, `new:ROW`, `pick:TEXT` (the open menu's entry added with that text, as a click; the next menu's entries are logged)). Used by the virtual-session scenarios because no pointer can be injected there. |
+| `debugHoverIndex`, `debugPointerX`, `debugAction` | off | testing only (not in the settings page): force the hovered task, pretend the pointer rests at a screen x, or run one action (`start`, `search`, `overview`, `downloads-menu`, `trash-menu`, `close-menu`, `configure` (opens the settings dialog), `menu:ROW`, `activate:ROW`, `new:ROW`, `pick:TEXT` (the last menu's action added with that text, run as a click on it would, whether or not the menu could open; the next menu's entries are logged)). Used by the virtual-session scenarios because no pointer can be injected there. |
 
 ## Behaviour
 
@@ -610,10 +610,13 @@ KWin's own "not responding" dialog sends SIGABRT first so that a crash report is
   whose name holds spaces and parentheses (field 22), and the command run with `sh` against stand-in
   processes: one that quits on SIGTERM at once (the command returns at once, its zombie counted as
   ended), one that ignores SIGTERM (SIGKILL after the wait) and one named `plasmashell` (left alone).
-- `tests/menu_test.py` (CI step "Dock menu test hook"; offscreen Qt): on Plasma's own menu, whose
-  KAcceleratorManager puts an `&` into each entry's text when it opens, `pick:TEXT` still finds an
-  entry by the text it was added with and runs its action (one with no action too), and picks no
-  disabled entry and no text the menu lacks.
+- `tests/menu_test.py` (CI step "Dock menu test hook"; offscreen Qt): the actions the dock keeps for
+  `pick:TEXT` (DockMenu.actions, `contents/code/menu-pick.js`) on Plasma's own menu. In a private
+  session no input has reached, Qt cannot open a grabbing popup and closes the menu at once (qtbase
+  6.11 `qwaylandxdgshellintegration.cpp`), and the menu's KAcceleratorManager puts an `&` into each
+  entry's text when it opens; so the open menu's texts are checked to differ, and once the menu is
+  destroyed its kept actions still give the entry added with a text, whose action runs (one with no
+  action too), and no disabled entry and no text the menu lacks.
 - `tests/vsession/scenario-endtask.sh` (a private session; the test hook `pick:TEXT` chooses menu
   entries): a stand-in app that ignores SIGTERM (kdialog) has End Task… in its menu and a pinned app
   that is not running has none; End Task… asks first and Cancel leaves the app running; End Task ends

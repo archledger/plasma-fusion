@@ -10,13 +10,15 @@
 #   3. End Task ends it: SIGTERM, which it ignores, then SIGKILL.
 # Run: tools/vsession/remote.sh dock-endtask packages/plasmoids/org.plasmafusion.dock/tests/vsession/scenario-endtask.sh SEED 1440x900 240
 export OUT
-set -uo pipefail
+set -euo pipefail
 set -x
 CHK=$OUT/checks.txt
 PLOG=$OUT/plasmashell.log
 pass() { echo "PASS $*" >>"$CHK"; }
 fail() { echo "FAIL $*" >>"$CHK"; }
 info() { echo "INFO $*" >>"$CHK"; }
+# A step that fails stops the scenario (strict mode); the reason lands in the checks.
+trap 'fail "the scenario stopped at line $LINENO: $BASH_COMMAND"' ERR
 mark() { MARK=$(wc -l <"$PLOG"); }
 MARK=0
 wait_log() { # PATTERN SECONDS: a line matching PATTERN logged after the last mark
@@ -35,8 +37,10 @@ JS
 }
 alive() { [ -d "/proc/$1" ] && [ "$(sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -c1)" != Z ]; }
 
-bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1
-info "fusion-config rc=$?"
+fc=0
+bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc=$?
+info "fusion-config rc=$fc"
+[ "$fc" = 0 ]
 pfv_restart_shell 12
 
 # The stand-in: kdialog with SIGTERM ignored (an ignored signal stays ignored across exec).
@@ -47,8 +51,9 @@ mark
 dock dump-targets
 wait_log "dock: targets" 5
 targets=$(since "dock: targets")
-row=$(tr ' ' '\n' <<<"$targets" | grep -o 'task[0-9]*-[^@]*kdialog' | head -1 | sed 's/^task\([0-9]*\)-.*/\1/')
-idle=$(tr ' ' '\n' <<<"$targets" | grep -o 'task[0-9]*-org.kde.dolphin' | head -1 | sed 's/^task\([0-9]*\)-.*/\1/')
+row=$(tr ' ' '\n' <<<"$targets" | grep -m1 -o 'task[0-9]*-[^@]*kdialog' | sed 's/^task\([0-9]*\)-.*/\1/')
+# Dolphin is pinned by default; without it the check of a pinned app is skipped.
+idle=$(tr ' ' '\n' <<<"$targets" | grep -m1 -o 'task[0-9]*-org.kde.dolphin' | sed 's/^task\([0-9]*\)-.*/\1/' || true)
 info "stand-in pid $app, dock row ${row:-none}; Dolphin (pinned, not running) row ${idle:-none}"
 
 # ---- 1. the menus
@@ -77,7 +82,7 @@ dock "menu:$row"
 wait_log "dock: menu " 5
 mark
 dock "pick:End Task…"
-if wait_log "dock: menu [^:]*kdialog: End Task \| Cancel" 5; then pass "2: End Task… asks first (End Task, Cancel)"; else fail "2: no confirmation ($(since 'dock: menu'))"; fi
+if wait_log "dock: menu [^:]*kdialog: End Task \| Cancel" 5; then pass "2: End Task… asks first (End Task, Cancel)"; else fail "2: no confirmation ($(since 'dock: pick'))"; fi
 shot 20-confirm
 dock "pick:Cancel"
 sleep 4
@@ -97,3 +102,7 @@ if alive "$app"; then fail "3: the app still runs 10 s after End Task"
 else pass "3: End Task ends the app that ignores SIGTERM ($(since 'dock: end task ' | sed 's/.*dock: //'))"; fi
 shot 30-ended
 info "done"
+# A failed check fails the scenario (scenario rc), as the KWin scenarios do.
+trap - ERR
+set +e
+[ "$(grep -c '^FAIL' "$CHK" || true)" = 0 ]
