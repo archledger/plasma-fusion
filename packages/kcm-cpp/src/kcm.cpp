@@ -119,7 +119,8 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications && lockNotificationSummaries == other.lockNotificationSummaries
         && tabletMode == other.tabletMode && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft
         && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters
-        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
+        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator
+        && launcherRecentFiles == other.launcherRecentFiles && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
@@ -184,6 +185,10 @@ PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaDat
         m_topBarAvailable = false;
         m_metersAvailable = false;
         m_quickSettingsAvailable = false;
+        m_launcherAvailable = false;
+        // The switches set while the launchers differed stay changes: the next read keeps them
+        // while the launchers still differ.
+        m_launcherMixed.clear();
         m_folderAvailable = false;
         Q_EMIT shellStateChanged();
         settingsChanged();
@@ -338,6 +343,11 @@ bool PlasmaFusionKcm::metersAvailable() const
 bool PlasmaFusionKcm::quickSettingsAvailable() const
 {
     return m_quickSettingsAvailable;
+}
+
+bool PlasmaFusionKcm::launcherAvailable() const
+{
+    return m_launcherAvailable;
 }
 
 bool PlasmaFusionKcm::folderAvailable() const
@@ -637,6 +647,66 @@ bool PlasmaFusionKcm::homeIndicator() const
 void PlasmaFusionKcm::setHomeIndicator(bool value)
 {
     setField(&State::homeIndicator, value);
+}
+
+bool PlasmaFusionKcm::launcherRecentFiles() const
+{
+    return m_current.launcherRecentFiles;
+}
+
+void PlasmaFusionKcm::setLauncherRecentFiles(bool value)
+{
+    setLauncherField(&State::launcherRecentFiles, u"showRecommended"_s, value);
+}
+
+bool PlasmaFusionKcm::launcherRecentApps() const
+{
+    return m_current.launcherRecentApps;
+}
+
+void PlasmaFusionKcm::setLauncherRecentApps(bool value)
+{
+    setLauncherField(&State::launcherRecentApps, u"showRecentApps"_s, value);
+}
+
+bool PlasmaFusionKcm::launcherPlaces() const
+{
+    return m_current.launcherPlaces;
+}
+
+void PlasmaFusionKcm::setLauncherPlaces(bool value)
+{
+    setLauncherField(&State::launcherPlaces, u"showPlaces"_s, value);
+}
+
+// A launcher switch. While the launchers differ on its key the switch shows it off, and setting
+// it is a change of its own: Apply writes it to every launcher even when it ends where it was
+// (on and back off makes them all off).
+void PlasmaFusionKcm::setLauncherField(bool State::*field, const QString &key, bool value)
+{
+    if (m_launcherMixed.contains(key) && !m_launcherMixedSet.contains(key)) {
+        m_launcherMixedSet.insert(key);
+        if (m_current.*field == value) {
+            settingsChanged();
+            return;
+        }
+    }
+    setField(field, value);
+}
+
+bool PlasmaFusionKcm::launcherRecentFilesMixed() const
+{
+    return m_launcherMixed.contains(u"showRecommended"_s);
+}
+
+bool PlasmaFusionKcm::launcherRecentAppsMixed() const
+{
+    return m_launcherMixed.contains(u"showRecentApps"_s);
+}
+
+bool PlasmaFusionKcm::launcherPlacesMixed() const
+{
+    return m_launcherMixed.contains(u"showPlaces"_s);
 }
 
 bool PlasmaFusionKcm::highContrastAvailable() const
@@ -972,6 +1042,7 @@ void PlasmaFusionKcm::load()
     loadConfigState(state);
     m_current = state;
     m_saved = state;
+    m_launcherMixedSet.clear();
     m_wallpaperColor = state.accentMode == WallpaperAccent ? state.accentColor : QColor();
     Q_EMIT wallpaperColorChanged();
     Q_EMIT environmentChanged();
@@ -1080,12 +1151,12 @@ void PlasmaFusionKcm::onConfigChanged(const KConfigGroup &group, const QByteArra
 
 bool PlasmaFusionKcm::isSaveNeeded() const
 {
-    return !(m_current == m_saved);
+    return !(m_current == m_saved) || !m_launcherMixedSet.isEmpty();
 }
 
 // The defaults, except for what cannot be changed right now (a missing dock, top bar, quick
-// settings or Folder View desktop, a stopped shell, no high-contrast scheme): those keep the
-// value on the page.
+// settings, launcher or Folder View desktop, a stopped shell, no high-contrast scheme): those
+// keep the value on the page.
 PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
 {
     State defaults;
@@ -1105,6 +1176,11 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
     }
     if (!m_quickSettingsAvailable) {
         defaults.keyboardPolicy = m_current.keyboardPolicy;
+    }
+    if (!m_launcherAvailable) {
+        defaults.launcherRecentFiles = m_current.launcherRecentFiles;
+        defaults.launcherRecentApps = m_current.launcherRecentApps;
+        defaults.launcherPlaces = m_current.launcherPlaces;
     }
     if (!m_folderAvailable) {
         defaults.desktopIcons = m_current.desktopIcons;
@@ -1233,6 +1309,33 @@ void PlasmaFusionKcm::save()
             m_current.homeIndicator = before.homeIndicator;
         }
     }
+    // The launcher's sections: every launcher widget's key (one is hidden next to the Fusion dock).
+    const struct {
+        bool State::*field;
+        QString key;
+    } launcherKeys[] = {
+        {&State::launcherRecentFiles, u"showRecommended"_s},
+        {&State::launcherRecentApps, u"showRecentApps"_s},
+        {&State::launcherPlaces, u"showPlaces"_s},
+    };
+    for (const auto &k : launcherKeys) {
+        // A key the launchers differ on is written when the page set it, even to the value shown.
+        if (after.*k.field == before.*k.field && !m_launcherMixedSet.contains(k.key)) {
+            continue;
+        }
+        if (m_launcherAvailable) {
+            if (applyWidgetKey(u"org.plasmafusion.launcher"_s,
+                               k.key,
+                               after.*k.field ? u"true"_s : u"false"_s,
+                               i18nc("@info", "The launcher setting could not be changed."))) {
+                m_launcherMixed.remove(k.key);
+            }
+        } else {
+            m_current.*k.field = before.*k.field;
+        }
+    }
+    m_launcherMixedSet.clear();
+    Q_EMIT shellStateChanged(); // the launcher keys written agree now
     if (after.globalMenu != before.globalMenu) {
         if (m_topBarAvailable) {
             applyGlobalMenu(after.globalMenu);

@@ -39,6 +39,14 @@
             <label>Show recently used files under the pinned apps</label>
             <default>true</default>
         </entry>
+        <entry name="showRecentApps" type="Bool">
+            <label>Show the "Recent" chip (recently and often used apps)</label>
+            <default>true</default>
+        </entry>
+        <entry name="showPlaces" type="Bool">
+            <label>Show the "Places" chip (places, drives and recent folders)</label>
+            <default>true</default>
+        </entry>
         <entry name="openRequest" type="String">
             <label>Written by other shell parts through desktop scripting: "MODE:NONCE[:ARGUMENT]" opens the launcher in that mode (home, search with the query as argument, apps, recent for recent files, history for recently and often used apps, category with its key); "configure:NONCE" opens the launcher's settings. Testing: "frames:NONCE" logs the frames the launcher window drew since the last such request, its geometry, pinned rows and columns.</label>
             <default></default>

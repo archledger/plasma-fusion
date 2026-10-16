@@ -607,6 +607,24 @@ QtObject {
     s = json.loads(call(win, "state"))
     check(s["view"] == "home" and s["chip"] == 0, "the last chip gone: All, not an empty grid titled Pinned (%s)" % s)
 
+    # The Recent and Places chips turned off in the settings (showRecentApps, showPlaces): the
+    # launcher builds its chips without them. Shown while it goes, Recent gives way to All; an open
+    # request for a chip that is off opens the home view.
+    call(win, "setChips", json.dumps(fixed + [office]))
+    call(win, "selectChip", 1)
+    QTest.qWait(100)
+    call(win, "setChips", json.dumps([fixed[0], office]))
+    QTest.qWait(100)
+    s = json.loads(call(win, "state"))
+    check(s["view"] == "home" and s["chip"] == 0, "the Recent chip turned off while shown: All (%s)" % s)
+    for mode in ("history", "places"):
+        call(win, "openMode", mode)
+        QTest.qWait(100)
+        s = json.loads(call(win, "state"))
+        check(s["view"] == "home" and s["chip"] == 0, "open request \"%s\" with its chip off: the home view (%s)" % (mode, s))
+    call(win, "setChips", json.dumps(fixed + [office]))
+    QTest.qWait(100)
+
     # An empty view under the chips (Recent with the activity history off or no app used yet, a
     # category without apps): Tab and Down go on to the footer instead of stopping on the chips,
     # Shift+Tab and Up from the footer come back to them, and Down from the search field reaches the

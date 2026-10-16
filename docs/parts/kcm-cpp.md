@@ -48,6 +48,7 @@ control is `ChoiceRow`, an action row `ActionRow`). The keys are the plan's regi
 | Dock and top bar | Magnified icon size: 56 px / 62 px | every dock's `[General] magnifiedSize` (disabled while magnification is off; another value shows no segment chosen and is kept) |
 | | Solid top bar next to windows | the top bars' panel `opacity`: `adaptive` (owner decision 5) or `translucent`; plasmafusionrc `[TopBar] SolidNextToWindows` (*new*) keeps the choice, which Reduced glass cannot show (both bars opaque; the switch is disabled with a note then). The opacity of a panel whose screen is gone (the top bar of a monitor that was unplugged) is neither read nor set (0.5.0): Plasma 6.8 keeps such a panel on its missing screen, and plasmashell crashes reading it (`docs/parts/kwin-tablet.md`, "Panels without a screen"); its widgets still get the glass key |
 | | Top bar on every screen | plasmafusionrc `[TopBar] EveryScreen` (*new*, default `true`, owner decision 8). Off: the top bars on screens other than the main one (the top bar with quick settings on the lowest screen number, as every bar has quick settings since 2026-10-09) are removed, and `ensure-topbars.js` adds none while the key is false; on: the layout part's `ensure-topbars.js` is run when it is installed (`contents/layouts/` of either Plasma Fusion Global Theme), then the page's glass and top-bar opacity are applied to the new bars and, when the power tier is not full, the power service is asked to apply it to them |
+| Launcher | Recent files under the pinned apps; Recently used apps (the Recent chip); Places and drives (the Places chip) | every `org.plasmafusion.launcher` widget's `[General] showRecommended`, `showRecentApps`, `showPlaces` (default `true`; the launcher next to the Fusion dock is hidden but holds the keys), through `evaluateScript` as the dock's keys; a section shows on only while every launcher has it on; with launchers that differ the row says so ("Some launchers show this and some do not"), and setting its switch is a change even when it ends where it was (also across a shell restart, while they still differ), so Apply writes it, on or off, to all (Defaults too); disabled with a note while no launcher widget is in a panel, which keeps the values (docs/parts/shell-launcher.md) |
 | Desktop | Icons on the desktop | every Folder View desktop: off = `[General] filterPattern=/` and `filterMode=1` ("show files matching" a pattern no file name can match; `QRegularExpression::fromWildcard` anchors it); on = `filterMode=0`, `filterPattern=*`, only when the desktop holds exactly that state (a filter set up in Folder View's own settings is left alone). Positions are kept: Folder View's positioner only adds entries while items are filtered out (`positioner.cpp` sourceRowsRemoved / updatePositionsList) |
 | | Icon size: Small / Medium / Large | Folder View `[General] iconSize` 1 / 2 / 3 (32 / 48 / 64 px; Medium is the Plasma Fusion default, BACKLOG M1) |
 | | When I drag files between folders: Ask / Move | kdeglobals `[KDE] DndBehavior`: Ask = key removed (KDE's default `AlwaysAsk`), Move = `MoveIfSameDevice` (the General Behavior page's key; BACKLOG S7) |
@@ -155,7 +156,7 @@ kwinrc, plasmafusionrc and the shell layout from a fusion-config.sh backup.
 ## Behaviour
 
 - Load: every value is read from the session when the page opens (kdeglobals, kwinrc,
-  plasmafusionrc; the dock, top bars, quick settings and Folder View desktop through one
+  plasmafusionrc; the dock, top bars, quick settings, launcher and Folder View desktop through one
   evaluateScript call, asynchronously; the controls that depend on them are disabled for that
   moment). Style shows nothing chosen when the current Global Theme
   is not Plasma Fusion (or automatic switching uses other themes). An accent colour that is not a
@@ -166,7 +167,8 @@ kwinrc, plasmafusionrc and the shell layout from a fusion-config.sh backup.
   1.0.0-4: snap layouts on hold, Glass Full, high contrast off, reduce motion off, 62 px, solid top
   bar next to windows, a top bar on every screen, desktop icons on at Medium, file drag Ask,
   lighter at 10 % on, tablet mode Automatic, apps full screen, dock hides over apps, keyboard in
-  tablet mode only, edge swipes off, home indicator on. Apply writes only what changed, in this
+  tablet mode only, edge swipes off, home indicator on; the launcher's three sections on (2026-10-16).
+  Apply writes only what changed, in this
   order: Style, colour scheme (high contrast), accent (on top of the scheme just applied), window
   buttons, snap layouts and hot corner (one KWin reconfigure), glass (plasmafusionrc and blur),
   motion, file drag, battery, tablet keys (then the tablet script's shortcut), then the shell:
@@ -559,3 +561,26 @@ owner's request; "Deviations from the board" has the reason the board shows no d
   in windows of 1720, 900 and 640 px the 560 px column stands in the middle of the page on a
   whole pixel; at 500 px it takes the page's whole width. Without the change the three wide
   windows fail (the column at x 0).
+
+## Launcher sections (2026-10-16)
+
+A Launcher group after Dock and top bar: recent files under the pinned apps, the Recent chip
+(recently and often used apps) and the Places chip, each a switch over every launcher widget's
+key (`showRecommended`, `showRecentApps`, `showPlaces`), read and written through the shell as the
+dock's keys. Before, only the recent files could be turned off, in the launcher's own settings
+(the next-queue proposal's item 1, approved 2026-10-16).
+
+- `tests/shell-panels.sh` (ctest `kcmctl-panels`), cases `launcher` and `nolauncher`, against the
+  stand-in shell (which now takes widget configuration in the layout and lists it with
+  `showConfig`): the keys read (an unset key as on, `"false"` as off), Apply writes the two that
+  changed and leaves the third alone, no error; without a launcher widget the switches are not
+  available and keep their value, and nothing is written. Case `twolaunchers` (review): two
+  launchers, the second with the Places chip off, show it off, and turning it on writes it to
+  both. Case `mixedoff` (review): the same launchers; the page says the Places chip is mixed (not
+  the Recent chip, which they agree on), the switch turned on and back off still needs Apply, and
+  Apply writes off to both, after which they agree. Case `mixedrestart` (review): the same, with the
+  stand-in shell stopped and started again between the switch and Apply: the switch set before is
+  still a change, and Apply still writes off to both. Without the module's write, read or launcher
+  count the cases fail; reading the first launcher only fails `twolaunchers`; without the mixed
+  state `mixedoff` fails (the first launcher kept the Places chip on); clearing it when the shell
+  goes away fails `mixedrestart`.

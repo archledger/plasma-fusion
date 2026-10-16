@@ -37,7 +37,7 @@ using namespace PlasmaFusion;
 
 namespace
 {
-// Reads the shell state in one call: the dock's keys, the top bar (the panel holding
+// Reads the shell state in one call: the dock's and the launcher's keys, the top bar (the panel holding
 // org.plasmafusion.appname; the one with quick settings when there are several) and whether it
 // has the system meters, the quick settings' keyboard policy and the Folder View desktop's filter
 // and icon size. A panel's opacity and sizes are read only while its screen is there: for a
@@ -55,6 +55,8 @@ var state = { docks: 0, magnify: true, magnifiedSize: 62, homeIndicator: true,
               topBars: 0, menu: false, topOpacity: "", meters: false,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
+              launchers: 0, recentFiles: true, recentApps: true, places: true,
+              recentFilesOn: 0, recentAppsOn: 0, placesOn: 0,
               folders: 0, filterMode: 0, filterPattern: "*", iconSize: 3 };
 var mainTopBar = false, chosenTopBar = false;
 var ps = panels();
@@ -69,6 +71,22 @@ for (var i = 0; i < ps.length; ++i) {
             state.homeIndicator = bool(docks[j].readConfig("homeIndicator", true), true);
         }
         ++state.docks;
+    }
+    // A section is on only while every launcher shows it: with launchers that differ, the page
+    // shows it off (and says they differ: how many show it), and setting it writes it to all.
+    var launchers = p.widgets("org.plasmafusion.launcher");
+    for (var j = 0; j < launchers.length; ++j) {
+        launchers[j].currentConfigGroup = ["General"];
+        var recentFiles = bool(launchers[j].readConfig("showRecommended", true), true);
+        var recentApps = bool(launchers[j].readConfig("showRecentApps", true), true);
+        var places = bool(launchers[j].readConfig("showPlaces", true), true);
+        state.recentFiles = state.recentFiles && recentFiles;
+        state.recentApps = state.recentApps && recentApps;
+        state.places = state.places && places;
+        state.recentFilesOn += recentFiles ? 1 : 0;
+        state.recentAppsOn += recentApps ? 1 : 0;
+        state.placesOn += places ? 1 : 0;
+        ++state.launchers;
     }
     var qs = p.widgets("org.plasmafusion.quicksettings");
     for (var j = 0; j < qs.length; ++j) {
@@ -519,6 +537,8 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
     m_topBarAvailable = false;
     m_metersAvailable = false;
     m_quickSettingsAvailable = false;
+    m_launcherAvailable = false;
+    m_launcherMixed.clear();
     m_folderAvailable = false;
     if (reply.isError()) {
         qCWarning(KCM_PLASMAFUSION) << "Could not read the Plasma shell layout:" << reply.error().message();
@@ -528,6 +548,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         m_topBarAvailable = state.value(u"topBars"_s).toInt() > 0;
         m_metersAvailable = state.value(u"metersInstalled"_s).toBool();
         m_quickSettingsAvailable = state.value(u"quickSettings"_s).toInt() > 0;
+        m_launcherAvailable = state.value(u"launchers"_s).toInt() > 0;
         m_folderAvailable = state.value(u"folders"_s).toInt() > 0;
 
         // A change still pending on the page (the shell restarted meanwhile) is kept.
@@ -569,11 +590,32 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
             const int policy = policies.indexOf(state.value(u"keyboardPolicy"_s).toString());
             take(m_current.keyboardPolicy, m_saved.keyboardPolicy, policy >= 0 ? policy : int(KeyboardTablet));
         }
+        if (m_launcherAvailable) {
+            take(m_current.launcherRecentFiles, m_saved.launcherRecentFiles, state.value(u"recentFiles"_s).toBool(true));
+            take(m_current.launcherRecentApps, m_saved.launcherRecentApps, state.value(u"recentApps"_s).toBool(true));
+            take(m_current.launcherPlaces, m_saved.launcherPlaces, state.value(u"places"_s).toBool(true));
+            // The keys some launchers show and some do not.
+            const int launchers = state.value(u"launchers"_s).toInt();
+            const std::pair<QString, QString> counts[] = {
+                {u"recentFilesOn"_s, u"showRecommended"_s},
+                {u"recentAppsOn"_s, u"showRecentApps"_s},
+                {u"placesOn"_s, u"showPlaces"_s},
+            };
+            for (const auto &[count, key] : counts) {
+                const int on = state.value(count).toInt();
+                if (on > 0 && on < launchers) {
+                    m_launcherMixed.insert(key);
+                }
+            }
+        }
         if (m_folderAvailable) {
             const bool hidden = state.value(u"filterMode"_s).toInt() == 1 && state.value(u"filterPattern"_s).toString() == s_hideAllPattern;
             take(m_current.desktopIcons, m_saved.desktopIcons, !hidden);
             take(m_current.iconSize, m_saved.iconSize, state.value(u"iconSize"_s).toInt(3));
         }
+        // A switch set while its key was mixed stays a change while the launchers still differ
+        // (also across a shell restart; a read that failed changes nothing).
+        m_launcherMixedSet.intersect(m_launcherMixed);
     }
     Q_EMIT shellStateChanged();
     Q_EMIT magnifyChanged();

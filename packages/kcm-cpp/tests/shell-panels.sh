@@ -14,7 +14,16 @@
 #               reports no error, the meters are placed, and the page's event loop keeps running
 #               while it waits (a timer ticks during Apply, the page does not freeze);
 #   slowbars    the same for "Top bar on every screen" (a stand-in ensure-topbars.js, then the
-#               panels' look for the new bars).
+#               panels' look for the new bars);
+#   launcher    the Launcher switches read from the launcher widget (one key already off, as a
+#               string) and written to it, the keys it does not change left alone;
+#   nolauncher  no launcher widget: the switches are not available and keep their value;
+#   twolaunchers two launchers, the second with the Places chip off: the page shows it off, and
+#               turning it on writes it to both.
+#   mixedoff    the same two launchers: the page says they differ, the switch turned on and back
+#               off is still a change to apply, and Apply writes off to both (they agree then).
+#   mixedrestart the same, with the shell restarted between the switch and Apply: still a change,
+#               and Apply still writes off to both.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -29,6 +38,7 @@ failures=0
 
 APPNAME=org.plasmafusion.appname QS=org.plasmafusion.quicksettings CLOCK=org.plasmafusion.clockpill
 TRAY=org.kde.plasma.systemtray DOCK=org.plasmafusion.dock METERS=org.plasmafusion.meters
+LAUNCHER=org.plasmafusion.launcher
 
 # run CASE LAYOUT COMMANDS...: one module session against the stand-in shell. Leaves the kcmctl
 # output in $work/CASE/kcmctl.log, the shell's in $work/CASE/fakeshell.log and the panels in
@@ -50,6 +60,8 @@ run() {
       "$1" "$2" "$3" "$4" >"$5/fakeshell.log" 2>&1 &
       shell=$!
       for _ in $(seq 1 100); do grep -q "fakeshell: ready" "$5/fakeshell.log" && break; sleep 0.05; done
+      # For a case that restarts the stand-in shell (a kcmctl sh command).
+      export PFV_FAKESHELL=$1 PFV_SHELLJS=$2 PFV_FAKESHELL_PID=$shell
       sed "s|@W@|$5|g" "$5/commands" | "$6" >"$5/kcmctl.log" 2>&1
       status=$?
       kill "$shell" 2>/dev/null || true
@@ -72,6 +84,7 @@ expect() {
   fi
 }
 value() { sed -n "s/^kcmctl: $2=//p" "$work/$1/kcmctl.log" | tail -1; }
+first() { sed -n "s/^kcmctl: $2=//p" "$work/$1/kcmctl.log" | head -1; }
 panel() { sed -n "$2p" "$work/$1/panels"; }
 is() { [ "$1" = "$2" ]; }
 alive() { ! grep -q "crashed" "$work/$1/fakeshell.log"; }
@@ -119,6 +132,67 @@ expect slowbars "no error although the shell answered 7 s late" is "$(value slow
 expect slowbars "the choice is kept" grep -q "EveryScreen=true" "$work/slowbars/config/plasmafusionrc"
 expect slowbars "the page's event loop ran while it waited ($(beats slowbars 2) ticks of 100 ms in $(busy slowbars) ms)" \
   test "$(beats slowbars 2)" -ge 80
+
+run launcher "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "get launcherAvailable" "get launcherRecentFiles" "get launcherRecentApps" "get launcherPlaces" \
+  "set launcherRecentFiles false" "set launcherPlaces true" save "wait 500" "get errorText"
+expect launcher "the module found the launcher" is "$(value launcher launcherAvailable)" true
+expect launcher "recent files and the Recent chip read as on (keys not set)" \
+  is "$(first launcher launcherRecentFiles) $(first launcher launcherRecentApps)" "true true"
+expect launcher "the Places chip read as off (the key written as the string false)" is "$(first launcher launcherPlaces)" false
+expect launcher "recent files off and Places on written to the launcher, the Recent chip's key left alone" \
+  is "$(panel launcher 2)" "bottom 0: launcher{General/showPlaces=true,General/showRecommended=false} dock"
+expect launcher "no error" is "$(value launcher errorText)" ""
+
+run nolauncher "{\"showConfig\": true, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$DOCK\"]}]}" \
+  waitshell "get launcherAvailable" "set launcherRecentFiles false" save "wait 500" "get launcherRecentFiles" "get errorText"
+expect nolauncher "no launcher widget: the switches are not available" is "$(value nolauncher launcherAvailable)" false
+expect nolauncher "and keep their value" is "$(value nolauncher launcherRecentFiles)" true
+expect nolauncher "nothing written to the panels" is "$(panel nolauncher 2)" "bottom 0: dock"
+
+run twolaunchers "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", {\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"true\"}}, \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "get launcherPlaces" "set launcherPlaces true" save "wait 500" "get errorText"
+expect twolaunchers "two launchers that differ: the Places chip shows off" is "$(first twolaunchers launcherPlaces)" false
+expect twolaunchers "turning it on writes it to the first launcher" \
+  is "$(panel twolaunchers 1)" "top 0: appname launcher{General/showPlaces=true} clockpill systemtray quicksettings"
+expect twolaunchers "and to the second" is "$(panel twolaunchers 2)" "bottom 0: launcher{General/showPlaces=true} dock"
+expect twolaunchers "no error" is "$(value twolaunchers errorText)" ""
+
+run mixedoff "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", {\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"true\"}}, \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "get launcherPlacesMixed" "get launcherRecentAppsMixed" "set launcherPlaces true" "set launcherPlaces false" \
+  "get needsSave" save "wait 500" "get launcherPlacesMixed" "get errorText"
+expect mixedoff "two launchers that differ: the page says the Places chip is mixed" is "$(first mixedoff launcherPlacesMixed)" true
+expect mixedoff "  and not the Recent chip, which they agree on" is "$(value mixedoff launcherRecentAppsMixed)" false
+expect mixedoff "the switch on and back off is still a change to apply" is "$(value mixedoff needsSave)" true
+expect mixedoff "Apply writes off to the first launcher" \
+  is "$(panel mixedoff 1)" "top 0: appname launcher{General/showPlaces=false} clockpill systemtray quicksettings"
+expect mixedoff "and to the second" is "$(panel mixedoff 2)" "bottom 0: launcher{General/showPlaces=false} dock"
+expect mixedoff "after Apply they agree" is "$(value mixedoff launcherPlacesMixed)" false
+expect mixedoff "no error" is "$(value mixedoff errorText)" ""
+
+# The stand-in shell stopped and started again (its layout as it was) between the switch and Apply.
+run mixedrestart "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", {\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"true\"}}, \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "set launcherPlaces true" "set launcherPlaces false" \
+  'sh kill "$PFV_FAKESHELL_PID"; sleep 0.5' "wait 500" "get shellRunning" \
+  'sh "$PFV_FAKESHELL" "$PFV_SHELLJS" @W@/layout.json @W@/panels >@W@/fakeshell2.log 2>&1 & echo $! >@W@/fakeshell2.pid; for _ in $(seq 1 100); do grep -q "fakeshell: ready" @W@/fakeshell2.log && break; sleep 0.05; done' \
+  "wait 4000" waitshell "get shellRunning" "get launcherPlacesMixed" "get needsSave" save "wait 500" "get errorText" \
+  'sh kill "$(cat @W@/fakeshell2.pid)"'
+expect mixedrestart "the shell went away" is "$(first mixedrestart shellRunning)" false
+expect mixedrestart "and came back, the Places chip still mixed" is "$(value mixedrestart launcherPlacesMixed)" true
+expect mixedrestart "the switch set before the restart is still a change to apply" is "$(value mixedrestart needsSave)" true
+expect mixedrestart "Apply writes off to the first launcher" \
+  is "$(panel mixedrestart 1)" "top 0: appname launcher{General/showPlaces=false} clockpill systemtray quicksettings"
+expect mixedrestart "and to the second" is "$(panel mixedrestart 2)" "bottom 0: launcher{General/showPlaces=false} dock"
+expect mixedrestart "no error" is "$(value mixedrestart errorText)" ""
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

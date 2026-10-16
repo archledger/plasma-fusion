@@ -41,6 +41,12 @@ PlasmoidItem {
     readonly property QtObject configuration: Plasmoid.configuration
     readonly property bool designLabels: Plasmoid.configuration.designLabels
     readonly property bool showRecommended: Plasmoid.configuration.showRecommended
+    // The "Recent" and "Places" chips (Launcher.shownFixedChips()); the chips are built again when
+    // either changes.
+    readonly property bool showRecentApps: Plasmoid.configuration.showRecentApps
+    readonly property bool showPlaces: Plasmoid.configuration.showPlaces
+    onShowRecentAppsChanged: rebuildChips()
+    onShowPlacesChanged: rebuildChips()
     readonly property bool menuOpen: launcherWindow.visible || sheetWindow.visible
     // Tablet posture: the full-screen sheet instead of the card (TABLET 4.5).
     readonly property bool tablet: tabletState.tablet
@@ -115,15 +121,15 @@ PlasmoidItem {
     }
 
     // The chips before the categories: "All" (the home view), "Recent" (recently and often used
-    // apps) and "Places" (places, drives and recent folders). `view` is the card's view for the
-    // chip; categories have "category" and their row.
+    // apps) and "Places" (places, drives and recent folders), the last two unless turned off.
+    // `view` is the card's view for the chip; categories have "category" and their row.
     function fixedChips(): var {
-        return [
+        return Launcher.shownFixedChips([
             { key: "all", label: i18nc("@title:tab all applications", "All"), row: -1, view: "home" },
             { key: "recentapps", label: i18nc("@title:tab recently and often used apps", "Recent"), row: -1, view: "history" },
             { key: "places", label: i18nc("@title:tab the file manager's places, drives and recent folders", "Places"),
               row: -1, view: "places" },
-        ];
+        ], showRecentApps, showPlaces);
     }
 
     // Category chips: "All" plus the XDG menu categories that have apps, in the board's order,
@@ -737,7 +743,8 @@ PlasmoidItem {
                      + launcherWindow.x + "," + launcherWindow.y + " " + launcherWindow.cardWidth + "x" + launcherWindow.cardHeight
                      + ", pinned rows " + (card ? card.pinnedRows : -1) + ", columns " + (card ? card.columns : -1)
                      + ", screen " + root.screenGeometry.width + "x" + root.screenGeometry.height
-                     + ", pinned " + (card && launcherWindow.visible ? card.pinnedCentres(launcherWindow.x, launcherWindow.y) : "-"));
+                     + ", pinned " + (card && launcherWindow.visible ? card.pinnedCentres(launcherWindow.x, launcherWindow.y) : "-")
+                     + ", chips " + root.chips.map(c => c.key).join("+"));
         framesDrawn = 0;
     }
 

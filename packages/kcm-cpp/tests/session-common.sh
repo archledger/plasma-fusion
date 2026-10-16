@@ -136,7 +136,7 @@ for (var i = 0; i < ps.length; ++i) {
         var w = ws[j], t = w.type;
         if (t === "org.plasmafusion.dock") out.push("  dock " + keys(w, ["magnify", "magnifiedSize", "homeIndicator", "glass"]));
         else if (t === "org.plasmafusion.quicksettings") out.push("  quicksettings " + keys(w, ["keyboardPolicy", "glass"]) + " shortcut=" + w.globalShortcut);
-        else if (t === "org.plasmafusion.launcher") out.push("  launcher " + keys(w, ["glass"]));
+        else if (t === "org.plasmafusion.launcher") out.push("  launcher " + keys(w, ["glass", "showRecommended", "showRecentApps", "showPlaces"]));
         else if (t === "org.plasmafusion.pen") out.push("  pen shortcut=" + w.globalShortcut);
     }
 }

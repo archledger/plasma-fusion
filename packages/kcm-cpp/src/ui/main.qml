@@ -70,6 +70,9 @@ KCM.SimpleKCM {
     readonly property int glassReduced: 1
     readonly property int glassSolid: 2
 
+    // A launcher section the launcher widgets differ on (its switch shows it off).
+    readonly property string launcherMixedNote: i18nc("@info", "Some launchers show this and some do not. Setting it here sets it for all of them.")
+
     // The same note for every control that goes through the Plasma shell.
     function shellNote(available, missingText) {
         if (kcm.shellLoading || available) {
@@ -439,6 +442,53 @@ KCM.SimpleKCM {
                             ? i18nc("@info", "Other screens get their bar with the next Plasma Fusion layout update; the choice is kept.")
                             : root.shellNote(kcm.shellRunning, "")
                         onToggleRequested: kcm.everyScreen = !kcm.everyScreen
+                    }
+                }
+            }
+
+            // ---------- Launcher ----------
+            // What the launcher shows besides the pinned apps (every launcher widget's keys; the
+            // same switches are in the launcher's own settings).
+            ColumnLayout {
+                spacing: 10
+                Layout.fillWidth: true
+
+                SectionTitle {
+                    text: i18nc("@title:group the Plasma Fusion launcher", "Launcher")
+                    pal: fusionPalette
+                }
+                ColumnLayout {
+                    spacing: 0
+                    Layout.fillWidth: true
+
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@option:check the launcher's home view", "Recent files under the pinned apps")
+                        checked: kcm.launcherRecentFiles
+                        enabled: kcm.launcherAvailable && !kcm.shellLoading
+                        note: kcm.launcherRecentFilesMixed ? root.launcherMixedNote
+                            : root.shellNote(kcm.launcherAvailable, i18nc("@info", "The Plasma Fusion launcher is not in a panel."))
+                        onToggleRequested: kcm.launcherRecentFiles = !kcm.launcherRecentFiles
+                    }
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@option:check the launcher's Recent chip", "Recently used apps (the Recent chip)")
+                        checked: kcm.launcherRecentApps
+                        enabled: kcm.launcherAvailable && !kcm.shellLoading
+                        note: kcm.launcherRecentAppsMixed ? root.launcherMixedNote : ""
+                        onToggleRequested: kcm.launcherRecentApps = !kcm.launcherRecentApps
+                    }
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        last: true
+                        text: i18nc("@option:check the launcher's Places chip", "Places and drives (the Places chip)")
+                        checked: kcm.launcherPlaces
+                        enabled: kcm.launcherAvailable && !kcm.shellLoading
+                        note: kcm.launcherPlacesMixed ? root.launcherMixedNote : ""
+                        onToggleRequested: kcm.launcherPlaces = !kcm.launcherPlaces
                     }
                 }
             }

@@ -231,6 +231,12 @@ function withoutUnhidden(list, unhidden) {
     return Array.from(list || []).map(String).filter(id => id.length > 0 && shown.indexOf(id) < 0);
 }
 
+// The chips before the categories that the user keeps: the "Recent" chip (recently and often used
+// apps) and the "Places" chip can be turned off (showRecentApps, showPlaces); "All" always stays.
+function shownFixedChips(chips, showRecentApps, showPlaces) {
+    return chips.filter(c => (c.key !== "recentapps" || showRecentApps) && (c.key !== "places" || showPlaces));
+}
+
 // Splits the configured default pins into slots of alternatives.
 function pinnedSlots(entries) {
     const slots = [];

@@ -5,7 +5,8 @@
 // uses, for fakeshell.cpp. Panels hold widgets in order; a widget's index is its place in that
 // order and setting it moves the widget there (the panel's own rule: taken out, then put in at the
 // index); geometry.x is 100 px per place. Layout file (JSON):
-//   panels            [{ location, screen, opacity, widgets: [plugin id, ...], listDelayMs }]
+//   panels            [{ location, screen, opacity, widgets: [plugin id or { type, config }, ...],
+//                     listDelayMs }]; a widget's config maps "Group/key" to a value
 //   knownWidgetTypes  plugin ids addWidget() can make (default: every id in the panels)
 //   failAdd           plugin ids addWidget() fails for (it returns an Error, as plasmashell does)
 //   insert            "x" (default: before the widget at the x given, as a drop there) or "end"
@@ -18,10 +19,12 @@
 //                     writing its opacity crashes the shell (host.crash), as plasmashell crashes on
 //                     the invalid config group of a missing screen
 //   showOpacity       the state file also names each panel's opacity ("top 0 adaptive: ...")
+//   showConfig        the state file also lists each widget's configuration after its id
+//                     ("launcher{General/showPlaces=false}"), keys in order
 //   scriptDelayMs     the shell answers a script only this long after it came (a shell that has
 //   slowFrom          just started), from the slowFrom-th script on (default 1: every script)
 
-var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false,
+var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false, showConfig: false,
               scriptDelayMs: 0, slowFrom: 1, scripts: 0 };
 var knownWidgetTypes = [];
 var screenCount = 1;
@@ -40,9 +43,16 @@ function loadLayout(text) {
             screen: p.screen === undefined ? 0 : p.screen,
             opacity: p.opacity || "adaptive",
             listDelayMs: p.listDelayMs,
-            items: (p.widgets || []).map(function (type) {
+            items: (p.widgets || []).map(function (entry) {
+                var type = typeof entry === "string" ? entry : entry.type;
                 all.push(type);
-                return makeWidget(type);
+                var w = makeWidget(type);
+                if (typeof entry !== "string" && entry.config) {
+                    for (var key in entry.config) {
+                        w.config[key] = entry.config[key];
+                    }
+                }
+                return w;
             })
         };
     });
@@ -51,6 +61,7 @@ function loadLayout(text) {
     state.insert = layout.insert || "x";
     state.listDelayMs = layout.listDelayMs || 0;
     state.showOpacity = layout.showOpacity === true;
+    state.showConfig = layout.showConfig === true;
     state.scriptDelayMs = layout.scriptDelayMs || 0;
     state.slowFrom = layout.slowFrom || 1;
     knownWidgetTypes = state.known.slice();
@@ -154,7 +165,12 @@ function print(text) {
 function dumpLayout() {
     return state.panels.map(function (p) {
         return p.location + " " + p.screen + (state.showOpacity ? " " + p.opacity : "") + ": " + p.items.map(function (w) {
-            return w.type.replace(/^org\.(plasmafusion|kde\.plasma)\./, "");
+            var name = w.type.replace(/^org\.(plasmafusion|kde\.plasma)\./, "");
+            var keys = Object.keys(w.config).sort();
+            if (!state.showConfig || keys.length === 0) {
+                return name;
+            }
+            return name + "{" + keys.map(function (k) { return k + "=" + w.config[k]; }).join(",") + "}";
         }).join(" ");
     }).join("\n") + "\n";
 }
