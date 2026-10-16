@@ -114,13 +114,14 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
 {
     return style == other.style && sameAccent(other) && buttonStyle == other.buttonStyle && fusionDecoration == other.fusionDecoration
         && magnify == other.magnify && globalMenu == other.globalMenu && hotCorner == other.hotCorner && snapTrigger == other.snapTrigger
-        && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen && everyDock == other.everyDock
-        && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical && fileContentIndexing == other.fileContentIndexing
-        && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications && lockNotificationSummaries == other.lockNotificationSummaries
-        && tabletMode == other.tabletMode && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft
-        && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters
-        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator
-        && launcherRecentFiles == other.launcherRecentFiles && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces;
+        && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen
+        && everyDock == other.everyDock && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical
+        && fileContentIndexing == other.fileContentIndexing && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications
+        && lockNotificationSummaries == other.lockNotificationSummaries && tabletMode == other.tabletMode && tabletApps == other.tabletApps
+        && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize
+        && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters && desktopIcons == other.desktopIcons && iconSize == other.iconSize
+        && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator && launcherRecentFiles == other.launcherRecentFiles
+        && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
