@@ -228,7 +228,8 @@ runs them together against one built HOME tree, with one summary:
   the session runner succeeded), every check passed (at least one), and no core dump came from its
   session (on the test host `coredumps.json` must be there and empty). Exit 0 only when every
   feature run passed; 2 for a setup error: an option without its value, an unknown or empty
-  `--features` list (a name is matched whole, as a fixed string: `[p]lacement` is unknown), or
+  `--features` list (a name is matched whole, as a fixed string: `[p]lacement` is unknown; a name
+  given twice is refused, as its second run would replace the first one's results), or
   Quick Look among the features without `--quicklook`. Each session takes a
   session slot, the container lane's too.
 - When: before a Plasma update is let onto the test machines (the plasma-watch issue names it) and
@@ -239,7 +240,7 @@ runs them together against one built HOME tree, with one summary:
   summary), a feature without checks (exit 1), a session stopped at its time limit after passing
   checks (exit 1), a runner that fails after a complete-looking session, a core dump (exit 1),
   each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, an
-  unknown feature, one given as a pattern (`[p]lacement`, `place.ent`), Quick Look's service menu
+  unknown feature, one given as a pattern (`[p]lacement`, `place.ent`) or twice, Quick Look's service menu
   executable in its seed, an empty feature list, Quick Look without its install and an option without its value
   (exit 2), `--help` printing the usage only, and the two lanes keeping their own results. Without
   any one of those rules its case fails.

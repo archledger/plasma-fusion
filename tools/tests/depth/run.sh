@@ -98,6 +98,9 @@ if [ "$WANT" != all ]; then
     # A fixed string, the whole line: a name is not a pattern ("[p]lacement" is no feature).
     printf '%s\n' "${IDS[@]}" | grep -qxF -- "$id" || { echo "unknown feature $id (--list)" >&2; exit 2; }
   done
+  # Each once: a second run of a feature would replace the first one's results.
+  dup=$(printf '%s\n' "${want[@]}" | sort | uniq -d)
+  [ -z "$dup" ] || { echo "feature ${dup%%$'\n'*} is chosen twice" >&2; exit 2; }
   IDS=("${want[@]}")
 fi
 # Quick Look is one of the features to pass: without its install the run cannot pass it.

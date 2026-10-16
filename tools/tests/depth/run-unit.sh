@@ -10,7 +10,7 @@
 # a core dump. Checked: the exit status and the summary for each, Quick Look skipped without its
 # install, each feature's seed (the HOME tree and tools for every one, the live chips' stand-ins
 # and debug rule, Quick Look's install), chosen features only, relative paths, and the setup errors
-# (an unknown feature, one given as a pattern, an empty feature list). Test tooling only, not installed.
+# (an unknown feature, one given as a pattern or twice, an empty feature list). Test tooling only, not installed.
 #
 #   run-unit.sh BASE
 #
@@ -142,6 +142,8 @@ run pattern --features '[p]lacement'
 expect "  a name that only matches as a pattern ([p]lacement): exit 2, nothing run" nothing_run 2
 run pattern2 --features 'place.ent'
 expect "  and place.ent: exit 2, nothing run" nothing_run 2
+run twice --features placement,snapgroups,placement
+expect "a feature chosen twice: exit 2, nothing run" nothing_run 2
 run emptylist --features ""
 expect "an empty feature list: exit 2 (nothing tested is no pass)" [ "$RC" = 2 ]
 
