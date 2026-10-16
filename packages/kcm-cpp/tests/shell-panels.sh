@@ -31,7 +31,8 @@
 #   docksoffcopies only copies left: the one on screen 0 stays as the one dock;
 #   docksoffpanel a copy's panel whose dock the user removed goes too;
 #   docksoffunplugged the one original on an unplugged screen: a copy on a screen that is there
-#               stays as the dock, the unplugged one gets its value back;
+#               stays as the dock (standing in for it), the unplugged one gets its value back;
+#   docksoffnodock every dock widget removed while on: it can still be turned off (cleanup);
 #   docksnotmade ensure-topbars.js says it could not make a dock: an error;
 #   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
 #
@@ -243,7 +244,7 @@ run docksoffcopies "{\"showConfig\": true, \"screens\": 2, \"panels\": [
   waitshell "set everyDock false" save "wait 500" "get errorText"
 expect docksoffcopies "one dock panel is left" is "$(wc -l <"$work/docksoffcopies/panels")" 2
 expect docksoffcopies "the one on screen 0, no longer a copy, every screen's windows" \
-  is "$(panel docksoffcopies 2)" "bottom 0{PlasmaFusion/everyScreenCopy=}: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/everyScreenCopy=}"
+  is "$(panel docksoffcopies 2)" "bottom 0{PlasmaFusion/everyScreenCopy=,PlasmaFusion/standInFor=}: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/everyScreenCopy=}"
 expect docksoffcopies "no error" is "$(value docksoffcopies errorText)" ""
 
 # A copy's panel whose dock the user removed (its launcher left): it goes too when turned off.
@@ -266,11 +267,24 @@ run docksoffunplugged "{\"showConfig\": true, \"screens\": 2, \"panels\": [
   {\"location\": \"bottom\", \"screen\": 1, \"config\": {\"PlasmaFusion/everyScreenCopy\": true}, \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true, \"PlasmaFusion/everyScreenCopy\": true}}]}]}" \
   waitshell "set everyDock false" save "wait 500" "get errorText"
 expect docksoffunplugged "the copy of screen 1 goes, the other two stay" is "$(wc -l <"$work/docksoffunplugged/panels")" 3
-expect docksoffunplugged "the copy on screen 0 stays as the one dock, no longer a copy" \
-  is "$(panel docksoffunplugged 3)" "bottom 0{PlasmaFusion/everyScreenCopy=}: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/everyScreenCopy=}"
+expect docksoffunplugged "the copy on screen 0 stays as the one dock, no longer a copy, standing in for the unplugged one (panel 105)" \
+  is "$(panel docksoffunplugged 3)" "bottom 0{PlasmaFusion/everyScreenCopy=,PlasmaFusion/standInFor=105}: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/everyScreenCopy=}"
 expect docksoffunplugged "the dock of the unplugged screen gets its value back" \
   is "$(panel docksoffunplugged 2)" "bottom 2: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/onlyCurrentScreenBefore=}"
 expect docksoffunplugged "no error" is "$(value docksoffunplugged errorText)" ""
+
+# The user removed every dock widget while the switch was on: the page has no dock, and can still
+# turn it off, which removes the copy's panel (its launcher left) and stores the choice.
+prepare_docksoffnodock() { prepare_docksoff "$@"; }
+run docksoffnodock "{\"showConfig\": true, \"screens\": 2, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"screen\": 1, \"config\": {\"PlasmaFusion/everyScreenCopy\": true}, \"widgets\": [\"$LAUNCHER\"]}]}" \
+  waitshell "get dockAvailable" "set everyDock false" save "wait 500" "get everyDock" "get errorText"
+expect docksoffnodock "no dock widget: the page has no dock" is "$(first docksoffnodock dockAvailable)" false
+expect docksoffnodock "turned off anyway: the copy's panel is gone" is "$(wc -l <"$work/docksoffnodock/panels")" 1
+expect docksoffnodock "  the choice is stored" grep -q "EveryScreen=false" "$work/docksoffnodock/config/plasmafusionrc"
+expect docksoffnodock "  and the page reads it off" is "$(value docksoffnodock everyDock)" false
+expect docksoffnodock "no error" is "$(value docksoffnodock errorText)" ""
 
 # ensure-topbars.js runs but cannot make a dock ("not made 1"): an error says so.
 prepare_docksnotmade() {

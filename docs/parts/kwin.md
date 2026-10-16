@@ -50,7 +50,7 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `.../contents/ui/main.qml` | the script: reads the desktops and windows, carries out a pass, watches the windows' desktop moves |
 | `.../contents/ui/Workspaces.js` | the pure rules (which windows hold a workspace, the plan, the timing, the numbered names); node-tested |
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | `KeepFirst` (System Settings > Window Management > KWin Scripts) |
-| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the five packages into the stage, runs the placement rules', snap groups' and dynamic workspaces' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
+| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the five packages into the stage, runs the placement rules', snap groups', snap cycle's, `Panels.js`'s and dynamic workspaces' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
 | `packages/kwin/tests/` | test tooling only, not installed (see Verification) |
 
 ## Build and install
@@ -761,9 +761,11 @@ screen).
   comes from
   `ensureTopBars.js`, which the build generates from the Global Theme's file. (A layout template
   with `loadTemplate()` did not work: plasmashell loads only templates of the panel category,
-  which would also put it into "Add Panel".) When the answer says a bar was added or completed, the
-  script asks systemd (`ReloadOrTryRestartUnit plasma-fusion-powerfx.service`) to have the power
-  service apply its tier to the new widgets; nothing happens when the service is not running
+  which would also put it into "Add Panel".) When the answer says a bar was added or completed, or
+  a dock was made ("Dock on every screen", a screen plugged in; `contents/ui/Panels.js`
+  `addedWidgets()`, tested by `packages/kwin/tests/panels.test.js` in the build), the script asks
+  systemd (`ReloadOrTryRestartUnit plasma-fusion-powerfx.service`) to have the power service apply
+  its tier to the new widgets; nothing happens when the service is not running
   (docs/parts/powerfx.md).
 - Touchpad, three fingers: up opens Overview, down closes it or shows the desktop
   (`SwipeGestureHandler`, device type touchpad). KWin's own three-finger vertical swipe switches

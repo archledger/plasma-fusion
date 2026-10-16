@@ -448,7 +448,8 @@ KCM.SimpleKCM {
                         last: true
                         text: i18nc("@option:check", "Dock on every screen")
                         checked: kcm.everyDock
-                        enabled: kcm.dockAvailable && kcm.shellRunning && !kcm.shellLoading
+                        // While on it can go off without a dock left (that removes the copies).
+                        enabled: (kcm.dockAvailable || kcm.everyDock) && kcm.shellRunning && !kcm.shellLoading
                         note: kcm.shellRunning && kcm.dockAvailable && !kcm.topBarScriptAvailable
                             ? i18nc("@info", "Other screens get their dock with the next Plasma Fusion layout update; the choice is kept.")
                             : root.shellNote(kcm.dockAvailable, i18nc("@info", "The Plasma Fusion dock is not in a panel."))

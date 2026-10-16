@@ -8,6 +8,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.kwin
 import "ensureTopBars.js" as EnsureTopBars
+import "Panels.js" as Panels
 import "Cycle.js" as Cycle
 import "Groups.js" as Groups
 import "SnapGeometry.js" as SnapGeometry
@@ -1165,11 +1166,10 @@ Item {
             topBarsRetry.stop();
             topBarsRetry.tries = 0;
             console.info("plasmafusion-snap: " + line);
-            // New widgets (a bar's quick settings and tray) get the power tier's keys only when
-            // the power service applies its tier again: its reload, which does nothing when the
-            // service is not running.
-            const counts = line.match(/added (\d+), completed (\d+)/);
-            if (counts && (Number(counts[1]) > 0 || Number(counts[2]) > 0)) {
+            // New widgets (a bar's quick settings and tray, a dock and its launcher) get the power
+            // tier's keys only when the power service applies its tier again: its reload, which
+            // does nothing when the service is not running.
+            if (Panels.addedWidgets(line)) {
                 powerTierCall.call();
             }
         }
@@ -1199,7 +1199,7 @@ Item {
         dbusInterface: "org.freedesktop.systemd1.Manager"
         method: "ReloadOrTryRestartUnit"
         arguments: ["plasma-fusion-powerfx.service", "replace"]
-        onFailed: console.info("plasmafusion-snap: the power service was not asked to apply its tier to the new bars")
+        onFailed: console.info("plasmafusion-snap: the power service was not asked to apply its tier to the new panels")
     }
     Timer {
         id: topBarsRetry

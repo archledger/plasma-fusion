@@ -326,7 +326,9 @@ print(JSON.stringify(result));
 // onlyCurrentScreenBefore, kept by ensure-topbars.js; then emptied). Docks the user made stay. When
 // no dock but copies is left on a screen that is there (the user removed the one there was, or it
 // is on a monitor that is unplugged), the copy on the lowest screen stays as the one dock: no
-// longer a copy, listing every screen's windows. Prints how many panels went.
+// longer a copy, listing every screen's windows, and standing in for the unplugged screens' docks
+// ([PlasmaFusion] standInFor, their panel ids; ensure-topbars.js removes it when one is back).
+// Prints how many panels went.
 const QString s_removeExtraDocksScript =
     uR"JS(
 function mark(w, key) {
@@ -345,7 +347,7 @@ function isCopy(p, docks) {
 function shown(p) {
     return p.screen >= 0 && p.screen < screenCount;
 }
-var removed = 0, keep = null, original = false;
+var removed = 0, keep = null, original = false, away = [];
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
     var docks = ps[i].widgets("org.plasmafusion.dock");
@@ -354,6 +356,9 @@ for (var i = 0; i < ps.length; ++i) {
     }
     if (!isCopy(ps[i], docks)) {
         original = original || shown(ps[i]);
+        if (!shown(ps[i])) {
+            away.push(ps[i].id);
+        }
     } else if (shown(ps[i]) && (keep === null || ps[i].screen < keep.screen)) {
         keep = ps[i];
     }
@@ -365,8 +370,11 @@ for (var i = 0; i < ps.length; ++i) {
     var docks = ps[i].widgets("org.plasmafusion.dock");
     var copy = isCopy(ps[i], docks);
     if (keep !== null && ps[i].id === keep.id) {
+        // It stands in for the docks of unplugged screens: ensure-topbars.js removes it when one
+        // of them is on a screen again.
         ps[i].currentConfigGroup = ["PlasmaFusion"];
         ps[i].writeConfig("everyScreenCopy", "");
+        ps[i].writeConfig("standInFor", away.join(","));
         ps[i].currentConfigGroup = [];
         for (var j = 0; j < docks.length; ++j) {
             docks[j].currentConfigGroup = ["PlasmaFusion"];

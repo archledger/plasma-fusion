@@ -397,6 +397,38 @@ test("ensure-topbars: a main dock without a launcher of its own still gives each
     assert.strictEqual(general(launcherOf(copy)).buttonStyle, "hidden");
     assert.strictEqual(copy.config.PlasmaFusion.everyScreenCopy, true, "and its panel is marked as a copy");
 });
+// The settings page kept a copy as the one dock (standInFor) while the dock there was sat on an
+// unplugged screen; the switch is off now.
+function standIn(origScreen) {
+    const keep = dockPanel();
+    keep.id = 80;
+    keep.config = { PlasmaFusion: { standInFor: "70" } };
+    keep.widgets = keep.widgets.map((w, i) => Object.assign({}, w, { id: 81 + i }));
+    const orig = dockPanel();
+    orig.id = 70;
+    orig.screen = origScreen;
+    orig.widgets = orig.widgets.map((w, i) => Object.assign({}, w, { id: 71 + i }));
+    return shell({ screens: TWO, files: dockRc("false"), panels: [mainBar(), keep, orig] });
+}
+test("ensure-topbars: switch off, the dock a copy stood in for is back on a screen: the stand-in goes", () => {
+    const s = standIn(1);
+    s.run(ENSURE);
+    assert.match(s.output, /docks: one .*, 1 stand-in gave way/, s.output);
+    assert.deepStrictEqual(docksOf(s).map((p) => p.id), [70], "only the dock there was");
+});
+test("ensure-topbars: switch off, that dock still on an unplugged screen: the stand-in stays", () => {
+    const s = standIn(2);
+    s.run(ENSURE);
+    assert.deepStrictEqual(docksOf(s).map((p) => p.id).sort(), [70, 80]);
+    assert.strictEqual(s.panels.find((p) => p.id === 80).config.PlasmaFusion.standInFor, "70", "still standing in");
+});
+test("ensure-topbars: switch off, that dock removed: the stand-in is the dock now", () => {
+    const s = standIn(1);
+    s.panels.splice(s.panels.findIndex((p) => p.id === 70), 1);
+    s.run(ENSURE);
+    assert.deepStrictEqual(docksOf(s).map((p) => p.id), [80]);
+    assert.strictEqual(s.panels.find((p) => p.id === 80).config.PlasmaFusion.standInFor, "", "no longer standing in");
+});
 test("ensure-topbars: no dock installed, no docks", () => {
     const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.dock"] });
     s.run(ENSURE);

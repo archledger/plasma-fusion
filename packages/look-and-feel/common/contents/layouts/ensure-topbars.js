@@ -367,8 +367,10 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     onlyCurrentScreenBefore, which the settings page puts back. The main dock, the one copied, is
     the one on the lowest screen number that is not a copy. When the shell cannot make the dock or
     its launcher (addWidget gives an Error; or the launcher is not installed), the new panel is
-    removed again. Idempotent; a dock is never removed
-    here. Prints one line: "docks: screens N, added M" (", not made K" when some could not be).
+    removed again. With the switch off, a dock the settings page kept standing in for docks of
+    unplugged screens ([PlasmaFusion] standInFor) is removed once one of those is on a screen
+    again. Idempotent; no other dock is removed here. Prints one line: "docks: screens N, added M"
+    (", not made K" when some could not be).
 */
 (function () {
     var DOCK = "org.plasmafusion.dock", LAUNCHER = "org.plasmafusion.launcher";
@@ -382,7 +384,35 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         return value === true || String(value) === "true";
     }
     if (!truthy(ConfigFile("plasmafusionrc", "Dock").readEntry("EveryScreen"))) {
-        print("docks: one (plasmafusionrc [Dock] EveryScreen is not true)");
+        // A dock the settings page kept when the switch went off while the docks there were sat on
+        // unplugged screens stands in for them ([PlasmaFusion] standInFor, their panel ids): it
+        // goes when one of them is on a screen again, and with them gone it is the dock now.
+        var gaveWay = 0, off = panels();
+        for (var a = 0; a < off.length; ++a) {
+            off[a].currentConfigGroup = ["PlasmaFusion"];
+            var standIn = String(off[a].readConfig("standInFor", ""));
+            off[a].currentConfigGroup = [];
+            if (standIn === "") {
+                continue;
+            }
+            var ids = standIn.split(","), there = false, back = false;
+            for (var b = 0; b < off.length; ++b) {
+                if (b === a || ids.indexOf(String(off[b].id)) === -1) {
+                    continue;
+                }
+                there = true;
+                back = back || (off[b].screen >= 0 && off[b].screen < screenCount && off[b].widgets(DOCK).length > 0);
+            }
+            if (back) {
+                off[a].remove();
+                gaveWay++;
+            } else if (!there) {
+                off[a].currentConfigGroup = ["PlasmaFusion"];
+                off[a].writeConfig("standInFor", "");
+                off[a].currentConfigGroup = [];
+            }
+        }
+        print("docks: one (plasmafusionrc [Dock] EveryScreen is not true)" + (gaveWay > 0 ? ", " + gaveWay + " stand-in gave way" : ""));
         return;
     }
     if (knownWidgetTypes.indexOf(DOCK) === -1) {

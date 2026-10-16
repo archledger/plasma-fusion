@@ -1384,7 +1384,9 @@ void PlasmaFusionKcm::save()
         }
     }
     if (after.everyDock != before.everyDock) {
-        if (m_shellRunning && m_dockAvailable) {
+        // Off needs no dock (the user may have removed every one): it removes the copies' panels
+        // and stores the choice. On needs a dock to copy.
+        if (m_shellRunning && (m_dockAvailable || !after.everyDock)) {
             applyEveryDock(after.everyDock);
         } else {
             m_current.everyDock = before.everyDock;

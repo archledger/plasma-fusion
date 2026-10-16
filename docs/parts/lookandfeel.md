@@ -539,7 +539,9 @@ live session gets these changes through DEVICE-1's in-place migration.
   (`[PlasmaFusion] everyScreenCopy`): the settings page removes the copies' panels when the switch
   goes off, and only those, so docks the user made stay; a copy's panel whose dock the user removed
   still counts for its screen. A dock panel of a screen that is not there (Plasma 6.8 keeps it) is
-  left as it is, and the other screens are filled. Every dock then lists only its own screen's windows
+  left as it is, and the other screens are filled. With the switch off, a dock the settings page
+  kept standing in for docks of unplugged screens (`[PlasmaFusion] standInFor`, their panel ids) is
+  removed once one of them is on a screen again; with them gone it is the dock now. Every dock then lists only its own screen's windows
   (`showOnlyCurrentScreen`); a dock that is not a copy remembers what it had in `[PlasmaFusion]
   onlyCurrentScreenBefore`. The main dock, the one copied, is the one on the lowest screen number
   that is not a copy. Every copy gets a launcher of its own; when the shell cannot make the dock or
@@ -556,7 +558,9 @@ live session gets these changes through DEVICE-1's in-place migration.
   after a second run, and neither does a launcher it cannot make; held keys copied with the user's
   value; a copy's panel without its dock keeps its screen; a dock of a screen that is not there is
   left alone while the others are filled; no copy without the launcher installed; a copy gets a
-  launcher also when the main dock has none; nothing without the dock installed. Without the copy mark, the panel
+  launcher also when the main dock has none; with the switch off a stand-in gives way to the dock
+  back on a screen, stays while that one is still on an unplugged screen, and is the dock once
+  that one is gone; nothing without the dock installed. Without the copy mark, the panel
   removal, the remembering or the second dock's turn, a case fails.
 - Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
   `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into
