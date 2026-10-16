@@ -6,7 +6,9 @@
 # stage in ~/pf-stage and tools/ in ~/pf-tools, then a stand-in app that ignores SIGTERM (kdialog
 # started with SIGTERM ignored), driven through the dock's test hook (debugAction: menu, pick):
 #   1. the running app's menu has End Task…; a pinned app that is not running has none;
-#   2. End Task… asks first (End Task, Cancel), and Cancel leaves the app running;
+#   2. End Task… asks first (End Task, Cancel), and Cancel leaves the app running; an End Task…
+#      that comes after a task before the stand-in's went (kcalc, started first, quit), when the
+#      menu's row is another app's or none, asks nothing;
 #   3. End Task ends it: SIGTERM, which it ignores, then SIGKILL.
 # Run: tools/vsession/remote.sh dock-endtask packages/plasmoids/org.plasmafusion.dock/tests/vsession/scenario-endtask.sh SEED 1440x900 240
 export OUT
@@ -43,10 +45,22 @@ info "fusion-config rc=$fc"
 [ "$fc" = 0 ]
 pfv_restart_shell 12
 
+# An app that is not pinned, started first, so its task comes before the stand-in's (step 2).
+kcalc >"$OUT/kcalc.log" 2>&1 &
+calc=$!
+sleep 3
 # The stand-in: kdialog with SIGTERM ignored (an ignored signal stays ignored across exec).
 sh -c "trap '' TERM; exec kdialog --title 'Stuck app' --msgbox 'A stand-in that ignores SIGTERM'" >"$OUT/kdialog.log" 2>&1 &
 app=$!
 sleep 4
+# ROW of the dock's task whose id matches PATTERN, from a fresh targets report (empty: none).
+task_row() {
+  mark
+  dock dump-targets
+  wait_log "dock: targets" 5
+  tr ' ' '\n' <<<"$(since "dock: targets")" | { grep -m1 -o "task[0-9]*-[^@]*$1" || true; } | sed 's/^task\([0-9]*\)-.*/\1/'
+}
+calcrow=$(task_row kcalc)
 mark
 dock dump-targets
 wait_log "dock: targets" 5
@@ -54,7 +68,7 @@ targets=$(since "dock: targets")
 row=$(tr ' ' '\n' <<<"$targets" | grep -m1 -o 'task[0-9]*-[^@]*kdialog' | sed 's/^task\([0-9]*\)-.*/\1/')
 # Dolphin is pinned by default; without it the check of a pinned app is skipped.
 idle=$(tr ' ' '\n' <<<"$targets" | grep -m1 -o 'task[0-9]*-org.kde.dolphin' | sed 's/^task\([0-9]*\)-.*/\1/' || true)
-info "stand-in pid $app, dock row ${row:-none}; Dolphin (pinned, not running) row ${idle:-none}"
+info "stand-in pid $app, dock row ${row:-none}; kcalc row ${calcrow:-none}; Dolphin (pinned, not running) row ${idle:-none}"
 
 # ---- 1. the menus
 mark
@@ -87,6 +101,25 @@ shot 20-confirm
 dock "pick:Cancel"
 sleep 4
 if alive "$app"; then pass "2: Cancel leaves the app running"; else fail "2: the app is gone after Cancel"; fi
+# An End Task… whose row changed before it ran: the stand-in's menu, then the task before it goes.
+if [ -n "${calcrow:-}" ] && [ "$calcrow" -lt "$row" ]; then
+  mark
+  dock "menu:$row"
+  wait_log "dock: menu " 5
+  kill "$calc"
+  for _ in $(seq 1 20); do [ "$(task_row kdialog)" = "$row" ] || break; sleep 0.5; done
+  mark
+  dock "pick:End Task…"
+  if wait_log "dock: end task [^ ]*kdialog: its row changed, not asked" 5 && ! since "dock: menu [^:]*: End Task" >/dev/null; then
+    pass "2: End Task… after the task before it went asks nothing ($(since 'dock: end task'))"
+  else
+    fail "2: a stale End Task…: $(since 'dock: end task') $(since 'dock: menu')"
+  fi
+  row=$(task_row kdialog)
+  info "the stand-in's row now ${row:-none}"
+else
+  fail "2: kcalc's task (row ${calcrow:-none}) is not before the stand-in's ($row): no stale End Task to try"
+fi
 
 # ---- 3. End Task
 mark

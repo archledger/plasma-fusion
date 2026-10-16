@@ -1348,8 +1348,9 @@ PlasmoidItem {
                            "window-close-symbolic", () => tasksModel.requestClose(index), {});
             // End Task for an app that does not answer Close (not for the shell's own windows).
             if (!EndTask.sessionApp(item.iconName) && EndTask.endTaskPids(taskPids(row)).length > 0) {
+                const endApp = item.iconName;
                 menu.addAction(i18nc("@action:inmenu end an app that does not respond", "End Task…"), "process-stop-symbolic",
-                               () => Qt.callLater(root.confirmEndTask, row), {});
+                               () => Qt.callLater(root.confirmEndTask, row, endApp), {});
             }
         }
         if (logNextMenu) {
@@ -1530,12 +1531,14 @@ PlasmoidItem {
     // have are ended (EndTask.stillOurs()), and the command ends a process only while it is still
     // the one read (EndTask.endTaskCommand()): one that quit meanwhile, and a process that got its
     // number since, are left alone.
-    function confirmEndTask(row: int): void {
+    function confirmEndTask(row: int, appId: string): void {
+        // The row as the menu had it: when tasks came, went or moved before this ran, it may be
+        // another app's now, and then nothing is asked.
         const item = taskRepeater.itemAt(row) as TaskItem;
-        if (!item) {
+        if (!item || item.iconName !== appId) {
+            console.info("dock: end task " + appId + ": its row changed, not asked");
             return;
         }
-        const appId = item.iconName;
         const asked = EndTask.endTaskPids(taskPids(row));
         let identities = null;
         reader.run(EndTask.identityCommand(asked), out => { identities = EndTask.identities(out); });

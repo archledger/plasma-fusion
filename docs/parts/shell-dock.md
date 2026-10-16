@@ -590,7 +590,8 @@ asks first in the menu's place, as Empty Trash… does: "End APP? Anything not s
 with End Task and Cancel. When it opens, the app's processes (every window's `AppPid`,
 `taskPids()`) are read with their start times (field 22 of `/proc/PID/stat`;
 `EndTask.identityCommand()`), and the question closes when the app's tasks change (it is a task
-menu). At the click End Task runs `EndTask.endTaskCommand()` (`contents/code/endtask.js`) with
+menu). It comes a moment after the click on End Task… (the menu's own click is done first); if the
+row is another app's by then, because a task came, went or moved meanwhile, nothing is asked. At the click End Task runs `EndTask.endTaskCommand()` (`contents/code/endtask.js`) with
 those of the processes the app's windows still have (`EndTask.stillOurs()`, by its app id,
 `appPids()`), each with the start time read, so a process that quit meanwhile, or another one that
 got its number since, is never ended:
@@ -626,5 +627,7 @@ KWin's own "not responding" dialog sends SIGABRT first so that a crash report is
   action too), and no disabled entry and no text the menu lacks.
 - `tests/vsession/scenario-endtask.sh` (a private session; the test hook `pick:TEXT` chooses menu
   entries): a stand-in app that ignores SIGTERM (kdialog) has End Task… in its menu and a pinned app
-  that is not running has none; End Task… asks first and Cancel leaves the app running; End Task ends
+  that is not running has none; End Task… asks first and Cancel leaves the app running; an End Task…
+  that runs after the task before the stand-in's went (kcalc, started first, then quit) asks
+  nothing; End Task ends
   it.
