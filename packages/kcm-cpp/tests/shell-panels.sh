@@ -19,11 +19,14 @@
 #               string) and written to it, the keys it does not change left alone;
 #   nolauncher  no launcher widget: the switches are not available and keep their value;
 #   twolaunchers two launchers, the second with the Places chip off: the page shows it off, and
-#               turning it on writes it to both.
+#               turning it on writes it to both;
 #   mixedoff    the same two launchers: the page says they differ, the switch turned on and back
-#               off is still a change to apply, and Apply writes off to both (they agree then).
+#               off is still a change to apply, and Apply writes off to both (they agree then);
 #   mixedrestart the same, with the shell restarted between the switch and Apply: still a change,
-#               and Apply still writes off to both.
+#               and Apply still writes off to both;
+#   docksoff    a dock on every screen turned off: the second screen's dock goes (its launcher
+#               with it), and the main dock shows every screen's windows again, as before;
+#   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -193,6 +196,33 @@ expect mixedrestart "Apply writes off to the first launcher" \
   is "$(panel mixedrestart 1)" "top 0: appname launcher{General/showPlaces=false} clockpill systemtray quicksettings"
 expect mixedrestart "and to the second" is "$(panel mixedrestart 2)" "bottom 0: launcher{General/showPlaces=false} dock"
 expect mixedrestart "no error" is "$(value mixedrestart errorText)" ""
+
+prepare_docksoff() { printf '[Dock]\nEveryScreen=true\n' >"$1/config/plasmafusionrc"; }
+run docksoff "{\"showConfig\": true, \"screens\": 2, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true, \"PlasmaFusion/onlyCurrentScreenBefore\": false}}]},
+  {\"location\": \"bottom\", \"screen\": 1, \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true}}]}]}" \
+  waitshell "get everyDock" "set everyDock false" save "wait 500" "get errorText"
+expect docksoff "the switch reads on (plasmafusionrc [Dock] EveryScreen)" is "$(first docksoff everyDock)" true
+expect docksoff "the second screen's dock panel is gone" is "$(wc -l <"$work/docksoff/panels")" 2
+expect docksoff "the main dock shows every screen's windows again, its remembered value emptied" \
+  is "$(panel docksoff 2)" "bottom 0: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/onlyCurrentScreenBefore=}"
+expect docksoff "the choice is kept" grep -q "EveryScreen=false" "$work/docksoff/config/plasmafusionrc"
+expect docksoff "no error" is "$(value docksoff errorText)" ""
+
+prepare_dockson() {
+  local dir=$1/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts
+  mkdir -p "$dir"
+  # Its trace: one more dock widget in the dock panel.
+  printf 'panels().forEach(function (p) { if (p.location === "bottom") p.addWidget("org.plasmafusion.dock"); });\nprint("docks: screens 2, added 1");\n' >"$dir/ensure-topbars.js"
+}
+run dockson "{\"screens\": 2, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", \"$DOCK\"]}]}" \
+  waitshell "get everyDock" "set everyDock true" save "wait 500" "get errorText"
+expect dockson "off by default" is "$(first dockson everyDock)" false
+expect dockson "turned on: the choice is kept" grep -q "EveryScreen=true" "$work/dockson/config/plasmafusionrc"
+expect dockson "  ensure-topbars.js ran (it adds the docks)" is "$(panel dockson 2)" "bottom 0: launcher dock dock"
+expect dockson "no error" is "$(value dockson errorText)" ""
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

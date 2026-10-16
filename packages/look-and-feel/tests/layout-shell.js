@@ -42,9 +42,15 @@ function shell(options) {
         return {
             get currentConfigGroup() { return group; },
             set currentConfigGroup(g) { group = g; },
+            // The keys set in the current group (Plasma's Widget.configKeys).
+            get configKeys() { return Object.keys((o.config || {})[group.join("][")] || {}); },
             readConfig(key, def) {
                 const g = (o.config || {})[group.join("][")] || {};
-                return g[key] === undefined ? def : g[key];
+                if (g[key] === undefined)
+                    return def;
+                // KConfig converts to the default's type: a list read with a text default comes
+                // back as its comma-joined text (KConfigGroup::readEntry with a QString default).
+                return typeof def === "string" && Array.isArray(g[key]) ? g[key].join(",") : g[key];
             },
             writeConfig(key, value) {
                 const name = group.join("][");

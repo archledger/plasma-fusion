@@ -39,6 +39,7 @@ function loadLayout(text) {
     var all = [];
     state.panels = (layout.panels || []).map(function (p) {
         return {
+            id: state.nextId++,
             location: p.location || "top",
             screen: p.screen === undefined ? 0 : p.screen,
             opacity: p.opacity || "adaptive",
@@ -115,6 +116,13 @@ function view(panel, what) {
 
 function panelObject(panel) {
     return {
+        get id() { return panel.id; },
+        remove: function () {
+            var at = state.panels.indexOf(panel);
+            if (at >= 0) {
+                state.panels.splice(at, 1);
+            }
+        },
         get location() { return panel.location; },
         get screen() { return panel.screen; },
         get opacity() { view(panel, "opacity"); return panel.opacity; },

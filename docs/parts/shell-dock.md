@@ -633,3 +633,12 @@ KWin's own "not responding" dialog sends SIGABRT first so that a crash report is
   that runs after the task before the stand-in's went (kcalc, started first, then quit) asks
   nothing; End Task ends
   it.
+
+## A dock on every screen (2026-10-16)
+
+With the settings page's "Dock on every screen" (plasmafusionrc `[Dock] EveryScreen`, off by
+default) every screen gets a dock: `ensure-topbars.js` copies the main dock's settings and pins
+to it, with a hidden launcher of its own in its panel (Start opens the launcher of the dock's own
+panel, `findLauncherApplet()`, so on its screen), and every dock lists only its own screen's
+windows (`showOnlyCurrentScreen`). docs/parts/lookandfeel.md and kcm-cpp.md have the details and
+the tests.

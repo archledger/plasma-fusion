@@ -250,6 +250,61 @@ test("ensure-topbars: with two screens and no bar, the second screen's bar gets 
     }
 });
 
+// A dock on every screen (plasmafusionrc [Dock] EveryScreen=true): the second screen's dock follows
+// the main one.
+function dockPanel(opts) {
+    return { id: 40, type: "org.kde.panel", screen: 0, location: "bottom", height: 72, hiding: "dodgewindows", opacity: "translucent",
+             config: {}, widgets: [
+        { id: 41, type: "org.plasmafusion.launcher", config: { General: { buttonStyle: "hidden", favoritesPortedToKAstats: true, glass: "solid",
+                                                                           showRecommended: false, openRequest: "home:1" } } },
+        { id: 42, type: "org.plasmafusion.dock", config: { General: Object.assign({ launchers: ["applications:a.desktop", "applications:b.desktop"],
+                                                                                   magnifiedSize: 56, debugAction: "menu:1" }, opts || {}) } }] };
+}
+const docksOf = (s) => s.panels.filter((p) => p.widgets.some((w) => w.type === "org.plasmafusion.dock"));
+const general = (w) => (w.config || {}).General || {};
+const dockRc = (v) => { const f = rc(); f.plasmafusionrc.Dock = { EveryScreen: v }; return f; };
+test("ensure-topbars: a dock on every screen gives the second screen a dock like the main one", () => {
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 1/, s.output);
+    const added = docksOf(s).find((p) => p.screen === 1);
+    assert.ok(added, "a dock panel on screen 1");
+    assert.deepStrictEqual([added.location, added.height, added.hiding, added.opacity, added.floating, added.lengthMode, added.alignment],
+                           ["bottom", 72, "dodgewindows", "translucent", true, "fit", "center"]);
+    assert.deepStrictEqual(added.widgets.map((w) => w.type), ["org.plasmafusion.launcher", "org.plasmafusion.dock"], "its own launcher first");
+    const d = general(added.widgets[1]), l = general(added.widgets[0]);
+    assert.deepStrictEqual(d.launchers, ["applications:a.desktop", "applications:b.desktop"], "the pins, as a list");
+    assert.strictEqual(d.magnifiedSize, 56);
+    assert.strictEqual(d.debugAction, undefined, "a test hook is not copied");
+    assert.strictEqual(d.showOnlyCurrentScreen, true, "it lists its own screen's windows");
+    assert.deepStrictEqual([l.buttonStyle, l.glass, l.showRecommended, l.favoritesPortedToKAstats, l.openRequest],
+                           ["hidden", "solid", false, true, undefined], "the launcher: hidden, the main one's settings, no request");
+    const main = docksOf(s).find((p) => p.id === 40).widgets[1];
+    assert.strictEqual(general(main).showOnlyCurrentScreen, true, "the main dock too");
+    assert.strictEqual(main.config.PlasmaFusion.onlyCurrentScreenBefore, false, "  remembering what it had");
+});
+test("ensure-topbars: without [Dock] EveryScreen there is one dock", () => {
+    const s = shell({ screens: TWO, files: rc(), panels: [mainBar(), dockPanel()] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: one/);
+    assert.strictEqual(docksOf(s).length, 1);
+    assert.strictEqual(general(docksOf(s)[0].widgets[1]).showOnlyCurrentScreen, undefined, "the main dock is left as it is");
+});
+test("ensure-topbars: a dock on every screen, run again: nothing more, the remembered value kept", () => {
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel({ showOnlyCurrentScreen: true })] });
+    s.run(ENSURE);
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 0/, s.output);
+    assert.strictEqual(docksOf(s).length, 2, "one dock per screen");
+    const main = docksOf(s).find((p) => p.id === 40).widgets[1];
+    assert.strictEqual(main.config.PlasmaFusion.onlyCurrentScreenBefore, true, "a main dock that showed its own screen only remembers that");
+});
+test("ensure-topbars: no dock installed, no docks", () => {
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.dock"] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: the Plasma Fusion dock is not installed/);
+});
+
 test("ensure-topbars: \"Top bar on every screen\" off adds nothing", () => {
     const s = shell({ screens: TWO, files: rc({ EveryScreen: "false" }), panels: [mainBar()] });
     s.run(ENSURE);

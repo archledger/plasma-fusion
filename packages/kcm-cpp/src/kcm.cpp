@@ -114,7 +114,7 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
 {
     return style == other.style && sameAccent(other) && buttonStyle == other.buttonStyle && fusionDecoration == other.fusionDecoration
         && magnify == other.magnify && globalMenu == other.globalMenu && hotCorner == other.hotCorner && snapTrigger == other.snapTrigger
-        && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen
+        && glass == other.glass && highContrast == other.highContrast && reduceMotion == other.reduceMotion && everyScreen == other.everyScreen && everyDock == other.everyDock
         && dndBehavior == other.dndBehavior && lighterOnCritical == other.lighterOnCritical && fileContentIndexing == other.fileContentIndexing
         && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications && lockNotificationSummaries == other.lockNotificationSummaries
         && tabletMode == other.tabletMode && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft
@@ -514,6 +514,16 @@ bool PlasmaFusionKcm::everyScreen() const
 void PlasmaFusionKcm::setEveryScreen(bool value)
 {
     setField(&State::everyScreen, value);
+}
+
+bool PlasmaFusionKcm::everyDock() const
+{
+    return m_current.everyDock;
+}
+
+void PlasmaFusionKcm::setEveryDock(bool value)
+{
+    setField(&State::everyDock, value);
 }
 
 bool PlasmaFusionKcm::desktopIcons() const
@@ -982,6 +992,7 @@ void PlasmaFusionKcm::loadConfigState(State &state) const
     // Glass, top bars, battery, app icons (plasmafusionrc)
     state.glass = glassFromName(KConfigGroup(fusion, u"Effects"_s).readEntry("Glass", QString()));
     state.everyScreen = KConfigGroup(fusion, u"TopBar"_s).readEntry("EveryScreen", true);
+    state.everyDock = KConfigGroup(fusion, u"Dock"_s).readEntry("EveryScreen", false);
     state.lighterOnCritical = KConfigGroup(fusion, u"Power"_s).readEntry("LighterOnCritical", true);
     // The app-icons service treats anything but "designs" as familiar (docs/parts/app-icons.md).
     state.iconsMode = KConfigGroup(fusion, u"Icons"_s).readEntry("AppIcons", QString()) == u"designs"_s ? IconsDesigned : IconsFamiliar;
@@ -1021,6 +1032,7 @@ void PlasmaFusionKcm::copyConfigState(const State &from, State &to) const
     to.highContrast = from.highContrast;
     to.reduceMotion = from.reduceMotion;
     to.everyScreen = from.everyScreen;
+    to.everyDock = from.everyDock;
     to.dndBehavior = from.dndBehavior;
     to.lighterOnCritical = from.lighterOnCritical;
     to.fileContentIndexing = from.fileContentIndexing;
@@ -1189,6 +1201,10 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
     if (!m_shellRunning) {
         defaults.glass = m_current.glass;
         defaults.everyScreen = m_current.everyScreen;
+        defaults.everyDock = m_current.everyDock;
+    }
+    if (!m_dockAvailable) {
+        defaults.everyDock = m_current.everyDock;
     }
     return defaults;
 }
@@ -1364,6 +1380,13 @@ void PlasmaFusionKcm::save()
             applyEveryScreen(after.everyScreen);
         } else {
             m_current.everyScreen = before.everyScreen;
+        }
+    }
+    if (after.everyDock != before.everyDock) {
+        if (m_shellRunning && m_dockAvailable) {
+            applyEveryDock(after.everyDock);
+        } else {
+            m_current.everyDock = before.everyDock;
         }
     }
     if (after.desktopIcons != before.desktopIcons || after.iconSize != before.iconSize) {

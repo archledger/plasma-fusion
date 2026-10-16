@@ -434,7 +434,6 @@ KCM.SimpleKCM {
                     ToggleRow {
                         Layout.fillWidth: true
                         pal: fusionPalette
-                        last: true
                         text: i18nc("@option:check", "Top bar on every screen")
                         checked: kcm.everyScreen
                         enabled: kcm.shellRunning && !kcm.shellLoading
@@ -442,6 +441,18 @@ KCM.SimpleKCM {
                             ? i18nc("@info", "Other screens get their bar with the next Plasma Fusion layout update; the choice is kept.")
                             : root.shellNote(kcm.shellRunning, "")
                         onToggleRequested: kcm.everyScreen = !kcm.everyScreen
+                    }
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        last: true
+                        text: i18nc("@option:check", "Dock on every screen")
+                        checked: kcm.everyDock
+                        enabled: kcm.dockAvailable && kcm.shellRunning && !kcm.shellLoading
+                        note: kcm.shellRunning && kcm.dockAvailable && !kcm.topBarScriptAvailable
+                            ? i18nc("@info", "Other screens get their dock with the next Plasma Fusion layout update; the choice is kept.")
+                            : root.shellNote(kcm.dockAvailable, i18nc("@info", "The Plasma Fusion dock is not in a panel."))
+                        onToggleRequested: kcm.everyDock = !kcm.everyDock
                     }
                 }
             }

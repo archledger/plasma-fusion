@@ -349,3 +349,145 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     }
     print("top bars: screens " + screenCount + ", added " + added + ", completed " + completed);
 })();
+
+/*
+    A dock on every screen (plasmafusionrc [Dock] EveryScreen=true, the settings page's "Dock on
+    every screen"; off by default: one dock, on the main screen, as the layout script makes it). A
+    screen without a dock panel gets one like the layout script's (bottom, floating, fit, centred)
+    with the main dock's height, hiding and opacity, a hidden launcher of its own (the dock's Start
+    opens the launcher of its own panel, so on its own screen) and the main dock's and launcher's
+    settings (every [General] key they have set, but the ones that ask for something once: the
+    test hooks and requests). Every dock then lists only its own screen's windows
+    (showOnlyCurrentScreen); the main dock keeps the value it had before in its [PlasmaFusion]
+    onlyCurrentScreenBefore, which the settings page puts back when the switch goes off and removes
+    the other docks. The main dock is the one on the lowest screen number. Idempotent; a dock is
+    never removed here. Prints one line: "docks: screens N, added M".
+*/
+(function () {
+    var DOCK = "org.plasmafusion.dock", LAUNCHER = "org.plasmafusion.launcher";
+    // Keys of a list type (main.xml): copied as lists; a list read with a text default would come
+    // back as one comma-joined entry.
+    var LISTS = ["launchers", "launcherFallbacks", "favorites", "hiddenApplications"];
+    // Keys that ask a widget for something once, or belong to the one widget.
+    var SKIP = ["debugAction", "debugPointerX", "debugHoverIndex", "splitRequest", "activateRequest", "openRequest",
+                "showOnlyCurrentScreen"];
+    function truthy(value) {
+        return value === true || String(value) === "true";
+    }
+    if (!truthy(ConfigFile("plasmafusionrc", "Dock").readEntry("EveryScreen"))) {
+        print("docks: one (plasmafusionrc [Dock] EveryScreen is not true)");
+        return;
+    }
+    if (knownWidgetTypes.indexOf(DOCK) === -1) {
+        print("docks: the Plasma Fusion dock is not installed");
+        return;
+    }
+    var ps = panels();
+    if (ps.length === 0 || desktops().length === 0) {
+        print("docks: skipped, the layout is not loaded yet");
+        return;
+    }
+    var onScreen = {}, main = null, unplaced = 0;
+    for (var i = 0; i < ps.length; ++i) {
+        if (ps[i].widgets(DOCK).length === 0) {
+            continue;
+        }
+        if (ps[i].screen < 0 || ps[i].screen >= screenCount) {
+            unplaced++;
+            continue;
+        }
+        if (onScreen[ps[i].screen] === undefined) {
+            onScreen[ps[i].screen] = ps[i];
+        }
+        if (main === null || ps[i].screen < main.screen) {
+            main = ps[i];
+        }
+    }
+    if (unplaced > 0) {
+        print("docks: skipped, " + unplaced + " dock panel(s) without a screen");
+        return;
+    }
+    if (main === null) {
+        print("docks: no Plasma Fusion dock to follow");
+        return;
+    }
+    // FROM's [General] keys onto TO (but SKIP), lists as lists.
+    function copyKeys(from, to) {
+        from.currentConfigGroup = ["General"];
+        to.currentConfigGroup = ["General"];
+        var keys = from.configKeys || [];
+        for (var k = 0; k < keys.length; ++k) {
+            var key = String(keys[k]);
+            if (SKIP.indexOf(key) !== -1) {
+                continue;
+            }
+            to.writeConfig(key, from.readConfig(key, LISTS.indexOf(key) !== -1 ? [] : ""));
+        }
+        from.currentConfigGroup = [];
+        to.currentConfigGroup = [];
+    }
+    function onlyThisScreen(dock) {
+        dock.currentConfigGroup = ["General"];
+        var before = dock.readConfig("showOnlyCurrentScreen", "");
+        if (!truthy(before)) {
+            dock.writeConfig("showOnlyCurrentScreen", true);
+        }
+        dock.currentConfigGroup = [];
+        return before;
+    }
+    var mainDock = main.widgets(DOCK)[0];
+    var mainLaunchers = main.widgets(LAUNCHER);
+    var added = 0;
+    for (var sc = 0; sc < screenCount; ++sc) {
+        if (onScreen[sc] !== undefined) {
+            continue;
+        }
+        var dockPanel = new Panel;
+        dockPanel.screen = sc;
+        dockPanel.location = "bottom";
+        dockPanel.height = main.height;
+        dockPanel.floating = true;
+        dockPanel.lengthMode = "fit";
+        dockPanel.alignment = "center";
+        dockPanel.hiding = main.hiding;
+        dockPanel.opacity = main.opacity;
+        if (mainLaunchers.length > 0 && knownWidgetTypes.indexOf(LAUNCHER) !== -1) {
+            var launcher = dockPanel.addWidget(LAUNCHER);
+            if (launcher && typeof launcher === "object" && launcher.type !== undefined) {
+                copyKeys(mainLaunchers[0], launcher);
+                // Next to the Fusion dock the launcher has no button of its own; its pins are the
+                // shared ones already (no first-run pins again).
+                launcher.currentConfigGroup = ["General"];
+                launcher.writeConfig("buttonStyle", "hidden");
+                launcher.writeConfig("favoritesPortedToKAstats", true);
+                launcher.currentConfigGroup = [];
+            }
+        }
+        var dock = dockPanel.addWidget(DOCK);
+        if (dock && typeof dock === "object" && dock.type !== undefined) {
+            copyKeys(mainDock, dock);
+            onlyThisScreen(dock);
+        }
+        added++;
+    }
+    // Every dock lists its own screen's windows; the main one remembers what it had.
+    mainDock.currentConfigGroup = ["PlasmaFusion"];
+    // ("" too: the settings page empties it when it puts the value back.)
+    var remembered = String(mainDock.readConfig("onlyCurrentScreenBefore", "\u0001unset"));
+    mainDock.currentConfigGroup = [];
+    var unset = remembered === "\u0001unset" || remembered === "";
+    if (added > 0 || unset) {
+        var before = onlyThisScreen(mainDock);
+        if (unset) {
+            mainDock.currentConfigGroup = ["PlasmaFusion"];
+            mainDock.writeConfig("onlyCurrentScreenBefore", truthy(before));
+            mainDock.currentConfigGroup = [];
+        }
+    }
+    for (var s2 in onScreen) {
+        if (onScreen[s2] !== main) {
+            onScreen[s2].widgets(DOCK).forEach(onlyThisScreen);
+        }
+    }
+    print("docks: screens " + screenCount + ", added " + added);
+})();

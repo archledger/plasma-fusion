@@ -526,6 +526,19 @@ live session gets these changes through DEVICE-1's in-place migration.
   layout script's lists, which the build checks are the same, the pen menu and quick settings) and is
   the main bar for the others; existing bars without one are left as they are and unmarked. Note:
   `readConfig` needs a default of the key's type (`[]` for lists; `null` returns undefined).
+- `ensure-topbars.js` also gives every screen a dock (2026-10-16) while plasmafusionrc `[Dock]
+  EveryScreen` is true (the settings page's "Dock on every screen"; off by default): a screen
+  without a dock panel gets one like the layout script's (bottom, floating, fit, centred) with the
+  main dock's height, hiding and opacity, a hidden launcher of its own (the dock's Start opens the
+  launcher of its own panel, on its screen; marked as having its pins, so no first-run pins again)
+  and every `[General]` key the main dock and launcher have set (Plasma's `Widget.configKeys`,
+  checked in plasma-workspace 6.7.5 `shell/scripting/widget.h`), but the test hooks and requests;
+  list keys are copied as lists. Every dock then lists only its own screen's windows
+  (`showOnlyCurrentScreen`); the main dock remembers what it had in `[PlasmaFusion]
+  onlyCurrentScreenBefore`. Prints "docks: screens N, added M". Tests (`tests/layout.test.js`): the
+  second screen's dock and launcher with the main one's settings (a list as a list, no test hook,
+  no request), its own screen only, the main dock remembering; one dock without the key; a second
+  run adds nothing and keeps the remembered value; nothing without the dock installed.
 - Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
   `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into
   `~/.local/share/plasma/layout-templates/`: "Add Panel" offers the Fusion top bar and dock.

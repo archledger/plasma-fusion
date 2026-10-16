@@ -173,7 +173,7 @@ write_config() {
 }
 
 ints=(style buttonStyle snapTrigger glass magnifiedSize iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy)
-bools=(magnify globalMenu hotCorner highContrast reduceMotion solidTopBar everyScreen desktopIcons lighterOnCritical
+bools=(magnify globalMenu hotCorner highContrast reduceMotion solidTopBar everyScreen everyDock desktopIcons lighterOnCritical
   fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters launcherRecentFiles launcherRecentApps launcherPlaces)
 reads=(accentMode accentColor wallpaperColor shellRunning dockAvailable launcherAvailable metersAvailable fusionDecoration errorText infoText
   highContrastAvailable previousDesktopAvailable powerCritical fusionLookAndFeel busy noSuchProperty)

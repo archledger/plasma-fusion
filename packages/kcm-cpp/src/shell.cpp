@@ -319,6 +319,43 @@ for (var i = 0; i < ds.length; ++i) {
 print(JSON.stringify(result));
 )JS"_s;
 
+// Docks on the screens other than the main one are removed (with their launchers), and the main
+// dock gets back the showOnlyCurrentScreen it had before every screen had a dock (its
+// [PlasmaFusion] onlyCurrentScreenBefore, kept by ensure-topbars.js; then emptied). The main dock is
+// the one on the lowest screen number.
+const QString s_removeExtraDocksScript =
+    uR"JS(
+var docks = [], main = null, removed = 0;
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    if (ps[i].widgets("org.plasmafusion.dock").length === 0) {
+        continue;
+    }
+    docks.push(ps[i]);
+    if (ps[i].screen >= 0 && (main === null || ps[i].screen < main.screen)) {
+        main = ps[i];
+    }
+}
+for (var i = 0; main !== null && i < docks.length; ++i) {
+    if (docks[i].id !== main.id) {
+        docks[i].remove();
+        ++removed;
+    }
+}
+if (main !== null) {
+    var d = main.widgets("org.plasmafusion.dock")[0];
+    d.currentConfigGroup = ["PlasmaFusion"];
+    var before = String(d.readConfig("onlyCurrentScreenBefore", ""));
+    if (before !== "") {
+        d.writeConfig("onlyCurrentScreenBefore", "");
+        d.currentConfigGroup = ["General"];
+        d.writeConfig("showOnlyCurrentScreen", before === "true");
+    }
+    d.currentConfigGroup = [];
+}
+print(removed);
+)JS"_s;
+
 // Top bars on the screens other than the main one are removed. The main one is the top bar with
 // quick settings on the lowest screen number (every screen's bar has quick settings since
 // 2026-10-09; the primary screen is 0), else the top bar on the lowest screen number.
@@ -857,6 +894,46 @@ bool PlasmaFusionKcm::applyEveryScreen(bool on)
     return panels;
 }
 
+// plasmafusionrc [Dock] EveryScreen, which ensure-topbars.js (also run by KWin when a screen is
+// added and at login) reads: on, it adds the docks now; off, the other docks go.
+bool PlasmaFusionKcm::applyEveryDock(bool on)
+{
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup(fusion, u"Dock"_s).writeEntry("EveryScreen", on, KConfig::Notify);
+    fusion->sync();
+
+    bool ok = false;
+    if (!on) {
+        const QString result = evaluateShellScript(s_removeExtraDocksScript, &ok);
+        if (!ok) {
+            addError(i18nc("@info", "The docks could not be changed: %1", result));
+            return false;
+        }
+        qCDebug(KCM_PLASMAFUSION) << "docks removed:" << result;
+        return true;
+    }
+    const QString path = topBarScriptPath();
+    if (path.isEmpty()) {
+        // Nothing to run yet; the choice is stored for the next login.
+        return true;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        addError(i18nc("@info", "%1 could not be read.", path));
+        return false;
+    }
+    const QString result = evaluateShellScript(QString::fromUtf8(file.readAll()), &ok);
+    if (!ok) {
+        addError(i18nc("@info", "The docks could not be added: %1", result));
+        return false;
+    }
+    // New docks take the glass level and the power tier, as new top bars do.
+    const bool panels = applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    reapplyPowerTier();
+    return panels;
+}
+
 bool PlasmaFusionKcm::applyDesktop(const State &before, const State &after)
 {
     const QString icons = after.desktopIcons == before.desktopIcons ? u"null"_s : after.desktopIcons ? u"true"_s : u"false"_s;
@@ -1117,6 +1194,14 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before)
     }
     if (!m_saved.everyScreen) {
         evaluateShellScript(s_removeExtraTopBarsScript, &ok);
+    }
+    // The layout makes one dock; with a dock on every screen the others come back.
+    if (m_saved.everyDock) {
+        const QString script = topBarScriptPath();
+        QFile file(script);
+        if (!script.isEmpty() && file.open(QIODevice::ReadOnly)) {
+            evaluateShellScript(QString::fromUtf8(file.readAll()), &ok);
+        }
     }
     // The power service applies its tier to the new widgets when it restarts.
     KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);

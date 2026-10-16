@@ -48,6 +48,7 @@ control is `ChoiceRow`, an action row `ActionRow`). The keys are the plan's regi
 | Dock and top bar | Magnified icon size: 56 px / 62 px | every dock's `[General] magnifiedSize` (disabled while magnification is off; another value shows no segment chosen and is kept) |
 | | Solid top bar next to windows | the top bars' panel `opacity`: `adaptive` (owner decision 5) or `translucent`; plasmafusionrc `[TopBar] SolidNextToWindows` (*new*) keeps the choice, which Reduced glass cannot show (both bars opaque; the switch is disabled with a note then). The opacity of a panel whose screen is gone (the top bar of a monitor that was unplugged) is neither read nor set (0.5.0): Plasma 6.8 keeps such a panel on its missing screen, and plasmashell crashes reading it (`docs/parts/kwin-tablet.md`, "Panels without a screen"); its widgets still get the glass key |
 | | Top bar on every screen | plasmafusionrc `[TopBar] EveryScreen` (*new*, default `true`, owner decision 8). Off: the top bars on screens other than the main one (the top bar with quick settings on the lowest screen number, as every bar has quick settings since 2026-10-09) are removed, and `ensure-topbars.js` adds none while the key is false; on: the layout part's `ensure-topbars.js` is run when it is installed (`contents/layouts/` of either Plasma Fusion Global Theme), then the page's glass and top-bar opacity are applied to the new bars and, when the power tier is not full, the power service is asked to apply it to them |
+| | Dock on every screen | plasmafusionrc `[Dock] EveryScreen` (*new*, default `false`: one dock). On: `ensure-topbars.js` runs at once and gives every screen without one a dock like the main one, each listing its own screen's windows (docs/parts/lookandfeel.md); off: the docks on the other screens are removed with their launchers (`s_removeExtraDocksScript`) and the main dock gets back the `showOnlyCurrentScreen` it had. Disabled with a note while no Fusion dock is in a panel; after a layout reset with it on, the other docks come back |
 | Launcher | Recent files under the pinned apps; Recently used apps (the Recent chip); Places and drives (the Places chip) | every `org.plasmafusion.launcher` widget's `[General] showRecommended`, `showRecentApps`, `showPlaces` (default `true`; the launcher next to the Fusion dock is hidden but holds the keys), through `evaluateScript` as the dock's keys; a section shows on only while every launcher has it on; with launchers that differ the row says so ("Some launchers show this and some do not"), and setting its switch is a change even when it ends where it was (also across a shell restart, while they still differ), so Apply writes it, on or off, to all (Defaults too); disabled with a note while no launcher widget is in a panel, which keeps the values (docs/parts/shell-launcher.md) |
 | Desktop | Icons on the desktop | every Folder View desktop: off = `[General] filterPattern=/` and `filterMode=1` ("show files matching" a pattern no file name can match; `QRegularExpression::fromWildcard` anchors it); on = `filterMode=0`, `filterPattern=*`, only when the desktop holds exactly that state (a filter set up in Folder View's own settings is left alone). Positions are kept: Folder View's positioner only adds entries while items are filtered out (`positioner.cpp` sourceRowsRemoved / updatePositionsList) |
 | | Icon size: Small / Medium / Large | Folder View `[General] iconSize` 1 / 2 / 3 (32 / 48 / 64 px; Medium is the Plasma Fusion default, BACKLOG M1) |
@@ -584,3 +585,17 @@ dock's keys. Before, only the recent files could be turned off, in the launcher'
   count the cases fail; reading the first launcher only fails `twolaunchers`; without the mixed
   state `mixedoff` fails (the first launcher kept the Places chip on); clearing it when the shell
   goes away fails `mixedrestart`.
+
+## Dock on every screen (2026-10-16)
+
+The next queue's item 3 (approved 2026-10-16): per-monitor behaviour (PowerToys' "independent
+desktops per monitor", 338 thumbs-up; Microsoft lists per-monitor taskbar positions as
+"evaluating"). Before, one dock on the main screen; the top bar already had "Top bar on every
+screen". The new switch under it keeps its choice in plasmafusionrc `[Dock] EveryScreen`, which
+`ensure-topbars.js` reads at login, when a screen is added, after Apply and after a layout reset.
+
+- `tests/shell-panels.sh` (ctest `kcmctl-panels`), cases `docksoff` and `dockson` against the
+  stand-in shell (whose panels now have a stable id and can be removed): turned off, the second
+  screen's dock panel goes and the main dock's `showOnlyCurrentScreen` comes back to the value it
+  remembered (its `onlyCurrentScreenBefore` emptied); turned on, the choice is kept and
+  ensure-topbars.js runs. The layout side is tested in packages/look-and-feel/tests/layout.test.js.
