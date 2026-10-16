@@ -39,6 +39,25 @@ RC=$HOME/.local/share/kxmlgui5/dolphin/dolphinui.rc
 ACTION=servicemenu_plasma-fusion-quicklook.desktop::quicklook
 
 # Quick Look's window: its caption ("NAME — Quick Look"), empty when there is none.
+# Quits this session's Dolphin only: the test host's own desktop runs under the same user, so its
+# Dolphin is told apart by its XDG_RUNTIME_DIR (this session's is private), as vsession.sh's
+# teardown does. Waits until they are gone (4 s at most).
+quit_dolphin() {
+  local p i pids=()
+  for p in /proc/[0-9]*; do
+    [ "$(cat "$p/comm" 2>/dev/null)" = dolphin ] || continue
+    grep -qz "^XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR\$" "$p/environ" 2>/dev/null && pids+=("${p#/proc/}")
+  done
+  [ ${#pids[@]} -gt 0 ] || return 0
+  kill "${pids[@]}" 2>/dev/null || true
+  for _ in $(seq 1 16); do
+    p=0
+    for i in "${pids[@]}"; do [ -d "/proc/$i" ] && p=1; done
+    [ "$p" = 1 ] || return 0
+    sleep 0.25
+  done
+  return 0
+}
 ql_caption() {
   K run "var l = workspace.windowList(), c = ''; for (var i = 0; i < l.length; ++i) {
     if (String(l[i].caption).indexOf('— Quick Look') >= 0) { c = String(l[i].caption); } } report(c);" |
@@ -149,7 +168,7 @@ fi
 if [ "$MODE" = removed ] || [ "$MODE" = removed-red ]; then
   [ "$(xml "actions.get('$ACTION'), actions.get('toggle_selection_mode')")" = "('Space', '')" ] &&
     info "the two keys are set (version $(xml version))" || fail "removed: the setup did not give the keys"
-  pkill -u "$(id -u)" -x dolphin || true
+  quit_dolphin
   sleep 2
   rm -f "$HOME/.local/bin/plasma-fusion-quicklook" "$HOME/.local/share/kio/servicemenus/plasma-fusion-quicklook.desktop" \
     "$HOME/.local/share/applications/org.plasmafusion.quicklook.desktop"
@@ -176,7 +195,7 @@ if [ "$MODE" = removed ] || [ "$MODE" = removed-red ]; then
   python3 -c "import sys; sys.exit(0 if float('$part') > 0.01 else 1)" &&
     pass "removed: Space toggles selection mode again (Dolphin's view changed by $part, 61-after-space.png)" ||
     fail "removed: Space changed nothing in Dolphin ($part)"
-  pkill -u "$(id -u)" -x dolphin || true
+  quit_dolphin
   info "done"
   exit 0
 fi
@@ -251,8 +270,17 @@ shot 41-context-menu
 pfinput 'key escape' 'sleep 1'
 
 # ---- 5. the restore
-pkill -u "$(id -u)" -x dolphin || true
+# A Dolphin of another session (the test host's desktop runs under the same user): a stand-in
+# named dolphin with another XDG_RUNTIME_DIR, which the cleanup must leave alone.
+mkdir -p "$OUT/other"
+cp "$(command -v sleep)" "$OUT/other/dolphin"
+XDG_RUNTIME_DIR=$OUT/other "$OUT/other/dolphin" 120 &
+other=$!
+sleep 0.5
+quit_dolphin
 sleep 2
+if [ -d "/proc/$other" ]; then pass "5: the cleanup leaves another session's Dolphin alone"; else fail "5: the cleanup ended another session's Dolphin"; fi
+kill "$other" 2>/dev/null || true
 undo_rc=0
 bash "$HOME/pf-tools/device/fusion-restore.sh" >"$OUT/restore.log" 2>&1 || undo_rc=$?
 info "fusion-restore rc=$undo_rc"
@@ -264,5 +292,5 @@ pfinput 'key space'
 sleep 4
 [ -z "$(ql_caption)" ] && pass "5: after the restore Space opens no Quick Look (Dolphin's own key again)" || fail "5: Quick Look opened ($(ql_caption))"
 shot 50-restored
-pkill -u "$(id -u)" -x dolphin || true
+quit_dolphin
 info "done"
