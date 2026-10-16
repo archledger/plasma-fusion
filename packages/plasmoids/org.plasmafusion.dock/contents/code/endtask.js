@@ -84,7 +84,9 @@ function boundTo(ids, pids) {
 }
 
 // The shell command (sh -c, the executable engine's) that ends the processes with these
-// identities, or "" when there is none. A process gets SIGTERM, and SIGKILL after the wait, only
+// identities, or "" when there is none. Those still running are looked for at least once, also
+// when the wait is over before the first look (a machine paused that long). A process gets
+// SIGTERM, and SIGKILL after the wait, only
 // while its start time is still the one taken when the user was asked, and never one with a
 // session process's name, so a number that went to another process since is left alone. (Between
 // that check and the signal itself a few shell steps remain; only a pidfd would close them, which
@@ -97,8 +99,8 @@ function endTaskCommand(ids) {
     return START_TIME + "s=; for e in " + ok.join(" ") + "; do i=${e%:*}; case \"$(cat /proc/$i/comm 2>/dev/null)\" in "
         + SESSION_PROCESSES.join("|") + "|'') ;; *) [ \"$(st $i)\" = \"${e#*:}\" ] && s=\"$s $e\" ;; esac; done; "
         + "[ -n \"$s\" ] || exit 0; for e in $s; do kill -TERM ${e%:*} 2>/dev/null; done; d=$(($(cs) + 300)); "
-        + "while [ $(cs) -lt $d ]; do a=; for e in $s; do i=${e%:*}; "
+        + "while :; do a=; for e in $s; do i=${e%:*}; "
         + "[ \"$(st $i)\" = \"${e#*:}\" ] && [ \"$(sed 's/.*) //' /proc/$i/stat 2>/dev/null | cut -c1)\" != Z ] && a=\"$a $e\"; done; "
-        + "[ -n \"$a\" ] || exit 0; sleep 0.1; done; "
+        + "[ -n \"$a\" ] || exit 0; [ $(cs) -lt $d ] || break; sleep 0.1; done; "
         + "for e in $a; do i=${e%:*}; [ \"$(st $i)\" = \"${e#*:}\" ] && kill -KILL $i 2>/dev/null; done; exit 0";
 }

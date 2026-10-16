@@ -1525,12 +1525,12 @@ PlasmoidItem {
         menu.openRelative();
     }
 
-    // End Task's confirmation in the menu's place, as Empty Trash's. The processes are the app's
-    // when it asks, each read with its start time then (EndTask.identityCommand()); the question
-    // closes when the app's tasks change (a task menu). At the click only those its windows still
-    // have are ended (EndTask.stillOurs()), and the command ends a process only while it is still
-    // the one read (EndTask.endTaskCommand()): one that quit meanwhile, and a process that got its
-    // number since, are left alone.
+    // End Task's confirmation in the menu's place, as Empty Trash's. The app's processes are read
+    // with their start times first (EndTask.identityCommand(), a moment), and the question opens
+    // once they are, so End Task always has them; it closes when the app's tasks change (a task
+    // menu). At the click only those its windows still have are ended (EndTask.stillOurs()), and
+    // the command ends a process only while it is still the one read (EndTask.endTaskCommand()):
+    // one that quit meanwhile, and a process that got its number since, are left alone.
     function confirmEndTask(row: int, appId: string): void {
         // The row as the menu had it: when tasks came, went or moved before this ran, it may be
         // another app's now, and then nothing is asked.
@@ -1540,17 +1540,24 @@ PlasmoidItem {
             return;
         }
         const asked = EndTask.endTaskPids(taskPids(row));
-        let identities = null;
-        reader.run(EndTask.identityCommand(asked), out => { identities = EndTask.identities(out); });
+        reader.run(EndTask.identityCommand(asked), out => root.askEndTask(row, appId, asked, EndTask.identities(out)));
+    }
+
+    function askEndTask(row: int, appId: string, asked: var, identities: var): void {
+        const item = taskRepeater.itemAt(row) as TaskItem;
+        if (!item || item.iconName !== appId) {
+            console.info("dock: end task " + appId + ": its row changed, not asked");
+            return;
+        }
+        if (identities.length === 0) {
+            console.info("dock: end task " + appId + " (nothing left to end)");
+            return;
+        }
         const name = item.name || appId;
         const menu = openMenu(item.iconItem);
         menu.taskMenu = true;
         menu.addHeader(i18nc("@title:menu %1 an app", "End %1? Anything not saved in it is lost.", name));
         menu.addAction(i18nc("@action:inmenu", "End Task"), "process-stop-symbolic", () => {
-            if (identities === null) {
-                console.info("dock: end task " + appId + " (its processes were not read yet)");
-                return;
-            }
             const ids = EndTask.boundTo(identities, EndTask.stillOurs(asked, appPids(appId)));
             console.info("dock: end task " + appId + " " + (ids.length > 0 ? ids.join(",") : "(nothing left to end)"));
             if (ids.length > 0) {

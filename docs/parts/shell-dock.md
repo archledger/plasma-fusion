@@ -587,10 +587,10 @@ The next queue's item 6 (approved 2026-10-16): Windows 11's taskbar has End Task
 the panel" is a runner-up in all three desktops' loved lists. A running app's menu has **End Task…**
 after Close, unless its windows are the shell's own (`EndTask.sessionApp()`: plasmashell, KWin). It
 asks first in the menu's place, as Empty Trash… does: "End APP? Anything not saved in it is lost."
-with End Task and Cancel. When it opens, the app's processes (every window's `AppPid`,
+with End Task and Cancel. Before it opens, the app's processes (every window's `AppPid`,
 `taskPids()`) are read with their start times (field 22 of `/proc/PID/stat`;
-`EndTask.identityCommand()`), and the question closes when the app's tasks change (it is a task
-menu). It comes a moment after the click on End Task… (the menu's own click is done first); if the
+`EndTask.identityCommand()`, a moment), so End Task always has them; the question closes when the
+app's tasks change (it is a task menu). It comes a moment after the click on End Task… (the menu's own click is done first); if the
 row is another app's by then, because a task came, went or moved meanwhile, nothing is asked. At the click End Task runs `EndTask.endTaskCommand()` (`contents/code/endtask.js`) with
 those of the processes the app's windows still have (`EndTask.stillOurs()`, by its app id,
 `appPids()`), each with the start time read, so a process that quit meanwhile, or another one that
@@ -598,7 +598,8 @@ got its number since, is never ended:
 
 - SIGTERM to each whose start time is still the one read, which an app that still works answers
   by quitting;
-- after up to 3 s by the clock (`/proc/uptime`, so a busy machine does not stretch it), SIGKILL to
+- after up to 3 s by the clock (`/proc/uptime`, so a busy machine does not stretch it; those still
+  running are looked for at least once, also when the machine paused past the wait), SIGKILL to
   those still running (a process that is gone, or a zombie waiting to be reaped, counts as ended),
   which no app can refuse, again only while the start time is the same;
   between that check and the signal a few shell steps remain (only a pidfd would close them, which
@@ -617,8 +618,8 @@ KWin's own "not responding" dialog sends SIGABRT first so that a crash report is
   once), and the command run with `sh` against stand-in processes: one whose start time is not the
   one given gets no signal at all, nor one named `plasmashell` with its true one; one that quits on
   SIGTERM at once (the command returns at once, its zombie counted as ended) and one that ignores
-  SIGTERM (SIGKILL after the wait). Without the start-time check before SIGTERM, or without the name
-  guard when reading, it fails.
+  SIGTERM (SIGKILL after the wait, also when the wait is over before the first look). Without the
+  start-time check before SIGTERM, the name guard when reading, or the first look, it fails.
 - `tests/menu_test.py` (CI step "Dock menu test hook"; offscreen Qt): the actions the dock keeps for
   `pick:TEXT` (DockMenu.actions, `contents/code/menu-pick.js`) on Plasma's own menu. In a private
   session no input has reached, Qt cannot open a grabbing popup and closes the menu at once (qtbase

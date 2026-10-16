@@ -96,6 +96,15 @@ setTimeout(async () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.ok(!shellGone, "a process named plasmashell is left alone");
     shell.kill("SIGKILL");
+    // The wait over before the first look (the machine paused for longer than it): the one that
+    // ignores SIGTERM still gets SIGKILL.
+    const late = spawn("sh", ["-c", "trap '' TERM; exec " + sleepBin + " 60"]);
+    const lateEnd = ended(late);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const lateCommand = endTaskCommand(idsOf([late.pid]));
+    assert.ok(lateCommand.indexOf("+ 300))") > 0, "the command waits 300 hundredths of a second");
+    spawnSync("sh", ["-c", lateCommand.replace("+ 300))", "- 1))")], { timeout: 15000 });
+    assert.strictEqual(await within(lateEnd, 2000), "SIGKILL", "a wait over before the first look still ends the app");
     // An app that quits at once: the command returns at once.
     const quick = spawn(sleepBin, ["60"]);
     const quickEnd = ended(quick);
