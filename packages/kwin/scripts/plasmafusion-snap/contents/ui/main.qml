@@ -1155,11 +1155,12 @@ Item {
         onFinished: returnValue => {
             const line = String(returnValue.length > 0 ? returnValue[0] : "").trim();
             // At session start plasmashell can answer before it has loaded its layout, or before
-            // it has put its panels on their screens ("skipped"): ask again, with a growing delay
+            // it has put its panels on their screens ("skipped", the top bars' or the docks' part):
+            // ask again, with a growing delay
             // for up to about three minutes (a slow start, the parity VM, took longer than 15 s).
             // Only the first skip of a burst is logged, and the give-up once: the answer repeats
             // identically (a laptop logged ~20 skip lines at every session start, 2026-10-12).
-            if (line.indexOf("top bars: skipped") !== -1) {
+            if (Panels.needsRetry(line)) {
                 askTopBarsAgain(line);
                 return;
             }

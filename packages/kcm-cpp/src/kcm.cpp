@@ -1204,9 +1204,8 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
         defaults.everyScreen = m_current.everyScreen;
         defaults.everyDock = m_current.everyDock;
     }
-    if (!m_dockAvailable) {
-        defaults.everyDock = m_current.everyDock;
-    }
+    // Without a dock "Dock on every screen" keeps its default (off) too: going off needs no dock
+    // (it removes the copies' panels), going on does, and the default never turns it on.
     return defaults;
 }
 

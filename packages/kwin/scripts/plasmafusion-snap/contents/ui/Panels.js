@@ -15,3 +15,10 @@ function addedWidgets(text) {
     var docks = s.match(/docks: screens \d+, added (\d+)/);
     return (bars !== null && (Number(bars[1]) > 0 || Number(bars[2]) > 0)) || (docks !== null && Number(docks[1]) > 0);
 }
+
+// Whether to ask ensure-topbars.js again: plasmashell answered before it had loaded its layout or
+// put its panels on their screens ("top bars: skipped" or "docks: skipped", either part).
+function needsRetry(text) {
+    var s = String(text || "");
+    return s.indexOf("top bars: skipped") !== -1 || s.indexOf("docks: skipped") !== -1;
+}

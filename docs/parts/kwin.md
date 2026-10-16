@@ -763,7 +763,8 @@ screen).
   with `loadTemplate()` did not work: plasmashell loads only templates of the panel category,
   which would also put it into "Add Panel".) When the answer says a bar was added or completed, or
   a dock was made ("Dock on every screen", a screen plugged in; `contents/ui/Panels.js`
-  `addedWidgets()`, tested by `packages/kwin/tests/panels.test.js` in the build), the script asks
+  `addedWidgets()`, tested by `packages/kwin/tests/panels.test.js` in the build; a "skipped" of either
+  part, the top bars' or the docks', is asked again, `needsRetry()`), the script asks
   systemd (`ReloadOrTryRestartUnit plasma-fusion-powerfx.service`) to have the power service apply
   its tier to the new widgets; nothing happens when the service is not running
   (docs/parts/powerfx.md).

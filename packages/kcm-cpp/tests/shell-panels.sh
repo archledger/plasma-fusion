@@ -33,6 +33,7 @@
 #   docksoffunplugged the one original on an unplugged screen: a copy on a screen that is there
 #               stays as the dock (standing in for it), the unplugged one gets its value back;
 #   docksoffnodock every dock widget removed while on: it can still be turned off (cleanup);
+#   docksdefaults the same through Defaults (off is the default without a dock too);
 #   docksnotmade ensure-topbars.js says it could not make a dock: an error;
 #   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
 #
@@ -285,6 +286,17 @@ expect docksoffnodock "turned off anyway: the copy's panel is gone" is "$(wc -l 
 expect docksoffnodock "  the choice is stored" grep -q "EveryScreen=false" "$work/docksoffnodock/config/plasmafusionrc"
 expect docksoffnodock "  and the page reads it off" is "$(value docksoffnodock everyDock)" false
 expect docksoffnodock "no error" is "$(value docksoffnodock errorText)" ""
+
+# The same with Defaults: off is the default also without a dock, so Defaults and Apply clean up.
+prepare_docksdefaults() { prepare_docksoff "$@"; }
+run docksdefaults "{\"showConfig\": true, \"screens\": 2, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"screen\": 1, \"config\": {\"PlasmaFusion/everyScreenCopy\": true}, \"widgets\": [\"$LAUNCHER\"]}]}" \
+  waitshell defaults "get everyDock" "get needsSave" save "wait 500" "get errorText"
+expect docksdefaults "Defaults turns the switch off without a dock" is "$(first docksdefaults everyDock)" false
+expect docksdefaults "  as a change to apply" is "$(first docksdefaults needsSave)" true
+expect docksdefaults "  and Apply removes the copy's panel" is "$(wc -l <"$work/docksdefaults/panels")" 1
+expect docksdefaults "  and stores the choice" grep -q "EveryScreen=false" "$work/docksdefaults/config/plasmafusionrc"
 
 # ensure-topbars.js runs but cannot make a dock ("not made 1"): an error says so.
 prepare_docksnotmade() {
