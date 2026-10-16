@@ -23,6 +23,7 @@ import org.kde.kitemmodels as KItemModels
 import "../code/jobs.js" as Jobs
 import "../code/pins.js" as Pins
 import "../code/date-timer.js" as DateTimer
+import "../code/endtask.js" as EndTask
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
@@ -863,6 +864,8 @@ PlasmoidItem {
         case "downloads-menu": showDownloadsMenu(); break;
         case "trash-menu": showTrashMenu(); break;
         case "close-menu": if (lastMenu) lastMenu.close(); break;
+        // An entry of the open menu, by its text (the rest of the key), as a click on it.
+        case "pick": if (lastMenu) { logNextMenu = true; lastMenu.pick(parts.slice(1).join(":")); } break;
         case "menu": if (item) { logNextMenu = true; showTaskMenu(item); } break;
         case "activate": if (item) activateTask(row, 0); break;
         case "new": if (item) tasksModel.requestNewInstance(tasksModel.makeModelIndex(row)); break;
@@ -1325,6 +1328,11 @@ PlasmoidItem {
             const count = tasksModel.rowCount(index);
             menu.addAction(count > 1 ? i18nc("@action:inmenu", "Close All %1 Windows", count) : i18nc("@action:inmenu", "Close"),
                            "window-close-symbolic", () => tasksModel.requestClose(index), {});
+            // End Task for an app that does not answer Close (not for the shell's own windows).
+            if (!EndTask.sessionApp(item.iconName) && EndTask.endTaskPids(taskPids(row)).length > 0) {
+                menu.addAction(i18nc("@action:inmenu end an app that does not respond", "End Task…"), "process-stop-symbolic",
+                               () => Qt.callLater(root.confirmEndTask, row), {});
+            }
         }
         if (logNextMenu) {
             logNextMenu = false;
@@ -1468,6 +1476,29 @@ PlasmoidItem {
                        () => Qt.openUrlExternally("trash:/"), {});
         menu.addAction(i18nc("@action:inmenu", "Empty Trash…"), "trash-empty-symbolic",
                        () => Qt.callLater(root.confirmEmptyTrash), { enabled: root.trashFull });
+        menu.openRelative();
+    }
+
+    // End Task's confirmation in the menu's place, as Empty Trash's. The processes are the ones the
+    // app has now; the command waits for them to quit and ends the rest (EndTask.endTaskCommand()).
+    function confirmEndTask(row: int): void {
+        const item = taskRepeater.itemAt(row) as TaskItem;
+        if (!item) {
+            return;
+        }
+        const pids = EndTask.endTaskPids(taskPids(row));
+        const name = item.name || item.iconName;
+        const menu = openMenu(item.iconItem);
+        menu.addHeader(i18nc("@title:menu %1 an app", "End %1? Anything not saved in it is lost.", name));
+        menu.addAction(i18nc("@action:inmenu", "End Task"), "process-stop-symbolic", () => {
+            console.info("dock: end task " + item.iconName + " " + pids.join(","));
+            executable.run(EndTask.endTaskCommand(pids));
+        }, {});
+        menu.addAction(i18nc("@action:inmenu", "Cancel"), "dialog-cancel-symbolic", null, {});
+        if (logNextMenu) {
+            logNextMenu = false;
+            console.info("dock: menu " + item.iconName + ": " + menu.entries.join(" | "));
+        }
         menu.openRelative();
     }
 

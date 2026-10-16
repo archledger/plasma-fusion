@@ -68,7 +68,7 @@ dock.addWidget("org.plasmafusion.dock");
 | `showOnlyCurrentDesktop` / `showOnlyCurrentActivity` / `showOnlyCurrentScreen` | true / true / false | task filters, as in the stock task manager |
 | `minimizeActiveTaskOnClick` | `true` | clicking the active app minimizes it |
 | `downloadsFolder` | empty (XDG download dir) | folder of the Downloads stack |
-| `debugHoverIndex`, `debugPointerX`, `debugAction` | off | testing only (not in the settings page): force the hovered task, pretend the pointer rests at a screen x, or run one action (`start`, `search`, `overview`, `downloads-menu`, `trash-menu`, `close-menu`, `configure` (opens the settings dialog), `menu:ROW`, `activate:ROW`, `new:ROW`). Used by the virtual-session scenarios because no pointer can be injected there. |
+| `debugHoverIndex`, `debugPointerX`, `debugAction` | off | testing only (not in the settings page): force the hovered task, pretend the pointer rests at a screen x, or run one action (`start`, `search`, `overview`, `downloads-menu`, `trash-menu`, `close-menu`, `configure` (opens the settings dialog), `menu:ROW`, `activate:ROW`, `new:ROW`, `pick:TEXT` (the open menu's entry with that text, as a click; the next menu's entries are logged)). Used by the virtual-session scenarios because no pointer can be injected there. |
 
 ## Behaviour
 
@@ -101,7 +101,8 @@ dock.addWidget("org.plasmafusion.dock");
   slot; running apps that are not pinned follow the second separator (QuickSettings board). Click:
   launch / activate / minimize the active one / cycle a group's windows (stock rules); Shift+click and
   middle-click: new instance; right-click: menu with window list, New Window or Open, Minimize/Restore,
-  **Keep in Dock** (pin/unpin), Close / Close All; drag sideways to reorder within pinned or running; drop
+  **Keep in Dock** (pin/unpin), Close / Close All, End Task… (a running app that is not the shell's
+  own; see "End Task" below); drag sideways to reorder within pinned or running; drop
   `.desktop` files to pin, other files on an app to open them with it; Meta+Alt+1..9 through
   `activateTaskAtIndex` (fusion-config.sh binds the snap script's "Activate Dock Entry N" actions;
   Meta+1..4 switch workspaces); startup feedback pulses the icon; an app demanding attention gets an orange dot;
@@ -579,3 +580,30 @@ parity audit, artifacts/plasma-fusion/2026-10-09-stock-parity). Tests, all with 
   the stream starts; a click on it mutes the stream (pactl `Mute: yes`) without restoring the minimized
   app, and a second click unmutes it; the menu shows Mute checked and unchecked accordingly; stopping
   playback hides it.
+
+## End Task (2026-10-16)
+
+The next queue's item 6 (approved 2026-10-16): Windows 11's taskbar has End Task, and "End Task from
+the panel" is a runner-up in all three desktops' loved lists. A running app's menu has **End Task…**
+after Close, unless its windows are the shell's own (`EndTask.sessionApp()`: plasmashell, KWin). It
+asks first in the menu's place, as Empty Trash… does: "End APP? Anything not saved in it is lost."
+with End Task and Cancel. End Task runs `EndTask.endTaskCommand()` (`contents/code/endtask.js`)
+with the app's processes as it has them then (every window's `AppPid`, `taskPids()`):
+
+- SIGTERM to each, which an app that still works answers by quitting;
+- after up to 3 s, SIGKILL to those still running (a process that is gone, or a zombie waiting to be
+  reaped, counts as ended), which no app can refuse;
+- a process named like one of the session's own (`/proc/PID/comm`: plasmashell, kwin_wayland,
+  Xwayland, ksmserver, kded6, systemd and the like) is never ended, whatever window it came with.
+
+KWin's own "not responding" dialog sends SIGABRT first so that a crash report is written (KWin
+6.7.5 `src/helpers/killer/killer.cpp`); a chosen End Task is not a crash, so it does not.
+
+- `tests/endtask.test.js` (node, in the dock's build step): the process ids taken (whole numbers above
+  1, once each), the shell's windows without End Task, and the command run with `sh` against stand-in
+  processes: one that quits on SIGTERM at once (the command returns at once, its zombie counted as
+  ended), one that ignores SIGTERM (SIGKILL after the wait) and one named `plasmashell` (left alone).
+- `tests/vsession/scenario-endtask.sh` (a private session; the test hook `pick:TEXT` chooses menu
+  entries): a stand-in app that ignores SIGTERM (kdialog) has End Task… in its menu and a pinned app
+  that is not running has none; End Task… asks first and Cancel leaves the app running; End Task ends
+  it.
