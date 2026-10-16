@@ -1154,25 +1154,27 @@ Item {
         arguments: [EnsureTopBars.script]
         onFinished: returnValue => {
             const line = String(returnValue.length > 0 ? returnValue[0] : "").trim();
+            const next = Panels.afterAnswer(line);
+            // New widgets (a bar's quick settings and tray, a dock and its launcher) get the power
+            // tier's keys only when the power service applies its tier again: its reload, which
+            // does nothing when the service is not running. Also when the other part is asked again
+            // (a dock made while the top bars' part was skipped).
+            if (next.powerTier) {
+                powerTierCall.call();
+            }
             // At session start plasmashell can answer before it has loaded its layout, or before
             // it has put its panels on their screens ("skipped", the top bars' or the docks' part):
             // ask again, with a growing delay
             // for up to about three minutes (a slow start, the parity VM, took longer than 15 s).
             // Only the first skip of a burst is logged, and the give-up once: the answer repeats
             // identically (a laptop logged ~20 skip lines at every session start, 2026-10-12).
-            if (Panels.needsRetry(line)) {
+            if (next.retry) {
                 askTopBarsAgain(line);
                 return;
             }
             topBarsRetry.stop();
             topBarsRetry.tries = 0;
             console.info("plasmafusion-snap: " + line);
-            // New widgets (a bar's quick settings and tray, a dock and its launcher) get the power
-            // tier's keys only when the power service applies its tier again: its reload, which
-            // does nothing when the service is not running.
-            if (Panels.addedWidgets(line)) {
-                powerTierCall.call();
-            }
         }
         // plasmashell not on the bus yet (the session's start): ask again, as above.
         onFailed: askTopBarsAgain("plasmashell did not run the top-bar check")

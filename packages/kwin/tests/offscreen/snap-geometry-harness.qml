@@ -431,6 +431,31 @@ Item {
         rectCheck("a 48 px gap on a 1024 px area: half, third, then the two thirds", cycleWin.frameGeometry, Qt.rect(0, 34, 659, 700));
         KWin.setConfig("Gap", 6);
         KW.Workspace.maximizeArea = Qt.rect(0, 34, 1440, 866);
+        // ensure-topbars.js's answer with the top bars' part skipped (a top panel of an unplugged
+        // screen) and a dock made: the power service is asked at once, and the top bars again.
+        let topBars = null, power = null, retry = null;
+        const objs = script.data || [];
+        for (let i = 0; i < objs.length; ++i) {
+            const o = objs[i];
+            if (o && o.method === "evaluateScript" && String((o.arguments || [])[0]).indexOf("docks: screens") !== -1) {
+                topBars = o;
+            } else if (o && o.method === "ReloadOrTryRestartUnit") {
+                power = o;
+            } else if (o && o.maxTries !== undefined && o.tries !== undefined) {
+                retry = o;
+            }
+        }
+        if (!topBars || !power || !retry) {
+            check("the top-bar call, the power reload and the retry are found", false, [!!topBars, !!power, !!retry].join(","));
+        } else {
+            const before = power.calls;
+            topBars.finished(["top bars: skipped, 1 top panel(s) without a screen\ndocks: screens 2, added 1"]);
+            check("a dock made while the top bars' part was skipped: the power service is asked at once",
+                power.calls === before + 1, power.calls - before);
+            check("  and the top bars are asked again", retry.running, retry.running);
+            retry.stop();
+            retry.tries = 0;
+        }
         Qt.callLater(testEnd);
     }
     function testEnd() {

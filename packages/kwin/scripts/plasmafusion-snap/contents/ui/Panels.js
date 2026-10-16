@@ -22,3 +22,10 @@ function needsRetry(text) {
     var s = String(text || "");
     return s.indexOf("top bars: skipped") !== -1 || s.indexOf("docks: skipped") !== -1;
 }
+
+// What the snap script does with an answer: ask the power service to apply its tier (something was
+// made, also in a part answered while the other part was skipped), and ask again (a part was
+// skipped). Both can be true at once.
+function afterAnswer(text) {
+    return { powerTier: addedWidgets(text), retry: needsRetry(text) };
+}

@@ -12,7 +12,7 @@ const { pathToFileURL } = require("url");
 
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-snap", "contents", "ui", "Panels.js");
 vm.runInThisContext(fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (l) => " ".repeat(l.length)), { filename: pathToFileURL(file).href });
-const { addedWidgets, needsRetry } = globalThis;
+const { addedWidgets, needsRetry, afterAnswer } = globalThis;
 
 const both = (bars, docks) => "top bars: screens 2, " + bars + "\ndocks: " + docks;
 assert.strictEqual(addedWidgets(both("added 1, completed 0", "one (plasmafusionrc [Dock] EveryScreen is not true)")), true, "a top bar made");
@@ -29,4 +29,11 @@ assert.strictEqual(needsRetry("top bars: off (plasmafusionrc [TopBar] EveryScree
                    "top bars off, the docks skipped (Dock on every screen alone)");
 assert.strictEqual(needsRetry(both("added 0, completed 0", "screens 2, added 0")), false, "an answer");
 assert.strictEqual(needsRetry(""), false, "no answer (the call failing is handled apart)");
+// Both at once: the top bars' part skipped (a top panel of an unplugged screen) while the docks'
+// part made a dock. The new dock gets the tier now, and the top bars are asked again.
+assert.deepStrictEqual(afterAnswer("top bars: skipped, 1 top panel(s) without a screen\ndocks: screens 2, added 1"),
+                       { powerTier: true, retry: true }, "a dock made while the top bars' part was skipped");
+assert.deepStrictEqual(afterAnswer(both("added 0, completed 0", "screens 2, added 0")), { powerTier: false, retry: false }, "nothing to do");
+assert.deepStrictEqual(afterAnswer("top bars: skipped, the layout is not loaded yet\ndocks: skipped, the layout is not loaded yet"),
+                       { powerTier: false, retry: true }, "only ask again");
 console.log("panels.test.js: all passed");
