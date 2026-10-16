@@ -14,7 +14,8 @@ PlasmaExtras.Menu {
     placement: PlasmaExtras.Menu.TopPosedLeftAlignedPopup
 
     // Testing: the entries as added ("> " a submenu, "  " its entries, "[x]" checked), and the
-    // items, for pick().
+    // items with the text they were added with, for pick() (the shown text is not it: the menu
+    // gets KAcceleratorManager, which puts an "&" in each item's text when it opens).
     property var entries: []
     property var items: []
     // A task's menu: its window actions hold the task's model index from when it opened.
@@ -42,7 +43,7 @@ PlasmaExtras.Menu {
         }
         menu.addMenuItem(item);
         entries.push((item.checked ? "[x] " : "") + text);
-        items.push(item);
+        items.push({ text: text, item: item });
         return item;
     }
 
@@ -90,7 +91,8 @@ PlasmaExtras.Menu {
 
     // Testing (the dock's debugAction "pick:TEXT"): the item with this text, as if it was clicked.
     function pick(text: string): bool {
-        const item = items.find(i => i.text === text);
+        const entry = items.find(i => i.text === text);
+        const item = entry ? entry.item : null;
         if (!item || item.enabled === false) {
             return false;
         }

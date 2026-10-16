@@ -154,6 +154,11 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.dock/tests/transfers_test.py
 
+      - name: Dock menu test hook on Plasma's menu (offscreen Qt)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen python3 packages/plasmoids/org.plasmafusion.dock/tests/menu_test.py
+
       - name: Launcher views on Kicker's models (activity history, private bus)
         run: |
           set -euo pipefail
