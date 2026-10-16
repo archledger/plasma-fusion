@@ -4,6 +4,7 @@
 import QtQuick
 
 QtObject {
+    id: dbusCall
     property string service
     property string path
     property string dbusInterface
@@ -11,7 +12,11 @@ QtObject {
     property var arguments: []
     signal finished(var returnValue)
     signal failed()
-    // How often the script called it (the harness reads it).
+    // How often the script called it, and with which arguments (the harness reads them).
     property int calls: 0
-    function call() { calls++; }
+    property var callLog: []
+    function call() {
+        calls++;
+        callLog = callLog.concat([[].concat(dbusCall.arguments)]);
+    }
 }

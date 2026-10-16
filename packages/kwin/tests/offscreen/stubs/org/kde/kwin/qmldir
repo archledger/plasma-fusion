@@ -11,3 +11,4 @@ singleton Options 3.0 Options.qml
 DesktopBackground 3.0 DesktopBackground.qml
 WindowModel 3.0 WindowModel.qml
 SwipeGestureHandler 3.0 SwipeGestureHandler.qml
+PinchGestureHandler 3.0 PinchGestureHandler.qml

@@ -888,16 +888,27 @@ and down to the script.
   active effects (`org.kde.kwin.Effects` `activeEffects`) every 100 ms while `slide` or
   `fadedesktop` is among them, 3 s at most (`Gestures.js` `desktopSwitching`). Without it, three
   fingers sideways set to All windows only switched the desktop on the test laptop (four desktops
-  in a row, as the setup makes them).
+  in a row, as the setup makes them). There is one wait at a time: a gesture that comes during it
+  joins it, and when the switch ends each shortcut is invoked once, in the order the gestures
+  came (review of #59: with a wait each, the first answer invoked the second gesture's shortcut,
+  and the second answer did it again, toggling it back off, while the first was lost).
 
 ### Verification (2026-10-16)
 
 - `packages/kwin/tests/gestures.test.js` (8 tests, in the build): the keys and defaults, the
   actions in the page's order, unknown and empty names, the shortcuts and quick settings' modes,
   the `openRequest` script, the desktop switch seen in a list or its text, main.qml's handlers
-  (direction, finger count, key) and its shortcuts waiting for the switch. Each of six mutations
+  (direction, finger count, key) and its shortcuts going to the wait. Each of six mutations
   (a shortcut, the case of a name, the request's key, a finger count, a handler's key, a default)
   fails it.
+- The offscreen snap harness (`tests/offscreen/snap-geometry-harness.qml`, CI `build`; its
+  stand-in `org.kde.kwin` has `PinchGestureHandler` and KWin 6.7.5's gesture enums, and its
+  `DBusCall` logs each call's arguments): the built script's six handlers; three fingers left
+  (All windows) asks KWin's effects and invokes nothing yet; three fingers right (the grid) during
+  the wait joins it; while KWin slides nothing is invoked, it asks again 100 ms later, and after
+  the switch All windows and then the grid are invoked, each once; a late answer invokes nothing;
+  three fingers up (Overview) with no switch is invoked at once. With a wait each (the first
+  head of #59) three of the checks fail.
 - On the test laptop's own session (Fedora 44, KWin 6.7.5, four desktops in one row), with a
   virtual touchpad made through `/dev/uinput` that libinput 1.31.3 takes as a touchpad (three-
   and four-finger swipes and pinches, as `libinput debug-events` showed): the installed 0.5.0 snap

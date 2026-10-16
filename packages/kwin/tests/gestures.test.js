@@ -59,14 +59,11 @@ test("KWin's desktop switch (its slide or fade) is seen in its active effects, a
     assert.strictEqual(desktopSwitching(""), false);
     assert.strictEqual(desktopSwitching(undefined), false);
 });
-test("main.qml has KWin's shortcuts wait for a desktop switch, and invokes them after it", () => {
+test("main.qml queues KWin's shortcuts for the desktop switch (the snap harness runs the wait)", () => {
     const qml = fs.readFileSync(path.join(dir, "main.qml"), "utf8");
     const run = qml.slice(qml.indexOf("function runGesture("), qml.indexOf("SwipeGestureHandler {"));
-    assert.match(run, /if \(shortcut !== ""\) \{[^}]*desktopSwitchCall\.call\(\);/);
+    assert.match(run, /if \(shortcut !== ""\) \{\s*root\.queueShortcut\(shortcut\);/);
     assert.doesNotMatch(run, /kwinShortcutCall\.call/, "not at once");
-    const check = qml.slice(qml.indexOf("id: desktopSwitchCall"), qml.indexOf("id: desktopSwitchTimer"));
-    assert.match(check, /Gestures\.desktopSwitching\(active\)[^{]*\{[^}]*desktopSwitchTimer\.restart\(\);\s*return;/);
-    assert.match(check, /root\.invokePendingShortcut\(\);/);
 });
 test("main.qml listens to each gesture with its direction and finger count, and runs its key", () => {
     const qml = fs.readFileSync(path.join(dir, "main.qml"), "utf8");

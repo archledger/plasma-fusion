@@ -1241,9 +1241,7 @@ Item {
         const shortcut = Gestures.kwinShortcut(action);
         const mode = Gestures.quickSettingsMode(action);
         if (shortcut !== "") {
-            root.pendingShortcut = shortcut;
-            root.shortcutChecks = 0;
-            desktopSwitchCall.call();
+            root.queueShortcut(shortcut);
         } else if (mode !== "") {
             quickSettingsCall.arguments = [Gestures.quickSettingsScript(mode, Date.now())];
             quickSettingsCall.call();
@@ -1291,12 +1289,26 @@ Item {
     }
     // Overview, its grid and All windows do not open while KWin switches desktops (Gestures.js
     // desktopSwitching), which it does with the same gesture with more than one column (or row) of
-    // desktops: their shortcut waits until the switch ends, asking every 100 ms, 3 s at most.
-    property string pendingShortcut: ""
+    // desktops: their shortcuts wait until the switch ends, asking every 100 ms, 3 s at most. One
+    // wait at a time: a gesture during it joins it, and each shortcut is invoked once, in order.
+    property var pendingShortcuts: []
     property int shortcutChecks: 0
-    function invokePendingShortcut() {
-        kwinShortcutCall.arguments = [root.pendingShortcut];
-        kwinShortcutCall.call();
+    function queueShortcut(shortcut) {
+        const waiting = root.pendingShortcuts.length > 0;
+        root.pendingShortcuts = root.pendingShortcuts.concat([shortcut]);
+        if (!waiting) {
+            root.shortcutChecks = 0;
+            desktopSwitchCall.call();
+        }
+    }
+    function invokePendingShortcuts() {
+        const shortcuts = root.pendingShortcuts;
+        root.pendingShortcuts = [];
+        desktopSwitchTimer.stop();
+        for (let i = 0; i < shortcuts.length; ++i) {
+            kwinShortcutCall.arguments = [shortcuts[i]];
+            kwinShortcutCall.call();
+        }
     }
     DBusCall {
         id: desktopSwitchCall
@@ -1306,15 +1318,18 @@ Item {
         method: "Get"
         arguments: ["org.kde.kwin.Effects", "activeEffects"]
         onFinished: returnValue => {
+            if (root.pendingShortcuts.length === 0) {
+                return;
+            }
             const active = returnValue.length > 0 ? returnValue[0] : "";
             if (Gestures.desktopSwitching(active) && root.shortcutChecks < 30) {
                 root.shortcutChecks += 1;
                 desktopSwitchTimer.restart();
                 return;
             }
-            root.invokePendingShortcut();
+            root.invokePendingShortcuts();
         }
-        onFailed: root.invokePendingShortcut()
+        onFailed: root.invokePendingShortcuts()
     }
     Timer {
         id: desktopSwitchTimer
