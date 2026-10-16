@@ -12,6 +12,7 @@ import "Panels.js" as Panels
 import "Cycle.js" as Cycle
 import "Groups.js" as Groups
 import "SnapGeometry.js" as SnapGeometry
+import "Gestures.js" as Gestures
 
 // Plasma Fusion snapping (boards QuickSettings.dc.html "Snap layouts", TabsSnap.dc.html).
 //
@@ -28,6 +29,8 @@ import "SnapGeometry.js" as SnapGeometry
 //   minimise and restore together, and activating one brings the others up with it.
 // - "Plasma Fusion: Snap Left/Right" (the setup gives them Meta+Left/Right): pressed again they
 //   step the window through 1/2, 1/3 and 2/3 of that side (Cycle.js).
+// - Touchpad gestures you can set on the settings page (Gestures.js): three fingers up, down,
+//   left and right, four fingers pinched in and spread out.
 //
 // Halves, 2:1 and quarters use KWin's own quick tiles (so they stay tiled, share their edge
 // when resized and restore their size when dragged out); thirds are placed by geometry.
@@ -298,24 +301,26 @@ Item {
         name: "Plasma Fusion: Snap Layouts"
         text: i18nd("plasmafusion", "Plasma Fusion: Snap Layouts")
         sequence: "Meta+Z"
-        onActivated: {
-            if (flyoutLoader.active) {
-                flyoutLoader.active = false;
-                return;
-            }
-            const win = Workspace.activeWindow;
-            if (!root.usable(win)) {
-                return;
-            }
-            pickerLoader.active = false;
-            root.endFill();
-            flyoutLoader.target = win;
-            flyoutLoader.layouts = root.layoutsFor(win);
-            flyoutLoader.active = true;
-            // The button side may have changed since the last look (System Settings).
-            if (sideLoader.item) {
-                sideLoader.item.refresh();
-            }
+        onActivated: root.toggleSnapLayouts()
+    }
+    // The flyout for the active window, or closed when it is open (Meta+Z, a gesture).
+    function toggleSnapLayouts() {
+        if (flyoutLoader.active) {
+            flyoutLoader.active = false;
+            return;
+        }
+        const win = Workspace.activeWindow;
+        if (!root.usable(win)) {
+            return;
+        }
+        pickerLoader.active = false;
+        root.endFill();
+        flyoutLoader.target = win;
+        flyoutLoader.layouts = root.layoutsFor(win);
+        flyoutLoader.active = true;
+        // The button side may have changed since the last look (System Settings).
+        if (sideLoader.item) {
+            sideLoader.item.refresh();
         }
     }
 
@@ -1223,28 +1228,105 @@ Item {
         }
     }
 
-    // ---------------------------------------------------------------- three-finger swipes
+    // ---------------------------------------------------------------- touchpad gestures
 
-    // Touchpad, three fingers (BACKLOG S15): up opens Overview, down closes it or, when it is
-    // closed, shows the desktop. KWin's own three-finger vertical swipe only switches between
-    // rows of virtual desktops; the Fusion layout has one row (hand check on the device).
+    // The gestures you can set (Gestures.js, board Gestures.dc.html): the settings page writes
+    // what each does to kwinrc [Script-plasmafusion-snap], read when the gesture comes (a KWin
+    // reconfigure, which the page asks for, reads the file again). By default three fingers up
+    // open Overview and down close it or, when it is closed, show the desktop (BACKLOG S15), four
+    // fingers pinched in open the launcher and spread out show the desktop.
+    function runGesture(key) {
+        const action = Gestures.actionFor(key, KWin.readConfig(key, ""));
+        console.info("plasmafusion-snap: gesture " + key + ": " + action);
+        const shortcut = Gestures.kwinShortcut(action);
+        const mode = Gestures.quickSettingsMode(action);
+        if (shortcut !== "") {
+            root.pendingShortcut = shortcut;
+            root.shortcutChecks = 0;
+            desktopSwitchCall.call();
+        } else if (mode !== "") {
+            quickSettingsCall.arguments = [Gestures.quickSettingsScript(mode, Date.now())];
+            quickSettingsCall.call();
+        } else if (action === "desktop") {
+            activeEffectsCall.call();
+        } else if (action === "launcher") {
+            launcherCall.call();
+        } else if (action === "snaplayouts") {
+            root.toggleSnapLayouts();
+        }
+    }
     SwipeGestureHandler {
         direction: SwipeGestureHandler.Direction.Up
         fingerCount: 3
         deviceType: SwipeGestureHandler.Device.Touchpad
-        onActivated: {
-            console.info("plasmafusion-snap: three-finger swipe up");
-            overviewCall.call();
-        }
+        onActivated: root.runGesture("GestureSwipeUp3")
     }
     SwipeGestureHandler {
         direction: SwipeGestureHandler.Direction.Down
         fingerCount: 3
         deviceType: SwipeGestureHandler.Device.Touchpad
-        onActivated: {
-            console.info("plasmafusion-snap: three-finger swipe down");
-            activeEffectsCall.call();
+        onActivated: root.runGesture("GestureSwipeDown3")
+    }
+    SwipeGestureHandler {
+        direction: SwipeGestureHandler.Direction.Left
+        fingerCount: 3
+        deviceType: SwipeGestureHandler.Device.Touchpad
+        onActivated: root.runGesture("GestureSwipeLeft3")
+    }
+    SwipeGestureHandler {
+        direction: SwipeGestureHandler.Direction.Right
+        fingerCount: 3
+        deviceType: SwipeGestureHandler.Device.Touchpad
+        onActivated: root.runGesture("GestureSwipeRight3")
+    }
+    PinchGestureHandler {
+        direction: PinchGestureHandler.Direction.Contracting
+        fingerCount: 4
+        onActivated: root.runGesture("GesturePinchIn4")
+    }
+    PinchGestureHandler {
+        direction: PinchGestureHandler.Direction.Expanding
+        fingerCount: 4
+        onActivated: root.runGesture("GesturePinchOut4")
+    }
+    // Overview, its grid and All windows do not open while KWin switches desktops (Gestures.js
+    // desktopSwitching), which it does with the same gesture with more than one column (or row) of
+    // desktops: their shortcut waits until the switch ends, asking every 100 ms, 3 s at most.
+    property string pendingShortcut: ""
+    property int shortcutChecks: 0
+    function invokePendingShortcut() {
+        kwinShortcutCall.arguments = [root.pendingShortcut];
+        kwinShortcutCall.call();
+    }
+    DBusCall {
+        id: desktopSwitchCall
+        service: "org.kde.KWin"
+        path: "/Effects"
+        dbusInterface: "org.freedesktop.DBus.Properties"
+        method: "Get"
+        arguments: ["org.kde.kwin.Effects", "activeEffects"]
+        onFinished: returnValue => {
+            const active = returnValue.length > 0 ? returnValue[0] : "";
+            if (Gestures.desktopSwitching(active) && root.shortcutChecks < 30) {
+                root.shortcutChecks += 1;
+                desktopSwitchTimer.restart();
+                return;
+            }
+            root.invokePendingShortcut();
         }
+        onFailed: root.invokePendingShortcut()
+    }
+    Timer {
+        id: desktopSwitchTimer
+        interval: 100
+        onTriggered: desktopSwitchCall.call()
+    }
+    DBusCall {
+        id: kwinShortcutCall
+        service: "org.kde.kglobalaccel"
+        path: "/component/kwin"
+        dbusInterface: "org.kde.kglobalaccel.Component"
+        method: "invokeShortcut"
     }
     DBusCall {
         id: overviewCall
@@ -1253,6 +1335,20 @@ Item {
         dbusInterface: "org.kde.kglobalaccel.Component"
         method: "invokeShortcut"
         arguments: ["Overview"]
+    }
+    DBusCall {
+        id: launcherCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "activateLauncherMenu"
+    }
+    DBusCall {
+        id: quickSettingsCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
     }
     DBusCall {
         id: activeEffectsCall

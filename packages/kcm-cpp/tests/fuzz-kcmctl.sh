@@ -6,8 +6,9 @@
 # bash's generator seeded with PF_FUZZ_SEED (default 1), so the same seed repeats the same rounds;
 # PF_FUZZ_COUNT rounds (default 25). Each round
 #   - writes kdeglobals, kwinrc, plasmafusionrc and baloofilerc with valid, odd and broken values
-#     for the keys the module reads (or leaves a key, a group or a file out), and sometimes adds the
-#     high-contrast scheme and the previous-desktop theme the module looks for;
+#     for the keys the module reads (the touchpad gestures' names and the desktops' number and rows
+#     among them; or leaves a key, a group or a file out), and sometimes adds the high-contrast
+#     scheme and the previous-desktop theme the module looks for;
 #   - writes a settings file for "Import settings…" with valid, odd and wrongly typed values (or
 #     one cut short, or none);
 #   - runs kcmctl with random commands: set (valid and invalid values), get, dump, load, save,
@@ -128,6 +129,13 @@ write_config() {
   entry DockHiding overApps none
   entry EdgeLeft true false
   entry EdgeRight true false
+  group 'Script-plasmafusion-snap'
+  entry GestureSwipeUp3 overview none Grid teleport ''
+  entry GestureSwipeLeft3 windows snaplayouts quicksettings
+  entry GesturePinchIn4 launcher notifications desktop
+  group 'Desktops'
+  entry Number 1 2 4 9 0
+  entry Rows 1 2 3 0 99
   group 'Plugins'
   entry blurEnabled true false
   entry plasmafusion-snapEnabled true false
@@ -185,13 +193,15 @@ json_value() {
 }
 # The settings file importSettings reads (settingsfile.cpp): whole, cut short, or not there.
 write_settings_file() {
-  local f=$work/settings.json format version glass corner accent color lv screen location height mode config type key s
+  local f=$work/settings.json format version glass corner accent color gesture row lv screen location height mode config type key s
   json_value '"plasma-fusion-settings"'; format=$REPLY
   json_value 1; version=$REPLY
   json_value 0 1 2; glass=$REPLY
   json_value true false; corner=$REPLY
   json_value 0 1 2; accent=$REPLY
   json_value '"#2f6fdf"' '"red"' '"#zz"'; color=$REPLY
+  json_value 0 4 8 9; gesture=$REPLY
+  json_value true false; row=$REPLY
   json_value 1; lv=$REPLY
   json_value 0 1 5; screen=$REPLY
   json_value '"top"' '"bottom"' '"left"'; location=$REPLY
@@ -201,7 +211,8 @@ write_settings_file() {
   json_value '"org.plasmafusion.dock"' '""'; type=$REPLY
   json_value '"Meta+A"' '""' '"Not a key"'; key=$REPLY
   s="{\"format\": $format, \"version\": $version, \"settings\": {\"glass\": $glass, \"hotCorner\": $corner, \"accentMode\": $accent,"
-  s+=" \"accentColor\": $color}, \"layout\": {\"version\": $lv, \"panels\": [{\"screen\": $screen, \"location\": $location,"
+  s+=" \"accentColor\": $color, \"gesturePinchIn\": $gesture, \"desktopsInOneRow\": $row},"
+  s+=" \"layout\": {\"version\": $lv, \"panels\": [{\"screen\": $screen, \"location\": $location,"
   s+=" \"height\": $height, \"floating\": false, \"lengthMode\": $mode, \"alignment\": \"center\", \"hiding\": \"none\","
   s+=" \"opacity\": \"adaptive\", \"config\": $config, \"widgets\": [{\"type\": $type, \"shortcut\": $key, \"config\": $config}]}]}}"
   case $((RANDOM % 8)) in
@@ -211,9 +222,10 @@ write_settings_file() {
   esac
 }
 
-ints=(style buttonStyle snapTrigger glass magnifiedSize iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy)
+ints=(style buttonStyle snapTrigger glass magnifiedSize iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy
+  gestureSwipeUp gestureSwipeDown gestureSwipeLeft gestureSwipeRight gesturePinchIn gesturePinchOut)
 bools=(magnify globalMenu hotCorner highContrast reduceMotion solidTopBar everyScreen everyDock desktopIcons lighterOnCritical
-  fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters launcherRecentFiles launcherRecentApps launcherPlaces)
+  fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters launcherRecentFiles launcherRecentApps launcherPlaces desktopsInOneRow)
 reads=(accentMode accentColor wallpaperColor shellRunning dockAvailable launcherAvailable metersAvailable fusionDecoration errorText infoText
   highContrastAvailable previousDesktopAvailable powerCritical fusionLookAndFeel busy noSuchProperty)
 methods=(setSchemeAccent setWallpaperAccent useFusionDecoration restorePreviousDesktop resetLayout noSuchMethod
@@ -263,9 +275,11 @@ write_commands() {
 
 # The range of every integer property (kcm.h).
 declare -A low=([style]=-1 [accentMode]=0 [buttonStyle]=0 [snapTrigger]=0 [glass]=0 [magnifiedSize]=48 [iconSize]=0
-  [dndBehavior]=0 [tabletMode]=0 [tabletApps]=0 [tabletDock]=0 [keyboardPolicy]=0)
+  [dndBehavior]=0 [tabletMode]=0 [tabletApps]=0 [tabletDock]=0 [keyboardPolicy]=0
+  [gestureSwipeUp]=0 [gestureSwipeDown]=0 [gestureSwipeLeft]=0 [gestureSwipeRight]=0 [gesturePinchIn]=0 [gesturePinchOut]=0)
 declare -A high=([style]=2 [accentMode]=2 [buttonStyle]=2 [snapTrigger]=1 [glass]=2 [magnifiedSize]=72 [iconSize]=6
-  [dndBehavior]=1 [tabletMode]=2 [tabletApps]=1 [tabletDock]=1 [keyboardPolicy]=2)
+  [dndBehavior]=1 [tabletMode]=2 [tabletApps]=1 [tabletDock]=1 [keyboardPolicy]=2
+  [gestureSwipeUp]=8 [gestureSwipeDown]=8 [gestureSwipeLeft]=8 [gestureSwipeRight]=8 [gesturePinchIn]=8 [gesturePinchOut]=8)
 
 # Prints the reported values outside their range; the status is 1 when there is one.
 check_ranges() {

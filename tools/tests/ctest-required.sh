@@ -14,7 +14,7 @@ build=${2:?usage: ctest-required.sh PART_DIR BUILD_DIR}
 
 case $(basename "$part") in
   decoration-cpp) required=(pfdeco-preview-dark pfdeco-preview-light pfdeco-fuzz) ;;
-  kcm-cpp) required=(kcmctl-load kcmctl-fuzz kcmctl-meters kcmctl-panels kcmctl-power kcmctl-reset kcmctl-settingsfile) ;;
+  kcm-cpp) required=(kcmctl-load kcmctl-fuzz kcmctl-meters kcmctl-panels kcmctl-power kcmctl-reset kcmctl-settingsfile kcmctl-gestures) ;;
   quicklook-cpp) required=(quicklook-model quicklook-viewers) ;;
   # The navigation effect has no tests of its own yet.
   *) required=() ;;

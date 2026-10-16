@@ -33,6 +33,7 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `packages/kwin/scripts/plasmafusion-snap/metadata.json` | KPackage metadata (KWin/Script, declarativescript, config KCM) |
 | `.../contents/ui/main.qml` | shortcut, quick-tile logic, gaps, picker trigger, filling a layout's zones, snap groups |
 | `.../contents/ui/Groups.js` | snap groups' pure rules (join, leave, partners, the zones' fill order, the thirds' zone test); node-tested |
+| `.../contents/ui/Gestures.js` | the touchpad gestures you can set: their kwinrc keys and defaults, the actions and how each is run ("Touchpad gestures" below); node-tested |
 | `.../contents/ui/SnapFlyout.qml` | Meta+Z flyout |
 | `.../contents/ui/DecorationSide.qml` | which side the maximize button is on (reads the decoration settings with `kreadconfig6`) |
 | `.../contents/ui/ensureTopBars.js` | generated at build from `packages/look-and-feel/common/contents/layouts/ensure-topbars.js`: the script text the hot-plug handler sends to plasmashell (not in the source tree) |
@@ -50,7 +51,7 @@ sources) plus `org.kde.plasma.core` (Dialog), Kirigami (theme colours, icons) an
 | `.../contents/ui/main.qml` | the script: reads the desktops and windows, carries out a pass, watches the windows' desktop moves |
 | `.../contents/ui/Workspaces.js` | the pure rules (which windows hold a workspace, the plan, the timing, the numbered names); node-tested |
 | `.../contents/config/main.xml`, `contents/ui/config.ui` | `KeepFirst` (System Settings > Window Management > KWin Scripts) |
-| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the five packages into the stage, runs the placement rules', snap groups', snap cycle's, `Panels.js`'s and dynamic workspaces' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
+| `tools/build.d/80-kwin.sh` | checks metadata ids/structures and XML, copies the five packages into the stage, runs the placement rules', snap groups', snap cycle's, `Panels.js`'s, touchpad gestures' and dynamic workspaces' node suites when node is installed, generates `ensureTopBars.js`, compiles the preview shader with `qsb` when it is installed (else the committed `.qsb` file is used) |
 | `packages/kwin/tests/` | test tooling only, not installed (see Verification) |
 
 ## Build and install
@@ -118,6 +119,7 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 | `[Script-plasmafusion-snap] QuickTileGaps` | true | apply the gap to KWin's quick tiles (edge snapping, Meta+arrow, Meta+Z halves/quarters) |
 | `[Script-plasmafusion-snap] FillOtherHalf` | true | offer the other windows after a window is snapped to a half, and for every empty zone of a layout chosen in the flyout |
 | `[Script-plasmafusion-snap] PairWindows` | true | snap groups: windows snapped together through the picker minimise/restore/raise together |
+| `[Script-plasmafusion-snap] GestureSwipeUp3`, `GestureSwipeDown3`, `GestureSwipeLeft3`, `GestureSwipeRight3`, `GesturePinchIn4`, `GesturePinchOut4` | `overview`, `desktop`, `none`, `none`, `launcher`, `desktop` | what three fingers up, down, left and right and four fingers pinched in and spread out do: `none`, `overview`, `desktop`, `grid`, `windows`, `launcher`, `quicksettings`, `notifications` or `snaplayouts` (an unknown name is the default). Set on the Plasma Fusion settings page, not in the script's own settings; read at the next reconfigure ("Touchpad gestures") |
 | `[Script-plasmafusion-attach] FollowParent` | true | dialogs move with their window |
 | `[Script-plasmafusion-attach] DetachOnMove` | true | dragging a dialog yourself detaches it (false: it snaps back) |
 | `[Script-plasmafusion-attach] TitleBarGap` | 0 | px between the parent's title bar and the dialog |
@@ -774,6 +776,8 @@ screen).
 - Touchpad, three fingers: up opens Overview, down closes it or shows the desktop
   (`SwipeGestureHandler`, device type touchpad). KWin's own three-finger vertical swipe switches
   between rows of virtual desktops; the Fusion layout has one row. Hand check on the device.
+  Since 2026-10-16 these are two of the gestures the settings page sets ("Touchpad gestures" at
+  the end).
 - The outline's durations follow Plasma's animation speed.
 
 ### Verification
@@ -828,5 +832,85 @@ Private sessions on the ThinkPad (seed from `fusion-config.sh --install`):
 - The split divider handle (TABLET 4.10, P2): T18's "drag the divider" step has no handle; the
   two tiles still share their edge when one is resized by its border.
 - Touchpad swipes cannot be produced in a private session: hand check at DEPLOY-1 (also that
-  KWin's own three-finger vertical gesture does nothing visible with one desktop row).
+  KWin's own three-finger vertical gesture does nothing visible with one desktop row). Since
+  2026-10-16 a virtual touchpad on the test laptop's own session plays them ("Touchpad gestures",
+  Verification).
 - The 6 px strip between a snapped half and the picker shows the windows under it (as before).
+
+## Touchpad gestures (2026-10-16)
+
+The next queue's item 8 (the owner's list and defaults, 2026-10-16; board
+`design/boards/Gestures.dc.html`): the snap script listens to six touchpad gestures, and the
+Plasma Fusion settings page sets what each does (docs/parts/kcm-cpp.md, "Touchpad gestures").
+Before, three fingers up opened Overview and down closed it or showed the desktop, fixed.
+
+What KWin 6.7.5 leaves free (read in its v6.7.5 sources): it takes every touchpad swipe and pinch
+with three or more fingers, whether or not a handler matches (`src/input.cpp` 1090-1131), and all
+the handlers of a gesture's direction and finger count fire together (`src/gestures.cpp` 117-147).
+Its own are four fingers up (Overview) and down (Overview's grid,
+`plugins/overview/overvieweffect.cpp` 35-46), three and four fingers left and right (desktops,
+`src/virtualdesktops.cpp` 806-809, which move only with more than one column of desktops), three
+fingers up and down (the desktop row above or below, 810-821, only with more than one row) and a
+three-finger pinch (Zoom, `plugins/zoom/zoom.cpp` 70-75, on by default). No setting turns them off.
+So the script takes three fingers up, down, left and right and four fingers pinched in and spread
+out; four-finger swipes and the three-finger pinch stay KWin's. Where KWin also uses one of the
+six (three fingers sideways with several columns of desktops, up and down with several rows),
+both happen: the settings page says so on the row, and its "Keep desktops in one row" leaves up
+and down to the script.
+
+- `contents/ui/Gestures.js` (pure, `packages/kwin/tests/gestures.test.js` in the build): each
+  gesture's kwinrc key in `[Script-plasmafusion-snap]` (`GestureSwipeUp3`, `GestureSwipeDown3`,
+  `GestureSwipeLeft3`, `GestureSwipeRight3`, `GesturePinchIn4`, `GesturePinchOut4`), handler type,
+  direction, finger count and default; the nine actions in the settings page's order (`none`,
+  `overview`, `desktop`, `grid`, `windows`, `launcher`, `quicksettings`, `notifications`,
+  `snaplayouts`); a name it does not know (empty, a later version's, a typo) is the gesture's
+  default, as on the page.
+- `main.qml`: four `SwipeGestureHandler`s (three fingers, touchpad) and two
+  `PinchGestureHandler`s (four fingers, contracting and expanding). A gesture reads its key with
+  `KWin.readConfig` when it comes, from KWin's copy of kwinrc (KWin 6.7.5
+  `src/scripting/scripting.cpp` 119-122), which a KWin reconfigure reads again
+  (`src/workspace.cpp` 1014); the settings page asks for one after it writes the keys. It logs
+  `plasmafusion-snap: gesture <key>: <action>` and runs the action:
+  - Overview, Grid of desktops, All windows: KWin's shortcuts `Overview`, `Grid View` and
+    `Expose` (kglobalaccel `invokeShortcut` on `/component/kwin`), each opening or closing it;
+  - Show desktop: closes Overview when it is open, else shows or hides the desktop (as three
+    fingers down did);
+  - Launcher: plasmashell's `activateLauncherMenu`, as the Meta key;
+  - Quick settings, Notifications: quick settings' `openRequest` (`toggle:<nonce>`,
+    `notifications:<nonce>`), as its own keys hand it (docs/parts/shell-quicksettings.md); the
+    widget on KWin's active screen acts on it;
+  - Snap layouts: the Meta+Z flyout for the active window (or closes it).
+
+  Overview, its grid and All windows do not start while another full-screen effect runs (KWin
+  6.7.5 `effect/quickeffect.cpp` `QuickSceneEffect::startInternal`), and KWin's desktop switch is
+  one (its slide, `plugins/slide/slide.cpp` 460 and 500, or fade). So when KWin also switches
+  desktops with the gesture, the shortcut waits until the switch ends: the script asks KWin's
+  active effects (`org.kde.kwin.Effects` `activeEffects`) every 100 ms while `slide` or
+  `fadedesktop` is among them, 3 s at most (`Gestures.js` `desktopSwitching`). Without it, three
+  fingers sideways set to All windows only switched the desktop on the test laptop (four desktops
+  in a row, as the setup makes them).
+
+### Verification (2026-10-16)
+
+- `packages/kwin/tests/gestures.test.js` (8 tests, in the build): the keys and defaults, the
+  actions in the page's order, unknown and empty names, the shortcuts and quick settings' modes,
+  the `openRequest` script, the desktop switch seen in a list or its text, main.qml's handlers
+  (direction, finger count, key) and its shortcuts waiting for the switch. Each of six mutations
+  (a shortcut, the case of a name, the request's key, a finger count, a handler's key, a default)
+  fails it.
+- On the test laptop's own session (Fedora 44, KWin 6.7.5, four desktops in one row), with a
+  virtual touchpad made through `/dev/uinput` that libinput 1.31.3 takes as a touchpad (three-
+  and four-finger swipes and pinches, as `libinput debug-events` showed): the installed 0.5.0 snap
+  script with this change's gesture code (`Gestures.js` and the gesture part of `main.qml`, the
+  same text) put in `~/.local/share/kwin-wayland/scripts`, which KWin 6.7.5 reads before
+  `kwin/scripts` (`src/scripting/scripting.cpp` 757-760). A changed script needs a path KWin has
+  not loaded before: its QML engine keeps a file it compiled (the second and third runs, from the
+  same path, ran the first one's code). With the defaults three fingers up opened Overview (no
+  wait), down closed it, then showed the desktop and gave it back; four fingers pinched in opened
+  and closed the launcher (`activateLauncherMenu`), spread out showed the desktop and gave it
+  back. With the keys set as the page writes them: three fingers left (All windows) went to the
+  next desktop and then opened All windows, the script having waited one check for KWin's slide;
+  right (Grid of desktops) came back and opened the grid, the same; four fingers pinched in sent
+  quick settings `toggle:<nonce>` twice, spread out `notifications:<nonce>`; up (Nothing) did
+  nothing; down (Snap layouts) found no window to place. The machine was left as found (the
+  script's keys deleted, the installed script loaded again, the first desktop current).

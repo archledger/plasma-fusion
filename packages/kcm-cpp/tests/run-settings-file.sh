@@ -142,6 +142,7 @@ check "  as a Plasma Fusion settings file of version 1" test "$(json "$work/expo
 check "  with the applied settings" test "$(json "$work/export.json" '[f["settings"][k] for k in ("glass", "hotCorner", "reduceMotion", "iconsMode")]')" = "[1, False, True, 0]"
 check "  and not the change still pending (magnifiedSize)" test "$(json "$work/export.json" 'f["settings"]["magnifiedSize"]')" = 62
 check "  and the accent and decoration" test "$(json "$work/export.json" '"accentMode" in f["settings"] and "fusionDecoration" in f["settings"]')" = True
+check "  and the touchpad gestures, desktops in one row" test "$(json "$work/export.json" '[f["settings"][k] for k in ("gestureSwipeUp", "gesturePinchIn", "desktopsInOneRow")]')" = "[1, 5, False]"
 check "  the decoration in use, not Plasma Fusion's: its keys" \
   test "$(json "$work/export.json" 'f["settings"]["fusionDecoration"], f["settings"]["decoration"]')" = \
   "(False, {'ButtonsOnLeft': 'XIA', 'ButtonsOnRight': '_', 'library': 'org.kde.kwin.aurorae.v2', 'theme': '__aurorae__svg__TestTheme'})"
@@ -193,7 +194,7 @@ write("version", dict(good, version=2))
 write("nopanels", dict(good, layout=dict(good["layout"], panels=[])))
 bad = json.loads(json.dumps(good)); bad["layout"]["panels"][0]["location"] = "middle"; write("location", bad)
 bad = json.loads(json.dumps(good)); bad["layout"]["panels"][0]["widgets"][0]["config"][0]["keys"]["keyboardPolicy"] = 3; write("keytype", bad)
-bad = json.loads(json.dumps(good)); bad["settings"]["glass"] = 7; bad["settings"]["hotCorner"] = "yes"; write("values", bad)
+bad = json.loads(json.dumps(good)); bad["settings"]["glass"] = 7; bad["settings"]["hotCorner"] = "yes"; bad["settings"]["gestureSwipeLeft"] = 4; write("values", bad)
 def panel(name, change):
     bad = json.loads(json.dumps(good)); change(bad["layout"]["panels"][0]); write(name, bad)
 panel("customlen", lambda p: p.update(lengthMode="custom"))
@@ -229,6 +230,8 @@ session values "get hotCorner" "call importSettings $work/values.json" "get glas
 check "values a setting does not take are left as they are" bash -c "grep -q '^kcmctl: glass=0' '$work/values.log' && test \$(grep -c '^kcmctl: hotCorner=true' '$work/values.log') = 2"
 check "  and the page says so" grep -q '2 settings in the file have values this version does not take' "$work/values.log"
 check "  the rest of the file is in place" bash -c "grep -q importGot '$work/calls.log' && grep -q '^AppIcons=designs' '$XDG_CONFIG_HOME/plasmafusionrc'"
+check "  a gesture's choice too (kwinrc, the snap script's name)" bash -c "
+  [ \"\$(kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key GestureSwipeLeft3)\" = windows ]"
 
 # ---- A decoration that is not installed here is named; a file without keys gives none (no
 # default either: the file is what the user had).

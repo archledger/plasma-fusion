@@ -95,12 +95,13 @@ off.
 | `src/ui/FusionPalette.qml` | board colours dark / light; accent-dependent ones from the colour scheme |
 | `src/ui/SectionTitle.qml`, `StyleCard.qml`, `Swatch.qml`, `WallpaperPill.qml`, `Segmented.qml`, `ToggleRow.qml` | the board's controls |
 | `src/ui/ChoiceRow.qml`, `ActionRow.qml` | a label with a segmented control (side by side, stacked in a narrow window), an action with its explanation and button |
+| `src/ui/DropDown.qml`, `DropDownRow.qml` | the Gestures board's drop-down (a `T.ComboBox` drawn to the board, its list a popup) and a label with one |
 | `packages/common/FusionMetrics.qml` (shared, not this part's) | compiled into the module's resources next to `main.qml` (`src/CMakeLists.txt`; `common/` in the source tarball): board text through `m.font()`, text-holding heights through `m.px()`, so the page follows the user's font size (identical at the default font) |
 | `icons/plasmafusion-logo.svg` | the logo mark (three discs), installed as hicolor `apps/plasmafusion-logo` (CC-BY-SA-4.0) |
 | `build-remote.sh`, `container-build.sh` | development: build in the container on the ThinkPad and fetch the installed tree (`root/`) for test sessions; the package is built by `packaging/build-rpm.sh --compiled` (system.md) |
 | `LICENSES/` | GPL-2.0-or-later (code), CC-BY-SA-4.0 (icon) |
-| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop; `--report` prints where the content column is), `page_layout_test.py` (the column's place in System Settings' widths, CI `build`), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh`, `scenario-everydock.sh` ("Dock on every screen" on two outputs) |
-| `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/run-power-tier.sh`, `tests/run-reset-layout.sh`, `tests/run-settings-file.sh`, `tests/shell-panels.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and settings files and drives the module with random commands, saving and importing included, in a scratch HOME with stand-ins for the programs it starts. `tests/meters-switch.sh` (ctest test `kcmctl-meters`) turns the system meters switch on and off against `fakeshell` (`tests/fakeshell/`: a stand-in Plasma shell answering `evaluateScript` with a QJSEngine model of desktop scripting, `shell.js`, that can list new widgets late, per bar too, add them at the bar's end or fail to make them): meters placed by hand stay, the new ones are placed before quick settings, also on two bars whose meters are listed 0.4 s and 1.8 s late (the module placed only the first bar's before a71fb66), the errors without quick settings and when the widget cannot be made, Apply returning at once while the shell is slow, and off removing every one. `tests/shell-panels.sh` (ctest test `kcmctl-panels`) changes the panels against it: with a top bar on a missing screen (the model crashes on its opacity, as plasmashell 6.8 does) the state is read and the look applied without touching that bar; with a shell that answers 7 s late (`scriptDelayMs`, `slowFrom`) the page reads it, and turning on the system meters or "Top bar on every screen" reports no error while kcmctl's `heartbeat` timer keeps ticking during Apply. `tests/run-power-tier.sh` (ctest test `kcmctl-power`, with node and python3-gobject) runs the module and the power service against a stand-in plasmashell and KWin (`packages/powerfx/tests/mock-session.py`): the page's choices while a tier is held; `tests/run-reset-layout.sh` (`kcmctl-reset`) the layout reset and the keys it gives, `tests/run-settings-file.sh` (`kcmctl-settingsfile`) the settings file. The `compiled` and `sanitizers` workflows run all seven (docs/parts/ci.md, "Dynamic analysis") |
+| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop; `--report` prints where the content column is, `--gestures` the touchpad gesture rows, `--key-dropdown` presses a key in a drop-down, `--open-dropdown` opens one's list), `page_layout_test.py` (the column's place in System Settings' widths and the touchpad gesture rows, CI `build`), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh`, `scenario-everydock.sh` ("Dock on every screen" on two outputs) |
+| `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/run-power-tier.sh`, `tests/run-reset-layout.sh`, `tests/run-settings-file.sh`, `tests/run-gestures.sh`, `tests/shell-panels.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and settings files and drives the module with random commands, saving and importing included, in a scratch HOME with stand-ins for the programs it starts. `tests/meters-switch.sh` (ctest test `kcmctl-meters`) turns the system meters switch on and off against `fakeshell` (`tests/fakeshell/`: a stand-in Plasma shell answering `evaluateScript` with a QJSEngine model of desktop scripting, `shell.js`, that can list new widgets late, per bar too, add them at the bar's end or fail to make them): meters placed by hand stay, the new ones are placed before quick settings, also on two bars whose meters are listed 0.4 s and 1.8 s late (the module placed only the first bar's before a71fb66), the errors without quick settings and when the widget cannot be made, Apply returning at once while the shell is slow, and off removing every one. `tests/shell-panels.sh` (ctest test `kcmctl-panels`) changes the panels against it: with a top bar on a missing screen (the model crashes on its opacity, as plasmashell 6.8 does) the state is read and the look applied without touching that bar; with a shell that answers 7 s late (`scriptDelayMs`, `slowFrom`) the page reads it, and turning on the system meters or "Top bar on every screen" reports no error while kcmctl's `heartbeat` timer keeps ticking during Apply. `tests/run-power-tier.sh` (ctest test `kcmctl-power`, with node and python3-gobject) runs the module and the power service against a stand-in plasmashell and KWin (`packages/powerfx/tests/mock-session.py`): the page's choices while a tier is held; `tests/run-reset-layout.sh` (`kcmctl-reset`) the layout reset and the keys it gives, `tests/run-settings-file.sh` (`kcmctl-settingsfile`) the settings file, `tests/run-gestures.sh` (`kcmctl-gestures`) the touchpad gestures and the desktops in one row. The `compiled` and `sanitizers` workflows run all eight (docs/parts/ci.md, "Dynamic analysis") |
 
 ## Build
 
@@ -171,10 +172,13 @@ kwinrc, plasmafusionrc and the shell layout from a fusion-config.sh backup.
   1.0.0-4: snap layouts on hold, Glass Full, high contrast off, reduce motion off, 62 px, solid top
   bar next to windows, a top bar on every screen, desktop icons on at Medium, file drag Ask,
   lighter at 10 % on, tablet mode Automatic, apps full screen, dock hides over apps, keyboard in
-  tablet mode only, edge swipes off, home indicator on; the launcher's three sections on (2026-10-16).
+  tablet mode only, edge swipes off, home indicator on; the launcher's three sections on (2026-10-16);
+  three fingers up Overview, down Show desktop, left and right nothing, four fingers pinched in the
+  launcher and spread out Show desktop, the desktops in one row (2026-10-16).
   Apply writes only what changed, in this
   order: Style, colour scheme (high contrast), accent (on top of the scheme just applied), window
-  buttons, snap layouts and hot corner (one KWin reconfigure), glass (plasmafusionrc and blur),
+  buttons, snap layouts, hot corner and touchpad gestures (one KWin reconfigure), the desktops'
+  rows, glass (plasmafusionrc and blur),
   motion, file drag, battery, tablet keys (then the tablet script's shortcut), then the shell:
   dock, home indicator, top bar menu, panels and glass keys, top bars on other screens, desktop,
   keyboard policy.
@@ -769,3 +773,64 @@ Tests:
   applied changes to those widgets (the import's Apply, then the removal); the same Apply alone,
   and removing the panels alone (one at a time, both docks, both top bars), log nothing, and every
   check passes. Which widget's reply handler it is is a follow-up.
+
+## Touchpad gestures (2026-10-16)
+
+The next queue's item 8 (the owner's list and defaults, 2026-10-16; board
+`design/boards/Gestures.dc.html`): a "Touchpad gestures" group after Tablet sets what three
+fingers up, down, left and right and four fingers pinched in and spread out do. Each row is a
+`DropDownRow` with the board's drop-down (`DropDown.qml`: a `T.ComboBox` drawn to the board, its
+list a popup, the chosen action with a check) offering Nothing, Overview, Show desktop, Grid of
+desktops, All windows, Launcher, Quick settings, Notifications and Snap layouts (the
+`GestureAction` values, in the snap script's `Gestures.js` order). The defaults: up Overview, down
+Show desktop, left and right Nothing, pinched in Launcher, spread out Show desktop. The snap script
+does the gestures (docs/parts/kwin.md, "Touchpad gestures").
+
+- Load and Apply: kwinrc `[Script-plasmafusion-snap]` `GestureSwipeUp3`, `GestureSwipeDown3`,
+  `GestureSwipeLeft3`, `GestureSwipeRight3`, `GesturePinchIn4`, `GesturePinchOut4` hold the
+  action's name (`none`, `overview`, `desktop`, `grid`, `windows`, `launcher`, `quicksettings`,
+  `notifications`, `snaplayouts`); an empty or unknown name is the default, as in the script.
+  Apply writes only the changed keys and reconfigures KWin, in the one reconfigure of the window
+  buttons, snap layouts and hot corner (the script reads its keys from KWin's copy of kwinrc,
+  which a reconfigure reads again). The
+  settings file carries the six choices and the switch below.
+- KWin keeps its own gestures (it has no setting for them): four-finger swipes (a note under the
+  group says what they do), and three fingers sideways while there is more than one column of
+  desktops, up and down while there is more than one row. Every row stays settable; while KWin
+  also uses one of these, the row says so ("both happen": the snap script waits for KWin's desktop
+  switch before it opens Overview, the grid or All windows). The page works out KWin's grid as KWin
+  6.7.5 does (`VirtualDesktopManager::load` and `updateLayout`: `[Desktops] Rows`, 2 when not
+  set, at most one per desktop, as many columns as the desktops need), from kwinrc `[Desktops]`
+  `Number` and `Rows` with a change not applied yet counted. KWin writes them without a change
+  notification, so the page reads them again on KWin's `countChanged` and `rowsChanged` signals
+  (`/VirtualDesktopManager`), as when it opens and after Apply.
+- "Keep desktops in one row" (on by default: `plasma-fusion setup` puts the desktops in one row,
+  `tools/device/fusion-config.sh`): on, KWin's rows become 1, which leaves three fingers up and
+  down to the group's rows with several desktops; off, they become the rows there were before
+  (kept in plasmafusionrc `[Gestures] PreviousRows`, at least 2, KWin's default). Apply sets
+  KWin's `rows` property over D-Bus (KWin lays the desktops out and saves; it refuses more rows
+  than desktops, `dbusinterface.cpp` `setRows`) and writes kwinrc `[Desktops] Rows`, which KWin
+  reads when it starts. The page shows the switch on while kwinrc has `Rows=1`. With fewer
+  desktops than the rows given back, KWin keeps one row (it holds no more rows than desktops) and
+  writes that when it next saves the desktops; the switch then shows on again.
+- `tests/run-gestures.sh` (ctest `kcmctl-gestures`, 45 checks, with the stand-in KWin of
+  `packages/powerfx/tests/mock-session.py --kwin-config`, which logs its reconfigure and rows and
+  whose `createDesktop` adds a desktop to kwinrc and sends `countChanged` as KWin does): the
+  defaults, the page's Defaults, kwinrc's names read (case aside, unknown and empty ones the
+  default); each of the nine actions written as `Gestures.js` names it (read from that file), only
+  the changed key, KWin reconfigured; values out of range not taken; the notes for one desktop,
+  two in two rows, four in two rows and in one row not applied yet, and for a desktop added while
+  the page is open; one row on (KWin's rows, kwinrc and the rows kept) and read back, off (the
+  rows given back, the kept number gone). Eight mutations of the module (no write, no reconfigure,
+  no rows, the rows not given back, the pending switch ignored, an unknown name not the default,
+  the default of two rows, the gestures left out of the settings file) and the desktop signals not
+  connected fail it or `kcmctl-settingsfile`, which checks that an export holds the gestures and
+  the switch and that an import writes a gesture's name. `tests/fuzz-kcmctl.sh` gives the gesture
+  keys and the desktops random values, and the settings file a gesture and the switch.
+- `tests/page_layout_test.py` (CI `build`, offscreen: `offscreen_preview.py --gestures` and
+  `--key-dropdown N KEY`): each row shows the module's choice, the notes show on the up and down
+  and the left and right rows while the module says KWin uses those, a key in a drop-down (Down,
+  End) sets the module's value. Four mutations (a row not wired to the module, nor from it, the
+  note gone, the drop-down's choice not passed on) fail it.
+- Not done: the page does not say when the snap script is turned off (System Settings > Window
+  Management > KWin Scripts), which leaves the gestures to nothing.

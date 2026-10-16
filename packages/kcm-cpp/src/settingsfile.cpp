@@ -269,6 +269,13 @@ const QList<PlasmaFusionKcm::FileSetting> &PlasmaFusionKcm::fileSettings()
         {"launcherRecentFiles", nullptr, &State::launcherRecentFiles},
         {"launcherRecentApps", nullptr, &State::launcherRecentApps},
         {"launcherPlaces", nullptr, &State::launcherPlaces},
+        {"gestureSwipeUp", &State::gestureSwipeUp, nullptr},
+        {"gestureSwipeDown", &State::gestureSwipeDown, nullptr},
+        {"gestureSwipeLeft", &State::gestureSwipeLeft, nullptr},
+        {"gestureSwipeRight", &State::gestureSwipeRight, nullptr},
+        {"gesturePinchIn", &State::gesturePinchIn, nullptr},
+        {"gesturePinchOut", &State::gesturePinchOut, nullptr},
+        {"desktopsInOneRow", nullptr, &State::desktopsInOneRow},
     };
     return settings;
 }

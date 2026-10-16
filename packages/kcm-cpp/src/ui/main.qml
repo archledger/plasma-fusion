@@ -75,6 +75,20 @@ KCM.SimpleKCM {
     // A launcher section the launcher widgets differ on (its switch shows it off).
     readonly property string launcherMixedNote: i18nc("@info", "Some launchers show this and some do not. Setting it here sets it for all of them.")
 
+    // What a touchpad gesture can do, in the module's GestureAction order (the snap script's
+    // Gestures.js ACTIONS).
+    readonly property var gestureActions: [
+        i18nc("@item:inlistbox a gesture does nothing", "Nothing"),
+        i18nc("@item:inlistbox", "Overview"),
+        i18nc("@item:inlistbox", "Show desktop"),
+        i18nc("@item:inlistbox", "Grid of desktops"),
+        i18nc("@item:inlistbox present all windows", "All windows"),
+        i18nc("@item:inlistbox", "Launcher"),
+        i18nc("@item:inlistbox", "Quick settings"),
+        i18nc("@item:inlistbox", "Notifications"),
+        i18nc("@item:inlistbox", "Snap layouts")
+    ]
+
     // The same note for every control that goes through the Plasma shell.
     function shellNote(available, missingText) {
         if (kcm.shellLoading || available) {
@@ -743,6 +757,93 @@ KCM.SimpleKCM {
                         note: root.shellNote(kcm.dockAvailable, i18nc("@info", "The Plasma Fusion dock is not in a panel."))
                         onToggleRequested: kcm.homeIndicator = !kcm.homeIndicator
                     }
+                }
+            }
+
+            // ---------- Touchpad gestures (board Gestures.dc.html) ----------
+            ColumnLayout {
+                spacing: 10
+                Layout.fillWidth: true
+
+                SectionTitle {
+                    text: i18nc("@title:group", "Touchpad gestures")
+                    pal: fusionPalette
+                }
+                ColumnLayout {
+                    spacing: 0
+                    Layout.fillWidth: true
+
+                    DropDownRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label touchpad gesture", "Swipe up with three fingers")
+                        model: root.gestureActions
+                        currentIndex: kcm.gestureSwipeUp
+                        onActivated: index => kcm.gestureSwipeUp = index
+                    }
+                    DropDownRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label touchpad gesture", "Swipe down with three fingers")
+                        model: root.gestureActions
+                        currentIndex: kcm.gestureSwipeDown
+                        note: kcm.gestureUpDownShared
+                            ? i18nc("@info", "With more than one row of desktops, KWin also switches desktops with three fingers up and down: both happen.")
+                            : ""
+                        onActivated: index => kcm.gestureSwipeDown = index
+                    }
+                    DropDownRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label touchpad gesture", "Swipe left with three fingers")
+                        model: root.gestureActions
+                        currentIndex: kcm.gestureSwipeLeft
+                        onActivated: index => kcm.gestureSwipeLeft = index
+                    }
+                    DropDownRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label touchpad gesture", "Swipe right with three fingers")
+                        model: root.gestureActions
+                        currentIndex: kcm.gestureSwipeRight
+                        note: kcm.gestureSidewaysShared
+                            ? i18nc("@info", "With more than one column of desktops, KWin also switches desktops with three fingers left and right: both happen.")
+                            : ""
+                        onActivated: index => kcm.gestureSwipeRight = index
+                    }
+                    DropDownRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label touchpad gesture", "Pinch in with four fingers")
+                        model: root.gestureActions
+                        currentIndex: kcm.gesturePinchIn
+                        onActivated: index => kcm.gesturePinchIn = index
+                    }
+                    DropDownRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label touchpad gesture", "Spread out with four fingers")
+                        model: root.gestureActions
+                        currentIndex: kcm.gesturePinchOut
+                        onActivated: index => kcm.gesturePinchOut = index
+                    }
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        last: true
+                        text: i18nc("@option:check virtual desktops", "Keep desktops in one row")
+                        note: i18nc("@info", "Three fingers up and down then stay yours with several desktops; left and right switch them.")
+                        checked: kcm.desktopsInOneRow
+                        onToggleRequested: kcm.desktopsInOneRow = !kcm.desktopsInOneRow
+                    }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: i18nc("@info", "Four-finger swipes are KWin's own: up opens Overview, down the grid of desktops, left and right switch desktops.")
+                    font.family: fusionPalette.family
+                    font.pointSize: 8.625 * fusionPalette.m.ts // 11.5 px
+                    color: fusionPalette.section
                 }
             }
 

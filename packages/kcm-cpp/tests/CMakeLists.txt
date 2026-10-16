@@ -8,8 +8,8 @@
 # scratch HOME and with stand-ins for the programs the module starts. meters-switch.sh turns the
 # system meters switch on and off against fakeshell, a stand-in Plasma shell, and shell-panels.sh
 # changes the panels against it; run-power-tier.sh runs the module with the power service against
-# a stand-in plasmashell, run-reset-layout.sh its layout reset and run-settings-file.sh its settings
-# file (export and import).
+# a stand-in plasmashell, run-reset-layout.sh its layout reset, run-settings-file.sh its settings
+# file (export and import) and run-gestures.sh its touchpad gestures.
 
 add_executable(kcmctl kcmctl/kcmctl.cpp)
 # A stand-in Plasma shell for the switches that change panels (meters-switch.sh).
@@ -62,6 +62,11 @@ if(DBUS_RUN_SESSION)
                      COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-settings-file.sh" $<TARGET_FILE:kcmctl> "${CMAKE_BINARY_DIR}/bin"
                              "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-settingsfile")
             set_tests_properties(kcmctl-settingsfile PROPERTIES TIMEOUT 240)
+            # Touchpad gestures and desktops in one row (run-gestures.sh).
+            add_test(NAME kcmctl-gestures
+                     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/run-gestures.sh" $<TARGET_FILE:kcmctl> "${CMAKE_BINARY_DIR}/bin"
+                             "${CMAKE_CURRENT_BINARY_DIR}/kcmctl-gestures")
+            set_tests_properties(kcmctl-gestures PROPERTIES TIMEOUT 240)
         endif()
     endif()
 endif()
