@@ -25,6 +25,7 @@
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSet>
 #include <QStandardPaths>
 #include <QThread>
@@ -322,7 +323,9 @@ print(JSON.stringify(result));
 // The docks "Dock on every screen" added (marked [PlasmaFusion] everyScreenCopy by
 // ensure-topbars.js) are removed with their panels (their launchers too); every other dock gets back
 // the showOnlyCurrentScreen it had before (its [PlasmaFusion] onlyCurrentScreenBefore, kept by
-// ensure-topbars.js; then emptied). Docks the user made stay. Prints how many panels went.
+// ensure-topbars.js; then emptied). Docks the user made stay. When no dock but copies is left (the
+// user removed the one there was), the copy on the lowest screen stays as the one dock: no longer a
+// copy, listing every screen's windows. Prints how many panels went.
 const QString s_removeExtraDocksScript =
     uR"JS(
 function mark(w, key) {
@@ -331,15 +334,46 @@ function mark(w, key) {
     w.currentConfigGroup = [];
     return value;
 }
-var removed = 0;
+function isCopy(p) {
+    var docks = p.widgets("org.plasmafusion.dock");
+    for (var j = 0; j < docks.length; ++j) {
+        if (mark(docks[j], "everyScreenCopy") === "true") {
+            return true;
+        }
+    }
+    return false;
+}
+var removed = 0, keep = null, original = false;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
-    var docks = ps[i].widgets("org.plasmafusion.dock");
-    var copy = false;
-    for (var j = 0; j < docks.length; ++j) {
-        copy = copy || mark(docks[j], "everyScreenCopy") === "true";
+    if (ps[i].widgets("org.plasmafusion.dock").length === 0) {
+        continue;
     }
-    if (copy) {
+    if (!isCopy(ps[i])) {
+        original = true;
+    } else if (ps[i].screen >= 0 && (keep === null || ps[i].screen < keep.screen)) {
+        keep = ps[i];
+    }
+}
+if (original) {
+    keep = null;
+}
+for (var i = 0; i < ps.length; ++i) {
+    var docks = ps[i].widgets("org.plasmafusion.dock");
+    if (docks.length === 0) {
+        continue;
+    }
+    if (keep !== null && ps[i].id === keep.id) {
+        for (var j = 0; j < docks.length; ++j) {
+            docks[j].currentConfigGroup = ["PlasmaFusion"];
+            docks[j].writeConfig("everyScreenCopy", "");
+            docks[j].currentConfigGroup = ["General"];
+            docks[j].writeConfig("showOnlyCurrentScreen", false);
+            docks[j].currentConfigGroup = [];
+        }
+        continue;
+    }
+    if (isCopy(ps[i])) {
         ps[i].remove();
         ++removed;
         continue;
@@ -934,8 +968,8 @@ bool PlasmaFusionKcm::applyEveryDock(bool on)
 }
 
 // Runs ensure-topbars.js, which gives every screen without one a dock while [Dock] EveryScreen is
-// true. False, with the error shown, when the script cannot be read or fails; *ran is false when
-// there is none to run (the Global Theme is not installed).
+// true. False, with the error shown, when the script cannot be read or fails, or says it could not
+// make a dock; *ran is false when there is none to run (the Global Theme is not installed).
 bool PlasmaFusionKcm::runDockScript(bool *ran)
 {
     *ran = false;
@@ -955,6 +989,13 @@ bool PlasmaFusionKcm::runDockScript(bool *ran)
         return false;
     }
     *ran = true;
+    // The script ran, but the shell could not make some docks ("docks: ..., not made N"): those
+    // screens have none.
+    const QRegularExpressionMatch notMade = QRegularExpression(u"not made (\\d+)"_s).match(result);
+    if (notMade.hasMatch()) {
+        addError(i18np("The dock of one screen could not be made.", "The docks of %1 screens could not be made.", notMade.captured(1).toInt()));
+        return false;
+    }
     return true;
 }
 

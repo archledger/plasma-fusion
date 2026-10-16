@@ -538,8 +538,9 @@ live session gets these changes through DEVICE-1's in-place migration.
   those, so docks the user made stay. Every dock then lists only its own screen's windows
   (`showOnlyCurrentScreen`); a dock that is not a copy remembers what it had in `[PlasmaFusion]
   onlyCurrentScreenBefore`. The main dock, the one copied, is the one on the lowest screen number
-  that is not a copy. When the shell cannot make the dock (`addWidget` gives an Error, as
-  plasma-workspace 6.7.5 `shell/scripting/containment.cpp` does), the new panel is removed again.
+  that is not a copy. When the shell cannot make the dock or its launcher (`addWidget` gives an
+  Error, as plasma-workspace 6.7.5 `shell/scripting/containment.cpp` does), the new panel is removed
+  again.
   Prints "docks: screens N, added M" (", not made K"). Tests (`tests/layout.test.js`, whose
   stand-in shell has `remove()` and an `addWidget` that fails for the types in `failAdd`): the
   second screen's dock and launcher with the main one's settings (a list as a list, no test hook,
@@ -547,7 +548,8 @@ live session gets these changes through DEVICE-1's in-place migration.
   the key; a second run adds nothing and keeps the remembered value; a dock only on screen 1 stays
   the main one and remembers, the new one on screen 0 is a copy; a second dock of the user's on the
   main screen gets no copy and remembers too; a dock the shell cannot make leaves no panel, also
-  after a second run; nothing without the dock installed. Without the copy mark, the panel
+  after a second run, and neither does a launcher it cannot make; nothing without the dock
+  installed. Without the copy mark, the panel
   removal, the remembering or the second dock's turn, a case fails.
 - Two panel templates (`packages/look-and-feel/layout-templates/org.plasmafusion.panel.topbar` and
   `.dock`, `X-Plasma-ContainmentCategories=panel`), installed into

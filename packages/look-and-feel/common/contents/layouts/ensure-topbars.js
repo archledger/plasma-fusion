@@ -362,8 +362,8 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     user made stay. Every dock then lists only its own screen's windows (showOnlyCurrentScreen); a
     dock that is not a copy keeps the value it had before in its [PlasmaFusion]
     onlyCurrentScreenBefore, which the settings page puts back. The main dock, the one copied, is
-    the one on the lowest screen number that is not a copy. When the shell cannot make the dock
-    (addWidget gives an Error), the new panel is removed again. Idempotent; a dock is never removed
+    the one on the lowest screen number that is not a copy. When the shell cannot make the dock or
+    its launcher (addWidget gives an Error), the new panel is removed again. Idempotent; a dock is never removed
     here. Prints one line: "docks: screens N, added M" (", not made K" when some could not be).
 */
 (function () {
@@ -480,15 +480,20 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         dockPanel.opacity = main.opacity;
         if (mainLaunchers.length > 0 && knownWidgetTypes.indexOf(LAUNCHER) !== -1) {
             var launcher = dockPanel.addWidget(LAUNCHER);
-            if (made(launcher)) {
-                copyKeys(mainLaunchers[0], launcher);
-                // Next to the Fusion dock the launcher has no button of its own; its pins are the
-                // shared ones already (no first-run pins again).
-                launcher.currentConfigGroup = ["General"];
-                launcher.writeConfig("buttonStyle", "hidden");
-                launcher.writeConfig("favoritesPortedToKAstats", true);
-                launcher.currentConfigGroup = [];
+            if (!made(launcher)) {
+                // Without a launcher of its own the dock's Start would open another screen's: no
+                // panel either (a later run tries again).
+                dockPanel.remove();
+                failed++;
+                continue;
             }
+            copyKeys(mainLaunchers[0], launcher);
+            // Next to the Fusion dock the launcher has no button of its own; its pins are the
+            // shared ones already (no first-run pins again).
+            launcher.currentConfigGroup = ["General"];
+            launcher.writeConfig("buttonStyle", "hidden");
+            launcher.writeConfig("favoritesPortedToKAstats", true);
+            launcher.currentConfigGroup = [];
         }
         var dock = dockPanel.addWidget(DOCK);
         if (!made(dock)) {

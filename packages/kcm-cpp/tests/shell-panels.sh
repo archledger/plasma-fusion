@@ -28,6 +28,8 @@
 #               screen goes with its panel (its launcher too), a second dock of the user's stays,
 #               and each dock left gets back the showOnlyCurrentScreen it had;
 #   docksofffail the same while the shell fails the removal: an error, and the choice stays on;
+#   docksoffcopies only copies left: the one on screen 0 stays as the one dock;
+#   docksnotmade ensure-topbars.js says it could not make a dock: an error;
 #   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
@@ -227,6 +229,30 @@ expect docksofffail "an error says so" bash -c "grep -q '^kcmctl: errorText=.*do
 expect docksofffail "the choice stays on" grep -q "EveryScreen=true" "$work/docksofffail/config/plasmafusionrc"
 expect docksofffail "  and the page shows it on" is "$(value docksofffail everyDock)" true
 expect docksofffail "every dock panel is still there" is "$(wc -l <"$work/docksofffail/panels")" 4
+
+# Only copies left (the user removed the dock there was): turned off, the one on screen 0 stays as
+# the one dock, no longer a copy, listing every screen's windows.
+prepare_docksoffcopies() { prepare_docksoff "$@"; }
+run docksoffcopies "{\"showConfig\": true, \"screens\": 2, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true, \"PlasmaFusion/everyScreenCopy\": true}}]},
+  {\"location\": \"bottom\", \"screen\": 1, \"widgets\": [\"$LAUNCHER\", {\"type\": \"$DOCK\", \"config\": {\"General/showOnlyCurrentScreen\": true, \"PlasmaFusion/everyScreenCopy\": true}}]}]}" \
+  waitshell "set everyDock false" save "wait 500" "get errorText"
+expect docksoffcopies "one dock panel is left" is "$(wc -l <"$work/docksoffcopies/panels")" 2
+expect docksoffcopies "the one on screen 0, no longer a copy, every screen's windows" \
+  is "$(panel docksoffcopies 2)" "bottom 0: launcher dock{General/showOnlyCurrentScreen=false,PlasmaFusion/everyScreenCopy=}"
+expect docksoffcopies "no error" is "$(value docksoffcopies errorText)" ""
+
+# ensure-topbars.js runs but cannot make a dock ("not made 1"): an error says so.
+prepare_docksnotmade() {
+  local dir=$1/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts
+  mkdir -p "$dir"
+  printf 'print("top bars: screens 2, added 0, completed 0");\nprint("docks: screens 2, added 0, not made 1");\n' >"$dir/ensure-topbars.js"
+}
+run docksnotmade "{\"screens\": 2, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", \"$DOCK\"]}]}" \
+  waitshell "set everyDock true" save "wait 500" "get errorText"
+expect docksnotmade "a dock not made is an error" bash -c "grep -q '^kcmctl: errorText=.*could not be made' '$work/docksnotmade/kcmctl.log'"
 
 prepare_dockson() {
   local dir=$1/data/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts

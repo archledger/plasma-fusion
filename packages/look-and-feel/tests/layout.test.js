@@ -345,6 +345,12 @@ test("ensure-topbars: a dock the shell cannot make leaves no panel behind", () =
     s.run(ENSURE);
     assert.deepStrictEqual(bottom(), [0], "a second run neither");
 });
+test("ensure-topbars: a launcher the shell cannot make leaves no panel behind either", () => {
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], failAdd: ["org.plasmafusion.launcher"] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 0, not made 1/, s.output);
+    assert.deepStrictEqual(s.panels.filter((p) => p.location === "bottom").map((p) => p.screen), [0], "no dock without its launcher on screen 1");
+});
 test("ensure-topbars: no dock installed, no docks", () => {
     const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.dock"] });
     s.run(ENSURE);
