@@ -37,7 +37,7 @@ using namespace PlasmaFusion;
 
 namespace
 {
-// Reads the shell state in one call: the dock's keys, the top bar (the panel holding
+// Reads the shell state in one call: the dock's and the launcher's keys, the top bar (the panel holding
 // org.plasmafusion.appname; the one with quick settings when there are several) and whether it
 // has the system meters, the quick settings' keyboard policy and the Folder View desktop's filter
 // and icon size. A panel's opacity and sizes are read only while its screen is there: for a
@@ -55,6 +55,7 @@ var state = { docks: 0, magnify: true, magnifiedSize: 62, homeIndicator: true,
               topBars: 0, menu: false, topOpacity: "", meters: false,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
+              launchers: 0, recentFiles: true, recentApps: true, places: true,
               folders: 0, filterMode: 0, filterPattern: "*", iconSize: 3 };
 var mainTopBar = false, chosenTopBar = false;
 var ps = panels();
@@ -69,6 +70,16 @@ for (var i = 0; i < ps.length; ++i) {
             state.homeIndicator = bool(docks[j].readConfig("homeIndicator", true), true);
         }
         ++state.docks;
+    }
+    var launchers = p.widgets("org.plasmafusion.launcher");
+    for (var j = 0; j < launchers.length; ++j) {
+        launchers[j].currentConfigGroup = ["General"];
+        if (state.launchers === 0) {
+            state.recentFiles = bool(launchers[j].readConfig("showRecommended", true), true);
+            state.recentApps = bool(launchers[j].readConfig("showRecentApps", true), true);
+            state.places = bool(launchers[j].readConfig("showPlaces", true), true);
+        }
+        ++state.launchers;
     }
     var qs = p.widgets("org.plasmafusion.quicksettings");
     for (var j = 0; j < qs.length; ++j) {
@@ -519,6 +530,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
     m_topBarAvailable = false;
     m_metersAvailable = false;
     m_quickSettingsAvailable = false;
+    m_launcherAvailable = false;
     m_folderAvailable = false;
     if (reply.isError()) {
         qCWarning(KCM_PLASMAFUSION) << "Could not read the Plasma shell layout:" << reply.error().message();
@@ -528,6 +540,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         m_topBarAvailable = state.value(u"topBars"_s).toInt() > 0;
         m_metersAvailable = state.value(u"metersInstalled"_s).toBool();
         m_quickSettingsAvailable = state.value(u"quickSettings"_s).toInt() > 0;
+        m_launcherAvailable = state.value(u"launchers"_s).toInt() > 0;
         m_folderAvailable = state.value(u"folders"_s).toInt() > 0;
 
         // A change still pending on the page (the shell restarted meanwhile) is kept.
@@ -568,6 +581,11 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
             static const QStringList policies = {u"tablet"_s, u"touch"_s, u"never"_s};
             const int policy = policies.indexOf(state.value(u"keyboardPolicy"_s).toString());
             take(m_current.keyboardPolicy, m_saved.keyboardPolicy, policy >= 0 ? policy : int(KeyboardTablet));
+        }
+        if (m_launcherAvailable) {
+            take(m_current.launcherRecentFiles, m_saved.launcherRecentFiles, state.value(u"recentFiles"_s).toBool(true));
+            take(m_current.launcherRecentApps, m_saved.launcherRecentApps, state.value(u"recentApps"_s).toBool(true));
+            take(m_current.launcherPlaces, m_saved.launcherPlaces, state.value(u"places"_s).toBool(true));
         }
         if (m_folderAvailable) {
             const bool hidden = state.value(u"filterMode"_s).toInt() == 1 && state.value(u"filterPattern"_s).toString() == s_hideAllPattern;

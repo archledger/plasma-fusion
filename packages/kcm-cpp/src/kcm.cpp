@@ -119,7 +119,8 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications && lockNotificationSummaries == other.lockNotificationSummaries
         && tabletMode == other.tabletMode && tabletApps == other.tabletApps && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft
         && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters
-        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator;
+        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator
+        && launcherRecentFiles == other.launcherRecentFiles && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
@@ -184,6 +185,7 @@ PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaDat
         m_topBarAvailable = false;
         m_metersAvailable = false;
         m_quickSettingsAvailable = false;
+        m_launcherAvailable = false;
         m_folderAvailable = false;
         Q_EMIT shellStateChanged();
         settingsChanged();
@@ -338,6 +340,11 @@ bool PlasmaFusionKcm::metersAvailable() const
 bool PlasmaFusionKcm::quickSettingsAvailable() const
 {
     return m_quickSettingsAvailable;
+}
+
+bool PlasmaFusionKcm::launcherAvailable() const
+{
+    return m_launcherAvailable;
 }
 
 bool PlasmaFusionKcm::folderAvailable() const
@@ -637,6 +644,36 @@ bool PlasmaFusionKcm::homeIndicator() const
 void PlasmaFusionKcm::setHomeIndicator(bool value)
 {
     setField(&State::homeIndicator, value);
+}
+
+bool PlasmaFusionKcm::launcherRecentFiles() const
+{
+    return m_current.launcherRecentFiles;
+}
+
+void PlasmaFusionKcm::setLauncherRecentFiles(bool value)
+{
+    setField(&State::launcherRecentFiles, value);
+}
+
+bool PlasmaFusionKcm::launcherRecentApps() const
+{
+    return m_current.launcherRecentApps;
+}
+
+void PlasmaFusionKcm::setLauncherRecentApps(bool value)
+{
+    setField(&State::launcherRecentApps, value);
+}
+
+bool PlasmaFusionKcm::launcherPlaces() const
+{
+    return m_current.launcherPlaces;
+}
+
+void PlasmaFusionKcm::setLauncherPlaces(bool value)
+{
+    setField(&State::launcherPlaces, value);
 }
 
 bool PlasmaFusionKcm::highContrastAvailable() const
@@ -1084,8 +1121,8 @@ bool PlasmaFusionKcm::isSaveNeeded() const
 }
 
 // The defaults, except for what cannot be changed right now (a missing dock, top bar, quick
-// settings or Folder View desktop, a stopped shell, no high-contrast scheme): those keep the
-// value on the page.
+// settings, launcher or Folder View desktop, a stopped shell, no high-contrast scheme): those
+// keep the value on the page.
 PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
 {
     State defaults;
@@ -1105,6 +1142,11 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
     }
     if (!m_quickSettingsAvailable) {
         defaults.keyboardPolicy = m_current.keyboardPolicy;
+    }
+    if (!m_launcherAvailable) {
+        defaults.launcherRecentFiles = m_current.launcherRecentFiles;
+        defaults.launcherRecentApps = m_current.launcherRecentApps;
+        defaults.launcherPlaces = m_current.launcherPlaces;
     }
     if (!m_folderAvailable) {
         defaults.desktopIcons = m_current.desktopIcons;
@@ -1231,6 +1273,28 @@ void PlasmaFusionKcm::save()
                            i18nc("@info", "The dock setting could not be changed."));
         } else {
             m_current.homeIndicator = before.homeIndicator;
+        }
+    }
+    // The launcher's sections: every launcher widget's key (one is hidden next to the Fusion dock).
+    const struct {
+        bool State::*field;
+        QString key;
+    } launcherKeys[] = {
+        {&State::launcherRecentFiles, u"showRecommended"_s},
+        {&State::launcherRecentApps, u"showRecentApps"_s},
+        {&State::launcherPlaces, u"showPlaces"_s},
+    };
+    for (const auto &k : launcherKeys) {
+        if (after.*k.field == before.*k.field) {
+            continue;
+        }
+        if (m_launcherAvailable) {
+            applyWidgetKey(u"org.plasmafusion.launcher"_s,
+                           k.key,
+                           after.*k.field ? u"true"_s : u"false"_s,
+                           i18nc("@info", "The launcher setting could not be changed."));
+        } else {
+            m_current.*k.field = before.*k.field;
         }
     }
     if (after.globalMenu != before.globalMenu) {

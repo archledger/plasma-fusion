@@ -52,7 +52,9 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
 | `designLabels` | true | short design names (Files, Browser, Terminal...) on the pinned tiles of the default apps; the real name is the tooltip |
 | `dimBackground` | true | dim layer rgba(6,8,18,0.4) dark / rgba(221,230,244,0.35) light |
 | `bottomOffset` | 108 | 16 px dock gap + 74 px dock + 18 px |
-| `showRecommended` | true | recent files section |
+| `showRecommended` | true | recent files section (also the Plasma Fusion settings page's Launcher group) |
+| `showRecentApps` | true | the "Recent" chip (recently and often used apps); off: no such chip (settings page and the launcher's own settings) |
+| `showPlaces` | true | the "Places" chip (places, drives and recent folders); off: no such chip |
 | `openRequest` | "" | written by other parts through desktop scripting: `<mode>:<nonce>[:<argument>]`, modes `home`, `search` (argument = query), `apps`, `recent` (recent files), `history` (the "Recent" chip: recently and often used apps), `places` (the "Places" chip), `category` (argument = key such as `graphics`); `configure` opens the settings dialog |
 | `hiddenApplications` | [] | Kicker's "Hide Application" list (menu ids such as `org.kde.kcalc.desktop`); the settings page lists these apps under "Hidden apps" with a Show button each and Show All |
 | `glass` | `full` | written by the settings module and the power service (`full`, `reduced`, `solid`); `solid` draws only the tint behind the tablet sheet (no wallpaper picture) |
@@ -75,13 +77,16 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   and `Popular` ordering (`UsageModels.qml`, the lists of Kicker's "Recent Applications" and
   "Often Used"), Kicker's `ComputerModel` (Kickoff's Places > Computer) and a `RecentUsageModel`
   with `OnlyFolders`.
-- Chips: "All", "Recent", "Places", then every non-empty XDG menu category, identified by its directory icon
+- Chips: "All", "Recent" (unless `showRecentApps` is off), "Places" (unless `showPlaces` is off;
+  `Launcher.shownFixedChips()`), then every non-empty XDG menu category, identified by its directory icon
   (locale independent), duplicates and "Lost & Found" dropped, ordered Development, Graphics,
   Internet, Multimedia, Office, System, then Games, Education, Science, Utilities, Settings, Help.
   Chips that do not fit go into a round "..." chip with a menu. The chips are rebuilt when the menu
   changes (an app hidden, installed or removed); the card keeps the chosen chip by its key
   (`LauncherCard.chipKey`), so a category stays chosen when one before it comes or goes, and when
-  the chosen category itself is gone (its last app hidden) the card goes back to "All".
+  the chosen category itself is gone (its last app hidden) the card goes back to "All". The same
+  happens when the Recent or Places chip is turned off while it is shown, and an `openRequest` for
+  a chip that is off (`history`, `places`) opens the home view.
 - Recent (the `history` view, a chip like the categories: Kickoff has History and Frequently Used,
   Kicker "Recent Applications" and "Often Used"; the boards have no such view, so it reuses the
   board's section header and app tiles): "Recently used", one row of the apps started last (as
@@ -177,6 +182,13 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   With touch input (tablet posture's metrics) every chip reaches 44 x 44: the drawn pill follows the
   text size and the target grows to the touch minimum (`Chip.qml`; before, a short-label chip was
   41 x 28).
+- `tests/sections.test.js` (node, in the build step): `shownFixedChips()` keeps "All" and drops the
+  Recent and Places chips as `showRecentApps` and `showPlaces` say. `tests/views_test.py` also turns
+  them off under the card: the Recent view shown gives way to "All", and the open requests
+  `history` and `places` with their chip off open the home view.
+- `tests/vsession/scenario-sections.sh` (a private session): the launcher's chips from its frames
+  report (`openRequest` `frames`, whose line now ends with the chip keys) as `showRecentApps` and
+  `showPlaces` change, and the home view with and without the recent files (screenshots).
 - `tests/hidden.test.js` (node, in the build step): the hidden list after Show and Show All, merged
   with the live list on Apply. `tests/views_test.py` also loads the settings page (the hidden apps
   by name, Show, Show All, an app hidden again after an Apply stays hidden at the next one) and

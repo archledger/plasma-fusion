@@ -443,6 +443,50 @@ KCM.SimpleKCM {
                 }
             }
 
+            // ---------- Launcher ----------
+            // What the launcher shows besides the pinned apps (every launcher widget's keys; the
+            // same switches are in the launcher's own settings).
+            ColumnLayout {
+                spacing: 10
+                Layout.fillWidth: true
+
+                SectionTitle {
+                    text: i18nc("@title:group the Plasma Fusion launcher", "Launcher")
+                    pal: fusionPalette
+                }
+                ColumnLayout {
+                    spacing: 0
+                    Layout.fillWidth: true
+
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@option:check the launcher's home view", "Recent files under the pinned apps")
+                        checked: kcm.launcherRecentFiles
+                        enabled: kcm.launcherAvailable && !kcm.shellLoading
+                        note: root.shellNote(kcm.launcherAvailable, i18nc("@info", "The Plasma Fusion launcher is not in a panel."))
+                        onToggleRequested: kcm.launcherRecentFiles = !kcm.launcherRecentFiles
+                    }
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@option:check the launcher's Recent chip", "Recently used apps (the Recent chip)")
+                        checked: kcm.launcherRecentApps
+                        enabled: kcm.launcherAvailable && !kcm.shellLoading
+                        onToggleRequested: kcm.launcherRecentApps = !kcm.launcherRecentApps
+                    }
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        last: true
+                        text: i18nc("@option:check the launcher's Places chip", "Places and drives (the Places chip)")
+                        checked: kcm.launcherPlaces
+                        enabled: kcm.launcherAvailable && !kcm.shellLoading
+                        onToggleRequested: kcm.launcherPlaces = !kcm.launcherPlaces
+                    }
+                }
+            }
+
             // ---------- Desktop ----------
             ColumnLayout {
                 spacing: 10

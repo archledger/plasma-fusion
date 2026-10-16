@@ -14,7 +14,10 @@
 #               reports no error, the meters are placed, and the page's event loop keeps running
 #               while it waits (a timer ticks during Apply, the page does not freeze);
 #   slowbars    the same for "Top bar on every screen" (a stand-in ensure-topbars.js, then the
-#               panels' look for the new bars).
+#               panels' look for the new bars);
+#   launcher    the Launcher switches read from the launcher widget (one key already off, as a
+#               string) and written to it, the keys it does not change left alone;
+#   nolauncher  no launcher widget: the switches are not available and keep their value.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -29,6 +32,7 @@ failures=0
 
 APPNAME=org.plasmafusion.appname QS=org.plasmafusion.quicksettings CLOCK=org.plasmafusion.clockpill
 TRAY=org.kde.plasma.systemtray DOCK=org.plasmafusion.dock METERS=org.plasmafusion.meters
+LAUNCHER=org.plasmafusion.launcher
 
 # run CASE LAYOUT COMMANDS...: one module session against the stand-in shell. Leaves the kcmctl
 # output in $work/CASE/kcmctl.log, the shell's in $work/CASE/fakeshell.log and the panels in
@@ -72,6 +76,7 @@ expect() {
   fi
 }
 value() { sed -n "s/^kcmctl: $2=//p" "$work/$1/kcmctl.log" | tail -1; }
+first() { sed -n "s/^kcmctl: $2=//p" "$work/$1/kcmctl.log" | head -1; }
 panel() { sed -n "$2p" "$work/$1/panels"; }
 is() { [ "$1" = "$2" ]; }
 alive() { ! grep -q "crashed" "$work/$1/fakeshell.log"; }
@@ -119,6 +124,26 @@ expect slowbars "no error although the shell answered 7 s late" is "$(value slow
 expect slowbars "the choice is kept" grep -q "EveryScreen=true" "$work/slowbars/config/plasmafusionrc"
 expect slowbars "the page's event loop ran while it waited ($(beats slowbars 2) ticks of 100 ms in $(busy slowbars) ms)" \
   test "$(beats slowbars 2)" -ge 80
+
+run launcher "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "get launcherAvailable" "get launcherRecentFiles" "get launcherRecentApps" "get launcherPlaces" \
+  "set launcherRecentFiles false" "set launcherPlaces true" save "wait 500" "get errorText"
+expect launcher "the module found the launcher" is "$(value launcher launcherAvailable)" true
+expect launcher "recent files and the Recent chip read as on (keys not set)" \
+  is "$(first launcher launcherRecentFiles) $(first launcher launcherRecentApps)" "true true"
+expect launcher "the Places chip read as off (the key written as the string false)" is "$(first launcher launcherPlaces)" false
+expect launcher "recent files off and Places on written to the launcher, the Recent chip's key left alone" \
+  is "$(panel launcher 2)" "bottom 0: launcher{General/showPlaces=true,General/showRecommended=false} dock"
+expect launcher "no error" is "$(value launcher errorText)" ""
+
+run nolauncher "{\"showConfig\": true, \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$DOCK\"]}]}" \
+  waitshell "get launcherAvailable" "set launcherRecentFiles false" save "wait 500" "get launcherRecentFiles" "get errorText"
+expect nolauncher "no launcher widget: the switches are not available" is "$(value nolauncher launcherAvailable)" false
+expect nolauncher "and keep their value" is "$(value nolauncher launcherRecentFiles)" true
+expect nolauncher "nothing written to the panels" is "$(panel nolauncher 2)" "bottom 0: dock"
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

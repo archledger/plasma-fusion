@@ -89,6 +89,7 @@ def main():
              "solidTopBar": True, "everyScreen": True, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
              "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
              "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
+             "launcherAvailable": True, "launcherRecentFiles": True, "launcherRecentApps": True, "launcherPlaces": True,
              "fileContentIndexing": True,
              "iconsMode": 1, "lockNotifications": True, "lockNotificationSummaries": False,
              "quickSettingsAvailable": True, "folderAvailable": True, "highContrastAvailable": True,
@@ -154,6 +155,10 @@ def main():
         edgeLeft = Property(bool, _get("edgeLeft"), _set("edgeLeft"), notify=changed)
         edgeRight = Property(bool, _get("edgeRight"), _set("edgeRight"), notify=changed)
         homeIndicator = Property(bool, _get("homeIndicator"), _set("homeIndicator"), notify=changed)
+        launcherAvailable = Property(bool, _get("launcherAvailable"), notify=changed)
+        launcherRecentFiles = Property(bool, _get("launcherRecentFiles"), _set("launcherRecentFiles"), notify=changed)
+        launcherRecentApps = Property(bool, _get("launcherRecentApps"), _set("launcherRecentApps"), notify=changed)
+        launcherPlaces = Property(bool, _get("launcherPlaces"), _set("launcherPlaces"), notify=changed)
         quickSettingsAvailable = Property(bool, _get("quickSettingsAvailable"), notify=changed)
         folderAvailable = Property(bool, _get("folderAvailable"), notify=changed)
         highContrastAvailable = Property(bool, _get("highContrastAvailable"), notify=changed)

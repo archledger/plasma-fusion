@@ -38,6 +38,9 @@ class QDBusServiceWatcher;
       Snap layouts    plasmafusionrc [Decoration] SnapLayoutsOnHover (false: hold, true: hover).
       Dock            the org.plasmafusion.dock widgets' [General] magnify and magnifiedSize keys
                       (desktop scripting).
+      Launcher        the org.plasmafusion.launcher widgets' [General] showRecommended (recent
+                      files on the home view), showRecentApps and showPlaces (the Recent and
+                      Places chips), by desktop scripting.
       Global menu     org.kde.plasma.appmenu right after org.plasmafusion.appname in the top bar.
       System meters   org.plasmafusion.meters right before org.plasmafusion.quicksettings in every
                       top bar (the widget is in no layout; off: every meters widget of a panel goes).
@@ -89,6 +92,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool dockAvailable READ dockAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool topBarAvailable READ topBarAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool quickSettingsAvailable READ quickSettingsAvailable NOTIFY shellStateChanged)
+    // A Plasma Fusion launcher widget is in a panel (it is hidden next to the Fusion dock).
+    Q_PROPERTY(bool launcherAvailable READ launcherAvailable NOTIFY shellStateChanged)
     // The system meters widget is installed (the shell's knownWidgetTypes).
     Q_PROPERTY(bool metersAvailable READ metersAvailable NOTIFY shellStateChanged)
     // The desktop is a Folder View (the only desktop type that shows icons).
@@ -123,6 +128,9 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool edgeLeft READ edgeLeft WRITE setEdgeLeft NOTIFY stateChanged)
     Q_PROPERTY(bool edgeRight READ edgeRight WRITE setEdgeRight NOTIFY stateChanged)
     Q_PROPERTY(bool homeIndicator READ homeIndicator WRITE setHomeIndicator NOTIFY stateChanged)
+    Q_PROPERTY(bool launcherRecentFiles READ launcherRecentFiles WRITE setLauncherRecentFiles NOTIFY stateChanged)
+    Q_PROPERTY(bool launcherRecentApps READ launcherRecentApps WRITE setLauncherRecentApps NOTIFY stateChanged)
+    Q_PROPERTY(bool launcherPlaces READ launcherPlaces WRITE setLauncherPlaces NOTIFY stateChanged)
 
     // What the session offers (read-only).
     Q_PROPERTY(bool highContrastAvailable READ highContrastAvailable NOTIFY environmentChanged)
@@ -188,6 +196,7 @@ public:
     bool topBarAvailable() const;
     bool metersAvailable() const;
     bool quickSettingsAvailable() const;
+    bool launcherAvailable() const;
     bool folderAvailable() const;
     bool decorationInstalled() const;
     bool fusionDecoration() const;
@@ -240,6 +249,12 @@ public:
     void setEdgeRight(bool value);
     bool homeIndicator() const;
     void setHomeIndicator(bool value);
+    bool launcherRecentFiles() const;
+    void setLauncherRecentFiles(bool value);
+    bool launcherRecentApps() const;
+    void setLauncherRecentApps(bool value);
+    bool launcherPlaces() const;
+    void setLauncherPlaces(bool value);
 
     bool highContrastAvailable() const;
     bool previousDesktopAvailable() const;
@@ -330,6 +345,9 @@ private:
         int iconSize = 2;
         int keyboardPolicy = KeyboardTablet;
         bool homeIndicator = true;
+        bool launcherRecentFiles = true;
+        bool launcherRecentApps = true;
+        bool launcherPlaces = true;
 
         bool sameAccent(const State &other) const;
         bool operator==(const State &other) const;
@@ -405,6 +423,7 @@ private:
     bool m_topBarAvailable = false;
     bool m_metersAvailable = false;
     bool m_quickSettingsAvailable = false;
+    bool m_launcherAvailable = false;
     bool m_folderAvailable = false;
     bool m_decorationInstalled = false;
     bool m_highContrastAvailable = false;

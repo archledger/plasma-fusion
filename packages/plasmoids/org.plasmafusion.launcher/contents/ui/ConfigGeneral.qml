@@ -20,6 +20,8 @@ KCMUtils.SimpleKCM {
     property alias cfg_designLabels: designLabels.checked
     property alias cfg_dimBackground: dimBackground.checked
     property alias cfg_showRecommended: showRecommended.checked
+    property alias cfg_showRecentApps: showRecentApps.checked
+    property alias cfg_showPlaces: showPlaces.checked
     property alias cfg_bottomOffset: bottomOffset.value
 
     // Keys this page does not edit. The settings dialog passes every key in and writes every
@@ -44,6 +46,8 @@ KCMUtils.SimpleKCM {
     property bool cfg_dimBackgroundDefault
     property int cfg_bottomOffsetDefault
     property bool cfg_showRecommendedDefault
+    property bool cfg_showRecentAppsDefault
+    property bool cfg_showPlacesDefault
     property string cfg_openRequestDefault
     property var cfg_hiddenApplicationsDefault
     property string cfg_glassDefault
@@ -123,6 +127,16 @@ KCMUtils.SimpleKCM {
         QQC2.CheckBox {
             id: showRecommended
             text: i18nc("@option:check", "Show recently used files")
+        }
+
+        QQC2.CheckBox {
+            id: showRecentApps
+            text: i18nc("@option:check the launcher's Recent chip", "Show the Recent chip (recently and often used apps)")
+        }
+
+        QQC2.CheckBox {
+            id: showPlaces
+            text: i18nc("@option:check the launcher's Places chip", "Show the Places chip (places, drives and recent folders)")
         }
 
         QQC2.CheckBox {
