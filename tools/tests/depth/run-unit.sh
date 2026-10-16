@@ -27,7 +27,7 @@ echo stand-in >"$BASE/ql/bin/plasma-fusion-quicklook"
 # The stand-in runner: NAME SCENARIO SEED SIZE TIMEOUT, results in ./vsession-out/NAME/.
 cat >"$BASE/runner.sh" <<'EOF'
 #!/bin/bash
-set -eu
+set -euo pipefail
 name=$1 scenario=$2 seed=$3
 out=vsession-out/$name
 mkdir -p "$out"
@@ -66,6 +66,8 @@ has() { grep -qxF -- "$2" "$W/results/$1/seed.txt"; }
 has_both() { has "$1" "$2" && has "$1" "$3"; }
 lacks() { ! grep -qF -- "$2" "$W/results/$1/seed.txt"; }
 exit_and() { [ "$RC" = "$1" ] && [ "$(result)" = "$2" ]; }
+nothing_run() { [ "$RC" = "$1" ] && [ ! -e "$W/results/placement" ]; }
+help_is_usage() { "$HERE/run.sh" --help | grep -q -- "--runner CMD" && ! "$HERE/run.sh" --help | grep -q "import json"; }
 
 run all --quicklook "$BASE/ql"
 expect "every feature passing: exit 0" [ "$RC" = 0 ]
@@ -81,8 +83,9 @@ expect "  Quick Look's seed has its install in ~/.local" has quicklook ./.local/
 expect "  the others have no Quick Look" lacks placement quicklook
 
 run noql
-expect "without --quicklook: exit 0" [ "$RC" = 0 ]
-expect "  Quick Look is SKIPPED, the others PASS" [ "$(result)" = "placement=PASS snapgroups=PASS workspaces=PASS copytext=PASS quicklook=SKIPPED livechips=PASS" ]
+expect "every feature but no --quicklook: exit 2 (Quick Look cannot pass), nothing run" nothing_run 2
+run noql-chosen --features placement,livechips
+expect "  without quicklook among the features, no --quicklook is needed" exit_and 0 "placement=PASS livechips=PASS"
 
 UNIT_FAIL=workspaces run red --quicklook "$BASE/ql"
 expect "a feature broken on purpose: exit 1" [ "$RC" = 1 ]
@@ -113,6 +116,21 @@ RC=0
   --features quicklook >"$BASE/relative.log" 2>&1) || RC=$?
 expect "relative --stage, --quicklook and --runner: exit 0" [ "$RC" = 0 ]
 expect "  Quick Look's seed has its install" has quicklook ./.local/bin/plasma-fusion-quicklook
+
+RC=0; bash "$HERE/run.sh" --stage >"$BASE/novalue.log" 2>&1 || RC=$?
+expect "an option without its value: exit 2" [ "$RC" = 2 ]
+expect "  saying so" grep -qx -- "--stage needs a value" "$BASE/novalue.log"
+expect "--help prints the usage only" help_is_usage
+# The lanes keep their own results: without --work, the test host's run and a container's land in
+# different directories, and the second does not delete the first.
+DEF=$(cd "$HERE/../../.." && pwd)/build/tests/depth
+rm -rf "$DEF/host" "$DEF/container-localhost_unit_beta"
+bash "$HERE/run.sh" --stage "$BASE/stage" --name unit --runner "$BASE/runner.sh" --features placement >"$BASE/lane1.log" 2>&1 || true
+bash "$HERE/run.sh" --stage "$BASE/stage" --name unit --runner "$BASE/runner.sh" --features placement \
+  --image localhost/unit:beta >"$BASE/lane2.log" 2>&1 || true
+both_lanes() { [ -f "$DEF/host/results/summary.json" ] && [ -f "$DEF/container-localhost_unit_beta/results/summary.json" ]; }
+expect "  two lanes without --work: each keeps its own summary" both_lanes
+rm -rf "$DEF/host" "$DEF/container-localhost_unit_beta"
 
 run unknown --features nosuch
 expect "an unknown feature: exit 2" [ "$RC" = 2 ]

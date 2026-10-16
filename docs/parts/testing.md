@@ -198,19 +198,25 @@ runs them together against one built HOME tree, with one summary:
     cmake -S packages/quicklook-cpp -B build/ql && cmake --build build/ql
     cmake --install build/ql --prefix "$PWD/build/ql-install"
     tools/tests/depth/run.sh --quicklook build/ql-install        # the test host (ThinkPad)
-    tools/tests/depth/run.sh --image localhost/plasma-fusion-test:f44-6.8beta ...  # the beta lane
+    tools/tests/depth/run.sh --image localhost/plasma-fusion-test:f44-6.8beta --quicklook DIR  # the beta lane
 
 - Every feature's seed is the HOME tree at `~/pf-stage` and `tools/` at `~/pf-tools`; the live
   chips' adds their stand-ins (`fake_status_items.py`, quick settings' `mock_power.py`) and the
   widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`
-  (`--quicklook`; without it Quick Look is SKIPPED, as tools/build.sh does not build a compiled
-  part).
+  (`--quicklook`, required while Quick Look is among the features: tools/build.sh does not build a
+  compiled part; for the beta lane, Quick Look built in the beta build image).
+- The two lanes keep their own results: `build/tests/depth/host` and
+  `build/tests/depth/container-<image>` unless `--work` says otherwise. The test image
+  (`tools/container/test/Containerfile`) has what the six scenarios run besides Plasma: Kate and
+  Okular, Tesseract with its English data, wl-clipboard, dbus-python, and PipeWire with its Pulse
+  server and tools.
 - Results: `build/tests/depth/results/<feature>/` (checks, `scenario.log`, screenshots, logs,
   core dumps) and `summary.md` / `summary.json`. A feature passes only when its session ran to the
   end (`scenario rc=0` and `session rc=0` in `scenario.log`, so not stopped at its time limit, and
   the session runner succeeded), every check passed (at least one), and no core dump came from its
   session (on the test host `coredumps.json` must be there and empty). Exit 0 only when every
-  feature run passed; 2 for a setup error, an empty `--features` list too. Each session takes a
+  feature run passed; 2 for a setup error: an option without its value, an unknown or empty
+  `--features` list, or Quick Look among the features without `--quicklook`. Each session takes a
   session slot, the container lane's too.
 - When: before a Plasma update is let onto the test machines (the plasma-watch issue names it) and
   before a release tag (docs/RELEASING.md, step 2), on the test host and on the beta container.
@@ -219,8 +225,10 @@ runs them together against one built HOME tree, with one summary:
   0), Quick Look skipped without its install, a feature broken on purpose (exit 1, named in the
   summary), a feature without checks (exit 1), a session stopped at its time limit after passing
   checks (exit 1), a runner that fails after a complete-looking session, a core dump (exit 1),
-  each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, and
-  an unknown or empty feature list (exit 2). Without any one of those rules its case fails.
+  each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, an
+  unknown or empty feature list, Quick Look without its install and an option without its value
+  (exit 2), `--help` printing the usage only, and the two lanes keeping their own results. Without
+  any one of those rules its case fails.
 
 ## Harness additions (`tools/vsession`)
 

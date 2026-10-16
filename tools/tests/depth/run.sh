@@ -19,11 +19,13 @@
 #
 #   --stage DIR      built HOME tree (tools/build.sh output; default <repo>/stage/home)
 #   --quicklook DIR  Quick Look installed below a prefix (cmake --install BUILD --prefix DIR: bin/,
-#                    share/), copied into the quicklook session's ~/.local; without it quicklook is
-#                    SKIPPED (a compiled part: tools/build.sh does not build it)
+#                    share/), copied into the quicklook session's ~/.local; needed whenever quicklook
+#                    is among the features (a compiled part: tools/build.sh does not build it; for
+#                    the beta lane, build it in the beta build image)
 #   --features LIST  feature names, comma-separated (default all)
 #   --name PREFIX    session name prefix (default depth; sessions PREFIX-<feature>)
-#   --work DIR       seeds, raw session output and results (default <repo>/build/tests/depth)
+#   --work DIR       seeds, raw session output and results (default <repo>/build/tests/depth/host,
+#                    or .../container-<image> with --image, so the two lanes keep their own)
 #   --image IMAGE    run each session in a Plasma test container on this machine instead of the
 #                    test host (tools/vsession/cvsession.sh with PFV_IMAGE=IMAGE): the beta lane
 #                    (docs/parts/containers.md)
@@ -55,8 +57,13 @@ FEATURES=(
   "quicklook|packages/quicklook-cpp/tests/vsession/scenario-quicklook.sh|1440x900|420"
   "livechips|packages/plasmoids/org.plasmafusion.livechips/tests/vsession/scenario-livechips.sh|1440x900|360"
 )
-STAGE=$ROOT/stage/home; QUICKLOOK=''; WANT=all; NAME=depth; WORK=$ROOT/build/tests/depth; IMAGE=''; RUNNER=''
+STAGE=$ROOT/stage/home; QUICKLOOK=''; WANT=all; NAME=depth; WORK=''; IMAGE=''; RUNNER=''
 while [ $# -gt 0 ]; do
+  # An option that takes a value must have one (a setup error, exit 2, not a failed feature).
+  case "$1" in
+    --stage|--quicklook|--features|--name|--work|--image|--runner)
+      [ $# -ge 2 ] || { echo "$1 needs a value" >&2; exit 2; } ;;
+  esac
   case "$1" in
     --stage) STAGE=$2; shift 2 ;;
     --quicklook) QUICKLOOK=$2; shift 2 ;;
@@ -66,10 +73,15 @@ while [ $# -gt 0 ]; do
     --image) IMAGE=$2; shift 2 ;;
     --runner) RUNNER=$2; shift 2 ;;
     --list) printf '%s\n' "${FEATURES[@]}" | cut -d'|' -f1,2 | tr '|' ' '; exit 0 ;;
-    -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d'; exit 0 ;;
+    -h|--help) sed -n '2,/^set -euo pipefail$/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
+# Each lane keeps its own results: a later run of the other lane does not delete them.
+if [ -z "$WORK" ]; then
+  if [ -n "$IMAGE" ]; then WORK=$ROOT/build/tests/depth/container-$(printf '%s' "$IMAGE" | tr -c 'A-Za-z0-9._-' '_')
+  else WORK=$ROOT/build/tests/depth/host; fi
+fi
 # Paths as given from the caller's directory: the runs below work in WORK.
 STAGE=$(realpath -m -- "$STAGE")
 [ -z "$QUICKLOOK" ] || QUICKLOOK=$(realpath -m -- "$QUICKLOOK")
@@ -86,6 +98,11 @@ if [ "$WANT" != all ]; then
     printf '%s\n' "${IDS[@]}" | grep -qx "$id" || { echo "unknown feature $id (--list)" >&2; exit 2; }
   done
   IDS=("${want[@]}")
+fi
+# Quick Look is one of the features to pass: without its install the run cannot pass it.
+if printf '%s\n' "${IDS[@]}" | grep -qx quicklook && [ -z "$QUICKLOOK" ]; then
+  echo "quicklook needs --quicklook DIR (its install; or leave it out with --features)" >&2
+  exit 2
 fi
 mkdir -p "$WORK" || exit 2
 WORK=$(cd "$WORK" && pwd)
@@ -108,8 +125,10 @@ make_feature_seed() {  # FEATURE SEED
       printf 'QT_LOGGING_RULES=org.plasmafusion.livechips.debug=true\n' >"$s/.config/pfv-env"
       ;;
     quicklook)
+      # Never without an install (an empty path would copy from /).
+      [ -n "$QUICKLOOK" ] && [ -d "$QUICKLOOK/bin" ] || return 1
       mkdir -p "$s/.local"
-      cp -a "$QUICKLOOK"/. "$s/.local/" || return 1
+      cp -a -- "$QUICKLOOK"/. "$s/.local/" || return 1
       ;;
   esac
 }
@@ -138,11 +157,6 @@ run_feature() {  # ID
   n=$NAME-$id
   seed=$WORK/seeds/$id
   mkdir -p "$RES/$id"
-  if [ "$id" = quicklook ] && [ -z "$QUICKLOOK" ]; then
-    echo "== $id: SKIPPED (no --quicklook install)"
-    echo "SKIPPED" >"$RES/$id/skipped"
-    return 0
-  fi
   make_feature_seed "$id" "$seed" || { echo "   $id: the seed failed" | tee "$RES/$id/error"; return 0; }
   echo "== $id ($(date +%T)): $scenario"
   local ran=0
@@ -188,9 +202,6 @@ res, lane, kind, ids = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
 rows, bad = [], 0
 for i in ids:
     d = os.path.join(res, i)
-    if os.path.exists(os.path.join(d, "skipped")):
-        rows.append({"feature": i, "result": "SKIPPED", "pass": 0, "fail": 0, "failed": []})
-        continue
     lines = []
     if os.path.exists(os.path.join(d, "checks.txt")):
         lines = open(os.path.join(d, "checks.txt"), errors="replace").read().splitlines()
