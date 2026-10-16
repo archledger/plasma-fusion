@@ -28,6 +28,11 @@ Per system: the installer's plan and run, `plasma-fusion status`, a new login (t
 launcher and the lock screen), the login check's log, no crash, then `uninstall` and a new login
 with the previous desktop. Every system must pass; the evidence goes to the ledger's artifacts.
 
+Then the depth features' check on the merged commit's HOME tree, on the test host and on the
+Plasma beta container (`tools/tests/depth/run.sh`, docs/parts/testing.md "Depth features"): window
+placement memory, snap groups, dynamic workspaces, copy text, Quick Look and live chips, each
+feature's session scenario. Every feature must pass; its summary goes with the evidence.
+
 ## 3. Tag (owner)
 
 ```sh

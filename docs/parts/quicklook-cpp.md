@@ -135,7 +135,10 @@ with its QML modules). The main package recommends it (Arch: optdepends).
 - The setup's step: `tools/device/tests/quicklook-keys-unit.sh` (CI `build`, docs/parts/device.md).
 - `tests/vsession/scenario-quicklook.sh`: real Dolphin in a private session (KWin's emulated keys),
   Quick Look installed below `~/.local` (a service menu there needs the executable bit, as KIO asks
-  of service menus outside the system directories; the packages install below `/usr/share`).
+  of service menus outside the system directories; the packages install below `/usr/share`). It
+  quits only its own session's Dolphin (by the session's private `XDG_RUNTIME_DIR`): the test host's
+  desktop runs under the same user, and a stand-in Dolphin with another runtime directory is
+  checked to survive the cleanup (2026-10-16, 14 checks pass on the test laptop).
   2026-10-15, Fedora 44 VM (Dolphin 26.08.1, KF 6.30, Qt 6.11.2, KWin 6.7.5), 1440x900: 12 checks
   pass - the setup's file of version 0; after Dolphin's start its own interface (version 49, menus
   and toolbars) with the two keys; one selected file: Space opens "alpha.png — Quick Look", Space

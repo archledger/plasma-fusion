@@ -7,12 +7,14 @@
 # and tools/ in ~/pf-tools, and the chips' test tool in ~/pf-chips. The Fusion setup runs (it puts
 # the chips before the tray and hides the tray items they replace), then:
 #   1. nothing in use but this run's own SSH login (the harness reaches the host over SSH): the
-#      SSH chip;
+#      SSH chip; in a test container (cvsession.sh) there is no logind and so no login: the widget
+#      says it has no logind, and no SSH chip;
 #   2. a timed Keep awake (quick settings' debugAction keepawake:SECONDS): its chip with the time
 #      left; a click opens quick settings;
 #   3. a screen recording (Spectacle's item, fake_status_items.py recording): the time runs, the
 #      chip's button finishes it (Activate);
-#   4. screen sharing and remote control (the portal's items, fake ones): the capsule's glyphs,
+#   4. screen sharing and remote control (the portal's items, fake ones): the capsule's glyphs
+#      (and SSH's where there is the login),
 #      the panel on hover (a tooltip) and on a click, its rows; Stop sharing and End end them (the
 #      menu's End);
 #   5. a microphone (a private PipeWire with a virtual source, parecord as "Zoom"): the chip, the
@@ -87,13 +89,23 @@ case " $order " in
   *) fail "setup: the chips are not right before the tray ($order)" ;;
 esac
 
-# ---- 1. this run's own SSH login
+# ---- 1. this run's own SSH login. On the test host (remote.sh) the harness's SSH login is one,
+# which logind lists. A test container (cvsession.sh; podman writes /run/.containerenv into every
+# container) has no system bus, so no logind and no login.
+if [ -f /run/.containerenv ]; then ssh_login=0; else ssh_login=1; fi
 sleep 3
 info "logins: $(last 'remote logins')"
-case "$(last 'state')" in
-  *'"capsule":["ssh"]'*'"tint":"ssh"'*) pass "1: the SSH login shows the SSH chip, tinted ($(last 'state'))" ;;
-  *) fail "1: no SSH chip ($(last 'state'))" ;;
-esac
+if [ "$ssh_login" = 1 ]; then
+  case "$(last 'state')" in
+    *'"capsule":["ssh"]'*'"tint":"ssh"'*) pass "1: the SSH login shows the SSH chip, tinted ($(last 'state'))" ;;
+    *) fail "1: no SSH chip ($(last 'state'))" ;;
+  esac
+else
+  case "$(last 'no systemd-logind')|$(last 'state')" in
+    '|'* | *'"ssh"'*) fail "1: a test container: logind '$(last 'no systemd-logind')', state $(last 'state')" ;;
+    *) pass "1: a test container has no logind (the widget says so) and no SSH chip ($(last 'no systemd-logind'))" ;;
+  esac
+fi
 shot 10-ssh
 
 # ---- 2. a timed Keep awake
@@ -137,7 +149,9 @@ if grep -q 'activated recording' "$OUT/fake-recording.log"; then pass "3: the ch
 mark
 python3 "$FAKE" screen Firefox window --timeout 120 >"$OUT/fake-screen.log" 2>&1 &
 python3 "$FAKE" remote RustDesk input --timeout 120 >"$OUT/fake-remote.log" 2>&1 &
-if wait_log 'state .*"capsule":\["remote","screen","ssh"\]' 10; then pass "4: the capsule: remote control, screen sharing and SSH, neutral ($(last 'state'))"; else fail "4: capsule $(last 'state')"; fi
+if [ "$ssh_login" = 1 ]; then capsule='"capsule":\["remote","screen","ssh"\]' kinds="remote control, screen sharing and SSH"
+else capsule='"capsule":\["remote","screen"\]' kinds="remote control and screen sharing"; fi
+if wait_log "state .*$capsule" 10; then pass "4: the capsule: $kinds, neutral ($(last 'state'))"; else fail "4: capsule $(last 'state')"; fi
 sleep 1
 shot 40-capsule
 read -r cx cy <<<"$(chip capsule)"
@@ -153,8 +167,10 @@ wait_log 'panel ' 5 || true
 sleep 1
 shot 41-panel
 info "panel: $(last 'panel')"
-case "$(last 'panel')" in
-  *'screen "Firefox" "Stop sharing"'*'remote "RustDesk" "End"'*'ssh '*) pass "4: the panel names the apps with their actions, and the login" ;;
+case "$ssh_login|$(last 'panel')" in
+  1'|'*'screen "Firefox" "Stop sharing"'*'remote "RustDesk" "End"'*'ssh '*) pass "4: the panel names the apps with their actions, and the login" ;;
+  0'|'*'ssh '*) fail "4: a login row in a test container: $(last 'panel')" ;;
+  0'|'*'screen "Firefox" "Stop sharing"'*'remote "RustDesk" "End"'*) pass "4: the panel names the apps with their actions (no login in a test container)" ;;
   *) fail "4: panel rows: $(last 'panel')" ;;
 esac
 read -r bx by <<<"$(button 'Stop sharing')"

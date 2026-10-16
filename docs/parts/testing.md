@@ -13,6 +13,9 @@ Two regression gates that run from the laptop against the ThinkPad in private vi
   configuration (sizes, scales, two outputs, lid, tablet, rotation) with layout assertions.
 - **Rubber-band test** (`tools/tests/perf/band.sh`, BACKLOG S5): band selection over 20, 60 and
   100 desktop icons.
+- **Depth features** (`tools/tests/depth/`, 2026-10-16): the session scenarios of the features
+  that set Plasma Fusion apart, in one run with one summary, before every Plasma update and release
+  ("Depth features" below).
 - **Field log** (daily use on the laptop, apart from test noise): [fieldlog.md](fieldlog.md).
 
 Status: built and run on HEAD 282b1a5 (the staged HOME tree is byte-identical to the deployed
@@ -44,6 +47,8 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/tests/` (
 | `tools/tests/matrix/{run.sh,body.sh,mx.py,check.py,configs.txt}` | adaptive matrix (TEST-1): driver, in-session walk, per-configuration steps, layout judge, the configurations |
 | `tools/tests/perf/{band.sh,scen-band.sh,band.py}` | rubber-band selection with 20/60/100 icons (S5): driver, scenario, table and verdict |
 | `tools/tests/lib/slot-test.sh` | self-test of the slot lock semantics on a private lock directory |
+| `tools/tests/depth/run.sh` | the depth features' check: the six features' session scenarios, their seeds, one summary |
+| `tools/tests/depth/run-unit.sh` | its unit test with a stand-in session runner (CI `build`) |
 
 ## Running them
 
@@ -172,6 +177,80 @@ Alt+Tab first frame and animation end, Overview late frames per cycle. Not encod
 the frame-time rows (render p95 during pop-up animations, overview render p95, missed vblanks,
 GUI-thread time per frame), quick settings "first frame at most 50 ms after the release" (only
 "not slower than stock" is), and the device-only and desktop-file rows.
+
+## Depth features (2026-10-16)
+
+The next queue's item 5 (approved 2026-10-16): reliability is part of a depth feature (the
+2026-10-14 report: macOS 27's Spaces regressions dominated an otherwise rich release). Each
+feature the queues added has a session scenario, run when it was built; `tools/tests/depth/run.sh`
+runs them together against one built HOME tree, with one summary:
+
+| Feature | Scenario |
+|---|---|
+| window placement memory | `packages/kwin/tests/vsession/scenario-placement.sh` |
+| snap groups | `packages/kwin/tests/vsession/scenario-snapgroups.sh` |
+| dynamic workspaces | `packages/kwin/tests/vsession/scenario-workspaces.sh` |
+| copy text from the screen | `packages/copytext/tests/vsession/scenario-copytext.sh` |
+| Quick Look | `packages/quicklook-cpp/tests/vsession/scenario-quicklook.sh` |
+| live chips | `packages/plasmoids/org.plasmafusion.livechips/tests/vsession/scenario-livechips.sh` |
+
+    tools/build.sh                                   # the HOME tree, stage/home
+    cmake -S packages/quicklook-cpp -B build/ql && cmake --build build/ql
+    cmake --install build/ql --prefix "$PWD/build/ql-install"
+    tools/tests/depth/run.sh --quicklook build/ql-install        # the test host (ThinkPad)
+    tools/tests/depth/run.sh --image localhost/plasma-fusion-test:f44-6.8beta --quicklook DIR  # the beta lane
+
+- The test host needs what the test image has for the scenarios besides Plasma: Kate and Okular,
+  Tesseract with its English data, wl-clipboard, dbus-python, PipeWire's Pulse server and tools,
+  and Qt's `qml` tool for copy text's target window (`qml6` on Arch, `qml-qt6` from
+  `qt6-qtdeclarative-devel` on Fedora; the scenario takes either). Without them the features fail
+  where they need them (copy text logs `tesseract: command not found`). Nothing else may log in
+  over SSH during a run: the live chips count the host's SSH logins.
+- Every feature's seed is the HOME tree at `~/pf-stage` and `tools/` at `~/pf-tools`; the live
+  chips' adds their stand-ins (`fake_status_items.py`, quick settings' `mock_power.py`) and the
+  widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`, its
+  service menu made executable there (KIO takes one outside the system directories only so;
+  `cmake --install` writes it 0644)
+  (`--quicklook`, required while Quick Look is among the features: tools/build.sh does not build a
+  compiled part; for the beta lane, Quick Look built in the beta build image).
+- The live chips' first check depends on the lane: on the test host the harness's own SSH login
+  shows the SSH chip; a test container has no system bus and so no logind (podman's
+  `/run/.containerenv` tells the scenario it is in one), where the widget must say it has no logind
+  and show no SSH chip, and the capsule and panel of step 4 come without the login.
+- One run per work tree (a lock on it): a second run on the same tree is refused (exit 2), as it
+  would delete or mix the first one's results; a container run also refuses while a container
+  session of the same name (`pfv68-NAME-<feature>`) is running. Results a rootless container left
+  (owned by subordinate ids, `cvsession.sh` copies them with `cp -a`) are cleared through podman's
+  user namespace (`podman unshare rm`) when a plain `rm` cannot.
+- The two lanes keep their own results: `build/tests/depth/host` and
+  `build/tests/depth/container-<image>` unless `--work` says otherwise. The test image
+  (`tools/container/test/Containerfile`) has what the six scenarios run besides Plasma: Kate and
+  Okular, Tesseract with its English data, wl-clipboard, dbus-python, and PipeWire with its Pulse
+  server and tools.
+- Results: `build/tests/depth/results/<feature>/` (checks, `scenario.log`, screenshots, logs,
+  core dumps) and `summary.md` / `summary.json`. A feature passes only when its session ran to the
+  end (`scenario rc=0` and `session rc=0` in `scenario.log`, so not stopped at its time limit, and
+  the session runner succeeded), every check passed (at least one), and no core dump came from its
+  session (on the test host `coredumps.json` must be there and empty). Exit 0 only when every
+  feature run passed; 2 for a setup error: an option without its value, an unknown or empty
+  `--features` list (a name is matched whole, as a fixed string: `[p]lacement` is unknown; a name
+  given twice is refused, as its second run would replace the first one's results), or
+  Quick Look among the features without `--quicklook`. Each session takes a
+  session slot, the container lane's too.
+- When: before a Plasma update is let onto the test machines (the plasma-watch issue names it) and
+  before a release tag (docs/RELEASING.md, step 2), on the test host and on the beta container.
+- GitHub's runners cannot run it (KWin's session screenshots need a GPU, docs/parts/containers.md);
+  CI runs its unit test, `run-unit.sh`, with a stand-in session runner: every feature passing (exit
+  0), Quick Look skipped without its install, a feature broken on purpose (exit 1, named in the
+  summary), a feature without checks (exit 1), a session stopped at its time limit after passing
+  checks (exit 1), a runner that fails after a complete-looking session, a core dump (exit 1),
+  each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, an
+  unknown feature, one given as a pattern (`[p]lacement`, `place.ent`) or twice, Quick Look's service menu
+  executable in its seed, an empty feature list, Quick Look without its install and an option without its value
+  (exit 2), `--help` printing the usage only, the two lanes keeping their own results, a second run
+  on the same work tree refused while the first runs, and results the user cannot remove cleared
+  through a stand-in `podman unshare`. Without
+  any one of those rules its case fails.
 
 ## Harness additions (`tools/vsession`)
 

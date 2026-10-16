@@ -33,7 +33,7 @@
 #      third to be offered again;
 #  22. a window of another activity is not offered by the picker;
 #  23. a window moved into the offered third while the picker is open is not covered by the pick.
-# Run: tools/vsession/remote.sh sg-1 packages/kwin/tests/vsession/scenario-snapgroups.sh SEED 1440x900 420
+# Run: tools/vsession/remote.sh sg-1 packages/kwin/tests/vsession/scenario-snapgroups.sh SEED 1440x900 720
 exec 2>&1
 export OUT
 set -euo pipefail

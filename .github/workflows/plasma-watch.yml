@@ -74,7 +74,7 @@ jobs:
           | Package | Tested | Fedora 44 stable | with updates-testing | |
           |---|---|---|---|---|
           ${rows}
-          Before lifting the dnf hold on the test machines: build the compiled parts against the new version, test a private session, then raise the versions in \`packaging/tested-versions.txt\` (docs/parts/ci.md)."
+          Before lifting the dnf hold on the test machines: build the compiled parts against the new version, run the depth features' check on the new version (\`tools/tests/depth/run.sh\`, docs/parts/testing.md), then raise the versions in \`packaging/tested-versions.txt\` (docs/parts/ci.md)."
           {
             echo "newer=$newer"
             echo "title=Fedora 44 has a newer Plasma stack: $first"

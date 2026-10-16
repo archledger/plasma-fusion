@@ -159,6 +159,11 @@ reaches no journal.
   anchor line in Qt 6.11) kept the widget from loading, and Stop sharing and End failed until the
   menu event's data was a plain string (the D-Bus module marshals no wrapped `int32` in a variant).
 
+In a test container (`tools/vsession/cvsession.sh`, the depth suite's beta lane) there is no
+system bus and so no logind: the first check there is that the widget says it has no logind and
+shows no SSH chip, and step 4's capsule and panel come without the login (the scenario knows the
+lane from podman's `/run/.containerenv`).
+
 Not verified: the camera in a session (that would turn on the test laptop's own camera; the
 monitor is Plasma's own and `pw-dump`'s parsing has its tests), a real portal session and a real
 Spectacle recording (stand-ins with the same properties), Plasma 6.8, other text scales.
