@@ -50,12 +50,15 @@ assert.strictEqual(stepOf({ x: 0, y: 100, width: 720, height: 800 }, area, "left
 assert.strictEqual(stepOf({ x: 0, y: 34, width: 720, height: 840 }, area, "left"), "half", "a terminal's bottom a few rows short still is");
 
 // ---- a step asked for but not drawn yet
-const asked = { side: "left", step: "third", at: 1000 };
-assert.strictEqual(currentStep("half", asked, "left", 1400), "third", "the client still shows the half: the third asked counts");
-assert.strictEqual(currentStep("third", asked, "left", 1400), "third", "drawn: the same");
-assert.strictEqual(currentStep("half", asked, "left", 2500), "half", "a second later the size decides");
-assert.strictEqual(currentStep("half", asked, "right", 1400), "half", "another side: the size decides");
-assert.strictEqual(currentStep("", null, "left", 1400), "", "nothing asked");
+const halfRect = r(0, 720);
+const asked = { side: "left", step: "third", at: 1000, from: halfRect };
+assert.strictEqual(currentStep("half", asked, "left", 1400, halfRect), "third", "the client still shows the half it had: the third asked counts");
+assert.strictEqual(currentStep("third", asked, "left", 1400, r(0, 480)), "third", "drawn: measured, the same");
+assert.strictEqual(currentStep("half", asked, "left", 2500, halfRect), "half", "a second later the size decides");
+assert.strictEqual(currentStep("half", asked, "right", 1400, halfRect), "half", "another side: the size decides");
+assert.strictEqual(currentStep("", asked, "left", 1400, { x: 300, y: 200, width: 600, height: 400 }), "",
+                   "dragged elsewhere within the second: its rectangle is not the one asked from, the size decides");
+assert.strictEqual(currentStep("", null, "left", 1400, halfRect), "", "nothing asked");
 
 // ---- the cycle
 assert.strictEqual(nextStep("", false), "half", "not on that side yet: the half");

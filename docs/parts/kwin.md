@@ -273,10 +273,11 @@ that side of the work area, then back to 1/2 (`Cycle.js`):
   width as the script places it, gap included (`Cycle.stepWidths()`: so the largest gap, 48 px, on
   a small area still gives known steps); a terminal sizes itself in character cells, hence the
   tolerances; anything else starts at 1/2;
-- a client that has not drawn the new size yet still shows the step before: for a second after a
-  request on the same side, the step asked counts (`Cycle.currentStep()`, `cyclePending` per
-  window), so quick presses and key repeat go on through the steps; a move or resize by the user
-  drops it, and so does a move to another screen;
+- a client that has not drawn the new size yet still shows the rectangle it had: for a second after
+  a request on the same side, while the window still has that rectangle, the step asked counts
+  (`Cycle.currentStep()`, `cyclePending` per window with the rectangle it was asked from), so quick
+  presses and key repeat go on through the steps; any other rectangle (the step drawn, or a drag or
+  resize since) is measured, and a move to another screen drops it;
 - 1/2 is KWin's quick tile (`quickTile()`, as the key gave before, so the other half is still
   offered by the picker), 1/3 and 2/3 plain geometry with the gap (`thirdRect()`, `zoneRect()`, as
   the flyout's thirds and 2:1 zone); a step leaves the window's snap group, as a layout choice;
@@ -296,7 +297,8 @@ half, third and two thirds follow;
 `tools/device/tests/shortcut-keys-unit.sh` (CI `build`): the setup's key move (with the
 Windows-style set, once on an update while KWin's quick tile holds the key, never after the mark or
 from another action the user chose); `tests/vsession/scenario-snapcycle.sh` (a private session,
-real keys): Meta+Left four times and Meta+Right twice after the setup.
+real keys): Meta+Left four times and Meta+Right twice after the setup; a failed check fails the
+scenario (its status).
 
 ### Snap-zone outline
 

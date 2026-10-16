@@ -32,7 +32,8 @@ where() {
 # of its width (within 3 %, a terminal sizes itself in character cells), tiled or not as asked.
 check() {
   local label=$1 side=$2 share=$3 tiled=$4 w
-  w=$(where)
+  # (pfkwin.py reports the text as a JSON string: without its quotes.)
+  w=$(where | tr -d '"')
   info "$label: $w"
   if python3 - "$w" "$side" "$share" "$tiled" <<'PY'
 import sys
@@ -78,3 +79,5 @@ press meta+right
 check "2: again: the right third" right 1/3 0
 shot 20-right-third
 info "done"
+# A failed check fails the scenario (scenario rc), as the other KWin scenarios do.
+[ "$(grep -c '^FAIL' "$CHK" || true)" = 0 ]

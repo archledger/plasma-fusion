@@ -43,16 +43,21 @@ function stepOf(rect, area, side, gap, halfGap) {
     return "";
 }
 
-// The step a window is at, given the last step asked of it (PENDING: { side, step, at } or null)
-// at NOW (ms): a client that has not drawn the new size yet still shows the step before, so for a
-// second after a request on the same side the requested step counts while the size does not show
-// it yet. MEASURED is stepOf's answer. main.qml drops PENDING when the user moves or resizes the
-// window.
-function currentStep(measured, pending, side, now) {
-    if (pending && pending.side === side && now - pending.at < 1000 && measured !== pending.step) {
+// The step a window is at, given the last step asked of it (PENDING: { side, step, at, from },
+// FROM the window's rectangle when it was asked, or null) at NOW (ms), the window's rectangle being
+// RECT: a client that has not drawn the new size yet still shows the rectangle it had, so for a
+// second after a request on the same side the requested step counts while the window still has
+// that rectangle. Any other rectangle (the step drawn, or the window moved or resized since, by the
+// user or anything else) is measured: MEASURED, stepOf's answer.
+function currentStep(measured, pending, side, now, rect) {
+    if (pending && pending.side === side && now - pending.at < 1000 && sameRect(rect, pending.from)) {
         return pending.step;
     }
     return measured;
+}
+function sameRect(a, b) {
+    return !!a && !!b && Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1
+        && Math.abs(a.width - b.width) <= 1 && Math.abs(a.height - b.height) <= 1;
 }
 
 // The step after CURRENT: 1/2, 1/3, 2/3, then "screen" when a screen lies on that side
