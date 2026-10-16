@@ -613,9 +613,10 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
             take(m_current.desktopIcons, m_saved.desktopIcons, !hidden);
             take(m_current.iconSize, m_saved.iconSize, state.value(u"iconSize"_s).toInt(3));
         }
+        // A switch set while its key was mixed stays a change while the launchers still differ
+        // (also across a shell restart; a read that failed changes nothing).
+        m_launcherMixedSet.intersect(m_launcherMixed);
     }
-    // A switch set while its key was mixed stays a change only while the launchers still differ.
-    m_launcherMixedSet.intersect(m_launcherMixed);
     Q_EMIT shellStateChanged();
     Q_EMIT magnifyChanged();
     Q_EMIT globalMenuChanged();

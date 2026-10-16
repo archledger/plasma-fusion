@@ -22,6 +22,8 @@
 #               turning it on writes it to both.
 #   mixedoff    the same two launchers: the page says they differ, the switch turned on and back
 #               off is still a change to apply, and Apply writes off to both (they agree then).
+#   mixedrestart the same, with the shell restarted between the switch and Apply: still a change,
+#               and Apply still writes off to both.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -58,6 +60,8 @@ run() {
       "$1" "$2" "$3" "$4" >"$5/fakeshell.log" 2>&1 &
       shell=$!
       for _ in $(seq 1 100); do grep -q "fakeshell: ready" "$5/fakeshell.log" && break; sleep 0.05; done
+      # For a case that restarts the stand-in shell (a kcmctl sh command).
+      export PFV_FAKESHELL=$1 PFV_SHELLJS=$2 PFV_FAKESHELL_PID=$shell
       sed "s|@W@|$5|g" "$5/commands" | "$6" >"$5/kcmctl.log" 2>&1
       status=$?
       kill "$shell" 2>/dev/null || true
@@ -172,6 +176,23 @@ expect mixedoff "Apply writes off to the first launcher" \
 expect mixedoff "and to the second" is "$(panel mixedoff 2)" "bottom 0: launcher{General/showPlaces=false} dock"
 expect mixedoff "after Apply they agree" is "$(value mixedoff launcherPlacesMixed)" false
 expect mixedoff "no error" is "$(value mixedoff errorText)" ""
+
+# The stand-in shell stopped and started again (its layout as it was) between the switch and Apply.
+run mixedrestart "{\"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", {\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"true\"}}, \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$LAUNCHER\", \"config\": {\"General/showPlaces\": \"false\"}}, \"$DOCK\"]}]}" \
+  waitshell "set launcherPlaces true" "set launcherPlaces false" \
+  'sh kill "$PFV_FAKESHELL_PID"; sleep 0.5' "wait 500" "get shellRunning" \
+  'sh "$PFV_FAKESHELL" "$PFV_SHELLJS" @W@/layout.json @W@/panels >@W@/fakeshell2.log 2>&1 & echo $! >@W@/fakeshell2.pid; for _ in $(seq 1 100); do grep -q "fakeshell: ready" @W@/fakeshell2.log && break; sleep 0.05; done' \
+  "wait 4000" waitshell "get shellRunning" "get launcherPlacesMixed" "get needsSave" save "wait 500" "get errorText" \
+  'sh kill "$(cat @W@/fakeshell2.pid)"'
+expect mixedrestart "the shell went away" is "$(first mixedrestart shellRunning)" false
+expect mixedrestart "and came back, the Places chip still mixed" is "$(value mixedrestart launcherPlacesMixed)" true
+expect mixedrestart "the switch set before the restart is still a change to apply" is "$(value mixedrestart needsSave)" true
+expect mixedrestart "Apply writes off to the first launcher" \
+  is "$(panel mixedrestart 1)" "top 0: appname launcher{General/showPlaces=false} clockpill systemtray quicksettings"
+expect mixedrestart "and to the second" is "$(panel mixedrestart 2)" "bottom 0: launcher{General/showPlaces=false} dock"
+expect mixedrestart "no error" is "$(value mixedrestart errorText)" ""
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

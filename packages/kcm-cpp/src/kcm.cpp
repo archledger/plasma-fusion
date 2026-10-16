@@ -186,8 +186,9 @@ PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaDat
         m_metersAvailable = false;
         m_quickSettingsAvailable = false;
         m_launcherAvailable = false;
+        // The switches set while the launchers differed stay changes: the next read keeps them
+        // while the launchers still differ.
         m_launcherMixed.clear();
-        m_launcherMixedSet.clear();
         m_folderAvailable = false;
         Q_EMIT shellStateChanged();
         settingsChanged();
