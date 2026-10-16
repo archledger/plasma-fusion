@@ -82,6 +82,13 @@ var TRAY_ITEMS_HIDDEN = [
     "org.kde.plasma.printmanager",
     "org.kde.plasma.manage-inputmethod"
 ];
+// Tray items the live chips replace, hidden in a tray whose bar has them (the layout script's list).
+var TRAY_ITEMS_REPLACED_BY_CHIPS = [
+    "plasmashell_microphone",
+    "org.kde.plasma.cameraindicator",
+    "xdg-desktop-portal-kde",
+    "Spectacle"
+];
 
 var hasQuickSettings = false;
 var otherTray = null;
@@ -115,6 +122,8 @@ if (!add(panel, ["org.plasmafusion.clockpill"])) {
     add(panel, ["org.kde.plasma.digitalclock"]);
 }
 add(panel, ["org.kde.plasma.panelspacer"]);
+// The live chips at the start of the right cluster, right before the tray.
+var chips = add(panel, ["org.plasmafusion.livechips"]);
 var tray = add(panel, ["org.kde.plasma.systemtray"]);
 if (tray && otherTray) {
     // The tray's item lists and its look. readConfig needs a default of the key's type (null
@@ -130,7 +139,23 @@ if (tray && otherTray) {
         // A list the user emptied is copied as well (the new tray's own defaults would bring
         // the removed items back); only a list never set is left to the new tray.
         var list = otherTray.readConfig(TRAY_LISTS[k], UNSET);
-        if (list && !(list.length === 1 && list[0] === UNSET[0])) {
+        var copied = list && !(list.length === 1 && list[0] === UNSET[0]);
+        // This bar has the live chips: its tray hides the items they replace, whether the other
+        // tray did (a bar with chips) or not (a bar from before them, or without them).
+        if (chips && (TRAY_LISTS[k] === "disabledStatusNotifiers" || TRAY_LISTS[k] === "hiddenItems")) {
+            var items = [];
+            for (var i = 0; copied && i < list.length; ++i) {
+                items.push(String(list[i]));
+            }
+            for (var c = 0; c < TRAY_ITEMS_REPLACED_BY_CHIPS.length; ++c) {
+                if (items.indexOf(TRAY_ITEMS_REPLACED_BY_CHIPS[c]) === -1) {
+                    items.push(TRAY_ITEMS_REPLACED_BY_CHIPS[c]);
+                }
+            }
+            list = items;
+            copied = true;
+        }
+        if (copied) {
             tray.writeConfig(TRAY_LISTS[k], list);
         }
     }
@@ -146,7 +171,7 @@ if (tray && otherTray) {
     // The first top bar: the items quick settings replaces and the passive ones hidden, the ones
     // with no use (and Disks & Devices, which quick settings replaces) known and not loaded.
     tray.currentConfigGroup = ["General"];
-    var trayOff = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED);
+    var trayOff = TRAY_ITEMS_HIDDEN.concat(TRAY_ITEMS_REPLACED, chips ? TRAY_ITEMS_REPLACED_BY_CHIPS : []);
     tray.writeConfig("disabledStatusNotifiers", trayOff);
     tray.writeConfig("hiddenItems", trayOff);
     var knownItems = tray.readConfig("knownItems", []) || [];

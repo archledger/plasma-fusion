@@ -91,6 +91,14 @@
       "x": 1520,
       "y": 0
     },
+    "LiveChips.dc.html": {
+      "h": 1640,
+      "page": "dark",
+      "title": "26 · Live chips — privacy and activity, dark and light",
+      "w": 1440,
+      "x": 1520,
+      "y": 3060
+    },
     "Lock.dc.html": {
       "h": 900,
       "page": "startup",
@@ -293,6 +301,7 @@
     "QuickSettings.dc.html",
     "AltTab.dc.html",
     "Popups.dc.html",
+    "LiveChips.dc.html",
     "Tablet.dc.html",
     "MainLight.dc.html",
     "LauncherLight.dc.html",

@@ -157,6 +157,99 @@ test("ensure-topbars: without meters in the main bar a new bar gets none", () =>
     assert.ok(!has(bar, "org.plasmafusion.meters"));
 });
 
+// The live chips (LiveChips board): right before the tray, which hides the items they replace.
+const CHIPS = "org.plasmafusion.livechips";
+const CHIPS_ITEMS = ["plasmashell_microphone", "org.kde.plasma.cameraindicator", "xdg-desktop-portal-kde", "Spectacle"];
+const trayOff = (bar) => {
+    const g = (bar.widgets.find((w) => w.type === "org.kde.plasma.systemtray").config || {}).General || {};
+    return { hidden: g.hiddenItems || [], disabled: g.disabledStatusNotifiers || [] };
+};
+test("layout: the live chips sit right before the tray, whose items they replace are hidden", () => {
+    const s = shell({ screens: TWO, files: rc() });
+    s.run(LAYOUT);
+    for (const bar of tops(s)) {
+        const t = types(bar);
+        assert.strictEqual(t.indexOf(CHIPS), t.indexOf("org.kde.plasma.systemtray") - 1, "screen " + bar.screen + ": " + t.join(" "));
+        const off = trayOff(bar);
+        for (const id of CHIPS_ITEMS) {
+            assert.ok(off.hidden.includes(id) && off.disabled.includes(id), id + " hidden on screen " + bar.screen);
+        }
+    }
+});
+test("layout: without the live chips installed the tray keeps their items", () => {
+    const s = shell({ screens: TWO, files: rc(), without: [CHIPS] });
+    s.run(LAYOUT);
+    for (const bar of tops(s)) {
+        assert.ok(!has(bar, CHIPS));
+        const off = trayOff(bar);
+        assert.ok(CHIPS_ITEMS.every((id) => !off.hidden.includes(id) && !off.disabled.includes(id)), JSON.stringify(off));
+        assert.ok(off.hidden.includes("org.kde.plasma.volume"), "the other lists as before");
+    }
+});
+function withChips(bar) {
+    const at = bar.widgets.findIndex((w) => w.type === "org.kde.plasma.systemtray");
+    bar.widgets.splice(at, 0, { id: 9, type: CHIPS, config: {} });
+    return bar;
+}
+test("ensure-topbars: with the main bar's chips, a new screen's bar gets them right before its tray", () => {
+    const s = shell({ screens: TWO, files: rc(), panels: [withChips(mainBar())] });
+    s.run(ENSURE);
+    const t = types(tops(s).find((p) => p.screen === 1));
+    assert.strictEqual(t.indexOf(CHIPS), t.indexOf("org.kde.plasma.systemtray") - 1, t.join(" "));
+});
+test("ensure-topbars: the tray copied from the main bar hides the chips' items, which that tray shows", () => {
+    // The main tray hides only one item of the user's: none of those the chips replace.
+    const s = shell({ screens: TWO, files: rc(), panels: [withChips(mainBar())] });
+    s.run(ENSURE);
+    const off = trayOff(tops(s).find((p) => p.screen === 1));
+    assert.ok(off.hidden.includes("org.kde.kscreen"), "the main tray's list is copied: " + JSON.stringify(off));
+    assert.ok(CHIPS_ITEMS.every((id) => off.hidden.includes(id) && off.disabled.includes(id)), JSON.stringify(off));
+});
+test("ensure-topbars: without chips in the main bar the copied tray is as the main one", () => {
+    const { bar } = screenTwo(rc());
+    assert.deepStrictEqual(trayOff(bar), { hidden: ["org.kde.kscreen"], disabled: [] });
+});
+test("ensure-topbars: an older bar with a tray of its own gets the chips at the tray's place", () => {
+    const old = { id: 20, type: "org.kde.panel", screen: 1, location: "top", opacity: "adaptive", config: {}, widgets: [
+        { id: 21, type: "org.plasmafusion.appname", config: {} },
+        { id: 22, type: "org.plasmafusion.clockpill", config: {} },
+        { id: 23, type: "org.kde.plasma.systemtray", config: {} }] };
+    const s = shell({ screens: TWO, files: rc(), panels: [withChips(mainBar()), old] });
+    s.run(ENSURE);
+    const bar = tops(s).find((p) => p.id === 20);
+    assert.deepStrictEqual(types(bar), ["org.plasmafusion.appname", "org.plasmafusion.clockpill", CHIPS, "org.kde.plasma.systemtray",
+                                        "org.plasmafusion.quicksettings"]);
+    // That tray hides the items the chips replace too.
+    const off = trayOff(bar);
+    assert.ok(CHIPS_ITEMS.every((id) => off.hidden.includes(id) && off.disabled.includes(id)), JSON.stringify(off));
+});
+test("ensure-topbars: without chips in the main bar a new bar gets none", () => {
+    const { bar } = screenTwo(rc());
+    assert.ok(!has(bar, CHIPS));
+});
+test("ensure-topbars: a first bar (no main bar) gets the chips and a tray that hides their items", () => {
+    // Every top bar removed, the dock left.
+    const dock = { id: 30, type: "org.kde.panel", screen: 0, location: "bottom", opacity: "translucent", config: {}, widgets: [] };
+    const s = shell({ screens: [[1920, 1080]], files: rc(), panels: [dock] });
+    s.run(ENSURE);
+    const bar = tops(s)[0];
+    assert.ok(bar, s.output);
+    const t = types(bar);
+    assert.strictEqual(t.indexOf(CHIPS), t.indexOf("org.kde.plasma.systemtray") - 1, t.join(" "));
+    assert.ok(CHIPS_ITEMS.every((id) => trayOff(bar).hidden.includes(id)), JSON.stringify(trayOff(bar)));
+});
+test("ensure-topbars: with two screens and no bar, the second screen's bar gets the chips of the first", () => {
+    const dock = { id: 30, type: "org.kde.panel", screen: 0, location: "bottom", opacity: "translucent", config: {}, widgets: [] };
+    const s = shell({ screens: TWO, files: rc(), panels: [dock] });
+    s.run(ENSURE);
+    assert.strictEqual(tops(s).length, 2, s.output);
+    for (const bar of tops(s)) {
+        const t = types(bar);
+        assert.strictEqual(t.indexOf(CHIPS), t.indexOf("org.kde.plasma.systemtray") - 1, "screen " + bar.screen + ": " + t.join(" "));
+        assert.ok(CHIPS_ITEMS.every((id) => trayOff(bar).hidden.includes(id)), "screen " + bar.screen + ": " + JSON.stringify(trayOff(bar)));
+    }
+});
+
 test("ensure-topbars: \"Top bar on every screen\" off adds nothing", () => {
     const s = shell({ screens: TWO, files: rc({ EveryScreen: "false" }), panels: [mainBar()] });
     s.run(ENSURE);
@@ -181,6 +274,25 @@ test("Add Panel: the top bar with the page's defaults is adaptive", () => {
     s.run(TOPBAR);
     assert.strictEqual(tops(s)[0].opacity, "adaptive");
     assert.strictEqual(glass(all(s, "org.plasmafusion.quicksettings")[0]), undefined);
+});
+
+test("Add Panel: a top bar that copies another bar's tray hides the items its live chips replace", () => {
+    // A bar from before the live chips: its tray hides one item of the user's, and none of theirs.
+    const s = shell({ screens: TWO, files: rc(), panels: [mainBar()] });
+    s.run(TOPBAR);
+    const bar = tops(s).find((p) => p.id !== 2);
+    assert.ok(has(bar, CHIPS), types(bar).join(" "));
+    const off = trayOff(bar);
+    assert.ok(off.hidden.includes("org.kde.kscreen"), "the other tray's list is copied: " + JSON.stringify(off));
+    assert.ok(CHIPS_ITEMS.every((id) => off.hidden.includes(id) && off.disabled.includes(id)), JSON.stringify(off));
+});
+
+test("Add Panel: without the live chips installed the copied tray is as the other one", () => {
+    const s = shell({ screens: TWO, files: rc(), panels: [mainBar()], without: [CHIPS] });
+    s.run(TOPBAR);
+    const bar = tops(s).find((p) => p.id !== 2);
+    assert.ok(!has(bar, CHIPS));
+    assert.deepStrictEqual(trayOff(bar), { hidden: ["org.kde.kscreen"], disabled: [] });
 });
 
 test("Add Panel: the dock and its launcher follow Glass Solid", () => {

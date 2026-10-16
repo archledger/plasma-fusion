@@ -21,7 +21,7 @@ const KNOWN = [
     "org.plasmafusion.appname", "org.plasmafusion.clockpill", "org.plasmafusion.quicksettings",
     "org.plasmafusion.pen", "org.plasmafusion.launcher", "org.plasmafusion.dock", "org.plasmafusion.meters",
     "org.plasmafusion.weathercard", "org.plasmafusion.calendarcard", "org.plasmafusion.systemcard",
-    "org.plasmafusion.desktop", "org.kde.plasma.systemtray", "org.kde.plasma.appmenu",
+    "org.plasmafusion.desktop", "org.plasmafusion.livechips", "org.kde.plasma.systemtray", "org.kde.plasma.appmenu",
     "org.kde.plasma.panelspacer", "org.kde.plasma.kickoff", "org.kde.plasma.digitalclock",
 ];
 
@@ -29,6 +29,8 @@ function shell(options) {
     const opts = options || {};
     const screens = opts.screens || [[1920, 1080]];
     const files = opts.files || {};
+    // The widgets plasmashell knows (opts.without: ones not installed).
+    const known = KNOWN.filter((t) => (opts.without || []).indexOf(t) === -1);
     const panels = opts.panels || [];
     const desktops = opts.desktops || screens.map((s, i) => ({ id: 100 + i, type: "org.plasmafusion.desktop", screen: i, config: {}, widgets: [] }));
     let nextId = 1 + Math.max(0, ...panels.map((p) => p.id), ...panels.flatMap((p) => p.widgets.map((w) => w.id)),
@@ -52,23 +54,31 @@ function shell(options) {
             },
         };
     }
-    function widget(w) {
+    // A widget's place in its panel: 100 px a widget, in order (enough to place one before another).
+    function widget(w, c) {
         return Object.assign(configurable(w), {
             get id() { return w.id; },
             get type() { return w.type; },
+            get geometry() { return c ? { x: c.widgets.indexOf(w) * 100, y: 0, width: 90, height: 34 } : undefined; },
             set userBackgroundHints(v) { w.userBackgroundHints = v; },
             get userBackgroundHints() { return w.userBackgroundHints; },
         });
     }
     function containment(c) {
         const api = configurable(c);
-        api.widgets = (type) => c.widgets.filter((w) => type === undefined || w.type === type).map(widget);
-        api.addWidget = (type) => {
-            if (KNOWN.indexOf(type) === -1)
+        api.widgets = (type) => c.widgets.filter((w) => type === undefined || w.type === type).map((w) => widget(w, c));
+        // addWidget(type) appends; addWidget(type, x, y, w, h) puts it at x, before the widget there,
+        // as a panel does.
+        api.addWidget = (type, x) => {
+            if (known.indexOf(type) === -1)
                 return null;
             const w = { id: nextId++, type: type, config: {} };
-            c.widgets.push(w);
-            return widget(w);
+            const at = typeof x === "number" ? c.widgets.findIndex((o, i) => i * 100 > x) : -1;
+            if (at === -1)
+                c.widgets.push(w);
+            else
+                c.widgets.splice(at, 0, w);
+            return widget(w, c);
         };
         for (const key of ["screen", "location", "height", "floating", "lengthMode", "alignment", "hiding", "opacity",
                            "wallpaperPlugin"]) {
@@ -111,7 +121,7 @@ function shell(options) {
             currentActivity: () => "activity",
             screenCount: screens.length,
             screenGeometry: (i) => ({ x: 0, y: 0, width: screens[i][0], height: screens[i][1] }),
-            knownWidgetTypes: KNOWN,
+            knownWidgetTypes: known,
             gridUnit: 18,
             fileExists: () => false,
             ConfigFile: configFile,

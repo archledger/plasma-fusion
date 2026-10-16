@@ -127,6 +127,18 @@ var TRAY_ITEMS_HIDDEN = [
     "org.kde.plasma.manage-inputmethod"
 ];
 
+// Tray items the live chips widget replaces (docs/parts/shell-livechips.md), hidden the same way
+// (disabledStatusNotifiers and hiddenItems) in a tray whose bar has the chips: plasma-pa's
+// microphone item (the volume applet makes it and stays loaded), the camera indicator,
+// xdg-desktop-portal-kde's screen-casting and remote-control items, and Spectacle's recording item.
+// A status item's id is its program's display name (with "_microphone" for plasma-pa's).
+var TRAY_ITEMS_REPLACED_BY_CHIPS = [
+    "plasmashell_microphone",
+    "org.kde.plasma.cameraindicator",
+    "xdg-desktop-portal-kde",
+    "Spectacle"
+];
+
 // A string-list key of an applet's configuration as an array (the scripting engine returns a
 // list, or a comma-separated string for a key it cannot type).
 function readList(applet, key) {
@@ -224,8 +236,9 @@ if (!addFirst(topBar, ["org.plasmafusion.clockpill"])) {
 }
 addFirst(topBar, ["org.kde.plasma.panelspacer"]);
 
-// Right: the stock tray for application status icons (StatusNotifierItems, shown as usual),
-// then the quick-settings status pill.
+// Right: the live chips (LiveChips board: the start of the right cluster), the stock tray for
+// application status icons (StatusNotifierItems, shown as usual), then the quick-settings status pill.
+var chips = installed("org.plasmafusion.livechips") ? addFirst(topBar, ["org.plasmafusion.livechips"]) : null;
 var tray = addFirst(topBar, ["org.kde.plasma.systemtray"]);
 // The pen menu (PEN-1), hidden in laptop posture; its Meta+Shift+W is set by fusion-config.sh --pen,
 // not here. Skipped while the pen widget is not installed.
@@ -234,11 +247,11 @@ if (installed("org.plasmafusion.pen")) {
 }
 var quickSettings = withGlass(addFirst(topBar, ["org.plasmafusion.quicksettings"]));
 
-// The tray's items: the ones quick settings replaces and the passive ones hidden, the ones with no
-// use not loaded (the lists above). The same for the tray of every top bar.
-function configureTray(tray, withQuickSettings) {
+// The tray's items: the ones quick settings and the live chips replace and the passive ones hidden,
+// the ones with no use not loaded (the lists above). The same for the tray of every top bar.
+function configureTray(tray, withQuickSettings, withChips) {
     tray.currentConfigGroup = ["General"];
-    var trayOff = TRAY_ITEMS_HIDDEN.concat(withQuickSettings ? TRAY_ITEMS_REPLACED : []);
+    var trayOff = TRAY_ITEMS_HIDDEN.concat(withQuickSettings ? TRAY_ITEMS_REPLACED : [], withChips ? TRAY_ITEMS_REPLACED_BY_CHIPS : []);
     tray.writeConfig("disabledStatusNotifiers", trayOff);
     tray.writeConfig("hiddenItems", trayOff);
     // The tray may or may not have enabled its default items yet: either way the unloaded ones
@@ -264,7 +277,7 @@ function configureTray(tray, withQuickSettings) {
     tray.currentConfigGroup = [];
 }
 if (tray) {
-    configureTray(tray, quickSettings !== null);
+    configureTray(tray, quickSettings !== null, chips !== null);
 }
 
 /* ---------- dock ---------- */
@@ -298,8 +311,8 @@ if (!withGlass(addFirst(dock, ["org.plasmafusion.dock"]))) {
 /* ---------- other screens ---------- */
 
 // Every other screen gets a top bar of its own: app name, global menu, clock pill (owner decision 8)
-// and, since 2026-10-09 (owner decision), the main bar's status area: the tray, set up the same way,
-// and quick settings (the widgets share the session's jobs, see the quick settings part). The pen
+// and, since 2026-10-09 (owner decision), the main bar's status area: the live chips, the tray, set
+// up the same way, and quick settings (the widgets share the session's jobs, see the quick settings part). The pen
 // menu, the dock and the cards stay on the primary screen. The same bar is added to screens
 // connected later by ensure-topbars.js (fusion-config.sh --screens, KWin's plasmafusion-snap), which
 // marks a bar it gives the status area ([PlasmaFusion] statusItems); these bars are marked too.
@@ -328,9 +341,10 @@ for (var sc = 1; everyScreen && sc < screenCount; ++sc) {
     }
     addFirst(bar, ["org.kde.plasma.panelspacer"]);
     if (tray) {
+        var barChips = chips ? addFirst(bar, ["org.plasmafusion.livechips"]) : null;
         var barTray = addFirst(bar, ["org.kde.plasma.systemtray"]);
         if (barTray) {
-            configureTray(barTray, quickSettings !== null);
+            configureTray(barTray, quickSettings !== null, barChips !== null);
         }
     }
     if (quickSettings) {

@@ -313,6 +313,7 @@ for p in plasma/look-and-feel/org.plasmafusion.dark.desktop plasma/look-and-feel
          plasma/plasmoids/org.plasmafusion.appname plasma/plasmoids/org.plasmafusion.clockpill \
          plasma/plasmoids/org.plasmafusion.quicksettings plasma/plasmoids/org.plasmafusion.launcher \
          plasma/plasmoids/org.plasmafusion.dock plasma/plasmoids/org.plasmafusion.pen \
+         plasma/plasmoids/org.plasmafusion.livechips \
          plasma/plasmoids/org.plasmafusion.desktop \
          plasma/plasmoids/org.plasmafusion.calendarcard plasma/plasmoids/org.plasmafusion.weathercard \
          plasma/plasmoids/org.plasmafusion.systemcard plasma/plasmoids/org.plasmafusion.meters \

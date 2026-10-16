@@ -110,9 +110,10 @@ plasmashell is stopped (it writes the layout file when it quits), the files are 
 | portrait card positions `ItemGeometries-<H>x<W>` and `ItemGeometriesVertical`: the first two cards side by side under the bar, right-aligned on the 16 px grid, the rest under the right one (the CPU/memory card hides itself in portrait, CARD-2) | neither key exists; sizes from the landscape positions; screen size from the shell |
 | top bar `plasmashellrc [PlasmaViews][Panel <id>] panelOpacity` 2 (translucent) becomes 0 (adaptive: solid next to maximized windows, decision 5) | it is still 2, on a HOME below configuration version 2, and the settings page has not chosen translucent (`[TopBar] SolidNextToWindows=false`) |
 | tray: `org.kde.plasma.vault`, `org.kde.plasma.devicenotifier`, `org.kde.kscreen`, `org.kde.plasma.printmanager`, `org.kde.plasma.manage-inputmethod` added to `hiddenItems` and `disabledStatusNotifiers` (no expander arrow; quick settings has its own keyboard button) | missing from the list, on a HOME below configuration version 2 |
-| tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems`; once (plasmafusionrc `[Setup] TrayDevices=done`, written after the first run that looked at the layout or built a new one) |
+| tray where quick settings is in the bar: `org.kde.plasma.devicenotifier` out of `extraItems` and in `knownItems` (not loaded: the quick-settings Disks & Devices page replaces it) | it is in `extraItems`, or not in `knownItems`; once (plasmafusionrc `[Setup] TrayDevices=done`, written after the first run that looked at the layout or built a new one, unless its migration stopped part way) |
 | every app menu `[Configuration][Appearance] allScreens=false` (decision 8) | the key is not set |
 | pen widget `org.plasmafusion.pen` added to the top bar between the tray and quick settings (next free applet id, `AppletOrder`) | the widget is installed and not in the bar, on a HOME below configuration version 2 |
+| live chips `org.plasmafusion.livechips` added right before the tray of every Plasma Fusion top bar with a tray (a free applet id each, `AppletOrder`), and the tray items they replace (`plasmashell_microphone`, `org.kde.plasma.cameraindicator`, `xdg-desktop-portal-kde`, `Spectacle`) added to that tray's `hiddenItems` and `disabledStatusNotifiers` (docs/parts/shell-livechips.md) | the widget is installed and not in that bar, or there but not right before the tray (a run that stopped between writing the widget and the bar's order); once (plasmafusionrc `[Setup] LiveChips=done`, written after the first run that looked at the layout or built a new one while the widget was installed, unless its migration stopped part way) |
 
 The rows "below configuration version 2" bring a layout from before 0.2.0 up to it; every release
 since ran them at its first run. Until 0.5.0 they ran at every run, so each `plasma-fusion update`
@@ -121,6 +122,9 @@ made the settings page's translucent top bar adaptive again, put a tray item the
 back a removed pen menu or desktop, and, since such a change is a migration, stopped and started
 plasmashell (ending Keep awake). Now a later run finds nothing to migrate on a layout the user
 left alone, and changes nothing the user changed (`tools/device/tests/layout-migration-unit.sh`).
+Each step reads the layout as the steps before it left it in the same run (their writes are queued
+and applied together), so step 7 keeps the pen menu step 6 put into the bar's order and the items
+step 4 hid.
 
 Whether the layout is a Plasma Fusion one (a full-width top panel and a floating, fit-content
 bottom panel), the top bars that get `floatingApplets` and the bar thickness the run sets are read

@@ -244,6 +244,15 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.meters/tests/readings_test.py
 
+      - name: Live chips' logic, sources, keyboard and texts (node; offscreen Qt, stand-in camera monitor and status items on a private bus)
+        run: |
+          set -euo pipefail
+          node packages/plasmoids/org.plasmafusion.livechips/tests/chips.test.js
+          STAGE="$RUNNER_TEMP/chips-stage" tools/build.sh livechips
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.livechips/tests/chips_qml_test.py "$RUNNER_TEMP/chips-stage"
+
       - name: Clipboard sheet on Plasma's clipboard model (offscreen, throw-away HOME)
         run: |
           set -euo pipefail

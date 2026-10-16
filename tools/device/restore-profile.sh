@@ -25,6 +25,7 @@ ADDED=(
   .local/share/plasma/plasmoids/org.plasmafusion.appname .local/share/plasma/plasmoids/org.plasmafusion.clockpill
   .local/share/plasma/plasmoids/org.plasmafusion.quicksettings .local/share/plasma/plasmoids/org.plasmafusion.launcher
   .local/share/plasma/plasmoids/org.plasmafusion.dock .local/share/plasma/plasmoids/org.plasmafusion.pen
+  .local/share/plasma/plasmoids/org.plasmafusion.livechips
   .local/share/plasma/plasmoids/org.plasmafusion.weathercard .local/share/plasma/plasmoids/org.plasmafusion.calendarcard
   .local/share/plasma/plasmoids/org.plasmafusion.systemcard .local/share/plasma/plasmoids/org.plasmafusion.meters
   .local/share/plasma/look-and-feel/org.plasmafusion.previous.desktop

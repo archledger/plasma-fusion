@@ -30,6 +30,9 @@ commands, the bundled fonts, the tile emitter and the tests.
 <td valign="top"><a href="previews/AltTab.webp"><img src="previews/AltTab.webp" width="420" alt="Window switcher (Alt+Tab)"></a><br><b>Window switcher (Alt+Tab)</b><br><a href="boards/AltTab.dc.html">source</a></td>
 <td valign="top"><a href="previews/Popups.webp"><img src="previews/Popups.webp" width="420" alt="Pop-ups, toasts and tray panels"></a><br><b>Pop-ups, toasts and tray panels</b><br><a href="boards/Popups.dc.html">source</a></td>
 </tr>
+<tr>
+<td valign="top"><a href="previews/LiveChips.webp"><img src="previews/LiveChips.webp" width="420" alt="Live chips — privacy and activity, dark and light"></a><br><b>Live chips — privacy and activity, dark and light</b><br><a href="boards/LiveChips.dc.html">source</a></td>
+</tr>
 </table>
 
 ## Desktop · light
