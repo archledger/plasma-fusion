@@ -296,7 +296,8 @@ before the client drew the third goes on to the two thirds; with a 48 px gap on 
 half, third and two thirds follow;
 `tools/device/tests/shortcut-keys-unit.sh` (CI `build`): the setup's key move (with the
 Windows-style set, once on an update while KWin's quick tile holds the key, never after the mark or
-from another action the user chose); `tests/vsession/scenario-snapcycle.sh` (a private session,
+from another action the user chose; an update while an older snap script runs unloads it and
+starts it again, then moves the keys); `tests/vsession/scenario-snapcycle.sh` (a private session,
 real keys): Meta+Left four times and Meta+Right twice after the setup; a failed check fails the
 scenario (its status).
 

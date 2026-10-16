@@ -2060,6 +2060,20 @@ snap_cycle_actions_registered() {
   bus call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
     grep -qF "\"$SNAP_CYCLE Left\""
 }
+# A snap script that is running without the actions is an older one (an update in this session):
+# KWin does not load a script that is loaded already (6.7.5 scripting.cpp,
+# loadDeclarativeScript), so it is unloaded, and started again as the one installed now.
+snap_script_reload() {
+  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true || return 0
+  note "snap sizes: the running snap script is an older one (started again)"
+  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s plasmafusion-snap >/dev/null 2>&1 || true
+  # unloadScript only schedules the deletion; start() loads it again once it is gone.
+  for _ in $(seq 1 20); do
+    bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true || break
+    sleep 0.1
+  done
+  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting start >/dev/null 2>&1 || true
+}
 apply_snap_cycle_keys() {
   local side key
   read_key plasmafusionrc Shortcuts SnapCycleKeys
@@ -2068,6 +2082,7 @@ apply_snap_cycle_keys() {
     return 0
   fi
   if [ "$DRY" = 0 ]; then
+    snap_cycle_actions_registered || snap_script_reload
     for _ in $(seq 1 20); do snap_cycle_actions_registered && break; sleep 0.5; done
     if ! snap_cycle_actions_registered; then
       note "snap sizes: the snap KWin script's actions are not registered (keys not set)"

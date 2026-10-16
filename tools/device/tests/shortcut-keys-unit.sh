@@ -58,7 +58,7 @@ LIB=$BASE/lib.sh
   grep -m1 '^SNAP_CYCLE_KEYS_VERSION=' "$TOOL" || true
   extract note keyname install_text shortcut_get shortcut_set shortcut_add shortcut_remove key_holders \
     shortcut_claim register_command_component command_key_present notify_desktop ensure_notify_shortcut clipboard_desktop \
-    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade apply_snap_cycle_keys
+    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade snap_script_reload apply_snap_cycle_keys
 } >"$LIB"
 grep -q '^apply_snap_cycle_keys() {' "$LIB" || { echo "FAIL: apply_snap_cycle_keys was not found in fusion-config.sh"; exit 1; }
 for f in ensure_notify_shortcut ensure_clipboard_shortcut; do
@@ -213,6 +213,27 @@ run_case() {
       snapcycle)
         # The script registered its actions (KWin runs it).
         snap_cycle_actions_registered() { true; }
+        apply_snap_cycle_keys "$4" ;;
+      snapcycle-old)
+        # An older snap script is running (an update in this session): loaded, without the new
+        # actions, which come once it is unloaded and started again (a KWin stand-in in front of
+        # the kglobalaccel one; its calls in $HOME/kwin.calls).
+        eval "fake_$(declare -f bus)"
+        bus() {
+          local a=("$@")
+          [ "${a[0]}" = call ] && a=("${a[@]:1}")
+          if [ "${a[0]}" = org.kde.KWin ]; then
+            echo "${a[3]}" >>"$HOME/kwin.calls"
+            case ${a[3]} in
+              isScriptLoaded) if [ -f "$HOME/unloaded" ]; then echo "b false"; else echo "b true"; fi ;;
+              unloadScript) : >"$HOME/unloaded"; echo "b true" ;;
+              start) [ ! -f "$HOME/unloaded" ] || : >"$HOME/started" ;;
+            esac
+            return 0
+          fi
+          fake_bus "$@"
+        }
+        snap_cycle_actions_registered() { [ -f "$HOME/started" ]; }
         apply_snap_cycle_keys "$4" ;;
       step | step-notify)
         has_name() { true; }
@@ -370,6 +391,14 @@ if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  the 
 run_case snap-migrate snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
 expect_keys "an update (no Windows-style set) moves Meta+Left from KWin's default too, once" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
 expect_keys "  and Meta+Right" kwin "Plasma Fusion: Snap Right" "$META_RIGHT"
+run_case snap-migrate-old snapcycle-old migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "an update while an older snap script runs: it is started again and Meta+Left moves" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
+if [ "$(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)" = "isScriptLoaded unloadScript isScriptLoaded start " ]; then
+  pass "  unloaded, then started once it was gone"
+else
+  fail "  KWin calls: $(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)"
+fi
+if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  and the run is marked"; else fail "  the run is not marked"; fi
 SNAPMARK=1 run_case snap-migrate-done snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
 expect_keys "after the mark, Meta+Left the user gave back to KWin's quick tile stays there" kwin "Window Quick Tile Left" "$META_LEFT"
 expect_keys "  and Snap Left gets nothing" kwin "Plasma Fusion: Snap Left" ""
