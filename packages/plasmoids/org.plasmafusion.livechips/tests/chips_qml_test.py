@@ -13,7 +13,8 @@
 - the status items (sources/StatusItems.qml, with Plasma's D-Bus module) against a stand-in
   watcher and items on a private bus (fake_watcher.py): an item that unregisters while its
   properties are read is not shown when the reply comes after, one that stays is; a recording's
-  time runs on with nothing logged, and the widget's debug output (for the session tests) has it.
+  time runs on with nothing logged, and the widget's debug output (for the session tests) has it;
+  a recording with sound (Spectacle 6.8's title) is a recording too.
 
   STAGE=$PWD/build/stage tools/build.sh livechips
   QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
@@ -317,6 +318,12 @@ def status_items(root, i18n):
         check(until(lambda: any('"time":"0:45"' in m[2] and m[1] == "org.plasmafusion.livechips" for m in messages)),
               "with the widget's debug output on, the status items are logged")
         QLoggingCategory.setFilterRules("")
+        # A recording with sound (Spectacle 6.8's title, "Spectacle is Recording with Sound").
+        fake.send("drop 3")
+        check(until(lambda: harness.property("recording") == ""), "the recording ends with its item (%s)" % harness.property("recording"))
+        fake.send("add 4 sound")
+        check(until(lambda: harness.property("recording") == "0:41"),
+              "a recording with sound shows its time too (%s)" % harness.property("recording"))
     finally:
         qInstallMessageHandler(None)
         fake.stop()

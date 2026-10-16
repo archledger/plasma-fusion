@@ -47,7 +47,7 @@ Status: new in the release after 0.5.0. Last edited 2026-10-16.
 | Screen sharing | xdg-desktop-portal-kde's "Screen casting" status item (icon `media-record`, id `xdg-desktop-portal-kde`); the app from its tooltip, a window or the screen from its overlay icon | ForegroundVisited | **Stop sharing**: the item's menu action End (`Session::close`) |
 | Remote control | the portal's "Remote Control" item (icon `krfb`); the app from the tooltip's first line, the pointer and keys or the screen from its lines | ForegroundNegative | **End**, as above |
 | SSH | systemd-logind: sessions with `Remote=yes` (any user) that are not closing; `sshd` and `tailscaled` read as SSH, others as a remote login | ForegroundLink | none |
-| Recording | Spectacle's recording item, known by its tooltip title ("Spectacle is Recording"; its id is Spectacle's translated name); the time is Spectacle's own (`KFormat`, `0:42`); while it renders, no chip | ForegroundNegative on its tint | the round button: Activate (Spectacle's `finishRecording`) |
+| Recording | Spectacle's recording item, known by its tooltip title ("Spectacle is Recording", or "Spectacle is Recording with Sound" when Spectacle 6.8 records sound; its id is Spectacle's translated name); the time is Spectacle's own (`KFormat`, `0:42`); while it renders, no chip | ForegroundNegative on its tint | the round button: Activate (Spectacle's `finishRecording`) |
 | Keep awake | quick settings in the same bar: its widget's `keepAwakeUntil` (a timed Keep awake's end, else 0); "until turned off" has no chip (the status pill shows its cup) | text colour | a click opens quick settings on its Keep awake page (`openRequest` `keepawake`, with that widget's output) |
 
 A status item is read again on each of its signals (Spectacle's tooltip changes every second). A
@@ -111,7 +111,7 @@ reaches no journal.
   the argument, a message of another shape), the portal's two kinds, logind's sessions (remote,
   not closing, oldest first; Tailscale SSH is SSH), the apps reading a camera from a `pw-dump`
   graph (a screen-cast source and an audio stream are not the camera), Keep awake's time left.
-- `tests/chips_qml_test.py` (offscreen Qt on a private bus, CI `build`, 22 checks):
+- `tests/chips_qml_test.py` (offscreen Qt on a private bus, CI `build`, 24 checks):
   - the camera source with a stand-in camera monitor and `Exec`: no `pw-dump` without a running
     camera; its reader; an app that starts or stops reading the running camera seen at the next
     look; none once it stops;
@@ -122,6 +122,7 @@ reaches no journal.
     - an item that unregisters while its properties are read is not shown when the reply comes
       after, while one that stays is shown and goes when it unregisters;
     - a recording's time runs on with nothing logged;
+    - a recording with sound (Spectacle 6.8's title) shows its time too;
     - with the widget's debug output on, the lines the session test reads are there.
 - `tools/build.d/76-livechips.sh`: the widget logs only through its category (`console.debug(log,
   ...)` and `console.warn(log, ...)`).
@@ -129,7 +130,8 @@ reaches no journal.
   right before the tray in every new bar, their items hidden; nothing without the widget;
   `ensure-topbars.js` with the main bar's chips (a new bar, an older bar with its own tray: at the
   tray's place, that tray hiding their items; the tray copied from the main bar hiding them too),
-  without them (the copy as the main tray), and a first bar; the "Add Panel" top bar that copies
+  without them (the copy as the main tray), a first bar, and two screens with no bar (both bars
+  get them); the "Add Panel" top bar that copies
   another bar's tray hides their items too, and copies it as it is without the widget.
 - `tools/device/tests/layout-migration-unit.sh` (CI `build`): step 7 adds the chips before the tray
   of every top bar with distinct ids and hides their items there, once; a bar that has them before

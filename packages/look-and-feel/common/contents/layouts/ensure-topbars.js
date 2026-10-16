@@ -298,6 +298,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
             main = bar;
             mainTray = has(bar, TRAY) ? bar.widgets(TRAY)[0] : null;
             mainQs = has(bar, QS);
+            mainChips = has(bar, CHIPS);
         }
         bar.currentConfigGroup = ["PlasmaFusion"];
         bar.writeConfig("statusItems", true);

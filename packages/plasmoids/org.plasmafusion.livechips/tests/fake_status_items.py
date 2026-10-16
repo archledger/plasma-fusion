@@ -9,7 +9,8 @@ sets (xdg-desktop-portal-kde screencast.cpp and remotedesktop.cpp, Spectacle Spe
 
   fake_status_items.py screen APP window|screen     the portal's "Screen casting" item, menu End
   fake_status_items.py remote APP input|view        the portal's "Remote Control" item, menu End
-  fake_status_items.py recording SECONDS            Spectacle's recording item; its tooltip's time
+  fake_status_items.py recording SECONDS [sound]    Spectacle's recording item (with sound: its
+                                                    title in Spectacle 6.8); its tooltip's time
                                                     runs on (KFormat's m:ss); Activate finishes it
 
 It prints one line per event ("ended KIND", "activated recording") and exits when the chips end
@@ -54,14 +55,15 @@ def screen_props(app, window):
                 ToolTip=tooltip("", "Screen casting", "Sharing contents to %s" % app))
 
 
-def recording_props(seconds):
-    """Spectacle's recording item, SECONDS into the recording."""
+def recording_props(seconds, sound=False):
+    """Spectacle's recording item, SECONDS into the recording (with SOUND, Spectacle 6.8's title)."""
     return dict(base_props(), Id=dbus.String("Spectacle"), Category=dbus.String("SystemServices"), Title=dbus.String("Spectacle"),
-                IconName=dbus.String("media-record"), ToolTip=recording_tooltip(seconds))
+                IconName=dbus.String("media-record"), ToolTip=recording_tooltip(seconds, sound))
 
 
-def recording_tooltip(seconds):
-    return tooltip("", "Spectacle is Recording", "Time recorded: %d:%02d\nClick to finish recording" % (seconds // 60, seconds % 60))
+def recording_tooltip(seconds, sound=False):
+    return tooltip("", "Spectacle is Recording with Sound" if sound else "Spectacle is Recording",
+                   "Time recorded: %d:%02d\nClick to finish recording" % (seconds // 60, seconds % 60))
 
 
 class Item(dbus.service.Object):
@@ -171,11 +173,12 @@ def main():
         Menu(bus, lambda: done("ended " + a.kind))
     else:
         seconds = [int(a.args[0]) if a.args else 0]
-        item = Item(bus, recording_props(seconds[0]), on_activate=lambda: done("activated recording"))
+        sound = a.args[1:2] == ["sound"]
+        item = Item(bus, recording_props(seconds[0], sound), on_activate=lambda: done("activated recording"))
 
         def tick():
             seconds[0] += 1
-            item.props["ToolTip"] = recording_tooltip(seconds[0])
+            item.props["ToolTip"] = recording_tooltip(seconds[0], sound)
             item.NewToolTip()
             return True
         GLib.timeout_add(1000, tick)

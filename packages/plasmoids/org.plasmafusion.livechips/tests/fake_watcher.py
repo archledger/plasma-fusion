@@ -5,9 +5,10 @@
 (not installed), on a private session bus. The items are fake_status_items.py's, each under a name
 of its own (org.kde.StatusNotifierItem-PID-N) at /ItemN. Commands, one per line on stdin:
 
-  add N screen|recording [hold]   item N, the portal's "Screen casting" for Firefox or Spectacle's
-                                  recording at 0:41, registered; with hold, its replies to GetAll
-                                  wait for release
+  add N screen|recording|sound [hold]
+                                  item N, the portal's "Screen casting" for Firefox or Spectacle's
+                                  recording at 0:41 (sound: with sound, Spectacle 6.8's title),
+                                  registered; with hold, its replies to GetAll wait for release
   drop N                          N unregisters (its object stays: a held reply can still go)
   release N                       N sends the GetAll replies it holds
   tick N                          N's recording runs on a second (NewToolTip)
@@ -79,6 +80,7 @@ def main():
     watcher = Watcher(bus)
     items = {}
     seconds = {}
+    sounds = {}
     pending = [b""]
 
     def run(line):
@@ -90,7 +92,8 @@ def main():
         if words[0] == "add":
             names.append(dbus.service.BusName(key.split("/")[0], bus))
             seconds[number] = 41
-            props = fake.screen_props("Firefox", True) if words[2] == "screen" else fake.recording_props(seconds[number])
+            sounds[number] = words[2] == "sound"
+            props = fake.screen_props("Firefox", True) if words[2] == "screen" else fake.recording_props(seconds[number], sounds[number])
             item = HeldItem(bus, number, props, "/Item%d" % number)
             item.hold = "hold" in words[3:]
             items[number] = item
@@ -107,7 +110,7 @@ def main():
             print("released %d %d" % (number, len(held)), flush=True)
         elif words[0] == "tick":
             seconds[number] += 1
-            items[number].props["ToolTip"] = fake.recording_tooltip(seconds[number])
+            items[number].props["ToolTip"] = fake.recording_tooltip(seconds[number], sounds[number])
             items[number].NewToolTip()
 
     def readable(fd, condition):

@@ -238,6 +238,17 @@ test("ensure-topbars: a first bar (no main bar) gets the chips and a tray that h
     assert.strictEqual(t.indexOf(CHIPS), t.indexOf("org.kde.plasma.systemtray") - 1, t.join(" "));
     assert.ok(CHIPS_ITEMS.every((id) => trayOff(bar).hidden.includes(id)), JSON.stringify(trayOff(bar)));
 });
+test("ensure-topbars: with two screens and no bar, the second screen's bar gets the chips of the first", () => {
+    const dock = { id: 30, type: "org.kde.panel", screen: 0, location: "bottom", opacity: "translucent", config: {}, widgets: [] };
+    const s = shell({ screens: TWO, files: rc(), panels: [dock] });
+    s.run(ENSURE);
+    assert.strictEqual(tops(s).length, 2, s.output);
+    for (const bar of tops(s)) {
+        const t = types(bar);
+        assert.strictEqual(t.indexOf(CHIPS), t.indexOf("org.kde.plasma.systemtray") - 1, "screen " + bar.screen + ": " + t.join(" "));
+        assert.ok(CHIPS_ITEMS.every((id) => trayOff(bar).hidden.includes(id)), "screen " + bar.screen + ": " + JSON.stringify(trayOff(bar)));
+    }
+});
 
 test("ensure-topbars: \"Top bar on every screen\" off adds nothing", () => {
     const s = shell({ screens: TWO, files: rc({ EveryScreen: "false" }), panels: [mainBar()] });

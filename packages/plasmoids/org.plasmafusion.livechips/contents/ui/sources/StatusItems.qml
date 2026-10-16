@@ -45,9 +45,11 @@ Item {
     readonly property string endLabel: i18ndc("xdg-desktop-portal-kde", "@action:inmenu stops screen/window sharing", "End")
     readonly property string recordingPattern: i18ndc("spectacle", "@info:tooltip subtitle for recording tray icon",
                                                       "Time recorded: %1\nClick to finish recording", marker)
-    // Spectacle's item is known by its tooltip title (its id is Spectacle's translated name).
+    // Spectacle's item is known by its tooltip title (its id is Spectacle's translated name); with
+    // sound (Spectacle 6.8) the title says so.
     readonly property var spectacleTitles: [
         i18ndc("spectacle", "@info:tooltip title for recording tray icon", "Spectacle is Recording"),
+        i18ndc("spectacle", "@info:tooltip title for recording tray icon", "Spectacle is Recording with Sound"),
         i18ndc("spectacle", "@info:tooltip title for rendering tray icon", "Spectacle is Finishing the Recording")
     ]
 
