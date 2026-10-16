@@ -913,9 +913,28 @@ bool PlasmaFusionKcm::applyEveryDock(bool on)
         qCDebug(KCM_PLASMAFUSION) << "docks removed:" << result;
         return true;
     }
+    bool ran = false;
+    if (!runDockScript(&ran)) {
+        return false;
+    }
+    if (!ran) {
+        // Nothing to run yet; the choice is stored for the next login.
+        return true;
+    }
+    // New docks take the glass level and the power tier, as new top bars do.
+    const bool panels = applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
+    reapplyPowerTier();
+    return panels;
+}
+
+// Runs ensure-topbars.js, which gives every screen without one a dock while [Dock] EveryScreen is
+// true. False, with the error shown, when the script cannot be read or fails; *ran is false when
+// there is none to run (the Global Theme is not installed).
+bool PlasmaFusionKcm::runDockScript(bool *ran)
+{
+    *ran = false;
     const QString path = topBarScriptPath();
     if (path.isEmpty()) {
-        // Nothing to run yet; the choice is stored for the next login.
         return true;
     }
     QFile file(path);
@@ -923,15 +942,14 @@ bool PlasmaFusionKcm::applyEveryDock(bool on)
         addError(i18nc("@info", "%1 could not be read.", path));
         return false;
     }
+    bool ok = false;
     const QString result = evaluateShellScript(QString::fromUtf8(file.readAll()), &ok);
     if (!ok) {
         addError(i18nc("@info", "The docks could not be added: %1", result));
         return false;
     }
-    // New docks take the glass level and the power tier, as new top bars do.
-    const bool panels = applyPanels(m_current.glass, m_current.solidTopBar, !m_powerCritical);
-    reapplyPowerTier();
-    return panels;
+    *ran = true;
+    return true;
 }
 
 bool PlasmaFusionKcm::applyDesktop(const State &before, const State &after)
@@ -1195,12 +1213,13 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before)
     if (!m_saved.everyScreen) {
         evaluateShellScript(s_removeExtraTopBarsScript, &ok);
     }
-    // The layout makes one dock; with a dock on every screen the others come back.
+    // The layout makes one dock; with a dock on every screen the others come back (they copy the
+    // main dock's look, set above). When they cannot, the page says so: the switch is on but the
+    // other screens have no dock until it is set again.
     if (m_saved.everyDock) {
-        const QString script = topBarScriptPath();
-        QFile file(script);
-        if (!script.isEmpty() && file.open(QIODevice::ReadOnly)) {
-            evaluateShellScript(QString::fromUtf8(file.readAll()), &ok);
+        bool ran = false;
+        if (runDockScript(&ran) && !ran) {
+            addError(i18nc("@info", "The docks of the other screens could not be added back: the Global Theme's ensure-topbars.js is not installed."));
         }
     }
     // The power service applies its tier to the new widgets when it restarts.

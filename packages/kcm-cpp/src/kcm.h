@@ -418,6 +418,7 @@ private:
     bool applyPanels(int glass, bool solidTopBar, bool widgetGlass);
     bool applyEveryScreen(bool on);
     bool applyEveryDock(bool on);
+    bool runDockScript(bool *ran);
     void reapplyPowerTier();
     bool applyDesktop(const State &before, const State &after);
     bool applyWidgetKey(const QString &plugin, const QString &key, const QString &jsValue, const QString &what);

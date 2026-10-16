@@ -299,6 +299,24 @@ test("ensure-topbars: a dock on every screen, run again: nothing more, the remem
     const main = docksOf(s).find((p) => p.id === 40).widgets[1];
     assert.strictEqual(main.config.PlasmaFusion.onlyCurrentScreenBefore, true, "a main dock that showed its own screen only remembers that");
 });
+test("ensure-topbars: a dock only on the second screen: the one added on the first remembers", () => {
+    // The settings page keeps the dock on the lowest screen when the switch goes off (and puts its
+    // remembered value back), so the dock added on screen 0 holds what the one there was had.
+    const p = dockPanel();
+    p.screen = 1;
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), p] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 1/, s.output);
+    const dockOf = (panel) => panel.widgets.find((w) => w.type === "org.plasmafusion.dock");
+    const first = dockOf(docksOf(s).find((d) => d.screen === 0)), second = dockOf(docksOf(s).find((d) => d.id === 40));
+    assert.strictEqual(((first.config || {}).PlasmaFusion || {}).onlyCurrentScreenBefore, false, "the new dock on screen 0 remembers false");
+    assert.ok(["", undefined].includes(((second.config || {}).PlasmaFusion || {}).onlyCurrentScreenBefore),
+              "the dock on screen 1 remembers nothing (it goes when the switch is off)");
+    assert.deepStrictEqual([general(first).showOnlyCurrentScreen, general(second).showOnlyCurrentScreen], [true, true], "both list their own screen");
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 0/, s.output);
+    assert.strictEqual(first.config.PlasmaFusion.onlyCurrentScreenBefore, false, "run again: still remembered on screen 0");
+});
 test("ensure-topbars: no dock installed, no docks", () => {
     const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), dockPanel()], without: ["org.plasmafusion.dock"] });
     s.run(ENSURE);

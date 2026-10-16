@@ -9,6 +9,8 @@
 # variables. No kglobalaccel answers there, so every key the module tries to give is reported as
 # not set, which shows which keys it tries: quick settings gets Meta+A when it had none, and the
 # pen menu gets a key only when the old one had it (Meta+Shift+W is fusion-config.sh --pen's).
+# With "Dock on every screen" on, the reset runs ensure-topbars.js (a stand-in) for the other docks
+# and reports it when the script is missing or fails.
 # Needs node and python3 with GObject introspection (mock-session.py).
 #
 #   run-reset-layout.sh KCMCTL PLUGIN_DIR WORKDIR
@@ -75,6 +77,29 @@ cp "$work/layout-pen.json" "$work/layout.json"; cp "$work/layout-new.json" "$wor
 reset pen
 check "a pen menu that had Meta+Shift+W gets it again" grep -q 'Meta+Shift+W for pen menu' "$work/pen.err"
 
+# "Dock on every screen" saved on: the reset runs ensure-topbars.js (a stand-in) to bring the other
+# docks back, and says so when it cannot: no script (no data dirs but the scratch one), or a
+# script that fails.
+printf '[Dock]\nEveryScreen=true\n' >"$XDG_CONFIG_HOME/plasmafusionrc"
+export XDG_DATA_DIRS=$work/nodata
+lf=$XDG_DATA_HOME/plasma/look-and-feel/org.plasmafusion.dark.desktop/contents/layouts
+cp "$work/layout-nopen.json" "$work/layout.json"; cp "$work/layout-new.json" "$work/layout.json.reset"
+reset docks-missing
+check "every dock, no ensure-topbars.js: the reset says the other docks could not come back" \
+  grep -q 'docks of the other screens could not be added back' "$work/docks-missing.err"
+mkdir -p "$lf"
+echo 'throw new Error("stand-in failure");' >"$lf/ensure-topbars.js"
+cp "$work/layout-nopen.json" "$work/layout.json"; cp "$work/layout-new.json" "$work/layout.json.reset"
+reset docks-fail
+check "every dock, a failing ensure-topbars.js: the reset says the docks could not be added" \
+  grep -q 'The docks could not be added' "$work/docks-fail.err"
+echo 'print("docks: stand-in ran");' >"$lf/ensure-topbars.js"
+cp "$work/layout-nopen.json" "$work/layout.json"; cp "$work/layout-new.json" "$work/layout.json.reset"
+: >"$work/calls.log"
+reset docks
+check "every dock: the reset runs ensure-topbars.js" grep -q 'docks: stand-in ran' "$work/calls.log"
+check "  and reports nothing about the docks" bash -c "! grep -qi 'docks' '$work/docks.err'"
+
 echo "$((N - FAIL)) of $N passed"
 [ "$FAIL" = 0 ]
 EOF2
@@ -85,7 +110,7 @@ layout "" 50 >"$work/layout-new.json"
 status=0
 dbus-run-session --config-file="$here/session-bus.conf" -- bash "$work/inner.sh" "$work" "$kcmctl" "$powerfx" || status=$?
 if [ "$status" != 0 ]; then
-  for f in "$work"/nopen.log "$work"/pen.log; do echo "--- $f"; cat "$f" 2>/dev/null; done
+  for f in "$work"/nopen.log "$work"/pen.log "$work"/docks-missing.log "$work"/docks-fail.log "$work"/docks.log; do echo "--- $f"; cat "$f" 2>/dev/null; done
   echo "--- shell calls"; cat "$work/calls.log" 2>/dev/null
   echo "FAIL: kcmctl-reset"
   exit 1

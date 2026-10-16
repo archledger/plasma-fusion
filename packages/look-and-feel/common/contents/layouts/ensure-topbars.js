@@ -360,8 +360,9 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     test hooks and requests). Every dock then lists only its own screen's windows
     (showOnlyCurrentScreen); the main dock keeps the value it had before in its [PlasmaFusion]
     onlyCurrentScreenBefore, which the settings page puts back when the switch goes off and removes
-    the other docks. The main dock is the one on the lowest screen number. Idempotent; a dock is
-    never removed here. Prints one line: "docks: screens N, added M".
+    the other docks. The main dock is the one on the lowest screen number; when a dock is added on
+    a lower screen than it (none was on screen 0), that new dock is the one the page keeps, and the
+    remembered value moves to it. Idempotent; a dock is never removed here. Prints one line: "docks: screens N, added M".
 */
 (function () {
     var DOCK = "org.plasmafusion.dock", LAUNCHER = "org.plasmafusion.launcher";
@@ -438,6 +439,10 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     var mainDock = main.widgets(DOCK)[0];
     var mainLaunchers = main.widgets(LAUNCHER);
     var added = 0;
+    // The dock on the lowest screen once every screen has one: the one the settings page keeps
+    // when the switch goes off, so it holds the remembered value (a dock added on a lower screen
+    // than the one there was, with none on screen 0 before, is it).
+    var keepDock = mainDock, keepScreen = main.screen;
     for (var sc = 0; sc < screenCount; ++sc) {
         if (onScreen[sc] !== undefined) {
             continue;
@@ -467,22 +472,39 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         if (dock && typeof dock === "object" && dock.type !== undefined) {
             copyKeys(mainDock, dock);
             onlyThisScreen(dock);
+            if (sc < keepScreen) {
+                keepDock = dock;
+                keepScreen = sc;
+            }
         }
         added++;
     }
-    // Every dock lists its own screen's windows; the main one remembers what it had.
-    mainDock.currentConfigGroup = ["PlasmaFusion"];
-    // ("" too: the settings page empties it when it puts the value back.)
-    var remembered = String(mainDock.readConfig("onlyCurrentScreenBefore", "\u0001unset"));
-    mainDock.currentConfigGroup = [];
-    var unset = remembered === "\u0001unset" || remembered === "";
+    function remembered(dock) {
+        dock.currentConfigGroup = ["PlasmaFusion"];
+        // ("" too: the settings page empties it when it puts the value back.)
+        var value = String(dock.readConfig("onlyCurrentScreenBefore", "\u0001unset"));
+        dock.currentConfigGroup = [];
+        return value === "\u0001unset" ? "" : value;
+    }
+    function remember(dock, value) {
+        dock.currentConfigGroup = ["PlasmaFusion"];
+        dock.writeConfig("onlyCurrentScreenBefore", value);
+        dock.currentConfigGroup = [];
+    }
+    // Every dock lists its own screen's windows; the kept one remembers what the main one had.
+    var value = remembered(mainDock);
+    var unset = value === "";
     if (added > 0 || unset) {
         var before = onlyThisScreen(mainDock);
         if (unset) {
-            mainDock.currentConfigGroup = ["PlasmaFusion"];
-            mainDock.writeConfig("onlyCurrentScreenBefore", truthy(before));
-            mainDock.currentConfigGroup = [];
+            value = truthy(before) ? "true" : "false";
         }
+    }
+    if (keepDock !== mainDock) {
+        remember(keepDock, truthy(value));
+        remember(mainDock, "");
+    } else if (unset) {
+        remember(mainDock, truthy(value));
     }
     for (var s2 in onScreen) {
         if (onScreen[s2] !== main) {
