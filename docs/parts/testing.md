@@ -205,17 +205,22 @@ runs them together against one built HOME tree, with one summary:
   widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`
   (`--quicklook`; without it Quick Look is SKIPPED, as tools/build.sh does not build a compiled
   part).
-- Results: `build/tests/depth/results/<feature>/` (checks, screenshots, logs, core dumps) and
-  `summary.md` / `summary.json`. Exit 0 only when every feature run passed every check; a feature
-  that gives no checks (its session stopped before them) fails.
+- Results: `build/tests/depth/results/<feature>/` (checks, `scenario.log`, screenshots, logs,
+  core dumps) and `summary.md` / `summary.json`. A feature passes only when its session ran to the
+  end (`scenario rc=0` and `session rc=0` in `scenario.log`, so not stopped at its time limit, and
+  the session runner succeeded), every check passed (at least one), and no core dump came from its
+  session (on the test host `coredumps.json` must be there and empty). Exit 0 only when every
+  feature run passed; 2 for a setup error, an empty `--features` list too. Each session takes a
+  session slot, the container lane's too.
 - When: before a Plasma update is let onto the test machines (the plasma-watch issue names it) and
   before a release tag (docs/RELEASING.md, step 2), on the test host and on the beta container.
 - GitHub's runners cannot run it (KWin's session screenshots need a GPU, docs/parts/containers.md);
   CI runs its unit test, `run-unit.sh`, with a stand-in session runner: every feature passing (exit
   0), Quick Look skipped without its install, a feature broken on purpose (exit 1, named in the
-  summary), a feature without checks (exit 1), each feature's seed, chosen features only, and an
-  unknown one (exit 2). Without the FAIL count, the empty-feature rule or the live chips' seed
-  extras its cases fail.
+  summary), a feature without checks (exit 1), a session stopped at its time limit after passing
+  checks (exit 1), a runner that fails after a complete-looking session, a core dump (exit 1),
+  each feature's seed, chosen features only, relative `--stage`, `--quicklook` and `--runner`, and
+  an unknown or empty feature list (exit 2). Without any one of those rules its case fails.
 
 ## Harness additions (`tools/vsession`)
 

@@ -33,10 +33,14 @@
 #   --list           print the features and exit
 #
 # Each session runs in one session slot of build/lead/vslot.sh (tools/tests/lib/common.sh), one
-# after the other. Results: WORK/results/<feature>/ (checks.txt, screenshots, logs),
-# WORK/results/summary.md and summary.json. Exit status: 0 every check of every feature run
-# passed, 1 a check failed or a feature gave no checks, 2 setup error.
-set -u
+# after the other, on the test host and in a container alike. Results: WORK/results/<feature>/
+# (checks.txt, scenario.log, screenshots, logs, coredumps.json), WORK/results/summary.md and
+# summary.json. A feature passes when its session ran to the end (scenario rc=0 and session rc=0
+# in scenario.log: not stopped at its time limit), every check passed (at least one), and no core
+# dump came from its session (on the test host coredumps.json must say so; elsewhere a
+# coredumps.json the session left counts). Exit status: 0 every feature run passed, 1 one did not,
+# 2 setup error (also an empty --features list).
+set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 # shellcheck source=tools/tests/lib/common.sh
@@ -66,13 +70,18 @@ while [ $# -gt 0 ]; do
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
+# Paths as given from the caller's directory: the runs below work in WORK.
+STAGE=$(realpath -m -- "$STAGE")
+[ -z "$QUICKLOOK" ] || QUICKLOOK=$(realpath -m -- "$QUICKLOOK")
+[ -z "$RUNNER" ] || [ ! -e "$RUNNER" ] || RUNNER=$(realpath -- "$RUNNER")
 [ -d "$STAGE/.local/share/plasma" ] || { echo "no built HOME tree at $STAGE (run tools/build.sh)" >&2; exit 2; }
 [ -z "$QUICKLOOK" ] || [ -d "$QUICKLOOK/bin" ] || { echo "no Quick Look install at $QUICKLOOK (no bin/)" >&2; exit 2; }
 [[ "$NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "bad session name $NAME" >&2; exit 2; }
 IDS=()
 for f in "${FEATURES[@]}"; do IDS+=("${f%%|*}"); done
 if [ "$WANT" != all ]; then
-  want=(); IFS=, read -r -a want <<<"$WANT"
+  want=(); IFS=, read -r -a want <<<"$WANT" || true
+  [ ${#want[@]} -gt 0 ] || { echo "no features chosen (--features is empty)" >&2; exit 2; }
   for id in "${want[@]}"; do
     printf '%s\n' "${IDS[@]}" | grep -qx "$id" || { echo "unknown feature $id (--list)" >&2; exit 2; }
   done
@@ -105,8 +114,12 @@ make_feature_seed() {  # FEATURE SEED
   esac
 }
 
-if [ -z "$RUNNER" ] && [ -z "$IMAGE" ]; then
+SLOT=()
+if [ -z "$RUNNER" ]; then
+  # A session slot for every lane (a container's session is a GPU session too).
   slot_prefix one || exit 2
+fi
+if [ -z "$RUNNER" ] && [ -z "$IMAGE" ]; then
   T0=$(hssh 'date +%s') || { echo "host $HOST not reachable" >&2; exit 2; }
   names=(); for id in "${IDS[@]}"; do names+=("$NAME-$id"); done
   if session_in_use "${names[@]}"; then
@@ -114,7 +127,7 @@ if [ -z "$RUNNER" ] && [ -z "$IMAGE" ]; then
     exit 2
   fi
   { echo "start: $(host_state)"; slot_note; } | tee "$RES/host.txt"
-  host_packages >"$RES/packages.txt"
+  host_packages >"$RES/packages.txt" || true
   trap 'echo "interrupted; cleaning up"; host_cleanup "${names[@]}"; exit 130' INT TERM
 fi
 
@@ -132,24 +145,28 @@ run_feature() {  # ID
   fi
   make_feature_seed "$id" "$seed" || { echo "   $id: the seed failed" | tee "$RES/$id/error"; return 0; }
   echo "== $id ($(date +%T)): $scenario"
+  local ran=0
   if [ -n "$RUNNER" ]; then
-    $RUNNER "$n" "$ROOT/$scenario" "$seed" "$size" "$tmo" >"$RES/remote-$id.log" 2>&1 \
-      || echo "   $id: the runner failed (see $RES/remote-$id.log)"
+    "$RUNNER" "$n" "$ROOT/$scenario" "$seed" "$size" "$tmo" >"$RES/remote-$id.log" 2>&1 || ran=$?
   elif [ -n "$IMAGE" ]; then
     run_remote "$RES/remote-$id.log" "$n" "${SLOT[@]}" env PFV_IMAGE="$IMAGE" \
-      bash "$ROOT/tools/vsession/cvsession.sh" "$n" "$ROOT/$scenario" "$seed" "$size" "$tmo" \
-      || echo "   $id: cvsession.sh failed (see $RES/remote-$id.log)"
+      bash "$ROOT/tools/vsession/cvsession.sh" "$n" "$ROOT/$scenario" "$seed" "$size" "$tmo" || ran=$?
   else
     run_remote "$RES/remote-$id.log" "$n" "${SLOT[@]}" \
-      bash "$ROOT/tools/vsession/remote.sh" "$n" "$ROOT/$scenario" "$seed" "$size" "$tmo" \
-      || echo "   $id: remote.sh failed (see $RES/remote-$id.log)"
+      bash "$ROOT/tools/vsession/remote.sh" "$n" "$ROOT/$scenario" "$seed" "$size" "$tmo" || ran=$?
   fi
   if [ -d "vsession-out/$n" ]; then
     rm -rf "${RES:?}/$id"; mv "vsession-out/$n" "$RES/$id"
   fi
+  mkdir -p "$RES/$id"
+  if [ "$ran" != 0 ]; then
+    echo "   $id: the session runner failed with $ran (see $RES/remote-$id.log)"
+    echo "$ran" >"$RES/$id/runner-failed"
+  fi
   if [ -z "$RUNNER" ] && [ -z "$IMAGE" ]; then
-    host_cleanup "$n"
-    host_coredumps "$T0" "/var/tmp/pfv-$n/run" >"$RES/$id/coredumps.json"
+    host_cleanup "$n" || true
+    # No report (the host could not be asked) counts as a failure in the summary.
+    host_coredumps "$T0" "/var/tmp/pfv-$n/run" >"$RES/$id/coredumps.json" || rm -f "$RES/$id/coredumps.json"
   fi
   echo "   $id done ($(date +%T))"
 }
@@ -157,13 +174,17 @@ for id in "${IDS[@]}"; do
   run_feature "$id"
 done
 trap - INT TERM
-[ -n "$RUNNER" ] || [ -n "$IMAGE" ] || echo "end: $(host_state)" | tee -a "$RES/host.txt"
+if [ -z "$RUNNER" ] && [ -z "$IMAGE" ]; then
+  echo "end: $(host_state)" | tee -a "$RES/host.txt"
+fi
 
-# The summary: per feature its PASS and FAIL lines (checks.txt), a feature without any check
-# counting as a failure (the session did not get as far as its checks).
-python3 - "$RES" "${IMAGE:-test host}" "${IDS[@]}" <<'PY'
+# The summary: per feature its PASS and FAIL lines (checks.txt), the session's status
+# (scenario.log) and its core dumps (coredumps.json); a feature without any check counts as a
+# failure (the session did not get as far as its checks).
+rc=0
+python3 - "$RES" "${IMAGE:-test host}" "$([ -z "$RUNNER" ] && [ -z "$IMAGE" ] && echo host || echo other)" "${IDS[@]}" <<'PY' || rc=$?
 import json, os, sys
-res, lane, ids = sys.argv[1], sys.argv[2], sys.argv[3:]
+res, lane, kind, ids = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
 rows, bad = [], 0
 for i in ids:
     d = os.path.join(res, i)
@@ -175,6 +196,26 @@ for i in ids:
         lines = open(os.path.join(d, "checks.txt"), errors="replace").read().splitlines()
     passed = [l for l in lines if l.startswith("PASS")]
     failed = [l for l in lines if l.startswith("FAIL")]
+    # The session ran to the end: the scenario's and the session's status lines say 0.
+    log = ""
+    if os.path.exists(os.path.join(d, "scenario.log")):
+        log = open(os.path.join(d, "scenario.log"), errors="replace").read()
+    status = [l for l in log.splitlines() if l.startswith("scenario rc=") or l.startswith("session rc=")]
+    ended = "scenario rc=0" in status and "session rc=0" in status
+    if os.path.exists(os.path.join(d, "runner-failed")):
+        failed.append("FAIL the session runner failed (status %s)" % open(os.path.join(d, "runner-failed")).read().strip())
+    elif not ended:
+        failed.append("FAIL the session did not run to the end (%s)" % (", ".join(status) or "no status in scenario.log"))
+    # Core dumps of its session: on the test host the report must be there.
+    dumps_path = os.path.join(d, "coredumps.json")
+    try:
+        dumps = json.load(open(dumps_path)) if os.path.exists(dumps_path) else ([] if kind != "host" else None)
+    except ValueError:
+        dumps = None
+    if dumps is None:
+        failed.append("FAIL no core dump report for the session")
+    elif dumps:
+        failed.append("FAIL %d core dump(s) from the session" % len(dumps))
     result = "PASS" if passed and not failed else "FAIL" if failed else "NO CHECKS"
     bad += result != "PASS"
     rows.append({"feature": i, "result": result, "pass": len(passed), "fail": len(failed), "failed": failed[:10]})
@@ -191,6 +232,5 @@ for r in rows:
     print("%-11s %-9s %3d PASS %3d FAIL" % (r["feature"], r["result"], r["pass"], r["fail"]))
 sys.exit(0 if bad == 0 else 1)
 PY
-rc=$?
 echo "results: $RES (summary.md, summary.json, <feature>/checks.txt and screenshots)"
 exit "$rc"

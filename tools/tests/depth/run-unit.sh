@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Unit test of the depth features' check (tools/tests/depth/run.sh) with a stand-in session runner
-# (--runner): no test host, no session. The runner records the seed it was given and writes the
-# checks a scenario would: every check passing, one feature with a failing check (a red run, as a
-# feature broken on purpose), one feature that gives no checks. Checked: the exit status and the
-# summary for each, Quick Look skipped without its install, each feature's seed (the HOME tree and
-# tools for every one, the live chips' stand-ins and debug rule, Quick Look's install), and a run
-# of chosen features only. Test tooling only, not installed.
+# (--runner): no test host, no session. The runner records the seed it was given and writes what a
+# session leaves (checks, scenario.log's status lines, a core dump report): every check passing,
+# one feature with a failing check (a red run, as a feature broken on purpose), one feature that
+# gives no checks, a session stopped at its time limit after passing checks, a runner that fails,
+# a core dump. Checked: the exit status and the summary for each, Quick Look skipped without its
+# install, each feature's seed (the HOME tree and tools for every one, the live chips' stand-ins
+# and debug rule, Quick Look's install), chosen features only, relative paths, and the setup errors
+# (an unknown or an empty feature list). Test tooling only, not installed.
 #
 #   run-unit.sh BASE
 #
@@ -34,10 +36,15 @@ feature=${name#*-}
 [ -f "$seed/pf-tools/vsession/remote.sh" ] && echo "./pf-tools/vsession/remote.sh" >>"$out/seed.txt"
 cp "$seed/.config/pfv-env" "$out/pfv-env" 2>/dev/null || true
 echo "$scenario" >"$out/scenario.txt"
+{ echo "scenario rc=0"
+  if [ "$feature" = "${UNIT_TIMEOUT:-}" ]; then echo "session rc=124"; else echo "session rc=0"; fi; } >"$out/scenario.log"
+if [ "$feature" = "${UNIT_DUMP:-}" ]; then echo '[{"exe": "/usr/bin/plasmashell"}]' >"$out/coredumps.json"; fi
 [ "$feature" = "${UNIT_EMPTY:-}" ] && exit 0
 { echo "INFO $feature"; echo "PASS $feature: one"; echo "PASS $feature: two"
   [ "$feature" = "${UNIT_FAIL:-}" ] && echo "FAIL $feature: broken on purpose"
   true; } >"$out/checks.txt"
+# A runner that fails after a session that looks complete (the fetch of its results failed, say).
+[ "$feature" != "${UNIT_RUNNER_FAIL:-}" ] || exit 3
 EOF
 chmod +x "$BASE/runner.sh"
 
@@ -58,6 +65,7 @@ result() { python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); print
 has() { grep -qxF -- "$2" "$W/results/$1/seed.txt"; }
 has_both() { has "$1" "$2" && has "$1" "$3"; }
 lacks() { ! grep -qF -- "$2" "$W/results/$1/seed.txt"; }
+exit_and() { [ "$RC" = "$1" ] && [ "$(result)" = "$2" ]; }
 
 run all --quicklook "$BASE/ql"
 expect "every feature passing: exit 0" [ "$RC" = 0 ]
@@ -86,8 +94,30 @@ expect "a feature that gives no checks: exit 1" [ "$RC" = 1 ]
 expect "  NO CHECKS for it, only the chosen features run" [ "$(result)" = "copytext=NO CHECKS livechips=PASS" ]
 expect "  the others did not run" [ ! -e "$W/results/placement" ]
 
+UNIT_TIMEOUT=placement run timeout --features placement,snapgroups
+expect "a session stopped at its time limit after passing checks: exit 1" [ "$RC" = 1 ]
+expect "  it is FAIL, the other PASS" [ "$(result)" = "placement=FAIL snapgroups=PASS" ]
+expect "  summary.md says why" grep -qF -- "- placement: FAIL the session did not run to the end (scenario rc=0, session rc=124)" "$W/results/summary.md"
+
+UNIT_RUNNER_FAIL=snapgroups run runnerfail --features placement,snapgroups
+expect "a session runner that fails: exit 1, that feature FAIL" exit_and 1 "placement=PASS snapgroups=FAIL"
+
+UNIT_DUMP=livechips run dump --features livechips
+expect "a core dump from the session: exit 1, FAIL" exit_and 1 "livechips=FAIL"
+expect "  summary.md names it" grep -qF -- "- livechips: FAIL 1 core dump(s) from the session" "$W/results/summary.md"
+
+# Relative paths, as the documented command gives them, from the caller's directory.
+W=$BASE/relative
+RC=0
+(cd "$BASE" && bash "$HERE/run.sh" --stage stage --quicklook ql --work relative --name unit --runner ./runner.sh \
+  --features quicklook >"$BASE/relative.log" 2>&1) || RC=$?
+expect "relative --stage, --quicklook and --runner: exit 0" [ "$RC" = 0 ]
+expect "  Quick Look's seed has its install" has quicklook ./.local/bin/plasma-fusion-quicklook
+
 run unknown --features nosuch
 expect "an unknown feature: exit 2" [ "$RC" = 2 ]
+run emptylist --features ""
+expect "an empty feature list: exit 2 (nothing tested is no pass)" [ "$RC" = 2 ]
 
 echo "depth run-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]
