@@ -32,6 +32,7 @@ commands, the bundled fonts, the tile emitter and the tests.
 </tr>
 <tr>
 <td valign="top"><a href="previews/LiveChips.webp"><img src="previews/LiveChips.webp" width="420" alt="Live chips — privacy and activity, dark and light"></a><br><b>Live chips — privacy and activity, dark and light</b><br><a href="boards/LiveChips.dc.html">source</a></td>
+<td valign="top"><a href="previews/Gestures.webp"><img src="previews/Gestures.webp" width="420" alt="Touchpad gestures — settings, dark and light"></a><br><b>Touchpad gestures — settings, dark and light</b><br><a href="boards/Gestures.dc.html">source</a></td>
 </tr>
 </table>
 

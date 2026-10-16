@@ -67,6 +67,14 @@
       "x": 1520,
       "y": 0
     },
+    "Gestures.dc.html": {
+      "h": 1000,
+      "page": "dark",
+      "title": "27 · Touchpad gestures — settings, dark and light",
+      "w": 1440,
+      "x": 0,
+      "y": 4080
+    },
     "Icons.dc.html": {
       "h": 1520,
       "page": "icons",
@@ -302,6 +310,7 @@
     "AltTab.dc.html",
     "Popups.dc.html",
     "LiveChips.dc.html",
+    "Gestures.dc.html",
     "Tablet.dc.html",
     "MainLight.dc.html",
     "LauncherLight.dc.html",

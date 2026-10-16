@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plasma Fusion — touchpad gestures</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'Manrope',system-ui,sans-serif;background:#0d1020;color:#e8ebf4}
+button{font:inherit;color:inherit;border:0;padding:0;margin:0;background:none;cursor:default}
+svg{display:block;flex-shrink:0}
+svg.i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.col{width:720px;box-sizing:border-box;padding:28px;display:flex;flex-direction:column;gap:18px}
+.page{position:relative;box-sizing:border-box;padding:20px 24px;border-radius:14px;display:flex;flex-direction:column;gap:10px}
+.group{font-size:12px;font-weight:800}
+.row{height:44px;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.drop{width:180px;height:34px;box-sizing:border-box;padding:0 10px 0 12px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700}
+.menu{position:absolute;width:220px;box-sizing:border-box;padding:6px;border-radius:14px;display:flex;flex-direction:column;gap:1px;font-size:13px}
+.item{height:32px;padding:0 10px;border-radius:8px;display:flex;align-items:center;gap:10px}
+.note{font-size:12px;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="board" style="width:1440px;height:1000px;overflow:hidden;display:flex;flex-direction:column;background:#10142a">
+  <div style="padding:40px 28px 20px;display:flex;flex-direction:column;gap:10px">
+<span style="font-size:12px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#f2c38a">Plasma Fusion · Settings, part 2</span>
+<h1 style="margin:0;font-family:'Space Grotesk',sans-serif;font-size:44px;font-weight:700;line-height:1.05">Touchpad gestures</h1>
+<p style="margin:0;max-width:1100px;font-size:15px;line-height:1.55;color:#b8bfd3">The touchpad gestures KWin leaves free, each set to what it does: a group on the Plasma Fusion settings page, after Tablet. Three fingers up and down keep what they do today, four fingers pinched in open the launcher and spread out show the desktop, as on a Mac; three fingers left and right do nothing until set; the desktops stay in one row, as the setup puts them (KWin's rows), which leaves up and down to these rows with several desktops. Every row stays yours to set: while KWin also uses a gesture (three fingers left and right switch desktops while there is more than one column of them, up and down while there is more than one row), its row says so, and both happen.</p>
+</div>
+  <div style="display:flex">
+    <div class="col" id="dark" style="background:#141a2e;color:#e8ebf4"><span style="font-size:15px;font-weight:800">Dark · the defaults, one list open</span>
+<div class="page" style="background:#1b2031;border:1px solid rgba(255,255,255,0.14)">
+<span class="group" style="color:#a3abc2">Touchpad gestures</span>
+<div style="display:flex;flex-direction:column">
+<div class="row" style="border-bottom:1px solid rgba(255,255,255,0.06)"><span>Swipe up with three fingers</span><button aria-label="Swipe up with three fingers: Overview" aria-expanded="true" class="drop" style="background:#262d4c;border:1.5px solid #8ab8ff;box-shadow:0 0 0 3px rgba(91,157,255,0.18)">Overview<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(255,255,255,0.06)"><span>Swipe down with three fingers</span><button aria-label="Swipe down with three fingers: Show desktop" class="drop" style="background:#262d4c;border:1px solid rgba(255,255,255,0.12)">Show desktop<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(255,255,255,0.06)"><span>Swipe left with three fingers</span><button aria-label="Swipe left with three fingers: Nothing" class="drop" style="background:#262d4c;border:1px solid rgba(255,255,255,0.12)">Nothing<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(255,255,255,0.06)"><span>Swipe right with three fingers</span><button aria-label="Swipe right with three fingers: Nothing" class="drop" style="background:#262d4c;border:1px solid rgba(255,255,255,0.12)">Nothing<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(255,255,255,0.06)"><span>Pinch in with four fingers</span><button aria-label="Pinch in with four fingers: Launcher" class="drop" style="background:#262d4c;border:1px solid rgba(255,255,255,0.12)">Launcher<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(255,255,255,0.06)"><span>Spread out with four fingers</span><button aria-label="Spread out with four fingers: Show desktop" class="drop" style="background:#262d4c;border:1px solid rgba(255,255,255,0.12)">Show desktop<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div style="padding:9px 0 2px;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;justify-content:space-between;font-size:13px"><span>Keep desktops in one row</span><button aria-pressed="true" aria-label="Keep desktops in one row" style="width:40px;height:22px;border-radius:11px;background:#2f6fdf;position:relative"><span style="position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:9px;background:#ffffff"></span></button></div><span class="note" style="color:#a3abc2">Three fingers up and down then stay yours with several desktops; left and right switch them.</span></div>
+</div>
+<span class="note" style="color:#a3abc2">Four-finger swipes are KWin's own: up opens Overview, down the grid of desktops, left and right switch desktops.</span>
+<div role="listbox" aria-label="What swiping up with three fingers does" class="menu" style="right:24px;top:96px;background:#232a47;border:1px solid rgba(255,255,255,0.12);box-shadow:0 16px 40px rgba(0,0,0,0.5)">
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">Nothing</span></div>
+<div style="height:1px;margin:4px 6px;background:rgba(255,255,255,0.12)"></div>
+<div role="option" aria-selected="true" class="item" style="background:rgba(91,157,255,0.18);color:#cfe0ff"><span style="flex-grow:1;font-weight:700">Overview</span><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">Show desktop</span></div>
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">Grid of desktops</span></div>
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">All windows</span></div>
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">Launcher</span></div>
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">Quick settings</span></div>
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">Notifications</span></div>
+<div role="option" aria-selected="false" class="item"><span style="flex-grow:1">Snap layouts</span></div>
+</div>
+</div>
+</div>
+    <div class="col" id="light" style="background:#dde6f4;color:#141827"><span style="font-size:15px;font-weight:800">Light · several desktops in their row, still set</span>
+<div class="page" style="background:#ffffff;border:1px solid rgba(20,24,39,0.14)">
+<span class="group" style="color:#5b6278">Touchpad gestures</span>
+<div style="display:flex;flex-direction:column">
+<div class="row" style="border-bottom:1px solid rgba(20,24,39,0.06)"><span>Swipe up with three fingers</span><button aria-label="Swipe up with three fingers: Overview" class="drop" style="background:#eef0f5;border:1px solid rgba(20,24,39,0.14)">Overview<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(20,24,39,0.06)"><span>Swipe down with three fingers</span><button aria-label="Swipe down with three fingers: Show desktop" class="drop" style="background:#eef0f5;border:1px solid rgba(20,24,39,0.14)">Show desktop<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(20,24,39,0.06)"><span>Swipe left with three fingers</span><button aria-label="Swipe left with three fingers: All windows" class="drop" style="background:#eef0f5;border:1px solid rgba(20,24,39,0.14)">All windows<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(20,24,39,0.06)"><span>Swipe right with three fingers</span><button aria-label="Swipe right with three fingers: Nothing" class="drop" style="background:#eef0f5;border:1px solid rgba(20,24,39,0.14)">Nothing<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<span class="note" style="padding:2px 0 8px;color:#4d546a">With more than one column of desktops, KWin also switches desktops with three fingers left and right: both happen.</span>
+<div class="row" style="border-top:1px solid rgba(20,24,39,0.06);border-bottom:1px solid rgba(20,24,39,0.06)"><span>Pinch in with four fingers</span><button aria-label="Pinch in with four fingers: Launcher" class="drop" style="background:#eef0f5;border:1px solid rgba(20,24,39,0.14)">Launcher<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div class="row" style="border-bottom:1px solid rgba(20,24,39,0.06)"><span>Spread out with four fingers</span><button aria-label="Spread out with four fingers: Show desktop" class="drop" style="background:#eef0f5;border:1px solid rgba(20,24,39,0.14)">Show desktop<svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></svg></button></div>
+<div style="padding:9px 0 2px;display:flex;flex-direction:column;gap:2px"><div style="display:flex;align-items:center;justify-content:space-between;font-size:13px"><span>Keep desktops in one row</span><button aria-pressed="true" aria-label="Keep desktops in one row" style="width:40px;height:22px;border-radius:11px;background:#2f6fdf;position:relative"><span style="position:absolute;right:2px;top:2px;width:18px;height:18px;border-radius:9px;background:#ffffff"></span></button></div><span class="note" style="color:#4d546a">Three fingers up and down then stay yours with several desktops; left and right switch them.</span></div>
+</div>
+<span class="note" style="color:#4d546a">Four-finger swipes are KWin's own: up opens Overview, down the grid of desktops, left and right switch desktops.</span>
+</div>
+</div>
+  </div>
+<div style="flex-grow:1;padding:22px 28px 30px;background:#10142a;color:#cdd3e4;display:flex;gap:40px">
+  <div class="note" style="flex:1"><b style="color:#e8ebf4">What KWin takes.</b> KWin 6.7.5 handles every touchpad gesture with three
+  or more fingers and gives apps the two-finger ones. Its own: four fingers up (Overview), down (its grid), left and right
+  (desktops); a three-finger pinch (zoom); three fingers left and right while there is more than one column of desktops, up
+  and down while there is more than one row. None of them can be turned off (6.7.5): the group offers the others, and
+  the rows KWin uses now and then stay set, with a note while it does. Turned off, the desktops get back the rows they had (KWin's default is two).</div>
+  <div class="note" style="flex:1"><b style="color:#e8ebf4">Sizes.</b> Rows 44 px with the page's 13 px labels and group title. The
+  drop-down is the Controls board's (here 34 px, the page's control height; radius 10, surface2 with a 1 px border, a 14 px
+  chevron, the 2 px focus ring while its list is open); the list is the Controls board's menu (radius 14, 6 px padding,
+  32 px items, the chosen one in the accent's soft fill with a check). "Keep desktops in one row" is the page's switch row
+  (40 x 22, 18 px knob). No new colour.</div>
+  <div class="note" style="flex:1"><b style="color:#e8ebf4">What they do.</b> Each choice is something the desktop already does by
+  a shortcut: Overview, Show desktop, the grid of desktops and All windows are KWin's; Launcher is the Meta key's; quick
+  settings and notifications open as with their own keys; Snap layouts is Meta+Z's picker. Nothing leaves the gesture to
+  no one.</div>
+</div></div>
+</body>
+</html>
