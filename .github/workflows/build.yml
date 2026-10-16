@@ -244,6 +244,9 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.meters/tests/readings_test.py
 
+      - name: Settings page's content column in the middle of a wide page (offscreen Qt)
+        run: python3 packages/kcm-cpp/tests/page_layout_test.py
+
       - name: Live chips' logic, sources, keyboard and texts (node; offscreen Qt, stand-in camera monitor and status items on a private bus)
         run: |
           set -euo pipefail

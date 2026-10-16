@@ -79,7 +79,9 @@ KCM.SimpleKCM {
     }
 
     // The page's content item always gets the full width; the board's column is 420 px, so the
-    // controls stop growing at 560 px in a wide System Settings window (left-aligned, as on the board).
+    // controls stop growing at 560 px in a wide System Settings window, where the column stands in
+    // the middle of the page as System Settings' own pages stand (Kirigami.FormLayout centres its
+    // form), on a whole pixel. On the board the window is no wider than the column.
     // In a narrow window the cards and swatches wrap and the segmented control shrinks to its
     // text, so nothing needs horizontal scrolling down to that width.
     Item {
@@ -88,8 +90,10 @@ KCM.SimpleKCM {
 
         ColumnLayout {
             id: page
+            objectName: "pageColumn"
             spacing: 18
             width: Math.min(parent.width, 560)
+            x: Math.round((parent.width - width) / 2)
 
             FusionPalette {
                 id: fusionPalette

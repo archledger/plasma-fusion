@@ -94,7 +94,7 @@ off.
 | `icons/plasmafusion-logo.svg` | the logo mark (three discs), installed as hicolor `apps/plasmafusion-logo` (CC-BY-SA-4.0) |
 | `build-remote.sh`, `container-build.sh` | development: build in the container on the ThinkPad and fetch the installed tree (`root/`) for test sessions; the package is built by `packaging/build-rpm.sh --compiled` (system.md) |
 | `LICENSES/` | GPL-2.0-or-later (code), CC-BY-SA-4.0 (icon) |
-| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh` |
+| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop; `--report` prints where the content column is), `page_layout_test.py` (the column's place in System Settings' widths, CI `build`), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh` |
 | `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/run-power-tier.sh`, `tests/run-reset-layout.sh`, `tests/shell-panels.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and drives the module with random commands, saving included, in a scratch HOME with stand-ins for the programs it starts. `tests/meters-switch.sh` (ctest test `kcmctl-meters`) turns the system meters switch on and off against `fakeshell` (`tests/fakeshell/`: a stand-in Plasma shell answering `evaluateScript` with a QJSEngine model of desktop scripting, `shell.js`, that can list new widgets late, per bar too, add them at the bar's end or fail to make them): meters placed by hand stay, the new ones are placed before quick settings, also on two bars whose meters are listed 0.4 s and 1.8 s late (the module placed only the first bar's before a71fb66), the errors without quick settings and when the widget cannot be made, Apply returning at once while the shell is slow, and off removing every one. `tests/shell-panels.sh` (ctest test `kcmctl-panels`) changes the panels against it: with a top bar on a missing screen (the model crashes on its opacity, as plasmashell 6.8 does) the state is read and the look applied without touching that bar; with a shell that answers 7 s late (`scriptDelayMs`, `slowFrom`) the page reads it, and turning on the system meters or "Top bar on every screen" reports no error while kcmctl's `heartbeat` timer keeps ticking during Apply. `tests/run-power-tier.sh` (ctest test `kcmctl-power`, with node and python3-gobject) runs the module and the power service against a stand-in plasmashell and KWin (`packages/powerfx/tests/mock-session.py`): the page's choices while a tier is held; `tests/run-reset-layout.sh` (`kcmctl-reset`) the layout reset and the keys it gives. The `compiled` and `sanitizers` workflows run all six (docs/parts/ci.md, "Dynamic analysis") |
 
 ## Build
@@ -335,8 +335,11 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KCM-1/` 
   module under Appearance & Style with System Settings' own header ("Plasma Fusion") and its
   Defaults / Reset / Apply footer; the board shows instant changes without buttons.
 - The content column stops at 560 px (the board's is 420 px in its 652 px window), so in a wide
-  System Settings window the segmented control and switch rows are wider than on the board;
-  left-aligned like the board.
+  System Settings window the segmented control and switch rows are wider than on the board. There
+  the column stands in the middle of the page, on a whole pixel, as System Settings' own pages
+  centre their form (Kirigami 6.31 `FormLayout.qml`: `anchors.horizontalCenter:
+  root.horizontalCenter`); the board's window is no wider than its column, so it shows no
+  difference. Until 2026-10-16 the column stood at the page's left edge.
 - Blue means the colour scheme's own accent (#2f6fdf with its tuned focus, hover and link colours)
   and is drawn #5b9dff as on the board; the other swatches become Plasma's accent colour, and
   Plasma (not the board) derives the selection colour from it (70 % accent over the view
@@ -545,3 +548,14 @@ off). Baloo already stops content indexing on battery (baloo `FileIndexScheduler
 so the switch mostly saves power while charging; file names stay searchable. Search keywords: file
 search, file contents, indexing, baloo. Test: `scenario-controls.sh` now 98 checks (off writes `true`,
 on writes `false`), all PASS.
+
+## Content in the middle of the page (2026-10-16)
+
+In a System Settings window wider than the 560 px column, the column now stands in the middle of
+the page instead of at its left edge, as System Settings' own pages centre their form (the
+owner's request; "Deviations from the board" has the reason the board shows no difference).
+
+- `tests/page_layout_test.py` (CI `build`, offscreen, through `offscreen_preview.py --report`):
+  in windows of 1720, 900 and 640 px the 560 px column stands in the middle of the page on a
+  whole pixel; at 500 px it takes the page's whole width. Without the change the three wide
+  windows fail (the column at x 0).
