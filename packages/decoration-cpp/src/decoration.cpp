@@ -390,7 +390,7 @@ bool Decoration::tiledEdges(Qt::Edges *edges) const
     Qt::Edges e = w->adjacentScreenEdges();
     bool tiled = bool(e);
     if (!tiled) {
-        // KWin reports no adjacent edges for tiles with padding (Plasma Fusion uses 6 px gaps), so
+        // KWin reports no adjacent edges for tiles with padding (a gap set for the snap script), so
         // read the window's tile (KWin scripting property) and its place in the layout directly.
         if (const QObject *tile = windowProperty("tile").value<QObject *>()) {
             const QVariant geometry = tile->property("relativeGeometry");

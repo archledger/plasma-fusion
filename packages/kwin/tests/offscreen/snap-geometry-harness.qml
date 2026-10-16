@@ -90,6 +90,8 @@ Item {
     }
 
     Component.onCompleted: {
+        // The geometry checks measure a 6 px gap; the default (none) has its own checks.
+        KWin.setConfig("Gap", 6);
         KW.Workspace.windows = [win];
         KW.Workspace.currentDesktop = desktop;
         const base = "file://" + stageHome + "/.local/share/kwin/scripts/plasmafusion-snap/contents/";
@@ -107,6 +109,9 @@ Item {
             return;
         }
         outlineWindow = outlineComponent.createObject(null);
+        // Until its settings are read (moments after KWin starts it), the outline has no gap.
+        check("before reading its settings the outline has no gap",
+            !outlineWindow.settingsLoaded && outlineWindow.configuredGap === 0, outlineWindow.configuredGap);
         outlineWindow.settingsLoadedChanged.connect(() => {
             if (outlineWindow.settingsLoaded) Qt.callLater(testQuickRoots);
         });
@@ -179,14 +184,14 @@ Item {
     }
     function checkShown() {
         settingsWait.next = () => {
-            check("showing the outline does not read the settings again", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
+            check("showing the outline does not read the settings again", outlineWindow.configuredGap === 0, outlineWindow.configuredGap);
             KW.Options.configChanged();
             settingsWait.next = () => {
                 check("KWin reloading its configuration reads them again", outlineWindow.configuredGap === 12, outlineWindow.configuredGap);
                 testFiles.writeKwinrc("");
                 KW.Options.configChanged();
                 settingsWait.next = () => {
-                    check("and back to the default", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
+                    check("and back to the default", outlineWindow.configuredGap === 0, outlineWindow.configuredGap);
                     testGeometry();
                 };
                 settingsWait.restart();
@@ -204,7 +209,13 @@ Item {
 
     function testGeometry() {
         check("actual outline config reader loads enabled default", outlineWindow.quickGaps, outlineWindow.quickGaps);
-        check("actual outline config reader loads default gap", outlineWindow.configuredGap === 6, outlineWindow.configuredGap);
+        check("actual outline config reader loads default gap (none)", outlineWindow.configuredGap === 0, outlineWindow.configuredGap);
+        outlineWindow.applySettings("true\nwide\n");
+        check("a gap that is not a number is none", outlineWindow.configuredGap === 0, outlineWindow.configuredGap);
+        outlineWindow.applySettings("true\n0\n");
+        KWin.unsetConfig("Gap");
+        check("the script's default gap is none", script.gap() === 0, script.gap());
+        KWin.setConfig("Gap", 6);
         const a = Qt.rect(0, 34, 1440, 866);
         for (const gap of [0, 6, 12, 48]) {
             rectCheck("left half gap=" + gap, script.zoneRect(a, 0, 0, 0.5, 1, gap), Qt.rect(0, 34, 720 - gap / 2, 866));
@@ -260,6 +271,8 @@ Item {
         check("interactive resize shared edge unchanged", win.frameGeometry.x + win.frameGeometry.width === 717, win.frameGeometry);
         win.resize = false;
         if (outlineWindow) {
+            // The outline's checks measure the same 6 px gap (its default is none, checked above).
+            outlineWindow.applySettings("true\n6\n");
             outline.active = true;
             outlineWindow.place(a, false);
             const zone = outlineWindow.contentItem.children[0];

@@ -164,6 +164,8 @@ judge() { python3 "$OUT/judge.py" "$@" >>"$CHK"; } # KIND STATE ARGS...
 fc_rc=0
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc_rc=$?
 info "fusion-config rc=$fc_rc"
+# These checks measure a 6 px gap between snapped windows (the default is none).
+kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap 6
 kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-snapEnabled true
 qdbus org.kde.KWin /KWin reconfigure
 sleep 3

@@ -11,7 +11,7 @@ they differ. Last edited 2026-09-30.
 | Id | Type | What |
 |---|---|---|
 | `org.plasmafusion.switcher` | KWin/WindowSwitcher | Alt+Tab switcher of the AltTab / AltTabLight boards: frosted 1100 px card (radius 26), "This workspace" / "All workspaces" tabs, window count, live previews in a 5-column grid, key-hint bar, dimmed work area behind |
-| `plasmafusion-snap` | KWin/Script (declarative) | Meta+Z snap-layouts flyout (QuickSettings board), "Pick a window for this side" after snapping a half (TabsSnap board), 6 px gaps for snapped halves and quarters, pairs that minimise and restore together; "Plasma Fusion: Activate Dock Entry 1..9" (Meta+Alt+1..9 from setup), passed to the dock as its `activateRequest` key, since Plasma 6.8 gives plasmashell's task manager entries to the stock task manager only |
+| `plasmafusion-snap` | KWin/Script (declarative) | Meta+Z snap-layouts flyout (QuickSettings board), "Pick a window for this side" after snapping a half (TabsSnap board), snapped halves and quarters that meet with no gap (a gap can be set), pairs that minimise and restore together; "Plasma Fusion: Activate Dock Entry 1..9" (Meta+Alt+1..9 from setup), passed to the dock as its `activateRequest` key, since Plasma 6.8 gives plasmashell's task manager entries to the stock task manager only |
 | (in `plasmafusion-snap`) `contents/outline/outline.qml` | KWin outline QML | blue snap-zone preview of the TabsSnap board (drag to an edge, Shift+drag custom zones, Meta+Z zone preview) |
 | `plasmafusion-attach` | KWin/Script (JavaScript) | modal dialogs placed centred on their window, just under its title bar, and moving with it (Windows board, "Dialogs · Attached to the parent window") |
 | `plasmafusion-placement` | KWin/Script (declarative) | window placement memory: each app's window is remembered where and as big as it was left and given back on the next open (bug 15329, the most-duplicated open Plasma wish); a spot on a screen that is gone is left to KWin's placement |
@@ -114,7 +114,7 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 
 | Group / key | Default | Meaning |
 |---|---|---|
-| `[Script-plasmafusion-snap] Gap` | 6 | logical px between snapped windows (0-48); no gap at work-area edges |
+| `[Script-plasmafusion-snap] Gap` | 0 | logical px between snapped windows (0-48; none by default, Windows board); no gap at work-area edges |
 | `[Script-plasmafusion-snap] QuickTileGaps` | true | apply the gap to KWin's quick tiles (edge snapping, Meta+arrow, Meta+Z halves/quarters) |
 | `[Script-plasmafusion-snap] FillOtherHalf` | true | offer the other windows after a window is snapped to a half, and for every empty zone of a layout chosen in the flyout |
 | `[Script-plasmafusion-snap] PairWindows` | true | snap groups: windows snapped together through the picker minimise/restore/raise together |
@@ -175,7 +175,7 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   work area; for windows without a KWin title bar it hangs 8 px below the top.
 - Zones: halves 50/50, 2:1 (2/3 + 1/3), quarters, thirds. Halves, 2:1 and quarters use KWin's quick
   tiles (the 2:1 split is the quick-tile split, so the partner half resizes with it; KWin resets it
-  to 50 % when both halves are empty); thirds are plain geometry with 6 px gaps.
+  to 50 % when both halves are empty); thirds are plain geometry with the same gap.
 - Keys: the first zone is highlighted when it opens (board); arrows/Tab move, 1-4 pick a layout,
   Enter/Space places, Esc closes. Moving with keys or hovering shows the target in the snap-zone
   outline. It is a Qt popup: a click anywhere else or any focus change closes it (KWin's popup
@@ -238,8 +238,9 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   layout family), and before a group minimises, restores or raises, every member is checked
   (`Groups.holds`). So a change no handler sees (an app or a script moving a window within its
   placement's settle, a switch in the 220 ms between two offers) still counts.
-- Gaps: 6 px between halves and quarters, with the outer edges flush to the work area (panels
-  remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
+- Gaps: none by default: snapped windows meet (Windows board; the owner's decision of 2026-10-16,
+  up to 0.5.0 the default was 6 px). A gap set with `Gap` goes between halves and quarters, with
+  the outer edges flush to the work area (panels remain reserved). KWin's scalar tile padding also insets screen edges, so the script leaves
   native quick-tile padding at the configured gap and fills only each window's outer edges
   after KWin settles. Native padding keeps the inner gap and pointer compensation during split
   resizing; the outer-edge correction runs during resizing too. Work-area endpoints clamp odd
@@ -424,8 +425,11 @@ Offline (laptop):
   test of eight children fails 4 of these), and the outline's settings: not read again when it
   shows, read again when KWin reloads its configuration and then back to the default (`Options`
   stub; with the 0.4 outline 6 checks fail: it read the new gap on show, then kept it from the
-  data engine's cached result, which the later geometry checks inherit). Build the stage with `STAGE=STAGE_HOME tools/build.sh
-  kwin`.
+  data engine's cached result, which the later geometry checks inherit). The geometry checks set a
+  6 px gap; the default, none, has its own: the script's, the outline's before and after it reads
+  its settings and for a gap that is not a number, and the settings dialog's (`main.xml`,
+  `config.ui`); each fails with its old default of 6 (2026-10-16, 65 checks). Build the stage
+  with `STAGE=STAGE_HOME tools/build.sh kwin`.
 
 Virtual sessions on the ThinkPad (`tools/vsession/remote.sh kw-N SCENARIO SEED`, private HOME and
 bus, 1440x900). Seeds: `packages/kwin/tests/vsession/make-seed.sh STAGE_HOME SEED dark|light`
@@ -515,9 +519,8 @@ tools/vsession/remote.sh kw-3 packages/kwin/tests/vsession/scenario-evidence.sh 
   behind the frosted wallpaper, which suits "the empty half".
 - Dim layer with `HighlightWindows=true` (KWin default): KWin fades every other window, including
   the dim layer, so the board's even dim needs `HighlightWindows=false`.
-- Snapped halves: 6 px gap, but corners stay as the decoration draws them (Aurorae: square client
-  corners); the board's "square inner, rounded outer" corners need the compiled decoration.
-- The first snap on each workspace/screen shows the gap one step late (the script can only reach
+- Snapped halves: corners stay as the decoration draws them (Aurorae: square client corners); the board's "square inner, rounded outer" corners need the compiled decoration.
+- With a gap set, the first snap on each workspace/screen shows it one step late (the script can only reach
   KWin's quick-tile root through a tiled window, so it sets the padding right after the first snap).
   The padding stays until KWin restarts if the script is disabled.
 - 2:1 and quarters are real quick tiles; thirds are plain geometry (KWin's quick tiles have only two
