@@ -920,6 +920,11 @@ bool PlasmaFusionKcm::powerCritical() const
     return m_powerCritical;
 }
 
+bool PlasmaFusionKcm::snapScriptOn() const
+{
+    return m_snapScriptOn;
+}
+
 bool PlasmaFusionKcm::fusionLookAndFeel() const
 {
     return m_saved.style != OtherStyle;
@@ -1040,16 +1045,23 @@ void PlasmaFusionKcm::updateEnvironment()
     const bool critical = power.readEntry("Tier", QString()).compare(u"critical"_s, Qt::CaseInsensitive) == 0
         && power.readEntry("LighterOnCritical", true);
 
-    if (highContrast != m_highContrastAvailable || previous != m_previousDesktopAvailable || critical != m_powerCritical) {
+    // kwinrc for the gestures' notes.
+    KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
+    kwin->reparseConfiguration();
+    // KWin loads a script when its [Plugins] <id>Enabled entry converts to true as a QVariant
+    // does ("0", "false" and empty do not), and by its EnabledByDefault when the entry is missing
+    // (KWin 6.7.5 Scripting::queryScriptsToLoad): false for the snap script (its metadata.json).
+    const bool snapOn = QVariant(KConfigGroup(kwin, u"Plugins"_s).readEntry("plasmafusion-snapEnabled", QString())).toBool();
+
+    if (highContrast != m_highContrastAvailable || previous != m_previousDesktopAvailable || critical != m_powerCritical || snapOn != m_snapScriptOn) {
         m_highContrastAvailable = highContrast;
         m_previousDesktopAvailable = previous;
         m_powerCritical = critical;
+        m_snapScriptOn = snapOn;
         Q_EMIT environmentChanged();
     }
 
-    // KWin's desktops (it writes Number and Rows when they change) for the gestures' notes.
-    KSharedConfig::Ptr kwin = KSharedConfig::openConfig(u"kwinrc"_s);
-    kwin->reparseConfiguration();
+    // KWin's desktops (it writes Number and Rows when they change).
     const KConfigGroup desktops(kwin, u"Desktops"_s);
     const int count = desktops.readEntry("Number", 1);
     const int rows = desktops.readEntry("Rows", 2);
@@ -1374,6 +1386,7 @@ void PlasmaFusionKcm::onConfigChanged(const KConfigGroup &group, const QByteArra
         s_snapScriptGroup,
         u"Desktops"_s,
         u"Gestures"_s,
+        u"Plugins"_s,
     };
     if (watched.contains(name)) {
         m_reloadTimer.start();

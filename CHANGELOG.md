@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Gestures and the snap script:** the Touchpad gestures group on the Plasma Fusion settings
+  page says when the Plasma Fusion Snap Layouts script, which does the gestures, is turned off,
+  and where to turn it on.
 - **Hide the top bar, and the island:** the Plasma Fusion settings page has "Hide the top bar
   automatically" (off by default). The bar slides away so a maximized window has the whole screen,
   and comes back when the pointer touches the top. While it is hidden, a black island at the top

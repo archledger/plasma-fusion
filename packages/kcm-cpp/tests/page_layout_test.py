@@ -7,7 +7,8 @@
 form (Kirigami.FormLayout), on a whole pixel; in a narrow one it takes the whole width.
 Then the touchpad gestures group (offscreen_preview.py --gestures, board Gestures.dc.html): each
 row shows the module's choice, a key in a drop-down sets the module's value, and the notes on
-KWin's own gestures show on their rows while the module says KWin uses them. And the dock's rows
+KWin's own gestures show on their rows while the module says KWin uses them, and a note under the
+group while the snap script, which does the gestures, is off. And the dock's rows
 (offscreen_preview.py --rows, --act; board DockSize.dc.html): Dock size and Group an app's windows
 show the module's values and a click sets them, the magnified size reads +8 / +14 px; Dock position
 (board DockPosition.dc.html) shows the module's edge with its note and a click sets it; Hide the top
@@ -79,6 +80,10 @@ def main():
     check(r["choices"] == ["Overview", "Show desktop", "Nothing", "Nothing", "Launcher", "Show desktop"],
           "gestures: each row shows the module's choice (%s)" % r["choices"])
     check(notes(r) == [] and r["oneRow"] is True, "  no note while KWin uses none of them, the switch on (%s)" % r)
+    check(r["snapOffNote"] is None, "  no note on the snap script while KWin loads it (%s)" % r["snapOffNote"])
+    r = gestures("--state", "snapScriptOn=false")
+    check(r["snapOffNote"] is not None and "do nothing" in r["snapOffNote"] and "KWin Scripts" in r["snapOffNote"],
+          "  the snap script off: the group says the gestures do nothing and where it is turned on (%s)" % r["snapOffNote"])
     r = gestures("--state", "gestureSidewaysShared=true")
     check(notes(r) == ["Swipe right with three fingers"] and "left and right" in r["rows"][3]["note"],
           "  KWin's three fingers sideways: the note under the left and right rows (%s)" % notes(r))

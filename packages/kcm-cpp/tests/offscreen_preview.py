@@ -114,7 +114,7 @@ def main():
              "settingsFileAvailable": True, "needsSave": False,
              "gestureSwipeUp": 1, "gestureSwipeDown": 2, "gestureSwipeLeft": 0, "gestureSwipeRight": 0,
              "gesturePinchIn": 5, "gesturePinchOut": 2, "desktopsInOneRow": True,
-             "gestureSidewaysShared": False, "gestureUpDownShared": False}
+             "gestureSidewaysShared": False, "gestureUpDownShared": False, "snapScriptOn": True}
     for kv in args.state:
         k, v = kv.split("=", 1)
         cur = state[k]
@@ -209,6 +209,7 @@ def main():
         desktopsInOneRow = Property(bool, _get("desktopsInOneRow"), _set("desktopsInOneRow"), notify=changed)
         gestureSidewaysShared = Property(bool, _get("gestureSidewaysShared"), notify=changed)
         gestureUpDownShared = Property(bool, _get("gestureUpDownShared"), notify=changed)
+        snapScriptOn = Property(bool, _get("snapScriptOn"), notify=changed)
 
         @Slot()
         def restorePreviousDesktop(self):
@@ -347,11 +348,13 @@ QQC2.ApplicationWindow {
                   and i.property("text") == "Keep desktops in one row"]
         names = ("gestureSwipeUp", "gestureSwipeDown", "gestureSwipeLeft", "gestureSwipeRight", "gesturePinchIn",
                  "gesturePinchOut", "desktopsInOneRow")
+        note = root.findChild(QQuickItem, "snapScriptOffNote")
         print("REPORT_GESTURES " + json.dumps({
             "rows": [{"text": r.property("text"), "index": r.property("currentIndex"), "note": r.property("note")}
                      for r in rows],
             "choices": [d.property("displayText") for d in drop_downs()],
             "oneRow": switch[0].property("checked") if switch else None,
+            "snapOffNote": note.property("text") if note and note.property("visible") else None,
             "kcm": {n: kcm.s[n] for n in names}}))
 
     def choice_and_switch_rows():

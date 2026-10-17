@@ -886,6 +886,17 @@ KCM.SimpleKCM {
                         onToggleRequested: kcm.desktopsInOneRow = !kcm.desktopsInOneRow
                     }
                 }
+                // The snap script does the gestures; KWin's Scripts page turns it off.
+                Text {
+                    objectName: "snapScriptOffNote"
+                    Layout.fillWidth: true
+                    visible: !kcm.snapScriptOn
+                    wrapMode: Text.WordWrap
+                    text: i18nc("@info", "These gestures do nothing while the Plasma Fusion Snap Layouts script is off: it is in Window Management > KWin Scripts.")
+                    font.family: fusionPalette.family
+                    font.pointSize: 8.625 * fusionPalette.m.ts // 11.5 px
+                    color: fusionPalette.section
+                }
                 Text {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
