@@ -8,7 +8,7 @@
             }
         ],
         "Category": "System Information",
-        "Description": "Live chips for the Plasma Fusion top bar: what uses the microphone, the camera or the screen, remote control and SSH logins, a screen recording and a Keep awake timer",
+        "Description": "Live chips for the Plasma Fusion top bar: what uses the microphone, the camera or the screen, remote control and SSH logins, a screen recording and a Keep awake timer; the island at the top of the screen while the bar is hidden",
         "EnabledByDefault": true,
         "Icon": "security-medium",
         "Id": "org.plasmafusion.livechips",

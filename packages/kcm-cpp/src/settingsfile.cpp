@@ -254,6 +254,7 @@ const QList<PlasmaFusionKcm::FileSetting> &PlasmaFusionKcm::fileSettings()
         {"dockPosition", &State::dockPosition, nullptr},
         {"groupWindows", nullptr, &State::groupWindows},
         {"solidTopBar", nullptr, &State::solidTopBar},
+        {"topBarAutoHide", nullptr, &State::topBarAutoHide},
         {"systemMeters", nullptr, &State::systemMeters},
         {"everyScreen", nullptr, &State::everyScreen},
         {"everyDock", nullptr, &State::everyDock},

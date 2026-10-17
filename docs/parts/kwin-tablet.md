@@ -53,7 +53,10 @@ needed.
   (the settings page's Dock position, board DockPosition.dc.html) is at the bottom in tablet
   posture, as on the Tablet board: its side is saved as `laptopLocation` with the height and given
   back on leave (2026-10-16; the test covers a dock on the left, one at the bottom and one
-  without a saved side).
+  without a saved side). A top bar that hides (the settings page's "Hide the top bar
+  automatically", board Island.dc.html) always shows in tablet posture: its `laptopHiding`, saved
+  with the height, is given back on leave (2026-10-17; the test covers a bar that hides, one that
+  shows and one set to hide while the posture held).
   Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
   start), the call is made again after 500 ms (one call for several panels). A Fusion panel whose
   screen is gone (the top bar of a monitor that was unplugged) is skipped, see "Panels without a
@@ -308,3 +311,28 @@ VM 5 (Plasma 6.7.5) 8cf0b3d did not crash (the bar is on screen -1 there) but ga
 a screen the tablet height too; with this change all 19 checks passed. A new script reaches a
 running KWin only with a new session: KWin keeps the compiled QML of a script it unloads and
 loads again from the same path.
+
+## The top bar for the island (2026-10-17)
+
+Board `design/boards/Island.dc.html`: while a top bar is hidden, the live chips of its screen show
+the island (docs/parts/shell-livechips.md, "The island"). Plasma hides an auto-hide panel through
+KWin: plasmashell asks for an auto-hide screen edge and KWin hides the panel's window until the
+pointer touches the edge (KWin 6.7.5 `LayerShellV1Window::reserveScreenEdge`, `Window::setHidden`).
+Plasmashell tells its widgets nothing about it (plasma-workspace 6.7.5 `PanelView` has no such
+property), but KWin's scripts see the window's `hidden`.
+
+- `contents/ui/TopBar.js`: `isTopBar()` (a plasmashell panel window along the whole top of its
+  output; the dock and the island are not) and `barScript()`, the plasmashell script that writes
+  the live chips' `[General] barHidden` for every panel on a screen: true while the bar of its
+  screen (matched by the screen's corner, `screenGeometry()`) is hidden. It writes only what
+  changes and skips panels of a screen that is gone.
+- `main.qml` follows the bars' windows (at start, and as plasmashell's panel windows appear) and
+  their `hiddenChanged`; the state goes to plasmashell when it changes (one call for changes in
+  the same turn of the event loop) and again when its panels appear (a shell restart). The log:
+  `plasmafusion-tablet: top bars [{"x":0,"y":0,"hidden":true}]: island: 1 widgets, 1 changed`.
+- `tests/tablet-topbar.test.js` (in the build): which windows are top bars (the dock, a dock on
+  the left, a window at the top, another output's bar, another app's are not), the state in a
+  fixed order, and the script against a model of desktop scripting: the laptop's bar hidden and
+  the monitor's shown, nothing written again, both changed, every island gone when no bar window
+  is known, a value written as text, a panel of a screen that is gone skipped. Reversing the
+  hidden value, dropping the screen check or writing on every call fails it.

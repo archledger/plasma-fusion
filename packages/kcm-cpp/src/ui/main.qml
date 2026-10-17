@@ -472,6 +472,19 @@ KCM.SimpleKCM {
                             : root.shellNote(kcm.dockAvailable, i18nc("@info", "The Plasma Fusion dock is not in a panel."))
                         onActivated: index => kcm.magnifiedSize = [56, 62][index]
                     }
+                    // Board Island.dc.html: the bar slides away; while it is hidden the island at the top
+                    // of the screen shows what uses the camera, the microphone or the screen.
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@option:check", "Hide the top bar automatically")
+                        checked: kcm.topBarAutoHide
+                        enabled: kcm.topBarAvailable && !kcm.shellLoading
+                        note: kcm.topBarAvailable
+                            ? i18nc("@info", "Move the pointer to the top of the screen to show it. While it is hidden, the island shows what uses the camera, the microphone or the screen.")
+                            : root.shellNote(kcm.topBarAvailable, i18nc("@info", "The Plasma Fusion top bar is not on this desktop."))
+                        onToggleRequested: kcm.topBarAutoHide = !kcm.topBarAutoHide
+                    }
                     ToggleRow {
                         Layout.fillWidth: true
                         pal: fusionPalette

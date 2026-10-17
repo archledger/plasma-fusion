@@ -19,7 +19,9 @@
 // dock's dockSize: Small 60, Medium 72, Large 78 px, board DockSize.dc.html), which the settings
 // page sets with the size. A dock on the left or right (board DockPosition.dc.html) is at the
 // bottom in tablet posture, as on the Tablet board, and goes back to its side after (its
-// laptopLocation, saved with the height).
+// laptopLocation, saved with the height). A top bar that hides (the settings page's "Hide the top
+// bar automatically", board Island.dc.html) always shows in tablet posture and hides again after
+// (its laptopHiding, saved with the height).
 //
 // Panels on a screen that is gone are skipped. Their height, hiding and the other sizes of a
 // scripting Panel come from the panel's window, or without one from its config for its screen;
@@ -72,6 +74,7 @@ function panelScript(isTablet, hiding, scale) {
         + "        if (isDock && p.location != \"bottom\") p.location = \"bottom\";\n"
         + "        if (p.height != h) p.height = h;\n"
         + "        if (isDock && p.hiding != DOCK_HIDING) p.hiding = DOCK_HIDING;\n"
+        + "        if (isTop && p.hiding != \"none\") p.hiding = \"none\";\n"
         + "        if (isDock) p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {\n"
         + "            w.currentConfigGroup = [\"General\"];\n"
         + "            if (Number(w.readConfig(\"tabletStripHeight\", 20)) != STRIP) w.writeConfig(\"tabletStripHeight\", STRIP);\n"
@@ -85,10 +88,12 @@ function panelScript(isTablet, hiding, scale) {
         + "        }\n"
         + "        p.height = saved > 0 && saved != h ? saved : laptop;\n"
         + "        if (isDock) p.hiding = String(p.readConfig(\"laptopHiding\", \"dodgewindows\"));\n"
+        + "        if (isTop) { var topHiding = String(p.readConfig(\"laptopHiding\", \"none\")); if (p.hiding != topHiding) p.hiding = topHiding; }\n"
         + "        p.writeConfig(\"tabletApplied\", false);\n"
         + "    }\n"
         + "    p.currentConfigGroup = [];\n"
-        + "    done.push((isTop ? \"top \" : \"dock \") + p.height + (isDock ? \" \" + p.hiding + (p.location != \"bottom\" ? \" \" + p.location : \"\") : \"\"));\n"
+        + "    done.push((isTop ? \"top \" : \"dock \") + p.height + (isDock ? \" \" + p.hiding + (p.location != \"bottom\" ? \" \" + p.location : \"\")\n"
+        + "        : p.hiding != \"none\" ? \" \" + p.hiding : \"\"));\n"
         + "});\n"
         + "if (done.length === 0 && skipped > 0) ready = false;\n"
         + "if (skipped > 0) done.push(skipped + \" without a screen skipped\");\n"

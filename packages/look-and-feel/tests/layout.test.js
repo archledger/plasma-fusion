@@ -134,6 +134,21 @@ function withMeters(bar) {
     return bar;
 }
 const types = (p) => p.widgets.map((w) => w.type);
+test("ensure-topbars: a new screen's bar hides as the main bar does (board Island.dc.html)", () => {
+    const hides = mainBar();
+    hides.hiding = "autohide";
+    const s = shell({ screens: TWO, files: rc(), panels: [hides] });
+    s.run(ENSURE);
+    assert.strictEqual(tops(s).find((p) => p.screen === 1).hiding, "autohide", "the main bar hides: the new one too");
+    // In tablet posture the main bar shows for the moment: the new one takes the hiding it goes back to.
+    const tablet = mainBar();
+    tablet.hiding = "none";
+    tablet.config = { PlasmaFusion: { tabletApplied: true, laptopHiding: "autohide" } };
+    const t2 = shell({ screens: TWO, files: rc(), panels: [tablet] });
+    t2.run(ENSURE);
+    assert.strictEqual(tops(t2).find((p) => p.screen === 1).hiding, "autohide", "tablet posture: the hiding it goes back to");
+    assert.strictEqual(screenTwo(rc()).bar.hiding, "none", "a main bar that shows: the new one shows");
+});
 test("ensure-topbars: with the main bar's meters on, a new screen's bar gets them before quick settings", () => {
     const s = shell({ screens: TWO, files: rc(), panels: [withMeters(mainBar())] });
     s.run(ENSURE);

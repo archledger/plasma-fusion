@@ -176,3 +176,108 @@ function timeLeft(endMs, nowMs) {
     var minutes = Math.max(0, Math.ceil((endMs - nowMs) / 60000));
     return { hours: Math.floor(minutes / 60), minutes: minutes % 60, total: minutes };
 }
+
+// ---- The island (board Island.dc.html): while the top bar is hidden, after Apple's Dynamic Island.
+
+// The colours on the island: it is black in light and dark, so its glyphs and dots take the dark
+// colour scheme's semantic colours (PlasmaFusionDark.colors [Colors:Window]: ForegroundPositive,
+// -Neutral, -Visited, -Negative, -Link), the LiveChips board's dark ones.
+var ISLAND_COLOURS = {
+    camera: "#7fd99c", microphone: "#f5c08c", screen: "#c3a6ff", remote: "#ff8a8f", recording: "#ff8a8f", ssh: "#8ab8ff"
+};
+
+// What the island shows, from what is going on: S { privacy: [kinds] (capsule().kinds),
+// recording, keepAwake, music: bools, fullScreen: the active window of the screen is full screen }.
+// The privacy kinds always come first, then a screen recording, a Keep awake timer and the music
+// playing: the first two of them show (the first in the island, the second in a bubble beside
+// it). In a full-screen window only the privacy kinds show, as dots. { mode: "none" | "compact" |
+// "dots", items: [names], dots: [privacy kinds] }.
+function island(s) {
+    var privacy = s.privacy || [];
+    if (s.fullScreen) {
+        return privacy.length > 0 ? { mode: "dots", items: [], dots: privacy.slice() } : { mode: "none", items: [], dots: [] };
+    }
+    var items = [];
+    if (privacy.length > 0) {
+        items.push("privacy");
+    }
+    if (s.recording) {
+        items.push("recording");
+    }
+    if (s.keepAwake) {
+        items.push("keepawake");
+    }
+    if (s.music) {
+        items.push("music");
+    }
+    items = items.slice(0, 2);
+    return { mode: items.length > 0 ? "compact" : "none", items: items, dots: privacy.slice() };
+}
+
+// The opened island's rows: one for each app (by name, whatever it uses) and each remote login,
+// the most serious first, each with its kinds in the capsule's order and the action that ends
+// the most serious of them: End (remote control), Stop sharing (the screen), Mute or Unmute (the
+// microphone). MICROPHONE_APPS [{ name, muted }], CAMERA_APPS [names] (else CAMERA_NAMES while a
+// camera is in use), PORTAL [{ key, kind, app }], LOGINS [{ id, user, host }].
+// [{ app, kinds, action: "end" | "stop" | "mute" | "unmute" | "", microphone: index, session: key, login }]
+function islandRows(microphoneApps, cameraApps, cameraInUse, cameraNames, portal, logins) {
+    var rows = [];
+    function row(name) {
+        var key = String(name || "").toLowerCase();
+        for (var i = 0; i < rows.length; ++i) {
+            if (rows[i].login === "" && rows[i].app.toLowerCase() === key) {
+                return rows[i];
+            }
+        }
+        var r = { app: String(name || ""), kinds: [], action: "", microphone: -1, session: "", login: "" };
+        rows.push(r);
+        return r;
+    }
+    function add(r, kind) {
+        if (r.kinds.indexOf(kind) < 0) {
+            r.kinds.push(kind);
+            r.kinds.sort(function (a, b) { return PRIVACY_ORDER.indexOf(a) - PRIVACY_ORDER.indexOf(b); });
+        }
+    }
+    for (var m = 0; m < microphoneApps.length; ++m) {
+        var mic = row(microphoneApps[m].name);
+        add(mic, "microphone");
+        mic.microphone = m;
+        if (mic.action === "") {
+            mic.action = microphoneApps[m].muted ? "unmute" : "mute";
+        }
+    }
+    if (cameraInUse) {
+        var named = cameraApps.length > 0 ? cameraApps : cameraNames;
+        for (var c = 0; c < named.length; ++c) {
+            add(row(named[c]), "camera");
+        }
+        if (named.length === 0) {
+            add(row(""), "camera");
+        }
+    }
+    for (var p = 0; p < portal.length; ++p) {
+        var s = portal[p];
+        if (s.kind !== "screen" && s.kind !== "remote") {
+            continue;
+        }
+        var r = row(s.app);
+        add(r, s.kind);
+        if (s.kind === "remote" || r.action !== "end") {
+            r.action = s.kind === "remote" ? "end" : "stop";
+            r.session = String(s.key);
+        }
+    }
+    for (var l = 0; l < logins.length; ++l) {
+        rows.push({ app: logins[l].host !== "" ? logins[l].user + "@" + logins[l].host : logins[l].user, kinds: ["ssh"], action: "",
+                    microphone: -1, session: "", login: String(logins[l].id) });
+    }
+    rows.sort(function (a, b) { return PRIVACY_ORDER.indexOf(a.kinds[0]) - PRIVACY_ORDER.indexOf(b.kinds[0]); });
+    return rows;
+}
+
+// An icon name to try for an app known by its name ("Firefox" -> "firefox", "Google Chrome" ->
+// "google-chrome"); the island shows the kind's glyph when the theme has no such icon.
+function iconGuess(name) {
+    return String(name || "").trim().toLowerCase().replace(/\s+/g, "-");
+}

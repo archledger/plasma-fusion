@@ -157,6 +157,15 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     var mainQs = main !== null && has(main, QS);
     var mainMeters = main !== null && has(main, METERS);
     var mainChips = main !== null && has(main, CHIPS);
+    // The main bar's hiding (the settings page's "Hide the top bar automatically", board
+    // Island.dc.html); in tablet posture the one it goes back to. A bar made here takes it.
+    var mainHiding = "none";
+    if (main !== null) {
+        main.currentConfigGroup = ["PlasmaFusion"];
+        var mainTablet = truthy(main.readConfig("tabletApplied", false));
+        mainHiding = String(mainTablet ? main.readConfig("laptopHiding", "none") : main.hiding) === "autohide" ? "autohide" : "none";
+        main.currentConfigGroup = [];
+    }
     // The tray's item lists and its look. readConfig needs a default of the key's type (null
     // gives undefined): [] for the lists, "" for the others (their text, written back as is).
     var TRAY_LISTS = ["disabledStatusNotifiers", "hiddenItems", "knownItems", "extraItems", "shownItems"];
@@ -330,7 +339,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         bar.floating = false;
         bar.lengthMode = "fill";
         bar.alignment = "center";
-        bar.hiding = "none";
+        bar.hiding = mainHiding;
         bar.opacity = look.topOpacity;
         add(bar, ["org.plasmafusion.appname", "org.kde.plasma.kickoff"]);
         var menu = add(bar, ["org.kde.plasma.appmenu"]);

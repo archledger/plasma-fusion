@@ -187,6 +187,22 @@ for (const plasma of ["6.8", "6.7"]) {
     assert.strictEqual(unsaved.run(false), "dock 72 dodgewindows");
 }
 
+// A top bar that hides (board Island.dc.html): it always shows in tablet posture, its hiding kept
+// with its height, and it hides again after; one that never hid stays shown.
+{
+    const s = shell("6.8", 1, [{ screen: 0, widgets: TOP, hiding: "autohide" }, { screen: 0, widgets: DOCK, height: 72 }]);
+    assert.strictEqual(s.run(true), "top 44, dock 80 dodgewindows");
+    assert.strictEqual(s.panels[0].hiding, "none");
+    assert.strictEqual(s.panels[0].config["PlasmaFusion/laptopHiding"], "autohide");
+    assert.strictEqual(s.run(false), "top 34 autohide, dock 72 none");
+    const shown = shell("6.8", 1, [{ screen: 0, widgets: TOP }]);
+    shown.run(true);
+    assert.strictEqual(shown.run(false), "top 34");
+    // Set to hide on the settings page while in tablet posture (laptopHiding): it hides after.
+    const later = shell("6.8", 1, [{ screen: 0, widgets: TOP, height: 44, config: { "PlasmaFusion/tabletApplied": true, "PlasmaFusion/laptopHiding": "autohide" } }]);
+    assert.strictEqual(later.run(false), "top 34 autohide");
+}
+
 // Before the shell has loaded its layout: "not ready", and nothing is changed.
 {
     assert.strictEqual(shell("6.8", 1, []).run(true), "not ready");

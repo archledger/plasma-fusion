@@ -123,11 +123,11 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && lockNotificationSummaries == other.lockNotificationSummaries && tabletMode == other.tabletMode && tabletApps == other.tabletApps
         && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize
         && dockSize == other.dockSize && dockPosition == other.dockPosition && groupWindows == other.groupWindows && solidTopBar == other.solidTopBar
-        && systemMeters == other.systemMeters && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy
-        && homeIndicator == other.homeIndicator && launcherRecentFiles == other.launcherRecentFiles && launcherRecentApps == other.launcherRecentApps
-        && launcherPlaces == other.launcherPlaces && gestureSwipeUp == other.gestureSwipeUp && gestureSwipeDown == other.gestureSwipeDown
-        && gestureSwipeLeft == other.gestureSwipeLeft && gestureSwipeRight == other.gestureSwipeRight && gesturePinchIn == other.gesturePinchIn
-        && gesturePinchOut == other.gesturePinchOut && desktopsInOneRow == other.desktopsInOneRow;
+        && topBarAutoHide == other.topBarAutoHide && systemMeters == other.systemMeters && desktopIcons == other.desktopIcons && iconSize == other.iconSize
+        && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator && launcherRecentFiles == other.launcherRecentFiles
+        && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces && gestureSwipeUp == other.gestureSwipeUp
+        && gestureSwipeDown == other.gestureSwipeDown && gestureSwipeLeft == other.gestureSwipeLeft && gestureSwipeRight == other.gestureSwipeRight
+        && gesturePinchIn == other.gesturePinchIn && gesturePinchOut == other.gesturePinchOut && desktopsInOneRow == other.desktopsInOneRow;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
@@ -541,6 +541,16 @@ bool PlasmaFusionKcm::solidTopBar() const
 void PlasmaFusionKcm::setSolidTopBar(bool value)
 {
     setField(&State::solidTopBar, value);
+}
+
+bool PlasmaFusionKcm::topBarAutoHide() const
+{
+    return m_current.topBarAutoHide;
+}
+
+void PlasmaFusionKcm::setTopBarAutoHide(bool value)
+{
+    setField(&State::topBarAutoHide, value);
 }
 
 bool PlasmaFusionKcm::systemMeters() const
@@ -1388,6 +1398,7 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
     if (!m_topBarAvailable) {
         defaults.globalMenu = m_current.globalMenu;
         defaults.solidTopBar = m_current.solidTopBar;
+        defaults.topBarAutoHide = m_current.topBarAutoHide;
     }
     if (!m_topBarAvailable || !m_metersAvailable) {
         defaults.systemMeters = m_current.systemMeters;
@@ -1540,6 +1551,13 @@ void PlasmaFusionKcm::save()
             applyDockPosition(after.dockPosition);
         } else {
             m_current.dockPosition = before.dockPosition;
+        }
+    }
+    if (after.topBarAutoHide != before.topBarAutoHide) {
+        if (m_topBarAvailable) {
+            applyTopBarAutoHide(after.topBarAutoHide);
+        } else {
+            m_current.topBarAutoHide = before.topBarAutoHide;
         }
     }
     if (after.groupWindows != before.groupWindows) {

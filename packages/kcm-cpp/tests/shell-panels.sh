@@ -54,6 +54,13 @@
 #   dockposread a dock on the right reads as Right;
 #   dockpostablet in tablet posture the dock stays at the bottom: the page shows the edge the
 #               tablet script gives back (laptopLocation), and a new one is written there.
+#   topbarhide  Hide the top bar automatically (board Island.dc.html): read off; on, every top bar
+#               on a screen hides (the second screen's copy too), the dock keeps its hiding, and the
+#               bar of an unplugged screen is left alone (its hiding would crash the shell);
+#   topbarhideread a bar that hides reads as on;
+#   topbarhidetablet in tablet posture the bar always shows: the page shows the hiding the tablet
+#               script gives back (laptopHiding), and a new one is written there (off, and on in
+#               topbarhidetablet2).
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -427,6 +434,40 @@ expect dockpostablet "tablet posture: the page shows the edge it goes back to (R
 expect dockpostablet "  Left: still at the bottom, Left given back after" \
   is "$(panel dockpostablet 1)" "bottom 0{PlasmaFusion/laptopLocation=left,PlasmaFusion/tabletApplied=true}: dock"
 expect dockpostablet "no error" is "$(value dockpostablet errorText)" ""
+
+run topbarhide "{\"screens\": 2, \"showHiding\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", \"$DOCK\"]},
+  {\"screen\": 1, \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]},
+  {\"screen\": 2, \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
+  waitshell "get topBarAutoHide" "set topBarAutoHide true" save "wait 500" "get topBarAutoHide" "get needsSave" "get errorText"
+expect topbarhide "the shell did not crash" alive topbarhide
+expect topbarhide "read: off" is "$(first topbarhide topBarAutoHide)" false
+expect topbarhide "on: the main top bar hides" is "$(panel topbarhide 1)" "top 0 autohide: appname clockpill systemtray quicksettings"
+expect topbarhide "  the second screen's too" is "$(panel topbarhide 3)" "top 1 autohide: appname clockpill quicksettings"
+expect topbarhide "  the dock keeps its hiding" is "$(panel topbarhide 2)" "bottom 0 dodgewindows: launcher dock"
+expect topbarhide "  the unplugged screen's bar is left alone" is "$(panel topbarhide 4)" "top 2 none: appname clockpill quicksettings"
+expect topbarhide "applied: on, nothing pending" is "$(value topbarhide topBarAutoHide) $(value topbarhide needsSave)" "true false"
+expect topbarhide "no error" is "$(value topbarhide errorText)" ""
+
+run topbarhideread "{\"panels\": [{\"hiding\": \"autohide\", \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
+  waitshell "get topBarAutoHide"
+expect topbarhideread "a bar that hides reads as on" is "$(value topbarhideread topBarAutoHide)" true
+
+run topbarhidetablet "{\"showConfig\": true, \"showHiding\": true, \"panels\": [{\"height\": 44,
+  \"config\": {\"PlasmaFusion/tabletApplied\": \"true\", \"PlasmaFusion/laptopHiding\": \"autohide\"},
+  \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
+  waitshell "get topBarAutoHide" "set topBarAutoHide false" save "wait 500" "get errorText"
+expect topbarhidetablet "tablet posture: the page shows the hiding it goes back to (on)" is "$(first topbarhidetablet topBarAutoHide)" true
+expect topbarhidetablet "  off: the bar still shows, off given back after" \
+  is "$(panel topbarhidetablet 1)" "top 0{PlasmaFusion/laptopHiding=none,PlasmaFusion/tabletApplied=true} none: appname clockpill quicksettings"
+expect topbarhidetablet "no error" is "$(value topbarhidetablet errorText)" ""
+run topbarhidetablet2 "{\"showConfig\": true, \"showHiding\": true, \"panels\": [{\"height\": 44,
+  \"config\": {\"PlasmaFusion/tabletApplied\": \"true\", \"PlasmaFusion/laptopHiding\": \"none\"},
+  \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
+  waitshell "set topBarAutoHide true" save "wait 500" "get errorText"
+expect topbarhidetablet2 "tablet posture, on: the bar still shows, on given back after" \
+  is "$(panel topbarhidetablet2 1)" "top 0{PlasmaFusion/laptopHiding=autohide,PlasmaFusion/tabletApplied=true} none: appname clockpill quicksettings"
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

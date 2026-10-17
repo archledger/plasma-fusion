@@ -14,7 +14,13 @@
   watcher and items on a private bus (fake_watcher.py): an item that unregisters while its
   properties are read is not shown when the reply comes after, one that stays is; a recording's
   time runs on with nothing logged, and the widget's debug output (for the session tests) has it;
-  a recording with sound (Spectacle 6.8's title) is a recording too.
+  a recording with sound (Spectacle 6.8's title) is a recording too;
+- the island (Island.qml, board Island.dc.html), its own window: shown while the bar is hidden and
+  gone when it shows; 4 px from the top and centred on the screen, compact 32 px high and at least
+  132 wide, not a pop-up of the bar's window (plasmashell keeps the bar shown while one of its
+  pop-ups is visible); the bubble 6 px beside it with the island still centred; opened in place 400 px wide,
+  where a click on Mute asks the app's microphone to mute and Esc closes it; in a full-screen
+  window the 14 px row of dots.
 
   STAGE=$PWD/build/stage tools/build.sh livechips
   QT_QPA_PLATFORM=offscreen dbus-run-session --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
@@ -28,8 +34,8 @@ import sys
 import tempfile
 import threading
 
-from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, Qt, QTimer, QUrl, Q_ARG, QtMsgType, Slot,
-                            qInstallMessageHandler)
+from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, QPoint, Qt, QTimer, QUrl, Q_ARG, Q_RETURN_ARG,
+                            QtMsgType, Slot, qInstallMessageHandler)
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
@@ -144,6 +150,60 @@ Window {
         onCapsuleClicked: capsules += 1
     }
     function focusFirst() { chips.keepAwakeItem.forceActiveFocus(Qt.TabFocusReason); }
+}
+"""
+# The island on a 1440 x 900 screen, its content set by the test; declared in a window, as the
+# widget's is in the bar's.
+ISLAND_HARNESS = """import QtQuick
+import QtQuick.Window
+Window {
+    id: harness
+    width: 200
+    height: 60
+    visible: true
+    property bool barHidden: true
+    property var content: ({ mode: "compact", items: ["privacy"], dots: ["camera", "microphone"] })
+    property var actions: []
+    readonly property var window: island
+    FusionMetrics { id: m }
+    Island {
+        id: island
+        metrics: m
+        dark: true
+        barHidden: harness.barHidden
+        screenGeometry: Qt.rect(0, 0, 1440, 900)
+        content: harness.content
+        rows: [{ app: "Firefox", kinds: ["camera", "microphone"], action: "mute", microphone: 0, session: "", login: "" }]
+        recording: null
+        keepAwakeLeft: null
+        media: null
+        onRowAction: row => harness.actions = harness.actions.concat([row.action])
+    }
+    function find(item, test) {
+        if (test(item)) return item;
+        for (const child of item.children) {
+            const found = find(child, test);
+            if (found) return found;
+        }
+        return null;
+    }
+    // The black shape (the frame's first child) and the bubble (its second), in screen pixels.
+    function state() {
+        const frame = island.mainItem, body = frame.children[0], bubble = frame.children[1];
+        return JSON.stringify({ visible: island.visible, mode: island.mode, x: island.x, y: island.y, frame: frame.width,
+                                transient: island.transientParent !== null,
+                                body: [island.x + body.x, island.y + body.y, body.width, body.height],
+                                bubble: bubble.visible ? [island.x + bubble.x, bubble.width] : null,
+                                px32: m.px(32), px132: m.px(132), px400: m.px(400), px14: m.px(14), px6: m.px(6) });
+    }
+    // The centre of the visible button with this text, in the island window's pixels.
+    function button(text) {
+        const label = find(island.mainItem, i => i.text === text && i.visible && i.width > 0);
+        if (!label) return "";
+        const c = label.mapToItem(island.mainItem, label.width / 2, label.height / 2);
+        return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
+    }
+    function openIt() { island.open("privacy"); }
 }
 """
 # Markup in an app's name, a login's user and Spectacle's time.
@@ -353,6 +413,8 @@ def main():
             f.write(TEXT_HARNESS)
         with open(os.path.join(root, "status_harness.qml"), "w") as f:
             f.write(STATUS_HARNESS)
+        with open(os.path.join(root, "contents/ui/island_harness.qml"), "w") as f:
+            f.write(ISLAND_HARNESS)
 
         app = QGuiApplication(sys.argv[:1])
         i18n = I18n()
@@ -426,6 +488,59 @@ def main():
         check(sorted(t["text"] for t in shown) == ["<b>0:42</b>", "<b>Zoom</b>", "<i>Meet</i>", "<u>r</u> from h"],
               "the names with markup are on the screen (%s)" % [t["text"] for t in shown])
         check(shown and all(t["plain"] for t in shown), "names and the recording's time are shown as plain text (%s)" % shown)
+
+        # ---- the island
+        isl = QQmlApplicationEngine()
+        isl.rootContext().setContextObject(i18n)
+        isl.load(QUrl.fromLocalFile(os.path.join(root, "contents/ui/island_harness.qml")))
+        if not isl.rootObjects():
+            raise SystemExit("island harness failed to load")
+        h = isl.rootObjects()[0]
+
+        def island():
+            return json.loads(QMetaObject.invokeMethod(h, "state", Qt.DirectConnection, Q_RETURN_ARG("QVariant")))
+        wait(700)
+        s = island()
+        check(s["visible"] and s["mode"] == "compact", "the bar hidden, a call: the island shows, compact (%s)" % s)
+        bx, by, bw, bh = s["body"]
+        check(by == 4 and bh == s["px32"] and bw >= s["px132"], "  4 px from the top, 32 px high, at least 132 wide (%s)" % s["body"])
+        check(abs(bx + bw / 2 - 720) <= 1, "  centred on the screen (%s)" % s["body"])
+        check(not s["transient"], "  not a pop-up of the bar's window (no transient parent: the bar can hide)")
+        h.setProperty("content", {"mode": "compact", "items": ["privacy", "music"], "dots": ["camera", "microphone"]})
+        wait(700)
+        s = island()
+        bx, by, bw, bh = s["body"]
+        check(s["bubble"] is not None and s["bubble"][0] == bx + bw + s["px6"] and s["bubble"][1] == s["px32"],
+              "two things: the second in a 32 px bubble 6 px beside it (%s)" % s)
+        check(abs(bx + bw / 2 - 720) <= 1, "  the island still centred on the screen (%s)" % s["body"])
+        check(s["x"] <= bx and s["bubble"][0] + s["bubble"][1] <= s["x"] + s["frame"],
+              "  both inside the island's window (%s)" % s)
+        h.setProperty("content", {"mode": "compact", "items": ["privacy"], "dots": ["camera", "microphone"]})
+        call(h, "openIt")
+        wait(900)
+        s = island()
+        check(s["mode"] == "opened" and s["body"][2] == s["px400"], "a click opens it in place, 400 px wide (%s)" % s)
+        check(abs(s["body"][0] + s["body"][2] / 2 - 720) <= 1, "  still centred (%s)" % s["body"])
+        at = QMetaObject.invokeMethod(h, "button", Qt.DirectConnection, Q_RETURN_ARG("QVariant"), Q_ARG("QVariant", "Mute"))
+        window = h.property("window")
+        if at:
+            QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(*json.loads(at)))
+            wait(100)
+        actions = h.property("actions")
+        actions = actions.toVariant() if hasattr(actions, "toVariant") else actions
+        check(list(actions or []) == ["mute"], "  Mute asks the app's microphone to mute (%s at %s)" % (actions, at))
+        window.requestActivate()
+        wait(200)
+        QTest.keyClick(window, Qt.Key_Escape)
+        wait(900)
+        check(island()["mode"] == "compact", "  Esc closes it (%s)" % island()["mode"])
+        h.setProperty("content", {"mode": "dots", "items": [], "dots": ["camera", "microphone"]})
+        wait(900)
+        s = island()
+        check(s["mode"] == "dots" and s["body"][3] == s["px14"] and s["body"][1] == 4, "a full-screen window: the 14 px row of dots (%s)" % s)
+        h.setProperty("barHidden", False)
+        wait(900)
+        check(not island()["visible"], "the bar shows: the island goes (%s)" % island())
 
         # ---- the status items, on a private bus
         status_items(root, i18n)

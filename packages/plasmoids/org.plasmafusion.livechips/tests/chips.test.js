@@ -13,7 +13,7 @@ const file = path.join(__dirname, "..", "contents", "code", "chips.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
 const { capsule, argument, portalKind, remoteLogins, cameraApps, timeLeft, tint, GLYPHS, PRIVACY_ORDER,
-        newReads, readStarted, readForgotten, readCurrent, layoutKey } = globalThis;
+        newReads, readStarted, readForgotten, readCurrent, layoutKey, island, islandRows, iconGuess, ISLAND_COLOURS } = globalThis;
 
 let checks = 0;
 function check(fn) {
@@ -115,5 +115,47 @@ check(() => assert.strictEqual(layoutKey(["ssh"], { time: "0:41" }, false), layo
 check(() => assert.notStrictEqual(layoutKey(["ssh"], null, false), layoutKey(["ssh"], { time: "0:01" }, false),
     "a recording that starts does"));
 check(() => assert.notStrictEqual(layoutKey(["ssh"], null, false), layoutKey(["microphone", "ssh"], null, false), "a new kind does"));
+
+// The island (board Island.dc.html): privacy first, then a recording, Keep awake and the music; the
+// first two show; in a full-screen window only the privacy kinds, as dots.
+check(() => assert.deepStrictEqual(island({ privacy: [], recording: false, keepAwake: false, music: false }), { mode: "none", items: [], dots: [] },
+    "nothing going on: no island"));
+check(() => assert.deepStrictEqual(island({ privacy: ["camera", "microphone"] }), { mode: "compact", items: ["privacy"], dots: ["camera", "microphone"] },
+    "a call: the privacy kinds"));
+check(() => assert.deepStrictEqual(island({ privacy: ["camera", "microphone"], music: true }).items, ["privacy", "music"],
+    "a call and music: the music in the bubble"));
+check(() => assert.deepStrictEqual(island({ privacy: ["microphone"], recording: true, keepAwake: true, music: true }).items, ["privacy", "recording"],
+    "four things: the privacy kinds and the recording; the rest waits in the bar"));
+check(() => assert.deepStrictEqual(island({ privacy: [], recording: false, keepAwake: true, music: true }).items, ["keepawake", "music"],
+    "no privacy kind: Keep awake first, then the music"));
+check(() => assert.deepStrictEqual(island({ privacy: [], music: true }).items, ["music"], "music alone"));
+check(() => assert.deepStrictEqual(island({ privacy: ["camera", "microphone"], recording: true, music: true, fullScreen: true }),
+    { mode: "dots", items: [], dots: ["camera", "microphone"] }, "full screen: only the privacy dots"));
+check(() => assert.deepStrictEqual(island({ privacy: [], recording: true, music: true, fullScreen: true }).mode, "none",
+    "full screen without a privacy kind: no island"));
+check(() => assert.deepStrictEqual(Object.keys(ISLAND_COLOURS).sort(), ["camera", "microphone", "recording", "remote", "screen", "ssh"],
+    "a colour for every kind"));
+check(() => assert.strictEqual(ISLAND_COLOURS.camera, "#7fd99c", "the dark scheme's ForegroundPositive"));
+
+// The opened island's rows: one per app, its kinds in order, the action of the most serious one.
+{
+    const mics = [{ name: "Firefox", muted: false }, { name: "Zoom", muted: true }];
+    const portal = [{ key: "s1", kind: "screen", app: "OBS Studio" }, { key: "r1", kind: "remote", app: "Krfb" }, { key: "s2", kind: "screen", app: "firefox" }];
+    const rows = islandRows(mics, ["Firefox"], true, [], portal, [{ id: "7", user: "ana", host: "10.0.0.2" }]);
+    check(() => assert.deepStrictEqual(rows.map((r) => r.app), ["Krfb", "Firefox", "OBS Studio", "Zoom", "ana@10.0.0.2"],
+        "remote control first, then the screen, the camera and microphone, SSH last"));
+    const ff = rows.find((r) => r.app === "Firefox");
+    check(() => assert.deepStrictEqual([ff.kinds, ff.action, ff.session, ff.microphone], [["screen", "camera", "microphone"], "stop", "s2", 0],
+        "Firefox: one row (its name in any case), Stop sharing before Mute"));
+    check(() => assert.deepStrictEqual([rows[0].action, rows[0].session], ["end", "r1"], "remote control: End"));
+    const zoom = rows.find((r) => r.app === "Zoom");
+    check(() => assert.deepStrictEqual([zoom.kinds, zoom.action, zoom.microphone], [["microphone"], "unmute", 1], "a muted app: Unmute"));
+    check(() => assert.deepStrictEqual([rows[4].kinds, rows[4].action, rows[4].login], [["ssh"], "", "7"], "a login: no action"));
+}
+check(() => assert.deepStrictEqual(islandRows([], [], true, ["Integrated Camera"], [], []).map((r) => [r.app, r.kinds]), [["Integrated Camera", ["camera"]]],
+    "a camera whose app is not known: the camera's name"));
+check(() => assert.deepStrictEqual(islandRows([], [], false, ["Integrated Camera"], [], []), [], "a camera not in use: no row"));
+check(() => assert.deepStrictEqual([iconGuess("Firefox"), iconGuess(" Google  Chrome "), iconGuess("")], ["firefox", "google-chrome", ""],
+    "an icon name from an app's name"));
 
 console.log("chips.test.js: " + checks + " checks passed");

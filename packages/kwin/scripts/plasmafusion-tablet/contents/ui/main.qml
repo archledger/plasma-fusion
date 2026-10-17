@@ -7,6 +7,7 @@ import QtQuick
 import org.kde.kwin
 import "Panels.js" as Panels
 import "Requests.js" as Requests
+import "TopBar.js" as TopBar
 
 // Plasma Fusion tablet mode (TABLET.md 3 and 4.2): the single owner of window policy and panel
 // geometry while the device is folded.
@@ -31,6 +32,9 @@ import "Requests.js" as Requests
 // Settings: kwinrc [Script-plasmafusion-tablet] (contents/config/main.xml). Other parts write
 // them with kwriteconfig6 --notify and then invoke the shortcut "Plasma Fusion: Tablet Window
 // Mode", which re-reads them. No timers run while idle.
+//
+// The top bar for the island (board Island.dc.html, TopBar.js): a top bar that hides is hidden by
+// KWin, and only KWin's scripts see it; its state goes to the live chips of its screen.
 //
 // Split view (TABLET2 M1, SplitDivider.qml): while the policy is applied and the active window is
 // quick-tiled left or right with another window on the other side, a handle on the split resizes
@@ -439,6 +443,7 @@ Item {
             }
             if (w.dock && String(w.resourceClass) === "plasmashell") {
                 panelsAppeared.restart();
+                root.trackBar(w);
             }
             if (!root.applied) {
                 return;
@@ -457,6 +462,11 @@ Item {
         function onWindowRemoved(w) {
             if (!w) {
                 return;
+            }
+            const bar = root.barWindows.indexOf(w);
+            if (bar >= 0) {
+                root.barWindows.splice(bar, 1);
+                barsChanged.restart();
             }
             const k = root.key(w);
             delete root.maximizedByUs[k];
@@ -567,7 +577,71 @@ Item {
     Timer {
         id: panelsAppeared
         interval: 500
-        onTriggered: root.applyPanels()
+        onTriggered: {
+            root.applyPanels();
+            root.sendBars(true);
+        }
+    }
+
+    // ---------------------------------------------------------------- the top bar for the island
+
+    // The top bars' windows (TopBar.isTopBar), followed for their `hidden`; their state goes to
+    // plasmashell when it changes (one call for changes in the same turn of the event loop) and
+    // again when its panels appear (a restart).
+    property var barWindows: []
+    property string sentBars: ""
+    function outputRect(w) {
+        const g = w && w.output ? w.output.geometry : null;
+        return g ? { x: g.x, y: g.y, width: g.width, height: g.height } : null;
+    }
+    function trackBar(w) {
+        if (barWindows.indexOf(w) >= 0 || !TopBar.isTopBar(w, outputRect(w))) {
+            return;
+        }
+        barWindows.push(w);
+        w.hiddenChanged.connect(barsChanged.restart);
+        barsChanged.restart();
+    }
+    function sendBars(force: bool) {
+        const bars = [];
+        for (const w of barWindows) {
+            const g = outputRect(w);
+            if (g) {
+                bars.push({ x: g.x, y: g.y, hidden: w.hidden });
+            }
+        }
+        const script = TopBar.barScript(bars);
+        if (!force && script === sentBars) {
+            return;
+        }
+        sentBars = script;
+        barCall.arguments = [script];
+        barCall.call();
+    }
+    Timer {
+        id: barsChanged
+        interval: 0
+        onTriggered: root.sendBars(false)
+    }
+    DBusCall {
+        id: barCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+        onFinished: returnValue => root.log("top bars " + JSON.stringify(TopBar.barState(root.barWindows.map(w => {
+            const g = root.outputRect(w);
+            return { x: g ? g.x : 0, y: g ? g.y : 0, hidden: w.hidden };
+        }))) + ": " + (returnValue.length > 0 ? String(returnValue[0]).trim() : ""))
+        // Sent again with the next change, or when the shell's panels appear.
+        onFailed: root.sentBars = ""
+    }
+    Component.onCompleted: {
+        for (const w of Workspace.stackingOrder) {
+            if (w.dock && String(w.resourceClass) === "plasmashell") {
+                trackBar(w);
+            }
+        }
     }
 
     // A scale change (Display Configuration, kscreen-doctor) keeps the screen list, so

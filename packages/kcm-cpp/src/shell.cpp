@@ -53,7 +53,7 @@ function bool(v, d) {
     return !(v === false || v === "false");
 }
 var state = { docks: 0, magnify: true, magnifiedSize: 62, dockSize: 1, dockPosition: "bottom", groupWindows: true, homeIndicator: true,
-              topBars: 0, menu: false, topOpacity: "", meters: false,
+              topBars: 0, menu: false, topOpacity: "", topHiding: "none", meters: false,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
               launchers: 0, recentFiles: true, recentApps: true, places: true,
@@ -110,6 +110,11 @@ for (var i = 0; i < ps.length; ++i) {
             state.menu = p.widgets("org.kde.plasma.appmenu").length > 0;
             state.meters = p.widgets("org.plasmafusion.meters").length > 0;
             state.topOpacity = String(p.opacity);
+            // In tablet posture the bar always shows for the moment: the hiding it goes back to.
+            p.currentConfigGroup = ["PlasmaFusion"];
+            var topTablet = p.readConfig("tabletApplied", false) === true || p.readConfig("tabletApplied", "") === "true";
+            state.topHiding = topTablet ? String(p.readConfig("laptopHiding", "none")) : String(p.hiding);
+            p.currentConfigGroup = [];
             mainTopBar = qs.length > 0;
             chosenTopBar = true;
         }
@@ -230,6 +235,39 @@ for (var i = 0; i < ps.length; ++i) {
     p.currentConfigGroup = [];
     if (!tablet && String(p.location) !== WHERE) {
         p.location = WHERE;
+    }
+    ++count;
+}
+print(count);
+)JS"_s;
+
+// %1: the top bars' hiding, "autohide" or "none" (board Island.dc.html). Every top bar on a
+// screen gets it (a panel of a screen that is not connected is left as it is: plasmashell reads
+// and writes its visibility in the screen's config, an invalid group for a screen that is gone).
+// In tablet posture the bar always shows and the hiding the tablet script gives back when the
+// posture ends (the panel's [PlasmaFusion] laptopHiding) becomes the new one. Prints the number
+// of top bars.
+const QString s_topBarHidingScript =
+    uR"JS(
+var HIDING = %1, count = 0;
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var p = ps[i];
+    if (p.widgets("org.plasmafusion.appname").length === 0 && p.widgets("org.plasmafusion.clockpill").length === 0
+        && p.widgets("org.plasmafusion.quicksettings").length === 0) {
+        continue;
+    }
+    if (!(p.screen >= 0 && p.screen < screenCount)) {
+        continue;
+    }
+    p.currentConfigGroup = ["PlasmaFusion"];
+    var tablet = p.readConfig("tabletApplied", false) === true || p.readConfig("tabletApplied", "") === "true";
+    if (tablet) {
+        p.writeConfig("laptopHiding", HIDING);
+    }
+    p.currentConfigGroup = [];
+    if (!tablet && String(p.hiding) !== HIDING) {
+        p.hiding = HIDING;
     }
     ++count;
 }
@@ -741,6 +779,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         }
         if (m_topBarAvailable) {
             take(m_current.globalMenu, m_saved.globalMenu, state.value(u"menu"_s).toBool(true));
+            take(m_current.topBarAutoHide, m_saved.topBarAutoHide, state.value(u"topHiding"_s).toString() == u"autohide");
             take(m_current.systemMeters, m_saved.systemMeters, state.value(u"meters"_s).toBool(false));
             // "adaptive": solid next to windows; "translucent": always glass. With Reduced glass
             // the bar is opaque, and the choice the page made last is in plasmafusionrc.
@@ -830,6 +869,18 @@ bool PlasmaFusionKcm::applyDockPosition(int position)
     if (!ok || result.toInt() < 1) {
         addError(ok ? i18nc("@info", "The dock setting could not be changed.")
                     : i18nc("@info %1 what failed, %2 error", "%1 %2", i18nc("@info", "The dock setting could not be changed."), result));
+        return false;
+    }
+    return true;
+}
+
+bool PlasmaFusionKcm::applyTopBarAutoHide(bool on)
+{
+    bool ok = false;
+    const QString result = evaluateShellScript(s_topBarHidingScript.arg(jsString(on ? u"autohide"_s : u"none"_s)), &ok);
+    if (!ok || result.toInt() < 1) {
+        addError(ok ? i18nc("@info", "The top bar setting could not be changed.")
+                    : i18nc("@info %1 what failed, %2 error", "%1 %2", i18nc("@info", "The top bar setting could not be changed."), result));
         return false;
     }
     return true;

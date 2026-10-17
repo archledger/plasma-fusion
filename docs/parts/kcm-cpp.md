@@ -46,6 +46,7 @@ control is `ChoiceRow`, an action row `ActionRow`). The keys are the plan's regi
 | | High contrast colors | `plasma-apply-colorscheme PlasmaFusionHighContrast` (the style part's scheme; the switch is disabled with a note while it is not installed) and the gsettings key `org.gnome.desktop.a11y.interface high-contrast`, written quietly when gsettings is present: that key is what the XDG settings portal's `contrast` is served from (xdg-desktop-portal-kde 6.7.5 does not serve the key at all, the GTK impl does), so applications that follow the portal see the mode too; turning it on selects Solid on the page (GAPS.md G10), which can be changed before Apply. Off: the scheme of the Global Theme in use (`PlasmaFusionDark` / `PlasmaFusionLight`). The accent colour is kept. After Light / Dark it is applied again on top of the theme's scheme; Follow sunset's switches at dawn and dusk bring the normal scheme back (the note says so) |
 | | Reduce motion | kdeglobals `[KDE] AnimationDurationFactor=0` with notification; the previous factor goes to plasmafusionrc `[Motion] PreviousAnimationDurationFactor` (not written when the key was missing, = 1.0). Off: the saved factor is written back, or the key removed; the saved one is then removed. The switch shows the live state (`factor == 0`), so it follows the Animations page's slider |
 | Dock and top bar | Magnified icon size: 56 px / 62 px | every dock's `[General] magnifiedSize` (disabled while magnification is off; another value shows no segment chosen and is kept) |
+| | Hide the top bar automatically | the top bars' panel `hiding`: `autohide` or `none` (default off). Every top bar on a screen gets it (a panel of a screen that is gone is left as it is); in tablet posture the bar shows and the hiding it goes back to (`[PlasmaFusion] laptopHiding`) is written. While a bar is hidden the island shows (board Island.dc.html; docs/parts/shell-livechips.md, "The island") |
 | | Solid top bar next to windows | the top bars' panel `opacity`: `adaptive` (owner decision 5) or `translucent`; plasmafusionrc `[TopBar] SolidNextToWindows` (*new*) keeps the choice, which Reduced glass cannot show (both bars opaque; the switch is disabled with a note then). The opacity of a panel whose screen is gone (the top bar of a monitor that was unplugged) is neither read nor set (0.5.0): Plasma 6.8 keeps such a panel on its missing screen, and plasmashell crashes reading it (`docs/parts/kwin-tablet.md`, "Panels without a screen"); its widgets still get the glass key |
 | | Top bar on every screen | plasmafusionrc `[TopBar] EveryScreen` (*new*, default `true`, owner decision 8). Off: the top bars on screens other than the main one (the top bar with quick settings on the lowest screen number, as every bar has quick settings since 2026-10-09) are removed, and `ensure-topbars.js` adds none while the key is false; on: the layout part's `ensure-topbars.js` is run when it is installed (`contents/layouts/` of either Plasma Fusion Global Theme), then the page's glass and top-bar opacity are applied to the new bars and, when the power tier is not full, the power service is asked to apply it to them |
 | | Dock on every screen | plasmafusionrc `[Dock] EveryScreen` (*new*, default `false`: one dock). On: `ensure-topbars.js` runs at once and gives every screen without one a dock like the main one, each listing its own screen's windows (docs/parts/lookandfeel.md); off: the docks `ensure-topbars.js` added (marked as copies) are removed with their panels and launchers (`s_removeExtraDocksScript`), docks the user made stay, and each dock left gets back the `showOnlyCurrentScreen` it had (with no other dock on a screen that is there, because the user removed it or its monitor is unplugged, the copy on the lowest screen stays as the one dock, no longer a copy, listing every screen's windows, and stands in for the unplugged screens' docks, `[PlasmaFusion] standInFor`, until one of them is back, when `ensure-topbars.js` removes it; a copy's panel whose dock the user removed goes too); when the removal fails the choice stays on (the page shows it on, with the error). Turned on, a dock `ensure-topbars.js` could not make ("not made N") is an error too. Disabled with a note while no Fusion dock is in a panel, except that while on it can always be turned off (the user may have removed every dock; off removes the copies' panels), and Defaults turns it off then too; after a layout reset with it on, the other docks come back, and the page shows an error when they cannot (`ensure-topbars.js` missing or failing) |
@@ -896,3 +897,30 @@ itself out for the edge (docs/parts/shell-dock.md, "The dock on the left or righ
   page fail them.
 - Session: `tests/scenario-dockedge.sh` (26 checks; docs/parts/shell-dock.md).
 
+## Hide the top bar automatically (2026-10-17)
+
+The owner's request of 2026-10-17 (board `design/boards/Island.dc.html`, the owner approved its
+mock on 2026-10-17): "Dock and top bar" has **Hide the top bar automatically** (off by default),
+with the note "Move the pointer to the top of the screen to show it. While it is hidden, the
+island shows what uses the camera, the microphone or the screen."
+
+- Read: the chosen top bar's hiding (`topHiding` of the read script), or in tablet posture (its
+  `[PlasmaFusion] tabletApplied`) the hiding the tablet script gives back, `laptopHiding`.
+- Apply: `s_topBarHidingScript` sets `hiding` to `autohide` or `none` on every panel with the app
+  name, the clock pill or quick settings that is on a screen. A top bar of a screen that is not
+  connected is left as it is: plasmashell reads and writes a panel's visibility in its screen's
+  config without a window (plasma-workspace 6.7.5 `Panel::setHiding`), an invalid group for a
+  screen that is gone. In tablet posture the bar keeps showing and `laptopHiding` becomes the new
+  hiding. The settings file carries it.
+- Plasma hides such a panel through KWin (an auto-hide screen edge); the tablet KWin script tells
+  the live chips when it is hidden (docs/parts/kwin-tablet.md, "The top bar for the island"), and
+  they show the island (docs/parts/shell-livechips.md). The bars "Top bar on every screen" makes
+  take the main bar's hiding (docs/parts/lookandfeel.md).
+- `tests/shell-panels.sh` (ctest `kcmctl-panels`), cases `topbarhide` (read off; on, the main bar
+  and the second screen's hide, the dock keeps `dodgewindows`, the bar of an unplugged screen is
+  left at `none` and the stand-in shell, which crashes on such a panel's hiding as plasmashell
+  does, does not crash; nothing pending after Apply), `topbarhideread` and `topbarhidetablet`,
+  against `fakeshell`, whose panels now have a hiding. `tests/run-settings-file.sh`: the export
+  holds it. `tests/page_layout_test.py`: the row shows the module's value with its note, a click
+  sets it. `kcmctl-fuzz` sets it at random.
+- Session: `tests/scenario-island.sh` (docs/parts/shell-livechips.md, "The island").

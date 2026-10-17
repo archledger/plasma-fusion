@@ -225,7 +225,8 @@ write_settings_file() {
 ints=(style buttonStyle snapTrigger glass magnifiedSize dockSize dockPosition iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy
   gestureSwipeUp gestureSwipeDown gestureSwipeLeft gestureSwipeRight gesturePinchIn gesturePinchOut)
 bools=(magnify globalMenu hotCorner highContrast reduceMotion solidTopBar everyScreen everyDock desktopIcons lighterOnCritical
-  fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters launcherRecentFiles launcherRecentApps launcherPlaces desktopsInOneRow groupWindows)
+  fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters launcherRecentFiles launcherRecentApps launcherPlaces desktopsInOneRow groupWindows
+  topBarAutoHide)
 reads=(accentMode accentColor wallpaperColor shellRunning dockAvailable launcherAvailable metersAvailable fusionDecoration errorText infoText
   highContrastAvailable previousDesktopAvailable powerCritical fusionLookAndFeel busy noSuchProperty)
 methods=(setSchemeAccent setWallpaperAccent useFusionDecoration restorePreviousDesktop resetLayout noSuchMethod
