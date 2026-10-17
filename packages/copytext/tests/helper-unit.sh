@@ -139,9 +139,11 @@ setup_case copied
 rc=0; run_helper || rc=$?
 [ "$rc" = 0 ] && ok "a selected area: the helper succeeds" || bad "a selected area: exit $rc ($(cat "$CASE/out"))"
 args=$(head -1 "$CASE/spectacle.log")
-case $args in "-b -n -r -o $CASE/run/plasma-fusion-copytext."*/region.png) ok "Spectacle captures a region in background mode into the runtime directory" ;;
+case $args in "-b -n -r -k -o $CASE/run/plasma-fusion-copytext."*/region.png)
+  ok "Spectacle captures a region in background mode into the runtime directory, on release" ;;
   *) bad "Spectacle's arguments: $args" ;; esac
-[ "$(head -1 "$CASE/tesseract.log")" = "$(sed -n 's/^-b -n -r -o //p' "$CASE/spectacle.log") stdout -l eng --psm 3" ] &&
+[ "$(head -1 "$CASE/tesseract.log")" = \
+  "$(sed -n 's/^-b -n -r -k -o //p' "$CASE/spectacle.log") stdout -l eng --psm 3" ] &&
   grep -q '^image ' "$CASE/tesseract.log" && ok "Tesseract reads the saved area (eng, automatic page segmentation)" ||
   bad "Tesseract's arguments: $(cat "$CASE/tesseract.log")"
 [ "$(calls setClipboardContents)" = "$(printf 'Hello Plasma Fusion\nsecond line')" ] &&
