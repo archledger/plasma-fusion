@@ -250,6 +250,14 @@
       "w": 1440,
       "x": 0,
       "y": 5200
+    },
+    "Island.dc.html": {
+      "h": 3900,
+      "page": "dark",
+      "title": "30 · The top bar hidden, and the island — dark and light",
+      "w": 1440,
+      "x": 1520,
+      "y": 6740
     }
   },
   "createdOnFiles": {
@@ -329,6 +337,7 @@
     "Gestures.dc.html",
     "DockSize.dc.html",
     "DockPosition.dc.html",
+    "Island.dc.html",
     "Tablet.dc.html",
     "MainLight.dc.html",
     "LauncherLight.dc.html",

@@ -38,6 +38,10 @@ commands, the bundled fonts, the tile emitter and the tests.
 <td valign="top"><a href="previews/DockSize.webp"><img src="previews/DockSize.webp" width="420" alt="Dock size and window grouping — dark and light"></a><br><b>Dock size and window grouping — dark and light</b><br><a href="boards/DockSize.dc.html">source</a></td>
 <td valign="top"><a href="previews/DockPosition.webp"><img src="previews/DockPosition.webp" width="420" alt="The dock on the left or right — dark and light"></a><br><b>The dock on the left or right — dark and light</b><br><a href="boards/DockPosition.dc.html">source</a></td>
 </tr>
+<tr>
+<td valign="top"><a href="previews/Island.webp"><img src="previews/Island.webp" width="420" alt="The top bar hidden, and the island — dark and light"></a><br><b>The top bar hidden, and the island — dark and light</b><br><a href="boards/Island.dc.html">source</a></td>
+<td></td>
+</tr>
 </table>
 
 ## Desktop · light
