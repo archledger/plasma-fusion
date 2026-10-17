@@ -816,27 +816,41 @@ does the gestures (docs/parts/kwin.md, "Touchpad gestures").
   reads when it starts. The page shows the switch on while kwinrc has `Rows=1`. With fewer
   desktops than the rows given back, KWin keeps one row (it holds no more rows than desktops) and
   writes that when it next saves the desktops; the switch then shows on again.
-- `tests/run-gestures.sh` (ctest `kcmctl-gestures`, 45 checks, with the stand-in KWin of
+- `tests/run-gestures.sh` (ctest `kcmctl-gestures`, 57 checks, with the stand-in KWin of
   `packages/powerfx/tests/mock-session.py --kwin-config`, which logs its reconfigure and rows and
   whose `createDesktop` adds a desktop to kwinrc and sends `countChanged` as KWin does): the
   defaults, the page's Defaults, kwinrc's names read (case aside, unknown and empty ones the
   default); each of the nine actions written as `Gestures.js` names it (read from that file), only
-  the changed key, KWin reconfigured; values out of range not taken; the notes for one desktop,
-  two in two rows, four in two rows and in one row not applied yet, and for a desktop added while
-  the page is open; one row on (KWin's rows, kwinrc and the rows kept) and read back, off (the
-  rows given back, the kept number gone). Eight mutations of the module (no write, no reconfigure,
-  no rows, the rows not given back, the pending switch ignored, an unknown name not the default,
-  the default of two rows, the gestures left out of the settings file) and the desktop signals not
-  connected fail it or `kcmctl-settingsfile`, which checks that an export holds the gestures and
-  the switch and that an import writes a gesture's name. `tests/fuzz-kcmctl.sh` gives the gesture
-  keys and the desktops random values, and the settings file a gesture and the switch.
+  the changed key, KWin reconfigured; values out of range not taken; the notes for one desktop, two
+  in two rows, four in two rows and in one row not applied yet, and for a desktop added while the
+  page is open; one row on (KWin's rows, kwinrc and the rows kept) and read back, off (the rows
+  given back, the kept number gone); the snap script off without the entry (and its metadata.json
+  off by default), the entry read as KWin reads it (true, 1 and off on; false, 0 and empty off),
+  turned on while the page is open with a change notification. Eight mutations of the module (no
+  write, no reconfigure, no rows, the rows not given back, the pending switch ignored, an unknown
+  name not the default, the default of two rows, the gestures left out of the settings file), the
+  desktop signals not connected, and four of the snap script's (the entry read as a KConfig bool,
+  the script always on, `[Plugins]` not watched, the change not sent) fail it or
+  `kcmctl-settingsfile`, which checks that an export holds the gestures and the switch and that an
+  import writes a gesture's name. `tests/fuzz-kcmctl.sh` gives the gesture keys and the desktops
+  random values, and the settings file a gesture and the switch.
 - `tests/page_layout_test.py` (CI `build`, offscreen: `offscreen_preview.py --gestures` and
   `--key-dropdown N KEY`): each row shows the module's choice, the notes show on the up and down
-  and the left and right rows while the module says KWin uses those, a key in a drop-down (Down,
-  End) sets the module's value. Four mutations (a row not wired to the module, nor from it, the
-  note gone, the drop-down's choice not passed on) fail it.
-- Not done: the page does not say when the snap script is turned off (System Settings > Window
-  Management > KWin Scripts), which leaves the gestures to nothing.
+  and the left and right rows while the module says KWin uses those, the snap script's note only
+  while the module says it is off, a key in a drop-down (Down, End) sets the module's value.
+  Seven mutations (a row not wired to the module, nor from it, the note gone, the drop-down's
+  choice not passed on; the snap script's note always shown, never shown, without its text) fail
+  it.
+- The snap script off (2026-10-17): the gestures are the snap script's, so while KWin does not
+  load it a note under the group says they do nothing and where it is turned on (Window
+  Management > KWin Scripts, where it is "Plasma Fusion Snap Layouts"). The page reads kwinrc
+  `[Plugins] plasmafusion-snapEnabled` as KWin 6.7.5 does when it loads scripts
+  (`Scripting::queryScriptsToLoad`: the entry converted as a `QVariant` converts a string, so
+  "false", "0" and empty are off and "off" is on; a missing entry is the script's
+  `EnabledByDefault`, false), when it opens and when `[Plugins]` changes with a change
+  notification (`plasma-fusion setup` and `kwriteconfig6 --notify`). KWin's own Scripts page
+  writes without one (KCMUtils 6.31 `KPluginModel::save`), so a change made there is not seen
+  while this page stays open.
 
 ## Dock size and window grouping (2026-10-16)
 

@@ -16,6 +16,9 @@
 #     page is open (KWin's countChanged; it writes kwinrc without a change notification);
 #   - desktops in one row: KWin's rows over D-Bus and kwinrc [Desktops] Rows, the rows before kept
 #     and given back when it goes off.
+#   - the snap script on as KWin 6.7.5 loads it (kwinrc [Plugins] plasmafusion-snapEnabled as a
+#     QVariant converts it, off when missing as its metadata.json has it), also turned on while
+#     the page is open (a write with a change notification).
 # Needs node and python3 with GObject introspection (mock-session.py).
 #
 #   run-gestures.sh KCMCTL PLUGIN_DIR WORKDIR
@@ -46,6 +49,7 @@ const fs = require("fs"), vm = require("vm");
 vm.runInThisContext(fs.readFileSync(process.argv[1], "utf8").replace(/^\.pragma library$/m, ""));
 console.log(ACTIONS.join(" "));
 ' "$here/../../kwin/scripts/plasmafusion-snap/contents/ui/Gestures.js" >"$work/actions.txt"
+cp "$here/../../kwin/scripts/plasmafusion-snap/metadata.json" "$work/snap-metadata.json"
 
 cat >"$work/inner.sh" <<'EOF2'
 set -u
@@ -135,6 +139,29 @@ session rowsback "set desktopsInOneRow false" save
 check "off: the rows the user had come back (3), the kept number goes" bash -c "
   grep -q 'kwin rows 3' '$work/calls.log' && [ \"\$(kreadconfig6 --file kwinrc --group Desktops --key Rows)\" = 3 ] &&
   [ -z \"\$(kreadconfig6 --file plasmafusionrc --group Gestures --key PreviousRows)\" ]"
+
+# ---- The snap script, which does the gestures: on as KWin loads it.
+export XDG_CONFIG_HOME=$work/config-d
+mkdir -p "$XDG_CONFIG_HOME"
+session nosnap "get snapScriptOn"
+check "the snap script off while kwinrc does not turn it on (its EnabledByDefault)" test "$(got nosnap snapScriptOn)" = false
+check "  the snap script's metadata.json has it off by default" python3 -c '
+import json, sys
+sys.exit(json.load(open(sys.argv[1]))["KPlugin"]["EnabledByDefault"] is not False)' "$work/snap-metadata.json"
+snap=
+for value in true 1 off false 0 ''; do
+  printf '[Plugins]\nplasmafusion-snapEnabled=%s\n' "$value" >"$XDG_CONFIG_HOME/kwinrc"
+  session "snap$value" "get snapScriptOn"
+  snap+="$(got "snap$value" snapScriptOn) "
+done
+check "  kwinrc's entry read as KWin reads it: true, 1 and off load the script, false, 0 and empty do not" \
+  test "$snap" = "true true true false false false "
+printf '[Plugins]\nplasmafusion-snapEnabled=false\n' >"$XDG_CONFIG_HOME/kwinrc"
+session snapon "get snapScriptOn" \
+  "sh kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-snapEnabled --notify true" \
+  "wait 1000" "get snapScriptOn"
+check "  turned on while the page is open (a change notification): the note goes" test \
+  "$(sed -n 's/^kcmctl: snapScriptOn=//p' "$work/snapon.log" | tr '\n' ' ')" = "false true "
 
 echo "$((N - FAIL)) of $N passed"
 [ "$FAIL" = 0 ]

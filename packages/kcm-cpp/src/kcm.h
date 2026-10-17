@@ -183,6 +183,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool tabletModeActive READ tabletModeActive NOTIFY environmentChanged)
     // The power service holds the glass solid and magnification off (10 % battery or less).
     Q_PROPERTY(bool powerCritical READ powerCritical NOTIFY environmentChanged)
+    // KWin loads the snap script, which does the touchpad gestures (kwinrc [Plugins]).
+    Q_PROPERTY(bool snapScriptOn READ snapScriptOn NOTIFY environmentChanged)
     // A Global Theme of Plasma Fusion is in use (the layout reset needs one).
     Q_PROPERTY(bool fusionLookAndFeel READ fusionLookAndFeel NOTIFY styleChanged)
     // An action (restore, layout reset) is running.
@@ -362,6 +364,7 @@ public:
     bool tabletModeAvailable() const;
     bool tabletModeActive() const;
     bool powerCritical() const;
+    bool snapScriptOn() const;
     bool fusionLookAndFeel() const;
     bool busy() const;
 
@@ -603,6 +606,7 @@ private:
     bool m_tabletModeAvailable = false;
     bool m_tabletModeActive = false;
     bool m_powerCritical = false;
+    bool m_snapScriptOn = false;
     // kwinrc [Desktops] Number and Rows (KWin's default 2), and the rows the user had before
     // "desktops in one row" (plasmafusionrc [Gestures] PreviousRows).
     int m_desktopCount = 1;
