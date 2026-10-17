@@ -36,7 +36,7 @@ import threading
 
 from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, QPoint, QRect, QSize, Qt, QTimer, QUrl, Q_ARG, Q_RETURN_ARG,
                             QtMsgType, Slot, qInstallMessageHandler)
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
 
@@ -206,6 +206,13 @@ Window {
         return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
     }
     function openIt() { island.open("privacy"); }
+    // The compact island's leading part: the app's icon shown (its name) and whether the kind's
+    // glyph shows.
+    function leading() {
+        const icon = find(island.mainItem, i => i.fallback !== undefined && i.source !== undefined && i.visible && i.width > 0);
+        const glyph = find(island.mainItem, i => i.path !== undefined && String(i.path) !== "" && i.visible && i.width > 0);
+        return JSON.stringify({ icon: icon ? String(icon.source) : "", glyph: glyph !== null });
+    }
     // The rows' scrolling area: [its height, its content's height, whether it scrolls].
     function scroller() {
         const f = find(island.mainItem, i => i.contentHeight !== undefined && i.interactive !== undefined && i.visible);
@@ -435,6 +442,10 @@ def main():
             f.write(ISLAND_HARNESS)
 
         app = QGuiApplication(sys.argv[:1])
+        # The island's leading icon comes from the icon theme: offscreen, Qt looks only in :/icons,
+        # so the system's themes are given (Breeze, which falls back to hicolor, as a session's).
+        QIcon.setThemeSearchPaths(["/usr/share/icons"])
+        QIcon.setThemeName("breeze")
         i18n = I18n()
 
         # ---- the camera's readers
@@ -524,6 +535,22 @@ def main():
         check(by == 4 and bh == s["px32"] and bw >= s["px132"], "  4 px from the top, 32 px high, at least 132 wide (%s)" % s["body"])
         check(abs(bx + bw / 2 - 720) <= 1, "  centred on the screen (%s)" % s["body"])
         check(not s["transient"], "  not a pop-up of the bar's window (no transient parent: the bar can hide)")
+        # The leading part: the app's icon, or the kind's glyph when the icon theme has none for it
+        # (Kirigami.Icon's valid only says a source is set, so its status says whether it was
+        # found; hicolor, which every theme falls back to, has kwin).
+        def leading():
+            return json.loads(QMetaObject.invokeMethod(h, "leading", Qt.DirectConnection, Q_RETURN_ARG("QVariant")))
+        row = {"kinds": ["camera", "microphone"], "action": "mute", "microphones": [0], "session": "", "login": ""}
+        h.setProperty("rows", [dict(row, app="KWin")])
+        wait(300)
+        lead = leading()
+        check(lead["icon"] == "kwin" and not lead["glyph"], "  an app with an icon: its icon leads the island (%s)" % lead)
+        h.setProperty("rows", [dict(row, app="No Such App 42")])
+        wait(300)
+        lead = leading()
+        check(lead["icon"] == "" and lead["glyph"], "  an app without one: the camera's glyph leads it, not a stand-in icon (%s)" % lead)
+        h.setProperty("rows", [dict(row, app="Firefox")])
+        wait(300)
         h.setProperty("content", {"mode": "compact", "items": ["privacy", "music"], "dots": ["camera", "microphone"]})
         wait(700)
         s = island()

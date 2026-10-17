@@ -9,6 +9,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **The island's icon:** a login over SSH or an app without an icon now shows its kind's glyph in
+  the island, not a blank page.
 - **No errors when bars are removed:** removing the top bars while quick settings was still asking
   KWin about the on-screen keyboard (as an import does) logged errors; it no longer does.
 - **Snap sizes after an update:** updating in a running session now moves Meta+Left/Right to the

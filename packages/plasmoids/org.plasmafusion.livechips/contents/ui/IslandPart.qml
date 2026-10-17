@@ -33,15 +33,18 @@ Item {
 
         // ---- leading
         // The app using the camera, microphone or screen; the kind's glyph when no icon is known.
+        // Kirigami.Icon's valid only says a source is set (6.31: an unknown name shows its
+        // "unknown" icon); its status says whether the theme has the icon.
         Kirigami.Icon {
             id: appIcon
+            readonly property bool found: status === Kirigami.Icon.Ready
             anchors.fill: parent
-            visible: part.leading && part.item === "privacy" && valid
+            visible: part.leading && part.item === "privacy" && found
             source: part.firstRow ? Chips.iconGuess(part.firstRow.app) : ""
         }
         LineIcon {
             anchors.centerIn: parent
-            visible: part.leading && part.item === "privacy" && !appIcon.valid
+            visible: part.leading && part.item === "privacy" && !appIcon.found
             path: Chips.GLYPHS[part.island.content.dots[0] || "camera"] || ""
             color: part.island.glyphColor(part.island.content.dots[0] || "")
             size: part.island.metrics.px(16)
