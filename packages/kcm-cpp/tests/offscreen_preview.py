@@ -96,12 +96,12 @@ def main():
 
     state = {"style": 1, "accentMode": 0, "accentColor": "#00000000", "buttonStyle": 0,
              "magnify": True, "globalMenu": True, "hotCorner": False, "shellLoading": False, "shellRunning": True,
-             "dockAvailable": True, "topBarAvailable": True, "decorationInstalled": False,
+             "dockAvailable": True, "topBarAvailable": True, "topBarHidingAvailable": True, "decorationInstalled": False,
              "fusionDecoration": False,
              "errorText": "", "infoText": "",
              "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62, "dockSize": 1,
              "dockPosition": 0, "groupWindows": True,
-             "solidTopBar": True, "everyScreen": True, "everyDock": False, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
+             "solidTopBar": True, "topBarAutoHide": False, "everyScreen": True, "everyDock": False, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
              "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
              "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
              "launcherAvailable": True, "launcherRecentFiles": True, "launcherRecentApps": True, "launcherPlaces": True,
@@ -149,6 +149,7 @@ def main():
         shellRunning = Property(bool, _get("shellRunning"), notify=changed)
         dockAvailable = Property(bool, _get("dockAvailable"), notify=changed)
         topBarAvailable = Property(bool, _get("topBarAvailable"), notify=changed)
+        topBarHidingAvailable = Property(bool, _get("topBarHidingAvailable"), notify=changed)
         decorationInstalled = Property(bool, _get("decorationInstalled"), notify=changed)
         fusionDecoration = Property(bool, _get("fusionDecoration"), notify=changed)
         errorText = Property(str, _get("errorText"), notify=changed)
@@ -166,6 +167,7 @@ def main():
         dockPosition = Property(int, _get("dockPosition"), _set("dockPosition"), notify=changed)
         groupWindows = Property(bool, _get("groupWindows"), _set("groupWindows"), notify=changed)
         solidTopBar = Property(bool, _get("solidTopBar"), _set("solidTopBar"), notify=changed)
+        topBarAutoHide = Property(bool, _get("topBarAutoHide"), _set("topBarAutoHide"), notify=changed)
         everyScreen = Property(bool, _get("everyScreen"), _set("everyScreen"), notify=changed)
         everyDock = Property(bool, _get("everyDock"), _set("everyDock"), notify=changed)
         desktopIcons = Property(bool, _get("desktopIcons"), _set("desktopIcons"), notify=changed)
@@ -384,7 +386,8 @@ QQC2.ApplicationWindow {
                 entry["labels"] = list(model.toVariant()) if hasattr(model, "toVariant") else list(model or [])
                 entry["index"] = row.property("currentIndex")
             out.append(entry)
-        print("REPORT_ROWS " + json.dumps({"rows": out, "kcm": {n: kcm.s[n] for n in ("dockSize", "dockPosition", "groupWindows", "magnifiedSize")}}))
+        names = ("dockSize", "dockPosition", "groupWindows", "magnifiedSize", "topBarAutoHide")
+        print("REPORT_ROWS " + json.dumps({"rows": out, "kcm": {n: kcm.s[n] for n in names}}))
 
     if args.act:
         QTimer.singleShot(600, act)

@@ -10,7 +10,8 @@ row shows the module's choice, a key in a drop-down sets the module's value, and
 KWin's own gestures show on their rows while the module says KWin uses them. And the dock's rows
 (offscreen_preview.py --rows, --act; board DockSize.dc.html): Dock size and Group an app's windows
 show the module's values and a click sets them, the magnified size reads +8 / +14 px; Dock position
-(board DockPosition.dc.html) shows the module's edge with its note and a click sets it.
+(board DockPosition.dc.html) shows the module's edge with its note and a click sets it; Hide the top
+bar automatically (board Island.dc.html) shows the module's value with its note and a click sets it.
 
     tests/page_layout_test.py
 """
@@ -111,6 +112,13 @@ def main():
     by, k = rows("--act", "Dock position=1")
     check(k["dockPosition"] == 1 and by["Dock position"]["index"] == 1,
           "  a click on Left sets the module's value (%s)" % k)
+    by, k = rows("--state", "topBarAutoHide=true")
+    hide = by.get("Hide the top bar automatically")
+    check(hide is not None and hide["checked"] is True and hide["note"].startswith("Move the pointer to the top of the screen"),
+          "top bar: Hide the top bar automatically shows on, with its note (%s)" % hide)
+    by, k = rows("--act", "Hide the top bar automatically")
+    check(k["topBarAutoHide"] is True and by["Hide the top bar automatically"]["checked"] is True,
+          "  a click turns it on (%s)" % k)
     print("page_layout_test: %s" % ("all passed" if not failed else "%d failed" % failed))
     return 1 if failed else 0
 

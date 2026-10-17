@@ -17,7 +17,9 @@ import "../code/chips.js" as Chips
 // under it on a click, and shows it as an interactive tooltip on hover (its buttons work there
 // too); the recording chip's button finishes the recording; the Keep awake chip opens quick
 // settings' Keep awake page. The tray items these signals come from are hidden by the layout and
-// the setup (TRAY_ITEMS_REPLACED_BY_CHIPS).
+// the setup (TRAY_ITEMS_REPLACED_BY_CHIPS). While the top bar of this screen is hidden (the settings
+// page's "Hide the top bar automatically"), the island at the top centre of the screen shows them
+// instead, and the music playing (Island.qml, board Island.dc.html).
 PlasmoidItem {
     id: root
 
@@ -54,6 +56,22 @@ PlasmoidItem {
         id: keepAwake
         appletRoot: root
     }
+    // The island's own sources, only while the bar is hidden (nothing runs for them with the
+    // switch off): the music playing (the MPRIS module is optional) and whether the screen's
+    // active window is full screen.
+    Loader {
+        id: mediaSource
+        active: Plasmoid.configuration.barHidden
+        asynchronous: true
+        source: "sources/Media.qml"
+    }
+    Loader {
+        id: fullScreenSource
+        active: Plasmoid.configuration.barHidden
+        sourceComponent: FullScreen {
+            screenGeometry: root.screenGeometry
+        }
+    }
 
     readonly property var microphoneApps: microphoneSource.item ? microphoneSource.item.apps : []
     readonly property bool cameraInUse: cameraSource.item ? cameraSource.item.inUse : false
@@ -68,6 +86,61 @@ PlasmoidItem {
     })
     readonly property bool anything: capsule.kinds.length > 0 || statusItems.recording !== null || keepAwake.inUse
     readonly property bool dark: Kirigami.ColorUtils.brightnessForColor(Kirigami.Theme.backgroundColor) === Kirigami.ColorUtils.Dark
+    readonly property rect screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
+
+    // ---- the island (board Island.dc.html)
+    readonly property var media: mediaSource.item
+    readonly property var islandContent: Chips.island({
+        "privacy": capsule.kinds,
+        "recording": statusItems.recording !== null,
+        "keepAwake": keepAwake.inUse,
+        "music": media !== null && media.playing,
+        "musicOpened": island.opened === "music",
+        "musicPlayer": media !== null && !!media.player,
+        "fullScreen": fullScreenSource.item ? fullScreenSource.item.active : false
+    })
+    readonly property var islandRows: Chips.islandRows(microphoneApps.map(a => ({ name: a.name, muted: a.muted })),
+                                                       cameraSource.item ? cameraSource.item.apps : [], cameraInUse,
+                                                       cameraSource.item ? cameraSource.item.cameras : [], statusItems.portal, remoteLogins.sessions)
+    Island {
+        id: island
+        metrics: m
+        dark: root.dark
+        barHidden: Plasmoid.configuration.barHidden
+        screenGeometry: root.screenGeometry
+        content: root.islandContent
+        rows: root.islandRows
+        recording: statusItems.recording
+        keepAwakeLeft: keepAwake.inUse ? keepAwake.remaining : null
+        media: root.media
+        onStopRecording: statusItems.stopRecording()
+        onOpenKeepAwake: keepAwake.open()
+        onRowAction: row => {
+            if (row.action === "mute" || row.action === "unmute") {
+                // the app's streams together: Mute while any of them records, Unmute them all
+                for (const i of row.microphones) {
+                    if (i >= 0 && i < root.microphoneApps.length && root.microphoneApps[i].muted !== (row.action === "mute")) {
+                        root.microphoneApps[i].setMuted(row.action === "mute");
+                    }
+                }
+            } else if (row.action === "stop" || row.action === "end") {
+                statusItems.endSession(row.session);
+            }
+        }
+    }
+    // Test hook: [General] islandRequest "open:NONCE" or "close:NONCE" opens or closes the island.
+    Connections {
+        target: Plasmoid.configuration
+        function onIslandRequestChanged() {
+            const request = String(Plasmoid.configuration.islandRequest);
+            console.debug(log, "livechips: islandRequest " + request);
+            if (request.startsWith("open:")) {
+                island.open(island.items[0] || "");
+            } else if (request.startsWith("close:")) {
+                island.close();
+            }
+        }
+    }
 
     // What the chips show, for the session tests ("livechips: state ...", debug output).
     readonly property string summary: JSON.stringify({

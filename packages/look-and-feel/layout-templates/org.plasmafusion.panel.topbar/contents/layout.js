@@ -4,7 +4,7 @@
     8 and 2026-10-09: the status area on every screen). The pen menu only when no Plasma Fusion
     quick settings exists yet (it stays in the main bar); a tray elsewhere lends its settings
     (hidden and unloaded items) to the new one. Sizes, and the settings page's Glass level and
-    top-bar choice, as the Global Theme's layout script.
+    top-bar choice, as the Global Theme's layout script; the main bar's hiding.
 
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
@@ -92,13 +92,30 @@ var TRAY_ITEMS_REPLACED_BY_CHIPS = [
 
 var hasQuickSettings = false;
 var otherTray = null;
+// The main bar's hiding (the settings page's "Hide the top bar automatically", board
+// Island.dc.html), in tablet posture the one it goes back to: the new bar takes it, from the first
+// Fusion top bar on a screen (the app name, the clock pill or quick settings, the settings page's
+// test; plasmashell reads a missing screen's from an invalid config and crashes).
+var otherHiding = "none", hidingFound = false;
 for (var p = 0; p < panelIds.length; ++p) {
     var other = panelById(panelIds[p]);
-    if (other && other.widgets("org.plasmafusion.quicksettings").length > 0) {
+    if (!other) {
+        continue;
+    }
+    if (other.widgets("org.plasmafusion.quicksettings").length > 0) {
         hasQuickSettings = true;
         if (otherTray === null && other.widgets("org.kde.plasma.systemtray").length > 0) {
             otherTray = other.widgets("org.kde.plasma.systemtray")[0];
         }
+    }
+    var fusionBar = other.widgets("org.plasmafusion.appname").length > 0 || other.widgets("org.plasmafusion.clockpill").length > 0
+        || other.widgets("org.plasmafusion.quicksettings").length > 0;
+    if (fusionBar && !hidingFound && other.screen >= 0 && other.screen < screenCount) {
+        other.currentConfigGroup = ["PlasmaFusion"];
+        var otherTablet = other.readConfig("tabletApplied", false) === true || String(other.readConfig("tabletApplied", "")) === "true";
+        otherHiding = String(otherTablet ? other.readConfig("laptopHiding", "none") : other.hiding) === "autohide" ? "autohide" : "none";
+        other.currentConfigGroup = [];
+        hidingFound = true;
     }
 }
 var panel = new Panel;
@@ -108,7 +125,7 @@ panel.height = Math.round(34 * textScale());
 panel.floating = false;
 panel.lengthMode = "fill";
 panel.alignment = "center";
-panel.hiding = "none";
+panel.hiding = otherHiding;
 panel.opacity = look.topOpacity;
 add(panel, ["org.plasmafusion.appname", "org.kde.plasma.kickoff"]);
 var menu = add(panel, ["org.kde.plasma.appmenu"]);

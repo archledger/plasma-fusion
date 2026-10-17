@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+    SPDX-License-Identifier: GPL-2.0-or-later
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="barHidden" type="Bool">
+      <label>Written by the plasmafusion-tablet KWin script: whether the top bar of this widget's screen is hidden now (the settings page's "Hide the top bar automatically"). The island shows while it is.</label>
+      <default>false</default>
+    </entry>
+    <entry name="islandRequest" type="String">
+      <label>Testing only: "open:NONCE" opens the island, "close:NONCE" closes it, as a click and Esc do.</label>
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

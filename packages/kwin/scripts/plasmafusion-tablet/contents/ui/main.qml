@@ -7,6 +7,7 @@ import QtQuick
 import org.kde.kwin
 import "Panels.js" as Panels
 import "Requests.js" as Requests
+import "TopBar.js" as TopBar
 
 // Plasma Fusion tablet mode (TABLET.md 3 and 4.2): the single owner of window policy and panel
 // geometry while the device is folded.
@@ -31,6 +32,9 @@ import "Requests.js" as Requests
 // Settings: kwinrc [Script-plasmafusion-tablet] (contents/config/main.xml). Other parts write
 // them with kwriteconfig6 --notify and then invoke the shortcut "Plasma Fusion: Tablet Window
 // Mode", which re-reads them. No timers run while idle.
+//
+// The top bar for the island (board Island.dc.html, TopBar.js): a top bar that hides is hidden by
+// KWin, and only KWin's scripts see it; its state goes to the live chips of its screen.
 //
 // Split view (TABLET2 M1, SplitDivider.qml): while the policy is applied and the active window is
 // quick-tiled left or right with another window on the other side, a handle on the split resizes
@@ -439,6 +443,7 @@ Item {
             }
             if (w.dock && String(w.resourceClass) === "plasmashell") {
                 panelsAppeared.restart();
+                root.trackBar(w);
             }
             if (!root.applied) {
                 return;
@@ -457,6 +462,11 @@ Item {
         function onWindowRemoved(w) {
             if (!w) {
                 return;
+            }
+            const bar = root.barWindows.indexOf(w);
+            if (bar >= 0) {
+                root.barWindows.splice(bar, 1);
+                barsChanged.restart();
             }
             const k = root.key(w);
             delete root.maximizedByUs[k];
@@ -567,7 +577,66 @@ Item {
     Timer {
         id: panelsAppeared
         interval: 500
-        onTriggered: root.applyPanels()
+        onTriggered: {
+            root.applyPanels();
+            root.sendBars(true);
+        }
+    }
+
+    // ---------------------------------------------------------------- the top bar for the island
+
+    // Plasmashell's panel windows, followed for their `hidden`, geometry and output; which of them
+    // are top bars is decided by their geometry each time (TopBar.barsOf). The bars' state goes to
+    // plasmashell when it changes (one call for changes in the same turn of the event loop) and
+    // again when its panels appear (a restart).
+    property var barWindows: []
+    property string sentBars: ""
+    function outputRect(w) {
+        const g = w && w.output ? w.output.geometry : null;
+        return g ? { x: g.x, y: g.y, width: g.width, height: g.height } : null;
+    }
+    function trackBar(w) {
+        if (barWindows.indexOf(w) >= 0) {
+            return;
+        }
+        barWindows.push(w);
+        w.hiddenChanged.connect(barsChanged.restart);
+        w.frameGeometryChanged.connect(barsChanged.restart);
+        w.outputChanged.connect(barsChanged.restart);
+        barsChanged.restart();
+    }
+    function sendBars(force: bool) {
+        const bars = TopBar.barsOf(barWindows, w => root.outputRect(w));
+        const script = TopBar.barScript(bars);
+        if (!force && script === sentBars) {
+            return;
+        }
+        sentBars = script;
+        barCall.arguments = [script];
+        barCall.call();
+    }
+    Timer {
+        id: barsChanged
+        interval: 0
+        onTriggered: root.sendBars(false)
+    }
+    DBusCall {
+        id: barCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
+        onFinished: returnValue => root.log("top bars " + JSON.stringify(TopBar.barState(TopBar.barsOf(root.barWindows, w => root.outputRect(w))))
+                                            + ": " + (returnValue.length > 0 ? String(returnValue[0]).trim() : ""))
+        // Sent again with the next change, or when the shell's panels appear.
+        onFailed: root.sentBars = ""
+    }
+    Component.onCompleted: {
+        for (const w of Workspace.stackingOrder) {
+            if (w.dock && String(w.resourceClass) === "plasmashell") {
+                trackBar(w);
+            }
+        }
     }
 
     // A scale change (Display Configuration, kscreen-doctor) keeps the screen list, so
@@ -660,6 +729,12 @@ Item {
         // Disabled (the kill switch): laptop options and windows first.
         if (applied && !quitting) {
             leave();
+        }
+        // ... and no island is left: the live chips hear that no bar is hidden (their barHidden
+        // is kept in the widget's config). The call goes out on KWin's own bus connection at once.
+        if (!quitting && sentBars !== "") {
+            barCall.arguments = [TopBar.barScript([])];
+            barCall.call();
         }
     }
 }

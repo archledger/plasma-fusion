@@ -143,6 +143,7 @@ check "  with the applied settings" test "$(json "$work/export.json" '[f["settin
 check "  and not the change still pending (magnifiedSize)" test "$(json "$work/export.json" 'f["settings"]["magnifiedSize"]')" = 62
 check "  and the accent and decoration" test "$(json "$work/export.json" '"accentMode" in f["settings"] and "fusionDecoration" in f["settings"]')" = True
 check "  and the dock's size, position and grouping" test "$(json "$work/export.json" '[f["settings"][k] for k in ("dockSize", "dockPosition", "groupWindows")]')" = "[1, 0, True]"
+check "  and whether the top bar hides" test "$(json "$work/export.json" 'f["settings"]["topBarAutoHide"]')" = "False"
 check "  and the touchpad gestures, desktops in one row" test "$(json "$work/export.json" '[f["settings"][k] for k in ("gestureSwipeUp", "gesturePinchIn", "desktopsInOneRow")]')" = "[1, 5, False]"
 check "  the decoration in use, not Plasma Fusion's: its keys" \
   test "$(json "$work/export.json" 'f["settings"]["fusionDecoration"], f["settings"]["decoration"]')" = \
@@ -312,6 +313,7 @@ work = sys.argv[1]
 f = json.load(open(f"{work}/good.json"))
 f["settings"]["everyDock"] = True
 f["settings"]["solidTopBar"] = False
+f["settings"]["topBarAutoHide"] = True
 json.dump(f, open(f"{work}/panelchoices.json", "w"))
 PY
 export XDG_CONFIG_HOME=$work/config-d
@@ -320,6 +322,7 @@ LAYOUT=$work/layout-nopanels.json session panelchoices "call importSettings $wor
 check "imported without a dock or top bar: the file's dock and top-bar choices are kept" bash -c "
   [ \"\$(kreadconfig6 --file plasmafusionrc --group Dock --key EveryScreen)\" = true ] &&
   [ \"\$(kreadconfig6 --file plasmafusionrc --group TopBar --key SolidNextToWindows)\" = false ] &&
+  [ \"\$(kreadconfig6 --file plasmafusionrc --group TopBar --key AutoHide)\" = true ] &&
   grep -q '^kcmctl: everyDock=true' '$work/panelchoices.log' && grep -q '^kcmctl: solidTopBar=false' '$work/panelchoices.log'"
 check "  and ensure-topbars.js runs for the other screens' docks" grep -q 'top bars: stand-in ran' "$work/calls.log"
 export XDG_CONFIG_HOME=$work/config-c

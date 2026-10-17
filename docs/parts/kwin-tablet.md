@@ -42,23 +42,31 @@ needed.
 - **Posture**: `FusionTablet` (BASE-1) asks KWin's `org.kde.KWin.TabletModeManager` once and follows
   its signals. The script does nothing until KWin has answered, so the Kirigami value (which can start
   stale inside KWin, TABLET F3) never moves windows.
-- **Panels, at once on every change**: one `evaluateScript` call in plasmashell (TABLET 3.6): the top bar
-  `round(44 x text scale)` (the layout script's `textScale()`), the dock 80 (96 with the headroom frame until INT-1) and `DockHiding` (not the stock
-  appmenu's `compactView`: see Verification). The laptop height and hiding are saved once per panel in
-  its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave
-  (for the dock the plate of its size, the dock's `dockSize`: 60, 72 or 78 px, 72 when not set,
-  since 2026-10-16; a saved 88 or 96 from the headroom frame counts as that plate). The settings
-  page's Dock size sets `laptopHeight` while the posture holds (docs/parts/kcm-cpp.md, "Dock size
-  and window grouping"); `tests/tablet-panels.test.js` covers both. A dock on the left or right
-  (the settings page's Dock position, board DockPosition.dc.html) is at the bottom in tablet
-  posture, as on the Tablet board: its side is saved as `laptopLocation` with the height and given
-  back on leave (2026-10-16; the test covers a dock on the left, one at the bottom and one
-  without a saved side).
-  Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
-  start), the call is made again after 500 ms (one call for several panels). A Fusion panel whose
-  screen is gone (the top bar of a monitor that was unplugged) is skipped, see "Panels without a
-  screen" below. When plasmashell is not on the bus, or answers "not ready" (no panels, desktops
-  or screens yet), the call is made again after 1, 2, 4, 8, 16 and 32 s.
+- **Panels, at once on every change**: one `evaluateScript` call in plasmashell (TABLET 3.6): the
+  top bar `round(44 x text scale)` (the layout script's `textScale()`), the dock 80 (96 with the
+  headroom frame until INT-1) and `DockHiding` (not the stock appmenu's `compactView`: see
+  Verification). The laptop height and hiding are saved once per panel in its `[PlasmaFusion]`
+  config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave (for the dock the
+  plate of its size, the dock's `dockSize`: 60, 72 or 78 px, 72 when not set, since 2026-10-16; a
+  saved 88 or 96 from the headroom frame counts as that plate). The settings page's Dock size sets
+  `laptopHeight` while the posture holds (docs/parts/kcm-cpp.md, "Dock size and window grouping");
+  `tests/tablet-panels.test.js` covers both. A dock on the left or right (the settings page's Dock
+  position, board DockPosition.dc.html) is at the bottom in tablet posture, as on the Tablet board:
+  its side is saved as `laptopLocation` with the height and given back on leave (2026-10-16; the
+  test covers a dock on the left, one at the bottom and one without a saved side). A top bar that
+  hides (the settings page's "Hide the top bar automatically", board Island.dc.html) always shows in
+  tablet posture: its `laptopHiding`, saved with the height, is given back on leave (2026-10-17; the
+  test covers a bar that hides, one that shows and one set to hide while the posture held). In
+  laptop posture a top bar takes the settings page's choice, plasmafusionrc `[TopBar] AutoHide`
+  (true: `autohide`, false: `none`; not set: left as it is), so a bar whose screen was not connected
+  when the choice changed gets it when its window appears (the test: a returned screen's bar, tablet
+  posture, off, not set). A top bar is a panel with the app name, the clock pill or quick settings,
+  the settings page's test (a bar with the app name alone too, since 2026-10-17). Panels the user
+  added are never touched. When plasmashell's panel windows appear (a restart, a late start), the
+  call is made again after 500 ms (one call for several panels). A Fusion panel whose screen is gone
+  (the top bar of a monitor that was unplugged) is skipped, see "Panels without a screen" below.
+  When plasmashell is not on the bus, or answers "not ready" (no panels, desktops or screens yet),
+  the call is made again after 1, 2, 4, 8, 16 and 32 s.
 - **Window policy, after 300 ms of stable posture** (flip bouncing), only with `WindowMode=fullscreen`
   and a built-in screen as the only screen: placement "Maximizing" and borderless maximized windows;
   every eligible window (normal, maximizable, not full screen, minimized, skip-taskbar, transient or
@@ -308,3 +316,34 @@ VM 5 (Plasma 6.7.5) 8cf0b3d did not crash (the bar is on screen -1 there) but ga
 a screen the tablet height too; with this change all 19 checks passed. A new script reaches a
 running KWin only with a new session: KWin keeps the compiled QML of a script it unloads and
 loads again from the same path.
+
+## The top bar for the island (2026-10-17)
+
+Board `design/boards/Island.dc.html`: while a top bar is hidden, the live chips of its screen show
+the island (docs/parts/shell-livechips.md, "The island"). Plasma hides an auto-hide panel through
+KWin: plasmashell asks for an auto-hide screen edge and KWin hides the panel's window until the
+pointer touches the edge (KWin 6.7.5 `LayerShellV1Window::reserveScreenEdge`, `Window::setHidden`).
+Plasmashell tells its widgets nothing about it (plasma-workspace 6.7.5 `PanelView` has no such
+property), but KWin's scripts see the window's `hidden`.
+
+- `contents/ui/TopBar.js`: `isTopBar()` (a plasmashell panel window along the whole top of its
+  output; the dock and the island are not) and `barScript()`, the plasmashell script that writes the
+  live chips' `[General] barHidden` for every panel on a screen: true while the bar of its screen
+  (matched by the screen's corner, `screenGeometry()`) is hidden and the chips' own panel hides.
+  KWin sees no widgets, so another full-width top panel on the screen is a bar too: a screen's bar
+  is hidden while any of its top panel windows is (`barState()`), and a panel that does not hide is
+  never hidden. It writes only what changes and skips panels of a screen that is gone.
+- `main.qml` follows plasmashell's panel windows (at start, and as they appear), their `hidden`,
+  geometry and output; which of them are top bars is decided by their geometry each time
+  (`TopBar.barsOf()`: a panel moved to another edge or made narrower is no bar any more); the state
+  goes to plasmashell when it changes (one call for changes in the same turn of the event loop) and
+  again when its panels appear (a shell restart). When the script is turned off (the kill switch),
+  it sends that no bar is hidden as it goes, so no island is left (the chips keep `barHidden` in
+  their config). The log: `plasmafusion-tablet: top bars [{"x":0,"y":0,"hidden":true}]: island: 1
+  widgets, 1 changed`.
+- `tests/tablet-topbar.test.js` (in the build): which windows are top bars (the dock, a dock on
+  the left, a window at the top, another output's bar, another app's are not), the state in a
+  fixed order, and the script against a model of desktop scripting: the laptop's bar hidden and
+  the monitor's shown, nothing written again, both changed, every island gone when no bar window
+  is known, a value written as text, a panel of a screen that is gone skipped. Reversing the
+  hidden value, dropping the screen check or writing on every call fails it.

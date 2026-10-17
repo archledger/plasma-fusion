@@ -26,7 +26,7 @@ const TOP = ["org.plasmafusion.appname", "org.plasmafusion.clockpill", "org.plas
 const DOCK = ["org.plasmafusion.dock"];
 
 // A shell with `screens` screens and these panels: {screen, widgets, height, hiding, config}.
-function shell(plasma, screens, specs, desktops = 1) {
+function shell(plasma, screens, specs, desktops = 1, rc = {}) {
     const touched = [];
     const panels = specs.map((spec, index) => {
         const panel = Object.assign({ id: index + 1, height: 34, hiding: "none", config: {}, group: "" }, spec);
@@ -88,7 +88,9 @@ function shell(plasma, screens, specs, desktops = 1) {
         desktops: () => new Array(desktops).fill({}),
         screenCount: screens,
         gridUnit: 18,
-        ConfigFile: () => ({ readEntry: () => "Noto Sans,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" }),
+        // kdeglobals' font for the text scale; plasmafusionrc from RC ("Group/key"), else not set.
+        ConfigFile: (file, group) => ({ readEntry: (key) => file === "plasmafusionrc" ? rc[group + "/" + key]
+                                                            : "Noto Sans,9.75,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" }),
         print: (text) => printed.push(String(text)),
     });
     return {
@@ -185,6 +187,41 @@ for (const plasma of ["6.8", "6.7"]) {
     assert.strictEqual(b.run(false), "dock 72 none");
     const unsaved = shell("6.8", 1, [{ screen: 0, widgets: DOCK, height: 80, location: "bottom", config: { "PlasmaFusion/tabletApplied": true } }]);
     assert.strictEqual(unsaved.run(false), "dock 72 dodgewindows");
+}
+
+// A top bar that hides (board Island.dc.html): it always shows in tablet posture, its hiding kept
+// with its height, and it hides again after; one that never hid stays shown.
+{
+    const s = shell("6.8", 1, [{ screen: 0, widgets: TOP, hiding: "autohide" }, { screen: 0, widgets: DOCK, height: 72 }]);
+    assert.strictEqual(s.run(true), "top 44, dock 80 dodgewindows");
+    assert.strictEqual(s.panels[0].hiding, "none");
+    assert.strictEqual(s.panels[0].config["PlasmaFusion/laptopHiding"], "autohide");
+    assert.strictEqual(s.run(false), "top 34 autohide, dock 72 none");
+    const shown = shell("6.8", 1, [{ screen: 0, widgets: TOP }]);
+    shown.run(true);
+    assert.strictEqual(shown.run(false), "top 34");
+    // Set to hide on the settings page while in tablet posture (laptopHiding): it hides after.
+    const later = shell("6.8", 1, [{ screen: 0, widgets: TOP, height: 44, config: { "PlasmaFusion/tabletApplied": true, "PlasmaFusion/laptopHiding": "autohide" } }]);
+    assert.strictEqual(later.run(false), "top 34 autohide");
+}
+
+// The settings page's choice (plasmafusionrc [TopBar] AutoHide): in laptop posture every top bar takes
+// it, a bar whose screen was not there when it changed too; in tablet posture the bar shows; not set:
+// the bar is left as it is.
+{
+    const on = shell("6.8", 2, [{ screen: 0, widgets: TOP, hiding: "autohide" }, { screen: 1, widgets: TOP }], 1, { "TopBar/AutoHide": "true" });
+    assert.strictEqual(on.run(false), "top 34 autohide, top 34 autohide", "the returned screen's bar hides too");
+    assert.strictEqual(on.run(true), "top 44, top 44", "tablet posture: shown");
+    assert.strictEqual(on.run(false), "top 34 autohide, top 34 autohide");
+    const off = shell("6.8", 1, [{ screen: 0, widgets: TOP, hiding: "autohide" }], 1, { "TopBar/AutoHide": "false" });
+    assert.strictEqual(off.run(false), "top 34", "off: shown");
+    const unset = shell("6.8", 1, [{ screen: 0, widgets: TOP, hiding: "autohide" }]);
+    assert.strictEqual(unset.run(false), "top 34 autohide", "not set: left as it is");
+    // A bar with the app name alone (the settings page hides it too): shown in tablet posture, the
+    // choice given back after.
+    const name = shell("6.8", 1, [{ screen: 0, widgets: ["org.plasmafusion.appname"], hiding: "autohide" }], 1, { "TopBar/AutoHide": "true" });
+    assert.strictEqual(name.run(true), "top 44", "an app-name bar in tablet posture: shown");
+    assert.strictEqual(name.run(false), "top 34 autohide", "  and hidden again after");
 }
 
 // Before the shell has loaded its layout: "not ready", and nothing is changed.

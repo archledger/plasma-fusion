@@ -4,14 +4,15 @@
 // A stand-in for plasmashell's desktop scripting (plasma-workspace 6.7.5 shell/scripting), enough
 // for plasma-fusion-powerfx's widget script and the settings module's scripts (its tests in
 // packages/kcm-cpp/tests): desktops(), panels(), knownWidgetTypes, a containment's widgets([TYPE]),
-// addWidget, id, type, screen, location and opacity, screenCount (the layout's "screens", default
+// addWidget, id, type, screen, location, opacity and hiding, screenCount (the layout's "screens", default
 // one more than the highest panel screen), a containment's remove(), a widget's id, type,
 // globalShortcut, index and remove(), and
 // for both currentConfigGroup, readConfig (converted to the default's type, as
 // KConfigGroup::readEntry does) and writeConfig (stored as KConfig text). A layout is JSON:
 //   {"desktops": [CONTAINMENT, ...], "panels": [CONTAINMENT, ...], "knownWidgetTypes": [...]}
 //   CONTAINMENT = [WIDGET, ...] or {"id": 2, "type": "org.kde.panel", "screen": 0, "location": "top",
-//                                   "opacity": "adaptive", "config": {...}, "widgets": [WIDGET, ...]}
+//                                   "opacity": "adaptive", "hiding": "none", "config": {...},
+//                                   "widgets": [WIDGET, ...]}
 //   WIDGET = {"id": 12, "type": "org.plasmafusion.dock", "config": {"General": {"magnify": "true"}}}
 //
 //   node fake-shell.js LAYOUT.json [WRITES.log] < SCRIPT   runs SCRIPT, saves the layout, prints
@@ -112,6 +113,8 @@ function run(script, layout, writes) {
             get location() { return prop("location", kind === "panels" ? "top" : "floating"); },
             get opacity() { return prop("opacity", "adaptive"); },
             set opacity(v) { obj().opacity = String(v); writes.push(`containment ${prop("id", at)} opacity=${v}`); },
+            get hiding() { return prop("hiding", prop("location", "top") === "bottom" ? "dodgewindows" : "none"); },
+            set hiding(v) { obj().hiding = String(v); writes.push(`containment ${prop("id", at)} hiding=${v}`); },
             widgets(type) {
                 return list().filter((w) => type === undefined || w.type === type).map((w) => wrap(w, list(), writes));
             },

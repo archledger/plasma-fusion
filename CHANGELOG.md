@@ -9,6 +9,12 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Hide the top bar, and the island:** the Plasma Fusion settings page has "Hide the top bar
+  automatically" (off by default). The bar slides away so a maximized window has the whole screen,
+  and comes back when the pointer touches the top. While it is hidden, a black island at the top
+  centre, after Apple's Dynamic Island, shows what uses the camera, the microphone or the screen,
+  a screen recording, a Keep awake timer or the music playing; a click opens it in place. In a
+  full-screen window only the privacy dots show; in tablet mode the bar always shows.
 - **Dock on the left or right:** the Plasma Fusion settings page has Dock position (Bottom, Left,
   Right). On a side the dock stands upright, 16 px from the screen's edge, magnifies along it and
   opens its name pill, previews, menus and the launcher beside it. In tablet mode it is at the

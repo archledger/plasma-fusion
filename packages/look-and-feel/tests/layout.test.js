@@ -134,6 +134,21 @@ function withMeters(bar) {
     return bar;
 }
 const types = (p) => p.widgets.map((w) => w.type);
+test("ensure-topbars: a new screen's bar hides as the main bar does (board Island.dc.html)", () => {
+    const hides = mainBar();
+    hides.hiding = "autohide";
+    const s = shell({ screens: TWO, files: rc(), panels: [hides] });
+    s.run(ENSURE);
+    assert.strictEqual(tops(s).find((p) => p.screen === 1).hiding, "autohide", "the main bar hides: the new one too");
+    // In tablet posture the main bar shows for the moment: the new one takes the hiding it goes back to.
+    const tablet = mainBar();
+    tablet.hiding = "none";
+    tablet.config = { PlasmaFusion: { tabletApplied: true, laptopHiding: "autohide" } };
+    const t2 = shell({ screens: TWO, files: rc(), panels: [tablet] });
+    t2.run(ENSURE);
+    assert.strictEqual(tops(t2).find((p) => p.screen === 1).hiding, "autohide", "tablet posture: the hiding it goes back to");
+    assert.strictEqual(screenTwo(rc()).bar.hiding, "none", "a main bar that shows: the new one shows");
+});
 test("ensure-topbars: with the main bar's meters on, a new screen's bar gets them before quick settings", () => {
     const s = shell({ screens: TWO, files: rc(), panels: [withMeters(mainBar())] });
     s.run(ENSURE);
@@ -611,6 +626,22 @@ test("Add Panel: the top bar with the page's defaults is adaptive", () => {
     assert.strictEqual(glass(all(s, "org.plasmafusion.quicksettings")[0]), undefined);
 });
 
+test("Add Panel: a new top bar hides as the main bar does (board Island.dc.html)", () => {
+    const hides = mainBar();
+    hides.hiding = "autohide";
+    const s = shell({ screens: TWO, files: rc(), panels: [hides] });
+    s.run(TOPBAR);
+    assert.strictEqual(tops(s).find((p) => p.id !== 2).hiding, "autohide", "the main bar hides: the new one too");
+    const shown = shell({ screens: TWO, files: rc(), panels: [mainBar()] });
+    shown.run(TOPBAR);
+    assert.strictEqual(tops(shown).find((p) => p.id !== 2).hiding, "none", "the main bar shows: the new one shows");
+    // A bar without quick settings (the app name and the clock pill) that hides: the new one too.
+    const noQs = { id: 2, type: "org.kde.panel", screen: 0, location: "top", opacity: "adaptive", hiding: "autohide", config: {}, widgets: [
+        { id: 3, type: "org.plasmafusion.appname", config: {} }, { id: 4, type: "org.plasmafusion.clockpill", config: {} }] };
+    const n = shell({ screens: TWO, files: rc(), panels: [noQs] });
+    n.run(TOPBAR);
+    assert.strictEqual(tops(n).find((p) => p.id !== 2).hiding, "autohide", "a bar without quick settings that hides: the new one too");
+});
 test("Add Panel: a top bar that copies another bar's tray hides the items its live chips replace", () => {
     // A bar from before the live chips: its tray hides one item of the user's, and none of theirs.
     const s = shell({ screens: TWO, files: rc(), panels: [mainBar()] });

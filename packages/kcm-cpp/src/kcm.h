@@ -106,6 +106,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool shellRunning READ shellRunning NOTIFY shellStateChanged)
     Q_PROPERTY(bool dockAvailable READ dockAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool topBarAvailable READ topBarAvailable NOTIFY shellStateChanged)
+    // A Fusion top bar the auto-hide applies to: the app name, the clock pill or quick settings.
+    Q_PROPERTY(bool topBarHidingAvailable READ topBarHidingAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool quickSettingsAvailable READ quickSettingsAvailable NOTIFY shellStateChanged)
     // A Plasma Fusion launcher widget is in a panel (it is hidden next to the Fusion dock).
     Q_PROPERTY(bool launcherAvailable READ launcherAvailable NOTIFY shellStateChanged)
@@ -132,6 +134,7 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(int dockPosition READ dockPosition WRITE setDockPosition NOTIFY stateChanged)
     Q_PROPERTY(bool groupWindows READ groupWindows WRITE setGroupWindows NOTIFY stateChanged)
     Q_PROPERTY(bool solidTopBar READ solidTopBar WRITE setSolidTopBar NOTIFY stateChanged)
+    Q_PROPERTY(bool topBarAutoHide READ topBarAutoHide WRITE setTopBarAutoHide NOTIFY stateChanged)
     Q_PROPERTY(bool systemMeters READ systemMeters WRITE setSystemMeters NOTIFY stateChanged)
     Q_PROPERTY(bool everyScreen READ everyScreen WRITE setEveryScreen NOTIFY stateChanged)
     Q_PROPERTY(bool everyDock READ everyDock WRITE setEveryDock NOTIFY stateChanged)
@@ -260,6 +263,7 @@ public:
     bool shellRunning() const;
     bool dockAvailable() const;
     bool topBarAvailable() const;
+    bool topBarHidingAvailable() const;
     bool metersAvailable() const;
     bool quickSettingsAvailable() const;
     bool launcherAvailable() const;
@@ -293,6 +297,8 @@ public:
     void setGroupWindows(bool value);
     bool solidTopBar() const;
     void setSolidTopBar(bool value);
+    bool topBarAutoHide() const;
+    void setTopBarAutoHide(bool value);
     bool systemMeters() const;
     void setSystemMeters(bool value);
     bool everyScreen() const;
@@ -447,6 +453,8 @@ private:
         int dockPosition = DockBottom;
         bool groupWindows = true;
         bool solidTopBar = true;
+        // The top bars hide until the pointer touches the top of the screen (board Island.dc.html).
+        bool topBarAutoHide = false;
         // Off by default: the meters are in no layout.
         bool systemMeters = false;
         bool desktopIcons = true;
@@ -526,6 +534,9 @@ private:
     // event loop) until the shell lists them; `request` is m_metersPlacement when it started.
     void placeSystemMeters(const QList<int> &ids, int attempt, int request);
     bool applyPanels(int glass, bool solidTopBar, bool widgetGlass);
+    // The top bars' hiding ("autohide" or "none"); in tablet posture the hiding the tablet script
+    // gives back.
+    bool applyTopBarAutoHide(bool on);
     bool applyEveryScreen(bool on);
     bool applyEveryDock(bool on);
     bool runDockScript(bool *ran);
@@ -577,6 +588,7 @@ private:
     bool m_shellRunning = true;
     bool m_dockAvailable = false;
     bool m_topBarAvailable = false;
+    bool m_topBarHidingAvailable = false;
     bool m_metersAvailable = false;
     bool m_quickSettingsAvailable = false;
     bool m_launcherAvailable = false;

@@ -63,7 +63,7 @@ checker sees them.
 | `tools/` | `build.sh` and `build.d/` (one script per part), `checks/` (the lints and their fixtures), `device/` (setup, restore, field log, gate — machine-facing tools), `tests/` (the packaging and release-VM harnesses), `plasma-fusion/` (the command-line tool) |
 | `scripts/` | `install.sh` — the one-line installer (its test mode is also what the release VMs install from) |
 | `docs/` | `PLAN.md`, `ARCHITECTURE.md`, `ROADMAP.md`, `SECURITY-ASSURANCE.md`, `parts/*.md` (one page per part: architecture, tests, how CI runs), `RELEASING.md` |
-| `design/` | the 29 design boards — the reference; the boards decide visuals, not the code |
+| `design/` | the 30 design boards — the reference; the boards decide visuals, not the code |
 | `packaging/` | `fedora/`, `arch/`, `debian/`, `nix/`, `check-version.sh`, `release-assets.sh` |
 | `fuzz/` | the fuzz targets (`app_icons`, `keyboard_keys`, `previous_theme`) |
 
