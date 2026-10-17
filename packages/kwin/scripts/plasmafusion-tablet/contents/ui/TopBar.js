@@ -21,15 +21,25 @@ function isTopBar(w, output) {
         && w.height > 0 && w.height <= output.height / 4;
 }
 
-// The bars as plasmashell gets them, from BARS [{x, y, hidden}] (their outputs' corners), in a
-// fixed order, so that the same state sends the same text (and nothing is sent again).
+// The bars as plasmashell gets them, from BARS [{x, y, hidden}] (their outputs' corners): one per
+// screen, hidden while any panel window along its top is (KWin sees no widgets: another full-width
+// top panel there is a bar too, and only a panel that hides can be hidden; barScript() then asks
+// the live chips' own panel whether it hides), in a fixed order, so that the same state sends the
+// same text (and nothing is sent again).
 function barState(bars) {
-    return bars.map(function (b) { return { x: Math.round(b.x), y: Math.round(b.y), hidden: b.hidden === true }; })
+    var byCorner = {};
+    bars.forEach(function (b) {
+        var key = Math.round(b.x) + "," + Math.round(b.y);
+        var was = byCorner[key];
+        byCorner[key] = { x: Math.round(b.x), y: Math.round(b.y), hidden: b.hidden === true || (was !== undefined && was.hidden) };
+    });
+    return Object.keys(byCorner).map(function (k) { return byCorner[k]; })
         .sort(function (a, b) { return a.x - b.x || a.y - b.y; });
 }
 
 // The script for plasmashell: every live chips widget in a panel on a screen gets barHidden true
-// while the bar of its screen (the screen's corner, screenGeometry()) is hidden, else false;
+// while the bar of its screen (the screen's corner, screenGeometry()) is hidden and its own panel
+// is one that hides (another top panel there may be the one hidden), else false;
 // written only when it changes. Panels on a screen that is gone are skipped (reading their
 // config crashes plasmashell, Panels.js). Prints "island: N widgets, M changed".
 function barScript(bars) {
@@ -37,9 +47,9 @@ function barScript(bars) {
         + "panels().forEach(function (p) {\n"
         + "    var chips = p.widgets(\"org.plasmafusion.livechips\");\n"
         + "    if (chips.length === 0 || !(p.screen >= 0 && p.screen < screenCount)) return;\n"
-        + "    var g = screenGeometry(p.screen), hidden = false;\n"
+        + "    var g = screenGeometry(p.screen), hidden = false, hides = String(p.hiding) === \"autohide\";\n"
         + "    for (var i = 0; i < BARS.length; ++i) {\n"
-        + "        if (Math.abs(BARS[i].x - g.x) < 1 && Math.abs(BARS[i].y - g.y) < 1) hidden = BARS[i].hidden;\n"
+        + "        if (Math.abs(BARS[i].x - g.x) < 1 && Math.abs(BARS[i].y - g.y) < 1) hidden = hides && BARS[i].hidden;\n"
         + "    }\n"
         + "    chips.forEach(function (w) {\n"
         + "        w.currentConfigGroup = [\"General\"];\n"

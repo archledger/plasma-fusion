@@ -56,7 +56,10 @@ needed.
   without a saved side). A top bar that hides (the settings page's "Hide the top bar
   automatically", board Island.dc.html) always shows in tablet posture: its `laptopHiding`, saved
   with the height, is given back on leave (2026-10-17; the test covers a bar that hides, one that
-  shows and one set to hide while the posture held).
+  shows and one set to hide while the posture held). In laptop posture a top bar takes the settings
+  page's choice, plasmafusionrc `[TopBar] AutoHide` (true: `autohide`, false: `none`; not set: left
+  as it is), so a bar whose screen was not connected when the choice changed gets it when its
+  window appears (the test: a returned screen's bar, tablet posture, off, not set).
   Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
   start), the call is made again after 500 ms (one call for several panels). A Fusion panel whose
   screen is gone (the top bar of a monitor that was unplugged) is skipped, see "Panels without a
@@ -322,10 +325,12 @@ Plasmashell tells its widgets nothing about it (plasma-workspace 6.7.5 `PanelVie
 property), but KWin's scripts see the window's `hidden`.
 
 - `contents/ui/TopBar.js`: `isTopBar()` (a plasmashell panel window along the whole top of its
-  output; the dock and the island are not) and `barScript()`, the plasmashell script that writes
-  the live chips' `[General] barHidden` for every panel on a screen: true while the bar of its
-  screen (matched by the screen's corner, `screenGeometry()`) is hidden. It writes only what
-  changes and skips panels of a screen that is gone.
+  output; the dock and the island are not) and `barScript()`, the plasmashell script that writes the
+  live chips' `[General] barHidden` for every panel on a screen: true while the bar of its screen
+  (matched by the screen's corner, `screenGeometry()`) is hidden and the chips' own panel hides.
+  KWin sees no widgets, so another full-width top panel on the screen is a bar too: a screen's bar
+  is hidden while any of its top panel windows is (`barState()`), and a panel that does not hide is
+  never hidden. It writes only what changes and skips panels of a screen that is gone.
 - `main.qml` follows the bars' windows (at start, and as plasmashell's panel windows appear) and
   their `hiddenChanged`; the state goes to plasmashell when it changes (one call for changes in
   the same turn of the event loop) and again when its panels appear (a shell restart). When the

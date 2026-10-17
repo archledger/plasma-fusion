@@ -34,7 +34,7 @@ import sys
 import tempfile
 import threading
 
-from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, QPoint, QSize, Qt, QTimer, QUrl, Q_ARG, Q_RETURN_ARG,
+from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, QPoint, QRect, QSize, Qt, QTimer, QUrl, Q_ARG, Q_RETURN_ARG,
                             QtMsgType, Slot, qInstallMessageHandler)
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlEngine
@@ -164,6 +164,7 @@ Window {
     property bool barHidden: true
     property var content: ({ mode: "compact", items: ["privacy"], dots: ["camera", "microphone"] })
     property var actions: []
+    property rect screen: Qt.rect(0, 0, 1440, 900)
     property var rows: [{ app: "Firefox", kinds: ["camera", "microphone"], action: "mute", microphones: [0], session: "", login: "" }]
     readonly property var window: island
     FusionMetrics { id: m }
@@ -172,7 +173,7 @@ Window {
         metrics: m
         dark: true
         barHidden: harness.barHidden
-        screenGeometry: Qt.rect(0, 0, 1440, 900)
+        screenGeometry: harness.screen
         content: harness.content
         rows: harness.rows
         recording: null
@@ -205,6 +206,11 @@ Window {
         return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
     }
     function openIt() { island.open("privacy"); }
+    // The rows' scrolling area: [its height, its content's height, whether it scrolls].
+    function scroller() {
+        const f = find(island.mainItem, i => i.contentHeight !== undefined && i.interactive !== undefined && i.visible);
+        return f ? JSON.stringify([f.height, f.contentHeight, f.interactive]) : "null";
+    }
     // The rows' names shown in the opened island.
     function names() {
         const out = [];
@@ -555,6 +561,19 @@ def main():
         check(shown == ["App %d" % i for i in range(1, 6)], "  five apps: a row for each (%s)" % shown)
         QTest.keyClick(window, Qt.Key_Escape)
         wait(900)
+        # Twelve apps on a screen 400 px high: the island stays on it, the rows scroll.
+        h.setProperty("screen", QRect(0, 0, 1440, 400))
+        h.setProperty("rows", [{"app": "App %d" % i, "kinds": ["microphone"], "action": "mute", "microphones": [i], "session": "", "login": ""}
+                               for i in range(1, 13)])
+        call(h, "openIt")
+        wait(900)
+        s = island()
+        scroll = json.loads(QMetaObject.invokeMethod(h, "scroller", Qt.DirectConnection, Q_RETURN_ARG("QVariant")))
+        check(s["body"][1] + s["body"][3] <= 400 and scroll and scroll[2] and scroll[1] > scroll[0],
+              "  twelve apps on a 400 px screen: the island stays on it, its rows scroll (%s, %s)" % (s["body"], scroll))
+        QTest.keyClick(window, Qt.Key_Escape)
+        wait(900)
+        h.setProperty("screen", QRect(0, 0, 1440, 900))
         h.setProperty("rows", [{"app": "Firefox", "kinds": ["camera", "microphone"], "action": "mute", "microphones": [0], "session": "", "login": ""}])
         # The window resized from outside (as a platform does when the focus changes its flags; the
         # Dialog then sizes its main item to the window): while it opens, and once it has opened.

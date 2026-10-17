@@ -190,6 +190,7 @@ PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaDat
         m_shellRunning = false;
         m_dockAvailable = false;
         m_topBarAvailable = false;
+        m_topBarHidingAvailable = false;
         m_metersAvailable = false;
         m_quickSettingsAvailable = false;
         m_launcherAvailable = false;
@@ -346,6 +347,11 @@ bool PlasmaFusionKcm::dockAvailable() const
 bool PlasmaFusionKcm::topBarAvailable() const
 {
     return m_topBarAvailable;
+}
+
+bool PlasmaFusionKcm::topBarHidingAvailable() const
+{
+    return m_topBarHidingAvailable;
 }
 
 bool PlasmaFusionKcm::metersAvailable() const
@@ -1398,6 +1404,8 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
     if (!m_topBarAvailable) {
         defaults.globalMenu = m_current.globalMenu;
         defaults.solidTopBar = m_current.solidTopBar;
+    }
+    if (!m_topBarHidingAvailable) {
         defaults.topBarAutoHide = m_current.topBarAutoHide;
     }
     if (!m_topBarAvailable || !m_metersAvailable) {
@@ -1554,7 +1562,7 @@ void PlasmaFusionKcm::save()
         }
     }
     if (after.topBarAutoHide != before.topBarAutoHide) {
-        if (m_topBarAvailable) {
+        if (m_topBarHidingAvailable) {
             applyTopBarAutoHide(after.topBarAutoHide);
         } else {
             m_current.topBarAutoHide = before.topBarAutoHide;

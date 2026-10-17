@@ -57,81 +57,97 @@ ColumnLayout {
         }
     }
 
-    // ---- privacy: a row for each app or login
-    Repeater {
-        model: opened.item === "privacy" ? opened.island.rows : []
-        delegate: RowLayout {
-            id: row
-            required property var modelData
-            Layout.fillWidth: true
-            Layout.minimumHeight: opened.island.metrics.px(56)
-            spacing: opened.island.metrics.px(12)
-
-            Item {
-                Layout.preferredWidth: opened.unit
-                Layout.preferredHeight: opened.unit
-                Kirigami.Icon {
-                    id: rowIcon
-                    anchors.fill: parent
-                    visible: row.modelData.login === "" && valid
-                    source: row.modelData.login === "" ? Chips.iconGuess(row.modelData.app) : ""
-                }
-                Rectangle {
-                    anchors.fill: parent
-                    visible: !rowIcon.visible
-                    radius: width / 2
-                    color: Qt.rgba(1, 1, 1, 0.12)
-                    LineIcon {
-                        anchors.centerIn: parent
-                        path: Chips.GLYPHS[row.modelData.kinds[0]] || ""
-                        color: opened.island.glyphColor(row.modelData.kinds[0])
-                        size: opened.island.metrics.px(18)
-                    }
-                }
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: opened.island.metrics.px(3)
-                Text {
+    // ---- privacy: a row for each app or login; they scroll when there are more than the screen
+    // holds (Island.maxHeight)
+    Flickable {
+        id: rowsView
+        visible: opened.item === "privacy"
+        Layout.fillWidth: true
+        Layout.preferredHeight: Math.min(rowsColumn.implicitHeight, opened.island.maxHeight - 2 * opened.island.metrics.px(14))
+        contentHeight: rowsColumn.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height
+        ColumnLayout {
+            id: rowsColumn
+            width: rowsView.width
+            spacing: opened.island.metrics.px(8)
+            Repeater {
+                model: opened.item === "privacy" ? opened.island.rows : []
+                delegate: RowLayout {
+                    id: row
+                    required property var modelData
                     Layout.fillWidth: true
-                    // Names from other apps and from logins: plain text.
-                    textFormat: Text.PlainText
-                    text: row.modelData.app || i18nc("@info an unnamed app", "An app")
-                    elide: Text.ElideRight
-                    color: "#ffffff"
-                    font.family: opened.island.metrics.family
-                    font.weight: Font.ExtraBold
-                    font.pixelSize: opened.island.metrics.font(14)
-                }
-                RowLayout {
-                    spacing: opened.island.metrics.px(6)
-                    Repeater {
-                        model: row.modelData.kinds
-                        delegate: Rectangle {
-                            required property string modelData
-                            Layout.preferredWidth: opened.island.metrics.px(6)
-                            Layout.preferredHeight: opened.island.metrics.px(6)
+                    Layout.minimumHeight: opened.island.metrics.px(56)
+                    spacing: opened.island.metrics.px(12)
+
+                    Item {
+                        Layout.preferredWidth: opened.unit
+                        Layout.preferredHeight: opened.unit
+                        Kirigami.Icon {
+                            id: rowIcon
+                            anchors.fill: parent
+                            visible: row.modelData.login === "" && valid
+                            source: row.modelData.login === "" ? Chips.iconGuess(row.modelData.app) : ""
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: !rowIcon.visible
                             radius: width / 2
-                            color: opened.island.glyphColor(modelData)
+                            color: Qt.rgba(1, 1, 1, 0.12)
+                            LineIcon {
+                                anchors.centerIn: parent
+                                path: Chips.GLYPHS[row.modelData.kinds[0]] || ""
+                                color: opened.island.glyphColor(row.modelData.kinds[0])
+                                size: opened.island.metrics.px(18)
+                            }
                         }
                     }
-                    Text {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: opened.island.kindsText(row.modelData.kinds)
-                        elide: Text.ElideRight
-                        color: opened.sub
-                        font.family: opened.island.metrics.family
-                        font.pixelSize: opened.island.metrics.font(12)
+                        spacing: opened.island.metrics.px(3)
+                        Text {
+                            Layout.fillWidth: true
+                            // Names from other apps and from logins: plain text.
+                            textFormat: Text.PlainText
+                            text: row.modelData.app || i18nc("@info an unnamed app", "An app")
+                            elide: Text.ElideRight
+                            color: "#ffffff"
+                            font.family: opened.island.metrics.family
+                            font.weight: Font.ExtraBold
+                            font.pixelSize: opened.island.metrics.font(14)
+                        }
+                        RowLayout {
+                            spacing: opened.island.metrics.px(6)
+                            Repeater {
+                                model: row.modelData.kinds
+                                delegate: Rectangle {
+                                    required property string modelData
+                                    Layout.preferredWidth: opened.island.metrics.px(6)
+                                    Layout.preferredHeight: opened.island.metrics.px(6)
+                                    radius: width / 2
+                                    color: opened.island.glyphColor(modelData)
+                                }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: opened.island.kindsText(row.modelData.kinds)
+                                elide: Text.ElideRight
+                                color: opened.sub
+                                font.family: opened.island.metrics.family
+                                font.pixelSize: opened.island.metrics.font(12)
+                            }
+                        }
+                    }
+                    IslandButton {
+                        visible: row.modelData.action !== ""
+                        text: row.modelData.action === "mute" ? i18nc("@action:button", "Mute")
+                            : row.modelData.action === "unmute" ? i18nc("@action:button", "Unmute")
+                            : row.modelData.action === "stop" ? i18nc("@action:button", "Stop sharing")
+                            : i18nc("@action:button", "End")
+                        onClicked: opened.island.rowAction(row.modelData)
                     }
                 }
-            }
-            IslandButton {
-                visible: row.modelData.action !== ""
-                text: row.modelData.action === "mute" ? i18nc("@action:button", "Mute")
-                    : row.modelData.action === "unmute" ? i18nc("@action:button", "Unmute")
-                    : row.modelData.action === "stop" ? i18nc("@action:button", "Stop sharing")
-                    : i18nc("@action:button", "End")
-                onClicked: opened.island.rowAction(row.modelData)
             }
         }
     }

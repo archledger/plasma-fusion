@@ -32,6 +32,12 @@ assert.ok(!isTopBar(win({ resourceClass: "firefox" }), laptop), "not plasmashell
 assert.ok(!isTopBar(win({ dock: false }), laptop), "not a panel");
 assert.ok(!isTopBar(win({}), null), "no output");
 
+// Two top panels on one screen (the Fusion bar and another full-width one): one entry, hidden while
+// either is.
+assert.deepStrictEqual(barState([{ x: 0, y: 0, hidden: true }, { x: 0, y: 0, hidden: false }]), [{ x: 0, y: 0, hidden: true }]);
+assert.deepStrictEqual(barState([{ x: 0, y: 0, hidden: false }, { x: 0, y: 0, hidden: true }]), [{ x: 0, y: 0, hidden: true }]);
+assert.deepStrictEqual(barState([{ x: 0, y: 0, hidden: false }, { x: 0, y: 0, hidden: false }]), [{ x: 0, y: 0, hidden: false }]);
+
 // The state in a fixed order: the same bars send the same script.
 assert.deepStrictEqual(barState([{ x: 1440, y: 0, hidden: false }, { x: 0, y: 0, hidden: true }]),
                        [{ x: 0, y: 0, hidden: true }, { x: 1440, y: 0, hidden: false }]);
@@ -55,6 +61,7 @@ function shell(screens, specs) {
         panels() {
             return panels.map((p) => ({
                 get screen() { return p.screen; },
+                get hiding() { return p.hiding || "autohide"; },
                 widgets(type) {
                     return p.widgets.filter((w) => !type || w === type).map(() => ({
                         currentConfigGroup: [],
@@ -91,6 +98,12 @@ const CHIPS = "org.plasmafusion.livechips";
     // A value written as text by an older run reads as true.
     s.panels[0].widgetConfig.barHidden = "true";
     assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }]), "island: 2 widgets, 0 changed");
+}
+{
+    // A panel that does not hide is never hidden (another top panel on its screen was).
+    const s = shell([laptop], [{ screen: 0, hiding: "none", widgets: [CHIPS] }]);
+    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }]), "island: 1 widgets, 0 changed");
+    assert.strictEqual(s.panels[0].widgetConfig.barHidden, undefined);
 }
 {
     // A panel of a screen that is gone is skipped.

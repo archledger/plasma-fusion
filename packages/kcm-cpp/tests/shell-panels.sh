@@ -57,7 +57,9 @@
 #   topbarhide  Hide the top bar automatically (board Island.dc.html): read off; on, every top bar
 #               on a screen hides (the second screen's copy too), the dock keeps its hiding, and the
 #               bar of an unplugged screen is left alone (its hiding would crash the shell);
-#   topbarhideread a bar that hides reads as on;
+#   topbarhideread a bar that hides reads as on; topbarhidenoname: a bar with the clock pill and
+#               quick settings but no app name has the switch too; the choice is also kept in
+#               plasmafusionrc [TopBar] AutoHide (the tablet script gives it to returning bars);
 #   topbarhidetablet in tablet posture the bar always shows: the page shows the hiding the tablet
 #               script gives back (laptopHiding), and a new one is written there (off, and on in
 #               topbarhidetablet2).
@@ -449,6 +451,14 @@ expect topbarhide "  the dock keeps its hiding" is "$(panel topbarhide 2)" "bott
 expect topbarhide "  the unplugged screen's bar is left alone" is "$(panel topbarhide 4)" "top 2 none: appname clockpill quicksettings"
 expect topbarhide "applied: on, nothing pending" is "$(value topbarhide topBarAutoHide) $(value topbarhide needsSave)" "true false"
 expect topbarhide "no error" is "$(value topbarhide errorText)" ""
+expect topbarhide "  the choice kept for bars whose screen comes back (plasmafusionrc [TopBar] AutoHide)" \
+  is "$(sed -n '/^\[TopBar\]/,/^\[/s/^AutoHide=//p' "$work/topbarhide/config/plasmafusionrc")" true
+
+# A Fusion bar without the app name (the clock pill and quick settings): the switch is there for it.
+run topbarhidenoname "{\"showHiding\": true, \"panels\": [{\"widgets\": [\"$CLOCK\", \"$QS\"]}]}" \
+  waitshell "get topBarHidingAvailable" "set topBarAutoHide true" save "wait 500" "get errorText"
+expect topbarhidenoname "a bar without the app name: the switch is there" is "$(value topbarhidenoname topBarHidingAvailable)" true
+expect topbarhidenoname "  and hides it" is "$(panel topbarhidenoname 1)" "top 0 autohide: clockpill quicksettings"
 
 run topbarhideread "{\"panels\": [{\"hiding\": \"autohide\", \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
   waitshell "get topBarAutoHide"

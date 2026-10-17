@@ -106,6 +106,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool shellRunning READ shellRunning NOTIFY shellStateChanged)
     Q_PROPERTY(bool dockAvailable READ dockAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool topBarAvailable READ topBarAvailable NOTIFY shellStateChanged)
+    // A Fusion top bar the auto-hide applies to: the app name, the clock pill or quick settings.
+    Q_PROPERTY(bool topBarHidingAvailable READ topBarHidingAvailable NOTIFY shellStateChanged)
     Q_PROPERTY(bool quickSettingsAvailable READ quickSettingsAvailable NOTIFY shellStateChanged)
     // A Plasma Fusion launcher widget is in a panel (it is hidden next to the Fusion dock).
     Q_PROPERTY(bool launcherAvailable READ launcherAvailable NOTIFY shellStateChanged)
@@ -261,6 +263,7 @@ public:
     bool shellRunning() const;
     bool dockAvailable() const;
     bool topBarAvailable() const;
+    bool topBarHidingAvailable() const;
     bool metersAvailable() const;
     bool quickSettingsAvailable() const;
     bool launcherAvailable() const;
@@ -585,6 +588,7 @@ private:
     bool m_shellRunning = true;
     bool m_dockAvailable = false;
     bool m_topBarAvailable = false;
+    bool m_topBarHidingAvailable = false;
     bool m_metersAvailable = false;
     bool m_quickSettingsAvailable = false;
     bool m_launcherAvailable = false;

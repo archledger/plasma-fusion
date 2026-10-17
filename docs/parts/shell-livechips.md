@@ -205,7 +205,8 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   tint and its time; Keep awake: the cup and the time left; the music: its cover (radius 6) and
   four level bars in the cover's orange (still: the motion lint allows no endless animation).
 - **Opened** (`IslandOpened.qml`, a click on the island or the bubble; Keep awake opens quick
-  settings' page instead): 400 px wide, radius 28, 14 px margins. A row for each app or login
+  settings' page instead): 400 px wide, radius 28, 14 px margins, on the screen (4 px from its top
+  and 24 px above its bottom at most: the rows scroll beyond that). A row for each app or login
   (`Chips.islandRows()`: an app's kinds in one row, the most serious first) with its icon, the dots
   and what it uses, and the action of its most serious kind: End, Stop sharing, Mute or Unmute (the
   panel's own actions; an app's microphone streams together: Mute while any of them records, for
@@ -239,10 +240,10 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   island still centred and both inside its window; opened 400 px wide and centred, where a real
   click on Mute asks the app's microphone to mute and Esc closes it; the window resized from outside
   while it opens and once it has opened, it still opens to its size and centred; five apps at once
-  give five rows; the full-screen dots 14 px high, the pointer on them shows the island and full
-  screen coming back shows the dots again. Mutations of each (8 px from the top, no room for the
-  bubble, shown with the bar, 300 px opened, no Esc, Mute doing nothing, no binding again after the
-  focus, the peek kept) fail it.
+  give five rows, twelve on a screen 400 px high stay on it and scroll; the full-screen dots 14 px
+  high, the pointer on them shows the island and full screen coming back shows the dots again.
+  Mutations of each (8 px from the top, no room for the bubble, shown with the bar, 300 px opened,
+  no Esc, Mute doing nothing, no binding again after the focus, the peek kept) fail it.
 - **Session** (`packages/kcm-cpp/tests/scenario-island.sh`; 2026-10-17, a private session on the
   Fedora 44 test laptop, Plasma 6.7.5, 1440 x 900, the stage, module and kcmctl of this change;
   stand-in status items): **23 checks pass**. The switch on: the bar's panel hides, KWin hides its

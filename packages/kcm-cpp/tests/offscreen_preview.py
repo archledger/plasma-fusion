@@ -96,7 +96,7 @@ def main():
 
     state = {"style": 1, "accentMode": 0, "accentColor": "#00000000", "buttonStyle": 0,
              "magnify": True, "globalMenu": True, "hotCorner": False, "shellLoading": False, "shellRunning": True,
-             "dockAvailable": True, "topBarAvailable": True, "decorationInstalled": False,
+             "dockAvailable": True, "topBarAvailable": True, "topBarHidingAvailable": True, "decorationInstalled": False,
              "fusionDecoration": False,
              "errorText": "", "infoText": "",
              "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62, "dockSize": 1,
@@ -149,6 +149,7 @@ def main():
         shellRunning = Property(bool, _get("shellRunning"), notify=changed)
         dockAvailable = Property(bool, _get("dockAvailable"), notify=changed)
         topBarAvailable = Property(bool, _get("topBarAvailable"), notify=changed)
+        topBarHidingAvailable = Property(bool, _get("topBarHidingAvailable"), notify=changed)
         decorationInstalled = Property(bool, _get("decorationInstalled"), notify=changed)
         fusionDecoration = Property(bool, _get("fusionDecoration"), notify=changed)
         errorText = Property(str, _get("errorText"), notify=changed)

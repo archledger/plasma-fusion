@@ -53,13 +53,13 @@ function bool(v, d) {
     return !(v === false || v === "false");
 }
 var state = { docks: 0, magnify: true, magnifiedSize: 62, dockSize: 1, dockPosition: "bottom", groupWindows: true, homeIndicator: true,
-              topBars: 0, menu: false, topOpacity: "", topHiding: "none", meters: false,
+              topBars: 0, menu: false, topOpacity: "", topHiding: "none", hidingBars: 0, meters: false,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
               launchers: 0, recentFiles: true, recentApps: true, places: true,
               recentFilesOn: 0, recentAppsOn: 0, placesOn: 0,
               folders: 0, filterMode: 0, filterPattern: "*", iconSize: 3 };
-var mainTopBar = false, chosenTopBar = false;
+var mainTopBar = false, chosenTopBar = false, hidingMain = false, hidingChosen = false;
 var ps = panels();
 for (var i = 0; i < ps.length; ++i) {
     var p = ps[i];
@@ -110,15 +110,24 @@ for (var i = 0; i < ps.length; ++i) {
             state.menu = p.widgets("org.kde.plasma.appmenu").length > 0;
             state.meters = p.widgets("org.plasmafusion.meters").length > 0;
             state.topOpacity = String(p.opacity);
-            // In tablet posture the bar always shows for the moment: the hiding it goes back to.
-            p.currentConfigGroup = ["PlasmaFusion"];
-            var topTablet = p.readConfig("tabletApplied", false) === true || p.readConfig("tabletApplied", "") === "true";
-            state.topHiding = topTablet ? String(p.readConfig("laptopHiding", "none")) : String(p.hiding);
-            p.currentConfigGroup = [];
             mainTopBar = qs.length > 0;
             chosenTopBar = true;
         }
         ++state.topBars;
+    }
+    // A top bar to hide: the app name, the clock pill or quick settings (s_topBarHidingScript's
+    // test); its hiding from the first on a screen, the one with quick settings when there are
+    // several. In tablet posture the bar always shows for the moment: the hiding it goes back to.
+    if (p.widgets("org.plasmafusion.appname").length > 0 || p.widgets("org.plasmafusion.clockpill").length > 0 || qs.length > 0) {
+        if (p.screen >= 0 && p.screen < screenCount && (!hidingChosen || (!hidingMain && qs.length > 0))) {
+            p.currentConfigGroup = ["PlasmaFusion"];
+            var topTablet = p.readConfig("tabletApplied", false) === true || p.readConfig("tabletApplied", "") === "true";
+            state.topHiding = topTablet ? String(p.readConfig("laptopHiding", "none")) : String(p.hiding);
+            p.currentConfigGroup = [];
+            hidingMain = qs.length > 0;
+            hidingChosen = true;
+        }
+        ++state.hidingBars;
     }
 }
 var ds = desktops();
@@ -735,6 +744,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
     m_shellRunning = !reply.isError();
     m_dockAvailable = false;
     m_topBarAvailable = false;
+    m_topBarHidingAvailable = false;
     m_metersAvailable = false;
     m_quickSettingsAvailable = false;
     m_launcherAvailable = false;
@@ -746,6 +756,7 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         const QJsonObject state = QJsonDocument::fromJson(lastLine(reply.value()).toUtf8()).object();
         m_dockAvailable = state.value(u"docks"_s).toInt() > 0;
         m_topBarAvailable = state.value(u"topBars"_s).toInt() > 0;
+        m_topBarHidingAvailable = state.value(u"hidingBars"_s).toInt() > 0;
         m_metersAvailable = state.value(u"metersInstalled"_s).toBool();
         m_quickSettingsAvailable = state.value(u"quickSettings"_s).toInt() > 0;
         m_launcherAvailable = state.value(u"launchers"_s).toInt() > 0;
@@ -779,7 +790,6 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
         }
         if (m_topBarAvailable) {
             take(m_current.globalMenu, m_saved.globalMenu, state.value(u"menu"_s).toBool(true));
-            take(m_current.topBarAutoHide, m_saved.topBarAutoHide, state.value(u"topHiding"_s).toString() == u"autohide");
             take(m_current.systemMeters, m_saved.systemMeters, state.value(u"meters"_s).toBool(false));
             // "adaptive": solid next to windows; "translucent": always glass. With Reduced glass
             // the bar is opaque, and the choice the page made last is in plasmafusionrc.
@@ -791,6 +801,9 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
                 fusion->reparseConfiguration();
                 take(m_current.solidTopBar, m_saved.solidTopBar, KConfigGroup(fusion, u"TopBar"_s).readEntry("SolidNextToWindows", true));
             }
+        }
+        if (m_topBarHidingAvailable) {
+            take(m_current.topBarAutoHide, m_saved.topBarAutoHide, state.value(u"topHiding"_s).toString() == u"autohide");
         }
         if (m_quickSettingsAvailable) {
             static const QStringList policies = {u"tablet"_s, u"touch"_s, u"never"_s};
@@ -876,6 +889,12 @@ bool PlasmaFusionKcm::applyDockPosition(int position)
 
 bool PlasmaFusionKcm::applyTopBarAutoHide(bool on)
 {
+    // Also for the bars of screens that are not connected now: the tablet KWin script gives a top bar
+    // this choice when its window appears (docs/parts/kwin-tablet.md).
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup(fusion, u"TopBar"_s).writeEntry("AutoHide", on, KConfig::Notify);
+    fusion->sync();
     bool ok = false;
     const QString result = evaluateShellScript(s_topBarHidingScript.arg(jsString(on ? u"autohide"_s : u"none"_s)), &ok);
     if (!ok || result.toInt() < 1) {

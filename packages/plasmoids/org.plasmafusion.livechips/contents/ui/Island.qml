@@ -81,6 +81,9 @@ PlasmaCore.Dialog {
     // ---- sizes (board: compact 32 px high, at least 132 wide, 6 px margins; the bubble 32 px, 6
     // px beside it; opened 400 px wide, radius 28, 14 px margins; full screen 14 px, 6 px dots)
     readonly property real compactHeight: metrics.px(32)
+    // The opened island stays on the screen (4 px from its top, 24 px above its bottom); its rows
+    // scroll inside (IslandOpened.qml).
+    readonly property real maxHeight: Math.max(metrics.px(120), screenGeometry.height - 4 - metrics.px(24))
     readonly property real gap: metrics.px(6)
     readonly property real targetWidth: mode === "dots" ? dotsRow.implicitWidth + metrics.px(8)
         : mode === "opened" ? metrics.px(400)

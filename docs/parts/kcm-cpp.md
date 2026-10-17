@@ -904,14 +904,20 @@ mock on 2026-10-17): "Dock and top bar" has **Hide the top bar automatically** (
 with the note "Move the pointer to the top of the screen to show it. While it is hidden, the
 island shows what uses the camera, the microphone or the screen."
 
-- Read: the chosen top bar's hiding (`topHiding` of the read script), or in tablet posture (its
-  `[PlasmaFusion] tabletApplied`) the hiding the tablet script gives back, `laptopHiding`.
+- Read: the hiding of the first top bar on a screen with the app name, the clock pill or quick
+  settings (the apply script's own test; the one with quick settings when there are several), or in
+  tablet posture (its `[PlasmaFusion] tabletApplied`) the hiding the tablet script gives back,
+  `laptopHiding`. The switch is there while such a bar is (`topBarHidingAvailable`; a bar without
+  the app name has it too).
 - Apply: `s_topBarHidingScript` sets `hiding` to `autohide` or `none` on every panel with the app
   name, the clock pill or quick settings that is on a screen. A top bar of a screen that is not
   connected is left as it is: plasmashell reads and writes a panel's visibility in its screen's
   config without a window (plasma-workspace 6.7.5 `Panel::setHiding`), an invalid group for a
   screen that is gone. In tablet posture the bar keeps showing and `laptopHiding` becomes the new
-  hiding. The settings file carries it. "Reset Fusion layout" rebuilds the bars showing (the layout
+  hiding. The choice is also kept in plasmafusionrc `[TopBar] AutoHide`: the tablet KWin script
+  gives it to a top bar when its window appears, so the bar of a screen that was not connected
+  gets it when the screen is back (docs/parts/kwin-tablet.md). The settings file carries it.
+  "Reset Fusion layout" rebuilds the bars showing (the layout
   script's `hiding = "none"`): the reset applies the choice again (`finishResetLayout`), as it does
   the glass level; a settings file's panels keep their own hiding.
 - Plasma hides such a panel through KWin (an auto-hide screen edge); the tablet KWin script tells
@@ -924,7 +930,8 @@ island shows what uses the camera, the microphone or the screen."
   does not crash; nothing pending after Apply), `topbarhideread` and `topbarhidetablet`, against
   `fakeshell`, whose panels now have a hiding. `tests/run-settings-file.sh`: the export holds it.
   `tests/page_layout_test.py`: the row shows the module's value with its note, a click sets it.
-  `kcmctl-fuzz` sets it at random. `tests/run-reset-layout.sh` (ctest `kcmctl-reset`): a bar that
-  hid hides again after a reset, one that showed is left showing (against powerfx's stand-in shell,
-  whose panels now have a hiding).
+  `topbarhidenoname`: a bar with the clock pill and quick settings but no app name has the switch
+  and hides; `topbarhide` also reads plasmafusionrc's key. `kcmctl-fuzz` sets it at random.
+  `tests/run-reset-layout.sh` (ctest `kcmctl-reset`): a bar that hid hides again after a reset, one
+  that showed is left showing (against powerfx's stand-in shell, whose panels now have a hiding).
 - Session: `tests/scenario-island.sh` (docs/parts/shell-livechips.md, "The island").
