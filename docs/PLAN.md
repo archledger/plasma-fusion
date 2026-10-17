@@ -98,7 +98,7 @@ Copied from section 2 of `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-
 ## Repository layout
 
 ```
-design/boards/            the 28 design boards (.dc.html) — the reference for every value
+design/boards/            the 29 design boards (.dc.html) — the reference for every value
 fonts/                    Manrope, Space Grotesk (+ OFL.txt)
 generators/<part>/        Python generators (stdlib + Pillow only; PySide6 allowed for QtSvg checks)
 packages/<part>/          hand-written sources (QML, JS, metadata, .colors, profiles)

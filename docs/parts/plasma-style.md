@@ -353,7 +353,9 @@ clipped to a 22 px cell is 0.08 px off the straight edge), content margins 4/4/8
 panel gives its applets 36 px rows), `south-hint-*-inset` 0, mask and shadow of the frame itself.
 
 The headroom moves out of the frame into the panel window: `floating-hint-top-margin` becomes 16
-(bottom 16, left/right 8 unchanged). Panel.qml places a floating panel's frame that far below the
+(bottom 16; left and right 8 until 2026-10-16, 16 since, so a dock on a side stands 16 px from its
+edge with 16 px of headroom inside, board DockPosition.dc.html; for the bottom dock they only widen
+its window's transparent ends). Panel.qml places a floating panel's frame that far below the
 window top, so the dock window stays 16 + 72 + 16 = 104 px tall with the plate in the same place;
 the 16 px above the plate are outside the frame's mask, so they are not blurred and, because
 PanelView cuts the input region at the mask's top edge, not clickable (both as today). The panel's

@@ -56,6 +56,11 @@ PlasmoidItem {
     Motion {
         id: motion
     }
+    // A dock on the left or right that holds this launcher in its panel tells it on which edge
+    // it is and where its plate is (global coordinates): the card then opens beside it (board
+    // DockPosition.dc.html, Launcher.besideDock()). At the bottom the edge is "bottom".
+    property string dockEdge: ""
+    property rect dockRect: Qt.rect(0, 0, 0, 0)
     property string searchText: ""
     property var chips: fixedChips()
     property double lastClosed: 0
@@ -366,8 +371,9 @@ PlasmoidItem {
         };
     }
 
-    // Card: 680 px wide, centred on the screen; its bottom edge sits `bottomOffset` px above the
-    // screen bottom (board: 16 px dock gap + 74 px dock + 18 px) or, when a bottom panel reserves
+    // Card: 680 px wide, centred on the screen (beside a dock on the left or right: see below);
+    // its bottom edge sits `bottomOffset` px above the screen bottom (board: 16 px dock gap +
+    // 74 px dock + 18 px) or, when a bottom panel reserves
     // more room, 4 px above that panel's reserved area (a floating panel's reserved area already
     // includes its floating gap, 16 px in the Plasma Fusion style). Width and height limits
     // follow the user's text size (at most the screen width less 32 px), rounded to whole
@@ -383,11 +389,13 @@ PlasmoidItem {
         let bottom = area ? s.y + s.height - 24 : Math.min(s.y + s.height - Plasmoid.configuration.bottomOffset, s.availBottom - 4);
         // qmllint disable missing-property
         const keyboard = Qt.inputMethod.keyboardRectangle;
+        let keyboardBottom = Infinity;
         if (keyboard.height > 0) {
-            bottom = Math.min(bottom, s.y + keyboard.y - 8);
+            keyboardBottom = s.y + keyboard.y - 8;
         } else if (Qt.inputMethod.visible) {
-            bottom = Math.min(bottom, s.y + Math.round(s.height * 0.6) - 8);
+            keyboardBottom = s.y + Math.round(s.height * 0.6) - 8;
         }
+        bottom = Math.min(bottom, keyboardBottom);
         // qmllint enable missing-property
         const top = s.availTop + 8;
         const portrait = s.height > s.width;
@@ -397,6 +405,19 @@ PlasmoidItem {
         launcherWindow.cardHeight = m.windowSize(height);
         launcherWindow.x = Math.round(s.x + (s.width - launcherWindow.cardWidth) / 2);
         launcherWindow.y = Math.round(Math.max(top, bottom - height));
+        // Beside a dock on the left or right (on its own screen): centred on the dock, kept under
+        // the top bar, above an on-screen keyboard and 8 px from the screen's edges, narrower when
+        // the room beside the dock is less than its width (at least 420 px, else centred).
+        const side = Launcher.sideArea(s, keyboardBottom);
+        const sideHeight = m.windowSize(Math.min(wanted, side.bottom - side.top));
+        const beside = area ? null : Launcher.besideDock(root.dockEdge, root.dockRect, side,
+            { width: launcherWindow.cardWidth, height: sideHeight, minWidth: m.px(420) });
+        if (beside) {
+            launcherWindow.cardWidth = m.windowSize(beside.width);
+            launcherWindow.cardHeight = sideHeight;
+            launcherWindow.x = beside.x;
+            launcherWindow.y = beside.y;
+        }
         // The dim layer covers the whole screen; panels stay above it (they are in a higher layer).
         backdrop.area = Qt.rect(s.x, s.y, s.width, s.height);
     }

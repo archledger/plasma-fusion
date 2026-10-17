@@ -142,6 +142,9 @@ function panelObject(panel) {
             }
         },
         get location() { return panel.location; },
+        // Plasma's scripting Panel sets the containment's location and form factor only (no
+        // window setting), so it works for a panel of a missing screen too.
+        set location(value) { panel.location = String(value); },
         get screen() { return panel.screen; },
         get opacity() { view(panel, "opacity"); return panel.opacity; },
         set opacity(value) { view(panel, "opacity"); panel.opacity = value; },

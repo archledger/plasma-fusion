@@ -425,6 +425,19 @@ KCM.SimpleKCM {
                     spacing: 0
                     Layout.fillWidth: true
 
+                    // Board DockPosition.dc.html: the dock at the bottom or on a side.
+                    ChoiceRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label the screen edge the dock is on", "Dock position")
+                        model: [i18nc("@option:radio dock position", "Bottom"), i18nc("@option:radio dock position", "Left"),
+                            i18nc("@option:radio dock position", "Right")]
+                        currentIndex: kcm.dockPosition
+                        enabled: kcm.dockAvailable && !kcm.shellLoading
+                        note: kcm.dockAvailable ? i18nc("@info", "In tablet mode the dock is at the bottom.")
+                            : root.shellNote(kcm.dockAvailable, i18nc("@info", "The Plasma Fusion dock is not in a panel."))
+                        onActivated: index => kcm.dockPosition = index
+                    }
                     // Board DockSize.dc.html: the dock's three sizes, its window grouping and the
                     // magnified size as a step over the icons (+8 / +14 px: 56 / 62 at Medium).
                     ChoiceRow {

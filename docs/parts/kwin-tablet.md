@@ -49,7 +49,11 @@ needed.
   (for the dock the plate of its size, the dock's `dockSize`: 60, 72 or 78 px, 72 when not set,
   since 2026-10-16; a saved 88 or 96 from the headroom frame counts as that plate). The settings
   page's Dock size sets `laptopHeight` while the posture holds (docs/parts/kcm-cpp.md, "Dock size
-  and window grouping"); `tests/tablet-panels.test.js` covers both.
+  and window grouping"); `tests/tablet-panels.test.js` covers both. A dock on the left or right
+  (the settings page's Dock position, board DockPosition.dc.html) is at the bottom in tablet
+  posture, as on the Tablet board: its side is saved as `laptopLocation` with the height and given
+  back on leave (2026-10-16; the test covers a dock on the left, one at the bottom and one
+  without a saved side).
   Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
   start), the call is made again after 500 ms (one call for several panels). A Fusion panel whose
   screen is gone (the top bar of a monitor that was unplugged) is skipped, see "Panels without a

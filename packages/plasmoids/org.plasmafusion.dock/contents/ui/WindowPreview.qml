@@ -15,6 +15,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.taskmanager as TaskManager
 
 import "../code/previews.js" as Previews
+import "../code/placement.js" as Placement
 
 // Window previews above a hovered running app (the stock task manager's tooltips): one card per
 // window with the app icon, the window title, a close button and a live thumbnail from KWin's
@@ -27,11 +28,15 @@ PlasmaCore.Dialog {
 
     required property DockPalette pal
     required property var taskModel
-    // The item whose top edge the preview sits on (horizontally centred on it).
+    // The item whose top edge the preview sits on (horizontally centred on it), or on a dock on
+    // the left or right the item beside which it sits (vertically centred on it).
     property Item anchorItem
+    property string edge: "bottom"
     // The dock's screen (its containment's screenGeometry, global coordinates): the preview stays
-    // 8 px inside it and its cards fit its width.
+    // 8 px inside it and its cards fit its width, beside a dock on the left or right the room
+    // between the anchor and the screen's far edge (roomWidth, measured when it shows).
     property rect screenGeometry: Qt.rect(0, 0, 0, 0)
+    property real roomWidth: 0
     // The task's row in taskModel; a group's windows are its children.
     property int row: -1
     property string appName
@@ -45,7 +50,9 @@ PlasmaCore.Dialog {
 
     type: PlasmaCore.Dialog.Tooltip
     flags: Qt.WindowDoesNotAcceptFocus | Qt.WindowStaysOnTopHint
-    location: PlasmaCore.Types.Floating
+    // Plasma's Dialog places itself again (popupPosition) when it is shown or resized: above
+    // its visual parent for Floating, beside it, centred on it, for a left or right edge.
+    location: edge === "left" ? PlasmaCore.Types.LeftEdge : edge === "right" ? PlasmaCore.Types.RightEdge : PlasmaCore.Types.Floating
     backgroundHints: PlasmaCore.Dialog.NoBackground
     visualParent: anchorItem
 
@@ -55,15 +62,29 @@ PlasmaCore.Dialog {
         }
         const p = anchorItem.mapToGlobal(0, 0);
         const g = screenGeometry;
-        let left = Math.round(p.x + (anchorItem.width - width) / 2);
-        if (g.width > 0) {
-            left = Math.max(g.x + 8, Math.min(left, g.x + g.width - width - 8));
+        const at = Placement.popupPosition({ x: p.x, y: p.y, width: anchorItem.width, height: anchorItem.height },
+                                           { width: width, height: height }, edge,
+                                           { x: g.x, y: g.y, width: g.width, height: g.height });
+        x = at.x;
+        y = at.y;
+    }
+    function measureRoom(): void {
+        const g = screenGeometry;
+        if (!anchorItem || !anchorItem.Window.window || !(g.width > 0)) {
+            roomWidth = 0;
+            return;
         }
-        x = left;
-        y = Math.round(p.y - height);
+        const p = anchorItem.mapToGlobal(0, 0);
+        roomWidth = Placement.room({ x: p.x, y: p.y, width: anchorItem.width, height: anchorItem.height }, edge,
+                                   { x: g.x, y: g.y, width: g.width, height: g.height });
     }
     onWidthChanged: if (visible) Qt.callLater(reposition)
-    onVisibleChanged: if (visible) Qt.callLater(reposition)
+    onVisibleChanged: if (visible) {
+        measureRoom();
+        Qt.callLater(reposition);
+    }
+    onAnchorItemChanged: measureRoom()
+    onEdgeChanged: measureRoom()
 
     // [{child, title, winId, active, minimized}] of all the task's windows (the cards show at most
     // six, shownWindows(); all are read so that the active one is found wherever it is).
@@ -147,12 +168,13 @@ PlasmaCore.Dialog {
             id: m
         }
         readonly property real pad: m.px(8)
-        // The cards fit the screen (less 8 px on each side): they shrink from 208 px thumbnails down
-        // to 140 px, and the windows that still do not fit are left out (a grouped app with six
-        // windows on a 1280 px screen), keeping the active one.
+        // The cards fit the screen (less 8 px on each side; beside a dock on a side, the room
+        // beside it): they shrink from 208 px thumbnails down to 140 px, and the windows that still
+        // do not fit are left out (a grouped app with six windows on a 1280 px screen), keeping the
+        // active one.
         readonly property real screenWidth: preview.screenGeometry.width > 0 ? preview.screenGeometry.width : 1280
         readonly property real cardInset: 2 * m.px(6)
-        readonly property real room: screenWidth - 16 - 2 * pad - 2
+        readonly property real room: (preview.roomWidth > 0 ? preview.roomWidth : screenWidth - 16) - 2 * pad - 2
         readonly property int shown: Math.max(1, Math.min(preview.windows.length, 6,
                                                           Math.floor((room + pad) / (m.px(140) + cardInset + pad))))
         readonly property real thumbW: Math.min(m.px(208), (room + pad) / shown - pad - cardInset)

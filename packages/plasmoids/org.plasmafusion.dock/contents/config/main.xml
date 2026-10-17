@@ -125,7 +125,7 @@
       <default></default>
     </entry>
     <entry name="debugPointerX" type="Int">
-      <label>Testing only: pretend the pointer rests over the dock at this screen x coordinate (-1 = off). Runs the same code as real pointer motion.</label>
+      <label>Testing only: pretend the pointer rests over the dock at this screen coordinate along the dock, x at the bottom and y on the left or right (-1 = off). Runs the same code as real pointer motion.</label>
       <default>-1</default>
     </entry>
     <entry name="debugHoverIndex" type="Int">

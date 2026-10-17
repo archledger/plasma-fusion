@@ -26,6 +26,7 @@ import "../code/date-timer.js" as DateTimer
 import "../code/endtask.js" as EndTask
 import "../code/menu-pick.js" as MenuPick
 import "../code/metrics.js" as Metrics
+import "../code/placement.js" as Placement
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
@@ -58,6 +59,13 @@ PlasmoidItem {
 
     // ---- Board metrics (logical px, Main.dc.html <nav aria-label="Dock">, DockSize.dc.html; TABLET 4.4) ----
     readonly property bool tablet: tabletState.tablet
+    // The panel's edge (board DockPosition.dc.html): at the bottom the row runs across the
+    // screen; on the left or right it stands upright, with the edge side (the icons' padding,
+    // the marks) towards the screen's edge. Positions along the row are x at the bottom, y on a
+    // side; the thickness is the panel's height at the bottom, its width on a side.
+    readonly property string edge: Placement.edgeOf(Plasmoid.location, PlasmaCore.Types.LeftEdge, PlasmaCore.Types.RightEdge)
+    readonly property bool vertical: edge !== "bottom"
+    readonly property real thickness: vertical ? width : height
     readonly property var metrics: Metrics.metrics(Plasmoid.configuration.dockSize, tablet, Plasmoid.configuration.tabletTile)
     readonly property bool portraitScreen: {
         const g = Plasmoid.containment ? Plasmoid.containment.screenGeometry : undefined;
@@ -72,10 +80,10 @@ PlasmoidItem {
     readonly property bool wideIndicators: metrics.wideIndicators
     // Room above the panel that magnified icons may use: with the plain south frame (STYLE-1) the
     // dock's 16 px headroom is above the panel; with the headroom frame it is inside it.
-    readonly property int headroomAbove: height <= tile + bottomPad + 20 ? 16 : 0
+    readonly property int headroomAbove: thickness <= tile + bottomPad + 20 ? 16 : 0
     readonly property int zoomTarget: Metrics.zoomTarget(tile, Plasmoid.configuration.magnifiedSize, tablet)
     readonly property int zoomSize: Plasmoid.configuration.magnify
-        ? Math.max(tile, Math.min(zoomTarget, Math.floor(height) - bottomPad + headroomAbove))
+        ? Math.max(tile, Math.min(zoomTarget, Math.floor(thickness) - bottomPad + headroomAbove))
         : tile
     // App icons shrink below their size only when the dock would otherwise be wider than the
     // screen (in tablet posture never below 44 px, the touch minimum).
@@ -86,10 +94,21 @@ PlasmoidItem {
     readonly property bool showDownloadsTrash: !tablet || (!portraitScreen && Plasmoid.configuration.tabletShowDownloadsTrash)
     // Start-up pulse cycles by battery tier (plasma-fusion-powerfx writes powerTier).
     readonly property int pulseCycles: [3, 1, 0][Math.max(0, Math.min(2, Plasmoid.configuration.powerTier))]
-    // Floating panel margins (Plasma style: 8 px left and right of the dock).
-    readonly property int screenMargin: 8
-    readonly property real screenWidth: {
-        const g = Plasmoid.containment ? Plasmoid.containment.screenGeometry : undefined;
+    // Floating panel margins (Plasma style: 16 px at the ends of the dock since 2026-10-16).
+    readonly property int screenMargin: 16
+    // The room for the row: the screen's width at the bottom. On a side the compositor centres
+    // the dock on the screen's height (it reserves no room: plasmashell 6.7.5 gives a panel that
+    // dodges windows no exclusive zone), so the row gets the height around the middle that the
+    // top bar (the containment's available area leaves it out) does not take, on both halves.
+    readonly property real screenLength: {
+        const c = Plasmoid.containment;
+        const g = c ? c.screenGeometry : undefined;
+        if (vertical) {
+            const h = g && g.height > 0 ? g.height : Screen.height;
+            const a = c ? c.availableScreenRect : undefined;
+            const taken = a && a.height > 0 ? Math.max(a.y, h - a.y - a.height) : 0;
+            return h - 2 * taken;
+        }
         return g && g.width > 0 ? g.width : Screen.width;
     }
 
@@ -171,11 +190,16 @@ PlasmoidItem {
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     Plasmoid.status: tasksModel.anyTaskDemandsAttention ? PlasmaCore.Types.NeedsAttentionStatus : PlasmaCore.Types.ActiveStatus
 
-    Layout.fillWidth: false
-    Layout.fillHeight: true
-    Layout.minimumWidth: Math.max(tile, Math.ceil(rest.width + padLeft + padRight))
-    Layout.preferredWidth: Layout.minimumWidth
-    Layout.maximumWidth: Layout.minimumWidth
+    // The row's length (its width at the bottom, its height on a side); across, the full thickness.
+    readonly property real rowLength: Math.max(tile, Math.ceil(rest.width + padLeft + padRight))
+    Layout.fillWidth: vertical
+    Layout.fillHeight: !vertical
+    Layout.minimumWidth: vertical ? 0 : rowLength
+    Layout.preferredWidth: vertical ? -1 : rowLength
+    Layout.maximumWidth: vertical ? Number.POSITIVE_INFINITY : rowLength
+    Layout.minimumHeight: vertical ? rowLength : 0
+    Layout.preferredHeight: vertical ? rowLength : -1
+    Layout.maximumHeight: vertical ? rowLength : Number.POSITIVE_INFINITY
 
     // ---- Tasks ----
     TaskManager.VirtualDesktopInfo { id: virtualDesktopInfo }
@@ -413,7 +437,7 @@ PlasmoidItem {
         let taskTile = tile;
         if (taskCount > 0) {
             const fixed = slots.reduce((sum, s) => sum + (s.kind === "task" ? 0 : s.w + gap), 0) - gap;
-            const budget = screenWidth - 2 * screenMargin - 2 * sidePad - fixed;
+            const budget = screenLength - 2 * screenMargin - 2 * sidePad - fixed;
             const fit = Math.floor(budget / taskCount) - gap;
             if (fit < tile) {
                 taskTile = Math.max(minTaskTile, fit);
@@ -504,7 +528,9 @@ PlasmoidItem {
         if (forced >= 0 && r.taskC[forced] !== undefined) {
             cursor = r.taskC[forced];
         } else if (debugPointer) {
-            cursor = row0.mapFromGlobal(Plasmoid.configuration.debugPointerX, 0).x;
+            // (a screen x at the bottom, a screen y on a side)
+            cursor = vertical ? row0.mapFromGlobal(0, Plasmoid.configuration.debugPointerX).y
+                              : row0.mapFromGlobal(Plasmoid.configuration.debugPointerX, 0).x;
         }
         const over = (hoverHandler.hovered || debugPointer || forced >= 0) && !isNaN(cursor) && r.firstTask >= 0
             && cursor >= r.firstTask - gap / 2 && cursor <= r.lastTask + gap / 2;
@@ -553,19 +579,20 @@ PlasmoidItem {
 
         // Apply: task items directly, fixed slots through `mag`. Then find the slot under the
         // pointer in the magnified geometry (the icon plus half of each neighbouring gap, from
-        // 10 px above the icon to the bottom of the panel), for tasks and buttons alike.
+        // the panel's edge to 10 px past the icon), for tasks and buttons alike.
         const fixed = {};
         let hoverRow = -1;
         let hoverKind = "";
         const live = hoverHandler.hovered || debugPointer;
         const pointer = live ? cursor : NaN;
-        const pointerY = hoverHandler.hovered ? pendingY : row0.height - bottomPad - tile / 2;
-        const restTop = row0.height - bottomPad - tile - 10;
+        // the pointer's distance from the panel's edge (pendingY: set by the hover handler)
+        const depth = hoverHandler.hovered ? pendingY : bottomPad + tile / 2;
+        const reach = bottomPad + tile + 10;
         for (let j = 0; j < n; ++j) {
             const s = r.slots[j];
             const w = s.kind === "task" ? r.taskW[s.row] : (s.kind === "sep1" || s.kind === "sep2" ? sepSlot : tile);
             const hit = !isNaN(pointer) && Math.abs(pointer - (s.c + offsets[j])) <= (w + g[j]) / 2 + gap / 2
-                && pointerY >= restTop - g[j];
+                && depth <= reach + g[j];
             if (s.kind !== "task") {
                 fixed[s.kind] = offsets[j];
                 if (hit && s.kind !== "sep1" && s.kind !== "sep2") {
@@ -661,7 +688,13 @@ PlasmoidItem {
     onPadLeftChanged: Qt.callLater(relayout)
     onPadRightChanged: Qt.callLater(relayout)
     onZoomSizeChanged: markMagnification()
-    onScreenWidthChanged: Qt.callLater(relayout)
+    onScreenLengthChanged: Qt.callLater(relayout)
+    onEdgeChanged: {
+        clearHover();
+        Qt.callLater(relayout);
+        insetTimer.restart();
+        Qt.callLater(tellLauncher);
+    }
     onTabletChanged: {
         clearHover();
         // the recents limit applies in tablet posture only (rescan() relays out too)
@@ -694,9 +727,10 @@ PlasmoidItem {
             }
             // Any hover from these devices ends a touch suppression.
             root.touchSuppress = false;
+            // along the row, and the distance from the panel's edge
             const p = row0.mapFromItem(root, point.position.x, point.position.y);
-            root.pendingX = p.x;
-            root.pendingY = p.y;
+            root.pendingX = root.vertical ? p.y : p.x;
+            root.pendingY = root.edge === "left" ? p.x : root.edge === "right" ? row0.width - p.x : row0.height - p.y;
             root.markMagnification();
             // A pen leaving range does not end a hover in Qt; a pen that stops reporting for a
             // moment has left (EFFECTS.md 4.4).
@@ -741,9 +775,10 @@ PlasmoidItem {
         if (!top || !item.parent || item.parent.parent !== top || item === root) {
             return;
         }
+        // the containment's margins at both ends of the row (left and right, or top and bottom)
         const p = root.mapToItem(item, 0, 0);
-        const left = Math.round(p.x);
-        const right = Math.round(item.width - p.x - root.width);
+        const left = Math.round(vertical ? p.y : p.x);
+        const right = Math.round(vertical ? item.height - p.y - root.height : item.width - p.x - root.width);
         if (left >= 0 && left <= 40 && right >= 0 && right <= 40) {
             leftInset = left;
             rightInset = right;
@@ -806,8 +841,25 @@ PlasmoidItem {
     // Opens or closes the launcher. A launcher applet in the dock's own panel is driven
     // directly (open/close functions of the Plasma Fusion launcher, else its expanded state);
     // otherwise plasmashell's "Activate Application Launcher" action finds one in any panel.
+    // The launcher in the dock's panel opens beside a dock on the left or right (board
+    // DockPosition.dc.html): it is told the dock's edge and plate (global coordinates; the dock
+    // fills the panel's thickness). Another launcher has no such properties and is left alone.
+    function tellLauncher(): void {
+        const applet = launcherApplet;
+        if (!applet || applet["dockEdge"] === undefined) {
+            return;
+        }
+        const p = root.mapToGlobal(0, 0);
+        applet["dockEdge"] = edge;
+        applet["dockRect"] = Qt.rect(p.x, p.y, root.width, root.height);
+    }
+    onLauncherAppletChanged: tellLauncher()
+    onThicknessChanged: Qt.callLater(tellLauncher)
+    onRowLengthChanged: Qt.callLater(tellLauncher)
+
     function toggleLauncher(wasOpen: var, mode: string): void {
         launcherApplet = findLauncherApplet();
+        tellLauncher();
         const applet = launcherApplet;
         if (!applet) {
             DBus.SessionBus.asyncCall({ service: "org.kde.plasmashell", path: "/PlasmaShell",
@@ -948,7 +1000,12 @@ PlasmoidItem {
                 add("previewclose" + i, card.closeTarget, card.closeTarget.width, card.closeTarget.height);
             });
         }
-        console.info("dock: targets tablet=" + root.tablet + " tile=" + root.tile + " zoom=" + root.zoomSize
+        // The name pill (a window of its own): its place on the screen.
+        const namePill = pill.item as NamePill;
+        if (namePill && namePill.visible) {
+            out.push("pill@" + Math.round(namePill.x) + "," + Math.round(namePill.y) + ":" + Math.round(namePill.width) + "x" + Math.round(namePill.height));
+        }
+        console.info("dock: targets tablet=" + root.tablet + " edge=" + root.edge + " tile=" + root.tile + " zoom=" + root.zoomSize
                      + " preview=" + (shown ? shown.row + "/" + shown.windows.length + (shown.visible ? "" : "(hidden)") : "none")
                      + " menu=" + (root.menuOpen ? "open" : "closed")
                      + " " + out.join(" "));
@@ -1137,9 +1194,10 @@ PlasmoidItem {
     }
 
     // Drag a task sideways to reorder it within its group (pinned or running).
-    function reorderTo(row: int, sceneX: real): void {
+    function reorderTo(row: int, scenePos: point): void {
         dragRow = row;
-        const x = row0.mapFromItem(null, sceneX, 0).x;
+        const p = row0.mapFromItem(null, scenePos.x, scenePos.y);
+        const x = vertical ? p.y : p.x;
         let target = row;
         for (let i = 0; i < taskRepeater.count; ++i) {
             if (!taskVisible[i] || !!taskPinned[i] !== !!taskPinned[row]) {
@@ -1180,7 +1238,10 @@ PlasmoidItem {
     }
 
     function openMenu(visualParent: Item): DockMenu {
-        const menu = menuComponent.createObject(root, { visualParent: visualParent }) as DockMenu;
+        // Above the item on the bottom dock, beside it away from the edge on a side.
+        const placement = edge === "left" ? PlasmaExtras.Menu.RightPosedTopAlignedPopup
+            : edge === "right" ? PlasmaExtras.Menu.LeftPosedTopAlignedPopup : PlasmaExtras.Menu.TopPosedLeftAlignedPopup;
+        const menu = menuComponent.createObject(root, { visualParent: visualParent, placement: placement }) as DockMenu;
         menu.statusChanged.connect(() => { root.menuOpen = menu.status !== PlasmaExtras.Menu.Closed; });
         lastMenu = menu;
         lastMenuActions = menu.actions;
@@ -1610,13 +1671,12 @@ PlasmoidItem {
                 drop.acceptProposedAction();
                 return;
             }
-            const x = row0.mapFromItem(taskDrop, drop.x, drop.y).x;
-            for (let i = 0; i < taskRepeater.count; ++i) {
-                if (root.taskVisible[i] && x >= root.rest.taskX[i] && x < root.rest.taskX[i] + root.rest.taskW[i]) {
-                    tasksModel.requestOpenUrls(tasksModel.makeModelIndex(i), drop.urls);
-                    drop.acceptProposedAction();
-                    return;
-                }
+            // the task under the drop's place along the row (y on a dock on the left or right)
+            const along = Placement.along(row0.mapFromItem(taskDrop, drop.x, drop.y), root.edge);
+            const i = Placement.taskAt(along, root.rest.taskX.slice(0, taskRepeater.count), root.rest.taskW, root.taskVisible);
+            if (i >= 0) {
+                tasksModel.requestOpenUrls(tasksModel.makeModelIndex(i), drop.urls);
+                drop.acceptProposedAction();
             }
         }
     }
@@ -2058,15 +2118,16 @@ PlasmoidItem {
     // ---- Content ----
     Item {
         id: row0
-        x: Math.round((root.width - root.rest.width) / 2 + (root.padLeft - root.padRight) / 2)
-        width: root.rest.width
-        height: root.height
+        x: root.vertical ? 0 : Math.round((root.width - root.rest.width) / 2 + (root.padLeft - root.padRight) / 2)
+        y: root.vertical ? Math.round((root.height - root.rest.width) / 2 + (root.padLeft - root.padRight) / 2) : 0
+        width: root.vertical ? root.width : root.rest.width
+        height: root.vertical ? root.rest.width : root.height
 
         DockButton {
             id: startButton
-            x: root.rest.start ?? 0
-            transform: Translate { x: root.mag.fixed.start ?? 0 }
-            height: row0.height
+            edge: root.edge
+            along: root.rest.start ?? 0
+            alongShift: root.mag.fixed.start ?? 0
             pal: dockPal
             motion: motion
             tile: root.tile
@@ -2087,9 +2148,9 @@ PlasmoidItem {
         DockButton {
             id: searchButton
             visible: root.showSearch
-            x: root.rest.search ?? 0
-            transform: Translate { x: root.mag.fixed.search ?? 0 }
-            height: row0.height
+            edge: root.edge
+            along: root.rest.search ?? 0
+            alongShift: root.mag.fixed.search ?? 0
             pal: dockPal
             motion: motion
             tile: root.tile
@@ -2109,9 +2170,9 @@ PlasmoidItem {
 
         DockButton {
             id: overviewButton
-            x: root.rest.overview ?? 0
-            transform: Translate { x: root.mag.fixed.overview ?? 0 }
-            height: row0.height
+            edge: root.edge
+            along: root.rest.overview ?? 0
+            alongShift: root.mag.fixed.overview ?? 0
             pal: dockPal
             motion: motion
             tile: root.tile
@@ -2129,11 +2190,17 @@ PlasmoidItem {
         }
 
         Rectangle {
-            x: root.rest.sep1 + (root.sepSlot - 1) / 2
-            transform: Translate { x: root.mag.fixed.sep1 ?? 0 }
-            y: row0.height - root.bottomPad - (root.tile - root.sepLength) / 2 - root.sepLength
-            width: 1
-            height: root.sepLength
+            // along the row in its slot; across, centred on the tiles
+            readonly property real along: root.rest.sep1 + (root.sepSlot - 1) / 2
+            readonly property real fromEdge: root.bottomPad + (root.tile - root.sepLength) / 2
+            x: root.edge === "left" ? fromEdge : root.edge === "right" ? row0.width - fromEdge - root.sepLength : along
+            y: root.vertical ? along : row0.height - fromEdge - root.sepLength
+            width: root.vertical ? root.sepLength : 1
+            height: root.vertical ? 1 : root.sepLength
+            transform: Translate {
+                x: root.vertical ? 0 : (root.mag.fixed.sep1 ?? 0)
+                y: root.vertical ? (root.mag.fixed.sep1 ?? 0) : 0
+            }
             color: dockPal.separator
         }
 
@@ -2156,11 +2223,11 @@ PlasmoidItem {
                 monthText: root.todayMonth
                 dayText: root.todayDay
                 shown: root.taskVisible[taskItem.index] ?? true
-                x: root.rest.taskX[taskItem.index] ?? 0
+                edge: root.edge
+                along: root.rest.taskX[taskItem.index] ?? 0
                 iconSize: root.rest.taskW[taskItem.index] ?? root.tile
                 zoomSize: root.zoomSize
                 zoomReady: root.zoomIconsReady
-                height: row0.height
                 bottomPad: root.bottomPad
                 onActivated: modifiers => {
                     // Tablet posture: starting a pinned app zooms from its tile (TABLET2 M1).
@@ -2171,7 +2238,7 @@ PlasmoidItem {
                 }
                 onNewInstanceRequested: tasksModel.requestNewInstance(tasksModel.makeModelIndex(taskItem.index))
                 onMenuRequested: root.showTaskMenu(taskItem)
-                onDragMoved: sceneX => root.reorderTo(taskItem.index, sceneX)
+                onDragMoved: scenePos => root.reorderTo(taskItem.index, scenePos)
                 onDragFinished: root.finishReorder()
                 onDesktopDrag: active => root.desktopDrag(taskItem, active)
                 onSplitDragMoved: globalPos => root.splitDragMove(taskItem, globalPos)
@@ -2182,11 +2249,17 @@ PlasmoidItem {
         }
 
         Rectangle {
-            x: root.rest.sep2 + (root.sepSlot - 1) / 2
-            transform: Translate { x: root.mag.fixed.sep2 ?? 0 }
-            y: row0.height - root.bottomPad - (root.tile - root.sepLength) / 2 - root.sepLength
-            width: 1
-            height: root.sepLength
+            // along the row in its slot; across, centred on the tiles
+            readonly property real along: root.rest.sep2 + (root.sepSlot - 1) / 2
+            readonly property real fromEdge: root.bottomPad + (root.tile - root.sepLength) / 2
+            x: root.edge === "left" ? fromEdge : root.edge === "right" ? row0.width - fromEdge - root.sepLength : along
+            y: root.vertical ? along : row0.height - fromEdge - root.sepLength
+            width: root.vertical ? root.sepLength : 1
+            height: root.vertical ? 1 : root.sepLength
+            transform: Translate {
+                x: root.vertical ? 0 : (root.mag.fixed.sep2 ?? 0)
+                y: root.vertical ? (root.mag.fixed.sep2 ?? 0) : 0
+            }
             color: dockPal.separator
             visible: root.rest.sep2 >= 0
         }
@@ -2194,9 +2267,9 @@ PlasmoidItem {
         DockButton {
             id: downloadsButton
             visible: root.showDownloadsTrash
-            x: root.rest.downloads ?? 0
-            transform: Translate { x: root.mag.fixed.downloads ?? 0 }
-            height: row0.height
+            edge: root.edge
+            along: root.rest.downloads ?? 0
+            alongShift: root.mag.fixed.downloads ?? 0
             pal: dockPal
             motion: motion
             tile: root.tile
@@ -2216,9 +2289,9 @@ PlasmoidItem {
         DockButton {
             id: trashButton
             visible: root.showDownloadsTrash
-            x: root.rest.trash ?? 0
-            transform: Translate { x: root.mag.fixed.trash ?? 0 }
-            height: row0.height
+            edge: root.edge
+            along: root.rest.trash ?? 0
+            alongShift: root.mag.fixed.trash ?? 0
             pal: dockPal
             motion: motion
             tile: root.tile
@@ -2268,10 +2341,13 @@ PlasmoidItem {
         // Where the name pill sits: its bottom edge 12 px above the hovered item (Main board).
         // Placed when the hovered item changes, at the item's position and magnified size at
         // that moment; it does not follow the magnification frame by frame (EFFECTS.md 4.4).
+        // At the bottom: a line 12 px above the icon, as wide as the grown icon. On a side: a
+        // line 12 px beside the grown icon away from the edge, as tall as it (Placement).
         Item {
             id: pillAnchor
             readonly property Item target: root.pillTarget
-            height: 1
+            width: root.vertical ? 0 : 1
+            height: root.vertical ? 1 : 0
             onTargetChanged: place()
 
             function place(): void {
@@ -2279,24 +2355,45 @@ PlasmoidItem {
                 if (!t) {
                     return;
                 }
+                // along: the item's start and length along the row; near, far: the icon's sides
+                // across the row (from the panel's left or top), grow: its growth.
+                let along, length, near, far, grow;
                 if (t instanceof TaskItem) {
                     const task = t as TaskItem;
                     // The size the hovered icon grows to with the pointer where it is now.
                     const r = root.rest;
                     const c = r.taskC[task.index] ?? 0;
                     const d = isNaN(root.cursorX) ? 0 : (c - root.cursorX) / r.radius;
-                    const full = root.zoom > 0 || root.pointerOverTasks
-                        ? (root.zoomSize - r.taskTile) * Math.max(0, 1 - d * d) : 0;
-                    const grow = Math.max(task.grow, full);
-                    x = task.x + task.shift - grow / 2;
-                    width = task.width + grow;
-                    y = task.iconTop - grow - 12;
+                    // (the zoom's own conditions without the pointer: the pill is for the item
+                    // under it, and the pointer may be marked over the tasks only a moment later)
+                    const magnifies = Plasmoid.configuration.magnify && !root.touchSuppress && root.dragRow < 0
+                        && !root.launcherOpen && !root.menuOpen;
+                    const full = magnifies ? (root.zoomSize - r.taskTile) * Math.max(0, 1 - d * d) : 0;
+                    grow = Math.max(task.grow, full);
+                    along = task.along + task.shift - grow / 2;
+                    length = (root.vertical ? task.height : task.width) + grow;
+                    near = root.vertical ? task.iconX : task.iconTop;
+                    far = near + task.iconSize;
                 } else {
                     const button = t as DockButton;
-                    const shift = button.transform.length > 0 ? (button.transform[0] as Translate).x : 0;
-                    x = button.x + shift;
-                    width = button.width;
-                    y = button.face.y - 12;
+                    grow = 0;
+                    along = button.along + button.alongShift;
+                    length = root.vertical ? button.height : button.width;
+                    near = root.vertical ? button.face.x : button.face.y;
+                    far = near + button.tile;
+                }
+                if (root.edge === "left") {
+                    x = far + grow + 12;
+                    y = along;
+                    height = length;
+                } else if (root.edge === "right") {
+                    x = near - grow - 12;
+                    y = along;
+                    height = length;
+                } else {
+                    x = along;
+                    width = length;
+                    y = near - grow - 12;
                 }
                 if (pill.item) {
                     (pill.item as NamePill).reposition();
@@ -2351,6 +2448,7 @@ PlasmoidItem {
         sourceComponent: NamePill {
             pal: dockPal
             anchorItem: pillAnchor
+            edge: root.edge
             text: root.pillText
             visible: root.pillText !== "" && root.visible && root.previewTarget === null
         }
@@ -2465,6 +2563,7 @@ PlasmoidItem {
             taskModel: tasksModel
             screenGeometry: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
             anchorItem: pillAnchor
+            edge: root.edge
             row: root.previewTarget ? (root.previewTarget as TaskItem).index : -1
             appName: root.previewTarget ? (root.previewTarget as TaskItem).name : ""
             visible: root.visible

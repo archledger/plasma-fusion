@@ -527,7 +527,8 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
         }
         var dockPanel = new Panel;
         dockPanel.screen = sc;
-        dockPanel.location = "bottom";
+        // the main dock's edge: the bottom, or a side (board DockPosition.dc.html)
+        dockPanel.location = main.location === "left" || main.location === "right" ? main.location : "bottom";
         dockPanel.height = main.height;
         dockPanel.floating = true;
         dockPanel.lengthMode = "fit";

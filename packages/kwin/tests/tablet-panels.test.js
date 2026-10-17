@@ -62,7 +62,8 @@ function shell(plasma, screens, specs, desktops = 1) {
         return {
             get id() { return panel.id; },
             get screen() { return plasma === "6.7" && panel.screen >= screens ? -1 : panel.screen; },
-            get location() { return panel.widgets === DOCK ? "bottom" : "top"; },
+            get location() { return panel.location || (panel.widgets === DOCK ? "bottom" : "top"); },
+            set location(where) { view(panel, "location="); panel.location = where; },
             get height() { view(panel, "height"); return panel.height; },
             set height(h) { view(panel, "height="); panel.height = h; },
             get hiding() { view(panel, "hiding"); return panel.hiding; },
@@ -166,6 +167,24 @@ for (const plasma of ["6.8", "6.7"]) {
     const unsaved = shell("6.8", 1, [{ screen: 0, widgets: DOCK, height: 80, config: { "PlasmaFusion/tabletApplied": true } }]);
     unsaved.panels[0].widgetConfig.dockSize = 2;
     assert.strictEqual(unsaved.run(false), "dock 78 dodgewindows", "no saved height: Large's plate");
+}
+
+// A dock on the left (board DockPosition.dc.html): at the bottom in tablet posture, its side kept
+// with its height, and back on the left after with its 72 px.
+{
+    const s = shell("6.8", 1, [{ screen: 0, widgets: TOP }, { screen: 0, widgets: DOCK, height: 72, location: "left" }]);
+    assert.strictEqual(s.run(true), "top 44, dock 80 dodgewindows");
+    assert.strictEqual(s.panels[1].location, "bottom");
+    assert.strictEqual(s.panels[1].config["PlasmaFusion/laptopLocation"], "left");
+    assert.strictEqual(s.run(false), "top 34, dock 72 none left");
+    assert.strictEqual(s.panels[1].location, "left");
+    // A dock that was at the bottom stays there; one without a saved side too.
+    const b = shell("6.8", 1, [{ screen: 0, widgets: DOCK, height: 72 }]);
+    b.run(true);
+    assert.strictEqual(b.panels[0].config["PlasmaFusion/laptopLocation"], "bottom");
+    assert.strictEqual(b.run(false), "dock 72 none");
+    const unsaved = shell("6.8", 1, [{ screen: 0, widgets: DOCK, height: 80, location: "bottom", config: { "PlasmaFusion/tabletApplied": true } }]);
+    assert.strictEqual(unsaved.run(false), "dock 72 dodgewindows");
 }
 
 // Before the shell has loaded its layout: "not ready", and nothing is changed.

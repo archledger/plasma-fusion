@@ -7,6 +7,8 @@ import QtQuick
 
 import org.kde.plasma.core as PlasmaCore
 
+import "../code/placement.js" as Placement
+
 // The name pill above the hovered dock item (Main board: padding 5/10, radius 8,
 // rgba(12,15,28,.92) fill, 1 px edge, 12 px bold text). It is a separate tooltip
 // window so it can sit above the panel; it never takes focus or input. The text, its padding
@@ -16,12 +18,16 @@ PlasmaCore.Dialog {
 
     required property DockPalette pal
     property string text
-    // The item whose top edge the pill sits on (horizontally centred on it).
+    // The item whose top edge the pill sits on (horizontally centred on it), or on a dock on
+    // the left or right the item beside which it sits (vertically centred on it).
     property Item anchorItem
+    property string edge: "bottom"
 
     type: PlasmaCore.Dialog.Tooltip
     flags: Qt.WindowDoesNotAcceptFocus | Qt.WindowStaysOnTopHint | Qt.WindowTransparentForInput
-    location: PlasmaCore.Types.Floating
+    // Plasma's Dialog places itself again (popupPosition) when it is shown or resized: above
+    // its visual parent for Floating, beside it, centred on it, for a left or right edge.
+    location: edge === "left" ? PlasmaCore.Types.LeftEdge : edge === "right" ? PlasmaCore.Types.RightEdge : PlasmaCore.Types.Floating
     backgroundHints: PlasmaCore.Dialog.NoBackground
     visualParent: anchorItem
 
@@ -31,8 +37,10 @@ PlasmaCore.Dialog {
             return;
         }
         const p = anchorItem.mapToGlobal(0, 0);
-        x = Math.round(p.x + (anchorItem.width - width) / 2);
-        y = Math.round(p.y - height);
+        const at = Placement.popupPosition({ x: p.x, y: p.y, width: anchorItem.width, height: anchorItem.height },
+                                           { width: width, height: height }, edge, null);
+        x = at.x;
+        y = at.y;
     }
 
     onWidthChanged: if (visible) Qt.callLater(reposition)

@@ -469,3 +469,21 @@ Work package LAUNCH-2 of the one-pass plan (TABLET 4.5), built by the lead direc
   the wallpaper copy is part of the INT-1 screenshots in the deployed session.
 - Not done: the date on a calendar app's tile (the dock has it), GPU time per animation frame (the INT-1
   perf run measures it).
+
+## Beside a dock on the left or right (2026-10-16)
+
+With the settings page's Dock position on Left or Right (board DockPosition.dc.html) the card opens
+beside the dock that holds the launcher in its panel: 8 px from its plate, centred on it, kept under
+the top bar, 8 px from the bottom and above an on-screen keyboard (`Launcher.sideArea()`), narrower
+when the room beside the dock is less than its width, 8 px from the screen's other edge, and centred
+on the screen when that room is under 420 px (`Launcher.besideDock()`). The dock tells the launcher
+its edge and plate (`dockEdge`, `dockRect`, global coordinates) when the launcher, the dock's edge
+or its size change and before it opens it, so the Meta key finds them too. At the bottom (or with a
+launcher in another panel) the card stays centred on the screen, as before. The dock is centred on
+the whole screen height (a panel that dodges windows reserves no room, so the compositor ignores the
+top bar), hence the clamp. `tests/beside.test.js` (in the build): the board's 96,100 at 1440 x 900
+on the left, the right side, the Small plate, null at the bottom or without a plate, the clamps at
+both ends, the keyboard's limit, the card narrowed to 664 px on a 768 px screen on either side,
+centred when less than 420 px is left, and a second screen's own edges. The session check is
+docs/parts/shell-dock.md's.
+

@@ -29,7 +29,7 @@ preview, a size mismatch, a mean per-channel difference over 12, or a worst wind
 20 (32 x 32 pixel windows, sliding in 16 px steps, so a small change cannot straddle every
 window) - the window test catches a stale preview whose change is confined to a small area, down
 to a 14 px icon. A board
-change re-renders the affected previews with this tool; `--check` over all 30 boards is the
+change re-renders the affected previews with this tool; `--check` over all 31 boards is the
 fidelity gate ([`docs/parts/icons.md`](icons.md) lists what the drawings mean).
 
 ## Per-app tiles

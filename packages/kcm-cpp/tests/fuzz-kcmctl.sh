@@ -222,7 +222,7 @@ write_settings_file() {
   esac
 }
 
-ints=(style buttonStyle snapTrigger glass magnifiedSize dockSize iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy
+ints=(style buttonStyle snapTrigger glass magnifiedSize dockSize dockPosition iconSize dndBehavior tabletMode tabletApps tabletDock keyboardPolicy
   gestureSwipeUp gestureSwipeDown gestureSwipeLeft gestureSwipeRight gesturePinchIn gesturePinchOut)
 bools=(magnify globalMenu hotCorner highContrast reduceMotion solidTopBar everyScreen everyDock desktopIcons lighterOnCritical
   fileContentIndexing edgeLeft edgeRight homeIndicator systemMeters launcherRecentFiles launcherRecentApps launcherPlaces desktopsInOneRow groupWindows)
@@ -274,10 +274,10 @@ write_commands() {
 }
 
 # The range of every integer property (kcm.h).
-declare -A low=([style]=-1 [accentMode]=0 [buttonStyle]=0 [snapTrigger]=0 [glass]=0 [magnifiedSize]=48 [dockSize]=0 [iconSize]=0
+declare -A low=([style]=-1 [accentMode]=0 [buttonStyle]=0 [snapTrigger]=0 [glass]=0 [magnifiedSize]=48 [dockSize]=0 [dockPosition]=0 [iconSize]=0
   [dndBehavior]=0 [tabletMode]=0 [tabletApps]=0 [tabletDock]=0 [keyboardPolicy]=0
   [gestureSwipeUp]=0 [gestureSwipeDown]=0 [gestureSwipeLeft]=0 [gestureSwipeRight]=0 [gesturePinchIn]=0 [gesturePinchOut]=0)
-declare -A high=([style]=2 [accentMode]=2 [buttonStyle]=2 [snapTrigger]=1 [glass]=2 [magnifiedSize]=72 [dockSize]=2 [iconSize]=6
+declare -A high=([style]=2 [accentMode]=2 [buttonStyle]=2 [snapTrigger]=1 [glass]=2 [magnifiedSize]=72 [dockSize]=2 [dockPosition]=2 [iconSize]=6
   [dndBehavior]=1 [tabletMode]=2 [tabletApps]=1 [tabletDock]=1 [keyboardPolicy]=2
   [gestureSwipeUp]=8 [gestureSwipeDown]=8 [gestureSwipeLeft]=8 [gestureSwipeRight]=8 [gesturePinchIn]=8 [gesturePinchOut]=8)
 

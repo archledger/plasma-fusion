@@ -14,7 +14,10 @@ progress per app must follow: one copy, a second one of the same app (their mean
 another app, and none once the jobs end. On a dock tile (TaskItem.qml, staged with the shared blocks
 as the build does) the progress ring shows next to an unread count, as in the stock task manager.
 The tile's running marks count a group's windows, three at most, the active app's first one the
-pill (board DockSize.dc.html, "Window count").
+pill (board DockSize.dc.html, "Window count"). On a dock on the left or right the tile is upright:
+its icon on the edge side, the marks upright beside it (board DockPosition.dc.html). A pinned
+tile dragged 48 px away from the dock's edge starts the launcher drag (desktopDrag), one dragged
+48 px towards the edge does not, on each edge (real pointer events in a window).
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -46,7 +49,7 @@ subprocess.run(["bash", str(root / "tools/build-lib/shared-qml.sh"), "install", 
 ui = stage / "contents/ui"
 
 import dbus  # noqa: E402
-from PySide6.QtCore import Q_RETURN_ARG, QMetaObject, QUrl  # noqa: E402
+from PySide6.QtCore import Q_RETURN_ARG, QMetaObject, QPoint, Qt, QUrl  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -153,6 +156,34 @@ Item {
         entry: null
         notificationCount: 0
     }
+    // A tile on a dock on the left or right (the panel's 72 px across, 48 along): `edgeSide`.
+    property string edgeSide: "left"
+    Item {
+        x: 500
+        width: 72
+        height: 200
+        TaskItem {
+            id: edgeTile
+            edge: edgeSide
+            along: 40
+            index: 3
+            model: ({ AppId: "org.kde.konsole", AppName: "Konsole", decoration: "utilities-terminal", IsLauncher: false,
+                      IsStartup: false, IsActive: true, IsDemandingAttention: false, IsGroupParent: true, ChildCount: 2 })
+            pal: palette
+            motion: motion
+            entry: null
+            notificationCount: 0
+        }
+    }
+    // The upright tile: its box, its icon's box, and its marks' boxes in the tile.
+    function edgeState() {
+        const row = find(edgeTile, "indicator");
+        const marks = row ? row.children.filter(c => c.width === 4 || c.height === 4).filter(c => c.width > 0 && c.height > 0)
+            .map(c => { const q = c.mapToItem(edgeTile, 0, 0); return [Math.round(q.x), Math.round(q.y), Math.round(c.width), Math.round(c.height)]; }) : [];
+        const i = edgeTile.iconItem;
+        return JSON.stringify({ tile: [edgeTile.x, edgeTile.y, edgeTile.width, edgeTile.height],
+                                icon: [Math.round(i.x), Math.round(i.y), Math.round(i.width), Math.round(i.height)], marks: marks });
+    }
     // The widths of the tile's marks, left to right.
     function marks() {
         const row = find(countTile, "indicator");
@@ -196,6 +227,52 @@ Item {
         return JSON.stringify({ ring: ring.visible, badge: badge.visible, progress: tile.progress,
                                 ringBox: [r.x, r.y, ring.width, ring.height], badgeBox: [b.x, b.y, badge.width, badge.height],
                                 icon: tile.iconItem.width });
+    }
+}
+"""
+
+# A pinned tile on a dock on SIDE in a window, for real pointer events: the panel's 72 px across, the
+# tile 48 px along, 120 px from the window's edges; `drags` counts the launcher drags it starts.
+DRAG_HARNESS = b"""
+import QtQuick
+import QtQuick.Window
+Window {
+    width: 400
+    height: 400
+    visible: true
+    property string side: "left"
+    property int drags: 0
+    DockPalette {
+        id: palette
+        dark: true
+    }
+    Motion {
+        id: motion
+    }
+    Item {
+        id: panel
+        x: side === "bottom" ? 120 : 160
+        y: side === "bottom" ? 160 : 120
+        width: side === "bottom" ? 200 : 72
+        height: side === "bottom" ? 72 : 200
+        TaskItem {
+            id: dragTile
+            edge: side
+            along: 40
+            index: 0
+            model: ({ AppId: "org.kde.konsole", AppName: "Konsole", decoration: "utilities-terminal", IsLauncher: true,
+                      IsStartup: false, IsActive: false, IsDemandingAttention: false })
+            pal: palette
+            motion: motion
+            entry: null
+            notificationCount: 0
+            onDesktopDrag: active => { if (active) drags++; }
+        }
+    }
+    function iconCentre() {
+        const i = dragTile.iconItem;
+        const c = i.mapToItem(null, i.width / 2, i.height / 2);
+        return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
     }
 }
 """
@@ -293,6 +370,53 @@ try:
     ]:
         got = marks(*args)
         check(got == want, "marks: %s (%r)" % (what, got))
+
+    # Upright tiles (board DockPosition.dc.html): on the left the icon 14 px from the edge (the
+    # bottom padding), the pill and a dot upright 5 px to its left, centred on it; on the right
+    # mirrored.
+    def edge_state(side):
+        item.setProperty("edgeSide", side)
+        QTest.qWait(400)
+        return json.loads(QMetaObject.invokeMethod(item, "edgeState", Q_RETURN_ARG("QVariant")))
+
+    left = edge_state("left")
+    check(left["tile"] == [0, 40, 72, 48], "left: the tile spans the panel's width at its place along the row (%r)" % (left["tile"],))
+    check(left["icon"] == [14, 0, 48, 48], "  its icon 14 px from the edge (%r)" % (left["icon"],))
+    check(left["marks"] == [[5, 12, 4, 16], [5, 31, 4, 5]], "  the pill and a dot upright, 5 px left of the icon (%r)" % (left["marks"],))
+    right = edge_state("right")
+    check(right["icon"] == [10, 0, 48, 48], "right: its icon 14 px from the edge (%r)" % (right["icon"],))
+    check(right["marks"] == [[63, 12, 4, 16], [63, 31, 4, 5]], "  the marks upright, 5 px right of the icon (%r)" % (right["marks"],))
+
+    # The launcher drag (TaskItem's DragHandler): 48 px away from the edge starts it, 48 px towards
+    # the edge does not (from the icon's far end there is room for that before the screen's edge).
+    drag_component = QQmlComponent(engine)
+    drag_component.setData(DRAG_HARNESS, QUrl.fromLocalFile(str(ui / "DragHarness.qml")))
+    window = drag_component.create()
+    if window is None:
+        raise AssertionError("drag harness did not load: " + "; ".join(e.toString() for e in drag_component.errors()))
+
+    def drags(side, dx, dy):
+        """Press on the tile's icon on SIDE's dock, move by (dx, dy) in steps, release: the number
+        of launcher drags started."""
+        window.setProperty("side", side)
+        window.setProperty("drags", 0)
+        QTest.qWait(300)
+        start = QPoint(*json.loads(QMetaObject.invokeMethod(window, "iconCentre", Q_RETURN_ARG("QVariant"))))
+        QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+        for step in range(1, 9):
+            QTest.mouseMove(window, QPoint(start.x() + dx * step // 8, start.y() + dy * step // 8))
+            QTest.qWait(20)
+        end = QPoint(start.x() + dx, start.y() + dy)
+        QTest.mouseRelease(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+        QTest.qWait(100)
+        return window.property("drags")
+
+    check(drags("left", 60, 0) == 1, "left dock: a drag 60 px to the right (away from the edge) is a launcher drag")
+    check(drags("left", -60, 0) == 0, "  60 px to the left (towards the edge) is not")
+    check(drags("right", -60, 0) == 1, "right dock: 60 px to the left is a launcher drag")
+    check(drags("right", 60, 0) == 0, "  60 px to the right is not")
+    check(drags("bottom", 0, -60) == 1, "bottom dock: 60 px up is a launcher drag")
+    check(drags("bottom", 0, 60) == 0, "  60 px down is not")
 
     print(f"transfers: {checks} checks passed")
 finally:

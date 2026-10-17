@@ -52,7 +52,7 @@ function bool(v, d) {
     }
     return !(v === false || v === "false");
 }
-var state = { docks: 0, magnify: true, magnifiedSize: 62, dockSize: 1, groupWindows: true, homeIndicator: true,
+var state = { docks: 0, magnify: true, magnifiedSize: 62, dockSize: 1, dockPosition: "bottom", groupWindows: true, homeIndicator: true,
               topBars: 0, menu: false, topOpacity: "", meters: false,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
@@ -70,6 +70,11 @@ for (var i = 0; i < ps.length; ++i) {
             state.magnify = bool(docks[j].readConfig("magnify", true), true);
             state.magnifiedSize = Number(docks[j].readConfig("magnifiedSize", 62)) || 62;
             state.dockSize = Number(docks[j].readConfig("dockSize", 1));
+            // In tablet posture the dock is at the bottom for the moment: the edge it goes back to.
+            p.currentConfigGroup = ["PlasmaFusion"];
+            var tabletApplied = p.readConfig("tabletApplied", false) === true || p.readConfig("tabletApplied", "") === "true";
+            state.dockPosition = tabletApplied ? String(p.readConfig("laptopLocation", "bottom")) : String(p.location);
+            p.currentConfigGroup = [];
             state.groupWindows = bool(docks[j].readConfig("groupWindows", true), true);
             state.homeIndicator = bool(docks[j].readConfig("homeIndicator", true), true);
         }
@@ -198,6 +203,35 @@ for (var i = 0; i < ps.length; ++i) {
     if (!tablet && p.screen >= 0 && p.screen < screenCount) {
         p.height = PLATES[SIZE] + (p.height === plate + 16 ? 16 : 0);
     }
+}
+print(count);
+)JS"_s;
+
+// %1: the dock panels' edge, "bottom", "left" or "right" (board DockPosition.dc.html). Every
+// panel holding a dock goes there (the dock lays itself out for the edge; Plasma's scripting
+// Panel sets the containment's location and form factor only, so a panel of a screen that is not
+// connected goes there too). In tablet posture the dock stays at the bottom and the edge the
+// tablet script gives back when the posture ends (the panel's [PlasmaFusion] laptopLocation)
+// becomes the new one. Prints the number of dock panels.
+const QString s_dockPositionScript =
+    uR"JS(
+var WHERE = %1, count = 0;
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var p = ps[i];
+    if (p.widgets("org.plasmafusion.dock").length === 0) {
+        continue;
+    }
+    p.currentConfigGroup = ["PlasmaFusion"];
+    var tablet = p.readConfig("tabletApplied", false) === true || p.readConfig("tabletApplied", "") === "true";
+    if (tablet) {
+        p.writeConfig("laptopLocation", WHERE);
+    }
+    p.currentConfigGroup = [];
+    if (!tablet && String(p.location) !== WHERE) {
+        p.location = WHERE;
+    }
+    ++count;
 }
 print(count);
 )JS"_s;
@@ -701,6 +735,8 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
             const int size = state.value(u"dockSize"_s).toInt(DockMedium);
             take(m_current.dockSize, m_saved.dockSize, size >= DockSmall && size <= DockLarge ? size : int(DockMedium));
             take(m_current.groupWindows, m_saved.groupWindows, state.value(u"groupWindows"_s).toBool(true));
+            const QString where = state.value(u"dockPosition"_s).toString();
+            take(m_current.dockPosition, m_saved.dockPosition, where == u"left" ? int(DockLeft) : where == u"right" ? int(DockRight) : int(DockBottom));
             take(m_current.homeIndicator, m_saved.homeIndicator, state.value(u"homeIndicator"_s).toBool(true));
         }
         if (m_topBarAvailable) {
@@ -784,6 +820,19 @@ bool PlasmaFusionKcm::applyMagnify(bool on)
 bool PlasmaFusionKcm::applyMagnifiedSize(int size)
 {
     return applyWidgetKey(u"org.plasmafusion.dock"_s, u"magnifiedSize"_s, QString::number(size), i18nc("@info", "The dock setting could not be changed."));
+}
+
+bool PlasmaFusionKcm::applyDockPosition(int position)
+{
+    bool ok = false;
+    const QString where = position == DockLeft ? u"left"_s : position == DockRight ? u"right"_s : u"bottom"_s;
+    const QString result = evaluateShellScript(s_dockPositionScript.arg(jsString(where)), &ok);
+    if (!ok || result.toInt() < 1) {
+        addError(ok ? i18nc("@info", "The dock setting could not be changed.")
+                    : i18nc("@info %1 what failed, %2 error", "%1 %2", i18nc("@info", "The dock setting could not be changed."), result));
+        return false;
+    }
+    return true;
 }
 
 bool PlasmaFusionKcm::applyDockSize(int size)
