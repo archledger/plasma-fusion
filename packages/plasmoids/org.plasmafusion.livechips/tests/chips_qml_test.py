@@ -241,9 +241,18 @@ Window {
         const tick = find(island.mainItem, i => i.objectName === "noticeTick" && i.visible);
         const glyph = find(island.mainItem, i => i.path !== undefined && String(i.path) !== "" && i.visible && i.width > 0);
         const text = find(island.mainItem, i => i.text !== undefined && i.font !== undefined && i.visible && String(i.text) !== "");
+        const texts = [];
+        const walk = item => {
+            if (item.text !== undefined && item.font !== undefined && item.visible && String(item.text) !== "") texts.push(String(item.text));
+            for (const child of item.children) walk(child);
+        };
+        walk(island.mainItem);
+        const body = find(island.mainItem, i => i.objectName === "islandBody");
         return JSON.stringify({ glyph: glyph ? String(glyph.path) : "", fill: fill ? fill.width : -1, tick: tick ? tick.x : -1,
-                                text: text ? String(text.text) : "", colour: text ? String(text.color) : "", px96: m.px(96),
-                                keyLine: island.keyLine.a });
+                                text: texts.length > 0 ? texts[texts.length - 1] : "", texts: texts,
+                                colour: text ? String(text.color) : "", px96: m.px(96), keyLine: island.keyLine.a,
+                                role: body.Accessible.role, name: body.Accessible.name,
+                                staticText: Accessible.StaticText, button: Accessible.Button });
     }
     function glyphs() { return JSON.stringify(Chips.GLYPHS); }
 }
@@ -724,6 +733,8 @@ def main():
         check(n["glyph"] == glyph_paths["speaker"] and abs(n["fill"] - 0.6 * n["px96"]) <= 1 and n["tick"] < 0 and n["text"] == "60"
               and n["colour"] == "#ffffff", "  the speaker, the 96 px bar 60 %% full, no tick, 60 in white (%s)" % n)
         check(n["keyLine"] == 0, "  no key line (the board's notices have none) (%s)" % n["keyLine"])
+        check(n["role"] == n["staticText"] and n["name"] == "Volume 60%",
+              "  read as what it says, not as a button (%s %s)" % (n["role"], n["name"]))
         call(h, "setNotice", "audio-volume-high-warning", 115, 150, "", [])
         wait(500)
         n = parts()
@@ -732,6 +743,11 @@ def main():
         call(h, "setNotice", "audio-volume-high-danger", 130, 150, "", [])
         wait(500)
         check(parts()["colour"] == "#ff8a8f", "  past 125: the danger colour (%s)" % parts())
+        call(h, "setNotice", "video-display-brightness", 75, 100, "DELL U2723", [])
+        wait(500)
+        n = parts()
+        check(n["texts"] == ["DELL U2723", "75"] and n["name"] == "Brightness DELL U2723 75%",
+              "  one screen of several: its name before the level, and read with it (%s, %s)" % (n["texts"], n["name"]))
         call(h, "setNotice", "audio-volume-muted", -1, 0, "Audio Muted", [])
         wait(500)
         n = parts()
@@ -747,7 +763,8 @@ def main():
               and parts()["text"] == "40", "  during a call: the notice takes the island (%s)" % parts())
         h.setProperty("content", {"mode": "compact", "items": ["privacy"], "dots": ["camera", "microphone"]})
         wait(500)
-        check(parts()["text"] == "" and parts()["fill"] < 0, "  and the call is back after it (%s)" % parts())
+        check(parts()["text"] == "" and parts()["fill"] < 0 and parts()["role"] == parts()["button"],
+              "  and the call is back after it, a button again (%s)" % parts())
 
         h.setProperty("barHidden", False)
         wait(900)

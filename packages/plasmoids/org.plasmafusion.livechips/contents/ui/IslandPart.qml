@@ -135,8 +135,27 @@ Item {
                 font.weight: Font.DemiBold
                 font.pixelSize: part.island.metrics.font(13)
             }
-            // Plasma's notice: a level (the 96 px bar, the tick at 100 % past it, the number in the
-            // level's colour) or its text.
+            // Plasma's notice: a level (Plasma's label for it, as one screen of several or a
+            // player, in the island's second colour; the 96 px bar, the tick at 100 % past it, the
+            // number in the level's colour) or its text.
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !part.leading && part.notice !== null && part.notice.level && part.notice.text !== ""
+                textFormat: Text.PlainText
+                text: part.notice && part.notice.level ? part.notice.text : ""
+                color: Qt.rgba(1, 1, 1, 0.62)
+                elide: Text.ElideRight
+                width: Math.min(implicitWidth, part.island.metrics.px(160))
+                font.family: part.island.metrics.displayFamily
+                font.weight: Font.DemiBold
+                font.pixelSize: part.island.metrics.font(13)
+            }
+            Item {
+                // the board's 10 px after the label (the row's 4 on both sides)
+                visible: !part.leading && part.notice !== null && part.notice.level && part.notice.text !== ""
+                width: part.island.metrics.px(2)
+                height: 1
+            }
             Item {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !part.leading && part.notice !== null && part.notice.level

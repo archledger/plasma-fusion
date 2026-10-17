@@ -220,10 +220,13 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   Plasma's icon name (the speaker, crossed out for `audio-volume-muted`; the microphone; the sun;
   the keyboard light), else Plasma's icon itself (a player's); a level fills the 96 px bar to
   Plasma's maximum (150 % for the volume past 100) with a tick at 100 % past it, in white to 100,
-  the warning colour to 125 and danger past it (osd.cpp's steps); a text is Plasma's, its lines in
-  one with " · ". A notice takes the island while it shows (`Chips.island()`), also over a
-  full-screen window, then it shows what it did; an island opened by a click stays as it is (the
-  notice is not shown); a click on a notice opens nothing; no key line. With the bar shown, on a
+  the warning colour to 125 and danger past it (osd.cpp's steps), with Plasma's label for it before
+  the bar in the island's second colour (one screen of several, whose name Plasma gives; a
+  player); a text is Plasma's, its lines in one with " · ". A notice takes the island while it
+  shows (`Chips.island()`), also over a full-screen window, then it shows what it did; an island
+  opened by a click stays as it is (the notice is not shown); a click on a notice opens nothing,
+  and a screen reader reads it as what it says ("Volume 60%", static text, not the island's
+  button); no key line. With the bar shown, on a
   screen without an island, with the tablet script off, and with Plasma's pop-up turned off
   (plasmarc `[OSD] Enabled`: it sends nothing then), Plasma's pop-up as before. Plasma 6.7.5 never
   shows a Wi-Fi, Bluetooth or mobile-internet notice (nothing calls those), so the island has none.
@@ -272,29 +275,30 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   first with End, a muted app with Unmute, a login without action, a camera known by its name only)
   and the icon names; Plasma's notices: the glyph for each of Plasma's icon names, the bar's fill
   and the tick for 60 of 100 and 115 of 150, white, warning and danger at 100, 101, 125, 126 and
-  150, the bar never more than full nor less than empty, Audio Muted and several screens' brightness
-  in one line, and the notice taking the island during a call, over a full-screen window and with
-  nothing else. `tests/chips_qml_test.py`: the island's QML in its own window, offscreen at 1440 x
-  900: shown while the bar is hidden and gone when it shows, 4 px from the top, 32 px high and at
-  least 132 wide (at the test's text scale), centred; an app with an icon in the theme (KWin, from
-  hicolor) leads with it, one without with the camera's glyph (the test gives Qt the system's icon
-  themes: offscreen it looks only in `:/icons`); the bubble 6 px beside it with the island still
-  centred and both inside its window; opened 400 px wide and centred, where a real click on Mute
-  asks the app's microphone to mute and Esc closes it; the window resized from outside while it
-  opens and once it has opened, it still opens to its size and centred; five apps at once give five
-  rows, twelve on a screen 400 px high stay on it and scroll; the full-screen dots 14 px high, the
-  pointer on them shows the island and full screen coming back shows the dots again; Plasma's
-  notices: a volume level compact and centred with the speaker, the bar 60 % full and 60 in white,
-  no key line, 115 of 150 with the tick and the warning colour, 130 in danger, Audio Muted without a
-  bar, a click opening nothing, the notice during a call and the call back after it; and
-  `sources/Osd.qml` on the private bus, the test being plasmashell sending its Osd's signals: a
-  notice before KWin asks is not shown, after the request it is, the next one takes its place, a
-  text arrives as its words, the same one again keeps it 1.8 s from then and it goes after, a
-  request with no recent notice shows nothing old and one just after it shows. Mutations of each (8
-  px from the top, no room for the bubble, shown with the bar, 300 px opened, no Esc, Mute doing
-  nothing, no binding again after the focus, the peek kept, the icon chosen by `valid`, the glyph
-  always; a notice shown unasked, kept for good, or an old one shown; the notice not taking the
-  island, one tone for all) fail it or `chips.test.js`.
+  150, the bar never more than full nor less than empty, a level keeping Plasma's label, Audio Muted
+  and several screens' brightness in one line, and the notice taking the island during a call, over
+  a full-screen window and with nothing else. `tests/chips_qml_test.py`: the island's QML in its own
+  window, offscreen at 1440 x 900: shown while the bar is hidden and gone when it shows, 4 px from
+  the top, 32 px high and at least 132 wide (at the test's text scale), centred; an app with an icon
+  in the theme (KWin, from hicolor) leads with it, one without with the camera's glyph (the test
+  gives Qt the system's icon themes: offscreen it looks only in `:/icons`); the bubble 6 px beside
+  it with the island still centred and both inside its window; opened 400 px wide and centred, where
+  a real click on Mute asks the app's microphone to mute and Esc closes it; the window resized from
+  outside while it opens and once it has opened, it still opens to its size and centred; five apps
+  at once give five rows, twelve on a screen 400 px high stay on it and scroll; the full-screen dots
+  14 px high, the pointer on them shows the island and full screen coming back shows the dots again;
+  Plasma's notices: a volume level compact and centred with the speaker, the bar 60 % full and 60 in
+  white, no key line, read as "Volume 60%" and not as a button, 115 of 150 with the tick and the
+  warning colour, 130 in danger, one screen of several with its name before the level, Audio Muted
+  without a bar, a click opening nothing, the notice during a call and the call back after it (a
+  button again); and `sources/Osd.qml` on the private bus, the test being plasmashell sending its
+  Osd's signals: a notice before KWin asks is not shown, after the request it is, the next one takes
+  its place, a text arrives as its words, the same one again keeps it 1.8 s from then and it goes
+  after, a request with no recent notice shows nothing old and one just after it shows. Mutations of
+  each (8 px from the top, no room for the bubble, shown with the bar, 300 px opened, no Esc, Mute
+  doing nothing, no binding again after the focus, the peek kept, the icon chosen by `valid`, the
+  glyph always; a notice shown unasked, kept for good, or an old one shown; the notice not taking
+  the island, one tone for all) fail it or `chips.test.js`.
 - **Session** (`packages/kcm-cpp/tests/scenario-island.sh`; 2026-10-17, a private session on the
   Fedora 44 test laptop, Plasma 6.7.5, 1440 x 900, the stage, module and kcmctl of this change;
   stand-in status items): **29 checks pass**. The switch on: the bar's panel hides, KWin hides its

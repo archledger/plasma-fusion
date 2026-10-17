@@ -670,15 +670,18 @@ Item {
         osdWindows.push(w);
         applyOsd(w, true);
     }
-    function applyOsd(w, shown: bool) {
+    // FRESH: the window has just come up (its notice is the one the island gets).
+    function applyOsd(w, fresh: bool) {
         const corner = TopBar.cornerOf(outputRect(w));
-        const island = corner !== "" && islandCorners.indexOf(corner) >= 0;
-        w.opacity = island ? 0 : 1;
-        if (island && shown) {
+        const what = TopBar.osdOpacity(corner, islandCorners, fresh);
+        if (what.opacity !== null) {
+            w.opacity = what.opacity;
+        }
+        if (what.request) {
             noticeCall.arguments = [TopBar.noticeScript(corner, String(Date.now()))];
             noticeCall.call();
         }
-        debug("Plasma's pop-up on " + (corner || "no screen") + ": " + (island ? "in the island" : "as it is"));
+        debug("Plasma's pop-up on " + (corner || "no screen") + ": " + (what.request ? "in the island" : what.opacity === null ? "kept" : "as it is"));
     }
     DBusCall {
         id: noticeCall

@@ -98,6 +98,19 @@ function isPlasmaOsd(w) {
     return !!w && w.onScreenDisplay === true && (c === "plasmashell" || c === "org.kde.plasmashell");
 }
 
+// What to do with Plasma's pop-up window on the screen at CORNER, ISLANDS being the corners whose
+// island is there: a window that has just come up there is made transparent and that island asked
+// for the notice (request); one already up keeps showing (its notice is no longer the island's to
+// show) until Plasma closes it; elsewhere it shows as it is. { opacity: 0 | 1 | null (as it is),
+// request: bool }
+function osdOpacity(corner, islands, fresh) {
+    var island = corner !== "" && islands.indexOf(corner) >= 0;
+    if (!island) {
+        return { opacity: 1, request: false };
+    }
+    return fresh ? { opacity: 0, request: true } : { opacity: null, request: false };
+}
+
 // The script for plasmashell that asks the island of the screen at CORNER ("X,Y") to show Plasma's
 // notice: its live chips get [General] noticeRequest NONCE. Prints "notice: N widgets".
 function noticeScript(corner, nonce) {

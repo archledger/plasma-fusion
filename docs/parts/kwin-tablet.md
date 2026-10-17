@@ -349,17 +349,20 @@ property), but KWin's scripts see the window's `hidden`.
   output, `Placement::placeOnScreenDisplay`). When it comes up on a screen whose island is there,
   the script makes it transparent (`opacity` 0) and asks that screen's live chips to show the notice
   (`TopBar.noticeScript()`: `[General] noticeRequest` with a new value, for the chips of that
-  screen only); elsewhere it stays as it is. A pop-up still up when the bars change is set again;
-  turned off, the script gives every pop-up it knows its opacity back. KWin's scripts have no
+  screen only); elsewhere it stays as it is (`TopBar.osdOpacity()`). A pop-up already up when a bar
+  starts hiding (or the script starts) keeps showing until Plasma closes it, as its notice is not
+  the island's to show; one on a screen whose bar shows again gets its opacity back, and turned
+  off, the script gives every pop-up it knows its opacity back. KWin's scripts have no
   signal for the active output (6.7.5 `WorkspaceWrapper`), and none is needed: the window says where
   the notice is. The line for each (`Plasma's pop-up on 0,0: in the island`) is debug output (the
   qml category), as it comes with every key press.
-- `tests/tablet-topbar.test.js` (in the build): which windows are top bars (the dock, a dock on
-  the left, a window at the top, another output's bar, another app's are not), the state in a
-  fixed order, and the script against a model of desktop scripting: the laptop's bar hidden and
-  the monitor's shown, nothing written again, both changed, every island gone when no bar window
-  is known, a value written as text, a panel of a screen that is gone skipped; the screens whose
-  island is there (none for a hidden bar without the live chips), a screen's corner, Plasma's
-  pop-up told from the island and other windows, and the notice request reaching only the chips of
-  its screen. Reversing the hidden value, dropping the screen check, writing on every call, not
-  listing the islands or asking every screen's chips fails it.
+- `tests/tablet-topbar.test.js` (in the build): which windows are top bars (the dock, a dock on the
+  left, a window at the top, another output's bar, another app's are not), the state in a fixed
+  order, and the script against a model of desktop scripting: the laptop's bar hidden and the
+  monitor's shown, nothing written again, both changed, every island gone when no bar window is
+  known, a value written as text, a panel of a screen that is gone skipped; the screens whose island
+  is there (none for a hidden bar without the live chips), a screen's corner, Plasma's pop-up told
+  from the island and other windows, what becomes of a pop-up that comes up, one already up and one
+  elsewhere, and the notice request reaching only the chips of its screen. Reversing the hidden
+  value, dropping the screen check, writing on every call, not listing the islands or asking every
+  screen's chips fails it.

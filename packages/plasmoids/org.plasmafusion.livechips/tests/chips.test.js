@@ -211,6 +211,8 @@ check(() => assert.deepStrictEqual(Object.values(NOTICE_COLOURS), ["#ffffff", "#
 check(() => assert.deepStrictEqual(notice("audio-volume-muted", null, null, "Audio Muted"),
     { glyph: "speakerOff", icon: "audio-volume-muted", level: false, value: "", fill: 0, tick: -1, tone: "plain", text: "Audio Muted" },
     "Audio Muted: the crossed-out speaker and its text"));
+check(() => assert.deepStrictEqual([notice("video-display-brightness", 75, 100, "DELL U2723").text, notice("elisa", 40, 100, "Elisa").text],
+    ["DELL U2723", "Elisa"], "a level keeps Plasma's label (one screen of several, a player)"));
 check(() => assert.strictEqual(notice("video-display-brightness", null, null, "Built-in: 80%\nDELL U2723: 60%\n").text,
     "Built-in: 80% · DELL U2723: 60%", "several screens' brightness: one line"));
 // The notice takes the island while it shows, over whatever is there, also in full screen.

@@ -15,7 +15,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-tablet", "contents", "ui", "TopBar.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { isTopBar, barState, barScript, barsOf, islandsAt, cornerOf, isPlasmaOsd, noticeScript } = globalThis;
+const { isTopBar, barState, barScript, barsOf, islandsAt, cornerOf, isPlasmaOsd, noticeScript, osdOpacity } = globalThis;
 
 // Windows: the laptop screen at 0,0 and a monitor to its right at 1440,0.
 const laptop = { x: 0, y: 0, width: 1440, height: 900 };
@@ -141,6 +141,14 @@ assert.ok(isPlasmaOsd({ onScreenDisplay: true, resourceClass: "plasmashell" }));
 assert.ok(!isPlasmaOsd({ onScreenDisplay: false, criticalNotification: true, resourceClass: "plasmashell" }), "the island");
 assert.ok(!isPlasmaOsd({ onScreenDisplay: true, resourceClass: "org.kde.kscreen" }), "another program's");
 assert.ok(!isPlasmaOsd(null));
+// Plasma's pop-up window: one that comes up on a screen with an island goes there; one already up
+// when the bar starts hiding (or the script starts) keeps showing until Plasma closes it (its
+// notice is not the island's to show); elsewhere, as it is.
+assert.deepStrictEqual(osdOpacity("0,0", ["0,0"], true), { opacity: 0, request: true }, "comes up there: to the island");
+assert.deepStrictEqual(osdOpacity("0,0", ["0,0"], false), { opacity: null, request: false }, "already up there: kept showing");
+assert.deepStrictEqual(osdOpacity("1440,0", ["0,0"], true), { opacity: 1, request: false }, "another screen: as it is");
+assert.deepStrictEqual(osdOpacity("0,0", [], false), { opacity: 1, request: false }, "the bar shows again: as it is");
+assert.deepStrictEqual(osdOpacity("", ["0,0"], true), { opacity: 1, request: false }, "no screen: as it is");
 // The request goes to the live chips of that screen only.
 {
     const s = shell([laptop, monitor], [

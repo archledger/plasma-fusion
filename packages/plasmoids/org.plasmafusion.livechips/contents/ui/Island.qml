@@ -188,6 +188,20 @@ PlasmaCore.Dialog {
         const c = items[0] === "music" ? Qt.color("#f2a65a") : Qt.color(kind !== "" ? glyphColor(kind) : "#ffffff");
         return Qt.rgba(c.r, c.g, c.b, kind !== "" || items[0] === "music" ? 0.45 : 0.18);
     }
+    // What a notice of Plasma's says, for a screen reader: a level with what it is ("Volume 60%",
+    // Plasma's label for a screen or a player with it), a text as Plasma wrote it.
+    function noticeName(n: var): string {
+        if (!n.level) {
+            return n.text;
+        }
+        const what = n.glyph === "speaker" ? i18nc("@info:accessibility a level in the island", "Volume")
+            : n.glyph === "microphone" ? i18nc("@info:accessibility a level in the island", "Microphone")
+            : n.glyph === "sun" ? i18nc("@info:accessibility a level in the island", "Brightness")
+            : n.glyph === "keyboardLight" ? i18nc("@info:accessibility a level in the island", "Keyboard brightness")
+            : i18nc("@info:accessibility a level in the island", "Level");
+        const percent = i18nc("@info:accessibility a level in percent", "%1%", n.value);
+        return [what, n.text, percent].filter(part => part !== "").join(" ");
+    }
     function leftText(left: var): string {
         if (!left) {
             return "";
@@ -267,6 +281,7 @@ PlasmaCore.Dialog {
         // The island: one black shape for every size.
         Rectangle {
             id: body
+            objectName: "islandBody"
             x: island.side + (island.frameWidth - width) / 2
             width: island.targetWidth
             height: island.targetHeight
@@ -288,9 +303,11 @@ PlasmaCore.Dialog {
                 NumberAnimation { duration: island.motion.surface; easing.type: island.motion.standardEasing }
             }
 
-            Accessible.role: Accessible.Button
-            Accessible.name: island.opened !== "" ? i18nc("@action:button the island at the top of the screen", "Close the island")
-                                                   : i18nc("@action:button the island at the top of the screen", "Open the island")
+            // A notice of Plasma's is read as what it says (no button: a click on it opens nothing).
+            Accessible.role: island.notice ? Accessible.StaticText : Accessible.Button
+            Accessible.name: island.notice ? island.noticeName(island.notice)
+                : island.opened !== "" ? i18nc("@action:button the island at the top of the screen", "Close the island")
+                : i18nc("@action:button the island at the top of the screen", "Open the island")
             Accessible.onPressAction: island.opened !== "" ? island.close() : island.items[0] !== "notice" ? island.open(island.items[0] || "") : undefined
 
             // A click on the island opens it; on an opened island's free part, closes it.
