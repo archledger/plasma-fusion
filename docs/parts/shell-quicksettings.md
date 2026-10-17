@@ -390,6 +390,20 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   under the list, a click on a profile chooses it directly.
   Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
   passes its time, the state line for timed and untimed.
+* The on-screen keyboard's replies (offscreen, Plasma's D-Bus module, a stand-in KWin on a private
+  bus whose `/VirtualKeyboard` and `/Effects` answer after 400 ms; in CI):
+
+  ```sh
+  QT_QPA_PLATFORM=offscreen dbus-run-session \
+    --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+    python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/tablet_policy_test.py
+  ```
+
+  KWin's keyboard state reaches the policy; a reply that comes after the policy was destroyed (the
+  state, the keyboard shown, a property set, KWin's Overview asked about in tablet posture) throws
+  nothing. Each of the four handlers without its check fails it. The settings-file session
+  (`packages/kcm-cpp/tests/scenario-settingsfile.sh`, two screens) logged the two TypeErrors during
+  the import without the change and none with it, 22 of 22 checks passing both times.
 * Hidden tray items while active (offscreen, Plasma's `org.kde.plasma.core`, a stand-in panel and
   tray with the stock ids and a writable configuration; in CI):
 
@@ -705,6 +719,11 @@ the lead directly.
   `VirtualKeyboardMode` is never written. The value is plasma-keyboard's desktop file, looked up once
   at start in the system data directories (`XDG_DATA_DIRS`; `/usr/share/applications` on Fedora, the
   system profile on NixOS; 2026-10-02), with the Fedora path when none has it.
+  The on-screen keyboard's state comes from KWin over D-Bus; Plasma's D-Bus module calls a reply
+  handler whenever the reply comes (plasma-workspace 6.7.5 `DBusConnection::asyncCall`), also after
+  the widget is gone, so the handlers return when its ids are null (2026-10-17: an import that
+  changed the keyboard policy and then removed the bars logged two `TypeError: Value is null and
+  could not be converted to an object`, one per screen's quick settings).
 - **Rotation lock** (F14, T19): lock = one `kscreen-doctor output.<o>.rotation.<current>
   output.<o>.autoRotatePolicy.never`; unlock = `autoRotatePolicy.inTabletMode rotation.normal`; leaving
   tablet mode while locked turns the screen back to normal and keeps the lock (plasmafusionrc

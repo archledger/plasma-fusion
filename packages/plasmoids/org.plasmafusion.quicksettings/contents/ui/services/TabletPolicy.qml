@@ -172,7 +172,11 @@ Item {
             "member": member,
             "arguments": [new DBus.string(name)],
             "signature": "(s)"
-        }, reply => { if (done) done(reply.value === true); }, () => {});
+        }, reply => {
+            if (policy && done) {
+                done(reply.value === true);
+            }
+        }, () => {});
     }
     function applyOverview(tabletPosture: bool) {
         if (tabletPosture) {
@@ -192,6 +196,10 @@ Item {
     }
 
     // ---- On-screen keyboard state (KWin)
+    // Plasma's D-Bus module calls a reply handler whenever the reply comes (plasma-workspace 6.7.5
+    // DBusConnection::asyncCall), also after this widget is gone: a panel removed while the call
+    // was out, as an import does right after its Apply changed the keyboard policy and KWin
+    // announced the keyboard. Its ids are null then, so the handlers check `policy` first.
     property bool oskAvailable: false
     property bool oskVisible: false
     property bool oskActive: false
@@ -204,6 +212,9 @@ Item {
             "arguments": [new DBus.string("org.kde.kwin.VirtualKeyboard")],
             "signature": "(s)"
         }, reply => {
+            if (!policy) {
+                return;
+            }
             const props = reply.value;
             if (props) {
                 policy.oskAvailable = props.available === true;
@@ -245,7 +256,11 @@ Item {
             // (a plain boolean in the variant: a DBus.bool inside one cannot be marshalled)
             "arguments": [new DBus.string("org.kde.kwin.VirtualKeyboard"), new DBus.string(name), new DBus.variant(value)],
             "signature": "(ssv)"
-        }, () => policy.refreshOsk(), error => console.warn("quicksettings: on-screen keyboard " + name + " not set: " + error));
+        }, () => {
+            if (policy) {
+                policy.refreshOsk();
+            }
+        }, error => console.warn("quicksettings: on-screen keyboard " + name + " not set: " + error));
     }
     // Shows the keyboard now (also without a text field), or hides it (TABLET 4.3).
     function toggleOsk() {
@@ -258,7 +273,11 @@ Item {
                 "iface": "org.kde.kwin.VirtualKeyboard",
                 "member": "forceActivate",
                 "arguments": []
-            }, () => policy.refreshOsk(), () => {});
+            }, () => {
+                if (policy) {
+                    policy.refreshOsk();
+                }
+            }, () => {});
         }
     }
 
