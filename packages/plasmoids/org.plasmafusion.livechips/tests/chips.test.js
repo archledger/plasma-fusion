@@ -129,6 +129,9 @@ check(() => assert.deepStrictEqual(island({ privacy: ["microphone"], recording: 
 check(() => assert.deepStrictEqual(island({ privacy: [], recording: false, keepAwake: true, music: true }).items, ["keepawake", "music"],
     "no privacy kind: Keep awake first, then the music"));
 check(() => assert.deepStrictEqual(island({ privacy: [], music: true }).items, ["music"], "music alone"));
+check(() => assert.deepStrictEqual(island({ privacy: [], music: false, musicOpened: true }).items, ["music"],
+    "paused in its opened view: the music stays (Play is there)"));
+check(() => assert.deepStrictEqual(island({ privacy: [], music: false, musicOpened: false }).mode, "none", "paused, closed: gone"));
 check(() => assert.deepStrictEqual(island({ privacy: ["camera", "microphone"], recording: true, music: true, fullScreen: true }),
     { mode: "dots", items: [], dots: ["camera", "microphone"] }, "full screen: only the privacy dots"));
 check(() => assert.deepStrictEqual(island({ privacy: [], recording: true, music: true, fullScreen: true }).mode, "none",

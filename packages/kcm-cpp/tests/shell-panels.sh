@@ -454,6 +454,13 @@ expect topbarhide "no error" is "$(value topbarhide errorText)" ""
 expect topbarhide "  the choice kept for bars whose screen comes back (plasmafusionrc [TopBar] AutoHide)" \
   is "$(sed -n '/^\[TopBar\]/,/^\[/s/^AutoHide=//p' "$work/topbarhide/config/plasmafusionrc")" true
 
+# The bars' change fails (the shell's script fails): the choice is not kept in plasmafusionrc
+# either, or the tablet script would bring it in later.
+run topbarhidefail "{\"failScripts\": \"var HIDING\", \"panels\": [{\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
+  waitshell "set topBarAutoHide true" save "wait 500" "get errorText"
+expect topbarhidefail "the change fails: the page says so" is "$(value topbarhidefail errorText | grep -c 'top bar setting could not be changed')" 1
+expect topbarhidefail "  and plasmafusionrc keeps no choice" is "$(sed -n '/^\[TopBar\]/,/^\[/s/^AutoHide=//p' "$work/topbarhidefail/config/plasmafusionrc" 2>/dev/null)" ""
+
 # A Fusion bar without the app name (the clock pill and quick settings): the switch is there for it.
 run topbarhidenoname "{\"showHiding\": true, \"panels\": [{\"widgets\": [\"$CLOCK\", \"$QS\"]}]}" \
   waitshell "get topBarHidingAvailable" "set topBarAutoHide true" save "wait 500" "get errorText"

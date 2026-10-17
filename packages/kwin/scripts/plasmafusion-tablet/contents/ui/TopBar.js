@@ -21,6 +21,20 @@ function isTopBar(w, output) {
         && w.height > 0 && w.height <= output.height / 4;
 }
 
+// The top bars among WINDOWS (plasmashell's panel windows), as barState() takes them, by their
+// geometry now (a panel moved to another edge or made narrower is no bar any more); OUTPUT_OF(w)
+// gives a window's output {x, y, width, height}.
+function barsOf(windows, outputOf) {
+    var bars = [];
+    for (var i = 0; i < windows.length; ++i) {
+        var output = outputOf(windows[i]);
+        if (isTopBar(windows[i], output)) {
+            bars.push({ x: output.x, y: output.y, hidden: windows[i].hidden === true });
+        }
+    }
+    return bars;
+}
+
 // The bars as plasmashell gets them, from BARS [{x, y, hidden}] (their outputs' corners): one per
 // screen, hidden while any panel window along its top is (KWin sees no widgets: another full-width
 // top panel there is a bar too, and only a panel that hides can be hidden; barScript() then asks

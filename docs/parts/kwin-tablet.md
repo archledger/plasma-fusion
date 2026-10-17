@@ -331,12 +331,14 @@ property), but KWin's scripts see the window's `hidden`.
   KWin sees no widgets, so another full-width top panel on the screen is a bar too: a screen's bar
   is hidden while any of its top panel windows is (`barState()`), and a panel that does not hide is
   never hidden. It writes only what changes and skips panels of a screen that is gone.
-- `main.qml` follows the bars' windows (at start, and as plasmashell's panel windows appear) and
-  their `hiddenChanged`; the state goes to plasmashell when it changes (one call for changes in
-  the same turn of the event loop) and again when its panels appear (a shell restart). When the
-  script is turned off (the kill switch), it sends that no bar is hidden as it goes, so no island
-  is left (the chips keep `barHidden` in their config). The log:
-  `plasmafusion-tablet: top bars [{"x":0,"y":0,"hidden":true}]: island: 1 widgets, 1 changed`.
+- `main.qml` follows plasmashell's panel windows (at start, and as they appear), their `hidden`,
+  geometry and output; which of them are top bars is decided by their geometry each time
+  (`TopBar.barsOf()`: a panel moved to another edge or made narrower is no bar any more); the state
+  goes to plasmashell when it changes (one call for changes in the same turn of the event loop) and
+  again when its panels appear (a shell restart). When the script is turned off (the kill switch),
+  it sends that no bar is hidden as it goes, so no island is left (the chips keep `barHidden` in
+  their config). The log: `plasmafusion-tablet: top bars [{"x":0,"y":0,"hidden":true}]: island: 1
+  widgets, 1 changed`.
 - `tests/tablet-topbar.test.js` (in the build): which windows are top bars (the dock, a dock on
   the left, a window at the top, another output's bar, another app's are not), the state in a
   fixed order, and the script against a model of desktop scripting: the laptop's bar hidden and

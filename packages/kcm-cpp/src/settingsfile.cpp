@@ -430,8 +430,9 @@ int PlasmaFusionKcm::applyFileDecoration(const QJsonObject &settings, QStringLis
 void PlasmaFusionKcm::keepPanelChoices(const QJsonObject &settings)
 {
     // Apply turns "Dock on every screen" on only with a dock to copy, and keeps the top bar's
-    // opacity choice only with a top bar; on a desktop without them the file's choice would be
-    // lost, though its panels bring them. finishResetLayout and ensure-topbars.js read the choice
+    // opacity and hiding choices only with a top bar; on a desktop without them the file's choice
+    // would be lost, though its panels bring them (the tablet script gives the hiding choice to the
+    // bars as their windows appear). finishResetLayout and ensure-topbars.js read the choice
     // from plasmafusionrc once the panels are there.
     const struct {
         const char *name;
@@ -441,6 +442,7 @@ void PlasmaFusionKcm::keepPanelChoices(const QJsonObject &settings)
     } choices[] = {
         {"everyDock", &State::everyDock, "Dock", "EveryScreen"},
         {"solidTopBar", &State::solidTopBar, "TopBar", "SolidNextToWindows"},
+        {"topBarAutoHide", &State::topBarAutoHide, "TopBar", "AutoHide"},
     };
     KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
     fusion->reparseConfiguration();

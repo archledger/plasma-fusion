@@ -15,7 +15,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-tablet", "contents", "ui", "TopBar.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { isTopBar, barState, barScript } = globalThis;
+const { isTopBar, barState, barScript, barsOf } = globalThis;
 
 // Windows: the laptop screen at 0,0 and a monitor to its right at 1440,0.
 const laptop = { x: 0, y: 0, width: 1440, height: 900 };
@@ -31,6 +31,18 @@ assert.ok(!isTopBar(win({ height: 300 }), laptop), "a panel window a third of th
 assert.ok(!isTopBar(win({ resourceClass: "firefox" }), laptop), "not plasmashell's");
 assert.ok(!isTopBar(win({ dock: false }), laptop), "not a panel");
 assert.ok(!isTopBar(win({}), null), "no output");
+
+// The bars among the panel windows, by their geometry now: a panel moved to the left edge, or made
+// narrower, is no bar any more; the dock never was.
+{
+    const out = () => laptop;
+    const top = win({ hidden: true }), dock = win({ x: 300, y: 812, width: 840, height: 88, hidden: true });
+    assert.deepStrictEqual(barsOf([top, dock], out), [{ x: 0, y: 0, hidden: true }], "the bar, not the dock");
+    top.x = 0; top.width = 34; top.height = 900;
+    assert.deepStrictEqual(barsOf([top, dock], out), [], "moved to the left edge: no bar");
+    top.width = 1440; top.height = 34; top.x = 0; top.y = 0; top.width = 600;
+    assert.deepStrictEqual(barsOf([top, dock], out), [], "made narrower: no bar");
+}
 
 // Two top panels on one screen (the Fusion bar and another full-width one): one entry, hidden while
 // either is.

@@ -187,7 +187,8 @@ var ISLAND_COLOURS = {
 };
 
 // What the island shows, from what is going on: S { privacy: [kinds] (capsule().kinds),
-// recording, keepAwake, music: bools, fullScreen: the active window of the screen is full screen }.
+// recording, keepAwake, music (playing): bools, musicOpened: the music's view is open (paused there,
+// it stays, so Play is there), fullScreen: the active window of the screen is full screen }.
 // The privacy kinds always come first, then a screen recording, a Keep awake timer and the music
 // playing: the first two of them show (the first in the island, the second in a bubble beside
 // it). In a full-screen window only the privacy kinds show, as dots. { mode: "none" | "compact" |
@@ -207,7 +208,7 @@ function island(s) {
     if (s.keepAwake) {
         items.push("keepawake");
     }
-    if (s.music) {
+    if (s.music || s.musicOpened) {
         items.push("music");
     }
     items = items.slice(0, 2);

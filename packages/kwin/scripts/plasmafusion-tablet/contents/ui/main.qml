@@ -585,7 +585,8 @@ Item {
 
     // ---------------------------------------------------------------- the top bar for the island
 
-    // The top bars' windows (TopBar.isTopBar), followed for their `hidden`; their state goes to
+    // Plasmashell's panel windows, followed for their `hidden`, geometry and output; which of them
+    // are top bars is decided by their geometry each time (TopBar.barsOf). The bars' state goes to
     // plasmashell when it changes (one call for changes in the same turn of the event loop) and
     // again when its panels appear (a restart).
     property var barWindows: []
@@ -595,21 +596,17 @@ Item {
         return g ? { x: g.x, y: g.y, width: g.width, height: g.height } : null;
     }
     function trackBar(w) {
-        if (barWindows.indexOf(w) >= 0 || !TopBar.isTopBar(w, outputRect(w))) {
+        if (barWindows.indexOf(w) >= 0) {
             return;
         }
         barWindows.push(w);
         w.hiddenChanged.connect(barsChanged.restart);
+        w.frameGeometryChanged.connect(barsChanged.restart);
+        w.outputChanged.connect(barsChanged.restart);
         barsChanged.restart();
     }
     function sendBars(force: bool) {
-        const bars = [];
-        for (const w of barWindows) {
-            const g = outputRect(w);
-            if (g) {
-                bars.push({ x: g.x, y: g.y, hidden: w.hidden });
-            }
-        }
+        const bars = TopBar.barsOf(barWindows, w => root.outputRect(w));
         const script = TopBar.barScript(bars);
         if (!force && script === sentBars) {
             return;
@@ -629,10 +626,8 @@ Item {
         path: "/PlasmaShell"
         dbusInterface: "org.kde.PlasmaShell"
         method: "evaluateScript"
-        onFinished: returnValue => root.log("top bars " + JSON.stringify(TopBar.barState(root.barWindows.map(w => {
-            const g = root.outputRect(w);
-            return { x: g ? g.x : 0, y: g ? g.y : 0, hidden: w.hidden };
-        }))) + ": " + (returnValue.length > 0 ? String(returnValue[0]).trim() : ""))
+        onFinished: returnValue => root.log("top bars " + JSON.stringify(TopBar.barState(TopBar.barsOf(root.barWindows, w => root.outputRect(w))))
+                                            + ": " + (returnValue.length > 0 ? String(returnValue[0]).trim() : ""))
         // Sent again with the next change, or when the shell's panels appear.
         onFailed: root.sentBars = ""
     }

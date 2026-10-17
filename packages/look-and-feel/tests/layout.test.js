@@ -635,6 +635,12 @@ test("Add Panel: a new top bar hides as the main bar does (board Island.dc.html)
     const shown = shell({ screens: TWO, files: rc(), panels: [mainBar()] });
     shown.run(TOPBAR);
     assert.strictEqual(tops(shown).find((p) => p.id !== 2).hiding, "none", "the main bar shows: the new one shows");
+    // A bar without quick settings (the app name and the clock pill) that hides: the new one too.
+    const noQs = { id: 2, type: "org.kde.panel", screen: 0, location: "top", opacity: "adaptive", hiding: "autohide", config: {}, widgets: [
+        { id: 3, type: "org.plasmafusion.appname", config: {} }, { id: 4, type: "org.plasmafusion.clockpill", config: {} }] };
+    const n = shell({ screens: TWO, files: rc(), panels: [noQs] });
+    n.run(TOPBAR);
+    assert.strictEqual(tops(n).find((p) => p.id !== 2).hiding, "autohide", "a bar without quick settings that hides: the new one too");
 });
 test("Add Panel: a top bar that copies another bar's tray hides the items its live chips replace", () => {
     // A bar from before the live chips: its tray hides one item of the user's, and none of theirs.

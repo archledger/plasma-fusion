@@ -889,12 +889,6 @@ bool PlasmaFusionKcm::applyDockPosition(int position)
 
 bool PlasmaFusionKcm::applyTopBarAutoHide(bool on)
 {
-    // Also for the bars of screens that are not connected now: the tablet KWin script gives a top bar
-    // this choice when its window appears (docs/parts/kwin-tablet.md).
-    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
-    fusion->reparseConfiguration();
-    KConfigGroup(fusion, u"TopBar"_s).writeEntry("AutoHide", on, KConfig::Notify);
-    fusion->sync();
     bool ok = false;
     const QString result = evaluateShellScript(s_topBarHidingScript.arg(jsString(on ? u"autohide"_s : u"none"_s)), &ok);
     if (!ok || result.toInt() < 1) {
@@ -902,6 +896,12 @@ bool PlasmaFusionKcm::applyTopBarAutoHide(bool on)
                     : i18nc("@info %1 what failed, %2 error", "%1 %2", i18nc("@info", "The top bar setting could not be changed."), result));
         return false;
     }
+    // Once the bars have it, also for the bars of screens that are not connected now: the tablet
+    // KWin script gives a top bar this choice when its window appears (docs/parts/kwin-tablet.md).
+    KSharedConfig::Ptr fusion = KSharedConfig::openConfig(s_fusionConfig, KConfig::NoGlobals);
+    fusion->reparseConfiguration();
+    KConfigGroup(fusion, u"TopBar"_s).writeEntry("AutoHide", on, KConfig::Notify);
+    fusion->sync();
     return true;
 }
 

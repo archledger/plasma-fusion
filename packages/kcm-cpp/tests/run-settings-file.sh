@@ -313,6 +313,7 @@ work = sys.argv[1]
 f = json.load(open(f"{work}/good.json"))
 f["settings"]["everyDock"] = True
 f["settings"]["solidTopBar"] = False
+f["settings"]["topBarAutoHide"] = True
 json.dump(f, open(f"{work}/panelchoices.json", "w"))
 PY
 export XDG_CONFIG_HOME=$work/config-d
@@ -321,6 +322,7 @@ LAYOUT=$work/layout-nopanels.json session panelchoices "call importSettings $wor
 check "imported without a dock or top bar: the file's dock and top-bar choices are kept" bash -c "
   [ \"\$(kreadconfig6 --file plasmafusionrc --group Dock --key EveryScreen)\" = true ] &&
   [ \"\$(kreadconfig6 --file plasmafusionrc --group TopBar --key SolidNextToWindows)\" = false ] &&
+  [ \"\$(kreadconfig6 --file plasmafusionrc --group TopBar --key AutoHide)\" = true ] &&
   grep -q '^kcmctl: everyDock=true' '$work/panelchoices.log' && grep -q '^kcmctl: solidTopBar=false' '$work/panelchoices.log'"
 check "  and ensure-topbars.js runs for the other screens' docks" grep -q 'top bars: stand-in ran' "$work/calls.log"
 export XDG_CONFIG_HOME=$work/config-c

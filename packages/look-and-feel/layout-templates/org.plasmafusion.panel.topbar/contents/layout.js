@@ -93,23 +93,29 @@ var TRAY_ITEMS_REPLACED_BY_CHIPS = [
 var hasQuickSettings = false;
 var otherTray = null;
 // The main bar's hiding (the settings page's "Hide the top bar automatically", board
-// Island.dc.html), in tablet posture the one it goes back to: the new bar takes it. Read only from
-// a bar on a screen (plasmashell reads a missing screen's from an invalid config and crashes).
+// Island.dc.html), in tablet posture the one it goes back to: the new bar takes it, from the first
+// Fusion top bar on a screen (the app name, the clock pill or quick settings, the settings page's
+// test; plasmashell reads a missing screen's from an invalid config and crashes).
 var otherHiding = "none", hidingFound = false;
 for (var p = 0; p < panelIds.length; ++p) {
     var other = panelById(panelIds[p]);
-    if (other && other.widgets("org.plasmafusion.quicksettings").length > 0) {
+    if (!other) {
+        continue;
+    }
+    if (other.widgets("org.plasmafusion.quicksettings").length > 0) {
         hasQuickSettings = true;
         if (otherTray === null && other.widgets("org.kde.plasma.systemtray").length > 0) {
             otherTray = other.widgets("org.kde.plasma.systemtray")[0];
         }
-        if (!hidingFound && other.screen >= 0 && other.screen < screenCount) {
-            other.currentConfigGroup = ["PlasmaFusion"];
-            var otherTablet = other.readConfig("tabletApplied", false) === true || String(other.readConfig("tabletApplied", "")) === "true";
-            otherHiding = String(otherTablet ? other.readConfig("laptopHiding", "none") : other.hiding) === "autohide" ? "autohide" : "none";
-            other.currentConfigGroup = [];
-            hidingFound = true;
-        }
+    }
+    var fusionBar = other.widgets("org.plasmafusion.appname").length > 0 || other.widgets("org.plasmafusion.clockpill").length > 0
+        || other.widgets("org.plasmafusion.quicksettings").length > 0;
+    if (fusionBar && !hidingFound && other.screen >= 0 && other.screen < screenCount) {
+        other.currentConfigGroup = ["PlasmaFusion"];
+        var otherTablet = other.readConfig("tabletApplied", false) === true || String(other.readConfig("tabletApplied", "")) === "true";
+        otherHiding = String(otherTablet ? other.readConfig("laptopHiding", "none") : other.hiding) === "autohide" ? "autohide" : "none";
+        other.currentConfigGroup = [];
+        hidingFound = true;
     }
 }
 var panel = new Panel;
