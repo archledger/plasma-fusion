@@ -206,10 +206,10 @@ Window {
         return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
     }
     function openIt() { island.open("privacy"); }
-    // The compact island's leading part: the app's icon shown (its name) and whether the kind's
-    // glyph shows.
+    // The compact island's leading part: the app's icon shown (its name; shown and not
+    // transparent) and whether the kind's glyph shows.
     function leading() {
-        const icon = find(island.mainItem, i => i.fallback !== undefined && i.source !== undefined && i.visible && i.width > 0);
+        const icon = find(island.mainItem, i => i.fallback !== undefined && i.source !== undefined && i.visible && i.opacity > 0 && i.width > 0);
         const glyph = find(island.mainItem, i => i.path !== undefined && String(i.path) !== "" && i.visible && i.width > 0);
         return JSON.stringify({ icon: icon ? String(icon.source) : "", glyph: glyph !== null });
     }

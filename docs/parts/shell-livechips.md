@@ -208,8 +208,10 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
 - **Compact** (`IslandPart.qml`): 32 px high, radius 16, at least 132 px wide, 6 px margins; the
   privacy kinds: the first app's icon (its name as an icon name, `Chips.iconGuess()`; the kind's
   glyph when the theme has none: Kirigami 6.31's `Icon.valid` only says a source is set, so its
-  `status` says whether the theme has it; on the ThinkPad's session a login and an app without an
-  icon showed Kirigami's "unknown" icon before, 2026-10-17) and an 8 px dot for each kind; a
+  `status` says whether the theme has it, and the icon stays shown, only transparent, until then,
+  as Kirigami loads an icon only once it is shown; on the ThinkPad's session a login and an app
+  without an icon showed Kirigami's "unknown" icon before, 2026-10-17) and an 8 px dot for each
+  kind; a
   recording: the red dot in its
   tint and its time; Keep awake: the cup and the time left; the music: its cover (radius 6) and
   four level bars in the cover's orange (still: the motion lint allows no endless animation).
