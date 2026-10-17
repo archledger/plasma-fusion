@@ -15,6 +15,7 @@ separator · running apps that are not pinned · **Downloads** stack · **Trash*
 | `.../contents/config/main.xml` | settings (below) |
 | `.../contents/config/config.qml`, `ui/ConfigGeneral.qml` | settings page: "Magnify icons on hover", magnified size, name pill, colours, Search action, filters, click-to-minimize |
 | `.../contents/ui/main.qml` | task model, layout and magnification engine, actions, menus, Downloads and Trash logic |
+| `.../contents/code/metrics.js` | the three sizes' metrics, tablet posture's, and the magnified size for a size (`tests/metrics.test.js`) |
 | `.../contents/ui/TaskItem.qml` | one app: theme icon with the board's drop shadow, running dot or active pill, pointer/keyboard handling |
 | `.../contents/ui/DockButton.qml` | the 48 px fixed buttons (fill, hover, pressed, "aria-pressed" accent state, indicator, focus ring) |
 | `.../contents/ui/NamePill.qml` | the name pill above the hovered item (a separate tooltip window) |
@@ -59,8 +60,10 @@ dock.addWidget("org.plasmafusion.dock");
 |---|---|---|
 | `launchers` | `applications:org.kde.dolphin.desktop, preferred://browser, applications:org.kde.konsole.desktop, applications:org.kde.kmail2.desktop, applications:org.kde.kate.desktop, applications:org.kde.elisa.desktop, applications:org.kde.gwenview.desktop, applications:org.kde.korganizer.desktop, applications:systemsettings.desktop` | pinned apps = the board's Files, Browser, Terminal, Mail, Code, Music, Photos, Calendar, Settings. `preferred://browser` resolves to the default browser (Google Chrome on the ThinkPad's real account, Firefox in a fresh HOME). A layout script may write its own list. |
 | `launcherFallbacks` | `kate=kwrite`, `kmail2=kontact`, `korganizer=merkuro.calendar` (full `applications:` URLs) | once per start, a pinned app that is not installed is replaced by its fallback (Kate is missing on the ThinkPad, so Code becomes KWrite; verified). Pinned apps that are still missing are hidden. |
+| `dockSize` | `1` | 0 Small, 1 Medium, 2 Large (board DockSize.dc.html, "Dock size and window grouping" below); set on the Plasma Fusion settings page with the panel's height |
+| `groupWindows` | `true` | an app's windows share one icon; off: one icon for each window |
 | `magnify` | `true` | "Magnify icons on hover" |
-| `magnifiedSize` | `62` | size of the icon under the pointer (48–72; neighbours follow the falloff) |
+| `magnifiedSize` | `62` | size of a 48 px icon under the pointer (48–72; neighbours follow the falloff); its step over 48 is added at every size, smaller below 48 px (the settings page's +8 / +14 px are 56 / 62) |
 | `showTooltips` | `true` | name pill above the hovered item |
 | `showPreviews` | `true` | window previews above a hovered running app (replace the name pill there) |
 | `colorVariant` | `0` | 0 follow the Plasma style (brightness of the theme background), 1 dark, 2 light |
@@ -72,7 +75,8 @@ dock.addWidget("org.plasmafusion.dock");
 
 ## Behaviour
 
-- **Geometry (board values):** 48 px tiles 8 px apart, 1×36 separators with 4 px margins, 12 px from the dock
+- **Geometry (board values, Medium; Small and Large in "Dock size and window grouping"):** 48 px
+  tiles 8 px apart, 1×36 separators with 4 px margins, 12 px from the dock
   edge to the first/last button, icons 14 px above the dock's bottom edge, running dot 5×4 (60 % ink), active
   pill 16×4 (#8ab8ff / #2f6fdf) 5 px under the icon. The applet asks for the full panel thickness
   (`Plasmoid.CanFillArea`), measures the containment's own side margins and compensates, so the row starts
@@ -96,7 +100,7 @@ dock.addWidget("org.plasmafusion.dock");
 - **Icons:** the icon theme's app icons (`decoration` of TasksModel) with the board's
   `drop-shadow(0 3px 6px rgba(0,0,0,.35))` (light: rgba(20,24,39,.14)) as a MultiEffect. The blur was
   calibrated against the rendered board: darkening below a tile matches the board within 1–2 % row by row.
-- **Tasks:** TasksModel with GroupApplications, SortManual, separateLaunchers, launchInPlace,
+- **Tasks:** TasksModel with GroupApplications (GroupDisabled with `groupWindows` off), SortManual, separateLaunchers, launchInPlace,
   hideActivatedLaunchers (as the stock Icons-only Task Manager). A running pinned app takes its launcher's
   slot; running apps that are not pinned follow the second separator (QuickSettings board). Click:
   launch / activate / minimize the active one / cycle a group's windows (stock rules); Shift+click and
@@ -642,3 +646,47 @@ to it, with a hidden launcher of its own in its panel (Start opens the launcher 
 panel, `findLauncherApplet()`, so on its screen), and every dock lists only its own screen's
 windows (`showOnlyCurrentScreen`). docs/parts/lookandfeel.md and kcm-cpp.md have the details and
 the tests.
+
+## Dock size and window grouping (2026-10-16)
+
+The next queue's item 2 (the owner approved the proposal on 2026-10-16; board
+`design/boards/DockSize.dc.html`): three sizes and a switch that gives each window its own icon,
+both on the Plasma Fusion settings page (docs/parts/kcm-cpp.md).
+
+| Size | Tile | Gap | Separator (slot) | Sides / bottom | Plate | Indicators | Magnified (+14 / +8) |
+|---|---|---|---|---|---|---|---|
+| Small (`dockSize` 0) | 40 | 7 | 30 (7) | 10 / 12 | 60 | 5 x 4 dot, 16 x 4 pill, 5 px under | 52 / 47 |
+| Medium (1, the Main board) | 48 | 8 | 36 (9) | 12 / 14 | 72 | as Small | 62 / 56 |
+| Large (2, the Tablet board's dock) | 56 | 12 | 40 (13) | 12 / 12 | 78 | 6 x 4 dot, 18 x 4 pill, 4 px under | 70 / 64 |
+
+- `contents/code/metrics.js` holds the table (`metrics()`) and `zoomTarget()`: the magnified size is
+  the icon plus the setting's step over 48 (`magnifiedSize` keeps its meaning, a 48 px icon's
+  magnified size), and below 48 px the step shrinks with the icon (Small: 52 or 47 px), so a small
+  dock's icon does not swell past its neighbours. Tablet posture keeps its own metrics at
+  `tabletTile` whatever the size, and adds 14. The fixed buttons' radius and glyphs, the separators
+  and the headroom rule already follow the tile; the dock lays out again when the metrics change
+  (the settings page writes the size and the panel's height apart, in either order).
+- The plate is the panel: the settings page sets its height to 60, 72 or 78 px (16 px more with the
+  headroom frame). Its corners are the Plasma style's one dock frame (24 px) at every size, as the
+  board notes.
+- `groupWindows` off: TasksModel GroupDisabled, so each window is a row of its own; a pinned
+  app's windows sit at its pin, side by side (launchInPlace). The rows' pins
+  (`Pins.pinIndexes`, `tests/pins.test.js`) count the windows of one launcher as one pin, so the
+  role-pin test of the next pin reads its own entry. A click goes straight to that window; its
+  menu, preview and audio button are that window's. No title on hover (the name pill keeps the
+  app's name).
+- The dock's own settings dialog has the grouping switch; the size is the settings page's only,
+  as it sets the panel's height too.
+- `tests/metrics.test.js` (in the build, 73-dock.sh): the three sizes, tablet posture at its tile,
+  an unknown or empty size as Medium, the magnified sizes; `tests/pins.test.js`: `pinIndexes`
+  grouped and ungrouped. Each of four mutations of metrics.js and one of `pinIndexes` fails them.
+- Session (`packages/kcm-cpp/tests/scenario-docksize.sh`, a private session on the Fedora 44 test
+  laptop, Plasma 6.7.5, the stage of this change, the module and kcmctl from it; the dock's
+  `dump-targets` hook, which now also logs its magnified size): **15 checks pass**. After the
+  setup Medium, its panel 72 px, 48 px tiles 56 px apart, magnified 62; Small: the panel 60 px,
+  40 px tiles 47 px apart, magnified 52; Large: 78 px, 56 px tiles 68 px apart, magnified 70; two
+  Konsole windows: one icon grouped, two side by side at Konsole's pin with grouping off, one again
+  when it is back on; Medium's 72 px panel again. With the dock's tile fixed at 48 and its
+  grouping fixed on (a red run), four of the checks fail. The screenshots match the board (the
+  sizes, the magnified third app, the grouping pair).
+

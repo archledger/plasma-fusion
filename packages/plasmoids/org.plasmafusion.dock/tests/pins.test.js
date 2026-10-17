@@ -21,6 +21,7 @@ vm.runInThisContext(code, { filename: pathToFileURL(file).href });
 const hiddenDuplicates = globalThis.hiddenDuplicates;
 const isRolePin = globalThis.isRolePin;
 const appLauncherUrl = globalThis.appLauncherUrl;
+const pinIndexes = globalThis.pinIndexes;
 assert.notStrictEqual(hiddenDuplicates, undefined, "pins.js does not define hiddenDuplicates");
 assert.notStrictEqual(isRolePin, undefined, "pins.js does not define isRolePin");
 
@@ -73,5 +74,21 @@ assert.deepStrictEqual(hiddenDuplicates(rows([])), []);
 assert.strictEqual(appLauncherUrl("org.kde.dolphin.desktop"), "applications:org.kde.dolphin.desktop", "plain desktop id");
 assert.strictEqual(appLauncherUrl("applications:org.kde.dolphin.desktop"), "applications:org.kde.dolphin.desktop", "id with the scheme (pinned entries, Plasma 6.8)");
 assert.strictEqual(appLauncherUrl("file:///home/pf/bin/thing.desktop"), "file:///home/pf/bin/thing.desktop", "a file-backed launcher keeps its URL");
+
+// pinIndexes(): the pin each row comes from. Grouped, one row per pin (a running app's window in
+// its launcher's place); ungrouped (the dock's "Group an app's windows" off), each window is a
+// row and a pinned app's windows share its pin, so the next pin's role-pin test reads its own
+// entry (with a row per window it read Konsole's second window as the next pin).
+const D = "applications:org.kde.dolphin.desktop", F = "applications:firefox.desktop", K = "applications:org.kde.konsole.desktop";
+const win = (url) => ({ pinned: true, launcher: false, url });
+const pin = (url) => ({ pinned: true, launcher: true, url });
+const other = (url) => ({ pinned: false, launcher: false, url });
+assert.deepStrictEqual(pinIndexes([win(D), pin(F), win(K), pin("applications:org.kde.kmail2.desktop"), other("applications:org.kde.kcalc.desktop")]),
+    [0, 1, 2, 3, -1], "grouped: one row per pin, the others -1");
+assert.deepStrictEqual(pinIndexes([win(D), win(K), win(K), pin(F), other("applications:org.kde.kcalc.desktop"), other("applications:org.kde.kcalc.desktop")]),
+    [0, 1, 1, 2, -1, -1], "ungrouped: Konsole's two windows share its pin");
+assert.deepStrictEqual(pinIndexes([pin(D), pin(D)]), [0, 1], "two launchers are two pins, even of one app (the duplicate rule hides one)");
+assert.deepStrictEqual(pinIndexes([win(""), win("")]), [0, 1], "rows without a URL are not merged");
+assert.deepStrictEqual(pinIndexes([]), []);
 
 console.log("pins: all checks passed");

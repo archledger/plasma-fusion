@@ -37,7 +37,16 @@
 #   docksexternal turned on by another program while the page is open: the page reads it;
 #   docksnotmade ensure-topbars.js says it could not make a dock: an error;
 #   docksskipped ensure-topbars.js says the docks are not on a screen yet: an error;
-#   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs.
+#   dockson     turned on: the choice is kept and the stand-in ensure-topbars.js runs;
+#   docksize    the dock's size and window grouping (board DockSize.dc.html): read from the first
+#               dock; Small and grouping off written to every dock, and each dock panel on a
+#               screen gets Small's 60 px plate; the panel of an unplugged screen keeps its height
+#               (reading it crashes plasmashell, and the stand-in shell too);
+#   docksizeframe the headroom frame's height (the plate and 16 px): Large gives 94;
+#   docksizetablet in tablet posture the panel keeps the tablet's height, and the height the
+#               tablet script gives back (laptopHeight) becomes the new size's;
+#   docksizeread a size and grouping set on the dock are read (the first dock's);
+#   docksizeodd a size the dock does not know shows as Medium.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -344,6 +353,47 @@ expect dockson "off by default" is "$(first dockson everyDock)" false
 expect dockson "turned on: the choice is kept" grep -q "EveryScreen=true" "$work/dockson/config/plasmafusionrc"
 expect dockson "  ensure-topbars.js ran (it adds the docks)" is "$(panel dockson 2)" "bottom 0: launcher dock dock"
 expect dockson "no error" is "$(value dockson errorText)" ""
+
+run docksize "{\"screens\": 2, \"showConfig\": true, \"showHeight\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", \"$DOCK\"]},
+  {\"location\": \"bottom\", \"screen\": 1, \"widgets\": [\"$DOCK\"]},
+  {\"location\": \"bottom\", \"screen\": 2, \"widgets\": [\"$DOCK\"]}]}" \
+  waitshell "get dockSize" "get groupWindows" "set dockSize 0" "set groupWindows false" save "wait 500" \
+  "get dockSize" "get groupWindows" "get needsSave" "get errorText"
+expect docksize "the shell did not crash" alive docksize
+expect docksize "read: Medium, grouped (the dock's defaults)" is "$(first docksize dockSize) $(first docksize groupWindows)" "1 true"
+expect docksize "Small and grouping off on the main dock, its panel 60 px" \
+  is "$(panel docksize 2)" "bottom 0 h60: launcher dock{General/dockSize=0,General/groupWindows=false}"
+expect docksize "  and on the second screen's dock" is "$(panel docksize 3)" "bottom 1 h60: dock{General/dockSize=0,General/groupWindows=false}"
+expect docksize "  the dock of an unplugged screen gets the keys, its panel keeps 72 px" \
+  is "$(panel docksize 4)" "bottom 2 h72: dock{General/dockSize=0,General/groupWindows=false}"
+expect docksize "  the top bar is left alone" is "$(panel docksize 1)" "top 0 h34: appname clockpill systemtray quicksettings"
+expect docksize "applied: the page shows them, nothing pending" \
+  is "$(value docksize dockSize) $(value docksize groupWindows) $(value docksize needsSave)" "0 false false"
+expect docksize "no error" is "$(value docksize errorText)" ""
+
+run docksizeframe "{\"showHeight\": true, \"panels\": [{\"location\": \"bottom\", \"height\": 88, \"widgets\": [\"$DOCK\"]}]}" \
+  waitshell "set dockSize 2" save "wait 500" "get errorText"
+expect docksizeframe "the headroom frame's 88 (Medium) becomes Large's 94" is "$(panel docksizeframe 1)" "bottom 0 h94: dock"
+expect docksizeframe "no error" is "$(value docksizeframe errorText)" ""
+
+run docksizetablet "{\"showConfig\": true, \"showHeight\": true, \"panels\": [{\"location\": \"bottom\", \"height\": 80,
+  \"config\": {\"PlasmaFusion/tabletApplied\": \"true\", \"PlasmaFusion/laptopHeight\": 72}, \"widgets\": [\"$DOCK\"]}]}" \
+  waitshell "set dockSize 0" save "wait 500" "get errorText"
+expect docksizetablet "tablet posture: the panel keeps 80 px, the height it gets back is Small's 60" \
+  is "$(panel docksizetablet 1)" "bottom 0{PlasmaFusion/laptopHeight=60,PlasmaFusion/tabletApplied=true} h80: dock{General/dockSize=0}"
+expect docksizetablet "no error" is "$(value docksizetablet errorText)" ""
+
+run docksizeread "{\"panels\": [
+  {\"location\": \"bottom\", \"widgets\": [{\"type\": \"$DOCK\", \"config\": {\"General/dockSize\": 2, \"General/groupWindows\": \"false\"}}]},
+  {\"location\": \"bottom\", \"screen\": 1, \"widgets\": [{\"type\": \"$DOCK\", \"config\": {\"General/dockSize\": 0}}]}]}" \
+  waitshell "get dockSize" "get groupWindows"
+expect docksizeread "the first dock's size and grouping (Large, off; the string false)" \
+  is "$(value docksizeread dockSize) $(value docksizeread groupWindows)" "2 false"
+run docksizeodd "{\"panels\": [{\"location\": \"bottom\", \"widgets\": [{\"type\": \"$DOCK\", \"config\": {\"General/dockSize\": 7}}]}]}" \
+  waitshell "get dockSize"
+expect docksizeodd "a size the dock does not know shows as Medium" is "$(value docksizeodd dockSize)" 1
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

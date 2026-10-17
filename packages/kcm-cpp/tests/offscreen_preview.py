@@ -65,6 +65,12 @@ def main():
     ap.add_argument("--gestures", action="store_true",
                     help="print the touchpad gesture rows: label, choice and note, the one-row switch and the"
                          " stand-in module's values (REPORT_GESTURES)")
+    ap.add_argument("--rows", action="store_true",
+                    help="print the page's choice and switch rows (text, choice or state, labels, note) and the stand-in"
+                         " module's dock values (REPORT_ROWS)")
+    ap.add_argument("--act", action="append", default=[], metavar="ROW[=N]",
+                    help="first do what a click does on the row with that text: a switch row toggles, a choice row"
+                         " picks its Nth choice (repeatable)")
     ap.add_argument("--key-dropdown", nargs=2, metavar=("N", "KEY"),
                     help="first give the Nth drop-down the focus and press KEY in it (Qt's key name: Down, Up, End)")
     args = ap.parse_args()
@@ -93,7 +99,7 @@ def main():
              "dockAvailable": True, "topBarAvailable": True, "decorationInstalled": False,
              "fusionDecoration": False,
              "errorText": "", "infoText": "",
-             "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62,
+             "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62, "dockSize": 1, "groupWindows": True,
              "solidTopBar": True, "everyScreen": True, "everyDock": False, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
              "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
              "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
@@ -155,6 +161,8 @@ def main():
         lockNotifications = Property(bool, _get("lockNotifications"), _set("lockNotifications"), notify=changed)
         lockNotificationSummaries = Property(bool, _get("lockNotificationSummaries"), _set("lockNotificationSummaries"), notify=changed)
         magnifiedSize = Property(int, _get("magnifiedSize"), _set("magnifiedSize"), notify=changed)
+        dockSize = Property(int, _get("dockSize"), _set("dockSize"), notify=changed)
+        groupWindows = Property(bool, _get("groupWindows"), _set("groupWindows"), notify=changed)
         solidTopBar = Property(bool, _get("solidTopBar"), _set("solidTopBar"), notify=changed)
         everyScreen = Property(bool, _get("everyScreen"), _set("everyScreen"), notify=changed)
         everyDock = Property(bool, _get("everyDock"), _set("everyDock"), notify=changed)
@@ -342,6 +350,44 @@ QQC2.ApplicationWindow {
             "oneRow": switch[0].property("checked") if switch else None,
             "kcm": {n: kcm.s[n] for n in names}}))
 
+    def choice_and_switch_rows():
+        from PySide6.QtQuick import QQuickItem
+        return [i for i in root.findChildren(QQuickItem)
+                if i.metaObject().className().startswith(("ChoiceRow_QMLTYPE", "ToggleRow_QMLTYPE"))]
+
+    def act():
+        from PySide6.QtQml import QQmlEngine, QQmlExpression
+        from PySide6.QtQuick import QQuickItem
+        for spec in args.act:
+            text, _, index = spec.partition("=")
+            for row in choice_and_switch_rows():
+                if row.property("text") != text:
+                    continue
+                if row.metaObject().className().startswith("ToggleRow_QMLTYPE"):
+                    QQmlExpression(QQmlEngine.contextForObject(row), row, "requestToggle()").evaluate()
+                else:
+                    # A click on a segment: the Segmented control's activated(index).
+                    seg = [c for c in row.findChildren(QQuickItem) if c.metaObject().className().startswith("Segmented_QMLTYPE")][0]
+                    QQmlExpression(QQmlEngine.contextForObject(seg), seg, "activated(%d)" % int(index)).evaluate()
+
+    def rows_report():
+        out = []
+        for row in choice_and_switch_rows():
+            toggle = row.metaObject().className().startswith("ToggleRow_QMLTYPE")
+            entry = {"text": row.property("text"), "note": row.property("note"), "enabled": row.isEnabled()}
+            if toggle:
+                entry["checked"] = row.property("checked")
+            else:
+                model = row.property("model")
+                entry["labels"] = list(model.toVariant()) if hasattr(model, "toVariant") else list(model or [])
+                entry["index"] = row.property("currentIndex")
+            out.append(entry)
+        print("REPORT_ROWS " + json.dumps({"rows": out, "kcm": {n: kcm.s[n] for n in ("dockSize", "groupWindows", "magnifiedSize")}}))
+
+    if args.act:
+        QTimer.singleShot(600, act)
+    if args.rows:
+        QTimer.singleShot(1000, rows_report)
     if args.key_dropdown:
         QTimer.singleShot(600, press_key)
     if args.gestures:

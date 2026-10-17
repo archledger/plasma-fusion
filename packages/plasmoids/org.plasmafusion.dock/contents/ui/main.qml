@@ -25,14 +25,16 @@ import "../code/pins.js" as Pins
 import "../code/date-timer.js" as DateTimer
 import "../code/endtask.js" as EndTask
 import "../code/menu-pick.js" as MenuPick
+import "../code/metrics.js" as Metrics
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
 // running apps that are not pinned, Downloads, Trash. It fills the full panel thickness
 // (88 px: 16 px transparent headroom + the 72 px dock drawn by the Plasma style; with the plain
 // south frame the 72 px plate, and the headroom above the panel), and magnified icons grow into
-// the headroom. In tablet posture (FusionTablet, TABLET 4.4) the tiles are 56 px, Search moves
-// into the launcher sheet, touch never magnifies, a long press opens the menu and a swipe up
-// opens the launcher.
+// the headroom. Its size (Small, Medium, Large: board DockSize.dc.html, code/metrics.js) comes
+// from the settings page, which sets the panel to its plate. In tablet posture (FusionTablet,
+// TABLET 4.4) the tiles are 56 px, Search moves into the launcher sheet, touch never magnifies,
+// a long press opens the menu and a swipe up opens the launcher.
 PlasmoidItem {
     id: root
 
@@ -54,22 +56,24 @@ PlasmoidItem {
         id: tint
     }
 
-    // ---- Board metrics (logical px, Main.dc.html <nav aria-label="Dock">; TABLET 4.4) ----
+    // ---- Board metrics (logical px, Main.dc.html <nav aria-label="Dock">, DockSize.dc.html; TABLET 4.4) ----
     readonly property bool tablet: tabletState.tablet
+    readonly property var metrics: Metrics.metrics(Plasmoid.configuration.dockSize, tablet, Plasmoid.configuration.tabletTile)
     readonly property bool portraitScreen: {
         const g = Plasmoid.containment ? Plasmoid.containment.screenGeometry : undefined;
         return g !== undefined && g.height > g.width;
     }
-    readonly property int tile: tablet ? Plasmoid.configuration.tabletTile : 48
-    readonly property int gap: tablet ? 12 : 8
-    readonly property int sepLength: tablet ? 40 : 36
-    readonly property int sepSlot: tablet ? 13 : 9   // 1 px line + 6 (laptop 4) px margin on each side
-    readonly property int sidePad: 12
-    readonly property int bottomPad: tablet ? 12 : 14
+    readonly property int tile: metrics.tile
+    readonly property int gap: metrics.gap
+    readonly property int sepLength: metrics.sepLength
+    readonly property int sepSlot: metrics.sepSlot   // 1 px line + a margin on each side
+    readonly property int sidePad: metrics.sidePad
+    readonly property int bottomPad: metrics.bottomPad
+    readonly property bool wideIndicators: metrics.wideIndicators
     // Room above the panel that magnified icons may use: with the plain south frame (STYLE-1) the
     // dock's 16 px headroom is above the panel; with the headroom frame it is inside it.
     readonly property int headroomAbove: height <= tile + bottomPad + 20 ? 16 : 0
-    readonly property int zoomTarget: tablet ? tile + 14 : Plasmoid.configuration.magnifiedSize
+    readonly property int zoomTarget: Metrics.zoomTarget(tile, Plasmoid.configuration.magnifiedSize, tablet)
     readonly property int zoomSize: Plasmoid.configuration.magnify
         ? Math.max(tile, Math.min(zoomTarget, Math.floor(height) - bottomPad + headroomAbove))
         : tile
@@ -186,7 +190,9 @@ PlasmoidItem {
         filterByActivity: Plasmoid.configuration.showOnlyCurrentActivity
         filterByScreen: Plasmoid.configuration.showOnlyCurrentScreen
 
-        groupMode: TaskManager.TasksModel.GroupApplications
+        // "Group an app's windows" off (the settings page): each window is a row of its own.
+        groupMode: Plasmoid.configuration.groupWindows ? TaskManager.TasksModel.GroupApplications
+                                                       : TaskManager.TasksModel.GroupDisabled
         groupInline: false
         // Tablet posture (TABLET2 N2): the apps that are not pinned in strict recency, the latest
         // first (libtaskmanager keeps pinned apps in their pinned order before them); rescan()
@@ -282,24 +288,28 @@ PlasmoidItem {
         const n = tasksModel.count;
         const visible = [];
         const pinned = [];
-        // Pinned rows come in configured pin order, one per pin (a running app's window replaces
-        // its launcher row in place), so the k-th of them comes from the k-th raw pin. Its
-        // preferred:// scheme tells a role pin from an explicit one (Pins.isRolePin).
+        // Pinned rows come in configured pin order (a running app's windows replace its launcher
+        // row in place), so each comes from a raw pin (Pins.pinIndexes: one row per pin, or with
+        // ungrouped windows one per window). Its preferred:// scheme tells a role pin from an
+        // explicit one (Pins.isRolePin).
         const rawPins = tasksModel.launcherList || [];
         const dupRows = [];
-        let pinIdx = 0;
-        let recents = 0;
+        const rows = [];
         for (let i = 0; i < n; ++i) {
             const isLauncher = role(i, TaskManager.AbstractTasksModel.IsLauncher) === true;
             const url = role(i, TaskManager.AbstractTasksModel.LauncherUrlWithoutIcon);
-            const isPinned = isLauncher || (url ? tasksModel.launcherPosition(url) !== -1 : false);
+            rows.push({ launcher: isLauncher, url: url ? String(url) : "",
+                        pinned: isLauncher || (url ? tasksModel.launcherPosition(url) !== -1 : false) });
+        }
+        const pinOf = Pins.pinIndexes(rows);
+        let recents = 0;
+        for (let i = 0; i < n; ++i) {
+            const isLauncher = rows[i].launcher;
+            const isPinned = rows[i].pinned;
             let shown = !isMissingLauncher(i);
-            if (isPinned) {
-                if (isLauncher) {
-                    dupRows.push({ row: i, app: String(role(i, TaskManager.AbstractTasksModel.AppId) || ""),
-                                   rolePin: Pins.isRolePin(rawPins[pinIdx]) });
-                }
-                pinIdx++;
+            if (isPinned && isLauncher) {
+                dupRows.push({ row: i, app: String(role(i, TaskManager.AbstractTasksModel.AppId) || ""),
+                               rolePin: Pins.isRolePin(rawPins[pinOf[i]]) });
             }
             // Tablet posture: only the most recent apps that are not pinned (the rows come in
             // recency order there); the App Switcher has the rest.
@@ -646,6 +656,8 @@ PlasmoidItem {
         insetTimer.restart();
     }
     onHeightChanged: Qt.callLater(relayout)
+    // The dock's size: the settings page writes it and the panel's height apart, in either order.
+    onMetricsChanged: Qt.callLater(relayout)
     onPadLeftChanged: Qt.callLater(relayout)
     onPadRightChanged: Qt.callLater(relayout)
     onZoomSizeChanged: markMagnification()
@@ -935,7 +947,7 @@ PlasmoidItem {
                 add("previewclose" + i, card.closeTarget, card.closeTarget.width, card.closeTarget.height);
             });
         }
-        console.info("dock: targets tablet=" + root.tablet + " tile=" + root.tile
+        console.info("dock: targets tablet=" + root.tablet + " tile=" + root.tile + " zoom=" + root.zoomSize
                      + " preview=" + (shown ? shown.row + "/" + shown.windows.length + (shown.visible ? "" : "(hidden)") : "none")
                      + " menu=" + (root.menuOpen ? "open" : "closed")
                      + " " + out.join(" "));
@@ -2134,6 +2146,7 @@ PlasmoidItem {
                 pal: dockPal
                 motion: motion
                 tablet: root.tablet
+                wideIndicators: root.wideIndicators
                 pulseCycles: root.pulseCycles
                 gap: root.gap
                 entry: root.dockEntries[taskItem.iconName] ?? null

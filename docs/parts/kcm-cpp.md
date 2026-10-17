@@ -100,7 +100,7 @@ off.
 | `icons/plasmafusion-logo.svg` | the logo mark (three discs), installed as hicolor `apps/plasmafusion-logo` (CC-BY-SA-4.0) |
 | `build-remote.sh`, `container-build.sh` | development: build in the container on the ThinkPad and fetch the installed tree (`root/`) for test sessions; the package is built by `packaging/build-rpm.sh --compiled` (system.md) |
 | `LICENSES/` | GPL-2.0-or-later (code), CC-BY-SA-4.0 (icon) |
-| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop; `--report` prints where the content column is, `--gestures` the touchpad gesture rows, `--key-dropdown` presses a key in a drop-down, `--open-dropdown` opens one's list), `page_layout_test.py` (the column's place in System Settings' widths and the touchpad gesture rows, CI `build`), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh`, `scenario-everydock.sh` ("Dock on every screen" on two outputs) |
+| `tests/` | test tooling, not installed: `offscreen_preview.py` (renders the QML with a stand-in module, laptop; `--report` prints where the content column is, `--gestures` the touchpad gesture rows, `--key-dropdown` presses a key in a drop-down, `--open-dropdown` opens one's list, `--rows` the choice and switch rows, `--act` clicks one), `page_layout_test.py` (the column's place in System Settings' widths, the touchpad gesture rows and the dock's rows, CI `build`), `make-seed.sh`, `session-common.sh`, `scenario-look.sh`, `scenario-interact.sh`, `scenario-decoration.sh`, `scenario-sunset.sh`; 1.0.0-4: `kcmctl/` (loads the plugin as System Settings does and drives it from stdin commands: set, save, load, defaults, call, get, dump; its first line names the plugin file it loaded), `scenario-controls.sh`, `scenario-actions.sh`, `scenario-page.sh`, `scenario-everydock.sh` ("Dock on every screen" on two outputs), `scenario-docksize.sh` (the dock's sizes and grouping) |
 | `tests/CMakeLists.txt`, `tests/run-kcmctl.sh`, `tests/run-power-tier.sh`, `tests/run-reset-layout.sh`, `tests/run-settings-file.sh`, `tests/run-gestures.sh`, `tests/shell-panels.sh`, `tests/session-bus.conf` | with `BUILD_TESTING` (on by default; the RPM build turns it off) `kcmctl` is built with the module, and the ctest test `kcmctl-load` loads the built module in a scratch HOME on a private D-Bus session without service activation: every property read, the defaults applied in memory, every property read again; nothing is saved. `tests/fuzz-kcmctl.sh` (ctest test `kcmctl-fuzz`) writes random configuration files and settings files and drives the module with random commands, saving and importing included, in a scratch HOME with stand-ins for the programs it starts. `tests/meters-switch.sh` (ctest test `kcmctl-meters`) turns the system meters switch on and off against `fakeshell` (`tests/fakeshell/`: a stand-in Plasma shell answering `evaluateScript` with a QJSEngine model of desktop scripting, `shell.js`, that can list new widgets late, per bar too, add them at the bar's end or fail to make them): meters placed by hand stay, the new ones are placed before quick settings, also on two bars whose meters are listed 0.4 s and 1.8 s late (the module placed only the first bar's before a71fb66), the errors without quick settings and when the widget cannot be made, Apply returning at once while the shell is slow, and off removing every one. `tests/shell-panels.sh` (ctest test `kcmctl-panels`) changes the panels against it: with a top bar on a missing screen (the model crashes on its opacity, as plasmashell 6.8 does) the state is read and the look applied without touching that bar; with a shell that answers 7 s late (`scriptDelayMs`, `slowFrom`) the page reads it, and turning on the system meters or "Top bar on every screen" reports no error while kcmctl's `heartbeat` timer keeps ticking during Apply. `tests/run-power-tier.sh` (ctest test `kcmctl-power`, with node and python3-gobject) runs the module and the power service against a stand-in plasmashell and KWin (`packages/powerfx/tests/mock-session.py`): the page's choices while a tier is held; `tests/run-reset-layout.sh` (`kcmctl-reset`) the layout reset and the keys it gives, `tests/run-settings-file.sh` (`kcmctl-settingsfile`) the settings file, `tests/run-gestures.sh` (`kcmctl-gestures`) the touchpad gestures and the desktops in one row. The `compiled` and `sanitizers` workflows run all eight (docs/parts/ci.md, "Dynamic analysis") |
 
 ## Build
@@ -174,13 +174,15 @@ kwinrc, plasmafusionrc and the shell layout from a fusion-config.sh backup.
   lighter at 10 % on, tablet mode Automatic, apps full screen, dock hides over apps, keyboard in
   tablet mode only, edge swipes off, home indicator on; the launcher's three sections on (2026-10-16);
   three fingers up Overview, down Show desktop, left and right nothing, four fingers pinched in the
-  launcher and spread out Show desktop, the desktops in one row (2026-10-16).
+  launcher and spread out Show desktop, the desktops in one row (2026-10-16); the dock Medium with an
+  app's windows grouped (2026-10-16).
   Apply writes only what changed, in this
   order: Style, colour scheme (high contrast), accent (on top of the scheme just applied), window
   buttons, snap layouts, hot corner and touchpad gestures (one KWin reconfigure), the desktops'
   rows, glass (plasmafusionrc and blur),
   motion, file drag, battery, tablet keys (then the tablet script's shortcut), then the shell:
-  dock, home indicator, top bar menu, panels and glass keys, top bars on other screens, desktop,
+  dock (magnification, its size with the panels' height, grouping), home indicator, top bar menu,
+  panels and glass keys, top bars on other screens, desktop,
   keyboard policy.
 - The shell steps of Apply and of the two actions run one evaluateScript call after the other,
   each on the answer of the one before. Each call may take up to 25 s (Qt's default D-Bus
@@ -834,3 +836,38 @@ does the gestures (docs/parts/kwin.md, "Touchpad gestures").
   note gone, the drop-down's choice not passed on) fail it.
 - Not done: the page does not say when the snap script is turned off (System Settings > Window
   Management > KWin Scripts), which leaves the gestures to nothing.
+
+## Dock size and window grouping (2026-10-16)
+
+The next queue's item 2 (the owner approved the proposal on 2026-10-16; board
+`design/boards/DockSize.dc.html`). "Dock and top bar" starts with **Dock size** (Small, Medium,
+Large), **Group an app's windows** (on; "Off: one icon for each window.") and **Magnified icon
+size**, whose choices now read +8 px and +14 px: they are still 56 and 62, the Medium dock's
+magnified sizes, which the dock turns into a step at every size (docs/parts/shell-dock.md, "Dock
+size and window grouping").
+
+- Read: the first dock's `[General] dockSize` (a value it does not know shows as Medium) and
+  `groupWindows`, in the shell state script with the dock's other keys.
+- Apply, with the dock's other keys: grouping through the widget key script; the size through
+  `s_dockSizeScript`, which writes `dockSize` on every dock and gives each dock panel the size's
+  plate (60, 72, 78 px; 16 px more when the panel had the old plate plus 16, the headroom frame). In
+  tablet posture (the panel's `[PlasmaFusion] tabletApplied`) the panel keeps the tablet's height
+  and `laptopHeight`, the height the tablet script gives back, becomes the new size's (the tablet
+  script itself gives back a size's plate when none was saved: docs/parts/kwin-tablet.md). A panel
+  of a screen that is not connected keeps its height (plasmashell crashes on the sizes of a panel
+  whose screen is gone); the copies "Dock on every screen" makes get the main dock's height when
+  they are made. Without a dock the page keeps the values (as for magnification).
+- The settings file carries `dockSize` and `groupWindows`; Defaults are Medium and grouped.
+- `tests/shell-panels.sh` (ctest `kcmctl-panels`), cases `docksize` (read; Small and grouping off on
+  the main dock, the second screen's and an unplugged screen's, whose panel keeps its height; the
+  top bar left alone; nothing pending after Apply), `docksizeframe` (88 becomes Large's 94),
+  `docksizetablet` (80 kept, `laptopHeight` 60), `docksizeread` and `docksizeodd`, against
+  `fakeshell`, whose panels now have a height (`showHeight`; reading it for a missing screen crashes
+  the stand-in, as plasmashell crashes). `tests/run-settings-file.sh`: the export holds both.
+  `tests/page_layout_test.py`: the rows show the module's values and a click sets them, the
+  magnified size reads +8 / +14 px. Eight mutations of the module (no size applied, no height, the
+  headroom frame ignored, the tablet height overwritten, an unplugged screen's height read, the
+  size not read, grouping not applied, the size left out of the settings file) and four of the
+  page fail them.
+- Session (`tests/scenario-docksize.sh`, 15 checks pass on the test laptop): docs/parts/shell-dock.md.
+

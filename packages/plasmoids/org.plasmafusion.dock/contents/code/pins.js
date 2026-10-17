@@ -55,3 +55,30 @@ function appLauncherUrl(id) {
     }
     return "applications:" + value.replace(/^applications:/, "");
 }
+
+// The configured pin each of the dock's rows comes from (-1 for a row that is not pinned), in
+// row order: pinned rows come in pin order, a running app's window in its launcher's place
+// (launchInPlace). With an app's windows grouped that is one row per pin; without, each window
+// is a row, and the windows of one pinned app follow each other, so a window row with the
+// launcher URL of the row before it shares that row's pin. A launcher row is a pin of its own.
+// ROWS: { pinned, launcher, url } per row.
+function pinIndexes(rows) {
+    const out = [];
+    let pin = -1;
+    let previous = null;
+    for (let i = 0; i < rows.length; ++i) {
+        const row = rows[i];
+        if (!row.pinned) {
+            out.push(-1);
+            previous = null;
+            continue;
+        }
+        const url = String(row.url || "");
+        if (row.launcher || previous === null || previous.launcher || url === "" || url !== previous.url) {
+            ++pin;
+        }
+        out.push(pin);
+        previous = { launcher: !!row.launcher, url: url };
+    }
+    return out;
+}

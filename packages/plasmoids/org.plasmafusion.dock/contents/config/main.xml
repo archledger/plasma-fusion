@@ -17,12 +17,22 @@
       <label>PRIMARY=FALLBACK pairs of launcher URLs. When PRIMARY is pinned but not installed, it is replaced by FALLBACK once (if FALLBACK is installed and not pinned yet).</label>
       <default>applications:org.kde.kate.desktop=applications:org.kde.kwrite.desktop,applications:org.kde.kmail2.desktop=applications:org.kde.kontact.desktop,applications:org.kde.korganizer.desktop=applications:org.kde.merkuro.calendar.desktop</default>
     </entry>
+    <entry name="dockSize" type="Int">
+      <label>Size of the dock: 0 = Small (40 px icons), 1 = Medium (48 px), 2 = Large (56 px). The Plasma Fusion settings page sets it with the panel's height (60, 72 or 78 px); tablet posture keeps its own size.</label>
+      <default>1</default>
+      <min>0</min>
+      <max>2</max>
+    </entry>
+    <entry name="groupWindows" type="Bool">
+      <label>Group an app's windows under one icon. Off: each window has its own icon.</label>
+      <default>true</default>
+    </entry>
     <entry name="magnify" type="Bool">
       <label>Magnify icons on hover (48 px icons grow up to 62 px, neighbours to 54 px).</label>
       <default>true</default>
     </entry>
     <entry name="magnifiedSize" type="Int">
-      <label>Size of the icon under the pointer when magnification is on, in logical pixels.</label>
+      <label>Size of a 48 px icon under the pointer when magnification is on, in logical pixels. Its step over 48 is added to the dock's icons at every size (below 48 px it shrinks with the icon).</label>
       <default>62</default>
       <min>48</min>
       <max>72</max>

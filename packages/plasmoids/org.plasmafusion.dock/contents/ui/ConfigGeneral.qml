@@ -14,6 +14,7 @@ import org.kde.plasma.plasmoid
 KCM.SimpleKCM {
     id: page
 
+    property alias cfg_groupWindows: groupWindows.checked
     property alias cfg_magnify: magnify.checked
     property alias cfg_magnifiedSize: magnifiedSize.value
     property alias cfg_showTooltips: showTooltips.checked
@@ -42,6 +43,7 @@ KCM.SimpleKCM {
     property bool cfg_homeIndicator
     property string cfg_splitRequest
     property string cfg_activateRequest
+    property int cfg_dockSize
 
     // The dialog also passes every key's default value as cfg_<key>Default.
     property var cfg_launchersDefault
@@ -69,6 +71,8 @@ KCM.SimpleKCM {
     property int cfg_tabletStripHeightDefault
     property string cfg_splitRequestDefault
     property string cfg_activateRequestDefault
+    property int cfg_dockSizeDefault
+    property bool cfg_groupWindowsDefault
 
     function saveConfig(): void {
         const config = Plasmoid.configuration;
@@ -89,6 +93,8 @@ KCM.SimpleKCM {
         // requests other shell parts write through desktop scripting
         cfg_splitRequest = config.splitRequest;
         cfg_activateRequest = config.activateRequest;
+        // the settings page's Dock size, set with the panel's height
+        cfg_dockSize = config.dockSize;
     }
 
     Kirigami.FormLayout {
@@ -109,8 +115,12 @@ KCM.SimpleKCM {
                 stepSize: 2
             }
             QQC2.Label {
-                text: i18nc("@label unit of the spin box", "px (icons rest at 48 px)")
+                text: i18nc("@label unit of the spin box", "px for 48 px icons (the dock's other sizes magnify by the same step)")
             }
+        }
+        QQC2.CheckBox {
+            id: groupWindows
+            text: i18nc("@option:check", "Group an app's windows (off: one icon for each window)")
         }
 
         QQC2.CheckBox {

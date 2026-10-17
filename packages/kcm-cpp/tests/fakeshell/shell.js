@@ -5,9 +5,9 @@
 // uses, for fakeshell.cpp. Panels hold widgets in order; a widget's index is its place in that
 // order and setting it moves the widget there (the panel's own rule: taken out, then put in at the
 // index); geometry.x is 100 px per place. Layout file (JSON):
-//   panels            [{ location, screen, opacity, config, widgets: [plugin id or { type, config },
-//                     ...], listDelayMs }]; a panel's and a widget's config map "Group/key" to a
-//                     value
+//   panels            [{ location, screen, opacity, height, config, widgets: [plugin id or { type,
+//                     config }, ...], listDelayMs }]; a panel's and a widget's config map
+//                     "Group/key" to a value; height defaults to 34 (top) and 72 (bottom)
 //   knownWidgetTypes  plugin ids addWidget() can make (default: every id in the panels)
 //   failAdd           plugin ids addWidget() fails for (it returns an Error, as plasmashell does)
 //   insert            "x" (default: before the widget at the x given, as a drop there) or "end"
@@ -17,9 +17,10 @@
 //                     times)
 //   screens           the number of screens (default: one more than the highest panel screen). A
 //                     panel on a screen that is not there behaves as in Plasma 6.8: reading or
-//                     writing its opacity crashes the shell (host.crash), as plasmashell crashes on
-//                     the invalid config group of a missing screen
+//                     writing its opacity or height crashes the shell (host.crash), as plasmashell
+//                     crashes on the invalid config group of a missing screen
 //   showOpacity       the state file also names each panel's opacity ("top 0 adaptive: ...")
+//   showHeight        the state file also names each panel's height ("bottom 0 h72: ...")
 //   showConfig        the state file also lists each widget's configuration after its id
 //                     ("launcher{General/showPlaces=false}"), keys in order, and a panel's after
 //                     its screen ("bottom 1{PlasmaFusion/everyScreenCopy=true}: ...")
@@ -28,7 +29,7 @@
 //   failScripts       a script holding this text gets an error reply instead (a shell whose script
 //                     fails or times out), as plasmashell answers a failing script
 
-var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false, showConfig: false,
+var state = { panels: [], nextId: 100, known: [], failAdd: [], insert: "x", listDelayMs: 0, showOpacity: false, showHeight: false, showConfig: false,
               scriptDelayMs: 0, slowFrom: 1, scripts: 0, failScripts: "" };
 var knownWidgetTypes = [];
 var screenCount = 1;
@@ -47,6 +48,7 @@ function loadLayout(text) {
             location: p.location || "top",
             screen: p.screen === undefined ? 0 : p.screen,
             opacity: p.opacity || "adaptive",
+            height: p.height !== undefined ? p.height : ((p.location || "top") === "bottom" ? 72 : 34),
             config: p.config || {},
             listDelayMs: p.listDelayMs,
             items: (p.widgets || []).map(function (entry) {
@@ -67,6 +69,7 @@ function loadLayout(text) {
     state.insert = layout.insert || "x";
     state.listDelayMs = layout.listDelayMs || 0;
     state.showOpacity = layout.showOpacity === true;
+    state.showHeight = layout.showHeight === true;
     state.showConfig = layout.showConfig === true;
     state.scriptDelayMs = layout.scriptDelayMs || 0;
     state.slowFrom = layout.slowFrom || 1;
@@ -142,6 +145,8 @@ function panelObject(panel) {
         get screen() { return panel.screen; },
         get opacity() { view(panel, "opacity"); return panel.opacity; },
         set opacity(value) { view(panel, "opacity"); panel.opacity = value; },
+        get height() { view(panel, "height"); return panel.height; },
+        set height(value) { view(panel, "height"); panel.height = value; },
         widgets: function (type) {
             return panel.items.filter(function (w) {
                 return listed(w) && (!type || w.type === type);
@@ -190,13 +195,13 @@ function print(text) {
 }
 
 // One line per panel: "top 0: appname quicksettings ..." with the plugin ids shortened (and the
-// opacity after the screen with showOpacity).
+// opacity after the screen with showOpacity, and the height with showHeight).
 function dumpLayout() {
     return state.panels.map(function (p) {
         // With showConfig a panel's own configuration follows its screen when it has any.
         var own = Object.keys(p.config).sort();
         var conf = state.showConfig && own.length > 0 ? "{" + own.map(function (k) { return k + "=" + p.config[k]; }).join(",") + "}" : "";
-        return p.location + " " + p.screen + conf + (state.showOpacity ? " " + p.opacity : "") + ": " + p.items.map(function (w) {
+        return p.location + " " + p.screen + conf + (state.showOpacity ? " " + p.opacity : "") + (state.showHeight ? " h" + p.height : "") + ": " + p.items.map(function (w) {
             var name = w.type.replace(/^org\.(plasmafusion|kde\.plasma)\./, "");
             var keys = Object.keys(w.config).sort();
             if (!state.showConfig || keys.length === 0) {

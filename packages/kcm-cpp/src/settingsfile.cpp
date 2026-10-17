@@ -250,6 +250,8 @@ const QList<PlasmaFusionKcm::FileSetting> &PlasmaFusionKcm::fileSettings()
         {"lockNotificationSummaries", nullptr, &State::lockNotificationSummaries},
         {"reduceMotion", nullptr, &State::reduceMotion},
         {"magnifiedSize", &State::magnifiedSize, nullptr},
+        {"dockSize", &State::dockSize, nullptr},
+        {"groupWindows", nullptr, &State::groupWindows},
         {"solidTopBar", nullptr, &State::solidTopBar},
         {"systemMeters", nullptr, &State::systemMeters},
         {"everyScreen", nullptr, &State::everyScreen},

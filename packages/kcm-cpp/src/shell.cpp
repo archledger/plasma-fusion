@@ -52,7 +52,7 @@ function bool(v, d) {
     }
     return !(v === false || v === "false");
 }
-var state = { docks: 0, magnify: true, magnifiedSize: 62, homeIndicator: true,
+var state = { docks: 0, magnify: true, magnifiedSize: 62, dockSize: 1, groupWindows: true, homeIndicator: true,
               topBars: 0, menu: false, topOpacity: "", meters: false,
               metersInstalled: knownWidgetTypes.indexOf("org.plasmafusion.meters") !== -1,
               quickSettings: 0, keyboardPolicy: "tablet",
@@ -69,6 +69,8 @@ for (var i = 0; i < ps.length; ++i) {
         if (state.docks === 0) {
             state.magnify = bool(docks[j].readConfig("magnify", true), true);
             state.magnifiedSize = Number(docks[j].readConfig("magnifiedSize", 62)) || 62;
+            state.dockSize = Number(docks[j].readConfig("dockSize", 1));
+            state.groupWindows = bool(docks[j].readConfig("groupWindows", true), true);
             state.homeIndicator = bool(docks[j].readConfig("homeIndicator", true), true);
         }
         ++state.docks;
@@ -154,6 +156,47 @@ for (var i = 0; i < ps.length; ++i) {
         ws[j].currentConfigGroup = ["General"];
         ws[j].writeConfig(key, value);
         ++count;
+    }
+}
+print(count);
+)JS"_s;
+
+// %1: the dock size (0 Small, 1 Medium, 2 Large; the dock's contents/code/metrics.js). Every dock
+// gets it, and its panel the size's plate (board DockSize.dc.html: 60, 72, 78 px), 16 px more
+// when the panel has the headroom frame's height (the plate it had plus 16). In tablet posture
+// the panel keeps the tablet's height, and the height the tablet script gives back when the
+// posture ends (the panel's [PlasmaFusion] laptopHeight) becomes the new size's. A panel of a
+// screen that is not connected keeps its height: plasmashell crashes on the sizes of a panel
+// whose screen is gone (see s_readShellScript); "Dock on every screen" gives its copies the main
+// dock's height when they are made. Prints the number of docks.
+const QString s_dockSizeScript =
+    uR"JS(
+var SIZE = %1, PLATES = [60, 72, 78], count = 0;
+var ps = panels();
+for (var i = 0; i < ps.length; ++i) {
+    var p = ps[i];
+    var docks = p.widgets("org.plasmafusion.dock");
+    if (docks.length === 0) {
+        continue;
+    }
+    var before = 1;
+    for (var j = 0; j < docks.length; ++j) {
+        docks[j].currentConfigGroup = ["General"];
+        before = Number(docks[j].readConfig("dockSize", 1));
+        docks[j].writeConfig("dockSize", SIZE);
+        docks[j].currentConfigGroup = [];
+        ++count;
+    }
+    var plate = PLATES[before] || 72;
+    p.currentConfigGroup = ["PlasmaFusion"];
+    var tablet = p.readConfig("tabletApplied", false) === true || p.readConfig("tabletApplied", "") === "true";
+    if (tablet) {
+        var saved = Number(p.readConfig("laptopHeight", plate));
+        p.writeConfig("laptopHeight", PLATES[SIZE] + (saved === plate + 16 ? 16 : 0));
+    }
+    p.currentConfigGroup = [];
+    if (!tablet && p.screen >= 0 && p.screen < screenCount) {
+        p.height = PLATES[SIZE] + (p.height === plate + 16 ? 16 : 0);
     }
 }
 print(count);
@@ -654,6 +697,10 @@ void PlasmaFusionKcm::shellStateArrived(QDBusPendingCallWatcher *watcher)
             }
             take(m_current.magnify, m_saved.magnify, magnify);
             take(m_current.magnifiedSize, m_saved.magnifiedSize, state.value(u"magnifiedSize"_s).toInt(62));
+            // A size the dock does not know is its Medium, as the dock shows it (metrics.js).
+            const int size = state.value(u"dockSize"_s).toInt(DockMedium);
+            take(m_current.dockSize, m_saved.dockSize, size >= DockSmall && size <= DockLarge ? size : int(DockMedium));
+            take(m_current.groupWindows, m_saved.groupWindows, state.value(u"groupWindows"_s).toBool(true));
             take(m_current.homeIndicator, m_saved.homeIndicator, state.value(u"homeIndicator"_s).toBool(true));
         }
         if (m_topBarAvailable) {
@@ -737,6 +784,18 @@ bool PlasmaFusionKcm::applyMagnify(bool on)
 bool PlasmaFusionKcm::applyMagnifiedSize(int size)
 {
     return applyWidgetKey(u"org.plasmafusion.dock"_s, u"magnifiedSize"_s, QString::number(size), i18nc("@info", "The dock setting could not be changed."));
+}
+
+bool PlasmaFusionKcm::applyDockSize(int size)
+{
+    bool ok = false;
+    const QString result = evaluateShellScript(s_dockSizeScript.arg(size), &ok);
+    if (!ok || result.toInt() < 1) {
+        addError(ok ? i18nc("@info", "The dock setting could not be changed.")
+                    : i18nc("@info %1 what failed, %2 error", "%1 %2", i18nc("@info", "The dock setting could not be changed."), result));
+        return false;
+    }
+    return true;
 }
 
 bool PlasmaFusionKcm::applyWidgetKey(const QString &plugin, const QString &key, const QString &jsValue, const QString &what)

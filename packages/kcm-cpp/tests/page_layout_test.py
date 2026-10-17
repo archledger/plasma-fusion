@@ -7,7 +7,9 @@
 form (Kirigami.FormLayout), on a whole pixel; in a narrow one it takes the whole width.
 Then the touchpad gestures group (offscreen_preview.py --gestures, board Gestures.dc.html): each
 row shows the module's choice, a key in a drop-down sets the module's value, and the notes on
-KWin's own gestures show on their rows while the module says KWin uses them.
+KWin's own gestures show on their rows while the module says KWin uses them. And the dock's rows
+(offscreen_preview.py --rows, --act; board DockSize.dc.html): Dock size and Group an app's windows
+show the module's values and a click sets them, the magnified size reads +8 / +14 px.
 
     tests/page_layout_test.py
 """
@@ -47,6 +49,11 @@ def gestures(*extra):
     return preview(900, "REPORT_GESTURES", "--gestures", *extra)
 
 
+def rows(*extra):
+    r = preview(900, "REPORT_ROWS", "--rows", *extra)
+    return {row["text"]: row for row in r["rows"]}, r["kcm"]
+
+
 def notes(r):
     return [row["text"] for row in r["rows"] if row["note"]]
 
@@ -82,6 +89,19 @@ def main():
     r = gestures("--key-dropdown", "4", "End")
     check(r["kcm"]["gesturePinchIn"] == 8 and r["choices"][4] == "Snap layouts",
           "  End in the pinch-in row's drop-down: the last choice, Snap layouts (%s)" % r["kcm"])
+    by, k = rows("--state", "dockSize=2", "groupWindows=false")
+    size, group, magnified = by.get("Dock size"), by.get("Group an app's windows"), by.get("Magnified icon size")
+    check(size is not None and size["labels"] == ["Small", "Medium", "Large"] and size["index"] == 2,
+          "dock: Dock size shows the module's size, Large (%s)" % size)
+    check(group is not None and group["checked"] is False and group["note"] == "Off: one icon for each window.",
+          "  Group an app's windows shows off, with its note (%s)" % group)
+    check(magnified is not None and magnified["labels"] == ["+8 px", "+14 px"] and magnified["index"] == 1,
+          "  the magnified size as a step: +8 / +14 px, +14 chosen (62) (%s)" % magnified)
+    by, k = rows("--act", "Dock size=0", "--act", "Group an app's windows")
+    check(k["dockSize"] == 0 and k["groupWindows"] is False and by["Dock size"]["index"] == 0,
+          "  a click on Small and on the switch sets the module's values (%s)" % k)
+    by, k = rows("--act", "Magnified icon size=0")
+    check(k["magnifiedSize"] == 56, "  +8 px is the Medium dock's 56 px (%s)" % k)
     print("page_layout_test: %s" % ("all passed" if not failed else "%d failed" % failed))
     return 1 if failed else 0
 

@@ -425,11 +425,34 @@ KCM.SimpleKCM {
                     spacing: 0
                     Layout.fillWidth: true
 
+                    // Board DockSize.dc.html: the dock's three sizes, its window grouping and the
+                    // magnified size as a step over the icons (+8 / +14 px: 56 / 62 at Medium).
+                    ChoiceRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@label size of the dock", "Dock size")
+                        model: [i18nc("@option:radio dock size", "Small"), i18nc("@option:radio dock size", "Medium"),
+                            i18nc("@option:radio dock size", "Large")]
+                        currentIndex: kcm.dockSize
+                        enabled: kcm.dockAvailable && !kcm.shellLoading
+                        note: root.shellNote(kcm.dockAvailable, i18nc("@info", "The Plasma Fusion dock is not in a panel."))
+                        onActivated: index => kcm.dockSize = index
+                    }
+                    ToggleRow {
+                        Layout.fillWidth: true
+                        pal: fusionPalette
+                        text: i18nc("@option:check", "Group an app's windows")
+                        checked: kcm.groupWindows
+                        enabled: kcm.dockAvailable && !kcm.shellLoading
+                        note: kcm.dockAvailable ? i18nc("@info", "Off: one icon for each window.")
+                            : root.shellNote(kcm.dockAvailable, i18nc("@info", "The Plasma Fusion dock is not in a panel."))
+                        onToggleRequested: kcm.groupWindows = !kcm.groupWindows
+                    }
                     ChoiceRow {
                         Layout.fillWidth: true
                         pal: fusionPalette
                         text: i18nc("@label size of the dock icon under the pointer", "Magnified icon size")
-                        model: [i18nc("@option:radio icon size in pixels", "56 px"), i18nc("@option:radio icon size in pixels", "62 px")]
+                        model: [i18nc("@option:radio icon growth in pixels", "+8 px"), i18nc("@option:radio icon growth in pixels", "+14 px")]
                         currentIndex: [56, 62].indexOf(kcm.magnifiedSize)
                         enabled: kcm.dockAvailable && !kcm.shellLoading && kcm.magnify
                         note: kcm.dockAvailable && !kcm.magnify ? i18nc("@info", "Magnification is off.")
