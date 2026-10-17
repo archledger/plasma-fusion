@@ -164,6 +164,11 @@ reaches no journal.
   The earlier runs of the scenario were red where the widget was wrong: a property named `left` (an
   anchor line in Qt 6.11) kept the widget from loading, and Stop sharing and End failed until the
   menu event's data was a plain string (the D-Bus module marshals no wrapped `int32` in a variant).
+  The hover check failed now and then (2026-10-17, one run in three) where the test was wrong:
+  step 3's click left the pointer on the bar, the capsule came up under it, and Qt Quick opened
+  the tooltip before the step's mark (Qt 6.11 `QQuickDeliveryAgent` hovers at the last pointer
+  position each frame items change), so the log after the mark had no new hover line. The pointer
+  now leaves the bar before the mark.
 
 In a test container (`tools/vsession/cvsession.sh`, the depth suite's beta lane) there is no
 system bus and so no logind: the first check there is that the widget says it has no logind and
