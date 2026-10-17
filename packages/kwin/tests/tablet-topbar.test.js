@@ -15,7 +15,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-tablet", "contents", "ui", "TopBar.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { isTopBar, barState, barScript, barsOf } = globalThis;
+const { isTopBar, barState, barScript, barsOf, islandsAt, cornerOf, isPlasmaOsd, noticeScript, osdOpacity } = globalThis;
 
 // Windows: the laptop screen at 0,0 and a monitor to its right at 1440,0.
 const laptop = { x: 0, y: 0, width: 1440, height: 900 };
@@ -97,19 +97,19 @@ const CHIPS = "org.plasmafusion.livechips";
         { screen: 1, widgets: ["org.plasmafusion.appname", CHIPS] },
         { screen: 0, widgets: ["org.plasmafusion.dock"] },
     ]);
-    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }, { x: 1440, y: 0, hidden: false }]), "island: 2 widgets, 1 changed");
+    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }, { x: 1440, y: 0, hidden: false }]), "island: 2 widgets, 1 changed, islands at 0,0");
     assert.deepStrictEqual([s.panels[0].widgetConfig.barHidden, s.panels[1].widgetConfig.barHidden], [true, undefined],
                            "the laptop's bar is hidden; the monitor's shows");
-    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }, { x: 1440, y: 0, hidden: false }]), "island: 2 widgets, 0 changed",
+    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }, { x: 1440, y: 0, hidden: false }]), "island: 2 widgets, 0 changed, islands at 0,0",
                        "nothing written again");
-    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: false }, { x: 1440, y: 0, hidden: true }]), "island: 2 widgets, 2 changed");
+    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: false }, { x: 1440, y: 0, hidden: true }]), "island: 2 widgets, 2 changed, islands at 1440,0");
     assert.deepStrictEqual([s.panels[0].widgetConfig.barHidden, s.panels[1].widgetConfig.barHidden], [false, true]);
     // No bar window known any more (plasmashell's windows went): every island goes.
     assert.strictEqual(s.run([]), "island: 2 widgets, 1 changed");
     assert.strictEqual(s.panels[1].widgetConfig.barHidden, false);
     // A value written as text by an older run reads as true.
     s.panels[0].widgetConfig.barHidden = "true";
-    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }]), "island: 2 widgets, 0 changed");
+    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }]), "island: 2 widgets, 0 changed, islands at 0,0");
 }
 {
     // A panel that does not hide is never hidden (another top panel on its screen was).
@@ -120,6 +120,66 @@ const CHIPS = "org.plasmafusion.livechips";
 {
     // A panel of a screen that is gone is skipped.
     const s = shell([laptop], [{ screen: 0, widgets: [CHIPS] }, { screen: 2, widgets: [CHIPS] }]);
-    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }]), "island: 1 widgets, 1 changed");
+    assert.strictEqual(s.run([{ x: 0, y: 0, hidden: true }]), "island: 1 widgets, 1 changed, islands at 0,0");
+}
+// The screens whose island is there, from the bar script's answer: Plasma's pop-up is hidden on
+// them only (a hidden bar without live chips keeps Plasma's pop-up).
+assert.deepStrictEqual(islandsAt("island: 2 widgets, 1 changed, islands at 0,0 1440,0"), ["0,0", "1440,0"]);
+assert.deepStrictEqual(islandsAt("island: 2 widgets, 0 changed"), [], "no hidden bar: no island");
+assert.deepStrictEqual(islandsAt(""), []);
+assert.deepStrictEqual(islandsAt(undefined), []);
+{
+    const s = shell([laptop], [{ screen: 0, widgets: ["org.plasmafusion.appname"] }]);
+    assert.deepStrictEqual(islandsAt(s.run([{ x: 0, y: 0, hidden: true }])), [], "a hidden bar without the live chips: no island there");
+}
+assert.strictEqual(cornerOf({ x: 1440.4, y: -0.2 }), "1440,0");
+assert.strictEqual(cornerOf(null), "", "a window without an output: no screen");
+// Plasma's pop-up: plasmashell's on-screen-display window (its class either name), not the island
+// (a critical notification) nor a panel.
+assert.ok(isPlasmaOsd({ onScreenDisplay: true, resourceClass: "org.kde.plasmashell" }));
+assert.ok(isPlasmaOsd({ onScreenDisplay: true, resourceClass: "plasmashell" }));
+assert.ok(!isPlasmaOsd({ onScreenDisplay: false, criticalNotification: true, resourceClass: "plasmashell" }), "the island");
+assert.ok(!isPlasmaOsd({ onScreenDisplay: true, resourceClass: "org.kde.kscreen" }), "another program's");
+assert.ok(!isPlasmaOsd(null));
+// Plasma's pop-up window: one that comes up on a screen with an island goes there; one already up
+// when the bar starts hiding (or the script starts) keeps showing until Plasma closes it (its
+// notice is not the island's to show); elsewhere, as it is.
+assert.deepStrictEqual(osdOpacity("0,0", ["0,0"], true), { opacity: 0, request: true }, "comes up there: to the island");
+assert.deepStrictEqual(osdOpacity("0,0", ["0,0"], false), { opacity: null, request: false }, "already up there: kept showing");
+assert.deepStrictEqual(osdOpacity("1440,0", ["0,0"], true), { opacity: 1, request: false }, "another screen: as it is");
+assert.deepStrictEqual(osdOpacity("0,0", [], false), { opacity: 1, request: false }, "the bar shows again: as it is");
+assert.deepStrictEqual(osdOpacity("", ["0,0"], true), { opacity: 1, request: false }, "no screen: as it is");
+// The request goes to the live chips of that screen only.
+{
+    const s = shell([laptop, monitor], [
+        { screen: 0, widgets: ["org.plasmafusion.appname", CHIPS] },
+        { screen: 1, widgets: ["org.plasmafusion.appname", CHIPS] },
+        { screen: 3, widgets: [CHIPS] },
+    ]);
+    const context = vm.createContext({
+        screenCount: 2,
+        screenGeometry(i) {
+            if (!(i >= 0 && i < 2)) {
+                throw new Error("screenGeometry of missing screen " + i);
+            }
+            return [laptop, monitor][i];
+        },
+        panels() {
+            return s.panels.map((p) => ({
+                get screen() { return p.screen; },
+                widgets(type) {
+                    return p.widgets.filter((w) => w === type).map(() => ({
+                        currentConfigGroup: [],
+                        writeConfig(key, value) { p.widgetConfig[key] = value; },
+                    }));
+                },
+            }));
+        },
+        print(text) { context.out = String(text); },
+    });
+    vm.runInContext(noticeScript("1440,0", "42"), context);
+    assert.strictEqual(context.out, "notice: 1 widgets");
+    assert.deepStrictEqual(s.panels.map((p) => p.widgetConfig.noticeRequest), [undefined, "42", undefined],
+                           "the monitor's island is asked; the laptop's is not, the screen that is gone is skipped");
 }
 console.log("tablet-topbar.test.js: ok");

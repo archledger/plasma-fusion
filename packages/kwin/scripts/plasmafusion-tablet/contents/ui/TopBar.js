@@ -55,9 +55,10 @@ function barState(bars) {
 // while the bar of its screen (the screen's corner, screenGeometry()) is hidden and its own panel
 // is one that hides (another top panel there may be the one hidden), else false;
 // written only when it changes. Panels on a screen that is gone are skipped (reading their
-// config crashes plasmashell, Panels.js). Prints "island: N widgets, M changed".
+// config crashes plasmashell, Panels.js). Prints "island: N widgets, M changed", then ", islands
+// at X,Y ..." with the corners of the screens whose island is there (islandsAt()).
 function barScript(bars) {
-    return "var BARS = " + JSON.stringify(barState(bars)) + ", n = 0, changed = 0;\n"
+    return "var BARS = " + JSON.stringify(barState(bars)) + ", n = 0, changed = 0, on = [];\n"
         + "panels().forEach(function (p) {\n"
         + "    var chips = p.widgets(\"org.plasmafusion.livechips\");\n"
         + "    if (chips.length === 0 || !(p.screen >= 0 && p.screen < screenCount)) return;\n"
@@ -71,6 +72,55 @@ function barScript(bars) {
         + "        if (was !== hidden) { w.writeConfig(\"barHidden\", hidden); ++changed; }\n"
         + "        ++n;\n"
         + "    });\n"
+        + "    var corner = Math.round(g.x) + \",\" + Math.round(g.y);\n"
+        + "    if (hidden && on.indexOf(corner) < 0) on.push(corner);\n"
         + "});\n"
-        + "print(\"island: \" + n + \" widgets, \" + changed + \" changed\");\n";
+        + "print(\"island: \" + n + \" widgets, \" + changed + \" changed\" + (on.length > 0 ? \", islands at \" + on.join(\" \") : \"\"));\n";
+}
+
+// The corners ("X,Y") of the screens whose island is there, from barScript()'s answer TEXT.
+function islandsAt(text) {
+    var m = /islands at ([-0-9, ]+)/.exec(String(text || ""));
+    return m ? m[1].trim().split(/\s+/).filter(function (c) { return /^-?[0-9]+,-?[0-9]+$/.test(c); }) : [];
+}
+
+// A screen's corner as barScript() names it, from its geometry {x, y}.
+function cornerOf(rect) {
+    return rect ? Math.round(rect.x) + "," + Math.round(rect.y) : "";
+}
+
+// Plasma's own pop-up (the volume, the brightness and the rest): plasmashell's on-screen-display
+// window (plasma-workspace 6.7.5 shell/osdwindow.cpp, the onscreendisplay role), a new KWin window
+// each time it shows. While the bar of the screen KWin puts it on is hidden and that screen's
+// island is there, the island shows the notice instead and the window is made transparent.
+function isPlasmaOsd(w) {
+    var c = w ? String(w.resourceClass) : "";
+    return !!w && w.onScreenDisplay === true && (c === "plasmashell" || c === "org.kde.plasmashell");
+}
+
+// What to do with Plasma's pop-up window on the screen at CORNER, ISLANDS being the corners whose
+// island is there: a window that has just come up there is made transparent and that island asked
+// for the notice (request); one already up keeps showing (its notice is no longer the island's to
+// show) until Plasma closes it; elsewhere it shows as it is. { opacity: 0 | 1 | null (as it is),
+// request: bool }
+function osdOpacity(corner, islands, fresh) {
+    var island = corner !== "" && islands.indexOf(corner) >= 0;
+    if (!island) {
+        return { opacity: 1, request: false };
+    }
+    return fresh ? { opacity: 0, request: true } : { opacity: null, request: false };
+}
+
+// The script for plasmashell that asks the island of the screen at CORNER ("X,Y") to show Plasma's
+// notice: its live chips get [General] noticeRequest NONCE. Prints "notice: N widgets".
+function noticeScript(corner, nonce) {
+    return "var CORNER = " + JSON.stringify(String(corner)) + ", NONCE = " + JSON.stringify(String(nonce)) + ", n = 0;\n"
+        + "panels().forEach(function (p) {\n"
+        + "    var chips = p.widgets(\"org.plasmafusion.livechips\");\n"
+        + "    if (chips.length === 0 || !(p.screen >= 0 && p.screen < screenCount)) return;\n"
+        + "    var g = screenGeometry(p.screen);\n"
+        + "    if (Math.round(g.x) + \",\" + Math.round(g.y) !== CORNER) return;\n"
+        + "    chips.forEach(function (w) { w.currentConfigGroup = [\"General\"]; w.writeConfig(\"noticeRequest\", NONCE); ++n; });\n"
+        + "});\n"
+        + "print(\"notice: \" + n + \" widgets\");\n";
 }

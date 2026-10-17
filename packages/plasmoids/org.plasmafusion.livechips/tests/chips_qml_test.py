@@ -156,6 +156,7 @@ Window {
 # widget's is in the bar's.
 ISLAND_HARNESS = """import QtQuick
 import QtQuick.Window
+import "../code/chips.js" as Chips
 Window {
     id: harness
     width: 200
@@ -229,6 +230,31 @@ Window {
         return JSON.stringify(out);
     }
     function peek() { island.peek = true; }
+    // Plasma's notice in the island, as the widget passes it (Chips.notice, Chips.island); a
+    // percent below 0 makes it a text.
+    function setNotice(icon, percent, maximum, text, privacy) {
+        harness.content = Chips.island({ privacy: privacy || [], notice: Chips.notice(icon, percent < 0 ? null : percent, maximum, text) });
+    }
+    // The notice's parts on the screen: the glyph's path, the bar's fill and tick, the text and its colour.
+    function noticeParts() {
+        const fill = find(island.mainItem, i => i.objectName === "noticeFill" && i.visible);
+        const tick = find(island.mainItem, i => i.objectName === "noticeTick" && i.visible);
+        const glyph = find(island.mainItem, i => i.path !== undefined && String(i.path) !== "" && i.visible && i.width > 0);
+        const text = find(island.mainItem, i => i.text !== undefined && i.font !== undefined && i.visible && String(i.text) !== "");
+        const texts = [];
+        const walk = item => {
+            if (item.text !== undefined && item.font !== undefined && item.visible && String(item.text) !== "") texts.push(String(item.text));
+            for (const child of item.children) walk(child);
+        };
+        walk(island.mainItem);
+        const body = find(island.mainItem, i => i.objectName === "islandBody");
+        return JSON.stringify({ glyph: glyph ? String(glyph.path) : "", fill: fill ? fill.width : -1, tick: tick ? tick.x : -1,
+                                text: texts.length > 0 ? texts[texts.length - 1] : "", texts: texts,
+                                colour: text ? String(text.color) : "", px96: m.px(96), keyLine: island.keyLine.a,
+                                role: body.Accessible.role, name: body.Accessible.name,
+                                staticText: Accessible.StaticText, button: Accessible.Button });
+    }
+    function glyphs() { return JSON.stringify(Chips.GLYPHS); }
 }
 """
 # Markup in an app's name, a login's user and Spectacle's time.
@@ -412,6 +438,58 @@ def status_items(root, i18n):
     finally:
         qInstallMessageHandler(None)
         fake.stop()
+
+
+def osd_notices(root):
+    from PySide6.QtDBus import QDBusConnection, QDBusMessage
+    bus = QDBusConnection.sessionBus()
+    if not bus.registerService("org.kde.plasmashell"):
+        raise SystemExit("could not take org.kde.plasmashell on the private bus")
+
+    def emit(member, *args):
+        m = QDBusMessage.createSignal("/org/kde/osdService", "org.kde.osdService", member)
+        m.setArguments(list(args))
+        bus.send(m)
+    engine = QQmlEngine()
+    component = QQmlComponent(engine, QUrl.fromLocalFile(os.path.join(root, "contents/ui/sources/Osd.qml")))
+    osd = component.create()
+    if osd is None:
+        raise SystemExit("Osd.qml: " + "; ".join(e.toString() for e in component.errors()))
+
+    def shown():
+        n = osd.property("notice")
+        if n is None:
+            return None
+        n = n.toVariant() if hasattr(n, "toVariant") else n
+        return n.get("value") if n.get("level") else n.get("text")
+    wait(300)
+    emit("osdProgress", "audio-volume-high", 60, 100, "")
+    wait(300)
+    check(shown() is None, "Plasma's notice before KWin asks for it: not shown (Plasma's pop-up may show it)")
+    call(osd, "request")
+    wait(100)
+    check(shown() == "60", "  KWin asks (its pop-up is hidden here): the notice that just came shows (%s)" % shown())
+    emit("osdProgress", "audio-volume-high", 65, 100, "")
+    wait(300)
+    check(shown() == "65", "  the next one while it shows takes its place (%s)" % shown())
+    emit("osdText", "audio-volume-muted", "Audio Muted")
+    wait(300)
+    check(shown() == "Audio Muted", "  a text, unwrapped from the D-Bus module's value (%s)" % shown())
+    wait(1300)
+    emit("osdText", "audio-volume-muted", "Audio Muted")
+    wait(1000)
+    check(shown() == "Audio Muted", "  the same one again keeps it 1.8 s from then (%s)" % shown())
+    wait(1200)
+    check(shown() is None, "  1.8 s after the last one: gone (%s)" % shown())
+    wait(1200)
+    call(osd, "request")
+    wait(100)
+    check(shown() is None, "a request with no recent notice shows nothing old (%s)" % shown())
+    emit("osdProgress", "video-display-brightness", 70, 100, "")
+    wait(300)
+    check(shown() == "70", "  one that comes just after the request shows (%s)" % shown())
+    osd.deleteLater()
+    bus.unregisterService("org.kde.plasmashell")
 
 
 def main():
@@ -643,9 +721,58 @@ def main():
         h.setProperty("content", {"mode": "dots", "items": [], "dots": ["camera", "microphone"]})
         wait(900)
         check(island()["mode"] == "dots", "  full screen ends and comes back: the dots again (%s)" % island()["mode"])
+        # ---- Plasma's notices in the island (board: volume, brightness and Plasma's notices)
+        def parts():
+            return json.loads(QMetaObject.invokeMethod(h, "noticeParts", Qt.DirectConnection, Q_RETURN_ARG("QVariant")))
+        glyph_paths = json.loads(QMetaObject.invokeMethod(h, "glyphs", Qt.DirectConnection, Q_RETURN_ARG("QVariant")))
+        call(h, "setNotice", "audio-volume-high", 60, 100, "", [])
+        wait(900)
+        s, n = island(), parts()
+        check(s["visible"] and s["mode"] == "compact" and abs(s["body"][0] + s["body"][2] / 2 - 720) <= 1 and s["body"][3] == s["px32"],
+              "a volume key: the island shows the level, compact and centred (%s)" % s)
+        check(n["glyph"] == glyph_paths["speaker"] and abs(n["fill"] - 0.6 * n["px96"]) <= 1 and n["tick"] < 0 and n["text"] == "60"
+              and n["colour"] == "#ffffff", "  the speaker, the 96 px bar 60 %% full, no tick, 60 in white (%s)" % n)
+        check(n["keyLine"] == 0, "  no key line (the board's notices have none) (%s)" % n["keyLine"])
+        check(n["role"] == n["staticText"] and n["name"] == "Volume 60%",
+              "  read as what it says, not as a button (%s %s)" % (n["role"], n["name"]))
+        call(h, "setNotice", "audio-volume-high-warning", 115, 150, "", [])
+        wait(500)
+        n = parts()
+        check(abs(n["fill"] - 115 / 150 * n["px96"]) <= 1 and abs(n["tick"] - 100 / 150 * n["px96"]) <= 1 and n["colour"] == "#f5c08c",
+              "  115 of 150: the tick at 100 %%, the warning colour (%s)" % n)
+        call(h, "setNotice", "audio-volume-high-danger", 130, 150, "", [])
+        wait(500)
+        check(parts()["colour"] == "#ff8a8f", "  past 125: the danger colour (%s)" % parts())
+        call(h, "setNotice", "video-display-brightness", 75, 100, "DELL U2723", [])
+        wait(500)
+        n = parts()
+        check(n["texts"] == ["DELL U2723", "75"] and n["name"] == "Brightness DELL U2723 75%",
+              "  one screen of several: its name before the level, and read with it (%s, %s)" % (n["texts"], n["name"]))
+        call(h, "setNotice", "audio-volume-muted", -1, 0, "Audio Muted", [])
+        wait(500)
+        n = parts()
+        check(n["glyph"] == glyph_paths["speakerOff"] and n["text"] == "Audio Muted" and n["fill"] < 0,
+              "  muted: the crossed-out speaker and Audio Muted, no bar (%s)" % n)
+        bx, by, bw, bh = island()["body"]
+        QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(int(bx - island()["x"] + bw / 2), int(by - island()["y"] + bh / 2)))
+        wait(600)
+        check(island()["mode"] == "compact", "  a click on a notice opens nothing (%s)" % island()["mode"])
+        call(h, "setNotice", "audio-volume-high", 40, 100, "", ["camera", "microphone"])
+        wait(500)
+        check(json.loads(QMetaObject.invokeMethod(h, "state", Qt.DirectConnection, Q_RETURN_ARG("QVariant")))["mode"] == "compact"
+              and parts()["text"] == "40", "  during a call: the notice takes the island (%s)" % parts())
+        h.setProperty("content", {"mode": "compact", "items": ["privacy"], "dots": ["camera", "microphone"]})
+        wait(500)
+        check(parts()["text"] == "" and parts()["fill"] < 0 and parts()["role"] == parts()["button"],
+              "  and the call is back after it, a button again (%s)" % parts())
+
         h.setProperty("barHidden", False)
         wait(900)
         check(not island()["visible"], "the bar shows: the island goes (%s)" % island())
+
+        # ---- Plasma's notices: the source (sources/Osd.qml), on a private bus where this process
+        # is plasmashell sending its Osd's signals
+        osd_notices(root)
 
         # ---- the status items, on a private bus
         status_items(root, i18n)

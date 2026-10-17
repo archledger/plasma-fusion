@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Volume, brightness and Plasma's notices in the island:** while the top bar is hidden, what
+  Plasma's own pop-up would show (the volume, the microphone, the brightness, the keyboard layout,
+  the touchpad, the power mode and the rest) shows in the island at the top instead, and Plasma's
+  box two thirds down the screen does not. With the bar shown, Plasma's box as before.
 - **The island's icon:** a login over SSH or an app without an icon now shows its kind's glyph in
   the island, not a blank page.
 - **No errors when bars are removed:** removing the top bars while quick settings was still asking

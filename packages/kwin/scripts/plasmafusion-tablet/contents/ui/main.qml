@@ -101,6 +101,11 @@ Item {
     function log(message) {
         console.info("plasmafusion-tablet: " + message);
     }
+    // For what happens on every key press (Plasma's pop-up): off unless the qml debug category is
+    // on (QT_LOGGING_RULES), as in the session tests.
+    function debug(message) {
+        console.debug("plasmafusion-tablet: " + message);
+    }
 
     // ---------------------------------------------------------------- window policy
 
@@ -445,6 +450,7 @@ Item {
                 panelsAppeared.restart();
                 root.trackBar(w);
             }
+            root.trackOsd(w);
             if (!root.applied) {
                 return;
             }
@@ -467,6 +473,10 @@ Item {
             if (bar >= 0) {
                 root.barWindows.splice(bar, 1);
                 barsChanged.restart();
+            }
+            const osd = root.osdWindows.indexOf(w);
+            if (osd >= 0) {
+                root.osdWindows.splice(osd, 1);
             }
             const k = root.key(w);
             delete root.maximizedByUs[k];
@@ -626,8 +636,14 @@ Item {
         path: "/PlasmaShell"
         dbusInterface: "org.kde.PlasmaShell"
         method: "evaluateScript"
-        onFinished: returnValue => root.log("top bars " + JSON.stringify(TopBar.barState(TopBar.barsOf(root.barWindows, w => root.outputRect(w))))
-                                            + ": " + (returnValue.length > 0 ? String(returnValue[0]).trim() : ""))
+        onFinished: returnValue => {
+            const answer = returnValue.length > 0 ? String(returnValue[0]).trim() : "";
+            root.log("top bars " + JSON.stringify(TopBar.barState(TopBar.barsOf(root.barWindows, w => root.outputRect(w)))) + ": " + answer);
+            root.islandCorners = TopBar.islandsAt(answer);
+            for (const w of root.osdWindows) {
+                root.applyOsd(w, false);
+            }
+        }
         // Sent again with the next change, or when the shell's panels appear.
         onFailed: root.sentBars = ""
     }
@@ -636,7 +652,43 @@ Item {
             if (w.dock && String(w.resourceClass) === "plasmashell") {
                 trackBar(w);
             }
+            trackOsd(w);
         }
+    }
+
+    // Plasma's own pop-up (the volume, the brightness and the rest; board Island.dc.html): while
+    // the bar of the screen KWin puts it on is hidden and that screen's island is there (the
+    // corners the bar script answers with), the window is made transparent and the island asked to
+    // show the notice instead; elsewhere, and once the bar shows, Plasma's pop-up as it is. It is a
+    // new window each time Plasma shows it.
+    property var islandCorners: []
+    property var osdWindows: []
+    function trackOsd(w) {
+        if (!TopBar.isPlasmaOsd(w) || osdWindows.indexOf(w) >= 0) {
+            return;
+        }
+        osdWindows.push(w);
+        applyOsd(w, true);
+    }
+    // FRESH: the window has just come up (its notice is the one the island gets).
+    function applyOsd(w, fresh: bool) {
+        const corner = TopBar.cornerOf(outputRect(w));
+        const what = TopBar.osdOpacity(corner, islandCorners, fresh);
+        if (what.opacity !== null) {
+            w.opacity = what.opacity;
+        }
+        if (what.request) {
+            noticeCall.arguments = [TopBar.noticeScript(corner, String(Date.now()))];
+            noticeCall.call();
+        }
+        debug("Plasma's pop-up on " + (corner || "no screen") + ": " + (what.request ? "in the island" : what.opacity === null ? "kept" : "as it is"));
+    }
+    DBusCall {
+        id: noticeCall
+        service: "org.kde.plasmashell"
+        path: "/PlasmaShell"
+        dbusInterface: "org.kde.PlasmaShell"
+        method: "evaluateScript"
     }
 
     // A scale change (Display Configuration, kscreen-doctor) keeps the screen list, so
@@ -735,6 +787,12 @@ Item {
         if (!quitting && sentBars !== "") {
             barCall.arguments = [TopBar.barScript([])];
             barCall.call();
+        }
+        // ... and Plasma's pop-up shows as it is again.
+        if (!quitting) {
+            for (const w of osdWindows) {
+                w.opacity = 1;
+            }
         }
     }
 }

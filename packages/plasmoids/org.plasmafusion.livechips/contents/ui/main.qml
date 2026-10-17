@@ -65,6 +65,13 @@ PlasmoidItem {
         asynchronous: true
         source: "sources/Media.qml"
     }
+    // Plasma's own notices (the volume, the brightness and the rest), which the island shows while
+    // the tablet KWin script hides Plasma's pop-up on this screen.
+    Loader {
+        id: osdSource
+        active: Plasmoid.configuration.barHidden
+        source: "sources/Osd.qml"
+    }
     Loader {
         id: fullScreenSource
         active: Plasmoid.configuration.barHidden
@@ -97,7 +104,9 @@ PlasmoidItem {
         "music": media !== null && media.playing,
         "musicOpened": island.opened === "music",
         "musicPlayer": media !== null && !!media.player,
-        "fullScreen": fullScreenSource.item ? fullScreenSource.item.active : false
+        "fullScreen": fullScreenSource.item ? fullScreenSource.item.active : false,
+        // An island opened by a click stays as it is (a notice would close it).
+        "notice": osdSource.item && island.opened === "" ? osdSource.item.notice : null
     })
     readonly property var islandRows: Chips.islandRows(microphoneApps.map(a => ({ name: a.name, muted: a.muted })),
                                                        cameraSource.item ? cameraSource.item.apps : [], cameraInUse,
@@ -128,6 +137,16 @@ PlasmoidItem {
             }
         }
     }
+    // The tablet KWin script made Plasma's pop-up on this screen transparent: show its notice.
+    Connections {
+        target: Plasmoid.configuration
+        function onNoticeRequestChanged() {
+            if (osdSource.item && String(Plasmoid.configuration.noticeRequest) !== "") {
+                osdSource.item.request();
+            }
+        }
+    }
+
     // Test hook: [General] islandRequest "open:NONCE" or "close:NONCE" opens or closes the island.
     Connections {
         target: Plasmoid.configuration

@@ -12,11 +12,14 @@
 #   3. screen sharing (the portal's item, fake_status_items.py): the island, compact, 4 px from the
 #      top and centred on the screen;
 #   4. opened (the widget's islandRequest, as a click), 400 px wide and still centred; closed;
-#   5. a recording too: the bubble 6 px beside the island, the island still centred;
+#   5. a recording too: the bubble 6 px beside the island, the island still centred; Plasma's
+#      notices (its osdService, as the volume keys reach it): the volume's level and Audio Muted in
+#      the island, Plasma's own pop-up there and transparent, the island back to what it showed
+#      after them;
 #   6. the pointer pushed against the top of the screen (KWin pushes it back once, then shows the
-#      bar after its activation delay): the bar shows, the island goes; the pointer away: the bar
-#      hides again, the island is back;
-#   7. the tablet KWin script turned off: no island left, on again: back; tablet posture: the
+#      bar after its activation delay): the bar shows, the island goes, Plasma's pop-up shows as
+#      it is; the pointer away: the bar hides again, the island is back;
+#   7. the tablet KWin script turned off: no island left, Plasma's pop-up as it is; on again: back; tablet posture: the
 #      bar shows, no island; laptop again: hidden, the island back;
 #   8. off: the bar shows again, no island.
 # Each step's screenshot is for the comparison with the board. The seed (make-seed.sh ... dark,
@@ -74,6 +77,30 @@ wait 2500
 get errorText
 K
   sleep 3
+}
+# Plasma's notices: a call to plasmashell's osdService (as plasma-pa's volume keys and the others
+# make), and the opacity of Plasma's pop-up window while it shows (its window lasts 1.8 s).
+osd() { busctl --user call org.kde.plasmashell /org/kde/osdService org.kde.osdService "$@" >/dev/null; }
+osd_opacity() {
+  local js=$PFV/osd-$$.js n
+  cat >"$js" <<JS
+// console.warn: KWin's print() is QJSEngine's console at debug level, which Fedora's logging rules
+// leave out.
+var seen = false;
+for (const w of workspace.windowList()) {
+    if (w.onScreenDisplay && String(w.resourceClass).indexOf("plasmashell") >= 0) { console.warn("PFOSD " + w.opacity); seen = true; }
+}
+if (!seen) console.warn("PFOSD none");
+JS
+  n=$(grep -ac "PFOSD" "$OUT/kwin.log" || true)
+  qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript pfkmosd >/dev/null 2>&1
+  qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$js" pfkmosd >/dev/null
+  # start() runs it: KWin 6.7.5 numbers scripts by their count, so /Scripting/ScriptN may be
+  # another script's once scripts were unloaded (docs/parts/kwin.md, "Snap sizes").
+  qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1
+  sleep 0.4
+  qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript pfkmosd >/dev/null 2>&1
+  { grep -a "PFOSD" "$OUT/kwin.log" || true; } | tail -n +"$((n + 1))" | tail -1 | sed 's/.*PFOSD //'
 }
 # The tablet script's last word on the bars (KWin's log).
 bars() { { grep -a "plasmafusion-tablet: top bars" "$OUT/kwin.log" || true; } | tail -1 | sed 's/.*top bars //'; }
@@ -138,12 +165,41 @@ check "a recording too: the bubble 6 px beside the island" "$((${bx:-0} - ${x:-0
 check "  the island still centred" "$(centred "$r")" yes
 shot i-two
 
+# Plasma's notices, as the volume keys reach plasmashell (its osdService): the island shows them
+# and Plasma's own pop-up is there, transparent; after them the island is back to what it showed.
+# A key held down for a screenshot (a screenshot takes longer than a notice's 1.8 s): the notice
+# again every 0.4 s, which keeps the island on it.
+held_shot() {
+  local name=$1 hold
+  shift
+  ( for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do osd "$@"; sleep 0.4; done ) &
+  hold=$!
+  sleep 0.5
+  shot "$name"
+  wait "$hold"
+}
+osd volumeChanged i 60
+wait_island "notice \(speaker 60 plain\)" 5 || true
+r=$(island)
+info "a volume key: $r"
+check "Plasma's volume notice: in the island, centred" "$(cut -d' ' -f1-5 <<<"$r") $(centred "$r")" "compact notice (speaker 60 plain) yes"
+check "  Plasma's pop-up is there, transparent" "$(osd_opacity)" 0
+held_shot i-notice volumeChanged i 60
+osd showText ss audio-volume-muted "Audio Muted"
+check "  Audio Muted: the crossed-out speaker and its text" \
+  "$(wait_island 'notice \(speakerOff "Audio Muted"\)' 5 && echo yes || island)" yes
+held_shot i-notice-muted showText ss audio-volume-muted "Audio Muted"
+check "  1.8 s after it: the island is back to the call and the recording" \
+  "$(wait_island '^compact privacy,recording' 6 && echo back || island)" back
+
 # The pointer pushed against the top edge: KWin shows the bar (its auto-hide screen edge; the
 # first touch only pushes the pointer back, and the next must come 75 to 350 ms later, KWin
 # 6.7.5 Edge::check with ElectricBorderDelay 75 and ElectricBorderCooldown 350): one pfinput run.
 pfinput "move 720 0" "sleep 0.15" "move 720 0" "sleep 0.15" "move 720 0" "sleep 0.15" "move 720 0"
 check "the pointer at the top: KWin shows the bar" "$(wait_bars '"hidden":false' 10 && echo shown || echo hidden)" shown
 check "  the island goes" "$(wait_island '^none' 10 && echo none || island)" none
+osd volumeChanged i 40
+check "  a volume key with the bar shown: Plasma's own pop-up, as it is" "$(osd_opacity)" 1
 shot i-bar
 # Down through the bar and away (the bar sees the pointer come and go, as with a person's).
 pfinput "move 720 8" "sleep 0.1" "move 720 20" "sleep 0.1" "move 720 60" "sleep 0.1" "move 720 500"
@@ -155,6 +211,8 @@ check "  the island is back" "$(wait_island '^compact' 10 && echo back || island
 kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-tabletEnabled false
 qdbus org.kde.KWin /KWin reconfigure
 check "the tablet script turned off: no island left" "$(wait_island '^none' 15 && echo none || island)" none
+osd volumeChanged i 50
+check "  Plasma's pop-up as it is" "$(osd_opacity)" 1
 kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-tabletEnabled true
 qdbus org.kde.KWin /KWin reconfigure
 check "  on again: the island is back" "$(wait_island '^compact' 15 && echo back || island)" back
