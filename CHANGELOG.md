@@ -9,6 +9,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **No errors when bars are removed:** removing the top bars while quick settings was still asking
+  KWin about the on-screen keyboard (as an import does) logged errors; it no longer does.
 - **Snap sizes after an update:** updating in a running session now moves Meta+Left/Right to the
   snap sizes at once. Before, the setup started the snap script again, KWin ran the older one, and
   the keys stayed KWin's quick tile.

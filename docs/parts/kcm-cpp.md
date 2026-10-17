@@ -775,7 +775,10 @@ Tests:
   object` from Plasma's D-Bus QML module during the remove step, only when the page has just
   applied changes to those widgets (the import's Apply, then the removal); the same Apply alone,
   and removing the panels alone (one at a time, both docks, both top bars), log nothing, and every
-  check passes. Which widget's reply handler it is is a follow-up.
+  check passes. They were quick settings' on-screen keyboard state, asked from KWin after the
+  Apply changed the keyboard policy and answered after the import removed the bars; fixed on
+  2026-10-17 (docs/parts/shell-quicksettings.md, "Keyboard policy"), the same scenario then logs
+  none.
 
 ## Touchpad gestures (2026-10-16)
 
