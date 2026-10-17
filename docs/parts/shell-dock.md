@@ -16,6 +16,7 @@ separator · running apps that are not pinned · **Downloads** stack · **Trash*
 | `.../contents/config/config.qml`, `ui/ConfigGeneral.qml` | settings page: "Magnify icons on hover", magnified size, name pill, colours, Search action, filters, click-to-minimize |
 | `.../contents/ui/main.qml` | task model, layout and magnification engine, actions, menus, Downloads and Trash logic |
 | `.../contents/code/metrics.js` | the three sizes' metrics, tablet posture's, and the magnified size for a size (`tests/metrics.test.js`) |
+| `.../contents/code/placement.js` | the dock's edge from Plasma's location, and where the name pill and previews go for it (`tests/placement.test.js`) |
 | `.../contents/ui/TaskItem.qml` | one app: theme icon with the board's drop shadow, running dot or active pill, pointer/keyboard handling |
 | `.../contents/ui/DockButton.qml` | the 48 px fixed buttons (fill, hover, pressed, "aria-pressed" accent state, indicator, focus ring) |
 | `.../contents/ui/NamePill.qml` | the name pill above the hovered item (a separate tooltip window) |
@@ -71,7 +72,7 @@ dock.addWidget("org.plasmafusion.dock");
 | `showOnlyCurrentDesktop` / `showOnlyCurrentActivity` / `showOnlyCurrentScreen` | true / true / false | task filters, as in the stock task manager |
 | `minimizeActiveTaskOnClick` | `true` | clicking the active app minimizes it |
 | `downloadsFolder` | empty (XDG download dir) | folder of the Downloads stack |
-| `debugHoverIndex`, `debugPointerX`, `debugAction` | off | testing only (not in the settings page): force the hovered task, pretend the pointer rests at a screen x, or run one action (`start`, `search`, `overview`, `downloads-menu`, `trash-menu`, `close-menu`, `configure` (opens the settings dialog), `menu:ROW`, `activate:ROW`, `new:ROW`, `pick:TEXT` (the last menu's action added with that text, run as a click on it would, whether or not the menu could open; the next menu's entries are logged)). Used by the virtual-session scenarios because no pointer can be injected there. |
+| `debugHoverIndex`, `debugPointerX`, `debugAction` | off | testing only (not in the settings page): force the hovered task, pretend the pointer rests at a screen x (a screen y on a dock on the left or right), or run one action (`start`, `search`, `overview`, `downloads-menu`, `trash-menu`, `close-menu`, `configure` (opens the settings dialog), `menu:ROW`, `activate:ROW`, `new:ROW`, `pick:TEXT` (the last menu's action added with that text, run as a click on it would, whether or not the menu could open; the next menu's entries are logged)). Used by the virtual-session scenarios because no pointer can be injected there. |
 
 ## Behaviour
 
@@ -714,4 +715,56 @@ each icon is one window with one mark, as before.
 - Session (`packages/kcm-cpp/tests/scenario-docksize.sh`, private session on the test laptop):
   **18 checks pass**, among them Konsole's two grouped windows with two marks, one mark each with
   grouping off and two again when it is back on; the screenshots match the board.
+
+## The dock on the left or right (2026-10-16)
+
+The next queue's item 4 (the owner's go on 2026-10-16; board `design/boards/DockPosition.dc.html`):
+the settings page's Dock position (Bottom, Left, Right; docs/parts/kcm-cpp.md) moves the dock's
+panel, and the dock lays itself out for the edge: the bottom dock turned upright, at every size.
+
+- The edge comes from the panel's location (`Placement.edgeOf`); the row's positions stay one
+  number along it (x at the bottom, y on a side) and only placing them turns. Every item knows the
+  edge: `DockButton` and `TaskItem` take their place along the row (`along`, `alongShift`) and the
+  panel's thickness across; the icon sits `bottomPad` from the edge side, centred along the row,
+  scales from the middle of its edge side and shifts along the row; the running marks stand upright
+  beside it on the edge side (4 x 5 dots, the 4 x 16 pill, the window count stacked); the attention
+  bounce lifts it away from the edge; the click area reaches 10 px past the icon. The separators lie
+  across, centred on the tiles. The hover keeps the position along the row and the distance from
+  the edge (the magnification's reach: 10 px past the icon). A drag along the row reorders, a drag
+  away from the edge takes the launcher.
+- On a side the panel is the plate's width (72 px at Medium) and as long as the row. The Plasma
+  style's floating hints are 16 px on the left and right too (docs/parts/plasma-style.md), so the
+  plate stands 16 px from the screen's edge with 16 px of headroom inside, where magnified icons
+  grow. A panel that dodges windows reserves no room (plasmashell 6.7.5 `PanelView`: exclusive zone
+  -1), so KWin centres it on the whole screen height, top bar or not: the row gets the height
+  around the middle that the top bar leaves on both halves (`screenLength`; 832 px at 1440 x 900,
+  800 with the 16 px ends), and with more apps than that its icons shrink as at the bottom.
+- The name pill and the previews open beside the icon, away from the edge, centred on it
+  (`Placement.popupPosition`; the anchor 12 px beside the grown icon). Plasma's Dialog places itself
+  again from its visual parent and location when it is shown or resized (libplasma 6.7.5
+  `Dialog::popupPosition`: above for Floating, to the right of the parent for LeftEdge, to the left
+  for RightEdge, centred on it), so both take the dock's edge as their location. The anchor counts
+  the growth the hovered icon gets whenever the dock magnifies (before, only once the pointer was
+  marked over the tasks, which a forced hover reached a moment later). Menus open beside the item
+  (`RightPosedTopAlignedPopup` / `LeftPosedTopAlignedPopup`).
+- Start opens the launcher beside the dock: the dock tells it its edge and plate
+  (docs/parts/shell-launcher.md).
+- In tablet posture the dock is at the bottom (the tablet script, docs/parts/kwin-tablet.md) and
+  goes back to its side after; the docks "Dock on every screen" makes take the main dock's edge
+  (docs/parts/lookandfeel.md).
+- `debugPointerX` is a screen y on a side; the targets hook logs `edge=` and the name pill's place.
+- `tests/placement.test.js` (in the build): the edge from Plasma's location, the pop-ups above and
+  beside, kept on the screen along the dock. `tests/transfers_test.py`: an upright tile on the left
+  and on the right (the tile across the panel at its place, the icon 14 px from the edge, the pill
+  and a dot upright 5 px from the icon). Mutations of each fail them: pop-ups above on a side, no
+  clamp along a side, the icon not on the edge side, the marks across.
+- Session (`packages/kcm-cpp/tests/scenario-dockedge.sh`, a private session on the Fedora 44 test
+  laptop at 1440 x 900, Plasma 6.7.5, the stage, module and kcmctl of this change): **26 checks
+  pass**. After the setup at the bottom; Left: the panel on the left, laid out for it, magnified 62,
+  Search 56 px below Start in the same column, the plate 16 px from the edge, centred on the screen
+  (63 px above and below), clear of the top bar, the name pill 12 px beside the magnified icon and
+  centred on it, the launcher's card at 96,100 (8 px beside the plate, centred on the dock); Right:
+  the same mirrored (the card's right edge at 1344); Bottom again: the row where the setup had it.
+  With the pill at the Floating location and the earlier length (the height under the top bar), a
+  red run fails six of them. The screenshots match the board.
 

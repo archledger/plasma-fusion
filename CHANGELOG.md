@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Dock on the left or right:** the Plasma Fusion settings page has Dock position (Bottom, Left,
+  Right). On a side the dock stands upright, 16 px from the screen's edge, magnifies along it and
+  opens its name pill, previews, menus and the launcher beside it. In tablet mode it is at the
+  bottom and goes back to its side after.
 - **Window count in the dock:** while an app's windows are grouped, the marks under its icon count
   them, up to three: dots for a running app, the accent pill first for the active one.
 - **Dock size and window grouping:** the Plasma Fusion settings page has Dock size (Small, Medium

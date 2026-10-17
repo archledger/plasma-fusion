@@ -9,7 +9,8 @@ Then the touchpad gestures group (offscreen_preview.py --gestures, board Gesture
 row shows the module's choice, a key in a drop-down sets the module's value, and the notes on
 KWin's own gestures show on their rows while the module says KWin uses them. And the dock's rows
 (offscreen_preview.py --rows, --act; board DockSize.dc.html): Dock size and Group an app's windows
-show the module's values and a click sets them, the magnified size reads +8 / +14 px.
+show the module's values and a click sets them, the magnified size reads +8 / +14 px; Dock position
+(board DockPosition.dc.html) shows the module's edge with its note and a click sets it.
 
     tests/page_layout_test.py
 """
@@ -102,6 +103,14 @@ def main():
           "  a click on Small and on the switch sets the module's values (%s)" % k)
     by, k = rows("--act", "Magnified icon size=0")
     check(k["magnifiedSize"] == 56, "  +8 px is the Medium dock's 56 px (%s)" % k)
+    by, k = rows("--state", "dockPosition=2")
+    pos = by.get("Dock position")
+    check(pos is not None and pos["labels"] == ["Bottom", "Left", "Right"] and pos["index"] == 2
+          and pos["note"] == "In tablet mode the dock is at the bottom.",
+          "  Dock position shows the module's edge, Right, with its note (%s)" % pos)
+    by, k = rows("--act", "Dock position=1")
+    check(k["dockPosition"] == 1 and by["Dock position"]["index"] == 1,
+          "  a click on Left sets the module's value (%s)" % k)
     print("page_layout_test: %s" % ("all passed" if not failed else "%d failed" % failed))
     return 1 if failed else 0
 

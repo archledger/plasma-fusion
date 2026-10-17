@@ -39,8 +39,8 @@ class QDBusServiceWatcher;
                       PlasmaFusion{Dark,Light}[-Left]; kwinrc [org.kde.kdecoration2].
       Snap layouts    plasmafusionrc [Decoration] SnapLayoutsOnHover (false: hold, true: hover).
       Dock            the org.plasmafusion.dock widgets' [General] magnify, magnifiedSize,
-                      dockSize and groupWindows keys, and for the size the dock panels' height
-                      (desktop scripting).
+                      dockSize and groupWindows keys, and for the size the dock panels' height;
+                      the dock panels' edge, Dock position (desktop scripting).
       Launcher        the org.plasmafusion.launcher widgets' [General] showRecommended (recent
                       files on the home view), showRecentApps and showPlaces (the Recent and
                       Places chips), by desktop scripting.
@@ -129,6 +129,7 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool reduceMotion READ reduceMotion WRITE setReduceMotion NOTIFY stateChanged)
     Q_PROPERTY(int magnifiedSize READ magnifiedSize WRITE setMagnifiedSize NOTIFY stateChanged)
     Q_PROPERTY(int dockSize READ dockSize WRITE setDockSize NOTIFY stateChanged)
+    Q_PROPERTY(int dockPosition READ dockPosition WRITE setDockPosition NOTIFY stateChanged)
     Q_PROPERTY(bool groupWindows READ groupWindows WRITE setGroupWindows NOTIFY stateChanged)
     Q_PROPERTY(bool solidTopBar READ solidTopBar WRITE setSolidTopBar NOTIFY stateChanged)
     Q_PROPERTY(bool systemMeters READ systemMeters WRITE setSystemMeters NOTIFY stateChanged)
@@ -213,6 +214,13 @@ public:
         DockLarge = 2
     };
     Q_ENUM(DockSize)
+    // The dock panels' edge (board DockPosition.dc.html).
+    enum DockPosition {
+        DockBottom = 0,
+        DockLeft = 1,
+        DockRight = 2
+    };
+    Q_ENUM(DockPosition)
     enum IconsMode {
         IconsDesigned = 0,
         IconsFamiliar = 1
@@ -279,6 +287,8 @@ public:
     void setMagnifiedSize(int value);
     int dockSize() const;
     void setDockSize(int value);
+    int dockPosition() const;
+    void setDockPosition(int value);
     bool groupWindows() const;
     void setGroupWindows(bool value);
     bool solidTopBar() const;
@@ -434,6 +444,7 @@ private:
         // Plasma shell (widgets and panels)
         int magnifiedSize = 62;
         int dockSize = DockMedium;
+        int dockPosition = DockBottom;
         bool groupWindows = true;
         bool solidTopBar = true;
         // Off by default: the meters are in no layout.
@@ -507,6 +518,8 @@ private:
     // The docks' dockSize and their panels' height for it (the size's plate, 16 px more with the
     // headroom frame; in tablet posture the height the tablet script gives back).
     bool applyDockSize(int size);
+    // The dock panels' edge; in tablet posture the edge the tablet script gives back.
+    bool applyDockPosition(int position);
     bool applyGlobalMenu(bool on);
     bool applySystemMeters(bool on);
     // Moves the meters widgets `ids` just added before quick settings, asking again (from the

@@ -99,7 +99,8 @@ def main():
              "dockAvailable": True, "topBarAvailable": True, "decorationInstalled": False,
              "fusionDecoration": False,
              "errorText": "", "infoText": "",
-             "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62, "dockSize": 1, "groupWindows": True,
+             "snapTrigger": 0, "glass": 0, "highContrast": False, "reduceMotion": False, "magnifiedSize": 62, "dockSize": 1,
+             "dockPosition": 0, "groupWindows": True,
              "solidTopBar": True, "everyScreen": True, "everyDock": False, "desktopIcons": True, "iconSize": 2, "dndBehavior": 0,
              "lighterOnCritical": True, "tabletMode": 0, "tabletApps": 0, "tabletDock": 0, "keyboardPolicy": 0,
              "edgeLeft": False, "edgeRight": False, "homeIndicator": True,
@@ -162,6 +163,7 @@ def main():
         lockNotificationSummaries = Property(bool, _get("lockNotificationSummaries"), _set("lockNotificationSummaries"), notify=changed)
         magnifiedSize = Property(int, _get("magnifiedSize"), _set("magnifiedSize"), notify=changed)
         dockSize = Property(int, _get("dockSize"), _set("dockSize"), notify=changed)
+        dockPosition = Property(int, _get("dockPosition"), _set("dockPosition"), notify=changed)
         groupWindows = Property(bool, _get("groupWindows"), _set("groupWindows"), notify=changed)
         solidTopBar = Property(bool, _get("solidTopBar"), _set("solidTopBar"), notify=changed)
         everyScreen = Property(bool, _get("everyScreen"), _set("everyScreen"), notify=changed)
@@ -382,7 +384,7 @@ QQC2.ApplicationWindow {
                 entry["labels"] = list(model.toVariant()) if hasattr(model, "toVariant") else list(model or [])
                 entry["index"] = row.property("currentIndex")
             out.append(entry)
-        print("REPORT_ROWS " + json.dumps({"rows": out, "kcm": {n: kcm.s[n] for n in ("dockSize", "groupWindows", "magnifiedSize")}}))
+        print("REPORT_ROWS " + json.dumps({"rows": out, "kcm": {n: kcm.s[n] for n in ("dockSize", "dockPosition", "groupWindows", "magnifiedSize")}}))
 
     if args.act:
         QTimer.singleShot(600, act)

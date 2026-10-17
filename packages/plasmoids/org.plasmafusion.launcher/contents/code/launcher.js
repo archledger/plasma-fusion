@@ -275,3 +275,20 @@ function iconNameFor(entry) {
     }
     return id.replace(/^applications:/, "").replace(/\.desktop$/, "");
 }
+
+// The card's top-left corner beside a dock on the left or right that holds the launcher (board
+// DockPosition.dc.html): 8 px from the dock's plate PLATE {x, y, width, height} (global
+// coordinates) and centred on it, kept inside AREA {top, bottom} (the screen under the top bar,
+// less 8 px at both ends); CARD {width, height}. The dock does not reserve room, so the
+// compositor centres it on the whole screen height (plasmashell 6.7.5 gives a panel that hides or
+// dodges no exclusive zone). null for a dock at the bottom or no plate known: the card is centred
+// on the screen then.
+function besideDock(edge, plate, area, card) {
+    if ((edge !== "left" && edge !== "right") || !plate || !(plate.width > 0)) {
+        return null;
+    }
+    const x = edge === "left" ? plate.x + plate.width + 8 : plate.x - 8 - card.width;
+    const centred = plate.y + (plate.height - card.height) / 2;
+    const y = Math.max(area.top, Math.min(centred, area.bottom - card.height));
+    return { x: Math.round(x), y: Math.round(y) };
+}

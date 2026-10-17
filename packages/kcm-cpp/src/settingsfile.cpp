@@ -251,6 +251,7 @@ const QList<PlasmaFusionKcm::FileSetting> &PlasmaFusionKcm::fileSettings()
         {"reduceMotion", nullptr, &State::reduceMotion},
         {"magnifiedSize", &State::magnifiedSize, nullptr},
         {"dockSize", &State::dockSize, nullptr},
+        {"dockPosition", &State::dockPosition, nullptr},
         {"groupWindows", nullptr, &State::groupWindows},
         {"solidTopBar", nullptr, &State::solidTopBar},
         {"systemMeters", nullptr, &State::systemMeters},

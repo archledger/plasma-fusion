@@ -46,7 +46,14 @@
 #   docksizetablet in tablet posture the panel keeps the tablet's height, and the height the
 #               tablet script gives back (laptopHeight) becomes the new size's;
 #   docksizeread a size and grouping set on the dock are read (the first dock's);
-#   docksizeodd a size the dock does not know shows as Medium.
+#   docksizeodd a size the dock does not know shows as Medium;
+#   dockpos     Dock position (board DockPosition.dc.html): read from the first dock panel; Left
+#               moves every dock panel, the copy of another screen's and the one of an unplugged
+#               screen too (Plasma's scripting Panel sets the containment's location only), and
+#               leaves the top bar where it is;
+#   dockposread a dock on the right reads as Right;
+#   dockpostablet in tablet posture the dock stays at the bottom: the page shows the edge the
+#               tablet script gives back (laptopLocation), and a new one is written there.
 #
 #   shell-panels.sh KCMCTL FAKESHELL PLUGIN_DIR WORKDIR
 set -euo pipefail
@@ -394,6 +401,32 @@ expect docksizeread "the first dock's size and grouping (Large, off; the string 
 run docksizeodd "{\"panels\": [{\"location\": \"bottom\", \"widgets\": [{\"type\": \"$DOCK\", \"config\": {\"General/dockSize\": 7}}]}]}" \
   waitshell "get dockSize"
 expect docksizeodd "a size the dock does not know shows as Medium" is "$(value docksizeodd dockSize)" 1
+
+run dockpos "{\"screens\": 2, \"showConfig\": true, \"panels\": [
+  {\"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$TRAY\", \"$QS\"]},
+  {\"location\": \"bottom\", \"widgets\": [\"$LAUNCHER\", \"$DOCK\"]},
+  {\"location\": \"bottom\", \"screen\": 1, \"widgets\": [\"$DOCK\"]},
+  {\"location\": \"bottom\", \"screen\": 2, \"widgets\": [\"$DOCK\"]}]}" \
+  waitshell "get dockPosition" "set dockPosition 1" save "wait 500" "get dockPosition" "get needsSave" "get errorText"
+expect dockpos "the shell did not crash" alive dockpos
+expect dockpos "read: Bottom" is "$(first dockpos dockPosition)" 0
+expect dockpos "Left: the main dock's panel" is "$(panel dockpos 2)" "left 0: launcher dock"
+expect dockpos "  the second screen's" is "$(panel dockpos 3)" "left 1: dock"
+expect dockpos "  and the unplugged screen's" is "$(panel dockpos 4)" "left 2: dock"
+expect dockpos "  the top bar stays at the top" is "$(panel dockpos 1)" "top 0: appname clockpill systemtray quicksettings"
+expect dockpos "applied: Left on the page, nothing pending" is "$(value dockpos dockPosition) $(value dockpos needsSave)" "1 false"
+expect dockpos "no error" is "$(value dockpos errorText)" ""
+
+run dockposread "{\"panels\": [{\"location\": \"right\", \"widgets\": [\"$DOCK\"]}]}" waitshell "get dockPosition"
+expect dockposread "a dock on the right reads as Right" is "$(value dockposread dockPosition)" 2
+
+run dockpostablet "{\"showConfig\": true, \"panels\": [{\"location\": \"bottom\", \"height\": 80,
+  \"config\": {\"PlasmaFusion/tabletApplied\": \"true\", \"PlasmaFusion/laptopLocation\": \"right\"}, \"widgets\": [\"$DOCK\"]}]}" \
+  waitshell "get dockPosition" "set dockPosition 1" save "wait 500" "get errorText"
+expect dockpostablet "tablet posture: the page shows the edge it goes back to (Right)" is "$(first dockpostablet dockPosition)" 2
+expect dockpostablet "  Left: still at the bottom, Left given back after" \
+  is "$(panel dockpostablet 1)" "bottom 0{PlasmaFusion/laptopLocation=left,PlasmaFusion/tabletApplied=true}: dock"
+expect dockpostablet "no error" is "$(value dockpostablet errorText)" ""
 
 if [ "$failures" -gt 0 ]; then
   echo "FAIL: $failures failed"

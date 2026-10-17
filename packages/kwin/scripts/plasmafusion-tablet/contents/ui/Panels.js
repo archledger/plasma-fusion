@@ -17,7 +17,9 @@
 // only sees Wayland's rounded integer scale); at 1.25, 1.5 or 2 the sizes stay. The laptop sizes
 // are the boards' and stay as they are. A dock's laptop height is the plate of its size (the
 // dock's dockSize: Small 60, Medium 72, Large 78 px, board DockSize.dc.html), which the settings
-// page sets with the size.
+// page sets with the size. A dock on the left or right (board DockPosition.dc.html) is at the
+// bottom in tablet posture, as on the Tablet board, and goes back to its side after (its
+// laptopLocation, saved with the height).
 //
 // Panels on a screen that is gone are skipped. Their height, hiding and the other sizes of a
 // scripting Panel come from the panel's window, or without one from its config for its screen;
@@ -64,8 +66,10 @@ function panelScript(isTablet, hiding, scale) {
         + "        if (!applied) {\n"
         + "            p.writeConfig(\"laptopHeight\", p.height == h || (isDock && (p.height == 88 || p.height == 96)) ? laptop : p.height);\n"
         + "            p.writeConfig(\"laptopHiding\", p.hiding);\n"
+        + "            if (isDock) p.writeConfig(\"laptopLocation\", String(p.location));\n"
         + "            p.writeConfig(\"tabletApplied\", true);\n"
         + "        }\n"
+        + "        if (isDock && p.location != \"bottom\") p.location = \"bottom\";\n"
         + "        if (p.height != h) p.height = h;\n"
         + "        if (isDock && p.hiding != DOCK_HIDING) p.hiding = DOCK_HIDING;\n"
         + "        if (isDock) p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {\n"
@@ -75,12 +79,16 @@ function panelScript(isTablet, hiding, scale) {
         + "    } else if (applied) {\n"
         + "        var saved = Number(p.readConfig(\"laptopHeight\", laptop));\n"
         + "        if (isDock && (saved == 88 || saved == 96)) saved = laptop;\n"
+        + "        if (isDock) {\n"
+        + "            var side = String(p.readConfig(\"laptopLocation\", \"bottom\"));\n"
+        + "            if ((side == \"left\" || side == \"right\") && p.location != side) p.location = side;\n"
+        + "        }\n"
         + "        p.height = saved > 0 && saved != h ? saved : laptop;\n"
         + "        if (isDock) p.hiding = String(p.readConfig(\"laptopHiding\", \"dodgewindows\"));\n"
         + "        p.writeConfig(\"tabletApplied\", false);\n"
         + "    }\n"
         + "    p.currentConfigGroup = [];\n"
-        + "    done.push((isTop ? \"top \" : \"dock \") + p.height + (isDock ? \" \" + p.hiding : \"\"));\n"
+        + "    done.push((isTop ? \"top \" : \"dock \") + p.height + (isDock ? \" \" + p.hiding + (p.location != \"bottom\" ? \" \" + p.location : \"\") : \"\"));\n"
         + "});\n"
         + "if (done.length === 0 && skipped > 0) ready = false;\n"
         + "if (skipped > 0) done.push(skipped + \" without a screen skipped\");\n"

@@ -15,6 +15,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.taskmanager as TaskManager
 
 import "../code/previews.js" as Previews
+import "../code/placement.js" as Placement
 
 // Window previews above a hovered running app (the stock task manager's tooltips): one card per
 // window with the app icon, the window title, a close button and a live thumbnail from KWin's
@@ -27,8 +28,10 @@ PlasmaCore.Dialog {
 
     required property DockPalette pal
     required property var taskModel
-    // The item whose top edge the preview sits on (horizontally centred on it).
+    // The item whose top edge the preview sits on (horizontally centred on it), or on a dock on
+    // the left or right the item beside which it sits (vertically centred on it).
     property Item anchorItem
+    property string edge: "bottom"
     // The dock's screen (its containment's screenGeometry, global coordinates): the preview stays
     // 8 px inside it and its cards fit its width.
     property rect screenGeometry: Qt.rect(0, 0, 0, 0)
@@ -45,7 +48,9 @@ PlasmaCore.Dialog {
 
     type: PlasmaCore.Dialog.Tooltip
     flags: Qt.WindowDoesNotAcceptFocus | Qt.WindowStaysOnTopHint
-    location: PlasmaCore.Types.Floating
+    // Plasma's Dialog places itself again (popupPosition) when it is shown or resized: above
+    // its visual parent for Floating, beside it, centred on it, for a left or right edge.
+    location: edge === "left" ? PlasmaCore.Types.LeftEdge : edge === "right" ? PlasmaCore.Types.RightEdge : PlasmaCore.Types.Floating
     backgroundHints: PlasmaCore.Dialog.NoBackground
     visualParent: anchorItem
 
@@ -55,12 +60,11 @@ PlasmaCore.Dialog {
         }
         const p = anchorItem.mapToGlobal(0, 0);
         const g = screenGeometry;
-        let left = Math.round(p.x + (anchorItem.width - width) / 2);
-        if (g.width > 0) {
-            left = Math.max(g.x + 8, Math.min(left, g.x + g.width - width - 8));
-        }
-        x = left;
-        y = Math.round(p.y - height);
+        const at = Placement.popupPosition({ x: p.x, y: p.y, width: anchorItem.width, height: anchorItem.height },
+                                           { width: width, height: height }, edge,
+                                           { x: g.x, y: g.y, width: g.width, height: g.height });
+        x = at.x;
+        y = at.y;
     }
     onWidthChanged: if (visible) Qt.callLater(reposition)
     onVisibleChanged: if (visible) Qt.callLater(reposition)

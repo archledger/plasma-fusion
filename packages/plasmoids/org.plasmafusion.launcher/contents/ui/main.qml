@@ -56,6 +56,11 @@ PlasmoidItem {
     Motion {
         id: motion
     }
+    // A dock on the left or right that holds this launcher in its panel tells it on which edge
+    // it is and where its plate is (global coordinates): the card then opens beside it (board
+    // DockPosition.dc.html, Launcher.besideDock()). At the bottom the edge is "bottom".
+    property string dockEdge: ""
+    property rect dockRect: Qt.rect(0, 0, 0, 0)
     property string searchText: ""
     property var chips: fixedChips()
     property double lastClosed: 0
@@ -366,8 +371,9 @@ PlasmoidItem {
         };
     }
 
-    // Card: 680 px wide, centred on the screen; its bottom edge sits `bottomOffset` px above the
-    // screen bottom (board: 16 px dock gap + 74 px dock + 18 px) or, when a bottom panel reserves
+    // Card: 680 px wide, centred on the screen (beside a dock on the left or right: see below);
+    // its bottom edge sits `bottomOffset` px above the screen bottom (board: 16 px dock gap +
+    // 74 px dock + 18 px) or, when a bottom panel reserves
     // more room, 4 px above that panel's reserved area (a floating panel's reserved area already
     // includes its floating gap, 16 px in the Plasma Fusion style). Width and height limits
     // follow the user's text size (at most the screen width less 32 px), rounded to whole
@@ -397,6 +403,17 @@ PlasmoidItem {
         launcherWindow.cardHeight = m.windowSize(height);
         launcherWindow.x = Math.round(s.x + (s.width - launcherWindow.cardWidth) / 2);
         launcherWindow.y = Math.round(Math.max(top, bottom - height));
+        // Beside a dock on the left or right (on its own screen): centred on the dock, kept under
+        // the top bar and 8 px from both ends.
+        const sideTop = s.availTop + 8;
+        const sideBottom = s.availBottom - 8;
+        const beside = area ? null : Launcher.besideDock(root.dockEdge, root.dockRect, { top: sideTop, bottom: sideBottom },
+            { width: launcherWindow.cardWidth, height: m.windowSize(Math.min(wanted, sideBottom - sideTop)) });
+        if (beside) {
+            launcherWindow.cardHeight = m.windowSize(Math.min(wanted, sideBottom - sideTop));
+            launcherWindow.x = beside.x;
+            launcherWindow.y = beside.y;
+        }
         // The dim layer covers the whole screen; panels stay above it (they are in a higher layer).
         backdrop.area = Qt.rect(s.x, s.y, s.width, s.height);
     }

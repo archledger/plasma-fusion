@@ -18,7 +18,8 @@ Panel frame switches (defaults = the frames deployed since round 2):
                           more keeps its thickness; applets get thickness - 8). The
                           headroom moves above the frame: floating-hint-top-margin 16, so
                           a floating panel window is 16 + thickness + 16 px tall and the
-                          dock (72 px thick) draws its magnified icons into the top 16 px.
+                          dock (72 px thick) draws its magnified icons into the top 16 px;
+                          left and right 16 too, for a dock on a side.
   --north-side-margin 6|0 left/right margin of the `north` (top bar) frame. With 0 the
                           panel containment keeps only its own 4 px row spacing at the
                           screen edges, and the edge plasmoids pad themselves.
@@ -143,7 +144,9 @@ PANEL_FALLBACK_R = 6                      # unprefixed panel frame: minimum draw
 # board's radius 24: the 24 px arc clipped to a 22 px cell is 0.08 px off the straight edge.
 PLAIN_SOUTH_CELL = 22
 PLAIN_SOUTH_MARGINS = (4, 4, 8, 8)        # (t, b, l, r): a 44 px panel gives its applets 36 px
-FLOATING_GAP_PLAIN = (DOCK_HEADROOM, 16, 8, 8)  # the headroom becomes transparent window space above the frame
+# The headroom becomes transparent window space above the frame; left and right 16 too, so a dock on
+# a side (board DockPosition.dc.html) stands 16 px from its edge with 16 px of headroom inside.
+FLOATING_GAP_PLAIN = (DOCK_HEADROOM, 16, DOCK_HEADROOM, DOCK_HEADROOM)
 TOPBAR_SIDE_DEFAULT = TOPBAR_MARGINS[2]
 WIDGET_MARGINS = (14, 14, 14, 14)         # widget cards: padding 14
 CTRL_R = 10                               # Controls.dc.html: corners are 10 px on controls

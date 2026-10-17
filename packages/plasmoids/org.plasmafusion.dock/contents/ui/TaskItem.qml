@@ -18,8 +18,8 @@ import "../code/metrics.js" as Metrics
 // next to the orange dot (G26). Calendar apps show today's date on their tile.
 //
 // The item keeps its rest size (`iconSize`) and rest position. Magnification never changes a
-// size: the dock sets `grow` (extra px of the magnified icon) and `shift` (horizontal offset),
-// the icon box scales around its bottom centre and the whole item is translated. So nothing is
+// size: the dock sets `grow` (extra px of the magnified icon) and `shift` (offset along the row),
+// the icon box scales around the middle of its edge side and the whole item is translated. So nothing is
 // laid out, re-rasterised or re-blurred while the pointer moves (EFFECTS.md section 4).
 Item {
     id: task
@@ -31,6 +31,12 @@ Item {
 
     property real iconSize: 48
     property int bottomPad: 14
+    // The dock's edge ("bottom", "left", "right"; board DockPosition.dc.html) and the item's
+    // place along the row (set by the dock). On a side the row is upright: the item is the
+    // panel's width across, the icon on the edge side, the marks beside it on that side.
+    property string edge: "bottom"
+    readonly property bool vertical: edge !== "bottom"
+    property real along: 0
     // Tablet posture: bigger dot and pill, 4 px under the icon (TABLET 4.4).
     property bool tablet: false
     // The tablet's running indicators (tablet posture and the Large dock).
@@ -132,12 +138,13 @@ Item {
     readonly property alias iconItem: iconBox
     readonly property alias audioBadge: audioBadge
     readonly property real iconTop: iconBox.y
+    readonly property real iconX: iconBox.x
     readonly property real magnification: (iconSize + grow) / iconSize
 
     signal activated(int modifiers)
     signal newInstanceRequested()
     signal menuRequested()
-    signal dragMoved(real sceneX)
+    signal dragMoved(point scenePos)
     signal dragFinished()
     // A drag upwards (48 px) with a mouse, touchpad or pen: the dock drags the app's launcher,
     // for a desktop shortcut (BACKLOG M3); false when the drag ends.
@@ -153,9 +160,16 @@ Item {
     // shown: false for a row the dock leaves out (tablet recents beyond the limit, TABLET2 N2)
     property bool shown: true
     visible: resolvable && shown
-    width: Math.round(iconSize)
+    x: vertical ? 0 : along
+    y: vertical ? along : 0
+    width: vertical ? (parent ? parent.width : iconSize) : Math.round(iconSize)
+    height: vertical ? Math.round(iconSize) : (parent ? parent.height : iconSize)
     activeFocusOnTab: visible
-    transform: Translate { x: task.shift; y: -bounce.lift }
+    // Magnification moves the item along the row; the attention bounce lifts it away from the edge.
+    transform: Translate {
+        x: task.edge === "left" ? bounce.lift : task.edge === "right" ? -bounce.lift : task.shift
+        y: task.vertical ? task.shift : -bounce.lift
+    }
 
     Accessible.role: Accessible.Button
     Accessible.name: task.badgeCount > 0 ? i18ncp("@info:tooltip app name and its unread count", "%2, %1 unread", "%2, %1 unread", task.badgeCount, name) : name
@@ -185,8 +199,10 @@ Item {
         id: iconBox
         width: Math.round(task.iconSize)
         height: width
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: task.height - task.bottomPad - height
+        // bottomPad from the edge side, centred along the row
+        x: task.edge === "left" ? task.bottomPad
+            : task.edge === "right" ? task.width - task.bottomPad - width : (task.width - width) / 2
+        y: task.vertical ? (task.height - height) / 2 : task.height - task.bottomPad - height
         // Press feedback: 0.94 and 80 % opacity (TABLET 4.4).
         readonly property bool held: mouse.pressed && !mouse.dragging && !mouse.armed
         // lifted while armed for a split drag (iPadOS: the icon rises before it can be dragged)
@@ -196,9 +212,10 @@ Item {
             NumberAnimation { duration: task.motion.pressScale; easing.type: task.motion.standardEasing }
         }
         opacity: task.isStartup ? startupPulse.value : (held ? 0.8 : 1)
+        // Grows away from the edge: from its edge side's middle.
         transform: Scale {
-            origin.x: iconBox.width / 2
-            origin.y: iconBox.height
+            origin.x: task.edge === "left" ? 0 : task.edge === "right" ? iconBox.width : iconBox.width / 2
+            origin.y: task.vertical ? iconBox.height / 2 : iconBox.height
             xScale: task.magnification * iconBox.pressScale
             yScale: task.magnification * iconBox.pressScale
         }
@@ -438,13 +455,18 @@ Item {
 
     // Running indicator under the icon, 5 px below it: one mark a window, three at most, 3 px
     // apart (board DockSize.dc.html, "Window count"): 5 x 4 dots, the active app's first mark the
-    // 16 x 4 pill (6 x 4 and 18 x 4, 4 px below, in tablet posture and on the Large dock).
-    Row {
+    // 16 x 4 pill (6 x 4 and 18 x 4, 4 px below, in tablet posture and on the Large dock). On a
+    // side they stand upright beside the icon on the edge side (board DockPosition.dc.html).
+    Grid {
         id: indicator
         objectName: "indicator"
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: task.height - task.bottomPad + (task.wideIndicators ? 4 : 5)
-        spacing: 3
+        readonly property int gapToIcon: task.wideIndicators ? 4 : 5
+        columns: task.vertical ? 1 : Math.max(1, task.marks)
+        rowSpacing: 3
+        columnSpacing: 3
+        x: task.edge === "left" ? iconBox.x - gapToIcon - width
+            : task.edge === "right" ? iconBox.x + iconBox.width + gapToIcon : (task.width - width) / 2
+        y: task.vertical ? iconBox.y + (iconBox.height - height) / 2 : task.height - task.bottomPad + gapToIcon
         visible: task.isRunning || task.isStartup
         opacity: task.isStartup ? startupPulse.value : 1
 
@@ -452,13 +474,15 @@ Item {
             model: task.marks
             delegate: Rectangle {
                 required property int index
-                height: 4
+                // the mark's length along the dock (it grows into the pill when the app is active)
+                property real length: Metrics.markWidth(index, task.isActive, task.wideIndicators)
+                width: task.vertical ? 4 : length
+                height: task.vertical ? length : 4
                 radius: 2
-                width: Metrics.markWidth(index, task.isActive, task.wideIndicators)
                 color: task.isActive && index === 0 ? task.pal.activePill
                     : (task.demandsAttention ? task.pal.attention : task.pal.runningDot)
 
-                Behavior on width {
+                Behavior on length {
                     enabled: task.motion.animate
                     NumberAnimation { duration: task.motion.toggle; easing.type: task.motion.standardEasing }
                 }
@@ -494,10 +518,12 @@ Item {
         // magnified neighbours never leave a gap without an item between them.
         // (half the gap on each side: a long press in a gap reached the panel, which then went into
         // its edit mode, in tablet posture where the gap is 12 px)
-        x: -task.gap / 2 - task.grow / 2
-        y: iconBox.y - 10 - task.grow
-        width: parent.width + task.gap + task.grow
-        height: parent.height - y
+        // (on a side: along y, and from the edge to 10 px past the grown icon)
+        x: task.edge === "left" ? 0 : task.edge === "right" ? iconBox.x - 10 - task.grow : -task.gap / 2 - task.grow / 2
+        y: task.vertical ? -task.gap / 2 - task.grow / 2 : iconBox.y - 10 - task.grow
+        width: task.edge === "left" ? iconBox.x + iconBox.width + 10 + task.grow
+            : task.edge === "right" ? parent.width - x : parent.width + task.gap + task.grow
+        height: task.vertical ? parent.height + task.gap + task.grow : parent.height - y
         hoverEnabled: false
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
         // A long press opens the menu (touch, TABLET 4.4; also the mouse); in tablet posture a
@@ -526,6 +552,8 @@ Item {
             }
             const dx = mouse.x - pressPoint.x;
             const dy = mouse.y - pressPoint.y;
+            // along the row (x at the bottom, y on a side)
+            const da = task.vertical ? dy : dx;
             // moved before the lift: a swipe or a reorder, not a split
             if (!armed && Math.hypot(dx, dy) > 10) {
                 holdArm.stop();
@@ -547,12 +575,12 @@ Item {
                 task.splitDragMoved(mapToGlobal(mouse.x, mouse.y));
                 return;
             }
-            if (!dragging && !armed && Math.abs(dx) > Qt.styleHints.startDragDistance
+            if (!dragging && !armed && Math.abs(da) > Qt.styleHints.startDragDistance
                     && !(task.tablet && dy < 0 && Math.abs(dy) > Math.abs(dx))) {
                 dragging = true;
             }
             if (dragging) {
-                task.dragMoved(mapToItem(null, mouse.x, mouse.y).x);
+                task.dragMoved(mapToItem(null, mouse.x, mouse.y));
             }
         }
         onReleased: mouse => {
@@ -580,14 +608,16 @@ Item {
                 task.dragFinished();
             }
         }
-        // Upwards: a drag of the launcher (Kickoff's way, a pointer handler that takes the point
-        // from this mouse area once it has moved 48 px up; sideways stays the reorder above).
+        // Away from the edge (up on the bottom dock): a drag of the launcher (Kickoff's way, a
+        // pointer handler that takes the point from this mouse area once it has moved 48 px;
+        // along the row stays the reorder above).
         DragHandler {
             // (tablet posture: an upward drag splits the screen instead)
             enabled: !task.tablet
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
             target: null
-            xAxis.enabled: false
+            xAxis.enabled: task.vertical
+            yAxis.enabled: !task.vertical
             dragThreshold: 48
             onActiveChanged: {
                 if (active) {

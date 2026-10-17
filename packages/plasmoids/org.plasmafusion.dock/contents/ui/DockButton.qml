@@ -6,7 +6,9 @@
 import QtQuick
 
 // A fixed 48 px dock button (Start, Search, Overview, Downloads, Trash): radius 13,
-// 8 % fill, accent fill with a 1 px inner ring while `active` (aria-pressed in the boards).
+// 8 % fill, accent fill with a 1 px inner ring while `active` (aria-pressed in the boards). On a
+// dock on the left or right (board DockPosition.dc.html) the row is upright: the button is the
+// panel's width across, its face on the edge side and its pill beside it.
 Item {
     id: button
 
@@ -31,12 +33,25 @@ Item {
     // Set by the dock, which tracks the pointer for the whole row (one hover source: an item's
     // own hover state can stay behind when the pointer jumps off the panel).
     property bool hovered: false
+    // The dock's edge ("bottom", "left", "right"), the button's place along the row and its
+    // magnification offset (set by the dock).
+    property string edge: "bottom"
+    readonly property bool vertical: edge !== "bottom"
+    property real along: 0
+    property real alongShift: 0
     readonly property bool pressed: mouse.pressed
 
     signal clicked()
     signal menuRequested()
 
-    width: tile
+    x: vertical ? 0 : along
+    y: vertical ? along : 0
+    width: vertical ? (parent ? parent.width : tile) : tile
+    height: vertical ? tile : (parent ? parent.height : tile)
+    transform: Translate {
+        x: button.vertical ? 0 : button.alongShift
+        y: button.vertical ? button.alongShift : 0
+    }
     activeFocusOnTab: true
 
     Accessible.role: Accessible.Button
@@ -63,11 +78,12 @@ Item {
         }
     }
 
+    // The face sits bottomPad from the edge side, centred along the row.
     Rectangle {
         id: face
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: button.bottomPad
+        x: button.edge === "left" ? button.bottomPad
+            : button.edge === "right" ? button.width - button.bottomPad - width : (button.width - width) / 2
+        y: button.vertical ? (button.height - height) / 2 : button.height - button.bottomPad - height
         width: button.tile
         height: button.tile
         radius: Math.round(button.tile * 13 / 48)
@@ -117,11 +133,15 @@ Item {
         antialiasing: true
     }
 
+    // The pill 5 px from the face on the edge side (4 px with the larger tiles), upright on a side.
     Rectangle {
-        anchors.horizontalCenter: face.horizontalCenter
-        y: face.y + face.height + (button.tile > 48 ? 4 : 5)
-        width: button.tile > 48 ? 18 : 16
-        height: 4
+        readonly property int gapToFace: button.tile > 48 ? 4 : 5
+        readonly property int length: button.tile > 48 ? 18 : 16
+        x: button.edge === "left" ? face.x - gapToFace - width
+            : button.edge === "right" ? face.x + face.width + gapToFace : face.x + (face.width - width) / 2
+        y: button.vertical ? face.y + (face.height - height) / 2 : face.y + face.height + gapToFace
+        width: button.vertical ? 4 : length
+        height: button.vertical ? length : 4
         radius: 2
         color: button.pal.activePill
         visible: button.showIndicator
@@ -129,11 +149,12 @@ Item {
 
     MouseArea {
         id: mouse
-        // Reach into the 8 px gaps so the pointer is always over one item.
-        x: -4
-        y: face.y - 10
-        width: parent.width + 8
-        height: parent.height - y
+        // Reach into the 8 px gaps so the pointer is always over one item, and 10 px past the
+        // face away from the edge.
+        x: button.edge === "left" ? 0 : button.edge === "right" ? face.x - 10 : -4
+        y: button.vertical ? -4 : face.y - 10
+        width: button.edge === "left" ? face.x + face.width + 10 : button.edge === "right" ? parent.width - x : parent.width + 8
+        height: button.vertical ? parent.height + 8 : parent.height - y
         hoverEnabled: false
         acceptedButtons: button.acceptsMenu ? (Qt.LeftButton | Qt.RightButton) : Qt.LeftButton
         onClicked: mouse => {

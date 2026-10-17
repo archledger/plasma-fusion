@@ -122,12 +122,12 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && fileContentIndexing == other.fileContentIndexing && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications
         && lockNotificationSummaries == other.lockNotificationSummaries && tabletMode == other.tabletMode && tabletApps == other.tabletApps
         && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize
-        && dockSize == other.dockSize && groupWindows == other.groupWindows && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters
-        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator
-        && launcherRecentFiles == other.launcherRecentFiles && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces
-        && gestureSwipeUp == other.gestureSwipeUp && gestureSwipeDown == other.gestureSwipeDown && gestureSwipeLeft == other.gestureSwipeLeft
-        && gestureSwipeRight == other.gestureSwipeRight && gesturePinchIn == other.gesturePinchIn && gesturePinchOut == other.gesturePinchOut
-        && desktopsInOneRow == other.desktopsInOneRow;
+        && dockSize == other.dockSize && dockPosition == other.dockPosition && groupWindows == other.groupWindows && solidTopBar == other.solidTopBar
+        && systemMeters == other.systemMeters && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy
+        && homeIndicator == other.homeIndicator && launcherRecentFiles == other.launcherRecentFiles && launcherRecentApps == other.launcherRecentApps
+        && launcherPlaces == other.launcherPlaces && gestureSwipeUp == other.gestureSwipeUp && gestureSwipeDown == other.gestureSwipeDown
+        && gestureSwipeLeft == other.gestureSwipeLeft && gestureSwipeRight == other.gestureSwipeRight && gesturePinchIn == other.gesturePinchIn
+        && gesturePinchOut == other.gesturePinchOut && desktopsInOneRow == other.desktopsInOneRow;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
@@ -508,6 +508,18 @@ void PlasmaFusionKcm::setDockSize(int value)
 {
     if (value >= DockSmall && value <= DockLarge) {
         setField(&State::dockSize, value);
+    }
+}
+
+int PlasmaFusionKcm::dockPosition() const
+{
+    return m_current.dockPosition;
+}
+
+void PlasmaFusionKcm::setDockPosition(int value)
+{
+    if (value >= DockBottom && value <= DockRight) {
+        setField(&State::dockPosition, value);
     }
 }
 
@@ -1369,6 +1381,7 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
         defaults.magnify = m_current.magnify;
         defaults.magnifiedSize = m_current.magnifiedSize;
         defaults.dockSize = m_current.dockSize;
+        defaults.dockPosition = m_current.dockPosition;
         defaults.groupWindows = m_current.groupWindows;
         defaults.homeIndicator = m_current.homeIndicator;
     }
@@ -1520,6 +1533,13 @@ void PlasmaFusionKcm::save()
             applyDockSize(after.dockSize);
         } else {
             m_current.dockSize = before.dockSize;
+        }
+    }
+    if (after.dockPosition != before.dockPosition) {
+        if (m_dockAvailable) {
+            applyDockPosition(after.dockPosition);
+        } else {
+            m_current.dockPosition = before.dockPosition;
         }
     }
     if (after.groupWindows != before.groupWindows) {

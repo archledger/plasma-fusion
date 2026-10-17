@@ -24,6 +24,7 @@ python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$src"
 if command -v node >/dev/null 2>&1; then
   node "$src/tests/pins.test.js" >/dev/null
   node "$src/tests/metrics.test.js" >/dev/null
+  node "$src/tests/placement.test.js" >/dev/null
   node "$src/tests/date-timer.test.js" >/dev/null
   node "$src/tests/audio.test.js" >/dev/null
   node "$src/tests/previews.test.js" >/dev/null

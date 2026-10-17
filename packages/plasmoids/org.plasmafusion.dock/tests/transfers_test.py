@@ -14,7 +14,8 @@ progress per app must follow: one copy, a second one of the same app (their mean
 another app, and none once the jobs end. On a dock tile (TaskItem.qml, staged with the shared blocks
 as the build does) the progress ring shows next to an unread count, as in the stock task manager.
 The tile's running marks count a group's windows, three at most, the active app's first one the
-pill (board DockSize.dc.html, "Window count").
+pill (board DockSize.dc.html, "Window count"). On a dock on the left or right the tile is upright:
+its icon on the edge side, the marks upright beside it (board DockPosition.dc.html).
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -152,6 +153,34 @@ Item {
         motion: motion
         entry: null
         notificationCount: 0
+    }
+    // A tile on a dock on the left or right (the panel's 72 px across, 48 along): `edgeSide`.
+    property string edgeSide: "left"
+    Item {
+        x: 500
+        width: 72
+        height: 200
+        TaskItem {
+            id: edgeTile
+            edge: edgeSide
+            along: 40
+            index: 3
+            model: ({ AppId: "org.kde.konsole", AppName: "Konsole", decoration: "utilities-terminal", IsLauncher: false,
+                      IsStartup: false, IsActive: true, IsDemandingAttention: false, IsGroupParent: true, ChildCount: 2 })
+            pal: palette
+            motion: motion
+            entry: null
+            notificationCount: 0
+        }
+    }
+    // The upright tile: its box, its icon's box, and its marks' boxes in the tile.
+    function edgeState() {
+        const row = find(edgeTile, "indicator");
+        const marks = row ? row.children.filter(c => c.width === 4 || c.height === 4).filter(c => c.width > 0 && c.height > 0)
+            .map(c => { const q = c.mapToItem(edgeTile, 0, 0); return [Math.round(q.x), Math.round(q.y), Math.round(c.width), Math.round(c.height)]; }) : [];
+        const i = edgeTile.iconItem;
+        return JSON.stringify({ tile: [edgeTile.x, edgeTile.y, edgeTile.width, edgeTile.height],
+                                icon: [Math.round(i.x), Math.round(i.y), Math.round(i.width), Math.round(i.height)], marks: marks });
     }
     // The widths of the tile's marks, left to right.
     function marks() {
@@ -293,6 +322,22 @@ try:
     ]:
         got = marks(*args)
         check(got == want, "marks: %s (%r)" % (what, got))
+
+    # Upright tiles (board DockPosition.dc.html): on the left the icon 14 px from the edge (the
+    # bottom padding), the pill and a dot upright 5 px to its left, centred on it; on the right
+    # mirrored.
+    def edge_state(side):
+        item.setProperty("edgeSide", side)
+        QTest.qWait(400)
+        return json.loads(QMetaObject.invokeMethod(item, "edgeState", Q_RETURN_ARG("QVariant")))
+
+    left = edge_state("left")
+    check(left["tile"] == [0, 40, 72, 48], "left: the tile spans the panel's width at its place along the row (%r)" % (left["tile"],))
+    check(left["icon"] == [14, 0, 48, 48], "  its icon 14 px from the edge (%r)" % (left["icon"],))
+    check(left["marks"] == [[5, 12, 4, 16], [5, 31, 4, 5]], "  the pill and a dot upright, 5 px left of the icon (%r)" % (left["marks"],))
+    right = edge_state("right")
+    check(right["icon"] == [10, 0, 48, 48], "right: its icon 14 px from the edge (%r)" % (right["icon"],))
+    check(right["marks"] == [[63, 12, 4, 16], [63, 31, 4, 5]], "  the marks upright, 5 px right of the icon (%r)" % (right["marks"],))
 
     print(f"transfers: {checks} checks passed")
 finally:

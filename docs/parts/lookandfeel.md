@@ -529,11 +529,13 @@ live session gets these changes through DEVICE-1's in-place migration.
   `readConfig` needs a default of the key's type (`[]` for lists; `null` returns undefined).
 - `ensure-topbars.js` also gives every screen a dock (2026-10-16) while plasmafusionrc `[Dock]
   EveryScreen` is true (the settings page's "Dock on every screen"; off by default): a screen
-  without a dock panel gets one like the layout script's (bottom, floating, fit, centred) with the
-  main dock's height, hiding and opacity, a hidden launcher of its own (the dock's Start opens the
-  launcher of its own panel, on its screen; marked as having its pins, so no first-run pins again)
-  and every `[General]` key the main dock and launcher have set (Plasma's `Widget.configKeys`,
-  checked in plasma-workspace 6.7.5 `shell/scripting/widget.h`), but the test hooks and requests;
+  without a dock panel gets one like the layout script's (floating, fit, centred) on the main
+  dock's edge (the bottom, or since 2026-10-16 the left or right: board DockPosition.dc.html), with
+  the main dock's height, hiding and opacity, a hidden launcher of its own (the dock's Start opens
+  the launcher of its own panel, on its screen; marked as having its pins, so no first-run pins
+  again) and every `[General]` key the main dock and launcher have set (Plasma's
+  `Widget.configKeys`, checked in plasma-workspace 6.7.5 `shell/scripting/widget.h`), but the test
+  hooks and requests;
   list keys are copied as lists; a key the power service holds while the battery is low (dock
   magnification, glass) is copied with the user's value from plasmafusionrc `[Power]
   UserWidgetValues`, not the held one. Such a dock and its panel are marked as a copy

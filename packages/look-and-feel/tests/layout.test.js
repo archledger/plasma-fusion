@@ -322,6 +322,16 @@ test("ensure-topbars: a dock only on the second screen: it stays the main one, t
     assert.match(s.output, /docks: screens 2, added 0/, s.output);
     assert.deepStrictEqual([pf(first).onlyCurrentScreenBefore, pf(second).onlyCurrentScreenBefore], [undefined, false], "run again: the same");
 });
+test("ensure-topbars: a copy takes the main dock's edge (board DockPosition.dc.html)", () => {
+    const left = dockPanel();
+    left.location = "left";
+    const s = shell({ screens: TWO, files: dockRc("true"), panels: [mainBar(), left] });
+    s.run(ENSURE);
+    assert.match(s.output, /docks: screens 2, added 1$/m, s.output);
+    const copy = docksOf(s).find((d) => d.screen === 1);
+    assert.ok(copy, "a dock for screen 1");
+    assert.strictEqual(copy.location, "left", "on the left, as the main dock");
+});
 test("ensure-topbars: a second dock of the user's on the main screen: no copy made for it, it remembers too", () => {
     const own = dockPanel({ showOnlyCurrentScreen: true });
     own.id = 50;
