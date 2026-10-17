@@ -461,6 +461,12 @@ run topbarhidefail "{\"failScripts\": \"var HIDING\", \"panels\": [{\"widgets\":
 expect topbarhidefail "the change fails: the page says so" is "$(value topbarhidefail errorText | grep -c 'top bar setting could not be changed')" 1
 expect topbarhidefail "  and plasmafusionrc keeps no choice" is "$(sed -n '/^\[TopBar\]/,/^\[/s/^AutoHide=//p' "$work/topbarhidefail/config/plasmafusionrc" 2>/dev/null)" ""
 
+# The only Fusion bar on a screen that is not connected: no switch (Apply could change no bar).
+run topbarhideunplugged "{\"screens\": 1, \"panels\": [{\"screen\": 1, \"widgets\": [\"$APPNAME\", \"$CLOCK\", \"$QS\"]}]}" \
+  waitshell "get topBarHidingAvailable"
+expect topbarhideunplugged "the only bar on an unplugged screen: no switch" is "$(value topbarhideunplugged topBarHidingAvailable)" false
+expect topbarhideunplugged "  the shell did not crash" alive topbarhideunplugged
+
 # A Fusion bar without the app name (the clock pill and quick settings): the switch is there for it.
 run topbarhidenoname "{\"showHiding\": true, \"panels\": [{\"widgets\": [\"$CLOCK\", \"$QS\"]}]}" \
   waitshell "get topBarHidingAvailable" "set topBarAutoHide true" save "wait 500" "get errorText"

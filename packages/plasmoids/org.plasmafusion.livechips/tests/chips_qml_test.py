@@ -573,6 +573,14 @@ def main():
               "  twelve apps on a 400 px screen: the island stays on it, its rows scroll (%s, %s)" % (s["body"], scroll))
         QTest.keyClick(window, Qt.Key_Escape)
         wait(900)
+        # A screen 300 px wide: the opened island fits it, 8 px from each side.
+        h.setProperty("screen", QRect(0, 0, 300, 900))
+        call(h, "openIt")
+        wait(900)
+        s = island()
+        check(s["body"][0] >= 4 and s["body"][0] + s["body"][2] <= 296, "  a screen 300 px wide: the opened island fits it (%s)" % s["body"])
+        QTest.keyClick(window, Qt.Key_Escape)
+        wait(900)
         h.setProperty("screen", QRect(0, 0, 1440, 900))
         h.setProperty("rows", [{"app": "Firefox", "kinds": ["camera", "microphone"], "action": "mute", "microphones": [0], "session": "", "login": ""}])
         # The window resized from outside (as a platform does when the focus changes its flags; the

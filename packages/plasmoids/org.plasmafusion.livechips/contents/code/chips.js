@@ -284,3 +284,15 @@ function islandRows(microphoneApps, cameraApps, cameraInUse, cameraNames, portal
 function iconGuess(name) {
     return String(name || "").trim().toLowerCase().replace(/\s+/g, "-");
 }
+
+// Whether a screen is taken by a full-screen window, from its WINDOWS [{ fullScreen, minimized }],
+// the last activated first: the first one not minimized is full screen. Not the globally active
+// window: with another screen's window focused, the full-screen one still covers its screen.
+function fullScreenOf(windows) {
+    for (var i = 0; i < windows.length; ++i) {
+        if (!windows[i].minimized) {
+            return windows[i].fullScreen === true;
+        }
+    }
+    return false;
+}

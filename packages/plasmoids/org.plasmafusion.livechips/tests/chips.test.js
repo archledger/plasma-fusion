@@ -13,7 +13,7 @@ const file = path.join(__dirname, "..", "contents", "code", "chips.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
 const { capsule, argument, portalKind, remoteLogins, cameraApps, timeLeft, tint, GLYPHS, PRIVACY_ORDER,
-        newReads, readStarted, readForgotten, readCurrent, layoutKey, island, islandRows, iconGuess, ISLAND_COLOURS } = globalThis;
+        newReads, readStarted, readForgotten, readCurrent, layoutKey, island, islandRows, iconGuess, ISLAND_COLOURS, fullScreenOf } = globalThis;
 
 let checks = 0;
 function check(fn) {
@@ -170,5 +170,14 @@ check(() => assert.deepStrictEqual(islandRows([], [], true, ["Integrated Camera"
 check(() => assert.deepStrictEqual(islandRows([], [], false, ["Integrated Camera"], [], []), [], "a camera not in use: no row"));
 check(() => assert.deepStrictEqual([iconGuess("Firefox"), iconGuess(" Google  Chrome "), iconGuess("")], ["firefox", "google-chrome", ""],
     "an icon name from an app's name"));
+
+// A screen taken by a full-screen window: its last activated window not minimized is full screen
+// (focus on another screen's window does not change that).
+check(() => assert.deepStrictEqual([
+    fullScreenOf([{ fullScreen: true, minimized: false }, { fullScreen: false, minimized: false }]),
+    fullScreenOf([{ fullScreen: false, minimized: false }, { fullScreen: true, minimized: false }]),
+    fullScreenOf([{ fullScreen: true, minimized: true }, { fullScreen: false, minimized: false }]),
+    fullScreenOf([{ fullScreen: false, minimized: true }, { fullScreen: true, minimized: false }]),
+    fullScreenOf([])], [true, false, false, true, false], "the last activated window on the screen decides; minimized ones do not count"));
 
 console.log("chips.test.js: " + checks + " checks passed");

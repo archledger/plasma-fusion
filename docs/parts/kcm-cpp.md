@@ -907,8 +907,8 @@ island shows what uses the camera, the microphone or the screen."
 - Read: the hiding of the first top bar on a screen with the app name, the clock pill or quick
   settings (the apply script's own test; the one with quick settings when there are several), or in
   tablet posture (its `[PlasmaFusion] tabletApplied`) the hiding the tablet script gives back,
-  `laptopHiding`. The switch is there while such a bar is (`topBarHidingAvailable`; a bar without
-  the app name has it too).
+  `laptopHiding`. The switch is there while such a bar is on a screen (`topBarHidingAvailable`; a
+  bar without the app name has it too).
 - Apply: `s_topBarHidingScript` sets `hiding` to `autohide` or `none` on every panel with the app
   name, the clock pill or quick settings that is on a screen. A top bar of a screen that is not
   connected is left as it is: plasmashell reads and writes a panel's visibility in its screen's
@@ -932,8 +932,9 @@ island shows what uses the camera, the microphone or the screen."
   `fakeshell`, whose panels now have a hiding. `tests/run-settings-file.sh`: the export holds it.
   `tests/page_layout_test.py`: the row shows the module's value with its note, a click sets it.
   `topbarhidefail`: when the shell's script fails, the page says so and plasmafusionrc keeps no
-  choice; `topbarhidenoname`: a bar with the clock pill and quick settings but no app name has the
-  switch and hides; `topbarhide` also reads plasmafusionrc's key. `kcmctl-fuzz` sets it at random.
+  choice; `topbarhideunplugged`: the only bar on a screen that is not connected gives no switch;
+  `topbarhidenoname`: a bar with the clock pill and quick settings but no app name has the switch
+  and hides; `topbarhide` also reads plasmafusionrc's key. `kcmctl-fuzz` sets it at random.
   `tests/run-reset-layout.sh` (ctest `kcmctl-reset`): a bar that hid hides again after a reset, one
   that showed is left showing (against powerfx's stand-in shell, whose panels now have a hiding).
 - Session: `tests/scenario-island.sh` (docs/parts/shell-livechips.md, "The island").

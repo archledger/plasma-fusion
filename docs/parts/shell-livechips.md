@@ -191,29 +191,31 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   bar hides. Off, in tablet posture (the bar always shows) and with nothing going on: no island.
   Its own sources (the music, the full-screen window) load only while the bar is hidden, so nothing
   runs for them with the switch off (the default).
-- **What** (`Chips.island()`): the privacy kinds always first, then a screen recording, a Keep
-  awake timer and the music playing; the first two show, the second in the bubble. In a
-  full-screen window (`sources/FullScreen.qml`) only the privacy kinds, as 6 px dots in a 14 px
-  capsule; the pointer on them shows the compact island (until the pointer leaves or full screen
-  ends). Notifications, the clock, file copies and
-  Plasma's volume and brightness pop-up are not in it: Plasma's pop-up is compiled into
-  plasma-workspace (6.7.5 loads it from the QML module `org.kde.plasma.workspace.osd`), so a theme
-  cannot move it.
+- **What** (`Chips.island()`): the privacy kinds always first, then a screen recording, a Keep awake
+  timer and the music playing; the first two show, the second in the bubble. In a full-screen window
+  (`sources/FullScreen.qml`) only the privacy kinds, as 6 px dots in a 14 px capsule; the pointer on
+  them shows the compact island (until the pointer leaves or full screen ends). A screen is full
+  screen while its last activated window that is not minimized is (`Chips.fullScreenOf()`, the task
+  manager sorted by activation), also with another screen's window focused. Notifications, the
+  clock, file copies and Plasma's volume and brightness pop-up are not in it: Plasma's pop-up is
+  compiled into plasma-workspace (6.7.5 loads it from the QML module
+  `org.kde.plasma.workspace.osd`), so a theme cannot move it.
 - **Compact** (`IslandPart.qml`): 32 px high, radius 16, at least 132 px wide, 6 px margins; the
   privacy kinds: the first app's icon (its name as an icon name, `Chips.iconGuess()`; the kind's
   glyph when the theme has none) and an 8 px dot for each kind; a recording: the red dot in its
   tint and its time; Keep awake: the cup and the time left; the music: its cover (radius 6) and
   four level bars in the cover's orange (still: the motion lint allows no endless animation).
 - **Opened** (`IslandOpened.qml`, a click on the island or the bubble; Keep awake opens quick
-  settings' page instead): 400 px wide, radius 28, 14 px margins, on the screen (4 px from its top
-  and 24 px above its bottom at most: the rows scroll beyond that). A row for each app or login
-  (`Chips.islandRows()`: an app's kinds in one row, the most serious first) with its icon, the dots
-  and what it uses, and the action of its most serious kind: End, Stop sharing, Mute or Unmute (the
-  panel's own actions; an app's microphone streams together: Mute while any of them records, for all
-  of them). A recording: its time and Stop. The music: cover, title, artist and player, where it is
-  (read again every second while opened) and previous, play or pause, next; paused there, the music
-  stays while its view is open and its player is there, so Play is there. It takes the keyboard
-  focus while opened (Esc closes it), and a click outside it or on its free part closes it.
+  settings' page instead): 400 px wide (at most the screen's width less 8 px on each side), radius
+  28, 14 px margins, on the screen (4 px from its top and 24 px above its bottom at most: the rows
+  scroll beyond that). A row for each app or login (`Chips.islandRows()`: an app's kinds in one row,
+  the most serious first) with its icon, the dots and what it uses, and the action of its most
+  serious kind: End, Stop sharing, Mute or Unmute (the panel's own actions; an app's microphone
+  streams together: Mute while any of them records, for all of them). A recording: its time and
+  Stop. The music: cover, title, artist and player, where it is (read again every second while
+  opened) and previous, play or pause, next; paused there, the music stays while its view is open
+  and its player is there, so Play is there. It takes the keyboard focus while opened (Esc closes
+  it), and a click outside it or on its free part closes it.
 - **Colours** (`Chips.ISLAND_COLOURS`): the island is black in both schemes, so its glyphs and dots
   take the dark scheme's semantic colours (PlasmaFusionDark.colors: ForegroundPositive for the
   camera, -Neutral the microphone, -Visited the screen, -Negative remote control and a recording,

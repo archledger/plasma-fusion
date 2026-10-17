@@ -84,9 +84,11 @@ PlasmaCore.Dialog {
     // The opened island stays on the screen (4 px from its top, 24 px above its bottom); its rows
     // scroll inside (IslandOpened.qml).
     readonly property real maxHeight: Math.max(metrics.px(120), screenGeometry.height - 4 - metrics.px(24))
+    // Opened: 400 px wide, at most the screen's width less 8 px on each side.
+    readonly property real openedWidth: Math.max(metrics.px(200), Math.min(metrics.px(400), screenGeometry.width - metrics.px(16)))
     readonly property real gap: metrics.px(6)
     readonly property real targetWidth: mode === "dots" ? dotsRow.implicitWidth + metrics.px(8)
-        : mode === "opened" ? metrics.px(400)
+        : mode === "opened" ? openedWidth
         : Math.max(metrics.px(132), leading.implicitWidth + trailing.implicitWidth + metrics.px(28) + 2 * metrics.px(6))
     readonly property real targetHeight: mode === "dots" ? metrics.px(14)
         : mode === "opened" ? openedContent.implicitHeight + 2 * metrics.px(14) : compactHeight
@@ -338,7 +340,7 @@ PlasmaCore.Dialog {
                 island: island
                 x: island.metrics.px(14)
                 y: island.metrics.px(14)
-                width: island.metrics.px(400) - 2 * island.metrics.px(14)
+                width: island.openedWidth - 2 * island.metrics.px(14)
                 visible: island.mode === "opened"
                 opacity: visible ? 1 : 0
                 Behavior on opacity {

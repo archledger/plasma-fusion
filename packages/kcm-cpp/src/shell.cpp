@@ -127,7 +127,10 @@ for (var i = 0; i < ps.length; ++i) {
             hidingMain = qs.length > 0;
             hidingChosen = true;
         }
-        ++state.hidingBars;
+        // Only a bar on a screen counts: the apply script leaves the others alone.
+        if (p.screen >= 0 && p.screen < screenCount) {
+            ++state.hidingBars;
+        }
     }
 }
 var ds = desktops();
