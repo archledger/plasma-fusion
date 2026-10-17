@@ -328,7 +328,9 @@ property), but KWin's scripts see the window's `hidden`.
   changes and skips panels of a screen that is gone.
 - `main.qml` follows the bars' windows (at start, and as plasmashell's panel windows appear) and
   their `hiddenChanged`; the state goes to plasmashell when it changes (one call for changes in
-  the same turn of the event loop) and again when its panels appear (a shell restart). The log:
+  the same turn of the event loop) and again when its panels appear (a shell restart). When the
+  script is turned off (the kill switch), it sends that no bar is hidden as it goes, so no island
+  is left (the chips keep `barHidden` in their config). The log:
   `plasmafusion-tablet: top bars [{"x":0,"y":0,"hidden":true}]: island: 1 widgets, 1 changed`.
 - `tests/tablet-topbar.test.js` (in the build): which windows are top bars (the dock, a dock on
   the left, a window at the top, another output's bar, another app's are not), the state in a

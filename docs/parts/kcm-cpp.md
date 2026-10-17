@@ -911,16 +911,20 @@ island shows what uses the camera, the microphone or the screen."
   connected is left as it is: plasmashell reads and writes a panel's visibility in its screen's
   config without a window (plasma-workspace 6.7.5 `Panel::setHiding`), an invalid group for a
   screen that is gone. In tablet posture the bar keeps showing and `laptopHiding` becomes the new
-  hiding. The settings file carries it.
+  hiding. The settings file carries it. "Reset Fusion layout" rebuilds the bars showing (the layout
+  script's `hiding = "none"`): the reset applies the choice again (`finishResetLayout`), as it does
+  the glass level; a settings file's panels keep their own hiding.
 - Plasma hides such a panel through KWin (an auto-hide screen edge); the tablet KWin script tells
   the live chips when it is hidden (docs/parts/kwin-tablet.md, "The top bar for the island"), and
   they show the island (docs/parts/shell-livechips.md). The bars "Top bar on every screen" and Add
   Panel make take the main bar's hiding (docs/parts/lookandfeel.md).
 - `tests/shell-panels.sh` (ctest `kcmctl-panels`), cases `topbarhide` (read off; on, the main bar
   and the second screen's hide, the dock keeps `dodgewindows`, the bar of an unplugged screen is
-  left at `none` and the stand-in shell, which crashes on such a panel's hiding as plasmashell
-  does, does not crash; nothing pending after Apply), `topbarhideread` and `topbarhidetablet`,
-  against `fakeshell`, whose panels now have a hiding. `tests/run-settings-file.sh`: the export
-  holds it. `tests/page_layout_test.py`: the row shows the module's value with its note, a click
-  sets it. `kcmctl-fuzz` sets it at random.
+  left at `none` and the stand-in shell, which crashes on such a panel's hiding as plasmashell does,
+  does not crash; nothing pending after Apply), `topbarhideread` and `topbarhidetablet`, against
+  `fakeshell`, whose panels now have a hiding. `tests/run-settings-file.sh`: the export holds it.
+  `tests/page_layout_test.py`: the row shows the module's value with its note, a click sets it.
+  `kcmctl-fuzz` sets it at random. `tests/run-reset-layout.sh` (ctest `kcmctl-reset`): a bar that
+  hid hides again after a reset, one that showed is left showing (against powerfx's stand-in shell,
+  whose panels now have a hiding).
 - Session: `tests/scenario-island.sh` (docs/parts/shell-livechips.md, "The island").

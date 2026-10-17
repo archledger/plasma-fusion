@@ -164,6 +164,7 @@ Window {
     property bool barHidden: true
     property var content: ({ mode: "compact", items: ["privacy"], dots: ["camera", "microphone"] })
     property var actions: []
+    property var rows: [{ app: "Firefox", kinds: ["camera", "microphone"], action: "mute", microphones: [0], session: "", login: "" }]
     readonly property var window: island
     FusionMetrics { id: m }
     Island {
@@ -173,7 +174,7 @@ Window {
         barHidden: harness.barHidden
         screenGeometry: Qt.rect(0, 0, 1440, 900)
         content: harness.content
-        rows: [{ app: "Firefox", kinds: ["camera", "microphone"], action: "mute", microphones: [0], session: "", login: "" }]
+        rows: harness.rows
         recording: null
         keepAwakeLeft: null
         media: null
@@ -204,6 +205,16 @@ Window {
         return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
     }
     function openIt() { island.open("privacy"); }
+    // The rows' names shown in the opened island.
+    function names() {
+        const out = [];
+        const walk = item => {
+            if (item.text !== undefined && item.visible && /^App /.test(String(item.text))) out.push(String(item.text));
+            for (const child of item.children) walk(child);
+        };
+        walk(island.mainItem);
+        return JSON.stringify(out);
+    }
     function peek() { island.peek = true; }
 }
 """
@@ -535,6 +546,16 @@ def main():
         QTest.keyClick(window, Qt.Key_Escape)
         wait(900)
         check(island()["mode"] == "compact", "  Esc closes it (%s)" % island()["mode"])
+        # Five apps at once: a row for each, none left out.
+        h.setProperty("rows", [{"app": "App %d" % i, "kinds": ["microphone"], "action": "mute", "microphones": [i], "session": "", "login": ""}
+                               for i in range(1, 6)])
+        call(h, "openIt")
+        wait(900)
+        shown = json.loads(QMetaObject.invokeMethod(h, "names", Qt.DirectConnection, Q_RETURN_ARG("QVariant")))
+        check(shown == ["App %d" % i for i in range(1, 6)], "  five apps: a row for each (%s)" % shown)
+        QTest.keyClick(window, Qt.Key_Escape)
+        wait(900)
+        h.setProperty("rows", [{"app": "Firefox", "kinds": ["camera", "microphone"], "action": "mute", "microphones": [0], "session": "", "login": ""}])
         # The window resized from outside (as a platform does when the focus changes its flags; the
         # Dialog then sizes its main item to the window): while it opens, and once it has opened.
         call(h, "openIt")

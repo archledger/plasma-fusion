@@ -1470,6 +1470,11 @@ void PlasmaFusionKcm::finishResetLayout(const QJsonObject &before, bool imported
     if (m_saved.glass != GlassFull || !m_saved.solidTopBar) {
         applyPanels(m_saved.glass, m_saved.solidTopBar, m_saved.glass != GlassFull && !m_powerCritical);
     }
+    // The top bars hide as they did: the choice lives in the panels, which a reset rebuilds (a
+    // settings file's panels keep their own).
+    if (m_saved.topBarAutoHide && !imported) {
+        applyTopBarAutoHide(true);
+    }
     // Off, a reset removes the bars the layout script put on the other screens; a settings file's
     // panels are the ones the user had, a bar of another screen too.
     if (!m_saved.everyScreen && !imported) {

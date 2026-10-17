@@ -735,5 +735,11 @@ Item {
         if (applied && !quitting) {
             leave();
         }
+        // ... and no island is left: the live chips hear that no bar is hidden (their barHidden
+        // is kept in the widget's config). The call goes out on KWin's own bus connection at once.
+        if (!quitting && sentBars !== "") {
+            barCall.arguments = [TopBar.barScript([])];
+            barCall.call();
+        }
     }
 }

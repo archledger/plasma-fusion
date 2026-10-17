@@ -16,7 +16,8 @@
 #   6. the pointer pushed against the top of the screen (KWin pushes it back once, then shows the
 #      bar after its activation delay): the bar shows, the island goes; the pointer away: the bar
 #      hides again, the island is back;
-#   7. tablet posture: the bar shows, no island; laptop again: hidden, the island back;
+#   7. the tablet KWin script turned off: no island left, on again: back; tablet posture: the
+#      bar shows, no island; laptop again: hidden, the island back;
 #   8. off: the bar shows again, no island.
 # Each step's screenshot is for the comparison with the board. The seed (make-seed.sh ... dark,
 # PF_KCMCTL set) also holds ~/pf-chips/fake_status_items.py, and its .config/pfv-env sets
@@ -148,6 +149,15 @@ shot i-bar
 pfinput "move 720 8" "sleep 0.1" "move 720 20" "sleep 0.1" "move 720 60" "sleep 0.1" "move 720 500"
 check "the pointer away: the bar hides again" "$(wait_bars '"hidden":true' 15 && echo hidden || echo shown)" hidden
 check "  the island is back" "$(wait_island '^compact' 10 && echo back || island)" back
+
+# The tablet script turned off (the kill switch) while the bar is hidden: it tells the chips no bar
+# is hidden as it goes, so no island is left; on again: back.
+kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-tabletEnabled false
+qdbus org.kde.KWin /KWin reconfigure
+check "the tablet script turned off: no island left" "$(wait_island '^none' 15 && echo none || island)" none
+kwriteconfig6 --file kwinrc --group Plugins --key plasmafusion-tabletEnabled true
+qdbus org.kde.KWin /KWin reconfigure
+check "  on again: the island is back" "$(wait_island '^compact' 15 && echo back || island)" back
 
 pfv_tablet on
 sleep 6

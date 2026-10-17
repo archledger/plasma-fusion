@@ -10,7 +10,8 @@
 # not set, which shows which keys it tries: quick settings gets Meta+A when it had none, and the
 # pen menu gets a key only when the old one had it (Meta+Shift+W is fusion-config.sh --pen's).
 # With "Dock on every screen" on, the reset runs ensure-topbars.js (a stand-in) for the other docks
-# and reports it when the script is missing or fails.
+# and reports it when the script is missing or fails. A top bar that hid (the settings page's "Hide
+# the top bar automatically") hides again after the reset, which rebuilds it showing.
 # Needs node and python3 with GObject introspection (mock-session.py).
 #
 #   run-reset-layout.sh KCMCTL PLUGIN_DIR WORKDIR
@@ -50,6 +51,17 @@ layout() {
 JSON
 }
 
+# bar HIDING FIRST_ID: a top bar (the app name and quick settings) with this hiding.
+bar() {
+  cat <<JSON
+{"knownWidgetTypes": ["org.plasmafusion.appname", "org.plasmafusion.quicksettings"],
+ "desktops": [{"id": $(($2 + 1)), "widgets": []}],
+ "panels": [{"id": $(($2 + 2)), "location": "top", "hiding": "$1", "widgets": [
+               {"id": $(($2 + 3)), "type": "org.plasmafusion.appname", "config": {}},
+               {"id": $(($2 + 4)), "type": "org.plasmafusion.quicksettings", "config": {}}]}]}
+JSON
+}
+
 cat >"$work/inner.sh" <<'EOF2'
 set -u
 work=$1 kcmctl=$2 powerfx=$3
@@ -84,6 +96,18 @@ cp "$work/layout-pen.json" "$work/layout.json"; cp "$work/layout-new.json" "$wor
 reset pen
 check "a pen menu that had Meta+Shift+W gets it again" grep -q 'Meta+Shift+W for pen menu' "$work/pen.err"
 
+# A top bar that hid: the layout rebuilds it showing, the module makes it hide again; one that
+# showed is left showing.
+# (the stand-in shell's writes are in calls.log.writes)
+cp "$work/bar-hidden.json" "$work/layout.json"; cp "$work/bar-new.json" "$work/layout.json.reset"
+: >"$work/calls.log.writes"
+reset hidden
+check "a top bar that hid: the rebuilt bar hides again" grep -q 'containment 52 hiding=autohide' "$work/calls.log.writes"
+cp "$work/bar-shown.json" "$work/layout.json"; cp "$work/bar-new.json" "$work/layout.json.reset"
+: >"$work/calls.log.writes"
+reset shown
+check "  one that showed: no hiding set" bash -c "! grep -q 'hiding=' '$work/calls.log.writes'"
+
 # "Dock on every screen" saved on: the reset runs ensure-topbars.js (a stand-in) to bring the other
 # docks back, and says so when it cannot: no script (no data dirs but the scratch one), or a
 # script that fails.
@@ -113,11 +137,14 @@ EOF2
 layout "" 0 >"$work/layout-nopen.json"
 layout "Meta+Shift+W" 0 >"$work/layout-pen.json"
 layout "" 50 >"$work/layout-new.json"
+bar autohide 0 >"$work/bar-hidden.json"
+bar none 0 >"$work/bar-shown.json"
+bar none 50 >"$work/bar-new.json"
 
 status=0
 dbus-run-session --config-file="$here/session-bus.conf" -- bash "$work/inner.sh" "$work" "$kcmctl" "$powerfx" || status=$?
 if [ "$status" != 0 ]; then
-  for f in "$work"/nopen.log "$work"/pen.log "$work"/docks-missing.log "$work"/docks-fail.log "$work"/docks.log; do echo "--- $f"; cat "$f" 2>/dev/null; done
+  for f in "$work"/nopen.log "$work"/pen.log "$work"/hidden.log "$work"/shown.log "$work"/docks-missing.log "$work"/docks-fail.log "$work"/docks.log; do echo "--- $f"; cat "$f" 2>/dev/null; done
   echo "--- shell calls"; cat "$work/calls.log" 2>/dev/null
   echo "FAIL: kcmctl-reset"
   exit 1

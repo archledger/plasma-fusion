@@ -238,21 +238,23 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   and at least 132 wide (at the test's text scale), centred; the bubble 6 px beside it with the
   island still centred and both inside its window; opened 400 px wide and centred, where a real
   click on Mute asks the app's microphone to mute and Esc closes it; the window resized from outside
-  while it opens and once it has opened, it still opens to its size and centred; the full-screen
-  dots 14 px high, the pointer on them shows the island and full screen coming back shows the dots
-  again. Mutations of each (8 px from the top, no room for the bubble, shown with the bar, 300 px
-  opened, no Esc, Mute doing nothing, no binding again after the focus, the peek kept) fail it.
+  while it opens and once it has opened, it still opens to its size and centred; five apps at once
+  give five rows; the full-screen dots 14 px high, the pointer on them shows the island and full
+  screen coming back shows the dots again. Mutations of each (8 px from the top, no room for the
+  bubble, shown with the bar, 300 px opened, no Esc, Mute doing nothing, no binding again after the
+  focus, the peek kept) fail it.
 - **Session** (`packages/kcm-cpp/tests/scenario-island.sh`; 2026-10-17, a private session on the
   Fedora 44 test laptop, Plasma 6.7.5, 1440 x 900, the stage, module and kcmctl of this change;
-  stand-in status items): **21 checks pass**. The switch on: the bar's panel hides, KWin hides its
+  stand-in status items): **23 checks pass**. The switch on: the bar's panel hides, KWin hides its
   window and the tablet script sets the chips' `barHidden`; the harness's own SSH login is in the
-  island; screen sharing: compact, 4 px from the top and centred (654,4 132x32); opened in place
-  and centred (520,4 400x148, the window KWin configured the same); closed; a recording too: the
-  bubble 6 px beside it, the island still centred; the pointer pushed against the top: the bar
-  shows and the island goes; the pointer down through the bar and away: the bar hides and the
-  island is back; tablet posture: the bar shows, no island; laptop again: hidden, the island back;
-  off: the bar shows, no island. The screenshots match the board (compact with the app and its
-  dots, the opened rows, the bubble).
+  island; screen sharing: compact, 4 px from the top and centred (654,4 132x32); opened in place and
+  centred (520,4 400x148, the window KWin configured the same); closed; a recording too: the bubble
+  6 px beside it, the island still centred; the pointer pushed against the top: the bar shows and
+  the island goes; the pointer down through the bar and away: the bar hides and the island is back;
+  the tablet KWin script turned off: no island left (a red run without its last call keeps the
+  island), on again: back; tablet posture: the bar shows, no island; laptop again: hidden, the
+  island back; off: the bar shows, no island. The screenshots match the board (compact with the app
+  and its dots, the opened rows, the bubble).
 - **Found in the session** (each fixed): with `Qt.WindowStaysOnTopHint` libplasma 6.7.5 makes a
   Dialog a Dock (`DialogPrivate::applyType`: a panel whose windows go below, under full-screen
   windows), so the island has no such flag. Taking the focus at once when it opened kept the

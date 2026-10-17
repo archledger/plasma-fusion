@@ -59,7 +59,7 @@ ColumnLayout {
 
     // ---- privacy: a row for each app or login
     Repeater {
-        model: opened.item === "privacy" ? opened.island.rows.slice(0, 4) : []
+        model: opened.item === "privacy" ? opened.island.rows : []
         delegate: RowLayout {
             id: row
             required property var modelData
