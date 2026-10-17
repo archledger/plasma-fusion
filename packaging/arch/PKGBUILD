@@ -9,7 +9,8 @@
 # rebuild this package after every kwin or kdecoration update (a pacman hook says so; until then the
 # Plasma Fusion login check keeps the version-bound parts off).
 pkgbase=plasma-fusion
-pkgname=(plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook)
+pkgname=(plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook
+         plasma-fusion-copytext)
 pkgver=0.5.0
 pkgrel=1
 pkgdesc="Plasma Fusion desktop for KDE Plasma 6"
@@ -20,7 +21,7 @@ makedepends=(git python python-pillow python-numpy pyside6 qt6-shadertools librs
              desktop-file-utils cmake ninja extra-cmake-modules qt6-base qt6-declarative kwin
              kdecoration plasma-activities kcoreaddons kconfig kconfigwidgets kglobalaccel ki18n
              kwindowsystem kpackage kcolorscheme kcmutils kio kdbusaddons kservice vulkan-headers libepoxy libdrm
-             plasma-workspace plasma-desktop plasma5support systemsettings)
+             plasma-workspace plasma-desktop plasma5support systemsettings layer-shell-qt)
 source=("plasma-fusion::git+https://github.com/archledger/plasma-fusion.git#tag=v${pkgver}?signed")
 sha256sums=('SKIP')
 validpgpkeys=('F35053398E3C80FE20891B82C10B8492BD7F30C6') # Wisbendji Fimerlus (release key)
@@ -37,6 +38,11 @@ build() {
       -DCMAKE_INSTALL_PREFIX=/usr -DKDE_INSTALL_USE_QT_SYS_PATHS=ON -DBUILD_TESTING=OFF
     cmake --build "$srcdir/build-$p"
   done
+  # The copy-text overlay goes to the helper directory, which on Arch is /usr/lib/plasma-fusion.
+  cmake -S packages/copytext-cpp -B "$srcdir/build-copytext" -G Ninja -DCMAKE_BUILD_TYPE=None \
+    -DCMAKE_INSTALL_PREFIX=/usr -DKDE_INSTALL_USE_QT_SYS_PATHS=ON -DBUILD_TESTING=OFF \
+    -DPF_HELPER_DIR=/usr/lib/plasma-fusion
+  cmake --build "$srcdir/build-copytext"
 }
 
 package_plasma-fusion() {
@@ -48,6 +54,7 @@ package_plasma-fusion() {
   optdepends=('plasma-fusion-decoration: the Plasma Fusion window decoration'
               'plasma-fusion-settings: the Plasma Fusion page in System Settings'
               'plasma-fusion-quicklook: Quick Look (Space in Dolphin previews files)'
+              'plasma-fusion-copytext: copy text from the screen with an instant selection'
               'plasma-fusion-navigation: tablet navigation gestures (convertibles)'
               'pyside6: draw app icons with QtSvg (else librsvg)'
               'librsvg: draw app icons when pyside6 is missing'
@@ -106,4 +113,11 @@ package_plasma-fusion-quicklook() {
               'qt6-svg: SVG pictures'
               'dolphin: Space in Dolphin opens Quick Look')
   DESTDIR="$pkgdir" cmake --install "$srcdir/build-quicklook"
+}
+
+package_plasma-fusion-copytext() {
+  license=('GPL-2.0-or-later')
+  pkgdesc="Plasma Fusion copy text: its own selection overlay (instead of Spectacle's)"
+  depends=("plasma-fusion=$pkgver" layer-shell-qt ki18n qt6-declarative qt6-base tesseract gcc-libs glibc)
+  DESTDIR="$pkgdir" cmake --install "$srcdir/build-copytext"
 }

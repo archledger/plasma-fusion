@@ -37,6 +37,7 @@ Build-Depends: debhelper-compat (= 13),
                libkf6kio-dev,
                libkf6service-dev,
                libkf6windowsystem-dev,
+               liblayershellqtinterface-dev,
                libkf6package-dev,
                libkf6kcmutils-dev,
                libepoxy-dev,
@@ -61,7 +62,7 @@ Depends: ${misc:Depends},
          python3-pil,
          systemd,
          librsvg2-bin | python3-pyside6.qtsvg
-Recommends: plasma-fusion-decoration, plasma-fusion-settings, plasma-fusion-quicklook, libnotify-bin,
+Recommends: plasma-fusion-decoration, plasma-fusion-settings, plasma-fusion-quicklook, plasma-fusion-copytext, libnotify-bin,
             powerdevil, plasma-nm, plasma-pa, bluedevil, tesseract-ocr
 Suggests: plasma-fusion-navigation, xournalpp, kate, konsole, python3-pyside6.qtsvg
 Description: Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
@@ -110,6 +111,19 @@ Description: Plasma Fusion Quick Look: preview files without opening them
  a folder; any other file shows its thumbnail. The arrow keys go through the
  selected files, Enter opens the shown one, Space or Esc closes the preview.
  "Quick Look" is in the context menus of Dolphin and the desktop as well.
+
+Package: plasma-fusion-copytext
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, plasma-fusion (>= ${source:Upstream-Version}),
+         layer-shell-qt, qml6-module-qtquick, qml6-module-qtquick-shapes, qml6-module-qtquick-window,
+         tesseract-ocr
+Description: Plasma Fusion copy text: its own selection overlay
+ The selection overlay of Plasma Fusion's copy text from the screen: the
+ copy-text button in the top bar, Meta+Shift+T, quick settings or the
+ clipboard sheet freeze the screen under a veil at once; draw a box around the
+ text and, as the drag ends, its text is on the clipboard. The session bus
+ starts the overlay the first time it is used. Without this package copy text
+ uses Spectacle's selection.
 
 Package: plasma-fusion-navigation
 Architecture: any

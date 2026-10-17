@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Plasma Fusion for NixOS: the shared part (what tools/build.sh stages: themes, widgets, icons,
-# fonts, the setup and login-check tools) and the three compiled parts, built from the system's own
+# fonts, the setup and login-check tools) and the compiled parts, built from the system's own
 # kdePackages. Used by ./module.nix; Plasma 6.7 or later (nixos-unstable while NixOS 26.05 has 6.6).
 #   pkgs:    a nixpkgs package set
 #   src:     a Plasma Fusion source tree (a pinned fetchGit or fetchFromGitHub, or a checkout)
@@ -111,6 +111,16 @@ rec {
     pname = "plasma-fusion-quicklook"; inherit version; dir = "quicklook-cpp"; app = true;
     buildInputs = with kdePackages; [ qtbase qtdeclarative qtmultimedia qtwebengine qtsvg qtimageformats kio kdbusaddons
       kservice kwindowsystem ki18n kcoreaddons kirigami qqc2-desktop-style syntax-highlighting kimageformats kio-extras ];
+    cmakeFlags = [ "-DBUILD_TESTING=OFF" ];
+  };
+
+  # Copy text's selection overlay: started by the session bus, it gets its screen pictures from KWin
+  # by its desktop file, whose Exec= must be the program KWin finds in /proc/PID/exe. Not wrapped:
+  # nixpkgs' KWin unwraps .NAME-wrapped for its Wayland checks only, not for this D-Bus one; the
+  # session's Qt plugin and QML paths serve it, as they serve the plugins above.
+  plasma-fusion-copytext = compiled {
+    pname = "plasma-fusion-copytext"; inherit version; dir = "copytext-cpp";
+    buildInputs = with kdePackages; [ qtbase qtdeclarative ki18n layer-shell-qt ];
     cmakeFlags = [ "-DBUILD_TESTING=OFF" ];
   };
 

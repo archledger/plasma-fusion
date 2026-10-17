@@ -27,7 +27,7 @@
         let pf = packagesFor pkgs; in
         {
           inherit (pf) plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation
-            plasma-fusion-quicklook;
+            plasma-fusion-quicklook plasma-fusion-copytext;
           default = pf.plasma-fusion;
         });
 
@@ -36,7 +36,7 @@
         programs.plasma-fusion.src = lib.mkDefault self;
       };
 
-      # nix flake check builds the four packages.
+      # nix flake check builds every package: the shared part and the compiled parts.
       checks = forAllSystems (pkgs: removeAttrs (packagesFor pkgs) [ "override" "overrideDerivation" ]);
     };
 }

@@ -9,6 +9,13 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Copy text's selection shows at once:** with the new `plasma-fusion-copytext` package (the main
+  package recommends it), Meta+Shift+T and the copy-text buttons show Plasma Fusion's own selection
+  in about a tenth of a second instead of Spectacle's in one to two and a half seconds: the screen
+  stays still under a light veil, the box drawn around the text copies it as the drag ends, and Esc
+  or a click ends it. It starts on the first copy text and then waits with no window and no CPU.
+  Without the package, or where KWin does not allow it the screen's picture, copy text uses
+  Spectacle's selection as before.
 - **A copy-text button in the top bar:** one click on the button before the clipboard, then a box
   drawn around text on the screen, and the text is on the clipboard, as with Meta+Shift+T; it can be
   turned off in the widget's settings ("Copy text button").

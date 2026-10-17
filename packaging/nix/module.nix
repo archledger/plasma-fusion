@@ -6,7 +6,7 @@
 #   imports = [ "${plasma-fusion-src}/packaging/nix/module.nix" ];
 #   programs.plasma-fusion = { enable = true; src = plasma-fusion-src; };
 #
-# It installs the shared part and, on Plasma 6.7 or later, the three compiled parts, all built from
+# It installs the shared part and, on Plasma 6.7 or later, the compiled parts, all built from
 # the system's own kdePackages, so every nixos-rebuild builds them against the KWin it ships (a
 # failed build stops the rebuild before anything changes). Each user then runs the per-user step
 # inside the Plasma session: /run/current-system/sw/share/plasma-fusion/tools/device/fusion-config.sh
@@ -50,7 +50,9 @@ in
       # notify-send and gdbus as on Fedora, where they are part of every Plasma install.
       environment.systemPackages = [ pf.plasma-fusion pkgs.libnotify pkgs.glib.bin ]
         ++ lib.optionals cfg.compiledParts [ pf.plasma-fusion-decoration pf.plasma-fusion-settings pf.plasma-fusion-navigation
-          pf.plasma-fusion-quicklook ];
+          pf.plasma-fusion-quicklook pf.plasma-fusion-copytext ];
+      # Copy text's overlay is started by the session bus: its D-Bus service file.
+      services.dbus.packages = lib.optionals cfg.compiledParts [ pf.plasma-fusion-copytext ];
       environment.pathsToLink = [ "/libexec/plasma-fusion" ];
       # Manrope and Space Grotesk for every user (fontconfig reads fonts.packages).
       fonts.packages = [ pf.plasma-fusion ];

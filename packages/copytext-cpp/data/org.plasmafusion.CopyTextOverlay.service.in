@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+[D-BUS Service]
+Name=org.plasmafusion.CopyTextOverlay
+Exec=@PF_HELPER_DIR@/plasma-fusion-copytext-overlay

@@ -181,10 +181,17 @@ a file and exits: without `-o` into Pictures/Screenshots (VM, 2026-10-11), with 
 alone, as its "save automatically" and "copy to clipboard" settings are not applied in background
 mode (`SpectacleCore.cpp`, 6.7.5). So the helper `plasma-fusion-copytext` (`packages/copytext/`; in
 the helper directory: `/usr/libexec/plasma-fusion`, `/usr/lib/plasma-fusion` on Arch, the system
-profile on NixOS, `~/.local/libexec/plasma-fusion` with `--install`) does it in four steps:
+profile on NixOS, `~/.local/libexec/plasma-fusion` with `--install`) does it in four steps, the
+first handed to Plasma Fusion's own selection where the `plasma-fusion-copytext` package is
+installed (below):
 
-1. capture: `spectacle -b -n -r -k -o $XDG_RUNTIME_DIR/plasma-fusion-copytext.XXXXXX/region.png`,
-   the directory removed when the helper ends; `-k` (`--release-capture`, Spectacle 6.7.0, not in
+1. capture: with the package (and `tesseract`), the helper calls the overlay's `Start()` on the
+   session bus (`org.plasmafusion.CopyTextOverlay`; the bus starts the overlay on the first call)
+   and ends; the overlay shows its selection at once (about 0.1 s against Spectacle's 1-2.5 s) and
+   gives the chosen area back with `plasma-fusion-copytext --image FILE`, which does steps 2 to 4
+   (docs/parts/copytext-cpp.md). Without it:
+   `spectacle -b -n -r -k -o $XDG_RUNTIME_DIR/plasma-fusion-copytext.XXXXXX/region.png`, the
+   directory removed when the helper ends; `-k` (`--release-capture`, Spectacle 6.7.0, not in
    6.6.0) takes the area as the drag ends, for this capture only (Spectacle's own "Accept on
    click-and-release" setting, `spectaclerc [General] useReleaseToCapture`, stays as the user set
    it); Esc ends it without a word;
@@ -234,14 +241,17 @@ with a space, not used for one with a `$` or a `%`, `spectacle --region` without
 written again); a loaded 0.5.0 component made again with the user's key kept and no change recorded,
 and no reload on a second run; quick settings' command run as Plasma's executable source runs it
 (the helper, else `spectacle --region`; its places and their order against `HELPER_DIRS`).
-`packages/copytext/tests/helper-unit.sh` (CI, 28 checks) runs the helper itself with a PATH of
+`packages/copytext/tests/helper-unit.sh` (CI, 32 checks) runs the helper itself with a PATH of
 stand-ins (Spectacle, Tesseract, kreadconfig6, busctl, wl-copy): the capture's arguments and its
 directory, the text Klipper gets, the notifications, nothing left behind, Esc, Spectacle open, a
 second press, the language choice, no language data, no `tesseract` command, no text, Tesseract
 failing, text that starts with a dash or holds markup, a long line cut in characters, wl-copy
-(without the helper's lock: it stays to serve the clipboard), no clipboard; then on a private bus
-with the real `busctl` (`fake_session.py` owns Klipper's and the notification server's names; text
-that starts like an option), and real Tesseract on a line drawn in Manrope at 14 px.
+(without the helper's lock: it stays to serve the clipboard), no clipboard, the overlay on the bus
+(`Start()` asked, nothing else run), its way back to Spectacle
+(`PLASMA_FUSION_COPYTEXT_NO_OVERLAY`), `--image FILE` (that picture read, no capture, the picture
+left to its owner) and `--image` without a picture (exit 2); then on a private bus with the
+real `busctl` (`fake_session.py` owns Klipper's and the notification server's names; text that
+starts like an option), and real Tesseract on a line drawn in Manrope at 14 px.
 `packages/copytext/tests/vsession/scenario-copytext.sh` (a private session, 32 checks; KWin and
 Spectacle 6.7.5, Tesseract 5.5.3) drives the real Spectacle, Tesseract and Klipper with KWin's
 emulated keys and pointer: 0.5.0's component, loaded first, starts `spectacle --region` from

@@ -8,8 +8,9 @@
 #   tools/tests/coverage.sh [--out DIR] [--deps] [scripts] [cpp:PACKAGE ...]
 #
 #   scripts        Python (coverage.py), shell (kcov) and JavaScript (node) in one pass (default)
-#   cpp:PACKAGE    a compiled part (decoration-cpp, kcm-cpp, navigation-cpp or quicklook-cpp): built with gcc
-#                  --coverage, its tests run, the lines of its src/ reported by gcovr
+#   cpp:PACKAGE    a compiled part (decoration-cpp, kcm-cpp, navigation-cpp, quicklook-cpp or
+#                  copytext-cpp): built with gcc --coverage, its tests run, the lines of its src/
+#                  reported by gcovr
 #   --out DIR      results (default build/coverage); an earlier result there is replaced, any
 #                  other non-empty directory is refused
 #   --deps         only install what the chosen parts need with dnf (as root, in a container or
@@ -55,7 +56,7 @@ while [ $# -gt 0 ]; do
     --out) OUT=${2:?--out needs a directory}; shift ;;
     --deps) DEPS=1 ;;
     -h|--help) sed -n '5,44p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    scripts|cpp:decoration-cpp|cpp:kcm-cpp|cpp:navigation-cpp|cpp:quicklook-cpp) parts+=("$1") ;;
+    scripts|cpp:decoration-cpp|cpp:kcm-cpp|cpp:navigation-cpp|cpp:quicklook-cpp|cpp:copytext-cpp) parts+=("$1") ;;
     *) echo "coverage.sh: unknown argument '$1' (--help)" >&2; exit 2 ;;
   esac
   shift

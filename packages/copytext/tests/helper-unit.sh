@@ -89,6 +89,8 @@ case " $* " in
   # Spectacle open: its name on the bus.
   *" NameHasOwner s org.kde.spectacle "*) if [ -e "$T/instance" ]; then echo "b true"; else echo "b false"; fi ;;
   *" org.kde.klipper "*) [ "${FAKE_KLIPPER:-1}" = 1 ] || { echo "Unit name org.kde.klipper not found" >&2; exit 1; } ;;
+  # Plasma Fusion's own overlay: on the bus only where the case says so.
+  *" org.plasmafusion.CopyTextOverlay "*) [ "${FAKE_OVERLAY:-0}" = 1 ] || { echo "The name is not activatable" >&2; exit 1; } ;;
   *" Notify "*) echo "u $n" ;;
 esac
 exit 0
@@ -167,6 +169,39 @@ rc=0; run_helper || rc=$?
   ok "with Spectacle open: spectacle --region there, no background capture" || bad "Spectacle open: exit $rc, $(cat "$CASE/spectacle.log")"
 [ ! -e "$CASE/fd9" ] && [ ! -e "$BASE/copied/fd9" ] && ok "Spectacle never holds the helper's lock (capture and --region)" ||
   bad "the lock reached Spectacle: $(cat "$CASE/fd9" "$BASE/copied/fd9" 2>/dev/null)"
+
+# 1e. Plasma Fusion's own overlay runs (its name on the bus): the helper asks it to start and is
+#     done; no Spectacle and no text recognition here (the overlay hands the area back, 1g).
+setup_case overlay
+rc=0; run_helper FAKE_OVERLAY=1 || rc=$?
+[ "$rc" = 0 ] && [ ! -e "$CASE/spectacle.log" ] && [ ! -e "$CASE/tesseract.log" ] &&
+  grep -qa 'org.plasmafusion.CopyTextOverlay' "$CASE"/bus.[0-9]* && grep -qa 'Start' "$CASE"/bus.[0-9]* &&
+  ok "the overlay running: the helper asks it to start, nothing else" ||
+  bad "the overlay running: exit $rc, $(cat "$CASE/spectacle.log" 2>/dev/null) $(cat "$CASE/out")"
+# 1f. The overlay's own way back (KWin gave it no pictures): Spectacle's capture, as without it.
+setup_case overlay-back
+rc=0; run_helper FAKE_OVERLAY=1 PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1 || rc=$?
+[ "$rc" = 0 ] && grep -q '^-b -n -r -k -o ' "$CASE/spectacle.log" && [ "$(calls setClipboardContents)" = "$(printf 'Hello Plasma Fusion\nsecond line')" ] &&
+  ok "the overlay's way back: Spectacle's capture, the text copied" || bad "the way back: exit $rc, $(cat "$CASE/spectacle.log" 2>/dev/null)"
+# 1g. --image FILE (the overlay chose the area): no capture; the file is read, copied and said;
+#     the file stays (the overlay removes its directory).
+setup_case image
+cp "$CASE/region.png" "$CASE/area.png"
+rc=0
+env -i PATH="$CASE/bin:$SYS" HOME="$CASE/home" XDG_RUNTIME_DIR="$CASE/run" T="$CASE" FAKE_LANGS="eng osd" FAKE_OVERLAY=1 \
+  /bin/bash "$HELPER" --image "$CASE/area.png" >>"$CASE/out" 2>&1 || rc=$?
+[ "$rc" = 0 ] && [ ! -e "$CASE/spectacle.log" ] && [ "$(head -1 "$CASE/tesseract.log")" = "$CASE/area.png stdout -l eng --psm 3" ] &&
+  [ "$(calls setClipboardContents)" = "$(printf 'Hello Plasma Fusion\nsecond line')" ] &&
+  [ "$(calls Notify)" = "Text copied|Hello Plasma Fusion (and 1 more line)|1 transient b true -1|Plasma Fusion" ] && [ -s "$CASE/area.png" ] &&
+  ok "--image: that picture read, its text copied and said, no capture, the picture left to its owner" ||
+  bad "--image: exit $rc, $(cat "$CASE/tesseract.log" 2>/dev/null) / $(calls Notify) / $(cat "$CASE/out")"
+# 1h. --image without a picture: an error, nothing done.
+setup_case image-missing
+rc=0
+env -i PATH="$CASE/bin:$SYS" HOME="$CASE/home" XDG_RUNTIME_DIR="$CASE/run" T="$CASE" FAKE_LANGS="eng osd" \
+  /bin/bash "$HELPER" --image "$CASE/none.png" >>"$CASE/out" 2>&1 || rc=$?
+[ "$rc" = 2 ] && [ ! -e "$CASE/spectacle.log" ] && [ ! -e "$CASE/tesseract.log" ] && [ -z "$(calls Notify)" ] &&
+  ok "--image without a picture: exit 2, nothing done" || bad "--image without a picture: exit $rc"
 
 # 1d. A second press while the area is being chosen does nothing; the first goes on.
 setup_case twice

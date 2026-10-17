@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Plasma Fusion for Fedora, from one source tarball: the shared part (plasma-fusion: themes,
-# widgets, icons, fonts, KWin scripts, setup tools) and the four compiled parts (-decoration,
-# -settings, -navigation, -quicklook). Copr builds releases through Packit (.packit.yaml); packaging/build-rpm.sh
+# widgets, icons, fonts, KWin scripts, setup tools) and the five compiled parts (-decoration,
+# -settings, -navigation, -quicklook, -copytext). Copr builds releases through Packit (.packit.yaml); packaging/build-rpm.sh
 # builds snapshots of a working tree (rpmbuild --without compiled: the shared part only). Every
 # package records nothing in a home directory: each user runs "plasma-fusion setup" in their Plasma
 # session (docs/parts/system.md).
@@ -54,6 +54,7 @@ BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  pkgconfig(vulkan)
 BuildRequires:  cmake(Qt6Core)
+BuildRequires:  cmake(Qt6Concurrent)
 BuildRequires:  cmake(Qt6DBus)
 BuildRequires:  cmake(Qt6Gui)
 BuildRequires:  cmake(Qt6Qml)
@@ -72,6 +73,7 @@ BuildRequires:  cmake(KF6KIO)
 BuildRequires:  cmake(KF6Package)
 BuildRequires:  cmake(KF6Service)
 BuildRequires:  cmake(KF6WindowSystem)
+BuildRequires:  cmake(LayerShellQt)
 %endif
 
 # Plasma 6.7 packages the themes plug into (Global Theme, Plasma style, shells, KWin
@@ -109,6 +111,7 @@ Recommends:     tesseract
 Recommends:     %{name}-decoration%{?_isa} = %{version}-%{release}
 Recommends:     %{name}-settings%{?_isa} = %{version}-%{release}
 Recommends:     %{name}-quicklook%{?_isa} = %{version}-%{release}
+Recommends:     %{name}-copytext%{?_isa} = %{version}-%{release}
 Suggests:       %{name}-navigation%{?_isa} = %{version}-%{release}
 %endif
 # The design's Code and Notes apps, the terminal whose theme is included, the login screen
@@ -224,6 +227,24 @@ size of a folder; any other file shows its thumbnail. The arrow keys go
 through the selected files, Enter opens the shown one in its application,
 Space or Esc closes the preview. "Quick Look" is in the context menus of
 Dolphin and the desktop as well.
+
+%package copytext
+Summary:        Plasma Fusion copy text: its own selection overlay
+License:        GPL-2.0-or-later
+# The helper (plasma-fusion-copytext, in the main package) reads, copies and notifies; this package
+# shows the selection at once where Spectacle starts for each capture.
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       qt6-qtdeclarative
+Requires:       layer-shell-qt
+Requires:       tesseract
+
+%description copytext
+The selection overlay of Plasma Fusion's copy text from the screen: the
+copy-text button in the top bar, Meta+Shift+T, quick settings or the clipboard
+sheet freeze the screen under a veil at once; draw a box around the text and,
+as the drag ends, its text is on the clipboard. The session bus starts the
+overlay the first time it is used; it then waits for the next capture.
+Without this package copy text uses Spectacle's selection.
 %endif
 
 %prep
@@ -256,6 +277,16 @@ done
   %cmake_kf6 -S . -B ../../_build/quicklook -G Ninja -DBUILD_TESTING=OFF
   %__cmake --build ../../_build/quicklook %{?_smp_mflags} --verbose
 )
+# The copy-text overlay's QML is compiled into its program too: the same content-derived stamp. Its
+# program goes next to plasma-fusion-copytext, in the helper directory.
+(
+  cd packages/copytext-cpp
+  SOURCE_DATE_EPOCH=$(( 1700000000 + 0x$(cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/qml/*.qml | sha256sum | cut -c1-6) ))
+  export SOURCE_DATE_EPOCH QT_RCC_SOURCE_DATE_OVERRIDE=$SOURCE_DATE_EPOCH
+  echo "copy text overlay QML time stamp: $SOURCE_DATE_EPOCH"
+  %cmake_kf6 -S . -B ../../_build/copytext -G Ninja -DBUILD_TESTING=OFF -DPF_HELPER_DIR=%{_libexecdir}/plasma-fusion
+  %__cmake --build ../../_build/copytext %{?_smp_mflags} --verbose
+)
 # rcc stamps every QML file of the settings page with SOURCE_DATE_EPOCH, and Qt's QML disk cache
 # (~/.cache/systemsettings/qmlcache, ~/.cache/kcmshell6/qmlcache) reuses a compiled file whose
 # source time stamp is unchanged: two builds from the same day would share the stamp, and an update
@@ -276,7 +307,7 @@ bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion
   --destdir %{buildroot} --prefix %{_prefix} --libexecdir %{_libexecdir}
 mkdir -p %{buildroot}%{_datadir}/plasma-fusion/built-against
 %if %{with compiled}
-for part in decoration settings navigation quicklook; do
+for part in decoration settings navigation quicklook copytext; do
   DESTDIR=%{buildroot} %__cmake --install _build/$part
 done
 %endif
@@ -363,9 +394,15 @@ find %{buildroot} -type f \( -name '*.qml' -o -name '*.js' -o -name '*.mjs' -o -
     fi
   done
 %if %{with compiled}
-for part in decoration settings navigation quicklook; do
+for part in decoration settings navigation quicklook copytext; do
   test -s %{buildroot}%{_datadir}/plasma-fusion/built-against/$part
 done
+# KWin gives the overlay its screen pictures by the desktop file whose Exec= is its program, and the
+# session bus starts that program: both point at the installed path.
+grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
+  %{buildroot}%{_kf6_datadir}/applications/org.plasmafusion.copytextoverlay.desktop
+grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
+  %{buildroot}%{_datadir}/dbus-1/services/org.plasmafusion.CopyTextOverlay.service
 %endif
 
 %files
@@ -483,6 +520,13 @@ done
 %{_kf6_datadir}/applications/org.plasmafusion.quicklook.desktop
 %{_kf6_datadir}/kio/servicemenus/plasma-fusion-quicklook.desktop
 %{_datadir}/plasma-fusion/built-against/quicklook
+
+%files copytext
+%license LICENSES/GPL-2.0-or-later.txt
+%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay
+%{_kf6_datadir}/applications/org.plasmafusion.copytextoverlay.desktop
+%{_datadir}/dbus-1/services/org.plasmafusion.CopyTextOverlay.service
+%{_datadir}/plasma-fusion/built-against/copytext
 %endif
 
 %changelog

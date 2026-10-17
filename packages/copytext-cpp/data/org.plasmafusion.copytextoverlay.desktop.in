@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+[Desktop Entry]
+Type=Application
+Name=Plasma Fusion: Copy Text Overlay
+Comment=Selection overlay for copying text from the screen (started with the session)
+Exec=@PF_HELPER_DIR@/plasma-fusion-copytext-overlay
+Icon=document-scan
+NoDisplay=true
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
