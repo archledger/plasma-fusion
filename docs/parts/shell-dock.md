@@ -722,16 +722,18 @@ The next queue's item 4 (the owner's go on 2026-10-16; board `design/boards/Dock
 the settings page's Dock position (Bottom, Left, Right; docs/parts/kcm-cpp.md) moves the dock's
 panel, and the dock lays itself out for the edge: the bottom dock turned upright, at every size.
 
-- The edge comes from the panel's location (`Placement.edgeOf`); the row's positions stay one
-  number along it (x at the bottom, y on a side) and only placing them turns. Every item knows the
-  edge: `DockButton` and `TaskItem` take their place along the row (`along`, `alongShift`) and the
-  panel's thickness across; the icon sits `bottomPad` from the edge side, centred along the row,
-  scales from the middle of its edge side and shifts along the row; the running marks stand upright
-  beside it on the edge side (4 x 5 dots, the 4 x 16 pill, the window count stacked); the attention
-  bounce lifts it away from the edge; the click area reaches 10 px past the icon. The separators lie
-  across, centred on the tiles. The hover keeps the position along the row and the distance from
-  the edge (the magnification's reach: 10 px past the icon). A drag along the row reorders, a drag
-  away from the edge takes the launcher.
+- The edge comes from the panel's location (`Placement.edgeOf`); the row's positions stay one number
+  along it (x at the bottom, y on a side) and only placing them turns. Every item knows the edge:
+  `DockButton` and `TaskItem` take their place along the row (`along`, `alongShift`) and the panel's
+  thickness across; the icon sits `bottomPad` from the edge side, centred along the row, scales from
+  the middle of its edge side and shifts along the row; the running marks stand upright beside it on
+  the edge side (4 x 5 dots, the 4 x 16 pill, the window count stacked); the attention bounce lifts
+  it away from the edge; the click area reaches 10 px past the icon. The separators lie across,
+  centred on the tiles. The hover keeps the position along the row and the distance from the edge
+  (the magnification's reach: 10 px past the icon). A drag along the row reorders, a drag away from
+  the edge takes the launcher (48 px towards the edge, which the icon's far end leaves room for,
+  does not; at the bottom too). A file dropped on an app opens with the app under the drop's place
+  along the row.
 - On a side the panel is the plate's width (72 px at Medium) and as long as the row. The Plasma
   style's floating hints are 16 px on the left and right too (docs/parts/plasma-style.md), so the
   plate stands 16 px from the screen's edge with 16 px of headroom inside, where magnified icons
@@ -740,13 +742,15 @@ panel, and the dock lays itself out for the edge: the bottom dock turned upright
   around the middle that the top bar leaves on both halves (`screenLength`; 832 px at 1440 x 900,
   800 with the 16 px ends), and with more apps than that its icons shrink as at the bottom.
 - The name pill and the previews open beside the icon, away from the edge, centred on it
-  (`Placement.popupPosition`; the anchor 12 px beside the grown icon). Plasma's Dialog places itself
-  again from its visual parent and location when it is shown or resized (libplasma 6.7.5
-  `Dialog::popupPosition`: above for Floating, to the right of the parent for LeftEdge, to the left
-  for RightEdge, centred on it), so both take the dock's edge as their location. The anchor counts
-  the growth the hovered icon gets whenever the dock magnifies (before, only once the pointer was
-  marked over the tasks, which a forced hover reached a moment later). Menus open beside the item
-  (`RightPosedTopAlignedPopup` / `LeftPosedTopAlignedPopup`).
+  (`Placement.popupPosition`; the anchor 12 px beside the grown icon), 8 px inside the screen both
+  ways. The previews' cards fit the room beside the dock (`Placement.room()`), not the screen's
+  width, so a group of six windows shrinks or leaves windows out as on a narrow screen. Plasma's
+  Dialog places itself again from its visual parent and location when it is shown or resized
+  (libplasma 6.7.5 `Dialog::popupPosition`: above for Floating, to the right of the parent for
+  LeftEdge, to the left for RightEdge, centred on it), so both take the dock's edge as their
+  location. The anchor counts the growth the hovered icon gets whenever the dock magnifies (before,
+  only once the pointer was marked over the tasks, which a forced hover reached a moment later).
+  Menus open beside the item (`RightPosedTopAlignedPopup` / `LeftPosedTopAlignedPopup`).
 - Start opens the launcher beside the dock: the dock tells it its edge and plate
   (docs/parts/shell-launcher.md).
 - In tablet posture the dock is at the bottom (the tablet script, docs/parts/kwin-tablet.md) and
@@ -754,10 +758,14 @@ panel, and the dock lays itself out for the edge: the bottom dock turned upright
   (docs/parts/lookandfeel.md).
 - `debugPointerX` is a screen y on a side; the targets hook logs `edge=` and the name pill's place.
 - `tests/placement.test.js` (in the build): the edge from Plasma's location, the pop-ups above and
-  beside, kept on the screen along the dock. `tests/transfers_test.py`: an upright tile on the left
-  and on the right (the tile across the panel at its place, the icon 14 px from the edge, the pill
-  and a dot upright 5 px from the icon). Mutations of each fail them: pop-ups above on a side, no
-  clamp along a side, the icon not on the edge side, the marks across.
+  beside, kept on the screen along the dock and across it, the room beside a side dock, a point's
+  place along the row and the task under it, the launcher drag's direction.
+  `tests/transfers_test.py`: an upright tile on the left and on the right (the tile across the panel
+  at its place, the icon 14 px from the edge, the pill and a dot upright 5 px from the icon), and a
+  pinned tile dragged 60 px away from and towards each edge with real pointer events (a launcher
+  drag only away; 30 checks). Mutations of each fail them: pop-ups above on a side, no clamp along
+  or across a side, the room the whole screen, a drop placed by x, the drag both ways, the icon not
+  on the edge side, the marks across.
 - Session (`packages/kcm-cpp/tests/scenario-dockedge.sh`, a private session on the Fedora 44 test
   laptop at 1440 x 900, Plasma 6.7.5, the stage, module and kcmctl of this change): **26 checks
   pass**. After the setup at the bottom; Left: the panel on the left, laid out for it, magnified 62,

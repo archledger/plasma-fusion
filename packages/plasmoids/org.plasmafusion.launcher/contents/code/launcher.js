@@ -276,19 +276,33 @@ function iconNameFor(entry) {
     return id.replace(/^applications:/, "").replace(/\.desktop$/, "");
 }
 
-// The card's top-left corner beside a dock on the left or right that holds the launcher (board
-// DockPosition.dc.html): 8 px from the dock's plate PLATE {x, y, width, height} (global
-// coordinates) and centred on it, kept inside AREA {top, bottom} (the screen under the top bar,
-// less 8 px at both ends); CARD {width, height}. The dock does not reserve room, so the
-// compositor centres it on the whole screen height (plasmashell 6.7.5 gives a panel that hides or
-// dodges no exclusive zone). null for a dock at the bottom or no plate known: the card is centred
-// on the screen then.
+// The card's place beside a dock on the left or right that holds the launcher (board
+// DockPosition.dc.html), {x, y, width}: 8 px from the dock's plate PLATE {x, y, width, height}
+// (global coordinates) and centred on it, kept inside AREA {top, bottom, left, right}
+// (sideArea()); CARD {width, height, minWidth}: narrower when the room beside the plate is less
+// than its width. The dock does not reserve room, so the compositor centres it on the whole screen
+// height (plasmashell 6.7.5 gives a panel that hides or dodges no exclusive zone). null for a dock
+// at the bottom, no plate known, or less room than minWidth beside it: the card is centred on the
+// screen then.
 function besideDock(edge, plate, area, card) {
     if ((edge !== "left" && edge !== "right") || !plate || !(plate.width > 0)) {
         return null;
     }
-    const x = edge === "left" ? plate.x + plate.width + 8 : plate.x - 8 - card.width;
+    const room = edge === "left" ? area.right - (plate.x + plate.width + 8) : plate.x - 8 - area.left;
+    const width = Math.min(card.width, room);
+    if (width < (card.minWidth || 0)) {
+        return null;
+    }
+    const x = edge === "left" ? plate.x + plate.width + 8 : plate.x - 8 - width;
     const centred = plate.y + (plate.height - card.height) / 2;
     const y = Math.max(area.top, Math.min(centred, area.bottom - card.height));
-    return { x: Math.round(x), y: Math.round(y) };
+    return { x: Math.round(x), y: Math.round(y), width: Math.floor(width) };
+}
+
+// Where the card may go beside a dock on a side, from the screen area S (screenArea()): under the
+// top bar and above the screen's bottom, 8 px from them and from the screen's left and right
+// edges, and above an on-screen keyboard (KEYBOARD_BOTTOM, the lowest the card may reach for it,
+// or Infinity).
+function sideArea(s, keyboardBottom) {
+    return { top: s.availTop + 8, bottom: Math.min(s.availBottom - 8, keyboardBottom), left: s.x + 8, right: s.x + s.width - 8 };
 }

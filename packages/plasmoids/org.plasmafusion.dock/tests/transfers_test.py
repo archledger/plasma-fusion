@@ -15,7 +15,9 @@ another app, and none once the jobs end. On a dock tile (TaskItem.qml, staged wi
 as the build does) the progress ring shows next to an unread count, as in the stock task manager.
 The tile's running marks count a group's windows, three at most, the active app's first one the
 pill (board DockSize.dc.html, "Window count"). On a dock on the left or right the tile is upright:
-its icon on the edge side, the marks upright beside it (board DockPosition.dc.html).
+its icon on the edge side, the marks upright beside it (board DockPosition.dc.html). A pinned
+tile dragged 48 px away from the dock's edge starts the launcher drag (desktopDrag), one dragged
+48 px towards the edge does not, on each edge (real pointer events in a window).
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -47,7 +49,7 @@ subprocess.run(["bash", str(root / "tools/build-lib/shared-qml.sh"), "install", 
 ui = stage / "contents/ui"
 
 import dbus  # noqa: E402
-from PySide6.QtCore import Q_RETURN_ARG, QMetaObject, QUrl  # noqa: E402
+from PySide6.QtCore import Q_RETURN_ARG, QMetaObject, QPoint, Qt, QUrl  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -229,6 +231,52 @@ Item {
 }
 """
 
+# A pinned tile on a dock on SIDE in a window, for real pointer events: the panel's 72 px across, the
+# tile 48 px along, 120 px from the window's edges; `drags` counts the launcher drags it starts.
+DRAG_HARNESS = b"""
+import QtQuick
+import QtQuick.Window
+Window {
+    width: 400
+    height: 400
+    visible: true
+    property string side: "left"
+    property int drags: 0
+    DockPalette {
+        id: palette
+        dark: true
+    }
+    Motion {
+        id: motion
+    }
+    Item {
+        id: panel
+        x: side === "bottom" ? 120 : 160
+        y: side === "bottom" ? 160 : 120
+        width: side === "bottom" ? 200 : 72
+        height: side === "bottom" ? 72 : 200
+        TaskItem {
+            id: dragTile
+            edge: side
+            along: 40
+            index: 0
+            model: ({ AppId: "org.kde.konsole", AppName: "Konsole", decoration: "utilities-terminal", IsLauncher: true,
+                      IsStartup: false, IsActive: false, IsDemandingAttention: false })
+            pal: palette
+            motion: motion
+            entry: null
+            notificationCount: 0
+            onDesktopDrag: active => { if (active) drags++; }
+        }
+    }
+    function iconCentre() {
+        const i = dragTile.iconItem;
+        const c = i.mapToItem(null, i.width / 2, i.height / 2);
+        return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
+    }
+}
+"""
+
 app = QGuiApplication(sys.argv[:1])
 bus = dbus.SessionBus()
 if bus.name_has_owner("org.kde.plasmashell"):
@@ -338,6 +386,37 @@ try:
     right = edge_state("right")
     check(right["icon"] == [10, 0, 48, 48], "right: its icon 14 px from the edge (%r)" % (right["icon"],))
     check(right["marks"] == [[63, 12, 4, 16], [63, 31, 4, 5]], "  the marks upright, 5 px right of the icon (%r)" % (right["marks"],))
+
+    # The launcher drag (TaskItem's DragHandler): 48 px away from the edge starts it, 48 px towards
+    # the edge does not (from the icon's far end there is room for that before the screen's edge).
+    drag_component = QQmlComponent(engine)
+    drag_component.setData(DRAG_HARNESS, QUrl.fromLocalFile(str(ui / "DragHarness.qml")))
+    window = drag_component.create()
+    if window is None:
+        raise AssertionError("drag harness did not load: " + "; ".join(e.toString() for e in drag_component.errors()))
+
+    def drags(side, dx, dy):
+        """Press on the tile's icon on SIDE's dock, move by (dx, dy) in steps, release: the number
+        of launcher drags started."""
+        window.setProperty("side", side)
+        window.setProperty("drags", 0)
+        QTest.qWait(300)
+        start = QPoint(*json.loads(QMetaObject.invokeMethod(window, "iconCentre", Q_RETURN_ARG("QVariant"))))
+        QTest.mousePress(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+        for step in range(1, 9):
+            QTest.mouseMove(window, QPoint(start.x() + dx * step // 8, start.y() + dy * step // 8))
+            QTest.qWait(20)
+        end = QPoint(start.x() + dx, start.y() + dy)
+        QTest.mouseRelease(window, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+        QTest.qWait(100)
+        return window.property("drags")
+
+    check(drags("left", 60, 0) == 1, "left dock: a drag 60 px to the right (away from the edge) is a launcher drag")
+    check(drags("left", -60, 0) == 0, "  60 px to the left (towards the edge) is not")
+    check(drags("right", -60, 0) == 1, "right dock: 60 px to the left is a launcher drag")
+    check(drags("right", 60, 0) == 0, "  60 px to the right is not")
+    check(drags("bottom", 0, -60) == 1, "bottom dock: 60 px up is a launcher drag")
+    check(drags("bottom", 0, 60) == 0, "  60 px down is not")
 
     print(f"transfers: {checks} checks passed")
 finally:

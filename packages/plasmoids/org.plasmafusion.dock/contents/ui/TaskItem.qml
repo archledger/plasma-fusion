@@ -9,6 +9,7 @@ import QtQuick
 import QtQuick.Shapes
 
 import "../code/metrics.js" as Metrics
+import "../code/placement.js" as Placement
 
 // One app in the dock: its tile (the Fusion icon, or any other icon on a neutral Fusion tile,
 // FusionIconTile) over a soft drop shadow, the running dots or active pill under it (one mark a
@@ -610,7 +611,8 @@ Item {
         }
         // Away from the edge (up on the bottom dock): a drag of the launcher (Kickoff's way, a
         // pointer handler that takes the point from this mouse area once it has moved 48 px;
-        // along the row stays the reorder above).
+        // along the row stays the reorder above). 48 px towards the edge (from the far end of the
+        // icon there is room for it) is no launcher drag.
         DragHandler {
             // (tablet posture: an upward drag splits the screen instead)
             enabled: !task.tablet
@@ -622,6 +624,10 @@ Item {
             onActiveChanged: {
                 if (active) {
                     mouse.suppressClick = true;
+                    const moved = Qt.point(centroid.position.x - centroid.pressPosition.x, centroid.position.y - centroid.pressPosition.y);
+                    if (!Placement.awayFromEdge(moved, task.edge)) {
+                        return;
+                    }
                 }
                 task.desktopDrag(active);
             }

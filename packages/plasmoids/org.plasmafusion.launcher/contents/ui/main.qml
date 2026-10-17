@@ -389,11 +389,13 @@ PlasmoidItem {
         let bottom = area ? s.y + s.height - 24 : Math.min(s.y + s.height - Plasmoid.configuration.bottomOffset, s.availBottom - 4);
         // qmllint disable missing-property
         const keyboard = Qt.inputMethod.keyboardRectangle;
+        let keyboardBottom = Infinity;
         if (keyboard.height > 0) {
-            bottom = Math.min(bottom, s.y + keyboard.y - 8);
+            keyboardBottom = s.y + keyboard.y - 8;
         } else if (Qt.inputMethod.visible) {
-            bottom = Math.min(bottom, s.y + Math.round(s.height * 0.6) - 8);
+            keyboardBottom = s.y + Math.round(s.height * 0.6) - 8;
         }
+        bottom = Math.min(bottom, keyboardBottom);
         // qmllint enable missing-property
         const top = s.availTop + 8;
         const portrait = s.height > s.width;
@@ -404,13 +406,15 @@ PlasmoidItem {
         launcherWindow.x = Math.round(s.x + (s.width - launcherWindow.cardWidth) / 2);
         launcherWindow.y = Math.round(Math.max(top, bottom - height));
         // Beside a dock on the left or right (on its own screen): centred on the dock, kept under
-        // the top bar and 8 px from both ends.
-        const sideTop = s.availTop + 8;
-        const sideBottom = s.availBottom - 8;
-        const beside = area ? null : Launcher.besideDock(root.dockEdge, root.dockRect, { top: sideTop, bottom: sideBottom },
-            { width: launcherWindow.cardWidth, height: m.windowSize(Math.min(wanted, sideBottom - sideTop)) });
+        // the top bar, above an on-screen keyboard and 8 px from the screen's edges, narrower when
+        // the room beside the dock is less than its width (at least 420 px, else centred).
+        const side = Launcher.sideArea(s, keyboardBottom);
+        const sideHeight = m.windowSize(Math.min(wanted, side.bottom - side.top));
+        const beside = area ? null : Launcher.besideDock(root.dockEdge, root.dockRect, side,
+            { width: launcherWindow.cardWidth, height: sideHeight, minWidth: m.px(420) });
         if (beside) {
-            launcherWindow.cardHeight = m.windowSize(Math.min(wanted, sideBottom - sideTop));
+            launcherWindow.cardWidth = m.windowSize(beside.width);
+            launcherWindow.cardHeight = sideHeight;
             launcherWindow.x = beside.x;
             launcherWindow.y = beside.y;
         }

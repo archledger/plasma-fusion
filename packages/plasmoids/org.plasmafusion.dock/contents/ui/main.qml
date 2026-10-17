@@ -1671,13 +1671,12 @@ PlasmoidItem {
                 drop.acceptProposedAction();
                 return;
             }
-            const x = row0.mapFromItem(taskDrop, drop.x, drop.y).x;
-            for (let i = 0; i < taskRepeater.count; ++i) {
-                if (root.taskVisible[i] && x >= root.rest.taskX[i] && x < root.rest.taskX[i] + root.rest.taskW[i]) {
-                    tasksModel.requestOpenUrls(tasksModel.makeModelIndex(i), drop.urls);
-                    drop.acceptProposedAction();
-                    return;
-                }
+            // the task under the drop's place along the row (y on a dock on the left or right)
+            const along = Placement.along(row0.mapFromItem(taskDrop, drop.x, drop.y), root.edge);
+            const i = Placement.taskAt(along, root.rest.taskX.slice(0, taskRepeater.count), root.rest.taskW, root.taskVisible);
+            if (i >= 0) {
+                tasksModel.requestOpenUrls(tasksModel.makeModelIndex(i), drop.urls);
+                drop.acceptProposedAction();
             }
         }
     }
