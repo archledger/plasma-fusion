@@ -207,7 +207,12 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   `org.kde.plasma.workspace.osd`), so a theme cannot move it.
 - **Compact** (`IslandPart.qml`): 32 px high, radius 16, at least 132 px wide, 6 px margins; the
   privacy kinds: the first app's icon (its name as an icon name, `Chips.iconGuess()`; the kind's
-  glyph when the theme has none) and an 8 px dot for each kind; a recording: the red dot in its
+  glyph when the theme has none: Kirigami 6.31's `Icon.valid` only says a source is set, so its
+  `status` says whether the theme has it, and the icon stays shown, only transparent, until then,
+  as Kirigami loads an icon only once it is shown; on the ThinkPad's session a login and an app
+  without an icon showed Kirigami's "unknown" icon before, 2026-10-17) and an 8 px dot for each
+  kind; a
+  recording: the red dot in its
   tint and its time; Keep awake: the cup and the time left; the music: its cover (radius 6) and
   four level bars in the cover's orange (still: the motion lint allows no endless animation).
 - **Opened** (`IslandOpened.qml`, a click on the island or the bubble; Keep awake opens quick
@@ -244,14 +249,17 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   first with End, a muted app with Unmute, a login without action, a camera known by its name only)
   and the icon names. `tests/chips_qml_test.py`: the island's QML in its own window, offscreen at
   1440 x 900: shown while the bar is hidden and gone when it shows, 4 px from the top, 32 px high
-  and at least 132 wide (at the test's text scale), centred; the bubble 6 px beside it with the
+  and at least 132 wide (at the test's text scale), centred; an app with an icon in the theme
+  (KWin, from hicolor) leads with it, one without with the camera's glyph (the test gives Qt the
+  system's icon themes: offscreen it looks only in `:/icons`); the bubble 6 px beside it with the
   island still centred and both inside its window; opened 400 px wide and centred, where a real
   click on Mute asks the app's microphone to mute and Esc closes it; the window resized from outside
   while it opens and once it has opened, it still opens to its size and centred; five apps at once
   give five rows, twelve on a screen 400 px high stay on it and scroll; the full-screen dots 14 px
   high, the pointer on them shows the island and full screen coming back shows the dots again.
   Mutations of each (8 px from the top, no room for the bubble, shown with the bar, 300 px opened,
-  no Esc, Mute doing nothing, no binding again after the focus, the peek kept) fail it.
+  no Esc, Mute doing nothing, no binding again after the focus, the peek kept, the icon chosen by
+  `valid`, the glyph always) fail it.
 - **Session** (`packages/kcm-cpp/tests/scenario-island.sh`; 2026-10-17, a private session on the
   Fedora 44 test laptop, Plasma 6.7.5, 1440 x 900, the stage, module and kcmctl of this change;
   stand-in status items): **23 checks pass**. The switch on: the bar's panel hides, KWin hides its
