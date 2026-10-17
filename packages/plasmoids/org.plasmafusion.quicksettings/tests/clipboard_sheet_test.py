@@ -35,7 +35,7 @@ Path(HOME, ".config", APP + "rc").write_text(
 # Klipper keeps no images by default ("Always ignore images"); the user turns that off.
 Path(HOME, ".config", "klipperrc").write_text("[General]\nIgnoreImages=false\n")
 
-from PySide6.QtCore import QMetaObject, QMimeData, QObject, QSortFilterProxyModel, Q_ARG, Q_RETURN_ARG, Qt, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import QMetaObject, QMimeData, QObject, QPointF, QSortFilterProxyModel, Q_ARG, Q_RETURN_ARG, Qt, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QColor, QCursor, QImage  # noqa: E402
 from PySide6.QtQml import QQmlComponent  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
@@ -119,13 +119,14 @@ Item {{
     height: 700
     property int closes: 0
     property int emojis: 0
+    property int copyTexts: 0
     property string chosenUuid: ""
     Services.Clipboard {{ id: history; objectName: "clipboardService" }}
     FusionMetrics {{ id: fusionMetrics }}
     property bool touch: false
     property FusionPalette pal: FusionPalette {{ touch: root.touch }}
     // What Backend.qml gives the page: the service, choose (on the clipboard, then the sheet
-    // closes) and the emoji selector.
+    // closes), the emoji selector and copy text from the screen (the sheet closes first).
     QtObject {{
         id: stubBackend
         signal closeRequested()
@@ -134,6 +135,9 @@ Item {{
             readonly property var service: history
             function choose(uuid) {{ history.choose(uuid); root.chosenUuid = uuid; stubBackend.closeRequested(); }}
             function openEmoji() {{ root.emojis++; stubBackend.closeRequested(); }}
+        }}
+        property var session: QtObject {{
+            function copyText() {{ root.copyTexts++; stubBackend.closeRequested(); }}
         }}
     }}
     // The sheet used to make a new page each time it opens; it now keeps the clipboard page and
@@ -439,6 +443,29 @@ check(not lst.property("activeFocus"), "Tab leaves the list")
 emoji = root.findChild(QObject, "clipboardEmoji")
 QMetaObject.invokeMethod(emoji, "clicked")
 check(root.property("emojis") == 1, "the Emoji button asks for the emoji selector")
+
+# The copy-text button (Popups board): in the header before Emoji, quick settings' own copy-text
+# glyph and name, and it copies text from the screen, the sheet closing first.
+copy_text = root.findChild(QQuickItem, "clipboardCopyText")
+icons = (stage / "components" / "Icons.js").read_text()
+glyph = icons.split("var copyText = \"", 1)[1].split("\"", 1)[0]
+drawn = [i.property("path") for i in items(copy_text) if i.property("path")] if copy_text is not None else []
+check(copy_text is not None and copy_text.isVisible() and copy_text.property("text") == "Copy text from the screen"
+      and drawn == [glyph], "the header's copy-text button: named, with quick settings' copy-text glyph (%r)" % drawn)
+emoji_item = root.findChild(QQuickItem, "clipboardEmoji")
+if copy_text is not None:
+    check(copy_text.mapToScene(QPointF(0, 0)).x() + copy_text.width() <= emoji_item.mapToScene(QPointF(0, 0)).x()
+          and copy_text.height() == 32, "... before the Emoji button, 32 px as it")
+    closes = root.property("closes")
+    QMetaObject.invokeMethod(copy_text, "clicked")
+    check(root.property("copyTexts") == 1 and root.property("closes") == closes + 1,
+          "a click copies text from the screen, the sheet closing first")
+    root.setProperty("touch", True)
+    QTest.qWait(50)
+    check(copy_text.width() >= 44 and copy_text.height() >= 44,
+          "in touch mode its target is 44 px (%gx%g)" % (copy_text.width(), copy_text.height()))
+    root.setProperty("touch", False)
+    QTest.qWait(50)
 
 # The rows are the list's delegates, not QObject children: reach the first one's star through it.
 first_row = QMetaObject.invokeMethod(lst, "itemAtIndex", Q_RETURN_ARG(QQuickItem), Q_ARG(int, 0))

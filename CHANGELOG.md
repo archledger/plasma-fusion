@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Copy text from the clipboard:** the clipboard pop-up (the top bar's clipboard button, Meta+V)
+  has a copy-text button next to Emoji: select an area of the screen and its text is on the
+  clipboard, as with Meta+Shift+T, one click from the top bar.
 - **The island's own glyphs for Plasma's notices:** the keyboard layout, the touchpad, the power
   mode, Do Not Disturb, Night Light, the on-screen keyboard, sleep blocked and the time zone now
   show in the island with its own line glyphs (the keyboard, the touchpad, the gauge, the bell,

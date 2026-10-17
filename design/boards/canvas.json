@@ -105,7 +105,7 @@
       "title": "26 · Live chips — privacy and activity, dark and light",
       "w": 1440,
       "x": 1520,
-      "y": 3060
+      "y": 3320
     },
     "Lock.dc.html": {
       "h": 900,
@@ -164,7 +164,7 @@
       "y": 3220
     },
     "Popups.dc.html": {
-      "h": 720,
+      "h": 1160,
       "page": "dark",
       "title": "6 · Pop-ups, toasts and tray panels",
       "w": 1440,
@@ -172,7 +172,7 @@
       "y": 2040
     },
     "PopupsLight.dc.html": {
-      "h": 720,
+      "h": 1160,
       "page": "light",
       "title": "12 · Pop-ups, light",
       "w": 1440,
@@ -241,7 +241,7 @@
       "title": "28 · Dock size and window grouping — dark and light",
       "w": 1440,
       "x": 1520,
-      "y": 4820
+      "y": 5080
     },
     "DockPosition.dc.html": {
       "h": 2620,
@@ -257,7 +257,7 @@
       "title": "30 · The top bar hidden, and the island — dark and light",
       "w": 1440,
       "x": 1520,
-      "y": 6740
+      "y": 7000
     }
   },
   "createdOnFiles": {
