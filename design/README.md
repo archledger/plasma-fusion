@@ -36,7 +36,7 @@ commands, the bundled fonts, the tile emitter and the tests.
 </tr>
 <tr>
 <td valign="top"><a href="previews/DockSize.webp"><img src="previews/DockSize.webp" width="420" alt="Dock size and window grouping — dark and light"></a><br><b>Dock size and window grouping — dark and light</b><br><a href="boards/DockSize.dc.html">source</a></td>
-<td></td>
+<td valign="top"><a href="previews/DockPosition.webp"><img src="previews/DockPosition.webp" width="420" alt="The dock on the left or right — dark and light"></a><br><b>The dock on the left or right — dark and light</b><br><a href="boards/DockPosition.dc.html">source</a></td>
 </tr>
 </table>
 

@@ -242,6 +242,14 @@
       "w": 1440,
       "x": 1520,
       "y": 4820
+    },
+    "DockPosition.dc.html": {
+      "h": 2620,
+      "page": "dark",
+      "title": "29 · The dock on the left or right — dark and light",
+      "w": 1440,
+      "x": 0,
+      "y": 5200
     }
   },
   "createdOnFiles": {
@@ -320,6 +328,7 @@
     "LiveChips.dc.html",
     "Gestures.dc.html",
     "DockSize.dc.html",
+    "DockPosition.dc.html",
     "Tablet.dc.html",
     "MainLight.dc.html",
     "LauncherLight.dc.html",
