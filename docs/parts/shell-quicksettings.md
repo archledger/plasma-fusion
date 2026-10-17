@@ -14,8 +14,19 @@ the top bar of `Main.dc.html` / `MainLight.dc.html` and the Wi-Fi tray panel of
 | Notification bell, amber (#F2A65A) 7 px unread dot | 30 × 26, radius 13 | `org.kde.notificationmanager` history, `unreadNotificationsCount` | always (option); slashed bell while Do Not Disturb is on |
 | System status pill: Wi-Fi, volume, battery icon + `NN%` | 26 px, radius 13, padding 12, gap 10, fill 8 % overlay; accent tint `rgba(91,157,255,.35)` + 1 px `rgba(138,184,255,.5)` while the pop-up is open | plasma-nm `ConnectionIcon`, plasma-pa `PreferredDevice.sink`, `BatteryControlModel` | each icon only when its service has data; a gear icon when none has |
 | Clipboard | 28 × 26, 16 px icon | the clipboard sheet (Plasma's clipboard model, below); Klipper's pop-up (`showKlipperPopupMenu`) without that module | option |
+| Copy text from the screen | 28 × 26, 16 px icon (quick settings' copy-text glyph) | `Backend.session.copyText()`: the helper `plasma-fusion-copytext`, as Meta+Shift+T (docs/parts/device.md) | option, on by default; not in a compact bar (tablet posture, the width budget's step 2), where quick settings' header and the clipboard sheet have it |
 | Phone | 28 × 26, 16 px icon | `org.kde.kdeconnect` `DevicesModel` (paired + reachable) | a device is connected |
 | `EN` keyboard layout badge | 22 px, padding 7, radius 6, 1 px border 18 % | `org.kde.plasma.workspace.keyboardlayout` (KWin) | layout info exists (option: only with 2+ layouts); click = next layout, wheel = next/previous, right-click or press and hold = menu of the layouts (as the stock Keyboard Layout widget) |
+
+The copy-text button (2026-10-17, Main board, the owner's request: one click, as a tray tool's
+icon such as NormCap's) sits before the clipboard button: a click selects an area of the screen and
+puts its text on the clipboard. Its option is the widget's "Copy text button" (`showCopyText`, one
+of the settings the bars of every screen share), and at the width budget's step 2 it leaves the bar
+with the phone and the clipboard. Test: `tests/topbar_test.py` (in CI; the bar on the real
+backend): shown by default, quick settings' copy-text glyph and name, the clipboard button's size
+and 6 px before it, a click and Return ask for copy text, its option off and a compact bar hide it,
+the budget's step 2 counts its width; it fails without the button, with the button left out of the
+budget, kept in a compact bar or shown with its option off.
 
 The pill also takes the mouse wheel (volume ±5 %) and middle click (mute). The pill's and the layout
 badge's wheel ignore a page scroll that is still turning as the pointer passes over them
@@ -30,7 +41,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   rectangular-region shortcut), copy text from the screen (after the pop-up closes: the selected
   area's text to the clipboard with `plasma-fusion-copytext`, found in the setup's helper
   directories in their order, else `spectacle --region`, where Extract Text copies it; the same as
-  Meta+Shift+T and the clipboard sheet's copy-text button, docs/parts/device.md), System Settings,
+  Meta+Shift+T, the top bar's and the clipboard sheet's copy-text buttons, docs/parts/device.md),
+  System Settings,
   lock, leave (logout / restart / shut down
   prompt); to their left the pencil that edits the tiles (0.5.0, section "Editable tiles"; in tablet
   posture it is in the tablet row);

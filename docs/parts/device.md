@@ -166,12 +166,13 @@ file, so `fusion-restore.sh` gives every key back.
 | Meta+Shift+T (every run, not part of the Windows set) | `org.plasmafusion.copytext.desktop` / `_launch` (0.5.0): copy text from the screen, a component like Meta+N whose command is the helper `plasma-fusion-copytext` (`spectacle --region` without the helper, and in 0.5.0); set only when no action holds the key, a key the user gave it is kept, nothing without Spectacle |
 
 **Copy text from the screen** (survey F6; PowerToys Text Extractor's Win+Shift+T, macOS Live Text).
-Meta+Shift+T, the button next to the screenshot button in quick settings' header, or the one next to
-Emoji in the clipboard sheet's header (2026-10-17; docs/parts/shell-quicksettings.md): draw a box
-around the text, and as the drag ends its text is on the clipboard and the selection is gone, with a
-"Text copied" notification that shows its first line (2026-10-15; in 0.5.0 Spectacle's window opened
-and Extract Text took one more click; until 2026-10-17 the box waited for Enter or a double-click,
-which copy-text tools such as NormCap do not ask for). Spectacle
+Meta+Shift+T, the copy-text button in the top bar (one click, before the clipboard button), the one
+next to the screenshot button in quick settings' header, or the one next to Emoji in the clipboard
+sheet's header (2026-10-17; docs/parts/shell-quicksettings.md): draw a box around the text, and as
+the drag ends its text is on the clipboard and the selection is gone, with a "Text copied"
+notification that shows its first line (2026-10-15; in 0.5.0 Spectacle's window opened and Extract
+Text took one more click; until 2026-10-17 the box waited for Enter or a double-click, which
+copy-text tools such as NormCap do not ask for). Spectacle
 6.7.5 (OCR since 6.6, Tesseract) recognises text only in its own window: `spectacle --help` and its
 D-Bus interface (`org.kde.Spectacle`: FullScreen, CurrentScreen, ActiveWindow, WindowUnderCursor,
 RectangularRegion, Record*, OpenWithoutScreenshot) have no text option, and neither has Plasma 6.8's
@@ -241,7 +242,7 @@ failing, text that starts with a dash or holds markup, a long line cut in charac
 (without the helper's lock: it stays to serve the clipboard), no clipboard; then on a private bus
 with the real `busctl` (`fake_session.py` owns Klipper's and the notification server's names; text
 that starts like an option), and real Tesseract on a line drawn in Manrope at 14 px.
-`packages/copytext/tests/vsession/scenario-copytext.sh` (a private session, 29 checks; KWin and
+`packages/copytext/tests/vsession/scenario-copytext.sh` (a private session, 32 checks; KWin and
 Spectacle 6.7.5, Tesseract 5.5.3) drives the real Spectacle, Tesseract and Klipper with KWin's
 emulated keys and pointer: 0.5.0's component, loaded first, starts `spectacle --region` from
 Meta+Shift+T; the setup makes it again with the helper and keeps the key (without that, the key went
@@ -252,9 +253,11 @@ left and no Spectacle left running; Esc copies and says nothing; with Spectacle'
 area goes to that Spectacle, which keeps running with it, and the helper copies nothing; a second
 line follows (both in Klipper's history); quick settings' button does the same as the key, and so
 does the clipboard sheet's (Meta+V, the button quick settings' dump places before Emoji), with the
-sheet closed for the selection (without the button the step fails). VM (0.5.0, real keys from a
-uinput keyboard): after the setup Meta+Shift+T started `spectacle --region` without a new login, the
-header button too; after the restore the key holds nothing and starts nothing.
+sheet closed for the selection (without the button the step fails), and so does the top bar's
+(before the clipboard button, where the dump's bar part places it; without the button that step
+fails). VM (0.5.0, real keys from a uinput keyboard): after the setup Meta+Shift+T started
+`spectacle --region` without a new login, the header button too; after the restore the key holds
+nothing and starts nothing.
 
 **Quick Look in Dolphin** (2026-10-15; docs/parts/quicklook-cpp.md). With Dolphin and the
 `plasma-fusion-quicklook` package installed (its program in PATH and its service menu in a data

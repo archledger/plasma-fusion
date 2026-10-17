@@ -21,6 +21,10 @@
       <label>Show the clipboard button</label>
       <default>true</default>
     </entry>
+    <entry name="showCopyText" type="Bool">
+      <label>Show the copy-text button (copy text from the screen)</label>
+      <default>true</default>
+    </entry>
     <entry name="showBatteryPercent" type="Bool">
       <label>Show the battery percentage in the status pill</label>
       <default>true</default>

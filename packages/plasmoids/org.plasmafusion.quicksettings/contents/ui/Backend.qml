@@ -24,6 +24,7 @@ Item {
     property bool keyboardLayoutAlways: true
     property bool showKdeConnect: true
     property bool showClipboard: true
+    property bool showCopyText: true
     property bool showBatteryPercent: true
     property bool showNotifications: true
     // The tiles' order and the hidden tiles (contents/code/tiles.js; the widget's settings).

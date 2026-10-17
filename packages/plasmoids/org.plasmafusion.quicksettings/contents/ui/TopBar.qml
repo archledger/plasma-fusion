@@ -11,18 +11,19 @@ import org.kde.plasma.extras as PlasmaExtras
 import "components"
 import "components/Icons.js" as Icons
 
-// Right side of the top bar: EN badge, phone, clipboard, the status pill and
+// Right side of the top bar: EN badge, phone, copy text, clipboard, the status pill and
 // the notification bell (Main and Quick Settings boards). Heights, paddings, gaps and the
 // icons in the row follow the user's text size (`metrics`), never taller than the panel row;
 // radii and the unread dot do not. Every target reaches over the bar's whole height.
 //
 // Tablet posture (TABLET 4.3): the pill is 32 px (padding 16, gap 12, icons 18, battery % 14 px
 // 800), the bell 44 x 44 (32 drawn, an 8 px unread dot), a keyboard button (44 x 44, 32 drawn)
-// shows while the on-screen keyboard is available, the EN badge, phone and clipboard leave the
-// bar (phone and clipboard get rows in the sheet), and in portrait the pill shows Wi-Fi and
-// battery only. A 24 px pull-down (TouchScreen) on the pill or the bell opens the sheet (4.1).
-// The top bar's width budget (the clock pill, ADAPTIVE 5.1) moves phone and clipboard at step 2
-// and hides the battery % at step 6 (`budgetLevel`).
+// shows while the on-screen keyboard is available, the EN badge, phone, copy text and clipboard
+// leave the bar (phone and clipboard get rows in the sheet; copy text is in the sheet's header),
+// and in portrait the pill shows Wi-Fi and battery only.
+// A 24 px pull-down (TouchScreen) on the pill or the bell opens the sheet (4.1).
+// The top bar's width budget (the clock pill, ADAPTIVE 5.1) moves phone, copy text and clipboard at
+// step 2 and hides the battery % at step 6 (`budgetLevel`).
 Item {
     id: bar
 
@@ -40,6 +41,7 @@ Item {
     readonly property real hitHeight: Math.max(rowHeight, height)
     readonly property bool phoneShown: backend.phone.shown && !backend.barCompact
     readonly property bool clipboardShown: backend.showClipboard && !backend.barCompact
+    readonly property bool copyTextShown: backend.showCopyText && !backend.barCompact
     readonly property bool percentShown: backend.showBatteryPercent && budgetLevel < 6
 
     readonly property alias pill: pill
@@ -51,6 +53,8 @@ Item {
     signal bellClicked()
     signal clipboardPressed()
     signal clipboardClicked()
+    // Copy text from the screen (the copy-text button: one click, as a tray tool's icon).
+    signal copyTextClicked()
     // A pull-down on the pill or the bell (touch).
     signal pulled(bool fromBell)
 
@@ -66,6 +70,9 @@ Item {
             }
             if (backend.showClipboard) {
                 saving += clipboardButton.implicitWidth + row.spacing;
+            }
+            if (backend.showCopyText) {
+                saving += copyTextButton.implicitWidth + row.spacing;
             }
         }
         if (level >= 6 && backend.showBatteryPercent && backend.battery.present) {
@@ -203,6 +210,20 @@ Item {
                   ? i18nc("@action:button %1 phone name", "%1 connected", bar.backend.phone.deviceName)
                   : i18nc("@action:button", "Phone connected")
             onClicked: bar.backend.phone.open()
+        }
+
+        // ---- Copy text from the screen (Main board: before the clipboard)
+        BarIconButton {
+            id: copyTextButton
+            objectName: "copyTextBarButton"
+            anchors.verticalCenter: parent.verticalCenter
+            visible: bar.copyTextShown
+            pal: bar.pal
+            metrics: bar.metrics
+            implicitHeight: bar.rowHeight
+            iconPath: Icons.copyText
+            text: i18nc("@action:button", "Copy text from the screen")
+            onClicked: bar.copyTextClicked()
         }
 
         // ---- Clipboard

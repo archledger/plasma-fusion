@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **A copy-text button in the top bar:** one click on the button before the clipboard, then a box
+  drawn around text on the screen, and the text is on the clipboard, as with Meta+Shift+T; it can be
+  turned off in the widget's settings ("Copy text button").
 - **Copy text in one movement:** drawing the box around the text now copies it and closes the
   selection as the drag ends, without Enter or a double-click, as copy-text tools such as NormCap
   do; Spectacle's own setting for its screenshots stays as it is.

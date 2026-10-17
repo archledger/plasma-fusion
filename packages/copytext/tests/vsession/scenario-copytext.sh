@@ -21,7 +21,9 @@
 #   5. quick settings' header button (Meta+A, the button left of System Settings): the first line
 #      again, the clipboard follows;
 #   6. the clipboard sheet's copy-text button (Meta+V, the button before Emoji, where quick
-#      settings' dump puts it): the second line again, the clipboard follows, the sheet is closed.
+#      settings' dump puts it): the second line again, the clipboard follows, the sheet is closed;
+#   7. the top bar's copy-text button (before the clipboard button, where the dump puts it): the
+#      first line again, the clipboard follows.
 # Screenshots are taken only while no Spectacle runs: the session's shot is a Spectacle request too,
 # and Spectacle takes it over (an area being chosen, an open window).
 # Run: tools/vsession/vsession.sh ct-1 packages/copytext/tests/vsession/scenario-copytext.sh 1440x900 300
@@ -242,10 +244,10 @@ fi
 
 # ---- 6. the clipboard sheet's copy-text button (Popups board)
 # Quick settings' dump (its debugAction dump:TAG): the summary ("..., sheet X,Y WxH" or "sheet
-# closed") or the sheet's targets ("name x,y wxh; ..."), PART summary|sheet. The setup restarted
-# the shell, which logs to the setup's state directory from then on.
+# closed") or the sheet's or the bar's targets ("name x,y wxh; ..."), PART summary|sheet|bar. The
+# setup restarted the shell, which logs to the setup's state directory from then on.
 qs_dump() {
-  local tag=ct$RANDOM$RANDOM i line
+  local tag=ct$RANDOM$RANDOM i line pattern
   local logs=("$OUT/plasmashell.log"
     "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/plasmashell.log")
   qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
@@ -254,11 +256,11 @@ qs_dump() {
          w.currentConfigGroup = ['General']; w.writeConfig('debugAction', 'dump:$tag'); }); });" \
     >/dev/null 2>&1 || true
   for ((i = 0; i < 30; i++)); do
-    if [ "$1" = sheet ]; then
-      line=$(cat "${logs[@]}" 2>/dev/null | grep -a "quicksettings: dump $tag sheet: " || true)
-    else
-      line=$(cat "${logs[@]}" 2>/dev/null | grep -a "quicksettings: dump $tag: " || true)
-    fi
+    case $1 in
+      sheet | bar) pattern="quicksettings: dump $tag $1: " ;;
+      *) pattern="quicksettings: dump $tag: " ;;
+    esac
+    line=$(cat "${logs[@]}" 2>/dev/null | grep -a "$pattern" || true)
     line=${line##*$'\n'}
     [ -n "$line" ] && { echo "${line#*"dump $tag"}"; return 0; }
     sleep 0.3
@@ -289,6 +291,28 @@ if [ -n "${CX:-}" ]; then
     fail "6: the sheet after the button: ${summary:0:160}"
 else
   fail "6: no copy-text button in the clipboard sheet (${sheet:0:300})"
+fi
+
+# ---- 7. the top bar's copy-text button (Main board: before the clipboard button)
+bar=$(qs_dump bar || true)
+read -r BX BY <<<"$(tr ';' '\n' <<<"$bar" |
+  sed -n 's/^.*copyTextBarButton \([0-9-]*\),\([0-9-]*\) .*$/\1 \2/p' | head -1)"
+info "7: the top bar's Copy Text button at ${BX:-?},${BY:-?}"
+shot 70-bar
+if [ -n "${BX:-}" ]; then
+  pfinput "click $BX $BY"
+  sleep 5
+  y=$((OY + 200))
+  pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20"
+  helper_done 30 && pass "7: the helper ended" || fail "7: the helper still runs"
+  shot 71-bar-button
+  got=$(clip)
+  [ "$got" = "$LINE1" ] && pass "7: the top bar's button copies the selected line: \"$got\"" ||
+    fail "7: the clipboard holds \"$got\""
+  [ "$(notified "Text copied")" = 5 ] && pass "7: a fifth \"Text copied\"" ||
+    fail "7: \"Text copied\" $(notified "Text copied") times"
+else
+  fail "7: no copy-text button in the top bar (${bar:0:300})"
 fi
 
 kill "$TARGET" "$MON" 2>/dev/null || true
