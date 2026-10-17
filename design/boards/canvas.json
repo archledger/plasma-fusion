@@ -234,6 +234,14 @@
       "w": 1440,
       "x": 0,
       "y": 1560
+    },
+    "DockSize.dc.html": {
+      "h": 1600,
+      "page": "dark",
+      "title": "28 · Dock size and window grouping — dark and light",
+      "w": 1440,
+      "x": 1520,
+      "y": 4820
     }
   },
   "createdOnFiles": {
@@ -311,6 +319,7 @@
     "Popups.dc.html",
     "LiveChips.dc.html",
     "Gestures.dc.html",
+    "DockSize.dc.html",
     "Tablet.dc.html",
     "MainLight.dc.html",
     "LauncherLight.dc.html",
