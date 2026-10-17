@@ -932,7 +932,8 @@ PlasmoidItem {
             if (t && t.visible) {
                 add("task" + i + "-" + t.iconName + (t.badgeCount > 0 ? "#" + t.badgeCount : "")
                     + (t.progress >= 0 ? "%" + t.progress.toFixed(2) : "") + (t.calendarTile ? "=" + t.dayText : "")
-                    + (t.audioStreams.length > 0 ? (t.muted ? "+muted" : t.audioShown ? "+audio" : "+quiet") : ""),
+                    + (t.audioStreams.length > 0 ? (t.muted ? "+muted" : t.audioShown ? "+audio" : "+quiet") : "")
+                    + (t.isRunning || t.isStartup ? "|" + t.marks : ""),
                     t, t.width + root.gap, t.iconItem.height);
                 if (t.audioShown) {
                     add("audio" + i, t.audioBadge, t.audioBadge.width, t.audioBadge.height);

@@ -14,7 +14,7 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "contents", "code", "metrics.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { metrics, zoomTarget, size } = globalThis;
+const { metrics, zoomTarget, size, markCount, markWidth } = globalThis;
 
 // The board's three sizes: tile, gap, separator and its slot, side and bottom padding, plate
 // (padding top + tile + bottom: 8+40+12, 10+48+14, 10+56+12), indicators.
@@ -41,5 +41,13 @@ assert.deepStrictEqual([zoomTarget(40, 62, false), zoomTarget(40, 56, false)], [
 assert.strictEqual(zoomTarget(48, 72, false), 72, "the dock's own settings go up to 72");
 assert.strictEqual(zoomTarget(48, 40, false), 48, "no step below the icon");
 assert.deepStrictEqual([zoomTarget(56, 56, true), zoomTarget(48, 62, true)], [70, 62], "tablet posture: +14");
+
+// The marks under a running app (board DockSize.dc.html, "Window count"): one a window, three at
+// most, and one for a single window or an app starting; the active app's first mark is the pill.
+assert.deepStrictEqual([1, 2, 3, 4, 9].map(markCount), [1, 2, 3, 3, 3], "one a window, three at most");
+assert.deepStrictEqual([0, undefined, NaN, -2, 1.5].map(markCount), [1, 1, 1, 1, 1], "one when no count is known");
+assert.deepStrictEqual([0, 1, 2].map((i) => markWidth(i, true, false)), [16, 5, 5], "active: the pill, then dots");
+assert.deepStrictEqual([0, 1].map((i) => markWidth(i, false, false)), [5, 5], "running: dots");
+assert.deepStrictEqual([0, 1].map((i) => markWidth(i, true, true)), [18, 6], "the wide marks (Large, tablet)");
 
 console.log("metrics: all checks passed");

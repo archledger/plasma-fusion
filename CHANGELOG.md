@@ -9,6 +9,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Window count in the dock:** while an app's windows are grouped, the marks under its icon count
+  them, up to three: dots for a running app, the accent pill first for the active one.
 - **Dock size and window grouping:** the Plasma Fusion settings page has Dock size (Small, Medium
   as before, Large) and "Group an app's windows": off, each window has its own icon, side by
   side where the app is pinned. The magnified icon size is now a step (+8 or +14 px) that follows

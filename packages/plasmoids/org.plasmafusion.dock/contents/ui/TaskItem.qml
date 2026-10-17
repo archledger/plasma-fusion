@@ -8,11 +8,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
 
+import "../code/metrics.js" as Metrics
+
 // One app in the dock: its tile (the Fusion icon, or any other icon on a neutral Fusion tile,
-// FusionIconTile) over a soft drop shadow, the running dot or active pill under it, an unread
-// count and a progress ring (Unity LauncherEntry, GAPS G17), an audio indicator while the app plays
-// sound or is muted (a click on it mutes or unmutes the app) and, when the app asks for attention,
-// one short bounce next to the orange dot (G26). Calendar apps show today's date on their tile.
+// FusionIconTile) over a soft drop shadow, the running dots or active pill under it (one mark a
+// window while an app's windows are grouped, three at most), an unread count and a progress ring
+// (Unity LauncherEntry, GAPS G17), an audio indicator while the app plays sound or is muted (a
+// click on it mutes or unmutes the app) and, when the app asks for attention, one short bounce
+// next to the orange dot (G26). Calendar apps show today's date on their tile.
 //
 // The item keeps its rest size (`iconSize`) and rest position. Magnification never changes a
 // size: the dock sets `grow` (extra px of the magnified icon) and `shift` (horizontal offset),
@@ -53,6 +56,10 @@ Item {
     readonly property bool isStartup: model.IsStartup === true
     readonly property bool isRunning: !isLauncher && !isStartup
     readonly property bool isActive: model.IsActive === true
+    // The windows behind this icon: a group's count (an app's windows grouped), else one.
+    readonly property int windowCount: model.IsGroupParent === true ? (model.ChildCount ?? 0) : 1
+    // The marks under the icon (the dock's targets hook reports them).
+    readonly property int marks: Metrics.markCount(windowCount)
     readonly property bool demandsAttention: model.IsDemandingAttention === true || (entry !== null && entry.urgent === true)
     // Launchers of apps that are not installed have no AppId; they are not shown.
     readonly property bool resolvable: !isLauncher || (model.AppId ?? "") !== ""
@@ -429,22 +436,33 @@ Item {
         antialiasing: true
     }
 
-    // Running indicator under the icon: 5 x 4 dot or 16 x 4 pill 5 px below it (6 x 4 / 18 x 4,
-    // 4 px, in tablet posture and on the Large dock).
-    Rectangle {
+    // Running indicator under the icon, 5 px below it: one mark a window, three at most, 3 px
+    // apart (board DockSize.dc.html, "Window count"): 5 x 4 dots, the active app's first mark the
+    // 16 x 4 pill (6 x 4 and 18 x 4, 4 px below, in tablet posture and on the Large dock).
+    Row {
         id: indicator
+        objectName: "indicator"
         anchors.horizontalCenter: parent.horizontalCenter
         y: task.height - task.bottomPad + (task.wideIndicators ? 4 : 5)
-        height: 4
-        radius: 2
-        width: task.isActive ? (task.wideIndicators ? 18 : 16) : (task.wideIndicators ? 6 : 5)
-        color: task.isActive ? task.pal.activePill : (task.demandsAttention ? task.pal.attention : task.pal.runningDot)
+        spacing: 3
         visible: task.isRunning || task.isStartup
         opacity: task.isStartup ? startupPulse.value : 1
 
-        Behavior on width {
-            enabled: task.motion.animate
-            NumberAnimation { duration: task.motion.toggle; easing.type: task.motion.standardEasing }
+        Repeater {
+            model: task.marks
+            delegate: Rectangle {
+                required property int index
+                height: 4
+                radius: 2
+                width: Metrics.markWidth(index, task.isActive, task.wideIndicators)
+                color: task.isActive && index === 0 ? task.pal.activePill
+                    : (task.demandsAttention ? task.pal.attention : task.pal.runningDot)
+
+                Behavior on width {
+                    enabled: task.motion.animate
+                    NumberAnimation { duration: task.motion.toggle; easing.type: task.motion.standardEasing }
+                }
+            }
         }
     }
 

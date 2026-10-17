@@ -47,3 +47,17 @@ function zoomTarget(tile, magnifiedSize, tablet) {
     const step = Math.max(0, Number(magnifiedSize) - 48);
     return tile + Math.round(step * Math.min(1, tile / 48));
 }
+
+// The marks under a running app's icon (board DockSize.dc.html, "Window count"): one a window,
+// three at most, for a group of an app's windows (WINDOWS: its window count); one for a single
+// window or an app that is starting.
+function markCount(windows) {
+    const n = Math.floor(Number(windows));
+    return n >= 1 ? Math.min(3, n) : 1;
+}
+
+// The width of mark INDEX: the active app's first mark is the pill (16 px; 18 with the wide
+// indicators), the others running dots (5 px; 6).
+function markWidth(index, active, wide) {
+    return active && index === 0 ? (wide ? 18 : 16) : (wide ? 6 : 5);
+}

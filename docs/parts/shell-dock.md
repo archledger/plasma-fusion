@@ -78,7 +78,8 @@ dock.addWidget("org.plasmafusion.dock");
 - **Geometry (board values, Medium; Small and Large in "Dock size and window grouping"):** 48 px
   tiles 8 px apart, 1×36 separators with 4 px margins, 12 px from the dock
   edge to the first/last button, icons 14 px above the dock's bottom edge, running dot 5×4 (60 % ink), active
-  pill 16×4 (#8ab8ff / #2f6fdf) 5 px under the icon. The applet asks for the full panel thickness
+  pill 16×4 (#8ab8ff / #2f6fdf) 5 px under the icon; for a group of an app's windows one mark a
+  window, three at most, 3 px apart, the active app's first one the pill ("Window count" below). The applet asks for the full panel thickness
   (`Plasmoid.CanFillArea`), measures the containment's own side margins and compensates, so the row starts
   exactly 12 px from the visible edge on both sides (measured: dock 305–1135 px vs board 305–1136 px).
 - **Magnification:** parabolic falloff `size = 48 + 14·zoom·max(0, 1 − (d/74)²)`, d = pointer distance
@@ -682,11 +683,35 @@ both on the Plasma Fusion settings page (docs/parts/kcm-cpp.md).
   grouped and ungrouped. Each of four mutations of metrics.js and one of `pinIndexes` fails them.
 - Session (`packages/kcm-cpp/tests/scenario-docksize.sh`, a private session on the Fedora 44 test
   laptop, Plasma 6.7.5, the stage of this change, the module and kcmctl from it; the dock's
-  `dump-targets` hook, which now also logs its magnified size): **15 checks pass**. After the
+  `dump-targets` hook, which now also logs its magnified size): **15 checks pass** (18 since
+  the window count, below). After the
   setup Medium, its panel 72 px, 48 px tiles 56 px apart, magnified 62; Small: the panel 60 px,
   40 px tiles 47 px apart, magnified 52; Large: 78 px, 56 px tiles 68 px apart, magnified 70; two
   Konsole windows: one icon grouped, two side by side at Konsole's pin with grouping off, one again
   when it is back on; Medium's 72 px panel again. With the dock's tile fixed at 48 and its
   grouping fixed on (a red run), four of the checks fail. The screenshots match the board (the
   sizes, the magnified third app, the grouping pair).
+
+### Window count (2026-10-16)
+
+With an app's windows grouped, nothing showed how many windows were behind an icon (the dock size
+proposal drew a wider bar for two windows, which no dock state showed; the owner asked for the
+count on 2026-10-16). The board (DockSize.dc.html, "Window count while grouped") draws one mark a
+window, three at most, 3 px apart: the running dots, and for the active app the pill first, then a
+dot for each other window. The marks keep their sizes and colours (6 x 4 and 18 x 4 on the Large
+dock and in tablet posture; the attention colour for an app that asks for attention). Grouping off,
+each icon is one window with one mark, as before.
+
+- `TaskItem.qml`: `windowCount` is a group's `ChildCount` (one for a single window); the marks are a
+  Repeater of `Metrics.markCount()` with `Metrics.markWidth()` (`contents/code/metrics.js`); the
+  first mark still grows into the pill when the app becomes active. The dock's targets hook reports
+  each running app's marks (`|N` after its name).
+- `tests/metrics.test.js`: the count and widths; `tests/transfers_test.py` (CI step "Dock
+  file-transfer progress"): a staged Konsole tile with one window, two, three and five grouped,
+  active with one and two, the wide marks, and a group that lists no window yet (one dot). Each of
+  the six mutations (one mark always, the group count not read, no cap at three, every mark the
+  pill, the last two in metrics.js and on the tile) fails them.
+- Session (`packages/kcm-cpp/tests/scenario-docksize.sh`, private session on the test laptop):
+  **18 checks pass**, among them Konsole's two grouped windows with two marks, one mark each with
+  grouping off and two again when it is back on; the screenshots match the board.
 

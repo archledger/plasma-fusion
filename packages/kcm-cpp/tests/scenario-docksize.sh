@@ -8,8 +8,9 @@
 #   2. Small: the panel 60 px, 40 px tiles 47 px apart, the icon under the pointer 52 px (the
 #      dock's zoomSize, and a screenshot with the third app under the pointer);
 #   3. Large: the panel 78 px, 56 px tiles 68 px apart, the icon under the pointer 70 px;
-#   4. two Konsole windows: one icon while grouped, two side by side at Konsole's pin when
-#      "Group an app's windows" is off, back to one when it is on again;
+#   4. two Konsole windows: one icon while grouped, with two marks under it (the window count),
+#      two side by side at Konsole's pin, one mark each, when "Group an app's windows" is off, back
+#      to one icon with two marks when it is on again;
 #   5. Medium again.
 # Each step's screenshot is for the comparison with the board. Run (make-seed.sh ... dark, PF_KCMCTL
 # set; the stage holds this change's dock):
@@ -62,6 +63,8 @@ step_of() {
 }
 konsoles() { grep -o 'task[0-9]*-[^@ ]*konsole[^@ ]*@' <<<"$1" | wc -l; }
 konsole_rows() { grep -o 'task[0-9]*-[^@ ]*konsole' <<<"$1" | sed 's/task\([0-9]*\)-.*/\1/' | tr '\n' ' ' | sed 's/ $//'; }
+# The marks under each Konsole icon (the "|N" of its entry), space-separated.
+konsole_marks() { grep -o 'task[0-9]*-[^@ ]*konsole[^@ ]*@' <<<"$1" | sed -n 's/.*|\([0-9]*\)@$/\1/p' | tr '\n' ' ' | sed 's/ $//'; }
 
 # Every window whose resource class contains CLASS small at the top of the screen, side by side,
 # so the dock (it dodges windows) shows for the screenshot.
@@ -144,6 +147,7 @@ place_top konsole
 sleep 2
 t=$(targets)
 check "grouped: Konsole's two windows share one icon" "$(konsoles "$t")" 1
+check "  with two marks under it" "$(konsole_marks "$t")" 2
 shot d04-grouped
 kcm <<'K'
 waitshell
@@ -158,6 +162,7 @@ check "off: the key" "$(wkey org.plasmafusion.dock groupWindows)" false
 t=$(targets)
 rows=$(konsole_rows "$t")
 check "  one icon for each window" "$(konsoles "$t")" 2
+check "  one mark each" "$(konsole_marks "$t")" "1 1"
 check "  side by side (rows next to each other)" "$(awk '{print ($2 - $1)}' <<<"$rows")" 1
 check "  no error" "$(lastget errorText)" ""
 shot d05-ungrouped
@@ -170,6 +175,7 @@ K
 sleep 3
 t=$(targets)
 check "on again: one icon" "$(konsoles "$t")" 1
+check "  two marks again" "$(konsole_marks "$t")" 2
 
 # 5. Medium again (the setup's).
 check "back to Medium: its 72 px panel" "$(wkey org.plasmafusion.dock dockSize) $(dock_height)" "1 72"
