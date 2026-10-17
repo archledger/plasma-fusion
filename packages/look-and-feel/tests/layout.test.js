@@ -626,6 +626,16 @@ test("Add Panel: the top bar with the page's defaults is adaptive", () => {
     assert.strictEqual(glass(all(s, "org.plasmafusion.quicksettings")[0]), undefined);
 });
 
+test("Add Panel: a new top bar hides as the main bar does (board Island.dc.html)", () => {
+    const hides = mainBar();
+    hides.hiding = "autohide";
+    const s = shell({ screens: TWO, files: rc(), panels: [hides] });
+    s.run(TOPBAR);
+    assert.strictEqual(tops(s).find((p) => p.id !== 2).hiding, "autohide", "the main bar hides: the new one too");
+    const shown = shell({ screens: TWO, files: rc(), panels: [mainBar()] });
+    shown.run(TOPBAR);
+    assert.strictEqual(tops(shown).find((p) => p.id !== 2).hiding, "none", "the main bar shows: the new one shows");
+});
 test("Add Panel: a top bar that copies another bar's tray hides the items its live chips replace", () => {
     // A bar from before the live chips: its tray hides one item of the user's, and none of theirs.
     const s = shell({ screens: TWO, files: rc(), panels: [mainBar()] });

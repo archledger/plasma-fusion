@@ -217,9 +217,10 @@ function island(s) {
 // The opened island's rows: one for each app (by name, whatever it uses) and each remote login,
 // the most serious first, each with its kinds in the capsule's order and the action that ends
 // the most serious of them: End (remote control), Stop sharing (the screen), Mute or Unmute (the
-// microphone). MICROPHONE_APPS [{ name, muted }], CAMERA_APPS [names] (else CAMERA_NAMES while a
-// camera is in use), PORTAL [{ key, kind, app }], LOGINS [{ id, user, host }].
-// [{ app, kinds, action: "end" | "stop" | "mute" | "unmute" | "", microphone: index, session: key, login }]
+// microphone: an app's streams together, Mute while any of them records). MICROPHONE_APPS
+// [{ name, muted }], CAMERA_APPS [names] (else CAMERA_NAMES while a camera is in use), PORTAL
+// [{ key, kind, app }], LOGINS [{ id, user, host }].
+// [{ app, kinds, action: "end" | "stop" | "mute" | "unmute" | "", microphones: [indexes], session: key, login }]
 function islandRows(microphoneApps, cameraApps, cameraInUse, cameraNames, portal, logins) {
     var rows = [];
     function row(name) {
@@ -229,7 +230,7 @@ function islandRows(microphoneApps, cameraApps, cameraInUse, cameraNames, portal
                 return rows[i];
             }
         }
-        var r = { app: String(name || ""), kinds: [], action: "", microphone: -1, session: "", login: "" };
+        var r = { app: String(name || ""), kinds: [], action: "", microphones: [], session: "", login: "" };
         rows.push(r);
         return r;
     }
@@ -242,8 +243,8 @@ function islandRows(microphoneApps, cameraApps, cameraInUse, cameraNames, portal
     for (var m = 0; m < microphoneApps.length; ++m) {
         var mic = row(microphoneApps[m].name);
         add(mic, "microphone");
-        mic.microphone = m;
-        if (mic.action === "") {
+        mic.microphones.push(m);
+        if (mic.action === "" || mic.action === "unmute") {
             mic.action = microphoneApps[m].muted ? "unmute" : "mute";
         }
     }
@@ -270,7 +271,7 @@ function islandRows(microphoneApps, cameraApps, cameraInUse, cameraNames, portal
     }
     for (var l = 0; l < logins.length; ++l) {
         rows.push({ app: logins[l].host !== "" ? logins[l].user + "@" + logins[l].host : logins[l].user, kinds: ["ssh"], action: "",
-                    microphone: -1, session: "", login: String(logins[l].id) });
+                    microphones: [], session: "", login: String(logins[l].id) });
     }
     rows.sort(function (a, b) { return PRIVACY_ORDER.indexOf(a.kinds[0]) - PRIVACY_ORDER.indexOf(b.kinds[0]); });
     return rows;

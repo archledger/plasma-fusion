@@ -529,8 +529,10 @@ live session gets these changes through DEVICE-1's in-place migration.
   `readConfig` needs a default of the key's type (`[]` for lists; `null` returns undefined).
 - A top bar `ensure-topbars.js` makes takes the main bar's hiding (2026-10-17, the settings page's
   "Hide the top bar automatically", board Island.dc.html): `autohide` or `none`, in tablet posture
-  the hiding the main bar goes back to (its `[PlasmaFusion] laptopHiding`). `tests/layout.test.js`:
-  a main bar that hides, one in tablet posture, one that shows.
+  the hiding the main bar goes back to (its `[PlasmaFusion] laptopHiding`). A top bar made with Add
+  Panel (the template `org.plasmafusion.panel.topbar`) takes the main bar's hiding too (read only
+  from a bar on a screen). `tests/layout.test.js`: a main bar that hides, one in tablet posture,
+  one that shows, for both.
 - `ensure-topbars.js` also gives every screen a dock (2026-10-16) while plasmafusionrc `[Dock]
   EveryScreen` is true (the settings page's "Dock on every screen"; off by default): a screen
   without a dock panel gets one like the layout script's (floating, fit, centred) on the main

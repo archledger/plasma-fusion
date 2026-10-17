@@ -34,7 +34,7 @@ import sys
 import tempfile
 import threading
 
-from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, QPoint, Qt, QTimer, QUrl, Q_ARG, Q_RETURN_ARG,
+from PySide6.QtCore import (QEventLoop, QLoggingCategory, QMetaObject, QObject, QPoint, QSize, Qt, QTimer, QUrl, Q_ARG, Q_RETURN_ARG,
                             QtMsgType, Slot, qInstallMessageHandler)
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlEngine
@@ -173,7 +173,7 @@ Window {
         barHidden: harness.barHidden
         screenGeometry: Qt.rect(0, 0, 1440, 900)
         content: harness.content
-        rows: [{ app: "Firefox", kinds: ["camera", "microphone"], action: "mute", microphone: 0, session: "", login: "" }]
+        rows: [{ app: "Firefox", kinds: ["camera", "microphone"], action: "mute", microphones: [0], session: "", login: "" }]
         recording: null
         keepAwakeLeft: null
         media: null
@@ -204,6 +204,7 @@ Window {
         return JSON.stringify([Math.round(c.x), Math.round(c.y)]);
     }
     function openIt() { island.open("privacy"); }
+    function peek() { island.peek = true; }
 }
 """
 # Markup in an app's name, a login's user and Spectacle's time.
@@ -534,10 +535,39 @@ def main():
         QTest.keyClick(window, Qt.Key_Escape)
         wait(900)
         check(island()["mode"] == "compact", "  Esc closes it (%s)" % island()["mode"])
+        # The window resized from outside (as a platform does when the focus changes its flags; the
+        # Dialog then sizes its main item to the window): while it opens, and once it has opened.
+        call(h, "openIt")
+        wait(100)
+        window.resize(QSize(100, 30))
+        wait(900)
+        s = island()
+        check(s["body"][2] == s["px400"] and abs(s["x"] + s["frame"] / 2 - 720) <= 1 and s["frame"] >= s["body"][2],
+              "  resized from outside while it opens: opened and centred all the same (%s)" % s)
+        window.resize(QSize(100, 30))
+        wait(300)
+        QTest.keyClick(window, Qt.Key_Escape)
+        wait(900)
+        call(h, "openIt")
+        wait(900)
+        s = island()
+        check(s["mode"] == "opened" and abs(s["x"] + s["frame"] / 2 - 720) <= 1 and s["frame"] >= s["body"][2],
+              "  resized from outside once opened: closed and opened again, its window fits (%s)" % s)
+        QTest.keyClick(window, Qt.Key_Escape)
+        wait(900)
         h.setProperty("content", {"mode": "dots", "items": [], "dots": ["camera", "microphone"]})
         wait(900)
         s = island()
         check(s["mode"] == "dots" and s["body"][3] == s["px14"] and s["body"][1] == 4, "a full-screen window: the 14 px row of dots (%s)" % s)
+        # The pointer on the dots shows the island; full screen ends and comes back: the dots again.
+        call(h, "peek")
+        wait(600)
+        check(island()["mode"] == "compact", "  the pointer on them: the compact island (%s)" % island()["mode"])
+        h.setProperty("content", {"mode": "compact", "items": ["privacy"], "dots": ["camera", "microphone"]})
+        wait(300)
+        h.setProperty("content", {"mode": "dots", "items": [], "dots": ["camera", "microphone"]})
+        wait(900)
+        check(island()["mode"] == "dots", "  full screen ends and comes back: the dots again (%s)" % island()["mode"])
         h.setProperty("barHidden", False)
         wait(900)
         check(not island()["visible"], "the bar shows: the island goes (%s)" % island())

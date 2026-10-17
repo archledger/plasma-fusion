@@ -194,7 +194,8 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
 - **What** (`Chips.island()`): the privacy kinds always first, then a screen recording, a Keep
   awake timer and the music playing; the first two show, the second in the bubble. In a
   full-screen window (`sources/FullScreen.qml`) only the privacy kinds, as 6 px dots in a 14 px
-  capsule; the pointer on them shows the compact island. Notifications, the clock, file copies and
+  capsule; the pointer on them shows the compact island (until the pointer leaves or full screen
+  ends). Notifications, the clock, file copies and
   Plasma's volume and brightness pop-up are not in it: Plasma's pop-up is compiled into
   plasma-workspace (6.7.5 loads it from the QML module `org.kde.plasma.workspace.osd`), so a theme
   cannot move it.
@@ -207,7 +208,8 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   settings' page instead): 400 px wide, radius 28, 14 px margins. A row for each app or login
   (`Chips.islandRows()`: an app's kinds in one row, the most serious first) with its icon, the dots
   and what it uses, and the action of its most serious kind: End, Stop sharing, Mute or Unmute (the
-  panel's own actions). A recording: its time and Stop. The music: cover, title, artist and player,
+  panel's own actions; an app's microphone streams together: Mute while any of them records, for
+  all of them). A recording: its time and Stop. The music: cover, title, artist and player,
   where it is (read again every second while opened) and previous, play or pause, next. It takes the
   keyboard focus while opened (Esc closes it), and a click outside it or on its free part closes it.
 - **Colours** (`Chips.ISLAND_COLOURS`): the island is black in both schemes, so its glyphs and dots
@@ -221,20 +223,25 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   takes no focus until opened (its flags; libplasma 6.7.5 passes them on to KWin as the surface's
   takes-focus). The black shape morphs between its sizes inside the window (the Motion tokens'
   surface duration), and the window keeps the larger size until a morph has ended, so it is not
-  resized on every frame.
+  resized on every frame. The frame's size and the window's place are bound again whenever the
+  focus changes: the Dialog sizes its main item to the window when the window is resized from
+  outside (a change of flags can give it the platform's last size back), which in Qt 6 ends the
+  main item's size bindings (a CI run of the QML test caught it).
 - **Test hooks.** Debug output `livechips: island compact privacy at X,Y WxH; bubble ...` (or
   `none`) once a morph has ended; `[General] islandRequest` "open:NONCE" or "close:NONCE".
 - **Tests.** `tests/chips.test.js`: the island's content (nothing, a call, a call and music, four
   things, without a privacy kind, music alone, full screen with and without one), its colours, the
-  opened rows (one row for Firefox's screen, camera and microphone with Stop sharing, remote
-  control first with End, a muted app with Unmute, a login without action, a camera known by its
-  name only) and the icon names. `tests/chips_qml_test.py`: the island's QML in its own window,
-  offscreen at 1440 x 900: shown while the bar is hidden and gone when it shows, 4 px from the top,
-  32 px high and at least 132 wide (at the test's text scale), centred; the bubble 6 px beside it
-  with the island still centred and both inside its window; opened 400 px wide and centred, where
-  a real click on Mute asks the app's microphone to mute and Esc closes it; the full-screen dots
-  14 px high. Mutations of each (8 px from the top, no room for the bubble, shown with the bar,
-  300 px opened, no Esc, Mute doing nothing) fail it.
+  opened rows (one row for Firefox's screen, camera and microphone with Stop sharing, remote control
+  first with End, a muted app with Unmute, a login without action, a camera known by its name only)
+  and the icon names. `tests/chips_qml_test.py`: the island's QML in its own window, offscreen at
+  1440 x 900: shown while the bar is hidden and gone when it shows, 4 px from the top, 32 px high
+  and at least 132 wide (at the test's text scale), centred; the bubble 6 px beside it with the
+  island still centred and both inside its window; opened 400 px wide and centred, where a real
+  click on Mute asks the app's microphone to mute and Esc closes it; the window resized from outside
+  while it opens and once it has opened, it still opens to its size and centred; the full-screen
+  dots 14 px high, the pointer on them shows the island and full screen coming back shows the dots
+  again. Mutations of each (8 px from the top, no room for the bubble, shown with the bar, 300 px
+  opened, no Esc, Mute doing nothing, no binding again after the focus, the peek kept) fail it.
 - **Session** (`packages/kcm-cpp/tests/scenario-island.sh`; 2026-10-17, a private session on the
   Fedora 44 test laptop, Plasma 6.7.5, 1440 x 900, the stage, module and kcmctl of this change;
   stand-in status items): **21 checks pass**. The switch on: the bar's panel hides, KWin hides its

@@ -145,13 +145,21 @@ check(() => assert.strictEqual(ISLAND_COLOURS.camera, "#7fd99c", "the dark schem
     check(() => assert.deepStrictEqual(rows.map((r) => r.app), ["Krfb", "Firefox", "OBS Studio", "Zoom", "ana@10.0.0.2"],
         "remote control first, then the screen, the camera and microphone, SSH last"));
     const ff = rows.find((r) => r.app === "Firefox");
-    check(() => assert.deepStrictEqual([ff.kinds, ff.action, ff.session, ff.microphone], [["screen", "camera", "microphone"], "stop", "s2", 0],
+    check(() => assert.deepStrictEqual([ff.kinds, ff.action, ff.session, ff.microphones], [["screen", "camera", "microphone"], "stop", "s2", [0]],
         "Firefox: one row (its name in any case), Stop sharing before Mute"));
     check(() => assert.deepStrictEqual([rows[0].action, rows[0].session], ["end", "r1"], "remote control: End"));
     const zoom = rows.find((r) => r.app === "Zoom");
-    check(() => assert.deepStrictEqual([zoom.kinds, zoom.action, zoom.microphone], [["microphone"], "unmute", 1], "a muted app: Unmute"));
+    check(() => assert.deepStrictEqual([zoom.kinds, zoom.action, zoom.microphones], [["microphone"], "unmute", [1]], "a muted app: Unmute"));
     check(() => assert.deepStrictEqual([rows[4].kinds, rows[4].action, rows[4].login], [["ssh"], "", "7"], "a login: no action"));
 }
+// An app with two streams, one muted and one recording: Mute, for both (the unmuted one is the one
+// that matters), whichever comes first; both muted: Unmute.
+check(() => assert.deepStrictEqual(["mute", "mute", "unmute"].map((_, n) => {
+    const streams = [[{ name: "Zoom", muted: true }, { name: "Zoom", muted: false }], [{ name: "Zoom", muted: false }, { name: "Zoom", muted: true }],
+                     [{ name: "Zoom", muted: true }, { name: "zoom", muted: true }]][n];
+    const r = islandRows(streams, [], false, [], [], [])[0];
+    return r.action + " " + r.microphones.join(",");
+}), ["mute 0,1", "mute 0,1", "unmute 0,1"], "an app's streams together: Mute while any records"));
 check(() => assert.deepStrictEqual(islandRows([], [], true, ["Integrated Camera"], [], []).map((r) => [r.app, r.kinds]), [["Integrated Camera", ["camera"]]],
     "a camera whose app is not known: the camera's name"));
 check(() => assert.deepStrictEqual(islandRows([], [], false, ["Integrated Camera"], [], []), [], "a camera not in use: no row"));

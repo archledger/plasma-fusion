@@ -66,6 +66,9 @@ PlasmaCore.Dialog {
         opened = "";
         peek = false;
     }
+    // The pointer's peek at the dots ends with the dots (else a later full screen kept it).
+    readonly property string contentMode: content.mode
+    onContentModeChanged: if (contentMode !== "dots") peek = false
     // An item that is no longer there closes; nothing to show closes it all.
     onItemsChanged: {
         if (opened !== "" && items.indexOf(opened) < 0) {
@@ -123,6 +126,16 @@ PlasmaCore.Dialog {
     visible: wanted || shown > 0
     x: screenGeometry.x + Math.round((screenGeometry.width - frame.width) / 2)
     y: screenGeometry.y + 4
+    // The frame's size and the window's place, bound again when the focus changes: the Dialog sizes
+    // its main item to the window whenever the window is resized from outside (a change of flags
+    // can give the window the platform's last size back), and in Qt 6 that resize ends the main
+    // item's size bindings; the window's place follows the frame's width.
+    function fit(): void {
+        frame.width = Qt.binding(() => island.frameWidth + 2 * island.side);
+        frame.height = Qt.binding(() => island.frameHeight);
+        x = Qt.binding(() => screenGeometry.x + Math.round((screenGeometry.width - frame.width) / 2));
+        y = Qt.binding(() => screenGeometry.y + 4);
+    }
 
     property bool wasActive: false
     onActiveChanged: {
@@ -143,6 +156,8 @@ PlasmaCore.Dialog {
         report.restart();
     }
     onFocusWantedChanged: {
+        fit();
+        Qt.callLater(island.fit);
         if (focusWanted) {
             Qt.callLater(() => { island.requestActivate(); openedContent.forceActiveFocus(); });
         }

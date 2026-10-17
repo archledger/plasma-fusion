@@ -114,8 +114,13 @@ PlasmoidItem {
         onStopRecording: statusItems.stopRecording()
         onOpenKeepAwake: keepAwake.open()
         onRowAction: row => {
-            if ((row.action === "mute" || row.action === "unmute") && row.microphone >= 0 && row.microphone < root.microphoneApps.length) {
-                root.microphoneApps[row.microphone].setMuted(row.action === "mute");
+            if (row.action === "mute" || row.action === "unmute") {
+                // the app's streams together: Mute while any of them records, Unmute them all
+                for (const i of row.microphones) {
+                    if (i >= 0 && i < root.microphoneApps.length && root.microphoneApps[i].muted !== (row.action === "mute")) {
+                        root.microphoneApps[i].setMuted(row.action === "mute");
+                    }
+                }
             } else if (row.action === "stop" || row.action === "end") {
                 statusItems.endSession(row.session);
             }

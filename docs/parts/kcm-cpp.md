@@ -914,8 +914,8 @@ island shows what uses the camera, the microphone or the screen."
   hiding. The settings file carries it.
 - Plasma hides such a panel through KWin (an auto-hide screen edge); the tablet KWin script tells
   the live chips when it is hidden (docs/parts/kwin-tablet.md, "The top bar for the island"), and
-  they show the island (docs/parts/shell-livechips.md). The bars "Top bar on every screen" makes
-  take the main bar's hiding (docs/parts/lookandfeel.md).
+  they show the island (docs/parts/shell-livechips.md). The bars "Top bar on every screen" and Add
+  Panel make take the main bar's hiding (docs/parts/lookandfeel.md).
 - `tests/shell-panels.sh` (ctest `kcmctl-panels`), cases `topbarhide` (read off; on, the main bar
   and the second screen's hide, the dock keeps `dodgewindows`, the bar of an unplugged screen is
   left at `none` and the stand-in shell, which crashes on such a panel's hiding as plasmashell

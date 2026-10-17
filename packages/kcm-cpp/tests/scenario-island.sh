@@ -118,7 +118,7 @@ info "opened: $r"
 read -r x y w h <<<"$(shape "$r")"
 check "opened in place: wider, still at the top and centred" \
   "$([ "${w:-0}" -ge 360 ] && echo wide) ${y:-} $(centred "$r")" "wide 4 yes"
-read -r wx wy ww wh <<<"$(win "$r")"
+read -r wx _ ww wh <<<"$(win "$r")"
 check "  its window holds it (the size KWin configured)" \
   "$([ "${wx:-9999}" -le "${x:-0}" ] && [ $((${wx:-0} + ${ww:-0})) -ge $((${x:-0} + ${w:-0})) ] && [ "${wh:-0}" -ge "${h:-1}" ] && echo yes || echo no)" yes
 shot i-opened
@@ -132,7 +132,7 @@ wait_island "privacy,recording .*; bubble" 15 || true
 r=$(island)
 info "two at once: $r"
 read -r x y w h <<<"$(shape "$r")"
-read -r bx bw <<<"$(bubble "$r")"
+read -r bx _ <<<"$(bubble "$r")"
 check "a recording too: the bubble 6 px beside the island" "$((${bx:-0} - ${x:-0} - ${w:-0}))" 6
 check "  the island still centred" "$(centred "$r")" yes
 shot i-two
