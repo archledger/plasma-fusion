@@ -21,7 +21,20 @@ var GLYPHS = {
     speakerOff: "M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16 9.5l5 5M21 9.5l-5 5",
     microphoneOff: "M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M4 4l16 16",
     sun: "M12 8.4a3.6 3.6 0 1 0 0 7.2a3.6 3.6 0 1 0 0-7.2zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4",
-    keyboardLight: "M3 12h18v7H3zM7 15.5h10M12 3v3M6 5l1.5 2M18 5l-1.5 2"
+    keyboardLight: "M3 12h18v7H3zM7 15.5h10M12 3v3M6 5l1.5 2M18 5l-1.5 2",
+    // and the board's "other notices": each its glyph, crossed out when off
+    keyboard: "M3 6.5h18v11H3zM7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8",
+    touchpad: "M4 5h16v14H4zM4 15h16M12 15v4",
+    touchpadOff: "M4 5h16v14H4zM4 15h16M12 15v4M3 3l18 18",
+    gauge: "M4.5 16a8 8 0 1 1 15 0M12 16l4-6",
+    bell: "M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0",
+    bellOff: "M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0M3 3l18 18",
+    moon: "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z",
+    moonOff: "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5zM3 3l18 18",
+    clock: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7.5v4.5l3 2",
+    onScreenKeyboard: "M3 4h18v12H3zM7 8h.01M10 8h.01M13 8h.01M16 8h.01M8 12h8M9 20h6M12 16v4",
+    onScreenKeyboardOff: "M3 4h18v12H3zM7 8h.01M10 8h.01M13 8h.01M16 8h.01M8 12h8M9 20h6M12 16v4M2 2l20 20",
+    keepawakeOff: "M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3c0 1.5 1 1.5 1 3M12 3c0 1.5 1 1.5 1 3M3 3l18 18"
 };
 
 // The badge tints of the Colors board, behind a capsule of one kind and behind each panel row's
@@ -194,26 +207,42 @@ var ISLAND_COLOURS = {
 
 // Plasma's notices (plasmashell 6.7.5 shell/osd.cpp, its osdProgress and osdText signals): the
 // glyph the board draws for Plasma's icon name, or "" (the island then shows Plasma's icon itself:
-// a player's, or another notice's).
+// a player's, or another notice's). The names are osd.cpp's and those the other parts of Plasma
+// 6.7.5 send through its showText: KWin's Night Light (redshift-status-day when it resumes by
+// day), the notifications' Do Not Disturb, the time zone (geotimezoned). plasma-pa names the
+// output device's notice with -symbolic, and -rtl right to left (audioicon.cpp): the same icon.
+var NOTICE_GLYPHS = {
+    "audio-volume-muted": "speakerOff",
+    "microphone-sensitivity-muted": "microphoneOff",
+    "video-display-brightness": "sun",
+    "input-keyboard-brightness": "keyboardLight",
+    "keyboard-layout": "keyboard",
+    "input-touchpad-on": "touchpad",
+    "input-touchpad-off": "touchpadOff",
+    "battery-profile-powersave": "gauge",
+    "speedometer": "gauge",
+    "battery-profile-performance": "gauge",
+    "notifications": "bell",
+    "notifications-disabled": "bellOff",
+    "redshift-status-on": "moon",
+    "redshift-status-day": "moon",
+    "redshift-status-off": "moonOff",
+    "input-keyboard-virtual-on": "onScreenKeyboard",
+    "input-keyboard-virtual-off": "onScreenKeyboardOff",
+    "system-suspend-inhibited": "keepawake",
+    "system-suspend-uninhibited": "keepawakeOff",
+    "clock": "clock"
+};
 function noticeGlyph(icon) {
-    var name = String(icon || "");
-    if (name === "audio-volume-muted") {
-        return "speakerOff";
+    var name = String(icon || "").replace(/-rtl$/, "").replace(/-symbolic$/, "");
+    if (Object.prototype.hasOwnProperty.call(NOTICE_GLYPHS, name)) {
+        return NOTICE_GLYPHS[name];
     }
     if (name.indexOf("audio-volume-") === 0) {
         return "speaker";
     }
-    if (name === "microphone-sensitivity-muted") {
-        return "microphoneOff";
-    }
     if (name.indexOf("microphone-sensitivity-") === 0) {
         return "microphone";
-    }
-    if (name === "video-display-brightness") {
-        return "sun";
-    }
-    if (name === "input-keyboard-brightness") {
-        return "keyboardLight";
     }
     return "";
 }

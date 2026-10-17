@@ -9,6 +9,11 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **The island's own glyphs for Plasma's notices:** the keyboard layout, the touchpad, the power
+  mode, Do Not Disturb, Night Light, the on-screen keyboard, sleep blocked and the time zone now
+  show in the island with its own line glyphs (the keyboard, the touchpad, the gauge, the bell,
+  the moon, the on-screen keyboard, Keep awake's cup, the clock), crossed out when off, instead of
+  Plasma's icons; a newly chosen output device that is muted shows the crossed-out speaker.
 - **Volume, brightness and Plasma's notices in the island:** while the top bar is hidden, what
   Plasma's own pop-up would show (the volume, the microphone, the brightness, the keyboard layout,
   the touchpad, the power mode and the rest) shows in the island at the top instead, and Plasma's
