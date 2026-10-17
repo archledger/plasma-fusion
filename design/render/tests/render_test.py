@@ -6,7 +6,8 @@
     python3 design/render/tests/render_test.py
 
 Needs Pillow; no Chrome (the comparison runs on fixture images, so a missing preview, a size
-mismatch and a stale preview are all exercised without a browser).
+mismatch and a stale preview are all exercised without a browser; the renders again of a board
+that does not match use a stand-in renderer).
 """
 import importlib.util
 import sys
@@ -68,6 +69,37 @@ with tempfile.TemporaryDirectory(prefix="render-test-") as td:
           "a committed preview of another size fails the check")
     check(render.compare("missing", got, td / "absent.png") is False,
           "a missing committed preview fails the check")
+
+    # A board is rendered again when it does not match (Chrome draws some boards differently now
+    # and then), and fails only when no render matches: a stand-in renderer gives the pictures.
+    want = write(td / "want.png", (64, 48), (10, 20, 30))
+    noise = write(td / "noise.png", (64, 48), (60, 20, 30))
+
+    def renders(*pictures):
+        calls = []
+
+        def fake(name, w, h, port, dest):
+            calls.append(name)
+            Image.open(pictures[min(len(calls), len(pictures)) - 1]).save(dest)
+            return dest
+        render.render = fake
+        return calls
+
+    calls = renders(noise, want)
+    check(render.check_board("noisy", 64, 48, 0, want) is True and len(calls) == 2,
+          "a board that differs once and matches in the next render passes (%d renders)"
+          % len(calls))
+    calls = renders(noise)
+    check(render.check_board("stale", 64, 48, 0, want) is False
+          and len(calls) == render.CHECK_ATTEMPTS,
+          "a board that differs in every render fails after %d renders (%d)"
+          % (render.CHECK_ATTEMPTS, len(calls)))
+    calls = renders(want)
+    check(render.check_board("good", 64, 48, 0, want) is True and len(calls) == 1,
+          "a board that matches is rendered once (%d)" % len(calls))
+    calls = renders(want)
+    check(render.check_board("missing", 64, 48, 0, td / "absent.webp") is False and len(calls) == 1,
+          "a board without a committed preview fails at once (%d renders)" % len(calls))
 
 print(f"render check test: {checks - len(failures)}/{checks} passed")
 sys.exit(1 if failures else 0)

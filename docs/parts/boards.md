@@ -11,7 +11,7 @@ The boards in `design/boards/` decide every colour, size and drawing of the them
 |---|---|
 | `design/render/render.py` | renders the boards to `design/previews/` (headless Chrome at 2x, WebP out); `--check` renders to a scratch directory and diffs against the committed previews |
 | `design/render/runtime.js` | the board template language in a plain browser (`x-dc`, `helmet`, `sc-for`, `sc-if`, `{{...}}`, `dc-import`, `DCLogic`) — the authoring canvas's runtime is not in this repository |
-| `design/render/tests/render_test.py` | check mode's comparison contract (identical, close, stale, size-mismatched and missing previews) |
+| `design/render/tests/render_test.py` | check mode's comparison contract (identical, close, stale, size-mismatched and missing previews), and its renders again (a board that differs once passes on the next render, one that differs every time fails after three, a missing preview at once) |
 | `design/render/tests/runtime_test.py` | the board runtime in a browser: loops, conditions, imports, SVG namespaces and the failure propagation (needs Chrome, like rendering) |
 
     design/render/render.py                   # every board, in canvas order
@@ -28,7 +28,11 @@ cannot come from a page that was not validated. `--check` exits nonzero for a mi
 preview, a size mismatch, a mean per-channel difference over 12, or a worst window mean over
 20 (32 x 32 pixel windows, sliding in 16 px steps, so a small change cannot straddle every
 window) - the window test catches a stale preview whose change is confined to a small area, down
-to a 14 px icon. A board
+to a 14 px icon. A board that does not match is rendered again, up to three times, and fails only
+when no render matches; the output names the render that did (2026-10-17: the Popups board's
+frosted tooltip drew its title one device pixel off in about one load in twenty, a worst window
+of 25.4, with the same layout, every font face loaded, a settled frame and the same result after
+a fresh raster; a stale preview differs in every render). A board
 change re-renders the affected previews with this tool; `--check` over all 32 boards is the
 fidelity gate ([`docs/parts/icons.md`](icons.md) lists what the drawings mean).
 
