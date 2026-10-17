@@ -13,6 +13,8 @@ the one KIO reports file copies to. Jobs are started on it the way KIO's job tra
 progress per app must follow: one copy, a second one of the same app (their mean), a suspended job,
 another app, and none once the jobs end. On a dock tile (TaskItem.qml, staged with the shared blocks
 as the build does) the progress ring shows next to an unread count, as in the stock task manager.
+The tile's running marks count a group's windows, three at most, the active app's first one the
+pill (board DockSize.dc.html, "Window count").
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -130,6 +132,32 @@ Item {
         entry: null
         notificationCount: 0
     }
+    // A Konsole tile whose model the test sets: a group of `children` windows or one window,
+    // active or not, with the wide (Large dock, tablet) marks or not.
+    property bool countGroup: false
+    property int countChildren: 0
+    property bool countActive: false
+    property bool countWide: false
+    TaskItem {
+        id: countTile
+        x: 300
+        width: 48
+        height: 90
+        index: 2
+        wideIndicators: countWide
+        model: ({ AppId: "org.kde.konsole", AppName: "Konsole", decoration: "utilities-terminal", IsLauncher: false,
+                  IsStartup: false, IsActive: countActive, IsDemandingAttention: false, IsGroupParent: countGroup,
+                  ChildCount: countChildren })
+        pal: palette
+        motion: motion
+        entry: null
+        notificationCount: 0
+    }
+    // The widths of the tile's marks, left to right.
+    function marks() {
+        const row = find(countTile, "indicator");
+        return row ? JSON.stringify(row.children.filter(c => c.height === 4).sort((a, b) => a.x - b.x).map(c => Math.round(c.width))) : "null";
+    }
     // The tile's mouse area (its interactive surface), found by the property only it declares.
     function touchTarget(item) {
         for (const child of item.children) {
@@ -245,6 +273,26 @@ try:
     target = tablet_target()
     check(target is not None and min(target) >= 44,
           "the tablet tile's touch target and icon reach 44 px at the boundary (%r)" % (target,))
+
+    # The running marks count a group's windows (board DockSize.dc.html, "Window count").
+    def marks(group, children, active, wide=False):
+        for name, value in (("countGroup", group), ("countChildren", children), ("countActive", active), ("countWide", wide)):
+            item.setProperty(name, value)
+        QTest.qWait(400)
+        return json.loads(QMetaObject.invokeMethod(item, "marks", Q_RETURN_ARG("QVariant")))
+
+    for args, want, what in [
+        ((False, 0, False), [5], "one window: one dot"),
+        ((True, 2, False), [5, 5], "two windows grouped: two dots"),
+        ((True, 3, False), [5, 5, 5], "three: three dots"),
+        ((True, 5, False), [5, 5, 5], "five: three dots at most"),
+        ((False, 0, True), [16], "the active app, one window: the pill"),
+        ((True, 2, True), [16, 5], "the active app, two windows: the pill and a dot"),
+        ((True, 2, True, True), [18, 6], "on the Large dock: the wide pill and dot"),
+        ((True, 0, False), [5], "a group that lists no window yet: one dot"),
+    ]:
+        got = marks(*args)
+        check(got == want, "marks: %s (%r)" % (what, got))
 
     print(f"transfers: {checks} checks passed")
 finally:
