@@ -10,9 +10,9 @@
 # component again with the helper (kglobalaccel keeps a loaded component's command otherwise),
 # keeping the key. A maximized window shows two known lines (where KWin placed its content: the
 # drags follow); then:
-#   1. Meta+Shift+T, an area dragged around the first line, Return: Klipper's clipboard holds the
-#      line, "Text copied" is notified, no image is left (runtime directory, Pictures), no Spectacle
-#      keeps running;
+#   1. Meta+Shift+T, an area dragged around the first line, released (no Return: the area is
+#      taken as the drag ends): Klipper's clipboard holds the line, "Text copied" is notified, no
+#      image is left (runtime directory, Pictures), no Spectacle keeps running;
 #   2. Meta+Shift+T, Esc: nothing is copied or notified, the helper ends;
 #   3. with Spectacle's window open: Meta+Shift+T, the area, Return: the helper leaves the capture to
 #      that Spectacle (spectacle --region), which shows it in its window (Extract Text there) and
@@ -49,10 +49,11 @@ procs() {
   done
   return 0
 }
-# Wait until no helper runs (max $1 s).
+# Wait until no helper runs (max $1 s of the clock: a round scans every process, which takes a while
+# under set -x, so counting rounds made a helper that stays a wait longer than the session).
 helper_done() {
-  local i
-  for ((i = 0; i < $1 * 5; i++)); do
+  local end=$((SECONDS + $1))
+  while [ "$SECONDS" -lt "$end" ]; do
     [ -n "$(procs plasma-fusion-copytext)" ] || return 0
     sleep 0.2
   done
@@ -72,11 +73,17 @@ spectacle_windows() {
   K run "var l = workspace.windowList(), n = 0; for (var i = 0; i < l.length; ++i) {
     if (l[i].normalWindow && String(l[i].resourceClass).indexOf('spectacle') >= 0) { n++; } } report(n);"
 }
-select_line() { # 1|2: Meta+Shift+T, a drag around the line (the content's 160,200 or 160,440, 32 px), Return
+# 1|2 [return]: Meta+Shift+T, a drag around the line (the content's 160,200 or 160,440, 32 px); the
+# helper's capture takes the area as the drag ends (-k), an open Spectacle's own on Return.
+select_line() {
   local y=$((OY + ($1 == 1 ? 200 : 440)))
   pfinput 'key meta+shift+t'
   sleep 5
-  pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20" 'sleep 0.6' 'key return'
+  if [ "${2:-}" = return ]; then
+    pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20" 'sleep 0.6' 'key return'
+  else
+    pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20"
+  fi
 }
 
 # ---- 0.5.0's component, loaded and given Meta+Shift+T as 0.5.0's setup did
@@ -178,7 +185,7 @@ spectacle --launchonly >"$OUT/spectacle-open.log" 2>&1 &
 sleep 5
 qdbus | grep -qx ' *org.kde.spectacle' && [ "$(spectacle_windows)" = 1 ] &&
   pass "3: Spectacle is open (a window, org.kde.spectacle on the bus)" || fail "3: Spectacle is not open: $(spectacle_windows) windows"
-select_line 2
+select_line 2 return
 helper_done 15 && pass "3: the helper handed over and ended" || fail "3: the helper still runs"
 sleep 3
 [ "$(clip)" = "$before" ] && [ "$(notified "Text copied")" = 1 ] &&
@@ -223,7 +230,7 @@ if [ -n "${QX:-}" ]; then
   pfinput "click $QX $QY"
   sleep 5
   y=$((OY + 200))
-  pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20" 'sleep 0.6' 'key return'
+  pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20"
   helper_done 30 && pass "5: the helper ended" || fail "5: the helper still runs"
   shot 51-button
   got=$(clip)
@@ -269,7 +276,7 @@ if [ -n "${CX:-}" ]; then
   pfinput "click $CX $CY"
   sleep 5
   y=$((OY + 440))
-  pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20" 'sleep 0.6' 'key return'
+  pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20"
   helper_done 30 && pass "6: the helper ended" || fail "6: the helper still runs"
   shot 61-sheet-button
   got=$(clip)

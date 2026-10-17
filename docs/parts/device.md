@@ -167,9 +167,11 @@ file, so `fusion-restore.sh` gives every key back.
 
 **Copy text from the screen** (survey F6; PowerToys Text Extractor's Win+Shift+T, macOS Live Text).
 Meta+Shift+T, the button next to the screenshot button in quick settings' header, or the one next to
-Emoji in the clipboard sheet's header (2026-10-17; docs/parts/shell-quicksettings.md): select an
-area, and its text is on the clipboard, with a "Text copied" notification that shows its first line
-(2026-10-15; in 0.5.0 Spectacle's window opened and Extract Text took one more click). Spectacle
+Emoji in the clipboard sheet's header (2026-10-17; docs/parts/shell-quicksettings.md): draw a box
+around the text, and as the drag ends its text is on the clipboard and the selection is gone, with a
+"Text copied" notification that shows its first line (2026-10-15; in 0.5.0 Spectacle's window opened
+and Extract Text took one more click; until 2026-10-17 the box waited for Enter or a double-click,
+which copy-text tools such as NormCap do not ask for). Spectacle
 6.7.5 (OCR since 6.6, Tesseract) recognises text only in its own window: `spectacle --help` and its
 D-Bus interface (`org.kde.Spectacle`: FullScreen, CurrentScreen, ActiveWindow, WindowUnderCursor,
 RectangularRegion, Record*, OpenWithoutScreenshot) have no text option, and neither has Plasma 6.8's
@@ -180,8 +182,11 @@ mode (`SpectacleCore.cpp`, 6.7.5). So the helper `plasma-fusion-copytext` (`pack
 the helper directory: `/usr/libexec/plasma-fusion`, `/usr/lib/plasma-fusion` on Arch, the system
 profile on NixOS, `~/.local/libexec/plasma-fusion` with `--install`) does it in four steps:
 
-1. capture: `spectacle -b -n -r -o $XDG_RUNTIME_DIR/plasma-fusion-copytext.XXXXXX/region.png`, the
-   directory removed when the helper ends; Esc ends it without a word;
+1. capture: `spectacle -b -n -r -k -o $XDG_RUNTIME_DIR/plasma-fusion-copytext.XXXXXX/region.png`,
+   the directory removed when the helper ends; `-k` (`--release-capture`, Spectacle 6.7.0, not in
+   6.6.0) takes the area as the drag ends, for this capture only (Spectacle's own "Accept on
+   click-and-release" setting, `spectaclerc [General] useReleaseToCapture`, stays as the user set
+   it); Esc ends it without a word;
 2. read: `tesseract FILE stdout -l LANGS --psm 3` with the languages Spectacle would use
    (`OcrManager.cpp`: `spectaclerc [General] ocrLanguages`, the installed ones in its order, no osd,
    no repeats, at most four; else the first installed language other than osd), so the languages
@@ -196,20 +201,21 @@ profile on NixOS, `~/.local/libexec/plasma-fusion` with `--install`) does it in 
 Spectacle runs once per session: a request goes to the Spectacle already open, which drops its
 window for the new capture (as its own Rectangular Region key does) and, for a background request,
 quits after saving (`SpectacleCore::activate`, 6.7.5). So while Spectacle is open
-(`org.kde.spectacle` on the session bus) the helper leaves the capture to it, and where the
-`tesseract` command is missing it opens Spectacle as before: `spectacle --region`, the area in
-Spectacle's window, where **Extract Text** on the selection's toolbar copies the text; the window
-stays afterwards unless its "Close after extraction" setting (`spectaclerc [General] closeAfterOcr`)
-is on. A second press while the area is being chosen does nothing (a lock in the runtime directory,
-not handed on to Spectacle or wl-copy, which stay). The packages recommend Tesseract (Fedora
-`tesseract`, Debian `tesseract-ocr`, Arch's optional `tesseract` with a `tesseract-data-*`
-language); on NixOS add `pkgs.tesseract` to the system packages. The setup's component runs the
-helper by its path (in double quotes when the path holds a space; a path with `"`, `` ` ``, `$`, `\`
-or `%` is not used) and `spectacle --region` when no helper is installed (the tools run from a
-source tree). kglobalaccel launches a component with the command it read when it loaded it
-(`KServiceActionComponent` keeps its `KService`, kglobalacceld 6.7), so when the setup changes the
-command of a loaded component (`plasma-fusion update` in a running session after 0.5.0), it
-unregisters `_launch` - kglobalacceld drops a component left without actions when it writes its
+(`org.kde.spectacle` on the session bus) the helper leaves the capture to it (without `-k`, which
+that Spectacle's selection would keep for its later captures: there the area waits for Enter), and
+where the `tesseract` command is missing it opens Spectacle as before: `spectacle --region`, the
+area in Spectacle's window, where **Extract Text** on the selection's toolbar copies the text; the
+window stays afterwards unless its "Close after extraction" setting (`spectaclerc [General]
+closeAfterOcr`) is on. A second press while the area is being chosen does nothing (a lock in the
+runtime directory, not handed on to Spectacle or wl-copy, which stay). The packages recommend
+Tesseract (Fedora `tesseract`, Debian `tesseract-ocr`, Arch's optional `tesseract` with a
+`tesseract-data-*` language); on NixOS add `pkgs.tesseract` to the system packages. The setup's
+component runs the helper by its path (in double quotes when the path holds a space; a path with
+`"`, `` ` ``, `$`, `\` or `%` is not used) and `spectacle --region` when no helper is installed (the
+tools run from a source tree). kglobalaccel launches a component with the command it read when it
+loaded it (`KServiceActionComponent` keeps its `KService`, kglobalacceld 6.7), so when the setup
+changes the command of a loaded component (`plasma-fusion update` in a running session after 0.5.0),
+it unregisters `_launch` - kglobalacceld drops a component left without actions when it writes its
 settings, 500 ms later - and registers it again, which makes the component from the new file; the
 keys it had are given back as they were (not recorded as a change). Quick settings' button runs the
 helper from the same places in the same order (`Backend.copyTextCommand`), else `spectacle
@@ -239,15 +245,16 @@ that starts like an option), and real Tesseract on a line drawn in Manrope at 14
 Spectacle 6.7.5, Tesseract 5.5.3) drives the real Spectacle, Tesseract and Klipper with KWin's
 emulated keys and pointer: 0.5.0's component, loaded first, starts `spectacle --region` from
 Meta+Shift+T; the setup makes it again with the helper and keeps the key (without that, the key went
-on starting `spectacle --region` and nothing was copied); then Meta+Shift+T and a drag around a line
-put exactly that line on Klipper's clipboard with a "Text copied" notification, no image left and no
-Spectacle left running; Esc copies and says nothing; with Spectacle's window open the area goes to
-that Spectacle, which keeps running with it, and the helper copies nothing; a second line follows
-(both in Klipper's history); quick settings' button does the same as the key, and so does the
-clipboard sheet's (Meta+V, the button quick settings' dump places before Emoji), with the sheet
-closed for the selection (without the button the step fails). VM (0.5.0, real keys
-from a uinput keyboard): after the setup Meta+Shift+T started `spectacle --region` without a new
-login, the header button too; after the restore the key holds nothing and starts nothing.
+on starting `spectacle --region` and nothing was copied); then Meta+Shift+T and a drag around a
+line, released without Return (main's helper before `-k` left the selection open and copied
+nothing), put exactly that line on Klipper's clipboard with a "Text copied" notification, no image
+left and no Spectacle left running; Esc copies and says nothing; with Spectacle's window open the
+area goes to that Spectacle, which keeps running with it, and the helper copies nothing; a second
+line follows (both in Klipper's history); quick settings' button does the same as the key, and so
+does the clipboard sheet's (Meta+V, the button quick settings' dump places before Emoji), with the
+sheet closed for the selection (without the button the step fails). VM (0.5.0, real keys from a
+uinput keyboard): after the setup Meta+Shift+T started `spectacle --region` without a new login, the
+header button too; after the restore the key holds nothing and starts nothing.
 
 **Quick Look in Dolphin** (2026-10-15; docs/parts/quicklook-cpp.md). With Dolphin and the
 `plasma-fusion-quicklook` package installed (its program in PATH and its service menu in a data

@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Copy text in one movement:** drawing the box around the text now copies it and closes the
+  selection as the drag ends, without Enter or a double-click, as copy-text tools such as NormCap
+  do; Spectacle's own setting for its screenshots stays as it is.
 - **Copy text from the clipboard:** the clipboard pop-up (the top bar's clipboard button, Meta+V)
   has a copy-text button next to Emoji: select an area of the screen and its text is on the
   clipboard, as with Meta+Shift+T, one click from the top bar.
