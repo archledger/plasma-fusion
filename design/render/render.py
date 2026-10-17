@@ -295,6 +295,31 @@ def compare(name: str, got: Path, want: Path) -> bool:
     return mad <= MAD_LIMIT and worst <= WINDOW_LIMIT
 
 
+# Chrome draws some boards differently now and then. On 2026-10-17 the Popups board's frosted
+# tooltip drew its title one device pixel off in about one load in twenty: the same layout (the
+# title at x 176.703 every time), every font face loaded, the frame settled (two more animation
+# frames changed nothing) and a fresh raster at another scale did not change it either. A stale
+# preview differs in every render, so a board that does not match is rendered again, up to
+# CHECK_ATTEMPTS times, and fails only when no render matches; the output says when one did not.
+CHECK_ATTEMPTS = 3
+
+
+def check_board(name: str, w: int, h: int, port: int, want: Path,
+                attempts: int = CHECK_ATTEMPTS) -> bool:
+    for attempt in range(1, attempts + 1):
+        with tempfile.TemporaryDirectory(prefix="board-check-") as td:
+            got = render(name, w, h, port, Path(td) / (name + ".webp"))
+            if compare(name, got, want):
+                if attempt > 1:
+                    print(f"{name}: matches on render {attempt} of {attempts}; the earlier render"
+                          " differed (Chrome draws it differently now and then)")
+                return True
+        if not want.exists():
+            return False
+    print(f"{name}: differs in all {attempts} renders")
+    return False
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("boards", nargs="*", help="board file names (default: all, canvas order)")
@@ -316,11 +341,9 @@ def main() -> int:
         for name in names:
             w, h = meta[name]["w"], meta[name]["h"]
             if args.check:
-                with tempfile.TemporaryDirectory(prefix="board-check-") as td:
-                    got = render(name, w, h, port, Path(td) / (name + ".webp"))
-                    want = args.out / (name.split(".dc.html")[0] + ".webp")
-                    if not compare(name, got, want):
-                        rc = 1
+                want = args.out / (name.split(".dc.html")[0] + ".webp")
+                if not check_board(name, w, h, port, want):
+                    rc = 1
             else:
                 dest = render(name, w, h, port, args.out / (name.split(".dc.html")[0] + ".webp"))
                 print(f"{dest} ({w * SCALE}x{h * SCALE})")
