@@ -16,6 +16,7 @@ KCM.SimpleKCM {
     property alias cfg_keyboardLayoutAlways: keyboardAlwaysBox.checked
     property alias cfg_showKdeConnect: phoneBox.checked
     property alias cfg_showClipboard: clipboardBox.checked
+    property alias cfg_showCopyText: copyTextBox.checked
     property alias cfg_showBatteryPercent: batteryBox.checked
     property alias cfg_showNotifications: notificationsBox.checked
     property alias cfg_popupOnNewDevice: newDeviceBox.checked
@@ -42,6 +43,7 @@ KCM.SimpleKCM {
     property bool cfg_keyboardLayoutAlwaysDefault
     property bool cfg_showKdeConnectDefault
     property bool cfg_showClipboardDefault
+    property bool cfg_showCopyTextDefault
     property bool cfg_showBatteryPercentDefault
     property bool cfg_popupOnNewDeviceDefault
     property bool cfg_showNotificationsDefault
@@ -101,6 +103,10 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: clipboardBox
             text: i18nc("@option:check", "Clipboard button")
+        }
+        QQC2.CheckBox {
+            id: copyTextBox
+            text: i18nc("@option:check", "Copy text button (copy text from the screen)")
         }
         QQC2.CheckBox {
             id: batteryBox

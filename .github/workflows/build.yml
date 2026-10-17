@@ -153,6 +153,14 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/tiles_edit_test.py "$RUNNER_TEMP/qs-stage"
 
+      - name: Quick settings top bar (staged QML on the real backend, offscreen Qt)
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/qs-stage" tools/build.sh quicksettings
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/topbar_test.py "$RUNNER_TEMP/qs-stage"
+
       - name: Hidden tray items while active (stand-in tray, offscreen Qt)
         run: |
           set -euo pipefail

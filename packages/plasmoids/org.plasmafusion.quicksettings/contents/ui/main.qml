@@ -61,8 +61,9 @@ PlasmoidItem {
     readonly property bool screenSettled: screenFromGeometry !== ""
     readonly property bool leader: Instances.leader === root
     readonly property var sharedKeys: ["showKeyboardLayout", "keyboardLayoutAlways", "showKdeConnect", "showClipboard",
-        "showBatteryPercent", "popupOnNewDevice", "showNotifications", "popupGap", "popupScreenMargin", "startPage",
-        "keyboardPolicy", "tabletNotifications", "lightLookAndFeel", "darkLookAndFeel", "tileOrder", "hiddenTiles"]
+        "showCopyText", "showBatteryPercent", "popupOnNewDevice", "showNotifications", "popupGap",
+        "popupScreenMargin", "startPage", "keyboardPolicy", "tabletNotifications",
+        "lightLookAndFeel", "darkLookAndFeel", "tileOrder", "hiddenTiles"]
     readonly property var sharedSettings: sharedKeys.map(key => Plasmoid.configuration[key])
     function sharedValue(key: string): var {
         return Plasmoid.configuration[key];
@@ -673,6 +674,7 @@ PlasmoidItem {
         keyboardLayoutAlways: Plasmoid.configuration.keyboardLayoutAlways
         showKdeConnect: Plasmoid.configuration.showKdeConnect
         showClipboard: Plasmoid.configuration.showClipboard
+        showCopyText: Plasmoid.configuration.showCopyText
         showBatteryPercent: Plasmoid.configuration.showBatteryPercent
         showNotifications: Plasmoid.configuration.showNotifications
         tileOrder: Plasmoid.configuration.tileOrder
@@ -740,6 +742,8 @@ PlasmoidItem {
             root.openOnPress = !root.clipboardShown;
         }
         onClipboardClicked: root.showClipboard(root.openOnPress)
+        // Copy text from the screen, as quick settings' header button (the sheet closes first).
+        onCopyTextClicked: backend.session.copyText()
         onBellClicked: {
             if (root.notificationsApart) {
                 if (root.centreOpen) {
