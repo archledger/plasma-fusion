@@ -58,7 +58,8 @@ LIB=$BASE/lib.sh
   grep -m1 '^SNAP_CYCLE_KEYS_VERSION=' "$TOOL" || true
   extract note keyname install_text shortcut_get shortcut_set shortcut_add shortcut_remove key_holders \
     shortcut_claim register_command_component command_key_present notify_desktop ensure_notify_shortcut clipboard_desktop \
-    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade snap_script_reload apply_snap_cycle_keys
+    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade package_dir snap_script_reload \
+    apply_snap_cycle_keys
 } >"$LIB"
 grep -q '^apply_snap_cycle_keys() {' "$LIB" || { echo "FAIL: apply_snap_cycle_keys was not found in fusion-config.sh"; exit 1; }
 for f in ensure_notify_shortcut ensure_clipboard_shortcut; do
@@ -193,10 +194,14 @@ run_case() {
   for row in "$@"; do printf '%s\n' "$row" | tr '|' '\t' >>"$H/kga"; done
   [ -z "${MARK:-}" ] || printf '[Shortcuts]\nClipboardKey=%s\n' "$MARK" >"$H/plasmafusionrc"
   [ -z "${SNAPMARK:-}" ] || printf '[Shortcuts]\nSnapCycleKeys=%s\n' "$SNAPMARK" >"$H/plasmafusionrc"
-  env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" KGA="$H/kga" WROTE="${WROTE:-0}" bash -c '
+  # NO_RUNTIME=1: a session without XDG_RUNTIME_DIR.
+  local runtime=(XDG_RUNTIME_DIR="$H/run")
+  [ "${NO_RUNTIME:-0}" = 0 ] || runtime=()
+  mkdir -p "$H/run"
+  env -i PATH="$PATH" HOME="$H" XDG_CONFIG_HOME="$H" KGA="$H/kga" WROTE="${WROTE:-0}" "${runtime[@]}" bash -c '
     set -euo pipefail
     . "$1"; . "$2"
-    DATA=$HOME/.local/share BACKUP=$HOME/backup CHANGES=0 DRY=0
+    DATA=$HOME/.local/share BACKUP=$HOME/backup CHANGES=0 DRY=0 INSTALL=
     case $3 in
       ensure) ensure_clipboard_shortcut "$4" ;;
       notify) ensure_notify_shortcut "$4" ;;
@@ -216,8 +221,15 @@ run_case() {
         apply_snap_cycle_keys "$4" ;;
       snapcycle-old)
         # An older snap script is running (an update in this session): loaded, without the new
-        # actions, which come once it is unloaded and started again (a KWin stand-in in front of
-        # the kglobalaccel one; its calls in $HOME/kwin.calls).
+        # actions (a KWin stand-in in front of the kglobalaccel one; its calls in
+        # $HOME/kwin.calls). As in KWin 6.7.5 with Qt 6.11, a script started again from the path
+        # KWin loaded it from at login is the older one (the QML engine keeps what it compiled by
+        # its path); one loaded from another path that reaches the installed package is the new
+        # one, with the actions.
+        pkg=$DATA/kwin/scripts/plasmafusion-snap
+        mkdir -p "$pkg/contents/ui"
+        echo "{}" >"$pkg/metadata.json"
+        echo "new" >"$pkg/contents/ui/main.qml"
         eval "fake_$(declare -f bus)"
         bus() {
           local a=("$@")
@@ -225,9 +237,16 @@ run_case() {
           if [ "${a[0]}" = org.kde.KWin ]; then
             echo "${a[3]}" >>"$HOME/kwin.calls"
             case ${a[3]} in
-              isScriptLoaded) if [ -f "$HOME/unloaded" ]; then echo "b false"; else echo "b true"; fi ;;
+              isScriptLoaded) if [ -f "$HOME/unloaded" ] && [ ! -f "$HOME/loaded" ]; then echo "b false"; else echo "b true"; fi ;;
               unloadScript) : >"$HOME/unloaded"; echo "b true" ;;
-              start) [ ! -f "$HOME/unloaded" ] || : >"$HOME/started" ;;
+              loadDeclarativeScript)
+                printf "%s\n" "${a[5]}" >"$HOME/loaded"
+                echo "i 3" ;;
+              start)
+                if [ -f "$HOME/loaded" ] && [ "$(sed -n 1p "$HOME/loaded")" != "$pkg/contents/ui/main.qml" ] &&
+                  [ "$(cat "$(sed -n 1p "$HOME/loaded")" 2>/dev/null)" = new ]; then
+                  : >"$HOME/started"
+                fi ;;
             esac
             return 0
           fi
@@ -392,13 +411,29 @@ run_case snap-migrate snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_
 expect_keys "an update (no Windows-style set) moves Meta+Left from KWin's default too, once" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
 expect_keys "  and Meta+Right" kwin "Plasma Fusion: Snap Right" "$META_RIGHT"
 run_case snap-migrate-old snapcycle-old migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
-expect_keys "an update while an older snap script runs: it is started again and Meta+Left moves" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
-if [ "$(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)" = "isScriptLoaded unloadScript isScriptLoaded start " ]; then
-  pass "  unloaded, then started once it was gone"
+expect_keys "an update while an older snap script runs: the new one is loaded and Meta+Left moves" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
+if [ "$(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)" = "isScriptLoaded unloadScript isScriptLoaded loadDeclarativeScript start " ]; then
+  pass "  unloaded, then loaded and started once it was gone"
 else
   fail "  KWin calls: $(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)"
 fi
+loaded=$(sed -n 1p "$H/loaded" 2>/dev/null)
+if [[ $loaded == "$H/run/plasma-fusion/kwin-scripts/plasmafusion-snap-"*/contents/ui/main.qml ]] &&
+  [ "$(readlink "${loaded%/contents/ui/main.qml}")" = "$H/.local/share/kwin/scripts/plasmafusion-snap" ]; then
+  pass "  from a link in the runtime directory to the installed package (a path KWin has not compiled)"
+else
+  fail "  loaded from '$loaded'"
+fi
 if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  and the run is marked"; else fail "  the run is not marked"; fi
+if grep -q "loaded again from the installed files" "$H/log"; then pass "  and says so"; else fail "  the log: $(grep 'snap sizes' "$H/log")"; fi
+NO_RUNTIME=1 run_case snap-migrate-old-noruntime snapcycle-old migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "without a runtime directory the older script stays: Meta+Left stays KWin's" kwin "Window Quick Tile Left" "$META_LEFT"
+if [ "$(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)" = "isScriptLoaded " ] && ! grep -q SnapCycleKeys "$H/plasmafusionrc" 2>/dev/null &&
+  grep -q "the new one comes with the next login" "$H/log"; then
+  pass "  not unloaded, the run not marked (the next update moves the keys), and the log says when"
+else
+  fail "  KWin calls: $(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null), log: $(grep 'snap sizes' "$H/log")"
+fi
 SNAPMARK=1 run_case snap-migrate-done snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
 expect_keys "after the mark, Meta+Left the user gave back to KWin's quick tile stays there" kwin "Window Quick Tile Left" "$META_LEFT"
 expect_keys "  and Snap Left gets nothing" kwin "Plasma Fusion: Snap Left" ""
