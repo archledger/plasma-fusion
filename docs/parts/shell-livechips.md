@@ -212,8 +212,8 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   panel's own actions; an app's microphone streams together: Mute while any of them records, for all
   of them). A recording: its time and Stop. The music: cover, title, artist and player, where it is
   (read again every second while opened) and previous, play or pause, next; paused there, the music
-  stays while its view is open, so Play is there. It takes the keyboard focus while opened (Esc
-  closes it), and a click outside it or on its free part closes it.
+  stays while its view is open and its player is there, so Play is there. It takes the keyboard
+  focus while opened (Esc closes it), and a click outside it or on its free part closes it.
 - **Colours** (`Chips.ISLAND_COLOURS`): the island is black in both schemes, so its glyphs and dots
   take the dark scheme's semantic colours (PlasmaFusionDark.colors: ForegroundPositive for the
   camera, -Neutral the microphone, -Visited the screen, -Negative remote control and a recording,

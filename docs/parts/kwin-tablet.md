@@ -42,29 +42,31 @@ needed.
 - **Posture**: `FusionTablet` (BASE-1) asks KWin's `org.kde.KWin.TabletModeManager` once and follows
   its signals. The script does nothing until KWin has answered, so the Kirigami value (which can start
   stale inside KWin, TABLET F3) never moves windows.
-- **Panels, at once on every change**: one `evaluateScript` call in plasmashell (TABLET 3.6): the top bar
-  `round(44 x text scale)` (the layout script's `textScale()`), the dock 80 (96 with the headroom frame until INT-1) and `DockHiding` (not the stock
-  appmenu's `compactView`: see Verification). The laptop height and hiding are saved once per panel in
-  its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave
-  (for the dock the plate of its size, the dock's `dockSize`: 60, 72 or 78 px, 72 when not set,
-  since 2026-10-16; a saved 88 or 96 from the headroom frame counts as that plate). The settings
-  page's Dock size sets `laptopHeight` while the posture holds (docs/parts/kcm-cpp.md, "Dock size
-  and window grouping"); `tests/tablet-panels.test.js` covers both. A dock on the left or right
-  (the settings page's Dock position, board DockPosition.dc.html) is at the bottom in tablet
-  posture, as on the Tablet board: its side is saved as `laptopLocation` with the height and given
-  back on leave (2026-10-16; the test covers a dock on the left, one at the bottom and one
-  without a saved side). A top bar that hides (the settings page's "Hide the top bar
-  automatically", board Island.dc.html) always shows in tablet posture: its `laptopHiding`, saved
-  with the height, is given back on leave (2026-10-17; the test covers a bar that hides, one that
-  shows and one set to hide while the posture held). In laptop posture a top bar takes the settings
-  page's choice, plasmafusionrc `[TopBar] AutoHide` (true: `autohide`, false: `none`; not set: left
-  as it is), so a bar whose screen was not connected when the choice changed gets it when its
-  window appears (the test: a returned screen's bar, tablet posture, off, not set).
-  Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
-  start), the call is made again after 500 ms (one call for several panels). A Fusion panel whose
-  screen is gone (the top bar of a monitor that was unplugged) is skipped, see "Panels without a
-  screen" below. When plasmashell is not on the bus, or answers "not ready" (no panels, desktops
-  or screens yet), the call is made again after 1, 2, 4, 8, 16 and 32 s.
+- **Panels, at once on every change**: one `evaluateScript` call in plasmashell (TABLET 3.6): the
+  top bar `round(44 x text scale)` (the layout script's `textScale()`), the dock 80 (96 with the
+  headroom frame until INT-1) and `DockHiding` (not the stock appmenu's `compactView`: see
+  Verification). The laptop height and hiding are saved once per panel in its `[PlasmaFusion]`
+  config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave (for the dock the
+  plate of its size, the dock's `dockSize`: 60, 72 or 78 px, 72 when not set, since 2026-10-16; a
+  saved 88 or 96 from the headroom frame counts as that plate). The settings page's Dock size sets
+  `laptopHeight` while the posture holds (docs/parts/kcm-cpp.md, "Dock size and window grouping");
+  `tests/tablet-panels.test.js` covers both. A dock on the left or right (the settings page's Dock
+  position, board DockPosition.dc.html) is at the bottom in tablet posture, as on the Tablet board:
+  its side is saved as `laptopLocation` with the height and given back on leave (2026-10-16; the
+  test covers a dock on the left, one at the bottom and one without a saved side). A top bar that
+  hides (the settings page's "Hide the top bar automatically", board Island.dc.html) always shows in
+  tablet posture: its `laptopHiding`, saved with the height, is given back on leave (2026-10-17; the
+  test covers a bar that hides, one that shows and one set to hide while the posture held). In
+  laptop posture a top bar takes the settings page's choice, plasmafusionrc `[TopBar] AutoHide`
+  (true: `autohide`, false: `none`; not set: left as it is), so a bar whose screen was not connected
+  when the choice changed gets it when its window appears (the test: a returned screen's bar, tablet
+  posture, off, not set). A top bar is a panel with the app name, the clock pill or quick settings,
+  the settings page's test (a bar with the app name alone too, since 2026-10-17). Panels the user
+  added are never touched. When plasmashell's panel windows appear (a restart, a late start), the
+  call is made again after 500 ms (one call for several panels). A Fusion panel whose screen is gone
+  (the top bar of a monitor that was unplugged) is skipped, see "Panels without a screen" below.
+  When plasmashell is not on the bus, or answers "not ready" (no panels, desktops or screens yet),
+  the call is made again after 1, 2, 4, 8, 16 and 32 s.
 - **Window policy, after 300 ms of stable posture** (flip bouncing), only with `WindowMode=fullscreen`
   and a built-in screen as the only screen: placement "Maximizing" and borderless maximized windows;
   every eligible window (normal, maximizable, not full screen, minimized, skip-taskbar, transient or

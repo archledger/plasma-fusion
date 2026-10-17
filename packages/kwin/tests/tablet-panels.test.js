@@ -217,6 +217,11 @@ for (const plasma of ["6.8", "6.7"]) {
     assert.strictEqual(off.run(false), "top 34", "off: shown");
     const unset = shell("6.8", 1, [{ screen: 0, widgets: TOP, hiding: "autohide" }]);
     assert.strictEqual(unset.run(false), "top 34 autohide", "not set: left as it is");
+    // A bar with the app name alone (the settings page hides it too): shown in tablet posture, the
+    // choice given back after.
+    const name = shell("6.8", 1, [{ screen: 0, widgets: ["org.plasmafusion.appname"], hiding: "autohide" }], 1, { "TopBar/AutoHide": "true" });
+    assert.strictEqual(name.run(true), "top 44", "an app-name bar in tablet posture: shown");
+    assert.strictEqual(name.run(false), "top 34 autohide", "  and hidden again after");
 }
 
 // Before the shell has loaded its layout: "not ready", and nothing is changed.

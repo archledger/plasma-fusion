@@ -95,7 +95,8 @@ PlasmoidItem {
         "recording": statusItems.recording !== null,
         "keepAwake": keepAwake.inUse,
         "music": media !== null && media.playing,
-        "musicOpened": media !== null && island.opened === "music",
+        "musicOpened": island.opened === "music",
+        "musicPlayer": media !== null && !!media.player,
         "fullScreen": fullScreenSource.item ? fullScreenSource.item.active : false
     })
     readonly property var islandRows: Chips.islandRows(microphoneApps.map(a => ({ name: a.name, muted: a.muted })),
