@@ -753,6 +753,11 @@ def main():
         n = parts()
         check(n["glyph"] == glyph_paths["speakerOff"] and n["text"] == "Audio Muted" and n["fill"] < 0,
               "  muted: the crossed-out speaker and Audio Muted, no bar (%s)" % n)
+        call(h, "setNotice", "notifications-disabled", -1, 0, "Notifications Off", [])
+        wait(500)
+        n = parts()
+        check(n["glyph"] == glyph_paths.get("bellOff", "?") and n["text"] == "Notifications Off" and n["name"] == "Notifications Off",
+              "  Do Not Disturb: the island's crossed-out bell, not Plasma's icon, and Plasma's words (%s)" % n)
         bx, by, bw, bh = island()["body"]
         QTest.mouseClick(window, Qt.LeftButton, Qt.NoModifier, QPoint(int(bx - island()["x"] + bw / 2), int(by - island()["y"] + bh / 2)))
         wait(600)

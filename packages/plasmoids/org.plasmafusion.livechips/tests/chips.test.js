@@ -14,7 +14,7 @@ const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line)
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
 const { capsule, argument, portalKind, remoteLogins, cameraApps, timeLeft, tint, GLYPHS, PRIVACY_ORDER,
         newReads, readStarted, readForgotten, readCurrent, layoutKey, island, islandRows, iconGuess, ISLAND_COLOURS, fullScreenOf,
-        notice, noticeGlyph, NOTICE_COLOURS } = globalThis;
+        notice, noticeGlyph, NOTICE_COLOURS, NOTICE_GLYPHS } = globalThis;
 
 let checks = 0;
 function check(fn) {
@@ -190,8 +190,41 @@ check(() => assert.deepStrictEqual(["microphone-sensitivity-low", "microphone-se
     ["microphone", "microphone", "microphoneOff"], "the microphone's"));
 check(() => assert.deepStrictEqual(["video-display-brightness", "input-keyboard-brightness", "elisa", "", undefined].map(noticeGlyph),
     ["sun", "keyboardLight", "", "", ""], "the brightness and keyboard light; a player's own icon, and none, have no glyph"));
-check(() => ["speaker", "speakerOff", "microphone", "microphoneOff", "sun", "keyboardLight"].forEach(g =>
-    assert.ok(typeof GLYPHS[g] === "string" && GLYPHS[g].length > 0, "the glyph " + g + " is drawn")));
+// The other notices (the board's "other notices"; KWin's Night Light, Do Not Disturb and the time
+// zone send theirs through showText): each its glyph, crossed out when off.
+check(() => assert.deepStrictEqual(["keyboard-layout", "input-touchpad-on", "input-touchpad-off", "battery-profile-powersave",
+    "speedometer", "battery-profile-performance"].map(noticeGlyph), ["keyboard", "touchpad", "touchpadOff", "gauge", "gauge", "gauge"],
+    "the keyboard layout, the touchpad (crossed out when off) and the gauge for the three power modes"));
+check(() => assert.deepStrictEqual(["notifications", "notifications-disabled", "redshift-status-on", "redshift-status-day",
+    "redshift-status-off"].map(noticeGlyph), ["bell", "bellOff", "moon", "moon", "moonOff"],
+    "Do Not Disturb's bell and Night Light's moon (resumed by day too), crossed out when off"));
+check(() => assert.deepStrictEqual(["input-keyboard-virtual-on", "input-keyboard-virtual-off", "system-suspend-inhibited",
+    "system-suspend-uninhibited", "clock"].map(noticeGlyph), ["onScreenKeyboard", "onScreenKeyboardOff", "keepawake", "keepawakeOff", "clock"],
+    "the on-screen keyboard, sleep blocked with Keep awake's cup, and the time zone's clock"));
+// plasma-pa names the output device's notice with -symbolic, and -rtl right to left: the same glyph.
+check(() => assert.deepStrictEqual(["audio-volume-muted-symbolic", "audio-volume-muted-symbolic-rtl", "audio-volume-muted-rtl",
+    "audio-volume-high-symbolic-rtl", "microphone-sensitivity-muted-symbolic"].map(noticeGlyph),
+    ["speakerOff", "speakerOff", "speakerOff", "speaker", "microphoneOff"], "a muted device is crossed out in each form of the name"));
+check(() => assert.deepStrictEqual(["edit-clear-history", "irc-voice", "audio-headphones-symbolic", "network-wireless-on", "toString",
+    "constructor", "clock-rtl-x"].map(noticeGlyph), ["", "", "", "", "", "", ""],
+    "a notice the board has no glyph for, and a name an object has of its own, show Plasma's icon"));
+// Every glyph a notice can take is drawn as the Island board draws it: the board shows one state of
+// each ("crossed out when off"), so the other is that glyph with its crossing line or without it;
+// the keyboard light the board names with the brightness ("the keyboard light the same way").
+check(() => {
+    const board = fs.readFileSync(path.join(__dirname, "..", "..", "..", "..", "design", "boards", "Island.dc.html"), "utf8");
+    const drawn = d => board.includes('d="' + d + '"');
+    const crossing = rest => /^M(\d+) \1l(\d+) \2$/.test(rest);
+    const paired = d => Object.values(GLYPHS).some(other => drawn(other)
+        && ((d.startsWith(other) && crossing(d.slice(other.length))) || (other.startsWith(d) && crossing(other.slice(d.length)))));
+    const names = new Set(Object.values(NOTICE_GLYPHS).concat(["speaker", "microphone"]));
+    assert.ok(names.size >= 17, "the notices' glyphs: " + [...names]);
+    names.forEach(g => {
+        assert.ok(typeof GLYPHS[g] === "string" && /^M/.test(GLYPHS[g]), "the glyph " + g + " is drawn");
+        assert.ok(g === "keyboardLight" || drawn(GLYPHS[g]) || paired(GLYPHS[g]), "the glyph " + g + " is the board's");
+    });
+    assert.ok(!paired("M4 5h16v14H4z") && crossing("M3 3l18 18") && !crossing("M3 3l18 17"), "only a crossing line pairs them");
+});
 // A level: the bar's fill and the number; to the maximum Plasma gives (150 % for the volume
 // beyond 100), the tick at 100 %; white to 100, warning to 125, danger past it.
 check(() => assert.deepStrictEqual(notice("audio-volume-high", 60, 100, ""),

@@ -217,19 +217,25 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   (`[General] noticeRequest`, docs/parts/kwin-tablet.md): the one that just came (Plasma sends it
   before it shows its window), and the ones that follow while it shows, for Plasma's own 1.8 s
   (`OsdItem.qml` timeout) after the last. `Chips.notice()` makes the view: the board's glyph for
-  Plasma's icon name (the speaker, crossed out for `audio-volume-muted`; the microphone; the sun;
-  the keyboard light), else Plasma's icon itself (a player's); a level fills the 96 px bar to
-  Plasma's maximum (150 % for the volume past 100) with a tick at 100 % past it, in white to 100,
+  Plasma's icon name (`Chips.NOTICE_GLYPHS`; the speaker, crossed out for `audio-volume-muted`; the
+  microphone; the sun; the keyboard light; and the board's "other notices", each its glyph crossed
+  out when off: the keyboard for the layout, the touchpad, the gauge for the three power modes, Do
+  Not Disturb's bell, Night Light's moon (KWin 6.7.5 sends `redshift-status-day` when it resumes by
+  day), the on-screen keyboard, Keep awake's cup for sleep and screen locking blocked, the clock for
+  the time zone; plasma-pa's `-symbolic` and `-rtl` forms of a name, which its notice for a new
+  output device uses (`audioicon.cpp`), are the same icon), else Plasma's icon itself (a player's;
+  an output device's kind, push to talk, notification history cleared); a level fills the 96 px bar
+  to Plasma's maximum (150 % for the volume past 100) with a tick at 100 % past it, in white to 100,
   the warning colour to 125 and danger past it (osd.cpp's steps), with Plasma's label for it before
-  the bar in the island's second colour (one screen of several, whose name Plasma gives; a
-  player); a text is Plasma's, its lines in one with " · ". A notice takes the island while it
-  shows (`Chips.island()`), also over a full-screen window, then it shows what it did; an island
-  opened by a click stays as it is (the notice is not shown); a click on a notice opens nothing,
-  and a screen reader reads it as what it says ("Volume 60%", static text, not the island's
-  button); no key line. With the bar shown, on a
-  screen without an island, with the tablet script off, and with Plasma's pop-up turned off
-  (plasmarc `[OSD] Enabled`: it sends nothing then), Plasma's pop-up as before. Plasma 6.7.5 never
-  shows a Wi-Fi, Bluetooth or mobile-internet notice (nothing calls those), so the island has none.
+  the bar in the island's second colour (one screen of several, whose name Plasma gives; a player);
+  a text is Plasma's, its lines in one with " · ". A notice takes the island while it shows
+  (`Chips.island()`), also over a full-screen window, then it shows what it did; an island opened by
+  a click stays as it is (the notice is not shown); a click on a notice opens nothing, and a screen
+  reader reads it as what it says ("Volume 60%", static text, not the island's button); no key line.
+  With the bar shown, on a screen without an island, with the tablet script off, and with Plasma's
+  pop-up turned off (plasmarc `[OSD] Enabled`: it sends nothing then), Plasma's pop-up as before.
+  Plasma 6.7.5 never shows a Wi-Fi, Bluetooth or mobile-internet notice (nothing calls those), so
+  the island has none.
 - **Compact** (`IslandPart.qml`): 32 px high, radius 16, at least 132 px wide, 6 px margins; the
   privacy kinds: the first app's icon (its name as an icon name, `Chips.iconGuess()`; the kind's
   glyph when the theme has none: Kirigami 6.31's `Icon.valid` only says a source is set, so its
@@ -273,7 +279,13 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   things, without a privacy kind, music alone, full screen with and without one), its colours, the
   opened rows (one row for Firefox's screen, camera and microphone with Stop sharing, remote control
   first with End, a muted app with Unmute, a login without action, a camera known by its name only)
-  and the icon names; Plasma's notices: the glyph for each of Plasma's icon names, the bar's fill
+  and the icon names; Plasma's notices: the glyph for each of Plasma's icon names (the volume, the
+  microphone, the brightness, the keyboard layout, the touchpad, the power modes, Do Not Disturb,
+  Night Light by night and by day, the on-screen keyboard, sleep blocked, the time zone), crossed
+  out in each of plasma-pa's forms of a muted name, Plasma's own icon for a name without a glyph
+  (and for one an object has of its own, `toString`), every notice's glyph as the Island board
+  draws it (one state of each, the other with its crossing line or without; the keyboard light the
+  board names with the brightness but does not draw), the bar's fill
   and the tick for 60 of 100 and 115 of 150, white, warning and danger at 100, 101, 125, 126 and
   150, the bar never more than full nor less than empty, a level keeping Plasma's label, Audio Muted
   and several screens' brightness in one line, and the notice taking the island during a call, over
@@ -290,7 +302,8 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   Plasma's notices: a volume level compact and centred with the speaker, the bar 60 % full and 60 in
   white, no key line, read as "Volume 60%" and not as a button, 115 of 150 with the tick and the
   warning colour, 130 in danger, one screen of several with its name before the level, Audio Muted
-  without a bar, a click opening nothing, the notice during a call and the call back after it (a
+  without a bar, Do Not Disturb with the island's crossed-out bell and not Plasma's icon, a click
+  opening nothing, the notice during a call and the call back after it (a
   button again); and `sources/Osd.qml` on the private bus, the test being plasmashell sending its
   Osd's signals: a notice before KWin asks is not shown, after the request it is, the next one takes
   its place, a text arrives as its words, the same one again keeps it 1.8 s from then and it goes
@@ -298,25 +311,29 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   each (8 px from the top, no room for the bubble, shown with the bar, 300 px opened, no Esc, Mute
   doing nothing, no binding again after the focus, the peek kept, the icon chosen by `valid`, the
   glyph always; a notice shown unasked, kept for good, or an old one shown; the notice not taking
-  the island, one tone for all) fail it or `chips.test.js`.
+  the island, one tone for all; step one's glyphs alone, a name's `-symbolic` or `-rtl` kept, a
+  lookup that takes an object's own names, Night Light by day without its moon, sleep unblocked
+  not crossed out, a glyph not the board's) fail it or `chips.test.js`.
 - **Session** (`packages/kcm-cpp/tests/scenario-island.sh`; 2026-10-17, a private session on the
   Fedora 44 test laptop, Plasma 6.7.5, 1440 x 900, the stage, module and kcmctl of this change;
-  stand-in status items): **29 checks pass**. The switch on: the bar's panel hides, KWin hides its
+  stand-in status items): **31 checks pass**. The switch on: the bar's panel hides, KWin hides its
   window and the tablet script sets the chips' `barHidden`; the harness's own SSH login is in the
   island; screen sharing: compact, 4 px from the top and centred (654,4 132x32); opened in place and
   centred (520,4 400x148, the window KWin configured the same); closed; a recording too: the bubble
   6 px beside it, the island still centred; Plasma's notices through plasmashell's real osdService
   (`volumeChanged`, `showText`, as the volume keys reach it): the volume's level in the island,
-  centred (629,4 182x32), Plasma's pop-up window there with opacity 0, Audio Muted, and 1.8 s after
-  it the call and the recording again (a red run with the tablet script not hiding the window
+  centred (629,4 182x32), Plasma's pop-up window there with opacity 0, Audio Muted, Do Not Disturb
+  (`showText` with its icon) with the crossed-out bell (639,4 163x32) and the touchpad turned off
+  (`touchpadEnabledChanged`) with the crossed-out touchpad, and 1.8 s after them the call and the
+  recording again (a red run with the tablet script not hiding the window
   fails the opacity check); the pointer pushed against the top: the bar shows and the island goes,
   and Plasma's pop-up shows as it is (opacity 1); the pointer down through the bar and away: the bar
   hides and the island is back; the tablet KWin script turned off: no island left (a red run
   without its last call keeps the island), Plasma's pop-up as it is, on again: back; tablet
   posture: the bar shows, no island; laptop again: hidden, the island back; off: the bar shows, no
   island. The screenshots match the board (compact with the app and its dots, the opened rows, the
-  bubble, the volume's level and Audio Muted, taken with the notice sent again every 0.4 s, as a
-  key held down: a screenshot takes longer than 1.8 s).
+  bubble, the volume's level, Audio Muted and Notifications Off, taken with the notice sent again
+  every 0.4 s, as a key held down: a screenshot takes longer than 1.8 s).
 - **Found in the session** (each fixed): with `Qt.WindowStaysOnTopHint` libplasma 6.7.5 makes a
   Dialog a Dock (`DialogPrivate::applyType`: a panel whose windows go below, under full-screen
   windows), so the island has no such flag. Taking the focus at once when it opened kept the

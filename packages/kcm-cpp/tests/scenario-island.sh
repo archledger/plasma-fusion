@@ -14,8 +14,8 @@
 #   4. opened (the widget's islandRequest, as a click), 400 px wide and still centred; closed;
 #   5. a recording too: the bubble 6 px beside the island, the island still centred; Plasma's
 #      notices (its osdService, as the volume keys reach it): the volume's level and Audio Muted in
-#      the island, Plasma's own pop-up there and transparent, the island back to what it showed
-#      after them;
+#      the island, Plasma's own pop-up there and transparent, Do Not Disturb and the touchpad with
+#      the island's own glyphs, the island back to what it showed after them;
 #   6. the pointer pushed against the top of the screen (KWin pushes it back once, then shows the
 #      bar after its activation delay): the bar shows, the island goes, Plasma's pop-up shows as
 #      it is; the pointer away: the bar hides again, the island is back;
@@ -189,6 +189,15 @@ osd showText ss audio-volume-muted "Audio Muted"
 check "  Audio Muted: the crossed-out speaker and its text" \
   "$(wait_island 'notice \(speakerOff "Audio Muted"\)' 5 && echo yes || island)" yes
 held_shot i-notice-muted showText ss audio-volume-muted "Audio Muted"
+# The other notices with the island's own glyphs (the board's "other notices"): Do Not Disturb as
+# the notifications widget sends it (showText with its icon), the touchpad as its kded does.
+osd showText ss notifications-disabled "Notifications Off"
+check "  Do Not Disturb: the crossed-out bell and Plasma's words" \
+  "$(wait_island 'notice \(bellOff "Notifications Off"\)' 5 && echo yes || island)" yes
+osd touchpadEnabledChanged b false
+check "  the touchpad turned off: the crossed-out touchpad" \
+  "$(wait_island 'notice \(touchpadOff "Touchpad Off"\)' 5 && echo yes || island)" yes
+held_shot i-notice-glyphs showText ss notifications-disabled "Notifications Off"
 check "  1.8 s after it: the island is back to the call and the recording" \
   "$(wait_island '^compact privacy,recording' 6 && echo back || island)" back
 
