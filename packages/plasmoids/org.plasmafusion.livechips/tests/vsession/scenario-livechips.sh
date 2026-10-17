@@ -156,7 +156,12 @@ sleep 1
 shot 40-capsule
 read -r cx cy <<<"$(chip capsule)"
 info "capsule at $cx $cy"
-# Hover: the panel as the capsule's tooltip (the board's "click or hover").
+# Hover: the panel as the capsule's tooltip (the board's "click or hover"). Step 3's click left
+# the pointer on the bar, where the capsule may have come up under it and opened the tooltip
+# before the mark (Qt 6.11 QQuickDeliveryAgent hovers at the last pointer position each frame
+# items change): the pointer leaves the bar first, so the hover counted is this one.
+pfinput "move $cx 450"
+sleep 1
 mark
 pfinput "move $cx $cy"
 if wait_log 'hover panel ' 6; then pass "4: hovering the capsule shows the panel as its tooltip ($(last 'hover panel' | cut -c1-120))"; else fail "4: no panel on hover"; fi
