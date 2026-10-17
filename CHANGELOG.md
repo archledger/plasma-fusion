@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Dock size and window grouping:** the Plasma Fusion settings page has Dock size (Small, Medium
+  as before, Large) and "Group an app's windows": off, each window has its own icon, side by
+  side where the app is pinned. The magnified icon size is now a step (+8 or +14 px) that follows
+  the dock's size.
 - **Touchpad gestures you set:** the Plasma Fusion settings page has a Touchpad gestures group:
   three fingers up, down, left and right and four fingers pinched in and spread out can each
   open Overview, show the desktop, open the grid of desktops, All windows, the launcher, quick

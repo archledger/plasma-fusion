@@ -142,6 +142,7 @@ check "  as a Plasma Fusion settings file of version 1" test "$(json "$work/expo
 check "  with the applied settings" test "$(json "$work/export.json" '[f["settings"][k] for k in ("glass", "hotCorner", "reduceMotion", "iconsMode")]')" = "[1, False, True, 0]"
 check "  and not the change still pending (magnifiedSize)" test "$(json "$work/export.json" 'f["settings"]["magnifiedSize"]')" = 62
 check "  and the accent and decoration" test "$(json "$work/export.json" '"accentMode" in f["settings"] and "fusionDecoration" in f["settings"]')" = True
+check "  and the dock's size and grouping" test "$(json "$work/export.json" '[f["settings"][k] for k in ("dockSize", "groupWindows")]')" = "[1, True]"
 check "  and the touchpad gestures, desktops in one row" test "$(json "$work/export.json" '[f["settings"][k] for k in ("gestureSwipeUp", "gesturePinchIn", "desktopsInOneRow")]')" = "[1, 5, False]"
 check "  the decoration in use, not Plasma Fusion's: its keys" \
   test "$(json "$work/export.json" 'f["settings"]["fusionDecoration"], f["settings"]["decoration"]')" = \

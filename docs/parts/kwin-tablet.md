@@ -46,7 +46,10 @@ needed.
   `round(44 x text scale)` (the layout script's `textScale()`), the dock 80 (96 with the headroom frame until INT-1) and `DockHiding` (not the stock
   appmenu's `compactView`: see Verification). The laptop height and hiding are saved once per panel in
   its `[PlasmaFusion]` config (`laptopHeight`, `laptopHiding`, `tabletApplied`) and given back on leave
-  (72 for the dock; a saved 88 or 96 from the headroom frame counts as 72).
+  (for the dock the plate of its size, the dock's `dockSize`: 60, 72 or 78 px, 72 when not set,
+  since 2026-10-16; a saved 88 or 96 from the headroom frame counts as that plate). The settings
+  page's Dock size sets `laptopHeight` while the posture holds (docs/parts/kcm-cpp.md, "Dock size
+  and window grouping"); `tests/tablet-panels.test.js` covers both.
   Panels the user added are never touched. When plasmashell's panel windows appear (a restart, a late
   start), the call is made again after 500 ms (one call for several panels). A Fusion panel whose
   screen is gone (the top bar of a monitor that was unplugged) is skipped, see "Panels without a

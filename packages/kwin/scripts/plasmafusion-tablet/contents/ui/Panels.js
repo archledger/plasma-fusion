@@ -15,7 +15,9 @@
 // scale, so their edges are crisp: at 4/3 the top bar 44 -> 45 (60 px), the dock 80 -> 81 (108 px)
 // and the dock's bottom strip 20 -> 21 (28 px; its config tabletStripHeight, as plasmashell's QML
 // only sees Wayland's rounded integer scale); at 1.25, 1.5 or 2 the sizes stay. The laptop sizes
-// are the boards' and stay as they are.
+// are the boards' and stay as they are. A dock's laptop height is the plate of its size (the
+// dock's dockSize: Small 60, Medium 72, Large 78 px, board DockSize.dc.html), which the settings
+// page sets with the size.
 //
 // Panels on a screen that is gone are skipped. Their height, hiding and the other sizes of a
 // scripting Panel come from the panel's window, or without one from its config for its screen;
@@ -42,6 +44,11 @@ function panelScript(isTablet, hiding, scale) {
         + "    return Math.max(0.85, Math.min(1.6, s));\n"
         + "}\n"
         + "var HEIGHT_TOP = snap(Math.round(44 * textScale())), done = [], skipped = 0;\n"
+        + "function dockPlate(p) {\n"
+        + "    var size = 1;\n"
+        + "    p.widgets(\"org.plasmafusion.dock\").forEach(function (w) { w.currentConfigGroup = [\"General\"]; size = Number(w.readConfig(\"dockSize\", 1)); });\n"
+        + "    return [60, 72, 78][size] || 72;\n"
+        + "}\n"
         + "var all = panels(), ready = all.length > 0 && desktops().length > 0 && screenCount > 0;\n"
         + "if (ready) all.forEach(function (p) {\n"
         + "    var ws = p.widgets(), types = [];\n"
@@ -52,7 +59,7 @@ function panelScript(isTablet, hiding, scale) {
         + "    if (!(p.screen >= 0 && p.screen < screenCount)) { ++skipped; return; }\n"
         + "    p.currentConfigGroup = [\"PlasmaFusion\"];\n"
         + "    var applied = p.readConfig(\"tabletApplied\", false) === true || p.readConfig(\"tabletApplied\", \"\") === \"true\";\n"
-        + "    var h = isTop ? HEIGHT_TOP : HEIGHT_DOCK, laptop = isTop ? Math.round(34 * textScale()) : 72;\n"
+        + "    var h = isTop ? HEIGHT_TOP : HEIGHT_DOCK, laptop = isTop ? Math.round(34 * textScale()) : dockPlate(p);\n"
         + "    if (TABLET) {\n"
         + "        if (!applied) {\n"
         + "            p.writeConfig(\"laptopHeight\", p.height == h || (isDock && (p.height == 88 || p.height == 96)) ? laptop : p.height);\n"

@@ -151,6 +151,23 @@ for (const plasma of ["6.8", "6.7"]) {
     assert.strictEqual(s.run(false, "dodgewindows", 4 / 3), "top 34, dock 72 none");
 }
 
+// The dock's size (dockSize, board DockSize.dc.html): its laptop height is that size's plate. A
+// Small dock keeps 60 through the posture; a saved height of the old headroom frame (88) and a
+// missing one come back as the size's plate (Large 78), not as the Medium dock's 72.
+{
+    const small = shell("6.8", 1, [{ screen: 0, widgets: TOP }, { screen: 0, widgets: DOCK, height: 60 }]);
+    small.panels[1].widgetConfig.dockSize = 0;
+    assert.strictEqual(small.run(true), "top 44, dock 80 dodgewindows");
+    assert.strictEqual(small.panels[1].config["PlasmaFusion/laptopHeight"], 60);
+    assert.strictEqual(small.run(false), "top 34, dock 60 none");
+    const large = shell("6.8", 1, [{ screen: 0, widgets: DOCK, height: 80, config: { "PlasmaFusion/tabletApplied": true, "PlasmaFusion/laptopHeight": 88 } }]);
+    large.panels[0].widgetConfig.dockSize = 2;
+    assert.strictEqual(large.run(false), "dock 78 dodgewindows", "the headroom frame's 88 becomes Large's plate");
+    const unsaved = shell("6.8", 1, [{ screen: 0, widgets: DOCK, height: 80, config: { "PlasmaFusion/tabletApplied": true } }]);
+    unsaved.panels[0].widgetConfig.dockSize = 2;
+    assert.strictEqual(unsaved.run(false), "dock 78 dodgewindows", "no saved height: Large's plate");
+}
+
 // Before the shell has loaded its layout: "not ready", and nothing is changed.
 {
     assert.strictEqual(shell("6.8", 1, []).run(true), "not ready");

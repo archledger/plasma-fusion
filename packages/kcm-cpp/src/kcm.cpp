@@ -122,11 +122,12 @@ bool PlasmaFusionKcm::State::operator==(const State &other) const
         && fileContentIndexing == other.fileContentIndexing && iconsMode == other.iconsMode && lockNotifications == other.lockNotifications
         && lockNotificationSummaries == other.lockNotificationSummaries && tabletMode == other.tabletMode && tabletApps == other.tabletApps
         && tabletDock == other.tabletDock && edgeLeft == other.edgeLeft && edgeRight == other.edgeRight && magnifiedSize == other.magnifiedSize
-        && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters && desktopIcons == other.desktopIcons && iconSize == other.iconSize
-        && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator && launcherRecentFiles == other.launcherRecentFiles
-        && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces && gestureSwipeUp == other.gestureSwipeUp
-        && gestureSwipeDown == other.gestureSwipeDown && gestureSwipeLeft == other.gestureSwipeLeft && gestureSwipeRight == other.gestureSwipeRight
-        && gesturePinchIn == other.gesturePinchIn && gesturePinchOut == other.gesturePinchOut && desktopsInOneRow == other.desktopsInOneRow;
+        && dockSize == other.dockSize && groupWindows == other.groupWindows && solidTopBar == other.solidTopBar && systemMeters == other.systemMeters
+        && desktopIcons == other.desktopIcons && iconSize == other.iconSize && keyboardPolicy == other.keyboardPolicy && homeIndicator == other.homeIndicator
+        && launcherRecentFiles == other.launcherRecentFiles && launcherRecentApps == other.launcherRecentApps && launcherPlaces == other.launcherPlaces
+        && gestureSwipeUp == other.gestureSwipeUp && gestureSwipeDown == other.gestureSwipeDown && gestureSwipeLeft == other.gestureSwipeLeft
+        && gestureSwipeRight == other.gestureSwipeRight && gesturePinchIn == other.gesturePinchIn && gesturePinchOut == other.gesturePinchOut
+        && desktopsInOneRow == other.desktopsInOneRow;
 }
 
 PlasmaFusionKcm::PlasmaFusionKcm(QObject *parent, const KPluginMetaData &metaData)
@@ -496,6 +497,28 @@ void PlasmaFusionKcm::setMagnifiedSize(int value)
     if (value >= 48 && value <= 72) {
         setField(&State::magnifiedSize, value);
     }
+}
+
+int PlasmaFusionKcm::dockSize() const
+{
+    return m_current.dockSize;
+}
+
+void PlasmaFusionKcm::setDockSize(int value)
+{
+    if (value >= DockSmall && value <= DockLarge) {
+        setField(&State::dockSize, value);
+    }
+}
+
+bool PlasmaFusionKcm::groupWindows() const
+{
+    return m_current.groupWindows;
+}
+
+void PlasmaFusionKcm::setGroupWindows(bool value)
+{
+    setField(&State::groupWindows, value);
 }
 
 bool PlasmaFusionKcm::solidTopBar() const
@@ -1345,6 +1368,8 @@ PlasmaFusionKcm::State PlasmaFusionKcm::defaultState() const
     if (!m_dockAvailable) {
         defaults.magnify = m_current.magnify;
         defaults.magnifiedSize = m_current.magnifiedSize;
+        defaults.dockSize = m_current.dockSize;
+        defaults.groupWindows = m_current.groupWindows;
         defaults.homeIndicator = m_current.homeIndicator;
     }
     if (!m_topBarAvailable) {
@@ -1488,6 +1513,23 @@ void PlasmaFusionKcm::save()
             applyMagnifiedSize(after.magnifiedSize);
         } else {
             m_current.magnifiedSize = before.magnifiedSize;
+        }
+    }
+    if (after.dockSize != before.dockSize) {
+        if (m_dockAvailable) {
+            applyDockSize(after.dockSize);
+        } else {
+            m_current.dockSize = before.dockSize;
+        }
+    }
+    if (after.groupWindows != before.groupWindows) {
+        if (m_dockAvailable) {
+            applyWidgetKey(u"org.plasmafusion.dock"_s,
+                           u"groupWindows"_s,
+                           after.groupWindows ? u"true"_s : u"false"_s,
+                           i18nc("@info", "The dock setting could not be changed."));
+        } else {
+            m_current.groupWindows = before.groupWindows;
         }
     }
     if (after.homeIndicator != before.homeIndicator) {

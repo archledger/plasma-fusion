@@ -38,7 +38,8 @@ class QDBusServiceWatcher;
                       decoration (org.plasmafusion.decoration); without it the Aurorae themes
                       PlasmaFusion{Dark,Light}[-Left]; kwinrc [org.kde.kdecoration2].
       Snap layouts    plasmafusionrc [Decoration] SnapLayoutsOnHover (false: hold, true: hover).
-      Dock            the org.plasmafusion.dock widgets' [General] magnify and magnifiedSize keys
+      Dock            the org.plasmafusion.dock widgets' [General] magnify, magnifiedSize,
+                      dockSize and groupWindows keys, and for the size the dock panels' height
                       (desktop scripting).
       Launcher        the org.plasmafusion.launcher widgets' [General] showRecommended (recent
                       files on the home view), showRecentApps and showPlaces (the Recent and
@@ -127,6 +128,8 @@ class PlasmaFusionKcm : public KQuickManagedConfigModule
     Q_PROPERTY(bool highContrast READ highContrast WRITE setHighContrast NOTIFY stateChanged)
     Q_PROPERTY(bool reduceMotion READ reduceMotion WRITE setReduceMotion NOTIFY stateChanged)
     Q_PROPERTY(int magnifiedSize READ magnifiedSize WRITE setMagnifiedSize NOTIFY stateChanged)
+    Q_PROPERTY(int dockSize READ dockSize WRITE setDockSize NOTIFY stateChanged)
+    Q_PROPERTY(bool groupWindows READ groupWindows WRITE setGroupWindows NOTIFY stateChanged)
     Q_PROPERTY(bool solidTopBar READ solidTopBar WRITE setSolidTopBar NOTIFY stateChanged)
     Q_PROPERTY(bool systemMeters READ systemMeters WRITE setSystemMeters NOTIFY stateChanged)
     Q_PROPERTY(bool everyScreen READ everyScreen WRITE setEveryScreen NOTIFY stateChanged)
@@ -203,6 +206,13 @@ public:
     Q_ENUM(TabletDock)
     enum KeyboardPolicy { KeyboardTablet = 0, KeyboardTouch = 1, KeyboardNever = 2 };
     Q_ENUM(KeyboardPolicy)
+    // The dock's dockSize key (its contents/code/metrics.js, board DockSize.dc.html).
+    enum DockSize {
+        DockSmall = 0,
+        DockMedium = 1,
+        DockLarge = 2
+    };
+    Q_ENUM(DockSize)
     enum IconsMode {
         IconsDesigned = 0,
         IconsFamiliar = 1
@@ -267,6 +277,10 @@ public:
     void setReduceMotion(bool value);
     int magnifiedSize() const;
     void setMagnifiedSize(int value);
+    int dockSize() const;
+    void setDockSize(int value);
+    bool groupWindows() const;
+    void setGroupWindows(bool value);
     bool solidTopBar() const;
     void setSolidTopBar(bool value);
     bool systemMeters() const;
@@ -419,6 +433,8 @@ private:
         bool edgeRight = false;
         // Plasma shell (widgets and panels)
         int magnifiedSize = 62;
+        int dockSize = DockMedium;
+        bool groupWindows = true;
         bool solidTopBar = true;
         // Off by default: the meters are in no layout.
         bool systemMeters = false;
@@ -488,6 +504,9 @@ private:
     QSize desktopGrid() const;
     bool applyMagnify(bool on);
     bool applyMagnifiedSize(int size);
+    // The docks' dockSize and their panels' height for it (the size's plate, 16 px more with the
+    // headroom frame; in tablet posture the height the tablet script gives back).
+    bool applyDockSize(int size);
     bool applyGlobalMenu(bool on);
     bool applySystemMeters(bool on);
     // Moves the meters widgets `ids` just added before quick settings, asking again (from the

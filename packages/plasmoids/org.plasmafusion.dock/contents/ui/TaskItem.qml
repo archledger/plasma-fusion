@@ -30,6 +30,8 @@ Item {
     property int bottomPad: 14
     // Tablet posture: bigger dot and pill, 4 px under the icon (TABLET 4.4).
     property bool tablet: false
+    // The tablet's running indicators (tablet posture and the Large dock).
+    property bool wideIndicators: tablet
     // Magnification of this frame, set by the dock.
     property real grow: 0
     property real shift: 0
@@ -428,14 +430,14 @@ Item {
     }
 
     // Running indicator under the icon: 5 x 4 dot or 16 x 4 pill 5 px below it (6 x 4 / 18 x 4,
-    // 4 px, in tablet posture).
+    // 4 px, in tablet posture and on the Large dock).
     Rectangle {
         id: indicator
         anchors.horizontalCenter: parent.horizontalCenter
-        y: task.height - task.bottomPad + (task.tablet ? 4 : 5)
+        y: task.height - task.bottomPad + (task.wideIndicators ? 4 : 5)
         height: 4
         radius: 2
-        width: task.isActive ? (task.tablet ? 18 : 16) : (task.tablet ? 6 : 5)
+        width: task.isActive ? (task.wideIndicators ? 18 : 16) : (task.wideIndicators ? 6 : 5)
         color: task.isActive ? task.pal.activePill : (task.demandsAttention ? task.pal.attention : task.pal.runningDot)
         visible: task.isRunning || task.isStartup
         opacity: task.isStartup ? startupPulse.value : 1
