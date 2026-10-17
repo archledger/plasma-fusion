@@ -258,6 +258,14 @@
       "w": 1440,
       "x": 1520,
       "y": 7000
+    },
+    "CopyText.dc.html": {
+      "h": 2545,
+      "page": "dark",
+      "title": "31 · Copy text from the screen — dark and light",
+      "w": 1440,
+      "x": 1520,
+      "y": 12630
     }
   },
   "createdOnFiles": {
@@ -357,7 +365,8 @@
     "Boot.dc.html",
     "Splash.dc.html",
     "Lock.dc.html",
-    "Login.dc.html"
+    "Login.dc.html",
+    "CopyText.dc.html"
   ],
   "pages": [
     {
