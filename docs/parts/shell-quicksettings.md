@@ -30,7 +30,8 @@ style's `dialogs/background`, so radius, 88 % fill, edge, shadow and blur come f
   rectangular-region shortcut), copy text from the screen (after the pop-up closes: the selected
   area's text to the clipboard with `plasma-fusion-copytext`, found in the setup's helper
   directories in their order, else `spectacle --region`, where Extract Text copies it; the same as
-  Meta+Shift+T, docs/parts/device.md), System Settings, lock, leave (logout / restart / shut down
+  Meta+Shift+T and the clipboard sheet's copy-text button, docs/parts/device.md), System Settings,
+  lock, leave (logout / restart / shut down
   prompt); to their left the pencil that edits the tiles (0.5.0, section "Editable tiles"; in tablet
   posture it is in the tablet row);
 * volume slider with mute button and chevron to the output chooser (up to 100 %, or 150 % with
@@ -1285,7 +1286,8 @@ only (`Text.StyledText` has no keyboard navigation for links).
 
 The clipboard button (and its 52 px row in the sheet when the bar has no room for it, as in tablet
 posture) opens the clipboard sheet: a page of the quick-settings pop-up, in its card, sizes and
-colours (the Quick Settings and Popups boards' drill-down pages). It replaces Klipper's own pop-up,
+colours (the Quick Settings and Popups boards' drill-down pages; the Popups board draws the sheet
+itself since 2026-10-17). It replaces Klipper's own pop-up,
 which the button opened before. Meta+V opens it too, on the screen in use (`openRequest`
 `clipboard`; the setup's Windows-style shortcut set takes the key from Klipper's pop-up,
 docs/parts/device.md); the button and Meta+V close it again. It shows no notification list, so
@@ -1309,7 +1311,8 @@ Show notifications off, the bell's empty list, the clipboard page).
   loads in the background after the widget starts: the button or Meta+V in those first moments
   waits for it and then opens the sheet (Klipper's pop-up only when the module could not load,
   `clipboard.js` `opening()`); before, they opened Klipper's pop-up.
-- **The sheet:** header with the back button (to quick settings), "Clipboard" and "Clear all"; a
+- **The sheet:** header with the back button (to quick settings), "Clipboard", the copy-text and
+  Emoji buttons and "Clear all"; a
   search field; "All / Starred" tabs once something is starred (the stock widget's "All History /
   Starred Only"; every opening starts on All, so Meta+V then Enter chooses what was copied last,
   where Klipper's own pop-up keeps the last tab: the tab is the long-lived service's, and Backend
@@ -1349,6 +1352,13 @@ Show notifications off, the bell's empty list, the clipboard page).
   every target at least 44 px (the header's buttons, Clear all, the search field, the tabs, the row
   and editor buttons), press and hold for the actions; the sheet takes its own height and its list
   what the rest leaves, so only the list scrolls.
+- **Copy text from the screen** (2026-10-17, Popups board): the header's copy-text button, before
+  Emoji, with quick settings' own copy-text glyph and tooltip, does what quick settings' header
+  button and Meta+Shift+T do (`Backend.session.copyText()`): the sheet closes, the user selects an
+  area, and its text goes to the clipboard, so it is the sheet's newest entry the next time it
+  opens ("Text copied" or "No text found" says how it went; docs/parts/device.md). The clipboard
+  button in the top bar is always there, so copy text is one click from the sheet; quick settings'
+  button is two clicks away.
 - **Emoji:** the header's Emoji button closes the sheet and opens Plasma's emoji selector
   (plasma-emojier, through its own Meta+. shortcut action, or the program); the sheet draws no emoji
   of its own.
@@ -1364,12 +1374,14 @@ Show notifications off, the bell's empty list, the clipboard page).
   `/dev/uinput`. Klipper's model has no paste either. Revisit when Plasma itself offers paste on
   selection.
 - Tests: `tests/clipboard.test.js` (search, previews, file names, arrow-key steps, type to search)
-  and `tests/clipboard_sheet_test.py` (53 checks: the service on Klipper's model, newest first,
+  and `tests/clipboard_sheet_test.py` (57 checks: the service on Klipper's model, newest first,
   search, image entries with their pictures, stars shared with a second view and kept in Klipper's
   storage across processes, choose, the on-screen hint, edit, remove, Clear all keeping the stars;
   the page: focus, arrows, type to search, Enter, Escape, Space, Delete, Tab, the action row by
-  keyboard, QR code, editor typing, Enter and Escape, Emoji, no row tooltips in touch mode, a copied
-  file's row with a non-empty preview, the entry's action buttons at 44 px with touch input). Both
+  keyboard, QR code, editor typing, Enter and Escape, Emoji, the copy-text button (quick settings'
+  copy-text glyph and name, before Emoji and 32 px as it, a click copies text with the sheet
+  closing first, 44 px in touch mode), no row tooltips in touch mode, a copied file's row with a
+  non-empty preview, the entry's action buttons at 44 px with touch input). Both
   fail without the sheet (the files do not exist on 0.4.1); the file preview check fails on 2a872e3
   (0x0 picture).
 

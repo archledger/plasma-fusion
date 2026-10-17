@@ -18,8 +18,10 @@ import "../code/clipboard.js" as Clip
 // (opening on All: Backend.qml), text, images and copied files, star, edit, QR code, Klipper's
 // actions, remove, and Clear all with Klipper's confirmation (starred entries stay). Choosing an
 // entry puts it on the clipboard and closes the sheet; the on-screen hint says to paste with Ctrl+V
-// (there is no paste on choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet"). The Emoji
-// button opens Plasma's emoji selector.
+// (there is no paste on choosing: docs/parts/shell-quicksettings.md, "Clipboard sheet"). The
+// copy-text button copies text from the screen, as Meta+Shift+T and quick settings' own button do
+// (the sheet closes, the area's text becomes the newest entry: Popups board); the Emoji button
+// opens Plasma's emoji selector.
 //
 // Keyboard: the list has the focus with the newest entry current; Up and Down move, Enter or Space
 // chooses, Delete removes, Menu or Right opens the entry's actions (Left and Right move between
@@ -185,6 +187,17 @@ ColumnLayout {
              : i18nc("@title", "Clipboard")
         onBack: page.mode !== "list" ? page.closeMode() : page.back()
 
+        IconButton {
+            objectName: "clipboardCopyText"
+            visible: page.mode === "list"
+            pal: page.pal
+            size: 32
+            iconSize: 16
+            fill: page.pal.overlay(0.08)
+            iconPath: Icons.copyText
+            text: i18nc("@action:button", "Copy text from the screen")
+            onClicked: page.backend.session.copyText()
+        }
         IconButton {
             objectName: "clipboardEmoji"
             visible: page.mode === "list"

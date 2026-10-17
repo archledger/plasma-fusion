@@ -19,7 +19,9 @@
 #      keeps running; the helper copies nothing;
 #   4. the second line the same way, after Spectacle was closed: the clipboard follows;
 #   5. quick settings' header button (Meta+A, the button left of System Settings): the first line
-#      again, the clipboard follows.
+#      again, the clipboard follows;
+#   6. the clipboard sheet's copy-text button (Meta+V, the button before Emoji, where quick
+#      settings' dump puts it): the second line again, the clipboard follows, the sheet is closed.
 # Screenshots are taken only while no Spectacle runs: the session's shot is a Spectacle request too,
 # and Spectacle takes it over (an area being chosen, an open window).
 # Run: tools/vsession/vsession.sh ct-1 packages/copytext/tests/vsession/scenario-copytext.sh 1440x900 300
@@ -229,6 +231,57 @@ if [ -n "${QX:-}" ]; then
   [ "$(notified "Text copied")" = 3 ] && pass "5: a third \"Text copied\"" || fail "5: \"Text copied\" $(notified "Text copied") times"
 else
   fail "5: the pop-up's window was not found"
+fi
+
+# ---- 6. the clipboard sheet's copy-text button (Popups board)
+# Quick settings' dump (its debugAction dump:TAG): the summary ("..., sheet X,Y WxH" or "sheet
+# closed") or the sheet's targets ("name x,y wxh; ..."), PART summary|sheet. The setup restarted
+# the shell, which logs to the setup's state directory from then on.
+qs_dump() {
+  local tag=ct$RANDOM$RANDOM i line
+  local logs=("$OUT/plasmashell.log"
+    "${XDG_STATE_HOME:-$HOME/.local/state}/plasma-fusion/plasmashell.log")
+  qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+    "panels().forEach(function (p) {
+       p.widgets('org.plasmafusion.quicksettings').forEach(function (w) {
+         w.currentConfigGroup = ['General']; w.writeConfig('debugAction', 'dump:$tag'); }); });" \
+    >/dev/null 2>&1 || true
+  for ((i = 0; i < 30; i++)); do
+    if [ "$1" = sheet ]; then
+      line=$(cat "${logs[@]}" 2>/dev/null | grep -a "quicksettings: dump $tag sheet: " || true)
+    else
+      line=$(cat "${logs[@]}" 2>/dev/null | grep -a "quicksettings: dump $tag: " || true)
+    fi
+    line=${line##*$'\n'}
+    [ -n "$line" ] && { echo "${line#*"dump $tag"}"; return 0; }
+    sleep 0.3
+  done
+  return 1
+}
+pfinput 'key meta+v'
+sleep 3
+sheet=$(qs_dump sheet || true)
+read -r CX CY <<<"$(tr ';' '\n' <<<"$sheet" |
+  sed -n 's/^.*clipboardCopyText \([0-9-]*\),\([0-9-]*\) .*$/\1 \2/p' | head -1)"
+info "6: the clipboard sheet's Copy Text button at ${CX:-?},${CY:-?}"
+shot 60-sheet
+if [ -n "${CX:-}" ]; then
+  pfinput "click $CX $CY"
+  sleep 5
+  y=$((OY + 440))
+  pfinput "drag $((OX + 130)) $((y - 30)) $((OX + 820)) $((y + 70)) 20" 'sleep 0.6' 'key return'
+  helper_done 30 && pass "6: the helper ended" || fail "6: the helper still runs"
+  shot 61-sheet-button
+  got=$(clip)
+  [ "$got" = "$LINE2" ] && pass "6: the sheet's button copies the selected line: \"$got\"" ||
+    fail "6: the clipboard holds \"$got\""
+  [ "$(notified "Text copied")" = 4 ] && pass "6: a fourth \"Text copied\"" ||
+    fail "6: \"Text copied\" $(notified "Text copied") times"
+  summary=$(qs_dump summary || true)
+  grep -q 'sheet closed' <<<"$summary" && pass "6: the sheet closed for the selection" ||
+    fail "6: the sheet after the button: ${summary:0:160}"
+else
+  fail "6: no copy-text button in the clipboard sheet (${sheet:0:300})"
 fi
 
 kill "$TARGET" "$MON" 2>/dev/null || true
