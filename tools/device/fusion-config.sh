@@ -2061,18 +2061,32 @@ snap_cycle_actions_registered() {
   bus call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
     grep -qF "\"$SNAP_CYCLE Left\""
 }
-# A snap script that is running without the actions is an older one (an update in this session):
-# KWin does not load a script that is loaded already (6.7.5 scripting.cpp,
-# loadDeclarativeScript), so it is unloaded, and started again as the one installed now.
+# A snap script that is running without the actions is an older one (an update in this session).
+# KWin does not load a script that is loaded already (6.7.5 scripting.cpp, loadDeclarativeScript),
+# and unloading it and starting it again runs the older one once more: KWin's QML engine keeps
+# every file it compiled by its path and never looks at the file again (Qt 6.11
+# QQmlTypeLoader::getType; KWin does not clear that cache). So it is loaded from a path the engine
+# has not seen: a link to the installed package in the runtime directory, a new one each time
+# (gone with the session; at the next login KWin loads the script from where it is installed).
 snap_script_reload() {
+  local dir link
   bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true || return 0
-  note "snap sizes: the running snap script is an older one (started again)"
+  if ! dir=$(package_dir kwin/scripts plasmafusion-snap) || [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    note "snap sizes: the running snap script is an older one (the new one comes with the next login)"
+    return 0
+  fi
+  link=$XDG_RUNTIME_DIR/plasma-fusion/kwin-scripts/plasmafusion-snap-$(date +%s%N)
+  mkdir -p "${link%/*}"
+  ln -sfn "$dir" "$link"
+  note "snap sizes: the running snap script is an older one (loaded again from the installed files)"
   bus call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s plasmafusion-snap >/dev/null 2>&1 || true
-  # unloadScript only schedules the deletion; start() loads it again once it is gone.
+  # unloadScript only schedules the deletion; the script loads again once it is gone.
   for _ in $(seq 1 20); do
     bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true || break
     sleep 0.1
   done
+  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting loadDeclarativeScript ss "$link/contents/ui/main.qml" plasmafusion-snap >/dev/null 2>&1 || true
+  # start() runs the scripts loaded and not running yet (Scripting::runScripts).
   bus call org.kde.KWin /Scripting org.kde.kwin.Scripting start >/dev/null 2>&1 || true
 }
 apply_snap_cycle_keys() {

@@ -289,6 +289,19 @@ that side of the work area, then back to 1/2 (`Cycle.js`):
   screen it goes back to 1/2. Meta+Shift+Left/Right (KWin's "Window to Previous/Next Screen") move
   a window between screens at once.
 
+An update in a running session (2026-10-17, found on the ThinkPad's live session): the snap script
+running then is the older one, without the two actions, and the setup cannot move the keys until
+the new one runs. KWin 6.7.5 does not load a script that is loaded already, and a script unloaded
+and started again is the older one once more: KWin's QML engine keeps every file it compiled by its
+path and does not read it again (Qt 6.11.2 `QQmlTypeLoader::getType` returns the cached type for a
+path; the cache is trimmed only from 64 types on, and KWin never clears it). So the setup unloads
+it and loads it from a path the engine has not seen: a link to the installed package in
+`$XDG_RUNTIME_DIR/plasma-fusion/kwin-scripts/` (a new one each time, gone with the session), with
+`Scripting.loadDeclarativeScript` and `start`. At the next login KWin loads it from where it is
+installed. Without a runtime directory the older script stays, the setup says the new one comes
+with the next login, and the run is not marked, so the next update moves the keys. The other
+Plasma Fusion KWin scripts run their older code until the next login.
+
 Tests: `tests/snap-cycle.test.js` (node, in the build step): the steps from a window's size on
 both sides and a second screen, the order, and the neighbouring screen;
 `tests/offscreen/snaptest.py` (CI `build`, the real script with stand-in KWin objects): from the left
@@ -299,9 +312,15 @@ half, third and two thirds follow;
 `tools/device/tests/shortcut-keys-unit.sh` (CI `build`): the setup's key move (with the
 Windows-style set, once on an update while KWin's quick tile holds the key, never after the mark or
 from another action the user chose; an update while an older snap script runs unloads it and
-starts it again, then moves the keys); `tests/vsession/scenario-snapcycle.sh` (a private session,
-real keys): Meta+Left four times and Meta+Right twice after the setup; a failed check fails the
-scenario (its status).
+loads it from a link in the runtime directory to the installed package, then moves the keys; its
+stand-in KWin runs the older code when the script is started again from its own path, so the
+reload of 0.5.0's setup, a load from the installed path or a missing link fail it; without a
+runtime directory the keys stay and the run is not marked); `tests/vsession/scenario-snapcycle.sh`
+(a private session, real keys): Meta+Left four times and Meta+Right twice after the setup;
+`tests/vsession/scenario-snapreload.sh` (a private session, the 0.5.0 package's snap script running
+from login, the setup installing the new one over it): the setup loads it again, Snap Left has
+Meta+Left, and Meta+Left twice gives the left third; with 0.5.0's setup the three checks fail; a
+failed check fails the scenario (its status).
 
 ### Snap-zone outline
 

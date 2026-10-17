@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Snap sizes after an update:** updating in a running session now moves Meta+Left/Right to the
+  snap sizes at once. Before, the setup started the snap script again, KWin ran the older one, and
+  the keys stayed KWin's quick tile.
 - **Gestures and the snap script:** the Touchpad gestures group on the Plasma Fusion settings
   page says when the Plasma Fusion Snap Layouts script, which does the gestures, is turned off,
   and where to turn it on.
