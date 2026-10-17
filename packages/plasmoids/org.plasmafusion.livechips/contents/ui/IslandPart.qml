@@ -14,13 +14,16 @@ Item {
     id: part
 
     required property Island island
-    // "privacy", "recording", "keepawake" or "music"
+    // "privacy", "recording", "keepawake", "music" or "notice"
     required property string item
     required property bool leading
 
     readonly property real unit: island.metrics.px(20)
     readonly property var firstRow: island.rows.length > 0 ? island.rows[0] : null
     readonly property var media: island.media
+    // Plasma's notice (Chips.notice()) while the item is one.
+    readonly property var notice: item === "notice" ? island.notice : null
+    readonly property color noticeColour: notice ? Chips.NOTICE_COLOURS[notice.tone] || "#ffffff" : "#ffffff"
 
     implicitWidth: content.implicitWidth
     implicitHeight: content.implicitHeight
@@ -71,6 +74,22 @@ Item {
             color: "#ffffff"
             size: part.island.metrics.px(16)
         }
+        // Plasma's notice: the board's glyph for Plasma's icon, else Plasma's icon itself (a
+        // player's), once the theme has it (Kirigami loads an icon only while it is shown).
+        LineIcon {
+            anchors.centerIn: parent
+            visible: part.leading && part.notice !== null && part.notice.glyph !== ""
+            path: part.notice && part.notice.glyph !== "" ? Chips.GLYPHS[part.notice.glyph] || "" : ""
+            color: "#ffffff"
+            size: part.island.metrics.px(18)
+        }
+        Kirigami.Icon {
+            id: noticeIcon
+            anchors.fill: parent
+            visible: part.leading && part.notice !== null && part.notice.glyph === ""
+            opacity: status === Kirigami.Icon.Ready ? 1 : 0
+            source: part.notice ? part.notice.icon : ""
+        }
         // The cover (the player's icon without one); round in the bubble.
         Kirigami.ShadowedImage {
             anchors.fill: parent
@@ -112,6 +131,55 @@ Item {
                 text: part.item === "recording" ? (part.island.recording ? part.island.recording.time : "")
                     : part.island.leftText(part.island.keepAwakeLeft)
                 color: part.item === "recording" ? part.island.glyphColor("recording") : "#ffffff"
+                font.family: part.island.metrics.displayFamily
+                font.weight: Font.DemiBold
+                font.pixelSize: part.island.metrics.font(13)
+            }
+            // Plasma's notice: a level (the 96 px bar, the tick at 100 % past it, the number in the
+            // level's colour) or its text.
+            Item {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !part.leading && part.notice !== null && part.notice.level
+                width: part.island.metrics.px(96)
+                height: part.island.metrics.px(5)
+                Rectangle {
+                    anchors.fill: parent
+                    radius: height / 2
+                    color: Qt.rgba(1, 1, 1, 0.22)
+                }
+                Rectangle {
+                    objectName: "noticeFill"
+                    width: parent.width * (part.notice ? part.notice.fill : 0)
+                    height: parent.height
+                    radius: height / 2
+                    color: part.noticeColour
+                }
+                Rectangle {
+                    objectName: "noticeTick"
+                    visible: part.notice !== null && part.notice.tick >= 0
+                    x: parent.width * (part.notice ? part.notice.tick : 0)
+                    y: -part.island.metrics.px(2)
+                    width: part.island.metrics.px(1.5)
+                    height: part.island.metrics.px(9)
+                    radius: width / 2
+                    color: Qt.rgba(1, 1, 1, 0.55)
+                }
+            }
+            Item {
+                // the board's 10 px between the bar and the number (the row's 4 on both sides)
+                visible: !part.leading && part.notice !== null && part.notice.level
+                width: part.island.metrics.px(2)
+                height: 1
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !part.leading && part.notice !== null
+                // Plasma's words (other apps' notices among them): plain text, one line.
+                textFormat: Text.PlainText
+                text: part.notice ? (part.notice.level ? part.notice.value : part.notice.text) : ""
+                color: part.noticeColour
+                elide: Text.ElideRight
+                width: Math.min(implicitWidth, part.island.metrics.px(300))
                 font.family: part.island.metrics.displayFamily
                 font.weight: Font.DemiBold
                 font.pixelSize: part.island.metrics.font(13)

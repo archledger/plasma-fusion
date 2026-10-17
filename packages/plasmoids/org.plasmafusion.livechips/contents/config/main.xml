@@ -13,6 +13,10 @@
       <label>Written by the plasmafusion-tablet KWin script: whether the top bar of this widget's screen is hidden now (the settings page's "Hide the top bar automatically"). The island shows while it is.</label>
       <default>false</default>
     </entry>
+    <entry name="noticeRequest" type="String">
+      <label>From the tablet KWin script: Plasma's pop-up came up on this screen and was made transparent; the island shows Plasma's notice (a new value each time).</label>
+      <default></default>
+    </entry>
     <entry name="islandRequest" type="String">
       <label>Testing only: "open:NONCE" opens the island, "close:NONCE" closes it, as a click and Esc do.</label>
       <default></default>

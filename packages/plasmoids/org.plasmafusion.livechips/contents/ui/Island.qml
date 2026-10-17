@@ -30,7 +30,7 @@ PlasmaCore.Dialog {
     // The top bar of this screen is hidden ([General] barHidden, from the tablet KWin script).
     required property bool barHidden
     required property rect screenGeometry
-    // Chips.island(): { mode, items, dots }
+    // Chips.island(): { mode, items, dots, notice }
     required property var content
     // Chips.islandRows()
     required property var rows
@@ -44,6 +44,9 @@ PlasmaCore.Dialog {
     signal stopRecording()
     signal openKeepAwake()
     signal rowAction(var row)
+
+    // Plasma's notice the island shows (Chips.notice()), or null.
+    readonly property var notice: content.notice || null
 
     // The opened item ("privacy", "recording" or "music"), or "" while compact.
     property string opened: ""
@@ -175,8 +178,12 @@ PlasmaCore.Dialog {
     function glyphColor(kind: string): color {
         return Chips.ISLAND_COLOURS[kind] || "#ffffff";
     }
-    // The key line: over dark windows, 1 px in the leading part's colour (Apple's key line).
+    // The key line: over dark windows, 1 px in the leading part's colour (Apple's key line); Plasma's
+    // notices have none (the board).
     readonly property color keyLine: {
+        if (items[0] === "notice") {
+            return "transparent";
+        }
         const kind = items[0] === "privacy" ? (content.dots[0] || "") : items[0] === "recording" ? "recording" : "";
         const c = items[0] === "music" ? Qt.color("#f2a65a") : Qt.color(kind !== "" ? glyphColor(kind) : "#ffffff");
         return Qt.rgba(c.r, c.g, c.b, kind !== "" || items[0] === "music" ? 0.45 : 0.18);
@@ -249,7 +256,9 @@ PlasmaCore.Dialog {
                 const w = "; window " + Math.round(island.x) + "," + Math.round(island.y) + " " + Math.round(island.width) + "x" + Math.round(island.height);
                 const g = body.mapToGlobal(0, 0);
                 const b = bubble.mapToGlobal(0, 0);
-                console.debug(log, "livechips: island " + island.mode + " " + island.items.join(",") + (island.opened !== "" ? " opened " + island.opened : "")
+                const n = island.notice ? " (" + (island.notice.glyph || island.notice.icon) + " "
+                    + (island.notice.level ? island.notice.value + " " + island.notice.tone : JSON.stringify(island.notice.text)) + ")" : "";
+                console.debug(log, "livechips: island " + island.mode + " " + island.items.join(",") + n + (island.opened !== "" ? " opened " + island.opened : "")
                               + " at " + Math.round(g.x) + "," + Math.round(g.y) + " " + Math.round(body.width) + "x" + Math.round(body.height)
                               + (island.bubbleShown ? "; bubble " + Math.round(b.x) + "," + Math.round(b.y) + " " + Math.round(bubble.width) + "x" + Math.round(bubble.height) : "") + w);
             }
@@ -282,13 +291,14 @@ PlasmaCore.Dialog {
             Accessible.role: Accessible.Button
             Accessible.name: island.opened !== "" ? i18nc("@action:button the island at the top of the screen", "Close the island")
                                                    : i18nc("@action:button the island at the top of the screen", "Open the island")
-            Accessible.onPressAction: island.opened !== "" ? island.close() : island.open(island.items[0] || "")
+            Accessible.onPressAction: island.opened !== "" ? island.close() : island.items[0] !== "notice" ? island.open(island.items[0] || "") : undefined
 
             // A click on the island opens it; on an opened island's free part, closes it.
             MouseArea {
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: island.opened !== "" ? island.close() : island.open(island.items[0] || "")
+                // A notice of Plasma's opens nothing.
+                onClicked: island.opened !== "" ? island.close() : island.items[0] !== "notice" ? island.open(island.items[0] || "") : undefined
                 onContainsMouseChanged: if (island.content.mode === "dots") island.peek = containsMouse || island.opened !== ""
             }
 

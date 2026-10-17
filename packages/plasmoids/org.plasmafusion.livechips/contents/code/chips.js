@@ -15,7 +15,13 @@ var GLYPHS = {
     screen: "M3 4h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 21h8M12 17v4M9 10.5l3-3 3 3M12 7.5v6",
     remote: "M5 3l12 6.5-5.5 1.5L9 16.5zM12 11l5 5",
     ssh: "M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM6.5 10l3 2.5-3 2.5M12 15.5h5",
-    keepawake: "M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3c0 1.5 1 1.5 1 3M12 3c0 1.5 1 1.5 1 3"
+    keepawake: "M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3c0 1.5 1 1.5 1 3M12 3c0 1.5 1 1.5 1 3",
+    // Plasma's notices in the island (the Island board's "volume, brightness and Plasma's notices")
+    speaker: "M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11",
+    speakerOff: "M4 9.5h3.5L12 5.5v13l-4.5-4H4zM16 9.5l5 5M21 9.5l-5 5",
+    microphoneOff: "M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M4 4l16 16",
+    sun: "M12 8.4a3.6 3.6 0 1 0 0 7.2a3.6 3.6 0 1 0 0-7.2zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4",
+    keyboardLight: "M3 12h18v7H3zM7 15.5h10M12 3v3M6 5l1.5 2M18 5l-1.5 2"
 };
 
 // The badge tints of the Colors board, behind a capsule of one kind and behind each panel row's
@@ -186,6 +192,57 @@ var ISLAND_COLOURS = {
     camera: "#7fd99c", microphone: "#f5c08c", screen: "#c3a6ff", remote: "#ff8a8f", recording: "#ff8a8f", ssh: "#8ab8ff"
 };
 
+// Plasma's notices (plasmashell 6.7.5 shell/osd.cpp, its osdProgress and osdText signals): the
+// glyph the board draws for Plasma's icon name, or "" (the island then shows Plasma's icon itself:
+// a player's, or another notice's).
+function noticeGlyph(icon) {
+    var name = String(icon || "");
+    if (name === "audio-volume-muted") {
+        return "speakerOff";
+    }
+    if (name.indexOf("audio-volume-") === 0) {
+        return "speaker";
+    }
+    if (name === "microphone-sensitivity-muted") {
+        return "microphoneOff";
+    }
+    if (name.indexOf("microphone-sensitivity-") === 0) {
+        return "microphone";
+    }
+    if (name === "video-display-brightness") {
+        return "sun";
+    }
+    if (name === "input-keyboard-brightness") {
+        return "keyboardLight";
+    }
+    return "";
+}
+
+// The level's colours on the island: white to 100 %, then Plasma's own steps (osd.cpp: warning to
+// 125 %, danger past it), in the island's microphone and recording colours.
+var NOTICE_COLOURS = { plain: "#ffffff", warning: "#f5c08c", danger: "#ff8a8f" };
+
+// A notice as the island shows it: from osdProgress(ICON, PERCENT, MAXIMUM, TEXT) a level, from
+// osdText(ICON, TEXT) (PERCENT null) a text. { glyph, icon, level: bool, value: "60", fill: 0..1
+// of the bar, tick: where 100 % is on the bar when the maximum is above it (else -1), tone: "plain" |
+// "warning" | "danger", text: one line (Plasma's lines joined with " · ") }.
+function notice(icon, percent, maximum, text) {
+    var level = percent !== null && percent !== undefined;
+    var p = level ? Math.max(0, Number(percent) || 0) : 0;
+    var max = level ? Math.max(1, Number(maximum) || 100) : 100;
+    return {
+        glyph: noticeGlyph(icon),
+        icon: String(icon || ""),
+        level: level,
+        value: level ? String(Math.round(p)) : "",
+        fill: level ? Math.min(p, max) / max : 0,
+        tick: level && max > 100 ? 100 / max : -1,
+        tone: !level || p <= 100 ? "plain" : p <= 125 ? "warning" : "danger",
+        text: String(text || "").split("\n").map(function (line) { return line.trim(); })
+            .filter(function (line) { return line.length > 0; }).join(" · ")
+    };
+}
+
 // What the island shows, from what is going on: S { privacy: [kinds] (capsule().kinds),
 // recording, keepAwake, music (playing): bools, musicOpened: the music's view is open, musicPlayer:
 // a player is still there (paused in its open view the music stays, so Play is there; a player
@@ -193,9 +250,14 @@ var ISLAND_COLOURS = {
 // The privacy kinds always come first, then a screen recording, a Keep awake timer and the music
 // playing: the first two of them show (the first in the island, the second in a bubble beside
 // it). In a full-screen window only the privacy kinds show, as dots. { mode: "none" | "compact" |
-// "dots", items: [names], dots: [privacy kinds] }.
+// "dots", items: [names], dots: [privacy kinds] }. A notice of Plasma's (S.notice, notice())
+// takes the island while it shows, also over a full-screen window: { mode: "compact", items:
+// ["notice"], dots, notice }.
 function island(s) {
     var privacy = s.privacy || [];
+    if (s.notice) {
+        return { mode: "compact", items: ["notice"], dots: privacy.slice(), notice: s.notice };
+    }
     if (s.fullScreen) {
         return privacy.length > 0 ? { mode: "dots", items: [], dots: privacy.slice() } : { mode: "none", items: [], dots: [] };
     }

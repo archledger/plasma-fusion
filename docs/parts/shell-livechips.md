@@ -202,9 +202,31 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   them shows the compact island (until the pointer leaves or full screen ends). A screen is full
   screen while its last activated window that is not minimized is (`Chips.fullScreenOf()`, the task
   manager sorted by activation), also with another screen's window focused. Notifications, the
-  clock, file copies and Plasma's volume and brightness pop-up are not in it: Plasma's pop-up is
-  compiled into plasma-workspace (6.7.5 loads it from the QML module
-  `org.kde.plasma.workspace.osd`), so a theme cannot move it.
+  clock and file copies are not in it.
+- **Plasma's notices** (2026-10-17, the owner's option B; the board's "volume, brightness and
+  Plasma's notices"): while the bar is hidden, what Plasma's own pop-up would show (the volume, the
+  microphone, a player's volume, the screen and keyboard brightness, the keyboard layout, the
+  touchpad, the power mode and the rest) shows in the island, and Plasma's pop-up does not. Plasma's
+  pop-up is compiled into plasma-workspace (6.7.5 loads it from the QML module
+  `org.kde.plasma.workspace.osd`), so a theme cannot change it; but every notice goes through
+  plasmashell's Osd object, which also sends it on D-Bus (`/org/kde/osdService`:
+  `osdProgress(icon, percent, maximum, text)`, `osdText(icon, text)`, shell/osd.cpp), and its
+  window is a new KWin window each time it shows. `sources/Osd.qml` (loaded while the bar is hidden)
+  listens to the two signals; the tablet KWin script, when that window comes up on a screen whose
+  island is there, makes it transparent and asks that screen's island to show the notice
+  (`[General] noticeRequest`, docs/parts/kwin-tablet.md): the one that just came (Plasma sends it
+  before it shows its window), and the ones that follow while it shows, for Plasma's own 1.8 s
+  (`OsdItem.qml` timeout) after the last. `Chips.notice()` makes the view: the board's glyph for
+  Plasma's icon name (the speaker, crossed out for `audio-volume-muted`; the microphone; the sun;
+  the keyboard light), else Plasma's icon itself (a player's); a level fills the 96 px bar to
+  Plasma's maximum (150 % for the volume past 100) with a tick at 100 % past it, in white to 100,
+  the warning colour to 125 and danger past it (osd.cpp's steps); a text is Plasma's, its lines in
+  one with " · ". A notice takes the island while it shows (`Chips.island()`), also over a
+  full-screen window, then it shows what it did; an island opened by a click stays as it is (the
+  notice is not shown); a click on a notice opens nothing; no key line. With the bar shown, on a
+  screen without an island, with the tablet script off, and with Plasma's pop-up turned off
+  (plasmarc `[OSD] Enabled`: it sends nothing then), Plasma's pop-up as before. Plasma 6.7.5 never
+  shows a Wi-Fi, Bluetooth or mobile-internet notice (nothing calls those), so the island has none.
 - **Compact** (`IslandPart.qml`): 32 px high, radius 16, at least 132 px wide, 6 px margins; the
   privacy kinds: the first app's icon (its name as an icon name, `Chips.iconGuess()`; the kind's
   glyph when the theme has none: Kirigami 6.31's `Icon.valid` only says a source is set, so its
@@ -242,36 +264,55 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   outside (a change of flags can give it the platform's last size back), which in Qt 6 ends the
   main item's size bindings (a CI run of the QML test caught it).
 - **Test hooks.** Debug output `livechips: island compact privacy at X,Y WxH; bubble ...` (or
-  `none`) once a morph has ended; `[General] islandRequest` "open:NONCE" or "close:NONCE".
+  `none`; a notice: `compact notice (speaker 60 plain) at ...`) once a morph has ended;
+  `[General] islandRequest` "open:NONCE" or "close:NONCE".
 - **Tests.** `tests/chips.test.js`: the island's content (nothing, a call, a call and music, four
   things, without a privacy kind, music alone, full screen with and without one), its colours, the
   opened rows (one row for Firefox's screen, camera and microphone with Stop sharing, remote control
   first with End, a muted app with Unmute, a login without action, a camera known by its name only)
-  and the icon names. `tests/chips_qml_test.py`: the island's QML in its own window, offscreen at
-  1440 x 900: shown while the bar is hidden and gone when it shows, 4 px from the top, 32 px high
-  and at least 132 wide (at the test's text scale), centred; an app with an icon in the theme
-  (KWin, from hicolor) leads with it, one without with the camera's glyph (the test gives Qt the
-  system's icon themes: offscreen it looks only in `:/icons`); the bubble 6 px beside it with the
-  island still centred and both inside its window; opened 400 px wide and centred, where a real
-  click on Mute asks the app's microphone to mute and Esc closes it; the window resized from outside
-  while it opens and once it has opened, it still opens to its size and centred; five apps at once
-  give five rows, twelve on a screen 400 px high stay on it and scroll; the full-screen dots 14 px
-  high, the pointer on them shows the island and full screen coming back shows the dots again.
-  Mutations of each (8 px from the top, no room for the bubble, shown with the bar, 300 px opened,
-  no Esc, Mute doing nothing, no binding again after the focus, the peek kept, the icon chosen by
-  `valid`, the glyph always) fail it.
+  and the icon names; Plasma's notices: the glyph for each of Plasma's icon names, the bar's fill
+  and the tick for 60 of 100 and 115 of 150, white, warning and danger at 100, 101, 125, 126 and
+  150, the bar never more than full nor less than empty, Audio Muted and several screens' brightness
+  in one line, and the notice taking the island during a call, over a full-screen window and with
+  nothing else. `tests/chips_qml_test.py`: the island's QML in its own window, offscreen at 1440 x
+  900: shown while the bar is hidden and gone when it shows, 4 px from the top, 32 px high and at
+  least 132 wide (at the test's text scale), centred; an app with an icon in the theme (KWin, from
+  hicolor) leads with it, one without with the camera's glyph (the test gives Qt the system's icon
+  themes: offscreen it looks only in `:/icons`); the bubble 6 px beside it with the island still
+  centred and both inside its window; opened 400 px wide and centred, where a real click on Mute
+  asks the app's microphone to mute and Esc closes it; the window resized from outside while it
+  opens and once it has opened, it still opens to its size and centred; five apps at once give five
+  rows, twelve on a screen 400 px high stay on it and scroll; the full-screen dots 14 px high, the
+  pointer on them shows the island and full screen coming back shows the dots again; Plasma's
+  notices: a volume level compact and centred with the speaker, the bar 60 % full and 60 in white,
+  no key line, 115 of 150 with the tick and the warning colour, 130 in danger, Audio Muted without a
+  bar, a click opening nothing, the notice during a call and the call back after it; and
+  `sources/Osd.qml` on the private bus, the test being plasmashell sending its Osd's signals: a
+  notice before KWin asks is not shown, after the request it is, the next one takes its place, a
+  text arrives as its words, the same one again keeps it 1.8 s from then and it goes after, a
+  request with no recent notice shows nothing old and one just after it shows. Mutations of each (8
+  px from the top, no room for the bubble, shown with the bar, 300 px opened, no Esc, Mute doing
+  nothing, no binding again after the focus, the peek kept, the icon chosen by `valid`, the glyph
+  always; a notice shown unasked, kept for good, or an old one shown; the notice not taking the
+  island, one tone for all) fail it or `chips.test.js`.
 - **Session** (`packages/kcm-cpp/tests/scenario-island.sh`; 2026-10-17, a private session on the
   Fedora 44 test laptop, Plasma 6.7.5, 1440 x 900, the stage, module and kcmctl of this change;
-  stand-in status items): **23 checks pass**. The switch on: the bar's panel hides, KWin hides its
+  stand-in status items): **29 checks pass**. The switch on: the bar's panel hides, KWin hides its
   window and the tablet script sets the chips' `barHidden`; the harness's own SSH login is in the
   island; screen sharing: compact, 4 px from the top and centred (654,4 132x32); opened in place and
   centred (520,4 400x148, the window KWin configured the same); closed; a recording too: the bubble
-  6 px beside it, the island still centred; the pointer pushed against the top: the bar shows and
-  the island goes; the pointer down through the bar and away: the bar hides and the island is back;
-  the tablet KWin script turned off: no island left (a red run without its last call keeps the
-  island), on again: back; tablet posture: the bar shows, no island; laptop again: hidden, the
-  island back; off: the bar shows, no island. The screenshots match the board (compact with the app
-  and its dots, the opened rows, the bubble).
+  6 px beside it, the island still centred; Plasma's notices through plasmashell's real osdService
+  (`volumeChanged`, `showText`, as the volume keys reach it): the volume's level in the island,
+  centred (629,4 182x32), Plasma's pop-up window there with opacity 0, Audio Muted, and 1.8 s after
+  it the call and the recording again (a red run with the tablet script not hiding the window
+  fails the opacity check); the pointer pushed against the top: the bar shows and the island goes,
+  and Plasma's pop-up shows as it is (opacity 1); the pointer down through the bar and away: the bar
+  hides and the island is back; the tablet KWin script turned off: no island left (a red run
+  without its last call keeps the island), Plasma's pop-up as it is, on again: back; tablet
+  posture: the bar shows, no island; laptop again: hidden, the island back; off: the bar shows, no
+  island. The screenshots match the board (compact with the app and its dots, the opened rows, the
+  bubble, the volume's level and Audio Muted, taken with the notice sent again every 0.4 s, as a
+  key held down: a screenshot takes longer than 1.8 s).
 - **Found in the session** (each fixed): with `Qt.WindowStaysOnTopHint` libplasma 6.7.5 makes a
   Dialog a Dock (`DialogPrivate::applyType`: a panel whose windows go below, under full-screen
   windows), so the island has no such flag. Taking the focus at once when it opened kept the

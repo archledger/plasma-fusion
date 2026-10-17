@@ -13,7 +13,8 @@ const file = path.join(__dirname, "..", "contents", "code", "chips.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
 const { capsule, argument, portalKind, remoteLogins, cameraApps, timeLeft, tint, GLYPHS, PRIVACY_ORDER,
-        newReads, readStarted, readForgotten, readCurrent, layoutKey, island, islandRows, iconGuess, ISLAND_COLOURS, fullScreenOf } = globalThis;
+        newReads, readStarted, readForgotten, readCurrent, layoutKey, island, islandRows, iconGuess, ISLAND_COLOURS, fullScreenOf,
+        notice, noticeGlyph, NOTICE_COLOURS } = globalThis;
 
 let checks = 0;
 function check(fn) {
@@ -179,5 +180,47 @@ check(() => assert.deepStrictEqual([
     fullScreenOf([{ fullScreen: true, minimized: true }, { fullScreen: false, minimized: false }]),
     fullScreenOf([{ fullScreen: false, minimized: true }, { fullScreen: true, minimized: false }]),
     fullScreenOf([])], [true, false, false, true, false], "the last activated window on the screen decides; minimized ones do not count"));
+
+// Plasma's notices (plasmashell 6.7.5 osd.cpp): its icon names to the board's glyphs; any other
+// icon is shown as it is.
+check(() => assert.deepStrictEqual(["audio-volume-low", "audio-volume-medium", "audio-volume-high", "audio-volume-high-warning",
+    "audio-volume-high-danger", "audio-volume-muted"].map(noticeGlyph), ["speaker", "speaker", "speaker", "speaker", "speaker", "speakerOff"],
+    "the volume's icons: the speaker, crossed out when muted"));
+check(() => assert.deepStrictEqual(["microphone-sensitivity-low", "microphone-sensitivity-high", "microphone-sensitivity-muted"].map(noticeGlyph),
+    ["microphone", "microphone", "microphoneOff"], "the microphone's"));
+check(() => assert.deepStrictEqual(["video-display-brightness", "input-keyboard-brightness", "elisa", "", undefined].map(noticeGlyph),
+    ["sun", "keyboardLight", "", "", ""], "the brightness and keyboard light; a player's own icon, and none, have no glyph"));
+check(() => ["speaker", "speakerOff", "microphone", "microphoneOff", "sun", "keyboardLight"].forEach(g =>
+    assert.ok(typeof GLYPHS[g] === "string" && GLYPHS[g].length > 0, "the glyph " + g + " is drawn")));
+// A level: the bar's fill and the number; to the maximum Plasma gives (150 % for the volume
+// beyond 100), the tick at 100 %; white to 100, warning to 125, danger past it.
+check(() => assert.deepStrictEqual(notice("audio-volume-high", 60, 100, ""),
+    { glyph: "speaker", icon: "audio-volume-high", level: true, value: "60", fill: 0.6, tick: -1, tone: "plain", text: "" },
+    "60 %: the speaker, the bar 60 % full, no tick"));
+check(() => {
+    const n = notice("audio-volume-high-warning", 115, 150, "");
+    assert.deepStrictEqual([n.value, n.fill, n.tick, n.tone], ["115", 115 / 150, 100 / 150, "warning"], "115 of 150: the tick at 100, warning");
+});
+check(() => assert.deepStrictEqual([100, 101, 125, 126, 150].map(p => notice("audio-volume-high", p, 150, "").tone),
+    ["plain", "warning", "warning", "danger", "danger"], "Plasma's steps: warning past 100, danger past 125"));
+check(() => assert.deepStrictEqual([notice("x", 140, 100, "").fill, notice("x", -5, 100, "").fill, notice("x", 0, 0, "").fill],
+    [1, 0, 0], "the bar is never more than full, nor less than empty, and a maximum of 0 does not break it"));
+check(() => assert.deepStrictEqual(Object.values(NOTICE_COLOURS), ["#ffffff", "#f5c08c", "#ff8a8f"],
+    "the board's white, warning and danger"));
+// A text: Plasma's words, its lines in one.
+check(() => assert.deepStrictEqual(notice("audio-volume-muted", null, null, "Audio Muted"),
+    { glyph: "speakerOff", icon: "audio-volume-muted", level: false, value: "", fill: 0, tick: -1, tone: "plain", text: "Audio Muted" },
+    "Audio Muted: the crossed-out speaker and its text"));
+check(() => assert.strictEqual(notice("video-display-brightness", null, null, "Built-in: 80%\nDELL U2723: 60%\n").text,
+    "Built-in: 80% · DELL U2723: 60%", "several screens' brightness: one line"));
+// The notice takes the island while it shows, over whatever is there, also in full screen.
+check(() => {
+    const n = notice("audio-volume-high", 40, 100, "");
+    assert.deepStrictEqual(island({ privacy: ["camera"], music: true, notice: n }),
+        { mode: "compact", items: ["notice"], dots: ["camera"], notice: n }, "during a call: the notice, then the call again");
+    assert.deepStrictEqual(island({ privacy: [], fullScreen: true, notice: n }).items, ["notice"], "over a full-screen window");
+    assert.strictEqual(island({ privacy: [], notice: n }).mode, "compact", "nothing else in use: the island shows for the notice");
+    assert.strictEqual(island({ privacy: [], notice: null }).mode, "none", "and goes after it");
+});
 
 console.log("chips.test.js: " + checks + " checks passed");
