@@ -284,8 +284,7 @@ line over dark content. iPhone shows the camera's and microphone's dots inside i
   Night Light by night and by day, the on-screen keyboard, sleep blocked, the time zone), crossed
   out in each of plasma-pa's forms of a muted name, Plasma's own icon for a name without a glyph
   (and for one an object has of its own, `toString`), every notice's glyph as the Island board
-  draws it (one state of each, the other with its crossing line or without; the keyboard light the
-  board names with the brightness but does not draw), the bar's fill
+  draws it (one state of each, the other with its crossing line or without), the bar's fill
   and the tick for 60 of 100 and 115 of 150, white, warning and danger at 100, 101, 125, 126 and
   150, the bar never more than full nor less than empty, a level keeping Plasma's label, Audio Muted
   and several screens' brightness in one line, and the notice taking the island during a call, over

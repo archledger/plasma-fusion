@@ -209,8 +209,7 @@ check(() => assert.deepStrictEqual(["edit-clear-history", "irc-voice", "audio-he
     "constructor", "clock-rtl-x"].map(noticeGlyph), ["", "", "", "", "", "", ""],
     "a notice the board has no glyph for, and a name an object has of its own, show Plasma's icon"));
 // Every glyph a notice can take is drawn as the Island board draws it: the board shows one state of
-// each ("crossed out when off"), so the other is that glyph with its crossing line or without it;
-// the keyboard light the board names with the brightness ("the keyboard light the same way").
+// each ("crossed out when off"), so the other is that glyph with its crossing line or without it.
 check(() => {
     const board = fs.readFileSync(path.join(__dirname, "..", "..", "..", "..", "design", "boards", "Island.dc.html"), "utf8");
     const drawn = d => board.includes('d="' + d + '"');
@@ -221,7 +220,7 @@ check(() => {
     assert.ok(names.size >= 17, "the notices' glyphs: " + [...names]);
     names.forEach(g => {
         assert.ok(typeof GLYPHS[g] === "string" && /^M/.test(GLYPHS[g]), "the glyph " + g + " is drawn");
-        assert.ok(g === "keyboardLight" || drawn(GLYPHS[g]) || paired(GLYPHS[g]), "the glyph " + g + " is the board's");
+        assert.ok(drawn(GLYPHS[g]) || paired(GLYPHS[g]), "the glyph " + g + " is the board's");
     });
     assert.ok(!paired("M4 5h16v14H4z") && crossing("M3 3l18 18") && !crossing("M3 3l18 17"), "only a crossing line pairs them");
 });
