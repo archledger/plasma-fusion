@@ -208,7 +208,12 @@ runs them together against one built HOME tree, with one summary:
   over SSH during a run: the live chips count the host's SSH logins.
 - Every feature's seed is the HOME tree at `~/pf-stage` and `tools/` at `~/pf-tools`; the live
   chips' adds their stand-ins (`fake_status_items.py`, quick settings' `mock_power.py`) and the
-  widget's debug rule (`~/.config/pfv-env`); Quick Look's adds its install below `~/.local`, its
+  widget's debug rule (`~/.config/pfv-env`); copy text's sets `PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1`
+  there, as its scenario drives Spectacle's selection (on a test host with the
+  `plasma-fusion-copytext` package the session bus would start the overlay instead: 9 checks failed
+  on the ThinkPad on 2026-10-18, after DEPLOY-10; the overlay has its own scenario,
+  `packages/copytext-cpp/tests/vsession/scenario-overlay.sh`); Quick Look's adds its install below
+  `~/.local`, its
   service menu made executable there (KIO takes one outside the system directories only so;
   `cmake --install` writes it 0644)
   (`--quicklook`, required while Quick Look is among the features: tools/build.sh does not build a

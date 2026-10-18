@@ -27,7 +27,9 @@
 # Screenshots are taken only while no Spectacle runs: the session's shot is a Spectacle request too,
 # and Spectacle takes it over (an area being chosen, an open window).
 # Run: tools/vsession/vsession.sh ct-1 packages/copytext/tests/vsession/scenario-copytext.sh 1440x900 300
-# (HOME seeded with the stage in ~/pf-stage and tools/ in ~/pf-tools).
+# (HOME seeded with the stage in ~/pf-stage and tools/ in ~/pf-tools; on a host with the
+# plasma-fusion-copytext package, PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1 in ~/.config/pfv-env, else the
+# session bus starts that package's overlay in place of Spectacle's selection).
 exec 2>&1
 export OUT
 set -euo pipefail
