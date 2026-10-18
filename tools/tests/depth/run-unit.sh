@@ -83,6 +83,8 @@ for f in placement snapgroups workspaces copytext quicklook livechips; do
 done
 expect "  the live chips' seed has their stand-ins" has_both livechips ./pf-chips/fake_status_items.py ./pf-chips/mock_power.py
 expect "  and the widget's debug rule" grep -qx 'QT_LOGGING_RULES=org.plasmafusion.livechips.debug=true' "$W/results/livechips/pfv-env"
+expect "  copy text's seed switches the overlay off (its scenario drives Spectacle's selection)" grep -qx 'PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1' "$W/results/copytext/pfv-env"
+expect "  the other seeds do not" bash -c '! grep -q NO_OVERLAY "$0"/results/{placement,snapgroups,workspaces,quicklook,livechips}/pfv-env 2>/dev/null' "$W"
 expect "  Quick Look's seed has its install in ~/.local" has quicklook ./.local/bin/plasma-fusion-quicklook
 menu_executable() { [ -x "$W/seeds/quicklook/.local/share/kio/servicemenus/plasma-fusion-quicklook.desktop" ]; }
 expect "  and its service menu is executable there (KIO's rule outside the system directories)" menu_executable

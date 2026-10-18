@@ -143,6 +143,13 @@ make_feature_seed() {  # FEATURE SEED
         "$ROOT/packages/plasmoids/org.plasmafusion.quicksettings/tests/mock_power.py" "$s/pf-chips/" || return 1
       printf 'QT_LOGGING_RULES=org.plasmafusion.livechips.debug=true\n' >"$s/.config/pfv-env"
       ;;
+    copytext)
+      # The scenario drives Spectacle's selection, the helper's own way: on a test host with the
+      # plasma-fusion-copytext package the session bus would start its overlay instead
+      # (packages/copytext-cpp/tests/vsession/scenario-overlay.sh tests that one).
+      mkdir -p "$s/.config"
+      printf 'PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1\n' >"$s/.config/pfv-env"
+      ;;
     quicklook)
       # Never without an install (an empty path would copy from /).
       [ -n "$QUICKLOOK" ] && [ -d "$QUICKLOOK/bin" ] || return 1
