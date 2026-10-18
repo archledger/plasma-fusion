@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Drag an app to a side:** in tablet posture, hold the app's name in the top bar for a moment
+  and drag it down: drop it on the left or right third and it takes that half, in the middle and it
+  is full screen, at the bottom and it goes home; a quick sideways flick of the name puts it in that
+  half at once.
 - **An app for the other side:** in tablet posture, with one app in a half and nothing beside it,
   the rest of the screen offers your apps (home apps first, then all apps A to Z) instead of a home
   page cut off under the app; tap one and it opens beside the first.

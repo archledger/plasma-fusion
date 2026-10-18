@@ -13,6 +13,8 @@ import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
 import org.kde.plasma.workspace.dbus as DBus
 
+import "../code/drop.js" as Drop
+
 // Top-left of the Plasma Fusion top bar (Main / MainLight boards): a 32x26 button with the
 // Fusion logo that opens the launcher, then the active application's name in Manrope 13 px
 // ExtraBold ("Desktop" when no window is focused). The global menu is the stock
@@ -371,6 +373,62 @@ PlasmoidItem {
         cardOpen = open;
     }
 
+    // ---- The pill's drag in tablet posture (board TabletSnap.dc.html): held for 300 ms (the
+    // dock's lift for its split drag) and dragged down, the app goes where it is dropped: a side,
+    // full screen (the middle third) or home (the bottom 96 px); back in the top bar, nowhere.
+    // Flicked sideways without the hold, it goes to that side at once. A tap and the 24 px
+    // pull-down still open the window card.
+    property bool pillArmed: false
+    property bool pillDragging: false
+    // The finger in the pill screen's coordinates while the pill is dragged.
+    property point dragFinger: Qt.point(0, 0)
+    readonly property rect pillScreen: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 1440, 900)
+    readonly property rect pillWork: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
+    // (the overlay's own properties of these names would shadow the ids inside it)
+    readonly property color dropAccent: accent.hoverAccent
+    readonly property bool dropDark: accent.dark
+    readonly property Motion dropMotion: motion
+    Timer {
+        id: pillArm
+        interval: 300
+        onTriggered: root.pillArmed = root.tablet && root.hasWindow
+    }
+    function startPillDrag(global: point): void {
+        cardWindow = appWindowIds;
+        pillDragging = true;
+        movePillDrag(global);
+        console.info("appname: pill drag starts");
+    }
+    function movePillDrag(global: point): void {
+        dragFinger = Qt.point(global.x - pillScreen.x, global.y - pillScreen.y);
+    }
+    function endPillDrag(): void {
+        const target = Drop.target(dragFinger, pillScreen.width, pillWork.y, pillWork.y + pillWork.height);
+        pillDragging = false;
+        pillArmed = false;
+        pillDrop(target, "drag");
+    }
+    function pillDrop(target: string, how: string): void {
+        console.info("appname: pill " + how + " to " + (target === "" ? "nowhere (back in the top bar)" : target));
+        if (target === "") {
+            return;
+        }
+        cardWindow = appWindowIds;
+        const atm = TaskManager.AbstractTasksModel;
+        if (target === "full") {
+            // (a tiled window is not maximized: maximizing it takes it out of its tile)
+            if (cardData(atm.IsMaximized) !== true) {
+                cardAction("fullscreen");
+            }
+        } else if (target === "home") {
+            if (cardData(atm.IsMinimized) !== true) {
+                cardAction("minimize");
+            }
+        } else {
+            cardAction(target);
+        }
+    }
+
     // Split waits for the window to be active: KWin's quick tile shortcut acts on the active
     // window, and the card itself had the focus.
     property string pendingTile: ""
@@ -587,11 +645,12 @@ PlasmoidItem {
                 height: pill.drawnHeight
                 radius: height / 2
                 antialiasing: true
-                color: root.cardOpen ? accent.soft(0.35)
+                // held for the drag: the open look, lifted a little (the dock's icon lifts too)
+                color: root.cardOpen || root.pillArmed ? accent.soft(0.35)
                      : root.tint(pillArea.pressed ? 0.16 : pillArea.containsMouse ? 0.12 : 0.08)
-                border.width: root.cardOpen ? 1 : 0
+                border.width: root.cardOpen || root.pillArmed ? 1 : 0
                 border.color: Qt.rgba(accent.focusRing.r, accent.focusRing.g, accent.focusRing.b, 0.5)
-                scale: pillArea.pressed ? 0.96 : 1
+                scale: root.pillArmed ? 1.04 : pillArea.pressed ? 0.96 : 1
                 Behavior on color {
                     enabled: motion.animate
                     ColorAnimation { duration: motion.hover }
@@ -665,11 +724,39 @@ PlasmoidItem {
                 Accessible.description: root.hasWindow ? i18nc("@info:whatsthis", "Window actions") : ""
                 Accessible.onPressAction: root.activatePill()
 
-                onPressed: {
+                property point pressPoint
+                onPressed: mouse => {
                     if (root.hasWindow) {
                         root.cardWanted = true;
                     }
                     root.openOnPress = !root.cardOpen;
+                    pressPoint = Qt.point(mouse.x, mouse.y);
+                    root.pillArmed = false;
+                    if (root.tablet && root.hasWindow) {
+                        pillArm.restart();
+                    }
+                }
+                // moved before the lift: a pull-down or a flick, not a drag
+                onPositionChanged: mouse => {
+                    if (!root.pillArmed && Math.hypot(mouse.x - pressPoint.x, mouse.y - pressPoint.y) > 10) {
+                        pillArm.stop();
+                    }
+                }
+                onReleased: {
+                    pillArm.stop();
+                    if (!root.pillDragging) {
+                        root.pillArmed = false;
+                    }
+                }
+                // The drag layer taking the touch cancels this area before the drag starts: the
+                // lift is let go only after that event, when no drag began.
+                onCanceled: {
+                    pillArm.stop();
+                    Qt.callLater(() => {
+                        if (!root.pillDragging) {
+                            root.pillArmed = false;
+                        }
+                    });
                 }
                 onClicked: {
                     if (!root.openOnPress && !root.cardOpen) {
@@ -685,27 +772,67 @@ PlasmoidItem {
                 }
             }
 
-            // Pull-down of 24 px opens the card too (TABLET 4.3). A layer above the mouse area:
-            // it holds only a passive grab until the finger has moved 24 px, so taps still
-            // reach the pill.
+            // Pull-down of 24 px opens the card too (TABLET 4.3); after the 300 ms hold the same
+            // drag carries the app to a side, full screen or home, and a sideways flick puts it
+            // in that half (board TabletSnap.dc.html). A layer above the mouse area: it holds
+            // only a passive grab until the finger has moved 24 px, so taps still reach the pill.
             Item {
+                id: dragLayer
                 anchors.fill: pillArea
                 z: 10
                 DragHandler {
+                    property bool flicking: false
                     acceptedDevices: PointerDevice.TouchScreen
                     target: null
-                    xAxis.enabled: false
                     dragThreshold: 24
                     onActiveChanged: {
                         // (translation is still 0 when `active` turns true: use the press position)
+                        const dx = centroid.position.x - centroid.pressPosition.x;
                         const dy = centroid.position.y - centroid.pressPosition.y;
-                        if (active && dy > 0 && !root.cardOpen) {
-                            console.info("appname: pull-down opens the " + (root.hasWindow ? "window card" : "launcher"));
-                            root.activatePill();
+                        if (active) {
+                            if (root.pillArmed && root.hasWindow) {
+                                root.startPillDrag(dragLayer.mapToGlobal(centroid.position.x, centroid.position.y));
+                            } else if (dy > 0 && dy >= Math.abs(dx) && !root.cardOpen) {
+                                console.info("appname: pull-down opens the " + (root.hasWindow ? "window card" : "launcher"));
+                                root.activatePill();
+                            } else if (root.tablet && root.hasWindow && Math.abs(dx) > Math.abs(dy)) {
+                                flicking = true;
+                            }
+                            return;
+                        }
+                        if (root.pillDragging) {
+                            root.endPillDrag();
+                        } else if (flicking) {
+                            flicking = false;
+                            const side = Drop.flick(centroid.velocity.x, centroid.velocity.y);
+                            if (side !== "") {
+                                root.pillDrop(side, "flick");
+                            }
+                        }
+                    }
+                    onCentroidChanged: {
+                        if (root.pillDragging) {
+                            root.movePillDrag(dragLayer.mapToGlobal(centroid.position.x, centroid.position.y));
                         }
                     }
                 }
             }
+        }
+    }
+
+    // The pill drag's overlay: the halves, the whole screen, home, the app under the finger.
+    Loader {
+        active: root.pillDragging
+        sourceComponent: WindowDropOverlay {
+            accent: root.dropAccent
+            dark: root.dropDark
+            motion: root.dropMotion
+            screenGeometry: root.pillScreen
+            finger: root.dragFinger
+            iconSource: root.appIcon
+            topInset: root.pillWork.y
+            bottomInset: root.pillScreen.height - root.pillWork.y - root.pillWork.height
+            visible: true
         }
     }
 

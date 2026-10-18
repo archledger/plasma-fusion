@@ -29,6 +29,10 @@ PY
   bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" "topbar: $id"
   # The clock's three settings pages: every key and default on each, the others' keys refreshed.
   case $id in *.clockpill) python3 -B "$ROOT/packages/common/tests/config_page_keys_test.py" "$src" ;; esac
+  # The window pill's drag in tablet posture: where a release goes, what a flick does.
+  if [ "$id" = org.plasmafusion.appname ] && command -v node >/dev/null 2>&1; then
+    node "$src/tests/drop.test.js" >/dev/null
+  fi
 
   rm -rf "$dest"
   mkdir -p "$dest"

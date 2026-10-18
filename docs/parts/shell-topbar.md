@@ -576,3 +576,40 @@ its menus or panels is open (plasma-workspace 6.7.5 `PanelView::restoreAutoHide`
 ask for attention only while their pop-ups are open, so nothing keeps it shown). In tablet posture
 it always shows (docs/parts/kwin-tablet.md). While it is hidden, the island at the top centre shows
 what the live chips would (board Island.dc.html, docs/parts/shell-livechips.md, "The island").
+
+## The pill's drag (tablet posture, 2026-10-18)
+
+Board `design/boards/TabletSnap.dc.html` ("A place for every window"): iPadOS 26 tiles a window
+flicked by its top to an edge, ChromeOS and Windows 11 snap a window dragged to an edge; in tablet
+posture Plasma Fusion's windows have no title bar, and the window pill is their chrome. Research:
+`artifacts/plasma-fusion/2026-10-18-tablet-autosnap/research.md`.
+
+- **Hold and drag**: in tablet posture, the pill of an app held for 300 ms without moving 10 px
+  (the dock's lift for its split drag) arms the drag: the pill takes its open look and grows to
+  1.04. Dragged down from there (the 24 px drag layer, which otherwise opens the card), the app's
+  icon follows the finger over `WindowDropOverlay.qml` (layer shell, "on-screen-display", no input,
+  as the dock's `SplitDropOverlay.qml`): the two halves at accent 8 %, the target at 28 % with a
+  full edge, both lit as "Full screen" over the middle third, a "Home" pill above the bottom, and
+  the hint "A side splits · the middle is full screen · the bottom goes home" in the island's
+  black. The release decides (`contents/code/drop.js`, `target()`): back in the top bar nothing,
+  the bottom 96 px of the work area home (minimized), the outer thirds that half (the card's Split
+  left or right: KWin's quick tile, so the other half offers what fills it), the middle full screen
+  (maximized, also out of a tile; nothing for a window already maximized).
+- **Flick**: without the hold, the pill moved sideways at 800 px/s or faster, more sideways than
+  down (`flick()`), puts the app in that half at once. A slower sideways move does nothing.
+- A tap and the 24 px pull-down still open the window card (a pull-down now has to be more down
+  than sideways). Laptop posture is unchanged: no lift and no flick there. The log:
+  `appname: pill drag starts`, `appname: pill drag to left`, `appname: pill flick to right`,
+  `appname: pill drag to nowhere (back in the top bar)`.
+
+Tests: `tests/drop.test.js` (node, in `70-topbar.sh`): the top bar, the thirds and their edges, the
+bottom 96 px on every side, a portrait screen, flicks at and under 800 px/s and mostly downward.
+`tests/vsession/scenario-pilldrag.sh` (private session on the ThinkPad, 1440 x 900, tablet
+posture, real touch through pfinput; 2026-10-18, pd-3): all 9 checks pass - KWrite opens full
+screen; held 0.45 s and dragged to the left third, KWrite takes the left half (0, 717); to the
+middle, full screen again; a flick to the right, the right half (723, 717); a slow sideways move
+does nothing; dragged within the top bar, nothing; the pull-down still opens the window card;
+dragged to the bottom, KWrite is minimized; no QML message about the pill's files. With main's pill
+(pd-r1) 6 checks fail: no drag, no flick (the held drags open the window card, and the card they
+leave open keeps the later pull-down from opening it again). Not verified: by a person's finger on
+the ThinkPad's own screen, portrait, a second screen.
