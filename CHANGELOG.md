@@ -9,12 +9,15 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## 0.6.0 (2026-10-18)
 
-Tested with Plasma 6.7 (6.7.5 on Fedora 44) and Plasma 6.8 (6.8.0 on Arch); the release tests'
-results land before the tag.
+Tested with Plasma 6.7 (6.7.5 on Fedora 44, Ubuntu 26.10 and NixOS; 6.7.4 on Debian testing) and
+Plasma 6.8 (6.8.0 on Arch and KDE neon; the 6.8 beta, 6.7.91, on Fedora 44).
 Packaged as before for Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian testing and
 KDE neon (.deb) and NixOS (flake), now as six packages: Quick Look and copy text's selection are
 packages of their own, which the main package recommends and the installer installs. On an
 untested Plasma series the parts that depend on Plasma internals stay off until an update.
+Known: on Plasma 6.8.0 with KDE Frameworks 6.31 (Arch, KDE neon), KDE's file indexer can crash over
+and over once a file is added to the home folder, with or without Plasma Fusion (KDE bug 524392);
+the bug's workaround is a `kde-baloo.service` override with `QT_QPA_PLATFORM=offscreen`.
 
 - **The installer brings Quick Look and copy text's selection too:** `install.sh` installs all six
   packages, and `install.sh update` from an earlier release adds the two new ones.
