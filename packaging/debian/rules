@@ -33,6 +33,10 @@ override_dh_auto_configure:
 	stamp=$$(( 1700000000 + 0x$$(cd packages/quicklook-cpp && cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/qml/*.qml | sha256sum | cut -c1-6) )); \
 	  echo $$stamp >_quicklook-stamp; \
 	  SOURCE_DATE_EPOCH=$$stamp dh_auto_configure --sourcedirectory=packages/quicklook-cpp --builddirectory=_build/quicklook -- $(CMAKE_FLAGS)
+	# The copy-text overlay's QML too; its program goes to the helper directory (/usr/libexec/plasma-fusion).
+	stamp=$$(( 1700000000 + 0x$$(cd packages/copytext-cpp && cat CMakeLists.txt src/CMakeLists.txt src/*.h src/*.cpp src/qml/*.qml | sha256sum | cut -c1-6) )); \
+	  echo $$stamp >_copytext-stamp; \
+	  SOURCE_DATE_EPOCH=$$stamp dh_auto_configure --sourcedirectory=packages/copytext-cpp --builddirectory=_build/copytext -- $(CMAKE_FLAGS) -DPF_HELPER_DIR=/usr/libexec/plasma-fusion
 
 override_dh_auto_build:
 	STAGE=$(CURDIR)/_stage bash tools/build.sh
@@ -41,6 +45,7 @@ override_dh_auto_build:
 	dh_auto_build --builddirectory=_build/navigation
 	SOURCE_DATE_EPOCH=$$(cat _kcm-stamp) QT_RCC_SOURCE_DATE_OVERRIDE=$$(cat _kcm-stamp) dh_auto_build --builddirectory=_build/settings
 	SOURCE_DATE_EPOCH=$$(cat _quicklook-stamp) QT_RCC_SOURCE_DATE_OVERRIDE=$$(cat _quicklook-stamp) dh_auto_build --builddirectory=_build/quicklook
+	SOURCE_DATE_EPOCH=$$(cat _copytext-stamp) QT_RCC_SOURCE_DATE_OVERRIDE=$$(cat _copytext-stamp) dh_auto_build --builddirectory=_build/copytext
 
 override_dh_auto_test:
 
@@ -52,6 +57,7 @@ override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/plasma-fusion-settings cmake --install _build/settings
 	DESTDIR=$(CURDIR)/debian/plasma-fusion-navigation cmake --install _build/navigation
 	DESTDIR=$(CURDIR)/debian/plasma-fusion-quicklook cmake --install _build/quicklook
+	DESTDIR=$(CURDIR)/debian/plasma-fusion-copytext cmake --install _build/copytext
 	# Every icon link resolves in the package or in the installed Breeze (hicolor and Flatpak names
 	# are those of apps that need not be installed).
 	ln -s /usr/share/icons/breeze debian/plasma-fusion/usr/share/icons/breeze

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Plasma Fusion for NixOS: the shared part (what tools/build.sh stages: themes, widgets, icons,
-# fonts, the setup and login-check tools) and the three compiled parts, built from the system's own
+# fonts, the setup and login-check tools) and the compiled parts, built from the system's own
 # kdePackages. Used by ./module.nix; Plasma 6.7 or later (nixos-unstable while NixOS 26.05 has 6.6).
 #   pkgs:    a nixpkgs package set
 #   src:     a Plasma Fusion source tree (a pinned fetchGit or fetchFromGitHub, or a checkout)
@@ -17,9 +17,9 @@ let
   pythonRuntime = pkgs.python3.withPackages (ps: [ ps.pillow ]);
   # NixOS links environment.systemPackages here; /usr/share and /usr/libexec do not exist.
   sw = "/run/current-system/sw";
-  compiled = { pname, version, dir, buildInputs, cmakeFlags ? [ ], app ? false }:
+  compiled = { pname, version, dir, buildInputs, cmakeFlags ? [ ], app ? false, postInstall ? "" }:
     stdenv.mkDerivation {
-      inherit pname version buildInputs cmakeFlags;
+      inherit pname version buildInputs cmakeFlags postInstall;
       src = "${src}/packages/${dir}";
       # The settings module compiles in packages/common/FusionMetrics.qml (found as common/).
       postUnpack = ''
@@ -112,6 +112,20 @@ rec {
     buildInputs = with kdePackages; [ qtbase qtdeclarative qtmultimedia qtwebengine qtsvg qtimageformats kio kdbusaddons
       kservice kwindowsystem ki18n kcoreaddons kirigami qqc2-desktop-style syntax-highlighting kimageformats kio-extras ];
     cmakeFlags = [ "-DBUILD_TESTING=OFF" ];
+  };
+
+  # Copy text's selection overlay: started by the session bus, it gets its screen pictures from KWin
+  # by its desktop file, whose Exec= must be the program KWin finds in /proc/PID/exe. Not wrapped:
+  # nixpkgs' KWin unwraps .NAME-wrapped for its Wayland checks only, not for this D-Bus one; the
+  # session's Qt plugin and QML paths serve it, as they serve the plugins above. The bus starts it
+  # from this output, and it hands the area to the helper beside it: a link to the shared package's.
+  plasma-fusion-copytext = compiled {
+    pname = "plasma-fusion-copytext"; inherit version; dir = "copytext-cpp";
+    buildInputs = with kdePackages; [ qtbase qtdeclarative ki18n layer-shell-qt ];
+    cmakeFlags = [ "-DBUILD_TESTING=OFF" ];
+    postInstall = ''
+      ln -s ${plasma-fusion}/libexec/plasma-fusion/plasma-fusion-copytext $out/libexec/plasma-fusion/plasma-fusion-copytext
+    '';
   };
 
   plasma-fusion-navigation = compiled {

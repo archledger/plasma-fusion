@@ -57,6 +57,20 @@ markup() {
 
 run=${XDG_RUNTIME_DIR:-}
 [ -n "$run" ] && [ -d "$run" ] && [ -w "$run" ] || run=${TMPDIR:-/tmp}
+
+# --image FILE: the area is already chosen (Plasma Fusion's own overlay saved it): read, copy, say.
+image=
+if [ "${1:-}" = --image ]; then
+  image=${2:-}
+  [ -s "$image" ] || { echo "plasma-fusion-copytext: --image needs a picture" >&2; exit 2; }
+fi
+# Plasma Fusion's own overlay, when it runs (plasma-fusion-copytext-overlay, the CopyText board):
+# it shows at once, where Spectacle starts for each capture, and hands the area back with --image.
+# PLASMA_FUSION_COPYTEXT_NO_OVERLAY is its way back here when KWin gives it no pictures.
+if [ -z "$image" ] && [ -z "${PLASMA_FUSION_COPYTEXT_NO_OVERLAY:-}" ] && command -v tesseract >/dev/null 2>&1 &&
+  bus -- call org.plasmafusion.CopyTextOverlay / org.plasmafusion.CopyTextOverlay Start >/dev/null 2>&1; then
+  exit 0
+fi
 # One at a time; the lock is not handed on to the programs that stay (Spectacle, wl-copy: fd 9
 # closed for them).
 if command -v flock >/dev/null 2>&1; then
@@ -70,7 +84,7 @@ spectacle_open() {
   owned=$(bus -- call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s org.kde.spectacle 2>/dev/null) || true
   [ "$owned" = "b true" ]
 }
-if ! command -v tesseract >/dev/null 2>&1 || spectacle_open; then
+if [ -z "$image" ] && { ! command -v tesseract >/dev/null 2>&1 || spectacle_open; }; then
   exec spectacle --region 9>&-
 fi
 
@@ -100,15 +114,19 @@ done
 printf -v lang '%s+' "${langs[@]}"
 lang=${lang%+}
 
-dir=$(mktemp -d "$run/plasma-fusion-copytext.XXXXXX")
-trap 'rm -rf -- "$dir"' EXIT
-img=$dir/region.png
-# -k (--release-capture, Spectacle 6.7.0): the area is taken as the drag ends, as copy-text tools
-# take it, without Enter or a double-click; Spectacle's own setting for its captures stays as it is.
-# Not for an open Spectacle above: its selection would keep the option for its later captures.
-spectacle -b -n -r -k -o "$img" >/dev/null 2>&1 9>&- || true
-# Cancelled (Esc): nothing to say.
-[ -s "$img" ] || exit 0
+if [ -n "$image" ]; then
+  img=$image
+else
+  dir=$(mktemp -d "$run/plasma-fusion-copytext.XXXXXX")
+  trap 'rm -rf -- "$dir"' EXIT
+  img=$dir/region.png
+  # -k (--release-capture, Spectacle 6.7.0): the area is taken as the drag ends, as copy-text tools
+  # take it, without Enter or a double-click; Spectacle's own setting for its captures stays as it
+  # is. Not for an open Spectacle above: its selection would keep the option for its later captures.
+  spectacle -b -n -r -k -o "$img" >/dev/null 2>&1 9>&- || true
+  # Cancelled (Esc): nothing to say.
+  [ -s "$img" ] || exit 0
+fi
 
 if ! raw=$(tesseract "$img" stdout -l "$lang" --psm 3 2>/dev/null); then
   notify "Could not read the text" "Tesseract failed on the selected area." 1

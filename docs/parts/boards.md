@@ -33,7 +33,7 @@ when no render matches; the output names the render that did (2026-10-17: the Po
 frosted tooltip drew its title one device pixel off in about one load in twenty, a worst window
 of 25.4, with the same layout, every font face loaded, a settled frame and the same result after
 a fresh raster; a stale preview differs in every render). A board
-change re-renders the affected previews with this tool; `--check` over all 32 boards is the
+change re-renders the affected previews with this tool; `--check` over all 33 boards is the
 fidelity gate ([`docs/parts/icons.md`](icons.md) lists what the drawings mean).
 
 ## Per-app tiles

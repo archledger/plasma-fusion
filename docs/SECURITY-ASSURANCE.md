@@ -225,6 +225,24 @@ Each boundary, what crosses it, and how it is guarded.
   A machine that installs it replaces Fedora's package until Fedora's next update replaces it back;
   the README there says when to rebuild and when to drop it.
 
+### 3.10 Copy text's selection overlay (KWin's screenshot permission)
+
+- `plasma-fusion-copytext-overlay` (package `plasma-fusion-copytext`) may call KWin's restricted
+  `org.kde.KWin.ScreenShot2`, as Spectacle and plasmashell may: KWin allows it to the executable
+  that its desktop file names in `Exec=` (`X-KDE-DBUS-Restricted-Interfaces`), the installed
+  program in the helper directory, which only root writes. No other program gets it: a script could
+  not be given the permission without giving it to its interpreter, hence a compiled program
+  ([`parts/copytext-cpp.md`](parts/copytext-cpp.md)).
+- It takes pictures only when `Start()` is called on the session bus, and each call shows them at
+  once over every screen (or, when KWin refuses, Spectacle's selection): a capture is never silent.
+  `Start()` takes nothing and returns nothing, so a caller cannot get a picture through it; any
+  program of the user can call it, and such a program is out of scope (section 2).
+- The pictures stay in the program's memory until the box is drawn or the selection ends; only the
+  chosen area is written, into a new directory of mode 700 in the user's runtime directory, for the
+  helper beside the program (`plasma-fusion-copytext --image`), and the directory is removed once
+  the helper ends (`Overlay::read` in `packages/copytext-cpp/src/overlay.cpp`; the `copytext-flow`
+  test checks the mode and the removal).
+
 ## 4. Secure design principles applied
 
 The principles of Saltzer and Schroeder, as the Best Practices criteria list them.
@@ -281,6 +299,7 @@ Widget files named here without a path are under
 | Greeter styling (root) | `--display-from FILE` | no link, a regular file, at most 1 MiB, read as its owner, must parse as a KWin output configuration |
 | Login check | KDE configuration files and package versions | values compared with fixed Plasma Fusion ids; an unreadable record or a package database that takes over 3 s counts as untested ([`parts/gate.md`](parts/gate.md)) |
 | Settings module | the user's choices | stored as enumerated names (for example the glass and button styles in `kcm.cpp`) |
+| Copy text's overlay | KWin's picture: a pipe and its description | only type `raw`, a width and a height above 0, a known image format and a stride not under the row; every row read in full; else no picture and Spectacle's selection (`readRawImage` in `packages/copytext-cpp/src/capture.cpp`; `copytext-core`) |
 
 ## 7. Hardening
 

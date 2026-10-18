@@ -22,7 +22,7 @@ addFilter(r"dangling-symlink /usr/share/icons/PlasmaFusion(-Dark)?/flatpak/\S+ /
 addFilter(r"^plasma-fusion\.\S+: E: no-binary$")
 
 # The GPL text is the licence as published (with the FSF's postal address).
-addFilter(r"incorrect-fsf-address /usr/share/licenses/plasma-fusion(-decoration|-settings|-navigation|-quicklook)?/GPL-2.0-or-later.txt")
+addFilter(r"incorrect-fsf-address /usr/share/licenses/plasma-fusion(-decoration|-settings|-navigation|-quicklook|-copytext)?/GPL-2.0-or-later.txt")
 
 # Paths in %description ("/usr/share/...") are not words.
 addFilter(r"spelling-error \('usr',")

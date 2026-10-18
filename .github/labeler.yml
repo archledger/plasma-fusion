@@ -7,7 +7,7 @@ icons:
       - any-glob-to-any-file: ["generators/icons/**", "generators/cursors/**", "packages/appicons/**"]
 shell:
   - changed-files:
-      - any-glob-to-any-file: ["packages/plasmoids/**", "packages/common/**", "packages/lockscreen/**", "packages/look-and-feel/**", "packages/quicklook-cpp/**"]
+      - any-glob-to-any-file: ["packages/plasmoids/**", "packages/common/**", "packages/lockscreen/**", "packages/look-and-feel/**", "packages/quicklook-cpp/**", "packages/copytext/**", "packages/copytext-cpp/**"]
 kwin:
   - changed-files:
       - any-glob-to-any-file: ["packages/kwin/**", "packages/navigation-cpp/**", "packages/decoration-cpp/**", "generators/decoration/**"]

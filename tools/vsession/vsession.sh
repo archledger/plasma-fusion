@@ -266,8 +266,11 @@ rm -f "$PFV/timed-out"
   done
 ) &
 WATCHDOG=$!
+# XDG_DATA_HOME as every XDG program derives it from this HOME: the session's bus daemon takes the
+# user's home from the account database instead, so without it a service file in the private
+# HOME (a program the bus starts on demand) went unseen, and the real home's ones were used.
 env -i "${EXTRA_ENV[@]}" "${OPT_ENV[@]}" HOME="$PFV/home" XDG_RUNTIME_DIR="$PFV/run" PFV="$PFV" NO_PLASMASHELL="${NO_PLASMASHELL:-0}" \
-  PFV_SCALE="${PFV_SCALE:-1}" \
+  XDG_DATA_HOME="$PFV/home/.local/share" PFV_SCALE="${PFV_SCALE:-1}" \
   PATH=/usr/bin:/bin:/usr/lib64/qt6/bin LANG=en_US.UTF-8 \
   XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE KDE_FULL_SESSION=true KDE_SESSION_VERSION=6 \
   XDG_CONFIG_DIRS="$CONFIG_DIRS" QT_FORCE_STDERR_LOGGING=1 \

@@ -40,7 +40,7 @@ commands, the bundled fonts, the tile emitter and the tests.
 </tr>
 <tr>
 <td valign="top"><a href="previews/Island.webp"><img src="previews/Island.webp" width="420" alt="The top bar hidden, and the island — dark and light"></a><br><b>The top bar hidden, and the island — dark and light</b><br><a href="boards/Island.dc.html">source</a></td>
-<td></td>
+<td valign="top"><a href="previews/CopyText.webp"><img src="previews/CopyText.webp" width="420" alt="Copy text from the screen — dark and light"></a><br><b>Copy text from the screen — dark and light</b><br><a href="boards/CopyText.dc.html">source</a></td>
 </tr>
 </table>
 

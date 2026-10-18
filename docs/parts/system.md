@@ -2,10 +2,11 @@
 
 Three pieces:
 
-1. **The packages** (one source, one version, four packages on every channel): `plasma-fusion`,
+1. **The packages** (one source, one version, six packages on every channel): `plasma-fusion`,
    everything of Plasma Fusion that all users can share (themes, widgets, icons, fonts, KWin
    scripts, the helpers, the setup tools and the `plasma-fusion` command), and the compiled parts
-   `plasma-fusion-decoration`, `plasma-fusion-settings` and `plasma-fusion-navigation`. Fedora
+   `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation`,
+   `plasma-fusion-quicklook` and `plasma-fusion-copytext`. Fedora
    (Copr), Arch (AUR), Ubuntu (PPA), KDE neon and Debian testing (release `.deb`s) and NixOS (flake
    or module) build them from the same files; the installer (docs/parts/installer.md) picks the
    channel.
@@ -31,7 +32,7 @@ the PKGBUILD, the Debian packaging, the Nix packages, rpmlint filters, licence t
 | `packaging/tested-plasma.txt` | the Plasma series this version was tested with (`6.7`); the login check records no other series as tested (gate.md) |
 | `packaging/fedora/plasma-fusion.spec` | the Fedora spec Copr builds (`.packit.yaml`) |
 | `packaging/arch/PKGBUILD` | the AUR package (split: `plasma-fusion` any, the compiled parts x86_64), from the signed tag; a pacman hook names the compiled part due for a rebuild after a kwin or kdecoration upgrade |
-| `packaging/debian/`, `packaging/build-deb.sh` | one source package, four binaries; `--target ubuntu:SERIES` (PPA, `X.Y.Z-0ppa1~SERIES1`), `neon`, `debian:testing` (`X.Y.Z-1~TARGET1`) or `plain` (`X.Y.Z-1`, the shared part for other Debian-family systems); `--source` makes the unsigned source package for Launchpad. The navigation package depends on the KWin series it was built against (`kwin-wayland (>= built, << next minor~)`) |
+| `packaging/debian/`, `packaging/build-deb.sh` | one source package, six binaries; `--target ubuntu:SERIES` (PPA, `X.Y.Z-0ppa1~SERIES1`), `neon`, `debian:testing` (`X.Y.Z-1~TARGET1`) or `plain` (`X.Y.Z-1`, the shared part for other Debian-family systems); `--source` makes the unsigned source package for Launchpad. The navigation package depends on the KWin series it was built against (`kwin-wayland (>= built, << next minor~)`) |
 | `packaging/nix/`, `flake.nix` | the Nix packages and the NixOS module (nixos.md) |
 | `packaging/stamp-installer.sh` | the release's installer (installer.md) |
 
@@ -53,7 +54,7 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
   (each dirty test build sorts newer than the one before). Example:
   `0.2.0~281.gitcde5bb0-1.fc44`. A snapshot gets its own changelog entry.
 * Without `--compiled` it builds the shared part only (`rpmbuild --without compiled`; the build
-  workflow does this); with it all four packages (KWin, KDecoration and KDE Frameworks development
+  workflow does this); with it all six packages (KWin, KDecoration and KDE Frameworks development
   packages needed: `dnf builddep packaging/fedora/plasma-fusion.spec`).
 * The source tarball is the working tree as it is (tracked plus untracked, not git-ignored files;
   `git ls-files --cached --others --exclude-standard`), stable order, owners 0, the revision's
@@ -62,11 +63,11 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
   build time (`use_source_date_epoch_as_buildtime`) and clamps the files' times to it, and the
   build host is recorded as `reproducible`.
 * `%build` runs `tools/build.sh` into `_stage/` (no display, `QT_QPA_PLATFORM=offscreen`, session
-  variables removed) and the Plymouth generator; with the compiled parts, the four CMake builds
-  (the settings page's and Quick Look's QML get a time stamp derived from their sources,
-  kcm-cpp.md).
-* `%install` runs `packaging/install-tree.sh` and `cmake --install` of the four parts; then every
-  QML/JS file of all four packages gets a time derived from its content, before the clamp date.
+  variables removed) and the Plymouth generator; with the compiled parts, the five CMake builds
+  (the settings page's, Quick Look's and copy text's overlay's QML get a time stamp derived from
+  their sources, kcm-cpp.md).
+* `%install` runs `packaging/install-tree.sh` and `cmake --install` of the five parts; then every
+  QML/JS file of all six packages gets a time derived from its content, before the clamp date.
   Qt's QML disk caches (`~/.cache/kwin/qmlcache`, `~/.cache/plasmashell/qmlcache`, ...) reuse a
   compiled file while its source's time is unchanged, and the clamp to the `%changelog` day gave
   0.3.0 and 0.3.1 equal times: after updating from 0.3.0, KWin and plasmashell kept running 0.3.0's
@@ -109,7 +110,7 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
 | `/usr/share/plasma-fusion/docs/` | `README.md`, `docs/PLAN.md`, `docs/parts/*.md` | `%doc` |
 | `/usr/bin/plasma-fusion` | `tools/plasma-fusion` | `setup`, `update`, `status`, `restore`, `drop-user-copy`, `version` (device.md) |
 | `/usr/share/plasma-fusion/{version,tested-plasma.txt,items.txt}` | `VERSION`, `packaging/tested-plasma.txt`, install-tree.sh | the version, the tested Plasma series (login check), the package's top-level entries (`drop-user-copy`) |
-| `/usr/share/plasma-fusion/built-against/{decoration,settings,navigation}` | the compiled parts' CMake | one per installed compiled part |
+| `/usr/share/plasma-fusion/built-against/{decoration,settings,navigation,quicklook,copytext}` | the compiled parts' CMake | one per installed compiled part |
 | `/usr/share/licenses/plasma-fusion/{GPL-2.0-or-later,CC-BY-SA-4.0}.txt` | `packaging/LICENSES/` | `%license` |
 
 Not in the RPM: per-user files (`~/.config/gtk-*`, the lock-screen systemd drop-in, kdeglobals and

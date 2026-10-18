@@ -75,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [decoration-cpp, kcm-cpp, navigation-cpp, quicklook-cpp]
+        package: [decoration-cpp, kcm-cpp, navigation-cpp, quicklook-cpp, copytext-cpp]
     steps:
       - name: Install git (checkout runs inside the container)
         run: dnf install -y -q git-core
