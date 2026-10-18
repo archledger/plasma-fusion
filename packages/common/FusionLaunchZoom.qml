@@ -13,6 +13,10 @@
 
       FusionLaunchZoom { id: launchZoom; dark: ... }
       launchZoom.play(iconItem, source, iconName)   // iconItem: the tapped FusionIconTile
+      launchZoom.play(iconItem, source, iconName, Qt.rect(x, y, w, h))   // into that part only
+
+    The part (global coordinates) is for an app that opens beside another one: the home screen's
+    free side (board TabletSplit.dc.html), where the card grows into the free half.
 
     The source is packages/common/FusionLaunchZoom.qml; tools/build-lib/shared-qml.sh copies it into
     every package that uses it (do not edit the copies).
@@ -40,14 +44,15 @@ Item {
         id: motion
     }
 
-    function play(iconItem: Item, source: var, name: string): void {
+    function play(iconItem: Item, source: var, name: string, part: var): void {
         if (!motion.animate || !iconItem || !iconItem.Window.window) {
             return;
         }
         const p = iconItem.mapToGlobal(0, 0);
         from = Qt.rect(p.x, p.y, iconItem.width, iconItem.height);
         const screen = iconItem.Screen;
-        area = Qt.rect(screen.virtualX, screen.virtualY, screen.width, screen.height);
+        area = part && part.width > 0 && part.height > 0 ? Qt.rect(part.x, part.y, part.width, part.height)
+                                                         : Qt.rect(screen.virtualX, screen.virtualY, screen.width, screen.height);
         iconSource = source;
         iconName = name;
         progress = 0;

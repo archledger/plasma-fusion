@@ -12,6 +12,9 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.private.kicker as Kicker
 import org.kde.plasma.workspace.dbus as DBus
 import org.kde.kirigami as Kirigami
+import org.kde.taskmanager as TaskManager
+
+import "code/home.js" as HomeLogic
 
 // The home screen in tablet posture (TABLET2 H1, owner decision "iPad-style"): pages of apps in the
 // desktop window, under the apps, in place of Folder View (whose rubber band was the owner's pen
@@ -170,7 +173,10 @@ Item {
     // once per event loop pass, with settled values (both change together)
     onPinnedPagesChanged: Qt.callLater(syncPages)
     onPageCountChanged: Qt.callLater(syncPages)
-    Component.onCompleted: syncPages()
+    Component.onCompleted: {
+        syncPages();
+        Qt.callLater(findFreeSide);
+    }
     function storeSizes(sizes: var): void {
         const s = sizes.slice();
         while (s.length > 1 && s[s.length - 1] <= 0) {
@@ -305,7 +311,8 @@ Item {
         const id = String(favoriteId || "").replace(/^applications:/, "");
         return /^[A-Za-z0-9._-]+\.desktop$/.test(id) ? id : "";
     }
-    // The dock splits the screen on a splitRequest "<left|right>:<nonce>:<app>.desktop".
+    // The dock splits the screen on a splitRequest "<left|right>:<nonce>:<app>.desktop": the dock of
+    // this screen only (home.js splitScript), so a dock on every screen does not start it twice.
     function requestSplit(side: string, appId: string): void {
         if (appId === "" || (side !== "left" && side !== "right")) {
             return;
@@ -314,10 +321,90 @@ Item {
         DBus.SessionBus.asyncCall({
             "service": "org.kde.plasmashell", "path": "/PlasmaShell", "iface": "org.kde.PlasmaShell",
             "member": "evaluateScript",
-            "arguments": [new DBus.string("panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {"
-                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"splitRequest\", \"" + side + ":\" + Date.now() + \":" + appId + "\"); }); });")],
+            "arguments": [new DBus.string(HomeLogic.splitScript(side, appId, Plasmoid.containment.screen, Date.now()))],
             "signature": "(s)"
         }, () => {}, error => console.warn("home: split request failed: " + error));
+    }
+
+    // ---- The free side (board TabletSplit.dc.html): one app fills a half, top to bottom, and
+    // nothing is shown beside it (a split with nothing else open, or the other app of a split closed
+    // or sent home). The pages, their dots and the cards step aside, and the free part offers the
+    // apps (FreeSidePicker.qml); a tap opens the app on that side the way a split request does. The
+    // windows of this screen, desktop and activity come from the task manager's model (their
+    // geometry, which KWin publishes), so no script has to say where the split is.
+    property var freeSide: null
+    readonly property bool picking: freeSide !== null
+    onPickingChanged: {
+        if (picking) {
+            stopEditing();
+        }
+    }
+    TaskManager.VirtualDesktopInfo {
+        id: desktopInfo
+    }
+    TaskManager.ActivityInfo {
+        id: activityInfo
+    }
+    TaskManager.TasksModel {
+        id: screenTasks
+        screenGeometry: home.plasmoidItem.screenGeometry
+        virtualDesktop: desktopInfo.currentDesktop
+        activity: activityInfo.currentActivity
+        filterByVirtualDesktop: true
+        filterByActivity: true
+        filterByScreen: true
+        filterMinimized: true
+        filterHidden: true
+        groupMode: TaskManager.TasksModel.GroupDisabled
+    }
+    Connections {
+        target: screenTasks
+        function onCountChanged(): void { Qt.callLater(home.findFreeSide); }
+        function onDataChanged(): void { Qt.callLater(home.findFreeSide); }
+        function onModelReset(): void { Qt.callLater(home.findFreeSide); }
+        function onLayoutChanged(): void { Qt.callLater(home.findFreeSide); }
+    }
+    onWidthChanged: Qt.callLater(findFreeSide)
+    onHeightChanged: Qt.callLater(findFreeSide)
+    function findFreeSide(): void {
+        const atm = TaskManager.AbstractTasksModel;
+        // The window geometry is the screen's (global) one; this layer starts at the work area's
+        // corner (the containment's availableScreenRect, relative to its screen).
+        const screen = home.plasmoidItem.screenGeometry;
+        const avail = home.plasmoidItem.availableScreenRect;
+        const ox = screen.x + avail.x;
+        const oy = screen.y + avail.y;
+        const windows = [];
+        for (let row = 0; row < screenTasks.count; ++row) {
+            const index = screenTasks.makeModelIndex(row);
+            if (screenTasks.data(index, atm.IsWindow) !== true || screenTasks.data(index, atm.IsMinimized) === true
+                    || screenTasks.data(index, atm.IsHidden) === true) {
+                continue;
+            }
+            const g = screenTasks.data(index, atm.Geometry);
+            if (!g) {
+                continue;
+            }
+            windows.push({ "x": g.x - ox, "y": g.y - oy, "width": g.width, "height": g.height,
+                           "appId": String(screenTasks.data(index, atm.AppId) || "") });
+        }
+        const found = HomeLogic.freeSide(windows, { "x": 0, "y": 0, "width": home.width, "height": home.height });
+        if (!HomeLogic.sameFree(found, freeSide)) {
+            freeSide = found;
+            console.info("home: free side: " + (found ? found.side + ", " + Math.round(found.width) + " px from x "
+                                                + Math.round(found.x) + " beside " + found.appId : "none"));
+        }
+    }
+    // A tap in the free part: the app opens on that side (the dock's split request; the app beside
+    // it is already in the other half, where KWin leaves a window quick-tiled again to its side).
+    function pickForSide(iconItem: Item, entry, side: string, appId: string): void {
+        if (appId === "") {
+            return;
+        }
+        const p = home.mapToGlobal(freeSide ? freeSide.x : 0, freeSide ? freeSide.y : 0);
+        launchZoom.play(iconItem, entry.decoration || "application-x-executable", iconNameFor(entry),
+                        freeSide ? Qt.rect(p.x, p.y, freeSide.width, freeSide.height) : undefined);
+        requestSplit(side, appId);
     }
 
     // The launcher (in the dock) opens on an openRequest "<mode>:<nonce>[:<argument>]".
@@ -381,6 +468,7 @@ Item {
     ListView {
         id: pages
         objectName: "homePages"
+        visible: !home.picking
         width: parent.width
         height: parent.height
         y: Math.min(120, home.dragDown * 0.5)
@@ -458,7 +546,8 @@ Item {
         anchors.fill: parent
         z: 100
         DragHandler {
-            enabled: !home.editing
+            // (not while the free side's list scrolls up and down)
+            enabled: !home.editing && !home.picking
             acceptedDevices: PointerDevice.TouchScreen
             target: null
             xAxis.enabled: false
@@ -494,7 +583,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: home.height - home.dockReserve - home.dotsHeight + 14 - 18
         spacing: 0
-        visible: home.pageCount > 1
+        visible: home.pageCount > 1 && !home.picking
         Repeater {
             model: home.pageCount
             // AbstractButtons (not TapHandlers): they take the press, so the page's empty-space tap
@@ -530,6 +619,19 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    Loader {
+        active: home.picking
+        x: home.freeSide ? home.freeSide.x : 0
+        y: home.freeSide ? home.freeSide.y : 0
+        width: home.freeSide ? home.freeSide.width : 0
+        height: home.freeSide ? home.freeSide.height : 0
+        sourceComponent: FreeSidePicker {
+            home: home
+            side: home.freeSide ? home.freeSide.side : "right"
+            otherApp: home.freeSide ? home.freeSide.appId : ""
         }
     }
 

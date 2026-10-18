@@ -80,6 +80,68 @@ deploy that also reloads KWin's scripts, the switch during the shell's start, wi
 Centre, the launcher's sheet, KWin's Overview or the home screen's edit mode open); the scenario
 stays as its regression test.
 
+## The free side beside an app (tablet posture, 2026-10-18)
+
+Board `design/boards/TabletSplit.dc.html` (SPLIT.md item 9, the owner's screencast of 2026-10-02):
+an app split into one half with nothing beside it left the rest of the screen to the home screen,
+where page 1 showed cut off under the app, the cards in the free half. Android and iPadOS offer the
+apps there. Now the home screen does:
+
+- **When**: one shown window of this screen, desktop and activity fills the left or the right part
+  of the work area top to bottom (within 24 px of its top, bottom and one side edge, not both: a
+  maximized window is at both), the part beside it is at least 240 px wide, and no other shown
+  window overlaps that part by more than the gaps (`contents/ui/code/home.js`, `freeSide()`). That
+  is a split from the dock or an app's menu with nothing else open, the other app of a split closed
+  or sent home, or a split at the divider's 1/3 or 2/3 (KWin's quick tiles, so the split divider
+  leaves its place: docs/parts/kwin-tablet.md). The windows come from the task manager's model
+  (`TaskManager.TasksModel`, filtered by screen, desktop and activity, without minimized and hidden
+  windows), with the geometry KWin publishes; the answer is worked out again whenever the model's
+  rows or data change (one pass per event loop turn) and logged when it changes: `home: free side:
+  right, 723 px from x 717 beside org.kde.kwrite.desktop`, `home: free side: none`.
+- **What**: the pages, their dots and the cards step aside (the cards' opacity 0, the input mask
+  covers the whole layer, edit mode ends), and the free part shows `FreeSidePicker.qml`: the board's
+  tint (rgba(8,11,24,.55); light rgba(250,251,255,.62), the snap script's "Pick a window for this
+  side" fill), "Pick an app for this side" (17 px, ExtraBold), the home apps under "Home" (the
+  pinned list in the home pages' order) and every app A to Z under "All apps", in 128 x 120 px cells
+  40 px from the sides, the list scrolling under a 120 px fade into the tint; the swipe-down search
+  is off there. Only apps are offered (a pinned file or link is not). The app on the other side is
+  dimmed to 40 % and takes no tap.
+- **A tap** opens the app on that side: the home screen's split request (`requestSplit`, the dock's
+  `startSplitForApp`), with the app-open zoom growing into the free part (`FusionLaunchZoom.play`'s
+  part, docs/parts/shared-blocks.md). The request goes to the dock of the home screen's own screen
+  (`splitScript()`: with a dock on every screen each dock used to start the app; with one dock only,
+  on another screen, to that one). The dock moves the app in use to the other half first, which is
+  where the app beside the free part already is: KWin 6.7.5 and 6.8.0 leave a window quick-tiled
+  again to its own side in place on a single screen (`Window::handleQuickTileShortcut`, identical in
+  both). With other windows open, "Pick a window for this side" covers the free half right after the
+  split (docs/parts/kwin.md); dismissed, this picker is under it.
+
+Tests: `tests/split-request.test.js` (node, in `76-desktop.sh`): the request against a model of
+desktop scripting reaches the dock of the home screen's screen only (a dock on every screen), the
+one dock when it is on another screen, not a dock of a screen that is gone, once with two docks on
+one screen, nothing without a dock, the app id quoted. `tests/freeside.test.js` (node, in
+`76-desktop.sh`): the halves with the snap script's gaps, both sides, two apps, nothing shown, a
+maximized window, a window not top to bottom or away from the edges, the divider's 2/3 and 1/3, a
+sliver too narrow, a window over the free part, a dialog in the app's half, one touching by the gaps
+only, a window without a size, a work area not at 0, a portrait screen, the app ids under their
+names, unchanged answers. `tests/vsession/scenario-freeside.sh` (private session on the ThinkPad,
+1440 x 900, tablet posture, real touch through pfinput; 2026-10-18, fs-3): 12 checks pass - no free
+side on the home screen or beside a maximized KWrite; KWrite quick-tiled left: the right part offers
+the apps; a tap on Dolphin there puts Dolphin on the right (723, 717 x 836) and KWrite stays on the
+left, and the free side goes; Dolphin closed: it comes back; KWrite on the right: the left part;
+KWrite maximized: none; Dolphin alone on the left: its own tile asks for nothing, the next (Konsole)
+opens beside it; no QML message about these files. With main's stage (e8193ac, fs-r1) the same
+scenario fails 6 checks (no free side, no tap opens an app there). The scenario taps 0.6 s after
+pfinput starts: the seat gains touch only when pfinput's device appears and plasmashell binds
+`wl_touch` a moment later, so an immediate tap lost its down event (WAYLAND_DEBUG: the up and frame
+arrived without it); a real touchscreen is always there.
+`tests/vsession/scenario-freeside-screens.sh` (two outputs, "Dock on every screen", tablet posture;
+fss-2): a dock on each screen; KWrite quick-tiled left on the first; one tap on Konsole in the free
+part starts one Konsole, on the right, and one dock acts on the request. With the previous request
+(every dock, fss-r1) the same tap started two Konsoles: both docks acted on it (one of their plans
+was dropped later, its app not becoming active). Not verified: by a person's finger on the
+ThinkPad's own screen, portrait, a real second monitor.
+
 ## Installation and switch-over
 
 - `fusion-config.sh` layout migration (plasmashell stopped): a desktop containment

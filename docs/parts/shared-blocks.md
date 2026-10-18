@@ -247,6 +247,9 @@ opens on top, covers it: no "app is ready" signal is needed. It fades out (`popu
 after 4 s or on a tap; a full-screen window costs about 37 MiB of GPU memory only while it exists.
 Reduced motion: nothing is shown. Used by the home screen (tiles), the dock (starting a pinned app in
 tablet posture) and the launcher sheet (tiles). Each play logs `launch zoom: <icon> from x,y size`.
+An optional fourth argument, a part of the screen in global coordinates (`play(iconItem, source,
+iconName, Qt.rect(x, y, w, h))`), makes the card grow into that part instead: the home screen's free
+side beside an app, where the app opens in the free half (2026-10-18, docs/parts/desktop.md).
 
 Test (private session, `build/m1/scen-m1z.sh`, m1x/m1y; evidence `artifacts/plasma-fusion/2026-10-01-tablet2/M1/zoom`):
 Discover tapped on the home screen: the splash with its icon fills the screen under the top bar, then

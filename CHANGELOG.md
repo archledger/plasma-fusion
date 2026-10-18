@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **An app for the other side:** in tablet posture, with one app in a half and nothing beside it,
+  the rest of the screen offers your apps (home apps first, then all apps A to Z) instead of a home
+  page cut off under the app; tap one and it opens beside the first.
 - **Copy text no longer stuck:** when copy text's own selection could not open a window on any
   screen, copy text did nothing from then on until the next login. It now uses Spectacle's
   selection that time, as when KWin refuses the pictures, and tries its own again the next time.

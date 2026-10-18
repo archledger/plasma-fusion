@@ -487,9 +487,10 @@ ContainmentItem {
             id: appletsLayout
             anchors.fill: parent
             // Plasma Fusion: on the tablet home screen the cards are page 1's widgets (dimmed while
-            // the home screen is edited: they are not part of it)
+            // the home screen is edited: they are not part of it; hidden while the free side beside
+            // an app offers the apps, board TabletSplit.dc.html)
             opacity: !root.tabletHome || !homeLoader.item ? 1
-                   : homeLoader.item.currentPage !== 0 ? 0 : homeLoader.item.editing ? 0.25 : 1
+                   : homeLoader.item.currentPage !== 0 || homeLoader.item.picking ? 0 : homeLoader.item.editing ? 0.25 : 1
             visible: opacity > 0
             Behavior on opacity {
                 enabled: motion.animate
@@ -677,7 +678,7 @@ ContainmentItem {
                     function contains(point: point): bool {
                         const r = root.cardsRect;
                         const onPage1 = homeLoader.item ? homeLoader.item.currentPage === 0 : true;
-                        if (homeLoader.item && homeLoader.item.editing) {
+                        if (homeLoader.item && (homeLoader.item.editing || homeLoader.item.picking)) {
                             return true;
                         }
                         return !(onPage1 && r.width > 0 && point.x >= r.x && point.x < r.x + r.width
