@@ -40,13 +40,13 @@ The key is in the repository as `.github/release-signing-key.asc`; it also signs
 | KDE neon (`ID=neon`) | release `.deb`s for neon | the six `~neon1` packages from the release, checked against the signed `SHA256SUMS`, in one `apt-get install` |
 | Debian testing or unstable (`forky`, `sid`) | release `.deb`s for Debian testing | the six `~testing1` packages, as for neon |
 | another Debian or Ubuntu family system with Plasma 6.7 or later | release `.deb` | the shared part only (`X.Y.Z-1_all`); the compiled parts need a build for that system's KWin |
+| NixOS | prints the lines | the flake input and module, or the `fetchGit` import (nixos.md); it never edits `/etc/nixos` |
+| anything else | refused | |
 
 `update` upgrades the packages that are installed and installs those a later release added (Quick
 Look and copy text's selection came after 0.5.0): dnf refuses to upgrade a package that is not
 installed, and apt's `--only-upgrade` skips it, so on Copr and the PPA the new ones are installed
 apart; the AUR and the release `.deb`s install the whole set either way.
-| NixOS | prints the lines | the flake input and module, or the `fetchGit` import (nixos.md); it never edits `/etc/nixos` |
-| anything else | refused | |
 
 The release stamps the lists: `PF_COPR_FEDORA` (Fedora releases), `PF_PPA_SERIES`, `PF_DEB_TARGETS`
 (`neon testing`) and `PF_PLASMA_SERIES` (`packaging/tested-plasma.txt`), with
