@@ -18,6 +18,10 @@ untested Plasma series the parts that depend on Plasma internals stay off until 
 
 - **The installer brings Quick Look and copy text's selection too:** `install.sh` installs all six
   packages, and `install.sh update` from an earlier release adds the two new ones.
+- **No half-updated Plasma from the installer:** on KDE neon, Debian and Ubuntu, when installing
+  Plasma Fusion would also upgrade part of Plasma (the system is behind the release's packages),
+  the installer now stops and says to update the system first. Before, on a KDE neon still at
+  Plasma 6.7.5, it left Plasma half on 6.8.0 and the desktop shell did not start.
 - **`plasma-fusion status` names every compiled part:** Quick Look and copy text's selection now
   show with what they were built against, as the decoration, the settings page and the tablet
   gestures did.

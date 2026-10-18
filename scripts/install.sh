@@ -300,6 +300,24 @@ plan() {
   fi
 }
 
+# apt's own dry run of the package step (ARGS: what apt-get install gets). On a system behind the
+# packages of this release, apt would upgrade part of Plasma with them (they need a newer KWin, and
+# with it libplasma) and keep the rest: on KDE neon still at Plasma 6.7.5, libplasma6 6.8.0 replaced
+# libPlasmaQuick.so.7 under plasmashell 6.7.5, which then did not start (2026-10-18). The system's
+# own update brings all of Plasma at once; until then nothing is installed.
+plasma_behind() {
+  BEHIND=$(LC_ALL=C apt-get -s install -y "$@" 2>/dev/null | awk '$1 == "Inst" && substr($3, 1, 1) == "[" &&
+    $2 ~ /^(kwin|kwin-[a-z0-9-]+|libkwin[a-z0-9-]*|libplasma[a-z0-9-]*|kf6-plasma-framework|plasma-workspace|plasma-desktop)(:[a-z0-9]+)?$/ {
+      gsub(/[][]/, "", $3); gsub(/[()]/, "", $4); printf "%s%s %s -> %s", sep, $2, $3, $4; sep = ", " }')
+  [ -n "$BEHIND" ]
+}
+behind_stop() { # WHAT_STAYS
+  printf '[plasma-fusion] %s
+' "Installing Plasma Fusion would also upgrade part of Plasma ($BEHIND): this system is behind this release's packages, and Plasma would be left half updated. Update the system first (KDE neon: sudo pkcon update, or Discover; Debian and Ubuntu: sudo apt full-upgrade), log out and in, then run this again." >&2
+  say "$1"
+  exit 3
+}
+
 install_packages() {
   case $LANE in
     copr)
@@ -335,6 +353,8 @@ install_packages() {
       fi
       $SUDO apt-get update || die "apt-get update failed."
       # shellcheck disable=SC2086
+      ! plasma_behind $PKGS || behind_stop "The PPA stays added; nothing was installed."
+      # shellcheck disable=SC2086
       $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $PKGS || die "apt could not install Plasma Fusion." ;;
     deb)
       files=
@@ -348,6 +368,8 @@ install_packages() {
       if [ -n "$have" ] && dpkg --compare-versions "$new" lt "$have"; then
         refuse "Plasma Fusion $have is installed, newer than this release's $new."
       fi
+      # shellcheck disable=SC2086
+      ! plasma_behind $files || behind_stop "Nothing was changed."
       # shellcheck disable=SC2086
       $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $files || die "apt could not install the packages."
       [ "$DEB_PARTIAL" = 0 ] ||
@@ -576,7 +598,12 @@ main() {
           die "dnf could not update Plasma Fusion." ;;
       aur) install_packages ;;
       ppa)
-        { $SUDO apt-get update && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade $HAVE_PKGS &&
+        $SUDO apt-get update || die "apt-get update failed."
+        # shellcheck disable=SC2086
+        ! plasma_behind --only-upgrade $HAVE_PKGS || behind_stop "Nothing was changed."
+        # shellcheck disable=SC2086
+        ! { [ -n "$NEW_PKGS" ] && plasma_behind $NEW_PKGS; } || behind_stop "Nothing was changed."
+        { $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade $HAVE_PKGS &&
           { [ -z "$NEW_PKGS" ] || $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $NEW_PKGS; }; } ||
           die "apt could not update Plasma Fusion." ;;
       deb) install_packages ;;
