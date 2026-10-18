@@ -494,6 +494,8 @@ built by the lead directly.
     (`plasmafusion-tablet`) now follows maximize changes: a window the user un-maximizes leaves its
     lists, so it is not touched when tablet mode ends; one that first opened in tablet mode gets 70 % of
     the work area. The next fold maximizes it again. The global switch stays QS-1's "Full-screen apps".
+    Since 2026-10-18 the window takes the free half instead (docs/parts/kwin-tablet.md, "Full screen
+    off takes a half"), unless it is wider than a half.
   - Split: the card activates the window, waits until KWin reports it active, then invokes "Window
     Quick Tile Left/Right" (component `kwin`); the tile loses its title bar as before (KWIN-1).
 - **Width budget** (`WidthBudget.qml` in the clock pill, which sits between the bar's two expanding

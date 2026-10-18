@@ -7,6 +7,7 @@ import QtQuick
 import org.kde.kwin
 import "Panels.js" as Panels
 import "Requests.js" as Requests
+import "Snap.js" as Snap
 import "TopBar.js" as TopBar
 
 // Plasma Fusion tablet mode (TABLET.md 3 and 4.2): the single owner of window policy and panel
@@ -404,12 +405,31 @@ Item {
         }
         if (w.maximizeMode === 3) {
             // Maximized again (the user's switch): the window is a maximized window now, so leave()
-            // must not treat it as the floating one this script recorded earlier.
+            // must not treat it as the floating window or the tile this script recorded earlier
+            // (out of full screen it took a half: a tile; leave() gives a tile its title bar, and
+            // a maximized window keeps the laptop's borderless setting).
             delete borderlessFloating[key(w)];
+            delete borderlessTiles[key(w)];
             return;
         }
         unmaximized.push(w);
         Qt.callLater(settleUnmaximized);
+    }
+    // Full screen off (board TabletSnap.dc.html): the half a window takes instead of floating, the
+    // free one (Snap.js), from the quick tiles of the other shown windows of its screen and desktop.
+    function snapSide(w) {
+        const area = Workspace.clientArea(Workspace.MaximizeArea, w);
+        const tiles = [];
+        const order = Workspace.stackingOrder;
+        for (let i = 0; i < order.length; ++i) {
+            const o = order[i];
+            if (o === w || !o || o.deleted || !o.normalWindow || o.minimized || !o.tile || o.output !== w.output
+                    || !(o.onAllDesktops || o.desktops.indexOf(Workspace.currentDesktop) >= 0)) {
+                continue;
+            }
+            tiles.push(o.tile.relativeGeometry);
+        }
+        return Snap.sideFor(tiles, w.minSize.width, area.width / 2);
     }
     function settleUnmaximized() {
         const list = unmaximized;
@@ -423,6 +443,23 @@ Item {
             const placed = openedInTablet[k] === true;
             delete maximizedByUs[k];
             delete openedInTablet[k];
+            // A window always has a place in tablet posture (owner decision 2026-10-18, replacing
+            // the floating window of 2026-10-13): out of full screen it takes a half through KWin's
+            // quick tile, so the split, its divider and the other half's pickers work as for any
+            // split, and tileChanged() takes its title bar. One that does not fit a half floats.
+            const side = snapSide(w);
+            if (side !== "") {
+                if (Workspace.activeWindow !== w) {
+                    Workspace.activeWindow = w;
+                }
+                if (side === "left") {
+                    Workspace.slotWindowQuickTileLeft();
+                } else {
+                    Workspace.slotWindowQuickTileRight();
+                }
+                log("windowed by the user: " + w.resourceClass + ", to the " + side + " half");
+                continue;
+            }
             if (placed) {
                 w.frameGeometry = restoreRect(w);
             }
@@ -436,7 +473,7 @@ Item {
             if (laptopNoBorder[k] === false) {
                 borderlessFloating[k] = true;
             }
-            log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", no title bar");
+            log("windowed by the user: " + w.resourceClass + " (wider than a half)" + (placed ? ", placed at 70 %" : "") + ", no title bar");
         }
     }
 

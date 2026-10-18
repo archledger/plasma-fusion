@@ -258,8 +258,10 @@ PY
 else
   fail "T18: no picker in tablet posture"
 fi
-# A window the user un-maximizes in tablet posture keeps no title bar: the appname pill is the
-# window's title bar and menu (owner decision 2026-10-13). Its class carries the round trip below.
+# A window the user un-maximizes in tablet posture takes a half (owner decision 2026-10-18, board
+# TabletSnap.dc.html: a window always has a place) without a title bar: the appname pill is the
+# window's title bar and menu (owner decision 2026-10-13). Taken out of that half it floats without
+# one; its class carries the floating window's round trip below.
 FLOATING=$(K run "var l = workspace.windowList(), pick = null;
   for (var i = 0; i < l.length; ++i) { var w = l[i];
     if (w.normalWindow && w.maximizeMode === 3 && !w.tile && String(w.resourceClass) !== '') { pick = w; break; } }
@@ -268,13 +270,25 @@ FLOATING=$(K run "var l = workspace.windowList(), pick = null;
 echo "un-maximized in tablet: ${FLOATING:-none}" >>"$OUT/place.log"
 SECOND="" # the maximized-again case's window; set below when there is a floating one
 sleep 1.5
+state tab2a; shot tab-snap
+python3 - "$OUT/state-tab2a.json" "$FLOATING" >>"$CHK" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); want = sys.argv[2]; a = d["area"]
+f = [w for w in d["windows"] if want and want in w["cls"]]
+ok = len(f) == 1 and f[0]["tiled"] and f[0]["max"] != 3 and f[0]["nb"] and f[0]["geo"]["w"] < a["w"] * 0.75
+print(("PASS" if ok else "FAIL") + f" T19: a window un-maximized in tablet posture takes a half without a title bar: {[(w['cls'], w['geo'], w['tiled'], w['nb']) for w in f]}")
+PY
+K run "var l = workspace.windowList(), out = 0; for (var i = 0; i < l.length; ++i) { var w = l[i];
+  if (w.normalWindow && String(w.resourceClass).indexOf('$FLOATING') >= 0 && w.tile) { w.tile.unmanage(w); out++; } }
+  report('took the un-maximized window out of its half: ' + out);" >>"$OUT/place.log"
+sleep 1.5
 state tab2b; shot tab-float
 python3 - "$OUT/state-tab2b.json" "$FLOATING" >>"$CHK" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1])); want = sys.argv[2]
 f = [w for w in d["windows"] if w["cls"] and not w["tiled"] and w["max"] != 3]
 ok = want != "" and len(f) >= 1 and all(w["nb"] for w in f) and any(want in w["cls"] for w in f)
-print(("PASS" if ok else "FAIL") + f" T19: a window un-maximized in tablet posture keeps no title bar: {[(w['cls'], w['geo'], w['nb']) for w in f]}")
+print(("PASS" if ok else "FAIL") + f" T19: a window taken out of its half in tablet posture floats without a title bar: {[(w['cls'], w['geo'], w['nb']) for w in f]}")
 PY
 # The floating window keeps no title bar through a tile round trip: quick-tile the window T19
 # un-maximized and untile it again.
@@ -472,9 +486,10 @@ print(("PASS" if ok else "FAIL") + f" T19: a window the user made borderless kee
 x = [w for w in d["windows"] if "kcalc" in w["cls"]]
 ok = len(x) == 1 and not x[0]["tiled"] and x[0]["max"] != 3 and x[0]["nb"]
 print(("PASS" if ok else "FAIL") + f" T19: a window opened in tablet under a no-titlebar rule keeps it: {[(w['cls'], w['max'], w['nb']) for w in x]}")
+# (un-maximized in tablet posture it took a half, and keeps it in laptop posture with its bar)
 m = [w for w in d["windows"] if "gwenview" in w["cls"]]
-ok = len(m) == 1 and not m[0]["tiled"] and m[0]["max"] != 3 and not m[0]["nb"]
-print(("PASS" if ok else "FAIL") + f" T19: a window maximized before the cycle got its title bar back: {[(w['cls'], w['max'], w['nb']) for w in m]}")
+ok = len(m) == 1 and m[0]["tiled"] and m[0]["max"] != 3 and not m[0]["nb"]
+print(("PASS" if ok else "FAIL") + f" T19: a window maximized before the cycle got its title bar back: {[(w['cls'], w['tiled'], w['max'], w['nb']) for w in m]}")
 PY
 else
   fail "T19: no window left for the user-borderless case"

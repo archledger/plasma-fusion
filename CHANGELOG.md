@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Full screen off takes a half:** in tablet posture, switching Full screen off in the app's card
+  puts it in the free half instead of leaving it floating out of reach; the other half then offers
+  your apps or open windows.
 - **Drag an app to a side:** in tablet posture, hold the app's name in the top bar for a moment
   and drag it down: drop it on the left or right third and it takes that half, in the middle and it
   is full screen, at the bottom and it goes home; a quick sideways flick of the name puts it in that
