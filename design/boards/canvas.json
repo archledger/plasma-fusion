@@ -274,6 +274,14 @@
       "w": 1440,
       "x": 0,
       "y": 7940
+    },
+    "TabletSnap.dc.html": {
+      "h": 3284,
+      "page": "dark",
+      "title": "33 · A place for every window in tablet posture — dark and light",
+      "w": 1440,
+      "x": 0,
+      "y": 10343
     }
   },
   "createdOnFiles": {
@@ -375,7 +383,8 @@
     "Lock.dc.html",
     "Login.dc.html",
     "CopyText.dc.html",
-    "TabletSplit.dc.html"
+    "TabletSplit.dc.html",
+    "TabletSnap.dc.html"
   ],
   "pages": [
     {
