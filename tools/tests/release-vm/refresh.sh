@@ -14,14 +14,16 @@
 #     some Ubuntu packages to neon's versions, and plain apt-get -y refuses that, leaving the system
 #     at its old Plasma (2026-10-18: still at 6.7.5 while neon had 6.8.0);
 #   Ubuntu, Debian: apt full-upgrade;
+#   on the apt systems, apt-get update with --error-on=any: without it, an index that failed to
+#     download is only a warning, and the update exits 0 with the old one;
 #   NixOS: nothing (the image is built from the candidate, nixos/build-image.sh).
-set -uo pipefail
+set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 H=${PF_VM_HOME:-$HOME/pf-vm}
 [ $# -gt 0 ] || { echo "usage: refresh.sh NAME..." >&2; exit 2; }
 vm() { bash "$HERE/vm.sh" "$@"; }
 # shellcheck disable=SC2016 # expanded in the VM
-UPDATE='set -uo pipefail
+UPDATE='set -euo pipefail
 . /etc/os-release
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
 case $ID in
@@ -40,10 +42,10 @@ case $ID in
     pacman -Syu --noconfirm >/tmp/refresh.log 2>&1 || { tail -20 /tmp/refresh.log; exit 1; }
     pacman -Q plasma-workspace kwin kscreenlocker qt6-base ;;
   neon)
-    { apt-get update -q && apt-get -y -q --allow-downgrades full-upgrade; } >/tmp/refresh.log 2>&1 || { tail -20 /tmp/refresh.log; exit 1; }
+    { apt-get update -q --error-on=any && apt-get -y -q --allow-downgrades full-upgrade; } >/tmp/refresh.log 2>&1 || { tail -20 /tmp/refresh.log; exit 1; }
     dpkg-query -W plasma-workspace kwin-wayland libplasma6 ;;
   ubuntu | debian)
-    { apt-get update -q && apt-get -y -q full-upgrade; } >/tmp/refresh.log 2>&1 || { tail -20 /tmp/refresh.log; exit 1; }
+    { apt-get update -q --error-on=any && apt-get -y -q full-upgrade; } >/tmp/refresh.log 2>&1 || { tail -20 /tmp/refresh.log; exit 1; }
     dpkg-query -W plasma-workspace kwin-wayland ;;
   nixos) echo "NixOS: nothing to refresh (the image is built from the candidate)" ;;
   *) echo "refresh: no rule for $ID"; exit 1 ;;
