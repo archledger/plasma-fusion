@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 """A failing real vmtest entrypoint must release its mocked VM resource and preserve evidence; the
-copy-text check and the KDE bug 524392 workaround gate the run."""
+copy-text check, the status before it and the KDE bug 524392 workaround (its own commands, against a
+stand-in systemctl) gate the run."""
 import os
 from pathlib import Path
 import shutil
@@ -22,9 +23,11 @@ case "$cmd" in
   ssh)
     case "$*" in
       *FAULT_HOOK*) exit 9 ;;
-      *kde-baloo.service*) if [ "$FAULT" = workaround ]; then echo failed; else echo "applied (kde-baloo.service)"; fi ;;
+      *kde-baloo.service*) HOME=$PF_VM_HOME/vmhome PATH=$PF_VM_HOME/vmbin:$PATH bash -c "$*" ;;
       *org.plasmafusion.CopyTextOverlay*) echo check >>"$PF_VM_HOME/copytext"; [ "$FAULT" != copytext ] && echo "overlay shown on kwin 6.8.0: shown in 50 ms" ;;
       *'plasma-fusion status'*)
+        n=$(cat "$PF_VM_HOME/status" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" >"$PF_VM_HOME/status"
+        [ "$FAULT" = status ] && [ "$n" = 2 ] && exit 1
         case "$FAULT" in copytext | copytext-pass) printf 'Plasma Fusion 0.6.0\n  copytext: installed, built against kf=6.31.0\n' ;; esac ;;
       *'sh ~/install.sh --yes'*) [ "$FAULT" != install ] ;;
       *'sh ~/install.sh --dry-run'*) [ "$FAULT" != dry ] ;;
@@ -38,6 +41,17 @@ case "$cmd" in
     esac ;;
 esac
 '''
+# systemctl in the VM, for the workaround's own commands: the user manager unreachable (baloo-bus),
+# no Baloo (baloo-absent), its unit masked (baloo-masked), daemon-reload failing (baloo-reload).
+SYSTEMCTL = r'''#!/bin/sh
+echo "$*" >>"$PF_VM_HOME/systemctl"
+[ "$FAULT" != baloo-bus ] || { echo "Failed to connect to user scope bus" >&2; exit 1; }
+case "$*" in
+  *show*) case "$FAULT" in baloo-absent) echo not-found ;; baloo-masked) echo masked ;; *) echo loaded ;; esac ;;
+  *daemon-reload*) [ "$FAULT" != baloo-reload ] ;;
+esac
+'''
+DROPIN = "vmhome/.config/systemd/user/kde-baloo.service.d/kde-bug-524392.conf"
 
 
 class VMCleanupTest(unittest.TestCase):
@@ -55,6 +69,10 @@ class VMCleanupTest(unittest.TestCase):
             sleep = root / "bin/sleep"
             sleep.write_text("#!/bin/sh\nexit 0\n")
             sleep.chmod(0o755)
+            (home / "vmhome").mkdir()
+            (home / "vmbin").mkdir()
+            (home / "vmbin/systemctl").write_text(SYSTEMCTL)
+            (home / "vmbin/systemctl").chmod(0o755)
             lane = "aur" if fault == "prerequisites" else "copr"
             result = subprocess.run(["bash", str(root / "vmtest.sh"), "test", lane], capture_output=True, text=True,
                 env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "0" if lane == "aur" else "1", "FAULT": fault,
@@ -62,6 +80,8 @@ class VMCleanupTest(unittest.TestCase):
                      "PATH": str(root / "bin") + ":" + os.environ["PATH"]})
             calls = (home / "calls").read_text().splitlines()
             self.checked = (home / "copytext").exists()
+            self.dropin = (home / DROPIN).read_text() if (home / DROPIN).exists() else None
+            self.systemctl = (home / "systemctl").read_text().splitlines() if (home / "systemctl").exists() else []
             return result, calls, (home / "vms/test/run.qcow2").exists(), list((home / "vms/test").glob("failed-run-*.qcow2"))
 
     def test_initial_crash_gate_releases_vm(self):
@@ -122,13 +142,38 @@ class VMCleanupTest(unittest.TestCase):
         self.assertFalse(self.checked)
         self.assertIn("copy text's selection: plasma-fusion-copytext not installed (skipped)", result.stdout)
 
-    def test_workaround_applied_and_its_failure_rejected(self):
-        result, calls, locked, preserved = self.run_vm("none")
-        self.assertIn("test system: KDE bug 524392 workaround applied (kde-baloo.service)", result.stdout)
-        result, calls, locked, preserved = self.run_vm("workaround")
+    def test_failed_status_after_login_is_rejected(self):
+        result, calls, locked, preserved = self.run_vm("status")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("FAIL: the KDE bug 524392 workaround could not be applied", result.stdout)
+        self.assertIn("FAIL: plasma-fusion status after the login (rc=1)", result.stdout)
+        self.assertNotIn("(skipped)", result.stdout)
+        self.assertFalse(self.checked)
+        self.assertFalse(locked)
         self.assertEqual(len(preserved), 1)
+
+    def test_workaround_applied(self):
+        result, calls, locked, preserved = self.run_vm("none")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("test system: KDE bug 524392 workaround applied (kde-baloo.service)", result.stdout)
+        self.assertEqual(self.dropin, "[Service]\nEnvironment=QT_QPA_PLATFORM=offscreen\n")
+        self.assertEqual(self.systemctl, ["--user show -p LoadState --value kde-baloo.service",
+                                          "--user daemon-reload", "--user try-restart kde-baloo.service"])
+
+    def test_workaround_not_needed_without_baloo(self):
+        result, calls, locked, preserved = self.run_vm("baloo-absent")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("test system: KDE bug 524392 workaround not needed (no kde-baloo.service)", result.stdout)
+        self.assertIsNone(self.dropin)
+
+    def test_workaround_failures_are_rejected(self):
+        for fault in ["baloo-bus", "baloo-masked", "baloo-reload"]:
+            with self.subTest(fault=fault):
+                result, calls, locked, preserved = self.run_vm(fault)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("FAIL: the KDE bug 524392 workaround could not be applied (rc=1)", result.stdout)
+                self.assertNotIn("installer:", result.stdout)
+                self.assertFalse(locked)
+                self.assertEqual(len(preserved), 1)
 
     def test_installer_stage_failures_are_rejected_and_preserved(self):
         for stage in ["prerequisites", "dry", "install", "uninstall"]:

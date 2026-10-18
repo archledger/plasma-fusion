@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """check-copytext.sh, the release test's check of copy text's own selection, against stand-ins for
 busctl, journalctl, sudo and kwin_wayland: the overlay shown passes and is ended; KWin's refusal, no
-answer to Start() and nothing shown fail; the lines in the system journal only (Debian) pass."""
+answer to Start() and nothing shown fail; the lines in the system journal only (Debian) pass; a
+pass whose overlay is not found or cannot be ended fails."""
 import os
 from pathlib import Path
 import subprocess
@@ -16,15 +17,16 @@ REFUSED = "copytext-overlay: no picture of DP-1 - The process is not authorized 
 
 
 class CheckCopyTextTest(unittest.TestCase):
-    def run_check(self, user_journal="", system_journal="", start_rc=0):
+    def run_check(self, user_journal="", system_journal="", start_rc=0, pid=None):
         with tempfile.TemporaryDirectory() as directory:
             bin_dir = Path(directory)
             # The overlay's stand-in: a real process the check must end by the PID the bus gives.
             overlay = subprocess.Popen(["sleep", "60"])
+            named = overlay.pid if pid is None else pid
             stubs = {
                 "busctl": f"""case "$*" in
   *" Start"*) exit {start_rc} ;;
-  *GetConnectionUnixProcessID*) echo "u {overlay.pid}" ;;
+  *GetConnectionUnixProcessID*) [ -n "{named}" ] && echo "u {named}" || exit 1 ;;
 esac""",
                 "journalctl": f"""case " $* " in
   *" --user "*) printf '%s' {user_journal!r} ;;
@@ -68,6 +70,17 @@ esac""",
         result, _ = self.run_check(user_journal=SHOWN, start_rc=1)
         self.assertEqual(result.returncode, 1)
         self.assertIn("FAIL: Start() not answered", result.stdout)
+
+    def test_overlay_not_found_fails(self):
+        result, ended = self.run_check(user_journal=SHOWN, pid="")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("FAIL: the overlay's process was not found to end it (kwin 6.8.0)", result.stdout)
+
+    def test_overlay_not_ended_fails(self):
+        # A PID of no process: kill fails.
+        result, ended = self.run_check(user_journal=SHOWN, pid="2147483646")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("FAIL: the overlay (pid 2147483646) could not be ended (kwin 6.8.0)", result.stdout)
 
     def test_nothing_shown_fails(self):
         result, ended = self.run_check()
