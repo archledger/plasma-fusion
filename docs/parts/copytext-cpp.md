@@ -42,7 +42,12 @@ selection of Plasma Fusion's own that stays running, so it shows at once:
 When KWin refuses the pictures (the desktop file missing, another compositor) it runs the helper
 with `PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1`, which then uses Spectacle's selection as without this
 package. Each `Start()` has a capture of its own: a picture that KWin still sends after a refusal
-ended it is dropped, not kept until the next press.
+ended it is dropped, not kept until the next press. It goes the helper's way too when it has the
+pictures but cannot make one window of them (the QML gives no window, a runtime error): it says
+"no overlay window" in the journal, and the next `Start()` asks KWin again. "shown in" is said only
+once a window is up (the release tests take that line as the overlay seen). 0.6.0 said it either
+way, and the overlay then stayed busy with no window: every later `Start()` did nothing until it was
+restarted.
 
 ## Starting it
 
@@ -127,7 +132,11 @@ there), Nix `plasma-fusion-copytext`. The main package recommends it (Arch: optd
   while the box is chosen asks KWin for nothing more; one while the helper still reads (the stand-in
   held) shows nothing, and the next after it does; Esc and a click close every window and run
   nothing; KWin's refusal runs the helper once, with `PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1`, and
-  shows no window; with one screen refused, the other's picture is dropped when it comes.
+  shows no window; with one screen refused, the other's picture is dropped when it comes; a capture
+  that makes no window (QML that gives an item, or a window that cannot be made: a required property
+  the overlay does not set) runs the helper the same way, does not say "shown in", and the next
+  `Start()` asks KWin again and goes the same way. Against 0.6.0's `overlay.cpp` both of these
+  cases fail (2026-10-18: no helper run; the overlay stayed busy).
 - All pass with `-Werror` and under AddressSanitizer and UndefinedBehaviorSanitizer with leak
   detection (`tools/sanitizers/run.sh`, Fedora 44 container, 2026-10-18). Line coverage
   (`tools/tests/coverage.sh cpp:copytext-cpp`, docs/parts/coverage.md): 82.2 % (189 of 230),

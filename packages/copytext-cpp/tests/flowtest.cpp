@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QQmlComponent>
 #include <QQuickWindow>
 #include <QRegularExpression>
 #include <QScreen>
@@ -46,7 +47,9 @@ static QImage nativePicture(QSize size, qreal scale, int screen)
 // pixels, in a private directory in the runtime directory that is gone once the helper is done; a
 // second Start() while the box is chosen, or while the helper reads it, does nothing; Esc and a
 // click end it with no helper; KWin's refusal runs the helper's own way
-// (PLASMA_FUSION_COPYTEXT_NO_OVERLAY), and a picture that comes after a refusal is dropped.
+// (PLASMA_FUSION_COPYTEXT_NO_OVERLAY), and a picture that comes after a refusal is dropped; so does
+// a capture that makes no window (the QML giving no window), which is not said shown, and the next
+// Start() asks KWin again.
 class FlowTest : public QObject
 {
     Q_OBJECT
@@ -85,6 +88,14 @@ class FlowTest : public QObject
         }
         return QString::fromUtf8(file.readAll()).split(u'\n', Qt::SkipEmptyParts);
     }
+    // What the overlay says (its qInfo and qWarning lines), passed on to QTest's own handler.
+    static inline QStringList s_said;
+    static inline QtMessageHandler s_previous = nullptr;
+    static void listen(QtMsgType type, const QMessageLogContext &context, const QString &message)
+    {
+        s_said.append(message);
+        s_previous(type, context, message);
+    }
     static QStringList privateDirs()
     {
         return QDir(qEnvironmentVariable("XDG_RUNTIME_DIR")).entryList({u"plasma-fusion-copytext-overlay.*"_s}, QDir::Dirs);
@@ -117,6 +128,7 @@ private Q_SLOTS:
     {
         // A stand-in that reads too little must not end the test.
         std::signal(SIGPIPE, SIG_IGN);
+        s_previous = qInstallMessageHandler(listen);
         QVERIFY(!m_out.isEmpty());
         QCOMPARE(QGuiApplication::screens().size(), 2);
         m_kwin.pictures.insert(u"DP-1"_s, nativePicture({120, 100}, 2, 0x10));
@@ -277,6 +289,38 @@ private Q_SLOTS:
         QTest::qWait(500);
         QCOMPARE(runs(), QStringList{u"|1"_s});
         QVERIFY(overlays().isEmpty());
+    }
+    void noWindowFallsBack_data()
+    {
+        QTest::addColumn<QByteArray>("qml");
+        // An object that is not a window, and a window that cannot be made (a property it needs
+        // that the overlay does not give).
+        QTest::newRow("not a window") << QByteArray("import QtQuick\nItem {}\n");
+        QTest::newRow("no object") << QByteArray("import QtQuick\nWindow { required property int missing }\n");
+    }
+    void noWindowFallsBack()
+    {
+        QFETCH(QByteArray, qml);
+        // An overlay of its own with that QML (the bus's keeps its own for the other cases).
+        Overlay overlay;
+        auto *component = overlay.findChild<QQmlComponent *>();
+        QVERIFY(component);
+        component->setData(qml, QUrl());
+        QVERIFY2(component->isReady(), qPrintable(component->errorString()));
+        s_said.clear();
+        overlay.Start();
+        // The helper's own way once, no window, and the overlay not said shown.
+        QTRY_COMPARE_WITH_TIMEOUT(runs(), QStringList{u"|1"_s}, 5000);
+        QVERIFY(overlays().isEmpty());
+        // Not stuck: the next press asks KWin again, and goes the helper's way again.
+        overlay.Start();
+        QTRY_COMPARE_WITH_TIMEOUT(runs(), (QStringList{u"|1"_s, u"|1"_s}), 5000);
+        QTest::qWait(500);
+        QCOMPARE(runs(), (QStringList{u"|1"_s, u"|1"_s}));
+        QCOMPARE(m_kwin.asked.size(), 4);
+        QVERIFY(overlays().isEmpty());
+        QVERIFY2(s_said.contains(u"copytext-overlay: no overlay window, Spectacle's selection instead"_s), qPrintable(s_said.join(u'\n')));
+        QVERIFY2(s_said.filter(u"copytext-overlay: shown in"_s).isEmpty(), qPrintable(s_said.join(u'\n')));
     }
 };
 
