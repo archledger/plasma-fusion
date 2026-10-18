@@ -18,7 +18,7 @@
 %endif
 
 Name:           plasma-fusion
-Version:        0.5.0
+Version:        0.6.0
 Release:        1%{?dist}
 Summary:        Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts)
 
@@ -530,6 +530,14 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %endif
 
 %changelog
+* Sun Oct 18 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.6.0-1
+- Copy text from the screen in one step with its own instant selection,
+  Quick Look in Dolphin, live chips, snap groups, snap sizes from the
+  keyboard and gap-free snapping, window placement memory, dynamic
+  workspaces, dock position, size, window count and every screen,
+  touchpad gestures, settings export and import, Plasma's notices in the
+  island, and Plasma 6.8.0
+
 * Mon Oct 12 2026 Wisbendji Fimerlus <archledger236@gmail.com> - 0.5.0-1
 - Clipboard sheet with Meta+V, editable Quick Settings, notifications
   grouped by app, Do not disturb durations, Power mode chooser, timed

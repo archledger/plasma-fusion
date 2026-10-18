@@ -7,7 +7,14 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
-## Unreleased
+## 0.6.0 (2026-10-18)
+
+Tested with Plasma 6.7 (6.7.5 on Fedora 44) and Plasma 6.8 (6.8.0 on Arch); the release tests'
+results land before the tag.
+Packaged as before for Fedora 44 and 45 (Copr), Arch (AUR), Ubuntu 26.10 (PPA), Debian testing and
+KDE neon (.deb) and NixOS (flake), now as six packages: Quick Look and copy text's selection are
+packages of their own, which the main package recommends and the installer installs. On an
+untested Plasma series the parts that depend on Plasma internals stay off until an update.
 
 - **The installer brings Quick Look and copy text's selection too:** `install.sh` installs all six
   packages, and `install.sh update` from an earlier release adds the two new ones.
