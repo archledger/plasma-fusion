@@ -7,6 +7,12 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 
 Newest first. Each release lists the Plasma series it was tested with and the systems it supports.
 
+## Unreleased
+
+- **Copy text no longer stuck:** when copy text's own selection could not open a window on any
+  screen, copy text did nothing from then on until the next login. It now uses Spectacle's
+  selection that time, as when KWin refuses the pictures, and tries its own again the next time.
+
 ## 0.6.0 (2026-10-18)
 
 Tested with Plasma 6.7 (6.7.5 on Fedora 44, Ubuntu 26.10 and NixOS; 6.7.4 on Debian testing) and

@@ -128,6 +128,8 @@ void Overlay::showAll()
         QObject *object = m_component->createWithInitialProperties(properties);
         auto *window = qobject_cast<QQuickWindow *>(object);
         if (!window) {
+            qWarning().noquote() << "copytext-overlay: no overlay window on" << screen->name() << "-"
+                                 << (object ? u"not a window"_s : m_component->errorString().trimmed());
             delete object;
             continue;
         }
@@ -148,6 +150,16 @@ void Overlay::showAll()
         connect(window, SIGNAL(cancelled()), this, SLOT(cancelled()));
         m_windows.append(window);
         window->show();
+    }
+    // Not one window: the helper's own way, as on KWin's refusal, rather than a selection that
+    // never shows and a Start() that does nothing from then on. "shown in" is said only with a
+    // window (the release tests take it as the overlay seen).
+    if (m_windows.isEmpty()) {
+        qWarning().noquote() << "copytext-overlay: no overlay window, Spectacle's selection instead";
+        m_pictures.clear();
+        closeAll();
+        fallBack();
+        return;
     }
     qInfo().noquote() << "copytext-overlay: shown in" << m_clock.elapsed() << "ms at" << QDateTime::currentMSecsSinceEpoch();
 }
