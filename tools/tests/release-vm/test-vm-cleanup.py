@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""A failing real vmtest entrypoint must release its mocked VM resource and preserve evidence."""
+"""A failing real vmtest entrypoint must release its mocked VM resource and preserve evidence; the
+copy-text check and the KDE bug 524392 workaround gate the run."""
 import os
 from pathlib import Path
 import shutil
@@ -21,6 +22,10 @@ case "$cmd" in
   ssh)
     case "$*" in
       *FAULT_HOOK*) exit 9 ;;
+      *kde-baloo.service*) if [ "$FAULT" = workaround ]; then echo failed; else echo "applied (kde-baloo.service)"; fi ;;
+      *org.plasmafusion.CopyTextOverlay*) echo check >>"$PF_VM_HOME/copytext"; [ "$FAULT" != copytext ] && echo "overlay shown on kwin 6.8.0: shown in 50 ms" ;;
+      *'plasma-fusion status'*)
+        case "$FAULT" in copytext | copytext-pass) printf 'Plasma Fusion 0.6.0\n  copytext: installed, built against kf=6.31.0\n' ;; esac ;;
       *'sh ~/install.sh --yes'*) [ "$FAULT" != install ] ;;
       *'sh ~/install.sh --dry-run'*) [ "$FAULT" != dry ] ;;
       *'sh ~/install.sh uninstall --yes'*) [ "$FAULT" != uninstall ] ;;
@@ -42,7 +47,7 @@ class VMCleanupTest(unittest.TestCase):
             root = home / "repo/tools/tests/release-vm"
             root.mkdir(parents=True)
             (home / "repo/VERSION").write_text("0.3.1\n")
-            for filename in ["vmtest.sh", "crash-count.py"]:
+            for filename in ["vmtest.sh", "crash-count.py", "check-copytext.sh"]:
                 shutil.copy2(HERE / filename, root / filename)
             (root / "vm.sh").write_text(BOUNDARY)
             (home / "vms/test").mkdir(parents=True)
@@ -56,6 +61,7 @@ class VMCleanupTest(unittest.TestCase):
                      "PF_AFTER_LOGIN": "FAULT_HOOK" if fault == "hook" else "",
                      "PATH": str(root / "bin") + ":" + os.environ["PATH"]})
             calls = (home / "calls").read_text().splitlines()
+            self.checked = (home / "copytext").exists()
             return result, calls, (home / "vms/test/run.qcow2").exists(), list((home / "vms/test").glob("failed-run-*.qcow2"))
 
     def test_initial_crash_gate_releases_vm(self):
@@ -91,6 +97,37 @@ class VMCleanupTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("stop", calls)
         self.assertFalse(locked)
+        self.assertEqual(len(preserved), 1)
+
+    def test_copytext_failure_is_rejected_and_preserved(self):
+        result, calls, locked, preserved = self.run_vm("copytext")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(self.checked)
+        self.assertIn("FAIL: copy text's selection", result.stdout)
+        self.assertIn("stop", calls)
+        self.assertFalse(locked)
+        self.assertEqual(len(preserved), 1)
+        self.assertNotIn("installer: uninstall", result.stdout)
+
+    def test_copytext_pass(self):
+        result, calls, locked, preserved = self.run_vm("copytext-pass")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertTrue(self.checked)
+        self.assertIn("copy text's selection rc=0: overlay shown on kwin 6.8.0: shown in 50 ms", result.stdout)
+        self.assertFalse(preserved)
+
+    def test_copytext_skipped_without_the_part(self):
+        result, calls, locked, preserved = self.run_vm("none")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse(self.checked)
+        self.assertIn("copy text's selection: plasma-fusion-copytext not installed (skipped)", result.stdout)
+
+    def test_workaround_applied_and_its_failure_rejected(self):
+        result, calls, locked, preserved = self.run_vm("none")
+        self.assertIn("test system: KDE bug 524392 workaround applied (kde-baloo.service)", result.stdout)
+        result, calls, locked, preserved = self.run_vm("workaround")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("FAIL: the KDE bug 524392 workaround could not be applied", result.stdout)
         self.assertEqual(len(preserved), 1)
 
     def test_installer_stage_failures_are_rejected_and_preserved(self):

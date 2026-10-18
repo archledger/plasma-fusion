@@ -9,7 +9,9 @@ curl -fsSL https://archive.neon.kde.org/public.key -o /etc/apt/trusted.gpg.d/neo
 gpg --show-keys /etc/apt/trusted.gpg.d/neon.asc 2>/dev/null | sed -n '2p;3p' || true
 echo "deb http://archive.neon.kde.org/user noble main" >/etc/apt/sources.list.d/neon.list
 apt-get update -qq
-apt-get -y -qq full-upgrade >/tmp/apt.log 2>&1 || { tail -20 /tmp/apt.log; exit 1; }
+# --allow-downgrades: neon's pins move some Ubuntu packages to neon's versions, which plain -y
+# refuses (refresh.sh does the same).
+apt-get -y -qq --allow-downgrades full-upgrade >/tmp/apt.log 2>&1 || { tail -20 /tmp/apt.log; exit 1; }
 apt-get -y -qq install neon-desktop >>/tmp/apt.log 2>&1 || { tail -20 /tmp/apt.log; exit 1; }
 dpkg-query -W plasma-workspace kwin-wayland
 grep -E '^(ID|PRETTY_NAME)=' /etc/os-release

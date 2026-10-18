@@ -28,6 +28,7 @@ tools/tests/release-vm/provision.sh neon noble.img neon
 # NixOS: an image with the module, built on a machine with Nix
 tools/tests/release-vm/nixos/build-image.sh SRC ~/pf-vm/id_ed25519.pub nixos.qcow2   # then vm.sh create nixos nixos.qcow2
 
+tools/tests/release-vm/refresh.sh NAME...      # before a round: each base brought up to date
 tools/tests/release-vm/build-all.sh [COMMIT]   # every channel's packages, built and checked in containers
 tools/tests/release-vm/run-all.sh              # the VM tests, one after another
 ```
@@ -38,7 +39,9 @@ tools/tests/release-vm/run-all.sh              # the VM tests, one after another
 | `provision.sh`, `prov-*.sh` | the cloud image with cloud-init (user `pf`, sudo, the test key), Plasma (Fedora: updates and `@kde-desktop-environment`; Arch: `plasma-meta`; Ubuntu and Debian: `kde-plasma-desktop`, on Debian the generic kernel, whose virtio-gpu driver KWin needs; neon: neon's archive and `neon-desktop`), then `prov-common.sh`: getty logs `pf` in on tty1 and `startplasma-wayland` runs there (no display manager, the same on every system) |
 | `build-all.sh` | the candidate: `tools/tests/packages/` for Fedora, Arch, Debian testing, Ubuntu 26.10, neon and the shared `.deb`, each built, installed and checked (QML imports and QML parsing included) in a container of its system |
 | `channels.sh` | from the candidate: a dnf repository (Copr's place), an apt repository (the PPA's), a release directory with `SHA256SUMS` signed by a throwaway key (never the release key), the Arch source, and the installer, served on 127.0.0.1:8088 |
-| `vmtest.sh NAME LANE` | one VM from its base: the stock desktop; the installer's dry run and install in the session (test mode: the channel, and for `.deb`s the snapshot version and the test key); `plasma-fusion status`; a logout (`org.kde.Shutdown.logout`, as the logout dialog) and a new login; the desktop, the launcher and the lock screen; the login check's log and the crashes of this boot; `uninstall`, another new login and the desktop it left; the packages left |
+| `vmtest.sh NAME LANE` | one VM from its base: KDE bug 524392's workaround for the test user (below); the stock desktop; the installer's dry run and install in the session (test mode: the channel, and for `.deb`s the snapshot version and the test key); `plasma-fusion status`; a logout (`org.kde.Shutdown.logout`, as the logout dialog) and a new login; the desktop, the launcher and the lock screen; copy text's own selection where the copytext part is installed (`check-copytext.sh`); the login check's log and the crashes of this boot; `uninstall`, another new login and the desktop it left; the packages left |
+| `check-copytext.sh` | in the session: `Start()` on the bus, then the overlay's "shown in" line in the journal (the user's, or the system journal for the user where there is none), KWin's refusal ("no picture of") or no answer failing; the overlay ended by the PID the bus names |
+| `refresh.sh NAME...` | each base updated the way its system updates itself (Fedora: `dnf upgrade` and the RPM database verified, rebuilt if it fails; Arch: `pacman -Syu`; KDE neon: `apt-get full-upgrade --allow-downgrades`, as neon's updater; Ubuntu, Debian: `apt-get full-upgrade`; NixOS: nothing), the Plasma versions after; a failed update fails it |
 | `run-all.sh` | `channels.sh`, then `vmtest.sh` for each VM |
 
 Results: `$PF_VM_HOME/results/NAME/` (`steps.log`, the installer's output, status, logs and the
@@ -63,6 +66,16 @@ The test images needed fixes of their own, not Plasma Fusion's: Debian's cloud k
 virtio-gpu driver (the generic kernel), the NixOS image the QEMU guest profile and
 `hardware.graphics.enable` (a display manager would turn it on), and the harness NixOS's wrapped
 process names (`.plasmashell-wrapped`).
+
+## What the 0.6.0 tests found (2026-10-18)
+
+| System | Found | Fix |
+|---|---|---|
+| KDE neon | The installer's packages, built against neon's Plasma 6.8.0, upgraded KWin and `libplasma6` on a neon still at 6.7.5 and kept `plasma-workspace` 6.7.5. `libplasma6` 6.8.0 replaced the `libPlasmaQuick.so.7` that plasmashell 6.7.5 needs, so plasmashell did not start and the setup stopped. | The installer asks apt for a dry run first and stops when it would upgrade part of Plasma (#81; docs/parts/installer.md). |
+| KDE neon (the test VM) | The refresh had left the VM at 6.7.5: plain `apt-get -y full-upgrade` refuses neon's pin downgrades. | `refresh.sh` and `prov-neon.sh` use `--allow-downgrades`, as neon's updater does. |
+| Arch, KDE neon | `baloo_file_extractor` aborted in a loop (2514 core dumps in one run, the first before Plasma Fusion was installed) once a file appeared in `~`: KDE bug 524392 (KDE Frameworks 6.31 with Qt 6.12). On a stock Arch VM, one new file in `~` was enough. | Not Plasma Fusion's. `vmtest.sh` applies the bug's workaround for the test user before the installer's copy (`kde-baloo.service` with `QT_QPA_PLATFORM=offscreen`); the crash gate is unchanged. Drop it once the tested frameworks have the fix. |
+| Fedora 44 beta (the test VM) | After the refresh, the base's RPM database was malformed ("database disk image is malformed"), and the install failed. | `refresh.sh` verifies the database and rebuilds it if needed. |
+| every system | Copy text's own selection (new in 0.6.0) was checked by a scratch after-login hook only. | `check-copytext.sh` runs in every `vmtest.sh`. It showed on all eight systems in the final round on `b0f7800` (73-128 ms after `Start()`), KWin 6.8.0 included, whose screenshot plugin changed since the beta. |
 
 ## Final round
 
