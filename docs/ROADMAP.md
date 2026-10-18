@@ -7,11 +7,14 @@ are welcome in GitHub Discussions; the way decisions are made is in
 
 ## Where the project stands
 
-- Experimental. Built for and tested on Fedora 44 KDE with Plasma 6.7.5, KDE Frameworks 6.30 and
-  Qt 6.11, on two machines: a convertible (ThinkPad X13 Yoga Gen 4) and a laptop (ASUS Zenbook).
-- Released since 0.2.0 (2026-10-03); 0.4.0 on 2026-10-10 ([`CHANGELOG.md`](../CHANGELOG.md),
-  [`RELEASING.md`](RELEASING.md)). This plan was written before the first release; the items below
-  keep their wording of 2026-10-02 with what has happened since noted.
+- Experimental. Built for and tested on Fedora 44 KDE with Plasma 6.7.5, KDE Frameworks 6.31 and
+  Qt 6.11, on two machines: a convertible (ThinkPad X13 Yoga Gen 4) and a laptop (ASUS Zenbook);
+  each release also in virtual machines of Arch, Ubuntu 26.10, Debian testing, KDE neon and NixOS
+  ([`parts/release-tests.md`](parts/release-tests.md)), Plasma 6.8.0 among them since 0.6.0.
+- Released since 0.2.0 (2026-10-03); 0.4.0 on 2026-10-10, 0.5.0 on 2026-10-13, 0.6.0 on
+  2026-10-18 ([`CHANGELOG.md`](../CHANGELOG.md), [`RELEASING.md`](RELEASING.md)). This plan was
+  written before the first release; the items below keep their wording of 2026-10-02 with what has
+  happened since noted.
 - One maintainer.
 
 ## Planned
@@ -23,7 +26,11 @@ are welcome in GitHub Discussions; the way decisions are made is in
    The compiled parts are already built against KDE's beta packages every week (`compiled`
    workflow), and a test round on 6.7.91 found and fixed five breakages
    ([`docs/parts/containers.md`](parts/containers.md)). Then: test 6.8 in private sessions, raise
-   [`packaging/tested-versions.txt`](../packaging/tested-versions.txt) and lift the hold.
+   [`packaging/tested-versions.txt`](../packaging/tested-versions.txt) and lift the hold. Since
+   then: 0.5.0 was tested with the 6.8 beta and 0.6.0 (2026-10-18) with Plasma 6.8.0 on Arch and
+   KDE neon. What is left is Fedora 44: it still ships 6.7.5 (2026-10-18), and the test machines'
+   hold lifts, with `tested-versions.txt` raised, once it moves to 6.8 (the `plasma-update` issue
+   says when).
 2. **Split screen in tablet posture.** A split pair shown as one card in the app switcher (in
    navigation 0.1-7 since 2026-10-02; a touch check on the tablet is next). Then saved app pairs
    (one icon that opens both apps side by side) and an app picker in the free half after one app is
