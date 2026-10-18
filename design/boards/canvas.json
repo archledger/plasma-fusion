@@ -266,6 +266,14 @@
       "w": 1440,
       "x": 1520,
       "y": 12630
+    },
+    "TabletSplit.dc.html": {
+      "h": 2283,
+      "page": "dark",
+      "title": "32 · Split screen in tablet posture — dark and light",
+      "w": 1440,
+      "x": 0,
+      "y": 7940
     }
   },
   "createdOnFiles": {
@@ -366,7 +374,8 @@
     "Splash.dc.html",
     "Lock.dc.html",
     "Login.dc.html",
-    "CopyText.dc.html"
+    "CopyText.dc.html",
+    "TabletSplit.dc.html"
   ],
   "pages": [
     {
