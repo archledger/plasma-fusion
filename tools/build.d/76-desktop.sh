@@ -21,6 +21,7 @@ python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$src/conten
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" desktop
 if command -v node >/dev/null 2>&1; then
   node "$src/tests/freeside.test.js" >/dev/null
+  node "$src/tests/split-request.test.js" >/dev/null
 fi
 
 rm -rf "$dest"

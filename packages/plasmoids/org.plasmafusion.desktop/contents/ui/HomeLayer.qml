@@ -311,7 +311,8 @@ Item {
         const id = String(favoriteId || "").replace(/^applications:/, "");
         return /^[A-Za-z0-9._-]+\.desktop$/.test(id) ? id : "";
     }
-    // The dock splits the screen on a splitRequest "<left|right>:<nonce>:<app>.desktop".
+    // The dock splits the screen on a splitRequest "<left|right>:<nonce>:<app>.desktop": the dock of
+    // this screen only (home.js splitScript), so a dock on every screen does not start it twice.
     function requestSplit(side: string, appId: string): void {
         if (appId === "" || (side !== "left" && side !== "right")) {
             return;
@@ -320,8 +321,7 @@ Item {
         DBus.SessionBus.asyncCall({
             "service": "org.kde.plasmashell", "path": "/PlasmaShell", "iface": "org.kde.PlasmaShell",
             "member": "evaluateScript",
-            "arguments": [new DBus.string("panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {"
-                + " w.currentConfigGroup = [\"General\"]; w.writeConfig(\"splitRequest\", \"" + side + ":\" + Date.now() + \":" + appId + "\"); }); });")],
+            "arguments": [new DBus.string(HomeLogic.splitScript(side, appId, Plasmoid.containment.screen, Date.now()))],
             "signature": "(s)"
         }, () => {}, error => console.warn("home: split request failed: " + error));
     }

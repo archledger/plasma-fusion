@@ -65,3 +65,15 @@ function sameFree(a, b) {
         && Math.round(a.y) === Math.round(b.y) && Math.round(a.width) === Math.round(b.width)
         && Math.round(a.height) === Math.round(b.height);
 }
+
+// The desktop scripting snippet that hands a split request ("<side>:<nonce>:<app>.desktop") to
+// one dock: the dock of the home screen's screen (with a dock on every screen, each would start the
+// app and move the windows), else the first dock there is (a dock on the main screen only).
+function splitScript(side, appId, screen, nonce) {
+    const value = JSON.stringify(side + ":" + nonce + ":" + appId);
+    return "(function () { var mine = null, any = null;"
+        + " panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {"
+        + " if (any === null) { any = w; } if (mine === null && p.screen === " + Number(screen) + ") { mine = w; } }); });"
+        + " var dock = mine !== null ? mine : any;"
+        + " if (dock !== null) { dock.currentConfigGroup = [\"General\"]; dock.writeConfig(\"splitRequest\", " + value + "); } })();";
+}
