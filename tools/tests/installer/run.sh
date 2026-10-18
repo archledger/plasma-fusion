@@ -59,8 +59,17 @@ INSTALLS='mkdir -p "$FAKE_BIN" && printf "#!/bin/sh\nprintf \"%%s\\\\n\" \"plasm
 fake sudo "[ \"\$1\" = -v ] && exit 0
 $LOGLINE
 exec \"\$@\""
+# dnf5 refuses to upgrade a package that is not installed ("Packages for argument 'X' available, but
+# not installed.", exit 1; Fedora 44, 2026-10-18).
 fake dnf "$LOGLINE
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
+case \" \$* \" in *' upgrade '*)
+  for a; do
+    case \$a in -* | upgrade) continue ;; esac
+    set -- \"\$a\"; $LOOKUP
+    [ -n \"\$v\" ] || { echo \"Packages for argument '\$1' available, but not installed.\" >&2; exit 1; }
+  done ;;
+esac
 exit \${FAKE_DNF_RC:-0}"
 fake apt-get "$LOGLINE
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
@@ -94,8 +103,10 @@ make_release() { # DIR [SIGNING_FP]: the .deb sets of the release
   for f in plasma-fusion_${V}-1_all.deb \
            plasma-fusion_${V}-1~neon1_all.deb plasma-fusion-decoration_${V}-1~neon1_amd64.deb \
            plasma-fusion-settings_${V}-1~neon1_amd64.deb plasma-fusion-navigation_${V}-1~neon1_amd64.deb \
+           plasma-fusion-quicklook_${V}-1~neon1_amd64.deb plasma-fusion-copytext_${V}-1~neon1_amd64.deb \
            plasma-fusion_${V}-1~testing1_all.deb plasma-fusion-decoration_${V}-1~testing1_amd64.deb \
-           plasma-fusion-settings_${V}-1~testing1_amd64.deb plasma-fusion-navigation_${V}-1~testing1_amd64.deb; do
+           plasma-fusion-settings_${V}-1~testing1_amd64.deb plasma-fusion-navigation_${V}-1~testing1_amd64.deb \
+           plasma-fusion-quicklook_${V}-1~testing1_amd64.deb plasma-fusion-copytext_${V}-1~testing1_amd64.deb; do
     echo "$f contents" >"$d/$f"
   done
   (cd "$d" && sha256sum ./*.deb | sed 's| \./| |' >SHA256SUMS)
@@ -108,7 +119,8 @@ make_release "$BASE/rel-tampered" "$TEST_FP"
 echo "changed" >>"$BASE/rel-tampered/plasma-fusion-decoration_${V}-1~neon1_amd64.deb"
 make_release "$BASE/rel-sumsedit" "$TEST_FP"
 make_release "$BASE/rel-subkey" "$SUB_PRIMARY"
-sed -i '1s/^./0/' "$BASE/rel-sumsedit/SHA256SUMS"
+# The first character of the first sum changed (to 1 where it is 0 already).
+sed -i '1{s/^0/1/;t;s/^./0/}' "$BASE/rel-sumsedit/SHA256SUMS"
 # As GitHub serves a release: the '~' of the Debian versions became '.' on upload.
 make_release "$BASE/rel-github" "$TEST_FP"
 for f in "$BASE/rel-github"/*~*; do mv "$f" "${f//\~/.}"; done
@@ -177,13 +189,13 @@ for SHNAME in "${shells[@]}"; do
   run "$sh" $FED -- --dry-run
   expect "Fedora 44 dry run exits 0" [ "$RC" = 0 ]
   expect "  plans the Copr chroot" has_out "dnf -y copr enable archledger/plasma-fusion fedora-44-x86_64"
-  expect "  plans all four packages" has_out "dnf -y install plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+  expect "  plans all six packages" has_out "dnf -y install plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
   expect "  changes nothing" no_change
   # Fedora 44 install
   run "$sh" $FED -- --yes --light
   expect "Fedora 44 install exits 0" [ "$RC" = 0 ]
   expect "  enables Copr through sudo" has_log "sudo dnf -y copr enable archledger/plasma-fusion fedora-44-x86_64"
-  expect "  installs the packages in one transaction" has_log "dnf -y install plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+  expect "  installs the packages in one transaction" has_log "dnf -y install plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
   expect "  runs the setup as the user with the flag" has_log "plasma-fusion setup --light"
   expect "  setup is not run through sudo" bash -c '! grep -q "^sudo plasma-fusion" <<<"$0"' "$LOG"
   # no terminal and no --yes
@@ -221,6 +233,20 @@ for SHNAME in "${shells[@]}"; do
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- update --yes
   expect "update upgrades through dnf" has_log "dnf -y upgrade --refresh plasma-fusion"
   expect "  then plasma-fusion update" has_log "plasma-fusion update"
+  # an update from a release before Quick Look and copy text: the four installed are upgraded, the
+  # two new ones installed (dnf would refuse to upgrade them)
+  P4="plasma-fusion=0.5.0 plasma-fusion-decoration=0.5.0 plasma-fusion-settings=0.5.0 plasma-fusion-navigation=0.5.0"
+  VERSIONS="$P675 $P4" run "$sh" $FED -- update --dry-run
+  expect "an update plans the upgrade of the installed packages" has_out "dnf -y upgrade --refresh plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+  expect "  and the new ones apart" has_out "dnf -y install plasma-fusion-quicklook plasma-fusion-copytext   (new in this release)"
+  VERSIONS="$P675 $P4" run "$sh" $FED -- update --yes
+  expect "an update from 0.5.0 exits 0" [ "$RC" = 0 ]
+  expect "  upgrades the four installed" has_log "dnf -y upgrade --refresh plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+  expect "  installs Quick Look and copy text" has_log "dnf -y install plasma-fusion-quicklook plasma-fusion-copytext"
+  expect "  then plasma-fusion update" has_log "plasma-fusion update"
+  VERSIONS="$P675 $P4 plasma-fusion-quicklook=0.6.0 plasma-fusion-copytext=0.6.0" run "$sh" $FED -- update --yes
+  expect "an update with every package installed only upgrades" has_log "dnf -y upgrade --refresh plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
+  expect "  and installs nothing" bash -c '! grep -q "^dnf -y install" <<<"$0"' "$LOG"
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- update --light --yes
   expect "update refuses setup options" [ "$RC" = 3 ]
   VERSIONS="$P675" run "$sh" $FED -- update --yes
@@ -300,7 +326,7 @@ for SHNAME in "${shells[@]}"; do
   # Arch
   osr arch "" "" "" "Arch Linux"
   run "$sh" $AUR -- --yes
-  expect "Arch builds the AUR packages with yay" has_log "yay -S --needed --noconfirm plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+  expect "Arch builds the AUR packages with yay" has_log "yay -S --needed --noconfirm plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
   expect "  without sudo around yay" bash -c '! grep -q "^sudo yay" <<<"$0"' "$LOG"
   osr endeavouros arch "" "" "EndeavourOS"
   run "$sh" pacman sudo busctl id -- --yes
@@ -313,7 +339,11 @@ for SHNAME in "${shells[@]}"; do
   osr ubuntu debian 26.10 stonking "Ubuntu 26.10"
   run "$sh" $DEB -- --yes
   expect "Kubuntu 26.10 adds the PPA" has_log "add-apt-repository -y ppa:archledger/plasma-fusion"
-  expect "  and installs the four packages" has_log "apt-get install -y plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+  expect "  and installs the six packages" has_log "apt-get install -y plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
+  # an update from a release before Quick Look and copy text (apt's --only-upgrade would skip them)
+  VERSIONS="$P675 $P4" run "$sh" $DEB -- update --yes
+  expect "a PPA update upgrades the four installed" has_log "apt-get install -y --only-upgrade plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+  expect "  and installs the new ones" has_log "apt-get install -y plasma-fusion-quicklook plasma-fusion-copytext"
   osr ubuntu debian 26.04 resolute "Ubuntu 26.04 LTS"
   VERSIONS="plasma-workspace=6.6.6 kwin=6.6.6" KWIN_RUNNING=6.6.6 run "$sh" $DEB -- --dry-run
   expect "Kubuntu 26.04 (Plasma 6.6) is refused" [ "$RC" = 3 ]
@@ -324,7 +354,7 @@ for SHNAME in "${shells[@]}"; do
   osr neon "ubuntu debian" 24.04 noble "KDE neon User Edition"
   RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
   expect "neon installs the neon .deb set" has_log "plasma-fusion-navigation_${V}-1~neon1_amd64.deb"
-  expect "  all four in one apt call" bash -c 'grep -c "^apt-get install -y .*plasma-fusion_.*~neon1_all.deb.*decoration.*settings.*navigation" <<<"$0" | grep -q 1' "$LOG"
+  expect "  all six in one apt call" bash -c 'grep -c "^apt-get install -y .*plasma-fusion_.*~neon1_all.deb.*decoration.*settings.*navigation.*quicklook.*copytext" <<<"$0" | grep -q 1' "$LOG"
   expect "  says the signature verified" has_out "signature verified"
   osr debian "" "" forky "Debian GNU/Linux forky/sid"
   RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
@@ -340,7 +370,7 @@ for SHNAME in "${shells[@]}"; do
   osr pika "ubuntu debian" 26.10 stonking "Another derivative"
   RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
   expect "another derivative gets the shared part only" has_log "plasma-fusion_${V}-1_all.deb"
-  expect "  and is told what is left out" has_out "no build of the window decoration"
+  expect "  and is told what is left out" has_out "no build of the compiled parts (the window decoration, settings page, tablet gestures, Quick Look and copy text's selection)"
   osr debian "" 13 trixie "Debian GNU/Linux 13"
   VERSIONS="plasma-workspace=6.3.6 kwin=6.3.6" RELEASE=$BASE/rel-good run "$sh" $DEB -- --dry-run
   expect "Debian 13 (Plasma 6.3) is refused" [ "$RC" = 3 ]

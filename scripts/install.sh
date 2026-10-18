@@ -41,6 +41,7 @@ PF_DEB_TARGETS='@PF_DEB_TARGETS@'
 
 REPO=archledger/plasma-fusion
 PKGS="plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
+PKGS="$PKGS plasma-fusion-quicklook plasma-fusion-copytext"
 # The release signing key (it also signs the git tags), pinned: the release's SHA256SUMS must carry
 # its signature. Imported into a temporary keyring only; your own keyring is never touched.
 KEY_FP=F35053398E3C80FE20891B82C10B8492BD7F30C6
@@ -246,25 +247,48 @@ deb_assets() {
 
 # ---------- plan and channels ----------
 
+# For update: the packages of PKGS installed now (HAVE_PKGS) and those a newer release added
+# (NEW_PKGS). dnf refuses to upgrade a package that is not installed, and apt's --only-upgrade skips
+# it, so the new ones are installed apart.
+split_installed() {
+  HAVE_PKGS='' NEW_PKGS=''
+  for p in $PKGS; do
+    if [ -n "$(pf_installed "$p")" ]; then HAVE_PKGS="$HAVE_PKGS $p"
+    else NEW_PKGS="$NEW_PKGS $p"; fi
+  done
+  HAVE_PKGS=${HAVE_PKGS# } NEW_PKGS=${NEW_PKGS# }
+}
+
 plan() {
+  [ "$MODE" != update ] || split_installed
   case $LANE in
     copr)
-      if [ -n "$DEV_DNF_REPO" ]; then
+      if [ "$MODE" = update ]; then
+        echo "  sudo dnf -y upgrade --refresh $HAVE_PKGS"
+        [ -z "$NEW_PKGS" ] || echo "  sudo dnf -y install $NEW_PKGS   (new in this release)"
+      elif [ -n "$DEV_DNF_REPO" ]; then
         echo "  sudo tee /etc/yum.repos.d/plasma-fusion-test.repo   (test repository $DEV_DNF_REPO)"
+        echo "  sudo dnf -y install $PKGS"
       else
         echo "  sudo dnf -y copr enable $REPO fedora-$FEDORA-x86_64"
-      fi
-      echo "  sudo dnf -y install $PKGS" ;;
+        echo "  sudo dnf -y install $PKGS"
+      fi ;;
     aur)
       if [ -n "$DEV_AUR_SRC" ]; then echo "  (cd $DEV_AUR_SRC && makepkg -si)   (test PKGBUILD)"
       elif has yay; then echo "  yay -S --needed $PKGS"
       elif has paru; then echo "  paru -S --needed $PKGS"
       fi ;;
     ppa)
-      if [ -n "$DEV_APT_REPO" ]; then echo "  sudo tee /etc/apt/sources.list.d/plasma-fusion-test.list   (test repository)"
-      else echo "  sudo add-apt-repository -y ppa:$REPO"; fi
-      echo "  sudo apt-get update"
-      echo "  sudo apt-get install -y $PKGS" ;;
+      if [ "$MODE" = update ]; then
+        echo "  sudo apt-get update"
+        echo "  sudo apt-get install -y --only-upgrade $HAVE_PKGS"
+        [ -z "$NEW_PKGS" ] || echo "  sudo apt-get install -y $NEW_PKGS   (new in this release)"
+      else
+        if [ -n "$DEV_APT_REPO" ]; then echo "  sudo tee /etc/apt/sources.list.d/plasma-fusion-test.list   (test repository)"
+        else echo "  sudo add-apt-repository -y ppa:$REPO"; fi
+        echo "  sudo apt-get update"
+        echo "  sudo apt-get install -y $PKGS"
+      fi ;;
     deb)
       echo "  download from $RELEASE_BASE:$DEBS (checked against the signed SHA256SUMS)"
       echo "  sudo apt-get install -y <those files>" ;;
@@ -327,7 +351,7 @@ install_packages() {
       # shellcheck disable=SC2086
       $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $files || die "apt could not install the packages."
       [ "$DEB_PARTIAL" = 0 ] ||
-        warn "this system has no build of the window decoration, settings page and tablet gestures; the themes, widgets and tools are installed." ;;
+        warn "this system has no build of the compiled parts (the window decoration, settings page, tablet gestures, Quick Look and copy text's selection); the themes, widgets and tools are installed." ;;
   esac
 }
 
@@ -545,10 +569,16 @@ main() {
   if [ "$MODE" = update ]; then
     say "updating the packages"
     # shellcheck disable=SC2086 # package lists split on purpose
+    split_installed
     case $LANE in
-      copr) $SUDO dnf -y upgrade --refresh $PKGS || die "dnf could not update Plasma Fusion." ;;
+      copr)
+        { $SUDO dnf -y upgrade --refresh $HAVE_PKGS && { [ -z "$NEW_PKGS" ] || $SUDO dnf -y install $NEW_PKGS; }; } ||
+          die "dnf could not update Plasma Fusion." ;;
       aur) install_packages ;;
-      ppa) { $SUDO apt-get update && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade $PKGS; } || die "apt could not update Plasma Fusion." ;;
+      ppa)
+        { $SUDO apt-get update && $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade $HAVE_PKGS &&
+          { [ -z "$NEW_PKGS" ] || $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $NEW_PKGS; }; } ||
+          die "apt could not update Plasma Fusion." ;;
       deb) install_packages ;;
     esac
   else

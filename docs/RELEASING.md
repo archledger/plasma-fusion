@@ -1,7 +1,7 @@
 # Releasing Plasma Fusion
 
 One version (`VERSION`), one signed tag `vX.Y.Z`, one source tarball; every channel builds the same
-four packages from it (docs/parts/system.md). Steps marked **owner** need the release key or an
+six packages from it (docs/parts/system.md). Steps marked **owner** need the release key or an
 account; the rest can be done by a maintainer or an agent and are recorded in the project ledger.
 
 The release key: F350 5339 8E3C 80FE 2089 1B82 C10B 8492 BD7F 30C6 (ed25519, expires 2028-07-02;

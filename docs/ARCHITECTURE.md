@@ -29,7 +29,7 @@ stage/home/                      a HOME tree: .local/share, .local/libexec, .con
         |
         +--> per user:   tools/device/fusion-config.sh --install stage/home
         |                (backup, copy into ~/.local, configure the session, login check)
-        +--> system:     packaging/ -> four packages per channel (Copr, AUR, PPA, .debs, Nix),
+        +--> system:     packaging/ -> six packages per channel (Copr, AUR, PPA, .debs, Nix),
                          installed by scripts/install.sh; each user runs plasma-fusion setup
 
 packages/{decoration,kcm,navigation}-cpp/  (C++, CMake)  -> their own RPMs, against KDE's libraries

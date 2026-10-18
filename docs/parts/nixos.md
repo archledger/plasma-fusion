@@ -23,7 +23,7 @@ The shared package is installed by `packaging/install-tree.sh`, as on every chan
 `$out/bin/plasma-fusion`, with the paths set for NixOS: the charge limit's polkit action and the
 quick settings tile name the helper's store path (pkexec matches the action's `exec.path`), the
 icon names handed back to Breeze and hicolor and the on-screen keyboard's desktop file point into
-`/run/current-system/sw/share`, and the Plymouth theme names its store path. All four packages take
+`/run/current-system/sw/share`, and the Plymouth theme names its store path. All six packages take
 their version from `VERSION`. The per-user
 templates (`share/plasma-fusion/config`) and the setup scripts (`share/plasma-fusion/tools`) come
 along; `fusion-config.sh` finds the templates through `XDG_DATA_DIRS`, and the helpers through

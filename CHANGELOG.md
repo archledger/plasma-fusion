@@ -9,6 +9,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **The installer brings Quick Look and copy text's selection too:** `install.sh` installs all six
+  packages, and `install.sh update` from an earlier release adds the two new ones.
 - **`plasma-fusion status` names every compiled part:** Quick Look and copy text's selection now
   show with what they were built against, as the decoration, the settings page and the tablet
   gestures did.
