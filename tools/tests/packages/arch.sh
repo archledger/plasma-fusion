@@ -38,7 +38,7 @@ pacman -U --noconfirm ./plasma-fusion-*.pkg.tar.zst >/dev/null
 pacman -Q | grep '^plasma-fusion'
 test "$(plasma-fusion version)" = "$version"
 grep -q 'exec.path">/usr/lib/plasma-fusion/plasma-fusion-charge-limit<' /usr/share/polkit-1/actions/org.plasmafusion.charge-limit.policy
-for p in decoration settings navigation; do test -s "/usr/share/plasma-fusion/built-against/$p"; done
+bash "$ROOT/tools/tests/packages/parts.sh"
 broken=$(find /usr/share/icons/PlasmaFusion* -xtype l | grep -vcE '/(hicolor|flatpak)/' || true)
 [ "$broken" = 0 ] || { echo "$broken broken icon links" >&2; exit 1; }
 bash "$ROOT/tools/tests/packages/qml-imports.sh"

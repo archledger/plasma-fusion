@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **`plasma-fusion status` names every compiled part:** Quick Look and copy text's selection now
+  show with what they were built against, as the decoration, the settings page and the tablet
+  gestures did.
 - **Copy text's selection shows at once:** with the new `plasma-fusion-copytext` package (the main
   package recommends it), Meta+Shift+T and the copy-text buttons show Plasma Fusion's own selection
   in about a tenth of a second instead of Spectacle's in one to two and a half seconds: the screen
