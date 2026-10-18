@@ -1,3 +1,14 @@
+plasma-fusion (0.6.0-1) unstable; urgency=medium
+
+  * Copy text from the screen in one step with its own instant selection,
+    Quick Look in Dolphin, live chips, snap groups, snap sizes from the
+    keyboard and gap-free snapping, window placement memory, dynamic
+    workspaces, dock position, size, window count and every screen,
+    touchpad gestures, settings export and import, Plasma's notices in the
+    island, and Plasma 6.8.0.
+
+ -- Wisbendji Fimerlus <archledger236@gmail.com>  Sun, 18 Oct 2026 02:59:05 +0000
+
 plasma-fusion (0.5.0-1) unstable; urgency=medium
 
   * Clipboard sheet with Meta+V, editable Quick Settings, notifications
