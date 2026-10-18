@@ -378,33 +378,48 @@ only way to move it). The tablets of 2025-2026 snap a window as the result of a 
 offer what fills the rest (research: `artifacts/plasma-fusion/2026-10-18-tablet-autosnap/`).
 
 - With apps full screen (`WindowMode` fullscreen, the window policy applied), a window the user
-  un-maximizes (the window card's Full screen switch, a shortcut) takes a half in
+  un-maximizes (the window card's Full screen switch, a shortcut) takes a side in
   `settleUnmaximized`, through KWin's quick tile (`Workspace.slotWindowQuickTileLeft/Right`, the
-  window made active first): the free half, from the quick tiles of the other shown windows of its
-  screen and desktop (`contents/ui/Snap.js`, `sideFor()`: the split divider's test of a left or
-  right tile), the right one when both are free or both taken. So the split, its divider and the
-  other half's pickers (the home screen's apps, "Pick a window for this side") work as for any
-  split, and `tileChanged()` takes the title bar as for every tile. The log: `windowed by the
-  user: org.kde.dolphin, to the right half`.
-- A window wider than a half at its minimum size (`minSize.width` over half the work area less
-  8 px) floats as before (`windowed by the user: ... (wider than a half)`). In the windowed mode the
-  policy is off and windows float; the window pill's drag moves them (docs/parts/shell-topbar.md).
+  window made active first). `contents/ui/Snap.js` decides: `occupiedTiles()` takes the quick
+  tiles of the other windows shown with it (its screen, the current desktop and activity; an empty
+  activity list is every activity, as in the snap script; not minimized), and `placeFor()` the
+  free side (the split divider's test of a left or right tile), the right one when both are free
+  or both taken, with the share of the work area that side has now: what the other window leaves
+  (the divider's 1/3 or 2/3 included), the right tile's when both are taken. With nothing else
+  shown the window takes the right half and the split goes back to the middle (`centreSplit()`,
+  by the left half's edge as the divider moves it): KWin keeps a split moved earlier while a
+  minimized window holds the other tile. The split, its divider and the other side's pickers (the
+  home screen's apps, "Pick a window for this side") then work as for any split, and
+  `tileChanged()` takes the title bar as for every tile. The log: `windowed by the user:
+  org.kde.dolphin, to the right (50 %, the split in the middle)`, `... to the right (33 %)`.
+- A window wider than its side at its minimum size (`minSize.width` over the side's width less
+  8 px) floats as before (`windowed by the user: ... (wider than its side)`). In the windowed mode
+  the policy is off and windows float; the window pill's drag moves them
+  (docs/parts/shell-topbar.md).
 - A window maximized again forgets the tile record as it forgets the floating one, so leaving
   tablet posture does not give a maximized window a title bar under the laptop's borderless
   setting (found by T19's maximized-again case once the un-maximized window took a half).
 
-Tests: `packages/kwin/tests/tablet-snap.test.js` (node, in `81-kwin-tablet.sh`): nothing tiled, the
-other half free on either side, the divider's 1/3 and 2/3, both taken, tiles that are not a side (a
-top half, a quarter), a minimum width over and at a half.
-`tests/vsession/scenario-fullscreen-off.sh` (private session on the ThinkPad, 1440 x 900, the window
-card's switch tapped with pfinput; 2026-10-18, fo-2): Dolphin alone takes the right half (723, 717)
-without a title bar and the home screen offers the apps in the left half; beside KWrite on the left
-it takes the right half, beside KWrite on the right the left; in laptop posture an un-maximized
-Dolphin is not tiled. With main's script (fo-r1) the three snap checks and the free side fail:
-Dolphin floats at 216, 1008 px wide (70 %). `scenario-kwin2-a.sh` (1920 x 1200 at 4/3, k2a-2): 31
-checks pass, T19 now checking that the un-maximized window takes a half without a title bar, then
-that it floats without one once taken out of its half; on the first run with the snap (k2a-1) the
-maximized-again case failed (a title bar on a maximized window after leave), fixed as above.
+Tests: `packages/kwin/tests/tablet-snap.test.js` (node, in `81-kwin-tablet.sh`): `placeFor()` with
+nothing tiled, the other side free on either side, the divider's 1/3 and 2/3 on either side (the
+share that side has), both taken, tiles that are not a side (a top half, a quarter), minimum
+widths over and at a half, a third and two thirds; `occupiedTiles()` with the window itself,
+another activity, screen or desktop, a minimized, a non-normal, a closing and an untiled window
+(none count), a window on every desktop, on this activity among others or on every activity (they
+count), and the case of a right tile here and a left one on another activity (the left side is
+free). `tests/vsession/scenario-fullscreen-off.sh` (private session on the ThinkPad, 1440 x 900,
+the window card's switch tapped with pfinput; 2026-10-18, fo-5): all 13 checks pass - Dolphin
+alone takes the right half (723, 717) without a title bar and the home screen offers the apps in
+the left half; beside KWrite on the left it takes the right half, beside KWrite on the right the
+left; beside KWrite in the left two thirds the right third (963, 477; its minimum width 173 fits);
+with KWrite sent home (its tile and the split kept), the right half with the split in the middle;
+in laptop posture an un-maximized Dolphin is not tiled. With main's script (fo-r1) the snap checks
+fail: Dolphin floats at 216, 1008 px wide (70 %); with the first version of this change (6c5f570,
+fo-r3) the last case fails: Dolphin got the third the split left (963, 477). `scenario-kwin2-a.sh`
+(1920 x 1200 at 4/3, k2a-2): 31 checks pass, T19 now checking that the un-maximized window takes a
+half without a title bar, then that it floats without one once taken out of its half; on the first
+run with the snap (k2a-1) the maximized-again case failed (a title bar on a maximized window after
+leave), fixed as above.
 
 Known, not changed here: a window opened in tablet posture is maximized and borderless when it
 appears, so its no-title-bar state is taken as the user's (KWin gives scripts no window rules); once

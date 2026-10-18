@@ -39,3 +39,9 @@ function flick(vx, vy) {
     }
     return vx > 0 ? "right" : "left";
 }
+
+// Whether a window's screen (the task model's ScreenGeometry) is the bar's screen.
+function sameScreen(window, bar) {
+    return !!window && !!bar && window.x === bar.x && window.y === bar.y
+        && window.width === bar.width && window.height === bar.height;
+}

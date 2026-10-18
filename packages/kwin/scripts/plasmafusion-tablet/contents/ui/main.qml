@@ -415,21 +415,27 @@ Item {
         unmaximized.push(w);
         Qt.callLater(settleUnmaximized);
     }
-    // Full screen off (board TabletSnap.dc.html): the half a window takes instead of floating, the
-    // free one (Snap.js), from the quick tiles of the other shown windows of its screen and desktop.
-    function snapSide(w) {
+    // Full screen off (board TabletSnap.dc.html): where a window goes instead of floating
+    // (Snap.js), from the quick tiles of the other windows shown with it (its screen, the current
+    // desktop and activity), or null when it does not fit there.
+    function snapPlace(w) {
         const area = Workspace.clientArea(Workspace.MaximizeArea, w);
-        const tiles = [];
-        const order = Workspace.stackingOrder;
-        for (let i = 0; i < order.length; ++i) {
-            const o = order[i];
-            if (o === w || !o || o.deleted || !o.normalWindow || o.minimized || !o.tile || o.output !== w.output
-                    || !(o.onAllDesktops || o.desktops.indexOf(Workspace.currentDesktop) >= 0)) {
-                continue;
-            }
-            tiles.push(o.tile.relativeGeometry);
+        const tiles = Snap.occupiedTiles(w, Workspace.stackingOrder, Workspace.currentDesktop, Workspace.currentActivity);
+        return Snap.placeFor(tiles, w.minSize.width, area.width);
+    }
+    // Nothing else tiled: the split back in the middle (KWin keeps a quick-tile split the divider
+    // moved earlier), by the left half's edge as the divider moves it.
+    function centreSplit(w) {
+        const root = w.tile ? w.tile.parent : null;
+        const left = root ? Array.from(root.tiles).find(t => Snap.isLeft(t.relativeGeometry)) : null;
+        if (!left) {
+            return;
         }
-        return Snap.sideFor(tiles, w.minSize.width, area.width / 2);
+        const area = Workspace.clientArea(Workspace.MaximizeArea, w);
+        const delta = area.x + area.width / 2 - (left.absoluteGeometry.x + left.absoluteGeometry.width);
+        if (Math.abs(delta) >= 1) {
+            left.resizeByPixels(delta, Qt.RightEdge);
+        }
     }
     function settleUnmaximized() {
         const list = unmaximized;
@@ -447,17 +453,21 @@ Item {
             // the floating window of 2026-10-13): out of full screen it takes a half through KWin's
             // quick tile, so the split, its divider and the other half's pickers work as for any
             // split, and tileChanged() takes its title bar. One that does not fit a half floats.
-            const side = snapSide(w);
-            if (side !== "") {
+            const place = snapPlace(w);
+            if (place) {
                 if (Workspace.activeWindow !== w) {
                     Workspace.activeWindow = w;
                 }
-                if (side === "left") {
+                if (place.side === "left") {
                     Workspace.slotWindowQuickTileLeft();
                 } else {
                     Workspace.slotWindowQuickTileRight();
                 }
-                log("windowed by the user: " + w.resourceClass + ", to the " + side + " half");
+                if (place.reset) {
+                    centreSplit(w);
+                }
+                log("windowed by the user: " + w.resourceClass + ", to the " + place.side + " ("
+                    + Math.round(place.fraction * 100) + " %" + (place.reset ? ", the split in the middle" : "") + ")");
                 continue;
             }
             if (placed) {
@@ -473,7 +483,7 @@ Item {
             if (laptopNoBorder[k] === false) {
                 borderlessFloating[k] = true;
             }
-            log("windowed by the user: " + w.resourceClass + " (wider than a half)" + (placed ? ", placed at 70 %" : "") + ", no title bar");
+            log("windowed by the user: " + w.resourceClass + " (wider than its side)" + (placed ? ", placed at 70 %" : "") + ", no title bar");
         }
     }
 

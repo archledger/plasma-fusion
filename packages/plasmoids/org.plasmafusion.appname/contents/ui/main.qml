@@ -382,6 +382,8 @@ PlasmoidItem {
     property bool pillDragging: false
     // The finger in the pill screen's coordinates while the pill is dragged.
     property point dragFinger: Qt.point(0, 0)
+    // The app the drag started with (its icon follows the finger even if the focus moves).
+    property var dragIcon: ""
     readonly property rect pillScreen: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 1440, 900)
     readonly property rect pillWork: Plasmoid.containment ? Plasmoid.containment.availableScreenRect : Qt.rect(0, 0, 1440, 900)
     // (the overlay's own properties of these names would shadow the ids inside it)
@@ -391,10 +393,19 @@ PlasmoidItem {
     Timer {
         id: pillArm
         interval: 300
-        onTriggered: root.pillArmed = root.tablet && root.hasWindow
+        onTriggered: root.pillArmed = root.tablet && root.hasWindow && root.windowHere()
+    }
+    // The app-name model is not filtered by screen, so a bar can show the active window of another
+    // screen: the drag and the flick act only from the bar of the window's own screen, whose
+    // halves are the ones the overlay shows.
+    function windowHere(): bool {
+        const index = tasksModel.activeTask;
+        const g = index && index.valid ? tasksModel.data(index, TaskManager.AbstractTasksModel.ScreenGeometry) : null;
+        return Drop.sameScreen(g, pillScreen);
     }
     function startPillDrag(global: point): void {
         cardWindow = appWindowIds;
+        dragIcon = appIcon;
         pillDragging = true;
         movePillDrag(global);
         console.info("appname: pill drag starts");
@@ -408,12 +419,16 @@ PlasmoidItem {
         pillArmed = false;
         pillDrop(target, "drag");
     }
+    // how: "drag" acts on the window captured when the drag started (cardWindow), "flick" on the
+    // active window now.
     function pillDrop(target: string, how: string): void {
         console.info("appname: pill " + how + " to " + (target === "" ? "nowhere (back in the top bar)" : target));
         if (target === "") {
             return;
         }
-        cardWindow = appWindowIds;
+        if (how === "flick") {
+            cardWindow = appWindowIds;
+        }
         const atm = TaskManager.AbstractTasksModel;
         if (target === "full") {
             // (a tiled window is not maximized: maximizing it takes it out of its tile)
@@ -795,7 +810,7 @@ PlasmoidItem {
                             } else if (dy > 0 && dy >= Math.abs(dx) && !root.cardOpen) {
                                 console.info("appname: pull-down opens the " + (root.hasWindow ? "window card" : "launcher"));
                                 root.activatePill();
-                            } else if (root.tablet && root.hasWindow && Math.abs(dx) > Math.abs(dy)) {
+                            } else if (root.tablet && root.hasWindow && Math.abs(dx) > Math.abs(dy) && root.windowHere()) {
                                 flicking = true;
                             }
                             return;
@@ -829,7 +844,7 @@ PlasmoidItem {
             motion: root.dropMotion
             screenGeometry: root.pillScreen
             finger: root.dragFinger
-            iconSource: root.appIcon
+            iconSource: root.dragIcon
             topInset: root.pillWork.y
             bottomInset: root.pillScreen.height - root.pillWork.y - root.pillWork.height
             visible: true

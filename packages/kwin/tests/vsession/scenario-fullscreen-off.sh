@@ -10,7 +10,11 @@
 #      apps in the left half;
 #   2. KWrite in the left half, Dolphin full screen over it: Dolphin takes the free right half;
 #   3. KWrite in the right half: Dolphin takes the left half;
-#   4. laptop posture: a window un-maximized there is not tiled.
+#   4. KWrite in the left two thirds (the divider's split): Dolphin takes the right third when its
+#      minimum width fits there, and floats when it does not;
+#   5. KWrite sent home (minimized: it keeps its two-thirds tile, and KWin the split): Dolphin, the
+#      only window shown, takes the right half, the split back in the middle;
+#   6. laptop posture: a window un-maximized there is not tiled.
 # Run: tools/vsession/remote.sh fo-1 packages/kwin/tests/vsession/scenario-fullscreen-off.sh SEED 1440x900 420
 exec 2>&1
 export OUT
@@ -90,14 +94,41 @@ fullscreen_off
 shot fo-3
 expect "3: Full screen off beside KWrite on the right: Dolphin takes the left half" dolphin "tiled and x <= 12 and not maxed"
 expect "3: KWrite stays on the right" kwrite "tiled and x >= 700"
-grep -a 'windowed by the user' "$KLOG" | tail -n 3 >>"$CHK" || true
+# ---- 4. KWrite in the left two thirds (as the split divider leaves it at 2/3)
+tile kwrite Left
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i];
+  if (w.normalWindow && String(w.resourceClass).indexOf('kwrite') >= 0 && w.tile) {
+    var a = workspace.clientArea(KWin.MaximizeArea, w);
+    w.tile.resizeByPixels(a.x + a.width * 2 / 3 - (w.tile.absoluteGeometry.x + w.tile.absoluteGeometry.width), 4); } }  // 4: Qt.RightEdge (no Qt namespace in a KWin JavaScript script)
+  report(1);" >/dev/null
+sleep 1.5
+act dolphin; sleep 0.5; K maximize org.kde.dolphin >/dev/null; sleep 2
+DMIN=$(K run "var l = workspace.windowList(), m = -1; for (var i = 0; i < l.length; ++i) { if (l[i].normalWindow && String(l[i].resourceClass).indexOf('dolphin') >= 0) { m = Math.round(l[i].minSize.width); } } report(m);")
+info "4: Dolphin's minimum width $DMIN, KWrite $(win kwrite)"
+fullscreen_off
+shot fo-4
+if [ "$DMIN" -le 472 ]; then
+  expect "4: beside KWrite in two thirds: Dolphin takes the right third" dolphin "tiled and x >= 940 and w <= 500 and not maxed"
+else
+  expect "4: beside KWrite in two thirds: Dolphin, wider than the third, floats" dolphin "not tiled and not maxed"
+fi
+expect "4: KWrite keeps its two thirds" kwrite "tiled and x <= 12 and w >= 940"
 
-# ---- 4. laptop posture: no snap
+# ---- 5. KWrite sent home, its tile and the 2/3 split kept: Dolphin alone, the split in the middle
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i]; if (w.normalWindow && String(w.resourceClass).indexOf('kwrite') >= 0) { w.minimized = true; } } report(1);" >/dev/null
+sleep 2
+act dolphin; sleep 0.5; K maximize org.kde.dolphin >/dev/null; sleep 2
+fullscreen_off
+shot fo-5
+expect "5: Dolphin alone takes the right half, the split in the middle" dolphin "tiled and 700 <= x <= 740 and 690 <= w <= 740 and not maxed"
+grep -a 'windowed by the user' "$KLOG" | tail -n 5 >>"$CHK" || true
+
+# ---- 6. laptop posture: no snap
 pfv_tablet off; sleep 6
 act dolphin; sleep 0.5; K maximize org.kde.dolphin >/dev/null; sleep 2
 K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i]; if (w.normalWindow && String(w.resourceClass).indexOf('dolphin') >= 0) { w.setMaximize(false, false); } } report(1);" >/dev/null
 sleep 2
-expect "4: laptop posture: un-maximized Dolphin is not tiled" dolphin "not tiled and not maxed"
+expect "6: laptop posture: un-maximized Dolphin is not tiled" dolphin "not tiled and not maxed"
 
 errs=$(grep -aE 'plasmafusion-tablet' "$KLOG" | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
 if [ -z "$errs" ]; then pass "no QML errors from plasmafusion-tablet"; else fail "plasmafusion-tablet: $(echo "$errs" | head -3 | tr '\n' ' ')"; fi

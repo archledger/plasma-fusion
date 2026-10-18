@@ -12,6 +12,8 @@
 #   5. held and dragged back into the top bar: nothing;
 #   6. pulled down 60 px without the hold: the window card opens, as before;
 #   7. held and dragged to the bottom: KWrite is minimized (home);
+#   8. the focus moving to Konsole while KWrite's pill is held and dragged: the drop still moves
+#      KWrite, and Konsole stays as it was;
 # and no QML messages about the pill's files.
 # Run: tools/vsession/remote.sh pd-1 packages/plasmoids/org.plasmafusion.appname/tests/vsession/scenario-pilldrag.sh SEED 1440x900 420
 exec 2>&1
@@ -107,6 +109,27 @@ pfinput 'key escape'; sleep 1
 # ---- 7. held and dragged to the bottom: home
 touch_ "hdrag $PX $PY 720 850 0.45 0.3"
 expect "7: dragged to the bottom" "drag to home" "mini"
+
+# ---- 8. the focus moves during the drag: the drop acts on the window the drag started with
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i]; if (w.normalWindow && String(w.resourceClass).indexOf('kwrite') >= 0) { w.minimized = false; workspace.activeWindow = w; w.setMaximize(true, true); } } report(1);" >/dev/null
+konsole >/dev/null 2>&1 &
+sleep 5
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i]; if (w.normalWindow && String(w.resourceClass).indexOf('kwrite') >= 0) { workspace.activeWindow = w; } } report(1);" >/dev/null
+sleep 1.5
+KON0=$(K run "var l = workspace.windowList(), r = 'none'; for (var i = 0; i < l.length; ++i) { var w = l[i]; if (w.normalWindow && String(w.resourceClass).indexOf('konsole') >= 0) { r = [Math.round(w.frameGeometry.x), Math.round(w.frameGeometry.width), !!w.tile].join(' '); } } report(r);")
+touch_ "hdrag $PX $PY 250 660 0.45 2.0" &
+TP=$!
+sleep 1.9
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { var w = l[i]; if (w.normalWindow && String(w.resourceClass).indexOf('konsole') >= 0) { workspace.activeWindow = w; } } report(1);" >/dev/null
+wait "$TP"
+sleep 2.5
+KON1=$(K run "var l = workspace.windowList(), r = 'none'; for (var i = 0; i < l.length; ++i) { var w = l[i]; if (w.normalWindow && String(w.resourceClass).indexOf('konsole') >= 0) { r = [Math.round(w.frameGeometry.x), Math.round(w.frameGeometry.width), !!w.tile].join(' '); } } report(r);")
+s=$(kw_state); read -r x w _ _ <<<"$s"
+if [[ "$(last_pill)" == *"drag to left"* ]] && [ "$x" -le 12 ] && [ "$w" -ge 600 ] && [ "$w" -le 760 ] && [ "$KON0" = "$KON1" ]; then
+  pass "8: the focus moved to Konsole during the drag: KWrite took the left half ($s), Konsole stayed ($KON1)"
+else
+  fail "8: the focus moved during the drag: $(last_pill); KWrite $s; Konsole before $KON0 after $KON1"
+fi
 
 errs=$(grep -a -E '(main|WindowDropOverlay|WindowCard)\.qml|drop\.js' "$PLOG" | grep -a 'org.plasmafusion.appname' || true)
 if [ -z "$errs" ]; then pass "no QML messages about the pill's files"; else fail "QML messages: $(echo "$errs" | head -5 | tr '\n' ' ')"; fi

@@ -599,19 +599,30 @@ posture Plasma Fusion's windows have no title bar, and the window pill is their 
   (maximized, also out of a tile; nothing for a window already maximized).
 - **Flick**: without the hold, the pill moved sideways at 800 px/s or faster, more sideways than
   down (`flick()`), puts the app in that half at once. A slower sideways move does nothing.
+- The drop acts on the window the drag started with (its windows and icon kept at the lift), even
+  when the focus moves meanwhile (an app's dialog, a notification); a flick acts on the active
+  window. Only the bar of the window's own screen drags or flicks it (`drop.js` `sameScreen()`:
+  the app-name model is not filtered by screen, so with a second screen a bar can show the other
+  screen's window, whose halves are not the ones its overlay would show); elsewhere the hold is a
+  pull-down as before.
 - A tap and the 24 px pull-down still open the window card (a pull-down now has to be more down
   than sideways). Laptop posture is unchanged: no lift and no flick there. The log:
   `appname: pill drag starts`, `appname: pill drag to left`, `appname: pill flick to right`,
   `appname: pill drag to nowhere (back in the top bar)`.
 
 Tests: `tests/drop.test.js` (node, in `70-topbar.sh`): the top bar, the thirds and their edges, the
-bottom 96 px on every side, a portrait screen, flicks at and under 800 px/s and mostly downward.
-`tests/vsession/scenario-pilldrag.sh` (private session on the ThinkPad, 1440 x 900, tablet
-posture, real touch through pfinput; 2026-10-18, pd-3): all 9 checks pass - KWrite opens full
-screen; held 0.45 s and dragged to the left third, KWrite takes the left half (0, 717); to the
-middle, full screen again; a flick to the right, the right half (723, 717); a slow sideways move
-does nothing; dragged within the top bar, nothing; the pull-down still opens the window card;
-dragged to the bottom, KWrite is minimized; no QML message about the pill's files. With main's pill
-(pd-r1) 6 checks fail: no drag, no flick (the held drags open the window card, and the card they
-leave open keeps the later pull-down from opening it again). Not verified: by a person's finger on
-the ThinkPad's own screen, portrait, a second screen.
+bottom 96 px on every side, a portrait screen, flicks at and under 800 px/s and mostly downward,
+the same screen and others. `tests/vsession/scenario-pilldrag.sh` (private session on the ThinkPad,
+1440 x 900, tablet posture, real touch through pfinput; 2026-10-18, pd-5): all 10 checks pass -
+KWrite opens full screen; held 0.45 s and dragged to the left third, KWrite takes the left half
+(0, 717); to the middle, full screen again; a flick to the right, the right half (723, 717); a slow
+sideways move does nothing; dragged within the top bar, nothing; the pull-down still opens the
+window card; dragged to the bottom, KWrite is minimized; the focus moved to Konsole during a drag
+of KWrite's pill, KWrite takes the left half and Konsole stays; no QML message about the pill's
+files. `tests/vsession/scenario-pilldrag-screens.sh` (two outputs, a top bar on each; pds-2): all 4
+pass - the second screen's pill does not drag the first screen's KWrite, the first screen's does.
+With main's pill (pd-r1) 6 checks fail: no drag, no flick (the held drags open the window card, and
+the card they leave open keeps the later pull-down from opening it again); with the first version
+of this change (6c5f570) the focus case fails (Konsole was tiled, pd-r2) and so does the second
+screen (KWrite moved from the second screen's bar, pds-r1). Not verified: by a person's finger on
+the ThinkPad's own screen, portrait, a real second monitor.

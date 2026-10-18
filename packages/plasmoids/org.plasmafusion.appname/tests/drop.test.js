@@ -44,4 +44,12 @@ assert.strictEqual(flick(-1500, 200), "left");
 assert.strictEqual(flick(799, 0), "");
 assert.strictEqual(flick(1000, 1200), "");
 assert.strictEqual(flick(0, 2000), "");
+// The window's screen against the bar's: only the same screen.
+const { sameScreen } = globalThis;
+const laptop = { x: 0, y: 0, width: 1440, height: 900 };
+assert.ok(sameScreen({ x: 0, y: 0, width: 1440, height: 900 }, laptop));
+assert.ok(!sameScreen({ x: 1440, y: 0, width: 1920, height: 1080 }, laptop));
+assert.ok(!sameScreen({ x: 0, y: 0, width: 1920, height: 1080 }, laptop));
+assert.ok(!sameScreen(null, laptop));
+assert.ok(!sameScreen(undefined, laptop) && !sameScreen(laptop, null));
 console.log("drop.test.js: ok");
