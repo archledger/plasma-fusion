@@ -31,17 +31,22 @@ The key is in the repository as `.github/release-signing-key.asc`; it also signs
 
 | System (`/etc/os-release`) | Channel | What it runs |
 |---|---|---|
-| Fedora (a release Copr builds) | Copr `archledger/plasma-fusion` | `sudo dnf copr enable archledger/plasma-fusion fedora-N-x86_64`, `sudo dnf install` the four packages |
+| Fedora (a release Copr builds) | Copr `archledger/plasma-fusion` | `sudo dnf copr enable archledger/plasma-fusion fedora-N-x86_64`, `sudo dnf install` the six packages |
 | Fedora Atomic (`/run/ostree-booted`) | prints the steps | the Copr repository file, `rpm-ostree install`, reboot |
 | RHEL family, other Fedora-likes | refused | no Copr chroot |
-| Arch and derivatives (`arch` in `ID`/`ID_LIKE`) | AUR | `yay -S --needed` (or `paru`) the four packages, as the user; without a helper it prints the makepkg steps and stops |
+| Arch and derivatives (`arch` in `ID`/`ID_LIKE`) | AUR | `yay -S --needed` (or `paru`) the six packages, as the user; without a helper it prints the makepkg steps and stops |
 | SteamOS | refused | read-only image |
-| Ubuntu (`ID=ubuntu`) on a series the PPA builds (`stonking`, 26.10) | PPA `ppa:archledger/plasma-fusion` | `add-apt-repository`, `apt-get install` the four packages |
-| KDE neon (`ID=neon`) | release `.deb`s for neon | the four `~neon1` packages from the release, checked against the signed `SHA256SUMS`, in one `apt-get install` |
-| Debian testing or unstable (`forky`, `sid`) | release `.deb`s for Debian testing | the four `~testing1` packages, as for neon |
+| Ubuntu (`ID=ubuntu`) on a series the PPA builds (`stonking`, 26.10) | PPA `ppa:archledger/plasma-fusion` | `add-apt-repository`, `apt-get install` the six packages |
+| KDE neon (`ID=neon`) | release `.deb`s for neon | the six `~neon1` packages from the release, checked against the signed `SHA256SUMS`, in one `apt-get install` |
+| Debian testing or unstable (`forky`, `sid`) | release `.deb`s for Debian testing | the six `~testing1` packages, as for neon |
 | another Debian or Ubuntu family system with Plasma 6.7 or later | release `.deb` | the shared part only (`X.Y.Z-1_all`); the compiled parts need a build for that system's KWin |
 | NixOS | prints the lines | the flake input and module, or the `fetchGit` import (nixos.md); it never edits `/etc/nixos` |
 | anything else | refused | |
+
+`update` upgrades the packages that are installed and installs those a later release added (Quick
+Look and copy text's selection came after 0.5.0): dnf refuses to upgrade a package that is not
+installed, and apt's `--only-upgrade` skips it, so on Copr and the PPA the new ones are installed
+apart; the AUR and the release `.deb`s install the whole set either way.
 
 The release stamps the lists: `PF_COPR_FEDORA` (Fedora releases), `PF_PPA_SERIES`, `PF_DEB_TARGETS`
 (`neon testing`) and `PF_PLASMA_SERIES` (`packaging/tested-plasma.txt`), with
@@ -118,7 +123,9 @@ signed with a throwaway key: every channel and refusal above, the session checks
 uninstall (with the login screen and boot splash undone first), the signature and checksum failures,
 no downgrade, truncated downloads (seven cut points) and a stamped copy that must ignore test
 endpoints in the environment (154 checks, 2026-10-02; 8 more for the uninstall and the optional
-steps, 2026-10-11). The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
+steps, 2026-10-11; 208 in all on 2026-10-18, with the six packages and an update from a release
+before Quick Look and copy text, whose fake dnf refuses to upgrade a package that is not installed,
+as dnf5 does). The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon
 and Debian testing, with the channels served from the test host.

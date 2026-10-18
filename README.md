@@ -117,8 +117,9 @@ changed and the ones that were kept ([`docs/parts/device.md`](docs/parts/device.
 
 How the parts fit together is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-The packages (one version, four packages on every channel: the shared part and the compiled
-decoration, settings page and tablet gestures, which the source install leaves out) are built
+The packages (one version, six packages on every channel: the shared part and the compiled
+decoration, settings page, tablet gestures, Quick Look and copy text's selection, which the source
+install leaves out) are built
 from `packaging/`: [`docs/parts/system.md`](docs/parts/system.md). Releasing is in
 [`docs/RELEASING.md`](docs/RELEASING.md), the changes per version in [`CHANGELOG.md`](CHANGELOG.md).
 

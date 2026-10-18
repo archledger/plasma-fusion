@@ -55,7 +55,7 @@ for t in $DEBT; do
 done
 deb plain docker.io/library/debian:testing plain
 # The shared part of the plain build is the universal .deb; its compiled parts are not shipped.
-rm -f "$OUT/release"/plasma-fusion-{decoration,settings,navigation}_"$version"-1_amd64.deb
+rm -f "$OUT/release"/plasma-fusion-{decoration,settings,navigation,quicklook,copytext}_"$version"-1_amd64.deb
 
 # The PPA's source packages (Launchpad builds them; nothing is signed here).
 for s in $PPA; do
