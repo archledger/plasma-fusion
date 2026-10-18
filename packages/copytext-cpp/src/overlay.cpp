@@ -57,19 +57,6 @@ Overlay::Overlay(QObject *parent)
     if (m_component->isError()) {
         qWarning().noquote() << "copytext-overlay:" << m_component->errorString();
     }
-    connect(&m_capture, &ScreenCapture::captured, this, [this](const QString &screenName, const QImage &image) {
-        m_pictures.insert(screenName, image);
-        if (--m_waiting == 0 && m_active) {
-            showAll();
-        }
-    });
-    connect(&m_capture, &ScreenCapture::failed, this, [this](const QString &screenName, const QString &reason) {
-        qWarning().noquote() << "copytext-overlay: no picture of" << screenName << "-" << reason;
-        if (m_active) {
-            closeAll();
-            fallBack();
-        }
-    });
 }
 
 QString Overlay::helper() const
@@ -79,17 +66,43 @@ QString Overlay::helper() const
 
 void Overlay::Start()
 {
-    // A second press while the box is being chosen does nothing (as the helper's lock).
-    if (m_active) {
+    // A second press while the box is being chosen, or while the helper reads the last one, does
+    // nothing (as the helper's lock: the helper would drop the second area).
+    if (m_active || m_reading) {
         return;
     }
     m_active = true;
     m_clock.start();
     m_pictures.clear();
+    // A capture of its own for each Start(): what an earlier one still answers (after a failure
+    // ended it) is dropped, not kept until the next.
+    if (m_capture) {
+        m_capture->deleteLater();
+    }
+    auto *capture = new ScreenCapture(this);
+    m_capture = capture;
+    connect(capture, &ScreenCapture::captured, this, [this, capture](const QString &screenName, const QImage &image) {
+        if (capture != m_capture || !m_active) {
+            qInfo().noquote() << "copytext-overlay: a picture of" << screenName << "after the end, dropped";
+            return;
+        }
+        m_pictures.insert(screenName, image);
+        if (--m_waiting == 0) {
+            showAll();
+        }
+    });
+    connect(capture, &ScreenCapture::failed, this, [this, capture](const QString &screenName, const QString &reason) {
+        qWarning().noquote() << "copytext-overlay: no picture of" << screenName << "-" << reason;
+        if (capture == m_capture && m_active) {
+            m_pictures.clear();
+            closeAll();
+            fallBack();
+        }
+    });
     const auto screens = QGuiApplication::screens();
     m_waiting = screens.size();
     for (QScreen *screen : screens) {
-        m_capture.capture(screen->name());
+        capture->capture(screen->name());
     }
 }
 
@@ -202,14 +215,18 @@ void Overlay::read(const QImage &area)
         delete dir;
         return;
     }
+    // Until the helper is done, Start() waits (m_reading).
+    m_reading = true;
     auto *process = new QProcess(this);
-    connect(process, &QProcess::finished, this, [process, dir] {
+    connect(process, &QProcess::finished, this, [this, process, dir] {
+        m_reading = false;
         process->deleteLater();
         delete dir;
     });
-    connect(process, &QProcess::errorOccurred, this, [process, dir](QProcess::ProcessError error) {
+    connect(process, &QProcess::errorOccurred, this, [this, process, dir](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
             qWarning().noquote() << "copytext-overlay: plasma-fusion-copytext did not start";
+            m_reading = false;
             process->deleteLater();
             delete dir;
         }

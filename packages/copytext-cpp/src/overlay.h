@@ -44,11 +44,12 @@ private:
     QQmlEngine m_engine;
     QQmlComponent *m_component = nullptr;
     CaptureImages *m_images = nullptr;
-    ScreenCapture m_capture;
+    ScreenCapture *m_capture = nullptr; // this Start()'s
     QHash<QString, QImage> m_pictures;
     QList<QQuickWindow *> m_windows;
     QElapsedTimer m_clock;
     int m_waiting = 0;
     int m_serial = 0;
     bool m_active = false;
+    bool m_reading = false; // the helper reads the chosen area
 };

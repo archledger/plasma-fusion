@@ -8,7 +8,7 @@ SPDX-License-Identifier: CC-BY-SA-4.0
 Status: new in the release after 0.5.0 (the owner's request of 2026-10-17: copy text from the screen
 as NormCap does it, one click, a box, done; the research, the CopyText board and the prototype's
 measurements approved the same day). Package `plasma-fusion-copytext` (the fifth compiled part).
-Last edited 2026-10-17.
+Last edited 2026-10-18.
 
 ## What it is
 
@@ -31,7 +31,9 @@ selection of Plasma Fusion's own that stays running, so it shows at once:
    from that screen's picture into a private directory in the runtime directory, the windows close,
    and `plasma-fusion-copytext --image FILE` reads, copies and says it ("Text copied" or "No text
    found"); the directory goes once the helper is done. Esc, a click without a drag or a box under 4
-   px end it without a word. A second `Start()` while the box is being chosen does nothing.
+   px end it without a word. A second `Start()` while the box is being chosen, or while the helper
+   still reads the last area, does nothing (the helper, which reads one area at a time, would drop a
+   second).
 3. **Waiting:** the program stays on the bus with no window. It draws with Qt Quick's software
    renderer: one still picture, a veil and a box, as fast as the GPU renderer and without keeping
    the GPU driver's memory (below). After each use it gives the freed memory back (glibc's
@@ -39,7 +41,8 @@ selection of Plasma Fusion's own that stays running, so it shows at once:
 
 When KWin refuses the pictures (the desktop file missing, another compositor) it runs the helper
 with `PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1`, which then uses Spectacle's selection as without this
-package.
+package. Each `Start()` has a capture of its own: a picture that KWin still sends after a refusal
+ended it is dropped, not kept until the next press.
 
 ## Starting it
 
@@ -60,7 +63,8 @@ package.
   go to its interpreter, every Python program); hence a compiled part.
 - **NixOS:** the program is not wrapped (nixpkgs' KWin patch unwraps `.NAME-wrapped` for its Wayland
   checks only, not for this D-Bus one); the module lists the package in `services.dbus.packages`.
-  Not tested on NixOS (docs/parts/nixos.md).
+  The bus starts the program from its own store path, where nothing else of Plasma Fusion is, so the
+  package links the shared package's helper beside it. Not run on NixOS (docs/parts/nixos.md).
 
 ## Files
 
@@ -99,8 +103,10 @@ there), Nix `plasma-fusion-copytext`. The main package recommends it (Arch: optd
 - `copytext-core` (`tests/coretest.cpp`, ctest; CI `compiled`, `sanitizers` and `coverage`): KWin's
   raw picture through a real pipe (rows with a stride above the row, the scale kept), and every
   doubt refused (a short read, a stride under the row, no format, an unknown one, no width, a type
-  other than raw); no scale (KWin before version 4) reads as 1; the box in native pixels at scale 1,
-  2 and 1.75 (every pixel the box touches) and past the picture's edge.
+  other than raw); rows of 20 KiB written slowly in pieces of 1000 bytes arrive whole (a pipe hands
+  over what is there; Qt's `QFile::read()` reads on to the full length, Qt 6.11
+  `QFSFileEnginePrivate::readFdFh`); no scale (KWin before version 4) reads as 1; the box in native
+  pixels at scale 1, 2 and 1.75 (every pixel the box touches) and past the picture's edge.
 - `copytext-overlay` (`tests/overlaytest.cpp`, offscreen, the software renderer): the QML against
   the board: the hint 46 px from the top, 32 px high, centred within half a pixel, gone once the
   drag starts; the veil's colour over the picture outside the box, the picture clear inside, the
@@ -118,12 +124,13 @@ there), Nix `plasma-fusion-copytext`. The main package recommends it (Arch: optd
   as `--image FILE` with exactly that box's native pixels (each pixel of the stand-in's picture says
   where it is), the windows gone; a box on HDMI-1 is cut from HDMI-1's picture; the file is in a new
   directory of mode 700 in the runtime directory, removed once the helper ends. A second `Start()`
-  while the box is chosen asks KWin for nothing more; Esc and a click close every window and run
+  while the box is chosen asks KWin for nothing more; one while the helper still reads (the stand-in
+  held) shows nothing, and the next after it does; Esc and a click close every window and run
   nothing; KWin's refusal runs the helper once, with `PLASMA_FUSION_COPYTEXT_NO_OVERLAY=1`, and
-  shows no window.
+  shows no window; with one screen refused, the other's picture is dropped when it comes.
 - All pass with `-Werror` and under AddressSanitizer and UndefinedBehaviorSanitizer with leak
-  detection (`tools/sanitizers/run.sh`, Fedora 44 container, 2026-10-17). Line coverage
-  (`tools/tests/coverage.sh cpp:copytext-cpp`, docs/parts/coverage.md): 81.8 % (180 of 220),
+  detection (`tools/sanitizers/run.sh`, Fedora 44 container, 2026-10-18). Line coverage
+  (`tools/tests/coverage.sh cpp:copytext-cpp`, docs/parts/coverage.md): 82.2 % (189 of 230),
   `main.cpp` not at all (the program's start runs only in a session, below). The RPMs build with the
   new package and rpmlint reports 0 errors over all 14 packages (its one warning, no-documentation,
   as the decoration's and Quick Look's).
@@ -155,8 +162,10 @@ there), Nix `plasma-fusion-copytext`. The main package recommends it (Arch: optd
   pointer included; `copytext-flow` - the box at scale 1, the first screen's picture for every box,
   a second `Start()` starting again, the way back without its variable or once per screen, the
   private directory kept, another D-Bus interface name, the windows without their geometry, the
-  helper run on a cancel, the directory's mode (the stand-in reporting 755). The window's screen
-  alone (`setScreen()` without the geometry change) passes offscreen, where the geometry places the
+  helper run on a cancel, the directory's mode (the stand-in reporting 755), `Start()` not waiting
+  for the helper, a picture kept after a refusal (and the overlay before these two, both cases);
+  `copytext-core` again - one `read()` per row instead of `QFile::read()`. The window's screen alone
+  (`setScreen()` without the geometry change) passes offscreen, where the geometry places the
   window: the layer shell's choice of output shows only on Wayland (the two-screen session run
   below). The helper's unit test against main's helper: three of the four new cases fail (the
   fourth, the way back to Spectacle, is main's behaviour).

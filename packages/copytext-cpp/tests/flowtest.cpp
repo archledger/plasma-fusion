@@ -44,8 +44,9 @@ static QImage nativePicture(QSize size, qreal scale, int screen)
 // overlay looks for it (flow/plasma-fusion-copytext: what it was given, in $FLOW_OUT): Start() on
 // the bus shows one window per screen; a box drawn on one goes to the helper as that screen's native
 // pixels, in a private directory in the runtime directory that is gone once the helper is done; a
-// second Start() while the box is chosen does nothing; Esc and a click end it with no helper; KWin's
-// refusal runs the helper's own way (PLASMA_FUSION_COPYTEXT_NO_OVERLAY).
+// second Start() while the box is chosen, or while the helper reads it, does nothing; Esc and a
+// click end it with no helper; KWin's refusal runs the helper's own way
+// (PLASMA_FUSION_COPYTEXT_NO_OVERLAY), and a picture that comes after a refusal is dropped.
 class FlowTest : public QObject
 {
     Q_OBJECT
@@ -133,12 +134,22 @@ private Q_SLOTS:
         QFile::remove(m_out + u"/runs"_s);
         QFile::remove(m_out + u"/region.png"_s);
         QFile::remove(m_out + u"/mode"_s);
+        QFile::remove(m_out + u"/hold"_s);
         m_kwin.asked.clear();
         m_kwin.refuseAll = false;
+        m_kwin.refused = QStringList{u"refused"_s};
     }
     void cleanup()
     {
+        // A failed case may leave its selection open or its helper reading: end both, so that the
+        // next case starts as the program would.
+        const auto left = overlays();
+        for (QQuickWindow *window : left) {
+            QMetaObject::invokeMethod(window, "cancelled");
+        }
+        QFile::remove(m_out + u"/hold"_s);
         QTRY_VERIFY_WITH_TIMEOUT(overlays().isEmpty(), 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(privateDirs().isEmpty(), 15000);
     }
 
     void handsOverTheBox()
@@ -214,6 +225,48 @@ private Q_SLOTS:
         QTest::qWait(500);
         QCOMPARE(runs(), QStringList());
         QCOMPARE(privateDirs(), QStringList());
+    }
+    void waitsForTheHelper()
+    {
+        // The helper still reads the first area (Tesseract): a press meanwhile shows nothing, as
+        // the helper would drop a second area (its lock).
+        QFile hold(m_out + u"/hold"_s);
+        QVERIFY(hold.open(QIODevice::WriteOnly));
+        hold.close();
+        m_overlay.Start();
+        QTRY_COMPARE_WITH_TIMEOUT(overlays().size(), 2, 5000);
+        QQuickWindow *window = overlayOn(u"DP-1"_s);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        drag(window, {10, 20}, {60, 45});
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(m_out + u"/region.png"_s), 5000);
+        m_overlay.Start();
+        QTest::qWait(500);
+        QVERIFY(overlays().isEmpty());
+        QCOMPARE(m_kwin.asked.size(), 2);
+        QCOMPARE(runs(), QStringList());
+        // Done: the next press shows the selection again.
+        QFile::remove(hold.fileName());
+        QTRY_COMPARE_WITH_TIMEOUT(runs().size(), 1, 15000);
+        QTRY_VERIFY_WITH_TIMEOUT(privateDirs().isEmpty(), 5000);
+        m_overlay.Start();
+        QTRY_COMPARE_WITH_TIMEOUT(overlays().size(), 2, 5000);
+        QCOMPARE(m_kwin.asked.size(), 4);
+        window = overlayOn(u"DP-1"_s);
+        window->requestActivate();
+        QVERIFY(QTest::qWaitForWindowActive(window));
+        QTest::keyClick(window, Qt::Key_Escape);
+    }
+    void partlyRefused()
+    {
+        // KWin refuses one screen and gives the other: the helper's own way once, no window, and
+        // the picture that comes after the refusal is not kept until the next press.
+        m_kwin.refused = QStringList{u"DP-1"_s};
+        QTest::ignoreMessage(QtInfoMsg, "copytext-overlay: a picture of HDMI-1 after the end, dropped");
+        m_overlay.Start();
+        QTRY_COMPARE_WITH_TIMEOUT(runs(), QStringList{u"|1"_s}, 5000);
+        QTest::qWait(500);
+        QCOMPARE(runs(), QStringList{u"|1"_s});
+        QVERIFY(overlays().isEmpty());
     }
     void refusedFallsBack()
     {

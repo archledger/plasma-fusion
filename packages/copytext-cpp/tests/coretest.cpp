@@ -6,12 +6,14 @@
 #include <QTest>
 #include <QVariantMap>
 
+#include <csignal>
+#include <thread>
 #include <unistd.h>
 
 using namespace Qt::StringLiterals;
 
-// KWin's raw picture through a real pipe (a writer thread would be needed past the pipe's buffer:
-// the pictures here are small) and the box's arithmetic.
+// KWin's raw picture through a real pipe (small pictures written at once, and a large one written
+// slowly in small pieces, as a pipe may hand it over) and the box's arithmetic.
 class CoreTest : public QObject
 {
     Q_OBJECT
@@ -55,6 +57,41 @@ private Q_SLOTS:
         QCOMPARE(image.devicePixelRatio(), 1.75);
         QCOMPARE(image.pixel(0, 0), pixels[0]);
         QCOMPARE(image.pixel(2, 1), pixels[5]);
+    }
+    void readsASlowWriter()
+    {
+        // Rows of 20 KiB (above QIODevice's 16 KiB read chunk) with padding, written by another
+        // thread in pieces of 1000 bytes with pauses: each read() of the pipe returns a piece, and
+        // every row must still arrive whole.
+        const int width = 5120;
+        const int height = 3;
+        const qsizetype stride = width * 4 + 16;
+        QByteArray bytes(stride * height, '\0');
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const QRgb p = qRgb(x & 0xff, x >> 8, y);
+                memcpy(bytes.data() + y * stride + x * 4, &p, 4);
+            }
+        }
+        // A reader that stops early must fail the case, not end the test with SIGPIPE.
+        std::signal(SIGPIPE, SIG_IGN);
+        int fds[2];
+        QCOMPARE(pipe(fds), 0);
+        std::thread writer([fd = fds[1], &bytes] {
+            for (qsizetype at = 0; at < bytes.size(); at += 1000) {
+                const auto written = write(fd, bytes.constData() + at, qMin<qsizetype>(1000, bytes.size() - at));
+                Q_UNUSED(written)
+                usleep(200);
+            }
+            ::close(fd);
+        });
+        const QImage image = readRawImage(fds[0], meta(width, height, stride, QImage::Format_ARGB32, 1.0));
+        writer.join();
+        QVERIFY(!image.isNull());
+        QCOMPARE(image.size(), QSize(width, height));
+        QCOMPARE(image.pixel(0, 0), qRgb(0, 0, 0));
+        QCOMPARE(image.pixel(4097, 1), qRgb(1, 16, 1));
+        QCOMPARE(image.pixel(width - 1, height - 1), qRgb(0xff, 19, 2));
     }
     void refusesDoubt()
     {

@@ -161,7 +161,7 @@ four measured languages together, and no test measures it yet.
 | kcm-cpp (`src/`) | 1,355 | 617 | 45.5 % | `kcmctl-load` and the random configuration test `kcmctl-fuzz` (default size) |
 | navigation-cpp (`src/`) | 996 | 0 | 0.0 % | none runs without KWin |
 | quicklook-cpp (`src/`) | 316 | 289 | 91.5 % | `quicklook-model` and `quicklook-viewers` (2026-10-15, Fedora 44 container; `main.cpp` 79.0 %: the second start's hand-over runs only in a session) |
-| copytext-cpp (`src/`) | 220 | 180 | 81.8 % | `copytext-core`, `copytext-overlay`, `copytext-capture` and `copytext-flow` (2026-10-17, Fedora 44 container; `overlay.cpp` 88.2 %, `capture.cpp` 90.9 %; `main.cpp` 0 %: the program's start runs only in a session) |
+| copytext-cpp (`src/`) | 230 | 189 | 82.2 % | `copytext-core`, `copytext-overlay`, `copytext-capture` and `copytext-flow` (2026-10-18, Fedora 44 container; `overlay.cpp` 88.3 %, `capture.cpp` 90.9 %; `main.cpp` 0 %: the program's start runs only in a session) |
 
 ### QML
 

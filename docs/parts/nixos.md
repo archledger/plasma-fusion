@@ -15,7 +15,7 @@ do not support (`find_package(KWin 6.7)`; 6.7-only QML interfaces), so until a N
 
 | File | What |
 |---|---|
-| `packaging/nix/plasma-fusion.nix` | `{ pkgs, src, version }` → `plasma-fusion` (the shared part), `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation`, `plasma-fusion-quicklook` (a program: wrapped with the QML modules of its viewers), `plasma-fusion-copytext` (a program, not wrapped: KWin gives its screenshot permission to the executable its desktop file names; docs/parts/copytext-cpp.md) |
+| `packaging/nix/plasma-fusion.nix` | `{ pkgs, src, version }` → `plasma-fusion` (the shared part), `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation`, `plasma-fusion-quicklook` (a program: wrapped with the QML modules of its viewers), `plasma-fusion-copytext` (a program, not wrapped: KWin gives its screenshot permission to the executable its desktop file names; a link to the shared package's `plasma-fusion-copytext` beside it, where it hands the area over; docs/parts/copytext-cpp.md) |
 | `packaging/nix/module.nix` | `programs.plasma-fusion = { enable; src; compiledParts; plymouth; }`; with `compiledParts`, copy text's overlay in `services.dbus.packages` too (the session bus starts it on the first copy text) |
 
 The shared package is installed by `packaging/install-tree.sh`, as on every channel
