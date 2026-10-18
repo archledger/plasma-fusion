@@ -7,6 +7,7 @@ import QtQuick
 import org.kde.kwin
 import "Panels.js" as Panels
 import "Requests.js" as Requests
+import "Snap.js" as Snap
 import "TopBar.js" as TopBar
 
 // Plasma Fusion tablet mode (TABLET.md 3 and 4.2): the single owner of window policy and panel
@@ -404,12 +405,37 @@ Item {
         }
         if (w.maximizeMode === 3) {
             // Maximized again (the user's switch): the window is a maximized window now, so leave()
-            // must not treat it as the floating one this script recorded earlier.
+            // must not treat it as the floating window or the tile this script recorded earlier
+            // (out of full screen it took a half: a tile; leave() gives a tile its title bar, and
+            // a maximized window keeps the laptop's borderless setting).
             delete borderlessFloating[key(w)];
+            delete borderlessTiles[key(w)];
             return;
         }
         unmaximized.push(w);
         Qt.callLater(settleUnmaximized);
+    }
+    // Full screen off (board TabletSnap.dc.html): where a window goes instead of floating
+    // (Snap.js), from the quick tiles of the other windows shown with it (its screen, the current
+    // desktop and activity), or null when it does not fit there.
+    function snapPlace(w) {
+        const area = Workspace.clientArea(Workspace.MaximizeArea, w);
+        const tiles = Snap.occupiedTiles(w, Workspace.stackingOrder, Workspace.currentDesktop, Workspace.currentActivity);
+        return Snap.placeFor(tiles, w.minSize.width, area.width);
+    }
+    // Nothing else tiled: the split back in the middle (KWin keeps a quick-tile split the divider
+    // moved earlier), by the left half's edge as the divider moves it.
+    function centreSplit(w) {
+        const root = w.tile ? w.tile.parent : null;
+        const left = root ? Array.from(root.tiles).find(t => Snap.isLeft(t.relativeGeometry)) : null;
+        if (!left) {
+            return;
+        }
+        const area = Workspace.clientArea(Workspace.MaximizeArea, w);
+        const delta = area.x + area.width / 2 - (left.absoluteGeometry.x + left.absoluteGeometry.width);
+        if (Math.abs(delta) >= 1) {
+            left.resizeByPixels(delta, Qt.RightEdge);
+        }
     }
     function settleUnmaximized() {
         const list = unmaximized;
@@ -423,6 +449,27 @@ Item {
             const placed = openedInTablet[k] === true;
             delete maximizedByUs[k];
             delete openedInTablet[k];
+            // A window always has a place in tablet posture (owner decision 2026-10-18, replacing
+            // the floating window of 2026-10-13): out of full screen it takes a half through KWin's
+            // quick tile, so the split, its divider and the other half's pickers work as for any
+            // split, and tileChanged() takes its title bar. One that does not fit a half floats.
+            const place = snapPlace(w);
+            if (place) {
+                if (Workspace.activeWindow !== w) {
+                    Workspace.activeWindow = w;
+                }
+                if (place.side === "left") {
+                    Workspace.slotWindowQuickTileLeft();
+                } else {
+                    Workspace.slotWindowQuickTileRight();
+                }
+                if (place.reset) {
+                    centreSplit(w);
+                }
+                log("windowed by the user: " + w.resourceClass + ", to the " + place.side + " ("
+                    + Math.round(place.fraction * 100) + " %" + (place.reset ? ", the split in the middle" : "") + ")");
+                continue;
+            }
             if (placed) {
                 w.frameGeometry = restoreRect(w);
             }
@@ -436,7 +483,7 @@ Item {
             if (laptopNoBorder[k] === false) {
                 borderlessFloating[k] = true;
             }
-            log("windowed by the user: " + w.resourceClass + (placed ? ", placed at 70 %" : "") + ", no title bar");
+            log("windowed by the user: " + w.resourceClass + " (wider than its side)" + (placed ? ", placed at 70 %" : "") + ", no title bar");
         }
     }
 
