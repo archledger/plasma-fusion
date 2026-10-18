@@ -19,6 +19,9 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["KPlugin"]
 python3 -c 'import sys, xml.dom.minidom as m; m.parse(sys.argv[1])' "$src/contents/config/main.xml"
 
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" desktop
+if command -v node >/dev/null 2>&1; then
+  node "$src/tests/freeside.test.js" >/dev/null
+fi
 
 rm -rf "$dest"
 mkdir -p "$dest"

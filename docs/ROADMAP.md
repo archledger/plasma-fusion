@@ -32,9 +32,9 @@ are welcome in GitHub Discussions; the way decisions are made is in
    hold lifts, with `tested-versions.txt` raised, once it moves to 6.8 (the `plasma-update` issue
    says when).
 2. **Split screen in tablet posture.** A split pair shown as one card in the app switcher (in
-   navigation 0.1-7 since 2026-10-02; a touch check on the tablet is next). Then saved app pairs
-   (one icon that opens both apps side by side) and an app picker in the free half after one app is
-   tiled.
+   navigation 0.1-7 since 2026-10-02; a touch check on the tablet is next) and an app picker in the
+   free half after one app is tiled (2026-10-18, board TabletSplit). Then saved app pairs (one icon
+   that opens both apps side by side).
 3. **Other distributions.** The login check and the installer read pacman, dpkg and Nix next to rpm
    and find helpers and data outside Fedora's paths (done 2026-10-02, tested in Arch and Debian
    containers and with a NixOS package list; not yet on a real Arch, Debian or NixOS desktop). Then
