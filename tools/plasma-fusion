@@ -80,7 +80,7 @@ built_record() {
 status() {
   local p f series kwin built
   echo "Plasma Fusion $VERSION ($PF)"
-  for p in decoration settings navigation; do
+  for p in decoration settings navigation quicklook copytext; do
     if f=$(built_record "$p"); then
       built=$(tr '\n' ' ' <"$f" | sed 's/ $//')
       echo "  $p: installed, built against $built"
