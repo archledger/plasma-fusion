@@ -86,6 +86,24 @@ case $lane in
     }' || { log "FAIL: could not prepare crash collector"; exit 1; }
     ;;
 esac
+# KDE bug 524392 (KDE Frameworks 6.31 with Qt 6.12: Arch and KDE neon on Plasma 6.8.0, 2026-10-18):
+# baloo_file_extractor aborts in a loop, thousands of core dumps in minutes, once a file appears in
+# ~ (the installer's copy below does that), with or without Plasma Fusion (a stock Arch VM did it
+# too). The bug's own workaround for the test user, before any file lands there, so that the crash
+# gate keeps meaning every other crash. Drop it once the tested frameworks have the fix. Not needed
+# only where the user manager answers that there is no such unit; any other answer, or none, fails.
+wa_rc=0
+vm ssh "$name" 'state=$(systemctl --user show -p LoadState --value kde-baloo.service) || exit 1
+  case $state in
+    not-found) echo "not needed (no kde-baloo.service)" ;;
+    loaded) mkdir -p ~/.config/systemd/user/kde-baloo.service.d &&
+      printf "[Service]\nEnvironment=QT_QPA_PLATFORM=offscreen\n" >~/.config/systemd/user/kde-baloo.service.d/kde-bug-524392.conf &&
+      systemctl --user daemon-reload && systemctl --user try-restart kde-baloo.service &&
+      echo "applied (kde-baloo.service)" ;;
+    *) echo "kde-baloo.service: LoadState=$state"; exit 1 ;;
+  esac' >"$OUT/02-workarounds.log" 2>&1 || wa_rc=$?
+log "test system: KDE bug 524392 workaround $(tail -n 1 "$OUT/02-workarounds.log")"
+[ "$wa_rc" = 0 ] || { log "FAIL: the KDE bug 524392 workaround could not be applied (rc=$wa_rc)"; exit 1; }
 # No dimming, screen off or suspend in the test sessions (from the next login on).
 vm ssh "$name" 'mkdir -p ~/.config && printf "[AC][Display]\nDimDisplayWhenIdle=false\nTurnOffDisplayWhenIdle=false\n\n[AC][SuspendAndShutdown]\nAutoSuspendAction=0\n" >~/.config/powerdevilrc'
 
@@ -158,7 +176,21 @@ sleep 8
 shot 22-lock
 vm ssh "$name" "$TTY1"' sudo loginctl unlock-session $(tty1_session)'
 sleep 4
-insession "plasma-fusion status" >"$OUT/23-status-after-login.log" 2>&1
+st_rc=0
+insession "plasma-fusion status" >"$OUT/23-status-after-login.log" 2>&1 || st_rc=$?
+# Copy text's own selection on this system's KWin, where the copytext part is installed (0.6.0 and
+# later): check-copytext.sh, output in 26-copytext.log. Before the crash count, so that a crash it
+# causes (KWin's screenshot code, the overlay) is counted. A status that failed tells nothing about
+# the part: that fails the run rather than skip the check.
+[ "$st_rc" = 0 ] || { log "FAIL: plasma-fusion status after the login (rc=$st_rc)"; exit 1; }
+if grep -q '^  copytext: installed' "$OUT/23-status-after-login.log"; then
+  ct_rc=0
+  insession "$(cat "$HERE/check-copytext.sh")" >"$OUT/26-copytext.log" 2>&1 || ct_rc=$?
+  log "copy text's selection rc=$ct_rc: $(tail -n 1 "$OUT/26-copytext.log")"
+  [ "$ct_rc" = 0 ] || { log "FAIL: copy text's selection"; exit "$ct_rc"; }
+else
+  log "copy text's selection: plasma-fusion-copytext not installed (skipped)"
+fi
 vm ssh "$name" 'tail -n 5 ~/.local/state/plasma-fusion/gate.log; echo; coredumpctl list --no-pager --since="@$(awk "/^btime/ {print \$2}" /proc/stat)" 2>&1 | tail -n 5; echo; journalctl --user -b --no-pager -p err 2>/dev/null | grep -iE "plasma-?fusion|plasmafusion" | tail -n 20' >"$OUT/24-logs.log" 2>&1
 # Crashes of this boot only (the provisioned base keeps the journal of its own boots).
 # A missing/failed collector is not zero crashes: abort the gate instead of hiding its status

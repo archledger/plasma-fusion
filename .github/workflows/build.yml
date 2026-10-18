@@ -98,11 +98,13 @@ jobs:
           command -v rsync >/dev/null || dnf install -y -q rsync
           tools/tests/depth/run-unit.sh build/depth-unit
 
-      - name: VM crash collector unit tests
+      - name: Release VM tools' unit tests (crash collector, run-all, cleanup, copy-text check, refresh)
         run: |
           python3 tools/tests/release-vm/test-crash-count.py
           python3 tools/tests/release-vm/test-run-all.py
           python3 tools/tests/release-vm/test-vm-cleanup.py
+          python3 tools/tests/release-vm/test-check-copytext.py
+          python3 tools/tests/release-vm/test-refresh.py
 
       - name: Design boards (tile emitters in sync, check mode, the board runtime)
         run: |

@@ -23,10 +23,11 @@ key in the AUR package's `validpgpkeys` and the installer.
 
 On the merged commit, build every channel and install it with the installer in a virtual machine
 of each system, in a real Plasma session: Fedora 44, Arch, Ubuntu 26.10, Debian testing, KDE neon
-and NixOS (`tools/tests/release-vm/build-all.sh`, then `run-all.sh`; docs/parts/release-tests.md).
-Per system: the installer's plan and run, `plasma-fusion status`, a new login (the desktop, the
-launcher and the lock screen), the login check's log, no crash, then `uninstall` and a new login
-with the previous desktop. Every system must pass; the evidence goes to the ledger's artifacts.
+and NixOS (`tools/tests/release-vm/refresh.sh` for each VM first, then `build-all.sh` and
+`run-all.sh`; docs/parts/release-tests.md). Per system: the installer's plan and run, `plasma-fusion
+status`, a new login (the desktop, the launcher and the lock screen), copy text's own selection
+shown, the login check's log, no crash, then `uninstall` and a new login with the previous desktop.
+Every system must pass; the evidence goes to the ledger's artifacts.
 
 Then the depth features' check on the merged commit's HOME tree, on the test host and on the
 Plasma beta container (`tools/tests/depth/run.sh`, docs/parts/testing.md "Depth features"): window
