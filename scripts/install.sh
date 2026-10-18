@@ -304,12 +304,34 @@ plan() {
 # packages of this release, apt would upgrade part of Plasma with them (they need a newer KWin, and
 # with it libplasma) and keep the rest: on KDE neon still at Plasma 6.7.5, libplasma6 6.8.0 replaced
 # libPlasmaQuick.so.7 under plasmashell 6.7.5, which then did not start (2026-10-18). The system's
-# own update brings all of Plasma at once; until then nothing is installed.
+# own update brings all of Plasma at once; until then nothing is installed. A dry run that fails
+# stops the installer too: its answer would be unknown.
 plasma_behind() {
-  BEHIND=$(LC_ALL=C apt-get -s install -y "$@" 2>/dev/null | awk '$1 == "Inst" && substr($3, 1, 1) == "[" &&
+  LC_ALL=C apt-get -s install -y "$@" >"$TMP/apt-dry-run" 2>"$TMP/apt-dry-run.err" ||
+    die "apt's dry run of the install failed, so nothing was installed: $(tail -n 3 "$TMP/apt-dry-run.err" | tr '\n' ' ')"
+  BEHIND=$(awk '$1 == "Inst" && substr($3, 1, 1) == "[" &&
     $2 ~ /^(kwin|kwin-[a-z0-9-]+|libkwin[a-z0-9-]*|libplasma[a-z0-9-]*|kf6-plasma-framework|plasma-workspace|plasma-desktop)(:[a-z0-9]+)?$/ {
-      gsub(/[][]/, "", $3); gsub(/[()]/, "", $4); printf "%s%s %s -> %s", sep, $2, $3, $4; sep = ", " }')
+      gsub(/[][]/, "", $3); gsub(/[()]/, "", $4); printf "%s%s %s -> %s", sep, $2, $3, $4; sep = ", " }' "$TMP/apt-dry-run")
   [ -n "$BEHIND" ]
+}
+
+# The release's .deb files, downloaded into the temporary directory and checked against the signed
+# SHA256SUMS before the plan, so that --dry-run checks them too: no downgrade, and apt's dry run of
+# their install (plasma_behind).
+deb_fetch() {
+  DEB_FILES=
+  for n in $DEBS; do
+    f=$(fetch_asset "$n") || exit 1
+    DEB_FILES="$DEB_FILES $f"
+  done
+  # No downgrade: the shared package must be newer than or equal to the installed one.
+  have=$(pf_installed plasma-fusion)
+  new=$(dpkg-deb -f "$TMP/$(printf '%s\n' $DEBS | head -n 1)" Version)
+  if [ -n "$have" ] && dpkg --compare-versions "$new" lt "$have"; then
+    refuse "Plasma Fusion $have is installed, newer than this release's $new."
+  fi
+  # shellcheck disable=SC2086 # package lists split on purpose
+  ! plasma_behind $DEB_FILES || behind_stop "Nothing was changed."
 }
 behind_stop() { # WHAT_STAYS
   printf '[plasma-fusion] %s
@@ -357,21 +379,9 @@ install_packages() {
       # shellcheck disable=SC2086
       $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $PKGS || die "apt could not install Plasma Fusion." ;;
     deb)
-      files=
-      for n in $DEBS; do
-        f=$(fetch_asset "$n") || exit 1
-        files="$files $f"
-      done
-      # No downgrade: the shared package must be newer than or equal to the installed one.
-      have=$(pf_installed plasma-fusion)
-      new=$(dpkg-deb -f "$TMP/$(printf '%s\n' $DEBS | head -n 1)" Version)
-      if [ -n "$have" ] && dpkg --compare-versions "$new" lt "$have"; then
-        refuse "Plasma Fusion $have is installed, newer than this release's $new."
-      fi
+      # Downloaded and checked before the plan (deb_fetch).
       # shellcheck disable=SC2086
-      ! plasma_behind $files || behind_stop "Nothing was changed."
-      # shellcheck disable=SC2086
-      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $files || die "apt could not install the packages."
+      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $DEB_FILES || die "apt could not install the packages."
       [ "$DEB_PARTIAL" = 0 ] ||
         warn "this system has no build of the compiled parts (the window decoration, settings page, tablet gestures, Quick Look and copy text's selection); the themes, widgets and tools are installed." ;;
   esac
@@ -582,7 +592,10 @@ main() {
     print_aur_steps
     exit 3
   fi
-  [ "$LANE" != deb ] || deb_assets
+  if [ "$LANE" = deb ]; then
+    deb_assets
+    deb_fetch
+  fi
   say "Plan:"
   plan >&2
   [ "$DRY" = 1 ] && { say "Dry run: nothing was changed."; exit 0; }

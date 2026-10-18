@@ -67,21 +67,25 @@ All of them read only, and all come before the question:
   installed one, otherwise "log out and in first";
 - install: Plasma Fusion not installed yet (else "use update"); update: installed; no setup options
   with update (it keeps the user's choices);
-- the `.deb` channel: the release's `SHA256SUMS` and its signature, before the plan is shown.
+- the `.deb` channel: the release's `SHA256SUMS` and its signature, then its `.deb` files
+  (downloaded into a temporary directory, each against its sum), no downgrade, and apt's dry run of
+  their install (below), all before the plan is shown, so `--dry-run` runs them too.
 
 Then it shows the plan with its commands and asks once on the terminal (`--yes` answers; without a
 terminal and without `--yes` it stops). `sudo -v` comes before the first change.
 
-On the apt channels (the PPA and the release `.deb`s) the package step first asks apt for a dry run
-of its own install (`apt-get -s install`). If that would upgrade part of Plasma with it (KWin,
-libplasma, `plasma-workspace`, `plasma-desktop`), the system is behind the release's packages, which
-were built against a newer Plasma, and apt would leave Plasma half updated: on KDE neon still at
-Plasma 6.7.5, the 6.8.0 packages took `libplasma6` 6.8.0 along, which replaced the
-`libPlasmaQuick.so.7` that plasmashell 6.7.5 needs, and plasmashell no longer started (release
-test, 2026-10-18). The installer then stops with what apt would upgrade and says to update the
-system first (KDE neon: `sudo pkcon update` or Discover; Debian and Ubuntu: `sudo apt
-full-upgrade`) and log out and in; nothing is installed (on the PPA, the PPA stays added). The same
-goes for `update` on the PPA.
+On the apt channels apt is first asked for a dry run of the install (`apt-get -s install`): for the
+release `.deb`s before the plan (above), on the PPA in the package step, after the PPA is added and
+`apt-get update` (the dry run cannot see the PPA before). If that would upgrade part of Plasma with
+it (KWin, libplasma, `plasma-workspace`, `plasma-desktop`), the system is behind the release's
+packages, which were built against a newer Plasma, and apt would leave Plasma half updated: on KDE
+neon still at Plasma 6.7.5, the 6.8.0 packages took `libplasma6` 6.8.0 along, which replaced the
+`libPlasmaQuick.so.7` that plasmashell 6.7.5 needs, and plasmashell no longer started (release test,
+2026-10-18). The installer then stops with what apt would upgrade and says to update the system
+first (KDE neon: `sudo pkcon update` or Discover; Debian and Ubuntu: `sudo apt full-upgrade`) and
+log out and in; nothing is installed (on the PPA, the PPA stays added). The same goes for `update`
+on the PPA. A dry run that fails stops the installer as well (exit 1, with apt's last lines): its
+answer would be unknown.
 
 ## Options and exit codes
 
@@ -136,9 +140,10 @@ no downgrade, truncated downloads (seven cut points) and a stamped copy that mus
 endpoints in the environment (154 checks, 2026-10-02; 8 more for the uninstall and the optional
 steps, 2026-10-11; 208 in all on 2026-10-18, with the six packages and an update from a release
 before Quick Look and copy text, whose fake dnf refuses to upgrade a package that is not installed,
-as dnf5 does; 226 with the apt dry run, whose fake apt-get -s prints a set simulation: neon, the PPA
-and a PPA update behind the release's Plasma refused, an install that upgrades nothing of Plasma
-let through). The `packages` workflow runs it with ShellCheck, `dash -n` and `busybox sh -n`.
+as dnf5 does; 236 with the apt dry run, whose fake apt-get -s prints a set simulation or fails: neon
+(also with `--dry-run`), the PPA and a PPA update behind the release's Plasma refused, a failed dry
+run stopping it, an install that upgrades nothing of Plasma let through). The `packages` workflow
+runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon
 and Debian testing, with the channels served from the test host.

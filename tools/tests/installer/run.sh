@@ -73,7 +73,7 @@ esac
 exit \${FAKE_DNF_RC:-0}"
 # apt-get -s prints what FAKE_APT_SIM holds (apt's simulation lines, "Inst NAME [OLD] (NEW ...)").
 fake apt-get "$LOGLINE
-case \" \$* \" in *' -s '*) printf '%b' \"\${FAKE_APT_SIM:-}\"; exit 0 ;; esac
+case \" \$* \" in *' -s '*) printf '%b' \"\${FAKE_APT_SIM:-}\"; [ -z \"\${FAKE_APT_SIM_ERR:-}\" ] || echo \"\$FAKE_APT_SIM_ERR\" >&2; exit \"\${FAKE_APT_SIM_RC:-0}\" ;; esac
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
 exit 0"
 fake add-apt-repository "$LOGLINE"
@@ -146,7 +146,7 @@ run() {
   case " ${VERSIONS:-} " in *" plasma-fusion="*) FAKE_BIN=$FB FAKE_LOG=$CASE/log sh -c "$INSTALLS" ;; esac
   : >"$CASE/log"
   OUT=$(env -i HOME="$CASE/home" PATH="$FB:/usr/bin:/bin" FAKE_BIN="$FB" FAKE_LOG="$CASE/log" \
-    FAKE_VERSIONS="${VERSIONS:-}" FAKE_FEDORA="${FEDORA:-}" FAKE_KWIN_RUNNING="${KWIN_RUNNING:-}" FAKE_APT_SIM="${APT_SIM:-}" \
+    FAKE_VERSIONS="${VERSIONS:-}" FAKE_FEDORA="${FEDORA:-}" FAKE_KWIN_RUNNING="${KWIN_RUNNING:-}" FAKE_APT_SIM="${APT_SIM:-}" FAKE_APT_SIM_RC="${APT_SIM_RC:-0}" FAKE_APT_SIM_ERR="${APT_SIM_ERR:-}" \
     FAKE_UID="${UID_FAKE:-1000}" FAKE_PF_VERSION=$V GNUPGHOME="$BASE/no-such-keyring" \
     ${SESSION:+XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null XDG_RUNTIME_DIR=$CASE} \
     ${DEV:+PLASMA_FUSION_DEV=1 PLASMA_FUSION_DEV_VERSION=$V PLASMA_FUSION_DEV_ROOT=$CASE/root} \
@@ -371,6 +371,13 @@ for SHNAME in "${shells[@]}"; do
   expect "neon behind the release's Plasma is refused" [ "$RC" = 3 ]
   expect "  naming what apt would upgrade" has_out "would also upgrade part of Plasma (kwin-wayland 4:6.7.5-0zneon1 -> 4:6.8.0-0zneon1, libplasma6 6.7.5-0zneon1 -> 6.8.0-0zneon1)"
   expect "  saying how to update first" has_out "KDE neon: sudo pkcon update"
+  expect "  nothing installed" bash -c '! grep -q "^apt-get install" <<<"$0"' "$LOG"
+  APT_SIM=$BEHIND_SIM RELEASE=$BASE/rel-good run "$sh" $DEB -- --dry-run
+  expect "  and so is its dry run (the .debs checked before the plan)" [ "$RC" = 3 ]
+  expect "  which names it too" has_out "would also upgrade part of Plasma (kwin-wayland"
+  APT_SIM_RC=100 APT_SIM_ERR='E: Unable to correct problems, you have held broken packages.' RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
+  expect "a failed apt dry run stops it" [ "$RC" = 1 ]
+  expect "  with apt's words" has_out "apt's dry run of the install failed, so nothing was installed: E: Unable to correct problems"
   expect "  nothing installed" bash -c '! grep -q "^apt-get install" <<<"$0"' "$LOG"
   APT_SIM='Inst plasma-fusion (0.2.0-1~neon1 local-deb [all])\nInst tesseract-ocr (5.3.4-1 Ubuntu:24.04 [amd64])\nInst libc6 [2.39-0ubuntu8] (2.39-0ubuntu9 Ubuntu:24.04 [amd64])\n' \
     RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
