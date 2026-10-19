@@ -176,9 +176,9 @@ Seen in a Plasma 6.7.91 session (2026-10-04, Fedora 44 VM, software rendering): 
 Wayland window, the window had no title bar, round corners, the outline and the shadow. The same
 rule first left an X11 window's title bar in place; investigated the same day: the window's
 WM_CLASS is `("qml", "Qml Runtime")` while its Wayland class is the app_id `qml`, and the test
-rule named `wmclass=qml` with `wmclassmatch=2` -- a regular expression, which KWin matches
-case-sensitively (exact and substring matching are case-insensitive) -- so it missed
-`Qml Runtime`. With `wmclass=Qml Runtime` the X11 window gets the shadow-only style too:
+rule named `wmclass=qml` with `wmclassmatch=2` -- substring matching, which KWin does
+case-sensitively, as all its class matching (`Rules::matchWMClass`, 6.7.5 and 6.8.0) -- so it
+missed `Qml Runtime`. With `wmclass=Qml Runtime` the X11 window gets the shadow-only style too:
 `_NET_FRAME_EXTENTS` reads 0, 0, 0, 0 against the compiled decoration. On X11 the rule must
 therefore name the window's WM_CLASS class (its second field), which can differ from the Wayland
 app_id of the same program. One caveat from the same session: a two-rule `kwinrulesrc` did not

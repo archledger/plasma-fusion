@@ -4,9 +4,11 @@
 */
 
 import QtQuick
+import QtCore
 import org.kde.kwin
 import "Panels.js" as Panels
 import "Requests.js" as Requests
+import "Rules.js" as Rules
 import "Snap.js" as Snap
 import "TopBar.js" as TopBar
 
@@ -124,6 +126,7 @@ Item {
     property var borderlessTiles: ({}) // internalId -> true: title bar removed from a tiled window
     property var borderlessFloating: ({}) // internalId -> true: floating window without a title bar
     property var laptopNoBorder: ({}) // internalId -> true: no title bar before the policy took over
+    property var appearedInTablet: ({}) // internalId -> true: appeared while the policy was applied
     property var tileHandlers: ({}) // internalId -> [window, handler]
 
     function key(w) {
@@ -265,7 +268,8 @@ Item {
     function leave() {
         busy = true;
         const ws = Workspace.stackingOrder;
-        let restored = 0, placed = 0, tiles = 0, floats = 0;
+        let restored = 0, placed = 0, tiles = 0, floats = 0, kept = 0;
+        const unmaximizedNow = {};
         // Un-maximize first, while borderless is still on: KWin gives the title bar back on
         // un-maximize only while the option is set.
         for (let i = 0; i < ws.length; ++i) {
@@ -274,12 +278,26 @@ Item {
                 continue;
             }
             const k = key(w);
+            let usersNoBar = false;
             if (w.maximizeMode === 3 && maximizedByUs[k]) {
                 w.setMaximize(false, false);
                 restored++;
+                unmaximizedNow[k] = true;
+                usersNoBar = laptopNoBorder[k] === true;
             } else if (w.maximizeMode === 3 && openedInTablet[k]) {
                 w.setMaximize(false, false, restoreRect(w));
                 placed++;
+                unmaximizedNow[k] = true;
+                usersNoBar = rulesKeepNoTitleBar(w);
+            }
+            // That un-maximize gives every window its title bar (KWin 6.7.5 and 6.8.0
+            // XdgToplevelWindow::maximize: setNoBorder(false) under the option), also one whose
+            // missing bar is the user's: borderless before tablet posture (the snapshot of
+            // enter()), or kept so by their rules when it opened in tablet posture ("apply
+            // initially" acts only as it appears; a forced rule keeps it borderless anyway).
+            if (usersNoBar && !w.noBorder) {
+                w.noBorder = true;
+                kept++;
             }
             if (borderlessTiles[k] && w.noBorder) {
                 w.noBorder = false;
@@ -298,11 +316,13 @@ Item {
             moveChanged = false;
         }
         // Windows still maximized (the user maximized them in tablet mode) get their title bar
-        // back, as Workspace::slotReconfigure does when the option goes off.
+        // back, as Workspace::slotReconfigure does when the option goes off. Not those un-maximized
+        // above: maximizeMode is the mode the client has taken, so they read 3 until it answers.
         if (!laptopBorderless) {
             for (let i = 0; i < ws.length; ++i) {
                 const w = ws[i];
-                if (w && !w.deleted && w.maximizeMode === 3 && w.noBorder) {
+                if (w && !w.deleted && w.maximizeMode === 3 && w.noBorder
+                    && !unmaximizedNow[key(w)]) {
                     w.noBorder = false;
                 }
             }
@@ -312,10 +332,11 @@ Item {
         borderlessTiles = ({});
         borderlessFloating = ({});
         laptopNoBorder = ({});
+        appearedInTablet = ({});
         applied = false;
         busy = false;
         log("leave: restored " + restored + ", placed " + placed + ", tiles with title bar " + tiles
-            + ", floated with title bar " + floats
+            + ", floated with title bar " + floats + ", kept without title bar " + kept
             + ", placement " + Options.placement + ", borderless " + Options.borderlessMaximizedWindows);
     }
 
@@ -361,12 +382,54 @@ Item {
         }
         tileHandlers = ({});
     }
+    // A window that appeared while the policy ran was maximized, and so made borderless by the
+    // option, as it appeared: that first no-title-bar state is the policy's, not the user's, though
+    // follow()'s decoration handler records it as theirs (KWin gives scripts no window rules). Once
+    // KWin shows its title bar again (an un-maximize under the option, a quick tile out of
+    // maximized), nothing forces it borderless, so the bar is the policy's to take and to give back
+    // at leave(). A window a rule forces borderless shows no bar here and stays the user's.
+    // A rule that removes the bar only when the window appears ("apply initially") lets KWin show
+    // it again on that un-maximize too, so the user's rules are read as well (Rules.js): a window
+    // one of them keeps without a title bar stays the user's.
+    function barShownAgain(w) {
+        const k = key(w);
+        if (appearedInTablet[k] && !w.noBorder && !rulesKeepNoTitleBar(w)) {
+            laptopNoBorder[k] = false;
+        }
+    }
+    // kwinrulesrc in every config directory KWin's KConfig reads it from: the user's first, then the
+    // XDG config directories (~/.config/kdedefaults, /etc/xdg; QStandardPaths' order is KConfig's).
+    // Read only: a Settings object stores every property declared on it in its file, so these
+    // declare none (a delegate's modelData would be written into the user's window rules).
+    Component {
+        id: ruleFile
+        Settings {}
+    }
+    readonly property var ruleFiles: StandardPaths
+        .standardLocations(StandardPaths.GenericConfigLocation)
+        .map(dir => ruleFile.createObject(root, { location: dir + "/kwinrulesrc" }))
+    function rulesKeepNoTitleBar(w) {
+        const readers = [];
+        for (const file of ruleFiles) {
+            if (file) {
+                file.sync();
+                readers.push(k => file.value(k));
+            }
+        }
+        return Rules.filesKeepNoTitleBar(readers, w.resourceClass, w.resourceName,
+                                         (p, t) => ruleRegex.matches(p, t));
+    }
+    // A rule's regular expression matched as KWin does (RuleRegex.qml: by QRegularExpression).
+    RuleRegex {
+        id: ruleRegex
+    }
     function tileChanged(w) {
         if (!applied || !w || w.deleted) {
             return;
         }
         const k = key(w);
         if (w.tile) {
+            barShownAgain(w);
             // A tile is drawn without a title bar. Claim it when this script takes the bar now, or
             // when the window is only borderless because of the policy: a window the user made
             // borderless themselves keeps that state and is not claimed (enter() tracks its own
@@ -449,6 +512,7 @@ Item {
             const placed = openedInTablet[k] === true;
             delete maximizedByUs[k];
             delete openedInTablet[k];
+            barShownAgain(w);
             // A window always has a place in tablet posture (owner decision 2026-10-18, replacing
             // the floating window of 2026-10-13): out of full screen it takes a half through KWin's
             // quick tile, so the split, its divider and the other half's pickers work as for any
@@ -506,6 +570,7 @@ Item {
             if (w.maximizeMode === 3) {
                 root.openedInTablet[root.key(w)] = true;
             }
+            root.appearedInTablet[root.key(w)] = true;
             if (root.eligible(w)) {
                 root.follow(w);
                 root.openedWindows.push(w);
@@ -529,6 +594,7 @@ Item {
             delete root.maximizedByUs[k];
             delete root.openedInTablet[k];
             delete root.borderlessTiles[k];
+            delete root.appearedInTablet[k];
             delete root.tileHandlers[k];
         }
         function onScreensChanged() {

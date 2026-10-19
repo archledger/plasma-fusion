@@ -9,6 +9,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Title bars back after tablet posture:** an app opened in tablet posture, then taken out of
+  full screen or put in a half, had no title bar after folding back into a laptop; it has its
+  title bar again, unless one of your window rules (or a system-wide one) removes it.
 - **Full screen off takes a half:** in tablet posture, switching Full screen off in the app's card
   puts it in the free half instead of leaving it floating out of reach; the other half then offers
   your apps or open windows.

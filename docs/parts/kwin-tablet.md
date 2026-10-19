@@ -421,7 +421,131 @@ half without a title bar, then that it floats without one once taken out of its 
 run with the snap (k2a-1) the maximized-again case failed (a title bar on a maximized window after
 leave), fixed as above.
 
-Known, not changed here: a window opened in tablet posture is maximized and borderless when it
-appears, so its no-title-bar state is taken as the user's (KWin gives scripts no window rules); once
-it is un-maximized or tiled in tablet posture, leaving tablet posture leaves it without a title bar
-(main 32cbf22 does the same: fo-r1, "floated with title bar 0").
+## Windows opened in tablet posture get their title bar back (2026-10-18)
+
+A window opened in tablet posture appears maximized (placement "Maximizing"), and KWin makes a
+maximized window borderless while the policy's option is on (`borderlessMaximizedWindows`: KWin
+6.7.5 `XdgToplevelWindow::maximize` sets `noBorder` with the maximize, and clears it on the
+un-maximize). `follow()`'s decoration handler recorded that first borderless state as the user's,
+as KWin gives scripts no window rules to tell a no-titlebar rule from the option, so once such a
+window was un-maximized or tiled in tablet posture, `leave()` never gave its title bar back: after
+tablet posture it had none (found with the snap above; main did the same, fo-r1, "tiles with
+title bar 0, floated with title bar 0").
+
+The script now notes the windows that appear while the policy runs (`appearedInTablet`). When KWin
+shows such a window's title bar again (the un-maximize under the option, a quick tile out of
+maximized: `barShownAgain()` in `settleUnmaximized()` and `tileChanged()`), nothing forces it
+borderless, so the bar is the policy's: taken while the posture holds and given back by
+`leave()`. Windows open before tablet posture keep their snapshot from `enter()`.
+
+Leaving tablet posture un-maximizes the windows the policy maximized and those opened in it while
+the option is still on, and KWin gives every one its title bar on that un-maximize (6.7.5 and
+6.8.0 `XdgToplevelWindow::maximize`: `setNoBorder(false)`). `leave()` makes a window whose missing
+bar is the user's borderless again: one borderless before tablet posture (the snapshot of
+`enter()`), or one opened in it that the user's rules keep without a bar (below). Before, a window
+left maximized until tablet posture ended got a title bar against its rule or the user's choice.
+The last step of `leave()`, which gives the windows still maximized their title bar when the
+laptop's option is off, skips these. A window's `maximizeMode` is the mode its client has taken,
+so a window just un-maximized still reads 3 until the client answers; the first version of this
+gave the bar back there (tb-7: "kept without title bar 2", then both with one).
+
+A no-titlebar rule that acts only when the window appears ("apply initially") does not stop KWin
+from showing the bar on that un-maximize, so the user's rules are read too, and a window one of
+them keeps without a title bar stays the user's (`Rules.js`):
+
+- **Where:** `kwinrulesrc` as KWin's KConfig reads it (`RuleBookSettings`): the user's file, then
+  those of the XDG config directories (`~/.config/kdedefaults`, `/etc/xdg`), a key in an earlier
+  file hiding the same key in the later ones. One QtCore `Settings` per file
+  (`StandardPaths.standardLocations`), read again at each decision, and only read: the objects
+  declare no properties, since `Settings` stores every property declared on it in its file (the
+  first version of this, an `Instantiator` delegate's `modelData`, wrote
+  `modelData=@Variant(...)` into the user's rules and created the file in `~/.config/kdedefaults`;
+  KConfig then warned "Invalid escape sequence").
+- **Locks:** QtCore `Settings` drops KConfig's marks of an immutable file or group (`[$i]`), with
+  which an administrator's rule wins over the user's file (it keeps a locked key's mark in the
+  key's name, `noborder[$i]`, which is read too). So the rules of each system file also count on
+  their own: a locked rule is never missed, and a user's own change to a system rule may be (the
+  window then keeps no title bar after tablet posture, as before this change).
+- **Which rules:** those that are on (`Enabled`, default true: `Rules::match()` skips the others),
+  in KWin's precedence (`WindowRules::checkNoBorder` and `checkDecorationPolicy`, `CHECK_RULE` in
+  6.7.5 and 6.8.0): of the rules that match the window, in their order, the first that names the
+  title bar decides, also one that leaves it alone ("don't affect" stops the walk too). It keeps
+  the window without a title bar when it sets `noborder` with a rule type that sets it, 2 to 6 (a
+  KConfig Bool: anything but false, no, off or 0), or, without `noborder`, one of 6.8's decoration
+  policies without a title bar, `none` and `shadow` ("Only shadow"; KConfig's enum takes the value
+  in any case or the number, 0 and 3; 6.8 migrates `noborder` over the policy). A rule this
+  cannot be sure of decides only when it removes the bar, and one that keeps the bar is passed
+  over in case it does not apply: a rule with conditions other than the class (window types, role,
+  title, machine, tag, having a parent), a pattern the matcher cannot read, or only 6.8's policy
+  (which 6.7.5 does not read).
+- **Which windows:** the class matched as KWin's `Rules::matchWMClass` does (6.7.5 and 6.8.0:
+  exact and substring matching too are case-sensitive). A regular expression is matched by
+  QRegularExpression, as KWin matches it (`RuleRegex.qml`). Qt 6.11's JavaScript reads some PCRE
+  without an error but differently: `\A` as `A`, `[[:alpha:]]` as a class and a `]`, `x{,3}` as
+  text where PCRE2 10.43 reads a quantifier, `\w` and `\s` beyond ASCII. But a `RegExp` handed to a
+  `RegularExpressionValidator` becomes a QRegularExpression with its source unchanged (and its `i`
+  and `m` flags as options; a leading `(?i)` or `(?m)` becomes one). A pattern Qt's JavaScript
+  cannot read at all (lookbehind, possessive quantifiers, other inline options, parentheses that
+  do not pair up on their own) is taken as applying, to every window: with such a rule the policy
+  claims no title bar and leaves the windows as before this change. The rules' other conditions
+  are not checked: such a rule counts when it removes the bar and is passed over when it keeps it
+  (above), so the user's bar is never claimed by mistake.
+
+A window under an apply-initially "Only shadow" rule keeps no title bar, but not its shadow-only
+style, until it opens again: KWin's borderless maximize already replaced its policy with none
+(6.8.0 `Window::setNoBorder`), and a script can set only `noBorder` (none, or the client's
+preference).
+
+Tests:
+
+- `packages/kwin/tests/tablet-rules.test.js` (node, in `81-kwin-tablet.sh`):
+  - the rules file as QtCore `Settings` reads it (the `[General]` keys at the top level, a comma
+    list as a list or as one string): an apply-initially substring rule, a forced exact one, a rule
+    that only sets the opacity, an empty file;
+  - KConfig's cascade: a system-wide rule, a user's key hiding the system's, a system group the
+    user's list names, a user's list without it; a locked key's name; a system rule the user's
+    file turns off still counting on its own;
+  - the rule types that set the property and those that do not; rules that are off; KConfig's
+    Bool; 6.8's decoration policies by value and by number;
+  - KWin's precedence: the first matching rule that names the title bar decides (also "don't
+    affect"), in the list's order; a rule with other conditions, an unread pattern or only the
+    policy passed over when it keeps the bar;
+  - class matching: unimportant, exact and substring (case-sensitive), the complete class; a
+    regular expression handed to the matcher with the class, its true and false kept, undefined
+    and no matcher taken as applying; leading `(?i)` and `(?m)` as flags.
+- `packages/kwin/tests/tablet_regex_test.py` (PySide6, offscreen; CI `build`): `RuleRegex.qml`
+  against QRegularExpression. PCRE syntax JavaScript reads otherwise gets KWin's answer; patterns
+  it cannot read come back undefined; 6000 random patterns over 11 classes (a fixed seed) never get
+  an answer that differs from KWin's (31 checks; 36 685 answers on Qt 6.11.2).
+- `tests/vsession/scenario-tablet-titlebars.sh` (private session on the ThinkPad, 1440 x 900, KWin
+  6.7.5; 2026-10-19, tb-9: all 19 checks pass, scenario rc 0):
+  - **On the laptop** (check 0), KWin applies the rules as the policy must read them. KCalc and
+    Ark open without a title bar: KCalc under a system-wide apply-initially rule in
+    `~/.config/kdedefaults`, its group locked (`[$i]`) against the user's file turning it off; Ark
+    under a regular expression with PCRE's `\A` and `\z`; Gwenview under an apply-initially rule.
+    Konsole, under a rule that is off, opens with one, and Filelight, under two apply-initially
+    rules of which the first keeps its title bar.
+  - **In tablet posture,** windows open: Dolphin taken out of full screen, KWrite quick-tiled from
+    it, and Konsole tiled and untiled have their title bars after tablet posture. KCalc, Ark and
+    KCharSelect (the user's forced rule), quick-tiled from full screen and untiled, keep none.
+  - **Left maximized until tablet posture ends:** Okular, made borderless by the user before it, and
+    Gwenview, opened in it under its rule, keep no title bar after `leave()` un-maximizes them;
+    Filelight has its title bar (its first rule).
+  - **Files:** the script, loaded again once the rules exist, leaves both rules files as they were.
+- **Red runs:**
+  - main's script (c947218): the three title bars are missing (tb-r2, "tiles with title bar 0,
+    floated with title bar 0");
+  - the first rules check, which read only the user's file (40cf2e7): KCalc gets a title bar
+    after leave (tb-r3, scenario rc 1);
+  - the second (3ffa019): Konsole keeps none, KCalc and Ark get one, and `modelData` is written
+    into both rules files (tb-r5, 4 failures);
+  - the third (402e2bb), and the first `leave()` fix (tb-7): Okular and Gwenview get a title bar
+    when tablet posture ends (tb-r7);
+  - the fourth (ec24884), which took any matching rule that removes the bar: Filelight keeps none
+    after tablet posture (tb-r9);
+  - without any rules check, `scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3:
+    a title bar after leave).
+- **Regression:** `scenario-kwin2-a.sh` passes all 31 checks (k2a-4, and k2a-11 with this version)
+  and `scenario-fullscreen-off.sh` all 13 (fo-7, fo-10).
+
+Not tested in a session: 6.8's decoration policies (the ThinkPad runs 6.7.5; node only).
