@@ -549,3 +549,12 @@ Tests:
   and `scenario-fullscreen-off.sh` all 13 (fo-7, fo-10).
 
 Not tested in a session: 6.8's decoration policies (the ThinkPad runs 6.7.5; node only).
+
+## Split at a third, a half, two thirds (2026-10-19)
+
+Three KWin actions without a key, "Plasma Fusion: Split One Third", "Split Half" and "Split Two
+Thirds" (`ShortcutHandler`s; text "Plasma Fusion: Split the Screen at …"): the active window's
+quick-tile split moves so that the left part is that share of the work area (`splitAt()`, from
+`centreSplit()`, which is now `splitAt(w, 0.5)`). The dock invokes one when it opens a saved app
+pair ([`apppairs.md`](apppairs.md)); they also show in System Settings' shortcuts. Log "split at one
+third: CLASS", or "no split here" when the active window has no quick tile beside another.

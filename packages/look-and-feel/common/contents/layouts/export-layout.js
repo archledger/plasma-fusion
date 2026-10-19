@@ -33,7 +33,7 @@
 (function () {
     var DOCK = "org.plasmafusion.dock";
     var SKIP = ["debugAction", "debugPointerX", "debugHoverIndex", "splitRequest", "activateRequest", "openRequest",
-                "powerTier", "AppletOrder", "ItemsGeometries", "SystrayContainmentId"];
+                "pairRequest", "pinRequest", "powerTier", "AppletOrder", "ItemsGeometries", "SystrayContainmentId"];
     // A containment's own keys at the top of its configuration (a widget's top is its
     // [Configuration] group, which has none of them).
     var ROOT_SKIP = ["activityId", "plugin", "location", "formfactor", "lastScreen"];

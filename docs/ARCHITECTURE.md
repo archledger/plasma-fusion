@@ -68,6 +68,7 @@ files: icon themes ([`parts/icons.md`](parts/icons.md)), cursor themes
 | Familiar app icons service | `packages/appicons` | systemd user manager | [`app-icons.md`](parts/app-icons.md) |
 | Charge-limit helper and polkit action | `packages/power/charge-limit` | pkexec, from quick settings | [`charge-limit.md`](parts/charge-limit.md) |
 | On-screen keyboard keys, per-app fixes | `packages/keyboard`, `packages/compat` | fusion-config.sh, the apps | [`keyboard.md`](parts/keyboard.md), [`compat.md`](parts/compat.md) |
+| Saved app pairs helper | `packages/apppairs` | the app switcher, the home screen | [`apppairs.md`](parts/apppairs.md) |
 
 ### Compiled parts
 

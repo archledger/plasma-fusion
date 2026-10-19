@@ -282,6 +282,14 @@
       "w": 1440,
       "x": 0,
       "y": 10343
+    },
+    "TabletPairs.dc.html": {
+      "h": 4760,
+      "page": "dark",
+      "title": "34 · Saved app pairs — dark and light",
+      "w": 1440,
+      "x": 0,
+      "y": 13747
     }
   },
   "createdOnFiles": {
@@ -384,7 +392,8 @@
     "Login.dc.html",
     "CopyText.dc.html",
     "TabletSplit.dc.html",
-    "TabletSnap.dc.html"
+    "TabletSnap.dc.html",
+    "TabletPairs.dc.html"
   ],
   "pages": [
     {

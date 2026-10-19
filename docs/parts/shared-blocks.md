@@ -256,6 +256,16 @@ Discover tapped on the home screen: the splash with its icon fills the screen un
 Discover's window opens over it; KCalc and Konsole (fast starts) appear at once over it; the splash
 window is not in the dock's task list.
 
+## FusionPairTile (saved app pairs, 2026-10-19)
+
+A saved app pair's icon (board `TabletPairs.dc.html`, "two tiles on a plate"): both apps'
+`FusionIconTile`s at 40 % of `size`, 5 % apart (at least 2 px), the first app on the left, on a
+plate the size of an app tile (radius 19/72 of `size`; white 16 % with a 22 % edge on the dark
+scheme, ink 10 % with 12 % on the light one, chosen by `Kirigami.Theme.backgroundColor` as the free
+side's picker does). `leftMissing` / `rightMissing`: an app that is gone at 35 % opacity and grey
+(`MultiEffect`, saturation -1). Used by the home screen's pair tiles
+([`apppairs.md`](apppairs.md)).
+
 ## FusionMetrics changes
 
 - `property bool tablet: Kirigami.Settings.tabletMode`, and `touch` is now `tablet ||

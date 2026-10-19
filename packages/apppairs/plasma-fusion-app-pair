@@ -1,0 +1,181 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion's saved app pairs (board design/boards/TabletPairs.dc.html, docs/parts/apppairs.md):
+# two apps used together, saved as one icon that opens both side by side, as Android's app pairs.
+# A pair is an application entry of its own, so the home screen holds it as it holds an app:
+#   $XDG_DATA_HOME/applications/org.plasmafusion.pair-ID.desktop
+# hidden from the app lists (NoDisplay), with the two apps and the split it was saved with:
+#   X-PlasmaFusion-PairLeft, X-PlasmaFusion-PairRight   the apps' desktop file ids
+#   X-PlasmaFusion-PairShare                            the left app's part: 0.3333, 0.5 or 0.6667
+#
+#   plasma-fusion-app-pair save LEFT RIGHT SHARE   save a pair (the app switcher's "Save pair") and
+#                                                  put it on the home screen; the same two apps in
+#                                                  the same order are saved once (the split is
+#                                                  updated); prints the pair's desktop file id
+#   plasma-fusion-app-pair swap PAIR               the two apps change sides
+#   plasma-fusion-app-pair remove PAIR             delete the pair's entry (after the home screen
+#                                                  let it go)
+#   plasma-fusion-app-pair open PAIR               ask the dock to open the pair (the entry's Exec;
+#                                                  the home screen asks the dock itself)
+# PAIR is the pair's desktop file id or path. After a change KDE's application cache is rebuilt
+# (kbuildsycoca6), so the home screen sees the entry as it is. The home screen and the dock take
+# their requests through plasmashell's desktop scripting, as the shell's own parts do: the home
+# screen's pinRequest "NONCE:applications:ID", the dock's pairRequest "NONCE:LEFT:RIGHT:SHARE".
+set -euo pipefail
+
+DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
+APPS=$DATA_HOME/applications
+
+die() { echo "plasma-fusion-app-pair: $*" >&2; exit 1; }
+# A desktop file id as the shell parts send it: one file name, no path.
+valid_app() { [[ $1 =~ ^[A-Za-z0-9._-]+\.desktop$ ]]; }
+valid_pair() { [[ $1 =~ ^org\.plasmafusion\.pair-[0-9A-Za-z]+\.desktop$ ]]; }
+
+# The split as the tablet's divider snaps it (1/3, 1/2, 2/3): the nearest of the three.
+snap_share() {
+  awk -v s="$1" 'BEGIN { if (s !~ /^[0-9]*\.?[0-9]+$/) exit 1;
+    if (s < 0.4167) print "0.3333"; else if (s > 0.5833) print "0.6667"; else print "0.5" }'
+}
+
+# KEY of FILE's [Desktop Entry] group (unlocalised), or nothing.
+entry_key() { # FILE KEY
+  awk -v k="$2" '
+    /^\[/ { group = $0; next }
+    group == "[Desktop Entry]" && index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }
+  ' "$1"
+}
+
+# An app's desktop file: the user's applications, then each XDG data directory's.
+app_file() { # ID
+  local dir dirs
+  IFS=: read -r -a dirs <<<"$DATA_HOME:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  for dir in "${dirs[@]}"; do
+    if [ -n "$dir" ] && [ -f "$dir/applications/$1" ]; then
+      printf '%s\n' "$dir/applications/$1"
+      return 0
+    fi
+  done
+  return 1
+}
+app_name() { # ID
+  local file name=
+  if file=$(app_file "$1"); then
+    name=$(entry_key "$file" Name)
+  fi
+  printf '%s\n' "${name:-${1%.desktop}}"
+}
+
+pair_file() { # PAIR (id or path)
+  local id=${1##*/}
+  valid_pair "$id" || die "not a pair: $1"
+  printf '%s\n' "$APPS/$id"
+}
+
+refresh_cache() {
+  if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    kbuildsycoca6 >/dev/null 2>&1 || true
+  fi
+}
+
+# Desktop scripting in plasmashell (as the home screen's split request does).
+shell_script() { # JS
+  busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s "$1" \
+    >/dev/null
+}
+
+write_pair() { # FILE LEFT RIGHT SHARE
+  local self tmp
+  # The helper as it was called, made absolute but with its links kept: on NixOS that is the
+  # profile's /run/current-system/sw/libexec path, which outlives the store generation behind it.
+  self=$(realpath -s -- "${BASH_SOURCE[0]}")
+  tmp=$(mktemp "$1.XXXXXX")
+  {
+    printf '[Desktop Entry]\n'
+    printf 'Type=Application\n'
+    printf 'Name=%s · %s\n' "$(app_name "$2")" "$(app_name "$3")"
+    printf 'Comment=App pair: opens both apps side by side\n'
+    printf 'Icon=view-split-left-right\n'
+    printf 'Exec="%s" open %%k\n' "$self"
+    printf 'NoDisplay=true\n'
+    printf 'StartupNotify=false\n'
+    printf 'X-PlasmaFusion-PairLeft=%s\n' "$2"
+    printf 'X-PlasmaFusion-PairRight=%s\n' "$3"
+    printf 'X-PlasmaFusion-PairShare=%s\n' "$4"
+  } >"$tmp"
+  mv -f -- "$tmp" "$1"
+}
+
+cmd_save() { # LEFT RIGHT SHARE
+  local left=$1 right=$2 share file id=
+  if ! valid_app "$left" || ! valid_app "$right"; then die "not desktop file ids: $left $right"; fi
+  [ "$left" != "$right" ] || die "one app twice: $left"
+  share=$(snap_share "$3") || die "not a split: $3"
+  mkdir -p "$APPS"
+  # The same two apps in the same order: that pair again, with this split.
+  for file in "$APPS"/org.plasmafusion.pair-*.desktop; do
+    [ -f "$file" ] || continue
+    if [ "$(entry_key "$file" X-PlasmaFusion-PairLeft)" = "$left" ] \
+      && [ "$(entry_key "$file" X-PlasmaFusion-PairRight)" = "$right" ]; then
+      id=${file##*/}
+      break
+    fi
+  done
+  if [ -z "$id" ]; then
+    id=org.plasmafusion.pair-$(date +%s)$((RANDOM % 1000))
+    while [ -e "$APPS/$id.desktop" ]; do id=$id$((RANDOM % 10)); done
+    id=$id.desktop
+  fi
+  write_pair "$APPS/$id" "$left" "$right" "$share"
+  refresh_cache
+  shell_script "desktops().forEach(function (d) { if (d.type === \"org.plasmafusion.desktop\") {
+    d.currentConfigGroup = [\"General\"];
+    d.writeConfig(\"pinRequest\", \"$(date +%s%N):applications:$id\"); } });"
+  printf '%s\n' "$id"
+}
+
+cmd_swap() { # PAIR
+  local file left right share
+  file=$(pair_file "$1")
+  [ -f "$file" ] || die "no such pair: $1"
+  left=$(entry_key "$file" X-PlasmaFusion-PairLeft)
+  right=$(entry_key "$file" X-PlasmaFusion-PairRight)
+  share=$(entry_key "$file" X-PlasmaFusion-PairShare)
+  if ! valid_app "$left" || ! valid_app "$right"; then die "not a pair entry: $file"; fi
+  # The split stays where it was: the app on the left keeps the left part's size.
+  write_pair "$file" "$right" "$left" "$(snap_share "${share:-0.5}" || echo 0.5)"
+  refresh_cache
+}
+
+cmd_remove() { # PAIR
+  local file
+  file=$(pair_file "$1")
+  rm -f -- "$file"
+  refresh_cache
+}
+
+cmd_open() { # PAIR
+  local file left right share
+  file=$(pair_file "$1")
+  [ -f "$file" ] || die "no such pair: $1"
+  left=$(entry_key "$file" X-PlasmaFusion-PairLeft)
+  right=$(entry_key "$file" X-PlasmaFusion-PairRight)
+  share=$(snap_share "$(entry_key "$file" X-PlasmaFusion-PairShare)" || echo 0.5)
+  if ! valid_app "$left" || ! valid_app "$right"; then die "not a pair entry: $file"; fi
+  # The dock on the first screen, else any (the home screen asks its own screen's dock).
+  shell_script "(function () { var mine = null, any = null;
+    panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {
+      if (any === null) { any = w; } if (mine === null && p.screen === 0) { mine = w; } }); });
+    var dock = mine !== null ? mine : any;
+    if (dock !== null) { dock.currentConfigGroup = [\"General\"];
+      dock.writeConfig(\"pairRequest\", \"$(date +%s%N):$left:$right:$share\"); } })();"
+}
+
+case ${1:-} in
+  save) [ $# -eq 4 ] || die "usage: save LEFT RIGHT SHARE"; cmd_save "$2" "$3" "$4" ;;
+  swap) [ $# -eq 2 ] || die "usage: swap PAIR"; cmd_swap "$2" ;;
+  remove) [ $# -eq 2 ] || die "usage: remove PAIR"; cmd_remove "$2" ;;
+  open) [ $# -eq 2 ] || die "usage: open PAIR"; cmd_open "$2" ;;
+  *) die "usage: save LEFT RIGHT SHARE | swap PAIR | remove PAIR | open PAIR" ;;
+esac

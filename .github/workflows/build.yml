@@ -89,6 +89,9 @@ jobs:
           dnf install -y -q tesseract tesseract-langpack-eng python3-pillow
           PLASMA_FUSION_REQUIRE=bus,ocr packages/copytext/tests/helper-unit.sh build/copytext-helper
 
+      - name: Saved app pairs' helper (stand-ins for busctl and kbuildsycoca6)
+        run: packages/apppairs/tests/helper-unit.sh build/apppairs-helper
+
       - name: Setup command shortcuts (against a fake kglobalaccel)
         run: tools/device/tests/shortcut-keys-unit.sh build/shortcut-keys
 

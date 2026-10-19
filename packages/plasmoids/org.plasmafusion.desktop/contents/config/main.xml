@@ -143,6 +143,10 @@
       <label>Tablet home screen: the widget layouts (one per screen size and orientation, ItemGeometriesTablet-WxH) already arranged once; later changes are the user's.</label>
       <default></default>
     </entry>
+    <entry name="pinRequest" type="String">
+      <label>Saved app pairs: the plasma-fusion-app-pair helper asks the home screen to pin a pair it saved, "nonce:applications:org.plasmafusion.pair-ID.desktop" (a pair's entry only).</label>
+      <default></default>
+    </entry>
     <entry name="homePageSizes" type="String">
       <label>Tablet home screen: how many pinned apps each home page holds, comma separated (empty: page 1 fills first). Kept when an app moves between pages.</label>
       <default></default>
