@@ -11,15 +11,18 @@
 # shell start. The home screen's layer loads in tablet posture.
 #   1. the helper's save pins the pair on the home screen;
 #   2. taken, the request leaves nothing behind in any home screen's settings;
-#   3. no QML errors from the home screen or its pairs;
-#   4. nothing of it is stored once the shell has quit.
+#   3. two requests in one script keep both pairs;
+#   4. no QML errors from the home screen or its pairs;
+#   5. nothing of it is stored once the shell has quit.
 # Run: tools/vsession/remote.sh pr-1 packages/apppairs/tests/vsession/scenario-pinreq.sh SEED 1440x900 300
 exec 2>&1
 export OUT
 set -euo pipefail
+set -E
 set -x
 CHK=$OUT/checks.txt
 PLOG=$OUT/plasmashell.log
+APPS=$HOME/.local/share/applications
 A=$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc
 pass() { echo "PASS $*" >>"$CHK"; }
 fail() { echo "FAIL $*" >>"$CHK"; }
@@ -64,19 +67,49 @@ else
   fi
 fi
 
-# ---- 3. no QML errors from the home screen or its pairs (before the shell quits below)
-errs=$( { grep -aE 'HomeLayer.qml|FusionPairTile.qml|FusionPairs\.js' "$PLOG" || true; } | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
-if [ -z "$errs" ]; then pass "3: no QML errors from the home screen or its pairs"; else fail "3: QML: $(echo "$errs" | head -3 | tr '\n' ' ')"; fi
+# ---- 3. two requests in one script keep both pairs (each request taken as it arrived; two saves
+# racing are the same thing with two scripts)
+t=$(date +%s%N)
+fa=org.plasmafusion.pair-${t}a.desktop
+fb=org.plasmafusion.pair-${t}b.desktop
+pair_entry() { # FILE NAME LEFT RIGHT
+  {
+    printf '[Desktop Entry]\nType=Application\nName=%s\n' "$2"
+    printf 'Exec=/bin/true\nNoDisplay=true\n'
+    printf 'X-PlasmaFusion-PairLeft=%s\nX-PlasmaFusion-PairRight=%s\nX-PlasmaFusion-PairShare=0.5\n' "$3" "$4"
+  } >"$APPS/$1"
+}
+pair_entry "$fa" "Dolphin · KWrite" org.kde.dolphin.desktop org.kde.kwrite.desktop
+pair_entry "$fb" "KWrite · Dolphin" org.kde.kwrite.desktop org.kde.dolphin.desktop
+kbuildsycoca6 >/dev/null 2>&1 || info "kbuildsycoca6 rc=$?"
+sleep 2
+evaljs - >/dev/null 2>&1 <<JS
+desktops().forEach(function (d) { d.currentConfigGroup = ["General"];
+  d.writeConfig("pinRequest", "$(date +%s%N):applications:$fa");
+  d.writeConfig("pinRequest", "$(date +%s%N):applications:$fb"); });
+JS
+sleep 5
+pa=$(grep -ac "home: pair: pin applications:$fa" "$PLOG" || true)
+pb=$(grep -ac "home: pair: pin applications:$fb" "$PLOG" || true)
+if [ "$pa" -ge 1 ] && [ "$pb" -ge 1 ]; then
+  pass "3: two requests in one script kept both pairs ($fa, $fb)"
+else
+  fail "3: two requests in one script lost one: $fa pinned $pa x, $fb pinned $pb x"
+fi
 
-# ---- 4. nothing of it is stored once the shell has quit (its settings are written back then).
+# ---- 4. no QML errors from the home screen or its pairs (before the shell quits below)
+errs=$( { grep -aE 'HomeLayer.qml|FusionPairTile.qml|FusionPairs\.js' "$PLOG" || true; } | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
+if [ -z "$errs" ]; then pass "4: no QML errors from the home screen or its pairs"; else fail "4: QML: $(echo "$errs" | head -3 | tr '\n' ' ')"; fi
+
+# ---- 5. nothing of it is stored once the shell has quit (its settings are written back then).
 # The session is disposable and ends here with the shell down.
 kquitapp6 plasmashell >/dev/null 2>&1 || true
 sleep 4
 left=$(stored | tr '\n' ' ' || true)
 if [ -z "${left// }" ]; then
-  pass "4: nothing of the request is stored after the shell quit"
+  pass "5: nothing of the request is stored after the shell quit"
 else
-  fail "4: the request is still stored after the shell quit: '$left'"
+  fail "5: the request is still stored after the shell quit: '$left'"
 fi
 info "done"
 trap - ERR

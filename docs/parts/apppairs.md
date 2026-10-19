@@ -74,12 +74,14 @@ the store generation behind it).
 The dock's `pairRequest` and `keepRequest` and the home screen's `pinRequest` are one-time requests:
 a dock copied for another screen (`ensure-topbars.js`), an exported layout (`export-layout.js`) and
 the settings file's layout (`settingsfile.cpp`) leave them out, as they leave out `splitRequest`.
-The home screen clears `pinRequest` once it has taken it (`takePinRequest`), through `Qt.callLater`
-and so once the request's script has returned: when a desktop script ends Plasma reads the applet's
-settings back from disk (plasma-workspace 6.7 `Widget::~Widget` → `reloadConfig` →
-`Applet::configChanged` → `KConfigLoader::load`), and a clear made while the script ran is dropped,
-leaving the request stored to be taken again at the next shell start — the same reload the dock's
-kept-pair pin waits out ([`shell-dock.md`](shell-dock.md)).
+The home screen clears `pinRequest` once it has taken it, through `Qt.callLater` and so once the
+request's script has returned: when a desktop script ends Plasma reads the applet's settings back
+from disk (plasma-workspace 6.7 `Widget::~Widget` → `reloadConfig` → `Applet::configChanged` →
+`KConfigLoader::load`), and a clear made while the script ran is dropped, leaving the request
+stored to be taken again at the next shell start — the same reload the dock's kept-pair pin waits
+out ([`shell-dock.md`](shell-dock.md)). Each request is kept as it arrives (`queuePinRequest`) and
+taken in order: the slot holds the newest only, so two saves in a row would lose the first to a
+take that read the slot later.
 
 A pair is the user's data, like a pinned app: `fusion-restore.sh` keeps it (it restores the setup's
 configuration). Without Plasma Fusion's home screen nothing shows it, as it is hidden from the app
@@ -118,7 +120,8 @@ lists.
   (two screens, a dock on each): see "Verification".
 - `packages/apppairs/tests/vsession/scenario-pinreq.sh` (the same seed): a taken `pinRequest`
   leaves nothing behind — not in any home screen's settings once taken, not on disk once the shell
-  has quit (the request's script would otherwise drop the home screen's clear).
+  has quit (the request's script would otherwise drop the home screen's clear) — and two requests
+  in one script keep both pairs (the slot holds the newest only).
 
 ## Verification
 
@@ -181,12 +184,13 @@ the navigation effect built against the same packages (`make-seed.sh`):
     as a plain tile named after its entry;
   - "Save pair" under the card sat on the switcher's Close All, so it moved beside it.
 
-- **The taken pin request is cleared for good** (`scenario-pinreq.sh`, 4 checks: pr-g3 on this tree
-  4/4, pr-r3 on main 02bae22 without the `Qt.callLater` red — 2 and 4 failed with the request still
-  in the settings and still stored after the shell quit): the helper's `save` pinned the pair
-  ("home: pair: pin …"), the taken request left nothing behind in any home screen's settings, there
-  were no QML errors from the home screen or its pairs, and nothing of it was stored once the shell
-  had quit.
+- **The taken pin request is cleared for good, and every request is taken** (`scenario-pinreq.sh`,
+  5 checks; pr-g5 on this tree 5/5): the helper's `save` pinned the pair ("home: pair: pin …"), the
+  taken request left nothing behind in any home screen's settings, two requests in one script kept
+  both pairs, there were no QML errors from the home screen or its pairs, and nothing of the
+  request was stored once the shell had quit. Red runs: pr-r3 on main 02bae22 without the deferral
+  (the request still in the settings, still stored after the shell quit) and pr-r5 on the deferral
+  alone (the first of two requests in one script lost its pair).
 
 Not verified: Remove Pair, Swap Sides and Keep in Dock from the menu by touch (the test sessions'
 menus take no synthetic input; the helper's `swap` and `remove` and the request Keep in Dock writes
