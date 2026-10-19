@@ -36,6 +36,8 @@ rm -rf "$dest"
 mkdir -p "$dest"
 cp -r "$src/metadata.json" "$src/contents" "$dest/"
 bash "$ROOT/tools/build-lib/shared-qml.sh" install "$src" "$dest/contents/ui"
+# Saved app pairs' shared library (an import a QML engine only fails on at run time).
+test -f "$dest/contents/ui/FusionPairs.js" || { echo "dock: FusionPairs.js was not installed" >&2; exit 1; }
 find "$dest" -type d -exec chmod 755 {} +
 find "$dest" -type f -exec chmod 644 {} +
 echo "  $id -> ${dest#"$STAGE"/}"

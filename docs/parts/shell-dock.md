@@ -789,3 +789,28 @@ dock's filters but the screen's: with a dock on every screen (`showOnlyCurrentSc
 on another screen is found there and activated, then moved to this screen with KWin's "Window to
 Next Screen" (a screen at a time, at most once round) before it is tiled, instead of being started
 a second time.
+
+## A saved app pair kept in the dock (2026-10-19)
+
+The home screen's Keep in Dock writes this screen's dock's `keepRequest` ("nonce:applications:ID", a
+pair's entry only), and the dock pins the entry (`setAppPinned`) as the launcher's Keep in Dock pins
+an app, once the request's script has returned (`takeKeepRequest` through `Qt.callLater`). When a
+desktop script that wrote an applet's settings ends, Plasma reads them back from disk
+(plasma-workspace 6.7 `Widget::~Widget` → `reloadConfig` → `Applet::configChanged` →
+`KConfigLoader::load`), and a value the applet set meanwhile is dropped from what it saves: a pin
+made while the script ran showed but was never saved (dk-2). A row whose app id is a pair's entry
+(`pairFor()`, with or without the `.desktop` that the task model drops from Plasma 6.8 on) is drawn
+with `FusionPairTile` from the entry and the apps' desktop files (read with property-less QtCore
+`Settings`; no magnified tile for it) and named with the pair's label, both apps' names in the
+user's language (the entry's `Name` is in the language it was saved in). The entry's `Exec` (the
+helper's `open`) asks the first screen's dock, so the dock never starts a pair as a launcher: a tap,
+a middle click, Shift, Meta+Alt+N and the menu's Open go through `openPair()` (`activateTask()`,
+`newInstance()`), which opens it here with `startPair()`, or with one of its apps gone opens its
+menu. That menu has Open (both apps there) and Keep in Dock (unchecking unpins) only; a file drop, a
+split drag (tablet posture) or a desktop drag does not take a pair. The rows' pairs are read again
+when apps are installed or removed: libtaskmanager then re-sends every launcher's `AppId` (KSycoca's
+`databaseChanged`, plasma-workspace 6.7 `launchertasksmodel.cpp`), and Qt's delegate model notifies
+the role for each row whatever its value (Qt 6.11 `qqmldmabstractitemmodeldata_p.h`). Remove Pair
+takes the pair out of every dock's pins first (the helper's `remove`). Logs
+"dock: pair tile: ID at X,Y" and "dock: pair menu ID "NAME": ENTRIES"
+([`apppairs.md`](apppairs.md)).

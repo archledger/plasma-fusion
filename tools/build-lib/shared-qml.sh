@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # The shared QML blocks in packages/common/ (FusionMetrics, Motion, FusionTablet, FusionBackdrop,
-# FusionAccent, FusionIconTile, FusionShadow, ...) for the tools/build.d scripts that stage QML
-# packages. A package never carries its own copy of a block; the build copies each block the
-# package uses.
+# FusionAccent, FusionIconTile, FusionShadow, ...) and its shared JavaScript libraries
+# (FusionPairs.js) for the tools/build.d scripts that stage QML packages. A package never carries
+# its own copy of a block; the build copies each block the package uses.
 #
 #   shared-qml.sh check SRC LABEL
 #       Fail when the package source SRC holds a file named like a shared block (or
@@ -25,7 +25,8 @@
 #
 # A package "uses" a block when its QML declares one (`Motion {`), types a property with it
 # (`property FusionTablet tabletState`), casts to it (`as FusionAccent`) or names its file
-# (`"FusionBackdrop.qml"`). ROOT is the repository root (tools/build.sh exports it).
+# (`"FusionBackdrop.qml"`); it uses a library when it names its file (`import "FusionPairs.js" as
+# Pairs`). ROOT is the repository root (tools/build.sh exports it).
 set -euo pipefail
 
 ROOT=${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
@@ -34,13 +35,17 @@ NAMES_JS=FusionIconNames.js
 
 die() { echo "shared-qml: $*" >&2; exit 1; }
 
-# Names of the shared blocks (file names without .qml), FusionMetrics first.
+# Names of the shared blocks (file names without .qml), FusionMetrics first, then the shared
+# JavaScript libraries (packages/common/*.js, with their suffix).
 blocks() {
   local f
   echo FusionMetrics
   for f in "$COMMON"/*.qml; do
     f=$(basename "$f" .qml)
     [ "$f" = FusionMetrics ] || echo "$f"
+  done
+  for f in "$COMMON"/*.js; do
+    [ -f "$f" ] && basename "$f"
   done
 }
 
@@ -95,8 +100,16 @@ def code(text, blank_strings=False):
     return "".join(out)
 
 
+def fname(t):
+    """A block's file name: a library is named with its suffix."""
+    return t if t.endswith(".js") else t + ".qml"
+
+
 def patterns(t):
     """(pattern for code with blanked strings, pattern for code with strings)"""
+    if t.endswith(".js"):
+        # a library is used only by its file name: import "FusionPairs.js" as Pairs
+        return re.compile(r"(?!x)x"), re.compile(r"(?:^|[^\w])" + re.escape(t) + r"\b")
     b = r"(?:^|[^\w.])"
     decl = re.compile("|".join([
         b + t + r"\s*\{",                         # Motion {
@@ -126,14 +139,14 @@ have = {"FusionMetrics"}
 sources = list(texts(files))
 have |= {t for t in blocks if used(t, sources)}
 while True:
-    own = list(texts(common / (b + ".qml") for b in sorted(have)))
+    own = list(texts(common / fname(b) for b in sorted(have)))
     more = {t for t in blocks if t not in have and used(t, own)}
     if not more:
         break
     have |= more
 for t in blocks:
     if t in have:
-        print(t + ".qml")
+        print(fname(t))
 PY
 }
 
@@ -212,10 +225,10 @@ case "$cmd" in
   check)
     src=${2:?shared-qml.sh check SRC LABEL}; label=${3:-$src}
     [ -d "$src" ] || die "$label: no package at $src"
-    for t in $(blocks) "${NAMES_JS%.js}"; do
-      ext=.qml; [ "$t" = "${NAMES_JS%.js}" ] && ext=.js
-      hit=$(find "$src" -name "$t$ext" -print -quit)
-      [ -z "$hit" ] || die "$label: the package has its own $t$ext (${hit#"$src"/}); the build copies packages/common/$t.qml"
+    for t in $(blocks) "$NAMES_JS"; do
+      case $t in *.js) name=$t ;; *) name=$t.qml ;; esac
+      hit=$(find "$src" -name "$name" -print -quit)
+      [ -z "$hit" ] || die "$label: the package has its own $name (${hit#"$src"/}); the build copies packages/common/$name"
     done
     ;;
   install)

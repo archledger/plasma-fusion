@@ -55,6 +55,9 @@ Item {
     // Unity LauncherEntry state of this app ({count, countVisible, progress, progressVisible,
     // urgent}) or null.
     property var entry: null
+    // A saved app pair kept in the dock (main.qml pairFor()), or null: drawn as both apps' tiles on
+    // a plate.
+    property var pair: null
     // Today, for the calendar tile ("SEP", "28").
     property string monthText: ""
     property string dayText: ""
@@ -70,7 +73,8 @@ Item {
     readonly property bool demandsAttention: model.IsDemandingAttention === true || (entry !== null && entry.urgent === true)
     // Launchers of apps that are not installed have no AppId; they are not shown.
     readonly property bool resolvable: !isLauncher || (model.AppId ?? "") !== ""
-    readonly property string name: model.AppName || model.display || ""
+    // (a saved pair: both apps' names in the user's language, as on the home screen)
+    readonly property string name: pair ? pair.label : model.AppName || model.display || ""
     // The theme icon's name: apps name their icon after their desktop id, which is AppId (without
     // the ".desktop" some entries carry).
     readonly property string iconName: String(model.AppId ?? "").replace(/\.desktop$/, "")
@@ -241,12 +245,23 @@ Item {
             size: iconBox.width
             source: task.model.decoration
             iconName: task.iconName
-            visible: !zoomLoader.item || task.grow <= 0.5
+            visible: !task.pair && (!zoomLoader.item || task.grow <= 0.5)
+        }
+        FusionPairTile {
+            visible: !!task.pair
+            anchors.fill: parent
+            size: iconBox.width
+            leftSource: task.pair ? task.pair.left.source : ""
+            leftIconName: task.pair ? task.pair.left.iconName : ""
+            leftMissing: !!task.pair && task.pair.left.missing
+            rightSource: task.pair ? task.pair.right.source : ""
+            rightIconName: task.pair ? task.pair.right.iconName : ""
+            rightMissing: !!task.pair && task.pair.right.missing
         }
 
         Loader {
             id: zoomLoader
-            active: task.zoomReady && task.zoomSize > task.iconSize
+            active: task.zoomReady && task.zoomSize > task.iconSize && !task.pair
             asynchronous: true
             anchors.centerIn: parent
             sourceComponent: FusionIconTile {
@@ -508,7 +523,8 @@ Item {
             id: holdArm
             interval: 300
             onTriggered: {
-                if (mouse.pressed && !mouse.dragging && task.tablet) {
+                // (not a saved pair: it opens two apps, and its entry is no app to split with)
+                if (mouse.pressed && !mouse.dragging && task.tablet && !task.pair) {
                     mouse.armed = true;
                 }
             }
@@ -614,8 +630,9 @@ Item {
         // along the row stays the reorder above). 48 px towards the edge (from the far end of the
         // icon there is room for it) is no launcher drag.
         DragHandler {
-            // (tablet posture: an upward drag splits the screen instead)
-            enabled: !task.tablet
+            // (tablet posture: an upward drag splits the screen instead; a saved pair's entry is
+            // only the dock's and the home screen's)
+            enabled: !task.tablet && !task.pair
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
             target: null
             xAxis.enabled: task.vertical

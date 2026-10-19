@@ -17,7 +17,7 @@ import org.kde.taskmanager as TaskManager
 import org.kde.plasma.plasma5support as P5Support
 
 import "code/home.js" as HomeLogic
-import "code/pairs.js" as Pairs
+import "FusionPairs.js" as Pairs
 
 // The home screen in tablet posture (TABLET2 H1, owner decision "iPad-style"): pages of apps in the
 // desktop window, under the apps, in place of Folder View (whose rubber band was the owner's pen
@@ -490,6 +490,19 @@ Item {
                                                          Plasmoid.containment.screen, Date.now()))],
             "signature": "(s)"
         }, () => {}, error => console.warn("home: pair request failed: " + error));
+    }
+    // Keep in Dock: this screen's dock pins the pair's entry (its keepRequest), as the launcher's
+    // Keep in Dock pins an app.
+    function keepPairInDock(favoriteId: string): void {
+        const script = Pairs.keepScript(favoriteId, Plasmoid.containment.screen, Date.now());
+        if (script === "") {
+            return;
+        }
+        console.info("home: pair: keep in dock " + Pairs.pairId(favoriteId));
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.plasmashell", "path": "/PlasmaShell", "iface": "org.kde.PlasmaShell",
+            "member": "evaluateScript", "arguments": [new DBus.string(script)], "signature": "(s)"
+        }, () => {}, error => console.warn("home: keep in dock failed: " + error));
     }
     // Swap Sides and Remove Pair: the helper rewrites or deletes the entry, then rebuilds KDE's
     // application cache, and the pinned apps model reads the pair again.

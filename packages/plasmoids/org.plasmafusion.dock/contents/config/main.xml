@@ -96,6 +96,10 @@
       <label>The home screen asks the dock to open a saved app pair: "nonce:left.desktop:right.desktop:share". The dock brings the first app to the left half and the second to the right one (started or activated, as for a split request; the app in use stays where it is), then has the plasmafusion-tablet KWin script set the split (share: the left part, 0.3333, 0.5 or 0.6667).</label>
       <default></default>
     </entry>
+    <entry name="keepRequest" type="String">
+      <label>The home screen's Keep in Dock for a saved app pair: "nonce:applications:org.plasmafusion.pair-ID.desktop". The dock pins the pair's entry (a pair's only).</label>
+      <default></default>
+    </entry>
     <entry name="activateRequest" type="String">
       <label>The snap KWin script's "Plasma Fusion: Activate Dock Entry N" shortcuts ask the dock to activate its app N: "N:nonce" (Plasma 6.8 no longer passes plasmashell's task manager entries to the dock)</label>
       <default></default>

@@ -2,10 +2,12 @@
     SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
     SPDX-License-Identifier: GPL-2.0-or-later
 
-    Saved app pairs on the home screen (board TabletPairs.dc.html, docs/parts/apppairs.md): a pair
-    is an application entry of its own (org.plasmafusion.pair-ID.desktop, written by the
-    plasma-fusion-app-pair helper), so the home screen holds it as a pinned app; its keys name the
-    two apps and the split. Tested by tests/pairs.test.js (node).
+    Saved app pairs on the home screen and in the dock (board TabletPairs.dc.html,
+    docs/parts/apppairs.md): a pair is an application entry of its own
+    (org.plasmafusion.pair-ID.desktop, written by the plasma-fusion-app-pair helper), so the home
+    screen and the dock hold it as a pinned app; its keys name the two apps and the split. A shared
+    library (tools/build-lib/shared-qml.sh copies it into the packages that import it). Tested by
+    packages/common/tests/pairs.test.js (node).
 */
 
 .pragma library
@@ -85,15 +87,27 @@ function iconName(appId) {
     return String(appId || "").replace(/\.desktop$/, "");
 }
 
-// The dock's pairRequest "nonce:left:right:share" through desktop scripting: the dock of this
-// screen only (as home.js splitScript), so a dock on every screen does not open it twice.
-function pairScript(pair, screen, nonce) {
-    const value = JSON.stringify(nonce + ":" + pair.left + ":" + pair.right + ":" + pair.share);
+// A request to this screen's dock through desktop scripting: the dock of that screen only, else
+// any (as home.js splitScript), so a dock on every screen does not act on it twice.
+function dockScript(key, value, screen) {
     return "(function () { var mine = null, any = null;"
         + " panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {"
         + " if (any === null) { any = w; } if (mine === null && p.screen === " + Number(screen) + ") { mine = w; } }); });"
         + " var dock = mine !== null ? mine : any;"
-        + " if (dock !== null) { dock.currentConfigGroup = [\"General\"]; dock.writeConfig(\"pairRequest\", " + value + "); } })();";
+        + " if (dock !== null) { dock.currentConfigGroup = [\"General\"]; dock.writeConfig(" + JSON.stringify(key) + ", "
+        + JSON.stringify(value) + "); } })();";
+}
+
+// The dock's pairRequest "nonce:left:right:share": open the pair.
+function pairScript(pair, screen, nonce) {
+    return dockScript("pairRequest", nonce + ":" + pair.left + ":" + pair.right + ":" + pair.share, screen);
+}
+
+// The dock's keepRequest "nonce:applications:ID": keep the pair in the dock ("" for anything but a
+// pair's entry).
+function keepScript(id, screen, nonce) {
+    const pair = pairId(id);
+    return pair === "" ? "" : dockScript("keepRequest", nonce + ":applications:" + pair, screen);
 }
 
 // The helper's command for "swap" or "remove" of a pair (by its id, which holds no character a

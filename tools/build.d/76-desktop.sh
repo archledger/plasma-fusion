@@ -22,13 +22,15 @@ bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" desktop
 if command -v node >/dev/null 2>&1; then
   node "$src/tests/freeside.test.js" >/dev/null
   node "$src/tests/split-request.test.js" >/dev/null
-  node "$src/tests/pairs.test.js" >/dev/null
+  node "$ROOT/packages/common/tests/pairs.test.js" >/dev/null
 fi
 
 rm -rf "$dest"
 mkdir -p "$dest"
 cp -r "$src/metadata.json" "$src/contents" "$dest/"
 bash "$ROOT/tools/build-lib/shared-qml.sh" install "$src" "$dest/contents/ui"
+# Saved app pairs' shared library (an import a QML engine only fails on at run time).
+test -f "$dest/contents/ui/FusionPairs.js" || { echo "desktop: FusionPairs.js was not installed" >&2; exit 1; }
 find "$dest" -type d -exec chmod 755 {} +
 find "$dest" -type f -exec chmod 644 {} +
 echo "  $id -> ${dest#"$STAGE"/}"
