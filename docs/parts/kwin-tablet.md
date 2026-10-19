@@ -439,23 +439,51 @@ borderless, so the bar is the policy's: taken while the posture holds and given 
 `leave()`. Windows open before tablet posture keep their snapshot from `enter()`.
 
 A no-titlebar rule that acts only when the window appears ("apply initially") does not stop KWin
-from showing the bar on that un-maximize, so the user's rules are read too: `Rules.js` reads
-`kwinrulesrc` (QtCore `Settings`, read again at each decision) and a window one of them keeps
-without a title bar (`noborder` with a rule type that sets it, 2 to 6, or 6.8's `decorationpolicy`
-`none`; the window class matched as KWin's `Rules::matchWMClass` does) stays the user's. The rules'
-other conditions (role, title, type, machine) are not checked: a rule that might apply is taken as
-applying, so the user's bar is never claimed by mistake.
+from showing the bar on that un-maximize, so the user's rules are read too, and a window one of
+them keeps without a title bar stays the user's (`Rules.js`):
 
-Tests: `packages/kwin/tests/tablet-rules.test.js` (node, in `81-kwin-tablet.sh`): the rules file as
-QtCore `Settings` reads it (the `[General]` keys at the top level, a comma list as a list or as one
-string), an apply-initially substring rule, a forced exact one, a rule that only sets the opacity,
-an empty file; the rule types that set the property and those that do not; 6.8's decoration policy;
-class matching (unimportant, exact, the complete class, a regular expression, one JavaScript cannot
-read). `tests/vsession/scenario-tablet-titlebars.sh` (private session on the ThinkPad, 1440 x 900;
-2026-10-18, tb-2: all 9 checks pass): windows opened in tablet posture - Dolphin taken out of full
-screen, KWrite quick-tiled from it, Konsole tiled and untiled - have their title bars after tablet
-posture, and KCalc (an apply-initially rule) and KCharSelect (a forced one), quick-tiled from full
-screen and untiled, keep none. With main's script (c947218, tb-r1) the three title bars are missing
-("tiles with title bar 0, floated with title bar 0"; tb-r2). Without the rules check,
-`scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3: a title bar after leave);
-with it all 31 checks pass (k2a-4), and `scenario-fullscreen-off.sh` all 13 (fo-7).
+- **Where:** `kwinrulesrc` as KWin's KConfig reads it (`RuleBookSettings`): the user's file, then
+  those of the XDG config directories (`~/.config/kdedefaults`, `/etc/xdg`), a key in an earlier
+  file hiding the same key in the later ones. One QtCore `Settings` per file
+  (`StandardPaths.standardLocations`), read again at each decision.
+- **Which rules:** `noborder` with a rule type that sets it, 2 to 6 (a KConfig Bool: anything but
+  false, no, off or 0), or one of 6.8's decoration policies without a title bar, `none` and
+  `shadow` ("Only shadow"; KConfig's enum takes the value in any case or the number, 0 and 3).
+- **Which windows:** the class matched as KWin's `Rules::matchWMClass` does (6.7.5 and 6.8.0:
+  exact and substring matching too are case-sensitive). The rules' other conditions (role, title,
+  type, machine) are not checked: a rule that might apply is taken as applying, so the user's bar
+  is never claimed by mistake.
+
+A window under an apply-initially "Only shadow" rule keeps no title bar, but not its shadow-only
+style, until it opens again: KWin's borderless maximize already replaced its policy with none
+(6.8.0 `Window::setNoBorder`), and a script can set only `noBorder` (none, or the client's
+preference).
+
+Tests:
+
+- `packages/kwin/tests/tablet-rules.test.js` (node, in `81-kwin-tablet.sh`):
+  - the rules file as QtCore `Settings` reads it (the `[General]` keys at the top level, a comma
+    list as a list or as one string): an apply-initially substring rule, a forced exact one, a rule
+    that only sets the opacity, an empty file;
+  - KConfig's cascade: a system-wide rule, a user's key hiding the system's, a system group the
+    user's list names, a user's list without it;
+  - the rule types that set the property and those that do not; KConfig's Bool; 6.8's decoration
+    policies by value and by number;
+  - class matching: unimportant, exact and substring (case-sensitive), the complete class, a
+    regular expression, one JavaScript cannot read.
+- `tests/vsession/scenario-tablet-titlebars.sh` (private session on the ThinkPad, 1440 x 900, KWin
+  6.7.5; 2026-10-19, tb-3: all 10 checks pass, scenario rc 0). Windows opened in tablet posture:
+  Dolphin taken out of full screen, KWrite quick-tiled from it, and Konsole tiled and untiled have
+  their title bars after tablet posture. KCalc and KCharSelect, quick-tiled from full screen and
+  untiled, keep none: KCalc under a system-wide apply-initially rule (in `~/.config/kdedefaults`,
+  listed in the user's rules as the KCM saves them; KWin applies it on the laptop, check 0),
+  KCharSelect under the user's forced one.
+- **Red runs:** with main's script (c947218) the three title bars are missing (tb-r2, "tiles with
+  title bar 0, floated with title bar 0"). With the first rules check, which read only the user's
+  file (40cf2e7), KCalc gets a title bar after leave (tb-r3, scenario rc 1). Without any rules
+  check, `scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3: a title bar after
+  leave).
+- **Regression:** with the rules check, `scenario-kwin2-a.sh` passes all 31 checks (k2a-4; with
+  every config directory read, k2a-5) and `scenario-fullscreen-off.sh` all 13 (fo-7).
+
+Not tested in a session: 6.8's decoration policies (the ThinkPad runs 6.7.5; node only).

@@ -380,13 +380,26 @@ Item {
             laptopNoBorder[k] = false;
         }
     }
-    Settings {
-        id: kwinRules
-        location: StandardPaths.writableLocation(StandardPaths.GenericConfigLocation) + "/kwinrulesrc"
+    // kwinrulesrc in every config directory KWin's KConfig reads it from: the user's first, then the
+    // XDG config directories (~/.config/kdedefaults, /etc/xdg; QStandardPaths' order is KConfig's).
+    Instantiator {
+        id: ruleFiles
+        model: StandardPaths.standardLocations(StandardPaths.GenericConfigLocation)
+        delegate: Settings {
+            required property url modelData
+            location: modelData + "/kwinrulesrc"
+        }
     }
     function rulesKeepNoTitleBar(w) {
-        kwinRules.sync();
-        const rules = Rules.readRules(k => kwinRules.value(k));
+        const readers = [];
+        for (let i = 0; i < ruleFiles.count; ++i) {
+            const file = ruleFiles.objectAt(i);
+            if (file) {
+                file.sync();
+                readers.push(k => file.value(k));
+            }
+        }
+        const rules = Rules.readRules(Rules.cascade(readers));
         return Rules.keepsNoTitleBar(rules, w.resourceClass, w.resourceName);
     }
     function tileChanged(w) {

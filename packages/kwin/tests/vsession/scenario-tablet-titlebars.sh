@@ -11,7 +11,9 @@
 #   3. Konsole quick-tiled and taken out of its tile again (it floats);
 #   4. KCalc, which an "apply initially" no-titlebar rule makes borderless as it appears (KWin
 #      shows its bar again on the un-maximize), and KCharSelect, which a forced one keeps
-#      borderless: both quick-tiled out of full screen, then out of their tiles;
+#      borderless: both quick-tiled out of full screen, then out of their tiles. KCalc's rule is a
+#      system-wide one (the session's XDG config directory ~/.config/kdedefaults, read as KWin reads
+#      /etc/xdg), listed in the user's rules as the KCM saves them beside one of their own;
 # after leaving tablet posture Dolphin, KWrite and Konsole have their title bars again, and KCalc
 # and KCharSelect still have none.
 # Run: tools/vsession/remote.sh tb-1 packages/kwin/tests/vsession/scenario-tablet-titlebars.sh SEED 1440x900 420
@@ -40,15 +42,25 @@ kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap 6
 kwriteconfig6 --file kwinrc --group Script-plasmafusion-tablet --key InternalOutputs "eDP,LVDS,DSI,Virtual"
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99
-# The user's no-title-bar rules: KCalc "apply initially" (Rules::Apply, substring), KCharSelect
-# forced (Rules::Force, exact): the user's, whatever the posture does.
+# The no-title-bar rules, the user's whatever the posture does: KCalc "apply initially"
+# (Rules::Apply, substring) from the system's configuration, KCharSelect forced (Rules::Force,
+# exact) from the user's own. The user's file lists both, as the KCM writes it when a rule is added
+# beside a system-wide one (KConfig saves only the keys that differ from the system's).
+mkdir -p "$HOME/.config/kdedefaults"
+cat >"$HOME/.config/kdedefaults/kwinrulesrc" <<'RULES'
+[1]
+Description=Test: no title bar for kcalc (system-wide)
+noborder=true
+noborderrule=3
+wmclass=kcalc
+wmclassmatch=2
+
+[General]
+count=1
+rules=1
+RULES
 kwriteconfig6 --file kwinrulesrc --group General --key count 2
 kwriteconfig6 --file kwinrulesrc --group General --key rules 1,2
-kwriteconfig6 --file kwinrulesrc --group 1 --key Description "Test: no title bar for kcalc"
-kwriteconfig6 --file kwinrulesrc --group 1 --key wmclass kcalc
-kwriteconfig6 --file kwinrulesrc --group 1 --key wmclassmatch 2
-kwriteconfig6 --file kwinrulesrc --group 1 --key noborder true
-kwriteconfig6 --file kwinrulesrc --group 1 --key noborderrule 3
 kwriteconfig6 --file kwinrulesrc --group 2 --key Description "Test: no title bar for kcharselect"
 kwriteconfig6 --file kwinrulesrc --group 2 --key wmclass org.kde.kcharselect
 kwriteconfig6 --file kwinrulesrc --group 2 --key wmclassmatch 1
@@ -56,6 +68,13 @@ kwriteconfig6 --file kwinrulesrc --group 2 --key noborder true
 kwriteconfig6 --file kwinrulesrc --group 2 --key noborderrule 2
 pfv_restart_shell 12
 qdbus org.kde.KWin /KWin reconfigure; sleep 3
+# KWin reads the system-wide rule: KCalc opens on the laptop without a title bar.
+kcalc >/dev/null 2>&1 &
+sleep 4
+case "$(state kcalc)" in "false true false") pass "0: KWin applies the system-wide rule: KCalc opens without a title bar on the laptop" ;; *) fail "0: KCalc on the laptop $(state kcalc)" ;; esac
+on kcalc "w.closeWindow();"
+sleep 2
+[ "$(state kcalc)" = none ] || info "KCalc still open: $(state kcalc)"
 pfv_tablet on; sleep 8
 
 # Every window opened in tablet posture.
@@ -100,3 +119,8 @@ done
 errs=$(grep -aE 'plasmafusion-tablet' "$KLOG" | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
 if [ -z "$errs" ]; then pass "no QML errors from plasmafusion-tablet"; else fail "plasmafusion-tablet: $(echo "$errs" | head -3 | tr '\n' ' ')"; fi
 info "done"
+# A failed check fails the scenario (scenario rc), as the other KWin scenarios do: without the trap
+# and errexit, so the last test sets the status vsession.sh records instead of ending its shell.
+trap - ERR
+set +e
+[ "$(grep -c '^FAIL' "$CHK" || true)" = 0 ]
