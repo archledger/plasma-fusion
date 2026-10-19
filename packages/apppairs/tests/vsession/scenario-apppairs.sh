@@ -17,7 +17,11 @@
 #   4. the pair's sides swapped (the helper, as Swap Sides runs it), the split at half again: the
 #      tile opens KWrite on the left and Dolphin on the right, at a third;
 #   5. a pair whose app is not installed: its tile is shown, and a tap opens nothing;
-# and no QML errors from the switcher, the home screen, its pair tile or pairs.js, nor the dock.
+#   6. Keep in Dock (the dock's keepRequest, as the home screen's menu writes it): the pair is
+#      pinned in the dock and saved with its pins, drawn there, and a tap on it opens both apps at
+#      the saved split; kept with an app gone, it is shown and a tap opens nothing;
+# and no QML errors from the switcher, the home screen, its pair tile or FusionPairs.js, nor the
+# dock.
 # Run: tools/vsession/remote.sh ap-1 packages/apppairs/tests/vsession/scenario-apppairs.sh SEED 1440x900 600
 exec 2>&1
 export OUT
@@ -198,7 +202,57 @@ if [ -n "${tx:-}" ]; then
 fi
 if [ "$(grep -ac 'dock: pair:' "$PLOG" || true)" = "$before" ]; then pass "5: a tap opens nothing"; else fail "5: it asked the dock: $(logged 'dock: pair:' "$PLOG")"; fi
 
-errs=$( { grep -aE 'HomeLayer.qml|HomeActionMenu.qml|FusionPairTile.qml|pairs\.js|org\.plasmafusion\.dock' "$PLOG" || true; } | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
+# ---- 6. Keep in Dock (the home screen's menu writes this screen's dock's keepRequest; the test
+# sessions' menus take no synthetic input, so the request is written as the menu writes it)
+keep() { # PAIR_ID
+  evaljs - >/dev/null <<JS
+panels().forEach(function (p) { if (p.screen !== 0) return; p.widgets("org.plasmafusion.dock").forEach(function (w) {
+    w.currentConfigGroup = ["General"]; w.writeConfig("keepRequest", Date.now() + ":applications:$1"); }); });
+JS
+}
+keep "$id"
+sleep 3
+if grep -aq "dock: pin applications:$id" "$PLOG"; then pass "6: Keep in Dock pinned the pair in the dock"; else fail "6: the dock did not pin applications:$id"; fi
+# and saved it with the dock's other pins (Plasma writes an applet's changed settings after a
+# second); a pin made while the request's script still ran shows, but is never saved
+if grep -aE '^launchers=' "$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc" | grep -aqF "applications:$id"; then
+  pass "6: the pin is saved with the dock's pins"
+else
+  fail "6: applications:$id is not in the saved pins"
+fi
+act kwrite; sleep 0.6
+reset_then_away 6
+docklog=$(logged "dock: pair tile: $id at " "$PLOG")
+if [ -n "$docklog" ]; then pass "6: the pair's tile in the dock: ${docklog##*: }"; else fail "6: no dock tile for $id"; fi
+shot ap-6-dock
+read -r dx dy <<<"$(at_of "$docklog")"
+if [ -n "${dx:-}" ]; then
+  tap "$dx" "$dy" 'sleep 0.3'
+  sleep 7
+fi
+shot ap-6-opened
+info "6: $(where)"
+if side_by_side kwrite dolphin 0.3333; then pass "6: a tap on the dock's pair opened KWrite on the left and Dolphin on the right, at a third"; else fail "6: after the dock's tap: $(where)"; fi
+# the pair with a missing app, kept too: its tile shows, a tap opens nothing
+keep "$gone"
+K run "var l = workspace.windowList(); for (var i = 0; i < l.length; ++i) { if (l[i].normalWindow) { l[i].minimized = true; } } report(1);" >/dev/null
+sleep 4
+docklog=$(logged "dock: pair tile: $gone at " "$PLOG")
+read -r dx dy <<<"$(at_of "$docklog")"
+before=$(grep -ac 'dock: pair:' "$PLOG" || true)
+if [ -n "${dx:-}" ]; then
+  tap "$dx" "$dy" 'sleep 0.3'
+  sleep 3
+  shot ap-6-gone
+  pfinput 'key escape' || true
+fi
+if [ -n "$docklog" ] && [ "$(grep -ac 'dock: pair:' "$PLOG" || true)" = "$before" ]; then
+  pass "6: the dock's pair with a missing app is shown and a tap opens nothing"
+else
+  fail "6: missing-app pair in the dock: '${docklog:-no tile}'"
+fi
+
+errs=$( { grep -aE 'HomeLayer.qml|HomeActionMenu.qml|FusionPairTile.qml|FusionPairs\.js|TaskItem.qml|org\.plasmafusion\.dock' "$PLOG" || true; } | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
 if [ -z "$errs" ]; then pass "no QML errors from the home screen, its pairs or the dock"; else fail "QML: $(echo "$errs" | head -3 | tr '\n' ' ')"; fi
 errs=$( { grep -aE 'plasmafusion_navigation|Task.qml' "$KLOG" || true; } | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
 if [ -z "$errs" ]; then pass "no QML errors from the app switcher"; else fail "switcher: $(echo "$errs" | head -3 | tr '\n' ' ')"; fi

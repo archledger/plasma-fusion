@@ -11,7 +11,8 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 - **Saved app pairs:** two apps side by side can be saved as one icon on the home screen: "Save
   pair" under their card in the app switcher. A tap on the pair opens both apps side by side, in
-  the split they were saved with; holding it offers Swap Sides and Remove Pair.
+  the split they were saved with; holding it offers Swap Sides, Keep in Dock and Remove Pair. A
+  pair kept in the dock opens the same way.
 - **Title bars back after tablet posture:** an app opened in tablet posture, then taken out of
   full screen or put in a half, had no title bar after folding back into a laptop; it has its
   title bar again, unless one of your window rules (or a system-wide one) removes it.

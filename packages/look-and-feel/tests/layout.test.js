@@ -274,7 +274,8 @@ function dockPanel(opts) {
                                                                            showRecommended: false, openRequest: "home:1" } } },
         { id: 42, type: "org.plasmafusion.dock", config: { General: Object.assign({ launchers: ["applications:a.desktop", "applications:b.desktop"],
                                                                                    magnifiedSize: 56, debugAction: "menu:1",
-                                                                                   pairRequest: "1:a.desktop:b.desktop:0.5" }, opts || {}) } }] };
+                                                                                   pairRequest: "1:a.desktop:b.desktop:0.5",
+                                                                                   keepRequest: "1:applications:org.plasmafusion.pair-1.desktop" }, opts || {}) } }] };
 }
 const docksOf = (s) => s.panels.filter((p) => p.widgets.some((w) => w.type === "org.plasmafusion.dock"));
 const general = (w) => (w.config || {}).General || {};
@@ -293,6 +294,7 @@ test("ensure-topbars: a dock on every screen gives the second screen a dock like
     assert.strictEqual(d.magnifiedSize, 56);
     assert.strictEqual(d.debugAction, undefined, "a test hook is not copied");
     assert.strictEqual(d.pairRequest, undefined, "nor a request (the new dock would open that pair)");
+    assert.strictEqual(d.keepRequest, undefined, "nor Keep in Dock's");
     assert.strictEqual(d.showOnlyCurrentScreen, true, "it lists its own screen's windows");
     assert.deepStrictEqual([l.buttonStyle, l.glass, l.showRecommended, l.favoritesPortedToKAstats, l.openRequest],
                            ["hidden", "solid", false, true, undefined], "the launcher: hidden, the main one's settings, no request");

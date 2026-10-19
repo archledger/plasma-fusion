@@ -1,20 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// Tests of contents/ui/code/pairs.js (not installed): saved app pairs on the home screen - a
+// Tests of FusionPairs.js (the shared library, not installed by itself): saved app pairs on the
+// home screen and in the dock - a
 // favourite's pair id, the pair and its apps from their desktop files as QtCore Settings reads them,
 // the label, the dock's pairRequest against a model of Plasma's desktop scripting, and the helper's
-// command. Run: node tests/pairs.test.js
+// command. Run: node packages/common/tests/pairs.test.js
 "use strict";
 const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 const vm = require("vm");
 const { pathToFileURL } = require("url");
-const file = path.join(__dirname, "..", "contents", "ui", "code", "pairs.js");
+const file = path.join(__dirname, "..", "FusionPairs.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { pairId, validApp, snapShare, readPair, readApp, label, iconName, pairScript, helperCommand } = globalThis;
+const { pairId, validApp, snapShare, readPair, readApp, label, iconName, pairScript, keepScript, helperCommand } = globalThis;
 assert.strictEqual(typeof pairId, "function", "pairs.js does not define pairId");
 
 // pairId: only the pair entries the helper writes.
@@ -104,6 +105,15 @@ for (const [layout, screen, expect] of [
 const none = shell([{ screen: 0, widgets: ["other"] }]);
 vm.runInNewContext(pairScript(pair, 0, 1), { panels: none.panels });
 assert.deepStrictEqual(none.writes, []);
+
+// keepScript: Keep in Dock asks this screen's dock to pin a pair's entry, nothing else.
+const keep = shell([{ screen: 0, widgets: ["org.plasmafusion.dock"] }, { screen: 1, widgets: ["org.plasmafusion.dock"] }]);
+vm.runInNewContext(keepScript("org.plasmafusion.pair-7.desktop", 1, 9), { panels: keep.panels });
+assert.deepStrictEqual(keep.writes, [{ screen: 1, key: "keepRequest", value: "9:applications:org.plasmafusion.pair-7.desktop", group: "General" }]);
+const keep2 = shell([{ screen: 0, widgets: ["org.plasmafusion.dock"] }]);
+vm.runInNewContext(keepScript("applications:org.plasmafusion.pair-7.desktop", 0, 3), { panels: keep2.panels });
+assert.strictEqual(keep2.writes[0].value, "3:applications:org.plasmafusion.pair-7.desktop");
+assert.strictEqual(keepScript("org.kde.dolphin.desktop", 0, 1), "");
 
 // helperCommand: swap and remove of a pair id only, run from the helper directories in order.
 const cmd = helperCommand("swap", "org.plasmafusion.pair-1.desktop");

@@ -55,6 +55,9 @@ Item {
     // Unity LauncherEntry state of this app ({count, countVisible, progress, progressVisible,
     // urgent}) or null.
     property var entry: null
+    // A saved app pair kept in the dock (main.qml pairFor()), or null: drawn as both apps' tiles on
+    // a plate.
+    property var pair: null
     // Today, for the calendar tile ("SEP", "28").
     property string monthText: ""
     property string dayText: ""
@@ -241,12 +244,23 @@ Item {
             size: iconBox.width
             source: task.model.decoration
             iconName: task.iconName
-            visible: !zoomLoader.item || task.grow <= 0.5
+            visible: !task.pair && (!zoomLoader.item || task.grow <= 0.5)
+        }
+        FusionPairTile {
+            visible: !!task.pair
+            anchors.fill: parent
+            size: iconBox.width
+            leftSource: task.pair ? task.pair.left.source : ""
+            leftIconName: task.pair ? task.pair.left.iconName : ""
+            leftMissing: !!task.pair && task.pair.left.missing
+            rightSource: task.pair ? task.pair.right.source : ""
+            rightIconName: task.pair ? task.pair.right.iconName : ""
+            rightMissing: !!task.pair && task.pair.right.missing
         }
 
         Loader {
             id: zoomLoader
-            active: task.zoomReady && task.zoomSize > task.iconSize
+            active: task.zoomReady && task.zoomSize > task.iconSize && !task.pair
             asynchronous: true
             anchors.centerIn: parent
             sourceComponent: FusionIconTile {

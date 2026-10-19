@@ -26,6 +26,7 @@ import "../code/date-timer.js" as DateTimer
 import "../code/endtask.js" as EndTask
 import "../code/menu-pick.js" as MenuPick
 import "../code/metrics.js" as Metrics
+import "FusionPairs.js" as Pairs
 import "../code/placement.js" as Placement
 
 // The whole content of the Plasma Fusion dock: Start, Search, Overview | pinned apps |
@@ -1106,6 +1107,14 @@ PlasmoidItem {
             tasksModel.requestRemoveLauncher(url);
         }
     }
+    // Keep in Dock for a saved app pair (the home screen's keepRequest "nonce:applications:ID").
+    function takeKeepRequest(): void {
+        const request = String(Plasmoid.configuration.keepRequest || "");
+        const id = Pairs.pairId(request.slice(request.indexOf(":") + 1));
+        if (id !== "") {
+            setAppPinned(id, true);
+        }
+    }
     function hasLauncher(url: url): bool {
         return tasksModel.launcherPosition(url) !== -1;
     }
@@ -1957,6 +1966,13 @@ PlasmoidItem {
                 root.startSplitForApp(parts.slice(2).join(":"), parts[0]);
             }
         }
+        // The request comes through desktop scripting, and when that script ends Plasma reads this
+        // applet's settings back from disk (plasma-workspace 6.7 Widget::~Widget → reloadConfig →
+        // Applet::configChanged → KConfigLoader::load), dropping a value set while it ran: the
+        // pin would show but never be saved. So pin once the script has returned.
+        function onKeepRequestChanged(): void {
+            Qt.callLater(root.takeKeepRequest);
+        }
         function onPairRequestChanged(): void {
             const parts = String(Plasmoid.configuration.pairRequest || "").split(":");
             const app = /^[A-Za-z0-9._-]+\.desktop$/;
@@ -2101,6 +2117,54 @@ PlasmoidItem {
         id: pairMoved
         interval: 300
         onTriggered: root.splitActiveIsApp()
+    }
+
+    // ---- A saved app pair kept in the dock (Keep in Dock, board TabletPairs.dc.html): its row is
+    // a launcher of the pair's entry (org.plasmafusion.pair-ID.desktop), drawn as both apps' tiles
+    // on a plate (FusionPairTile); a tap opens the pair here (startPair) and not the entry's Exec.
+    // The entry and the apps' own entries are read from the desktop files (QtCore Settings, read
+    // only: it stores every property declared on it in its file, so this one declares none).
+    Component {
+        id: entryFile
+        Settings {}
+    }
+    function readEntry(location: url, read): var {
+        const file = entryFile.createObject(root, { "location": location });
+        if (!file) {
+            return null;
+        }
+        const result = read(k => file.value(k));
+        file.destroy();
+        return result;
+    }
+    // The pair a row's app id is ("org.plasmafusion.pair-ID", with or without the suffix: the task
+    // model drops it from Plasma 6.8 on), or null:
+    // {id, left, right, leftId, rightId, share, label}.
+    function pairFor(appId: string): var {
+        const id = Pairs.pairId(/\.desktop$/.test(appId) ? appId : appId + ".desktop");
+        if (id === "") {
+            return null;
+        }
+        const data = StandardPaths.writableLocation(StandardPaths.GenericDataLocation);
+        const entry = readEntry(data + "/applications/" + id, v => Pairs.readPair(v));
+        if (!entry) {
+            return null;
+        }
+        const dirs = StandardPaths.standardLocations(StandardPaths.GenericDataLocation);
+        const app = appId => {
+            for (let i = 0; i < dirs.length; ++i) {
+                const a = readEntry(dirs[i] + "/applications/" + appId, v => Pairs.readApp(v, Qt.locale().name));
+                if (a) {
+                    return { "name": a.name || Pairs.iconName(appId), "source": a.icon || "application-x-executable",
+                             "iconName": Pairs.iconName(appId), "missing": false };
+                }
+            }
+            return { "name": Pairs.iconName(appId), "source": "application-x-executable", "iconName": Pairs.iconName(appId),
+                     "missing": true };
+        };
+        const left = app(entry.left), right = app(entry.right);
+        return { "id": id, "left": left, "right": right, "leftId": entry.left, "rightId": entry.right,
+                 "share": entry.share, "label": Pairs.label(left.name, right.name) };
     }
     Timer {
         id: pairSplit
@@ -2318,6 +2382,19 @@ PlasmoidItem {
                 pulseCycles: root.pulseCycles
                 gap: root.gap
                 entry: root.dockEntries[taskItem.iconName] ?? null
+                pair: root.pairFor(String(taskItem.model.AppId ?? ""))
+                // (where a pair is, for the session test that taps it, as the home screen logs it)
+                function logPair(): void {
+                    if (pair && shown) {
+                        Qt.callLater(() => {
+                            const c = taskItem.mapToGlobal(taskItem.width / 2, taskItem.height / 2);
+                            console.info("dock: pair tile: " + pair.id + " at " + Math.round(c.x) + "," + Math.round(c.y));
+                        });
+                    }
+                }
+                onAlongChanged: logPair()
+                onShownChanged: logPair()
+                onPairChanged: logPair()
                 audio: root.audio
                 pidsFor: row => root.taskPids(row)
                 monthText: root.todayMonth
@@ -2330,6 +2407,15 @@ PlasmoidItem {
                 zoomReady: root.zoomIconsReady
                 bottomPad: root.bottomPad
                 onActivated: modifiers => {
+                    // A saved pair kept here opens both apps; with one of them gone, the menu.
+                    if (taskItem.pair) {
+                        if (taskItem.pair.left.missing || taskItem.pair.right.missing) {
+                            root.showTaskMenu(taskItem);
+                        } else {
+                            root.startPair(taskItem.pair.leftId, taskItem.pair.rightId, taskItem.pair.share);
+                        }
+                        return;
+                    }
                     // Tablet posture: starting a pinned app zooms from its tile (TABLET2 M1).
                     if (root.tablet && taskItem.isLauncher) {
                         launchZoom.play(taskItem.iconItem, taskItem.model.decoration, taskItem.iconName);
