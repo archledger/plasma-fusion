@@ -68,6 +68,9 @@ commands, the bundled fonts, the tile emitter and the tests.
 <td valign="top"><a href="previews/Tablet.webp"><img src="previews/Tablet.webp" width="420" alt="Tablet home"></a><br><b>Tablet home</b><br><a href="boards/Tablet.dc.html">source</a></td>
 <td valign="top"><a href="previews/TabletLight.webp"><img src="previews/TabletLight.webp" width="420" alt="Tablet home, light"></a><br><b>Tablet home, light</b><br><a href="boards/TabletLight.dc.html">source</a></td>
 </tr>
+<tr>
+<td valign="top"><a href="previews/TabletPairs.webp"><img src="previews/TabletPairs.webp" width="420" alt="Saved app pairs — dark and light"></a><br><b>Saved app pairs — dark and light</b><br><a href="boards/TabletPairs.dc.html">source</a></td>
+</tr>
 </table>
 
 ## Theme parts
