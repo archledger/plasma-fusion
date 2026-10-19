@@ -43,6 +43,7 @@ KCM.SimpleKCM {
     property bool cfg_homeIndicator
     property string cfg_splitRequest
     property string cfg_pairRequest
+    property string cfg_keepRequest
     property string cfg_activateRequest
     property int cfg_dockSize
 
@@ -72,6 +73,7 @@ KCM.SimpleKCM {
     property int cfg_tabletStripHeightDefault
     property string cfg_splitRequestDefault
     property string cfg_pairRequestDefault
+    property string cfg_keepRequestDefault
     property string cfg_activateRequestDefault
     property int cfg_dockSizeDefault
     property bool cfg_groupWindowsDefault
@@ -95,6 +97,7 @@ KCM.SimpleKCM {
         // requests other shell parts write through desktop scripting
         cfg_splitRequest = config.splitRequest;
         cfg_pairRequest = config.pairRequest;
+        cfg_keepRequest = config.keepRequest;
         cfg_activateRequest = config.activateRequest;
         // the settings page's Dock size, set with the panel's height
         cfg_dockSize = config.dockSize;

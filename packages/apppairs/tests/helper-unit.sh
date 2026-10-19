@@ -8,7 +8,7 @@
 #   1. save: the pair's entry (hidden, the apps, the split snapped to 1/3, 1/2 or 2/3, both names,
 #      its Exec), the cache rebuilt before the home screen is asked to pin it;
 #   2. the same two apps again: the same entry with the new split; reversed: another pair;
-#   3. swap, open (the dock's pairRequest), remove;
+#   3. swap, open (the dock's pairRequest), remove (unpinned from the docks first);
 #   4. what it refuses: one app twice, no desktop file id, no split, a path that is not a pair's.
 # Test tooling only, not installed.
 #
@@ -123,6 +123,26 @@ check "open: the first screen's dock, else any" grep -q 'p.screen === 0' "$call"
 "$HELPER" remove "$id"
 check "remove: the entry is gone" test ! -e "$f"
 check "remove: the other pairs stay" test "$(pairs)" = 2
+# Its script (the arguments after busctl's "s") against a model of desktop scripting: the pair is
+# unpinned from every dock that keeps it (here one dock for every activity, one for some), their
+# other pins kept in order; a dock without it is not written.
+unpinned() { # CALL ID
+  sed '1,/^s$/d' "$1" | node -e '
+const vm = require("vm");
+const script = require("fs").readFileSync(0, "utf8"), url = "applications:" + process.argv[1];
+const docks = [[url, "applications:org.kde.dolphin.desktop"], ["preferred://browser", "[a1,a2]\n" + url],
+               ["applications:org.kde.kate.desktop"]].map(pins => ({ pins: pins, written: null }));
+const widget = d => ({ set currentConfigGroup(g) { d.group = g.join("/"); },
+                       readConfig: (k, def) => (k === "launchers" && d.group === "General" ? d.pins.slice() : def),
+                       writeConfig: (k, v) => { d.written = d.group + ":" + k + "=" + JSON.stringify(v); } });
+vm.runInNewContext(script, { panels: () => [
+    { screen: 0, widgets: n => (n === "org.plasmafusion.dock" ? [widget(docks[0])] : []) },
+    { screen: 1, widgets: n => (n === "org.plasmafusion.dock" ? [widget(docks[1]), widget(docks[2])] : []) }] });
+process.exit(docks[0].written === "General:launchers=[\"applications:org.kde.dolphin.desktop\"]"
+             && docks[1].written === "General:launchers=[\"preferred://browser\"]"
+             && docks[2].written === null ? 0 : 1);' "$2"
+}
+check "remove: unpinned from every dock that keeps it" unpinned "$(last_call)" "$id"
 
 # ---- the Exec of a helper called through a link (NixOS: /run/current-system/sw/libexec)
 mkdir -p "$BASE/profile/libexec"

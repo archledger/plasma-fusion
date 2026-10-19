@@ -263,8 +263,18 @@ A saved app pair's icon (board `TabletPairs.dc.html`, "two tiles on a plate"): b
 plate the size of an app tile (radius 19/72 of `size`; white 16 % with a 22 % edge on the dark
 scheme, ink 10 % with 12 % on the light one, chosen by `Kirigami.Theme.backgroundColor` as the free
 side's picker does). `leftMissing` / `rightMissing`: an app that is gone at 35 % opacity and grey
-(`MultiEffect`, saturation -1). Used by the home screen's pair tiles
+(`MultiEffect`, saturation -1). Used by the home screen's pair tiles and the dock's
 ([`apppairs.md`](apppairs.md)).
+
+## Shared JavaScript libraries: FusionPairs.js (2026-10-19)
+
+`tools/build-lib/shared-qml.sh` also copies the JavaScript libraries in `packages/common/*.js`
+into a package whose QML or JavaScript names the file (`import "FusionPairs.js" as Pairs`), as it
+copies a block named by its file; `check` refuses a package that carries its own copy. The first is
+`FusionPairs.js`, the saved app pairs' logic the home screen and the dock share (pair ids, the
+entries' keys as QtCore `Settings` reads them, the dock's request scripts; tested by
+`packages/common/tests/pairs.test.js`). The build steps of both packages check that it was
+installed (a missing import fails only when the QML engine loads it).
 
 ## FusionMetrics changes
 

@@ -16,7 +16,7 @@
 #                                                  updated); prints the pair's desktop file id
 #   plasma-fusion-app-pair swap PAIR               the two apps change sides
 #   plasma-fusion-app-pair remove PAIR             delete the pair's entry (after the home screen
-#                                                  let it go)
+#                                                  let it go), unpinned from the docks first
 #   plasma-fusion-app-pair open PAIR               ask the dock to open the pair (the entry's Exec;
 #                                                  the home screen asks the dock itself)
 # PAIR is the pair's desktop file id or path. After a change KDE's application cache is rebuilt
@@ -149,8 +149,18 @@ cmd_swap() { # PAIR
 }
 
 cmd_remove() { # PAIR
-  local file
+  local file id
   file=$(pair_file "$1")
+  id=${file##*/}
+  # Out of every dock that keeps it first (Keep in Dock): with its entry gone the dock would hide
+  # the pin but keep it, out of reach. A pin may carry its activities ("[ids]\n" before the URL).
+  shell_script "panels().forEach(function (p) { p.widgets(\"org.plasmafusion.dock\").forEach(function (w) {
+    w.currentConfigGroup = [\"General\"];
+    var pins = w.readConfig(\"launchers\", []), kept = [];
+    for (var i = 0; i < pins.length; ++i) {
+      if (String(pins[i]).replace(/^\\[[^\\]]*\\]\\n/, \"\") !== \"applications:$id\") { kept.push(String(pins[i])); } }
+    if (kept.length !== pins.length) { w.writeConfig(\"launchers\", kept); } }); });" \
+    || echo "plasma-fusion-app-pair: no dock reached (plasmashell not running?); a pin of $id stays" >&2
   rm -f -- "$file"
   refresh_cache
 }

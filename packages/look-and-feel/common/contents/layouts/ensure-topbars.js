@@ -388,7 +388,7 @@ function ensureTopBarsLook() {  // identical to the layout script's fusionLook()
     var LISTS = ["launchers", "launcherFallbacks", "favorites", "hiddenApplications"];
     // Keys that ask a widget for something once, or belong to the one widget.
     var SKIP = ["debugAction", "debugPointerX", "debugHoverIndex", "splitRequest", "activateRequest", "openRequest",
-                "pairRequest", "showOnlyCurrentScreen"];
+                "pairRequest", "keepRequest", "showOnlyCurrentScreen"];
     function truthy(value) {
         return value === true || String(value) === "true";
     }

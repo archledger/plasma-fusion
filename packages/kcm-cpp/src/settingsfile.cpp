@@ -92,6 +92,7 @@ bool reservedKeys(const QJsonValue &config, bool panel)
                                      u"activateRequest"_s,
                                      u"openRequest"_s,
                                      u"pairRequest"_s,
+                                     u"keepRequest"_s,
                                      u"pinRequest"_s,
                                      u"powerTier"_s,
                                      u"AppletOrder"_s,

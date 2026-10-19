@@ -8,12 +8,12 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.plasma.extras as PlasmaExtras
 
-import "code/pairs.js" as Pairs
+import "FusionPairs.js" as Pairs
 
 // The home screen's long-press menu (TABLET2 H1), from the launcher's ActionMenu.qml: add to or
 // remove from page 1 (the launcher's pinned list) plus the app's own actions (jump list, "Edit
 // Application…", "Hide Application"…).
-// A saved app pair has a menu of its own (Open, Swap Sides, Remove Pair).
+// A saved app pair has a menu of its own (Open, Swap Sides, Keep in Dock, Remove Pair).
 Item {
     id: actionMenu
 
@@ -59,8 +59,8 @@ Item {
         const id = entry && entry.favoriteId ? String(entry.favoriteId) : "";
         const actions = [];
 
-        // A saved app pair (board TabletPairs.dc.html): Open, Swap Sides, Remove Pair; with one of
-        // its apps gone, only Remove Pair.
+        // A saved app pair (board TabletPairs.dc.html): Open, Swap Sides, Keep in Dock, Remove
+        // Pair; with one of its apps gone, only Remove Pair.
         if (Pairs.pairId(id) !== "") {
             const pair = home.pairInfo(id);
             if (pair && !pair.left.missing && !pair.right.missing) {
@@ -68,6 +68,8 @@ Item {
                                actionId: "_fusion_pair_open" });
                 actions.push({ text: i18nc("@action:inmenu the two apps of a saved app pair change sides", "Swap Sides"),
                                icon: "exchange-positions", actionId: "_fusion_pair_swap" });
+                actions.push({ text: i18nc("@action:inmenu pin a saved app pair to the dock", "Keep in Dock"),
+                               icon: "pin", actionId: "_fusion_pair_keep" });
             }
             actions.push({ text: i18nc("@action:inmenu delete a saved app pair", "Remove Pair"), icon: "edit-delete",
                            actionId: "_fusion_pair_remove" });
@@ -141,6 +143,10 @@ Item {
         }
         if (actionId === "_fusion_pair_open") {
             home.openPair(home.pairInfo(favoriteId));
+            return;
+        }
+        if (actionId === "_fusion_pair_keep") {
+            home.keepPairInDock(favoriteId);
             return;
         }
         if (actionId === "_fusion_pair_swap") {

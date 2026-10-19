@@ -17,7 +17,7 @@ import org.kde.taskmanager as TaskManager
 import org.kde.plasma.plasma5support as P5Support
 
 import "code/home.js" as HomeLogic
-import "code/pairs.js" as Pairs
+import "FusionPairs.js" as Pairs
 
 // The home screen in tablet posture (TABLET2 H1, owner decision "iPad-style"): pages of apps in the
 // desktop window, under the apps, in place of Folder View (whose rubber band was the owner's pen
@@ -491,6 +491,19 @@ Item {
             "signature": "(s)"
         }, () => {}, error => console.warn("home: pair request failed: " + error));
     }
+    // Keep in Dock: this screen's dock pins the pair's entry (its keepRequest), as the launcher's
+    // Keep in Dock pins an app.
+    function keepPairInDock(favoriteId: string): void {
+        const script = Pairs.keepScript(favoriteId, Plasmoid.containment.screen, Date.now());
+        if (script === "") {
+            return;
+        }
+        console.info("home: pair: keep in dock " + Pairs.pairId(favoriteId));
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.plasmashell", "path": "/PlasmaShell", "iface": "org.kde.PlasmaShell",
+            "member": "evaluateScript", "arguments": [new DBus.string(script)], "signature": "(s)"
+        }, () => {}, error => console.warn("home: keep in dock failed: " + error));
+    }
     // Swap Sides and Remove Pair: the helper rewrites or deletes the entry, then rebuilds KDE's
     // application cache, and the pinned apps model reads the pair again.
     P5Support.DataSource {
@@ -532,22 +545,40 @@ Item {
     // laptop too, where this layer is not loaded: a request waiting in the configuration is taken
     // when the layer loads (rootModel's favourites ready), and every request is cleared once taken (a pair removed since is not
     // pinned again).
+    // Pin requests as they arrive: the slot holds the newest only, and two saves in a row would
+    // lose the first to a take that read the slot later.
+    property var pinRequests: []
+    // The request comes through desktop scripting, and when that script ends Plasma reads this
+    // applet's settings back from disk (plasma-workspace 6.7 Widget::~Widget → reloadConfig →
+    // Applet::configChanged → KConfigLoader::load), dropping a clear made while it ran: the
+    // request would stay stored and be taken again at the next shell start. So take it (and clear
+    // the slot) once the script has returned, as the dock pins a kept pair.
     Connections {
         target: Plasmoid.configuration
         function onPinRequestChanged(): void {
-            home.takePinRequest();
+            home.queuePinRequest();
         }
     }
-    function takePinRequest(): void {
+    function queuePinRequest(): void {
         const request = String(Plasmoid.configuration.pinRequest || "");
-        if (request === "" || !favoritesModel) {
+        if (request !== "") {
+            pinRequests.push(request);
+        }
+        Qt.callLater(home.takePinRequest);
+    }
+    function takePinRequest(): void {
+        if (!favoritesModel || pinRequests.length === 0) {
             return;
         }
-        const favoriteId = request.slice(request.indexOf(":") + 1);
+        const requests = pinRequests;
+        pinRequests = [];
         Plasmoid.configuration.pinRequest = "";
-        if (pairInfo(favoriteId) !== null && !favoritesModel.isFavorite(favoriteId)) {
-            console.info("home: pair: pin " + favoriteId);
-            favoritesModel.addFavorite(favoriteId, -1);
+        for (let i = 0; i < requests.length; ++i) {
+            const favoriteId = requests[i].slice(requests[i].indexOf(":") + 1);
+            if (pairInfo(favoriteId) !== null && !favoritesModel.isFavorite(favoriteId)) {
+                console.info("home: pair: pin " + favoriteId);
+                favoritesModel.addFavorite(favoriteId, -1);
+            }
         }
     }
 
@@ -585,7 +616,7 @@ Item {
             (favoritesModel as Kicker.KAStatsFavoritesModel).initForClient("org.plasmafusion.launcher.favorites");
             refresh();
             // (the favourites take a pin only from here on: a request waiting since the laptop)
-            Qt.callLater(home.takePinRequest);
+            home.queuePinRequest();
         }
     }
 
