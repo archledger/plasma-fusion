@@ -15,9 +15,12 @@
 #      system-wide one (the session's XDG config directory ~/.config/kdedefaults, read as KWin reads
 #      /etc/xdg), locked ([$i]) against the user's file, which tries to turn it off; Ark's names
 #      its class with a regular expression only PCRE reads ("\A", "\z");
+#   5. left maximized until tablet posture ends: Okular, made borderless by the user before tablet
+#      posture (the policy maximizes it), and Gwenview, opened in tablet posture under an "apply
+#      initially" no-titlebar rule;
 # after leaving tablet posture Dolphin, KWrite and Konsole (under a rule that is off) have their
-# title bars again, and KCalc, Ark and KCharSelect still have none; the script, loaded again once
-# the rules exist, leaves both rules files as they were.
+# title bars again, and KCalc, Ark, KCharSelect, Okular and Gwenview still have none; the script,
+# loaded again once the rules exist, leaves both rules files as they were.
 # Run: tools/vsession/remote.sh tb-1 packages/kwin/tests/vsession/scenario-tablet-titlebars.sh SEED 1440x900 420
 exec 2>&1
 export OUT
@@ -49,7 +52,8 @@ kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99
 #   locked ([$i]): the user's file turning it off (noborderrule 1) does not count for KWin;
 # - KCharSelect forced (Rules::Force, exact), the user's own;
 # - Konsole "apply initially", but off (Enabled=false): KWin skips it;
-# - Ark "apply initially", a regular expression with PCRE's \A and \z.
+# - Ark "apply initially", a regular expression with PCRE's \A and \z;
+# - Gwenview "apply initially" (substring).
 # The user's file lists them all, as the KCM writes it when rules are added beside a system-wide
 # one (KConfig saves only the keys that differ from the system's).
 mkdir -p "$HOME/.config/kdedefaults"
@@ -93,9 +97,16 @@ noborderrule=3
 wmclass=(?:\\A|\\.)ark\\z
 wmclassmatch=3
 
+[5]
+Description=Test: no title bar for gwenview
+noborder=true
+noborderrule=3
+wmclass=gwenview
+wmclassmatch=2
+
 [General]
-count=4
-rules=1,2,3,4
+count=5
+rules=1,2,3,4,5
 RULES
 pfv_restart_shell 12
 qdbus org.kde.KWin /KWin reconfigure; sleep 3
@@ -115,30 +126,37 @@ qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.loadDeclarativeScript \
 qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null
 sleep 3
 info "tablet script loaded again: $(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-tablet)"
-# How KWin reads the rules, on the laptop: KCalc (the locked system-wide rule) and Ark (PCRE) open
-# without a title bar, Konsole (its rule off) with one.
-for app in kcalc ark konsole; do
+# How KWin reads the rules, on the laptop: KCalc (the locked system-wide rule), Ark (PCRE) and
+# Gwenview open without a title bar, Konsole (its rule off) with one.
+for app in kcalc ark konsole gwenview; do
   "$app" >/dev/null 2>&1 &
   sleep 4
 done
 case "$(state kcalc)" in "false true false") pass "0: KWin applies the locked system-wide rule: KCalc opens without a title bar on the laptop" ;; *) fail "0: KCalc on the laptop $(state kcalc)" ;; esac
 case "$(state ark)" in "false true false") pass "0: KWin applies the PCRE rule: Ark opens without a title bar on the laptop" ;; *) fail "0: Ark on the laptop $(state ark)" ;; esac
 case "$(state konsole)" in "false false false") pass "0: KWin skips the rule that is off: Konsole opens with a title bar on the laptop" ;; *) fail "0: Konsole on the laptop $(state konsole)" ;; esac
-for app in kcalc ark konsole; do
+case "$(state gwenview)" in "false true false") pass "0: KWin applies Gwenview's rule: it opens without a title bar on the laptop" ;; *) fail "0: Gwenview on the laptop $(state gwenview)" ;; esac
+for app in kcalc ark konsole gwenview; do
   on "$app" "w.closeWindow();"
 done
 sleep 2
-for app in kcalc ark konsole; do
+for app in kcalc ark konsole gwenview; do
   [ "$(state "$app")" = none ] || info "$app still open: $(state "$app")"
 done
+# ---- 5. Okular, made borderless by the user on the laptop (as Alt+F3's "No titlebar and frame")
+okular >/dev/null 2>&1 &
+sleep 4
+on okular "w.noBorder = true;"
+sleep 0.5
+info "okular on the laptop, borderless by the user: $(state okular)"
 pfv_tablet on; sleep 8
 
 # Every window opened in tablet posture.
-for app in dolphin kwrite konsole kcalc kcharselect ark; do
+for app in dolphin kwrite konsole kcalc kcharselect ark gwenview; do
   "$app" >/dev/null 2>&1 &
   sleep 4
 done
-info "opened in tablet: dolphin $(state dolphin), kwrite $(state kwrite), konsole $(state konsole), kcalc $(state kcalc), kcharselect $(state kcharselect), ark $(state ark)"
+info "opened in tablet: dolphin $(state dolphin), kwrite $(state kwrite), konsole $(state konsole), kcalc $(state kcalc), kcharselect $(state kcharselect), ark $(state ark), gwenview $(state gwenview), okular $(state okular)"
 
 # ---- 1. Dolphin out of full screen: it takes a half
 on dolphin "workspace.activeWindow = w; w.setMaximize(false, false);"
@@ -171,6 +189,11 @@ done
 for app in kcalc kcharselect ark; do
   s=$(state "$app"); read -r _ nb _ <<<"$s"
   if [ "$nb" = true ]; then pass "after tablet posture $app keeps no title bar (its rule): $s"; else fail "$app got a title bar against its rule: $s"; fi
+done
+# ---- 5. left maximized until the posture ended: un-maximized by leave(), still without a title bar
+for app in okular gwenview; do
+  s=$(state "$app")
+  case "$s" in "false true false") pass "5: $app, maximized until tablet posture ended, keeps no title bar: $s" ;; *) fail "5: $app after tablet posture: $s" ;; esac
 done
 if [ "$(rules_sum)" = "$RULES_SUM" ] && ! grep -q 'modelData\|@Variant' "${RULE_FILES[@]}"; then
   pass "the script left the rules files as they were"

@@ -268,7 +268,8 @@ Item {
     function leave() {
         busy = true;
         const ws = Workspace.stackingOrder;
-        let restored = 0, placed = 0, tiles = 0, floats = 0;
+        let restored = 0, placed = 0, tiles = 0, floats = 0, kept = 0;
+        const unmaximizedNow = {};
         // Un-maximize first, while borderless is still on: KWin gives the title bar back on
         // un-maximize only while the option is set.
         for (let i = 0; i < ws.length; ++i) {
@@ -277,12 +278,26 @@ Item {
                 continue;
             }
             const k = key(w);
+            let usersNoBar = false;
             if (w.maximizeMode === 3 && maximizedByUs[k]) {
                 w.setMaximize(false, false);
                 restored++;
+                unmaximizedNow[k] = true;
+                usersNoBar = laptopNoBorder[k] === true;
             } else if (w.maximizeMode === 3 && openedInTablet[k]) {
                 w.setMaximize(false, false, restoreRect(w));
                 placed++;
+                unmaximizedNow[k] = true;
+                usersNoBar = rulesKeepNoTitleBar(w);
+            }
+            // That un-maximize gives every window its title bar (KWin 6.7.5 and 6.8.0
+            // XdgToplevelWindow::maximize: setNoBorder(false) under the option), also one whose
+            // missing bar is the user's: borderless before tablet posture (the snapshot of
+            // enter()), or kept so by their rules when it opened in tablet posture ("apply
+            // initially" acts only as it appears; a forced rule keeps it borderless anyway).
+            if (usersNoBar && !w.noBorder) {
+                w.noBorder = true;
+                kept++;
             }
             if (borderlessTiles[k] && w.noBorder) {
                 w.noBorder = false;
@@ -301,11 +316,13 @@ Item {
             moveChanged = false;
         }
         // Windows still maximized (the user maximized them in tablet mode) get their title bar
-        // back, as Workspace::slotReconfigure does when the option goes off.
+        // back, as Workspace::slotReconfigure does when the option goes off. Not those un-maximized
+        // above: maximizeMode is the mode the client has taken, so they read 3 until it answers.
         if (!laptopBorderless) {
             for (let i = 0; i < ws.length; ++i) {
                 const w = ws[i];
-                if (w && !w.deleted && w.maximizeMode === 3 && w.noBorder) {
+                if (w && !w.deleted && w.maximizeMode === 3 && w.noBorder
+                    && !unmaximizedNow[key(w)]) {
                     w.noBorder = false;
                 }
             }
@@ -319,7 +336,7 @@ Item {
         applied = false;
         busy = false;
         log("leave: restored " + restored + ", placed " + placed + ", tiles with title bar " + tiles
-            + ", floated with title bar " + floats
+            + ", floated with title bar " + floats + ", kept without title bar " + kept
             + ", placement " + Options.placement + ", borderless " + Options.borderlessMaximizedWindows);
     }
 

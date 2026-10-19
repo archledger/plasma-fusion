@@ -438,6 +438,17 @@ maximized: `barShownAgain()` in `settleUnmaximized()` and `tileChanged()`), noth
 borderless, so the bar is the policy's: taken while the posture holds and given back by
 `leave()`. Windows open before tablet posture keep their snapshot from `enter()`.
 
+Leaving tablet posture un-maximizes the windows the policy maximized and those opened in it while
+the option is still on, and KWin gives every one its title bar on that un-maximize (6.7.5 and
+6.8.0 `XdgToplevelWindow::maximize`: `setNoBorder(false)`). `leave()` makes a window whose missing
+bar is the user's borderless again: one borderless before tablet posture (the snapshot of
+`enter()`), or one opened in it that the user's rules keep without a bar (below). Before, a window
+left maximized until tablet posture ended got a title bar against its rule or the user's choice.
+The last step of `leave()`, which gives the windows still maximized their title bar when the
+laptop's option is off, skips these. A window's `maximizeMode` is the mode its client has taken,
+so a window just un-maximized still reads 3 until the client answers; the first version of this
+gave the bar back there (tb-7: "kept without title bar 2", then both with one).
+
 A no-titlebar rule that acts only when the window appears ("apply initially") does not stop KWin
 from showing the bar on that un-maximize, so the user's rules are read too, and a window one of
 them keeps without a title bar stays the user's (`Rules.js`):
@@ -496,15 +507,17 @@ Tests:
   it cannot read come back undefined; 6000 random patterns over 11 classes (a fixed seed) never get
   an answer that differs from KWin's (31 checks; 36 685 answers on Qt 6.11.2).
 - `tests/vsession/scenario-tablet-titlebars.sh` (private session on the ThinkPad, 1440 x 900, KWin
-  6.7.5; 2026-10-19, tb-6: all 14 checks pass, scenario rc 0):
+  6.7.5; 2026-10-19, tb-8: all 17 checks pass, scenario rc 0):
   - **On the laptop** (check 0), KWin applies the rules as the policy must read them. KCalc and
     Ark open without a title bar: KCalc under a system-wide apply-initially rule in
     `~/.config/kdedefaults`, its group locked (`[$i]`) against the user's file turning it off; Ark
-    under a regular expression with PCRE's `\A` and `\z`. Konsole, under a rule that is off,
-    opens with one.
+    under a regular expression with PCRE's `\A` and `\z`; Gwenview under an apply-initially rule.
+    Konsole, under a rule that is off, opens with one.
   - **In tablet posture,** windows open: Dolphin taken out of full screen, KWrite quick-tiled from
     it, and Konsole tiled and untiled have their title bars after tablet posture. KCalc, Ark and
     KCharSelect (the user's forced rule), quick-tiled from full screen and untiled, keep none.
+  - **Left maximized until tablet posture ends:** Okular, made borderless by the user before it, and
+    Gwenview, opened in it under its rule, keep no title bar after `leave()` un-maximizes them.
   - **Files:** the script, loaded again once the rules exist, leaves both rules files as they were.
 - **Red runs:**
   - main's script (c947218): the three title bars are missing (tb-r2, "tiles with title bar 0,
@@ -513,9 +526,11 @@ Tests:
     after leave (tb-r3, scenario rc 1);
   - the second (3ffa019): Konsole keeps none, KCalc and Ark get one, and `modelData` is written
     into both rules files (tb-r5, 4 failures);
+  - the third (402e2bb), and the first `leave()` fix (tb-7): Okular and Gwenview get a title bar
+    when tablet posture ends (tb-r7);
   - without any rules check, `scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3:
     a title bar after leave).
-- **Regression:** `scenario-kwin2-a.sh` passes all 31 checks (k2a-4, and k2a-8 with this version)
-  and `scenario-fullscreen-off.sh` all 13 (fo-7, fo-8).
+- **Regression:** `scenario-kwin2-a.sh` passes all 31 checks (k2a-4, and k2a-10 with this version)
+  and `scenario-fullscreen-off.sh` all 13 (fo-7, fo-10).
 
 Not tested in a session: 6.8's decoration policies (the ThinkPad runs 6.7.5; node only).
