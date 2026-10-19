@@ -776,3 +776,12 @@ panel, and the dock lays itself out for the edge: the bottom dock turned upright
   With the pill at the Floating location and the earlier length (the height under the top bar), a
   red run fails six of them. The screenshots match the board.
 
+## Opening a saved app pair (2026-10-19)
+
+The home screen's `pairRequest` ("nonce:LEFT:RIGHT:SHARE", desktop file ids and the left part of
+the split) opens a saved pair ([`apppairs.md`](apppairs.md)): `startPair()` brings the first app to
+the left half and then the second to the right one with `bringToSide()`, the split request's steps
+(`splitPlan` now carries a `then`, called after the tile shortcut's reply) without moving the app in
+use, and 300 ms after the last tile invokes the plasmafusion-tablet script's "Plasma Fusion: Split
+One Third", "Split Half" or "Split Two Thirds". Log "dock: pair: LEFT on the left, RIGHT on the
+right, split SHARE".

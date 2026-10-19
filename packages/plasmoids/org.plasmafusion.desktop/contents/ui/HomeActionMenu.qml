@@ -8,9 +8,12 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.plasma.extras as PlasmaExtras
 
+import "code/pairs.js" as Pairs
+
 // The home screen's long-press menu (TABLET2 H1), from the launcher's ActionMenu.qml: add to or
 // remove from page 1 (the launcher's pinned list) plus the app's own actions (jump list, "Edit
 // Application…", "Hide Application"…).
+// A saved app pair has a menu of its own (Open, Swap Sides, Remove Pair).
 Item {
     id: actionMenu
 
@@ -55,6 +58,29 @@ Item {
         const favorites = home.favoritesModel;
         const id = entry && entry.favoriteId ? String(entry.favoriteId) : "";
         const actions = [];
+
+        // A saved app pair (board TabletPairs.dc.html): Open, Swap Sides, Remove Pair; with one of
+        // its apps gone, only Remove Pair.
+        if (Pairs.pairId(id) !== "") {
+            const pair = home.pairInfo(id);
+            if (pair && !pair.left.missing && !pair.right.missing) {
+                actions.push({ text: i18nc("@action:inmenu open both apps of a saved app pair", "Open"), icon: "go-next",
+                               actionId: "_fusion_pair_open" });
+                actions.push({ text: i18nc("@action:inmenu the two apps of a saved app pair change sides", "Swap Sides"),
+                               icon: "exchange-positions", actionId: "_fusion_pair_swap" });
+            }
+            actions.push({ text: i18nc("@action:inmenu delete a saved app pair", "Remove Pair"), icon: "edit-delete",
+                           actionId: "_fusion_pair_remove" });
+            actions.push({ type: "separator" });
+            actions.push({ text: i18nc("@action:inmenu", "Edit Home Screen"), icon: "edit-entry", actionId: "_fusion_edit_home" });
+            targetModel = model;
+            targetIndex = index;
+            favoriteId = id;
+            actionList = actions;
+            menu.visualParent = item;
+            menu.open(x, y);
+            return;
+        }
 
         // Split (SPLIT.md item 2; Android: long press > Split): the dock opens the app in that half
         // and moves the app in use to the other one (the "fill the other half" picker offers it).
@@ -111,6 +137,18 @@ Item {
 
         if (actionId === "_fusion_edit_home") {
             home.startEditing();
+            return;
+        }
+        if (actionId === "_fusion_pair_open") {
+            home.openPair(home.pairInfo(favoriteId));
+            return;
+        }
+        if (actionId === "_fusion_pair_swap") {
+            home.swapPair(Pairs.pairId(favoriteId));
+            return;
+        }
+        if (actionId === "_fusion_pair_remove") {
+            home.removePair(targetModel === favorites ? targetIndex : -1, favoriteId);
             return;
         }
         if (actionId === "_fusion_split_left" || actionId === "_fusion_split_right") {

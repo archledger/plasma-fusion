@@ -708,34 +708,82 @@ FocusScope {
                 height: flickable.height
             }
 
-            PlasmaComponents.ToolButton {
-                id: closeAllButton
-                property bool closeRequested: false
-                visible: root.tasksCount !== 0 && !root.taskSwitcherHelpers.isInTaskScrubMode
-                enabled: !root.taskSwitcherHelpers.currentlyBeingClosed && !root.state.gestureInProgress
-
-                Kirigami.Theme.inherit: false
-                Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
-
+            // Plasma Fusion (saved app pairs, board TabletPairs.dc.html, docs/parts/apppairs.md): under
+            // the current card, when it is two apps side by side, "Save pair" beside Close All saves
+            // them as one icon on the home screen, as Android's Overview does: the first app on the
+            // left, the split as it is.
+            Row {
+                spacing: Kirigami.Units.gridUnit
                 anchors {
                     bottom: taskList.bottom
                     bottomMargin: (taskList.taskYBase) * 0.75
                     horizontalCenter: taskList.horizontalCenter
                 }
 
-                opacity: (root.taskSwitcherHelpers.currentlyBeingClosed || root.state.gestureInProgress || !root.taskSwitcherHelpers.taskDrawerOpened) ? 0.0 : 1.0
-                Behavior on opacity { NumberAnimation { duration: Kirigami.Units.shortDuration } }
+                PlasmaComponents.ToolButton {
+                    id: savePairButton
+                    readonly property var task: root.tasksCount > 0 ? taskList.getTaskAt(root.state.currentTaskIndex) : null
+                    readonly property var apps: task && task.partner && task.apps.length > 1 ? task.apps : []
+                    readonly property string leftId: apps.length > 1 ? root.state.appEntryId(apps[0]) : ""
+                    readonly property string rightId: apps.length > 1 ? root.state.appEntryId(apps[1]) : ""
+                    property string savedFor: ""
+                    readonly property bool saved: savedFor !== "" && savedFor === leftId + "|" + rightId
+                    visible: closeAllButton.visible && leftId !== "" && rightId !== "" && leftId !== rightId
+                    enabled: closeAllButton.enabled && !saved
+                    opacity: closeAllButton.opacity
 
-                icon.name: "edit-clear-history"
-                font.bold: true
+                    Kirigami.Theme.inherit: false
+                    Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
 
-                text: closeRequested ? i18n("Confirm Close All") : i18n("Close All")
+                    icon.name: saved ? "checkmark" : "view-split-left-right"
+                    font.bold: true
+                    text: saved ? i18nc("@action:button the two apps are saved as one icon", "Saved")
+                                : i18nc("@action:button save the two apps side by side as one icon on the home screen", "Save pair")
 
-                onClicked: {
-                    if (closeRequested) {
-                        taskList.closeAll();
-                    } else {
-                        closeRequested = true;
+                    onClicked: {
+                        if (root.state.saveAppPair(apps[0], apps[1], task.shareOf(apps[0]))) {
+                            savedFor = leftId + "|" + rightId;
+                        }
+                    }
+                    // (where it is, for the session test that taps it, as the home screen logs its
+                    // free side)
+                    function logPlace(): void {
+                        if (visible) {
+                            Qt.callLater(() => {
+                                const c = savePairButton.mapToGlobal(savePairButton.width / 2, savePairButton.height / 2);
+                                console.info("plasmafusion-navigation: Save pair for " + leftId + " | " + rightId + " at "
+                                             + Math.round(c.x) + "," + Math.round(c.y));
+                            });
+                        }
+                    }
+                    onVisibleChanged: logPlace()
+                    onLeftIdChanged: logPlace()
+                    Component.onCompleted: logPlace()
+                }
+
+                PlasmaComponents.ToolButton {
+                    id: closeAllButton
+                    property bool closeRequested: false
+                    visible: root.tasksCount !== 0 && !root.taskSwitcherHelpers.isInTaskScrubMode
+                    enabled: !root.taskSwitcherHelpers.currentlyBeingClosed && !root.state.gestureInProgress
+
+                    Kirigami.Theme.inherit: false
+                    Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
+
+                    opacity: (root.taskSwitcherHelpers.currentlyBeingClosed || root.state.gestureInProgress || !root.taskSwitcherHelpers.taskDrawerOpened) ? 0.0 : 1.0
+                    Behavior on opacity { NumberAnimation { duration: Kirigami.Units.shortDuration } }
+
+                    icon.name: "edit-clear-history"
+                    font.bold: true
+
+                    text: closeRequested ? i18n("Confirm Close All") : i18n("Close All")
+
+                    onClicked: {
+                        if (closeRequested) {
+                            taskList.closeAll();
+                        } else {
+                            closeRequested = true;
+                        }
                     }
                 }
             }

@@ -96,6 +96,13 @@ public:
     // gesture). It is one card the next time, and in tablet posture, when one of the two is
     // activated again (the dock, a notification), the other comes back into its half.
     Q_INVOKABLE void rememberPair(KWin::Window *window, KWin::Window *partner);
+    // Plasma Fusion (saved app pairs, docs/parts/apppairs.md): the desktop file id of the window's
+    // app ("org.kde.dolphin.desktop") when its entry is installed, else "".
+    Q_INVOKABLE QString appEntryId(KWin::Window *window) const;
+    // Saves the two apps side by side as a pair, `share` the left app's part of the split: the
+    // plasma-fusion-app-pair helper writes its entry and asks the home screen to pin it. False
+    // when the helper could not be started.
+    Q_INVOKABLE bool saveAppPair(KWin::Window *left, KWin::Window *right, qreal share);
 
     qreal touchXPosition() const;
     qreal touchYPosition() const;

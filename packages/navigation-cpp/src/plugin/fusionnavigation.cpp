@@ -7,18 +7,23 @@
 #include "fusionnavigation.h"
 #include "splitside.h"
 
+#include <KSharedConfig>
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusMessage>
+#include <QDir>
+#include <QFileInfo>
 #include <QKeyEvent>
 #include <QMetaObject>
+#include <QProcess>
 #include <QQuickItem>
-#include <KSharedConfig>
+#include <QRegularExpression>
+#include <QStandardPaths>
 #include <config-kwin.h>
+#include <core/output.h>
 #include <inputmethod.h>
 #include <main.h>
 #include <tabletmodemanager.h>
-#include <core/output.h>
 #include <window.h>
 #include <workspace.h>
 
@@ -279,6 +284,50 @@ void FusionNavigationState::updateWasInActiveTask(KWin::Window *window)
         newWasInActiveTask = !window->isDesktop();
     }
     setWasInActiveTask(newWasInActiveTask);
+}
+
+QString FusionNavigationState::appEntryId(KWin::Window *window) const
+{
+    if (!window) {
+        return QString();
+    }
+    // KWin's desktop file name: the Wayland app_id, or X11's _KDE_NET_WM_DESKTOP_FILE, mostly
+    // without the suffix.
+    QString id = window->desktopFileName();
+    if (!id.endsWith(QLatin1String(".desktop"))) {
+        id += QLatin1String(".desktop");
+    }
+    static const QRegularExpression valid(QStringLiteral("^[A-Za-z0-9._-]+\\.desktop$"));
+    if (!valid.match(id).hasMatch() || QStandardPaths::locate(QStandardPaths::ApplicationsLocation, id).isEmpty()) {
+        return QString();
+    }
+    return id;
+}
+
+bool FusionNavigationState::saveAppPair(KWin::Window *left, KWin::Window *right, qreal share)
+{
+    const QString leftId = appEntryId(left);
+    const QString rightId = appEntryId(right);
+    if (leftId.isEmpty() || rightId.isEmpty() || leftId == rightId) {
+        return false;
+    }
+    // The helper from the places the setup puts its helpers, in its order (tools/device/
+    // fusion-config.sh, HELPER_DIRS), as quick settings runs the copy-text helper.
+    const QStringList dirs{QDir::homePath() + QLatin1String("/.local/libexec/plasma-fusion"),
+                           QStringLiteral("/usr/local/libexec/plasma-fusion"),
+                           QStringLiteral("/usr/libexec/plasma-fusion"),
+                           QStringLiteral("/usr/lib/plasma-fusion"),
+                           QStringLiteral("/run/current-system/sw/libexec/plasma-fusion")};
+    for (const QString &dir : dirs) {
+        const QFileInfo helper(dir + QLatin1String("/plasma-fusion-app-pair"));
+        if (helper.isFile() && helper.isExecutable()) {
+            const QString split = QString::number(share, 'f', 4);
+            qInfo("plasmafusion-navigation: save app pair %s | %s, split %s", qPrintable(leftId), qPrintable(rightId), qPrintable(split));
+            return QProcess::startDetached(helper.filePath(), {QStringLiteral("save"), leftId, rightId, split});
+        }
+    }
+    qWarning("plasmafusion-navigation: no plasma-fusion-app-pair helper");
+    return false;
 }
 
 void FusionNavigationState::showDock()

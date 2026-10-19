@@ -6,6 +6,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtCore
 import QtQuick.Templates as T
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.plasmoid
@@ -13,8 +14,10 @@ import org.kde.plasma.private.kicker as Kicker
 import org.kde.plasma.workspace.dbus as DBus
 import org.kde.kirigami as Kirigami
 import org.kde.taskmanager as TaskManager
+import org.kde.plasma.plasma5support as P5Support
 
 import "code/home.js" as HomeLogic
+import "code/pairs.js" as Pairs
 
 // The home screen in tablet posture (TABLET2 H1, owner decision "iPad-style"): pages of apps in the
 // desktop window, under the apps, in place of Folder View (whose rubber band was the owner's pen
@@ -407,6 +410,137 @@ Item {
         requestSplit(side, appId);
     }
 
+    // ---- Saved app pairs (board TabletPairs.dc.html, docs/parts/apppairs.md): a pair is an
+    // application entry of its own (org.plasmafusion.pair-ID.desktop in the user's applications,
+    // written by the plasma-fusion-app-pair helper), held on the home screen as a pinned app. Its
+    // tile shows both apps' tiles on a plate; a tap has this screen's dock open both side by side.
+    // The apps of the A-Z pages by desktop file id: a pair's apps, with their names and icons.
+    Instantiator {
+        id: appIndex
+        model: home.allModel
+        delegate: QtObject {
+            required property string favoriteId
+            required property string display
+            required property var decoration
+        }
+    }
+    // Desktop files read as QtCore Settings reads them (read only: a Settings object stores each
+    // property declared on it in its file, so this one declares none).
+    Component {
+        id: entryFile
+        Settings {}
+    }
+    function readEntry(location: url, read): var {
+        const file = entryFile.createObject(home, { "location": location });
+        if (!file) {
+            return null;
+        }
+        const result = read(k => file.value(k));
+        file.destroy();
+        return result;
+    }
+    // An app of a pair: the A-Z pages' entry, else its desktop file in the data directories (an
+    // app the menus hide), else gone: {name, source, iconName, missing}.
+    function pairApp(appId: string, fallbackName: string): var {
+        const iconName = Pairs.iconName(appId);
+        for (let i = 0; i < appIndex.count; ++i) {
+            const a = appIndex.objectAt(i);
+            if (a && a.favoriteId === "applications:" + appId) {
+                return { "name": a.display, "source": a.decoration || "application-x-executable", "iconName": iconName, "missing": false };
+            }
+        }
+        const dirs = StandardPaths.standardLocations(StandardPaths.GenericDataLocation);
+        for (let i = 0; i < dirs.length; ++i) {
+            const app = readEntry(dirs[i] + "/applications/" + appId, v => Pairs.readApp(v, Qt.locale().name));
+            if (app) {
+                return { "name": app.name || iconName, "source": app.icon || "application-x-executable", "iconName": iconName, "missing": false };
+            }
+        }
+        return { "name": fallbackName || iconName, "source": "application-x-executable", "iconName": iconName, "missing": true };
+    }
+    // The pair a favourite is, or null: {id, left, right (pairApp), leftId, rightId, share, label}.
+    function pairInfo(favoriteId: string): var {
+        const id = Pairs.pairId(favoriteId);
+        if (id === "") {
+            return null;
+        }
+        const location = StandardPaths.writableLocation(StandardPaths.GenericDataLocation) + "/applications/" + id;
+        const entry = readEntry(location, v => {
+            const pair = Pairs.readPair(v);
+            return pair ? Object.assign(pair, { "names": String(v("Desktop Entry/Name") ?? "").split(" · ") }) : null;
+        });
+        if (!entry) {
+            return null;
+        }
+        const left = pairApp(entry.left, entry.names.length === 2 ? entry.names[0] : "");
+        const right = pairApp(entry.right, entry.names.length === 2 ? entry.names[1] : "");
+        return { "id": id, "left": left, "right": right, "leftId": entry.left, "rightId": entry.right,
+                 "share": entry.share, "label": Pairs.label(left.name, right.name) };
+    }
+    // A tap on a pair: this screen's dock opens both apps (its pairRequest).
+    function openPair(pair): void {
+        if (!pair || pair.left.missing || pair.right.missing) {
+            return;
+        }
+        console.info("home: pair: " + pair.leftId + " | " + pair.rightId + ", split " + pair.share);
+        DBus.SessionBus.asyncCall({
+            "service": "org.kde.plasmashell", "path": "/PlasmaShell", "iface": "org.kde.PlasmaShell",
+            "member": "evaluateScript",
+            "arguments": [new DBus.string(Pairs.pairScript({ "left": pair.leftId, "right": pair.rightId, "share": pair.share },
+                                                         Plasmoid.containment.screen, Date.now()))],
+            "signature": "(s)"
+        }, () => {}, error => console.warn("home: pair request failed: " + error));
+    }
+    // Swap Sides and Remove Pair: the helper rewrites or deletes the entry, then rebuilds KDE's
+    // application cache, and the pinned apps model reads the pair again.
+    P5Support.DataSource {
+        id: pairHelper
+        engine: "executable"
+        onNewData: (source, data) => {
+            if (Number(data["exit code"]) !== 0) {
+                console.warn("home: pair helper failed (" + data["exit code"] + "): " + String(data.stderr || "").trim());
+            }
+            disconnectSource(source);
+        }
+    }
+    function swapPair(pairIdValue: string): void {
+        const command = Pairs.helperCommand("swap", pairIdValue);
+        if (command !== "") {
+            console.info("home: pair: swap " + pairIdValue);
+            pairHelper.connectSource(command);
+        }
+    }
+    // Unpinned and deleted at once (no undo: the entry is gone with it).
+    function removePair(row: int, favoriteId: string): void {
+        const id = Pairs.pairId(favoriteId);
+        const command = Pairs.helperCommand("remove", id);
+        if (command === "") {
+            return;
+        }
+        console.info("home: pair: remove " + id);
+        const page = row >= 0 ? pageOf(row) : -1;
+        const sizes = pageTakes.slice();
+        favoritesModel.removeFavorite(favoriteId);
+        if (page >= 0) {
+            sizes[page] -= 1;
+            storeSizes(sizes);
+        }
+        pairHelper.connectSource(command);
+    }
+    // The helper's "save" (the app switcher's Save pair) asks every home screen to pin the new
+    // pair: pinRequest "nonce:applications:ID", a pair's entry only.
+    Connections {
+        target: Plasmoid.configuration
+        function onPinRequestChanged(): void {
+            const request = String(Plasmoid.configuration.pinRequest || "");
+            const favoriteId = request.slice(request.indexOf(":") + 1);
+            if (Pairs.pairId(favoriteId) !== "" && home.favoritesModel && !home.favoritesModel.isFavorite(favoriteId)) {
+                console.info("home: pair: pin " + favoriteId);
+                home.favoritesModel.addFavorite(favoriteId, -1);
+            }
+        }
+    }
+
     // The launcher (in the dock) opens on an openRequest "<mode>:<nonce>[:<argument>]".
     function openSearch(): void {
         DBus.SessionBus.asyncCall({
@@ -700,9 +834,23 @@ Item {
         width: home.cellWidth
         height: home.cellHeight
         hoverEnabled: true
-        text: tile.model.display || ""
+        // A saved app pair (null for an app): its two apps and the split.
+        readonly property var pair: home.pairInfo(String(tile.model.favoriteId || ""))
+        readonly property string missingApp: !pair ? "" : pair.left.missing ? pair.left.name : pair.right.missing ? pair.right.name : ""
+        text: pair ? pair.label : (tile.model.display || "")
+        // (where a pair is, for the session test that taps it, as the free side is logged)
+        Component.onCompleted: {
+            if (pair) {
+                Qt.callLater(() => {
+                    const c = tile.mapToGlobal(tile.width / 2, tile.height / 2);
+                    console.info("home: pair tile: " + pair.id + " at " + Math.round(c.x) + "," + Math.round(c.y));
+                });
+            }
+        }
         Accessible.role: Accessible.Button
-        Accessible.name: text
+        Accessible.name: !pair ? text
+                         : missingApp !== "" ? i18nc("@info:whatsthis %1 the pair's name, %2 an app's name", "%1, an app pair, %2 is not installed", text, missingApp)
+                         : i18nc("@info:whatsthis %1 the pair's name", "%1, an app pair", text)
 
         readonly property var source: pageView.pinned ? home.favoritesModel : home.allModel
         readonly property bool pinnedPage: pageView.pinned
@@ -710,6 +858,15 @@ Item {
                                         && !home.favoritesModel.isFavorite(String(tile.model.favoriteId))
         onClicked: {
             if (home.editing) {
+                return;
+            }
+            // A pair opens both apps; with one of them gone, its menu (Remove Pair) instead.
+            if (pair) {
+                if (missingApp !== "") {
+                    actionMenu.openFor(source, tile.sourceRow, tile.model, tile, width / 2, height / 2);
+                } else {
+                    home.openPair(pair);
+                }
                 return;
             }
             if (source) {
@@ -784,12 +941,25 @@ Item {
             FusionIconTile {
                 id: icon
                 x: (parent.width - width) / 2
-                y: Math.round((parent.height - (72 + 10 + label.height)) / 2)
+                y: Math.round((parent.height - (72 + 10 + label.height + (missing.visible ? missing.height : 0))) / 2)
                 size: 72
+                visible: !tile.pair
                 source: tile.model.decoration || "application-x-executable"
                 iconName: home.iconNameFor(tile.model)
                 // Today's date over the calendar tile, as in the launcher and the dock.
                 calendarDate: true
+            }
+            FusionPairTile {
+                visible: !!tile.pair
+                x: icon.x
+                y: icon.y
+                size: icon.size
+                leftSource: tile.pair ? tile.pair.left.source : ""
+                leftIconName: tile.pair ? tile.pair.left.iconName : ""
+                leftMissing: !!tile.pair && tile.pair.left.missing
+                rightSource: tile.pair ? tile.pair.right.source : ""
+                rightIconName: tile.pair ? tile.pair.right.iconName : ""
+                rightMissing: !!tile.pair && tile.pair.right.missing
             }
             // Edit mode: remove (page 1) or add to page 1 (A-Z pages); 26 px drawn, 44 px target.
             T.AbstractButton {
@@ -802,7 +972,9 @@ Item {
                                       : i18nc("@action:button %1 app name", "Add %1 to the home screen", tile.text)
                 Accessible.name: text
                 onClicked: {
-                    if (tile.pinnedPage) {
+                    if (tile.pinnedPage && tile.pair) {
+                        home.removePair(tile.sourceRow, String(tile.model.favoriteId || ""));
+                    } else if (tile.pinnedPage) {
                         home.removeAt(tile.sourceRow, String(tile.model.favoriteId || ""));
                     } else {
                         home.addToHome(tile.model);
@@ -851,6 +1023,25 @@ Item {
                 style: Text.Raised
                 styleColor: Qt.rgba(0, 0, 0, 0.45)
                 font.pixelSize: home.metrics.font(13)
+                font.weight: Font.DemiBold
+            }
+            // A pair with one app gone says which (board TabletPairs.dc.html, "An app gone").
+            Text {
+                id: missing
+                visible: tile.missingApp !== ""
+                anchors.top: label.bottom
+                anchors.topMargin: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: parent.width - 12
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                maximumLineCount: 1
+                text: i18nc("@info %1 an app's name", "%1 is not installed", tile.missingApp)
+                textFormat: Text.PlainText
+                color: Qt.rgba(1, 1, 1, 0.78)
+                style: Text.Raised
+                styleColor: Qt.rgba(0, 0, 0, 0.45)
+                font.pixelSize: home.metrics.font(12)
                 font.weight: Font.DemiBold
             }
         }

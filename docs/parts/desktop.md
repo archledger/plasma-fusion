@@ -142,6 +142,14 @@ part starts one Konsole, on the right, and one dock acts on the request. With th
 was dropped later, its app not becoming active). Not verified: by a person's finger on the
 ThinkPad's own screen, portrait, a real second monitor.
 
+## Saved app pairs on the home screen (2026-10-19)
+
+A favourite whose entry is a pair's (`applications:org.plasmafusion.pair-ID.desktop`) is drawn as
+`FusionPairTile` and named after both apps; a tap has this screen's dock open both, held it has the
+pair's menu (Open, Swap Sides, Remove Pair), and with an app gone a second line says which and a tap
+opens the menu. The helper's `pinRequest` (containment configuration) pins a pair it saved. The
+whole feature: [`apppairs.md`](apppairs.md).
+
 ## Installation and switch-over
 
 - `fusion-config.sh` layout migration (plasmashell stopped): a desktop containment

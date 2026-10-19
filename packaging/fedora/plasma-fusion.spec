@@ -364,7 +364,7 @@ test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.
 # templates, the login check, the top-bar script of the Global Themes, the font fallback.
 test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
 test -s %{buildroot}%{_datadir}/plasma-fusion/appicons/plasma-fusion-app-icons.service
-for h in powerfx libreoffice charge-limit keyboard-keys app-icons copytext; do
+for h in powerfx libreoffice charge-limit keyboard-keys app-icons copytext app-pair; do
   test -x %{buildroot}%{_libexecdir}/plasma-fusion/plasma-fusion-$h
 done
 grep -qF '%{_libexecdir}/plasma-fusion/plasma-fusion-charge-limit</annotate>' \
@@ -492,6 +492,7 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_libexecdir}/plasma-fusion/plasma-fusion-keyboard-keys
 %{_libexecdir}/plasma-fusion/plasma-fusion-app-icons
 %{_libexecdir}/plasma-fusion/plasma-fusion-copytext
+%{_libexecdir}/plasma-fusion/plasma-fusion-app-pair
 %{_datadir}/polkit-1/actions/org.plasmafusion.charge-limit.policy
 
 %if %{with compiled}

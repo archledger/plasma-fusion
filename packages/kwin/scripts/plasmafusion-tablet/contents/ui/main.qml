@@ -489,16 +489,22 @@ Item {
     // Nothing else tiled: the split back in the middle (KWin keeps a quick-tile split the divider
     // moved earlier), by the left half's edge as the divider moves it.
     function centreSplit(w) {
-        const root = w.tile ? w.tile.parent : null;
+        splitAt(w, 0.5);
+    }
+    // The split of w's quick tiles where the left part is `share` of the work area.
+    function splitAt(w, share) {
+        const root = w && w.tile ? w.tile.parent : null;
         const left = root ? Array.from(root.tiles).find(t => Snap.isLeft(t.relativeGeometry)) : null;
         if (!left) {
-            return;
+            return false;
         }
         const area = Workspace.clientArea(Workspace.MaximizeArea, w);
-        const delta = area.x + area.width / 2 - (left.absoluteGeometry.x + left.absoluteGeometry.width);
+        const edge = left.absoluteGeometry.x + left.absoluteGeometry.width;
+        const delta = area.x + area.width * share - edge;
         if (Math.abs(delta) >= 1) {
             left.resizeByPixels(delta, Qt.RightEdge);
         }
+        return true;
     }
     function settleUnmaximized() {
         const list = unmaximized;
@@ -837,6 +843,26 @@ Item {
             root.log("settings re-read: WindowMode " + root.windowMode() + ", DockHiding " + root.dockHiding());
             root.applyPanels();
             root.sync();
+        }
+    }
+
+    // A saved app pair opens in the split it was saved with (docs/parts/apppairs.md): once both
+    // apps are in their halves, the dock invokes one of these (no key of their own) for the active
+    // window's split, also on the laptop.
+    Instantiator {
+        model: [{ "name": "One Third", "share": 1 / 3 }, { "name": "Half", "share": 0.5 },
+                { "name": "Two Thirds", "share": 2 / 3 }]
+        delegate: ShortcutHandler {
+            required property var modelData
+            name: "Plasma Fusion: Split " + modelData.name
+            text: "Plasma Fusion: Split the Screen at " + modelData.name
+            sequence: ""
+            onActivated: {
+                const w = Workspace.activeWindow;
+                const done = root.splitAt(w, modelData.share);
+                root.log("split at " + modelData.name.toLowerCase() + ": "
+                         + (done ? String(w.resourceClass) : "no split here"));
+            }
         }
     }
 

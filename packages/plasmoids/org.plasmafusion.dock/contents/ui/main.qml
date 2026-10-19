@@ -1888,7 +1888,7 @@ PlasmoidItem {
     property var splitDrag: null      // {row, icon, finger}
     // An icon held for a split drag: the swipe-up to the launcher steps aside.
     property bool iconArmed: false
-    property var splitPlan: null      // {side, appId, step: "other" | "app", other}
+    property var splitPlan: null      // {side, appId, row, then: called once the app is tiled}
     readonly property rect screenRect: Plasmoid.containment ? Plasmoid.containment.screenGeometry : Qt.rect(0, 0, 0, 0)
     function splitDragMove(item: Item, globalPos: point): void {
         const local = Qt.point(globalPos.x - screenRect.x, globalPos.y - screenRect.y);
@@ -1957,6 +1957,14 @@ PlasmoidItem {
                 root.startSplitForApp(parts.slice(2).join(":"), parts[0]);
             }
         }
+        function onPairRequestChanged(): void {
+            const parts = String(Plasmoid.configuration.pairRequest || "").split(":");
+            const app = /^[A-Za-z0-9._-]+\.desktop$/;
+            if (parts.length === 4 && app.test(parts[1]) && app.test(parts[2])
+                    && parts[1] !== parts[2]) {
+                root.startPair(parts[1], parts[2], Number(parts[3]));
+            }
+        }
     }
     function invokeKWinShortcutThen(name: string, done): void {
         DBus.SessionBus.asyncCall({
@@ -2020,9 +2028,45 @@ PlasmoidItem {
             return;
         }
         const side = splitPlan.side;
+        const then = splitPlan.then || null;
         splitPlan = null;
         splitTimeout.stop();
-        invokeKWinShortcutThen(tileShortcut(side), null);
+        invokeKWinShortcutThen(tileShortcut(side), then);
+    }
+
+    // ---- Saved app pairs (board TabletPairs.dc.html, docs/parts/apppairs.md): the home screen's
+    // pairRequest. The first app goes to the left half and the second to the right one, each the
+    // split request's way (activated, or started, then quick-tiled once it is the active window),
+    // one after the other; the app in use stays where it is (it is behind the pair, as it would be
+    // behind any app opened over it). Then the plasmafusion-tablet KWin script sets the split as it
+    // was saved, a moment after the last tile (KWin moves the window after the shortcut's reply).
+    property real pairShare: 0.5
+    function startPair(left: string, right: string, share: real): void {
+        pairShare = share;
+        console.info("dock: pair: " + left + " on the left, " + right + " on the right, split "
+                     + share);
+        bringToSide(left, "left", () => bringToSide(right, "right", () => pairSplit.restart()));
+    }
+    function bringToSide(appId: string, side: string, then): void {
+        const atm = TaskManager.AbstractTasksModel;
+        let row = -1;
+        for (let r = 0; r < tasksModel.count && row < 0; ++r) {
+            if (sameApp(tasksModel.data(tasksModel.makeModelIndex(r), atm.AppId), appId)) {
+                row = r;
+            }
+        }
+        splitPlan = { "side": side, "appId": appId, "row": row, "then": then };
+        splitTimeout.restart();
+        splitBringApp.restart();
+    }
+    Timer {
+        id: pairSplit
+        interval: 300
+        onTriggered: {
+            const name = root.pairShare < 0.4167 ? "One Third"
+                : root.pairShare > 0.5833 ? "Two Thirds" : "Half";
+            root.invokeKWinShortcutThen("Plasma Fusion: Split " + name, null);
+        }
     }
     Connections {
         target: tasksModel
