@@ -948,7 +948,7 @@ PlasmoidItem {
         } break;
         case "menu": if (item) { logNextMenu = true; showTaskMenu(item); } break;
         case "activate": if (item) activateTask(row, 0); break;
-        case "new": if (item) tasksModel.requestNewInstance(tasksModel.makeModelIndex(row)); break;
+        case "new": if (item) newInstance(row); break;
         case "dump-targets": dumpTargets(); break;
         case "add-desktop": if (item && launcherPath(row) !== "") addToDesktop(launcherPath(row)); break;
         case "badge": if (item) {
@@ -1014,6 +1014,11 @@ PlasmoidItem {
 
     // ---- Task actions (same rules as the stock task manager) ----
     function activateTask(row: int, modifiers: int): void {
+        const pair = pairOfRow(row);
+        if (pair) {
+            openPair(row, pair);
+            return;
+        }
         const index = tasksModel.makeModelIndex(row);
         const atm = TaskManager.AbstractTasksModel;
         if (modifiers & Qt.ShiftModifier) {
@@ -1379,6 +1384,21 @@ PlasmoidItem {
         if (name) {
             menu.addHeader(name);
         }
+        // A saved pair: Open (both apps here) unless one of them is gone, and Keep in Dock; the
+        // rest would run the pair's entry as an app.
+        if (item.pair) {
+            const pair = item.pair;
+            if (!pair.left.missing && !pair.right.missing) {
+                menu.addAction(i18nc("@action:inmenu", "Open"), "document-open-symbolic", () => root.openPair(row, pair), {});
+                menu.addSeparator();
+            }
+            menu.addAction(i18nc("@action:inmenu", "Keep in Dock"), "window-pin-symbolic",
+                           () => root.setPinned(row, false), { checkable: true, checked: true });
+            logNextMenu = false;
+            console.info("dock: pair menu " + pair.id + " \"" + name + "\": " + menu.entries.join(" | "));
+            menu.openRelative();
+            return;
+        }
         addNotificationItems(menu, item);
         if (tasksModel.data(index, atm.IsGroupParent) === true) {
             for (let j = 0; j < tasksModel.rowCount(index); ++j) {
@@ -1683,7 +1703,7 @@ PlasmoidItem {
             // the task under the drop's place along the row (y on a dock on the left or right)
             const along = Placement.along(row0.mapFromItem(taskDrop, drop.x, drop.y), root.edge);
             const i = Placement.taskAt(along, root.rest.taskX.slice(0, taskRepeater.count), root.rest.taskW, root.taskVisible);
-            if (i >= 0) {
+            if (i >= 0 && !root.pairOfRow(i)) {
                 tasksModel.requestOpenUrls(tasksModel.makeModelIndex(i), drop.urls);
                 drop.acceptProposedAction();
             }
@@ -2166,6 +2186,30 @@ PlasmoidItem {
         return { "id": id, "left": left, "right": right, "leftId": entry.left, "rightId": entry.right,
                  "share": entry.share, "label": Pairs.label(left.name, right.name) };
     }
+    function pairOfRow(row: int): var {
+        return pairFor(String(role(row, TaskManager.AbstractTasksModel.AppId) || ""));
+    }
+    // Every way the dock would start a launcher (a tap, a middle click, Shift, Meta+Alt+N) opens a
+    // pair here, never through the entry's Exec (the helper's open asks the first screen's dock);
+    // with one of its apps gone, the pair's menu instead.
+    function openPair(row: int, pair: var): void {
+        if (pair.left.missing || pair.right.missing) {
+            const item = taskRepeater.itemAt(row) as TaskItem;
+            if (item) {
+                showTaskMenu(item);
+            }
+        } else {
+            startPair(pair.leftId, pair.rightId, pair.share);
+        }
+    }
+    function newInstance(row: int): void {
+        const pair = pairOfRow(row);
+        if (pair) {
+            openPair(row, pair);
+        } else {
+            tasksModel.requestNewInstance(tasksModel.makeModelIndex(row));
+        }
+    }
     Timer {
         id: pairSplit
         interval: 300
@@ -2382,6 +2426,9 @@ PlasmoidItem {
                 pulseCycles: root.pulseCycles
                 gap: root.gap
                 entry: root.dockEntries[taskItem.iconName] ?? null
+                // (read again when apps are installed or removed: libtaskmanager then re-sends
+                // every launcher's AppId, KSycoca's databaseChanged, and the delegate's AppId
+                // notifies)
                 pair: root.pairFor(String(taskItem.model.AppId ?? ""))
                 // (where a pair is, for the session test that taps it, as the home screen logs it)
                 function logPair(): void {
@@ -2409,11 +2456,7 @@ PlasmoidItem {
                 onActivated: modifiers => {
                     // A saved pair kept here opens both apps; with one of them gone, the menu.
                     if (taskItem.pair) {
-                        if (taskItem.pair.left.missing || taskItem.pair.right.missing) {
-                            root.showTaskMenu(taskItem);
-                        } else {
-                            root.startPair(taskItem.pair.leftId, taskItem.pair.rightId, taskItem.pair.share);
-                        }
+                        root.openPair(taskItem.index, taskItem.pair);
                         return;
                     }
                     // Tablet posture: starting a pinned app zooms from its tile (TABLET2 M1).
@@ -2422,7 +2465,7 @@ PlasmoidItem {
                     }
                     root.activateTask(taskItem.index, modifiers);
                 }
-                onNewInstanceRequested: tasksModel.requestNewInstance(tasksModel.makeModelIndex(taskItem.index))
+                onNewInstanceRequested: root.newInstance(taskItem.index)
                 onMenuRequested: root.showTaskMenu(taskItem)
                 onDragMoved: scenePos => root.reorderTo(taskItem.index, scenePos)
                 onDragFinished: root.finishReorder()

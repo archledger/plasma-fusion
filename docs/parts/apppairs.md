@@ -37,10 +37,11 @@ the pair goes on the Home screen and can be added to the taskbar).
 - **Changing:** held, the pair's menu: Open, Swap Sides, Keep in Dock, Remove Pair (and Edit Home
   Screen).
   Swap Sides keeps the split's place: the app now on the left takes the left part's size. Remove
-  Pair unpins the pair and deletes it at once (no undo: the entry is gone with it); in edit mode
-  the tile's remove button does the same. Keep in Dock pins the pair in this screen's dock, where
-  it is drawn the same way and a tap opens it as on the home screen (with an app gone, the dock's
-  menu: Unpin). Its name is both apps' names, "Dolphin · Firefox", in the apps' own language.
+  Pair unpins the pair, from the docks too, and deletes it at once (no undo: the entry is gone
+  with it); in edit mode the tile's remove button does the same. Keep in Dock pins the pair in
+  this screen's dock, where it is drawn the same way, named the same, and a tap (or a middle click)
+  opens it as on the home screen; held there, its menu has Open and Keep in Dock (unchecking it
+  unpins). Its name is both apps' names, "Dolphin · Firefox", in the apps' own language.
 - **An app gone:** when one of the two apps is uninstalled, its tile shows faded and grey, a second
   line says which ("Firefox is not installed"), and a tap opens the menu (Remove Pair only) instead
   of opening half of the pair.
@@ -82,10 +83,10 @@ lists.
 
 | Part | Where | What it does |
 |---|---|---|
-| The helper | `packages/apppairs/plasma-fusion-app-pair` (libexec, `tools/build.d/83-apppairs.sh`) | `save LEFT RIGHT SHARE`: writes the entry (the apps' desktop file ids, the split snapped to 1/3, 1/2 or 2/3; both apps' names from their entries, the user's first), rebuilds KDE's application cache (`kbuildsycoca6`), then asks the home screen to pin it (desktop scripting: the `org.plasmafusion.desktop` containments' `pinRequest`, "nonce:applications:ID"); prints the pair's id. `swap PAIR`, `remove PAIR` (the user's entries only), `open PAIR` (the first screen's dock's `pairRequest`). |
+| The helper | `packages/apppairs/plasma-fusion-app-pair` (libexec, `tools/build.d/83-apppairs.sh`) | `save LEFT RIGHT SHARE`: writes the entry (the apps' desktop file ids, the split snapped to 1/3, 1/2 or 2/3; both apps' names from their entries, the user's first), rebuilds KDE's application cache (`kbuildsycoca6`), then asks the home screen to pin it (desktop scripting: the `org.plasmafusion.desktop` containments' `pinRequest`, "nonce:applications:ID"); prints the pair's id. `swap PAIR`, `remove PAIR` (the user's entries only; first out of every dock's pins, desktop scripting), `open PAIR` (the first screen's dock's `pairRequest`). |
 | Save pair | `packages/navigation-cpp` (`TaskSwitcher.qml`, `FusionNavigationState::appEntryId()` and `saveAppPair()`) | The button beside Close All while the current card is a pair (`taskList.getTaskAt(currentTaskIndex)`); starts the helper's `save` from the helper directories in the setup's order (`HELPER_DIRS`). Logs "plasmafusion-navigation: Save pair for LEFT \| RIGHT at X,Y" when shown and "save app pair LEFT \| RIGHT, split S". |
 | The pair's tile and menu | `org.plasmafusion.desktop` (`HomeLayer.qml`, `HomeActionMenu.qml`, `FusionPairs.js`) | A favourite `applications:org.plasmafusion.pair-ID.desktop` is a pair: its entry and each app's are read with QtCore `Settings` (read only, no declared properties); the apps' names and icons come from the all-apps model, else their desktop files in the data directories (an app the menus hide), else the app is gone. A tap writes this screen's dock's `pairRequest`; Swap Sides and Remove Pair run the helper (Plasma 5 Support's executable engine). `pinRequest` pins a pair's entry only. Keep in Dock writes this screen's dock's `keepRequest`. Logs "home: pair tile: ID at X,Y", "home: pair: …". |
-| Kept in the dock | `org.plasmafusion.dock` (`main.qml`: `keepRequest`, `pairFor()`; `TaskItem.qml`) | `keepRequest` "nonce:applications:ID" pins a pair's entry (`setAppPinned`, a pair's only) once the request's script has returned, so that the pin is saved ([`shell-dock.md`](shell-dock.md)). A row whose app id is a pair's entry is drawn with `FusionPairTile` (the entry and the apps' desktop files read with property-less `Settings`; no magnified tile); a tap opens the pair here (`startPair()`), not the entry's `Exec`; with an app gone, a tap opens the dock's menu (Unpin). Logs "dock: pair tile: ID at X,Y". |
+| Kept in the dock | `org.plasmafusion.dock` (`main.qml`: `keepRequest`, `pairFor()`; `TaskItem.qml`) | `keepRequest` "nonce:applications:ID" pins a pair's entry (`setAppPinned`, a pair's only) once the request's script has returned, so that the pin is saved ([`shell-dock.md`](shell-dock.md)). A row whose app id is a pair's entry is drawn with `FusionPairTile` (the entry and the apps' desktop files read with property-less `Settings`; no magnified tile) and named after its apps (the label, not the entry's `Name`). Every way the dock starts a launcher (a tap, a middle click, Shift, Meta+Alt+N, the menu's Open) opens the pair here (`openPair()` → `startPair()`), never the entry's `Exec`; its menu is Open and Keep in Dock only, and no file drop, split drag or desktop drag takes it. With an app gone, a tap opens that menu without Open. An app installed or removed meanwhile is seen at once (libtaskmanager re-sends every launcher's `AppId` on KSycoca's `databaseChanged`). Logs "dock: pair tile: ID at X,Y", "dock: pair menu ID "NAME": ENTRIES". |
 | The pair logic | `packages/common/FusionPairs.js` | A shared library (`tools/build-lib/shared-qml.sh` copies a `packages/common/*.js` into the packages that name it, as it copies the QML blocks): pair ids, the entry's and the apps' keys as `Settings` reads them, the label, the dock's `pairRequest` and `keepRequest` scripts, the helper's command. |
 | The icon | `packages/common/FusionPairTile.qml` | Two `FusionIconTile`s at 40 % of the size, 5 % apart, on a plate (radius 19/72, white 16 % with a 22 % edge on the dark scheme, ink 10 % with 12 % on the light one); an app gone at 35 % opacity and grey. |
 | Opening | `org.plasmafusion.dock` (`main.qml`: `startPair()`, `bringToSide()`, `pairTasks`) | `pairRequest` "nonce:LEFT:RIGHT:SHARE": each app the split request's way (`splitPlan` with a `then`), without moving the app in use, looked up among every screen's windows (`pairTasks`, the dock's filters but the screen's) and moved to this screen when it is on another; 300 ms after the last tile, KWin's "Plasma Fusion: Split One Third / Half / Two Thirds". Logs "dock: pair: …". |
@@ -94,9 +95,10 @@ lists.
 ## Tests
 
 - `packages/apppairs/tests/helper-unit.sh` (CI `build`): the helper against stand-ins for busctl and
-  kbuildsycoca6, 38 checks: the entry, the split snapped, both names, the cache rebuilt before the
+  kbuildsycoca6, 39 checks: the entry, the split snapped, both names, the cache rebuilt before the
   pin request, the same pair saved twice, a reversed one, the `Exec` of a helper called through a
-  link, swap, open, remove, and what it refuses.
+  link, swap, open, remove (its script run against a model of desktop scripting: out of every dock
+  that keeps it, the other pins kept), and what it refuses.
 - `packages/look-and-feel/tests/layout.test.js`: a dock copied for another screen gets no
   `pairRequest` or `keepRequest`.
 - `tools/build.d/73-dock.sh` and `76-desktop.sh`: both packages hold `FusionPairs.js` (an import a
@@ -133,19 +135,35 @@ the navigation effect built against the same packages (`make-seed.sh`):
   screen's windows; all 5 checks pass): KWrite open on the second screen and Dolphin not running,
   the first screen's dock's `pairRequest` started Dolphin on the left half of the first screen and
   brought KWrite over from the second screen to its right half.
-- **dk-3, Keep in Dock, all 20 checks pass, scenario rc 0** (the scenario above with step 6):
+- **dk-5, Keep in Dock, all 27 checks pass, scenario rc 0** (the scenario above with steps 6 and 7;
+  dk-3 the same with step 6 only, 20):
   - the dock's `keepRequest`, written through desktop scripting as the menu writes it, pinned the
     pair ("dock: pin applications:…") and the pin was in the saved configuration three seconds
     later;
   - with the split moved to half and both apps minimized, the dock drew the pair's tile at 992,844
     and a tap on it opened KWrite on the left and Dolphin on the right, at a third;
   - the pair with an app that is not installed, kept too, was drawn (that app grey) and a tap
-    opened nothing; no QML errors from the dock or `FusionPairs.js`.
+    opened its menu, not the pair;
+  - the dock's menus (its test hook): "KWrite · Dolphin": Open, Keep in Dock; the pair with an app
+    gone: Keep in Dock only;
+  - with the split at half again, a middle click (the hook's `new`, the same function) opened KWrite
+    and Dolphin at a third from this dock: the stored `pairRequest` stayed as it was, so the entry's
+    `Exec` did not run;
+  - with the entry's `Name` rewritten (as if saved in another language) and the cache rebuilt, the
+    dock still named the pair "KWrite · Dolphin";
+  - the missing app's entry installed while plasmashell ran (a stand-in): that pair's menu had Open
+    again, "Stand-in · Dolphin";
+  - the helper's `remove` took the pair out of the dock's saved `launchers`; no QML errors from the
+    dock or `FusionPairs.js`.
 - **Red for Keep in Dock:** on main (1d736c0, dk-r1) nothing was pinned, no tile, nothing opened.
   dk-2, with the pin made while the request's script still ran, pinned and drew the pair but
   never saved it: the stored `launchers` stayed as before, also after plasmashell quit. Logging in
   the dock (dg-3) showed the new list assigned to `Plasmoid.configuration.launchers`; the scripting
-  wrapper's reload at the script's end (`KConfigLoader::load`) dropped it before Plasma saved.
+  wrapper's reload at the script's end (`KConfigLoader::load`) dropped it before Plasma saved. On
+  the first version of this change (72cae63, dk-r2, with dk-4's scenario) every check added after
+  it failed: no pair menu (the generic one, in steps 6 and 7), a middle click ran the entry's
+  `Exec` (a new `pairRequest` was stored), and the pin stayed after Remove Pair. (dk-4, on the
+  fixed code, failed only on its own step 7 setup, both apps still minimized; fixed for dk-5.)
 - **Red, on the first pull request's first version (eab4d41):** the pair saved on the laptop was
   never pinned (ap-r2); with two screens Dolphin and KWrite stayed on the second screen, untiled
   (aps-r1).
@@ -156,7 +174,7 @@ the navigation effect built against the same packages (`make-seed.sh`):
 
 Not verified: Remove Pair, Swap Sides and Keep in Dock from the menu by touch (the test sessions'
 menus take no synthetic input; the helper's `swap` and `remove` and the request Keep in Dock writes
-are tested); that a tap on a kept pair with an app gone shows the dock's menu (only that it opens
-nothing); a real second
+are tested); a real middle click, Shift or Meta+Alt+N on a kept pair (they reach the same functions
+as the hook's `new` and a tap); a real second
 monitor (two virtual outputs are tested); Plasma 6.8 (the dock and the home screen use nothing that
 changed; the navigation effect is built per KWin version).

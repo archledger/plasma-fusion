@@ -73,7 +73,8 @@ Item {
     readonly property bool demandsAttention: model.IsDemandingAttention === true || (entry !== null && entry.urgent === true)
     // Launchers of apps that are not installed have no AppId; they are not shown.
     readonly property bool resolvable: !isLauncher || (model.AppId ?? "") !== ""
-    readonly property string name: model.AppName || model.display || ""
+    // (a saved pair: both apps' names in the user's language, as on the home screen)
+    readonly property string name: pair ? pair.label : model.AppName || model.display || ""
     // The theme icon's name: apps name their icon after their desktop id, which is AppId (without
     // the ".desktop" some entries carry).
     readonly property string iconName: String(model.AppId ?? "").replace(/\.desktop$/, "")
@@ -522,7 +523,8 @@ Item {
             id: holdArm
             interval: 300
             onTriggered: {
-                if (mouse.pressed && !mouse.dragging && task.tablet) {
+                // (not a saved pair: it opens two apps, and its entry is no app to split with)
+                if (mouse.pressed && !mouse.dragging && task.tablet && !task.pair) {
                     mouse.armed = true;
                 }
             }
@@ -628,8 +630,9 @@ Item {
         // along the row stays the reorder above). 48 px towards the edge (from the far end of the
         // icon there is room for it) is no launcher drag.
         DragHandler {
-            // (tablet posture: an upward drag splits the screen instead)
-            enabled: !task.tablet
+            // (tablet posture: an upward drag splits the screen instead; a saved pair's entry is
+            // only the dock's and the home screen's)
+            enabled: !task.tablet && !task.pair
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
             target: null
             xAxis.enabled: task.vertical
