@@ -9,13 +9,15 @@
 #   1. Dolphin taken out of full screen (it takes a half);
 #   2. KWrite quick-tiled out of full screen (the dock's and the pill's split);
 #   3. Konsole quick-tiled and taken out of its tile again (it floats);
-#   4. KCalc, which an "apply initially" no-titlebar rule makes borderless as it appears (KWin
-#      shows its bar again on the un-maximize), and KCharSelect, which a forced one keeps
-#      borderless: both quick-tiled out of full screen, then out of their tiles. KCalc's rule is a
+#   4. KCalc and Ark, which "apply initially" no-titlebar rules make borderless as they appear
+#      (KWin shows their bars again on the un-maximize), and KCharSelect, which a forced one keeps
+#      borderless: quick-tiled out of full screen, then out of their tiles. KCalc's rule is a
 #      system-wide one (the session's XDG config directory ~/.config/kdedefaults, read as KWin reads
-#      /etc/xdg), listed in the user's rules as the KCM saves them beside one of their own;
-# after leaving tablet posture Dolphin, KWrite and Konsole have their title bars again, and KCalc
-# and KCharSelect still have none.
+#      /etc/xdg), locked ([$i]) against the user's file, which tries to turn it off; Ark's names
+#      its class with a regular expression only PCRE reads ("\A", "\z");
+# after leaving tablet posture Dolphin, KWrite and Konsole (under a rule that is off) have their
+# title bars again, and KCalc, Ark and KCharSelect still have none; the script, loaded again once
+# the rules exist, leaves both rules files as they were.
 # Run: tools/vsession/remote.sh tb-1 packages/kwin/tests/vsession/scenario-tablet-titlebars.sh SEED 1440x900 420
 exec 2>&1
 export OUT
@@ -42,14 +44,18 @@ kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key Gap 6
 kwriteconfig6 --file kwinrc --group Script-plasmafusion-tablet --key InternalOutputs "eDP,LVDS,DSI,Virtual"
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99
-# The no-title-bar rules, the user's whatever the posture does: KCalc "apply initially"
-# (Rules::Apply, substring) from the system's configuration, KCharSelect forced (Rules::Force,
-# exact) from the user's own. The user's file lists both, as the KCM writes it when a rule is added
-# beside a system-wide one (KConfig saves only the keys that differ from the system's).
+# The no-title-bar rules, the user's whatever the posture does:
+# - KCalc "apply initially" (Rules::Apply, substring), from the system's configuration, its group
+#   locked ([$i]): the user's file turning it off (noborderrule 1) does not count for KWin;
+# - KCharSelect forced (Rules::Force, exact), the user's own;
+# - Konsole "apply initially", but off (Enabled=false): KWin skips it;
+# - Ark "apply initially", a regular expression with PCRE's \A and \z.
+# The user's file lists them all, as the KCM writes it when rules are added beside a system-wide
+# one (KConfig saves only the keys that differ from the system's).
 mkdir -p "$HOME/.config/kdedefaults"
 cat >"$HOME/.config/kdedefaults/kwinrulesrc" <<'RULES'
-[1]
-Description=Test: no title bar for kcalc (system-wide)
+[1][$i]
+Description=Test: no title bar for kcalc (system-wide, locked)
 noborder=true
 noborderrule=3
 wmclass=kcalc
@@ -59,30 +65,80 @@ wmclassmatch=2
 count=1
 rules=1
 RULES
-kwriteconfig6 --file kwinrulesrc --group General --key count 2
-kwriteconfig6 --file kwinrulesrc --group General --key rules 1,2
-kwriteconfig6 --file kwinrulesrc --group 2 --key Description "Test: no title bar for kcharselect"
-kwriteconfig6 --file kwinrulesrc --group 2 --key wmclass org.kde.kcharselect
-kwriteconfig6 --file kwinrulesrc --group 2 --key wmclassmatch 1
-kwriteconfig6 --file kwinrulesrc --group 2 --key noborder true
-kwriteconfig6 --file kwinrulesrc --group 2 --key noborderrule 2
+# The user's file by hand: KConfig refuses to write into the locked group (kwriteconfig6 rc 2), and
+# reads the locked values whatever the user's file says. Backslashes as KConfig writes them.
+cat >"$HOME/.config/kwinrulesrc" <<'RULES'
+[1]
+noborderrule=1
+
+[2]
+Description=Test: no title bar for kcharselect
+noborder=true
+noborderrule=2
+wmclass=org.kde.kcharselect
+wmclassmatch=1
+
+[3]
+Description=Test: no title bar for konsole (off)
+Enabled=false
+noborder=true
+noborderrule=3
+wmclass=konsole
+wmclassmatch=2
+
+[4]
+Description=Test: no title bar for ark (PCRE)
+noborder=true
+noborderrule=3
+wmclass=(?:\\A|\\.)ark\\z
+wmclassmatch=3
+
+[General]
+count=4
+rules=1,2,3,4
+RULES
 pfv_restart_shell 12
 qdbus org.kde.KWin /KWin reconfigure; sleep 3
-# KWin reads the system-wide rule: KCalc opens on the laptop without a title bar.
-kcalc >/dev/null 2>&1 &
-sleep 4
-case "$(state kcalc)" in "false true false") pass "0: KWin applies the system-wide rule: KCalc opens without a title bar on the laptop" ;; *) fail "0: KCalc on the laptop $(state kcalc)" ;; esac
-on kcalc "w.closeWindow();"
-sleep 2
-[ "$(state kcalc)" = none ] || info "KCalc still open: $(state kcalc)"
-pfv_tablet on; sleep 8
-
-# Every window opened in tablet posture.
-for app in dolphin kwrite konsole kcalc kcharselect; do
+# The script only reads the rules: neither file changes from here to the end, and none gains a key
+# (a Settings object writes the properties declared on it into its file). It is loaded again now
+# that the files exist (it opens them as it starts), as the setup's snap_script_reload does.
+RULE_FILES=("$HOME/.config/kwinrulesrc" "$HOME/.config/kdedefaults/kwinrulesrc")
+rules_sum() { sha256sum "${RULE_FILES[@]}" | cut -d' ' -f1 | tr '\n' ' '; }
+RULES_SUM=$(rules_sum)
+qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript plasmafusion-tablet >/dev/null
+for _ in $(seq 1 20); do
+  [ "$(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-tablet)" = true ] || break
+  sleep 0.1
+done
+qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.loadDeclarativeScript \
+  "$HOME/.local/share/kwin/scripts/plasmafusion-tablet/contents/ui/main.qml" plasmafusion-tablet >/dev/null
+qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null
+sleep 3
+info "tablet script loaded again: $(qdbus org.kde.KWin /Scripting org.kde.kwin.Scripting.isScriptLoaded plasmafusion-tablet)"
+# How KWin reads the rules, on the laptop: KCalc (the locked system-wide rule) and Ark (PCRE) open
+# without a title bar, Konsole (its rule off) with one.
+for app in kcalc ark konsole; do
   "$app" >/dev/null 2>&1 &
   sleep 4
 done
-info "opened in tablet: dolphin $(state dolphin), kwrite $(state kwrite), konsole $(state konsole), kcalc $(state kcalc), kcharselect $(state kcharselect)"
+case "$(state kcalc)" in "false true false") pass "0: KWin applies the locked system-wide rule: KCalc opens without a title bar on the laptop" ;; *) fail "0: KCalc on the laptop $(state kcalc)" ;; esac
+case "$(state ark)" in "false true false") pass "0: KWin applies the PCRE rule: Ark opens without a title bar on the laptop" ;; *) fail "0: Ark on the laptop $(state ark)" ;; esac
+case "$(state konsole)" in "false false false") pass "0: KWin skips the rule that is off: Konsole opens with a title bar on the laptop" ;; *) fail "0: Konsole on the laptop $(state konsole)" ;; esac
+for app in kcalc ark konsole; do
+  on "$app" "w.closeWindow();"
+done
+sleep 2
+for app in kcalc ark konsole; do
+  [ "$(state "$app")" = none ] || info "$app still open: $(state "$app")"
+done
+pfv_tablet on; sleep 8
+
+# Every window opened in tablet posture.
+for app in dolphin kwrite konsole kcalc kcharselect ark; do
+  "$app" >/dev/null 2>&1 &
+  sleep 4
+done
+info "opened in tablet: dolphin $(state dolphin), kwrite $(state kwrite), konsole $(state konsole), kcalc $(state kcalc), kcharselect $(state kcharselect), ark $(state ark)"
 
 # ---- 1. Dolphin out of full screen: it takes a half
 on dolphin "workspace.activeWindow = w; w.setMaximize(false, false);"
@@ -96,8 +152,8 @@ tile konsole Right
 on konsole "if (w.tile) { w.tile.unmanage(w); }"
 sleep 1.5
 case "$(state konsole)" in "false true false") pass "3: Konsole out of its tile floats without a title bar" ;; *) fail "3: Konsole $(state konsole)" ;; esac
-# ---- 4. KCalc and KCharSelect under their rules: quick-tiled out of full screen, then untiled
-for app in kcalc kcharselect; do
+# ---- 4. KCalc, KCharSelect and Ark under their rules: quick-tiled out of full screen, then untiled
+for app in kcalc kcharselect ark; do
   tile "$app" Left
   info "$app tiled: $(state "$app")"
   on "$app" "if (w.tile) { w.tile.unmanage(w); }"
@@ -112,10 +168,15 @@ for app in dolphin kwrite konsole; do
   s=$(state "$app"); read -r _ nb _ <<<"$s"
   if [ "$nb" = false ]; then pass "after tablet posture $app has its title bar: $s"; else fail "after tablet posture $app has no title bar: $s"; fi
 done
-for app in kcalc kcharselect; do
+for app in kcalc kcharselect ark; do
   s=$(state "$app"); read -r _ nb _ <<<"$s"
   if [ "$nb" = true ]; then pass "after tablet posture $app keeps no title bar (its rule): $s"; else fail "$app got a title bar against its rule: $s"; fi
 done
+if [ "$(rules_sum)" = "$RULES_SUM" ] && ! grep -q 'modelData\|@Variant' "${RULE_FILES[@]}"; then
+  pass "the script left the rules files as they were"
+else
+  fail "the rules files changed: $(grep -H 'modelData\|@Variant' "${RULE_FILES[@]}" | head -2 | tr '\n' ' ')"
+fi
 errs=$(grep -aE 'plasmafusion-tablet' "$KLOG" | grep -aiE 'error|TypeError|ReferenceError|is not defined|Cannot' || true)
 if [ -z "$errs" ]; then pass "no QML errors from plasmafusion-tablet"; else fail "plasmafusion-tablet: $(echo "$errs" | head -3 | tr '\n' ' ')"; fi
 info "done"

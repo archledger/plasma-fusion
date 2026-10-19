@@ -445,14 +445,32 @@ them keeps without a title bar stays the user's (`Rules.js`):
 - **Where:** `kwinrulesrc` as KWin's KConfig reads it (`RuleBookSettings`): the user's file, then
   those of the XDG config directories (`~/.config/kdedefaults`, `/etc/xdg`), a key in an earlier
   file hiding the same key in the later ones. One QtCore `Settings` per file
-  (`StandardPaths.standardLocations`), read again at each decision.
-- **Which rules:** `noborder` with a rule type that sets it, 2 to 6 (a KConfig Bool: anything but
-  false, no, off or 0), or one of 6.8's decoration policies without a title bar, `none` and
-  `shadow` ("Only shadow"; KConfig's enum takes the value in any case or the number, 0 and 3).
+  (`StandardPaths.standardLocations`), read again at each decision, and only read: the objects
+  declare no properties, since `Settings` stores every property declared on it in its file (the
+  first version of this, an `Instantiator` delegate's `modelData`, wrote
+  `modelData=@Variant(...)` into the user's rules and created the file in `~/.config/kdedefaults`;
+  KConfig then warned "Invalid escape sequence").
+- **Locks:** QtCore `Settings` drops KConfig's marks of an immutable file or group (`[$i]`), with
+  which an administrator's rule wins over the user's file (it keeps a locked key's mark in the
+  key's name, `noborder[$i]`, which is read too). So the rules of each system file also count on
+  their own: a locked rule is never missed, and a user's own change to a system rule may be (the
+  window then keeps no title bar after tablet posture, as before this change).
+- **Which rules:** those that are on (`Enabled`, default true: `Rules::match()` skips the others)
+  and set `noborder` with a rule type that sets it, 2 to 6 (a KConfig Bool: anything but false,
+  no, off or 0), or one of 6.8's decoration policies without a title bar, `none` and `shadow`
+  ("Only shadow"; KConfig's enum takes the value in any case or the number, 0 and 3).
 - **Which windows:** the class matched as KWin's `Rules::matchWMClass` does (6.7.5 and 6.8.0:
-  exact and substring matching too are case-sensitive). The rules' other conditions (role, title,
-  type, machine) are not checked: a rule that might apply is taken as applying, so the user's bar
-  is never claimed by mistake.
+  exact and substring matching too are case-sensitive). A regular expression is matched by
+  QRegularExpression, as KWin matches it (`RuleRegex.qml`). Qt 6.11's JavaScript reads some PCRE
+  without an error but differently: `\A` as `A`, `[[:alpha:]]` as a class and a `]`, `x{,3}` as
+  text where PCRE2 10.43 reads a quantifier, `\w` and `\s` beyond ASCII. But a `RegExp` handed to a
+  `RegularExpressionValidator` becomes a QRegularExpression with its source unchanged (and its `i`
+  and `m` flags as options; a leading `(?i)` or `(?m)` becomes one). A pattern Qt's JavaScript
+  cannot read at all (lookbehind, possessive quantifiers, other inline options, parentheses that
+  do not pair up on their own) is taken as applying, to every window: with such a rule the policy
+  claims no title bar and leaves the windows as before this change. The rules' other conditions
+  (role, title, type, machine) are not checked: a rule that might apply is taken as applying, so
+  the user's bar is never claimed by mistake.
 
 A window under an apply-initially "Only shadow" rule keeps no title bar, but not its shadow-only
 style, until it opens again: KWin's borderless maximize already replaced its policy with none
@@ -466,24 +484,38 @@ Tests:
     list as a list or as one string): an apply-initially substring rule, a forced exact one, a rule
     that only sets the opacity, an empty file;
   - KConfig's cascade: a system-wide rule, a user's key hiding the system's, a system group the
-    user's list names, a user's list without it;
-  - the rule types that set the property and those that do not; KConfig's Bool; 6.8's decoration
-    policies by value and by number;
-  - class matching: unimportant, exact and substring (case-sensitive), the complete class, a
-    regular expression, one JavaScript cannot read.
+    user's list names, a user's list without it; a locked key's name; a system rule the user's
+    file turns off still counting on its own;
+  - the rule types that set the property and those that do not; rules that are off; KConfig's
+    Bool; 6.8's decoration policies by value and by number;
+  - class matching: unimportant, exact and substring (case-sensitive), the complete class; a
+    regular expression handed to the matcher with the class, its true and false kept, undefined
+    and no matcher taken as applying; leading `(?i)` and `(?m)` as flags.
+- `packages/kwin/tests/tablet_regex_test.py` (PySide6, offscreen; CI `build`): `RuleRegex.qml`
+  against QRegularExpression. PCRE syntax JavaScript reads otherwise gets KWin's answer; patterns
+  it cannot read come back undefined; 6000 random patterns over 11 classes (a fixed seed) never get
+  an answer that differs from KWin's (31 checks; 36 685 answers on Qt 6.11.2).
 - `tests/vsession/scenario-tablet-titlebars.sh` (private session on the ThinkPad, 1440 x 900, KWin
-  6.7.5; 2026-10-19, tb-3: all 10 checks pass, scenario rc 0). Windows opened in tablet posture:
-  Dolphin taken out of full screen, KWrite quick-tiled from it, and Konsole tiled and untiled have
-  their title bars after tablet posture. KCalc and KCharSelect, quick-tiled from full screen and
-  untiled, keep none: KCalc under a system-wide apply-initially rule (in `~/.config/kdedefaults`,
-  listed in the user's rules as the KCM saves them; KWin applies it on the laptop, check 0),
-  KCharSelect under the user's forced one.
-- **Red runs:** with main's script (c947218) the three title bars are missing (tb-r2, "tiles with
-  title bar 0, floated with title bar 0"). With the first rules check, which read only the user's
-  file (40cf2e7), KCalc gets a title bar after leave (tb-r3, scenario rc 1). Without any rules
-  check, `scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3: a title bar after
-  leave).
-- **Regression:** with the rules check, `scenario-kwin2-a.sh` passes all 31 checks (k2a-4; with
-  every config directory read, k2a-5) and `scenario-fullscreen-off.sh` all 13 (fo-7).
+  6.7.5; 2026-10-19, tb-6: all 14 checks pass, scenario rc 0):
+  - **On the laptop** (check 0), KWin applies the rules as the policy must read them. KCalc and
+    Ark open without a title bar: KCalc under a system-wide apply-initially rule in
+    `~/.config/kdedefaults`, its group locked (`[$i]`) against the user's file turning it off; Ark
+    under a regular expression with PCRE's `\A` and `\z`. Konsole, under a rule that is off,
+    opens with one.
+  - **In tablet posture,** windows open: Dolphin taken out of full screen, KWrite quick-tiled from
+    it, and Konsole tiled and untiled have their title bars after tablet posture. KCalc, Ark and
+    KCharSelect (the user's forced rule), quick-tiled from full screen and untiled, keep none.
+  - **Files:** the script, loaded again once the rules exist, leaves both rules files as they were.
+- **Red runs:**
+  - main's script (c947218): the three title bars are missing (tb-r2, "tiles with title bar 0,
+    floated with title bar 0");
+  - the first rules check, which read only the user's file (40cf2e7): KCalc gets a title bar
+    after leave (tb-r3, scenario rc 1);
+  - the second (3ffa019): Konsole keeps none, KCalc and Ark get one, and `modelData` is written
+    into both rules files (tb-r5, 4 failures);
+  - without any rules check, `scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3:
+    a title bar after leave).
+- **Regression:** `scenario-kwin2-a.sh` passes all 31 checks (k2a-4, and k2a-8 with this version)
+  and `scenario-fullscreen-off.sh` all 13 (fo-7, fo-8).
 
 Not tested in a session: 6.8's decoration policies (the ThinkPad runs 6.7.5; node only).

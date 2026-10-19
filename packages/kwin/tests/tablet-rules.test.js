@@ -12,7 +12,10 @@ const { pathToFileURL } = require("url");
 const file = path.join(__dirname, "..", "scripts", "plasmafusion-tablet", "contents", "ui", "Rules.js");
 const code = fs.readFileSync(file, "utf8").replace(/^\.pragma library$/m, (line) => " ".repeat(line.length));
 vm.runInThisContext(code, { filename: pathToFileURL(file).href });
-const { readRules, keepsNoTitleBar, removesTitleBar, matchesClass, cascade, truthy } = globalThis;
+const { readRules, keepsNoTitleBar, removesTitleBar, matchesClass, cascade, truthy, filesKeepNoTitleBar, regexForQt } = globalThis;
+// A stand-in for RuleRegex.qml's matches() (QRegularExpression; tests/tablet_regex_test.py), for
+// the cases where PCRE and JavaScript agree; undefined where JavaScript cannot read the pattern.
+const jsMatch = (p, t) => { try { return new RegExp(p).test(t); } catch (e) { return undefined; } };
 assert.strictEqual(typeof readRules, "function", "Rules.js does not define readRules");
 
 // A reader over a parsed INI file as QSettings reads it: [General] at the top level, the rest
@@ -120,7 +123,52 @@ assert.ok(!matchesClass({ wmclassmatch: "2", wmclass: "KCalc" }, "org.kde.kcalc"
 assert.ok(matchesClass({ wmclassmatch: "0" }, "anything", "x"));
 assert.ok(matchesClass({ wmclassmatch: "1", wmclass: "kcalc org.kde.kcalc", wmclasscomplete: "true" }, "org.kde.kcalc", "kcalc"));
 assert.ok(!matchesClass({ wmclassmatch: "1", wmclass: "org.kde.kcalc", wmclasscomplete: "true" }, "org.kde.kcalc", "kcalc"));
-assert.ok(matchesClass({ wmclassmatch: "3", wmclass: "^org\\.kde\\.k(calc|write)$" }, "org.kde.kwrite", "kwrite"));
-assert.ok(!matchesClass({ wmclassmatch: "3", wmclass: "^org\\.kde\\.kcalc$" }, "org.kde.kwrite", "kwrite"));
-assert.ok(matchesClass({ wmclassmatch: "3", wmclass: "(?<bad" }, "org.kde.kwrite", "kwrite"));
+assert.ok(matchesClass({ wmclassmatch: "3", wmclass: "^org\\.kde\\.k(calc|write)$" }, "org.kde.kwrite", "kwrite", jsMatch));
+assert.ok(!matchesClass({ wmclassmatch: "3", wmclass: "^org\\.kde\\.kcalc$" }, "org.kde.kwrite", "kwrite", jsMatch));
+assert.ok(matchesClass({ wmclassmatch: "3", wmclass: "(?<bad" }, "org.kde.kwrite", "kwrite", jsMatch));
+// A rule that is off (Enabled=false) is skipped, as Rules::match() does; on by default.
+const kcalcRule = "[1]\nnoborder=true\nnoborderrule=3\nwmclass=kcalc\nwmclassmatch=2\n";
+const withEnabled = (v) => reader(kcalcRule + (v === null ? "" : "Enabled=" + v + "\n") + "[General]\ncount=1\nrules=1");
+assert.ok(!keepsNoTitleBar(readRules(withEnabled("false")), "org.kde.kcalc", "kcalc"));
+assert.ok(keepsNoTitleBar(readRules(withEnabled("true")), "org.kde.kcalc", "kcalc"));
+assert.ok(keepsNoTitleBar(readRules(withEnabled(null)), "org.kde.kcalc", "kcalc"));
+assert.ok(keepsNoTitleBar(readRules(withEnabled("")), "org.kde.kcalc", "kcalc"));
+// A key KConfig marks immutable keeps the mark in its name in QtCore Settings: read too.
+const locked = reader("[1]\nnoborder[$i]=true\nnoborderrule[$i]=2\nwmclass=kcalc\nwmclassmatch=2\n[General]\nrules[$i]=1");
+assert.ok(keepsNoTitleBar(readRules(locked), "org.kde.kcalc", "kcalc"));
+// The files together: a system rule the user's file turns off still counts on its own (Settings
+// drops KConfig's locks of a file or group, so a locked rule is never missed); one the system's
+// own file turns off does not; the user's own rules still count.
+const sysRule = reader(kcalcRule + "[General]\ncount=1\nrules=1");
+const userOffRule = reader("[1]\nnoborderrule=1");
+assert.ok(!keepsNoTitleBar(readRules(cascade([userOffRule, sysRule])), "org.kde.kcalc", "kcalc"));
+assert.ok(filesKeepNoTitleBar([userOffRule, sysRule], "org.kde.kcalc", "kcalc"));
+assert.ok(!filesKeepNoTitleBar([none, withEnabled("false")], "org.kde.kcalc", "kcalc"));
+assert.ok(filesKeepNoTitleBar([sysRule, none], "org.kde.kcalc", "kcalc"));
+assert.ok(!filesKeepNoTitleBar([sysRule, none], "org.kde.dolphin", "dolphin"));
+assert.ok(!filesKeepNoTitleBar([none], "org.kde.kcalc", "kcalc"));
+// A regular expression goes to the matcher (RuleRegex.qml: QRegularExpression, as KWin), with the class
+// or "name class"; true and false are its answer, undefined (a pattern it cannot read) and no
+// matcher at all are taken as applying.
+const re = (p, cls, m) => matchesClass({ wmclassmatch: "3", wmclass: p }, cls, "x", m);
+const asked = [];
+const recorder = (p, t) => { asked.push([p, t]); return false; };
+assert.ok(!re("(?:\\A|\\.)ark\\z", "org.kde.kwrite", recorder));
+assert.deepStrictEqual(asked, [["(?:\\A|\\.)ark\\z", "org.kde.kwrite"]]);
+assert.ok(re("x", "org.kde.ark", () => true));
+assert.ok(re("x", "org.kde.ark", () => undefined));
+assert.ok(re("^org\\.kde\\.kcalc$", "org.kde.kwrite")); // no matcher
+assert.ok(!matchesClass({ wmclassmatch: "3", wmclass: "^kcalc org", wmclasscomplete: "true" }, "org.kde.kwrite", "kwrite", jsMatch));
+assert.ok(matchesClass({ wmclassmatch: "3", wmclass: "^kcalc org", wmclasscomplete: "true" }, "org.kde.kcalc", "kcalc", jsMatch));
+// The matcher passed down through the rules and the files.
+const arkRule = reader("[4]\nnoborder=true\nnoborderrule=3\nwmclass=(?:\\A|\\.)ark\\z\nwmclassmatch=3\n[General]\nrules=4");
+assert.ok(!filesKeepNoTitleBar([arkRule], "org.kde.dolphin", "dolphin", () => false));
+assert.ok(filesKeepNoTitleBar([arkRule], "org.kde.ark", "ark", () => true));
+assert.ok(filesKeepNoTitleBar([arkRule], "org.kde.dolphin", "dolphin")); // no matcher: applying
+// Leading PCRE options as the flags Qt carries over (i and m); the rest as written.
+assert.deepStrictEqual(regexForQt("(?i)KCalc"), { source: "KCalc", flags: "i" });
+assert.deepStrictEqual(regexForQt("(?mi)^a"), { source: "^a", flags: "mi" });
+assert.deepStrictEqual(regexForQt("(?ii)a"), { source: "a", flags: "i" });
+assert.deepStrictEqual(regexForQt("a(?i)b"), { source: "a(?i)b", flags: "" });
+assert.deepStrictEqual(regexForQt("(?s)a.b"), { source: "(?s)a.b", flags: "" });
 console.log("tablet-rules.test.js: ok");

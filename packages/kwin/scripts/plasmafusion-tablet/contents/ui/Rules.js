@@ -18,7 +18,7 @@ function sets(type) {
     return t >= 2 && t <= 6;
 }
 // A Bool as KConfigGroup::readEntry reads it: anything but false, no, off or 0 (in any case) is
-// true; a missing key is the default, false.
+// true; a missing or empty value is the default, false here.
 function truthy(value) {
     if (value === undefined || value === null || value === false || value === "") {
         return false;
@@ -44,8 +44,13 @@ function cascade(readers) {
 
 // The rules as plain objects from a reader of kwinrulesrc's keys (QtCore Settings' value(): the
 // [General] group's keys at the top level, a rule's as "<group>/<key>"; a comma list may come as a
-// list or as one string).
-function readRules(value) {
+// list or as one string). A key KConfig marks immutable ("key[$i]=") keeps the mark in its name
+// there, and is read too.
+function readRules(read) {
+    const value = k => {
+        const v = read(k);
+        return v === undefined || v === null ? read(k + "[$i]") : v;
+    };
     let groups = value("rules");
     if (groups === undefined || groups === null || groups === "") {
         groups = [];
@@ -60,6 +65,7 @@ function readRules(value) {
         }
         const key = k => value(id + "/" + k);
         list.push({
+            enabled: key("Enabled"),
             noborder: key("noborder"), noborderrule: key("noborderrule"),
             decorationpolicy: key("decorationpolicy"), decorationpolicyrule: key("decorationpolicyrule"),
             wmclass: key("wmclass"), wmclassmatch: key("wmclassmatch"), wmclasscomplete: key("wmclasscomplete"),
@@ -86,10 +92,13 @@ function removesTitleBar(rule) {
 // Rules::matchWMClass (KWin 6.7.5 and 6.8.0 rules.cpp): unimportant (0) matches every window;
 // exact (1), substring (2) and regular expression (3) compare with the class, or "name class" with
 // wmclasscomplete, all three case-sensitively (Rules reads wmclass as written, and the window's
-// class is its app_id or WM_CLASS as given). A rule's other conditions (role, title, type,
-// machine) are not checked: a rule that might apply is taken as applying, so the user's bar is
-// never claimed by mistake.
-function matchesClass(rule, resourceClass, resourceName) {
+// class is its app_id or WM_CLASS as given). A regular expression is KWin's QRegularExpression
+// (PCRE), which JavaScript's RegExp reads differently in places, so regexMatch(pattern, text)
+// matches it (RuleRegex.qml, with QRegularExpression itself): true or false, or undefined when it
+// cannot; then, or without regexMatch, the rule is taken as applying. A rule's other conditions
+// (role, title, type, machine) are not checked: a rule that might apply is taken as applying, so
+// the user's bar is never claimed by mistake.
+function matchesClass(rule, resourceClass, resourceName, regexMatch) {
     const match = Number(rule.wmclassmatch || 0);
     if (match === 0) {
         return true;
@@ -103,16 +112,43 @@ function matchesClass(rule, resourceClass, resourceName) {
         return cls.indexOf(wanted) >= 0;
     }
     if (match === 3) {
-        try {
-            return new RegExp(wanted).test(cls);
-        } catch (e) {
-            return true; // a pattern JavaScript cannot read: taken as applying
-        }
+        const m = regexMatch ? regexMatch(wanted, cls) : undefined;
+        return m === undefined ? true : m;
     }
     return true;
 }
 
+// A PCRE pattern as Qt's JavaScript can carry it to a QRegularExpression (a RegExp converts with
+// its source unchanged and its i and m flags as options): options PCRE takes at its start, (?i),
+// (?m) or both, become those flags, as Qt's JavaScript does not read them.
+function regexForQt(pattern) {
+    const lead = /^\(\?([im]+)\)/.exec(pattern);
+    if (!lead) {
+        return { source: pattern, flags: "" };
+    }
+    return { source: pattern.slice(lead[0].length), flags: Array.from(new Set(lead[1])).join("") };
+}
+
+// Whether a rule is on: KWin's Rules::match() skips one whose Enabled is false (default true).
+function isEnabled(rule) {
+    const on = rule.enabled;
+    return on === undefined || on === null || on === "" || truthy(on);
+}
+
 // Whether one of the user's rules keeps this window without a title bar.
-function keepsNoTitleBar(rules, resourceClass, resourceName) {
-    return rules.some(r => removesTitleBar(r) && matchesClass(r, String(resourceClass || ""), String(resourceName || "")));
+function keepsNoTitleBar(rules, resourceClass, resourceName, regexMatch) {
+    const cls = String(resourceClass || ""), name = String(resourceName || "");
+    return rules.some(r => isEnabled(r) && removesTitleBar(r)
+        && matchesClass(r, cls, name, regexMatch));
+}
+
+// Whether a rule in kwinrulesrc's files keeps this window without a title bar (readers: one
+// value() per file, the user's first): in KConfig's cascade, or in one of the system's files on its
+// own. QtCore Settings drops KConfig's marks of an immutable file or group ([$i]), with which an
+// administrator's rule wins over the user's file; so a locked rule is never missed, and a user's
+// own change to a system rule may be (the window then stays as the policy left it).
+function filesKeepNoTitleBar(readers, resourceClass, resourceName, regexMatch) {
+    const views = [cascade(readers)].concat(readers.slice(1));
+    return views.some(read => keepsNoTitleBar(readRules(read), resourceClass, resourceName,
+                                              regexMatch));
 }

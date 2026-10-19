@@ -382,25 +382,29 @@ Item {
     }
     // kwinrulesrc in every config directory KWin's KConfig reads it from: the user's first, then the
     // XDG config directories (~/.config/kdedefaults, /etc/xdg; QStandardPaths' order is KConfig's).
-    Instantiator {
-        id: ruleFiles
-        model: StandardPaths.standardLocations(StandardPaths.GenericConfigLocation)
-        delegate: Settings {
-            required property url modelData
-            location: modelData + "/kwinrulesrc"
-        }
+    // Read only: a Settings object stores every property declared on it in its file, so these
+    // declare none (a delegate's modelData would be written into the user's window rules).
+    Component {
+        id: ruleFile
+        Settings {}
     }
+    readonly property var ruleFiles: StandardPaths
+        .standardLocations(StandardPaths.GenericConfigLocation)
+        .map(dir => ruleFile.createObject(root, { location: dir + "/kwinrulesrc" }))
     function rulesKeepNoTitleBar(w) {
         const readers = [];
-        for (let i = 0; i < ruleFiles.count; ++i) {
-            const file = ruleFiles.objectAt(i);
+        for (const file of ruleFiles) {
             if (file) {
                 file.sync();
                 readers.push(k => file.value(k));
             }
         }
-        const rules = Rules.readRules(Rules.cascade(readers));
-        return Rules.keepsNoTitleBar(rules, w.resourceClass, w.resourceName);
+        return Rules.filesKeepNoTitleBar(readers, w.resourceClass, w.resourceName,
+                                         (p, t) => ruleRegex.matches(p, t));
+    }
+    // A rule's regular expression matched as KWin does (RuleRegex.qml: by QRegularExpression).
+    RuleRegex {
+        id: ruleRegex
     }
     function tileChanged(w) {
         if (!applied || !w || w.deleted) {
