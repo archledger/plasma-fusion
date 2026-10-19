@@ -2008,9 +2008,12 @@ PlasmoidItem {
                 return;
             }
             const atm = TaskManager.AbstractTasksModel;
-            const active = tasksModel.activeTask;
-            if (active && active.valid && root.sameApp(tasksModel.data(active, atm.AppId), root.splitPlan.appId)) {
+            const model = root.splitPlan.pair ? pairTasks : tasksModel;
+            const active = model.activeTask;
+            if (active && active.valid && root.sameApp(model.data(active, atm.AppId), root.splitPlan.appId)) {
                 root.splitActiveIsApp();
+            } else if (root.splitPlan.row >= 0 && root.splitPlan.pair) {
+                pairTasks.requestActivate(pairTasks.makeModelIndex(root.splitPlan.row));
             } else if (root.splitPlan.row >= 0) {
                 root.activateTask(root.splitPlan.row, 0);
             } else {
@@ -2025,6 +2028,14 @@ PlasmoidItem {
     }
     function splitActiveIsApp(): void {
         if (!splitPlan) {
+            return;
+        }
+        // A pair's app open on another screen comes to this one first, a screen at a time (KWin's
+        // "Window to Next Screen" moves the active window), at most once round the screens.
+        if (splitPlan.pair && !pairActiveHere()
+                && splitPlan.moves < Qt.application.screens.length - 1) {
+            splitPlan.moves += 1;
+            invokeKWinShortcutThen("Window to Next Screen", () => pairMoved.restart());
             return;
         }
         const side = splitPlan.side;
@@ -2047,17 +2058,49 @@ PlasmoidItem {
                      + share);
         bringToSide(left, "left", () => bringToSide(right, "right", () => pairSplit.restart()));
     }
+    // An app's window from every screen (pairTasks), one on this screen first; none: started.
     function bringToSide(appId: string, side: string, then): void {
         const atm = TaskManager.AbstractTasksModel;
         let row = -1;
-        for (let r = 0; r < tasksModel.count && row < 0; ++r) {
-            if (sameApp(tasksModel.data(tasksModel.makeModelIndex(r), atm.AppId), appId)) {
+        for (let r = 0; r < pairTasks.count; ++r) {
+            const index = pairTasks.makeModelIndex(r);
+            if (pairTasks.data(index, atm.IsWindow) === true
+                    && sameApp(pairTasks.data(index, atm.AppId), appId)
+                    && (row < 0 || sameRect(pairTasks.data(index, atm.ScreenGeometry), screenRect))) {
                 row = r;
             }
         }
-        splitPlan = { "side": side, "appId": appId, "row": row, "then": then };
+        splitPlan = { "side": side, "appId": appId, "row": row, "then": then, "pair": true, "moves": 0 };
         splitTimeout.restart();
         splitBringApp.restart();
+    }
+    function sameRect(a, b): bool {
+        return !!a && !!b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+    }
+    // Whether the active window is on this dock's screen (unknown counts as here).
+    function pairActiveHere(): bool {
+        const active = pairTasks.activeTask;
+        const g = active && active.valid
+            ? pairTasks.data(active, TaskManager.AbstractTasksModel.ScreenGeometry) : null;
+        return !g || sameRect(g, screenRect);
+    }
+    // The dock's own model lists only its screen's windows when every screen has a dock
+    // (showOnlyCurrentScreen): a pair's app open on another screen is found here, so it comes to
+    // this screen instead of opening a second time (a single-instance app would only be raised
+    // where it is). The dock's other filters, the windows one by one.
+    TaskManager.TasksModel {
+        id: pairTasks
+        screenGeometry: Plasmoid.containment.screenGeometry
+        activity: activityInfo.currentActivity
+        filterByCurrentVirtualDesktop: Plasmoid.configuration.showOnlyCurrentDesktop
+        filterByActivity: Plasmoid.configuration.showOnlyCurrentActivity
+        filterByScreen: false
+        groupMode: TaskManager.TasksModel.GroupDisabled
+    }
+    Timer {
+        id: pairMoved
+        interval: 300
+        onTriggered: root.splitActiveIsApp()
     }
     Timer {
         id: pairSplit
@@ -2069,8 +2112,21 @@ PlasmoidItem {
         }
     }
     Connections {
+        target: pairTasks
+        enabled: root.splitPlan !== null && !!root.splitPlan.pair && !splitBringApp.running
+                 && !pairMoved.running
+        function onActiveTaskChanged(): void {
+            const atm = TaskManager.AbstractTasksModel;
+            const active = pairTasks.activeTask;
+            if (active && active.valid && pairTasks.data(active, atm.IsWindow) === true
+                    && root.sameApp(pairTasks.data(active, atm.AppId), root.splitPlan.appId)) {
+                root.splitActiveIsApp();
+            }
+        }
+    }
+    Connections {
         target: tasksModel
-        enabled: root.splitPlan !== null && !splitBringApp.running
+        enabled: root.splitPlan !== null && !root.splitPlan.pair && !splitBringApp.running
         function onActiveTaskChanged(): void {
             const atm = TaskManager.AbstractTasksModel;
             const active = tasksModel.activeTask;

@@ -528,16 +528,26 @@ Item {
         pairHelper.connectSource(command);
     }
     // The helper's "save" (the app switcher's Save pair) asks every home screen to pin the new
-    // pair: pinRequest "nonce:applications:ID", a pair's entry only.
+    // pair: pinRequest "nonce:applications:ID", a pair's entry only. The switcher works on the
+    // laptop too, where this layer is not loaded: a request waiting in the configuration is taken
+    // when the layer loads (rootModel's favourites ready), and every request is cleared once taken (a pair removed since is not
+    // pinned again).
     Connections {
         target: Plasmoid.configuration
         function onPinRequestChanged(): void {
-            const request = String(Plasmoid.configuration.pinRequest || "");
-            const favoriteId = request.slice(request.indexOf(":") + 1);
-            if (Pairs.pairId(favoriteId) !== "" && home.favoritesModel && !home.favoritesModel.isFavorite(favoriteId)) {
-                console.info("home: pair: pin " + favoriteId);
-                home.favoritesModel.addFavorite(favoriteId, -1);
-            }
+            home.takePinRequest();
+        }
+    }
+    function takePinRequest(): void {
+        const request = String(Plasmoid.configuration.pinRequest || "");
+        if (request === "" || !favoritesModel) {
+            return;
+        }
+        const favoriteId = request.slice(request.indexOf(":") + 1);
+        Plasmoid.configuration.pinRequest = "";
+        if (pairInfo(favoriteId) !== null && !favoritesModel.isFavorite(favoriteId)) {
+            console.info("home: pair: pin " + favoriteId);
+            favoritesModel.addFavorite(favoriteId, -1);
         }
     }
 
@@ -574,6 +584,8 @@ Item {
         Component.onCompleted: {
             (favoritesModel as Kicker.KAStatsFavoritesModel).initForClient("org.plasmafusion.launcher.favorites");
             refresh();
+            // (the favourites take a pin only from here on: a request waiting since the laptop)
+            Qt.callLater(home.takePinRequest);
         }
     }
 

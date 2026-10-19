@@ -6,6 +6,8 @@
 # Saved app pairs (board TabletPairs.dc.html, docs/parts/apppairs.md) in a private session in
 # tablet posture, with real touch (pfinput) and the navigation effect built from this tree
 # (make-seed.sh):
+#   0. a pair saved on the laptop, where the home screen's layer is not loaded, is pinned once
+#      tablet posture loads it;
 #   1. Dolphin quick-tiled left and KWrite right; the tablet script's "Split One Third" puts the
 #      split at a third;
 #   2. the app switcher shows the two as one card with "Save pair" under it; a tap saves the pair
@@ -90,8 +92,20 @@ kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardShown true
 kwriteconfig6 --file plasmafusionrc --group Tablet --key GestureCardVersion 99
 pfv_restart_shell 12
 qdbus org.kde.KWin /KWin reconfigure; sleep 3
+# ---- 0. a pair saved on the laptop (the switcher works there too), where the home screen's layer
+# is not loaded: it is pinned once tablet posture loads it; then removed again (the grid as before)
+early=$("$HOME/.local/libexec/plasma-fusion/plasma-fusion-app-pair" save org.kde.kcalc.desktop org.kde.konsole.desktop 0.5 2>>"$OUT/helper.log" || true)
+sleep 3
+if [ -n "$early" ] && grep -aq "home: pair: pin applications:$early" "$PLOG"; then info "0: pinned on the laptop already"; fi
 pfv_tablet on; sleep 8
 info "navigation effect: $(qdbus org.kde.KWin /Effects org.kde.kwin.Effects.isEffectLoaded plasmafusion_navigation)"
+if [ -n "$early" ] && grep -aq "home: pair: pin applications:$early" "$PLOG"; then
+  pass "0: a pair saved on the laptop is pinned once tablet posture shows the home screen ($early)"
+else
+  fail "0: the pair saved on the laptop ('$early') was not pinned"
+fi
+"$HOME/.local/libexec/plasma-fusion/plasma-fusion-app-pair" remove "$early" >>"$OUT/helper.log" 2>&1 || info "remove rc=$?"
+sleep 3
 
 # ---- 1. Dolphin left, KWrite right, the split at a third
 dolphin >/dev/null 2>&1 &

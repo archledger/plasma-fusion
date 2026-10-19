@@ -124,6 +124,13 @@ check "open: the first screen's dock, else any" grep -q 'p.screen === 0' "$call"
 check "remove: the entry is gone" test ! -e "$f"
 check "remove: the other pairs stay" test "$(pairs)" = 2
 
+# ---- the Exec of a helper called through a link (NixOS: /run/current-system/sw/libexec)
+mkdir -p "$BASE/profile/libexec"
+ln -s "$HELPER" "$BASE/profile/libexec/plasma-fusion-app-pair"
+id5=$("$BASE/profile/libexec/plasma-fusion-app-pair" save org.kde.kate.desktop firefox.desktop 0.5)
+check "called through a link: its Exec keeps the link, not the file behind it" \
+  test "$(key "$APPS/$id5" Exec)" = "\"$BASE/profile/libexec/plasma-fusion-app-pair\" open %k"
+
 # ---- 4. refused
 refused() { ! "$HELPER" "$@" >/dev/null 2>&1; }
 check "one app twice" refused save firefox.desktop firefox.desktop 0.5

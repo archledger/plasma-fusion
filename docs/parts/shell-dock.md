@@ -784,4 +784,8 @@ the left half and then the second to the right one with `bringToSide()`, the spl
 (`splitPlan` now carries a `then`, called after the tile shortcut's reply) without moving the app in
 use, and 300 ms after the last tile invokes the plasmafusion-tablet script's "Plasma Fusion: Split
 One Third", "Split Half" or "Split Two Thirds". Log "dock: pair: LEFT on the left, RIGHT on the
-right, split SHARE".
+right, split SHARE". A pair's apps are looked up in `pairTasks`, a second task model with the
+dock's filters but the screen's: with a dock on every screen (`showOnlyCurrentScreen`) an app open
+on another screen is found there and activated, then moved to this screen with KWin's "Window to
+Next Screen" (a screen at a time, at most once round) before it is tiled, instead of being started
+a second time.

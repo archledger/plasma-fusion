@@ -87,7 +87,9 @@ shell_script() { # JS
 
 write_pair() { # FILE LEFT RIGHT SHARE
   local self tmp
-  self=$(realpath -- "${BASH_SOURCE[0]}")
+  # The helper as it was called, made absolute but with its links kept: on NixOS that is the
+  # profile's /run/current-system/sw/libexec path, which outlives the store generation behind it.
+  self=$(realpath -s -- "${BASH_SOURCE[0]}")
   tmp=$(mktemp "$1.XXXXXX")
   {
     printf '[Desktop Entry]\n'
