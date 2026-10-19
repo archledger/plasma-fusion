@@ -547,8 +547,13 @@ Item {
     // pinned again).
     Connections {
         target: Plasmoid.configuration
+        // The request comes through desktop scripting, and when that script ends Plasma reads this
+        // applet's settings back from disk (plasma-workspace 6.7 Widget::~Widget → reloadConfig →
+        // Applet::configChanged → KConfigLoader::load), dropping a clear made while it ran: the
+        // request would stay stored and be taken again at the next shell start. So take it (and
+        // clear it) once the script has returned, as the dock pins a kept pair.
         function onPinRequestChanged(): void {
-            home.takePinRequest();
+            Qt.callLater(home.takePinRequest);
         }
     }
     function takePinRequest(): void {
