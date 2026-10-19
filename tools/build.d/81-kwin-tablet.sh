@@ -31,13 +31,14 @@ PY
 test -f "$src/contents/ui/main.qml"
 # The right-edge swipe's quick settings request (contents/ui/Requests.js), the panel script and the
 # top bars' state for the island against a model of desktop scripting (contents/ui/Panels.js,
-# TopBar.js), and the half a window takes out of full screen (contents/ui/Snap.js), when node is
-# installed.
+# TopBar.js), the half a window takes out of full screen (contents/ui/Snap.js) and the user's
+# no-title-bar window rules (contents/ui/Rules.js), when node is installed.
 if command -v node >/dev/null 2>&1; then
   node "$ROOT/packages/kwin/tests/tablet-requests.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/tablet-panels.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/tablet-topbar.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/tablet-snap.test.js" >/dev/null
+  node "$ROOT/packages/kwin/tests/tablet-rules.test.js" >/dev/null
 fi
 bash "$ROOT/tools/build-lib/shared-qml.sh" check "$src" "kwin-tablet"
 

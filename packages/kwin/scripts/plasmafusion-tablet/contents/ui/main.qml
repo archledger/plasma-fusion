@@ -4,9 +4,11 @@
 */
 
 import QtQuick
+import QtCore
 import org.kde.kwin
 import "Panels.js" as Panels
 import "Requests.js" as Requests
+import "Rules.js" as Rules
 import "Snap.js" as Snap
 import "TopBar.js" as TopBar
 
@@ -124,6 +126,7 @@ Item {
     property var borderlessTiles: ({}) // internalId -> true: title bar removed from a tiled window
     property var borderlessFloating: ({}) // internalId -> true: floating window without a title bar
     property var laptopNoBorder: ({}) // internalId -> true: no title bar before the policy took over
+    property var appearedInTablet: ({}) // internalId -> true: appeared while the policy was applied
     property var tileHandlers: ({}) // internalId -> [window, handler]
 
     function key(w) {
@@ -312,6 +315,7 @@ Item {
         borderlessTiles = ({});
         borderlessFloating = ({});
         laptopNoBorder = ({});
+        appearedInTablet = ({});
         applied = false;
         busy = false;
         log("leave: restored " + restored + ", placed " + placed + ", tiles with title bar " + tiles
@@ -361,12 +365,37 @@ Item {
         }
         tileHandlers = ({});
     }
+    // A window that appeared while the policy ran was maximized, and so made borderless by the
+    // option, as it appeared: that first no-title-bar state is the policy's, not the user's, though
+    // follow()'s decoration handler records it as theirs (KWin gives scripts no window rules). Once
+    // KWin shows its title bar again (an un-maximize under the option, a quick tile out of
+    // maximized), nothing forces it borderless, so the bar is the policy's to take and to give back
+    // at leave(). A window a rule forces borderless shows no bar here and stays the user's.
+    // A rule that removes the bar only when the window appears ("apply initially") lets KWin show
+    // it again on that un-maximize too, so the user's rules are read as well (Rules.js): a window
+    // one of them keeps without a title bar stays the user's.
+    function barShownAgain(w) {
+        const k = key(w);
+        if (appearedInTablet[k] && !w.noBorder && !rulesKeepNoTitleBar(w)) {
+            laptopNoBorder[k] = false;
+        }
+    }
+    Settings {
+        id: kwinRules
+        location: StandardPaths.writableLocation(StandardPaths.GenericConfigLocation) + "/kwinrulesrc"
+    }
+    function rulesKeepNoTitleBar(w) {
+        kwinRules.sync();
+        const rules = Rules.readRules(k => kwinRules.value(k));
+        return Rules.keepsNoTitleBar(rules, w.resourceClass, w.resourceName);
+    }
     function tileChanged(w) {
         if (!applied || !w || w.deleted) {
             return;
         }
         const k = key(w);
         if (w.tile) {
+            barShownAgain(w);
             // A tile is drawn without a title bar. Claim it when this script takes the bar now, or
             // when the window is only borderless because of the policy: a window the user made
             // borderless themselves keeps that state and is not claimed (enter() tracks its own
@@ -449,6 +478,7 @@ Item {
             const placed = openedInTablet[k] === true;
             delete maximizedByUs[k];
             delete openedInTablet[k];
+            barShownAgain(w);
             // A window always has a place in tablet posture (owner decision 2026-10-18, replacing
             // the floating window of 2026-10-13): out of full screen it takes a half through KWin's
             // quick tile, so the split, its divider and the other half's pickers work as for any
@@ -506,6 +536,7 @@ Item {
             if (w.maximizeMode === 3) {
                 root.openedInTablet[root.key(w)] = true;
             }
+            root.appearedInTablet[root.key(w)] = true;
             if (root.eligible(w)) {
                 root.follow(w);
                 root.openedWindows.push(w);
@@ -529,6 +560,7 @@ Item {
             delete root.maximizedByUs[k];
             delete root.openedInTablet[k];
             delete root.borderlessTiles[k];
+            delete root.appearedInTablet[k];
             delete root.tileHandlers[k];
         }
         function onScreensChanged() {

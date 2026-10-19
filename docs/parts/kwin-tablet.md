@@ -421,7 +421,41 @@ half without a title bar, then that it floats without one once taken out of its 
 run with the snap (k2a-1) the maximized-again case failed (a title bar on a maximized window after
 leave), fixed as above.
 
-Known, not changed here: a window opened in tablet posture is maximized and borderless when it
-appears, so its no-title-bar state is taken as the user's (KWin gives scripts no window rules); once
-it is un-maximized or tiled in tablet posture, leaving tablet posture leaves it without a title bar
-(main 32cbf22 does the same: fo-r1, "floated with title bar 0").
+## Windows opened in tablet posture get their title bar back (2026-10-18)
+
+A window opened in tablet posture appears maximized (placement "Maximizing"), and KWin makes a
+maximized window borderless while the policy's option is on (`borderlessMaximizedWindows`: KWin
+6.7.5 `XdgToplevelWindow::maximize` sets `noBorder` with the maximize, and clears it on the
+un-maximize). `follow()`'s decoration handler recorded that first borderless state as the user's,
+as KWin gives scripts no window rules to tell a no-titlebar rule from the option, so once such a
+window was un-maximized or tiled in tablet posture, `leave()` never gave its title bar back: after
+tablet posture it had none (found with the snap above; main did the same, fo-r1, "tiles with
+title bar 0, floated with title bar 0").
+
+The script now notes the windows that appear while the policy runs (`appearedInTablet`). When KWin
+shows such a window's title bar again (the un-maximize under the option, a quick tile out of
+maximized: `barShownAgain()` in `settleUnmaximized()` and `tileChanged()`), nothing forces it
+borderless, so the bar is the policy's: taken while the posture holds and given back by
+`leave()`. Windows open before tablet posture keep their snapshot from `enter()`.
+
+A no-titlebar rule that acts only when the window appears ("apply initially") does not stop KWin
+from showing the bar on that un-maximize, so the user's rules are read too: `Rules.js` reads
+`kwinrulesrc` (QtCore `Settings`, read again at each decision) and a window one of them keeps
+without a title bar (`noborder` with a rule type that sets it, 2 to 6, or 6.8's `decorationpolicy`
+`none`; the window class matched as KWin's `Rules::matchWMClass` does) stays the user's. The rules'
+other conditions (role, title, type, machine) are not checked: a rule that might apply is taken as
+applying, so the user's bar is never claimed by mistake.
+
+Tests: `packages/kwin/tests/tablet-rules.test.js` (node, in `81-kwin-tablet.sh`): the rules file as
+QtCore `Settings` reads it (the `[General]` keys at the top level, a comma list as a list or as one
+string), an apply-initially substring rule, a forced exact one, a rule that only sets the opacity,
+an empty file; the rule types that set the property and those that do not; 6.8's decoration policy;
+class matching (unimportant, exact, the complete class, a regular expression, one JavaScript cannot
+read). `tests/vsession/scenario-tablet-titlebars.sh` (private session on the ThinkPad, 1440 x 900;
+2026-10-18, tb-2: all 9 checks pass): windows opened in tablet posture - Dolphin taken out of full
+screen, KWrite quick-tiled from it, Konsole tiled and untiled - have their title bars after tablet
+posture, and KCalc (an apply-initially rule) and KCharSelect (a forced one), quick-tiled from full
+screen and untiled, keep none. With main's script (c947218, tb-r1) the three title bars are missing
+("tiles with title bar 0, floated with title bar 0"; tb-r2). Without the rules check,
+`scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3: a title bar after leave);
+with it all 31 checks pass (k2a-4), and `scenario-fullscreen-off.sh` all 13 (fo-7).
