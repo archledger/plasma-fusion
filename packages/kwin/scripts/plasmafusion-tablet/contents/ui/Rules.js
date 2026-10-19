@@ -69,6 +69,10 @@ function readRules(read) {
             noborder: key("noborder"), noborderrule: key("noborderrule"),
             decorationpolicy: key("decorationpolicy"), decorationpolicyrule: key("decorationpolicyrule"),
             wmclass: key("wmclass"), wmclassmatch: key("wmclassmatch"), wmclasscomplete: key("wmclasscomplete"),
+            types: key("types"), windowrolematch: key("windowrolematch"),
+            titlematch: key("titlematch"), clientmachinematch: key("clientmachinematch"),
+            tagmatch: key("tagmatch"),
+            hastransientparentmatch: key("hastransientparentmatch"),
         });
     }
     return list;
@@ -82,11 +86,22 @@ function policyRemovesTitleBar(value) {
     return ["none", "0", "shadow", "3"].indexOf(String(value).trim().toLowerCase()) >= 0;
 }
 
-// Whether a rule removes the title bar: the legacy noborder (6.7.5, and 6.8 before RuleBookSettings
-// migrates it to a decoration policy) or one of 6.8's decoration policies without one.
+// Whether a rule names the title bar: the legacy noborder (6.7.5 reads only it, and 6.8's
+// RuleBookSettings migrates it over the decoration policy), or 6.8's decoration policy.
+function namesNoBorder(rule) {
+    return Number(rule.noborderrule || 0) !== 0;
+}
+function namesPolicy(rule) {
+    return Number(rule.decorationpolicyrule || 0) !== 0;
+}
+
+// Whether a rule removes the title bar: its noborder when it names one, else one of 6.8's
+// decoration policies without a title bar.
 function removesTitleBar(rule) {
-    return (sets(rule.noborderrule) && truthy(rule.noborder))
-        || (sets(rule.decorationpolicyrule) && policyRemovesTitleBar(rule.decorationpolicy));
+    if (namesNoBorder(rule)) {
+        return sets(rule.noborderrule) && truthy(rule.noborder);
+    }
+    return sets(rule.decorationpolicyrule) && policyRemovesTitleBar(rule.decorationpolicy);
 }
 
 // Rules::matchWMClass (KWin 6.7.5 and 6.8.0 rules.cpp): unimportant (0) matches every window;
@@ -96,9 +111,12 @@ function removesTitleBar(rule) {
 // (PCRE), which JavaScript's RegExp reads differently in places, so regexMatch(pattern, text)
 // matches it (RuleRegex.qml, with QRegularExpression itself): true or false, or undefined when it
 // cannot; then, or without regexMatch, the rule is taken as applying. A rule's other conditions
-// (role, title, type, machine) are not checked: a rule that might apply is taken as applying, so
-// the user's bar is never claimed by mistake.
+// are not checked here (keepsNoTitleBar() says how a rule with them counts).
 function matchesClass(rule, resourceClass, resourceName, regexMatch) {
+    return classMatch(rule, resourceClass, resourceName, regexMatch) !== false;
+}
+// The same as true, false or undefined (a pattern the matcher cannot read, or no matcher).
+function classMatch(rule, resourceClass, resourceName, regexMatch) {
     const match = Number(rule.wmclassmatch || 0);
     if (match === 0) {
         return true;
@@ -112,10 +130,21 @@ function matchesClass(rule, resourceClass, resourceName, regexMatch) {
         return cls.indexOf(wanted) >= 0;
     }
     if (match === 3) {
-        const m = regexMatch ? regexMatch(wanted, cls) : undefined;
-        return m === undefined ? true : m;
+        return regexMatch ? regexMatch(wanted, cls) : undefined;
     }
     return true;
+}
+
+// Whether a rule names nothing but the window class, of what KWin's Rules::match() compares (the
+// window types, role, machine, title, tag and having a parent too): its class match is its match.
+function onlyByClass(rule) {
+    const unimportant = v => v === undefined || v === null || v === "" || Number(v) === 0;
+    const t = rule.types; // NET::AllTypesMask (all bits), the default, matches every window
+    const allTypes = t === undefined || t === null || t === "" || Number(t) === 4294967295
+        || Number(t) === -1;
+    return allTypes && unimportant(rule.windowrolematch) && unimportant(rule.titlematch)
+        && unimportant(rule.clientmachinematch) && unimportant(rule.tagmatch)
+        && unimportant(rule.hastransientparentmatch);
 }
 
 // A PCRE pattern as Qt's JavaScript can carry it to a QRegularExpression (a RegExp converts with
@@ -135,11 +164,31 @@ function isEnabled(rule) {
     return on === undefined || on === null || on === "" || truthy(on);
 }
 
-// Whether one of the user's rules keeps this window without a title bar.
+// Whether the user's rules keep this window without a title bar, in KWin's precedence
+// (WindowRules::checkNoBorder and checkDecorationPolicy, CHECK_RULE in 6.7.5 and 6.8.0): of the
+// rules that match the window, in their order, the first that names the title bar decides, also
+// one that leaves it alone ("don't affect": Rules::checkSetStop). A rule this cannot be sure of
+// (conditions other than the class, a pattern the matcher cannot read, or only 6.8's decoration
+// policy, which 6.7.5 does not read) decides only when it removes the bar; one that keeps the bar
+// is passed over in case it does not apply, so the user's bar is never claimed by mistake.
 function keepsNoTitleBar(rules, resourceClass, resourceName, regexMatch) {
     const cls = String(resourceClass || ""), name = String(resourceName || "");
-    return rules.some(r => isEnabled(r) && removesTitleBar(r)
-        && matchesClass(r, cls, name, regexMatch));
+    for (const r of rules) {
+        if (!isEnabled(r) || (!namesNoBorder(r) && !namesPolicy(r))) {
+            continue;
+        }
+        const m = classMatch(r, cls, name, regexMatch);
+        if (m === false) {
+            continue;
+        }
+        if (removesTitleBar(r)) {
+            return true;
+        }
+        if (m === true && onlyByClass(r) && namesNoBorder(r)) {
+            return false;
+        }
+    }
+    return false;
 }
 
 // Whether a rule in kwinrulesrc's files keeps this window without a title bar (readers: one

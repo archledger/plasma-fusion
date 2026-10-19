@@ -466,10 +466,18 @@ them keeps without a title bar stays the user's (`Rules.js`):
   key's name, `noborder[$i]`, which is read too). So the rules of each system file also count on
   their own: a locked rule is never missed, and a user's own change to a system rule may be (the
   window then keeps no title bar after tablet posture, as before this change).
-- **Which rules:** those that are on (`Enabled`, default true: `Rules::match()` skips the others)
-  and set `noborder` with a rule type that sets it, 2 to 6 (a KConfig Bool: anything but false,
-  no, off or 0), or one of 6.8's decoration policies without a title bar, `none` and `shadow`
-  ("Only shadow"; KConfig's enum takes the value in any case or the number, 0 and 3).
+- **Which rules:** those that are on (`Enabled`, default true: `Rules::match()` skips the others),
+  in KWin's precedence (`WindowRules::checkNoBorder` and `checkDecorationPolicy`, `CHECK_RULE` in
+  6.7.5 and 6.8.0): of the rules that match the window, in their order, the first that names the
+  title bar decides, also one that leaves it alone ("don't affect" stops the walk too). It keeps
+  the window without a title bar when it sets `noborder` with a rule type that sets it, 2 to 6 (a
+  KConfig Bool: anything but false, no, off or 0), or, without `noborder`, one of 6.8's decoration
+  policies without a title bar, `none` and `shadow` ("Only shadow"; KConfig's enum takes the value
+  in any case or the number, 0 and 3; 6.8 migrates `noborder` over the policy). A rule this
+  cannot be sure of decides only when it removes the bar, and one that keeps the bar is passed
+  over in case it does not apply: a rule with conditions other than the class (window types, role,
+  title, machine, tag, having a parent), a pattern the matcher cannot read, or only 6.8's policy
+  (which 6.7.5 does not read).
 - **Which windows:** the class matched as KWin's `Rules::matchWMClass` does (6.7.5 and 6.8.0:
   exact and substring matching too are case-sensitive). A regular expression is matched by
   QRegularExpression, as KWin matches it (`RuleRegex.qml`). Qt 6.11's JavaScript reads some PCRE
@@ -480,8 +488,8 @@ them keeps without a title bar stays the user's (`Rules.js`):
   cannot read at all (lookbehind, possessive quantifiers, other inline options, parentheses that
   do not pair up on their own) is taken as applying, to every window: with such a rule the policy
   claims no title bar and leaves the windows as before this change. The rules' other conditions
-  (role, title, type, machine) are not checked: a rule that might apply is taken as applying, so
-  the user's bar is never claimed by mistake.
+  are not checked: such a rule counts when it removes the bar and is passed over when it keeps it
+  (above), so the user's bar is never claimed by mistake.
 
 A window under an apply-initially "Only shadow" rule keeps no title bar, but not its shadow-only
 style, until it opens again: KWin's borderless maximize already replaced its policy with none
@@ -499,6 +507,9 @@ Tests:
     file turns off still counting on its own;
   - the rule types that set the property and those that do not; rules that are off; KConfig's
     Bool; 6.8's decoration policies by value and by number;
+  - KWin's precedence: the first matching rule that names the title bar decides (also "don't
+    affect"), in the list's order; a rule with other conditions, an unread pattern or only the
+    policy passed over when it keeps the bar;
   - class matching: unimportant, exact and substring (case-sensitive), the complete class; a
     regular expression handed to the matcher with the class, its true and false kept, undefined
     and no matcher taken as applying; leading `(?i)` and `(?m)` as flags.
@@ -507,17 +518,19 @@ Tests:
   it cannot read come back undefined; 6000 random patterns over 11 classes (a fixed seed) never get
   an answer that differs from KWin's (31 checks; 36 685 answers on Qt 6.11.2).
 - `tests/vsession/scenario-tablet-titlebars.sh` (private session on the ThinkPad, 1440 x 900, KWin
-  6.7.5; 2026-10-19, tb-8: all 17 checks pass, scenario rc 0):
+  6.7.5; 2026-10-19, tb-9: all 19 checks pass, scenario rc 0):
   - **On the laptop** (check 0), KWin applies the rules as the policy must read them. KCalc and
     Ark open without a title bar: KCalc under a system-wide apply-initially rule in
     `~/.config/kdedefaults`, its group locked (`[$i]`) against the user's file turning it off; Ark
     under a regular expression with PCRE's `\A` and `\z`; Gwenview under an apply-initially rule.
-    Konsole, under a rule that is off, opens with one.
+    Konsole, under a rule that is off, opens with one, and Filelight, under two apply-initially
+    rules of which the first keeps its title bar.
   - **In tablet posture,** windows open: Dolphin taken out of full screen, KWrite quick-tiled from
     it, and Konsole tiled and untiled have their title bars after tablet posture. KCalc, Ark and
     KCharSelect (the user's forced rule), quick-tiled from full screen and untiled, keep none.
   - **Left maximized until tablet posture ends:** Okular, made borderless by the user before it, and
-    Gwenview, opened in it under its rule, keep no title bar after `leave()` un-maximizes them.
+    Gwenview, opened in it under its rule, keep no title bar after `leave()` un-maximizes them;
+    Filelight has its title bar (its first rule).
   - **Files:** the script, loaded again once the rules exist, leaves both rules files as they were.
 - **Red runs:**
   - main's script (c947218): the three title bars are missing (tb-r2, "tiles with title bar 0,
@@ -528,9 +541,11 @@ Tests:
     into both rules files (tb-r5, 4 failures);
   - the third (402e2bb), and the first `leave()` fix (tb-7): Okular and Gwenview get a title bar
     when tablet posture ends (tb-r7);
+  - the fourth (ec24884), which took any matching rule that removes the bar: Filelight keeps none
+    after tablet posture (tb-r9);
   - without any rules check, `scenario-kwin2-a.sh`'s T19 failed on its apply-initially KCalc (k2a-3:
     a title bar after leave).
-- **Regression:** `scenario-kwin2-a.sh` passes all 31 checks (k2a-4, and k2a-10 with this version)
+- **Regression:** `scenario-kwin2-a.sh` passes all 31 checks (k2a-4, and k2a-11 with this version)
   and `scenario-fullscreen-off.sh` all 13 (fo-7, fo-10).
 
 Not tested in a session: 6.8's decoration policies (the ThinkPad runs 6.7.5; node only).

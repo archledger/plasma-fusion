@@ -171,4 +171,41 @@ assert.deepStrictEqual(regexForQt("(?mi)^a"), { source: "^a", flags: "mi" });
 assert.deepStrictEqual(regexForQt("(?ii)a"), { source: "a", flags: "i" });
 assert.deepStrictEqual(regexForQt("a(?i)b"), { source: "a(?i)b", flags: "" });
 assert.deepStrictEqual(regexForQt("(?s)a.b"), { source: "(?s)a.b", flags: "" });
+// KWin's precedence (CHECK_RULE): of the matching rules, in their order, the first that names the
+// title bar decides, also one that leaves it alone (don't affect); a rule this cannot be sure of
+// (other conditions, an unread pattern, only 6.8's policy) decides only when it removes the bar.
+const R = (o) => Object.assign({ wmclass: "filelight", wmclassmatch: "2" }, o);
+const keepsFl = (rules, m) => keepsNoTitleBar(rules, "org.kde.filelight", "filelight", m);
+const applyKeep = R({ noborder: "false", noborderrule: "3" });   // apply initially: a title bar
+const applyRemove = R({ noborder: "true", noborderrule: "3" });  // apply initially: none
+const forceKeep = R({ noborder: "false", noborderrule: "2" });
+assert.ok(!keepsFl([applyKeep, applyRemove]));                  // the first decides
+assert.ok(keepsFl([applyRemove, applyKeep]));
+assert.ok(!keepsFl([forceKeep, applyRemove]));
+assert.ok(!keepsFl([R({ noborderrule: "1" }), applyRemove]));    // don't affect: stops too
+assert.ok(keepsFl([R({ noborder: "false", noborderrule: "0" }), applyRemove])); // unused: passed over
+assert.ok(keepsFl([R({ wmclass: "kcalc", noborder: "false", noborderrule: "2" }), applyRemove])); // no match
+assert.ok(keepsFl([R({ enabled: "false", noborder: "false", noborderrule: "2" }), applyRemove]));
+for (const cond of [{ titlematch: "1" }, { windowrolematch: "2" }, { clientmachinematch: "1" }, { types: "1" },
+                    { tagmatch: "1" }, { hastransientparentmatch: "1" }]) {
+    assert.ok(keepsFl([R(Object.assign({ noborder: "false", noborderrule: "2" }, cond)), applyRemove]),
+              `not sure of ${JSON.stringify(cond)}`);
+}
+assert.ok(!keepsFl([R({ types: "4294967295", noborder: "false", noborderrule: "2" }), applyRemove])); // all types
+assert.ok(!keepsFl([R({ types: "-1", noborder: "false", noborderrule: "2" }), applyRemove]));
+const reKeep = R({ wmclass: "x", wmclassmatch: "3", noborder: "false", noborderrule: "2" });
+assert.ok(keepsFl([reKeep, applyRemove], () => undefined));     // a pattern the matcher cannot read
+assert.ok(!keepsFl([reKeep, applyRemove], () => true));
+assert.ok(keepsFl([reKeep, applyRemove], () => false));
+const policyServer = R({ decorationpolicy: "server", decorationpolicyrule: "2" }); // 6.8 only
+assert.ok(keepsFl([policyServer, applyRemove]));
+assert.ok(!keepsFl([policyServer]));
+// noborder over the decoration policy in one rule (6.8 migrates it over): noborder decides.
+assert.ok(!removesTitleBar({ noborder: "false", noborderrule: "2", decorationpolicy: "none", decorationpolicyrule: "2" }));
+assert.ok(removesTitleBar({ noborder: "true", noborderrule: "2", decorationpolicy: "server", decorationpolicyrule: "2" }));
+// The rules' order is the [General] list's.
+const ordered = (list) => reader("[6]\nnoborder=false\nnoborderrule=3\nwmclass=filelight\nwmclassmatch=2\n"
+    + "[7]\nnoborder=true\nnoborderrule=3\nwmclass=filelight\nwmclassmatch=2\n[General]\nrules=" + list);
+assert.ok(!keepsFl(readRules(ordered("6,7"))));
+assert.ok(keepsFl(readRules(ordered("7,6"))));
 console.log("tablet-rules.test.js: ok");
