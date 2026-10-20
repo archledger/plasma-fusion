@@ -93,4 +93,5 @@ generation).
 
 - The boot splash (`plymouth = true`) is built but not tried on a real NixOS boot.
 - The login greeter styling (`tools/system/greeter-apply.sh`) assumes plasma-login-manager; NixOS
-  uses SDDM.
+  uses SDDM. The SDDM theme is packaged for manual selection, with its wallpaper pointing into
+  `/run/current-system/sw/share`; automatic apply/restore remains follow-up work (sddm.md).

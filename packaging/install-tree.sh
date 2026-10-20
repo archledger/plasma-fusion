@@ -8,10 +8,12 @@
 # spec, the Arch PKGBUILD, Debian's rules, the Nix package), so the installed files are the same
 # everywhere apart from the directories chosen below. Run from the top of a built source tree.
 #
-#   packaging/install-tree.sh --stage DIR --plymouth DIR [options]
+#   packaging/install-tree.sh --stage DIR --plymouth DIR --sddm DIR [options]
 #
 #   --stage DIR        tools/build.sh's STAGE (its .local/share, .local/libexec and .config)
 #   --plymouth DIR     generators/plymouth/build.sh's theme directory (…/plasma-fusion)
+#   --sddm DIR         packages/sddm-theme/build.sh's theme directory (…/plasmafusion),
+#                      installed as P/share/sddm/themes/plasmafusion
 #   --destdir DIR      the package root files are written below (rpm's buildroot, makepkg's pkgdir,
 #                      debian/<package>); empty for Nix, whose prefix is $out
 #   --prefix P         /usr by default: data in P/share, the command in P/bin
@@ -28,11 +30,12 @@
 # text, so a moved string fails the build instead of shipping a wrong path. Everything the build
 # staged must be installed: a new part written below .local/share without a line here fails too.
 set -euo pipefail
-STAGE='' PLYMOUTH='' DESTDIR='' PREFIX=/usr LIBEXECDIR='' SYSSHARE='' PLYTHEME=0
+STAGE='' PLYMOUTH='' SDDM='' DESTDIR='' PREFIX=/usr LIBEXECDIR='' SYSSHARE='' PLYTHEME=0
 while [ $# -gt 0 ]; do
   case $1 in
     --stage) STAGE=$2; shift ;;
     --plymouth) PLYMOUTH=$2; shift ;;
+    --sddm) SDDM=$2; shift ;;
     --destdir) DESTDIR=$2; shift ;;
     --prefix) PREFIX=$2; shift ;;
     --libexecdir) LIBEXECDIR=$2; shift ;;
@@ -45,6 +48,7 @@ while [ $# -gt 0 ]; do
 done
 [ -d "$STAGE/.local/share" ] || { echo "--stage: no .local/share in '$STAGE' (run tools/build.sh)" >&2; exit 2; }
 [ -s "$PLYMOUTH/plasma-fusion.plymouth" ] || { echo "--plymouth: no plasma-fusion.plymouth in '$PLYMOUTH'" >&2; exit 2; }
+[ -f "$SDDM/metadata.desktop" ] || { echo "--sddm: no metadata.desktop in '$SDDM' (run packages/sddm-theme/build.sh)" >&2; exit 2; }
 [ -f tools/build.sh ] && [ -f VERSION ] || { echo "run from the top of the Plasma Fusion source tree" >&2; exit 2; }
 PREFIX=${PREFIX%/}
 LIBEXECDIR=${LIBEXECDIR:-$PREFIX/libexec}
@@ -145,6 +149,10 @@ else
   mkdir -p "$dest/plasma-fusion/plymouth"
   cp -a "$PLYMOUTH" "$dest/plasma-fusion/plymouth/plasma-fusion"
 fi
+
+# The SDDM login theme: installed for manual selection; apply/restore integration is a follow-up.
+mkdir -p "$dest/sddm/themes"
+cp -a "$SDDM" "$dest/sddm/themes/plasmafusion"
 
 # Per-user configuration from the build (GTK 3/4 stylesheets, the font fallback, user units), kept
 # as templates for the per-user step; the package itself writes nothing into a home directory.

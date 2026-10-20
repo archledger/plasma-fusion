@@ -1,0 +1,430 @@
+/* SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * The board's sign-in card (Login.dc.html, 520,210 at 1440 x 900): the 112 px avatar, the name,
+ * the 340 x 28 pill password field with its show-password and sign-in buttons, and the message
+ * row. "Use fingerprint" and "Caps Lock is on" are board items SDDM gives themes no API for
+ * (GreeterProxy.h); the message slot carries login messages instead (docs/parts/sddm.md).
+ */
+
+import QtQuick 2.15
+import "palette.js" as Palette
+
+Item {
+    id: card
+    height: column.implicitHeight
+
+    property url avatarSource: ""
+    property string avatarLetter: ""
+    property string personName: ""
+    property bool promptName: false
+    property string message: ""
+    property bool passwordRequired: true
+    property bool busy: false
+    // SDDM creates an independent QML engine per screen. Only the primary view may submit, so a
+    // second screen cannot start a competing authentication against the shared daemon.
+    property bool allowInput: true
+    property real heightBudget: Number.POSITIVE_INFINITY
+    // Measure only the non-message pieces; the message budget must not depend on its own height.
+    readonly property real baseHeight: avatarFrame.height + column.spacing + passwordRow.height
+        + (personLabel.visible ? personLabel.height + column.spacing : 0)
+        + (nameRow.visible ? nameRow.height + fields.spacing : 0)
+        + (capsRow.visible ? capsRow.height + fields.spacing : 0)
+    signal loginRequested(string user, string password)
+
+    function focusPassword() {
+        if (promptName) {
+            nameInput.forceActiveFocus();
+        } else if (passwordRequired) {
+            password.forceActiveFocus();
+        } else {
+            signIn.forceActiveFocus();
+        }
+    }
+    function clearPassword() {
+        showPassword.pressed = false;
+        // clear(), unlike assigning text, also resets partial input from the IME.
+        // https://doc.qt.io/qt-6/qml-qtquick-textinput.html#clear-method
+        password.clear();
+        focusPassword();
+    }
+    function focusUsername() {
+        if (promptName) {
+            nameInput.forceActiveFocus();
+        }
+    }
+    function focusPasswordField() {
+        if (passwordRequired) {
+            password.forceActiveFocus();
+        } else {
+            signIn.forceActiveFocus();
+        }
+    }
+    function submit() {
+        if (allowInput && !busy) {
+            loginRequested(promptName ? nameInput.text : "", passwordRequired ? password.text : "");
+        }
+    }
+    function clearUsername() {
+        nameInput.clear();
+    }
+
+    Column {
+        id: column
+        width: parent.width
+        spacing: 16
+
+        // Avatar: the user's icon, else its initial on the board's purple disc
+        Rectangle {
+            id: avatarFrame
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 112
+            height: 112
+            radius: 56
+            color: Palette.avatarFill
+            border.color: Palette.avatarRing
+            border.width: 4
+
+            CircularImage {
+                id: cardAvatar
+                anchors.fill: parent
+                anchors.margins: 4
+                source: card.avatarSource
+                fill: Palette.avatarFill
+                visible: card.avatarSource != ""
+            }
+            Text {
+                anchors.centerIn: parent
+                visible: !cardAvatar.ready
+                font.family: Palette.clockFont
+                font.pixelSize: 46
+                font.weight: Font.Bold
+                color: "#ffffff"
+                text: card.avatarLetter
+                textFormat: Text.PlainText
+            }
+        }
+
+        Text {
+            id: personLabel
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
+            font.family: Palette.clockFont
+            font.pixelSize: 28
+            font.weight: Font.DemiBold
+            color: Palette.ink
+            text: card.personName
+            textFormat: Text.PlainText
+            visible: !card.promptName
+        }
+
+        Column {
+            id: fields
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 340
+            spacing: 10
+
+            // The name field (the "Other user" path; as KDE's theme: a user not in the model)
+            Rectangle {
+                id: nameRow
+                visible: card.promptName
+                width: parent.width
+                height: 48
+                radius: 24
+                color: Palette.fillField
+                border.color: nameInput.activeFocus ? Palette.accent : Palette.stroke
+                border.width: nameInput.activeFocus ? 1.5 : 1
+
+                Rectangle {
+                    visible: nameInput.activeFocus
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    radius: 28
+                    color: "transparent"
+                    border.color: Palette.accentRing
+                    border.width: 4
+                    z: -1
+                }
+                TextInput {
+                    id: nameInput
+                    Accessible.name: qsTr("Username")
+                    // Raw TextInput is outside the Tab chain unless this is explicit.
+                    activeFocusOnTab: true
+                    enabled: card.allowInput && !card.busy
+                    // Account names are case-sensitive; an autocapitalising IME must not change one.
+                    inputMethodHints: Qt.ImhNoAutoUppercase
+                    anchors.fill: parent
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 18
+                    verticalAlignment: TextInput.AlignVCenter
+                    font.family: Palette.bodyFont
+                    font.pixelSize: 16
+                    color: Palette.ink
+                    clip: true
+                    onAccepted: card.passwordRequired ? password.forceActiveFocus() : card.submit()
+                }
+                Text {
+                    anchors.fill: nameInput
+                    verticalAlignment: Text.AlignVCenter
+                    font.family: Palette.bodyFont
+                    font.pixelSize: 16
+                    color: Palette.inkMuted
+                    visible: nameInput.text === "" && nameInput.preeditText.length === 0
+                    text: qsTr("Username")
+                }
+            }
+            // The pill password field (48 high, radius 24, the accent ring when focused)
+            Rectangle {
+                id: passwordRow
+                objectName: "passwordRow"
+                width: parent.width
+                height: 48
+                radius: 24
+                color: Palette.fillField
+                border.color: password.activeFocus ? Palette.accent : Palette.stroke
+                border.width: password.activeFocus ? 1.5 : 1
+
+                Rectangle {
+                    visible: password.activeFocus
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    radius: 28
+                    color: "transparent"
+                    border.color: Palette.accentRing
+                    border.width: 4
+                    z: -1
+                }
+
+                TextInput {
+                    id: password
+                    objectName: "passwordInput"
+                    visible: card.passwordRequired
+                    Accessible.name: qsTr("Password")
+                    Accessible.passwordEdit: true
+                    activeFocusOnTab: true
+                    enabled: card.allowInput && !card.busy
+                    // Qt suppresses a protected field's name; keep a static, non-secret description.
+                    Accessible.description: qsTr("Password")
+                    // Keep these hints when reveal switches echoMode to Normal (the lock-screen policy).
+                    inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhSensitiveData
+                    anchors.left: parent.left
+                    anchors.right: showPassword.left
+                    anchors.leftMargin: 18
+                    // Fill the row so a click anywhere in the pill focuses the field.
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    font.family: Palette.bodyFont
+                    font.pixelSize: 16
+                    font.letterSpacing: 0.2
+                    color: Palette.ink
+                    echoMode: showPassword.pressed ? TextInput.Normal : TextInput.Password
+                    clip: true
+                    onAccepted: card.submit()
+                    Keys.onEscapePressed: card.clearPassword()
+                    Keys.onPressed: event => {
+                        // Match the lock screen: deleted input must not be recoverable after reveal.
+                        if (event.matches(StandardKey.Undo) || event.matches(StandardKey.Redo)) {
+                            event.accepted = true;
+                        }
+                    }
+                }
+                Text {
+                    anchors.fill: password
+                    verticalAlignment: TextInput.AlignVCenter
+                    font.family: Palette.bodyFont
+                    font.pixelSize: 16
+                    color: Palette.inkMuted
+                    visible: card.passwordRequired && password.text === "" && password.preeditText.length === 0
+                    text: qsTr("Password")
+                }
+                Text {
+                    objectName: "noPasswordLabel"
+                    anchors.left: parent.left
+                    anchors.right: signIn.left
+                    anchors.leftMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    font.family: Palette.bodyFont
+                    font.pixelSize: 16
+                    color: Palette.inkMuted
+                    visible: !card.passwordRequired
+                    text: qsTr("No password required")
+                    elide: Text.ElideRight
+                }
+
+                // Show password (the board's eye; 36 px round, inkSoft)
+                Item {
+                    id: showPassword
+                    visible: card.passwordRequired
+                    enabled: card.allowInput && !card.busy
+                    Accessible.name: qsTr("Show password")
+                    Accessible.role: Accessible.Button
+                    Accessible.checkable: true
+                    Accessible.checked: pressed
+                    activeFocusOnTab: true
+                    property bool pressed: false
+                    Keys.onReturnPressed: pressed = !pressed
+                    Keys.onEnterPressed: pressed = !pressed
+                    Keys.onSpacePressed: pressed = !pressed
+                    Accessible.onPressAction: pressed = !pressed
+                    anchors.right: signIn.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 36
+                    height: 36
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 18
+                        color: "transparent"
+                        border.color: Palette.accent
+                        border.width: showPassword.activeFocus ? 2 : 0
+                    }
+
+                    // The eye: a lens, its pupil and a struck line while the text shows
+                    Item {
+                        anchors.centerIn: parent
+                        width: 18
+                        height: 18
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 18
+                            height: 11
+                            radius: 6
+                            color: "transparent"
+                            border.color: Palette.inkSoft
+                            border.width: 1.8
+                        }
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 6
+                            height: 6
+                            radius: 3
+                            color: "transparent"
+                            border.color: Palette.inkSoft
+                            border.width: 1.8
+                        }
+                        Rectangle {
+                            visible: showPassword.pressed
+                            anchors.centerIn: parent
+                            width: 22
+                            height: 2
+                            color: Palette.inkSoft
+                            rotation: -45
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: showPassword.pressed = !showPassword.pressed
+                    }
+                }
+
+                // Sign in (36 px round, the board's deep blue arrow)
+                Rectangle {
+                    id: signIn
+                    enabled: card.allowInput && !card.busy
+                    Accessible.name: qsTr("Sign in")
+                    Accessible.role: Accessible.Button
+                    activeFocusOnTab: true
+                    Keys.onReturnPressed: card.submit()
+                    Keys.onEnterPressed: card.submit()
+                    Keys.onSpacePressed: card.submit()
+                    Accessible.onPressAction: card.submit()
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 36
+                    height: 36
+                    radius: 18
+                    color: Palette.accentDeep
+                    border.color: Palette.accent
+                    border.width: activeFocus ? 2 : 0
+
+                    Item {
+                        anchors.centerIn: parent
+                        width: 18
+                        height: 18
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 14
+                            height: 1.8
+                            color: "#ffffff"
+                        }
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 8
+                            height: 1.8
+                            color: "#ffffff"
+                            rotation: 45
+                            transformOrigin: Item.Right
+                        }
+                        Rectangle {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 8
+                            height: 1.8
+                            color: "#ffffff"
+                            rotation: -45
+                            transformOrigin: Item.Right
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
+                    }
+                }
+            }
+
+            // The message row (the board's caps-lock/fingerprint row; the fingerprint link is the
+            // one board item SDDM gives themes no API for - docs/parts/sddm.md)
+            Column {
+                id: messages
+                width: parent.width
+                spacing: 4
+
+                Row {
+                    id: capsRow
+                    visible: keyboard.capsLock
+                    spacing: 6
+                    Canvas {
+                        width: 14
+                        height: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        onPaint: {
+                            const ctx = getContext("2d");
+                            ctx.clearRect(0, 0, width, height);
+                            ctx.fillStyle = Palette.warnInk;
+                            // The board's bolt (M12 4l7 8h-4v7H9v-7H5z at 24 -> 14)
+                            ctx.beginPath();
+                            ctx.moveTo(8.2, 2.3);
+                            ctx.lineTo(12.3, 6.9);
+                            ctx.lineTo(9.9, 6.9);
+                            ctx.lineTo(9.9, 11.7);
+                            ctx.lineTo(5.8, 6.9);
+                            ctx.lineTo(8.2, 6.9);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                        Component.onCompleted: requestPaint()
+                    }
+                    Text {
+                        font.family: Palette.bodyFont
+                        font.pixelSize: 12
+                        font.weight: Font.Bold
+                        color: Palette.warnInk
+                        text: qsTr("Caps Lock is on")
+                    }
+                }
+
+                MessageView {
+                    width: parent.width
+                    visible: card.message !== ""
+                    text: card.message
+                    heightBudget: card.heightBudget - card.baseHeight
+                        - (capsRow.visible ? messages.spacing : fields.spacing)
+                }
+            }
+        }
+    }
+}

@@ -12,7 +12,9 @@ Three pieces:
    channel.
 2. **Login greeter styling** (`tools/system/greeter-apply.sh`, `greeter-restore.sh`): Plasma Fusion
    Dark for the plasma-login-manager 6.7.5 greeter, the way System Settings' "Apply Plasma
-   Settings…" would do it, plus the greeter wallpaper.
+   Settings…" would do it, plus the greeter wallpaper. The shared package also installs the
+   [SDDM theme](sddm.md) for manual selection; these scripts still handle plasma-login-manager
+   only and do not select or restart SDDM.
 3. **Kate and Marknote** installed with dnf for the design's Code and Notes slots.
 
 Owned files: `packaging/` (version, source tarball, the shared install script, the Fedora spec,
@@ -28,7 +30,7 @@ the PKGBUILD, the Debian packaging, the Nix packages, rpmlint filters, licence t
 | `VERSION` | the only version (`0.2.0`); `packaging/check-version.sh` checks that the spec, the PKGBUILD and the Debian changelog agree (build workflow, Packit) |
 | `packaging/version.sh [--rpm\|--deb\|--plain]` | the version of a commit: `X.Y.Z` at the tag `vX.Y.Z`; before it `X.Y.Z~N.gitHASH` (N commits in all), after it `X.Y.Z^N.gitHASH` (rpm) or `X.Y.Z+N.gitHASH` (dpkg) with N commits since the tag. A snapshot sorts above the release before it and below the one it leads to |
 | `packaging/make-source.sh [--ref REF\|--worktree]` | `plasma-fusion-X.Y.Z.tar.gz`: `git archive` of a tag (the release asset every channel builds from) or the working tree (test builds); sorted, owners 0, the commit's time, `gzip -n`: the same commit gives the same bytes |
-| `packaging/install-tree.sh` | installs the shared part into a package root for every channel: what `tools/build.sh` staged, the Plymouth theme (as the source `plymouth-install.sh` installs, or on NixOS as a theme), the per-user templates, the setup tools, `plasma-fusion` in `bin/`, `version`, `tested-plasma.txt`, `items.txt` and the documentation. `--libexecdir` (Arch: `/usr/lib`) and `--system-share` (NixOS: the system profile) set the paths the charge limit's polkit action and tile, the on-screen keyboard's desktop file and the icon names handed back to Breeze and hicolor use; every replacement must find its text. It fails when the build staged anything it does not install |
+| `packaging/install-tree.sh` | requires `--stage DIR` (the HOME stage), `--plymouth DIR` (the built Plymouth theme) and `--sddm DIR` (the built `plasmafusion` theme directory, not its parent). Installs the shared part into a package root for every channel: what `tools/build.sh` staged, the Plymouth theme (as the source `plymouth-install.sh` installs, or on NixOS as a theme), the SDDM theme, the per-user templates, setup tools, `plasma-fusion` in `bin/`, version records and documentation. `--libexecdir` (Arch: `/usr/lib`) and `--system-share` (NixOS: the system profile) set the helper, polkit, keyboard and icon paths; every replacement must find its text. It fails when the build staged anything it does not install. Installing the theme never selects or restarts a display manager |
 | `packaging/tested-plasma.txt` | the Plasma series this version was tested with (`6.7`); the login check records no other series as tested (gate.md) |
 | `packaging/fedora/plasma-fusion.spec` | the Fedora spec Copr builds (`.packit.yaml`) |
 | `packaging/arch/PKGBUILD` | the AUR package (split: `plasma-fusion` any, the compiled parts x86_64), from the signed tag; a pacman hook names the compiled part due for a rebuild after a kwin or kdecoration upgrade |
@@ -63,7 +65,8 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
   build time (`use_source_date_epoch_as_buildtime`) and clamps the files' times to it, and the
   build host is recorded as `reproducible`.
 * `%build` runs `tools/build.sh` into `_stage/` (no display, `QT_QPA_PLATFORM=offscreen`, session
-  variables removed) and the Plymouth generator; with the compiled parts, the five CMake builds
+  variables removed), the Plymouth generator and `packages/sddm-theme/build.sh` into `_sddm/`;
+  the installer takes its `_sddm/plasmafusion` child. With the compiled parts, it runs five CMake builds
   (the settings page's, Quick Look's and copy text's overlay's QML get a time stamp derived from
   their sources, kcm-cpp.md).
 * `%install` runs `packaging/install-tree.sh` and `cmake --install` of the five parts; then every
@@ -93,6 +96,7 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
 | `/usr/share/plasma/desktoptheme/plasma-fusion-{dark,light}/` | plasma-style | |
 | `/usr/share/plasma/plasmoids/org.plasmafusion.*/` | top bar, quick settings, launcher, dock, desktop cards | glob, so new Plasma Fusion widgets are packaged without a spec change |
 | `/usr/share/plasma/shells/org.plasmafusion.lockshell/` | lockscreen | |
+| `/usr/share/sddm/themes/plasmafusion/` | `packages/sddm-theme/build.sh` | QtQuick login theme, metadata and `theme.conf`; manual selection only, no active greeter or authentication settings changed (sddm.md) |
 | `/usr/share/plasma/layout-templates/org.plasmafusion.panel.{topbar,dock}/` | lookandfeel | the "Add Panel" entries; the directory belongs to plasma-desktop |
 | `/usr/share/icons/{PlasmaFusion,PlasmaFusion-Dark,PlasmaFusion-cursors,PlasmaFusion-Light-cursors}/` | icons, cursors | all 8 816 links kept (see below) |
 | `/usr/share/aurorae/themes/PlasmaFusion{Dark,Light}{,-Left}/` | decoration | `aurorae/` and `aurorae/themes/` co-owned (no owner in Fedora) |

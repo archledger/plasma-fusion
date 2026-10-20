@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: CC0-1.0
+#
+# The theme's options (SDDM reads this file into the `config` context object; GreeterApp.cpp).
+# build.sh writes BACKGROUND - one of tools/system/greeter-apply.sh's three Dusk Ridge treatments
+# (login, dimmed, blurred), the login board's by default.
+[General]
+background=@BACKGROUND@
+# SDDM 0.21 otherwise requests every getpwent() entry for a theme that does not opt out. This
+# theme offers "Other user", so it works with the directory-backed-limited model: a host on LDAP
+# need not enumerate its whole passwd directory before the greeter appears.
+needsFullUserModel=false
