@@ -18,6 +18,7 @@
  */
 
 import QtQuick 2.15
+import QtCore
 
 Rectangle {
     id: root
@@ -34,11 +35,75 @@ Rectangle {
     // SDDM 0.21 never emits primaryChanged, so poll the getter at a login-screen pace.
     property bool primaryNow: primaryScreen === true
     property bool primaryInitialized: false
-    // SDDM exposes no cross-engine pending state, so a handoff waits briefly before accepting
-    // input instead of submitting into a request that may still run on the previous primary view.
-    property bool handoffReady: true
-    readonly property bool interactive: primaryNow && handoffReady
+    readonly property bool interactive: primaryNow
     readonly property real footerTop: Math.min(session.y, powerButtons.y)
+    // SDDM builds one QML engine per screen, so a QML property cannot lock a login across
+    // displays. A QSettings-backed file can; its owner renews a heartbeat while PAM runs.
+    readonly property string viewToken: Math.random().toString(36).substring(2)
+    readonly property string authLockPath: StandardPaths.writableLocation(
+        StandardPaths.GenericConfigLocation) + "/plasmafusion-auth.ini"
+    property bool lockOwned: false
+
+    Settings {
+        id: authState
+        location: root.authLockPath
+        category: "Auth"
+    }
+
+    function readAuthLock() {
+        authState.sync();
+        return {
+            pending: authState.value("pending", false) === true,
+            owner: String(authState.value("owner", "")),
+            heartbeat: Number(authState.value("heartbeat", 0))
+        };
+    }
+
+    function writeAuthLock(pending, owner, heartbeat) {
+        authState.setValue("pending", pending);
+        authState.setValue("owner", owner);
+        authState.setValue("heartbeat", heartbeat);
+        authState.sync();
+        return authState.value("pending", false) === pending
+            && String(authState.value("owner", "")) === owner;
+    }
+
+    function acquireAuthLock() {
+        const lock = readAuthLock();
+        if (lock.pending && Date.now() - lock.heartbeat < 5000) {
+            return false;
+        }
+        writeAuthLock(true, viewToken, Date.now());
+        lockOwned = true;
+        return true;
+    }
+
+    function clearAuthLock() {
+        writeAuthLock(false, "", 0);
+    }
+
+    function refreshAuthLock() {
+        const lock = readAuthLock();
+        if (lock.pending && Date.now() - lock.heartbeat < 5000) {
+            if (!root.authenticating) {
+                root.authenticating = true;
+                root.lockOwned = false;
+                card.message = qsTr("Signing in on another display…");
+            } else if (lock.owner === root.viewToken) {
+                authState.setValue("heartbeat", Date.now());
+                authState.sync();
+            }
+            return;
+        }
+        if (lock.pending) {
+            // The owning view or greeter is gone; reclaim rather than stay locked forever.
+            clearAuthLock();
+        }
+        if (root.authenticating && !root.lockOwned) {
+            root.authenticating = false;
+            card.message = "";
+        }
+    }
 
     function refreshPrimary() {
         let now = primaryScreen === true;
@@ -55,12 +120,8 @@ Rectangle {
         }
         primaryNow = now;
         if (now) {
-            handoffReady = false;
-            handoffTimer.restart();
             initUsers();
         } else {
-            handoffReady = false;
-            handoffTimer.stop();
             // Do not leave a revealed credential or typed name on a now-secondary display.
             card.clearPassword();
             card.clearUsername();
@@ -80,13 +141,10 @@ Rectangle {
         interval: 1000
         repeat: true
         running: true
-        onTriggered: root.refreshPrimary()
-    }
-    Timer {
-        id: handoffTimer
-        interval: 2000
-        repeat: false
-        onTriggered: root.handoffReady = true
+        onTriggered: {
+            root.refreshPrimary();
+            root.refreshAuthLock();
+        }
     }
 
     function login(user, password) {
@@ -105,7 +163,13 @@ Rectangle {
             card.clearPassword();
             return;
         }
+        if (!acquireAuthLock()) {
+            card.message = qsTr("Login already in progress");
+            card.clearPassword();
+            return;
+        }
         authenticating = true;
+        lockOwned = true;
         card.message = qsTr("Signing in…");
         // Do not leave a revealed credential on screen while PAM is pending.
         card.clearPassword();
@@ -116,6 +180,8 @@ Rectangle {
         target: sddm
         function onLoginFailed() {
             authenticating = false;
+            lockOwned = false;
+            clearAuthLock();
             card.message = qsTr("Login failed");
             card.clearPassword();
             // clearPassword focuses the name field for Other user; only the password was wrong.
@@ -123,6 +189,8 @@ Rectangle {
         }
         function onLoginSucceeded() {
             authenticating = false;
+            lockOwned = false;
+            clearAuthLock();
         }
         function onInformationMessage(message) {
             card.message = message;
@@ -276,6 +344,7 @@ Rectangle {
 
     Component.onCompleted: {
         refreshPrimary();
+        refreshAuthLock();
         initUsers();
     }
 

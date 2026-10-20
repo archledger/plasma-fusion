@@ -126,6 +126,12 @@ def main() -> int:
                         dependency in dependencies)
         ok &= check("Debian Build-Depends declares the QtQuick QML module",
                     "qml6-module-qtquick" in dependencies)
+        ok &= check("Debian Build-Depends declares the QtCore QML module",
+                    "qml6-module-qtcore" in dependencies)
+        main_stanza = (REPO / "packaging/debian/control").read_text().split(
+            "Package: plasma-fusion\n", 1)[1].split("\n\n", 1)[0]
+        ok &= check("Debian's main package depends on the QtCore QML module",
+                    "qml6-module-qtcore" in main_stanza)
 
         # Exercise each channel's actual builder invocation, not a hand-written equivalent:
         # build.sh takes a root and appends plasmafusion, while install-tree takes the theme.
@@ -151,12 +157,15 @@ def main() -> int:
                                 "background=/run/current-system/sw/share/plasma-fusion/backgrounds/"
                                 in configs[0].read_text())
 
-        # The theme stays dependency-free: QtQuick and its own files only
+        # The theme uses only core Qt modules and its own files: QtQuick for the board and
+        # QtCore's Settings/StandardPaths for the cross-engine authentication lock. Debian
+        # splits QtCore's QML module, so the package declares it explicitly.
         imports = []
         for qml in theme.glob("*.qml"):
             imports += re.findall(r'^import\s+(\S+)', qml.read_text(), re.M)
-        bad = sorted({i for i in imports if not (i.startswith('"') or i == "QtQuick")})
-        ok &= check("the QML imports only QtQuick and the theme's own files", not bad, ", ".join(bad))
+        bad = sorted({i for i in imports if not (i.startswith('"') or i in ("QtQuick", "QtCore"))})
+        ok &= check("the QML imports only QtQuick, QtCore and the theme's own files", not bad,
+                    ", ".join(bad))
 
         # The QML parses: qmllint when it is installed, else a balanced-brace read
         lint = shutil.which("qmllint")

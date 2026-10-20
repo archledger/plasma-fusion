@@ -14,6 +14,8 @@ import sys
 import tempfile
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
+# The theme's cross-screen lock is a QSettings file; keep every test run's state isolated.
+os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp(prefix="pf-sddm-config-")
 
 from PySide6.QtCore import (  # noqa: E402
     QAbstractListModel, QMetaObject, QModelIndex, QObject, QPoint, Property, Qt, QUrl, Signal, Slot,
@@ -755,9 +757,6 @@ def main():
         check(not card.property("allowInput"), "the primary poll keeps a non-primary view disabled")
         screen.set_primary(0)
         QMetaObject.invokeMethod(root, "refreshPrimary")
-        check(not card.property("allowInput"),
-              "a handoff keeps input disabled until the settle window ends")
-        QTest.qWait(2100)
         check(card.property("allowInput"), "input returns when this view becomes primary again")
         view.close()
         view.setSource(QUrl())
@@ -818,15 +817,68 @@ def main():
             check(not proxy.logins, "a secondary screen cannot submit a login")
             screen3.set_primary(0)
             QMetaObject.invokeMethod(root3, "refreshPrimary")
-            check(not card3.property("allowInput"),
-                  "a new primary view waits for the settle window")
-            QTest.qWait(2100)
             check(card3.property("allowInput"),
                   "a new primary view is re-enabled for input")
             check(card3.property("promptName"),
                   "the handoff keeps the initialized Other-user prompt")
             view3.close()
             view3.setSource(QUrl())
+            app.processEvents()
+
+        def open_shared_theme(screen_obj, primary):
+            view = QQuickView()
+            ctx = view.rootContext()
+            for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
+                              ("userModel", users), ("sessionModel", sessions),
+                              ("screenModel", screen_obj), ("primaryScreen", primary)):
+                ctx.setContextProperty(name, obj)
+            view.setResizeMode(QQuickView.SizeRootObjectToView)
+            view.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
+            if view.status() == QQuickView.Ready:
+                view.resize(1440, 900)
+                view.show()
+                QTest.qWait(100)
+            return view
+
+        # Separate engines share a QSettings file, so a pending login on one screen blocks a
+        # handoff to another screen until SDDM returns a result.
+        screen_a = Screen(0)
+        screen_b = Screen(-1)
+        view_a = open_shared_theme(screen_a, True)
+        view_b = open_shared_theme(screen_b, False)
+        check(view_a.status() == QQuickView.Ready and view_b.status() == QQuickView.Ready,
+              "the cross-screen lock fixtures load")
+        if view_a.status() == QQuickView.Ready and view_b.status() == QQuickView.Ready:
+            root_a = view_a.rootObject()
+            root_b = view_b.rootObject()
+            QQmlExpression(qmlContext(root_a), root_a, "clearAuthLock()").evaluate()
+            proxy.logins.clear()
+            QQmlExpression(qmlContext(root_a), root_a, 'login("", "first-input")').evaluate()
+            check(proxy.logins == [("user0", "first-input", 1)],
+                  "the primary view submits the shared request")
+            QTest.qWait(1100)
+            check(root_b.property("authenticating"),
+                  "another screen sees the pending lock")
+            screen_a.set_primary(-1)
+            screen_b.set_primary(0)
+            QMetaObject.invokeMethod(root_a, "refreshPrimary")
+            QMetaObject.invokeMethod(root_b, "refreshPrimary")
+            check(root_b.property("interactive"), "the promoted view accepts input")
+            QQmlExpression(qmlContext(root_b), root_b, 'login("", "second-input")').evaluate()
+            check(len(proxy.logins) == 1,
+                  "the promoted view cannot submit while the shared lock is held")
+            proxy.loginFailed.emit()
+            QTest.qWait(50)
+            check(not root_a.property("authenticating") and not root_b.property("authenticating"),
+                  "the shared result unlocks every screen")
+            QQmlExpression(qmlContext(root_b), root_b, 'login("", "second-input")').evaluate()
+            check(len(proxy.logins) == 2, "the promoted view can submit after the result")
+            proxy.loginFailed.emit()
+            QTest.qWait(50)
+            view_a.close()
+            view_a.setSource(QUrl())
+            view_b.close()
+            view_b.setSource(QUrl())
             app.processEvents()
     print(f"SDDM behavior: {checks - failures}/{checks} passed")
     return 1 if failures else 0

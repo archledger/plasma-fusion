@@ -89,6 +89,7 @@ Requires:       plasma5support >= 6.7
 Requires:       breeze-icon-theme >= 6.30
 Requires:       fonts-filesystem
 Requires:       kde-filesystem
+Requires:       qt6-qtdeclarative
 # tools/device/*.sh and tools/system/*.sh
 Requires:       python3
 # pkexec for the charge-limit helper

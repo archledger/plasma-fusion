@@ -51,7 +51,7 @@ package_plasma-fusion() {
   pkgdesc="Plasma Fusion desktop for KDE Plasma 6 (themes, widgets, icons, fonts, setup tools)"
   depends=(plasma-workspace plasma-desktop libplasma kwin aurorae plasma5support kscreenlocker
            'breeze-icons>=6.30' kconfig kdbusaddons systemd polkit util-linux bash python python-pillow
-           fontconfig glib2)
+           fontconfig glib2 qt6-declarative)
   optdepends=('plasma-fusion-decoration: the Plasma Fusion window decoration'
               'plasma-fusion-settings: the Plasma Fusion page in System Settings'
               'plasma-fusion-quicklook: Quick Look (Space in Dolphin previews files)'
