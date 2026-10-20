@@ -16,7 +16,7 @@ import tempfile
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 from PySide6.QtCore import (  # noqa: E402
-    QAbstractListModel, QModelIndex, QObject, Property, Qt, QUrl, Signal, Slot,
+    QAbstractListModel, QMetaObject, QModelIndex, QObject, QPoint, Property, Qt, QUrl, Signal, Slot,
 )
 from PySide6.QtGui import QColor, QGuiApplication, QImage  # noqa: E402
 from PySide6.QtQml import QQmlExpression, qmlContext  # noqa: E402
@@ -128,7 +128,12 @@ def walk(item):
 
 
 def accessible(item):
-    value, _ = QQmlExpression(qmlContext(item), item, "Accessible.name").evaluate()
+    context = qmlContext(item)
+    # Flickable's native contentItem has no QML context. Do not pass null to QQmlExpression;
+    # its QML-authored descendants still carry the accessible names the test searches for.
+    if context is None:
+        return ""
+    value, _ = QQmlExpression(context, item, "Accessible.name").evaluate()
     return value or ""
 
 
@@ -159,8 +164,8 @@ def main():
         avatar = str(Path(tmp) / "avatar.png")
         image.save(avatar)
         subprocess.run(["bash", str(HERE / "build.sh"), tmp, avatar], check=True)
-        users = Model([{"name": f"user{i}", "realName": f"Person {i}", "icon": avatar}
-                       for i in range(4)])
+        users = Model([{"name": f"user{i}", "realName": "A long account name " * 6 if i == 0 else f"Person {i}",
+                        "icon": avatar} for i in range(20)])
         sessions = Model([{"name": name} for name in ("Plasma", "Plasma X11", "Other session")])
         keyboard = Keyboard()
         proxy = Proxy()
@@ -183,7 +188,14 @@ def main():
         QTest.qWait(100)
         root = view.rootObject()
         password = find(root, "Password")
+        reveal = find(root, "Show password")
         check(root.property("loginName") == "user0", "SDDM's last user populates the login card")
+        check(password.hasActiveFocus() and
+              any(item.property("text") == "Password" and item.isVisible() for item in walk(root)),
+              "the initially focused password field has a visible prompt")
+        switcher = next(item for item in walk(root) if item.property("choiceCount") is not None)
+        check(switcher.width() <= root.width() - 64 and switcher.x() >= 32,
+              "many accounts and a long name stay in a viewport inside the screen margins")
 
         layout = find(root, "Keyboard layout")
         check(reachable(view, password, layout), "Tab reaches the keyboard-layout control")
@@ -208,12 +220,32 @@ def main():
         press(view, second, Qt.Key_Return)
         check(root.property("loginName") == "user1", "Return chooses the focused account")
         password.setProperty("text", "test-input")
+        reveal.setProperty("pressed", True)
         press(view, third, Qt.Key_Space)
         check(root.property("loginName") == "user2" and password.property("text") == "",
               "account changes clear the previous password")
+        check(not reveal.property("pressed"), "account changes reset password visibility")
         other = find(root, "Other user")
         press(view, other, Qt.Key_Left)
-        check(view.activeFocusItem() == find(root, "Person 3"), "Left from Other user focuses the last account")
+        last = find(root, "Person 19")
+        check(view.activeFocusItem() == last, "Left from Other user focuses the last account")
+        left = last.mapToScene(last.boundingRect().topLeft()).x()
+        check(left >= 32 and left + last.width() <= root.width() - 32,
+              "keyboard focus scrolls the last account fully into the viewport")
+        viewport = next(item for item in walk(switcher) if item.property("contentX") is not None)
+        before = viewport.property("contentX")
+        start = viewport.mapToScene(viewport.boundingRect().center()).toPoint()
+        QTest.mousePress(view, Qt.LeftButton, Qt.NoModifier, start)
+        QTest.qWait(30)
+        # First cross the drag threshold, then move after Flickable takes the pointer grab.
+        QTest.mouseMove(view, start + QPoint(30, 0), 30)
+        QTest.qWait(30)
+        QTest.mouseMove(view, start + QPoint(230, 0), 30)
+        QTest.qWait(30)
+        QTest.mouseMove(view, start + QPoint(330, 0), 30)
+        QTest.mouseRelease(view, Qt.LeftButton, Qt.NoModifier, start + QPoint(330, 0))
+        QMetaObject.invokeMethod(viewport, "cancelFlick")
+        check(viewport.property("contentX") < before, "a pointer drag scrolls hidden accounts into view")
         press(view, other, Qt.Key_Return)
         username = find(root, "Username")
         check(username.isVisible() and view.activeFocusItem() == username,
@@ -250,11 +282,12 @@ def main():
         press(view, password, Qt.Key_Return)
         check(proxy.logins == [("unlisted", "test-input", 2)],
               "login submits the typed username and selected session to the stand-in only")
+        reveal.setProperty("pressed", True)
         proxy.loginFailed.emit()
         QTest.qWait(10)
         check(password.property("text") == "", "failed login clears the password")
+        check(not reveal.property("pressed"), "failed login resets password visibility")
 
-        reveal = find(root, "Show password")
         check(reachable(view, password, reveal), "Tab reaches password visibility")
         press(view, reveal, Qt.Key_Space)
         check(reveal.property("pressed"), "Space operates password visibility")
@@ -268,6 +301,10 @@ def main():
         QTest.keyClick(view, Qt.Key_Backspace)
         QTest.keyClick(view, Qt.Key_Z, Qt.ControlModifier)
         check(password.property("text") == "", "Undo cannot recover deleted password input")
+        view.resize(480, 900)
+        QTest.qWait(20)
+        check(switcher.width() <= 416 and switcher.x() >= 32,
+              "the account viewport follows a narrow screen")
         check(not warnings, "theme behavior emits no QML warnings")
         for warning in warnings:
             print("QML", warning)

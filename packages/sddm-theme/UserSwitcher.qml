@@ -9,10 +9,17 @@
 import QtQuick 2.15
 import "palette.js" as Palette
 
-Item {
+Flickable {
     id: switcher
-    width: row.width
+    width: Math.min(row.width, Math.max(0, maximumWidth))
     height: row.height
+    property real maximumWidth: parent ? Math.max(0, parent.width - 64) : 1440
+    onWidthChanged: Qt.callLater(revealSelection)
+    clip: true
+    contentWidth: row.width
+    contentHeight: row.height
+    flickableDirection: Flickable.HorizontalFlick
+    boundsBehavior: Flickable.StopAtBounds
 
     property int selectedIndex: userModel.lastIndex >= 0 ? userModel.lastIndex : 0
     property bool otherSelected: false
@@ -51,6 +58,18 @@ Item {
             userRepeater.itemAt(next).focusChoice();
         }
     }
+    function ensureVisible(item) {
+        if (!item || switcher.width <= 0) {
+            return;
+        }
+        const x = item.mapToItem(row, 0, 0).x;
+        const wanted = x < switcher.contentX ? x
+                     : Math.max(switcher.contentX, x + item.width - switcher.width);
+        switcher.contentX = Math.max(0, Math.min(wanted, row.width - switcher.width));
+    }
+    function revealSelection() {
+        ensureVisible(otherSelected ? otherTile : userRepeater.itemAt(selectedIndex));
+    }
 
     Row {
         id: row
@@ -61,6 +80,7 @@ Item {
             model: userModel
             delegate: Column {
                 id: userColumn
+                width: 56
                 spacing: 8
                 property bool selected: !switcher.otherSelected && switcher.selectedIndex === index
                 function focusChoice() { userTile.forceActiveFocus(); }
@@ -74,6 +94,7 @@ Item {
                         switcher.sent = true;
                         switcher.userChosen(index, switcher.rowsData[index].user, switcher.rowsData[index].icon,
                                             switcher.rowsData[index].name, switcher.rowsData[index].letter);
+                        Qt.callLater(switcher.revealSelection);
                     }
                 }
 
@@ -89,7 +110,12 @@ Item {
                     color: Palette.avatarFill
                     border.color: (userColumn.selected || activeFocus) ? Palette.accent : Palette.avatarRing
                     border.width: (userColumn.selected || activeFocus) ? 3 : 0
-                    onActiveFocusChanged: { if (activeFocus) { switcher.cursor = index; } }
+                    onActiveFocusChanged: {
+                        if (activeFocus) {
+                            switcher.cursor = index;
+                            switcher.ensureVisible(userColumn);
+                        }
+                    }
                     Keys.onLeftPressed: switcher.moveChoice(index, -1)
                     Keys.onRightPressed: switcher.moveChoice(index, 1)
 
@@ -122,6 +148,9 @@ Item {
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
                     font.family: Palette.bodyFont
                     font.pixelSize: 13
                     font.weight: userColumn.selected ? Font.ExtraBold : Font.DemiBold
@@ -149,7 +178,12 @@ Item {
                 color: Palette.fillField
                 border.color: (otherColumn.selected || activeFocus) ? Palette.accent : Palette.dashed
                 border.width: 1.5
-                onActiveFocusChanged: { if (activeFocus) { switcher.cursor = userModel.count; } }
+                onActiveFocusChanged: {
+                    if (activeFocus) {
+                        switcher.cursor = userModel.count;
+                        switcher.ensureVisible(otherColumn);
+                    }
+                }
                 Keys.onLeftPressed: switcher.moveChoice(userModel.count, -1)
                 Keys.onRightPressed: switcher.moveChoice(userModel.count, 1)
 

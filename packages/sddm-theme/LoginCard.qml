@@ -29,6 +29,7 @@ Item {
         }
     }
     function clearPassword() {
+        showPassword.pressed = false;
         password.text = "";
         password.forceActiveFocus();
     }
@@ -68,6 +69,9 @@ Item {
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            elide: Text.ElideRight
             font.family: Palette.clockFont
             font.pixelSize: 28
             font.weight: Font.DemiBold
@@ -161,7 +165,7 @@ Item {
                     echoMode: showPassword.pressed ? TextInput.Normal : TextInput.Password
                     clip: true
                     onAccepted: card.loginRequested(card.promptName ? nameInput.text : "", text)
-                    Keys.onEscapePressed: text = ""
+                    Keys.onEscapePressed: card.clearPassword()
                     Keys.onPressed: event => {
                         // Match the lock screen: deleted input must not be recoverable after reveal.
                         if (event.matches(StandardKey.Undo) || event.matches(StandardKey.Redo)) {
@@ -175,7 +179,7 @@ Item {
                     font.family: Palette.bodyFont
                     font.pixelSize: 16
                     color: Palette.inkMuted
-                    visible: password.text === "" && !password.activeFocus
+                    visible: password.text === "" && password.preeditText.length === 0
                     text: qsTr("Password")
                 }
 

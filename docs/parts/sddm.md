@@ -91,6 +91,11 @@ Qt6 greeter rejects.
   password; undo/redo shortcuts cannot recover deleted input, including while it is revealed
   (the same policy as the lock-screen PasswordField). Power/authentication dispatch is recorded
   only by the stand-ins, never a daemon. QML warnings fail the suite.
+  The empty password prompt remains visible on initial focus; explicit clears reset reveal as
+  well as input. Twenty-account and long-name fixtures exercise the bounded, clipped horizontal
+  account viewport, focus-following scroll, pointer dragging and a narrow screen. Captions elide
+  within the avatar width while each account's accessible name stays complete; the card's full
+  name is bounded by the card too.
 - The repository's QML checks (motion, a11y, id scope) cover the theme's files like every other
   part; the a11y check found the theme's ten unnamed interactive items before the first commit.
 
