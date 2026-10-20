@@ -212,7 +212,9 @@ Rectangle {
 
     Component.onCompleted: {
         if (!users.sent) {
-            users.otherRequested();
+            // No listed account answered: select Other user through the normal path so its
+            // visual and assistive state match the prompted username.
+            users.activateChoice(users.choiceCount - 1);
         }
     }
 

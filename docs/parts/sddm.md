@@ -148,7 +148,10 @@ Qt6 greeter rejects.
   Submitting captures the credential, clears and re-masks the field immediately, then holds one
   pending request: the card, account strip and session chooser stay blocked, with "Signing in…",
   until `loginFailed` or `loginSucceeded`. A slow PAM response cannot be resubmitted or have its
-  displayed account/session changed underneath it.
+  displayed account/session changed underneath it. Every way of opening the session chooser,
+  including Up/Down, shares the same guard. With no listed accounts, the fallback selects Other
+  user through the normal activation path, so its prompt, selection ring and accessible state
+  agree.
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill

@@ -98,6 +98,13 @@ Item {
             pill.forceActiveFocus();
         }
     }
+    function openMenu() {
+        if (busy) {
+            return;
+        }
+        menu.open = true;
+        focusChoice(session.index);
+    }
 
     Rectangle {
         id: pill
@@ -115,8 +122,8 @@ Item {
         Keys.onEnterPressed: session.toggleMenu()
         Keys.onSpacePressed: session.toggleMenu()
         Accessible.onPressAction: session.toggleMenu()
-        Keys.onDownPressed: { menu.open = true; session.focusChoice(session.index); }
-        Keys.onUpPressed: { menu.open = true; session.focusChoice(session.index); }
+        Keys.onDownPressed: session.openMenu()
+        Keys.onUpPressed: session.openMenu()
 
         Row {
             id: row

@@ -73,7 +73,8 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   stay in the Tab chain. Failed Other-user logins return focus to the password, and staged QML
   mtimes derive from content so upgrades invalidate Qt's cache. A submitted credential is cleared
   and re-masked immediately; one pending request blocks duplicate submission and account/session
-  changes until SDDM reports success or failure.
+  changes (including session arrow keys) until SDDM reports success or failure. An empty user
+  model selects Other user consistently.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.

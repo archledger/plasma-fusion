@@ -570,6 +570,8 @@ def main():
               "account selection is blocked while authentication is pending")
         press(view, picker, Qt.Key_Return)
         check(not option.isVisible(), "the session chooser is blocked while authentication is pending")
+        press(view, picker, Qt.Key_Down)
+        check(not option.isVisible(), "session arrow keys are blocked while authentication is pending")
         reveal.setProperty("pressed", True)
         proxy.loginFailed.emit()
         QTest.qWait(10)
@@ -705,6 +707,31 @@ def main():
         view.close()
         view.setSource(QUrl())
         app.processEvents()
+
+        # With no listed accounts, Main's fallback must select Other user through the normal
+        # path so the prompted username and the tile's visual/assistive state agree.
+        empty_users = Model([])
+        view2 = QQuickView()
+        context2 = view2.rootContext()
+        for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
+                          ("userModel", empty_users), ("sessionModel", sessions)):
+            context2.setContextProperty(name, obj)
+        view2.setResizeMode(QQuickView.SizeRootObjectToView)
+        view2.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
+        check(view2.status() == QQuickView.Ready, "the empty-user-model theme loads")
+        if view2.status() == QQuickView.Ready:
+            view2.resize(1440, 900)
+            view2.show()
+            QTest.qWait(100)
+            root2 = view2.rootObject()
+            card2 = next(item for item in walk(root2) if item.property("promptName") is not None)
+            other2 = find(root2, "Other user")
+            check(card2.property("promptName")
+                  and QQmlExpression(qmlContext(other2), other2, "Accessible.selected").evaluate()[0],
+                  "an empty user model selects Other user consistently")
+            view2.close()
+            view2.setSource(QUrl())
+            app.processEvents()
     print(f"SDDM behavior: {checks - failures}/{checks} passed")
     return 1 if failures else 0
 
