@@ -51,6 +51,7 @@ rec {
       patchShebangs tools generators packages
       STAGE=$PWD/_stage bash tools/build.sh
       bash generators/plymouth/build.sh "$PWD/_plymouth/plasma-fusion"
+      bash packages/sddm-theme/build.sh "$PWD/_sddm/plasmafusion"
       runHook postBuild
     '';
     # packaging/install-tree.sh, as every channel: the files that name another package's data point
@@ -60,7 +61,7 @@ rec {
     # splash is a theme for boot.plymouth.themePackages with its own store path.
     installPhase = ''
       runHook preInstall
-      bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion \
+      bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion --sddm "$PWD/_sddm/plasmafusion" \
         --prefix $out --libexecdir $out/libexec --system-share ${sw}/share --plymouth-theme
       runHook postInstall
     '';

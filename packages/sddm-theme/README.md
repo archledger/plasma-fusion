@@ -57,8 +57,9 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
 
 ## Install and check
 
-    packages/sddm-theme/build.sh build/sddm/theme        # stage the theme
-    sddm-greeter --test --theme build/sddm/theme         # see it without logging out
+    packages/sddm-theme/build.sh build/sddm               # stage the theme (build/sddm/plasmafusion)
+    sddm-greeter-qt6 --test-mode --theme build/sddm/plasmafusion   # see it (the Qt6 greeter, per
+                                                           # --help; the docs say --test, which it rejects)
 
 `greeter-apply.sh` (root) selects it on a system whose display manager is SDDM; on other display
 managers it reports and changes nothing.

@@ -11,6 +11,7 @@ import "palette.js" as Palette
 
 Item {
     id: switcher
+    width: row.width
     height: row.height
 
     property int selectedIndex: userModel.lastIndex >= 0 ? userModel.lastIndex : 0
@@ -45,21 +46,24 @@ Item {
                 }
 
                 Rectangle {
+                    id: userTile
                     Accessible.name: String(model.realName || model.name || "")
+                    Accessible.role: Accessible.Button
+                    activeFocusOnTab: true
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 56
                     height: 56
                     radius: 28
                     color: Palette.avatarFill
-                    border.color: selected ? Palette.accent : Palette.avatarRing
-                    border.width: selected ? 3 : 0
-                    clip: true
+                    border.color: (selected || activeFocus) ? Palette.accent : Palette.avatarRing
+                    border.width: (selected || activeFocus) ? 3 : 0
 
-                    Image {
+                    CircularImage {
                         anchors.fill: parent
+                        anchors.margins: 3
                         source: model.icon || ""
+                        fill: Palette.avatarFill
                         visible: model.icon !== undefined && model.icon !== ""
-                        fillMode: Image.PreserveAspectCrop
                     }
                     Text {
                         anchors.centerIn: parent
@@ -72,13 +76,17 @@ Item {
                     }
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: {
-                            switcher.otherSelected = false;
-                            switcher.selectedIndex = index;
-                            switcher.userChosen(index, String(model.name), model.icon || "",
-                                                String(model.realName || model.name),
-                                                String(model.realName || model.name || "?").charAt(0).toUpperCase());
-                        }
+                        onClicked: switchTo()
+                    }
+                    Keys.onReturnPressed: switchTo()
+                    Keys.onEnterPressed: switchTo()
+                    Keys.onSpacePressed: switchTo()
+                    function switchTo() {
+                        switcher.otherSelected = false;
+                        switcher.selectedIndex = index;
+                        switcher.userChosen(index, String(model.name), model.icon || "",
+                                            String(model.realName || model.name),
+                                            String(model.realName || model.name || "?").charAt(0).toUpperCase());
                     }
                 }
                 Text {
@@ -98,14 +106,17 @@ Item {
             property bool selected: switcher.otherSelected
 
             Rectangle {
+                id: otherTile
                 Accessible.name: qsTr("Other user")
+                Accessible.role: Accessible.Button
+                activeFocusOnTab: true
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 56
                 height: 56
                 radius: 28
                 color: Palette.fillField
-                border.color: selected ? Palette.accent : Palette.dashed
-                border.width: 1.5
+                border.color: (selected || activeFocus) ? Palette.accent : Palette.dashed
+                border.width: (selected || activeFocus) ? 1.5 : 1.5
 
                 Item {
                     anchors.centerIn: parent
@@ -134,10 +145,14 @@ Item {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: {
-                        switcher.otherSelected = true;
-                        switcher.otherRequested();
-                    }
+                    onClicked: switchToOther()
+                }
+                Keys.onReturnPressed: switchToOther()
+                Keys.onEnterPressed: switchToOther()
+                Keys.onSpacePressed: switchToOther()
+                function switchToOther() {
+                    switcher.otherSelected = true;
+                    switcher.otherRequested();
                 }
             }
             Text {

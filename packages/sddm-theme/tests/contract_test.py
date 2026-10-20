@@ -28,11 +28,11 @@ def check(name, ok, detail=""):
 
 
 def main() -> int:
+    own_tmp = None
     stage = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else None
-    tmp = None
     if stage is None:
-        tmp = tempfile.mkdtemp(prefix="sddm-contract-")
-        stage = pathlib.Path(tmp) / "stage"
+        own_tmp = tempfile.mkdtemp(prefix="sddm-contract-")
+        stage = pathlib.Path(own_tmp) / "stage"
     ok = True
     try:
         built = subprocess.run([str(HERE / "build.sh"), str(stage)],
@@ -41,8 +41,8 @@ def main() -> int:
 
         theme = stage / "plasmafusion"
         for name in ("Main.qml", "palette.js", "LoginCard.qml", "UserSwitcher.qml",
-                     "SessionPill.qml", "PowerBar.qml", "metadata.desktop", "theme.conf",
-                     "preview.webp"):
+                     "SessionPill.qml", "PowerBar.qml", "CircularImage.qml", "metadata.desktop",
+                     "theme.conf", "preview.webp"):
             ok &= check(f"the theme ships {name}", (theme / name).is_file())
 
         # metadata.desktop: the identity SDDM reads (docs/THEMING.md; KDE's Breeze theme)
@@ -84,20 +84,23 @@ def main() -> int:
                 ok &= check(f"{qml.name} has balanced braces",
                             text.count("{") == text.count("}"), qml.name)
 
-        # build.sh is reproducible
-        again = stage.parent / (stage.name + "-again") if tmp else stage.parent / "stage-again"
-        built2 = subprocess.run([str(HERE / "build.sh"), str(again)], capture_output=True, text=True)
-        same = built2.returncode == 0
-        if same:
-            for f in sorted(theme.iterdir()):
-                twin = again / "plasmafusion" / f.name
-                same &= twin.is_file() and twin.read_bytes() == f.read_bytes()
-        ok &= check("two builds are byte-identical", same)
+        # build.sh is reproducible; the second build and its comparison live in a directory this
+        # invocation owns, so an explicitly given stage never has siblings removed under it
+        again_root = pathlib.Path(tempfile.mkdtemp(prefix="sddm-again-"))
+        try:
+            built2 = subprocess.run([str(HERE / "build.sh"), str(again_root)],
+                                    capture_output=True, text=True)
+            same = built2.returncode == 0
+            if same:
+                for f in sorted(theme.iterdir()):
+                    twin = again_root / "plasmafusion" / f.name
+                    same &= twin.is_file() and twin.read_bytes() == f.read_bytes()
+            ok &= check("two builds are byte-identical", same)
+        finally:
+            shutil.rmtree(again_root, ignore_errors=True)
     finally:
-        if tmp:
-            shutil.rmtree(tmp, ignore_errors=True)
-        elif stage.parent.joinpath("stage-again").exists():
-            shutil.rmtree(stage.parent / "stage-again", ignore_errors=True)
+        if own_tmp:
+            shutil.rmtree(own_tmp, ignore_errors=True)
     return 0 if ok else 1
 
 

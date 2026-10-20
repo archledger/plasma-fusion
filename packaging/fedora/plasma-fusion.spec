@@ -261,6 +261,10 @@ bash tools/build.sh
 # stage. It is shipped as a source for tools/system/plymouth-install.sh, not installed into
 # /usr/share/plymouth/themes: installing this package never changes the boot splash.
 bash generators/plymouth/build.sh "$PWD/_plymouth/plasma-fusion"
+# The SDDM login theme is system-wide only, like the Plymouth theme: it is installed as
+# share/sddm/themes/plasmafusion (SDDM reads its themes from there), and greeter-apply.sh
+# selects it.
+bash packages/sddm-theme/build.sh "$PWD/_sddm/plasmafusion"
 
 %if %{with compiled}
 for part in decoration navigation; do
@@ -303,7 +307,7 @@ done
 %endif
 
 %install
-bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion \
+bash packaging/install-tree.sh --stage _stage --plymouth _plymouth/plasma-fusion --sddm _sddm/plasmafusion \
   --destdir %{buildroot} --prefix %{_prefix} --libexecdir %{_libexecdir}
 mkdir -p %{buildroot}%{_datadir}/plasma-fusion/built-against
 %if %{with compiled}
@@ -360,6 +364,7 @@ for t in PlasmaFusion PlasmaFusion-Dark PlasmaFusion-cursors PlasmaFusion-Light-
   test -s "%{buildroot}%{_datadir}/icons/$t/index.theme"
 done
 test -s %{buildroot}%{_datadir}/plasma-fusion/backgrounds/dusk-ridge-dark-login.png
+test -s %{buildroot}%{_datadir}/sddm/themes/plasmafusion/metadata.desktop
 # What the per-user step takes from the package: the power-tiers unit and program, the pen
 # templates, the login check, the top-bar script of the Global Themes, the font fallback.
 test -s %{buildroot}%{_datadir}/plasma-fusion/powerfx/plasma-fusion-powerfx.service
@@ -476,6 +481,7 @@ grep -qx 'Exec=%{_libexecdir}/plasma-fusion/plasma-fusion-copytext-overlay' \
 %{_datadir}/plasma-fusion/compat/
 %{_datadir}/plasma-fusion/config/
 %{_datadir}/plasma-fusion/plymouth/
+%{_datadir}/sddm/themes/plasmafusion/
 %{_datadir}/plasma-fusion/tools/
 %{_datadir}/plasma-fusion/version
 %{_datadir}/plasma-fusion/tested-plasma.txt

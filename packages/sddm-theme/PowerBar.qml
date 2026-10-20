@@ -12,6 +12,7 @@ import "palette.js" as Palette
 
 Item {
     id: power
+    width: column.width
     height: column.height
 
     Row {
@@ -65,7 +66,7 @@ Item {
                 height: 18
                 onPaint: {
                     const ctx = getContext("2d");
-                    ctx.reset();
+                    ctx.clearRect(0, 0, width, height);
                     ctx.strokeStyle = button.danger ? "#ffffff" : Palette.ink;
                     ctx.fillStyle = button.danger ? "#ffffff" : Palette.ink;
                     ctx.lineWidth = 1.8;

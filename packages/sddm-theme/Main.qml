@@ -77,10 +77,14 @@ Rectangle {
                 interval: 10000
                 repeat: true
                 running: true
-                onTriggered: clockText.text = Qt.formatTime(new Date(), "HH:mm")
+                onTriggered: {
+                    clockText.text = Qt.formatTime(new Date(), "HH:mm");
+                    dateText.text = Qt.formatDate(new Date(), "dddd, d MMMM");
+                }
             }
         }
         Text {
+            id: dateText
             anchors.baseline: clockText.baseline
             font.family: "Manrope"
             font.pixelSize: 14
@@ -140,6 +144,7 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.round(parent.height * 600 / 900)
         onUserChosen: (index, user, icon, name, letter) => {
+            card.clearPassword();
             root.loginName = user;
             root.personIcon = icon;
             root.personName = name;
@@ -148,6 +153,7 @@ Rectangle {
             card.focusPassword();
         }
         onOtherRequested: {
+            card.clearPassword();
             root.loginName = "";
             root.personIcon = "";
             root.personName = "";

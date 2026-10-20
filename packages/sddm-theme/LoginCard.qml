@@ -48,13 +48,12 @@ Item {
             border.color: Palette.avatarRing
             border.width: 4
 
-            Image {
+            CircularImage {
                 anchors.fill: parent
                 anchors.margins: 4
                 source: card.avatarSource
+                fill: Palette.avatarFill
                 visible: card.avatarSource != ""
-                fillMode: Image.PreserveAspectCrop
-                clip: true
             }
             Text {
                 anchors.centerIn: parent
@@ -276,7 +275,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         onPaint: {
                             const ctx = getContext("2d");
-                            ctx.reset();
+                            ctx.clearRect(0, 0, width, height);
                             ctx.fillStyle = Palette.warnInk;
                             // The board's bolt (M12 4l7 8h-4v7H9v-7H5z at 24 -> 14)
                             ctx.beginPath();

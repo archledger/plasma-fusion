@@ -23,8 +23,9 @@ mkdir -p "$DEST"
 
 # The theme's files: the QML, the palette and the metadata SDDM reads (docs/THEMING.md).
 cp "$HERE/Main.qml" "$HERE/palette.js" "$HERE/LoginCard.qml" "$HERE/UserSwitcher.qml" \
-   "$HERE/SessionPill.qml" "$HERE/PowerBar.qml" "$HERE/metadata.desktop" "$DEST/"
-sed "s|@BACKGROUND@|$BACKGROUND|" "$HERE/theme.conf.in" >"$DEST/theme.conf"
+   "$HERE/SessionPill.qml" "$HERE/PowerBar.qml" "$HERE/CircularImage.qml" \
+   "$HERE/metadata.desktop" "$DEST/"
+python3 -c 'import sys, pathlib; s = pathlib.Path(sys.argv[1]).read_text(); pathlib.Path(sys.argv[2]).write_text(s.replace(sys.argv[3], sys.argv[4]))' "$HERE/theme.conf.in" "$DEST/theme.conf" "@BACKGROUND@" "$BACKGROUND"
 cp "$HERE/../../design/previews/Login.webp" "$DEST/preview.webp"
 
 # A stable order and mode, so two builds are byte-identical.
