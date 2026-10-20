@@ -19,6 +19,12 @@ Item {
     property string personName: ""
     property bool promptName: false
     property string message: ""
+    property real heightBudget: Number.POSITIVE_INFINITY
+    // Measure only the non-message pieces; the message budget must not depend on its own height.
+    readonly property real baseHeight: avatarFrame.height + column.spacing + passwordRow.height
+        + (personLabel.visible ? personLabel.height + column.spacing : 0)
+        + (nameRow.visible ? nameRow.height + fields.spacing : 0)
+        + (capsRow.visible ? capsRow.height + fields.spacing : 0)
     signal loginRequested(string user, string password)
 
     function focusPassword() {
@@ -30,7 +36,9 @@ Item {
     }
     function clearPassword() {
         showPassword.pressed = false;
-        password.text = "";
+        // clear(), unlike assigning text, also resets partial input from the IME.
+        // https://doc.qt.io/qt-6/qml-qtquick-textinput.html#clear-method
+        password.clear();
         password.forceActiveFocus();
     }
 
@@ -41,6 +49,7 @@ Item {
 
         // Avatar: the user's icon, else its initial on the board's purple disc
         Rectangle {
+            id: avatarFrame
             anchors.horizontalCenter: parent.horizontalCenter
             width: 112
             height: 112
@@ -69,6 +78,7 @@ Item {
         }
 
         Text {
+            id: personLabel
             anchors.horizontalCenter: parent.horizontalCenter
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
@@ -83,6 +93,7 @@ Item {
         }
 
         Column {
+            id: fields
             anchors.horizontalCenter: parent.horizontalCenter
             width: 340
             spacing: 10
@@ -155,7 +166,13 @@ Item {
 
                 TextInput {
                     id: password
+                    objectName: "passwordInput"
                     Accessible.name: qsTr("Password")
+                    Accessible.passwordEdit: true
+                    // Qt suppresses a protected field's name; keep a static, non-secret description.
+                    Accessible.description: qsTr("Password")
+                    // Keep these hints when reveal switches echoMode to Normal (the lock-screen policy).
+                    inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhSensitiveData
                     anchors.left: parent.left
                     anchors.right: showPassword.left
                     anchors.leftMargin: 18
@@ -304,10 +321,12 @@ Item {
             // The message row (the board's caps-lock/fingerprint row; the fingerprint link is the
             // one board item SDDM gives themes no API for - docs/parts/sddm.md)
             Column {
+                id: messages
                 width: parent.width
                 spacing: 4
 
                 Row {
+                    id: capsRow
                     visible: keyboard.capsLock
                     spacing: 6
                     Canvas {
@@ -340,16 +359,12 @@ Item {
                     }
                 }
 
-                Text {
+                MessageView {
                     width: parent.width
                     visible: card.message !== ""
-                    font.family: Palette.bodyFont
-                    font.pixelSize: 12
-                    font.weight: Font.Bold
-                    color: Palette.warnInk
                     text: card.message
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
+                    heightBudget: card.heightBudget - card.baseHeight
+                        - (capsRow.visible ? messages.spacing : fields.spacing)
                 }
             }
         }

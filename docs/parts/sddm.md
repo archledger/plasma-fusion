@@ -1,6 +1,6 @@
 <!--
 SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
-SPDX-License-Identifier: GPL-2.0-or-later
+SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 
 # The SDDM login screen
@@ -103,12 +103,48 @@ Qt6 greeter rejects.
   password diagnosis.
   Short-screen card/account positions also keep both groups clear of each other and the footer;
   normal-height layouts keep the board's y positions (210 and 600 at 900 px high).
+  Password input requests the lock screen's sensitive/nonpredictive IME hints even while revealed;
+  `clear()` resets both committed text and preedit composition. A protected field has a static,
+  non-secret accessibility description (Qt 6.11.2 suppresses its attached name).
+  Model reset invalidates the selected session until delegates are rebuilt; the initial remembered
+  session is honored, resets fall back to the first available entry, data changes refresh the label,
+  and an empty model blocks login with "No sessions available". The live Repeater count is used
+  rather than SDDM 0.21's `CONSTANT` count property.
+  Full authentication instructions wrap, including unbroken text, and a bounded `MessageView`
+  grows within the remaining card space. Overflow remains reachable by Tab, arrows and Page
+  Up/Down (Home/End also work); long instructions, caps lock and Other user are covered together
+  at 480 px height without covering account/footer controls. No elision discards the instruction.
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
   change reproduces stale mask corners without the repaint handler.
 - The repository's QML checks (motion, a11y, id scope) cover the theme's files like every other
   part; the a11y check found the theme's ten unnamed interactive items before the first commit.
+
+### Live upstream references for the safety and lifecycle rules
+
+- [Qt 6.11.2 TextInput implementation](https://raw.githubusercontent.com/qt/qtdeclarative/v6.11.2/src/quick/items/qquicktextinput.cpp):
+  masked modes already add sensitive hints; explicit flags preserve them when reveal selects Normal.
+- [TextInput.clear()](https://doc.qt.io/qt-6/qml-qtquick-textinput.html#clear-method): use it instead of
+  assigning empty text, because it also resets partial input from the IME.
+- [Qt 6.11.2 accessibility implementation](https://raw.githubusercontent.com/qt/qtdeclarative/v6.11.2/src/quick/items/qquickaccessibleattached_p.h):
+  `name()` returns empty for `passwordEdit`; the field retains a static description, and tests use
+  its stable object name rather than dropping protected semantics to recover a label.
+- [SDDM 0.21 SessionModel.cpp](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/SessionModel.cpp)
+  and [header](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/SessionModel.h): directory
+  changes reset the model, while `count` and `lastIndex` are declared `CONSTANT`.
+- [Qt model-reset contract](https://doc.qt.io/qt-6/qabstractitemmodel.html#modelReset): previously read
+  counts, indexes and role data are invalid after reset.
+- [Text wrapping](https://doc.qt.io/qt-6/qml-qtquick-text.html#wrapMode-prop): `Text.Wrap` prefers word
+  boundaries but also wraps overlong words, unlike `WordWrap` alone.
+- [Flickable](https://doc.qt.io/qt-6/qml-qtquick-flickable.html) and
+  [Keys](https://doc.qt.io/qt-6/qml-qtquick-keys.html): the message's measured content height, clipped
+  viewport and keyboard paging stay in core QtQuick; no optional controls module is required.
+
+The current generic Qt reference identifies itself as 6.12.0. These longstanding APIs are checked
+against the version-pinned 6.11.2 source and the actual 6.11.1/6.11.2 runtimes; no 6.12-only API is
+used. IME hints are requests to the input-method implementation, not a claim about a particular
+IME's dictionary storage. Tests use synthetic composition, never real credentials or a PAM stack.
 
 ## Verification
 

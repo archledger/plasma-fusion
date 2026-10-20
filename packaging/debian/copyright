@@ -22,6 +22,7 @@ Comment: A few of these files are LGPL-2.0-or-later (their SPDX headers say so).
 
 Files: docs/* README.md SECURITY.md CONTRIBUTING.md GOVERNANCE.md design/*
        generators/wallpapers/svg/* packages/look-and-feel/*/contents/previews/*
+       packages/sddm-theme/README.md
 Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 License: CC-BY-SA-4.0
 Comment: The rendered artwork (icons, cursors, wallpapers, window decorations, backgrounds) is

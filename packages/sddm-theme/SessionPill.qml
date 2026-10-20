@@ -16,6 +16,46 @@ Item {
 
     property int index: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
     property string selectedName: ""
+    property bool resetting: false
+    readonly property bool valid: !resetting && index >= 0 && index < choices.count
+
+    function syncSelection() {
+        if (resetting) {
+            return;
+        }
+        if (choices.count === 0) {
+            index = -1;
+            selectedName = "";
+            return;
+        }
+        if (!valid) {
+            index = 0;
+        }
+        const item = choices.itemAt(index);
+        if (item) {
+            selectedName = item.sessionName;
+        }
+    }
+
+    // SDDM 0.21 declares count/lastIndex CONSTANT, but resets its model on directory changes.
+    // Use the live Repeater count and discard cached selection/data (docs/parts/sddm.md).
+    Connections {
+        target: sessionModel
+        function onModelAboutToBeReset() {
+            session.resetting = true;
+            session.index = -1;
+            session.selectedName = "";
+            if (menu.open) {
+                session.closeMenu();
+            }
+        }
+        function onModelReset() {
+            session.resetting = false;
+            Qt.callLater(session.syncSelection);
+        }
+        function onDataChanged() { Qt.callLater(session.syncSelection); }
+    }
+    Component.onCompleted: syncSelection()
 
     function choose(i, name) {
         index = i;
@@ -148,8 +188,10 @@ Item {
                 Repeater {
                     id: choices
                     model: sessionModel
+                    onCountChanged: Qt.callLater(session.syncSelection)
                     delegate: Rectangle {
                         id: choice
+                        property string sessionName: String(model.name || "")
                         width: list.width
                         height: 32
                         radius: 8

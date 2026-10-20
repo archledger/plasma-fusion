@@ -18,7 +18,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 from PySide6.QtCore import (  # noqa: E402
     QAbstractListModel, QMetaObject, QModelIndex, QObject, QPoint, Property, Qt, QUrl, Signal, Slot,
 )
-from PySide6.QtGui import QColor, QGuiApplication, QImage  # noqa: E402
+from PySide6.QtGui import QColor, QGuiApplication, QImage, QInputMethod, QInputMethodEvent  # noqa: E402
 from PySide6.QtQml import QQmlExpression, qmlContext  # noqa: E402
 from PySide6.QtQuick import QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -42,6 +42,19 @@ class Model(QAbstractListModel):
     def __init__(self, rows):
         super().__init__()
         self.rows = rows
+        self.last_index = 0
+
+    def reset_rows(self, rows, during_reset=None):
+        self.beginResetModel()
+        self.rows = rows
+        if during_reset:
+            during_reset()
+        self.endResetModel()
+
+    def rename_row(self, row, name):
+        self.rows[row]["name"] = name
+        role = next(role for role, value in self.roles.items() if value == b"name")
+        self.dataChanged.emit(self.index(row, 0), self.index(row, 0), [role])
 
     def roleNames(self):
         return self.roles
@@ -50,10 +63,12 @@ class Model(QAbstractListModel):
         return 0 if parent.isValid() else len(self.rows)
 
     def data(self, index, role):
+        if not index.isValid() or not 0 <= index.row() < len(self.rows):
+            return None
         return self.rows[index.row()].get(self.roles[role].decode(), "") if role in self.roles else None
 
     count = Property(int, lambda self: len(self.rows), constant=True)
-    lastIndex = Property(int, lambda self: 0, constant=True)
+    lastIndex = Property(int, lambda self: self.last_index, constant=True)
 
 
 class Layout(QObject):
@@ -72,6 +87,7 @@ class Keyboard(QObject):
         super().__init__()
         self.choices = [Layout("<b>EN</b>"), Layout("FR")]
         self.current = 0
+        self.caps = False
 
     def set_current(self, value):
         self.current = value
@@ -79,7 +95,7 @@ class Keyboard(QObject):
 
     layouts = Property("QVariantList", lambda self: self.choices, constant=True)
     currentLayout = Property(int, lambda self: self.current, set_current, notify=changed)
-    capsLock = Property(bool, lambda self: False, constant=True)
+    capsLock = Property(bool, lambda self: self.caps, notify=changed)
 
 
 class Proxy(QObject):
@@ -149,6 +165,11 @@ def plain_labels(root, text):
                                 for item in labels)
 
 
+def rendered_text(root, text):
+    return next(item for item in walk(root)
+                if item.property("text") == text and item.metaObject().indexOfProperty("lineCount") >= 0)
+
+
 def press(view, item, key, modifier=Qt.NoModifier):
     item.forceActiveFocus()
     QTest.keyClick(view, key, modifier)
@@ -179,6 +200,7 @@ def main():
         sessions = Model([{"name": name} for name in ("Plasma", "Plasma X11", "Other session")]
                          + [{"name": f"Additional {i}"} for i in range(12)]
                          + [{"name": session_name}])
+        sessions.last_index = 1
         keyboard = Keyboard()
         proxy = Proxy()
         config = Config(avatar)
@@ -199,19 +221,83 @@ def main():
         view.show()
         QTest.qWait(100)
         root = view.rootObject()
-        password = find(root, "Password")
+        # Qt 6.11.2 deliberately suppresses Accessible.name on passwordEdit items. Use the
+        # stable object name, while asserting the protected state and static description below.
+        password = root.findChild(QObject, "passwordInput")
+        check(password is not None, "the protected password input is available to the harness")
+        if password is None:
+            return 1
         reveal = find(root, "Show password")
+        card = next(item for item in walk(root) if item.property("promptName") is not None)
         check(root.property("loginName") == "user0", "SDDM's last user populates the login card")
-        check(plain_labels(root, account_name), "account names and captions render markup literally")
-        check(plain_labels(root, "<b>EN</b>"), "keyboard layout labels render markup literally")
-        proxy.informationMessage.emit("<b>Notice</b>")
-        QTest.qWait(10)
-        check(plain_labels(root, "<b>Notice</b>"), "daemon information renders markup literally")
-        proxy.informationMessage.emit("")
         check(password.hasActiveFocus() and
               any(item.property("text") == "Password" and item.isVisible() for item in walk(root)),
               "the initially focused password field has a visible prompt")
         switcher = next(item for item in walk(root) if item.property("choiceCount") is not None)
+        check(plain_labels(root, account_name), "account names and captions render markup literally")
+        check(plain_labels(root, "<b>EN</b>"), "keyboard layout labels render markup literally")
+        proxy.informationMessage.emit("<b>Notice</b>")
+        QTest.qWait(50)
+        check(plain_labels(root, "<b>Notice</b>"), "daemon information renders markup literally")
+        before_message = card.height()
+        long_message = "Read all of these authentication instructions before continuing. " * 80
+        proxy.informationMessage.emit(long_message)
+        QTest.qWait(50)
+        message = rendered_text(root, long_message)
+        check(message.property("lineCount") > 1 and not message.property("truncated"),
+              "long authentication instructions wrap without losing their ending")
+        check(card.height() > before_message, "the card grows to show wrapped authentication text")
+        message_view = next((item for item in walk(root) if accessible(item) == "Authentication message"), None)
+        check(message_view is not None and message_view.property("contentHeight") > message_view.height(),
+              "overlong authentication instructions have a bounded scrolling view")
+        paged = False
+        short_fit = False
+        caps_fit = False
+        other_caps_fit = False
+        if message_view is not None:
+            check(reachable(view, password, message_view), "Tab reaches overflowing authentication instructions")
+            press(view, message_view, Qt.Key_PageDown)
+            paged = message_view.property("contentY") > 0
+            view.resize(1440, 480)
+            QTest.qWait(50)
+            picker = next(item for item in walk(root) if accessible(item).startswith("Session:"))
+            footer_top = min(picker.mapToScene(picker.boundingRect().topLeft()).y(),
+                             find(root, "Sleep").mapToScene(find(root, "Sleep").boundingRect().topLeft()).y())
+            short_fit = (card.y() + card.height() <= switcher.y()
+                         and switcher.y() + switcher.height() <= footer_top)
+            keyboard.caps = True
+            keyboard.changed.emit()
+            QTest.qWait(50)
+            caps_fit = (card.y() + card.height() <= switcher.y()
+                        and switcher.y() + switcher.height() <= footer_top)
+            press(view, find(root, "Other user"), Qt.Key_Return)
+            QTest.qWait(50)
+            other_caps_fit = (card.y() + card.height() <= switcher.y()
+                              and switcher.y() + switcher.height() <= footer_top)
+            keyboard.caps = False
+            keyboard.changed.emit()
+            message_view.forceActiveFocus()
+            pages = int(message_view.property("contentHeight") / max(1, message_view.height())) + 2
+            for _ in range(pages):
+                QTest.keyClick(view, Qt.Key_PageDown)
+            check(message_view.property("contentY") >= message_view.property("contentHeight") - message_view.height() - 1,
+                  "keyboard paging can reach the end of all authentication instructions")
+            view.resize(1440, 900)
+            QTest.qWait(50)
+        else:
+            check(False, "Tab reaches overflowing authentication instructions")
+            check(False, "keyboard paging can reach the end of all authentication instructions")
+        check(paged, "Page Down scrolls authentication instructions")
+        check(short_fit, "long instructions keep the form, accounts and footer separate on a short screen")
+        check(caps_fit, "caps-lock warnings and long instructions fit together on a short screen")
+        check(other_caps_fit, "Other user, caps-lock warning and long instructions remain usable together")
+        unbroken_message = "X" * 200
+        proxy.informationMessage.emit(unbroken_message)
+        QTest.qWait(50)
+        message = rendered_text(root, unbroken_message)
+        check(message.property("lineCount") > 1 and message.property("contentWidth") <= message.width(),
+              "long unbroken authentication text also remains within the message row")
+        proxy.informationMessage.emit("")
         check(switcher.width() <= root.width() - 64 and switcher.x() >= 32,
               "many accounts and a long name stay in a viewport inside the screen margins")
 
@@ -273,7 +359,6 @@ def main():
 
         view.resize(1440, 480)
         QTest.qWait(20)
-        card = next(item for item in walk(root) if item.property("promptName") is not None)
         check(card.y() + card.height() + 16 <= switcher.y(),
               "the account strip does not cover the login fields on a short screen")
         picker = next(item for item in walk(root) if accessible(item).startswith("Session:"))
@@ -282,6 +367,8 @@ def main():
         check(switcher.y() + switcher.height() + 16 <= footer_top,
               "the account strip stays above the footer controls on a short screen")
         session = picker.parentItem()
+        check(session.property("index") == 1 and session.property("selectedName") == "Plasma X11",
+              "initial selection still honors the remembered session")
         option = find(root, "Other session")
         check(reachable(view, password, picker), "Tab reaches the session picker")
         press(view, picker, Qt.Key_Return)
@@ -349,6 +436,15 @@ def main():
         check(reachable(view, password, reveal), "Tab reaches password visibility")
         press(view, reveal, Qt.Key_Space)
         check(reveal.property("pressed"), "Space operates password visibility")
+        password.forceActiveFocus()
+        hints = QInputMethod.queryFocusObject(Qt.ImHints, None)
+        hints = getattr(hints, "value", hints)
+        required_hints = (Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText | Qt.ImhSensitiveData).value
+        check(hints is not None and hints & required_hints == required_hints,
+              "revealed password input still requests sensitive, nonpredictive IME handling")
+        check(QQmlExpression(qmlContext(password), password,
+                            'Accessible.passwordEdit && Accessible.description === qsTr("Password")').evaluate()[0],
+              "revealed input retains protected semantics and a non-secret description")
         # Qt's normal echo mode retains deleted input for undo. Never use a real secret here.
         reveal.setProperty("pressed", True)
         password.setProperty("text", "")
@@ -359,12 +455,52 @@ def main():
         QTest.keyClick(view, Qt.Key_Backspace)
         QTest.keyClick(view, Qt.Key_Z, Qt.ControlModifier)
         check(password.property("text") == "", "Undo cannot recover deleted password input")
+        reveal.setProperty("pressed", False)
+        password.forceActiveFocus()
+        QGuiApplication.sendEvent(password, QInputMethodEvent("preedit-test", []))
+        check(password.property("preeditText") == "preedit-test", "the IME fixture has active composition")
+        proxy.loginFailed.emit()
+        QTest.qWait(10)
+        check(password.property("preeditText") == "" and not password.property("inputMethodComposing"),
+              "clearing a password also resets uncommitted IME input")
         view.resize(480, 900)
         QTest.qWait(20)
         check(switcher.width() <= 416 and switcher.x() >= 32,
               "the account viewport follows a narrow screen")
         check(card.y() == 210 and switcher.y() == 600,
               "normal-height layouts keep the Login board's vertical positions")
+        proxy.logins.clear()
+
+        def login_during_reset():
+            # Exercise both the immediate signal handler and a later event-loop turn.
+            for _ in range(2):
+                password.setProperty("text", "test-input")
+                press(view, password, Qt.Key_Return)
+            check(not proxy.logins, "login is blocked while the session model is resetting")
+
+        sessions.reset_rows([{"name": "Replacement"}], login_during_reset)
+        QTest.qWait(50)
+        check(session.property("index") == 0 and session.property("selectedName") == "Replacement",
+              "a session reset replaces the old index and label coherently")
+        sessions.rename_row(0, "Renamed session")
+        QTest.qWait(50)
+        check(session.property("selectedName") == "Renamed session", "selected session names follow model data changes")
+        sessions.reset_rows([])
+        QTest.qWait(50)
+        proxy.logins.clear()
+        password.setProperty("text", "test-input")
+        press(view, password, Qt.Key_Return)
+        check(session.property("index") == -1 and not proxy.logins, "an empty session model never sends an invalid index")
+        check(any(item.property("text") == "No sessions available" and item.isVisible() for item in walk(root)),
+              "an empty session model gives an actionable message")
+        sessions.reset_rows([{"name": "Recovered"}, {"name": "Alternative"}])
+        QTest.qWait(50)
+        check(session.property("index") == 0 and session.property("selectedName") == "Recovered",
+              "session selection recovers when entries reappear")
+        proxy.logins.clear()
+        password.setProperty("text", "test-input")
+        press(view, password, Qt.Key_Return)
+        check(proxy.logins == [("unlisted", "test-input", 0)], "recovered logins use the displayed session index")
         check(not warnings, "theme behavior emits no QML warnings")
         for warning in warnings:
             print("QML", warning)

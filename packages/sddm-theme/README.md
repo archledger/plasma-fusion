@@ -2,7 +2,7 @@
 
 <!--
 SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
-SPDX-License-Identifier: GPL-2.0-or-later
+SPDX-License-Identifier: CC-BY-SA-4.0
 -->
 
 The Plasma Fusion login screen as an SDDM theme (docs/ROADMAP.md, "Login screen and boot splash
@@ -57,6 +57,10 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   with SDDM-shaped model/proxy stand-ins, driven by Qt key events. Covers Tab, account arrows,
   session selection, keyboard layouts, power dispatch, Other user, failed login, password reveal
   and blocked undo. The stand-ins never authenticate or perform a power action.
+- Input-method, model-reset and long-message regressions cover revealed-password hints,
+  composition clearing, replacement/empty/recovered session models, and complete instructions
+  reachable through the bounded keyboard-scrollable `MessageView`. `tests/avatar_test.py`
+  checks photo-mask pixels. The part page links the live Qt/SDDM sources behind these choices.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.

@@ -35,6 +35,11 @@ Rectangle {
         if (who === "") {
             return;
         }
+        if (!session.valid) {
+            card.message = qsTr("No sessions available");
+            card.clearPassword();
+            return;
+        }
         card.message = "";
         sddm.login(who, password, session.index);
     }
@@ -147,6 +152,7 @@ Rectangle {
         y: Math.max(0, Math.min(Math.round(parent.height * 210 / 900),
                                root.footerTop - users.height - height - 32))
         width: 400
+        heightBudget: Math.max(0, root.footerTop - users.height - 32)
         avatarSource: root.personIcon
         avatarLetter: root.personLetter
         personName: root.personName

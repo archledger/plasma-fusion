@@ -43,7 +43,7 @@ def main() -> int:
 
         theme = stage / "plasmafusion"
         for name in ("Main.qml", "palette.js", "LoginCard.qml", "UserSwitcher.qml",
-                     "SessionPill.qml", "PowerBar.qml", "CircularImage.qml", "metadata.desktop",
+                     "SessionPill.qml", "PowerBar.qml", "CircularImage.qml", "MessageView.qml", "metadata.desktop",
                      "theme.conf", "preview.webp"):
             ok &= check(f"the theme ships {name}", (theme / name).is_file())
 
@@ -65,6 +65,16 @@ def main() -> int:
             ok &= check("theme.conf's background is an absolute path",
                         m.group(1).startswith("/"), m.group(1))
         ok &= check("theme.conf carries no unsubstituted placeholder", "@BACKGROUND@" not in conf)
+
+        # Split the marker so REUSE does not parse the test string as this file's license.
+        doc_license = "SPDX-" + "License-Identifier: CC-BY-SA-4.0"
+        for doc in ("docs/parts/sddm.md", "packages/sddm-theme/README.md"):
+            ok &= check(f"{doc} uses the documentation license",
+                        doc_license in (REPO / doc).read_text().splitlines()[:8])
+        copyright_stanzas = (REPO / "packaging/debian/copyright").read_text().split("\n\n")
+        ok &= check("Debian groups the SDDM README under the documentation license",
+                    any(stanza.startswith("Files:") and "packages/sddm-theme/README.md" in stanza
+                        and "License: CC-BY-SA-4.0" in stanza for stanza in copyright_stanzas))
 
         # Debian-family distributions split PySide6 by module. The normal build runs the
         # behavior suite, so every module it imports must be declared even on a headless builder.
