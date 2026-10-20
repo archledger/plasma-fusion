@@ -19,7 +19,9 @@ current state. Phases 1 and 2 and round 2 are built and installed on the ThinkPa
 
 ## Owner decisions (2026-09-30)
 
-The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/DECISIONS.md`: decisions 1-8 and every listed default. The build plan for these answers is `PLAN.md` in the same folder; each decision-dependent behaviour sits behind a config key.
+The owner answered "all recommended" to the decisions record of 2026-09-30 (the maintainer's
+records): decisions 1-8 and every listed default. The build plan for these answers is `PLAN.md` in
+that record; each decision-dependent behaviour sits behind a config key.
 
 | # | Topic | Answer |
 |---|---|---|
@@ -77,7 +79,8 @@ The owner answered "all recommended" to `/mnt/archledger-gp/artifacts/plasma-fus
 
 ## New names and keys (one-pass build registry, 2026-09-30)
 
-Copied from section 2 of `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md`. "Owner WP" is the work package there that creates the name or key; use these exact ids and keys.
+Copied from section 2 of the decisions build plan of 2026-09-30 (the maintainer's records).
+"Owner WP" is the work package there that creates the name or key; use these exact ids and keys.
 
 | Kind | Id / key | Owner WP |
 |---|---|---|
@@ -115,7 +118,10 @@ Each part owns its own `generators/<part>/`, `packages/<part>/` and `tools/build
 
 `tools/vsession/remote.sh NAME SCENARIO SEED_HOME [SIZE] [TIMEOUT]` (run under `build/lead/vslot.sh`, which holds a session slot) copies a HOME tree to `/var/tmp/pfv-NAME/home` on the ThinkPad, starts a private headless KWin (virtual output, OpenGL on the Iris Xe, blur available) with kactivitymanagerd, kded6 and plasmashell on a private D-Bus bus, sources the scenario, and copies screenshots and logs back to `./vsession-out/NAME/`. The scenario can call `shot NAME`, `evaljs FILE`, `qdbus ...`, `wait_for_name NAME`. It never touches the logged-in desktop. Use a unique NAME per agent.
 
-Compare screenshots with the board renders in `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-design-source/renders/` (and the boards' source for exact numbers). Test at 1920x1200 with `PFV_SCALE=1.3333333` (the ThinkPad panel at 4/3, 1440x900 logical: the boards' size); `tools/vsession/vsession.sh` lists the other `PFV_*` options (tablet mode, two outputs, fonts, reduced motion).
+Compare screenshots with the design-source board renders of 2026-09-29 (the maintainer's records;
+see the boards' source for exact numbers). Test at 1920x1200 with `PFV_SCALE=1.3333333` (the
+ThinkPad panel at 4/3, 1440x900 logical: the boards' size); `tools/vsession/vsession.sh` lists the
+other `PFV_*` options (tablet mode, two outputs, fonts, reduced motion).
 
 ## Phases
 

@@ -4,8 +4,8 @@ Status: built and tested on the ThinkPad in private sessions (gt-a, gt-ld) and a
 HOME trees, then reviewed and fixed (see Review); not installed in the real session (the lead
 deploys). Last edited 2026-09-30.
 
-Covers ADAPTIVE.md fixes 9 and 10, GAPS.md G14 and G15, test matrix M27
-(`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-adaptive/`).
+Covers ADAPTIVE.md fixes 9 and 10, GAPS.md G14 and G15, test matrix M27 (the adaptive record of
+2026-09-30, the maintainer's records).
 
 ## What it is
 
@@ -274,8 +274,8 @@ them back on). Removing "My previous desktop": delete
 
 ## Verification (2026-09-30)
 
-All on the ThinkPad unless noted; evidence in
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/gate/`.
+All on the ThinkPad unless noted; evidence in the gate build run of 2026-09-30 (the maintainer's
+records).
 
 - `bash -n` and `shellcheck -S warning` clean for every script; `previous-theme.py` compiles.
 - `tests/gate-unit.sh BASE [--real-rpm]` (throw-away HOMEs, fake rpm, KConfig's `kreadconfig6` as
@@ -333,7 +333,8 @@ hand in the session), a real Plasma update.
 ## Review (2026-09-30)
 
 An adversarial review re-ran every test, read the code line by line and checked the claims
-against the 6.7.5 sources. Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/gate/review-*`.
+against the 6.7.5 sources. Evidence: the `review-*` files of the gate build run of 2026-09-30 (the
+maintainer's records).
 The builder's Verification section above is kept as it was; the numbers below are the review's.
 
 Found and fixed:
@@ -458,7 +459,7 @@ plasma-fusion-decoration installed. Run 2026-10-01: 144 passed, 0 failed.
 
 ## Other distributions (2026-10-02)
 
-Plan: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-02-other-distros/INSTALL-OTHER-DISTROS.md`
+Plan: the other-distros install plan of 2026-10-02 (the maintainer's records)
 section 5, P2. Before this the check read versions only with rpm; without rpm it recorded every
 version as `no-rpm`, so on Arch, Debian or NixOS it always "matched" and never switched anything
 off.

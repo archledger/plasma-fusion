@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
 # Familiar app icons: every installed app's own icon on a Plasma Fusion tile (owner decision
-# 2026-10-01; design: artifacts/plasma-fusion/2026-10-01-tablet2/ICONS-BLEND.md).
+# 2026-10-01; design: ICONS-BLEND.md of the tablet2 run of 2026-10-01, the maintainer's records).
 #
 #   plasma-fusion-app-icons refresh [--force] [--dry-run]   (re)build what changed since the last run
 #   plasma-fusion-app-icons watch                          refresh now, then whenever apps change

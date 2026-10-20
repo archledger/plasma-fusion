@@ -1775,7 +1775,7 @@ bool PlasmaFusionKcm::applyColorScheme(bool highContrast)
 // contrast at all (its appearance keys are color-scheme, accent-color and reduced-motion), so the
 // scheme alone cannot reach applications that follow the portal. Written quietly: gsettings or its
 // schema can be absent, which is not an error the user needs to see (settings plan task 2,
-// artifacts/plasma-fusion/2026-10-05-settings-plan/PLAN.md).
+// PLAN.md of 2026-10-05, the maintainer's records).
 void PlasmaFusionKcm::setPortalHighContrast(bool value)
 {
     if (QStandardPaths::findExecutable(u"gsettings"_s).isEmpty()) {

@@ -3,7 +3,7 @@
 Status: built and tested in private sessions on the ThinkPad (see "Verification"); not deployed. The
 lead built it directly (work package KWIN-1 of the 2026-09-30 one-pass plan). Last edited 2026-10-13.
 
-Spec: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-tablet/TABLET.md` sections 3.1-3.6 and
+Spec: the tablet spec of 2026-09-30 (the maintainer's records), sections 3.1-3.6 and
 4.2 with the review corrections, owner decision 2 (apps full screen without title bars, large dialogs
 too; the dock hides over apps). The single owner of window policy and panel geometry in tablet
 mode; plasmoids switch their own layouts from `FusionTablet`.
@@ -123,7 +123,7 @@ needed.
 Private sessions on the ThinkPad (1920 x 1200 at 4/3), `build/kt/` (scenarios `scen-kt1.sh`,
 `scen-kt2.sh`, helper `pf-kt/kt.py`), the stage of HEAD plus this package installed with
 `fusion-config.sh --install`; `InternalOutputs` includes `Virtual` there. Final runs `kt-1` and
-`kt-2` (evidence `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KWIN-1/`):
+`kt-2` (evidence: the KWIN-1 build run of 2026-09-30, the maintainer's records):
 
 - T1: three windows at known geometries; tablet: all maximized without title bar, placement 9,
   borderless on, stacking and focus unchanged; leave: every frame geometry exactly as before (0 px),
@@ -203,8 +203,8 @@ KWin's quick tiles) get a handle on the split, as on iPadOS:
   would make either window narrower than its minimum size (`Window.minSize`). Released in the outer
   12 % it ends the split: the window on that side is minimized (not closed) and the other maximized.
 
-Test (private session, 1920x1200 at 4/3, `build/m1/scen-m1a.sh`, m1f; evidence
-`artifacts/plasma-fusion/2026-10-01-tablet2/M1/`): Konsole tiled left and Dolphin right (711 | 711 px);
+Test (private session, 1920x1200 at 4/3, `build/m1/scen-m1a.sh`, m1f; evidence: the M1 tablet run
+of 2026-10-01, the maintainer's records): Konsole tiled left and Dolphin right (711 | 711 px);
 a drag to 69 % snaps to 2/3 (951 | 471), to 28 % to 1/3 (471 | 951), to 97 % minimizes Dolphin and
 maximizes Konsole (1440 x 836); the handle window is skip-taskbar and skip-switcher.
 
@@ -265,8 +265,8 @@ it bring both back into their tiles, so this script's handle comes back with the
 closes both. After the home gesture, activating either app again in tablet posture (the dock, a
 notification) restores the other into its half, unless another app is shown there (the dock's
 split drag). An app alone in a tile picked from its own card fills the screen. Test: 6.7.5
-container, sessions pair5 and lone2, and the review fixes' fx-* sessions (evidence
-`artifacts/plasma-fusion/2026-10-01-tablet2/split-pair/`).
+container, sessions pair5 and lone2, and the review fixes' fx-* sessions (evidence: the split-pair
+tablet run of 2026-10-01, the maintainer's records).
 
 ## Keeping the dock over apps (SPLIT.md item 6)
 
@@ -375,7 +375,8 @@ Board `design/boards/TabletSnap.dc.html` ("A place for every window"), owner dec
 in tablet posture an app is full screen or in a half, never left floating where a finger cannot
 move it (a window without a title bar there has nothing to hold; the window card's buttons were the
 only way to move it). The tablets of 2025-2026 snap a window as the result of a gesture and then
-offer what fills the rest (research: `artifacts/plasma-fusion/2026-10-18-tablet-autosnap/`).
+offer what fills the rest (research: the tablet-autosnap record of 2026-10-18, the maintainer's
+records).
 
 - With apps full screen (`WindowMode` fullscreen, the window policy applied), a window the user
   un-maximizes (the window card's Full screen switch, a shortcut) takes a side in

@@ -7,8 +7,8 @@ offline and tested in QEMU/KVM on the laptop with the real Plymouth 24.004.60 an
 and reboot screens, simpledrm handover, 1440x900, 1920x1200, 2880x1800 at Plymouth device scale 1
 and 2, two displays); install, greeting and rollback tested as fake root in a user and mount
 namespace. Not yet installed on the ThinkPad: it still has the first version (Boot board, black
-screen) from 2026-09-29, see "History". Evidence of this version:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-plymouth-splash/`.
+screen) from 2026-09-29, see "History". Evidence of this version: the Plymouth splash run of
+2026-10-01 (the maintainer's records).
 
 The Plymouth theme takes the look of the Splash board (`design/boards/Splash.dc.html`, picture
 `design/previews/Splash.webp`): the blurred Dusk Ridge wallpaper, the three-circle logo inside two
@@ -260,7 +260,7 @@ a note when one is only prepared.
 
 ## Verification (2026-10-01, on the laptop)
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-plymouth-splash/`.
+Evidence: the Plymouth splash run of 2026-10-01 (the maintainer's records).
 
 * Build: `build.sh` twice gives byte-identical output; `check_theme.py` ok (351 images, 2485 KiB);
   shellcheck clean on all shell scripts; `tools/build.sh` (whole tree, scratch stage) passes;
@@ -321,8 +321,8 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-plymouth-splash
 The first version followed the Boot board only: black screen, a 96 px logo 250 px from the top,
 three pulsing dots 120 px above the bottom, and the same unlock form. It was tested in a VM on the
 ThinkPad and installed and selected there; the notes below are its record and still describe what
-the ThinkPad has until this version is installed. Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/plymouth/`.
+the ThinkPad has until this version is installed. Evidence: the Plymouth build run of 2026-09-30
+(the maintainer's records).
 
 VM test of the first version (on the ThinkPad, as user `test`, no root; work dir
 `~test/.local/state/plasma-fusion/vmtest`):
@@ -387,8 +387,8 @@ Unprivileged: `~test/.local/state/plasma-fusion/plymouth/` (theme copy, scripts,
 
 ### Review of the first version (2026-09-29)
 
-Adversarial review of the part as built, then fixes in the files it owns. Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/plymouth/review-*`.
+Adversarial review of the part as built, then fixes in the files it owns. Evidence: the Plymouth
+build run of 2026-09-30 (the maintainer's records), its `review-*` files.
 
 What was checked:
 

@@ -181,7 +181,7 @@ tints, as the Popups board's rgba(255,255,255,.1) buttons), `ColorScheme-Highlig
   a Breeze baseline run (ps-4) prints too. An earlier build without `hint-*-inset` in `dialogs/background` caused
   "PlasmoidHeading: Binding loop detected for property leftInset" in the network and Bluetooth
   pop-ups; fixed (zero insets, as Breeze has).
-- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/plasma-style/`
+- Evidence: the plasma-style build run of 2026-09-29 (the maintainer's records)
   (`screenshots/`, `side-by-side/` board vs build, `scale-4-3/`, `offscreen/`, `logs/`).
 
 Re-run: `STAGE=$S tools/build.sh plasma-style && generators/plasma-style/tests/make-seed.sh $S/home
@@ -299,7 +299,7 @@ style run together with every other part.
 
 ### Evidence
 
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/plasma-style/`:
+The plasma-style build run of 2026-09-29 (the maintainer's records):
 `review-dark-sheet.png`, `review-light-sheet.png` (all ten screenshots per variant),
 `review-{dark,light}-{01-desktop,02-tray,07-tooltip,10-launcher}.png`, `review-topbar-thickness.png`,
 `review-tooltip-sbs.png`, `review-tray-floatingapplets.png`, logs in `logs/review/`.

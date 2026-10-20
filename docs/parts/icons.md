@@ -229,7 +229,7 @@ Plasma Fusion names for glyphs that have no standard name: `plasmafusion-logo`,
   warnings in plasmashell, KWin, Dolphin, System Settings or Nautilus logs.
 * Two builds are byte-identical (files and link targets).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/icons/`
+Evidence: the icons build run of 2026-09-29 (the maintainer's records)
 (`board-*.png` + `board-scores.txt`, `sheet-*.png` contact sheets, `status-strip-both-variants.png`,
 `weather-sheet.png`, `side-by-side-*.png`, `session-dark-*`, `session-light-*`,
 `session-dark-scale4of3-*`, `session-integrated-dark-*`, `capture-report.txt`).
@@ -329,7 +329,8 @@ the specific names only for the former). The integrated screenshots were taken b
 `edit-copy`/`edit-paste` change (not visible in them). KWin's own icon lookups in vsessions: see
 "Needs from other parts".
 
-Evidence: `review-*.png` in the evidence folder: `review-{dark,light}-0{1..6}-*.png` (sessions),
+Evidence: the `review-*.png` files of the icons build run of 2026-09-29 (the maintainer's records):
+`review-{dark,light}-0{1..6}-*.png` (sessions),
 `review-light-pages-before-after.png`, `review-pages-trash-and-new-glyphs-on-white-and-dark.png`,
 `review-new-tray-and-action-glyphs.png`, `review-app-symbolic-board-glyphs.png`,
 `review-board-files.png`, `review-board-places.png`, `review-board-scores.txt` (apps 2.0, logo 1.4,
@@ -401,7 +402,8 @@ Checks: `validate.py` passes (2424 drawings, both themes); two builds are byte-i
 ## Familiar app icons (2026-10-01)
 
 The owner chose to keep every app's own icon, blended with Plasma Fusion, over the designed tiles
-(design canvas and comparison: ICONS-BLEND.md on the shared project memory). The designed tiles
+(design canvas and comparison: ICONS-BLEND.md in the tablet run of 2026-10-01, the maintainer's
+records). The designed tiles
 stay in the themes; `plasma-fusion-app-icons` (docs/parts/app-icons.md) draws each installed app's
 own icon onto a Fusion tile in `~/.local/share/icons/PlasmaFusion{,-Dark}/apps/scalable`, which the
 icon loader finds first. `plasmafusionrc [Icons] AppIcons=designs` brings the designed tiles back.
@@ -414,9 +416,8 @@ The owner preferred the design board's tiles (`design/previews/Main.webp`) to th
 provided people still recognise their apps, and approved a per-app redesign: every app in Fedora
 44's KDE catalogue (237: the apps.kde.org apps packaged for Fedora plus the installed core apps)
 and 99 of the most common Linux apps (browsers, office, chat, media, games, development, system
-tools), 336 apps in all. Design material on the shared project memory:
-`artifacts/plasma-fusion/2026-10-02-icons/` (style guide, per-batch sheets with each original next
-to its tile, review notes).
+tools), 336 apps in all. Design material: the icons design record of 2026-10-02 (the maintainer's
+records; style guide, per-batch sheets with each original next to its tile, review notes).
 
 **Style.** The board's tile construction, unchanged: 64 units, radius 15, 4-unit lip, 9 % sheen on
 the top 28 units, 1-unit 14 % white edge, glyph layers `g1` (fill), `g2` (even-odd fill), `s1`

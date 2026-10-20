@@ -47,9 +47,9 @@ are welcome in GitHub Discussions; the way decisions are made is in
    Python tools' parsers runs since 2026-10-02), and the project documents: governance, code of
    conduct, architecture, this roadmap, the security assurance case
    ([`SECURITY-ASSURANCE.md`](SECURITY-ASSURANCE.md)). Also a known documentation defect:
-   [`PLAN.md`](PLAN.md) and 27 of the part pages in [`docs/parts/`](parts/) cite paths on the
-   maintainer's private share, which other readers cannot open. Those references are to be replaced
-   with public text or removed.
+   [`PLAN.md`](PLAN.md) and 27 of the part pages in [`docs/parts/`](parts/) cited paths on the
+   maintainer's private share, which other readers could not open. Those references were replaced
+   with public text on 2026-10-19 (each names its record in words instead of a path).
 
 ### In the year
 

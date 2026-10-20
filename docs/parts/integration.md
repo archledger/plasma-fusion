@@ -4,7 +4,7 @@ The one-pass build's last step before the deploy (PLAN.md section 5, INT-1). Bui
 `git archive 321228a` (the frame flip) with `PF_LINTS=fail`; the stage is byte-identical to the
 working-tree stage the lane runs used. The fix round `5417df4` changed test tooling and one test
 hook in the pen widget (no user-visible change). Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/INT-1/`.
+the INT-1 build run of 2026-09-30 (the maintainer's records).
 
 ## What INT-1 changed
 
@@ -35,7 +35,7 @@ hook in the pen widget (no user-visible change). Evidence:
 | Settings module controls (every switch; glass Full/Reduced/Solid = X5) | 96/96 |
 | Power tiers in a session (X6) | 29/29 |
 | Decoration 1.0-3 with the settings page | loaded in every state; right glyphs, left circles, show on hover, Light, Defaults |
-| Board side-by-sides, dark and light (desktop, launcher, overview, quick settings, snap, Alt+Tab) | on the share (`side-by-side/`) |
+| Board side-by-sides, dark and light (desktop, launcher, overview, quick settings, snap, Alt+Tab) | the INT-1 build run's `side-by-side/` files (the maintainer's records) |
 | Perf gate `--strict-budget`, 3 quiet runs | 10 of 25 budget rows met; against the 282b1a5 baseline everything better or the same except launcher Meta → first frame (below) |
 | Repository and 50 commit messages: AI mentions | none |
 | `coredumpctl` on the ThinkPad since the start of INT-1 | none |

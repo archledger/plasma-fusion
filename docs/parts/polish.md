@@ -1,13 +1,13 @@
 # Part: polish across the phase-1 parts
 
-Fixes for the review findings and cross-part needs that phase 1 left open
-(`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/phase1-open-items.txt`, 87 items),
-checked against the boards at 1:1 in private virtual sessions on the ThinkPad and, read-only, on
+Fixes for the review findings and cross-part needs that phase 1 left open (87 items in
+`phase1-open-items.txt` of the build run of 2026-09-29, the maintainer's records), checked
+against the boards at 1:1 in private virtual sessions on the ThinkPad and, read-only, on
 its real session at scale 4/3.
 
 Status: done and reviewed (see Review), not yet deployed to the real session (the lead deploys).
 Last edited 2026-09-29.
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/polish/`.
+Evidence: the polish build run of 2026-09-30 (the maintainer's records).
 
 ## Changed files
 
@@ -255,8 +255,8 @@ file against the 6.7.5 sources (appmenu `MenuDelegate.qml`, `PanelView::restore`
 `ConfigFile`, KWin's `TabBoxHandler::grabbedKeyEvent`, libplasma's applet shortcut clean-up),
 the full build (`STAGE=build/rpo/home PF_WALLPAPER_SIZES=quick tools/build.sh`, rc 0), offline
 checks, and five integrated virtual sessions on the ThinkPad (rpo-1..rpo-5, 1440x900, the whole
-stage applied with `fusion-config.sh --install`, real input through KWin EIS). Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/polish/review-*` (images,
+stage applied with `fusion-config.sh --install`, real input through KWin EIS). Evidence: the polish
+build run of 2026-09-30 (the maintainer's records), its `review-*` files (images,
 `review-logs/`, `review-tooling/`).
 
 ### Findings fixed in this review

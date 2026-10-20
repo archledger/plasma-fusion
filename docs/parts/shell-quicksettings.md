@@ -454,7 +454,8 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
 * plasmashell was restarted inside the session with `QT_FORCE_STDERR_LOGGING=1`: no warning or
   error from this widget in any run (other lines come from stock applets and the missing session
   services of the virtual session).
-* Screenshots and board side-by-sides: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-quicksettings/`
+* Screenshots and board side-by-sides: the shell-quicksettings build run of 2026-09-29
+  (the maintainer's records)
   (`side-by-side-dark.png`, `side-by-side-light.png`, `side-by-side-wifi-{dark,light}.png`,
   `side-by-side-topbar.png`, `side-by-side-preview-{dark,light}.png`, `session-*.png`,
   `preview-keyboard-focus.png`; nearby Wi-Fi names are pixelated). The scenario, seed script,
@@ -667,8 +668,8 @@ An independent review of the part, integrated with every other part that exists 
 
 ### Evidence
 
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-quicksettings/review-*.png`
-(network names pixelated): `review-side-by-side-{dark,light,topbar}.png` (board next to the
+The shell-quicksettings build run of 2026-09-29 (the maintainer's records), its `review-*.png`
+files (network names pixelated): `review-side-by-side-{dark,light,topbar}.png` (board next to the
 session), `review-{dark,light}-{bar,popup,wifi}.png`, `review-dark-{bluetooth,audio}.png`,
 `review-{dark,light}-keyboard-tile.png`, `review-dark-keyboard-chevron.png`,
 `review-dark-keyboard-close-notification.png`, `review-dark-many-notifications.png`,
@@ -820,13 +821,13 @@ from the posture at its start (`ProfileDefaults::defaultPowerButtonAction(isMobi
   bottom edge takes touch in tablet posture (all `[TouchEdges]` actions are None). Private sessions
   `e8`/`e20` (navigation effect, Konsole, tablet): a swipe up starting 15 px above the bottom does
   nothing with 8 px and goes home with 20 px; `pb3`: the key follows the posture with the power
-  button keys. Evidence: `.../2026-10-01-tablet2/N1/touch-zone/`.
+  button keys. Evidence: the tablet2 N1 touch-zone run of 2026-10-01 (the maintainer's records).
 
 Private session `pb1` (PowerDevil not running there; keys only): tablet writes 5 keys and keeps the
 user's `Battery` value 1 (sleep); laptop removes them; fold, unfold, fold 1 s apart ends in the
 tablet state; a user's `AC` 8 set in tablet posture survives the return to laptop. The press itself
 (screen off and locked, a second press wakes to the lock screen) is a hand check on the ThinkPad.
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/P0/power-button/`.
+Evidence: the tablet2 P0 power-button run of 2026-10-01 (the maintainer's records).
 
 ## Gesture lock and Overview in tablet posture (TABLET2 G1, 2026-10-01)
 
@@ -890,8 +891,8 @@ together (the forced split is itself a known complaint).
   centre); every model read goes through `entry?.` — a removed row's card read a null model while it
   was torn down (10 TypeErrors per dismissed notification, also in the laptop sheet's hidden list).
 
-Tests (private sessions, 1920x1200 at 4/3, `build/s1/scen-s1b.sh`, `scen-s1h.sh`; evidence
-`artifacts/plasma-fusion/2026-10-01-tablet2/S1/`): bell opens the centre (first frame 68 ms; later
+Tests (private sessions, 1920x1200 at 4/3, `build/s1/scen-s1b.sh`, `scen-s1h.sh`; the tablet2 S1
+run of 2026-10-01, the maintainer's records): bell opens the centre (first frame 68 ms; later
 16-50 ms); the Konsole stack of 4 opens on "3 more"; long press shows the menu and the centre stays
 when it closes; a sideways swipe dismisses the Dolphin card; Clear all → undo bar → Undo brings the
 list back; Clear all → after 5 s "No notifications"; swipe up on the clock column closes; the clock
@@ -1429,8 +1430,8 @@ scrolls only when it is taller than the room. On the previous code it fails 10 c
 restart at 1280 x 800 (every page: wanted 356 x 392 in a 328 x 364 item, scrolling) and 10 at 1.25
 after a live scale change with only the padding fixed; with the change it passes at 1280 x 800,
 1920 x 1200 and 1280 x 800 at scales 1, 1.25 and 1.5, with and without a scrolling notification
-list. Screenshots: `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/shellfixes-shots/`
-(`base-*` before, `fix-*` after).
+list. Screenshots: the shellfixes-shots track of the 0.5.0 release run of 2026-10-11 (the
+maintainer's records) (`base-*` before, `fix-*` after).
 
 ## Sub-pages' touch targets (0.6.0)
 

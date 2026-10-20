@@ -555,7 +555,7 @@ and pointer drags inside the private session only).
   Libplasma prints "Member visible of the object PlasmaQuick::Dialog overrides a member of the
   base object" once per process that uses PlasmaCore.Dialog (plasmashell, the stock thumbnail_grid
   switcher, and these packages); it is not caused by the QML here.
-- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/kwin/`: `screenshots/dark`,
+- Evidence: the kwin build run of 2026-09-29 (the maintainer's records): `screenshots/dark`,
   `screenshots/light` (evidence runs), `screenshots/switcher-keys/{dark,light}`,
   `screenshots/snap-sequence-dark`, `side-by-side/` (board vs build: switcher full frame and card
   crop, flyout crop, dark and light), `offscreen/` (harness renders incl. edge cases), `logs/`.
@@ -688,10 +688,10 @@ Remains (not fixed):
 - The deviations listed above stay; not tested at the ThinkPad's 4/3 scale, with several screens,
   with Xwayland dialogs or with touch.
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/kwin/review-*.png`
-(dark and light evidence runs after the fixes, the edge cases, board side-by-sides). The builder's
-`screenshots/light/10-switcher.png` and `11-switcher-all-workspaces.png` show the white-out that
-is fixed now.
+Evidence: the `review-*.png` files of the kwin build run of 2026-09-29 (the maintainer's records;
+dark and light evidence runs after the fixes, the edge cases, board side-by-sides). The builder's
+evidence files `screenshots/light/10-switcher.png` and `11-switcher-all-workspaces.png` show the
+white-out that is fixed now.
 
 Re-run: `STAGE=$PWD/build/rkw/home tools/build.sh && packages/kwin/tests/vsession/make-seed.sh
 build/rkw/home build/rkw/seed-dark dark && tools/vsession/remote.sh rkw-3
@@ -845,7 +845,7 @@ Private sessions on the ThinkPad (seed from `fusion-config.sh --install`):
   of the difference: the same build without it (2 runs, a comparison only) gives 3.7 ms in the
   median (p95 6.0, at most 7.2) and settles as fast. The previews are not the cost (see above).
   Keeping the board's dim or dropping it is the owner's choice.
-- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KWIN-2/`.
+- Evidence: the KWIN-2 build run of 2026-09-30 (the maintainer's records).
 
 ### Not done
 

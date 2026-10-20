@@ -206,7 +206,7 @@ file manager's places, the removable drives and the recent folders. Plasma 6 app
   Global Theme layout (Fusion dock + top bar). No QML warnings from the launcher in plasmashell's log.
 - Pixel checks against the renders (same 1440 x 900 geometry): card at 380,92 680x700; dim, card fill
   under blur and search field within 1-3 RGB units of the board in both variants.
-- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-launcher/`
+- Evidence: the shell-launcher build run of 2026-09-29 (the maintainer's records)
   (`board-vs-launcher-{dark,light}.png`, `fusion-layout-*`, `standalone-*`,
   `keyboard-navigation-offscreen.png`, `manrope-qt-synthetic-bold-vs-wght-axis.png`, `test/`).
 
@@ -335,7 +335,7 @@ with Fedora's `XDG_CONFIG_DIRS` (it includes `/usr/share/kde-settings/kde-profil
 
 ### Review evidence
 
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-launcher/`:
+The shell-launcher build run of 2026-09-29 (the maintainer's records):
 `review-{dark,light}-01..13-*.png` (home, hover, search with a resting pointer, keyboard into
 results, Esc clears, grid keyboard ring, Esc closes, dock Start + category, All apps, More,
 context menu, more-categories menu, dim-layer click closes), `review-board-vs-build-*.png`,

@@ -2,8 +2,9 @@
 
 Every installed app keeps its own icon, on a Plasma Fusion tile: people recognise their apps, and
 the dock, the home screen, the launcher, the task switcher and the apps' own windows show the same
-row of tiles. Owner decision 2026-10-01 after the design comparison (ICONS-BLEND.md on the shared
-project memory: designed tiles, icons as installed, harmonized originals, familiar tiles).
+row of tiles. Owner decision 2026-10-01 after the design comparison (ICONS-BLEND.md of the tablet2
+run of 2026-10-01, the maintainer's records: designed tiles, icons as installed, harmonized
+originals, familiar tiles).
 
 Since 2026-10-02 the 336 apps with a designed tile of their own (docs/parts/icons.md, "Per-app
 tiles") keep it in both modes; familiar icons are drawn for the other apps only.

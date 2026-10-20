@@ -136,8 +136,8 @@ Themes; Manrope must be installed.
   within 1-2 levels of `desktop-dark-1` / `desktop-light-1`; icon, title, circle positions within
   1 px (the board render has half-pixel offsets).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/decoration/`
-(`sbs-{dark,light}-desktop.png`, `sbs-{dark,light}-titlebars-2x.png` board above / ours below,
+Evidence: the decoration build run of 2026-09-29 (the maintainer's records:
+`sbs-{dark,light}-desktop.png`, `sbs-{dark,light}-titlebars-2x.png` board above / ours below,
 `states-3x-dark-left-light-right.png`, `{dark,light}-*.png` full screenshots,
 `dark-desktop-scale-4-3-1920x1200.png`, `dark-edge-*.png`, `offline-anatomy-*.png`).
 
@@ -266,7 +266,7 @@ shadow after a resize without a focus change, the long-title clipping, square in
 tiled windows. Remaining from the build: bottom corners, animations, icon fade, 32 px tool
 windows, hover-hold, show-on-hover, resize band.
 
-Evidence (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/decoration/`):
+Evidence (the decoration build run of 2026-09-29, the maintainer's records):
 `review-{dark,light}-desktop.png` (integrated, Global Theme applied), `review-sbs-{dark,light}-
 titlebars-2x.png` (board row first, then rest, hover maximize, hover close, pressed minimize,
 left rest, left hover), `review-sbs-{dark,light}-inactive-2x.png`, `review-glyphs-board-before-

@@ -323,10 +323,10 @@ The two notification keys are also on the Plasma Fusion settings module's Lock &
 (System Settings > Appearance & Style > Plasma Fusion, docs/parts/kcm-cpp.md); the clock and media
 card keys stay on Screen Locking > Appearance.
 
-Verified visually 2026-10-05 in a VM (a notification sent while the screen is locked;
-`artifacts/plasma-fusion/2026-10-05-settings-plan/lock-privacy/`): `showNotifications=false` shows
-no card, `true` with `showNotificationSummaries=false` shows the card without a title, and the
-summaries key adds the title. The body never shows.
+Verified visually 2026-10-05 in a VM (a notification sent while the screen is locked; the
+lock-privacy part of the settings-plan run of 2026-10-05, the maintainer's records):
+`showNotifications=false` shows no card, `true` with `showNotificationSummaries=false` shows the
+card without a title, and the summaries key adds the title. The body never shows.
 
 The lock-screen wallpaper is kscreenlocker's own setting (`kscreenlockerrc [Greeter]
 WallpaperPlugin`, `[Greeter][Wallpaper][org.kde.image][General] Image=`), see "Needs".
@@ -362,7 +362,7 @@ WallpaperPlugin`, `[Greeter][Wallpaper][org.kde.image][General] Image=`), see "N
   field, avatar, blur within 1–4 levels; date, clock, pill label, avatar letter, name and small
   clock ink boxes within 1–3 px; the clock `14:49` measures 359 px wide against the board's 363.
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscreen/`
+Evidence: the lockscreen build run of 2026-09-29 (the maintainer's records)
 (`greeter-idle-dark.png`, `greeter-prompt-dark.png`, `greeter-idle-light-wallpaper-12h.png`,
 `side-by-side-idle-vs-lock-board.png`, `side-by-side-prompt-vs-login-board.png`,
 `offscreen-prompt-pam-messages-capslock-fingerprint.png`, `offscreen-no-password-unlock.png`,
@@ -396,9 +396,10 @@ before their fixes. In the parity VM (Plasma 6.7.5, `loginctl lock-session`, a
 uinput pointer): the row shows Sleep, Switch User, Restart, Shut Down; with `systemd-inhibit
 --what=shutdown --mode=block --who=Updater` held by root, Shut Down said "A program is blocking a
 shutdown…" (it listed "Updater: Installing updates" before the page stopped naming programs; VM
-6.7.91, `tracks/lockfixes-shots/15-*`, `16-*`) and is off; Cancel returns; with it released, Restart confirmed restarted the VM (logind
-"The system will reboot now!", a new boot id). Evidence:
-`artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/small-shots/item2-*`.
+6.7.91, the 0.5.0 release run's `tracks/lockfixes-shots/15-*`, `16-*`) and is off; Cancel returns;
+with it released, Restart confirmed restarted the VM (logind "The system will reboot now!", a new
+boot id). Evidence: the `item2-*` small-shots files of the 0.5.0 release run of 2026-10-11 (the
+maintainer's records).
 
 ## Deviations from the boards
 
@@ -519,7 +520,7 @@ renders), the 6.7.5 lock-screen QML, kscreenlocker/KWin sources and the ThinkPad
 * The synthetic-bold problem affects every Qt text in Plasma Fusion that asks for Manrope or
   Space Grotesk at weight ≥ 700 below 64 px (reported to the lead for the other parts).
 
-Evidence (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lockscreen/`):
+Evidence (the lockscreen build run of 2026-09-29, the maintainer's records):
 `review-greeter-{idle,prompt}-dark.png`, `review-greeter-{idle,prompt}-light-en_US.png`,
 `review-side-by-side-idle-vs-lock-board.png`, `review-side-by-side-prompt-vs-login-board.png`,
 `review-text-weight-board-before-after.png`, `review-glass-edges-board-before-after.png`,
@@ -534,8 +535,9 @@ comment in `PfStyle.qml` now says so.
 
 ## LOCK-1 (2026-09-30)
 
-Work package LOCK-1 of the one-pass plan (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md`;
-EFFECTS 6.4, ADAPTIVE 5.10, TABLET 4.13, GAPS G23 and G25, BACKLOG S1), built by the lead directly.
+Work package LOCK-1 of the one-pass plan (the decisions plan of 2026-09-30, the maintainer's
+records; EFFECTS 6.4, ADAPTIVE 5.10, TABLET 4.13, GAPS G23 and G25, BACKLOG S1), built by the lead
+directly.
 Every PAM prompt and message path is as it was; `/etc/pam.d` was not touched.
 
 ### Changes
@@ -615,7 +617,7 @@ Every PAM prompt and message path is as it was; `/etc/pam.d` was not touched.
 
 Not covered here (DEPLOY-1 hand check H8, a ship blocker): unlocking by typing on the real
 on-screen keyboard in tablet posture, by fingerprint and by face; Orca reading the announcements.
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/LOCK-1/`.
+Evidence: the LOCK-1 build run of 2026-09-30 (the maintainer's records).
 
 ## On-screen keyboard in tablet posture (TABLET2 P0, 2026-09-30)
 
@@ -658,8 +660,8 @@ nothing typed), in tablet posture, locked after a key press:
 Emulated touch reaches the greeter only once its seat has touch: the test touchscreen exists only
 while `pfinput` is connected, so the scenarios wait 1 s after connecting (`sleep 1` before `tap`).
 Offscreen harness (`test/run.sh OUT`): all states render, no QML warnings; qmllint warnings
-unchanged (19). Hand check H8 on the ThinkPad remains, now expected to pass. Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/P0/`.
+unchanged (19). Hand check H8 on the ThinkPad remains, now expected to pass. Evidence: the P0
+tablet run of 2026-10-01 (the maintainer's records).
 
 ## Tablet posture: swipe up to unlock (TABLET2 L1, 2026-10-01)
 
@@ -686,8 +688,8 @@ privacy). Laptop posture is unchanged.
 
 Tests: the offscreen harness's `tablet` scenario now checks the idle state first (hint text, 40-120 px
 above the bottom, handle 120 x 5 at the bottom, prompt hidden; `tablet-idle.png`): 13/13 at 1440x900
-and 900x1440. Private locked sessions (`build/l1/scen-l1.sh`, l1e/l1f; evidence
-`artifacts/plasma-fusion/2026-10-01-tablet2/L1/`): tap and a 40 px swipe keep the idle screen and no
+and 900x1440. Private locked sessions (`build/l1/scen-l1.sh`, l1e/l1f; evidence: the L1 tablet run
+of 2026-10-01, the maintainer's records): tap and a 40 px swipe keep the idle screen and no
 keyboard; a 260 px swipe shows the prompt with the keyboard (KWin `VirtualKeyboard.visible` true);
 Escape blanks the screen as before; after waking, a hardware key shows the prompt with the typed
 character and no keyboard; laptop posture: a click shows the prompt. **H8 hand check update**: in

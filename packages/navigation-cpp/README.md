@@ -20,7 +20,7 @@ copyright lines. Plasma Fusion changes:
 - the toggle shortcut has no default key;
 - a short swipe up (16 px or more, below home) over an app shows the dock; the switcher leaves out
   input-method panels, pop-ups, OSDs, zero-size windows and plasmashell's surfaces;
-- gesture numbers (TABLET2 N1, from the research on the share): a fast upward flick from an app goes
+- gesture numbers (TABLET2 N1, from the maintainer's research): a fast upward flick from an app goes
   home only past 72 px, a slow drag past min(260 px, 55 % of the height) (Plasma Mobile: any flick,
   and 55 %); the cards pulse (3.5 %, Kirigami durations) where Plasma Mobile vibrates;
 - a key press on a hardware keyboard hides the on-screen keyboard (`FusionKeyboardSpy`, a KWin input
@@ -99,8 +99,8 @@ Split left / Split right, the dock's split drag, the quick-tile keys) are one ca
   activate the app behind it, which then counted as the last used one, so after going home the
   switcher led with the app that had been behind.
 
-Test (6.7.5 container, 1440 x 900 logical; sessions pair5, lone2, evidence
-`artifacts/plasma-fusion/2026-10-01-tablet2/split-pair/`): Dolphin maximized, KWrite tiled left,
+Test (6.7.5 container, 1440 x 900 logical; sessions pair5, lone2, evidence: the tablet2 split-pair
+run of 2026-10-01, the maintainer's records): Dolphin maximized, KWrite tiled left,
 Konsole right. Switcher: 2 cards, the pair as one (screenshot P9-switcher). Picked: both back in
 their tiles, Konsole active. Home, then KWrite activated (as the dock does) and, again, KWrite
 tapped in the dock: Konsole back in its half both times. Sideways to Dolphin and back: the pair

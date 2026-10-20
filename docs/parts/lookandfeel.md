@@ -359,7 +359,7 @@ First build (lf-* sessions), then the review (rlf-* sessions, see "Review"):
     shortcuts, gtk.css files as before, drop-in removed;
   - plasmashell logs: only the upstream system-monitor TypeError in the shell that builds the
     layout (gone after the restart that follows).
-- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/lookandfeel/`
+- Evidence: the lookandfeel build run of 2026-09-29 (the maintainer's records)
   (`review-*.png`, `review-logs/`; the earlier files of the first build are kept).
 
 A virtual session is not started by startplasma, so `~/.config/kdedefaults` is not in its
@@ -494,9 +494,9 @@ as Plasma Fusion). `fusion-restore.sh` removes the check; "My previous desktop" 
 
 ## LAYOUT-1 (2026-09-30)
 
-Work package LAYOUT-1 of the one-pass plan (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md`),
-built by the lead directly. The layout script runs only on a fresh layout or `--reset-layout`; the
-live session gets these changes through DEVICE-1's in-place migration.
+Work package LAYOUT-1 of the one-pass plan (the decisions plan of 2026-09-30, the maintainer's
+records), built by the lead directly. The layout script runs only on a fresh layout or
+`--reset-layout`; the live session gets these changes through DEVICE-1's in-place migration.
 
 ### Changes
 

@@ -322,7 +322,7 @@ board render sits about 0.6 px right/down of its CSS geometry and blends its edg
 backdrop, so its edge reads darker (49,47,66) than the spec value we draw (59,63,78), as the Aurorae
 review found.
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/decoration-cpp/`:
+Evidence: the decoration-cpp build run of 2026-09-30 (the maintainer's records):
 `sbs-{dark,light}-titlebars-2x.png` (board row first, then rest, hover maximize, hover close,
 pressed minimize, hold on maximize, left circles rest / hover, show on hover away / over, maximized),
 `sbs-{dark,light}-inactive-2x.png`, `sbs-dark-titlebars-scale-4-3.png`, `tiled-corners-6x.png`,
@@ -407,7 +407,7 @@ glyphs). Both Fusion decorations stay under the 5 MiB budget per window.
 **Tablet flip:** 11-32 ms from writing `kwinrc [Input] TabletMode` (kwriteconfig6 `--notify`) to
 the decorations' new layout, 4 flips with 3 windows (TABLET.md 9: drawn within 100 ms).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/DECO-1/` (see its
+Evidence: the DECO-1 build2 run of 2026-09-30 (the maintainer's records; see its
 `README.txt`): the RPM and its `.sha256`, build logs, `preview-{dark,light}.log`, offline title-bar
 sheets (tablet, short screen, LeftCircles and ShowOnHover in tablet mode), the offline 200 % corner
 comparison, the session screenshots and `scenario.log` / `kwin.log` excerpts of every run, `mem.txt`
@@ -566,8 +566,8 @@ Findings:
 | 11 | medium | Review step "install the RPM system-wide, `rpm -V`, load the system copy in a session" could not be run: the session's permission system denied the `sudo dnf install`. | Open: commands below for the lead |
 
 Release after review: `plasma-fusion-decoration-1.0-2.fc44.x86_64.rpm`, sha256
-`16c6ac060b22a0ff267c2fab0bc068b0950e8fd9cfc6e4335d4d1edb7a42f69d`, on the share next to the
-builder's 1.0-1 (superseded) and on the ThinkPad in
+`16c6ac060b22a0ff267c2fab0bc068b0950e8fd9cfc6e4335d4d1edb7a42f69d`, kept in the maintainer's
+records next to the builder's 1.0-1 (superseded) and on the ThinkPad in
 `~test/.local/state/plasma-fusion/rcx/decoration-cpp/rpmbuild/RPMS/x86_64/`. To install and check
 (ThinkPad, as root; does not switch any session):
 
@@ -582,7 +582,7 @@ rpm -V plasma-fusion-decoration && echo clean
 Test-tool note: `pfinput 'down'` without an `'up'` in the same call releases the button when
 pfinput exits, at the current position (a press on minimize held across two pfinput calls minimizes).
 
-Evidence (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/decoration-cpp/`):
+Evidence (the decoration-cpp build run of 2026-09-30, the maintainer's records):
 `review-final-dark-4-3-*.png` (rcx-3, final build, dark at 4/3: desktop, hover maximize / close,
 snap flyout on hover, hover after an accent change to #E0457B, tiled halves, maximized, LeftCircles
 hover, ShowOnHover away / over, live switch to the light scheme, the Window Decorations settings
@@ -627,5 +627,5 @@ fixes, re-ran the checks and fixed one more.
 
 Release after review: `plasma-fusion-decoration-1.0-3.fc44.x86_64.rpm`, sha256
 `84a04778491ce5962551a4fc2c99817e49a0a5f9bbd127c942e38d7dcf722dc4`
-(`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/DECO-1/rpm/`; the builder's RPM
-from before the review is kept in `rpm/builder-pre-review/`).
+(the DECO-1 build2 run of 2026-09-30, the maintainer's records; the builder's RPM from before
+the review is kept in its `rpm/builder-pre-review/`).

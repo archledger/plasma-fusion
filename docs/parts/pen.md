@@ -1,6 +1,6 @@
 # Pen (stylus) support
 
-Spec: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-tablet/PEN.md` (defaults in section 2,
+Spec: the pen spec of 2026-09-30 (the maintainer's records; defaults in section 2,
 Pen menu in section 3, hand checks V1-V6 in section 6.2). Device: ThinkPad X13 Yoga Gen 4, Wacom
 WACF2200 `056a:534d`, libinput devices "Wacom HID 534D Pen" and "Wacom HID 534D Finger".
 
@@ -162,7 +162,7 @@ Hand checks for DEPLOY-1 (PEN.md 6.2): V1-V7 with a real pen, the widget on the 
 (`PenDevice` finds it, the settings page's device writes), the app scope of a note, and the card's
 first-frame time.
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/PEN-1/`.
+Evidence: the PEN-1 build run of 2026-09-30 (the maintainer's records).
 
 ## Pen like a finger in tablet posture (TABLET2 PEN-2, 2026-10-01)
 
@@ -211,12 +211,12 @@ page "Press and hold: Right click (menu) / Nothing" (shown while the pen acts as
 `plasmafusionrc [Pen] TabletPenHold` (default true), read live. Each hold logs
 `plasmafusion-navigation: pen press and hold: right click at x,y`.
 
-Test (`build/penhold/scen-hold.sh`, ph1; evidence `artifacts/plasma-fusion/2026-10-01-tablet2/PEN-2/hold`):
-a hold on Dolphin's file view opens its context menu on lift, a hold drifting 40 px opens none, a quick
-tap opens the file, a hold in Konsole opens Konsole's menu, with the setting off nothing happens. The
-private session has a pointer device only while the test input client is connected, and without one
-the seat offers no pointer, so the scenario keeps one connected (as the hardware's touchpad and
-TrackPoint always are).
+Test (`build/penhold/scen-hold.sh`, ph1; evidence: the PEN-2 hold run of 2026-10-01, the
+maintainer's records): a hold on Dolphin's file view opens its context menu on lift, a hold drifting
+40 px opens none, a quick tap opens the file, a hold in Konsole opens Konsole's menu, with the
+setting off nothing happens. The private session has a pointer device only while the test input
+client is connected, and without one the seat offers no pointer, so the scenario keeps one connected
+(as the hardware's touchpad and TrackPoint always are).
 
 ## Press and hold over the Plasma shell (2026-10-01)
 
