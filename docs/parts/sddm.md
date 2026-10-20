@@ -96,6 +96,13 @@ Qt6 greeter rejects.
   account viewport, focus-following scroll, pointer dragging and a narrow screen. Captions elide
   within the avatar width while each account's accessible name stays complete; the card's full
   name is bounded by the card too.
+  A sixteen-session fixture on a 480 px-high screen checks the vertically bounded session menu,
+  focus-following scroll, pointer dragging and a long selected session name. Account, layout,
+  session and daemon-provided text uses `Text.PlainText`, so HTML-like names are displayed
+  literally. `loginFailed()` carries no reason: the theme reports "Login failed", not a guessed
+  password diagnosis.
+  Short-screen card/account positions also keep both groups clear of each other and the footer;
+  normal-height layouts keep the board's y positions (210 and 600 at 900 px high).
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill

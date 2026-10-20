@@ -32,6 +32,15 @@ Item {
             choices.itemAt((i + choices.count) % choices.count).forceActiveFocus();
         }
     }
+    function revealChoice(item) {
+        if (!item || viewport.height <= 0) {
+            return;
+        }
+        const y = item.y;
+        const wanted = y < viewport.contentY ? y
+                     : Math.max(viewport.contentY, y + item.height - viewport.height);
+        viewport.contentY = Math.max(0, Math.min(wanted, list.implicitHeight - viewport.height));
+    }
     function toggleMenu() {
         menu.open = !menu.open;
         if (menu.open) {
@@ -48,7 +57,8 @@ Item {
         color: Palette.fill
         border.color: activeFocus ? Palette.accent : Palette.stroke
         border.width: activeFocus ? 2 : 1
-        width: row.implicitWidth + 26
+        width: Math.min(sessionLabel.implicitWidth + mark.width + chevron.implicitWidth + row.spacing * 2 + 26,
+                        240, Math.max(0, session.parent.width - session.x - 32))
         Accessible.name: qsTr("Session: %1", "the chosen session's name").arg(session.selectedName)
         Accessible.role: Accessible.Button
         activeFocusOnTab: true
@@ -65,6 +75,7 @@ Item {
 
             // The Fusion mark: three overlapping circles (the board's session logo)
             Item {
+                id: mark
                 anchors.verticalCenter: parent.verticalCenter
                 width: 18
                 height: 18
@@ -73,14 +84,19 @@ Item {
                 Rectangle { x: 8; y: 6; width: 11; height: 11; radius: 6; color: "#3cc4b0"; opacity: 0.85 }
             }
             Text {
+                id: sessionLabel
+                width: Math.max(0, pill.width - mark.width - chevron.implicitWidth - row.spacing * 2 - 26)
+                elide: Text.ElideRight
                 anchors.verticalCenter: parent.verticalCenter
                 font.family: Palette.bodyFont
                 font.pixelSize: 13
                 font.weight: Font.Bold
                 color: Palette.ink
                 text: session.selectedName !== "" ? session.selectedName : qsTr("Session")
+                textFormat: Text.PlainText
             }
             Text {
+                id: chevron
                 anchors.verticalCenter: parent.verticalCenter
                 font.family: Palette.bodyFont
                 font.pixelSize: 12
@@ -99,60 +115,85 @@ Item {
     Rectangle {
         id: menu
         property bool open: false
+        property int cursor: 0
         visible: open
         anchors.bottom: pill.top
         anchors.bottomMargin: 8
         anchors.left: pill.left
-        width: 240
-        height: list.implicitHeight + 8
+        width: Math.min(240, Math.max(0, session.parent.width - session.x - 32))
+        height: Math.min(list.implicitHeight + 8, Math.max(0, session.y - 8 - 32))
         radius: 12
         color: "#f2141a2e"
         border.color: Palette.stroke
         border.width: 1
 
-        Column {
-            id: list
-            x: 4
-            y: 4
-            width: parent.width - 8
-            Repeater {
-                id: choices
-                model: sessionModel
-                delegate: Rectangle {
-                    width: list.width
-                    height: 32
-                    radius: 8
-                    color: session.index === index ? Palette.fill : "transparent"
-                    border.color: Palette.accent
-                    border.width: activeFocus ? 2 : 0
+        Flickable {
+            id: viewport
+            anchors.fill: parent
+            anchors.margins: 4
+            clip: true
+            contentWidth: width
+            contentHeight: list.implicitHeight
+            flickableDirection: Flickable.VerticalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            onHeightChanged: {
+                if (menu.open) {
+                    session.revealChoice(choices.itemAt(menu.cursor));
+                }
+            }
 
-                    Accessible.name: String(model.name || "")
-                    Accessible.role: Accessible.Button
-                    activeFocusOnTab: true
-                    Keys.onReturnPressed: session.choose(index, String(model.name || ""))
-                    Keys.onEnterPressed: session.choose(index, String(model.name || ""))
-                    Keys.onSpacePressed: session.choose(index, String(model.name || ""))
-                    Keys.onDownPressed: session.focusChoice(index + 1)
-                    Keys.onUpPressed: session.focusChoice(index - 1)
-                    Keys.onEscapePressed: session.closeMenu()
-                    Component.onCompleted: {
-                        // The model's first answer names the pill (lastIndex, else the first)
-                        if (session.selectedName === "" && index === session.index) {
-                            session.selectedName = String(model.name || "");
+            Column {
+                id: list
+                width: viewport.width
+                Repeater {
+                    id: choices
+                    model: sessionModel
+                    delegate: Rectangle {
+                        id: choice
+                        width: list.width
+                        height: 32
+                        radius: 8
+                        color: session.index === index ? Palette.fill : "transparent"
+                        border.color: Palette.accent
+                        border.width: activeFocus ? 2 : 0
+
+                        Accessible.name: String(model.name || "")
+                        Accessible.role: Accessible.Button
+                        activeFocusOnTab: true
+                        onActiveFocusChanged: {
+                            if (activeFocus) {
+                                menu.cursor = index;
+                                session.revealChoice(choice);
+                            }
                         }
-                    }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: 12
-                        font.family: Palette.bodyFont
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
-                        color: Palette.ink
-                        text: String(model.name || "")
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: session.choose(index, String(model.name || ""))
+                        Keys.onReturnPressed: session.choose(index, String(model.name || ""))
+                        Keys.onEnterPressed: session.choose(index, String(model.name || ""))
+                        Keys.onSpacePressed: session.choose(index, String(model.name || ""))
+                        Keys.onDownPressed: session.focusChoice(index + 1)
+                        Keys.onUpPressed: session.focusChoice(index - 1)
+                        Keys.onEscapePressed: session.closeMenu()
+                        Component.onCompleted: {
+                            // The model's first answer names the pill (lastIndex, else the first)
+                            if (session.selectedName === "" && index === session.index) {
+                                session.selectedName = String(model.name || "");
+                            }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: 12
+                            width: parent.width - 24
+                            elide: Text.ElideRight
+                            font.family: Palette.bodyFont
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            color: Palette.ink
+                            text: String(model.name || "")
+                            textFormat: Text.PlainText
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: session.choose(index, String(model.name || ""))
+                        }
                     }
                 }
             }

@@ -134,6 +134,7 @@ Flickable {
                         font.weight: Font.ExtraBold
                         color: "#ffffff"
                         text: String(model.realName || model.name || "?").charAt(0).toUpperCase()
+                        textFormat: Text.PlainText
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -156,6 +157,7 @@ Flickable {
                     font.weight: userColumn.selected ? Font.ExtraBold : Font.DemiBold
                     color: userColumn.selected ? Palette.ink : Palette.inkSoft
                     text: String(model.realName || model.name || "")
+                    textFormat: Text.PlainText
                 }
             }
         }

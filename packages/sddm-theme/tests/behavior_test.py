@@ -70,7 +70,7 @@ class Keyboard(QObject):
 
     def __init__(self):
         super().__init__()
-        self.choices = [Layout("EN"), Layout("FR")]
+        self.choices = [Layout("<b>EN</b>"), Layout("FR")]
         self.current = 0
 
     def set_current(self, value):
@@ -141,6 +141,14 @@ def find(root, name):
     return next(item for item in walk(root) if accessible(item) == name)
 
 
+def plain_labels(root, text):
+    labels = [item for item in walk(root)
+              if item.property("text") == text and item.metaObject().indexOfProperty("textFormat") >= 0]
+    return bool(labels) and all(QQmlExpression(qmlContext(item), item,
+                                              "textFormat === Text.PlainText").evaluate()[0]
+                                for item in labels)
+
+
 def press(view, item, key, modifier=Qt.NoModifier):
     item.forceActiveFocus()
     QTest.keyClick(view, key, modifier)
@@ -164,9 +172,13 @@ def main():
         avatar = str(Path(tmp) / "avatar.png")
         image.save(avatar)
         subprocess.run(["bash", str(HERE / "build.sh"), tmp, avatar], check=True)
-        users = Model([{"name": f"user{i}", "realName": "A long account name " * 6 if i == 0 else f"Person {i}",
+        account_name = "<b>Account</b> " * 10
+        users = Model([{"name": f"user{i}", "realName": account_name if i == 0 else f"Person {i}",
                         "icon": avatar} for i in range(20)])
-        sessions = Model([{"name": name} for name in ("Plasma", "Plasma X11", "Other session")])
+        session_name = "<b>Odd session</b> " + "Z" * 300
+        sessions = Model([{"name": name} for name in ("Plasma", "Plasma X11", "Other session")]
+                         + [{"name": f"Additional {i}"} for i in range(12)]
+                         + [{"name": session_name}])
         keyboard = Keyboard()
         proxy = Proxy()
         config = Config(avatar)
@@ -190,6 +202,12 @@ def main():
         password = find(root, "Password")
         reveal = find(root, "Show password")
         check(root.property("loginName") == "user0", "SDDM's last user populates the login card")
+        check(plain_labels(root, account_name), "account names and captions render markup literally")
+        check(plain_labels(root, "<b>EN</b>"), "keyboard layout labels render markup literally")
+        proxy.informationMessage.emit("<b>Notice</b>")
+        QTest.qWait(10)
+        check(plain_labels(root, "<b>Notice</b>"), "daemon information renders markup literally")
+        proxy.informationMessage.emit("")
         check(password.hasActiveFocus() and
               any(item.property("text") == "Password" and item.isVisible() for item in walk(root)),
               "the initially focused password field has a visible prompt")
@@ -253,12 +271,25 @@ def main():
         check(any(item.property("text") == "Username" and item.isVisible() for item in walk(root)),
               "Other user has a visible Username prompt")
 
+        view.resize(1440, 480)
+        QTest.qWait(20)
+        card = next(item for item in walk(root) if item.property("promptName") is not None)
+        check(card.y() + card.height() + 16 <= switcher.y(),
+              "the account strip does not cover the login fields on a short screen")
         picker = next(item for item in walk(root) if accessible(item).startswith("Session:"))
+        footer_top = min(picker.mapToScene(picker.boundingRect().topLeft()).y(),
+                         find(root, "Sleep").mapToScene(find(root, "Sleep").boundingRect().topLeft()).y())
+        check(switcher.y() + switcher.height() + 16 <= footer_top,
+              "the account strip stays above the footer controls on a short screen")
         session = picker.parentItem()
         option = find(root, "Other session")
         check(reachable(view, password, picker), "Tab reaches the session picker")
         press(view, picker, Qt.Key_Return)
         check(option.isVisible(), "Return opens the session menu")
+        menu = next(item for item in walk(root) if item.property("open") is not None)
+        check(menu.mapToScene(menu.boundingRect().topLeft()).y() >= 32,
+              "an overfull session menu stays below the top screen margin")
+        check(plain_labels(root, session_name), "session choices render markup literally")
         check(find(root, "Plasma").mapToScene(find(root, "Plasma").boundingRect().topLeft()).x() >= 0,
               "the open session menu is not clipped off the screen's left edge")
         if not option.isVisible():
@@ -267,6 +298,31 @@ def main():
             QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier, pos)
         press(view, find(root, "Plasma"), Qt.Key_Down)
         check(view.activeFocusItem() == find(root, "Plasma X11"), "Down moves between session choices")
+        final_session = find(root, session_name)
+        press(view, final_session, Qt.Key_Down)
+        first = find(root, "Plasma")
+        check(view.activeFocusItem() == first and first.mapToScene(first.boundingRect().topLeft()).y() >= 32,
+              "wrapped session focus scrolls the first choice fully onto the screen")
+        press(view, final_session, Qt.Key_Up)
+        scroller = next((item for item in walk(menu) if item.property("contentY") is not None), None)
+        moved = False
+        if scroller is not None:
+            before = scroller.property("contentY")
+            start = scroller.mapToScene(scroller.boundingRect().center()).toPoint()
+            QTest.mousePress(view, Qt.LeftButton, Qt.NoModifier, start)
+            for delta in (20, 60, 100):
+                QTest.mouseMove(view, start + QPoint(0, delta), 30)
+                QTest.qWait(30)
+            QTest.mouseRelease(view, Qt.LeftButton, Qt.NoModifier, start + QPoint(0, 100))
+            QMetaObject.invokeMethod(scroller, "cancelFlick")
+            moved = scroller.property("contentY") < before
+        check(moved, "a pointer drag reaches the overfull session list")
+        press(view, final_session, Qt.Key_Space)
+        QTest.qWait(50)
+        check(session.property("index") == 15 and plain_labels(root, session_name),
+              "the selected session pill renders its name literally")
+        check(picker.width() <= 240, "a long selected session name stays inside a bounded pill")
+        press(view, picker, Qt.Key_Return)
         press(view, option, Qt.Key_Space)
         check(session.property("index") == 2 and not option.isVisible(),
               "Space chooses a session and closes the menu")
@@ -287,6 +343,8 @@ def main():
         QTest.qWait(10)
         check(password.property("text") == "", "failed login clears the password")
         check(not reveal.property("pressed"), "failed login resets password visibility")
+        check(any(item.property("text") == "Login failed" and item.isVisible() for item in walk(root)),
+              "an undiagnosed failure shows a generic login message")
 
         check(reachable(view, password, reveal), "Tab reaches password visibility")
         press(view, reveal, Qt.Key_Space)
@@ -305,6 +363,8 @@ def main():
         QTest.qWait(20)
         check(switcher.width() <= 416 and switcher.x() >= 32,
               "the account viewport follows a narrow screen")
+        check(card.y() == 210 and switcher.y() == 600,
+              "normal-height layouts keep the Login board's vertical positions")
         check(not warnings, "theme behavior emits no QML warnings")
         for warning in warnings:
             print("QML", warning)

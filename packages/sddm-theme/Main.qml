@@ -28,6 +28,7 @@ Rectangle {
     property url personIcon: ""
     property string personLetter: ""
     property string loginName: ""
+    readonly property real footerTop: Math.min(session.y, powerButtons.y)
 
     function login(user, password) {
         const who = user !== "" ? user : loginName;
@@ -41,7 +42,7 @@ Rectangle {
     Connections {
         target: sddm
         function onLoginFailed() {
-            card.message = qsTr("Wrong password");
+            card.message = qsTr("Login failed");
             card.clearPassword();
         }
         function onInformationMessage(message) {
@@ -131,6 +132,7 @@ Rectangle {
                 const l = keyboard.layouts[keyboard.currentLayout];
                 return String(l && (l.shortName || l.longName) || "");
             }
+            textFormat: Text.PlainText
         }
         MouseArea {
             anchors.fill: parent
@@ -142,7 +144,8 @@ Rectangle {
     LoginCard {
         id: card
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.round(parent.height * 210 / 900)
+        y: Math.max(0, Math.min(Math.round(parent.height * 210 / 900),
+                               root.footerTop - users.height - height - 32))
         width: 400
         avatarSource: root.personIcon
         avatarLetter: root.personLetter
@@ -154,7 +157,8 @@ Rectangle {
     UserSwitcher {
         id: users
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.round(parent.height * 600 / 900)
+        y: Math.max(card.y + card.height + 16,
+                    Math.min(Math.round(parent.height * 600 / 900), root.footerTop - height - 16))
         onUserChosen: (index, user, icon, name, letter) => {
             card.clearPassword();
             root.loginName = user;
@@ -191,6 +195,7 @@ Rectangle {
 
     // ---- The power buttons (bottom right) ----
     PowerBar {
+        id: powerButtons
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.rightMargin: 32

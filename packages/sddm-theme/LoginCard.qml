@@ -64,6 +64,7 @@ Item {
                 font.weight: Font.Bold
                 color: "#ffffff"
                 text: card.avatarLetter
+                textFormat: Text.PlainText
             }
         }
 
@@ -77,6 +78,7 @@ Item {
             font.weight: Font.DemiBold
             color: Palette.ink
             text: card.personName
+            textFormat: Text.PlainText
             visible: !card.promptName
         }
 
@@ -346,6 +348,7 @@ Item {
                     font.weight: Font.Bold
                     color: Palette.warnInk
                     text: card.message
+                    textFormat: Text.PlainText
                     elide: Text.ElideRight
                 }
             }
