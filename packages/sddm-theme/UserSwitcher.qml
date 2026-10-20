@@ -24,6 +24,31 @@ Item {
     signal userChosen(int index, string user, url icon, string name, string letter)
     signal otherRequested()
 
+    // Arrow-key cursor over the accounts and Other user: Left and Right move it, Return and
+    // Space activate it, exactly as a click would. The delegates' rings show the cursor.
+    readonly property int choiceCount: userModel.count + 1
+    property int cursor: -1
+    // Each delegate puts its row's data here (QAbstractItemModel has no get())
+    property var rowsData: []
+    function activateChoice(i) {
+        cursor = -1;
+        cursor = i;
+        if (i === userModel.count) {
+            otherSelected = true;
+            otherRequested();
+        } else {
+            otherSelected = false;
+            selectedIndex = i;
+            const d = switcher.rowsData[i];
+            switcher.userChosen(i, d ? d.user : "", d ? d.icon : "",
+                                d ? d.name : "", d ? d.letter : "");
+        }
+    }
+    Keys.onLeftPressed: activateChoice(((cursor <= 0 ? choiceCount - 1 : cursor) + choiceCount - 1) % choiceCount)
+    Keys.onRightPressed: activateChoice((cursor + 1) % choiceCount)
+    Keys.onReturnPressed: { if (cursor < 0) { activateChoice(otherSelected ? choiceCount - 1 : selectedIndex); } event.accepted = true; }
+    Keys.onSpacePressed: { if (cursor < 0) { activateChoice(otherSelected ? choiceCount - 1 : selectedIndex); } event.accepted = true; }
+
     Row {
         id: row
         spacing: 28
@@ -36,12 +61,14 @@ Item {
                 property bool selected: !switcher.otherSelected && switcher.selectedIndex === index
 
                 Component.onCompleted: {
+                    switcher.rowsData[index] = { "user": String(model.name), "icon": model.icon || "",
+                        "name": String(model.realName || model.name),
+                        "letter": String(model.realName || model.name || "?").charAt(0).toUpperCase() };
                     // The model's first answer picks the card's user (lastUser, else the first)
                     if (!switcher.sent && index === (userModel.lastIndex >= 0 ? userModel.lastIndex : 0)) {
                         switcher.sent = true;
-                        switcher.userChosen(index, String(model.name), model.icon || "",
-                                            String(model.realName || model.name),
-                                            String(model.realName || model.name || "?").charAt(0).toUpperCase());
+                        switcher.userChosen(index, switcher.rowsData[index].user, switcher.rowsData[index].icon,
+                                            switcher.rowsData[index].name, switcher.rowsData[index].letter);
                     }
                 }
 
@@ -55,8 +82,8 @@ Item {
                     height: 56
                     radius: 28
                     color: Palette.avatarFill
-                    border.color: (selected || activeFocus) ? Palette.accent : Palette.avatarRing
-                    border.width: (selected || activeFocus) ? 3 : 0
+                    border.color: (selected || activeFocus || switcher.cursor === index) ? Palette.accent : Palette.avatarRing
+                    border.width: (selected || activeFocus || switcher.cursor === index) ? 3 : 0
 
                     CircularImage {
                         anchors.fill: parent
@@ -115,8 +142,8 @@ Item {
                 height: 56
                 radius: 28
                 color: Palette.fillField
-                border.color: (selected || activeFocus) ? Palette.accent : Palette.dashed
-                border.width: (selected || activeFocus) ? 1.5 : 1.5
+                border.color: (selected || activeFocus || switcher.cursor === userModel.count) ? Palette.accent : Palette.dashed
+                border.width: (selected || activeFocus || switcher.cursor === userModel.count) ? 1.5 : 1.5
 
                 Item {
                     anchors.centerIn: parent
