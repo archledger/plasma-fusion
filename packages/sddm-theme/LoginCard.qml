@@ -19,6 +19,7 @@ Item {
     property string personName: ""
     property bool promptName: false
     property string message: ""
+    property bool passwordRequired: true
     property real heightBudget: Number.POSITIVE_INFINITY
     // Measure only the non-message pieces; the message budget must not depend on its own height.
     readonly property real baseHeight: avatarFrame.height + column.spacing + passwordRow.height
@@ -30,8 +31,10 @@ Item {
     function focusPassword() {
         if (promptName) {
             nameInput.forceActiveFocus();
-        } else {
+        } else if (passwordRequired) {
             password.forceActiveFocus();
+        } else {
+            signIn.forceActiveFocus();
         }
     }
     function clearPassword() {
@@ -39,12 +42,15 @@ Item {
         // clear(), unlike assigning text, also resets partial input from the IME.
         // https://doc.qt.io/qt-6/qml-qtquick-textinput.html#clear-method
         password.clear();
-        password.forceActiveFocus();
+        focusPassword();
     }
     function focusUsername() {
         if (promptName) {
             nameInput.forceActiveFocus();
         }
+    }
+    function submit() {
+        loginRequested(promptName ? nameInput.text : "", passwordRequired ? password.text : "");
     }
 
     Column {
@@ -138,7 +144,7 @@ Item {
                     font.pixelSize: 16
                     color: Palette.ink
                     clip: true
-                    onAccepted: password.forceActiveFocus()
+                    onAccepted: card.passwordRequired ? password.forceActiveFocus() : card.submit()
                 }
                 Text {
                     anchors.fill: nameInput
@@ -150,10 +156,10 @@ Item {
                     text: qsTr("Username")
                 }
             }
-
             // The pill password field (48 high, radius 24, the accent ring when focused)
             Rectangle {
                 id: passwordRow
+                objectName: "passwordRow"
                 width: parent.width
                 height: 48
                 radius: 24
@@ -175,6 +181,7 @@ Item {
                 TextInput {
                     id: password
                     objectName: "passwordInput"
+                    visible: card.passwordRequired
                     Accessible.name: qsTr("Password")
                     Accessible.passwordEdit: true
                     // Qt suppresses a protected field's name; keep a static, non-secret description.
@@ -191,7 +198,7 @@ Item {
                     color: Palette.ink
                     echoMode: showPassword.pressed ? TextInput.Normal : TextInput.Password
                     clip: true
-                    onAccepted: card.loginRequested(card.promptName ? nameInput.text : "", text)
+                    onAccepted: card.submit()
                     Keys.onEscapePressed: card.clearPassword()
                     Keys.onPressed: event => {
                         // Match the lock screen: deleted input must not be recoverable after reveal.
@@ -206,13 +213,27 @@ Item {
                     font.family: Palette.bodyFont
                     font.pixelSize: 16
                     color: Palette.inkMuted
-                    visible: password.text === "" && password.preeditText.length === 0
+                    visible: card.passwordRequired && password.text === "" && password.preeditText.length === 0
                     text: qsTr("Password")
+                }
+                Text {
+                    objectName: "noPasswordLabel"
+                    anchors.left: parent.left
+                    anchors.right: signIn.left
+                    anchors.leftMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    font.family: Palette.bodyFont
+                    font.pixelSize: 16
+                    color: Palette.inkMuted
+                    visible: !card.passwordRequired
+                    text: qsTr("No password required")
+                    elide: Text.ElideRight
                 }
 
                 // Show password (the board's eye; 36 px round, inkSoft)
                 Item {
                     id: showPassword
+                    visible: card.passwordRequired
                     Accessible.name: qsTr("Show password")
                     Accessible.role: Accessible.Button
                     Accessible.checkable: true
@@ -280,10 +301,10 @@ Item {
                     Accessible.name: qsTr("Sign in")
                     Accessible.role: Accessible.Button
                     activeFocusOnTab: true
-                    Keys.onReturnPressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
-                    Keys.onEnterPressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
-                    Keys.onSpacePressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
-                    Accessible.onPressAction: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
+                    Keys.onReturnPressed: card.submit()
+                    Keys.onEnterPressed: card.submit()
+                    Keys.onSpacePressed: card.submit()
+                    Accessible.onPressAction: card.submit()
                     anchors.right: parent.right
                     anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter

@@ -67,6 +67,18 @@ def main() -> int:
         ok &= check("theme.conf carries no unsubstituted placeholder", "@BACKGROUND@" not in conf)
         ok &= check("theme.conf opts out of enumerating the whole user directory",
                     re.search(r"^needsFullUserModel=false$", conf, re.M) is not None)
+        ok &= check("metadata's own data is licensed CC0",
+                    "SPDX-" + "License-Identifier: CC0-1.0" in meta)
+        ok &= check("metadata still names the theme code's license",
+                    re.search(r"^License=GPL-2\.0-or-later$", meta, re.M) is not None)
+
+        # Split the marker so REUSE does not parse the test string as this file's license.
+        doc_license = "SPDX-" + "License-Identifier: CC-BY-SA-4.0"
+        copyright_stanzas = (REPO / "packaging/debian/copyright").read_text().split("\n\n")
+        metadata_stanza = next((s for s in copyright_stanzas
+                                if s.startswith("Files: packages/sddm-theme/metadata.desktop")), "")
+        ok &= check("Debian groups the metadata file under CC0",
+                    "License: CC0-1.0" in metadata_stanza)
 
         # The documented smoke command must be the Qt6 greeter's real option.
         build_header = (HERE / "build.sh").read_text()
@@ -85,12 +97,9 @@ def main() -> int:
         ok &= check("every custom accessible button handles the press action",
                     buttons > 0 and presses >= buttons, f"{presses} press handlers for {buttons} buttons")
 
-        # Split the marker so REUSE does not parse the test string as this file's license.
-        doc_license = "SPDX-" + "License-Identifier: CC-BY-SA-4.0"
         for doc in ("docs/parts/sddm.md", "packages/sddm-theme/README.md"):
             ok &= check(f"{doc} uses the documentation license",
                         doc_license in (REPO / doc).read_text().splitlines()[:8])
-        copyright_stanzas = (REPO / "packaging/debian/copyright").read_text().split("\n\n")
         ok &= check("Debian groups the SDDM README under the documentation license",
                     any(stanza.startswith("Files:") and "packages/sddm-theme/README.md" in stanza
                         and "License: CC-BY-SA-4.0" in stanza for stanza in copyright_stanzas))

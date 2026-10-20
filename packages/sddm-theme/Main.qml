@@ -44,7 +44,7 @@ Rectangle {
             return;
         }
         card.message = "";
-        sddm.login(who, password, session.index);
+        sddm.login(who, card.passwordRequired ? password : "", session.index);
     }
 
     Connections {
@@ -170,7 +170,7 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(card.y + card.height + 16,
                     Math.min(Math.round(parent.height * 600 / 900), root.footerTop - height - 16))
-        onUserChosen: (index, user, icon, name, letter) => {
+        onUserChosen: (index, user, icon, name, letter, needsPassword) => {
             card.message = "";
             card.clearPassword();
             root.loginName = user;
@@ -178,6 +178,7 @@ Rectangle {
             root.personName = name;
             root.personLetter = letter;
             card.promptName = false;
+            card.passwordRequired = needsPassword;
             card.focusPassword();
         }
         onOtherRequested: {
@@ -188,6 +189,7 @@ Rectangle {
             root.personName = "";
             root.personLetter = "?";
             card.promptName = true;
+            card.passwordRequired = true;
             card.focusPassword();
         }
     }

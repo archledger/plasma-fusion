@@ -40,7 +40,7 @@ def check(ok, message):
 
 class Model(QAbstractListModel):
     roles = {Qt.UserRole + i: role.encode() for i, role in enumerate(
-        ("name", "realName", "icon", "homeDir", "exec", "comment"))}
+        ("name", "realName", "icon", "homeDir", "exec", "comment", "needsPassword"))}
 
     def __init__(self, rows):
         super().__init__()
@@ -220,7 +220,7 @@ def main():
         subprocess.run(["bash", str(HERE / "build.sh"), tmp, avatar], check=True)
         account_name = "<b>Account</b> " * 10
         users = Model([{"name": f"user{i}", "realName": account_name if i == 0 else f"Person {i}",
-                        "icon": avatar} for i in range(20)])
+                        "icon": avatar, "needsPassword": i != 6} for i in range(20)])
         users.rows[4]["icon"] = missing_avatar
         users.rows[5]["icon"] = invalid_avatar
         session_name = "<b>Odd session</b> " + "Z" * 300
@@ -277,6 +277,37 @@ def main():
               any(item.property("text") == "Password" and item.isVisible() for item in walk(root)),
               "the initially focused password field has a visible prompt")
         switcher = next(item for item in walk(root) if item.property("choiceCount") is not None)
+        person0 = find(root, account_name)
+        check(QQmlExpression(qmlContext(person0), person0, "Accessible.selected").evaluate()[0],
+              "the remembered account is exposed as selected to assistive technology")
+        not_selected = find(root, "Person 1")
+        check(not QQmlExpression(qmlContext(not_selected), not_selected,
+                                "Accessible.selected").evaluate()[0],
+              "other accounts are exposed as not selected")
+        other_tile = find(root, "Other user")
+        check(not QQmlExpression(qmlContext(other_tile), other_tile,
+                                "Accessible.selected").evaluate()[0],
+              "Other user is not selected when the remembered account is chosen")
+
+        no_password = root.findChild(QObject, "noPasswordLabel")
+        passwordless = find(root, "Person 6")
+        press(view, passwordless, Qt.Key_Space)
+        QTest.qWait(30)
+        check(not password.isVisible() and no_password.isVisible(),
+              "an account without a password hides the password field")
+        check(view.activeFocusItem() == find(root, "Sign in"),
+              "a passwordless account focuses its sign-in control")
+        check(QQmlExpression(qmlContext(passwordless), passwordless,
+                            "Accessible.selected").evaluate()[0],
+              "the passwordless account becomes the assistive selection")
+        proxy.logins.clear()
+        activate(find(root, "Sign in"))
+        check(proxy.logins == [("user6", "", 1)],
+              "passwordless sign-in submits an empty password")
+        press(view, person0, Qt.Key_Space)
+        QTest.qWait(30)
+        check(password.isVisible() and not no_password.isVisible(),
+              "a password account restores the password field")
         check(plain_labels(root, account_name), "account names and captions render markup literally")
         check(plain_labels(root, "<b>EN</b>"), "keyboard layout labels render markup literally")
         proxy.informationMessage.emit("<b>Notice</b>")

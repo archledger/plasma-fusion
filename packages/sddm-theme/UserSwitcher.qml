@@ -28,7 +28,7 @@ Flickable {
     property url selectedIcon: ""
     property string selectedName: ""
     property string selectedLetter: ""
-    signal userChosen(int index, string user, url icon, string name, string letter)
+    signal userChosen(int index, string user, url icon, string name, string letter, bool needsPassword)
     signal otherRequested()
 
     // Arrow keys move focus, Return/Space choose. Selecting an account focuses its password,
@@ -47,7 +47,8 @@ Flickable {
             selectedIndex = i;
             const d = switcher.rowsData[i];
             switcher.userChosen(i, d ? d.user : "", d ? d.icon : "",
-                                d ? d.name : "", d ? d.letter : "");
+                                d ? d.name : "", d ? d.letter : "",
+                                d ? d.needsPassword : true);
         }
     }
     function moveChoice(from, delta) {
@@ -88,12 +89,15 @@ Flickable {
                 Component.onCompleted: {
                     switcher.rowsData[index] = { "user": String(model.name), "icon": model.icon || "",
                         "name": String(model.realName || model.name),
-                        "letter": String(model.realName || model.name || "?").charAt(0).toUpperCase() };
+                        "letter": String(model.realName || model.name || "?").charAt(0).toUpperCase(),
+                        "needsPassword": model.needsPassword === undefined ? true : model.needsPassword };
                     // The model's first answer picks the card's user (lastUser, else the first)
                     if (!switcher.sent && index === (userModel.lastIndex >= 0 ? userModel.lastIndex : 0)) {
                         switcher.sent = true;
+                        switcher.otherSelected = false;
                         switcher.userChosen(index, switcher.rowsData[index].user, switcher.rowsData[index].icon,
-                                            switcher.rowsData[index].name, switcher.rowsData[index].letter);
+                                            switcher.rowsData[index].name, switcher.rowsData[index].letter,
+                                            switcher.rowsData[index].needsPassword);
                         Qt.callLater(switcher.revealSelection);
                     }
                 }
@@ -102,6 +106,7 @@ Flickable {
                     id: userTile
                     Accessible.name: String(model.realName || model.name || "")
                     Accessible.role: Accessible.Button
+                    Accessible.selected: userColumn.selected
                     activeFocusOnTab: true
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 56
@@ -174,6 +179,7 @@ Flickable {
                 id: otherTile
                 Accessible.name: qsTr("Other user")
                 Accessible.role: Accessible.Button
+                Accessible.selected: otherColumn.selected
                 activeFocusOnTab: true
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 56

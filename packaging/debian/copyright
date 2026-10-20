@@ -28,6 +28,11 @@ License: CC-BY-SA-4.0
 Comment: The rendered artwork (icons, cursors, wallpapers, window decorations, backgrounds) is
  CC-BY-SA-4.0 too; the generators that draw it are GPL-2.0-or-later.
 
+Files: packages/sddm-theme/metadata.desktop
+Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+License: CC0-1.0
+Comment: Project metadata and plain data are CC0-1.0; the theme code it selects is GPL-2.0-or-later.
+
 Files: fonts/manrope/*
 Copyright: 2018 The Manrope Project Authors <https://github.com/googlefonts/manrope>
 License: OFL-1.1
@@ -61,9 +66,12 @@ License: GPL-2.0-only or GPL-3.0-only or LicenseRef-KDE-Accepted-GPL
  LICENSES/LicenseRef-KDE-Accepted-GPL.txt of the source.
 
 License: CC-BY-SA-4.0
- Creative Commons Attribution-ShareAlike 4.0 International. The complete text is in
- LICENSES/CC-BY-SA-4.0.txt of the source and
+ Creative Commons Attribution-ShareAlike 4.0 International. The complete text is in LICENSES/CC-BY-SA-4.0.txt of the source and
  https://creativecommons.org/licenses/by-sa/4.0/legalcode.
+
+License: CC0-1.0
+ On Debian systems, the complete text of the CC0 1.0 Universal license can be found in
+ /usr/share/common-licenses/CC0-1.0.
 
 License: OFL-1.1
  SIL Open Font License, Version 1.1. The complete text is installed with the fonts as

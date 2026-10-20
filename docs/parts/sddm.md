@@ -128,6 +128,11 @@ Qt6 greeter rejects.
   `theme.conf` sets `needsFullUserModel=false`: SDDM 0.21 otherwise walks the complete passwd
   directory (including large NSS directories). Other user covers accounts beyond the limited
   model, and the remembered account remains available as SDDM adds it explicitly.
+  The account tiles and Other user expose `Accessible.selected`. An account whose SDDM
+  `needsPassword` role is false hides the password input, shows "No password required" beside
+  its sign-in control, and submits an empty password; switching back to a password account
+  restores the field. `metadata.desktop` carries CC0 for its own data while its `License` field
+  still names the theme code's GPL-2.0-or-later.
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
@@ -161,6 +166,13 @@ Qt6 greeter rejects.
   Qt6 parser defines `test-mode`, not `test`.
 - [SDDM UserModel enumeration](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/UserModel.cpp):
   without all users it stops at the avatar threshold and explicitly adds the remembered account.
+  The model's `needsPassword` role comes from `UserModel.h`; the reference theme passes it to
+  its account presentation, which is why a passwordless account has no password field.
+- [SDDM reference theme](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/theme/Main.qml):
+  `showPassword: model.needsPassword` and `sddm.login(model.name, password, sessionIndex)`.
+  Our equivalent keeps a visible sign-in control and sends the empty password.
+- [Accessible selection](https://doc.qt.io/qt-6/qml-qtquick-accessible.html#selected-prop): the
+  remembered and currently chosen account, and Other user, expose their selected state.
 - [Flickable](https://doc.qt.io/qt-6/qml-qtquick-flickable.html) and
   [Keys](https://doc.qt.io/qt-6/qml-qtquick-keys.html): the message's measured content height, clipped
   viewport and keyboard paging stay in core QtQuick; no optional controls module is required.

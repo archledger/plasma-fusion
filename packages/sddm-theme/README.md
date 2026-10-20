@@ -66,7 +66,9 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   databases do not delay the greeter; Other user covers accounts outside the limited model.
   `build.sh`'s header uses the Qt6 greeter's `--test-mode` command. The username field blocks
   automatic capitalization, the layout pill announces its selection, the reveal toggle reports
-  its checked state, and an empty Other-user submission gives an actionable message.
+  its checked state, and an empty Other-user submission gives an actionable message. Account
+  tiles expose their selected state, and a passwordless account hides the password input and
+  signs in without one. The metadata file's own data is CC0.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.
