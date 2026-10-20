@@ -41,6 +41,11 @@ Item {
         password.clear();
         password.forceActiveFocus();
     }
+    function focusUsername() {
+        if (promptName) {
+            nameInput.forceActiveFocus();
+        }
+    }
 
     Column {
         id: column
@@ -123,6 +128,8 @@ Item {
                 TextInput {
                     id: nameInput
                     Accessible.name: qsTr("Username")
+                    // Account names are case-sensitive; an autocapitalising IME must not change one.
+                    inputMethodHints: Qt.ImhNoAutoUppercase
                     anchors.fill: parent
                     anchors.leftMargin: 18
                     anchors.rightMargin: 18
@@ -208,6 +215,8 @@ Item {
                     id: showPassword
                     Accessible.name: qsTr("Show password")
                     Accessible.role: Accessible.Button
+                    Accessible.checkable: true
+                    Accessible.checked: pressed
                     activeFocusOnTab: true
                     property bool pressed: false
                     Keys.onReturnPressed: pressed = !pressed

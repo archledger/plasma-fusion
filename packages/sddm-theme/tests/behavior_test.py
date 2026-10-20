@@ -350,6 +350,8 @@ def main():
         check(reachable(view, password, layout), "Tab reaches the keyboard-layout control")
         press(view, layout, Qt.Key_Space)
         check(keyboard.current == 1, "Space changes the keyboard layout")
+        layout_name = QQmlExpression(qmlContext(layout), layout, "Accessible.description").evaluate()[0]
+        check(layout_name == "FR", "the keyboard control announces the selected layout")
         keyboard.set_current(1)
         press(view, layout, Qt.Key_Return)
         check(keyboard.current == 0, "Return cycles the keyboard layout")
@@ -413,6 +415,19 @@ def main():
               "Other user exposes and focuses the username input")
         check(any(item.property("text") == "Username" and item.isVisible() for item in walk(root)),
               "Other user has a visible Username prompt")
+        username_hint = QQmlExpression(qmlContext(username), username,
+                                       "inputMethodHints & Qt.ImhNoAutoUppercase").evaluate()[0]
+        check(bool(username_hint), "the username field prevents automatic IME capitalization")
+        check(not bool(QQmlExpression(qmlContext(reveal), reveal,
+                                     "Accessible.checkable && Accessible.checked").evaluate()[0]),
+              "the reveal toggle reports its unchecked state")
+        password.setProperty("text", "test-input")
+        proxy.logins.clear()
+        press(view, password, Qt.Key_Return)
+        check(not proxy.logins and card.property("message") == "Enter a username"
+              and view.activeFocusItem() == username,
+              "an empty Other-user name is reported and refocused")
+        check(password.property("text") == "", "an empty-name submit clears the stale password")
 
         view.resize(1440, 480)
         QTest.qWait(20)
@@ -493,6 +508,9 @@ def main():
         check(reachable(view, password, reveal), "Tab reaches password visibility")
         press(view, reveal, Qt.Key_Space)
         check(reveal.property("pressed"), "Space operates password visibility")
+        check(QQmlExpression(qmlContext(reveal), reveal,
+                            "Accessible.checkable && Accessible.checked").evaluate()[0],
+              "the reveal toggle reports its checked state")
         password.forceActiveFocus()
         hints = QInputMethod.queryFocusObject(Qt.ImHints, None)
         hints = getattr(hints, "value", hints)

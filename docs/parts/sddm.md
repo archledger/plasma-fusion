@@ -121,6 +121,10 @@ Qt6 greeter rejects.
   Every custom `Accessible.Button` handles the accessibility Press action as well as keys and
   pointer input; the suite invokes the real `QAccessible` action for layout, reveal, sign-in,
   sessions, accounts, Other user and all power controls.
+  The username field disables automatic IME capitalization, the keyboard control announces the
+  selected layout as its accessible description, and the reveal toggle exposes its checkable and
+  checked state. Submitting an empty Other-user name reports "Enter a username", clears the
+  stale password and refocuses the username field instead of appearing to do nothing.
   `theme.conf` sets `needsFullUserModel=false`: SDDM 0.21 otherwise walks the complete passwd
   directory (including large NSS directories). Other user covers accounts beyond the limited
   model, and the remembered account remains available as SDDM adds it explicitly.

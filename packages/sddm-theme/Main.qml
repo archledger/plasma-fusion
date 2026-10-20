@@ -33,6 +33,9 @@ Rectangle {
     function login(user, password) {
         const who = user !== "" ? user : loginName;
         if (who === "") {
+            card.message = qsTr("Enter a username");
+            card.clearPassword();
+            card.focusUsername();
             return;
         }
         if (!session.valid) {
@@ -113,6 +116,7 @@ Rectangle {
         radius: 17
         color: "#14ffffff"
         Accessible.name: qsTr("Keyboard layout")
+        Accessible.description: keyboardLabel.text
         Accessible.role: Accessible.Button
         activeFocusOnTab: true
         border.color: activeFocus ? "#6aa9ff" : "transparent"
