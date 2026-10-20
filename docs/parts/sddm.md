@@ -134,11 +134,17 @@ Qt6 greeter rejects.
   restores the field. `metadata.desktop` carries CC0 for its own data while its `License` field
   still names the theme code's GPL-2.0-or-later.
   Session choices also expose their selected state. Account tiles whose real names collide add
-  the login name to both the visible caption and accessible name, and the card shows that same
-  disambiguated identity. Both credential fields are explicit Tab stops, so keyboard traversal
-  returns to them after the layout, session and power controls.
+  the login name to both the accessible name and the card identity; the 56 px tile caption shows
+  the short login name itself so the distinguishing text is not elided away. Both credential
+  fields are explicit Tab stops, so keyboard traversal returns to them after the layout, session
+  and power controls. A failed Other-user login returns focus to the password field rather than
+  the still-valid username.
   `theme.conf.in` is CC0 like other project metadata and configuration input; Debian's
   machine-readable copyright groups it with `metadata.desktop` under CC0.
+  The staged theme gives every file a content-derived mtime within a bounded epoch. Qt's
+  persistent QML cache keys on source time, so a single fixed date could make an upgraded Arch
+  or NixOS system keep the previous compiled theme; identical content still yields identical
+  bytes and times.
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
@@ -182,6 +188,11 @@ Qt6 greeter rejects.
   selected state.
 - [Tab focus](https://doc.qt.io/qt-6/qml-qtquick-item.html#activeFocusOnTab-prop): `activeFocusOnTab`
   defaults to false; both raw TextInput credential fields opt in so they remain in the cycle.
+- [Qt QML disk cache](https://doc.qt.io/qt-6/qmldiskcache.html): a compiled unit is only reused
+  while the original source is unchanged; timestamp-based validation means one constant mtime
+  can keep an older theme after an upgrade. The NixOS report
+  [nixpkgs#541178](https://github.com/nixos/nixpkgs/issues/541178) describes exactly this stale
+  SDDM greeter cache, so the staged files get content-derived times.
 - [Flickable](https://doc.qt.io/qt-6/qml-qtquick-flickable.html) and
   [Keys](https://doc.qt.io/qt-6/qml-qtquick-keys.html): the message's measured content height, clipped
   viewport and keyboard paging stay in core QtQuick; no optional controls module is required.

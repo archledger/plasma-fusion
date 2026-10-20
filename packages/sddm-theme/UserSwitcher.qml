@@ -120,7 +120,14 @@ Flickable {
                 width: 56
                 spacing: 8
                 property bool selected: !switcher.otherSelected && switcher.selectedIndex === index
+                readonly property bool duplicateName: (switcher.nameCounts[String(model.realName || model.name)] || 0) > 1
+                readonly property bool nameDiffers: String(model.realName || "") !== ""
+                    && String(model.realName) !== String(model.name)
                 readonly property string shownName: switcher.displayNameFor(index)
+                // A 56 px caption elides any suffix; for duplicate real names show the login name,
+                // which is short enough to remain the visible distinguishing identifier.
+                readonly property string caption: duplicateName && nameDiffers
+                    ? String(model.name || "") : shownName
                 function focusChoice() { userTile.forceActiveFocus(); }
 
                 Component.onCompleted: {
@@ -200,7 +207,7 @@ Flickable {
                     font.pixelSize: 13
                     font.weight: userColumn.selected ? Font.ExtraBold : Font.DemiBold
                     color: userColumn.selected ? Palette.ink : Palette.inkSoft
-                    text: userColumn.shownName
+                    text: userColumn.caption
                     textFormat: Text.PlainText
                 }
             }

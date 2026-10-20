@@ -314,8 +314,8 @@ def main():
         twin2 = next((item for item in walk(root) if accessible(item) == "Twin (user8)"), None)
         check(twin1 is not None and twin2 is not None,
               "accounts sharing a real name expose their login names")
-        check(any(item.property("text") == "Twin (user7)" and item.isVisible() for item in walk(root)),
-              "the visible caption disambiguates a shared real name")
+        check(any(item.property("text") == "user7" and item.isVisible() for item in walk(root)),
+              "the visible caption shows the distinguishing login name")
         if twin1 is not None:
             press(view, twin1, Qt.Key_Space)
             disambiguated = card.property("personName") == "Twin (user7)"
@@ -560,6 +560,8 @@ def main():
         QTest.qWait(10)
         check(password.property("text") == "", "failed login clears the password")
         check(not reveal.property("pressed"), "failed login resets password visibility")
+        check(view.activeFocusItem() == password,
+              "a failed Other-user login returns focus to the password field")
         check(any(item.property("text") == "Login failed" and item.isVisible() for item in walk(root)),
               "an undiagnosed failure shows a generic login message")
 

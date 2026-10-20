@@ -49,6 +49,13 @@ Item {
             nameInput.forceActiveFocus();
         }
     }
+    function focusPasswordField() {
+        if (passwordRequired) {
+            password.forceActiveFocus();
+        } else {
+            signIn.forceActiveFocus();
+        }
+    }
     function submit() {
         loginRequested(promptName ? nameInput.text : "", passwordRequired ? password.text : "");
     }

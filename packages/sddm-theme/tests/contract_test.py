@@ -12,6 +12,7 @@ These checks run in CI (tools/build.d/91-sddm.sh) and fail on the version before
 """
 
 import ast
+import hashlib
 import pathlib
 import re
 import shlex
@@ -184,6 +185,18 @@ def main() -> int:
             ok &= check("two builds are byte-identical", same)
         finally:
             shutil.rmtree(again_root, ignore_errors=True)
+
+        # Qt's QML cache keys on source time; a single constant date would let an upgrade keep
+        # the previous compiled theme on channels that do not re-stamp it (Arch, NixOS).
+        def content_stamp(path):
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            return 1_600_000_000 + int(digest[:8], 16) % 200_000_000
+
+        files = [f for f in theme.iterdir() if f.is_file()]
+        ok &= check("theme mtimes derive from file content",
+                    all(int(f.stat().st_mtime) == content_stamp(f) for f in files))
+        ok &= check("theme mtimes vary with content instead of one constant",
+                    len({int(f.stat().st_mtime) for f in files}) > 1)
     finally:
         if own_tmp:
             shutil.rmtree(own_tmp, ignore_errors=True)

@@ -28,7 +28,23 @@ cp "$HERE/Main.qml" "$HERE/palette.js" "$HERE/LoginCard.qml" "$HERE/UserSwitcher
 python3 -c 'import sys, pathlib; s = pathlib.Path(sys.argv[1]).read_text(); pathlib.Path(sys.argv[2]).write_text(s.replace(sys.argv[3], sys.argv[4]))' "$HERE/theme.conf.in" "$DEST/theme.conf" "@BACKGROUND@" "$BACKGROUND"
 cp "$HERE/../../design/previews/Login.webp" "$DEST/preview.webp"
 
-# A stable order and mode, so two builds are byte-identical.
-find "$DEST" -type f -exec touch -d '2026-01-01 00:00:00 UTC' {} +
+# A stable order and mode, so two builds are byte-identical. The mtime is derived from each
+# file's content: Qt's persistent QML cache keys on source time, and a single fixed date could
+# keep the previous package's compiled theme after an upgrade on channels that do not re-stamp
+# later (Arch, NixOS). Same content gives the same time, so reproducibility is preserved.
+python3 - "$DEST" <<'PY'
+import hashlib
+import os
+import sys
+
+base = 1_600_000_000  # 2020-09-13, before any package build date
+for directory, _, files in os.walk(sys.argv[1]):
+    for name in files:
+        path = os.path.join(directory, name)
+        with open(path, "rb") as source:
+            digest = hashlib.sha256(source.read()).hexdigest()
+        stamp = base + int(digest[:8], 16) % 200_000_000
+        os.utime(path, (stamp, stamp))
+PY
 chmod 0644 "$DEST"/*
 echo "sddm theme: $DEST"

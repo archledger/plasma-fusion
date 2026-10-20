@@ -52,6 +52,8 @@ Rectangle {
         function onLoginFailed() {
             card.message = qsTr("Login failed");
             card.clearPassword();
+            // clearPassword focuses the name field for Other user; only the password was wrong.
+            card.focusPasswordField();
         }
         function onInformationMessage(message) {
             card.message = message;
