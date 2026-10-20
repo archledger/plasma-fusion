@@ -164,8 +164,12 @@ Qt6 greeter rejects.
   daemon silently refuses a concurrent authentication. A view that loses primary clears and
   re-masks the password and clears the typed Other-user name. An empty user model initializes
   Other user at load and on promotion, independently of input gating, so a view created secondary
-  shows the correct prompt and accessible selection when it becomes primary. A local pending
-  request also has a 60 s safety timeout, so a lost result cannot leave "Signing in…" forever.
+  shows the correct prompt and accessible selection when it becomes primary. The pending lock is
+  held until `loginFailed` or `loginSucceeded`; no local timer releases it, because SDDM neither
+  answers nor cancels a request that is still running. While a request is pending, a
+  `sessionModel` reset (SDDM watches the session directories) does not clear or resync the
+  displayed session; the proxy already copied the submitted index into the login message, so the
+  submitted label stays until the result and the deferred resync then adopts the rebuilt model.
   The keyboard-layout control follows the same input and pending guards.
   Selecting a listed account clears any previously typed Other-user name (including its IME
   composition); a failed login for that same Other-user identity keeps it. The password input
@@ -220,8 +224,13 @@ Qt6 greeter rejects.
   `primaryChanged` but never emits it, so the theme polls the getter instead of binding to it.
 - [SDDM Display authentication](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/daemon/Display.cpp):
   `startAuth` returns false with only a warning when another authentication is active; there is no
-  immediate greeter reply. The per-view 60 s timeout and the handoff settle window bound the case a
-  second view submits during a handoff.
+  immediate greeter reply. The theme therefore never unlocks a pending request locally; the
+  handoff settle window reduces the chance that a second view submits during a handoff.
+- [SDDM SessionModel](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/SessionModel.cpp)
+  and [GreeterProxy](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/GreeterProxy.cpp):
+  the model resets when the session directories change, while the proxy has already copied the
+  submitted indexed session into the login message. The theme keeps the submitted label visible
+  across that reset and resyncs after the result.
 - [Accessible selection](https://doc.qt.io/qt-6/qml-qtquick-accessible.html#selected-prop): the
   remembered and currently chosen account, Other user and the chosen session expose their
   selected state.

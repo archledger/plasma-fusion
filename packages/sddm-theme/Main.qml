@@ -88,18 +88,6 @@ Rectangle {
         repeat: false
         onTriggered: root.handoffReady = true
     }
-    Timer {
-        id: authTimeout
-        interval: 60000
-        repeat: false
-        onTriggered: {
-            if (root.authenticating) {
-                root.authenticating = false;
-                card.message = qsTr("Login timed out");
-                card.clearPassword();
-            }
-        }
-    }
 
     function login(user, password) {
         if (authenticating || !interactive) {
@@ -118,7 +106,6 @@ Rectangle {
             return;
         }
         authenticating = true;
-        authTimeout.restart();
         card.message = qsTr("Signing in…");
         // Do not leave a revealed credential on screen while PAM is pending.
         card.clearPassword();
@@ -128,7 +115,6 @@ Rectangle {
     Connections {
         target: sddm
         function onLoginFailed() {
-            authTimeout.stop();
             authenticating = false;
             card.message = qsTr("Login failed");
             card.clearPassword();
@@ -136,7 +122,6 @@ Rectangle {
             card.focusPasswordField();
         }
         function onLoginSucceeded() {
-            authTimeout.stop();
             authenticating = false;
         }
         function onInformationMessage(message) {

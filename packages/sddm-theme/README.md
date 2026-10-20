@@ -77,9 +77,10 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   model selects Other user consistently. Only the current primary screen is interactive (SDDM
   creates a separate QML engine per screen); primary changes are polled through screenModel, the
   new primary waits a short handoff settle, and a view that loses primary clears its credentials.
-  An empty model initializes Other user independently of input gating, a pending request times out
-  after 60 s, and the layout control is inert on secondary or pending views.
-  Leaving Other user clears its name, and the password field fills its pill for pointer focus.
+  An empty model initializes Other user independently of input gating, a pending request stays
+  locked until its result, and it keeps the submitted session label across a model reset. The
+  layout control is inert on secondary or pending views. Leaving Other user clears its name, and
+  the password field fills its pill for pointer focus.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.

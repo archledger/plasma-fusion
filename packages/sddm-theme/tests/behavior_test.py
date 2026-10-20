@@ -692,8 +692,17 @@ def main():
         password.setProperty("text", "test-input")
         press(view, password, Qt.Key_Return)
         check(proxy.logins == [("unlisted", "test-input", 0)], "recovered logins use the displayed session index")
+        sessions.reset_rows([{"name": "Replacement after submit"}])
+        QTest.qWait(20)
+        check(session.property("index") == 0 and session.property("selectedName") == "Recovered",
+              "a pending login keeps the submitted session across a model reset")
         proxy.loginFailed.emit()
-        QTest.qWait(10)
+        QTest.qWait(30)
+        check(session.property("index") == 0
+              and session.property("selectedName") == "Replacement after submit",
+              "the displayed session resyncs after the pending login resolves")
+        sessions.reset_rows([{"name": "Recovered"}, {"name": "Alternative"}])
+        QTest.qWait(50)
 
         # Screen readers activate Accessible.Button items through pressAction, which is separate
         # from their key and pointer handlers. Exercise every custom control in the theme.

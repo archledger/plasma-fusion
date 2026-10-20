@@ -21,10 +21,17 @@ Item {
     property bool resetting: false
     property bool busy: false
     property bool allowInput: true
+    // A model reset during an outstanding login must not change the displayed selection: the
+    // proxy already carries the submitted index. Keep the label and resync once the request ends.
+    property bool resyncPending: false
     readonly property bool valid: !resetting && index >= 0 && index < choices.count
 
     function syncSelection() {
         if (resetting) {
+            return;
+        }
+        if (busy) {
+            resyncPending = true;
             return;
         }
         if (choices.count === 0) {
@@ -41,23 +48,48 @@ Item {
         }
     }
 
+    onBusyChanged: {
+        if (!busy && resyncPending) {
+            resyncPending = false;
+            Qt.callLater(syncSelection);
+        }
+    }
+
     // SDDM 0.21 declares count/lastIndex CONSTANT, but resets its model on directory changes.
     // Use the live Repeater count and discard cached selection/data (docs/parts/sddm.md).
     Connections {
         target: sessionModel
         function onModelAboutToBeReset() {
             session.resetting = true;
+            if (menu.open) {
+                if (session.busy) {
+                    menu.open = false;
+                } else {
+                    session.closeMenu();
+                }
+            }
+            if (session.busy) {
+                session.resyncPending = true;
+                return;
+            }
             session.index = -1;
             session.selectedName = "";
-            if (menu.open) {
-                session.closeMenu();
-            }
         }
         function onModelReset() {
             session.resetting = false;
-            Qt.callLater(session.syncSelection);
+            if (session.busy) {
+                session.resyncPending = true;
+            } else {
+                Qt.callLater(session.syncSelection);
+            }
         }
-        function onDataChanged() { Qt.callLater(session.syncSelection); }
+        function onDataChanged() {
+            if (session.busy) {
+                session.resyncPending = true;
+            } else {
+                Qt.callLater(session.syncSelection);
+            }
+        }
     }
     Component.onCompleted: syncSelection()
 
