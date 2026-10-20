@@ -51,7 +51,7 @@ rec {
       patchShebangs tools generators packages
       STAGE=$PWD/_stage bash tools/build.sh
       bash generators/plymouth/build.sh "$PWD/_plymouth/plasma-fusion"
-      bash packages/sddm-theme/build.sh "$PWD/_sddm/plasmafusion"
+      bash packages/sddm-theme/build.sh "$PWD/_sddm" "${sw}/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png"
       runHook postBuild
     '';
     # packaging/install-tree.sh, as every channel: the files that name another package's data point

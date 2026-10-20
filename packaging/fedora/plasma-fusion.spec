@@ -262,9 +262,8 @@ bash tools/build.sh
 # /usr/share/plymouth/themes: installing this package never changes the boot splash.
 bash generators/plymouth/build.sh "$PWD/_plymouth/plasma-fusion"
 # The SDDM login theme is system-wide only, like the Plymouth theme: it is installed as
-# share/sddm/themes/plasmafusion (SDDM reads its themes from there), and greeter-apply.sh
-# selects it.
-bash packages/sddm-theme/build.sh "$PWD/_sddm/plasmafusion"
+# share/sddm/themes/plasmafusion (SDDM reads its themes from there) for manual selection.
+bash packages/sddm-theme/build.sh "$PWD/_sddm"
 
 %if %{with compiled}
 for part in decoration navigation; do

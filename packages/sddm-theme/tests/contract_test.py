@@ -13,6 +13,7 @@ These checks run in CI (tools/build.d/91-sddm.sh) and fail on the version before
 
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -63,6 +64,30 @@ def main() -> int:
             ok &= check("theme.conf's background is an absolute path",
                         m.group(1).startswith("/"), m.group(1))
         ok &= check("theme.conf carries no unsubstituted placeholder", "@BACKGROUND@" not in conf)
+
+        # Exercise each channel's actual builder invocation, not a hand-written equivalent:
+        # build.sh takes a root and appends plasmafusion, while install-tree takes the theme.
+        for channel, file in (("Fedora", "packaging/fedora/plasma-fusion.spec"),
+                              ("Arch", "packaging/arch/PKGBUILD"),
+                              ("Debian", "packaging/debian/rules"),
+                              ("NixOS", "packaging/nix/plasma-fusion.nix")):
+            line = next(s.strip() for s in (REPO / file).read_text().splitlines()
+                        if s.strip().startswith("bash packages/sddm-theme/build.sh "))
+            with tempfile.TemporaryDirectory(prefix="sddm-package-") as package_root:
+                line = (line.replace("$(CURDIR)", package_root).replace("$PWD", package_root)
+                        .replace("$srcdir", package_root)
+                        .replace("${sw}", "/run/current-system/sw"))
+                run = subprocess.run(shlex.split(line), cwd=REPO, capture_output=True, text=True)
+                out = pathlib.Path(package_root) / ("sddm" if channel == "Arch" else "_sddm")
+                ok &= check(f"{channel}'s builder supplies the installer's theme directory",
+                            run.returncode == 0 and (out / "plasmafusion/metadata.desktop").is_file(),
+                            run.stderr[-400:])
+                if channel == "NixOS":
+                    configs = list(out.rglob("theme.conf"))
+                    ok &= check("NixOS background names the system profile, not /usr/share",
+                                len(configs) == 1 and
+                                "background=/run/current-system/sw/share/plasma-fusion/backgrounds/"
+                                in configs[0].read_text())
 
         # The theme stays dependency-free: QtQuick and its own files only
         imports = []

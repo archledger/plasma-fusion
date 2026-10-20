@@ -41,7 +41,7 @@ override_dh_auto_configure:
 override_dh_auto_build:
 	STAGE=$(CURDIR)/_stage bash tools/build.sh
 	bash generators/plymouth/build.sh $(CURDIR)/_plymouth/plasma-fusion
-	bash packages/sddm-theme/build.sh $(CURDIR)/_sddm/plasmafusion
+	bash packages/sddm-theme/build.sh $(CURDIR)/_sddm
 	dh_auto_build --builddirectory=_build/decoration
 	dh_auto_build --builddirectory=_build/navigation
 	SOURCE_DATE_EPOCH=$$(cat _kcm-stamp) QT_RCC_SOURCE_DATE_OVERRIDE=$$(cat _kcm-stamp) dh_auto_build --builddirectory=_build/settings
