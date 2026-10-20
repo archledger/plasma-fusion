@@ -75,6 +75,14 @@ Flickable {
                    d.letter, d.needsPassword);
         Qt.callLater(revealSelection);
     }
+    function selectOtherInitial() {
+        if (sent) {
+            return;
+        }
+        sent = true;
+        otherSelected = true;
+        otherRequested();
+    }
     function activateChoice(i) {
         if (busy || !allowInput) {
             return;

@@ -158,7 +158,15 @@ Qt6 greeter rejects.
   authentication. `primaryScreen` is only a creation-time snapshot, so the theme polls
   `screenModel.primary` (a live getter) once a second; SDDM 0.21 never emits that model's
   `primaryChanged`, and the snapshot remains the fallback. If the primary monitor moves, the new
-  view becomes interactive instead of every screen staying locked.
+  view becomes interactive instead of every screen staying locked. The new primary waits a 2 s
+  settle window before accepting input, which keeps a handoff from submitting into a request that
+  may still be running on the previous view; SDDM exposes no cross-engine pending state, and its
+  daemon silently refuses a concurrent authentication. A view that loses primary clears and
+  re-masks the password and clears the typed Other-user name. An empty user model initializes
+  Other user at load and on promotion, independently of input gating, so a view created secondary
+  shows the correct prompt and accessible selection when it becomes primary. A local pending
+  request also has a 60 s safety timeout, so a lost result cannot leave "Signing in…" forever.
+  The keyboard-layout control follows the same input and pending guards.
   Selecting a listed account clears any previously typed Other-user name (including its IME
   composition); a failed login for that same Other-user identity keeps it. The password input
   fills its 48 px pill, so a click anywhere in the field row focuses it.
@@ -210,6 +218,10 @@ Qt6 greeter rejects.
 - [SDDM ScreenModel](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/ScreenModel.h):
   `primary` is a live property (0 for this view's screen, -1 otherwise). SDDM 0.21 declares
   `primaryChanged` but never emits it, so the theme polls the getter instead of binding to it.
+- [SDDM Display authentication](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/daemon/Display.cpp):
+  `startAuth` returns false with only a warning when another authentication is active; there is no
+  immediate greeter reply. The per-view 60 s timeout and the handoff settle window bound the case a
+  second view submits during a handoff.
 - [Accessible selection](https://doc.qt.io/qt-6/qml-qtquick-accessible.html#selected-prop): the
   remembered and currently chosen account, Other user and the chosen session expose their
   selected state.

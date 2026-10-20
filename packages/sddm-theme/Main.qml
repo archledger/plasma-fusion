@@ -33,14 +33,46 @@ Rectangle {
     // primaryScreen is a creation-time snapshot; screenModel.primary reads the current primary.
     // SDDM 0.21 never emits primaryChanged, so poll the getter at a login-screen pace.
     property bool primaryNow: primaryScreen === true
-    readonly property bool interactive: primaryNow
+    property bool primaryInitialized: false
+    // SDDM exposes no cross-engine pending state, so a handoff waits briefly before accepting
+    // input instead of submitting into a request that may still run on the previous primary view.
+    property bool handoffReady: true
+    readonly property bool interactive: primaryNow && handoffReady
     readonly property real footerTop: Math.min(session.y, powerButtons.y)
 
     function refreshPrimary() {
+        let now = primaryScreen === true;
         if (typeof screenModel !== "undefined" && screenModel && screenModel.primary !== undefined) {
-            primaryNow = screenModel.primary === 0;
+            now = screenModel.primary === 0;
+        }
+        if (!primaryInitialized) {
+            primaryNow = now;
+            primaryInitialized = true;
+            return;
+        }
+        if (now === primaryNow) {
+            return;
+        }
+        primaryNow = now;
+        if (now) {
+            handoffReady = false;
+            handoffTimer.restart();
+            initUsers();
         } else {
-            primaryNow = primaryScreen === true;
+            handoffReady = false;
+            handoffTimer.stop();
+            // Do not leave a revealed credential or typed name on a now-secondary display.
+            card.clearPassword();
+            card.clearUsername();
+        }
+    }
+
+    function initUsers() {
+        // An empty model has no delegate to report the initial choice; select Other through the
+        // same state path as a click so the prompt, ring and Accessible.selected agree. A
+        // non-empty model is initialized by its delegates, which do not depend on input gating.
+        if (!users.sent && userModel.count === 0) {
+            users.selectOtherInitial();
         }
     }
 
@@ -49,6 +81,24 @@ Rectangle {
         repeat: true
         running: true
         onTriggered: root.refreshPrimary()
+    }
+    Timer {
+        id: handoffTimer
+        interval: 2000
+        repeat: false
+        onTriggered: root.handoffReady = true
+    }
+    Timer {
+        id: authTimeout
+        interval: 60000
+        repeat: false
+        onTriggered: {
+            if (root.authenticating) {
+                root.authenticating = false;
+                card.message = qsTr("Login timed out");
+                card.clearPassword();
+            }
+        }
     }
 
     function login(user, password) {
@@ -68,6 +118,7 @@ Rectangle {
             return;
         }
         authenticating = true;
+        authTimeout.restart();
         card.message = qsTr("Signing in…");
         // Do not leave a revealed credential on screen while PAM is pending.
         card.clearPassword();
@@ -77,6 +128,7 @@ Rectangle {
     Connections {
         target: sddm
         function onLoginFailed() {
+            authTimeout.stop();
             authenticating = false;
             card.message = qsTr("Login failed");
             card.clearPassword();
@@ -84,6 +136,7 @@ Rectangle {
             card.focusPasswordField();
         }
         function onLoginSucceeded() {
+            authTimeout.stop();
             authenticating = false;
         }
         function onInformationMessage(message) {
@@ -152,9 +205,13 @@ Rectangle {
         Accessible.description: keyboardLabel.text
         Accessible.role: Accessible.Button
         activeFocusOnTab: true
+        enabled: root.interactive && !root.authenticating
         border.color: activeFocus ? "#6aa9ff" : "transparent"
         border.width: activeFocus ? 2 : 0
         function advance() {
+            if (!root.interactive || root.authenticating) {
+                return;
+            }
             if (keyboard.layouts.length > 1) {
                 keyboard.currentLayout = (keyboard.currentLayout + 1) % keyboard.layouts.length;
             }
@@ -234,11 +291,7 @@ Rectangle {
 
     Component.onCompleted: {
         refreshPrimary();
-        if (!users.sent) {
-            // No listed account answered: select Other user through the normal path so its
-            // visual and assistive state match the prompted username.
-            users.activateChoice(users.choiceCount - 1);
-        }
+        initUsers();
     }
 
     // ---- The session pill (bottom left) ----

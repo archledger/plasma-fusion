@@ -733,13 +733,22 @@ def main():
 
         # primaryScreen is only a snapshot. Moving primary while the greeter runs must hand
         # interactive input to the new primary rather than disabling every screen.
+        password.setProperty("text", "leaving-secret")
+        username.setProperty("text", "leaving-name")
+        reveal.setProperty("pressed", True)
         screen.set_primary(-1)
         QMetaObject.invokeMethod(root, "refreshPrimary")
         check(not card.property("allowInput"), "input is disabled when this view is no longer primary")
+        check(password.property("text") == "" and username.property("text") == ""
+              and not reveal.property("pressed"),
+              "losing primary clears and re-masks the credentials")
         QTest.qWait(1100)
         check(not card.property("allowInput"), "the primary poll keeps a non-primary view disabled")
         screen.set_primary(0)
-        QTest.qWait(1100)
+        QMetaObject.invokeMethod(root, "refreshPrimary")
+        check(not card.property("allowInput"),
+              "a handoff keeps input disabled until the settle window ends")
+        QTest.qWait(2100)
         check(card.property("allowInput"), "input returns when this view becomes primary again")
         view.close()
         view.setSource(QUrl())
@@ -777,7 +786,7 @@ def main():
         context3 = view3.rootContext()
         screen3 = Screen(-1)
         for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
-                          ("userModel", users), ("sessionModel", sessions),
+                          ("userModel", empty_users), ("sessionModel", sessions),
                           ("screenModel", screen3), ("primaryScreen", False)):
             context3.setContextProperty(name, obj)
         view3.setResizeMode(QQuickView.SizeRootObjectToView)
@@ -790,13 +799,23 @@ def main():
             root3 = view3.rootObject()
             card3 = next(item for item in walk(root3) if item.property("promptName") is not None)
             check(not card3.property("allowInput"), "a secondary screen is marked non-interactive")
+            check(card3.property("promptName"),
+                  "an empty model initializes Other user on a secondary screen")
+            keyboard.set_current(0)
+            activate(find(root3, "Keyboard layout"))
+            check(keyboard.current == 0, "the layout control is inert on a secondary screen")
             proxy.logins.clear()
             QMetaObject.invokeMethod(card3, "submit")
             check(not proxy.logins, "a secondary screen cannot submit a login")
             screen3.set_primary(0)
             QMetaObject.invokeMethod(root3, "refreshPrimary")
+            check(not card3.property("allowInput"),
+                  "a new primary view waits for the settle window")
+            QTest.qWait(2100)
             check(card3.property("allowInput"),
                   "a new primary view is re-enabled for input")
+            check(card3.property("promptName"),
+                  "the handoff keeps the initialized Other-user prompt")
             view3.close()
             view3.setSource(QUrl())
             app.processEvents()
