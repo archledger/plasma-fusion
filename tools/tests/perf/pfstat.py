@@ -2,10 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Copied from the perf-measure study (/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-research/
-# perf-measure/scripts/pfstat.py); changes: records the other virtual sessions with live processes on
-# the host ("others", noise); with PFSTAT_SUDO=1 it reads KWin's GPU counters (private fdinfo) with
-# sudo -n, read-only.
+# Copied from pfstat.py in the perf-measure research scripts of 2026-09-30 (the maintainer's
+# records); changes: records the other virtual sessions with live processes on the host ("others",
+# noise); with PFSTAT_SUDO=1 it reads KWin's GPU counters (private fdinfo) with sudo -n, read-only.
 #
 # pfstat.py LABEL: snapshot every process of this private session (environ XDG_RUNTIME_DIR ==
 # $XDG_RUNTIME_DIR, plus KWin, whose environ is unreadable because of its file capabilities) and

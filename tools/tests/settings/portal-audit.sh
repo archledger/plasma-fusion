@@ -2,8 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Portal propagation audit (settings registry:
-# artifacts/plasma-fusion/2026-10-05-settings-plan/PLAN.md task 1). Run inside a Plasma session.
+# Portal propagation audit (settings registry: PLAN.md of 2026-10-05, the maintainer's records,
+# task 1). Run inside a Plasma session.
 # Writes each appearance option the way the Fusion KCM does, reads the XDG settings portal back,
 # and restores what it changed.
 #   tools/tests/settings/portal-audit.sh
