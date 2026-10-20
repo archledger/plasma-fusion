@@ -32,8 +32,8 @@ context objects are `sddm`, `userModel`, `sessionModel`, `screenModel`, `keyboar
 | `metadata.desktop` | `Type=sddm-theme`, `MainScript`, `ConfigFile`, `Theme-Id`; `QtVersion=6` chooses the Qt6 greeter |
 
 The theme imports only `QtQuick 2.15` and its own `palette.js`: a login screen must survive
-missing optional modules, and the versioned import also loads under a Qt5 greeter (the failure
-behind the widely reported "Qt6 theme broke my login screen").
+missing optional modules, and the versioned import also loads under a Qt5 greeter, where an
+unversioned `import QtQuick` fails (sddm/sddm#1975 is that failure at a real login screen).
 
 ## The board, and where it stops
 
