@@ -25,6 +25,7 @@ Flickable {
     property bool otherSelected: false
     property bool sent: false
     property bool busy: false
+    property bool allowInput: true
     property string selectedUser: ""
     property url selectedIcon: ""
     property string selectedName: ""
@@ -75,7 +76,7 @@ Flickable {
         Qt.callLater(revealSelection);
     }
     function activateChoice(i) {
-        if (busy) {
+        if (busy || !allowInput) {
             return;
         }
         cursor = i;

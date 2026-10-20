@@ -30,10 +30,11 @@ Rectangle {
     property string loginName: ""
     // SDDM's login call is asynchronous; keep one request and its displayed identity stable.
     property bool authenticating: false
+    readonly property bool interactive: primaryScreen === true
     readonly property real footerTop: Math.min(session.y, powerButtons.y)
 
     function login(user, password) {
-        if (authenticating) {
+        if (authenticating || !interactive) {
             return;
         }
         const who = user !== "" ? user : loginName;
@@ -172,6 +173,7 @@ Rectangle {
                                root.footerTop - users.height - height - 32))
         width: 400
         busy: root.authenticating
+        allowInput: root.interactive
         heightBudget: Math.max(0, root.footerTop - users.height - 32)
         avatarSource: root.personIcon
         avatarLetter: root.personLetter
@@ -183,12 +185,14 @@ Rectangle {
     UserSwitcher {
         id: users
         busy: root.authenticating
+        allowInput: root.interactive
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(card.y + card.height + 16,
                     Math.min(Math.round(parent.height * 600 / 900), root.footerTop - height - 16))
         onUserChosen: (index, user, icon, name, letter, needsPassword) => {
             card.message = "";
             card.clearPassword();
+            card.clearUsername();
             root.loginName = user;
             root.personIcon = icon;
             root.personName = name;
@@ -222,6 +226,7 @@ Rectangle {
     SessionPill {
         id: session
         busy: root.authenticating
+        allowInput: root.interactive
         x: 32
         maximumWidth: Math.max(0, (powerButtons.width > 0 ? powerButtons.x - 16 : root.width - 32) - x)
         menuBottomLimit: root.footerTop

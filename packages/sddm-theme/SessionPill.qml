@@ -20,6 +20,7 @@ Item {
     property string selectedName: ""
     property bool resetting: false
     property bool busy: false
+    property bool allowInput: true
     readonly property bool valid: !resetting && index >= 0 && index < choices.count
 
     function syncSelection() {
@@ -61,7 +62,7 @@ Item {
     Component.onCompleted: syncSelection()
 
     function choose(i, name) {
-        if (busy) {
+        if (busy || !allowInput) {
             return;
         }
         index = i;
@@ -88,7 +89,7 @@ Item {
         viewport.contentY = Math.max(0, Math.min(wanted, list.implicitHeight - viewport.height));
     }
     function toggleMenu() {
-        if (busy) {
+        if (busy || !allowInput) {
             return;
         }
         menu.open = !menu.open;
@@ -99,7 +100,7 @@ Item {
         }
     }
     function openMenu() {
-        if (busy) {
+        if (busy || !allowInput) {
             return;
         }
         menu.open = true;

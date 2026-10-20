@@ -21,6 +21,9 @@ Item {
     property string message: ""
     property bool passwordRequired: true
     property bool busy: false
+    // SDDM creates an independent QML engine per screen. Only the primary view may submit, so a
+    // second screen cannot start a competing authentication against the shared daemon.
+    property bool allowInput: true
     property real heightBudget: Number.POSITIVE_INFINITY
     // Measure only the non-message pieces; the message budget must not depend on its own height.
     readonly property real baseHeight: avatarFrame.height + column.spacing + passwordRow.height
@@ -58,9 +61,12 @@ Item {
         }
     }
     function submit() {
-        if (!busy) {
+        if (allowInput && !busy) {
             loginRequested(promptName ? nameInput.text : "", passwordRequired ? password.text : "");
         }
+    }
+    function clearUsername() {
+        nameInput.clear();
     }
 
     Column {
@@ -146,7 +152,7 @@ Item {
                     Accessible.name: qsTr("Username")
                     // Raw TextInput is outside the Tab chain unless this is explicit.
                     activeFocusOnTab: true
-                    enabled: !card.busy
+                    enabled: card.allowInput && !card.busy
                     // Account names are case-sensitive; an autocapitalising IME must not change one.
                     inputMethodHints: Qt.ImhNoAutoUppercase
                     anchors.fill: parent
@@ -198,7 +204,7 @@ Item {
                     Accessible.name: qsTr("Password")
                     Accessible.passwordEdit: true
                     activeFocusOnTab: true
-                    enabled: !card.busy
+                    enabled: card.allowInput && !card.busy
                     // Qt suppresses a protected field's name; keep a static, non-secret description.
                     Accessible.description: qsTr("Password")
                     // Keep these hints when reveal switches echoMode to Normal (the lock-screen policy).
@@ -206,7 +212,9 @@ Item {
                     anchors.left: parent.left
                     anchors.right: showPassword.left
                     anchors.leftMargin: 18
-                    anchors.verticalCenter: parent.verticalCenter
+                    // Fill the row so a click anywhere in the pill focuses the field.
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
                     font.family: Palette.bodyFont
                     font.pixelSize: 16
                     font.letterSpacing: 0.2
@@ -249,7 +257,7 @@ Item {
                 Item {
                     id: showPassword
                     visible: card.passwordRequired
-                    enabled: !card.busy
+                    enabled: card.allowInput && !card.busy
                     Accessible.name: qsTr("Show password")
                     Accessible.role: Accessible.Button
                     Accessible.checkable: true
@@ -314,7 +322,7 @@ Item {
                 // Sign in (36 px round, the board's deep blue arrow)
                 Rectangle {
                     id: signIn
-                    enabled: !card.busy
+                    enabled: card.allowInput && !card.busy
                     Accessible.name: qsTr("Sign in")
                     Accessible.role: Accessible.Button
                     activeFocusOnTab: true

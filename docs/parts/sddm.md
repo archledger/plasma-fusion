@@ -152,6 +152,12 @@ Qt6 greeter rejects.
   including Up/Down, shares the same guard. With no listed accounts, the fallback selects Other
   user through the normal activation path, so its prompt, selection ring and accessible state
   agree.
+  SDDM gives each screen its own QQuickView/QML engine (and activates only the primary view), so
+  per-view QML state cannot coordinate a login across screens. Only the primary view accepts
+  input; a secondary screen shows the same board but cannot start a competing authentication.
+  Selecting a listed account clears any previously typed Other-user name (including its IME
+  composition); a failed login for that same Other-user identity keeps it. The password input
+  fills its 48 px pill, so a click anywhere in the field row focuses it.
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
@@ -193,6 +199,10 @@ Qt6 greeter rejects.
 - [SDDM GreeterProxy](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/GreeterProxy.h):
   `login()` is asynchronous and results arrive as `loginFailed`/`loginSucceeded`; the theme holds
   one pending request until one of those signals and clears the submitted credential meanwhile.
+- [SDDM per-screen views](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/GreeterApp.cpp):
+  `addViewForScreen()` creates a separate `QQuickView` (own engine) per screen, shares the proxy
+  and models, and activates only the primary view. Cross-screen pending state is therefore not
+  available in QML; the theme makes only the primary view interactive.
 - [Accessible selection](https://doc.qt.io/qt-6/qml-qtquick-accessible.html#selected-prop): the
   remembered and currently chosen account, Other user and the chosen session expose their
   selected state.

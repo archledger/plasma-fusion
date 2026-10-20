@@ -236,7 +236,8 @@ def main():
         view = QQuickView()
         context = view.rootContext()
         for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
-                          ("userModel", users), ("sessionModel", sessions)):
+                          ("userModel", users), ("sessionModel", sessions),
+                          ("primaryScreen", True)):
             context.setContextProperty(name, obj)
         warnings = []
         image_errors = []
@@ -314,6 +315,11 @@ def main():
         QTest.qWait(30)
         check(password.isVisible() and not no_password.isVisible(),
               "a password account restores the password field")
+        password_row = root.findChild(QObject, "passwordRow")
+        password_row_pos = password_row.mapToScene(QPoint(30, 6)).toPoint()
+        QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier, password_row_pos)
+        check(password.hasActiveFocus(),
+              "a click near the top of the password pill focuses the field")
         twin1 = next((item for item in walk(root) if accessible(item) == "Twin (user7)"), None)
         twin2 = next((item for item in walk(root) if accessible(item) == "Twin (user8)"), None)
         check(twin1 is not None and twin2 is not None,
@@ -465,6 +471,11 @@ def main():
               "Other user exposes and focuses the username input")
         check(any(item.property("text") == "Username" and item.isVisible() for item in walk(root)),
               "Other user has a visible Username prompt")
+        username.setProperty("text", "previous-name")
+        press(view, find(root, "Person 2"), Qt.Key_Space)
+        press(view, other, Qt.Key_Return)
+        check(username.property("text") == "",
+              "leaving Other user clears its remembered username")
         check(reachable(view, password, username),
               "Tab reaches the visible username field again")
         check(reachable(view, layout, password),
@@ -714,7 +725,8 @@ def main():
         view2 = QQuickView()
         context2 = view2.rootContext()
         for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
-                          ("userModel", empty_users), ("sessionModel", sessions)):
+                          ("userModel", empty_users), ("sessionModel", sessions),
+                          ("primaryScreen", True)):
             context2.setContextProperty(name, obj)
         view2.setResizeMode(QQuickView.SizeRootObjectToView)
         view2.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
@@ -731,6 +743,30 @@ def main():
                   "an empty user model selects Other user consistently")
             view2.close()
             view2.setSource(QUrl())
+            app.processEvents()
+
+        # A secondary screen has its own QML engine. It must not start a competing login.
+        view3 = QQuickView()
+        context3 = view3.rootContext()
+        for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
+                          ("userModel", users), ("sessionModel", sessions),
+                          ("primaryScreen", False)):
+            context3.setContextProperty(name, obj)
+        view3.setResizeMode(QQuickView.SizeRootObjectToView)
+        view3.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
+        check(view3.status() == QQuickView.Ready, "the secondary-screen theme loads")
+        if view3.status() == QQuickView.Ready:
+            view3.resize(1440, 900)
+            view3.show()
+            QTest.qWait(100)
+            root3 = view3.rootObject()
+            card3 = next(item for item in walk(root3) if item.property("promptName") is not None)
+            check(not card3.property("allowInput"), "a secondary screen is marked non-interactive")
+            proxy.logins.clear()
+            QMetaObject.invokeMethod(card3, "submit")
+            check(not proxy.logins, "a secondary screen cannot submit a login")
+            view3.close()
+            view3.setSource(QUrl())
             app.processEvents()
     print(f"SDDM behavior: {checks - failures}/{checks} passed")
     return 1 if failures else 0
