@@ -68,7 +68,8 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   automatic capitalization, the layout pill announces its selection, the reveal toggle reports
   its checked state, and an empty Other-user submission gives an actionable message. Account
   tiles expose their selected state, and a passwordless account hides the password input and
-  signs in without one. The metadata file's own data is CC0.
+  signs in without one. The metadata file's own data is CC0. Session choices announce selection,
+  duplicate real names include the login name, and both credential fields stay in the Tab chain.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.

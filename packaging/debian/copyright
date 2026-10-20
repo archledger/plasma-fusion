@@ -28,10 +28,11 @@ License: CC-BY-SA-4.0
 Comment: The rendered artwork (icons, cursors, wallpapers, window decorations, backgrounds) is
  CC-BY-SA-4.0 too; the generators that draw it are GPL-2.0-or-later.
 
-Files: packages/sddm-theme/metadata.desktop
+Files: packages/sddm-theme/metadata.desktop packages/sddm-theme/theme.conf.in
 Copyright: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 License: CC0-1.0
-Comment: Project metadata and plain data are CC0-1.0; the theme code it selects is GPL-2.0-or-later.
+Comment: Project metadata, configuration input and plain data are CC0-1.0; the theme code they
+ select or describe is GPL-2.0-or-later.
 
 Files: fonts/manrope/*
 Copyright: 2018 The Manrope Project Authors <https://github.com/googlefonts/manrope>

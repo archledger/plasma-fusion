@@ -223,6 +223,8 @@ def main():
                         "icon": avatar, "needsPassword": i != 6} for i in range(20)])
         users.rows[4]["icon"] = missing_avatar
         users.rows[5]["icon"] = invalid_avatar
+        users.rows[7]["realName"] = "Twin"
+        users.rows[8]["realName"] = "Twin"
         session_name = "<b>Odd session</b> " + "Z" * 300
         sessions = Model([{"name": name} for name in ("Plasma", "Plasma X11", "Other session")]
                          + [{"name": f"Additional {i}"} for i in range(12)]
@@ -308,6 +310,19 @@ def main():
         QTest.qWait(30)
         check(password.isVisible() and not no_password.isVisible(),
               "a password account restores the password field")
+        twin1 = next((item for item in walk(root) if accessible(item) == "Twin (user7)"), None)
+        twin2 = next((item for item in walk(root) if accessible(item) == "Twin (user8)"), None)
+        check(twin1 is not None and twin2 is not None,
+              "accounts sharing a real name expose their login names")
+        check(any(item.property("text") == "Twin (user7)" and item.isVisible() for item in walk(root)),
+              "the visible caption disambiguates a shared real name")
+        if twin1 is not None:
+            press(view, twin1, Qt.Key_Space)
+            disambiguated = card.property("personName") == "Twin (user7)"
+        else:
+            disambiguated = False
+        check(disambiguated, "the card shows the disambiguated account identity")
+        press(view, person0, Qt.Key_Space)
         check(plain_labels(root, account_name), "account names and captions render markup literally")
         check(plain_labels(root, "<b>EN</b>"), "keyboard layout labels render markup literally")
         proxy.informationMessage.emit("<b>Notice</b>")
@@ -446,6 +461,10 @@ def main():
               "Other user exposes and focuses the username input")
         check(any(item.property("text") == "Username" and item.isVisible() for item in walk(root)),
               "Other user has a visible Username prompt")
+        check(reachable(view, password, username),
+              "Tab reaches the visible username field again")
+        check(reachable(view, layout, password),
+              "Tab returns from the layout control to the password field")
         username_hint = QQmlExpression(qmlContext(username), username,
                                        "inputMethodHints & Qt.ImhNoAutoUppercase").evaluate()[0]
         check(bool(username_hint), "the username field prevents automatic IME capitalization")
@@ -476,6 +495,14 @@ def main():
         check(reachable(view, password, picker), "Tab reaches the session picker")
         press(view, picker, Qt.Key_Return)
         check(option.isVisible(), "Return opens the session menu")
+        selected_choice = find(root, "Plasma X11")
+        alternate_choice = find(root, "Plasma")
+        check(QQmlExpression(qmlContext(selected_choice), selected_choice,
+                            "Accessible.selected").evaluate()[0],
+              "the active session is exposed as selected")
+        check(not QQmlExpression(qmlContext(alternate_choice), alternate_choice,
+                                "Accessible.selected").evaluate()[0],
+              "alternative sessions are exposed as not selected")
         menu = next(item for item in walk(root) if item.property("open") is not None)
         check(menu.mapToScene(menu.boundingRect().topLeft()).y() >= 32,
               "an overfull session menu stays below the top screen margin")

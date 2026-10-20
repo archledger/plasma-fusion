@@ -205,6 +205,7 @@ Item {
 
                         Accessible.name: String(model.name || "")
                         Accessible.role: Accessible.Button
+                        Accessible.selected: session.index === index
                         activeFocusOnTab: true
                         onActiveFocusChanged: {
                             if (activeFocus) {

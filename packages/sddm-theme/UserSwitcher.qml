@@ -37,6 +37,42 @@ Flickable {
     property int cursor: -1
     // Each delegate puts its row's data here (QAbstractItemModel has no get())
     property var rowsData: []
+    // Real names are not unique; duplicates need the login name in their identity.
+    property var nameCounts: ({})
+    function recountNames() {
+        const counts = {};
+        for (let i = 0; i < rowsData.length; ++i) {
+            const d = rowsData[i];
+            if (d) {
+                counts[d.name] = (counts[d.name] || 0) + 1;
+            }
+        }
+        nameCounts = counts;
+    }
+    function displayNameFor(i) {
+        const d = rowsData[i];
+        if (!d) {
+            return "";
+        }
+        if ((nameCounts[d.name] || 0) > 1 && d.user !== d.name) {
+            return d.name + " (" + d.user + ")";
+        }
+        return d.name;
+    }
+    function selectInitial() {
+        if (sent) {
+            return;
+        }
+        sent = true;
+        otherSelected = false;
+        const d = rowsData[selectedIndex];
+        if (!d) {
+            return;
+        }
+        userChosen(selectedIndex, d.user, d.icon, displayNameFor(selectedIndex),
+                   d.letter, d.needsPassword);
+        Qt.callLater(revealSelection);
+    }
     function activateChoice(i) {
         cursor = i;
         if (i === userModel.count) {
@@ -47,7 +83,7 @@ Flickable {
             selectedIndex = i;
             const d = switcher.rowsData[i];
             switcher.userChosen(i, d ? d.user : "", d ? d.icon : "",
-                                d ? d.name : "", d ? d.letter : "",
+                                switcher.displayNameFor(i), d ? d.letter : "",
                                 d ? d.needsPassword : true);
         }
     }
@@ -84,27 +120,28 @@ Flickable {
                 width: 56
                 spacing: 8
                 property bool selected: !switcher.otherSelected && switcher.selectedIndex === index
+                readonly property string shownName: switcher.displayNameFor(index)
                 function focusChoice() { userTile.forceActiveFocus(); }
 
                 Component.onCompleted: {
-                    switcher.rowsData[index] = { "user": String(model.name), "icon": model.icon || "",
+                    const rows = switcher.rowsData.slice();
+                    rows[index] = { "user": String(model.name), "icon": model.icon || "",
                         "name": String(model.realName || model.name),
                         "letter": String(model.realName || model.name || "?").charAt(0).toUpperCase(),
                         "needsPassword": model.needsPassword === undefined ? true : model.needsPassword };
-                    // The model's first answer picks the card's user (lastUser, else the first)
+                    // A new array notifies the shownName bindings; mutating an element does not.
+                    switcher.rowsData = rows;
+                    Qt.callLater(switcher.recountNames);
+                    // The model's first answer picks the card's user (lastUser, else the first).
+                    // Deferred so duplicate real names are known before the identity is shown.
                     if (!switcher.sent && index === (userModel.lastIndex >= 0 ? userModel.lastIndex : 0)) {
-                        switcher.sent = true;
-                        switcher.otherSelected = false;
-                        switcher.userChosen(index, switcher.rowsData[index].user, switcher.rowsData[index].icon,
-                                            switcher.rowsData[index].name, switcher.rowsData[index].letter,
-                                            switcher.rowsData[index].needsPassword);
-                        Qt.callLater(switcher.revealSelection);
+                        Qt.callLater(switcher.selectInitial);
                     }
                 }
 
                 Rectangle {
                     id: userTile
-                    Accessible.name: String(model.realName || model.name || "")
+                    Accessible.name: userColumn.shownName
                     Accessible.role: Accessible.Button
                     Accessible.selected: userColumn.selected
                     activeFocusOnTab: true
@@ -163,7 +200,7 @@ Flickable {
                     font.pixelSize: 13
                     font.weight: userColumn.selected ? Font.ExtraBold : Font.DemiBold
                     color: userColumn.selected ? Palette.ink : Palette.inkSoft
-                    text: String(model.realName || model.name || "")
+                    text: userColumn.shownName
                     textFormat: Text.PlainText
                 }
             }

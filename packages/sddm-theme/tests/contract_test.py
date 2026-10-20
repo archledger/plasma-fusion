@@ -79,6 +79,8 @@ def main() -> int:
                                 if s.startswith("Files: packages/sddm-theme/metadata.desktop")), "")
         ok &= check("Debian groups the metadata file under CC0",
                     "License: CC0-1.0" in metadata_stanza)
+        ok &= check("Debian groups theme.conf.in under the same CC0 stanza",
+                    "packages/sddm-theme/theme.conf.in" in metadata_stanza)
 
         # The documented smoke command must be the Qt6 greeter's real option.
         build_header = (HERE / "build.sh").read_text()

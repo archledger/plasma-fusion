@@ -134,6 +134,8 @@ Item {
                 TextInput {
                     id: nameInput
                     Accessible.name: qsTr("Username")
+                    // Raw TextInput is outside the Tab chain unless this is explicit.
+                    activeFocusOnTab: true
                     // Account names are case-sensitive; an autocapitalising IME must not change one.
                     inputMethodHints: Qt.ImhNoAutoUppercase
                     anchors.fill: parent
@@ -184,6 +186,7 @@ Item {
                     visible: card.passwordRequired
                     Accessible.name: qsTr("Password")
                     Accessible.passwordEdit: true
+                    activeFocusOnTab: true
                     // Qt suppresses a protected field's name; keep a static, non-secret description.
                     Accessible.description: qsTr("Password")
                     // Keep these hints when reveal switches echoMode to Normal (the lock-screen policy).
