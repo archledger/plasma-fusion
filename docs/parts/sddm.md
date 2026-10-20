@@ -80,6 +80,9 @@ Qt6 greeter rejects.
   `theme.conf` contract, every shipped file, the dependency-free QML (imports checked), a QML
   parse (`qmllint` when present), two builds byte-identical, and the actual builder call from
   every channel produces the installer's expected directory and NixOS wallpaper path.
+  The suite also checks the Debian-family build dependencies against the behavior test's
+  imported PySide6 modules; these distributions split QtCore/QtGui/QtQml/QtQuick/QtTest into
+  separate packages and need `qml6-module-qtquick` for the theme's QML import.
 - `QT_QPA_PLATFORM=offscreen python3 packages/sddm-theme/tests/behavior_test.py` (CI through the
   same build part): the staged `Main.qml` in a real `QQuickView`, SDDM-shaped model/proxy stand-ins
   and Qt key events. Tab reaches the layout, session, power and reveal buttons; Left/Right move

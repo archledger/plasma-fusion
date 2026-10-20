@@ -11,6 +11,7 @@ These checks run in CI (tools/build.d/91-sddm.sh) and fail on the version before
     tests/contract_test.py [STAGE]     STAGE = build.sh's OUT (default: a throw-away build)
 """
 
+import ast
 import pathlib
 import re
 import shlex
@@ -64,6 +65,22 @@ def main() -> int:
             ok &= check("theme.conf's background is an absolute path",
                         m.group(1).startswith("/"), m.group(1))
         ok &= check("theme.conf carries no unsubstituted placeholder", "@BACKGROUND@" not in conf)
+
+        # Debian-family distributions split PySide6 by module. The normal build runs the
+        # behavior suite, so every module it imports must be declared even on a headless builder.
+        control = (REPO / "packaging/debian/control").read_text().split("\n\n", 1)[0]
+        field = re.search(r"(?m)^Build-Depends:([^\n]*(?:\n[ \t]+[^\n]*)*)", control)
+        dependencies = field.group(1) if field else ""
+        behavior = ast.parse((HERE / "tests/behavior_test.py").read_text())
+        modules = sorted({node.module.split(".")[1] for node in ast.walk(behavior)
+                          if isinstance(node, ast.ImportFrom) and node.module and
+                          node.module.startswith("PySide6.")})
+        for module in modules:
+            dependency = "python3-pyside6." + module.lower()
+            ok &= check(f"Debian Build-Depends declares {dependency}",
+                        dependency in dependencies)
+        ok &= check("Debian Build-Depends declares the QtQuick QML module",
+                    "qml6-module-qtquick" in dependencies)
 
         # Exercise each channel's actual builder invocation, not a hand-written equivalent:
         # build.sh takes a root and appends plasmafusion, while install-tree takes the theme.
