@@ -38,8 +38,17 @@ Rectangle {
     readonly property bool interactive: primaryNow
     readonly property real footerTop: Math.min(session.y, powerButtons.y)
     // SDDM builds one QML engine per screen, so a QML property cannot lock a login across
-    // displays. A QSettings-backed file can; its owner renews a heartbeat while PAM runs.
+    // displays. A QSettings-backed file can; any live screen renews a heartbeat while PAM runs.
     readonly property string viewToken: Math.random().toString(36).substring(2)
+    // SDDM launches a greeter with a random --socket name (sddm-<display>-<random>), so this key
+    // scopes the lock to one greeter process; another seat's greeter gets its own category.
+    property string greeterKey: {
+        const args = Qt.application.arguments;
+        const at = args.indexOf("--socket");
+        const socket = at >= 0 && at + 1 < args.length ? String(args[at + 1]) : "";
+        const base = socket.replace(/\\/g, "/").split("/").pop();
+        return base.replace(/[^A-Za-z0-9_.-]/g, "_");
+    }
     readonly property string authLockPath: StandardPaths.writableLocation(
         StandardPaths.GenericConfigLocation) + "/plasmafusion-auth.ini"
     property bool lockOwned: false
@@ -47,7 +56,7 @@ Rectangle {
     Settings {
         id: authState
         location: root.authLockPath
-        category: "Auth"
+        category: "Auth-" + (root.greeterKey !== "" ? root.greeterKey : "default")
     }
 
     function readAuthLock() {
@@ -89,10 +98,11 @@ Rectangle {
                 root.authenticating = true;
                 root.lockOwned = false;
                 card.message = qsTr("Signing in on another display…");
-            } else if (lock.owner === root.viewToken) {
-                authState.setValue("heartbeat", Date.now());
-                authState.sync();
             }
+            // A surviving screen renews the shared request even if the submitting screen's view
+            // was removed; only an entirely gone greeter stops the heartbeat.
+            authState.setValue("heartbeat", Date.now());
+            authState.sync();
             return;
         }
         if (lock.pending) {

@@ -160,14 +160,16 @@ Qt6 greeter rejects.
   `primaryChanged`, and the snapshot remains the fallback. If the primary monitor moves, the new
   view becomes interactive instead of every screen staying locked.
   The pending request itself is shared across those engines through a small `QtCore.Settings` file
-  at `StandardPaths.GenericConfigLocation/plasmafusion-auth.ini`: the submitting view stores its
-  token and renews a heartbeat once a second, every other view sees the lock and shows "Signing in
-  on another display…", and a newly primary view cannot submit until the daemon result clears it.
-  A lock whose heartbeat is older than five seconds belongs to a view or greeter that is gone and
-  is reclaimed. `QSettings::sync()` reloads changes made by another engine; the daemon still
-  serializes the actual authentication, so a read-then-write race cannot start two PAM
-  conversations. `QtCore` is a core Qt module (the Debian package declares `qml6-module-qtcore`);
-  the theme imports only QtQuick, QtCore and its own files. A view that loses primary clears and
+  at `StandardPaths.GenericConfigLocation/plasmafusion-auth.ini`. Its category is keyed by the
+  greeter's random `--socket` name (`sddm-<display>-<random>`, from `SocketServer.cpp`), so the
+  screen engines of one greeter share it while another seat's greeter cannot. The submitting view
+  stores its token, every live screen renews a heartbeat once a second, and a newly primary view
+  cannot submit until the daemon result clears it. A surviving screen keeps renewing after the
+  submitting screen's view is removed; the lock is reclaimed only when every view of that greeter
+  is gone, and a restarted greeter starts with a new socket category. `QSettings::sync()` reloads
+  changes made by another engine; the daemon still serializes the actual authentication, so a
+  read-then-write race cannot start two PAM conversations. `QtCore` is a core Qt module (the Debian
+  package declares `qml6-module-qtcore`); the theme imports only QtQuick, QtCore and its own files. A view that loses primary clears and
   re-masks the password and clears the typed Other-user name. An empty user model initializes
   Other user at load and on promotion, independently of input gating, so a view created secondary
   shows the correct prompt and accessible selection when it becomes primary. The pending lock is
@@ -232,6 +234,10 @@ Qt6 greeter rejects.
   `startAuth` returns false with only a warning when another authentication is active; there is no
   immediate greeter reply. The theme therefore never unlocks a pending request locally; the shared
   lock and the daemon's serialization bound the handoff case.
+- [SDDM Greeter launcher](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/daemon/Greeter.cpp)
+  and [SocketServer](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/daemon/SocketServer.cpp):
+  the greeter receives `--socket` with a per-greeter name (`sddm-<display>-<random>`), used as the
+  shared lock's category so seats stay independent.
 - [Qt Settings QML type](https://doc.qt.io/qt-6/qml-qtcore-settings.html) and
   [QSettings::sync()](https://doc.qt.io/qt-6/qsettings.html#sync): `Settings` (QtCore, since 6.5)
   persists the shared lock, and `sync()` reloads settings changed by another engine as well as
