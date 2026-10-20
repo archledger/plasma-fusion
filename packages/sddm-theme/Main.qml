@@ -166,6 +166,7 @@ Rectangle {
         y: Math.max(card.y + card.height + 16,
                     Math.min(Math.round(parent.height * 600 / 900), root.footerTop - height - 16))
         onUserChosen: (index, user, icon, name, letter) => {
+            card.message = "";
             card.clearPassword();
             root.loginName = user;
             root.personIcon = icon;
@@ -175,6 +176,7 @@ Rectangle {
             card.focusPassword();
         }
         onOtherRequested: {
+            card.message = "";
             card.clearPassword();
             root.loginName = "";
             root.personIcon = "";
@@ -195,6 +197,8 @@ Rectangle {
     SessionPill {
         id: session
         x: 32
+        maximumWidth: Math.max(0, (powerButtons.width > 0 ? powerButtons.x - 16 : root.width - 32) - x)
+        menuBottomLimit: root.footerTop
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 32
     }

@@ -59,6 +59,7 @@ Item {
             border.width: 4
 
             CircularImage {
+                id: cardAvatar
                 anchors.fill: parent
                 anchors.margins: 4
                 source: card.avatarSource
@@ -67,7 +68,7 @@ Item {
             }
             Text {
                 anchors.centerIn: parent
-                visible: card.avatarSource == ""
+                visible: !cardAvatar.ready
                 font.family: Palette.clockFont
                 font.pixelSize: 46
                 font.weight: Font.Bold

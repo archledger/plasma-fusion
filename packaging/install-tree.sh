@@ -8,7 +8,7 @@
 # spec, the Arch PKGBUILD, Debian's rules, the Nix package), so the installed files are the same
 # everywhere apart from the directories chosen below. Run from the top of a built source tree.
 #
-#   packaging/install-tree.sh --stage DIR --plymouth DIR [options]
+#   packaging/install-tree.sh --stage DIR --plymouth DIR --sddm DIR [options]
 #
 #   --stage DIR        tools/build.sh's STAGE (its .local/share, .local/libexec and .config)
 #   --plymouth DIR     generators/plymouth/build.sh's theme directory (…/plasma-fusion)

@@ -106,6 +106,10 @@ Qt6 greeter rejects.
   Password input requests the lock screen's sensitive/nonpredictive IME hints even while revealed;
   `clear()` resets both committed text and preedit composition. A protected field has a static,
   non-secret accessibility description (Qt 6.11.2 suppresses its attached name).
+  Account selection clears the previous account's authentication feedback. Missing or invalid
+  photo sources fall back to the account initial until the image reaches `Image.Ready`.
+  Narrow footer layouts reserve a gap for the power buttons, and the open session menu stays
+  above the entire footer rather than just above the shorter session pill.
   Model reset invalidates the selected session until delegates are rebuilt; the initial remembered
   session is honored, resets fall back to the first available entry, data changes refresh the label,
   and an empty model blocks login with "No sessions available". The live Repeater count is used
@@ -137,6 +141,8 @@ Qt6 greeter rejects.
   counts, indexes and role data are invalid after reset.
 - [Text wrapping](https://doc.qt.io/qt-6/qml-qtquick-text.html#wrapMode-prop): `Text.Wrap` prefers word
   boundaries but also wraps overlong words, unlike `WordWrap` alone.
+- [Image loading status](https://doc.qt.io/qt-6/qml-qtquick-image.html#status-prop): a nonempty URL
+  does not imply a loaded photo; the initial remains available during Loading or Error.
 - [Flickable](https://doc.qt.io/qt-6/qml-qtquick-flickable.html) and
   [Keys](https://doc.qt.io/qt-6/qml-qtquick-keys.html): the message's measured content height, clipped
   viewport and keyboard paging stay in core QtQuick; no optional controls module is required.

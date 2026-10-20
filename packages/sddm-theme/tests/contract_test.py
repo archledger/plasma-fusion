@@ -75,6 +75,10 @@ def main() -> int:
         ok &= check("Debian groups the SDDM README under the documentation license",
                     any(stanza.startswith("Files:") and "packages/sddm-theme/README.md" in stanza
                         and "License: CC-BY-SA-4.0" in stanza for stanza in copyright_stanzas))
+        system_doc = (REPO / "docs/parts/system.md").read_text()
+        ok &= check("the system part documents the required SDDM install input", "--sddm" in system_doc)
+        ok &= check("the system part lists the installed SDDM theme tree",
+                    "/usr/share/sddm/themes/plasmafusion/" in system_doc)
 
         # Debian-family distributions split PySide6 by module. The normal build runs the
         # behavior suite, so every module it imports must be declared even on a headless builder.

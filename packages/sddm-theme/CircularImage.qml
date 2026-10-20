@@ -14,6 +14,7 @@ Item {
     id: root
     property url source: ""
     property color fill: "transparent"
+    readonly property bool ready: photo.status === Image.Ready
     onSourceChanged: canvas.requestPaint()
     onFillChanged: canvas.requestPaint()
 

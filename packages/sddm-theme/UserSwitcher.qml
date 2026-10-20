@@ -120,6 +120,7 @@ Flickable {
                     Keys.onRightPressed: switcher.moveChoice(index, 1)
 
                     CircularImage {
+                        id: tileAvatar
                         anchors.fill: parent
                         anchors.margins: 3
                         source: model.icon || ""
@@ -128,7 +129,7 @@ Flickable {
                     }
                     Text {
                         anchors.centerIn: parent
-                        visible: model.icon === undefined || model.icon === ""
+                        visible: !tileAvatar.ready
                         font.family: Palette.bodyFont
                         font.pixelSize: 22
                         font.weight: Font.ExtraBold

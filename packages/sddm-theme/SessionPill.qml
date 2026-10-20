@@ -13,6 +13,8 @@ Item {
     id: session
     width: pill.width
     height: 40
+    property real maximumWidth: parent ? Math.max(0, parent.width - x - 32) : 240
+    property real menuBottomLimit: y
 
     property int index: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
     property string selectedName: ""
@@ -98,7 +100,7 @@ Item {
         border.color: activeFocus ? Palette.accent : Palette.stroke
         border.width: activeFocus ? 2 : 1
         width: Math.min(sessionLabel.implicitWidth + mark.width + chevron.implicitWidth + row.spacing * 2 + 26,
-                        240, Math.max(0, session.parent.width - session.x - 32))
+                        240, session.maximumWidth)
         Accessible.name: qsTr("Session: %1", "the chosen session's name").arg(session.selectedName)
         Accessible.role: Accessible.Button
         activeFocusOnTab: true
@@ -158,10 +160,11 @@ Item {
         property int cursor: 0
         visible: open
         anchors.bottom: pill.top
-        anchors.bottomMargin: 8
+        anchors.bottomMargin: 8 + Math.max(0, session.y - session.menuBottomLimit)
         anchors.left: pill.left
         width: Math.min(240, Math.max(0, session.parent.width - session.x - 32))
-        height: Math.min(list.implicitHeight + 8, Math.max(0, session.y - 8 - 32))
+        height: Math.min(list.implicitHeight + 8,
+                         Math.max(0, Math.min(session.y, session.menuBottomLimit) - 8 - 32))
         radius: 12
         color: "#f2141a2e"
         border.color: Palette.stroke

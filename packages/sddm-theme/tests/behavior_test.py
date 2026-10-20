@@ -170,6 +170,11 @@ def rendered_text(root, text):
                 if item.property("text") == text and item.metaObject().indexOfProperty("lineCount") >= 0)
 
 
+def visible_initial(root, letter):
+    return any(item.property("text") == letter and item.isVisible()
+               and item.metaObject().indexOfProperty("textFormat") >= 0 for item in walk(root))
+
+
 def press(view, item, key, modifier=Qt.NoModifier):
     item.forceActiveFocus()
     QTest.keyClick(view, key, modifier)
@@ -192,10 +197,16 @@ def main():
         image.fill(QColor("#aabbcc"))
         avatar = str(Path(tmp) / "avatar.png")
         image.save(avatar)
+        missing_avatar = str(Path(tmp) / "missing-avatar.png")
+        invalid_avatar = str(Path(tmp) / "invalid-avatar.png")
+        Path(invalid_avatar).write_bytes(b"not an image")
+        broken_urls = [QUrl.fromLocalFile(p).toString() for p in (missing_avatar, invalid_avatar)]
         subprocess.run(["bash", str(HERE / "build.sh"), tmp, avatar], check=True)
         account_name = "<b>Account</b> " * 10
         users = Model([{"name": f"user{i}", "realName": account_name if i == 0 else f"Person {i}",
                         "icon": avatar} for i in range(20)])
+        users.rows[4]["icon"] = missing_avatar
+        users.rows[5]["icon"] = invalid_avatar
         session_name = "<b>Odd session</b> " + "Z" * 300
         sessions = Model([{"name": name} for name in ("Plasma", "Plasma X11", "Other session")]
                          + [{"name": f"Additional {i}"} for i in range(12)]
@@ -210,7 +221,20 @@ def main():
                           ("userModel", users), ("sessionModel", sessions)):
             context.setContextProperty(name, obj)
         warnings = []
-        view.engine().warnings.connect(lambda errors: warnings.extend(e.toString() for e in errors))
+        image_errors = []
+
+        def note_warnings(errors):
+            for error in errors:
+                message = error.toString()
+                # These two owned bad-file fixtures intentionally produce Image.Error. Keep every
+                # other QML warning fatal, and verify the expected errors actually occurred below.
+                if (any(url in message for url in broken_urls) and "QML Image:" in message
+                        and ("Cannot open:" in message or "Error decoding:" in message)):
+                    image_errors.append(message)
+                else:
+                    warnings.append(message)
+
+        view.engine().warnings.connect(note_warnings)
         view.setResizeMode(QQuickView.SizeRootObjectToView)
         view.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
         check(view.status() == QQuickView.Ready, "the actual staged Main.qml loads")
@@ -230,6 +254,9 @@ def main():
         reveal = find(root, "Show password")
         card = next(item for item in walk(root) if item.property("promptName") is not None)
         check(root.property("loginName") == "user0", "SDDM's last user populates the login card")
+        check(len(image_errors) >= 2, "the missing and invalid avatar fixtures reached the image error path")
+        check(visible_initial(find(root, "Person 4"), "P"), "a missing tile avatar falls back to its initial")
+        check(visible_initial(find(root, "Person 5"), "P"), "an invalid tile avatar falls back to its initial")
         check(password.hasActiveFocus() and
               any(item.property("text") == "Password" and item.isVisible() for item in walk(root)),
               "the initially focused password field has a visible prompt")
@@ -271,6 +298,8 @@ def main():
             caps_fit = (card.y() + card.height() <= switcher.y()
                         and switcher.y() + switcher.height() <= footer_top)
             press(view, find(root, "Other user"), Qt.Key_Return)
+            # Selection clears the old account's feedback. This is a new message for Other user.
+            proxy.informationMessage.emit(long_message)
             QTest.qWait(50)
             other_caps_fit = (card.y() + card.height() <= switcher.y()
                               and switcher.y() + switcher.height() <= footer_top)
@@ -329,6 +358,16 @@ def main():
         check(root.property("loginName") == "user2" and password.property("text") == "",
               "account changes clear the previous password")
         check(not reveal.property("pressed"), "account changes reset password visibility")
+        proxy.informationMessage.emit("Feedback for the previous account")
+        press(view, find(root, "Person 4"), Qt.Key_Space)
+        check(card.property("message") == "", "listed-account changes discard prior authentication feedback")
+        check(root.property("loginName") == "user4" and visible_initial(card, "P"),
+              "a missing login-card avatar falls back to its initial")
+        press(view, find(root, "Person 5"), Qt.Key_Space)
+        check(root.property("loginName") == "user5" and visible_initial(card, "P"),
+              "an invalid login-card avatar falls back to its initial")
+        press(view, third, Qt.Key_Space)
+        check(not visible_initial(card, "P"), "a loaded login-card photo replaces the initial")
         other = find(root, "Other user")
         press(view, other, Qt.Key_Left)
         last = find(root, "Person 19")
@@ -350,7 +389,9 @@ def main():
         QTest.mouseRelease(view, Qt.LeftButton, Qt.NoModifier, start + QPoint(330, 0))
         QMetaObject.invokeMethod(viewport, "cancelFlick")
         check(viewport.property("contentX") < before, "a pointer drag scrolls hidden accounts into view")
+        proxy.informationMessage.emit("Feedback before Other user")
         press(view, other, Qt.Key_Return)
+        check(card.property("message") == "", "Other-user selection discards prior authentication feedback")
         username = find(root, "Username")
         check(username.isVisible() and view.activeFocusItem() == username,
               "Other user exposes and focuses the username input")
@@ -469,6 +510,18 @@ def main():
               "the account viewport follows a narrow screen")
         check(card.y() == 210 and switcher.y() == 600,
               "normal-height layouts keep the Login board's vertical positions")
+        press(view, picker, Qt.Key_Return)
+        press(view, final_session, Qt.Key_Space)
+        QTest.qWait(50)
+        power_row = find(root, "Sleep").parentItem().parentItem()
+        power_left = power_row.mapToScene(power_row.boundingRect().topLeft()).x()
+        check(picker.mapToScene(picker.boundingRect().topRight()).x() + 16 <= power_left,
+              "a long session pill keeps a gap before the narrow-screen power controls")
+        press(view, picker, Qt.Key_Return)
+        power_top = power_row.mapToScene(power_row.boundingRect().topLeft()).y()
+        check(menu.mapToScene(menu.boundingRect().bottomRight()).y() + 8 <= power_top,
+              "the open session menu stays above every footer control")
+        press(view, final_session, Qt.Key_Escape)
         proxy.logins.clear()
 
         def login_during_reset():
@@ -501,7 +554,7 @@ def main():
         password.setProperty("text", "test-input")
         press(view, password, Qt.Key_Return)
         check(proxy.logins == [("unlisted", "test-input", 0)], "recovered logins use the displayed session index")
-        check(not warnings, "theme behavior emits no QML warnings")
+        check(not warnings, "theme behavior emits no unexpected QML warnings")
         for warning in warnings:
             print("QML", warning)
         view.close()
