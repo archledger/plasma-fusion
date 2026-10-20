@@ -30,8 +30,26 @@ Rectangle {
     property string loginName: ""
     // SDDM's login call is asynchronous; keep one request and its displayed identity stable.
     property bool authenticating: false
-    readonly property bool interactive: primaryScreen === true
+    // primaryScreen is a creation-time snapshot; screenModel.primary reads the current primary.
+    // SDDM 0.21 never emits primaryChanged, so poll the getter at a login-screen pace.
+    property bool primaryNow: primaryScreen === true
+    readonly property bool interactive: primaryNow
     readonly property real footerTop: Math.min(session.y, powerButtons.y)
+
+    function refreshPrimary() {
+        if (typeof screenModel !== "undefined" && screenModel && screenModel.primary !== undefined) {
+            primaryNow = screenModel.primary === 0;
+        } else {
+            primaryNow = primaryScreen === true;
+        }
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: true
+        onTriggered: root.refreshPrimary()
+    }
 
     function login(user, password) {
         if (authenticating || !interactive) {
@@ -215,6 +233,7 @@ Rectangle {
     }
 
     Component.onCompleted: {
+        refreshPrimary();
         if (!users.sent) {
             // No listed account answered: select Other user through the normal path so its
             // visual and assistive state match the prompted username.

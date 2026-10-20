@@ -153,8 +153,12 @@ Qt6 greeter rejects.
   user through the normal activation path, so its prompt, selection ring and accessible state
   agree.
   SDDM gives each screen its own QQuickView/QML engine (and activates only the primary view), so
-  per-view QML state cannot coordinate a login across screens. Only the primary view accepts
-  input; a secondary screen shows the same board but cannot start a competing authentication.
+  per-view QML state cannot coordinate a login across screens. Only the current primary view
+  accepts input; a secondary screen shows the same board but cannot start a competing
+  authentication. `primaryScreen` is only a creation-time snapshot, so the theme polls
+  `screenModel.primary` (a live getter) once a second; SDDM 0.21 never emits that model's
+  `primaryChanged`, and the snapshot remains the fallback. If the primary monitor moves, the new
+  view becomes interactive instead of every screen staying locked.
   Selecting a listed account clears any previously typed Other-user name (including its IME
   composition); a failed login for that same Other-user identity keeps it. The password input
   fills its 48 px pill, so a click anywhere in the field row focuses it.
@@ -201,8 +205,11 @@ Qt6 greeter rejects.
   one pending request until one of those signals and clears the submitted credential meanwhile.
 - [SDDM per-screen views](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/GreeterApp.cpp):
   `addViewForScreen()` creates a separate `QQuickView` (own engine) per screen, shares the proxy
-  and models, and activates only the primary view. Cross-screen pending state is therefore not
-  available in QML; the theme makes only the primary view interactive.
+  and models, and activates only the primary view. Its `primaryScreenChanged` handler only
+  re-activates; the `primaryScreen` context value is set once at view creation.
+- [SDDM ScreenModel](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/ScreenModel.h):
+  `primary` is a live property (0 for this view's screen, -1 otherwise). SDDM 0.21 declares
+  `primaryChanged` but never emits it, so the theme polls the getter instead of binding to it.
 - [Accessible selection](https://doc.qt.io/qt-6/qml-qtquick-accessible.html#selected-prop): the
   remembered and currently chosen account, Other user and the chosen session expose their
   selected state.

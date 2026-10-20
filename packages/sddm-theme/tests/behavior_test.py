@@ -140,6 +140,20 @@ class Config(QObject):
     background = Property(str, lambda self: self.image, constant=True)
 
 
+class Screen(QObject):
+    changed = Signal()
+
+    def __init__(self, primary):
+        super().__init__()
+        self.value = primary
+
+    def set_primary(self, value):
+        self.value = value
+        self.changed.emit()
+
+    primary = Property(int, lambda self: self.value, notify=changed)
+
+
 def walk(item):
     yield item
     for child in item.childItems():
@@ -233,11 +247,12 @@ def main():
         keyboard = Keyboard()
         proxy = Proxy()
         config = Config(avatar)
+        screen = Screen(0)
         view = QQuickView()
         context = view.rootContext()
         for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
                           ("userModel", users), ("sessionModel", sessions),
-                          ("primaryScreen", True)):
+                          ("screenModel", screen), ("primaryScreen", True)):
             context.setContextProperty(name, obj)
         warnings = []
         image_errors = []
@@ -715,6 +730,17 @@ def main():
         check(not warnings, "theme behavior emits no unexpected QML warnings")
         for warning in warnings:
             print("QML", warning)
+
+        # primaryScreen is only a snapshot. Moving primary while the greeter runs must hand
+        # interactive input to the new primary rather than disabling every screen.
+        screen.set_primary(-1)
+        QMetaObject.invokeMethod(root, "refreshPrimary")
+        check(not card.property("allowInput"), "input is disabled when this view is no longer primary")
+        QTest.qWait(1100)
+        check(not card.property("allowInput"), "the primary poll keeps a non-primary view disabled")
+        screen.set_primary(0)
+        QTest.qWait(1100)
+        check(card.property("allowInput"), "input returns when this view becomes primary again")
         view.close()
         view.setSource(QUrl())
         app.processEvents()
@@ -722,11 +748,12 @@ def main():
         # With no listed accounts, Main's fallback must select Other user through the normal
         # path so the prompted username and the tile's visual/assistive state agree.
         empty_users = Model([])
+        screen2 = Screen(0)
         view2 = QQuickView()
         context2 = view2.rootContext()
         for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
                           ("userModel", empty_users), ("sessionModel", sessions),
-                          ("primaryScreen", True)):
+                          ("screenModel", screen2), ("primaryScreen", True)):
             context2.setContextProperty(name, obj)
         view2.setResizeMode(QQuickView.SizeRootObjectToView)
         view2.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
@@ -748,9 +775,10 @@ def main():
         # A secondary screen has its own QML engine. It must not start a competing login.
         view3 = QQuickView()
         context3 = view3.rootContext()
+        screen3 = Screen(-1)
         for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
                           ("userModel", users), ("sessionModel", sessions),
-                          ("primaryScreen", False)):
+                          ("screenModel", screen3), ("primaryScreen", False)):
             context3.setContextProperty(name, obj)
         view3.setResizeMode(QQuickView.SizeRootObjectToView)
         view3.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
@@ -765,6 +793,10 @@ def main():
             proxy.logins.clear()
             QMetaObject.invokeMethod(card3, "submit")
             check(not proxy.logins, "a secondary screen cannot submit a login")
+            screen3.set_primary(0)
+            QMetaObject.invokeMethod(root3, "refreshPrimary")
+            check(card3.property("allowInput"),
+                  "a new primary view is re-enabled for input")
             view3.close()
             view3.setSource(QUrl())
             app.processEvents()

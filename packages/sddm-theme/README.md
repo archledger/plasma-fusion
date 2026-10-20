@@ -74,9 +74,9 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   mtimes derive from content so upgrades invalidate Qt's cache. A submitted credential is cleared
   and re-masked immediately; one pending request blocks duplicate submission and account/session
   changes (including session arrow keys) until SDDM reports success or failure. An empty user
-  model selects Other user consistently. Only the primary screen is interactive (SDDM creates a
-  separate QML engine per screen); leaving Other user clears its name, and the password field
-  fills its pill for pointer focus.
+  model selects Other user consistently. Only the current primary screen is interactive (SDDM
+  creates a separate QML engine per screen); primary changes are polled through screenModel.
+  Leaving Other user clears its name, and the password field fills its pill for pointer focus.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.
