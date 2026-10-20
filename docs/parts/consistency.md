@@ -6,7 +6,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 # App consistency: keeping foreign toolkits in the Plasma Fusion look
 
 Status: written 2026-10-05 from the settings survey
-(`artifacts/plasma-fusion/2026-10-05-de-ux-survey/report.md`, § 5). The reference kits are
+(the de-ux-survey report of 2026-10-05, § 5, the maintainer's records). The reference kits are
 generated from the shipped colour schemes; the app table grows one row per app as it is checked.
 
 Plasma Fusion feeds the standard appearance channels, so anything that follows the desktop is
@@ -37,8 +37,8 @@ holds the map and the values to give app authors.
 
 Fill one row per app after checking it against Plasma Fusion Dark and Light. "Dark follows" means
 the app switches with the system `color-scheme` portal key without an in-app setting. The first
-four rows were checked 2026-10-05 in the ubuntu2610 VM (Fusion Dark and Light applied per app,
-screenshots in `artifacts/plasma-fusion/2026-10-05-settings-plan/app-consistency/`): the verdict
+four rows were checked 2026-10-05 in the ubuntu2610 VM (Fusion Dark and Light applied per app;
+the app-consistency screenshots of 2026-10-05 are the maintainer's records): the verdict
 for dark follows compares the app window's pixels across the two themes, and the title bar and
 file dialog columns are what the toolkit draws.
 

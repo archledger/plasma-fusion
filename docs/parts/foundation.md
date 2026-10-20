@@ -3,7 +3,7 @@
 Status 2026-09-29: built, parse-checked, contrast-checked and tested in virtual sessions on the
 ThinkPad (dark and light, on its own and inside the whole Plasma Fusion desktop), then reviewed
 and fixed in a second pass (see "Review" at the end). Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/foundation/` (review: `review-*.png`).
+the foundation build run of 2026-09-29 (the maintainer's records; review: `review-*.png`).
 
 ## What this part builds
 
@@ -517,7 +517,7 @@ An independent review re-read the boards (Colors, Controls, Main/MainLight, Over
 Lock/Login/Splash) and the upstream sources the part depends on, rebuilt everything into its own
 stage and tested the part inside the whole Plasma Fusion desktop on the ThinkPad (virtual sessions
 `rfd-1` dark, `rfd-2` dark then switched to light with `fusion-config.sh --light`). Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/foundation/review-*.png`.
+the foundation build run of 2026-09-29 (the maintainer's records): `review-*.png`.
 
 What was checked and held:
 - Colour schemes: every group and key of `/usr/share/color-schemes/BreezeDark.colors` is present

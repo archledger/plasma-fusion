@@ -179,7 +179,7 @@ dock.addWidget("org.plasmafusion.dock");
 - A last run with the real `PlasmaFusion-Dark` / `PlasmaFusion` icon themes from `tools/build.d/30-icons.sh`
   (instead of the test-only theme) gave the same layout in both variants (`screens-real-icons/`).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-dock/`
+Evidence: the shell-dock build run of 2026-09-29 (the maintainer's records)
 (`cmp-*.png` board vs session side by side; `screens/*.png` full 1440×900 screenshots with the test icon
 theme; `screens-real-icons/*.png` and `real-icons-dock-strip.png` with the built Plasma Fusion icon themes;
 `pointer-mapping-sequence.png`).
@@ -291,7 +291,7 @@ Still open / not changed:
   `QT_FORCE_STDERR_LOGGING=1` in tools/vsession/vsession.sh (the scenarios export it themselves) and the
   Breeze fallback icon for Ark (icon part).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-dock/review-*.png`
+Evidence: the shell-dock build run of 2026-09-29 (the maintainer's records), `review-*.png`
 (board above, session below: `review-dark-hover`, `review-light-hover`, `review-dark-launcher`,
 `review-light-launcher`, `review-dark-unpinned`, `review-light-unpinned`; `review-many-apps` before and
 after; `review-nothing-pinned`; `review-pill-and-ring-fix`; `review-dark-config`, `review-light-config`;
@@ -299,7 +299,7 @@ full screenshots `review-*-full.png`).
 
 ## Magnification rework (2026-09-30)
 
-Spec: EFFECTS.md section 4 (`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-tablet/`), ADAPTIVE fix 7,
+Spec: EFFECTS.md section 4 (the tablet run of 2026-09-30, the maintainer's records), ADAPTIVE fix 7,
 BACKLOG M4.
 
 - **The panel never changes size while the pointer moves.** `relayout()` computes only the rest layout (slots,
@@ -571,8 +571,8 @@ tablet gap opens the neighbouring app's menu.
 
 ## Stock parity: app menu, window previews, audio (2026-10-09)
 
-The stock task manager's menu entries, window previews and audio indicator that the dock lacked (stock
-parity audit, artifacts/plasma-fusion/2026-10-09-stock-parity). Tests, all with injected pointer input:
+The stock task manager's menu entries, window previews and audio indicator that the dock lacked (the
+stock parity audit of 2026-10-09, the maintainer's records). Tests, all with injected pointer input:
 - Menu (archhost parity VM, Fedora 44, Plasma 6.7.5): Firefox's menu lists its three actions and New
   Private Window opens one; KWrite's Recent Files lists the file it opened (Forget Recent Files is offered,
   not exercised); New Desktop adds a desktop and Move to Desktop moves the KWrite window there; More's Keep

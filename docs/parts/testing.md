@@ -24,7 +24,7 @@ Status: built and run on HEAD 282b1a5 (the staged HOME tree is byte-identical to
 real session. Work package TEST-1 (2026-09-30) added the session-slot lock, the teardown fix,
 more harness options, the matrix, the band test and new gate rows; see "TEST-1 (2026-09-30)".
 Last edited 2026-09-30.
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/tests/` (review:
+Evidence: the tests build run of 2026-09-30, the maintainer's records (review:
 `tests/review-rts/`).
 
 ## Files
@@ -39,7 +39,7 @@ Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/tests/` (
 | `tools/tests/icons/report.py` | laptop: table, screenshot comparison of the icon area, `summary.{md,json}` |
 | `tools/tests/perf/run.sh` | M6 driver (quiet-host wait, N sessions, core dumps, gate) |
 | `tools/tests/perf/scen-perf.sh` | in-session scenario (the perf-measure study's `scen-perf.sh`, Fusion arm, pointer targets read from the live dock and top bar) |
-| `tools/tests/perf/pfstat.py`, `winmon.js`, `analyze_ab.py` | copied from `2026-09-30-research/perf-measure/scripts/` (pfstat also records other virtual sessions on the host) |
+| `tools/tests/perf/pfstat.py`, `winmon.js`, `analyze_ab.py` | copied from the perf-measure research scripts of 2026-09-30, the maintainer's records (pfstat also records other virtual sessions on the host) |
 | `tools/tests/perf/gate.py` | metrics per run, median over runs, budget and baseline verdicts, table, exit status |
 | `tools/tests/perf/budget.json` | section 7 budget and the noise margin of every metric |
 | `tools/tests/perf/baseline.json` | stored baseline (282b1a5 stage, 1920x1200 at 4/3; per metric the quiet runs; see "Performance" below) |
@@ -552,7 +552,7 @@ stop-timeout abort.
 
 Everything was re-run from clean snapshots (`git archive` of 282b1a5, the deployed stage, and of
 HEAD 31affe9 and d4afee8) with the lane's files copied over them; no result of the build was
-reused. Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/tests/review-rts/`.
+reused. Evidence: the tests review-rts build run of 2026-09-30 (the maintainer's records).
 
 Confirmed:
 

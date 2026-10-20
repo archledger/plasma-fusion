@@ -1,7 +1,7 @@
 # Shared QML blocks and QML checks (BASE-1)
 
-Work package BASE-1 of the one-pass build plan
-(`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-decisions/PLAN.md`, section 5). Every lane builds
+Work package BASE-1 of the one-pass build plan (section 5 of `PLAN.md` in the decisions of
+2026-09-30, the maintainer's records). Every lane builds
 its QML on the same blocks for text scale, motion, tablet posture, glass, accent colour and foreign
 app icons, and the build checks durations and accessible names.
 
@@ -229,8 +229,8 @@ settings' FusionSlider knob, in place of QtQuick.Effects' `RectangularShadow`.
 
 Why: Qt 6.11.2's `RectangularShadow` keeps about 6 KiB for every destroyed instance. A plain Qt
 window that creates and destroys 200 of them 300 times grew from 168 to 335 MiB, while Rectangle,
-ShaderEffect and MultiEffect stayed flat (evidence and a draft Qt report:
-`artifacts/plasma-fusion/2026-10-01-tablet2/STRESS-1/qt-rectangularshadow/`). The tablet home
+ShaderEffect and MultiEffect stayed flat (evidence and a draft Qt report: the tablet2 STRESS-1
+qt-rectangularshadow run of 2026-10-01, the maintainer's records). The tablet home
 screen rebuilds its pages on every rotation, so plasmashell grew 0.4 MiB per rotation (300
 rotations: 357 -> 494 MiB) and per posture flip. With FusionShadow the same runs stay flat after the
 first rotations' warm-up; screenshots of the home screen, launcher, dock and controls match the old
@@ -251,7 +251,8 @@ An optional fourth argument, a part of the screen in global coordinates (`play(i
 iconName, Qt.rect(x, y, w, h))`), makes the card grow into that part instead: the home screen's free
 side beside an app, where the app opens in the free half (2026-10-18, docs/parts/desktop.md).
 
-Test (private session, `build/m1/scen-m1z.sh`, m1x/m1y; evidence `artifacts/plasma-fusion/2026-10-01-tablet2/M1/zoom`):
+Test (private session, `build/m1/scen-m1z.sh`, m1x/m1y; evidence: the tablet2 M1 zoom run of
+2026-10-01, the maintainer's records):
 Discover tapped on the home screen: the splash with its icon fills the screen under the top bar, then
 Discover's window opens over it; KCalc and Konsole (fast starts) appear at once over it; the splash
 window is not in the dock's task list.
@@ -392,4 +393,4 @@ Self-test: `tools/checks/tests/run.sh` (each fixture marks the lines a check mus
   (all lanes) also builds with `tools/build.sh` (1 min; lints in warn mode: 24 motion, 16 a11y
   findings in existing packages, for their lanes).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/BASE-1/`.
+Evidence: the BASE-1 build2 run of 2026-09-30 (the maintainer's records).

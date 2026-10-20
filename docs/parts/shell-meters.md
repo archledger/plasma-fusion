@@ -3,7 +3,7 @@
 Optional compact meters for the processor load, the memory in use, the download and upload rates
 and the processor temperature, in one pill drawn like the quick settings status pill (Main /
 MainLight boards `<header>`), with a small pop-up for a few more values and System Monitor. The
-0.5.0 answer to the survey's F2 (`artifacts/plasma-fusion/2026-10-11-improvement-survey-3`,
+0.5.0 answer to the survey's F2 (the improvement survey 3 of 2026-10-11, the maintainer's records;
 sources C-macos.md and D-windows-gnome.md: Stats is the most-installed Mac utility, 143k Homebrew
 installs a year; GNOME's Vitals, system-monitor, Freon and NetSpeed have over 6M downloads).
 Plasma 6 applet, QML only, GPL-2.0-or-later.
@@ -179,7 +179,8 @@ tiers"): 2 s, 4 s and 8 s at the default interval. The user's keys are never wri
 Fedora 44, Plasma 6.7.5, 2 CPUs, 3 GiB, virtio-vga (software rendering), the worktree's build
 laid over the user's `~/.local`; `tests/vm_meters.py` in the session, two busy loops (`busy 30 2`)
 and a host-side traffic source through QEMU's user network (about 2 MB/s down, 300 kB/s up).
-Screenshots and logs: `artifacts/plasma-fusion/2026-10-11-release-0.5.0/tracks/meters-shots/`.
+Screenshots and logs: the meters-shots track of the 0.5.0 release run of 2026-10-11 (the
+maintainer's records).
 
 - **Added** with desktop scripting (`vm_meters.py add`, where Add Widgets would place it) and from
   the settings page (`kcmctl`, and a real pointer click on the switch, then Apply): `... systemtray |

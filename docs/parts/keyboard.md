@@ -54,4 +54,4 @@ only). `fuzz/keyboard_keys_fuzzer.py` patches arbitrary text (docs/parts/ci.md, 
 Ctrl and Alt (keysyms are sent with no modifiers and letters are committed as text, so a modifier key
 needs plasma-keyboard C++), and moving the cursor by dragging on the space bar (Qt Virtual Keyboard
 handles the keyboard's touches in one area, so a layout cannot add a gesture to a key). Drafts for an
-upstream merge request: `artifacts/plasma-fusion/2026-10-01-tablet2/KEYBOARD/` on the shared drive.
+upstream merge request: the KEYBOARD tablet run of 2026-10-01 (the maintainer's records).

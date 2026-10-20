@@ -20,8 +20,8 @@ can be read in a minute a day, and lists development crashes last, separately.
 On the laptop, from the checkout (the tool copies itself, so the checkout can move on):
 
 ```
-tools/device/fieldlog/plasma-fusion-fieldlog install --share /mnt/archledger-gp/artifacts/plasma-fusion/fieldlog \
-    --dev-dirs '~/tmp-*:~/archledger-gp/artifacts'
+tools/device/fieldlog/plasma-fusion-fieldlog install --share ~/evidence \
+    --dev-dirs '~/tmp-*:~/work'
 plasma-fusion-fieldlog status          # after install, from ~/.local/libexec/plasma-fusion/
 ```
 
@@ -331,9 +331,9 @@ restart at 13:58 (a clean `systemctl` stop and start in the real session, not by
 core dump), no `fieldlog-error`, and the share copy. A 60 s run without `Environment=PATH=` (the
 broken case) recorded the same through the tool's fallback. All 415 dump records of the laptop
 classed with the old and the new code: the only changes are the 37 `~/tmp-*` probes (other to
-tooling) and, with `~/archledger-gp/artifacts` in `PF_FIELDLOG_DEV_DIRS`, its 38 test programs (28
-other, 10 app to tooling); no session or app crash changed class. The new unit order was checked
-for cycles against the user manager's loaded units (none; plasmashell, KWin and
+tooling) and, with the maintainer's evidence directory in `PF_FIELDLOG_DEV_DIRS`, its 38 test
+programs (28 other, 10 app to tooling); no session or app crash changed class. The new unit order
+was checked for cycles against the user manager's loaded units (none; plasmashell, KWin and
 `graphical-session.target` now start after the field log and stop before it).
 
 ## How the digest is read
@@ -428,8 +428,8 @@ Added after the review of 2026-10-02 (each fails on the version before its fix):
   agent process in its cgroup (the SSH login's `session-N.scope`): its test crashes are classed
   "other" (or "app", from a terminal tab whose agent has gone) unless their path gives them away.
   Of the laptop's dump records (checked 2026-10-02): 37 probes from an agent's `~/tmp-NAME/`
-  (2026-09-15), tooling with the default `~/tmp-*`, and 39 test programs from
-  `~/archledger-gp/artifacts/` (2026-09-07 to 09-25; 28 "other", 10 "app" without the setting);
+  (2026-09-15), tooling with the default `~/tmp-*`, and 39 test programs from the maintainer's
+  evidence directory (2026-09-07 to 09-25; 28 "other", 10 "app" without the setting);
   for such folders set `PF_FIELDLOG_DEV_DIRS` (`install --dev-dirs`).
 - Sustained CPU and memory jumps are seen at minute resolution.
 - A recorder that is killed (not stopped) saved its journal cursor up to 10 minutes before: its next

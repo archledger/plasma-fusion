@@ -170,7 +170,7 @@ saved. The whole feature: [`apppairs.md`](apppairs.md).
 laptop posture Folder View with cards and no QML errors; tablet posture page 1 with the pinned apps
 in 5 columns beside the cards, page 2 after a swipe with apps A to Z in 6 columns, a tap on the first
 tile of page 2 started Akregator, laptop posture again Folder View. Evidence:
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-tablet2/H1/`. `scen-home2.sh`: the installer
+the tablet2 H1 run of 2026-10-01 (the maintainer's records). `scen-home2.sh`: the installer
 built the layout with the fork, long press and right click open the menu (Firefox's jump list
 included), the login check's dry run with plasma-desktop 6.8.0 switches the containment and words
 the notification. `scen-home3.sh` (H2): a 70 px drag does nothing, a 300 px swipe down opens the
@@ -182,8 +182,8 @@ page flicks and taps unchanged.
 - Folders, a widget stack per page; dragging an app across pages.
 - App Library page with search at the end.
 
-Edit mode tests (`build/he/scen-he2.sh`, he7; evidence
-`artifacts/plasma-fusion/2026-10-01-tablet2/H1/edit`): long press on an empty cell enters it (badges,
+Edit mode tests (`build/he/scen-he2.sh`, he7; evidence the tablet2 H1 edit run of 2026-10-01,
+the maintainer's records): long press on an empty cell enters it (badges,
 cards dimmed, Done); Done leaves it; the Firefox badge removes Firefox and shows Undo; Undo puts it
 back in place; the second page dot opens the A-Z page with "+" on unpinned apps; "+" on Akregator adds
 it; after Done Akregator is last on page 1. he1: a drag from Discover's tile to Maps' cell moved

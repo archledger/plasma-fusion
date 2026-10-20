@@ -1,8 +1,8 @@
 # Text scale and pixel grid (FusionMetrics)
 
 Implements ADAPTIVE.md fix 2 (every Fusion text follows the user's font size) and fix 29 (font
-family resolved once per window). Audit: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-adaptive/ADAPTIVE.md`
-sections 3 and 3.1.
+family resolved once per window). Audit: sections 3 and 3.1 of `ADAPTIVE.md` in the adaptive run
+of 2026-09-30 (the maintainer's records).
 
 ## How it works
 

@@ -333,7 +333,7 @@ The workflow's reviewer stage was replaced by a lead review when the lead took t
   setting and reverts it. Apply then stays enabled (`isConfigurationChanged` sees the tier), so
   closing asks to apply or discard. Either answer keeps the live tier.
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/card1/` (runs, analysis,
+Evidence: the card1 build run of 2026-09-30 (the maintainer's records: runs, analysis,
 scenarios, crops); laptop scratch `build/cd1/`.
 
 ## Layout script: cards
@@ -576,8 +576,8 @@ print(report.join("\n") + "\n");
   - No core dump from the cd- sessions (`coredumpctl list --since "2026-09-29 17:41:45"`: the
     entries in that window are uid 981 kdialog, perf-pilot-* sessions and `kscreen-doctor -o` run
     over SSH by other agents).
-- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/desktop-cards/`
-  (`compare-board-{dark,light}.png` board | session | blend at 2x, `states-strip.png`,
+- Evidence: the desktop-cards build run of 2026-09-30 (the maintainer's records:
+  `compare-board-{dark,light}.png` board | session | blend at 2x, `states-strip.png`,
   `pointer-calendar-arrows.png`, `keyboard-*.png`, `location-search-dialog.png`,
   `migration-stock-to-fusion.png`, `tray-popup-after-layout.png`, `screens/` full 1440x900
   captures, `logs/`, `test-tooling/` with the scenarios, the extended input tool (letters, digits,
@@ -675,7 +675,7 @@ empty bars) are covered by code reading only. The system card still costs about 
 more than a static one; a static card needs `Kirigami.Units.longDuration` 0 (global animation
 speed "instant"), which also turns the glide off.
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/desktop-cards/review-*.png`
+Evidence: the desktop-cards build run of 2026-09-30 (the maintainer's records): `review-*.png`
 (board comparisons, final dark and light captures at 1440 x 900 en_GB, dark at scale 4/3 en_US
 and light at scale 4/3 from before the fixes, location keyboard flow, calendar focus, tray and notification, robustness, portrait) and
 `review-logs/` (CPU measurements, KOrganizer stub calls, layout dumps, kded modules, the scenario

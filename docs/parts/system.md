@@ -369,7 +369,7 @@ list is empty, and the dock replaced the missing Kate with KWrite once and saved
 
 ## Verification (ThinkPad, 2026-09-29)
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/system/` (screenshots, settings
+Evidence: the system build run of 2026-09-30, the maintainer's records (screenshots, settings
 dumps, `thinkpad-verification.txt`, `rpm-build-summary.txt`, the RPM and SRPM, the fusion-config patch).
 Scenarios and seeds: `build/sy/scen-*.sh`, `build/sy/seed-common/pf-sy/` (git-ignored).
 
@@ -432,7 +432,8 @@ PAM, irlume, fprintd.
   KActivities store `org.kde.plasma.favorites.applications`; dock `launchers` in
   plasma-org.kde.plasma.desktop-appletsrc). Not done here (no changes to the real session).
 * **Lead:** rebuild the RPM after the next commit (the current one says `.dirty…`: other parts were
-  editing while it was built). Record this checkpoint in the shared ledger (not written by this part).
+  editing while it was built). Record this checkpoint in the maintainer's records (not written by
+  this part).
 * **Lead, greeter display scale:** the greeter now uses 4/3 (review). If the user's panel
   configuration changes, run in the user's session
   `sudo /usr/share/plasma-fusion/tools/system/greeter-apply.sh --display-from ~/.config/kwinoutputconfig.json`

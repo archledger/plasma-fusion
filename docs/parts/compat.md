@@ -9,8 +9,8 @@ rule names its bug, its test and when to remove it.
 ## Backend audit (2026-10-01)
 
 Private Wayland sessions on the ThinkPad with the real session's X11 setup (1920 x 1200 at 4/3,
-`[Xwayland] Scale=4/3`, `Xft.dpi: 128`), one app per toolkit, maximized, screenshots in
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-10-01-hidpi/`:
+`[Xwayland] Scale=4/3`, `Xft.dpi: 128`), one app per toolkit, maximized, screenshots in the hidpi
+run of 2026-10-01 (the maintainer's records):
 
 | Backend | App | At 4/3 | Scale change 4/3 -> 1 -> 2 -> 4/3 |
 |---|---|---|---|

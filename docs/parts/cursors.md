@@ -176,7 +176,7 @@ parts built into `build/cr/home` + `.config/kcminputrc` + the test tools):
 - cr-3: `kcmshell6 kcm_cursortheme` lists "Plasma Fusion" (current, size 24) and "Plasma Fusion
   Light" with previews from the Xcursor files.
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/cursors/`. The files
+Evidence: the cursors build run of 2026-09-29 (the maintainer's records). The run's files
 without the `review-` prefix were made before the review changed the shadow and canvas (see
 Review); the `review-*` files show the current build. Builder's files: (`board-compare.png`, `session-vs-board.png` = board cards above the pointers KWin drew at size
 24 zoomed 3x, `contact-PlasmaFusion-cursors.png`, `contact-PlasmaFusion-Light-cursors.png`,

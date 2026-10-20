@@ -141,8 +141,8 @@ The spec's QML time stamp (`SOURCE_DATE_EPOCH` from a hash of the sources) inclu
 
 ## Install, open, roll back (lead / real session)
 
-1.0.0-3 is installed (2026-09-30 01:19Z). The 1.0.0-4 RPM of KCM-1 is in
-`/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KCM-1/rpm/` (with `SHA256SUMS`); PKG-1
+1.0.0-3 is installed (2026-09-30 01:19Z). The 1.0.0-4 RPM of KCM-1 is in the `rpm/` directory of
+the KCM-1 build run of 2026-09-30 (the maintainer's records, with `SHA256SUMS`); PKG-1
 builds the final one from the INT-1 commit with `build-rpm.sh`. The lead installs it at DEPLOY-1:
 
 ```
@@ -299,7 +299,7 @@ The builder's checks (1.0.0-1); the review's checks of 1.0.0-3 are under "Review
     period belong to other agents' sessions and SSH calls: plasma-login greeter, perf-pilot
     sessions, `kscreen-doctor`, `kstart --help`).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build/kcm-cpp/`:
+Evidence: the kcm-cpp build run of 2026-09-30 (the maintainer's records):
 `sbs-{dark,light}-board-vs-session.png` (board pane left, the page in System Settings right),
 `sbs-{dark,light}-board-vs-render-2x.png`, `session-{dark,light}-{systemsettings,kcmshell}.png`,
 `keyboard-{dark,light}-*.png`, `dock-magnify-on-off.png`, `topbar-global-menu-off-on.png`,
@@ -338,7 +338,7 @@ KCM-1 builder `o1km`; the lead took the lane over at 04:31Z and made the final b
   plasma-workspace 6.7.5 announces it before kdeglobals is written (it does not sync; the file is
   written when the tool exits), so plasmashell could read the old accent (BASE-1 found it).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-30-build2/KCM-1/` (RPMs with
+Evidence: the KCM-1 build run of 2026-09-30 (the maintainer's records; RPMs with
 `SHA256SUMS`, the three runs, notes).
 
 ## Deviations from the board, with reasons
@@ -481,8 +481,9 @@ qmllint (Qt 6.11.2) clean apart from the unqualified `kcm` / `i18n` context name
 tarball and spec are identical to the tree; all 28 requirements resolve on the ThinkPad.
 
 Runs (private virtual sessions on the ThinkPad with the whole stage installed by fusion-config.sh;
-scenarios, state dumps and logs in the share's `kcm-cpp/review-states/`; `build/rkm2/remote-run.sh`
-is `tools/vsession/remote.sh` plus the optional `bwrap` wrapper):
+scenarios, state dumps and logs in the `kcm-cpp/review-states/` files of the kcm-cpp build run of
+2026-09-30 (the maintainer's records); `build/rkm2/remote-run.sh` is `tools/vsession/remote.sh`
+plus the optional `bwrap` wrapper):
 
 | Run | Setup | Checked |
 |---|---|---|

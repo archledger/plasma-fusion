@@ -72,7 +72,7 @@ No configuration is needed; the defaults are the board values.
 | `popupGap` | 10 | px between the bar and the calendar card (the quick-settings pop-up uses 10 too) |
 | `widthBudget` | true | the top bar's width budget (TOP-2); off: only tablet posture collapses |
 | `menuPolicy` | `centre` | when the budget compacts the global menu: `centre` (whenever the pill cannot stay centred with the full menu, ADAPTIVE 5.1) or `overlap` (only when the bar would otherwise overlap; the pill may leave the middle) |
-| `menuSearch` | `false` | show the global menu's Search entry. Off because Plasma 6.7.5's applet crashes when you type in it after the active app rebuilt a submenu (Chrome's History does): it keeps pointers to deleted menu items. A KDE bug ([526561](https://bugs.kde.org/show_bug.cgi?id=526561)), reproduced with a stock panel; analysis and the upstream drafts in the shared project memory, `artifacts/plasma-fusion/2026-10-02-appmenu-crash/`. Arrowing right past the last menu skips the hidden entry and wraps to the first menu. The rebuilt plasma-workspace of `packaging/patches/plasma-workspace` (its README) carries the fix and names the action `appmenu-guarded`: the entry is shown there whatever the key says, and hidden again when a Fedora update replaces the rebuild. Settings: "Global menu: Show the Search entry" |
+| `menuSearch` | `false` | show the global menu's Search entry. Off because Plasma 6.7.5's applet crashes when you type in it after the active app rebuilt a submenu (Chrome's History does): it keeps pointers to deleted menu items. A KDE bug ([526561](https://bugs.kde.org/show_bug.cgi?id=526561)), reproduced with a stock panel; analysis and the upstream drafts in the appmenu crash record of 2026-10-02 (the maintainer's records). Arrowing right past the last menu skips the hidden entry and wraps to the first menu. The rebuilt plasma-workspace of `packaging/patches/plasma-workspace` (its README) carries the fix and names the action `appmenu-guarded`: the entry is shown there whatever the key says, and hidden again when a Fedora update replaces the rebuild. Settings: "Global menu: Show the Search entry" |
 | `menuCompacted` | false | internal: the budget compacted the global menu (and may switch it back) |
 | `debugAction` | "" | testing only: `dump-bar:TAG` logs the bar's widgets, the pill's offset and the budget step |
 
@@ -268,7 +268,7 @@ The layout places it right after the app name with its defaults (`compactView=fa
   bar at pill x + 12 (same), pill fill (32,36,54) vs (32,35,52) dark; bar fill (13,18,37) vs
   (12,17,36); pill centre 719.5 (721 on the board with its narrower date). Text caps start on the
   same row; Qt draws the 13 px glyphs 1 px shorter than the Chrome render.
-- Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-topbar/`:
+- Evidence: the shell-topbar build run of 2026-09-29 (the maintainer's records):
   `sbs-topbar-{dark,light}.png` (board rows vs build rows), `sbs-topbar-{dark,light}-zoom.png` (3x),
   `calendar-popup-{dark,light}.png`, `appmenu-light-hover-contrast.png`, `offscreen/`,
   `offscreen-{dark,light}.txt`, `dbuscalls.txt`, `vsession/tb-4`, `tb-5`, `tb-6` (full screenshots and logs),
@@ -398,7 +398,7 @@ Adversarial review of the part, integrated with every other part as they stand t
   thin space. The expectation is outdated, not the widget.
 - "Overview · Workspace N · Name" title during Overview: not implemented (accepted deviation).
 
-Evidence: `/mnt/archledger-gp/artifacts/plasma-fusion/2026-09-29-build/shell-topbar/`
+Evidence: the shell-topbar build run of 2026-09-29 (the maintainer's records), its files
 `review-topbar-{dark,light}.png`, `review-states-{dark,light}.png`,
 `review-launcher-state-sequence.png`, `review-appmenu-light-hover.png`, `review-settings-dark.png`,
 `review-full-{dark,light}-{dolphin,calendar}.png`, `review-test/` (scenarios, `pfinput.py`,
@@ -528,8 +528,8 @@ built by the lead directly.
   crashed both times. With the budget (ov3 x3, ov4, a start with the menu compact, a start in
   tablet portrait with changes inside the preload time x3, 15 rotations with app switches): no
   crash, and the menu goes back to full every time (it no longer stays compact until plasmashell
-  starts again; an interim version, cc1bce8, did that). Evidence:
-  artifacts/plasma-fusion/2026-09-30-deploy2/menu-fix/. `menuPolicy=overlap` compacts the menu only
+  starts again; an interim version, cc1bce8, did that). Evidence: the menu-fix deploy2 run of
+  2026-09-30 (the maintainer's records). `menuPolicy=overlap` compacts the menu only
   when the bar would otherwise overlap (the pill then leaves the middle), which keeps full menus far
   more often. The earlier plan to switch it from the tablet script's panel script was dropped when
   the crash was found; with the rebuild it would be possible again.
@@ -584,7 +584,7 @@ what the live chips would (board Island.dc.html, docs/parts/shell-livechips.md, 
 Board `design/boards/TabletSnap.dc.html` ("A place for every window"): iPadOS 26 tiles a window
 flicked by its top to an edge, ChromeOS and Windows 11 snap a window dragged to an edge; in tablet
 posture Plasma Fusion's windows have no title bar, and the window pill is their chrome. Research:
-`artifacts/plasma-fusion/2026-10-18-tablet-autosnap/research.md`.
+the tablet auto-snap research of 2026-10-18 (the maintainer's records).
 
 - **Hold and drag**: in tablet posture, the pill of an app held for 300 ms without moving 10 px
   (the dock's lift for its split drag) arms the drag: the pill takes its open look and grows to

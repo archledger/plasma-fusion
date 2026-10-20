@@ -59,4 +59,5 @@ extra line.
 Laptop (UX5406S, ASUS): `get` prints `85 -1` (an existing limit, no start threshold) and, since the
 TLP check (2026-10-02; TLP 1.10.2 with STOP_CHARGE_THRESH_BAT0=85 in /etc/tlp.d/01-charge-limit.conf),
 `managed=tlp`; `set` without root exits 77, `set 30` exits 64. ThinkPad (no TLP): `get` prints
-`100 0` only. ThinkPad hardware: see `artifacts/plasma-fusion/2026-10-01-tablet2/DEPLOY-2/`.
+`100 0` only. ThinkPad hardware: see the tablet2 DEPLOY-2 run of 2026-10-01 (the maintainer's
+records).
