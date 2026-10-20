@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Contract checks for Plasma Fusion's SDDM theme (packages/sddm-theme/).
+
+SDDM reads metadata.desktop for the theme's identity (docs/THEMING.md) and theme.conf for its
+options (GreeterApp.cpp: ThemeConfig from the metadata's ConfigFile). The theme takes no QML
+import beyond QtQuick and its own files - a login screen must survive missing optional modules.
+These checks run in CI (tools/build.d/91-sddm.sh) and fail on the version before each fix.
+
+    tests/contract_test.py [STAGE]     STAGE = build.sh's OUT (default: a throw-away build)
+"""
+
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = pathlib.Path(__file__).resolve().parent.parent
+REPO = HERE.parent.parent
+
+
+def check(name, ok, detail=""):
+    print(("PASS " if ok else "FAIL ") + name + ((" - " + detail) if detail and not ok else ""))
+    return ok
+
+
+def main() -> int:
+    stage = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else None
+    tmp = None
+    if stage is None:
+        tmp = tempfile.mkdtemp(prefix="sddm-contract-")
+        stage = pathlib.Path(tmp) / "stage"
+    ok = True
+    try:
+        built = subprocess.run([str(HERE / "build.sh"), str(stage)],
+                               capture_output=True, text=True)
+        ok &= check("build.sh stages the theme", built.returncode == 0, built.stderr[-400:])
+
+        theme = stage / "plasmafusion"
+        for name in ("Main.qml", "palette.js", "LoginCard.qml", "UserSwitcher.qml",
+                     "SessionPill.qml", "PowerBar.qml", "metadata.desktop", "theme.conf",
+                     "preview.webp"):
+            ok &= check(f"the theme ships {name}", (theme / name).is_file())
+
+        # metadata.desktop: the identity SDDM reads (docs/THEMING.md; KDE's Breeze theme)
+        meta = (theme / "metadata.desktop").read_text() if (theme / "metadata.desktop").is_file() else ""
+        for key, want in (("Type", "sddm-theme"), ("MainScript", "Main.qml"),
+                          ("ConfigFile", "theme.conf"), ("Theme-Id", "plasmafusion"),
+                          ("QtVersion", "6")):
+            ok &= check(f"metadata {key}={want}",
+                        re.search(rf"^{key}={re.escape(want)}$", meta, re.M) is not None)
+        ok &= check("metadata has MainScript and ConfigFile pointing at shipped files",
+                    (theme / "Main.qml").is_file() and (theme / "theme.conf").is_file())
+
+        # theme.conf: the one option the theme reads, substituted with a real path
+        conf = (theme / "theme.conf").read_text() if (theme / "theme.conf").is_file() else ""
+        m = re.search(r"^background=(.+)$", conf, re.M)
+        ok &= check("theme.conf sets background", m is not None)
+        if m:
+            ok &= check("theme.conf's background is an absolute path",
+                        m.group(1).startswith("/"), m.group(1))
+        ok &= check("theme.conf carries no unsubstituted placeholder", "@BACKGROUND@" not in conf)
+
+        # The theme stays dependency-free: QtQuick and its own files only
+        imports = []
+        for qml in theme.glob("*.qml"):
+            imports += re.findall(r'^import\s+(\S+)', qml.read_text(), re.M)
+        bad = sorted({i for i in imports if not (i.startswith('"') or i == "QtQuick")})
+        ok &= check("the QML imports only QtQuick and the theme's own files", not bad, ", ".join(bad))
+
+        # The QML parses: qmllint when it is installed, else a balanced-brace read
+        lint = shutil.which("qmllint")
+        if lint:
+            for qml in sorted(theme.glob("*.qml")):
+                run = subprocess.run([lint, str(qml)], capture_output=True, text=True)
+                clean = run.returncode == 0 and not re.search(r"error", run.stdout + run.stderr, re.I)
+                ok &= check(f"qmllint {qml.name}", clean, (run.stdout + run.stderr)[-300:])
+        else:
+            for qml in sorted(theme.glob("*.qml")):
+                text = qml.read_text()
+                ok &= check(f"{qml.name} has balanced braces",
+                            text.count("{") == text.count("}"), qml.name)
+
+        # build.sh is reproducible
+        again = stage.parent / (stage.name + "-again") if tmp else stage.parent / "stage-again"
+        built2 = subprocess.run([str(HERE / "build.sh"), str(again)], capture_output=True, text=True)
+        same = built2.returncode == 0
+        if same:
+            for f in sorted(theme.iterdir()):
+                twin = again / "plasmafusion" / f.name
+                same &= twin.is_file() and twin.read_bytes() == f.read_bytes()
+        ok &= check("two builds are byte-identical", same)
+    finally:
+        if tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
+        elif stage.parent.joinpath("stage-again").exists():
+            shutil.rmtree(stage.parent / "stage-again", ignore_errors=True)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

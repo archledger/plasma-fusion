@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# Plasma Fusion's SDDM theme (design/boards/Login.dc.html). SDDM reads this file for the theme's
+# identity (docs/THEMING.md): Type=sddm-theme, MainScript, ConfigFile; Theme-Id is the directory's
+# name; QtVersion=6 selects the Qt6 greeter (a Qt6 theme run by the Qt5 greeter fails outright).
+[SddmGreeterTheme]
+Name=Plasma Fusion
+Description=Plasma Fusion
+Author=Wisbendji Fimerlus
+Copyright=(c) 2026, Wisbendji Fimerlus
+License=GPL-2.0-or-later
+Type=sddm-theme
+Version=0.1
+Website=https://github.com/archledger/plasma-fusion
+Screenshot=preview.webp
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=plasmafusion
+Theme-API=2.0
+QtVersion=6
