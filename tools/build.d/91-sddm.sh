@@ -4,10 +4,11 @@
 #
 # SDDM login theme (packages/sddm-theme/, docs/parts/sddm.md). Nothing is staged into the HOME
 # tree - the theme is a system part (share/sddm/themes/plasmafusion) built by its build.sh and
-# installed by packaging/install-tree.sh; tools/system/greeter-apply.sh selects it. This runs its
-# contract checks (the metadata and theme.conf SDDM reads, the dependency-free QML, byte-identical
-# builds): packages/sddm-theme/tests/contract_test.py.
+# installed by packaging/install-tree.sh. Selection by greeter-apply.sh is a follow-up. This runs
+# the file/packaging contract and the actual theme with Qt key events and stand-in SDDM models;
+# no greeter daemon or session is contacted.
 set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 python3 "$ROOT/packages/sddm-theme/tests/contract_test.py"
-echo "  sddm -> contract checks (the theme is staged by packages/sddm-theme/build.sh)"
+QT_QPA_PLATFORM=offscreen python3 "$ROOT/packages/sddm-theme/tests/behavior_test.py"
+echo "  sddm -> contract + behavior checks (theme staged by packages/sddm-theme/build.sh)"

@@ -107,6 +107,18 @@ Rectangle {
         radius: 17
         color: "#14ffffff"
         Accessible.name: qsTr("Keyboard layout")
+        Accessible.role: Accessible.Button
+        activeFocusOnTab: true
+        border.color: activeFocus ? "#6aa9ff" : "transparent"
+        border.width: activeFocus ? 2 : 0
+        function advance() {
+            if (keyboard.layouts.length > 1) {
+                keyboard.currentLayout = (keyboard.currentLayout + 1) % keyboard.layouts.length;
+            }
+        }
+        Keys.onReturnPressed: advance()
+        Keys.onEnterPressed: advance()
+        Keys.onSpacePressed: advance()
 
         Text {
             id: keyboardLabel
@@ -122,7 +134,7 @@ Rectangle {
         }
         MouseArea {
             anchors.fill: parent
-            onClicked: keyboard.currentLayout = (keyboard.currentLayout + 1) % keyboard.layouts.length
+            onClicked: keyboardPill.advance()
         }
     }
 

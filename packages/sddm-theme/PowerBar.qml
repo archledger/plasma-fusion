@@ -51,13 +51,18 @@ Item {
 
         Rectangle {
             Accessible.name: button.label
+            Accessible.role: Accessible.Button
+            activeFocusOnTab: true
+            Keys.onReturnPressed: button.triggered()
+            Keys.onEnterPressed: button.triggered()
+            Keys.onSpacePressed: button.triggered()
             anchors.horizontalCenter: parent.horizontalCenter
             width: 44
             height: 44
             radius: 22
             color: button.danger ? Palette.danger : Palette.fill
-            border.color: button.danger ? Palette.danger : Palette.stroke
-            border.width: 1
+            border.color: activeFocus ? Palette.accent : (button.danger ? Palette.danger : Palette.stroke)
+            border.width: activeFocus ? 2 : 1
 
             Canvas {
                 id: canvas

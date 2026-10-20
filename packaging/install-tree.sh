@@ -150,8 +150,7 @@ else
   cp -a "$PLYMOUTH" "$dest/plasma-fusion/plymouth/plasma-fusion"
 fi
 
-# The SDDM login theme: always installed, unlike the boot splash, so tools/system/greeter-apply.sh
-# only selects it ([Theme] Current) and restoring the previous look leaves it installed.
+# The SDDM login theme: installed for manual selection; apply/restore integration is a follow-up.
 mkdir -p "$dest/sddm/themes"
 cp -a "$SDDM" "$dest/sddm/themes/plasmafusion"
 

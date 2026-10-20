@@ -5,7 +5,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 # The SDDM login screen
 
-Status: built, contract-tested and rendered under `sddm-greeter-qt6` in a container (the Login
+Status: built, contract/behavior-tested and rendered under `sddm-greeter-qt6` in a container (the Login
 board's look; see "Verification"); not yet installed on a system or in the release VMs.
 Source: [`packages/sddm-theme/`](../../packages/sddm-theme/).
 
@@ -62,16 +62,32 @@ Deviations from the board:
     packages/sddm-theme/build.sh build/sddm        # stage the theme (byte-identical)
     sddm-greeter-qt6 --test-mode --theme build/sddm/plasmafusion
 
-`packaging/install-tree.sh --sddm build/sddm` installs it as `share/sddm/themes/plasmafusion`;
-`tools/system/greeter-apply.sh` selects it on SDDM systems (and `greeter-restore.sh` puts the
-previous theme back). `sddm-greeter-qt6`'s flag is `--test-mode`; SDDM's theming document still
-says `--test`, which the Qt6 greeter rejects.
+`packaging/install-tree.sh --sddm build/sddm/plasmafusion` (alongside its stage and Plymouth
+arguments) installs it as `share/sddm/themes/plasmafusion`. Every channel passes the output root
+to the builder and the resulting theme directory to the installer. NixOS sets the wallpaper to
+`/run/current-system/sw/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png`, not `/usr/share`.
+The theme is available for manual selection in the distribution's SDDM settings; automatic
+apply/restore and the login check remain follow-up work. `tools/system/greeter-apply.sh` still
+handles plasma-login-manager only. Installing this theme changes neither the active display
+manager nor its authentication settings.
+
+`sddm-greeter-qt6`'s flag is `--test-mode`; SDDM's theming document still says `--test`, which the
+Qt6 greeter rejects.
 
 ## Tests
 
 - `packages/sddm-theme/tests/contract_test.py` (CI, `tools/build.d/91-sddm.sh`): the metadata and
   `theme.conf` contract, every shipped file, the dependency-free QML (imports checked), a QML
-  parse (`qmllint` when present), and two builds byte-identical - 26 checks.
+  parse (`qmllint` when present), two builds byte-identical, and the actual builder call from
+  every channel produces the installer's expected directory and NixOS wallpaper path.
+- `QT_QPA_PLATFORM=offscreen python3 packages/sddm-theme/tests/behavior_test.py` (CI through the
+  same build part): the staged `Main.qml` in a real `QQuickView`, SDDM-shaped model/proxy stand-ins
+  and Qt key events. Tab reaches the layout, session, power and reveal buttons; Left/Right move
+  account focus and Return/Space choose; session arrows, activation and Escape return focus to
+  the pill. Other user has a visible Username prompt. Account changes and failed logins clear the
+  password; undo/redo shortcuts cannot recover deleted input, including while it is revealed
+  (the same policy as the lock-screen PasswordField). Power/authentication dispatch is recorded
+  only by the stand-ins, never a daemon. QML warnings fail the suite.
 - The repository's QML checks (motion, a11y, id scope) cover the theme's files like every other
   part; the a11y check found the theme's ten unnamed interactive items before the first commit.
 

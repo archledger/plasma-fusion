@@ -115,6 +115,15 @@ Item {
                     clip: true
                     onAccepted: password.forceActiveFocus()
                 }
+                Text {
+                    anchors.fill: nameInput
+                    verticalAlignment: Text.AlignVCenter
+                    font.family: Palette.bodyFont
+                    font.pixelSize: 16
+                    color: Palette.inkMuted
+                    visible: nameInput.text === "" && nameInput.preeditText.length === 0
+                    text: qsTr("Username")
+                }
             }
 
             // The pill password field (48 high, radius 24, the accent ring when focused)
@@ -153,6 +162,12 @@ Item {
                     clip: true
                     onAccepted: card.loginRequested(card.promptName ? nameInput.text : "", text)
                     Keys.onEscapePressed: text = ""
+                    Keys.onPressed: event => {
+                        // Match the lock screen: deleted input must not be recoverable after reveal.
+                        if (event.matches(StandardKey.Undo) || event.matches(StandardKey.Redo)) {
+                            event.accepted = true;
+                        }
+                    }
                 }
                 Text {
                     anchors.fill: password
@@ -168,11 +183,24 @@ Item {
                 Item {
                     id: showPassword
                     Accessible.name: qsTr("Show password")
+                    Accessible.role: Accessible.Button
+                    activeFocusOnTab: true
                     property bool pressed: false
+                    Keys.onReturnPressed: pressed = !pressed
+                    Keys.onEnterPressed: pressed = !pressed
+                    Keys.onSpacePressed: pressed = !pressed
                     anchors.right: signIn.left
                     anchors.verticalCenter: parent.verticalCenter
                     width: 36
                     height: 36
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 18
+                        color: "transparent"
+                        border.color: Palette.accent
+                        border.width: showPassword.activeFocus ? 2 : 0
+                    }
 
                     // The eye: a lens, its pupil and a struck line while the text shows
                     Item {
@@ -216,6 +244,11 @@ Item {
                 Rectangle {
                     id: signIn
                     Accessible.name: qsTr("Sign in")
+                    Accessible.role: Accessible.Button
+                    activeFocusOnTab: true
+                    Keys.onReturnPressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
+                    Keys.onEnterPressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
+                    Keys.onSpacePressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
                     anchors.right: parent.right
                     anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter
@@ -223,6 +256,8 @@ Item {
                     height: 36
                     radius: 18
                     color: Palette.accentDeep
+                    border.color: Palette.accent
+                    border.width: activeFocus ? 2 : 0
 
                     Item {
                         anchors.centerIn: parent

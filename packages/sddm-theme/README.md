@@ -13,10 +13,11 @@ plasma-login-manager styling in [`tools/system/greeter-apply.sh`](../../tools/sy
 ## What it is
 
 `packages/sddm-theme/` is the theme source. `build.sh` stages it into a theme directory that
-`sddm-greeter` can run (`sddm-greeter --test --theme <dir>`), and
+`sddm-greeter-qt6` can run (`sddm-greeter-qt6 --test-mode --theme <dir>`), and
 [`packaging/install-tree.sh`](../../packaging/install-tree.sh) installs it as
-`share/sddm/themes/plasmafusion`. `tools/system/greeter-apply.sh` selects it for SDDM (and
-[`greeter-restore.sh`](../../tools/system/greeter-restore.sh) puts the previous theme back).
+`share/sddm/themes/plasmafusion`. This slice packages the theme for manual selection through
+the distribution's SDDM settings. Automatic apply/restore and the login check are follow-up work;
+`tools/system/greeter-apply.sh` still handles plasma-login-manager only.
 
 The theme is plain QtQuick with the models and the proxy object SDDM provides
 (SDDM `docs/THEMING.md`, v0.21.0): `sddm` (hostName, the power capabilities and methods,
@@ -50,10 +51,15 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
 
 - `tests/contract_test.py` (CI): the metadata and `theme.conf` contract (SDDM `docs/THEMING.md` and
   KDE's Breeze theme conventions), every referenced file exists in the staged theme, and the QML
-  parses (`qmllint`/`qmlformat` when present).
-- `tests/vsession/scenario-sddm.sh`: the theme under `sddm-greeter --test` in a private session on
-  the ThinkPad, screenshots compared against `design/previews/Login.webp` (the plasmalogin
-  greeter's preview harness shape, docs/parts/system.md).
+  parses (`qmllint` when present), builds are reproducible, and each channel's actual builder
+  invocation supplies the directory the installer expects (including the NixOS wallpaper path).
+- `tests/behavior_test.py` (CI via `tools/build.d/91-sddm.sh`): the staged `Main.qml` on real QtQuick
+  with SDDM-shaped model/proxy stand-ins, driven by Qt key events. Covers Tab, account arrows,
+  session selection, keyboard layouts, power dispatch, Other user, failed login, password reveal
+  and blocked undo. The stand-ins never authenticate or perform a power action.
+- The real `sddm-greeter-qt6 --test-mode` container render is recorded in
+  [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
+  scenario; the release-VM lane is follow-up work.
 
 ## Install and check
 
@@ -61,5 +67,5 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
     sddm-greeter-qt6 --test-mode --theme build/sddm/plasmafusion   # see it (the Qt6 greeter, per
                                                            # --help; the docs say --test, which it rejects)
 
-`greeter-apply.sh` (root) selects it on a system whose display manager is SDDM; on other display
-managers it reports and changes nothing.
+Installing the package does not change the active display manager, its theme or authentication
+settings. SDDM's apply/restore integration has not landed yet.

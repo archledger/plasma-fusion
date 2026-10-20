@@ -24,14 +24,13 @@ Item {
     signal userChosen(int index, string user, url icon, string name, string letter)
     signal otherRequested()
 
-    // Arrow-key cursor over the accounts and Other user: Left and Right move it, Return and
-    // Space activate it, exactly as a click would. The delegates' rings show the cursor.
+    // Arrow keys move focus, Return/Space choose. Selecting an account focuses its password,
+    // so arrows must not select it themselves or the next arrow would type into the password.
     readonly property int choiceCount: userModel.count + 1
     property int cursor: -1
     // Each delegate puts its row's data here (QAbstractItemModel has no get())
     property var rowsData: []
     function activateChoice(i) {
-        cursor = -1;
         cursor = i;
         if (i === userModel.count) {
             otherSelected = true;
@@ -44,21 +43,27 @@ Item {
                                 d ? d.name : "", d ? d.letter : "");
         }
     }
-    Keys.onLeftPressed: activateChoice(((cursor <= 0 ? choiceCount - 1 : cursor) + choiceCount - 1) % choiceCount)
-    Keys.onRightPressed: activateChoice((cursor + 1) % choiceCount)
-    Keys.onReturnPressed: { if (cursor < 0) { activateChoice(otherSelected ? choiceCount - 1 : selectedIndex); } event.accepted = true; }
-    Keys.onSpacePressed: { if (cursor < 0) { activateChoice(otherSelected ? choiceCount - 1 : selectedIndex); } event.accepted = true; }
+    function moveChoice(from, delta) {
+        const next = (from + delta + choiceCount) % choiceCount;
+        if (next === userModel.count) {
+            otherTile.forceActiveFocus();
+        } else {
+            userRepeater.itemAt(next).focusChoice();
+        }
+    }
 
     Row {
         id: row
         spacing: 28
 
         Repeater {
+            id: userRepeater
             model: userModel
             delegate: Column {
                 id: userColumn
                 spacing: 8
                 property bool selected: !switcher.otherSelected && switcher.selectedIndex === index
+                function focusChoice() { userTile.forceActiveFocus(); }
 
                 Component.onCompleted: {
                     switcher.rowsData[index] = { "user": String(model.name), "icon": model.icon || "",
@@ -82,8 +87,11 @@ Item {
                     height: 56
                     radius: 28
                     color: Palette.avatarFill
-                    border.color: (selected || activeFocus || switcher.cursor === index) ? Palette.accent : Palette.avatarRing
-                    border.width: (selected || activeFocus || switcher.cursor === index) ? 3 : 0
+                    border.color: (userColumn.selected || activeFocus) ? Palette.accent : Palette.avatarRing
+                    border.width: (userColumn.selected || activeFocus) ? 3 : 0
+                    onActiveFocusChanged: { if (activeFocus) { switcher.cursor = index; } }
+                    Keys.onLeftPressed: switcher.moveChoice(index, -1)
+                    Keys.onRightPressed: switcher.moveChoice(index, 1)
 
                     CircularImage {
                         anchors.fill: parent
@@ -109,19 +117,15 @@ Item {
                     Keys.onEnterPressed: switchTo()
                     Keys.onSpacePressed: switchTo()
                     function switchTo() {
-                        switcher.otherSelected = false;
-                        switcher.selectedIndex = index;
-                        switcher.userChosen(index, String(model.name), model.icon || "",
-                                            String(model.realName || model.name),
-                                            String(model.realName || model.name || "?").charAt(0).toUpperCase());
+                        switcher.activateChoice(index);
                     }
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     font.family: Palette.bodyFont
                     font.pixelSize: 13
-                    font.weight: selected ? Font.ExtraBold : Font.DemiBold
-                    color: selected ? Palette.ink : Palette.inkSoft
+                    font.weight: userColumn.selected ? Font.ExtraBold : Font.DemiBold
+                    color: userColumn.selected ? Palette.ink : Palette.inkSoft
                     text: String(model.realName || model.name || "")
                 }
             }
@@ -129,6 +133,7 @@ Item {
 
         // "Other user": the board's dashed tile
         Column {
+            id: otherColumn
             spacing: 8
             property bool selected: switcher.otherSelected
 
@@ -142,8 +147,11 @@ Item {
                 height: 56
                 radius: 28
                 color: Palette.fillField
-                border.color: (selected || activeFocus || switcher.cursor === userModel.count) ? Palette.accent : Palette.dashed
-                border.width: (selected || activeFocus || switcher.cursor === userModel.count) ? 1.5 : 1.5
+                border.color: (otherColumn.selected || activeFocus) ? Palette.accent : Palette.dashed
+                border.width: 1.5
+                onActiveFocusChanged: { if (activeFocus) { switcher.cursor = userModel.count; } }
+                Keys.onLeftPressed: switcher.moveChoice(userModel.count, -1)
+                Keys.onRightPressed: switcher.moveChoice(userModel.count, 1)
 
                 Item {
                     anchors.centerIn: parent
@@ -178,8 +186,7 @@ Item {
                 Keys.onEnterPressed: switchToOther()
                 Keys.onSpacePressed: switchToOther()
                 function switchToOther() {
-                    switcher.otherSelected = true;
-                    switcher.otherRequested();
+                    switcher.activateChoice(userModel.count);
                 }
             }
             Text {

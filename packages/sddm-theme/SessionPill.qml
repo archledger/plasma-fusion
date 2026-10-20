@@ -21,6 +21,24 @@ Item {
         index = i;
         selectedName = name;
         menu.open = false;
+        pill.forceActiveFocus();
+    }
+    function closeMenu() {
+        menu.open = false;
+        pill.forceActiveFocus();
+    }
+    function focusChoice(i) {
+        if (choices.count > 0) {
+            choices.itemAt((i + choices.count) % choices.count).forceActiveFocus();
+        }
+    }
+    function toggleMenu() {
+        menu.open = !menu.open;
+        if (menu.open) {
+            focusChoice(session.index);
+        } else {
+            pill.forceActiveFocus();
+        }
     }
 
     Rectangle {
@@ -28,10 +46,17 @@ Item {
         height: 40
         radius: 20
         color: Palette.fill
-        border.color: Palette.stroke
-        border.width: 1
+        border.color: activeFocus ? Palette.accent : Palette.stroke
+        border.width: activeFocus ? 2 : 1
         width: row.implicitWidth + 26
         Accessible.name: qsTr("Session: %1", "the chosen session's name").arg(session.selectedName)
+        Accessible.role: Accessible.Button
+        activeFocusOnTab: true
+        Keys.onReturnPressed: session.toggleMenu()
+        Keys.onEnterPressed: session.toggleMenu()
+        Keys.onSpacePressed: session.toggleMenu()
+        Keys.onDownPressed: { menu.open = true; session.focusChoice(session.index); }
+        Keys.onUpPressed: { menu.open = true; session.focusChoice(session.index); }
 
         Row {
             id: row
@@ -66,7 +91,7 @@ Item {
 
         MouseArea {
             anchors.fill: parent
-            onClicked: menu.open = !menu.open
+            onClicked: session.toggleMenu()
         }
     }
 
@@ -77,7 +102,7 @@ Item {
         visible: open
         anchors.bottom: pill.top
         anchors.bottomMargin: 8
-        anchors.horizontalCenter: pill.horizontalCenter
+        anchors.left: pill.left
         width: 240
         height: list.implicitHeight + 8
         radius: 12
@@ -91,14 +116,25 @@ Item {
             y: 4
             width: parent.width - 8
             Repeater {
+                id: choices
                 model: sessionModel
                 delegate: Rectangle {
                     width: list.width
                     height: 32
                     radius: 8
                     color: session.index === index ? Palette.fill : "transparent"
+                    border.color: Palette.accent
+                    border.width: activeFocus ? 2 : 0
 
                     Accessible.name: String(model.name || "")
+                    Accessible.role: Accessible.Button
+                    activeFocusOnTab: true
+                    Keys.onReturnPressed: session.choose(index, String(model.name || ""))
+                    Keys.onEnterPressed: session.choose(index, String(model.name || ""))
+                    Keys.onSpacePressed: session.choose(index, String(model.name || ""))
+                    Keys.onDownPressed: session.focusChoice(index + 1)
+                    Keys.onUpPressed: session.focusChoice(index - 1)
+                    Keys.onEscapePressed: session.closeMenu()
                     Component.onCompleted: {
                         // The model's first answer names the pill (lastIndex, else the first)
                         if (session.selectedName === "" && index === session.index) {
