@@ -71,7 +71,9 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   signs in without one. The metadata file's own data is CC0. Session choices announce selection,
   duplicate real names show the login name in the short tile caption, and both credential fields
   stay in the Tab chain. Failed Other-user logins return focus to the password, and staged QML
-  mtimes derive from content so upgrades invalidate Qt's cache.
+  mtimes derive from content so upgrades invalidate Qt's cache. A submitted credential is cleared
+  and re-masked immediately; one pending request blocks duplicate submission and account/session
+  changes until SDDM reports success or failure.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.

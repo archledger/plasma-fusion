@@ -24,6 +24,7 @@ Flickable {
     property int selectedIndex: userModel.lastIndex >= 0 ? userModel.lastIndex : 0
     property bool otherSelected: false
     property bool sent: false
+    property bool busy: false
     property string selectedUser: ""
     property url selectedIcon: ""
     property string selectedName: ""
@@ -74,6 +75,9 @@ Flickable {
         Qt.callLater(revealSelection);
     }
     function activateChoice(i) {
+        if (busy) {
+            return;
+        }
         cursor = i;
         if (i === userModel.count) {
             otherSelected = true;

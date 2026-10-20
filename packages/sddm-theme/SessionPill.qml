@@ -19,6 +19,7 @@ Item {
     property int index: sessionModel.lastIndex >= 0 ? sessionModel.lastIndex : 0
     property string selectedName: ""
     property bool resetting: false
+    property bool busy: false
     readonly property bool valid: !resetting && index >= 0 && index < choices.count
 
     function syncSelection() {
@@ -60,6 +61,9 @@ Item {
     Component.onCompleted: syncSelection()
 
     function choose(i, name) {
+        if (busy) {
+            return;
+        }
         index = i;
         selectedName = name;
         menu.open = false;
@@ -84,6 +88,9 @@ Item {
         viewport.contentY = Math.max(0, Math.min(wanted, list.implicitHeight - viewport.height));
     }
     function toggleMenu() {
+        if (busy) {
+            return;
+        }
         menu.open = !menu.open;
         if (menu.open) {
             focusChoice(session.index);

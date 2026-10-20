@@ -28,9 +28,14 @@ Rectangle {
     property url personIcon: ""
     property string personLetter: ""
     property string loginName: ""
+    // SDDM's login call is asynchronous; keep one request and its displayed identity stable.
+    property bool authenticating: false
     readonly property real footerTop: Math.min(session.y, powerButtons.y)
 
     function login(user, password) {
+        if (authenticating) {
+            return;
+        }
         const who = user !== "" ? user : loginName;
         if (who === "") {
             card.message = qsTr("Enter a username");
@@ -43,17 +48,24 @@ Rectangle {
             card.clearPassword();
             return;
         }
-        card.message = "";
+        authenticating = true;
+        card.message = qsTr("Signing in…");
+        // Do not leave a revealed credential on screen while PAM is pending.
+        card.clearPassword();
         sddm.login(who, card.passwordRequired ? password : "", session.index);
     }
 
     Connections {
         target: sddm
         function onLoginFailed() {
+            authenticating = false;
             card.message = qsTr("Login failed");
             card.clearPassword();
             // clearPassword focuses the name field for Other user; only the password was wrong.
             card.focusPasswordField();
+        }
+        function onLoginSucceeded() {
+            authenticating = false;
         }
         function onInformationMessage(message) {
             card.message = message;
@@ -159,6 +171,7 @@ Rectangle {
         y: Math.max(0, Math.min(Math.round(parent.height * 210 / 900),
                                root.footerTop - users.height - height - 32))
         width: 400
+        busy: root.authenticating
         heightBudget: Math.max(0, root.footerTop - users.height - 32)
         avatarSource: root.personIcon
         avatarLetter: root.personLetter
@@ -169,6 +182,7 @@ Rectangle {
     // ---- The user row (y 600 of 900: two thirds down, centred) ----
     UserSwitcher {
         id: users
+        busy: root.authenticating
         anchors.horizontalCenter: parent.horizontalCenter
         y: Math.max(card.y + card.height + 16,
                     Math.min(Math.round(parent.height * 600 / 900), root.footerTop - height - 16))
@@ -205,6 +219,7 @@ Rectangle {
     // ---- The session pill (bottom left) ----
     SessionPill {
         id: session
+        busy: root.authenticating
         x: 32
         maximumWidth: Math.max(0, (powerButtons.width > 0 ? powerButtons.x - 16 : root.width - 32) - x)
         menuBottomLimit: root.footerTop

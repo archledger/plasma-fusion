@@ -145,6 +145,10 @@ Qt6 greeter rejects.
   persistent QML cache keys on source time, so a single fixed date could make an upgraded Arch
   or NixOS system keep the previous compiled theme; identical content still yields identical
   bytes and times.
+  Submitting captures the credential, clears and re-masks the field immediately, then holds one
+  pending request: the card, account strip and session chooser stay blocked, with "Signing in…",
+  until `loginFailed` or `loginSucceeded`. A slow PAM response cannot be resubmitted or have its
+  displayed account/session changed underneath it.
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
@@ -183,6 +187,9 @@ Qt6 greeter rejects.
 - [SDDM reference theme](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/theme/Main.qml):
   `showPassword: model.needsPassword` and `sddm.login(model.name, password, sessionIndex)`.
   Our equivalent keeps a visible sign-in control and sends the empty password.
+- [SDDM GreeterProxy](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/GreeterProxy.h):
+  `login()` is asynchronous and results arrive as `loginFailed`/`loginSucceeded`; the theme holds
+  one pending request until one of those signals and clears the submitted credential meanwhile.
 - [Accessible selection](https://doc.qt.io/qt-6/qml-qtquick-accessible.html#selected-prop): the
   remembered and currently chosen account, Other user and the chosen session expose their
   selected state.

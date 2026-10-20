@@ -306,6 +306,10 @@ def main():
         activate(find(root, "Sign in"))
         check(proxy.logins == [("user6", "", 1)],
               "passwordless sign-in submits an empty password")
+        proxy.loginFailed.emit()
+        QTest.qWait(10)
+        check(not root.property("authenticating"),
+              "a failed passwordless attempt releases the pending state")
         press(view, person0, Qt.Key_Space)
         QTest.qWait(30)
         check(password.isVisible() and not no_password.isVisible(),
@@ -551,13 +555,25 @@ def main():
 
         username.setProperty("text", "unlisted")
         password.setProperty("text", "test-input")
+        reveal.setProperty("pressed", True)
         proxy.logins.clear()
         press(view, password, Qt.Key_Return)
         check(proxy.logins == [("unlisted", "test-input", 2)],
               "login submits the typed username and selected session to the stand-in only")
+        check(password.property("text") == "" and not reveal.property("pressed"),
+              "submission immediately clears and re-masks the credential")
+        check(root.property("authenticating"), "authentication remains pending until a result")
+        QMetaObject.invokeMethod(card, "submit")
+        check(len(proxy.logins) == 1, "a pending request cannot be submitted twice")
+        press(view, find(root, "Person 4"), Qt.Key_Space)
+        check(card.property("promptName") and username.property("text") == "unlisted",
+              "account selection is blocked while authentication is pending")
+        press(view, picker, Qt.Key_Return)
+        check(not option.isVisible(), "the session chooser is blocked while authentication is pending")
         reveal.setProperty("pressed", True)
         proxy.loginFailed.emit()
         QTest.qWait(10)
+        check(not root.property("authenticating"), "a failed result releases the pending state")
         check(password.property("text") == "", "failed login clears the password")
         check(not reveal.property("pressed"), "failed login resets password visibility")
         check(view.activeFocusItem() == password,
@@ -648,6 +664,8 @@ def main():
         password.setProperty("text", "test-input")
         press(view, password, Qt.Key_Return)
         check(proxy.logins == [("unlisted", "test-input", 0)], "recovered logins use the displayed session index")
+        proxy.loginFailed.emit()
+        QTest.qWait(10)
 
         # Screen readers activate Accessible.Button items through pressAction, which is separate
         # from their key and pointer handlers. Exercise every custom control in the theme.
@@ -669,6 +687,8 @@ def main():
         activate(find(root, "Sign in"))
         check(proxy.logins == [("unlisted", "test-input", 0)],
               "assistive press submits the sign-in fields")
+        proxy.loginFailed.emit()
+        QTest.qWait(10)
         activate(picker)
         recovered_choice = find(root, "Recovered")
         check(recovered_choice.isVisible(), "assistive press opens the session menu")

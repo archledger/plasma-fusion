@@ -20,6 +20,7 @@ Item {
     property bool promptName: false
     property string message: ""
     property bool passwordRequired: true
+    property bool busy: false
     property real heightBudget: Number.POSITIVE_INFINITY
     // Measure only the non-message pieces; the message budget must not depend on its own height.
     readonly property real baseHeight: avatarFrame.height + column.spacing + passwordRow.height
@@ -57,7 +58,9 @@ Item {
         }
     }
     function submit() {
-        loginRequested(promptName ? nameInput.text : "", passwordRequired ? password.text : "");
+        if (!busy) {
+            loginRequested(promptName ? nameInput.text : "", passwordRequired ? password.text : "");
+        }
     }
 
     Column {
@@ -143,6 +146,7 @@ Item {
                     Accessible.name: qsTr("Username")
                     // Raw TextInput is outside the Tab chain unless this is explicit.
                     activeFocusOnTab: true
+                    enabled: !card.busy
                     // Account names are case-sensitive; an autocapitalising IME must not change one.
                     inputMethodHints: Qt.ImhNoAutoUppercase
                     anchors.fill: parent
@@ -194,6 +198,7 @@ Item {
                     Accessible.name: qsTr("Password")
                     Accessible.passwordEdit: true
                     activeFocusOnTab: true
+                    enabled: !card.busy
                     // Qt suppresses a protected field's name; keep a static, non-secret description.
                     Accessible.description: qsTr("Password")
                     // Keep these hints when reveal switches echoMode to Normal (the lock-screen policy).
@@ -244,6 +249,7 @@ Item {
                 Item {
                     id: showPassword
                     visible: card.passwordRequired
+                    enabled: !card.busy
                     Accessible.name: qsTr("Show password")
                     Accessible.role: Accessible.Button
                     Accessible.checkable: true
@@ -308,6 +314,7 @@ Item {
                 // Sign in (36 px round, the board's deep blue arrow)
                 Rectangle {
                     id: signIn
+                    enabled: !card.busy
                     Accessible.name: qsTr("Sign in")
                     Accessible.role: Accessible.Button
                     activeFocusOnTab: true
