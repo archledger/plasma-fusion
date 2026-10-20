@@ -11,4 +11,5 @@ set -euo pipefail
 : "${ROOT:?}" "${STAGE:?}"
 python3 "$ROOT/packages/sddm-theme/tests/contract_test.py"
 QT_QPA_PLATFORM=offscreen python3 "$ROOT/packages/sddm-theme/tests/behavior_test.py"
-echo "  sddm -> contract + behavior checks (theme staged by packages/sddm-theme/build.sh)"
+QT_QPA_PLATFORM=offscreen python3 "$ROOT/packages/sddm-theme/tests/avatar_test.py"
+echo "  sddm -> contract + behavior + avatar checks (theme staged by packages/sddm-theme/build.sh)"

@@ -96,6 +96,10 @@ Qt6 greeter rejects.
   account viewport, focus-following scroll, pointer dragging and a narrow screen. Captions elide
   within the avatar width while each account's accessible name stays complete; the card's full
   name is bounded by the card too.
+- `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
+  avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
+  a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
+  change reproduces stale mask corners without the repaint handler.
 - The repository's QML checks (motion, a11y, id scope) cover the theme's files like every other
   part; the a11y check found the theme's ten unnamed interactive items before the first commit.
 

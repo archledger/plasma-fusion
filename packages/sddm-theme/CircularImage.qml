@@ -14,6 +14,8 @@ Item {
     id: root
     property url source: ""
     property color fill: "transparent"
+    onSourceChanged: canvas.requestPaint()
+    onFillChanged: canvas.requestPaint()
 
     Image {
         id: photo
