@@ -56,6 +56,7 @@ Item {
             Keys.onReturnPressed: button.triggered()
             Keys.onEnterPressed: button.triggered()
             Keys.onSpacePressed: button.triggered()
+            Accessible.onPressAction: button.triggered()
             anchors.horizontalCenter: parent.horizontalCenter
             width: 44
             height: 44

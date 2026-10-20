@@ -61,6 +61,10 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   composition clearing, replacement/empty/recovered session models, and complete instructions
   reachable through the bounded keyboard-scrollable `MessageView`. `tests/avatar_test.py`
   checks photo-mask pixels. The part page links the live Qt/SDDM sources behind these choices.
+- Assistive technology activates every custom button through the real Qt accessibility Press
+  action. The theme also opts out of full passwd enumeration so large directory-backed user
+  databases do not delay the greeter; Other user covers accounts outside the limited model.
+  `build.sh`'s header uses the Qt6 greeter's `--test-mode` command.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in
   [`docs/parts/sddm.md`](../../docs/parts/sddm.md). It is visual evidence, not an automated runtime
   scenario; the release-VM lane is follow-up work.

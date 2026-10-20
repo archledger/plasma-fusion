@@ -107,6 +107,7 @@ Item {
         Keys.onReturnPressed: session.toggleMenu()
         Keys.onEnterPressed: session.toggleMenu()
         Keys.onSpacePressed: session.toggleMenu()
+        Accessible.onPressAction: session.toggleMenu()
         Keys.onDownPressed: { menu.open = true; session.focusChoice(session.index); }
         Keys.onUpPressed: { menu.open = true; session.focusChoice(session.index); }
 
@@ -214,6 +215,7 @@ Item {
                         Keys.onReturnPressed: session.choose(index, String(model.name || ""))
                         Keys.onEnterPressed: session.choose(index, String(model.name || ""))
                         Keys.onSpacePressed: session.choose(index, String(model.name || ""))
+                        Accessible.onPressAction: session.choose(index, String(model.name || ""))
                         Keys.onDownPressed: session.focusChoice(index + 1)
                         Keys.onUpPressed: session.focusChoice(index - 1)
                         Keys.onEscapePressed: session.closeMenu()

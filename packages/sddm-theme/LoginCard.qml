@@ -213,6 +213,7 @@ Item {
                     Keys.onReturnPressed: pressed = !pressed
                     Keys.onEnterPressed: pressed = !pressed
                     Keys.onSpacePressed: pressed = !pressed
+                    Accessible.onPressAction: pressed = !pressed
                     anchors.right: signIn.left
                     anchors.verticalCenter: parent.verticalCenter
                     width: 36
@@ -273,6 +274,7 @@ Item {
                     Keys.onReturnPressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
                     Keys.onEnterPressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
                     Keys.onSpacePressed: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
+                    Accessible.onPressAction: card.loginRequested(card.promptName ? nameInput.text : "", password.text)
                     anchors.right: parent.right
                     anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter

@@ -18,7 +18,10 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 from PySide6.QtCore import (  # noqa: E402
     QAbstractListModel, QMetaObject, QModelIndex, QObject, QPoint, Property, Qt, QUrl, Signal, Slot,
 )
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QInputMethod, QInputMethodEvent  # noqa: E402
+from PySide6.QtGui import (  # noqa: E402
+    QAccessible, QAccessibleActionInterface, QColor, QGuiApplication, QImage, QInputMethod,
+    QInputMethodEvent,
+)
 from PySide6.QtQml import QQmlExpression, qmlContext  # noqa: E402
 from PySide6.QtQuick import QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -178,6 +181,19 @@ def visible_initial(root, letter):
 def press(view, item, key, modifier=Qt.NoModifier):
     item.forceActiveFocus()
     QTest.keyClick(view, key, modifier)
+    QTest.qWait(10)
+
+
+def activate(item):
+    """Invoke the accessibility Press action, not a key or pointer shortcut."""
+    interface = QAccessible.queryAccessibleInterface(item)
+    actions = interface.actionInterface() if interface is not None else None
+    press_name = QAccessibleActionInterface.pressAction()
+    available = actions is not None and press_name in actions.actionNames()
+    check(available, f"assistive press is available for {accessible(item) or 'control'}")
+    if not available:
+        return
+    actions.doAction(press_name)
     QTest.qWait(10)
 
 
@@ -554,6 +570,37 @@ def main():
         password.setProperty("text", "test-input")
         press(view, password, Qt.Key_Return)
         check(proxy.logins == [("unlisted", "test-input", 0)], "recovered logins use the displayed session index")
+
+        # Screen readers activate Accessible.Button items through pressAction, which is separate
+        # from their key and pointer handlers. Exercise every custom control in the theme.
+        keyboard.set_current(0)
+        activate(layout)
+        check(keyboard.current == 1, "assistive press changes the keyboard layout")
+        activate(reveal)
+        check(reveal.property("pressed"), "assistive press reveals the password")
+        activate(reveal)
+        check(not reveal.property("pressed"), "assistive press hides the password again")
+        activate(find(root, "Person 2"))
+        check(root.property("loginName") == "user2", "assistive press selects a listed account")
+        activate(find(root, "Other user"))
+        check(card.property("promptName") and view.activeFocusItem() == find(root, "Username"),
+              "assistive press selects Other user")
+        username.setProperty("text", "unlisted")
+        password.setProperty("text", "test-input")
+        proxy.logins.clear()
+        activate(find(root, "Sign in"))
+        check(proxy.logins == [("unlisted", "test-input", 0)],
+              "assistive press submits the sign-in fields")
+        activate(picker)
+        recovered_choice = find(root, "Recovered")
+        check(recovered_choice.isVisible(), "assistive press opens the session menu")
+        activate(recovered_choice)
+        check(session.property("index") == 0 and not recovered_choice.isVisible(),
+              "assistive press chooses a session")
+        for label, action in (("Sleep", "sleep"), ("Restart", "restart"), ("Shut down", "power")):
+            proxy.actions.clear()
+            activate(find(root, label))
+            check(proxy.actions == [action], f"assistive press triggers {label.lower()} once")
         check(not warnings, "theme behavior emits no unexpected QML warnings")
         for warning in warnings:
             print("QML", warning)

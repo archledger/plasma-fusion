@@ -118,6 +118,12 @@ Qt6 greeter rejects.
   grows within the remaining card space. Overflow remains reachable by Tab, arrows and Page
   Up/Down (Home/End also work); long instructions, caps lock and Other user are covered together
   at 480 px height without covering account/footer controls. No elision discards the instruction.
+  Every custom `Accessible.Button` handles the accessibility Press action as well as keys and
+  pointer input; the suite invokes the real `QAccessible` action for layout, reveal, sign-in,
+  sessions, accounts, Other user and all power controls.
+  `theme.conf` sets `needsFullUserModel=false`: SDDM 0.21 otherwise walks the complete passwd
+  directory (including large NSS directories). Other user covers accounts beyond the limited
+  model, and the remembered account remains available as SDDM adds it explicitly.
 - `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
   avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
   a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
@@ -143,6 +149,14 @@ Qt6 greeter rejects.
   boundaries but also wraps overlong words, unlike `WordWrap` alone.
 - [Image loading status](https://doc.qt.io/qt-6/qml-qtquick-image.html#status-prop): a nonempty URL
   does not imply a loaded photo; the initial remains available during Loading or Error.
+- [Accessible press action](https://doc.qt.io/qt-6/qml-qtquick-accessible.html#pressAction-signal):
+  `Accessible.Button` alone does not activate a custom item from a screen reader; every such
+  control defines `Accessible.onPressAction`, and tests invoke that real Qt action.
+- [SDDM GreeterApp partitioning](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/GreeterApp.cpp):
+  `needsFullUserModel` defaults to true and rebuilds the model around the theme's choice; the
+  Qt6 parser defines `test-mode`, not `test`.
+- [SDDM UserModel enumeration](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/greeter/UserModel.cpp):
+  without all users it stops at the avatar threshold and explicitly adds the remembered account.
 - [Flickable](https://doc.qt.io/qt-6/qml-qtquick-flickable.html) and
   [Keys](https://doc.qt.io/qt-6/qml-qtquick-keys.html): the message's measured content height, clipped
   viewport and keyboard paging stay in core QtQuick; no optional controls module is required.

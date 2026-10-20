@@ -65,6 +65,25 @@ def main() -> int:
             ok &= check("theme.conf's background is an absolute path",
                         m.group(1).startswith("/"), m.group(1))
         ok &= check("theme.conf carries no unsubstituted placeholder", "@BACKGROUND@" not in conf)
+        ok &= check("theme.conf opts out of enumerating the whole user directory",
+                    re.search(r"^needsFullUserModel=false$", conf, re.M) is not None)
+
+        # The documented smoke command must be the Qt6 greeter's real option.
+        build_header = (HERE / "build.sh").read_text()
+        ok &= check("build.sh documents the Qt6 greeter's --test-mode",
+                    "sddm-greeter-qt6 --test-mode --theme OUT/plasmafusion" in build_header)
+        ok &= check("build.sh documents no Qt5-only --test command",
+                    re.search(r"sddm-greeter\s+--test(?:\s|`)", build_header) is None)
+
+        # Each custom Accessible.Button must expose the assistive press action as well as keys
+        # and pointer input; behavior_test.py invokes the action on the staged controls.
+        buttons = presses = 0
+        for qml in theme.glob("*.qml"):
+            source = qml.read_text()
+            buttons += source.count("Accessible.role: Accessible.Button")
+            presses += source.count("Accessible.onPressAction:")
+        ok &= check("every custom accessible button handles the press action",
+                    buttons > 0 and presses >= buttons, f"{presses} press handlers for {buttons} buttons")
 
         # Split the marker so REUSE does not parse the test string as this file's license.
         doc_license = "SPDX-" + "License-Identifier: CC-BY-SA-4.0"

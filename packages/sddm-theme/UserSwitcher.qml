@@ -144,6 +144,7 @@ Flickable {
                     Keys.onReturnPressed: switchTo()
                     Keys.onEnterPressed: switchTo()
                     Keys.onSpacePressed: switchTo()
+                    Accessible.onPressAction: switchTo()
                     function switchTo() {
                         switcher.activateChoice(index);
                     }
@@ -222,6 +223,7 @@ Flickable {
                 Keys.onReturnPressed: switchToOther()
                 Keys.onEnterPressed: switchToOther()
                 Keys.onSpacePressed: switchToOther()
+                Accessible.onPressAction: switchToOther()
                 function switchToOther() {
                     switcher.activateChoice(userModel.count);
                 }

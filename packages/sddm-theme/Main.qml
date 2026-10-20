@@ -125,6 +125,7 @@ Rectangle {
         Keys.onReturnPressed: advance()
         Keys.onEnterPressed: advance()
         Keys.onSpacePressed: advance()
+        Accessible.onPressAction: advance()
 
         Text {
             id: keyboardLabel

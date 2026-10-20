@@ -2,9 +2,9 @@
 # SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
 # SPDX-License-Identifier: GPL-2.0-or-later
 #
-# Stage Plasma Fusion's SDDM theme (packages/sddm-theme/) into a theme directory that sddm-greeter
-# runs: `sddm-greeter --test --theme OUT/plasmafusion`. Reproducible: the same tree twice gives
-# byte-identical output.
+# Stage Plasma Fusion's SDDM theme (packages/sddm-theme/) into a theme directory the Qt6 greeter
+# runs: `sddm-greeter-qt6 --test-mode --theme OUT/plasmafusion`. Reproducible: the same tree twice
+# gives byte-identical output.
 #
 #   packages/sddm-theme/build.sh OUT [BACKGROUND]
 #
