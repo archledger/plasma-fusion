@@ -65,8 +65,8 @@ are welcome in GitHub Discussions; the way decisions are made is in
    dracut. Since then: the SDDM theme and its apply and restore (2026-10-21, checked on real boots
    of Debian testing, Ubuntu 26.10, Arch and Fedora 44 in the release VMs), and the boot splash
    installer for dracut beyond Fedora (Debian testing and Ubuntu 26.10 build with it now),
-   mkinitcpio and initramfs-tools (2026-10-21, as root in containers of each system); a boot
-   splash check on real boots in the release VMs is next.
+   mkinitcpio and initramfs-tools (2026-10-21, as root in containers of each system), and the
+   splash on real boots of all five release VMs (2026-10-21, `splashtest.sh`).
 9. **Upstream.** Send fixes found here to KDE where they belong, such as GTK font sizes that
    follow fractional Qt font sizes (kde-gtk-config).
 

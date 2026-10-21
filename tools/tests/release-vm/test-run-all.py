@@ -19,10 +19,12 @@ class RunAllTest(unittest.TestCase):
             shutil.copy2(HERE / "run-all.sh", root / "run-all.sh")
             (root / "vmtest.sh").write_text("#!/bin/bash\nset -eu\n"
                 'mkdir -p "$PF_VM_HOME/results/$1"\n' + child)
-            # The SDDM lane writes NAME-sddm and records how it was called
-            (root / "sddmtest.sh").write_text("#!/bin/bash\nset -eu\n"
-                'echo "$1 $2" >>"$PF_VM_HOME/sddm-calls"\nset -- "$1-sddm" "$2"\n'
-                'mkdir -p "$PF_VM_HOME/results/$1"\n' + child)
+            # The SDDM and boot splash lanes write NAME-sddm and NAME-splash and record how they
+            # were called
+            for lane_name in ("sddm", "splash"):
+                (root / f"{lane_name}test.sh").write_text("#!/bin/bash\nset -eu\n"
+                    f'echo "$1 $2" >>"$PF_VM_HOME/{lane_name}-calls"\nset -- "$1-{lane_name}" "$2"\n'
+                    'mkdir -p "$PF_VM_HOME/results/$1"\n' + child)
             for name in names:
                 if name not in missing:
                     (root / "vms" / name).mkdir(parents=True)
@@ -30,6 +32,8 @@ class RunAllTest(unittest.TestCase):
                 env={**os.environ, "PF_VM_HOME": directory, "PF_PUBLIC": "1"}, capture_output=True, text=True)
             calls = root / "sddm-calls"
             self.sddm_calls = calls.read_text().splitlines() if calls.exists() else []
+            calls = root / "splash-calls"
+            self.splash_calls = calls.read_text().splitlines() if calls.exists() else []
             return result
 
     def test_child_failure_propagates(self):
@@ -67,6 +71,20 @@ class RunAllTest(unittest.TestCase):
                                    lane="deb:sddm")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("first-sddm: FAIL: the greeter", result.stdout)
+
+    def test_splash_entry_runs_the_splash_lane(self):
+        result = self.run_campaign('echo "done $1" >"$PF_VM_HOME/results/$1/steps.log"\nexit 0\n',
+                                   lane="deb:splash")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.splash_calls, ["first deb"])
+        self.assertEqual(self.sddm_calls, [])
+        self.assertIn("first-splash: done first-splash", result.stdout)
+
+    def test_splash_failure_marker_is_not_a_pass(self):
+        result = self.run_campaign('echo "FAIL: no frame" >"$PF_VM_HOME/results/$1/steps.log"\nexit 0\n',
+                                   lane="deb:splash")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("first-splash: FAIL: no frame", result.stdout)
 
 
 if __name__ == "__main__":

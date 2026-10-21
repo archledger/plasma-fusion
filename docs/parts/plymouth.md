@@ -329,10 +329,10 @@ theme or the alternative as before, `plymouthd.conf` byte for byte, Arch's `HOOK
 the script plugin has a console viewer, each rebuilt image must hold the text plugin its builder
 copies, and `--remove-plugin` must remove every package the installer installed.
 `PF_PLYMOUTH_KERNEL` names the installed kernel there (in a container the running one is the
-host's), `PF_PLYMOUTH_CMDLINE` a command line file. 2026-10-21, all pass: Fedora 44 with dracut (13
-checks; `plymouth-plugin-script` installed and removed again), Debian testing with dracut (13) and
-with initramfs-tools (13), Ubuntu 26.10 with dracut (13) and with initramfs-tools (13), both from
-`bgrt` chosen automatically, and Arch with mkinitcpio (14; Plymouth installed by the installer, the
+host's), `PF_PLYMOUTH_CMDLINE` a command line file. 2026-10-21, all pass: Fedora 44 with dracut (14
+checks; `plymouth-plugin-script` installed and removed again), Debian testing with dracut (15) and
+with initramfs-tools (15), Ubuntu 26.10 with dracut (16) and with initramfs-tools (15), both from
+`bgrt` chosen automatically, and Arch with mkinitcpio (16; Plymouth installed by the installer, the
 hook through the drop-in, both removed again). From the first review: Ubuntu with a theme chosen by
 hand after the install keeps it and loses ours from the alternative; Arch with a preset that also
 builds a unified kernel image (`PF_PLYMOUTH_UKI=1`: both backed up, rebuilt and checked); Arch with
@@ -342,6 +342,25 @@ images rebuilt, the uninstall still rebuilds (it checks every image, not only th
 third: a preset naming its own configuration without the hook (`PF_PLYMOUTH_PRESET_CONFIG=1`) is
 refused with nothing changed. Debian's initramfs-tools hook needs fontconfig
 (`/etc/fonts/fonts.conf`), which a desktop has and a bare container does not.
+
+## Real boots in the release VMs (2026-10-21)
+
+`tools/tests/release-vm/splashtest.sh` (docs/parts/release-tests.md) boots a release VM with
+`quiet splash` and compares the screen with the Splash board, frame by frame over QMP: the stock
+boot must differ, the boot after `plymouth-install.sh --select` must match, and after the
+installer's uninstall the boot must differ again with the stock theme back. Plymouth's own log
+(`plymouth.debug`) must show a pixel display and the script running, and no boot may crash. On
+main at `f1c0597`, Fedora 44, Arch, Debian testing, Ubuntu 26.10 and KDE neon all pass, each with a
+largest region delta of 3.6 against a tolerance of 6. The VMs have one 1280x800 display, so these
+boots check factor 1 only (see Scaling).
+
+The lane found two faults, both fixed: the installer's apt calls failed while unattended-upgrades
+held dpkg's lock (#106), and on Ubuntu 26.10 plymouthd crashed, its backtrace on the screen instead
+of the splash. There the script plugin needs a text plugin that Ubuntu packs on its own
+(`plymouth-label-ft`), so `--select` now installs it (#107). Plymouth fixed the crash itself after
+26.134.222 (`88c8dd8`, "script: check if console_viewer is enabled"). In the VMs the splash shows
+for 1.4 s (Ubuntu 26.10) to 9.7 s (Arch); on Debian testing and Ubuntu 26.10 the display came only
+after the switch to the installed system.
 
 ## Verification (2026-10-01, on the laptop)
 

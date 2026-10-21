@@ -34,11 +34,13 @@ tools/tests/release-vm/build-all.sh [COMMIT]   # every channel's packages, built
 tools/tests/release-vm/run-all.sh              # the VM tests, one after another
 # the SDDM login screen on real boots, on the systems whose display manager is SDDM (needs Pillow)
 tools/tests/release-vm/run-all.sh debian-testing:deb:sddm ubuntu2610:ppa:sddm arch:aur:sddm fedora44:copr:sddm
+# the boot splash on real boots, on every system with an installer lane (needs Pillow)
+tools/tests/release-vm/run-all.sh fedora44:copr:splash arch:aur:splash ubuntu2610:ppa:splash debian-testing:deb:splash neon:deb:splash
 ```
 
 | Script | What |
 |---|---|
-| `vm.sh` | create, start (base or a fresh run overlay), wait, ssh as `pf` with the test key, QEMU screendump, stop (over ssh, then ACPI) |
+| `vm.sh` | create, start (base or a fresh run overlay; QEMU's monitor on `mon.sock`, its QMP on `qmp.sock`), wait, ssh as `pf` with the test key, QEMU screendump, stop (over ssh, then ACPI) |
 | `provision.sh`, `prov-*.sh` | the cloud image with cloud-init (user `pf`, sudo, the test key), Plasma (Fedora: updates and `@kde-desktop-environment`; Arch: `plasma-meta`; Ubuntu and Debian: `kde-plasma-desktop`, on Debian the generic kernel, whose virtio-gpu driver KWin needs; neon: neon's archive and `neon-desktop`), then `prov-common.sh`: getty logs `pf` in on tty1 and `startplasma-wayland` runs there (no display manager, the same on every system) |
 | `build-all.sh` | the candidate: `tools/tests/packages/` for Fedora, Arch, Debian testing, Ubuntu 26.10, neon and the shared `.deb`, each built, installed and checked (QML imports and QML parsing included) in a container of its system |
 | `channels.sh` | from the candidate: a dnf repository (Copr's place), an apt repository (the PPA's), a release directory with `SHA256SUMS` signed by a throwaway key (never the release key), the Arch source, and the installer, served on 127.0.0.1:8088 |
@@ -46,9 +48,11 @@ tools/tests/release-vm/run-all.sh debian-testing:deb:sddm ubuntu2610:ppa:sddm ar
 | `check-copytext.sh` | in the session: `Start()` on the bus, then the overlay's "shown in" line in the journal (the user's, or the system journal for the user where there is none), KWin's refusal ("no picture of") or no answer failing; the overlay ended by the PID the bus names, and a pass whose overlay is not found on the bus or cannot be ended failing |
 | `sddmtest.sh NAME LANE` | the SDDM login screen on real boots, in one VM from its base: SDDM made the display manager in place of the tty1 login (installed where the base lacks it, with the display server its greeter runs on: Fedora's `sddm-wayland-plasma`, Arch's `xorg-server`, Debian's and Ubuntu's `xserver-xorg-core`) and the test user given a password; the installer as `vmtest.sh` runs it, which must offer the login screen step; a reboot to the system's own greeter (`--check` exits 1; the screenshot must not look like the Login board); `greeter-apply.sh`; a reboot to the Plasma Fusion greeter: SDDM must start it with `--theme /usr/share/sddm/themes/plasmafusion`, no greeter message may name the theme's files (Qt's own components warn without them), and the screenshot must match the Login board (`greeter-compare.py`); the password typed through QEMU's monitor must start a session for the user from SDDM (`loginctl`: `Service=sddm`), whose `plasma-fusion status` names the login screen; no crash; the installer's `uninstall`, which restores the login screen; SDDM's files without the theme; a reboot to the system's own theme again, no crash. Results in `NAME-sddm/` (`steps.log`, the journals of each boot, the screenshots and their comparisons) |
 | `greeter-compare.py SHOT` | a greeter screenshot against `design/previews/Login.webp` where the board shows only its background (four regions: mid-left, the sun, the far right, the hills between the session pill and the power buttons), the board scaled and cropped to the screen as the theme fills it: each region's mean colour within 4/255 (`--expect match`) or some region more than 12/255 off (`--expect differ`, another theme). Needs Pillow (on NixOS `nix-shell -p python3Packages.pillow`) |
-| `lane-env.sh` | the installer and its test-mode environment for one lane (sourced by `vmtest.sh` and `sddmtest.sh`) |
+| `splashtest.sh NAME LANE` | the boot splash on real boots, in one VM from its base: the kernel arguments of a desktop's boot through the system's boot loader (`quiet splash`; `plymouth.ignore-serial-consoles`, since the VMs also log to a serial console and Plymouth then shows only its text splash; `plymouth.debug` for Plymouth's log; Fedora's `grubby`, a drop-in in `/etc/default/grub.d` on Debian, Ubuntu and neon, `/etc/default/grub` on Arch); the installer as `vmtest.sh` runs it, which must offer the boot splash step; a reboot with the system's own splash (installing the package never changes it), which must not look like the Splash board; `plymouth-install.sh --select`, which must select the theme; a reboot with it: one frame must match the board (`splash-capture.py`), Plymouth's log must show a pixel display (not the text splash) and the script plugin; no crash; the installer's `uninstall`, which leaves no theme and the system's theme selected again (on Arch, which had no Plymouth, not Plasma Fusion's); a reboot without the board's look. Each captured boot runs without the tty1 log-in, since Plasma Fusion's log-in splash (KSplash) looks like the board too: the lane sets the base's autologin drop-in aside before the reboot and logs in after the capture, and the desktop must start. Results in `NAME-splash/` (`steps.log`, each boot's command line, Plymouth's log and capture: `frames.tsv`, the closest frame, the first match, the last frame and a sheet of every frame) |
+| `splash-capture.py QMP OUT -- CMD` | runs `CMD` (the reboot), waits for QEMU's `RESET` event, then a screendump every 0.3 s for 60 s (`PF_SPLASH_SECONDS` in `splashtest.sh`), only the frames that changed kept in order; each measured against `design/previews/Splash.webp`: the logo's three circles where the theme centres its 1440x900 frame at the scale its script picks, the wallpaper where the script scales it to cover the screen (the sun, a plain area, the lower middle, the top): every region within 6/255 in some frame (`--expect match`) or more than 18/255 off in every frame (`--expect differ`). Needs Pillow |
+| `lane-env.sh` | the installer and its test-mode environment for one lane (sourced by `vmtest.sh`, `sddmtest.sh` and `splashtest.sh`) |
 | `refresh.sh NAME...` | each base updated the way its system updates itself (Fedora: `dnf upgrade`, with the RPM database verified, and rebuilt if it fails, before the upgrade and after it; Arch: `pacman -Syu`; KDE neon: `apt-get full-upgrade --allow-downgrades`, as neon's updater; Ubuntu, Debian: `apt-get full-upgrade`; on the apt systems `apt-get update --error-on=any`, since without it an index that failed to download is only a warning and the update exits 0; NixOS: nothing), the Plasma versions after; a failed update, or a VM that cannot be stopped after it, fails it |
-| `run-all.sh` | `channels.sh`, then `vmtest.sh` for each VM (`sddmtest.sh` for a `NAME:LANE:sddm` entry) |
+| `run-all.sh` | `channels.sh`, then `vmtest.sh` for each VM (`sddmtest.sh` for a `NAME:LANE:sddm` entry, `splashtest.sh` for `NAME:LANE:splash`) |
 
 Results: `$PF_VM_HOME/results/NAME/` (`steps.log`, the installer's output, status, logs and the
 screenshots). Things the harness itself shows that are not Plasma Fusion's: on Ubuntu, a logout and
@@ -103,6 +107,46 @@ Then all four passed on `548c9ee` (the merged `517bd03`), each from a fresh over
 | Fedora 44 | 6.7.5 | 0.21.0-13, Wayland (`sddm-wayland-plasma`) | `01-breeze-fedora` (100.7) | as Debian (1.0); no keyboard button on Wayland, as designed | as Debian | `01-breeze-fedora`, no crash |
 
 Evidence: the project ledger's artifacts, `plasma-fusion/2026-10-21-sddm-vm-lane/run3-548c9ee/`.
+
+## What the splash lane found (2026-10-21)
+
+The first runs of `splashtest.sh`, on a candidate from `5ac4240` (the merged #105):
+
+| System | Found | Fix |
+|---|---|---|
+| every system | Plymouth showed only its text splash: the VMs log to a serial console (`console=ttyS0`), and with a serial console active Plymouth manages the consoles alone, with details forced (`ply-device-manager.c`, `create_devices_from_terminals`, 24.004.60 and 26.134.222). | The lane adds `plymouth.ignore-serial-consoles`, Plymouth's own switch for it, next to `quiet splash`. A desktop has no serial console. |
+| every system | Plasma Fusion's log-in splash (KSplash) looks like the Splash board, so a capture running into the session could match without Plymouth. | Each captured boot runs without the tty1 log-in, which follows the capture. |
+| Ubuntu 26.10 | The installer failed: unattended-upgrades held dpkg's lock. Its daily run catches up at a random time within the first hour after a boot, and started at the second the installer did; `apt-get` gives up at once, where `apt` waits. | The installer waits for the lock as apt does (#106; docs/parts/installer.md). |
+| Ubuntu 26.10 | The boot showed plymouthd's backtrace instead of the splash: Plymouth's script plugin dereferenced a missing console viewer, which it has when no text plugin can be loaded (fixed upstream after 26.134.222), and Ubuntu packs the FreeType one on its own. | `plymouth-install.sh` brings the text plugin where the script plugin needs it (#107; docs/parts/plymouth.md). |
+| Arch | `pacman` timed out against the mirrors while `plymouth-install.sh` installed Plymouth. | The lane downloads Plymouth into pacman's cache first, three tries; the installer's own `pacman -S` installs it from there. |
+| KDE neon | The installer's apt dry run failed ("held broken packages"): the base was at Plasma 6.7, the candidate built against neon's 6.8.1. | `refresh.sh neon` before the round, as the steps say. |
+
+Then a final round on main at `f1c0597` (#106 and #107 merged): every channel built again, the
+candidate's own installer served, no change by hand. All five pass, with no crash on any boot:
+
+| System | Stock boot | After `--select` | After the uninstall | Kept by the uninstall |
+|---|---|---|---|---|
+| Fedora 44 | `bgrt`, differs (219.1) | matches (3.6) | `bgrt`, differs (214.5) | `plymouth-plugin-script` |
+| Arch | no splash, differs (254.9) | matches (3.6) | `bgrt`, differs (219.1) | `plymouth` |
+| Debian testing | `ceratopsian`, differs (205.0) | matches (3.6) | `ceratopsian`, differs (205.0) | nothing installed |
+| Ubuntu 26.10 | no splash, differs (218.8) | matches (3.6) | no splash, differs (232.2) | `plymouth-label-ft` |
+| KDE neon | `breeze`, differs (240.4) | matches (3.6) | `breeze`, differs (233.3) | nothing installed |
+
+The figures are the closest frame's largest region delta (a match needs 6 or less, a difference
+more than 18). Arch shows `bgrt` after the uninstall because the Plymouth the splash installer
+added stays and then runs from the installed system; `plymouth-uninstall.sh --remove-plugin`
+removes it. Debian's `plymouth-label` holds both text plugins and was already installed.
+
+How long the splash shows in the VMs (Plymouth's log, from the pixel display added to removed, on
+the boot after `--select`; the first round, then the final): Arch 9.4 and 9.7 s and KDE neon 6.1
+and 5.3 s, from 1.5 to 2.1 s into the boot, in the initramfs; Debian testing 1.5 s and Ubuntu 26.10
+1.4 s both times, the display coming only after the switch to the installed system (from 5.5 s).
+Fedora 44 varies: 2.1 s with the display after the switch, then 4.5 s with it in the initramfs from
+2.4 s; two of its six captured boots had it there. The lane takes a frame every 0.3 s: two or more
+matched the board on each (after the fade-in).
+
+Evidence: the project ledger's artifacts, `plasma-fusion/2026-10-21-splash-vm-lane/`
+(`candidate-5ac4240/` and `final-f1c0597/`).
 
 ## Final round
 
