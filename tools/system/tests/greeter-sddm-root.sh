@@ -117,6 +117,17 @@ for how in setpriv "no setpriv"; do
     ok "apply refuses a theme tree only root can read ($how)" || bad "0700 apply ($how)" "$OUT"
   OUT=$(PATH=$p bash "$APPLY" --check 2>&1); RC=$?
   [ "$RC" = 1 ] && has "unreadable for sddm" && ok "  root's check reads it as sddm ($how)" || bad "  0700 check ($how)" "$OUT"
+  # A public theme tree below a directory that user cannot pass (ThemeDir under /srv/private, 0700)
+  mkdir -p /srv/private/themes
+  cp -a "$T" /srv/private/themes/
+  chmod 0755 /srv/private/themes/plasmafusion
+  chmod 0700 /srv/private
+  mkdir -p /etc/sddm.conf.d
+  printf '[Theme]\nThemeDir=/srv/private/themes\n' >/etc/sddm.conf.d/00-themedir.conf
+  OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
+  [ "$RC" = 1 ] && has "cannot be read by SDDM's greeter user" && ok "  a tree below a directory sddm cannot pass is refused ($how)" ||
+    bad "  0700 parent ($how)" "$OUT"
+  rm -rf /etc/sddm.conf.d/00-themedir.conf /srv/private
   # The same tree readable for SDDM's group only: the greeter reads it
   chgrp -R sddm "$T"
   chmod 0750 "$T"

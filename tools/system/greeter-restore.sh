@@ -257,11 +257,12 @@ key_value() { # $1 file, $2 section, $3 key
     v = substr(l, index(l, "=") + 1); sub(/^[ \t\r\f\v]+/, "", v); sub(/[ \t\r\f\v]+$/, "", v); print v }'
 }
 
-# Whether SDDM's QDir::LocaleAware listing may order drop-in $1 against kde_settings.conf otherwise
-# than byte order does (greeter-apply.sh sddm_order_depends_on_locale: only a first difference in
-# a lower-case ASCII letter or digit on both sides, or one name beginning with the other, is sure).
-order_depends_on_locale() { # $1 file name
-  local a=$1 b=kde_settings.conf i=0 x y
+# Whether SDDM's QDir::LocaleAware listing may order drop-ins $1 and $2 (default kde_settings.conf)
+# otherwise than byte order does (greeter-apply.sh sddm_order_depends_on_locale: only a first
+# difference in a lower-case ASCII letter or digit on both sides, or one name beginning with the
+# other, is sure).
+order_depends_on_locale() { # $1 file name, [$2 file name]
+  local a=$1 b=${2:-kde_settings.conf} i=0 x y
   while [ "$i" -lt "${#a}" ] && [ "$i" -lt "${#b}" ]; do
     x=${a:i:1} y=${b:i:1}
     if [ "$x" != "$y" ]; then
@@ -276,18 +277,23 @@ order_depends_on_locale() { # $1 file name
 }
 # The file whose [Theme] KEY SDDM reads last - SDDM 0.21 reads /usr/lib/sddm/sddm.conf.d/*, then
 # /etc/sddm.conf.d/* (each sorted, as greeter-apply.sh orders them), then /etc/sddm.conf - with
-# the two files this restore changes taken from SDDM_ROOT. Empty when no file sets it; "?" when a
-# drop-in that sets it may be read before or after kde_settings.conf depending on the locale (then
-# the run's value is not known to decide it, and nothing is put back over the drop-in).
+# the two files this restore changes taken from SDDM_ROOT. Empty when no file sets it; "?" when
+# another file of its directory that sets the key may be read after it depending on the locale:
+# one with another value, or either being kde_settings.conf (the run's value there is what is to
+# be decided; nothing is then put back over the drop-in). Files that do not set the key do not
+# count, kde_settings.conf among them.
 deciding_file() { # $1 key
-  local f last=''
+  local f i last
+  local -a files=() dirs=() values=()
   while IFS= read -r f; do
     [ -n "$(key_lines "$f" Theme "$1")" ] || continue
-    last=$f
-    if [ "${f%/*}" = "$SYSROOT/etc/sddm.conf.d" ] && order_depends_on_locale "${f##*/}"; then
-      printf '?'
-      return
-    fi
+    files+=("$f") values+=("$(key_value "$f" Theme "$1")")
+    # Where SDDM lists it: kde_settings.conf comes from SDDM_ROOT, among /etc's drop-ins
+    case $f in
+      "$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf" | "$SYSROOT/etc/sddm.conf.d/"*) dirs+=(etc) ;;
+      "$SYSROOT/usr/lib/sddm/sddm.conf.d/"*) dirs+=(vendor) ;;
+      *) dirs+=(conf) ;;
+    esac
   done < <(
     # -H: a configuration directory that is itself a link is listed too, as SDDM's QDir lists it
     find -H "$SYSROOT/usr/lib/sddm/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' -xtype f 2>/dev/null | LC_ALL=C sort
@@ -296,7 +302,19 @@ deciding_file() { # $1 key
       printf 'kde_settings.conf\t%s\n' "$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf"
     } | LC_ALL=C sort | cut -f2-
     printf '%s\n' "$SDDM_ROOT/etc/sddm.conf")
-  printf '%s' "$last"
+  [ "${#files[@]}" -gt 0 ] || return 0
+  last=$((${#files[@]} - 1))
+  if [ "${dirs[last]}" != conf ]; then
+    for ((i = 0; i < last; i++)); do
+      [ "${dirs[i]}" = "${dirs[last]}" ] && order_depends_on_locale "${files[i]##*/}" "${files[last]##*/}" || continue
+      if [ "${values[i]}" != "${values[last]}" ] || [ "${files[i]##*/}" = kde_settings.conf ] ||
+        [ "${files[last]##*/}" = kde_settings.conf ]; then
+        printf '?'
+        return
+      fi
+    done
+  fi
+  printf '%s' "${files[last]}"
 }
 
 undo_sddm() { # $1 backup directory of an SDDM run

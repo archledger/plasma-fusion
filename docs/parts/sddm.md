@@ -149,7 +149,8 @@ in such an order stop it as well: the theme, and its `theme.conf.user`, would be
 which SDDM resolves from its own working directory, not the caller's. The
 run also stops when the theme cannot be read by SDDM's greeter user (the greeter runs as `sddm`,
 not root; as root the check runs as that user with `setpriv`, or without it - a minimal Fedora has
-`util-linux-core` only - reads the mode bits as the kernel does for that user, ACLs aside), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
+`util-linux-core` only - reads the mode bits as the kernel does for that user, ACLs aside, on the
+tree and on every directory above it), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
 `QtVersion=6`, and without that greeter SDDM shows its own theme) is missing, when the theme's
 directory is writable by anyone but root or one of the three files is a link (root would copy what
 it points to, and the rename would replace a link managed elsewhere), on NixOS
@@ -380,14 +381,17 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   Follow-up (#100): two drop-ins read after `kde_settings.conf` with different themes in a
   locale-dependent order make `--check` exit 2 and stop `apply`, an unprivileged check of a theme
   file it cannot read exits 2, restore keeps `Current` when `ThemeDir` points elsewhere since, and a
-  linked `kde_settings.conf` keeps its choice over `/etc/sddm.conf`'s old line.
+  linked `kde_settings.conf` keeps its choice over `/etc/sddm.conf`'s old line; and a `ThemeDir`
+  drop-in whose order against `kde_settings.conf` depends on the locale counts as unchanged when
+  `kde_settings.conf` does not set `ThemeDir` (only files that set a key decide it).
 - `tools/system/tests/greeter-sddm-root.sh` (CI, the build workflow's `sddm-root` job; it refuses
   to run outside a container or `PF_DISPOSABLE_SYSTEM=1`): the same scripts as root on the
   container's own files with Fedora 44's sddm package - apply and restore leave the system's files
   as they were, `kde_settings.conf` and `theme.conf.user` are written `root:root` 0644, a
   `root:sddm` 0640 `/etc/sddm.conf` keeps its owner, group and mode through apply and restore, a
   `root:sddm` 0640 `theme.conf.user` gets them back, a theme tree only root can read is refused
-  (with `setpriv` and without it) while one readable for SDDM's group is taken, an unprivileged
+  (with `setpriv` and without it), as is one below a directory `sddm` cannot pass (a `ThemeDir`
+  under a 0700 `/srv/private`), while one readable for SDDM's group is taken, an unprivileged
   check of it exits 2, and a theme tree others can write to is refused.
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,

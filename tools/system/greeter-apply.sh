@@ -377,11 +377,12 @@ sddm_themedir_unordered() {
 # greeter runs as that user, not as root (Greeter.cpp: setUser("sddm")), and falls back to SDDM's
 # own theme without it. As root the check runs as user sddm; otherwise as the caller.
 sddm_unreadable_theme() { # $1 theme directory
-  local g
-  local -a mine=() r=() d=()
+  local g up
+  local -a mine=() can=() r=() rx=()
   if [ "$(id -u)" != 0 ] || [ -n "$SYSROOT" ] || ! getent passwd sddm >/dev/null; then
     find "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null || printf '%s\n' "$1"
   elif command -v setpriv >/dev/null; then
+    # (a directory above the tree that user cannot pass makes find fail: the tree is reported)
     setpriv --reuid=sddm --regid="$(id -g sddm)" --init-groups --no-new-privs -- \
       find "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null || printf '%s\n' "$1"
   else
@@ -392,12 +393,22 @@ sddm_unreadable_theme() { # $1 theme directory
       [ "${#mine[@]}" = 0 ] || mine+=(-o)
       mine+=(-group "$g")
     done
-    for g in r rx; do
-      d=(\( -user sddm -perm "-u=$g" \) -o \( ! -user sddm \( "${mine[@]}" \) -perm "-g=$g" \)
+    for g in x r rx; do
+      can=(\( -user sddm -perm "-u=$g" \) -o \( ! -user sddm \( "${mine[@]}" \) -perm "-g=$g" \)
         -o \( ! -user sddm ! \( "${mine[@]}" \) -perm "-o=$g" \))
-      [ "$g" = rx ] || r=("${d[@]}")
+      case $g in
+        x)
+          # Every directory above the tree must let that user through
+          up=$1
+          while [ "$up" != / ]; do
+            up=$(dirname -- "$up")
+            [ -z "$(find "$up" -maxdepth 0 ! \( "${can[@]}" \) -print 2>/dev/null)" ] || { printf '%s\n' "$up"; return; }
+          done ;;
+        r) r=("${can[@]}") ;;
+        rx) rx=("${can[@]}") ;;
+      esac
     done
-    find "$1" \( -type d ! \( "${d[@]}" \) -o ! -type d ! \( "${r[@]}" \) \) -print -quit 2>/dev/null ||
+    find "$1" \( -type d ! \( "${rx[@]}" \) -o ! -type d ! \( "${r[@]}" \) \) -print -quit 2>/dev/null ||
       printf '%s\n' "$1"
   fi
 }

@@ -460,6 +460,18 @@ restore
   bad "themedir moved" "$OUT
 $(cat "$R/$KDE" "$R/etc/sddm.conf")"
 
+# --- one drop-in sets ThemeDir and orders against kde_settings.conf by the locale ("K-theme.conf"):
+# kde_settings.conf does not set ThemeDir, so that order does not matter; ThemeDir is unchanged and
+# the run is undone in full
+fresh d15b
+printf '[Theme]\nCurrent=breeze\n' >"$R/etc/sddm.conf"
+printf '[Theme]\nThemeDir=/usr/share/sddm/themes\n' >"$R/etc/sddm.conf.d/K-theme.conf"
+apply
+restore
+[ "$RC" = 0 ] && ! has "ThemeDir is" && [ ! -e "$R/$KDE" ] && grep -qx 'Current=breeze' "$R/etc/sddm.conf" &&
+  ok "restore: a ThemeDir drop-in of locale-dependent order against kde_settings.conf counts as unchanged" ||
+  bad "themedir drop-in vs kde_settings.conf" "$OUT"
+
 # --- kde_settings.conf replaced by a link since, with the run's theme: left alone, and
 # /etc/sddm.conf's old theme line does not come back over it
 fresh d16
