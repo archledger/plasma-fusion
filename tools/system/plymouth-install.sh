@@ -256,7 +256,8 @@ if ! command -v plymouth >/dev/null || [ ! -f "$(plugin_dir)script.so" ]; then
     case $PKG in
       dnf) run dnf install -y "$PLUGIN_PKG" ;;
       pacman) run pacman -S --needed --noconfirm "$PLUGIN_PKG" ;;
-      apt) run env DEBIAN_FRONTEND=noninteractive apt-get install -y "$PLUGIN_PKG" ;;
+      # (waiting for dpkg's lock as apt does, up to 10 minutes: scripts/install.sh, APT_LOCK)
+      apt) run env DEBIAN_FRONTEND=noninteractive apt-get install -y "$PLUGIN_PKG" -o DPkg::Lock::Timeout=600 ;;
     esac
     [ "$DRY" = 1 ] || { mkdir -p "$STATE"; echo "$PLUGIN_PKG" > "$STATE/installed-packages"; }
     [ "$DRY" = 1 ] || [ -f "$(plugin_dir)script.so" ] ||

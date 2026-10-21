@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Installer on Debian, Ubuntu and KDE neon:** the package steps wait (up to 10 minutes, as apt
+  says) while another package manager holds dpkg's lock, instead of failing at once; unattended
+  upgrades, which catch up at a random time in the first hour after a boot, made an install fail
+  that way in the release tests. `apt-get update` is tried three times, 15 s apart.
 - **Boot splash beyond Fedora:** `sudo /usr/share/plasma-fusion/tools/system/plymouth-install.sh
   --select` now also works on Arch, Debian testing, Ubuntu 26.10 and KDE neon: it finds the
   system's initramfs builder (dracut, mkinitcpio or initramfs-tools) and how it selects a theme
