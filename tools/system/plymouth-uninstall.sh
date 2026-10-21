@@ -13,8 +13,10 @@
 #   --all-kernels    rebuild the initramfs of every installed kernel, not only the running one
 #                    (Arch: mkinitcpio -P rebuilds every preset anyway)
 #   --keep-files     leave /usr/share/plymouth/themes/plasma-fusion in place
-#   --remove-plugin  also remove the package plymouth-install.sh installed for the script plugin
-#                    (Fedora plymouth-plugin-script; Arch, Debian, Ubuntu plymouth)
+#   --remove-plugin  also remove the packages plymouth-install.sh installed for the script plugin
+#                    and its text plugin
+#                    (Fedora plymouth-plugin-script; Arch, Debian, Ubuntu plymouth; Ubuntu
+#                    plymouth-label-ft, Debian plymouth-label)
 #   --dry-run        print what would be done
 #
 # The greeting choice remembered by plymouth-install.sh --user/--name is forgotten too.
@@ -233,11 +235,13 @@ if [ "$KEEP" = 0 ] && [ -d "$THEMES/$NAME" ]; then
   fi
   run rm -rf "$THEMES/$NAME"
 fi
-pkg=$(cat "$STATE/installed-packages" 2>/dev/null || true)
-if [ "$PLUGIN" = 1 ] && [ -n "$pkg" ]; then
-  if command -v dnf >/dev/null; then run dnf remove -y "$pkg"
-  elif command -v pacman >/dev/null; then run pacman -R --noconfirm "$pkg"
-  elif command -v apt-get >/dev/null; then run env DEBIAN_FRONTEND=noninteractive apt-get remove -y "$pkg" -o DPkg::Lock::Timeout=600
+# (One package a line: the script plugin's, the text plugin's)
+pkgs=()
+[ ! -s "$STATE/installed-packages" ] || mapfile -t pkgs < <(grep -v '^$' "$STATE/installed-packages")
+if [ "$PLUGIN" = 1 ] && [ "${#pkgs[@]}" -gt 0 ]; then
+  if command -v dnf >/dev/null; then run dnf remove -y "${pkgs[@]}"
+  elif command -v pacman >/dev/null; then run pacman -R --noconfirm "${pkgs[@]}"
+  elif command -v apt-get >/dev/null; then run env DEBIAN_FRONTEND=noninteractive apt-get remove -y "${pkgs[@]}" -o DPkg::Lock::Timeout=600
   fi
   [ "$DRY" = 1 ] || rm -f "$STATE/installed-packages"
 fi

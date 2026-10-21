@@ -39,8 +39,9 @@
 #   --layout LABEL   keyboard layout label shown next to the unlock field (default: derived from
 #                    /etc/vconsole.conf, e.g. "us" -> "EN" as Plasma shows it); "none" hides it
 #   --no-packages    do not install Plymouth's script plugin (Fedora: plymouth-plugin-script with
-#                    dnf; Arch, Debian, Ubuntu: plymouth with pacman or apt-get); fail if it is
-#                    missing. --no-dnf is the same
+#                    dnf; Arch, Debian, Ubuntu: plymouth with pacman or apt-get) or the text plugin
+#                    a newer script plugin needs (Ubuntu: plymouth-label-ft; Debian:
+#                    plymouth-label); fail if one is missing. --no-dnf is the same
 #   --dry-run        print what would be done
 #
 # Without --select only the files are installed: /usr/share/plymouth/themes/plasma-fusion/.
@@ -240,31 +241,61 @@ echo "greeting: ${names[0]:-(no name)} ($why)"
 
 # 2. Plymouth's script plugin (Fedora ships it separately; Arch installs no Plymouth by default).
 plugin_dir() { plymouth --get-splash-plugin-path 2>/dev/null; }
-if ! command -v plymouth >/dev/null || [ ! -f "$(plugin_dir)script.so" ]; then
-  if [ "$DNF" = 1 ] && [ -n "$PKG" ]; then
-    # A package transaction now changes the package database that a prepared offline update
-    # (Discover, dnf offline) was computed against. Refuse when one is scheduled for the next
-    # boot; mention it when one is only prepared.
-    if [ -e /system-update ]; then
-      echo "plymouth-install: an offline update is scheduled for the next boot (/system-update)." >&2
-      echo "  Install it first (reboot), or install $PLUGIN_PKG yourself and re-run with --no-packages." >&2
-      exit 1
-    fi
-    if [ -f /usr/lib/sysimage/libdnf5/offline/offline-transaction-state.toml ]; then
-      echo "note: a prepared offline update exists; it has to be prepared again after this dnf transaction"
-    fi
-    case $PKG in
-      dnf) run dnf install -y "$PLUGIN_PKG" ;;
-      pacman) run pacman -S --needed --noconfirm "$PLUGIN_PKG" ;;
-      # (waiting for dpkg's lock as apt does, up to 10 minutes: scripts/install.sh, APT_LOCK)
-      apt) run env DEBIAN_FRONTEND=noninteractive apt-get install -y "$PLUGIN_PKG" -o DPkg::Lock::Timeout=600 ;;
-    esac
-    [ "$DRY" = 1 ] || { mkdir -p "$STATE"; echo "$PLUGIN_PKG" > "$STATE/installed-packages"; }
-    [ "$DRY" = 1 ] || [ -f "$(plugin_dir)script.so" ] ||
-      { echo "plymouth-install: Plymouth's script plugin is still missing after installing $PLUGIN_PKG" >&2; exit 1; }
-  else
-    echo "plymouth-install: Plymouth's script plugin (script.so) is missing: install $PLUGIN_PKG" >&2
+# A package of Plymouth's, installed with the system's package manager and recorded for
+# plymouth-uninstall.sh --remove-plugin; with --no-packages (or no known package manager) a stop
+# naming it. $1 the package, $2 the file it brings to Plymouth's plugin directory, $3 what that is.
+install_plymouth_pkg() {
+  if [ "$DNF" != 1 ] || [ -z "$PKG" ]; then
+    echo "plymouth-install: $3 ($2) is missing: install $1" >&2
     exit 1
+  fi
+  # A package transaction now changes the package database that a prepared offline update
+  # (Discover, dnf offline) was computed against. Refuse when one is scheduled for the next
+  # boot; mention it when one is only prepared.
+  if [ -e /system-update ]; then
+    echo "plymouth-install: an offline update is scheduled for the next boot (/system-update)." >&2
+    echo "  Install it first (reboot), or install $1 yourself and re-run with --no-packages." >&2
+    exit 1
+  fi
+  if [ -f /usr/lib/sysimage/libdnf5/offline/offline-transaction-state.toml ]; then
+    echo "note: a prepared offline update exists; it has to be prepared again after this dnf transaction"
+  fi
+  case $PKG in
+    dnf) run dnf install -y "$1" ;;
+    pacman) run pacman -S --needed --noconfirm "$1" ;;
+    # (waiting for dpkg's lock as apt does, up to 10 minutes: scripts/install.sh, APT_LOCK)
+    apt) run env DEBIAN_FRONTEND=noninteractive apt-get install -y "$1" -o DPkg::Lock::Timeout=600 ;;
+  esac
+  [ "$DRY" = 1 ] || { mkdir -p "$STATE"; grep -qsx -- "$1" "$STATE/installed-packages" || echo "$1" >> "$STATE/installed-packages"; }
+  [ "$DRY" = 1 ] || [ -f "$(plugin_dir)$2" ] ||
+    { echo "plymouth-install: $3 is still missing after installing $1" >&2; exit 1; }
+}
+if ! command -v plymouth >/dev/null || [ ! -f "$(plugin_dir)script.so" ]; then
+  install_plymouth_pkg "$PLUGIN_PKG" script.so "Plymouth's script plugin"
+fi
+# 2b. Plymouth's text (label) plugin where the script plugin has a console viewer (Plymouth after
+#     24.004.60, whose script.so calls ply_console_viewer_*). Without a label plugin Plymouth makes
+#     no viewer, but the script plugin's refresh shows or hides one on each display all the same
+#     (script-lib-sprite.c, script_lib_sprite_refresh; fixed upstream by 88c8dd8, 2026-05-20, in
+#     no release yet, 26.134.222 the latest): plymouthd crashes as the splash starts (Ubuntu
+#     26.10, where the plugin is a package of its own, 2026-10-21). The theme draws its own text
+#     and needs the plugin for nothing else. The image needs the one its builder copies:
+#     label-freetype.so with dracut (Plymouth's plymouth-populate-initrd) and mkinitcpio (Arch's
+#     hook), label-pango.so with initramfs-tools (Debian's and Ubuntu's hook). Plymouth moves to
+#     the installed system during the boot and loads it from there too.
+LABEL_SO=
+if [ -f "$(plugin_dir)script.so" ] && grep -q ply_console_viewer "$(plugin_dir)script.so"; then
+  case $BUILDER in initramfs-tools) LABEL_SO=label-pango.so ;; *) LABEL_SO=label-freetype.so ;; esac
+  if [ ! -f "$(plugin_dir)$LABEL_SO" ]; then
+    case $PKG:$LABEL_SO in
+      dnf:*) LABEL_PKG=plymouth-plugin-label ;;
+      # Ubuntu packs the FreeType one on its own; Debian's plymouth-label has both
+      apt:label-freetype.so)
+        if apt-cache show plymouth-label-ft >/dev/null 2>&1; then LABEL_PKG=plymouth-label-ft; else LABEL_PKG=plymouth-label; fi ;;
+      apt:*) LABEL_PKG=plymouth-label ;;
+      *) LABEL_PKG=plymouth ;;
+    esac
+    install_plymouth_pkg "$LABEL_PKG" "$LABEL_SO" "Plymouth's text plugin, which its script plugin needs here"
   fi
 fi
 
@@ -449,13 +480,15 @@ if [ "$DRY" = 0 ]; then
   for img in "${IMAGES[@]}"; do
     # (Read the listing first: "lsinitrd | grep -q" fails under pipefail when grep exits early.)
     listing=$("$LIST" "$img")
-    if grep -q "usr/share/plymouth/themes/$NAME/$NAME.script" <<< "$listing" &&
-       grep -q "plymouth/script.so" <<< "$listing"; then
-      echo "initramfs $img contains the $NAME theme and the script plugin"
-    else
+    if ! grep -q "usr/share/plymouth/themes/$NAME/$NAME.script" <<< "$listing" ||
+       ! grep -q "plymouth/script.so" <<< "$listing"; then
       echo "plymouth-install: $img does not contain the theme; roll back with plymouth-uninstall.sh" >&2
       exit 1
+    elif [ -n "$LABEL_SO" ] && ! grep -q "plymouth/$LABEL_SO" <<< "$listing"; then
+      echo "plymouth-install: $img does not contain Plymouth's text plugin ($LABEL_SO), without which plymouthd stops as the splash starts; roll back with plymouth-uninstall.sh" >&2
+      exit 1
     fi
+    echo "initramfs $img contains the $NAME theme and the script plugin${LABEL_SO:+ (and $LABEL_SO)}"
   done
 fi
 echo "selected; previous initramfs kept as ${IMAGES[*]/%/.pre-$NAME}"

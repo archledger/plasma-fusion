@@ -4,7 +4,8 @@
 #
 # tools/system/plymouth-install.sh --select and plymouth-uninstall.sh as root on a system's own
 # initramfs builder and Plymouth, with an installed kernel: the theme selected and in the rebuilt
-# image with Plymouth's script plugin, the state from before put back by the uninstall (the theme
+# image with Plymouth's script plugin (and, where that plugin has a console viewer, the text plugin
+# the builder copies), the state from before put back by the uninstall (the theme
 # or the default.plymouth alternative, plymouthd.conf byte for byte, Arch's mkinitcpio hooks), the
 # image without it, the backups and the files gone. It changes /boot, /etc and /usr/share/plymouth,
 # so it runs only as root in a throw-away container (PF_DISPOSABLE_SYSTEM=1 allows another machine
@@ -118,16 +119,32 @@ printf 'BOOT_IMAGE=/vmlinuz root=/dev/vda1 ro quiet\n' >"$WORK/cmdline-plain"
 printf 'BOOT_IMAGE=/vmlinuz root=/dev/vda1 ro quiet splash\n' >"$WORK/cmdline-splash"
 set +e
 
+installed() { # $1 a package
+  rpm -q "$1" >/dev/null 2>&1 || pacman -Q "$1" >/dev/null 2>&1 ||
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+}
+
 # --- install and select
 OUT=$(PF_PLYMOUTH_CMDLINE=$WORK/cmdline-plain bash "$INSTALL" --select --name Alex "$THEME" 2>&1); RC=$?
 [ "$RC" = 0 ] && has "contains the $NAME theme and the script plugin" && ok "install --select ($BUILDER)" || bad "install --select" "$OUT"
 [ "$(current_theme)" = "$NAME" ] && ok "  $NAME is the selected theme" || bad "  selected theme: $(current_theme)"
+# A script plugin with a console viewer (Plymouth after 24.004.60) needs a text plugin in the image,
+# or plymouthd crashes as the splash starts: the one the builder copies
+label=''
+if grep -q ply_console_viewer "$(plymouth --get-splash-plugin-path)script.so" 2>/dev/null; then
+  label='label-freetype.so'
+  [ "$BUILDER" != initramfs-tools ] || label='label-pango.so'
+fi
 for img in "${IMAGES[@]}"; do
   l=$("$LIST" "$img" 2>/dev/null)
   grep -q "usr/share/plymouth/themes/$NAME/$NAME.script" <<<"$l" && grep -q "plymouth/script.so" <<<"$l" &&
     ok "  $img holds the theme and script.so" || bad "  $img without the theme"
+  [ -z "$label" ] || { grep -q "plymouth/$label" <<<"$l" &&
+    ok "  $img holds $label (the script plugin's console viewer needs a text plugin)" || bad "  $img without $label"; }
   [ -f "$img.pre-$NAME" ] && ok "  $img.pre-$NAME kept" || bad "  no backup of $img"
 done
+mapfile -t recorded < <(cat /var/lib/plasma-fusion/plymouth/installed-packages 2>/dev/null)
+echo "installed by the installer: ${recorded[*]:-nothing}"
 has 'the kernel command line has no "splash"' && ok "  a command line without splash is named" || bad "  splash note" "$OUT"
 if [ "$BUILDER" = mkinitcpio ]; then
   [ -f /etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf ] &&
@@ -162,6 +179,9 @@ if [ "$BUILDER" = mkinitcpio ]; then
 fi
 [ ! -e "/usr/share/plymouth/themes/$NAME" ] && [ ! -e /var/lib/plasma-fusion/plymouth ] && ok "  the files and the state removed" ||
   bad "  files or state left" "$(ls -la /usr/share/plymouth/themes /var/lib/plasma-fusion 2>&1)"
+for p in "${recorded[@]}"; do
+  ! installed "$p" && ok "  $p, which the installer installed, removed (--remove-plugin)" || bad "  $p still installed"
+done
 
 # --- Arch with the plymouth hook already in HOOKS (no drop-in of ours) and two images: another
 # theme selected by hand and only the first image rebuilt; the uninstall must still rebuild, since
