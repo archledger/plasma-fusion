@@ -50,8 +50,14 @@ on a real boot, Debian testing, 2026-10-21). On an X11 greeter the theme puts `V
 (an `InputPanel`) in its scene, which takes the keyboard over; it shows only after the board's
 accessibility button (top right, next to the layout pill: "On-screen keyboard", a checkable button)
 and while Qt's input method asks for a keyboard, along the bottom, with the sign-in card moved above
-it. KDE's Breeze theme does the same with a footer button. A Wayland greeter's keyboard is the
-compositor's (Fedora runs KWin with `--inputmethod plasma-keyboard`), so there the theme adds none.
+it. KDE's Breeze theme does the same with a footer button. When the keyboard goes (focus left the
+text fields, or its own hide key) the button is off again, so a later focus opens nothing by itself.
+The button is offered only once Qt's input method has asked for a keyboard: Qt's virtual keyboard
+does at once (the password field starts focused), a greeter started with another input method
+(`InputMethod=` empty, as Fedora and Arch ship it) never does. Qt allows one `InputPanel` per
+application and SDDM gives each screen a view of its own, so only the primary screen's view has the
+panel; a view that becomes primary creates it. A Wayland greeter's keyboard is the compositor's
+(Fedora runs KWin with `--inputmethod plasma-keyboard`), so there the theme adds none.
 
 ### The avatar
 
@@ -225,7 +231,9 @@ Qt6 greeter rejects.
   with `InputPanel`, one without): a focused field alone does not open the keyboard; the
   "On-screen keyboard" button (accessibility action and Space) opens it along the bottom, moves
   the card above it with a credential field keeping the focus, reports its checked state and
-  closes it again; without the module the theme loads with no keyboard, no button and no
+  closes it again; the button waits for the input method's first request, is off again when the
+  keyboard goes (a later focus does not reopen it), and a secondary screen's view has no panel
+  until it becomes primary; without the module the theme loads with no keyboard, no button and no
   warning. On the offscreen (software) scene graph a loaded card photo keeps the initial.
 - The repository's QML checks (motion, a11y, id scope) cover the theme's files like every other
   part; the a11y check found the theme's ten unnamed interactive items before the first commit.

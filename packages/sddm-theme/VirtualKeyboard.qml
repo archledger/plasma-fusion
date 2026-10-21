@@ -17,11 +17,19 @@ import QtQuick 2.15
 import QtQuick.VirtualKeyboard
 
 InputPanel {
-    // Set by the on-screen keyboard button
+    // Set by the on-screen keyboard button; cleared when the keyboard goes (focus left the text
+    // fields, or its own hide key), so the button is off again and a later focus opens nothing
     property bool activated: false
     // Qt's input method wants a keyboard (a text field has focus)
     property bool requested: Qt.inputMethod.visible
+    // Qt's input method has asked for a keyboard at least once. Only Qt's virtual keyboard does
+    // (it does at once: the password field starts focused); a greeter started with another input
+    // method (SDDM's InputMethod empty) never does, and the button is not offered there.
+    property bool available: false
 
     active: activated && requested
     visible: active
+    onRequestedChanged: if (requested) available = true
+    onActiveChanged: if (!active) activated = false
+    Component.onCompleted: available = requested
 }

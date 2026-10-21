@@ -785,12 +785,13 @@ def main():
 
         on_screen = find(root, "On-screen keyboard")
         panel = expr(root, "inputPanel.item")
-        check(on_screen.isVisible() and panel is not None,
-              "with QtQuick.VirtualKeyboard the on-screen keyboard button shows")
+        check(panel is not None and not on_screen.isVisible(),
+              "the button waits until Qt's input method asks for a keyboard (another input method never does)")
         if panel is not None:
             normal_y = card.property("y")
             panel.setProperty("requested", True)  # a text field has focus: Qt's input method asks
             QTest.qWait(10)
+            check(on_screen.isVisible(), "with Qt's virtual keyboard as the input method the button shows")
             check(not panel.property("visible") and card.property("y") == normal_y,
                   "a focused field alone does not open the keyboard over the screen")
             activate(on_screen)
@@ -802,6 +803,16 @@ def main():
                   and (password.hasActiveFocus() or username.hasActiveFocus()),
                   "the card moves above the keyboard and its credential field keeps the keys")
             check(expr(on_screen, "Accessible.checked"), "the button reports its on state")
+            panel.setProperty("requested", False)  # focus left the text fields
+            QTest.qWait(10)
+            check(not panel.property("visible") and not expr(on_screen, "Accessible.checked")
+                  and on_screen.isVisible(),
+                  "when the keyboard goes, the button is off again (and still offered)")
+            panel.setProperty("requested", True)
+            QTest.qWait(10)
+            check(not panel.property("visible"), "a later focus does not reopen it without the button")
+            activate(on_screen)
+            check(panel.property("visible"), "the button opens it again")
             press(view, on_screen, Qt.Key_Space)
             check(not panel.property("visible") and card.property("y") == normal_y
                   and not expr(on_screen, "Accessible.checked"),
@@ -867,6 +878,7 @@ def main():
 
         # A secondary screen has its own QML engine. It must not start a competing login.
         view3 = QQuickView()
+        view3.engine().addImportPath(stubs["keyboard"])
         context3 = view3.rootContext()
         screen3 = Screen(-1)
         for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
@@ -883,6 +895,9 @@ def main():
             root3 = view3.rootObject()
             card3 = next(item for item in walk(root3) if item.property("promptName") is not None)
             check(not card3.property("allowInput"), "a secondary screen is marked non-interactive")
+            # Qt's virtual keyboard allows one InputPanel per application: only the primary view
+            check(QQmlExpression(qmlContext(root3), root3, "inputPanel.item").evaluate()[0] is None,
+                  "a secondary screen's view creates no keyboard panel")
             check(card3.property("promptName"),
                   "an empty model initializes Other user on a secondary screen")
             keyboard.set_current(0)
@@ -895,6 +910,8 @@ def main():
             QMetaObject.invokeMethod(root3, "refreshPrimary")
             check(card3.property("allowInput"),
                   "a new primary view is re-enabled for input")
+            check(QQmlExpression(qmlContext(root3), root3, "inputPanel.item").evaluate()[0] is not None,
+                  "a view that becomes primary creates the keyboard panel")
             check(card3.property("promptName"),
                   "the handoff keeps the initialized Other-user prompt")
             view3.close()

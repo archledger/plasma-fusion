@@ -314,10 +314,11 @@ Rectangle {
         }
 
         // The board's accessibility button, for the aid SDDM lets a theme offer: the on-screen
-        // keyboard. Shown where VirtualKeyboard.qml loaded.
+        // keyboard. Shown where VirtualKeyboard.qml loaded and Qt's virtual keyboard is the input
+        // method.
         Rectangle {
             id: onScreenKeyboard
-            visible: inputPanel.item !== null
+            visible: inputPanel.item !== null && inputPanel.item.available
             width: 34
             height: 34
             radius: 17
@@ -458,11 +459,14 @@ Rectangle {
     }
 
     // ---- Qt's virtual keyboard, along the bottom while it shows ----
+    // Only in the primary screen's view: SDDM gives each screen a view of its own, and Qt's virtual
+    // keyboard allows one InputPanel per application. A view that becomes primary creates it.
     Loader {
         id: inputPanel
         z: 1
         width: parent.width
         y: root.keyboardShown ? root.height - height : root.height
+        active: root.interactive
         sourceComponent: root.keyboardComponent !== null && root.keyboardComponent.status === Component.Ready
                          ? root.keyboardComponent : null
     }
