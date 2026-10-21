@@ -9,6 +9,8 @@
 #   vm.sh start NAME [base|run]    boot (base: provisioning; run: a fresh overlay of base)
 #   vm.sh ssh NAME [CMD...]        ssh as pf (port from the VM's index)
 #   vm.sh shot NAME FILE.png       QEMU screendump of the display
+#                                  (QEMU's monitor: mon.sock; its QMP socket, for splash-capture.py:
+#                                  qmp.sock)
 #   vm.sh stop NAME                power off (ACPI, then kill)
 #   vm.sh wait NAME                wait for ssh
 set -euo pipefail
@@ -57,7 +59,8 @@ UD
       -drive "file=$disk,if=virtio,discard=unmap" -drive "file=$d/seed.iso,media=cdrom,readonly=on" \
       -nic "user,model=virtio-net-pci,ipv6=$ipv6,hostfwd=tcp:127.0.0.1:$(port)-:22" \
       -device virtio-vga -display none -vnc "127.0.0.1:$(( $(cat "$d/index") + 10 ))" \
-      -monitor "unix:$d/mon.sock,server,nowait" -serial "file:$d/serial.log" \
+      -monitor "unix:$d/mon.sock,server,nowait" -qmp "unix:$d/qmp.sock,server=on,wait=off" \
+      -serial "file:$d/serial.log" \
       -daemonize -pidfile "$d/qemu.pid"
     echo "started $name ($which), pid $(cat "$d/qemu.pid")" ;;
   wait)

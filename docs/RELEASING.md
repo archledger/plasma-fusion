@@ -30,7 +30,11 @@ shown, the login check's log, no crash, then `uninstall` and a new login with th
 Then the SDDM login screen on real boots of the systems whose display manager is SDDM (`run-all.sh
 debian-testing:deb:sddm ubuntu2610:ppa:sddm arch:aur:sddm fedora44:copr:sddm`, with Pillow): the
 system's own greeter, `greeter-apply.sh`, the Plasma Fusion greeter compared with the Login board, a
-login typed into it, `uninstall` and the system's own greeter again.
+login typed into it, `uninstall` and the system's own greeter again. And the boot splash on real
+boots of every system with an installer lane (`run-all.sh fedora44:copr:splash arch:aur:splash
+ubuntu2610:ppa:splash debian-testing:deb:splash neon:deb:splash`, with Pillow): the system's own
+splash, `plymouth-install.sh --select`, the boot captured from the reset on and compared with the
+Splash board, `uninstall` and the system's own splash again.
 Every system must pass; the evidence goes to the ledger's artifacts.
 
 Then the depth features' check on the merged commit's HOME tree, on the test host and on the
