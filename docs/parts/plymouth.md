@@ -316,7 +316,9 @@ with initramfs-tools (13), Ubuntu 26.10 with dracut (13) and with initramfs-tool
 hook through the drop-in, both removed again). From the first review: Ubuntu with a theme chosen by
 hand after the install keeps it and loses ours from the alternative; Arch with a preset that also
 builds a unified kernel image (`PF_PLYMOUTH_UKI=1`: both backed up, rebuilt and checked); Arch with
-dracut instead of mkinitcpio (`PF_PLYMOUTH_EXPECT=refused`) stops before any change. Debian's initramfs-tools hook needs fontconfig
+dracut instead of mkinitcpio (`PF_PLYMOUTH_EXPECT=refused`) stops before any change. From the
+second: with the hook already in `HOOKS`, another theme selected by hand and only the first of two
+images rebuilt, the uninstall still rebuilds (it checks every image, not only the first). Debian's initramfs-tools hook needs fontconfig
 (`/etc/fonts/fonts.conf`), which a desktop has and a bare container does not.
 
 ## Verification (2026-10-01, on the laptop)

@@ -169,10 +169,15 @@ else
   if [ "$SELECTOR" = alternatives ] && update-alternatives --query "$ALT" 2>/dev/null | grep -qxF "Alternative: $THEMES/$NAME/$NAME.plymouth"; then
     run update-alternatives --remove "$ALT" "$THEMES/$NAME/$NAME.plymouth"
   fi
-  # Deselected by hand without a rebuild: the running kernel's image may still carry it.
-  if [ "$DRY" = 0 ] && [ -n "$IMG" ] && [ "$(image_state "$IMG")" = theme ]; then
-    echo "$IMG still contains $NAME"
-    rebuild=1
+  # Deselected by hand without a rebuild (or with only one of Arch's images rebuilt): an image may
+  # still carry it.
+  if [ "$DRY" = 0 ]; then
+    for img in "${IMAGES[@]}"; do
+      if [ "$(image_state "$img")" = theme ]; then
+        echo "$img still contains $NAME"
+        rebuild=1
+      fi
+    done
   fi
 fi
 [ "$dropin" = 0 ] || rebuild=1

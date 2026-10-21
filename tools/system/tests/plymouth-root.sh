@@ -152,6 +152,24 @@ fi
 [ ! -e "/usr/share/plymouth/themes/$NAME" ] && [ ! -e /var/lib/plasma-fusion/plymouth ] && ok "  the files and the state removed" ||
   bad "  files or state left" "$(ls -la /usr/share/plymouth/themes /var/lib/plasma-fusion 2>&1)"
 
+# --- Arch with the plymouth hook already in HOOKS (no drop-in of ours) and two images: another
+# theme selected by hand and only the first image rebuilt; the uninstall must still rebuild, since
+# the second image carries the theme
+if [ "$BUILDER" = mkinitcpio ] && [ "${#IMAGES[@]}" -gt 1 ]; then
+  cp -a /etc/mkinitcpio.conf "$WORK/mkinitcpio.conf.before"
+  sed -i 's/^HOOKS=(\(.*\)\bsystemd\b/HOOKS=(\1systemd plymouth/' /etc/mkinitcpio.conf
+  OUT=$(PF_PLYMOUTH_CMDLINE=$WORK/cmdline-splash bash "$INSTALL" --select "$THEME" 2>&1); RC=$?
+  [ "$RC" = 0 ] && [ ! -e /etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf ] || bad "install with the hook already there" "$OUT"
+  plymouth-set-default-theme text
+  mkinitcpio -k "$KVER" -g "${IMAGES[0]}" >/dev/null 2>&1
+  OUT=$(bash "$UNINSTALL" 2>&1); RC=$?
+  clean=1
+  for img in "${IMAGES[@]}"; do image_has "$img" && clean=0; done
+  [ "$RC" = 0 ] && [ "$clean" = 1 ] && ok "deselected by hand with one image rebuilt: the uninstall rebuilds the others" ||
+    bad "image left with the theme" "$OUT"
+  cp -a "$WORK/mkinitcpio.conf.before" /etc/mkinitcpio.conf
+fi
+
 # --- Ubuntu, neon: another theme chosen by hand after the install; the uninstall removes ours from
 # the alternative and keeps that choice
 other=$(update-alternatives --query default.plymouth 2>/dev/null | sed -n 's/^Alternative: //p' | grep -v "/$NAME/" | head -n 1 || true)
