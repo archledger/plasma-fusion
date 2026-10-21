@@ -5,7 +5,9 @@
 
 SDDM reads metadata.desktop for the theme's identity (docs/THEMING.md) and theme.conf for its
 options (GreeterApp.cpp: ThemeConfig from the metadata's ConfigFile). The theme takes no QML
-import beyond QtQuick and its own files - a login screen must survive missing optional modules.
+import beyond QtQuick, QtCore and its own files - a login screen must survive missing optional
+modules; the two optional ones (QtQuick.Effects, QtQuick.VirtualKeyboard) each live in one file
+that the theme creates with Qt.createComponent and a status check, never by type or Loader URL.
 These checks run in CI (tools/build.d/91-sddm.sh) and fail on the version before each fix.
 
     tests/contract_test.py [STAGE]     STAGE = build.sh's OUT (default: a throw-away build)
@@ -44,7 +46,8 @@ def main() -> int:
 
         theme = stage / "plasmafusion"
         for name in ("Main.qml", "palette.js", "LoginCard.qml", "UserSwitcher.qml",
-                     "SessionPill.qml", "PowerBar.qml", "CircularImage.qml", "MessageView.qml", "metadata.desktop",
+                     "SessionPill.qml", "PowerBar.qml", "CircularImage.qml", "CircularMask.qml",
+                     "MessageView.qml", "VirtualKeyboard.qml", "metadata.desktop",
                      "theme.conf", "preview.webp"):
             ok &= check(f"the theme ships {name}", (theme / name).is_file())
 
@@ -160,12 +163,26 @@ def main() -> int:
         # The theme uses only core Qt modules and its own files: QtQuick for the board and
         # QtCore's Settings/StandardPaths for the cross-engine authentication lock. Debian
         # splits QtCore's QML module, so the package declares it explicitly.
+        # The optional modules: one file each, created by hand (Qt.createComponent reports a
+        # missing module as an error status; a Loader's URL or a type name would warn, or fail
+        # the theme's load).
+        optional = {"CircularMask.qml": "QtQuick.Effects", "VirtualKeyboard.qml": "QtQuick.VirtualKeyboard"}
         imports = []
         for qml in theme.glob("*.qml"):
-            imports += re.findall(r'^import\s+(\S+)', qml.read_text(), re.M)
-        bad = sorted({i for i in imports if not (i.startswith('"') or i in ("QtQuick", "QtCore"))})
-        ok &= check("the QML imports only QtQuick, QtCore and the theme's own files", not bad,
-                    ", ".join(bad))
+            allowed = ("QtQuick", "QtCore", optional.get(qml.name))
+            imports += [i for i in re.findall(r'^import\s+(\S+)', qml.read_text(), re.M)
+                        if not (i.startswith('"') or i in allowed)]
+        bad = sorted(set(imports))
+        ok &= check("the QML imports only QtQuick, QtCore and the theme's own files (and each "
+                    "optional module in its own file)", not bad, ", ".join(bad))
+        for name in optional:
+            users = {q.name: q.read_text() for q in theme.glob("*.qml") if q.name != name}
+            created = [n for n, text in users.items()
+                       if f'Qt.createComponent("{name}"' in text and ".status === Component.Ready" in text]
+            direct = [n for n, text in users.items()
+                      if re.search(rf'(?m)^\s*{name[:-4]}\s*{{', text) or f'source: "{name}"' in text]
+            ok &= check(f"{name} is only created by hand, with a status check", created and not direct,
+                        f"created in {created}, used directly in {direct}")
 
         # The QML parses: qmllint when it is installed, else a balanced-brace read
         lint = shutil.which("qmllint")

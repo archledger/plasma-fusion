@@ -37,6 +37,12 @@ Rectangle {
     property bool primaryInitialized: false
     readonly property bool interactive: primaryNow
     readonly property real footerTop: Math.min(session.y, powerButtons.y)
+    // Qt's virtual keyboard (VirtualKeyboard.qml), created here rather than by a Loader's URL: on a
+    // Wayland greeter (the compositor's keyboard) or without QtQuick.VirtualKeyboard there is no
+    // panel and no button, and no warning at every greeter start.
+    readonly property Component keyboardComponent: Qt.platform.pluginName.indexOf("wayland") < 0
+        ? Qt.createComponent("VirtualKeyboard.qml") : null
+    readonly property bool keyboardShown: inputPanel.item !== null && inputPanel.item.active
     // SDDM builds one QML engine per screen, so a QML property cannot lock a login across
     // displays. A QSettings-backed file can; any live screen renews a heartbeat while PAM runs.
     readonly property string viewToken: Math.random().toString(36).substring(2)
@@ -252,54 +258,140 @@ Rectangle {
         }
     }
 
-    // ---- Top right: the keyboard pill (of the board's three pills only this has an API) ----
-    Rectangle {
-        id: keyboardPill
-        visible: keyboard.layouts.length > 1
+    // ---- Top right: the keyboard layout pill and the accessibility button (the board's third,
+    // the Wi-Fi and battery pill, has no SDDM API) ----
+    Row {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.topMargin: 28
         anchors.rightMargin: 28
-        width: Math.max(58, keyboardLabel.implicitWidth + 24)
-        height: 34
-        radius: 17
-        color: "#14ffffff"
-        Accessible.name: qsTr("Keyboard layout")
-        Accessible.description: keyboardLabel.text
-        Accessible.role: Accessible.Button
-        activeFocusOnTab: true
-        enabled: root.interactive && !root.authenticating
-        border.color: activeFocus ? "#6aa9ff" : "transparent"
-        border.width: activeFocus ? 2 : 0
-        function advance() {
-            if (!root.interactive || root.authenticating) {
-                return;
-            }
-            if (keyboard.layouts.length > 1) {
-                keyboard.currentLayout = (keyboard.currentLayout + 1) % keyboard.layouts.length;
-            }
-        }
-        Keys.onReturnPressed: advance()
-        Keys.onEnterPressed: advance()
-        Keys.onSpacePressed: advance()
-        Accessible.onPressAction: advance()
+        spacing: 8
 
-        Text {
-            id: keyboardLabel
-            anchors.centerIn: parent
-            font.family: "Manrope"
-            font.pixelSize: 12
-            font.weight: Font.ExtraBold
-            color: "#e8ebf4"
-            text: {
-                const l = keyboard.layouts[keyboard.currentLayout];
-                return String(l && (l.shortName || l.longName) || "");
+        Rectangle {
+            id: keyboardPill
+            visible: keyboard.layouts.length > 1
+            width: Math.max(58, keyboardLabel.implicitWidth + 24)
+            height: 34
+            radius: 17
+            color: "#14ffffff"
+            Accessible.name: qsTr("Keyboard layout")
+            Accessible.description: keyboardLabel.text
+            Accessible.role: Accessible.Button
+            activeFocusOnTab: true
+            enabled: root.interactive && !root.authenticating
+            border.color: activeFocus ? "#6aa9ff" : "transparent"
+            border.width: activeFocus ? 2 : 0
+            function advance() {
+                if (!root.interactive || root.authenticating) {
+                    return;
+                }
+                if (keyboard.layouts.length > 1) {
+                    keyboard.currentLayout = (keyboard.currentLayout + 1) % keyboard.layouts.length;
+                }
             }
-            textFormat: Text.PlainText
+            Keys.onReturnPressed: advance()
+            Keys.onEnterPressed: advance()
+            Keys.onSpacePressed: advance()
+            Accessible.onPressAction: advance()
+
+            Text {
+                id: keyboardLabel
+                anchors.centerIn: parent
+                font.family: "Manrope"
+                font.pixelSize: 12
+                font.weight: Font.ExtraBold
+                color: "#e8ebf4"
+                text: {
+                    const l = keyboard.layouts[keyboard.currentLayout];
+                    return String(l && (l.shortName || l.longName) || "");
+                }
+                textFormat: Text.PlainText
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: keyboardPill.advance()
+            }
         }
-        MouseArea {
-            anchors.fill: parent
-            onClicked: keyboardPill.advance()
+
+        // The board's accessibility button, for the aid SDDM lets a theme offer: the on-screen
+        // keyboard. Shown where VirtualKeyboard.qml loaded and Qt's virtual keyboard is the input
+        // method.
+        Rectangle {
+            id: onScreenKeyboard
+            visible: inputPanel.item !== null && inputPanel.item.available
+            width: 34
+            height: 34
+            radius: 17
+            color: "#14ffffff"
+            Accessible.name: qsTr("On-screen keyboard")
+            Accessible.role: Accessible.Button
+            Accessible.checkable: true
+            Accessible.checked: inputPanel.item !== null && inputPanel.item.activated
+            activeFocusOnTab: true
+            enabled: root.interactive && !root.authenticating
+            border.color: activeFocus ? "#6aa9ff" : "transparent"
+            border.width: activeFocus ? 2 : 0
+            function toggle() {
+                if (!enabled || inputPanel.item === null) {
+                    return;
+                }
+                inputPanel.item.activated = !inputPanel.item.activated;
+                // The keys go to the focused field, so give it the focus before the keyboard shows
+                card.focusPassword();
+            }
+            // When the keyboard goes (focus left the text fields, or its own hide key) the button
+            // is off again, so a later focus opens nothing by itself - except while the focus is on
+            // this button: moving here from the field hides the keyboard, and the press that
+            // follows is to close it. Later, once focus and input method have settled.
+            function settle() {
+                if (inputPanel.item !== null && !inputPanel.item.active && !activeFocus) {
+                    inputPanel.item.activated = false;
+                }
+            }
+            onActiveFocusChanged: Qt.callLater(settle)
+            Connections {
+                target: inputPanel.item
+                function onActiveChanged() {
+                    Qt.callLater(onScreenKeyboard.settle);
+                }
+            }
+            Keys.onReturnPressed: toggle()
+            Keys.onEnterPressed: toggle()
+            Keys.onSpacePressed: toggle()
+            Accessible.onPressAction: toggle()
+
+            // The board's figure (24-unit grid at 18 px, stroke 1.8)
+            Canvas {
+                anchors.centerIn: parent
+                width: 18
+                height: 18
+                onPaint: {
+                    const ctx = getContext("2d");
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.save();
+                    ctx.scale(width / 24, height / 24);
+                    ctx.strokeStyle = "#e8ebf4";
+                    ctx.lineWidth = 1.8;
+                    ctx.lineCap = "round";
+                    ctx.lineJoin = "round";
+                    ctx.beginPath();
+                    ctx.arc(12, 4.5, 1.5, 0, Math.PI * 2);
+                    ctx.moveTo(5, 8);
+                    ctx.lineTo(12, 9.5);
+                    ctx.lineTo(19, 8);
+                    ctx.moveTo(12, 9.5);
+                    ctx.lineTo(12, 14);
+                    ctx.lineTo(9, 20);
+                    ctx.moveTo(12, 14);
+                    ctx.lineTo(15, 20);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                onClicked: onScreenKeyboard.toggle()
+            }
         }
     }
 
@@ -307,8 +399,11 @@ Rectangle {
     LoginCard {
         id: card
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.max(0, Math.min(Math.round(parent.height * 210 / 900),
-                               root.footerTop - users.height - height - 32))
+        // Above the on-screen keyboard while it shows; it covers the user row and the footer then
+        y: root.keyboardShown
+           ? Math.max(0, Math.min(Math.round(parent.height * 210 / 900), inputPanel.y - height - 16))
+           : Math.max(0, Math.min(Math.round(parent.height * 210 / 900),
+                                  root.footerTop - users.height - height - 32))
         width: 400
         busy: root.authenticating
         allowInput: root.interactive
@@ -377,5 +472,18 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.rightMargin: 32
         anchors.bottomMargin: 28
+    }
+
+    // ---- Qt's virtual keyboard, along the bottom while it shows ----
+    // Only in the primary screen's view: SDDM gives each screen a view of its own, and Qt's virtual
+    // keyboard allows one InputPanel per application. A view that becomes primary creates it.
+    Loader {
+        id: inputPanel
+        z: 1
+        width: parent.width
+        y: root.keyboardShown ? root.height - height : root.height
+        active: root.interactive
+        sourceComponent: root.keyboardComponent !== null && root.keyboardComponent.status === Component.Ready
+                         ? root.keyboardComponent : null
     }
 }
