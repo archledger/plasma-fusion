@@ -13,9 +13,11 @@
 #     'dnf -y -q install kernel-core dracut plymouth && cp -a /src /work && /work/tools/system/tests/plymouth-root.sh'
 # The theme is a minimal stand-in (the installer's paths, not the drawing), or THEME_DIR, a build
 # of generators/plymouth/build.sh. PF_PLYMOUTH_UKI=1 (Arch, with systemd-ukify): the preset also
-# builds a unified kernel image. PF_PLYMOUTH_EXPECT=refused: a system whose boot image the installer
-# cannot know (Arch with dracut instead of mkinitcpio) - it must stop with nothing changed. Test
-# tooling only.
+# builds a unified kernel image. PF_PLYMOUTH_PRESET_CONFIG=1 (Arch): the preset names its own
+# configuration (ALL_config), which reads no drop-ins. PF_PLYMOUTH_EXPECT=refused: a system the
+# installer cannot handle (Arch with dracut instead of mkinitcpio, or such a preset without the hook)
+# - it must stop with nothing changed; PF_PLYMOUTH_REFUSAL is the reason it must give. Test tooling
+# only.
 #
 #   tools/system/tests/plymouth-root.sh [THEME_DIR]
 set -euo pipefail
@@ -43,6 +45,9 @@ elif command -v dracut >/dev/null && command -v lsinitrd >/dev/null; then BUILDE
 elif command -v update-initramfs >/dev/null && command -v lsinitramfs >/dev/null; then BUILDER=initramfs-tools LIST=lsinitramfs
 else echo "plymouth-root: no initramfs builder" >&2; exit 1
 fi
+if [ "${PF_PLYMOUTH_PRESET_CONFIG:-}" = 1 ]; then
+  sed -i 's|^#ALL_config=|ALL_config=|' /etc/mkinitcpio.d/*.preset
+fi
 if [ "${PF_PLYMOUTH_UKI:-}" = 1 ]; then
   # The preset builds an image and a unified kernel image (mkinitcpio(8): <preset>_uki)
   mkdir -p /efi/EFI/Linux /etc/kernel
@@ -56,13 +61,30 @@ case $BUILDER in
     # shellcheck source=/dev/null # the system's presets
     mapfile -t IMAGES < <(for f in /etc/mkinitcpio.d/*.preset; do (. "$f"; for p in "${PRESETS[@]}"; do for k in image uki; do v=${p}_$k; [ -z "${!v:-}" ] || echo "${!v}"; done; done); done) ;;
 esac
+# The theme: a minimal one with the installer's files, unless a build is given
+THEME=${1:-}
+if [ -z "$THEME" ]; then
+  THEME=$WORK/theme
+  mkdir -p "$THEME"
+  printf '[Plymouth Theme]\nName=Plasma Fusion (test)\nDescription=stand-in\nModuleName=script\n\n[script]\nImageDir=/usr/share/plymouth/themes/%s\nScriptFile=/usr/share/plymouth/themes/%s/%s.script\n\n[script-env-vars]\n' \
+    "$NAME" "$NAME" "$NAME" >"$THEME/$NAME.plymouth"
+  printf 'Window.SetBackgroundTopColor(0.1, 0.1, 0.2);\nWindow.SetBackgroundBottomColor(0.1, 0.1, 0.2);\n' >"$THEME/$NAME.script"
+  printf '\x89PNG\r\n\x1a\n' >"$THEME/background.png"
+fi
+
 if [ "${PF_PLYMOUTH_EXPECT:-}" = refused ]; then
-  # No image at the names the installer knows: it must stop before changing anything
+  # No image at the names the installer knows (or another reason given): it must stop before
+  # changing anything
+  unknown="the boot loader's image is not known"
   RC=0
-  OUT=$(bash "$INSTALL" --select 2>&1) || RC=$?
-  [ "$RC" = 1 ] && has "no initramfs image of kernel $KVER" && ok "--select refused: the boot loader's image is not known" ||
-    bad "refusal" "$OUT"
+  OUT=$(bash "$INSTALL" --select "$THEME" 2>&1) || RC=$?
+  reason=${PF_PLYMOUTH_REFUSAL:-}
+  [ -n "$reason" ] || reason="no initramfs image of kernel $KVER"
+  [ "$RC" = 1 ] && has "$reason" && has "Nothing was changed." &&
+    ok "--select refused: ${PF_PLYMOUTH_REFUSAL:-$unknown}" || bad "refusal" "$OUT"
   [ ! -e "/usr/share/plymouth/themes/$NAME" ] && [ ! -e /var/lib/plasma-fusion ] && ! compgen -G "/boot/*.pre-$NAME" >/dev/null &&
+    [ ! -e /etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf ] && { ! command -v plymouth-set-default-theme >/dev/null ||
+      [ "$(plymouth-set-default-theme)" != "$NAME" ]; } &&
     ok "  nothing was changed" || bad "  changes left" "$(ls -la /usr/share/plymouth/themes /var/lib/plasma-fusion /boot 2>&1)"
   echo "plymouth-root ($BUILDER, refused): $PASS passed, $FAIL failed"
   [ "$FAIL" = 0 ]
@@ -84,17 +106,6 @@ current_theme() {
 }
 image_has() { local l; l=$("$LIST" "$1" 2>/dev/null) || return 2; grep -q "usr/share/plymouth/themes/$NAME/$NAME.script" <<<"$l"; }
 echo "system: $(. /etc/os-release && echo "$PRETTY_NAME"), builder $BUILDER, kernel $KVER, images ${IMAGES[*]}"
-
-# The theme: a minimal one with the installer's files, unless a build is given
-THEME=${1:-}
-if [ -z "$THEME" ]; then
-  THEME=$WORK/theme
-  mkdir -p "$THEME"
-  printf '[Plymouth Theme]\nName=Plasma Fusion (test)\nDescription=stand-in\nModuleName=script\n\n[script]\nImageDir=/usr/share/plymouth/themes/%s\nScriptFile=/usr/share/plymouth/themes/%s/%s.script\n\n[script-env-vars]\n' \
-    "$NAME" "$NAME" "$NAME" >"$THEME/$NAME.plymouth"
-  printf 'Window.SetBackgroundTopColor(0.1, 0.1, 0.2);\nWindow.SetBackgroundBottomColor(0.1, 0.1, 0.2);\n' >"$THEME/$NAME.script"
-  printf '\x89PNG\r\n\x1a\n' >"$THEME/background.png"
-fi
 
 # The state from before
 before_theme=$(current_theme 2>/dev/null || true)

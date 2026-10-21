@@ -134,6 +134,40 @@ if [ "$SELECT" = 1 ]; then
     exit 1
   fi
 fi
+# Arch: mkinitcpio puts Plymouth into an image only with its hook in HOOKS, which Arch's default
+# lacks. A drop-in of ours in /etc/mkinitcpio.conf.d adds it (step 5), but a preset that names its
+# own configuration (ALL_config, <preset>_config) is built with -c, which reads no drop-ins
+# (mkinitcpio(8)): such a configuration must have the hook already. Decided before any change.
+DROPIN=/etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf
+NEED_DROPIN=0
+if [ "$SELECT" = 1 ] && [ "$BUILDER" = mkinitcpio ]; then
+  hooks_of() { # $1 a configuration file, or "" for mkinitcpio.conf with the drop-ins: " HOOKS "
+    if [ -n "$1" ]; then
+      bash -c '. "$1"; echo " ${HOOKS[*]} "' _ "$1"
+    else
+      bash -c '. /etc/mkinitcpio.conf; for f in /etc/mkinitcpio.conf.d/*.conf; do [ ! -e "$f" ] || . "$f"; done; echo " ${HOOKS[*]} "'
+    fi
+  }
+  # Each preset's configuration: its own, ALL_config, or none (mkinitcpio.conf and the drop-ins)
+  mapfile -t configs < <(for f in /etc/mkinitcpio.d/*.preset; do
+    # shellcheck source=/dev/null # the system's presets
+    ( . "$f"; for p in "${PRESETS[@]}"; do v=${p}_config; printf '%s\n' "${!v:-${ALL_config:-}}"; done )
+  done | sort -u)
+  for cfg in "${configs[@]}"; do
+    hooks=$(hooks_of "$cfg")
+    [[ $hooks == *" plymouth "* ]] && continue
+    if [ -n "$cfg" ]; then
+      echo "plymouth-install: a mkinitcpio preset is built with its own configuration, $cfg, which reads no" >&2
+      echo "  drop-ins and has no plymouth hook: add plymouth to its HOOKS after systemd (or udev), before the" >&2
+      echo "  encryption hooks, and run this again. Nothing was changed." >&2
+      exit 1
+    fi
+    [[ $hooks == *" systemd "* || $hooks == *" udev "* ]] || {
+      echo "plymouth-install: HOOKS has neither systemd nor udev; add the plymouth hook by hand (after it, before encrypt). Nothing was changed." >&2
+      exit 1; }
+    NEED_DROPIN=1
+  done
+fi
 # The package that brings Plymouth's script plugin: Fedora's plymouth-plugin-script, elsewhere
 # Plymouth itself (Arch, Debian and Ubuntu ship script.so in plymouth).
 if command -v dnf >/dev/null; then PKG=dnf PLUGIN_PKG=plymouth-plugin-script
@@ -378,19 +412,14 @@ for img in "${IMAGES[@]}"; do
     [ "$DRY" = 1 ] || ( umask 077 && cp -- "$img" "$img.pre-$NAME" )
   fi
 done
-# Arch: mkinitcpio puts Plymouth into the image only with its hook in HOOKS, which Arch's default
-# lacks. A drop-in of ours (read after mkinitcpio.conf, bash) adds it after systemd or udev, before
-# the encryption hooks, so the passphrase prompt is the theme's; removed by plymouth-uninstall.sh.
-DROPIN=/etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf
-if [ "$BUILDER" = mkinitcpio ]; then
-  hooks=$(bash -c '. /etc/mkinitcpio.conf; for f in /etc/mkinitcpio.conf.d/*.conf; do [ ! -e "$f" ] || . "$f"; done; echo " ${HOOKS[*]} "')
-  if [[ $hooks != *" plymouth "* ]]; then
-    [[ $hooks == *" systemd "* || $hooks == *" udev "* ]] ||
-      { echo "plymouth-install: HOOKS has neither systemd nor udev; add the plymouth hook by hand (after it, before encrypt)" >&2; exit 1; }
-    echo "+ write $DROPIN (the plymouth hook after systemd or udev)"
-    if [ "$DRY" = 0 ]; then
-      install -d -m 0755 /etc/mkinitcpio.conf.d
-      cat >"$DROPIN" <<'EOF'
+# Arch: the plymouth hook through a drop-in of ours (read after mkinitcpio.conf, bash), after systemd
+# or udev, before the encryption hooks, so the passphrase prompt is the theme's; removed by
+# plymouth-uninstall.sh. Whether it is needed was decided above.
+if [ "$NEED_DROPIN" = 1 ]; then
+  echo "+ write $DROPIN (the plymouth hook after systemd or udev)"
+  if [ "$DRY" = 0 ]; then
+    install -d -m 0755 /etc/mkinitcpio.conf.d
+    cat >"$DROPIN" <<'EOF'
 # Plasma Fusion's boot splash (plymouth-install.sh): the plymouth hook after systemd or udev, so
 # before the encryption hooks. plymouth-uninstall.sh removes this file.
 read -r -a _pf_hooks <<<"${HOOKS[*]}"
@@ -401,8 +430,7 @@ for _pf_h in "${_pf_hooks[@]}"; do
 done
 unset _pf_hooks _pf_h
 EOF
-      echo "$DROPIN" > "$STATE/mkinitcpio-dropin"
-    fi
+    echo "$DROPIN" > "$STATE/mkinitcpio-dropin"
   fi
 fi
 if [ "$SELECTOR" = set-default-theme ]; then

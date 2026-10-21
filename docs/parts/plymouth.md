@@ -256,8 +256,10 @@ EFI system partition, where boot managers only look at `*.efi`). On
 Arch, whose default `HOOKS` has no `plymouth`, it writes
 `/etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf`, bash that mkinitcpio reads after
 `mkinitcpio.conf` and that puts `plymouth` after `systemd` (or `udev`), so before the encryption
-hooks and the passphrase prompt is the theme's (a preset naming its own `*_config` skips drop-ins:
-the image check below then fails and says to roll back). Then it selects the theme, rebuilds the
+hooks and the passphrase prompt is the theme's. A preset that names its own configuration
+(`ALL_config`, `<preset>_config`) is built with `-c`, which reads no drop-ins (mkinitcpio(8)): that
+configuration must have the hook already, or `--select` stops before any change and says where to
+add it. Then it selects the theme, rebuilds the
 running kernel's image (`nice -n 10 dracut -f IMAGE KERNEL`, `update-initramfs -u -k KERNEL`; Arch
 `mkinitcpio -P`) and checks with the lister that each image holds the theme and `script.so`. Kernels
 installed later get the theme automatically; other installed kernels keep their old splash until
@@ -318,7 +320,9 @@ hand after the install keeps it and loses ours from the alternative; Arch with a
 builds a unified kernel image (`PF_PLYMOUTH_UKI=1`: both backed up, rebuilt and checked); Arch with
 dracut instead of mkinitcpio (`PF_PLYMOUTH_EXPECT=refused`) stops before any change. From the
 second: with the hook already in `HOOKS`, another theme selected by hand and only the first of two
-images rebuilt, the uninstall still rebuilds (it checks every image, not only the first). Debian's initramfs-tools hook needs fontconfig
+images rebuilt, the uninstall still rebuilds (it checks every image, not only the first). From the
+third: a preset naming its own configuration without the hook (`PF_PLYMOUTH_PRESET_CONFIG=1`) is
+refused with nothing changed. Debian's initramfs-tools hook needs fontconfig
 (`/etc/fonts/fonts.conf`), which a desktop has and a bare container does not.
 
 ## Verification (2026-10-01, on the laptop)

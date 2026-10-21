@@ -81,6 +81,13 @@ jobs:
             image: docker.io/library/archlinux:base
             setup: pacman -Syu --noconfirm --needed git dracut linux
             expect: refused
+          # A preset with its own configuration reads no drop-ins: without the hook there, refused
+          - name: Arch, a preset's own configuration without the hook (refused)
+            image: docker.io/library/archlinux:base
+            setup: pacman -Syu --noconfirm --needed git linux mkinitcpio
+            preset_config: "1"
+            expect: refused
+            refusal: which reads no
     steps:
       - name: The kernel, the initramfs builder and Plymouth (git too, for the checkout)
         env:
@@ -96,4 +103,6 @@ jobs:
           PF_DISPOSABLE_SYSTEM: "1"
           PF_PLYMOUTH_UKI: ${{ matrix.uki }}
           PF_PLYMOUTH_EXPECT: ${{ matrix.expect }}
+          PF_PLYMOUTH_PRESET_CONFIG: ${{ matrix.preset_config }}
+          PF_PLYMOUTH_REFUSAL: ${{ matrix.refusal }}
         run: tools/system/tests/plymouth-root.sh
