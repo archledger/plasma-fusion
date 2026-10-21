@@ -150,11 +150,17 @@ run also stops when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6
 directory is writable by anyone but root or one of the three files is a link (root would copy what
 it points to, and the rename would replace a link managed elsewhere), on NixOS
 (`programs.plasma-fusion.sddm` instead: nixos.md) and with `--output` or `--display-from`
-(plasma-login-manager's). A run that would change nothing makes no backup.
+(plasma-login-manager's), and - before anything changes - when a wallpaper variant needs
+`theme.conf.user` in a theme tree that cannot be written (a read-only `/usr`); that file is also
+written first, so a failure there leaves `/etc` as it was. A run that would change nothing makes no
+backup. Configuration directories that are links to directories are read through, as SDDM's `QDir`
+lists them.
 
 The backup is `/var/lib/plasma-fusion/greeter-backup-<UTC>/` (0700), as for plasma-login-manager:
 the three files present or absent (`manifest`), `info` with `greeter=sddm`, the theme, cursors and
-wallpaper the run wrote and `before=plasma-fusion|other`, and `<file>.applied`, what it wrote.
+wallpaper the run wrote and `before=plasma-fusion|other` (`plasma-fusion` when any value the run
+writes was in effect already - the theme, the cursors or one of its wallpapers - so restore goes back
+past it), and `<file>.applied`, what it wrote.
 greeter-restore.sh undoes the runs newest first; without a named backup, SDDM's runs and
 plasma-login-manager's are separate chains (they change different files), each back to its own
 newest backup from before Plasma Fusion. A file goes back byte for byte while it is still what the
@@ -356,7 +362,10 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   every run back to that hand-made state instead of refusing (which stopped the uninstall). From
   the seventh: a relative `ThemeDir` stops `apply` and is named by `--check`, an incomplete backup
   no longer blocks restore, and a file put back keeps its saved owner and group (checked as root in
-  the Fedora 44 container: `root:sddm` 0640 back after apply and restore).
+  the Fedora 44 container: `root:sddm` 0640 back after apply and restore). From the eighth: a
+  wallpaper variant on a read-only theme tree stops before `/etc` changes, a run that finds an
+  earlier run's cursors counts as already on Plasma Fusion (restore undoes both), and a linked
+  configuration directory is read through.
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,
   and nothing for a backup of a run undone since; plasma-login-manager is restored with

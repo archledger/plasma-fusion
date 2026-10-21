@@ -361,6 +361,43 @@ restore --greeter sddm
 [ "$RC" = 0 ] && cmp -s "$R/$KDE" "$WORK/d8.kde" &&
   ok "  restore --greeter sddm undoes it back to the hand-made state (the uninstall's call)" || bad "  oldest fallback" "$OUT"
 
+# --- a read-only theme tree (an immutable /usr): a wallpaper variant is refused before /etc changes
+fresh d9
+chmod 0555 "$R/$THEME"
+apply --login-image dimmed
+[ "$RC" = 1 ] && has "cannot be written" && [ ! -e "$R/$KDE" ] && [ "$(backups)" = 0 ] &&
+  ok "a wallpaper variant on a read-only theme tree stops the run with /etc untouched" || bad "read-only theme" "$OUT"
+apply
+[ "$RC" = 0 ] && [ ! -e "$R/$THEME/theme.conf.user" ] && ok "  the theme's own wallpaper needs no write there" ||
+  bad "  read-only default" "$OUT"
+chmod 0755 "$R/$THEME"
+
+# --- an earlier run's cursors kept when the theme was changed by hand, then a second run: that
+# run counts as on Plasma Fusion already, so the default restore also undoes the first
+fresh d10
+apply
+kwriteconfig6 --file "$R/$KDE" --group Theme --key Current breeze
+tick
+apply
+grep -qx before=plasma-fusion "$(find "$R/var/lib/plasma-fusion" -mindepth 1 -maxdepth 1 -name 'greeter-backup-*' | sort | tail -1)/info" &&
+  ok "a run that finds the earlier run's cursors records before=plasma-fusion" || bad "cursor before marker"
+restore
+check
+[ "$RC" = 1 ] && [ "$(val "$R/$KDE" Theme Current)" = breeze ] && [ -z "$(val "$R/$KDE" Theme CursorTheme)" ] &&
+  has "breeze_cursors (/usr/lib/sddm/sddm.conf.d/kde_settings.conf)" &&
+  ok "  restore undoes both runs: the theme chosen by hand stays, the Plasma Fusion cursors go" ||
+  bad "  cursor left behind" "$OUT
+$(cat "$R/$KDE")"
+
+# --- /etc/sddm.conf.d as a link to a directory: its drop-ins count, as SDDM lists them
+fresh d11
+mv "$R/etc/sddm.conf.d" "$R/etc/sddm.conf.d.real"
+ln -s sddm.conf.d.real "$R/etc/sddm.conf.d"
+printf '[Theme]\nCurrent=local\n' >"$R/etc/sddm.conf.d.real/zz-local.conf"
+apply
+[ "$RC" = 1 ] && has "zz-local.conf would still set [Theme] Current=local" && ok "a linked configuration directory is read through" ||
+  bad "linked conf dir" "$OUT"
+
 # --- what stops a run before anything changes
 fresh e2
 printf '[Theme]\nThemeDir=/usr/share/sddm/themes\n' >"$R/etc/sddm.conf.d/Local-a.conf"

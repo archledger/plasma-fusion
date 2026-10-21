@@ -232,7 +232,8 @@ kr() { # $1 file, $2 group (nested with /), $3 key
 # hidden files, links to files included), sorted.
 conf_dir_files() { # $1 directory
   [ -d "$1" ] || return 0
-  find "$1" -mindepth 1 -maxdepth 1 ! -name '.*' -xtype f -print 2>/dev/null | LC_ALL=C sort
+  # -H: a directory that is itself a link is listed too, as QDir lists it
+  find -H "$1" -mindepth 1 -maxdepth 1 ! -name '.*' -xtype f -print 2>/dev/null | LC_ALL=C sort
 }
 
 # ---------- SDDM ----------
@@ -486,8 +487,14 @@ sddm_main() {
   for f in "$kde" "$conf" "$user_conf"; do
     [ ! -L "$f" ] || die "${f#"$SYSROOT"} is a link; change the theme where it points, or make it a file"
   done
+  # Whether the greeter already used Plasma Fusion: any value this run writes already in effect -
+  # the theme, the cursors (an earlier run's, kept when the theme was changed by hand since) or one
+  # of its wallpapers in theme.conf.user. Restore goes back past such a run to an older backup.
   sddm_effective Theme Current
   [ "$REPLY" != "$SDDM_THEME" ] || before=plasma-fusion
+  sddm_effective Theme CursorTheme
+  [ "$REPLY" != "$SDDM_CURSORS" ] || before=plasma-fusion
+  case $user_bg in "$share/plasma-fusion/backgrounds/"*) before=plasma-fusion ;; esac
 
   # The new files, made in $own. kde_settings.conf and theme.conf.user with kwriteconfig6: KConfig
   # is what System Settings' page writes them with as well.
@@ -512,6 +519,9 @@ sddm_main() {
     kw "$own/theme.conf.user" General background "$IMAGE"
     cmp -s "$user_conf" "$own/theme.conf.user" 2>/dev/null || user_new=$own/theme.conf.user
   fi
+  # A read-only theme tree (an immutable /usr) cannot take theme.conf.user: stop before /etc changes
+  [ -z "$user_new" ] || [ -w "$theme" ] ||
+    die "${theme#"$SYSROOT"} cannot be written (a read-only /usr?), so --login-image cannot be set there; run without it for the theme's own wallpaper. Nothing was changed."
   while IFS= read -r f; do
     die "$f sets the theme or cursors, and whether SDDM reads it before or after kde_settings.conf depends on its locale (QDir::LocaleAware); remove those keys there or give it a lower-case ASCII name. Nothing was changed."
   done < <(sddm_unordered)
@@ -574,6 +584,8 @@ sddm_main() {
     cp -- "$1" "$BACKUP/$3.applied"
     note "wrote ${2#"$SYSROOT"}"
   }
+  # theme.conf.user first: should it fail after all, /etc is still as it was
+  [ -z "$user_new" ] || put "$user_new" "$user_conf" sddm-theme/theme.conf.user
   if cmp -s "$own/kde_settings.conf" "$kde"; then
     note "${kde#"$SYSROOT"} already chooses Plasma Fusion (unchanged)"
   else
@@ -583,7 +595,6 @@ sddm_main() {
   # /etc/sddm.conf keeps its mode; the other two must be readable by the page (run as the user)
   # and by SDDM's greeter user.
   [ -z "$conf_new" ] || put "$conf_new" "$conf" etc/sddm.conf "$(stat -c %a "$conf")"
-  [ -z "$user_new" ] || put "$user_new" "$user_conf" sddm-theme/theme.conf.user
   if [ -z "$SYSROOT" ] && command -v restorecon >/dev/null && command -v selinuxenabled >/dev/null && selinuxenabled; then
     for f in "$kde" "$conf" "$user_conf"; do [ ! -e "$f" ] || restorecon "$f" || true; done
   fi

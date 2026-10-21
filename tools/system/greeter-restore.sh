@@ -289,8 +289,9 @@ deciding_file() { # $1 key
       return
     fi
   done < <(
-    find "$SYSROOT/usr/lib/sddm/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' -xtype f 2>/dev/null | LC_ALL=C sort
-    { find "$SYSROOT/etc/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' ! -name kde_settings.conf -xtype f \
+    # -H: a configuration directory that is itself a link is listed too, as SDDM's QDir lists it
+    find -H "$SYSROOT/usr/lib/sddm/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' -xtype f 2>/dev/null | LC_ALL=C sort
+    { find -H "$SYSROOT/etc/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' ! -name kde_settings.conf -xtype f \
         -printf '%f\t%p\n' 2>/dev/null
       printf 'kde_settings.conf\t%s\n' "$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf"
     } | LC_ALL=C sort | cut -f2-
