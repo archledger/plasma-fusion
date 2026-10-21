@@ -339,6 +339,22 @@ Rectangle {
                 // The keys go to the focused field, so give it the focus before the keyboard shows
                 card.focusPassword();
             }
+            // When the keyboard goes (focus left the text fields, or its own hide key) the button
+            // is off again, so a later focus opens nothing by itself - except while the focus is on
+            // this button: moving here from the field hides the keyboard, and the press that
+            // follows is to close it. Later, once focus and input method have settled.
+            function settle() {
+                if (inputPanel.item !== null && !inputPanel.item.active && !activeFocus) {
+                    inputPanel.item.activated = false;
+                }
+            }
+            onActiveFocusChanged: Qt.callLater(settle)
+            Connections {
+                target: inputPanel.item
+                function onActiveChanged() {
+                    Qt.callLater(onScreenKeyboard.settle);
+                }
+            }
             Keys.onReturnPressed: toggle()
             Keys.onEnterPressed: toggle()
             Keys.onSpacePressed: toggle()

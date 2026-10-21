@@ -813,10 +813,32 @@ def main():
             check(not panel.property("visible"), "a later focus does not reopen it without the button")
             activate(on_screen)
             check(panel.property("visible"), "the button opens it again")
-            press(view, on_screen, Qt.Key_Space)
+            # The real order by keyboard: the focus reaches the button first, which hides the
+            # keyboard (the field lost the focus, so the input method stops asking) ...
+            on_screen.forceActiveFocus()
+            panel.setProperty("requested", False)
+            QTest.qWait(10)
+            check(expr(on_screen, "Accessible.checked"),
+                  "focus on the button keeps the keyboard switched on (its press is to close it)")
+            # ... and passing on to another control switches it off
+            find(root, "Keyboard layout").forceActiveFocus()
+            QTest.qWait(10)
+            panel.setProperty("requested", True)
+            QTest.qWait(10)
+            check(not expr(on_screen, "Accessible.checked") and not panel.property("visible"),
+                  "focus passing over the button to another control switches it off")
+            activate(on_screen)
+            check(panel.property("visible"), "the button opens it once more")
+            on_screen.forceActiveFocus()
+            panel.setProperty("requested", False)
+            QTest.qWait(10)
+            QTest.keyClick(view, Qt.Key_Space)
+            QTest.qWait(10)
+            panel.setProperty("requested", True)  # the press gave the field the focus back
+            QTest.qWait(10)
             check(not panel.property("visible") and card.property("y") == normal_y
                   and not expr(on_screen, "Accessible.checked"),
-                  "the button (by key) closes it and the card returns")
+                  "Space on the focused button closes it, the card returns and it stays closed")
             panel.setProperty("requested", False)
         view.close()
         view.setSource(QUrl())

@@ -17,8 +17,7 @@ import QtQuick 2.15
 import QtQuick.VirtualKeyboard
 
 InputPanel {
-    // Set by the on-screen keyboard button; cleared when the keyboard goes (focus left the text
-    // fields, or its own hide key), so the button is off again and a later focus opens nothing
+    // Set by the on-screen keyboard button; Main.qml clears it when the keyboard goes
     property bool activated: false
     // Qt's input method wants a keyboard (a text field has focus)
     property bool requested: Qt.inputMethod.visible
@@ -30,6 +29,5 @@ InputPanel {
     active: activated && requested
     visible: active
     onRequestedChanged: if (requested) available = true
-    onActiveChanged: if (!active) activated = false
     Component.onCompleted: available = requested
 }
