@@ -15,9 +15,9 @@ plasma-login-manager styling in [`tools/system/greeter-apply.sh`](../../tools/sy
 `packages/sddm-theme/` is the theme source. `build.sh` stages it into a theme directory that
 `sddm-greeter-qt6` can run (`sddm-greeter-qt6 --test-mode --theme <dir>`), and
 [`packaging/install-tree.sh`](../../packaging/install-tree.sh) installs it as
-`share/sddm/themes/plasmafusion`. This slice packages the theme for manual selection through
-the distribution's SDDM settings. Automatic apply/restore and the login check are follow-up work;
-`tools/system/greeter-apply.sh` still handles plasma-login-manager only.
+`share/sddm/themes/plasmafusion`. `tools/system/greeter-apply.sh` chooses it where SDDM is the
+display manager (and `greeter-restore.sh` undoes that); System Settings' Login Screen (SDDM) page
+can choose it too. docs/parts/sddm.md, "Choosing it", has the details.
 
 The theme is plain QtQuick with the models and the proxy object SDDM provides
 (SDDM `docs/THEMING.md`, v0.21.0): `sddm` (hostName, the power capabilities and methods,
@@ -94,4 +94,4 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
                                                            # --help; the docs say --test, which it rejects)
 
 Installing the package does not change the active display manager, its theme or authentication
-settings. SDDM's apply/restore integration has not landed yet.
+settings; `sudo /usr/share/plasma-fusion/tools/system/greeter-apply.sh` chooses the theme.

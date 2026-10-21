@@ -169,6 +169,13 @@ Each boundary, what crosses it, and how it is guarded.
 - Work directories come from `mktemp -d` with mode 0700; backups go to
   `/var/lib/plasma-fusion/greeter-backup-<time>/` with mode 0700; `greeter-restore.sh` puts them
   back.
+- On SDDM it writes only root's files: `/etc/sddm.conf.d/kde_settings.conf`, `/etc/sddm.conf` and
+  the theme's `theme.conf.user`, each next to its target first and then renamed. It refuses a
+  theme directory anyone but root can write to and any of the three files that is a link (root
+  would copy what it points to, the rename would replace it), and `greeter-restore.sh` leaves a
+  link it finds there alone. `PF_GREETER_ROOT`, the tests' system tree, is refused for root by
+  both scripts, so root never writes through a tree another user prepared. `--check` reads only
+  files every user can read and needs no root.
 
 ### 3.6 User services (data from other packages)
 
@@ -253,7 +260,7 @@ The principles of Saltzer and Schroeder, as the Best Practices criteria list the
 | Fail-safe defaults | After an update the login check falls back to KDE's own lock screen and desktop and to the Plasma Fusion Aurorae decoration, which has no compiled plugin (`plasma-fusion-gate.sh`); a missing or unreadable version record, and versions no package database reports, count as untested ([`parts/gate.md`](parts/gate.md)). The polkit action denies remote and inactive sessions. Lock screen notification text is off by default. A QML error in the lock screen falls back to kscreenlocker's own. |
 | Complete mediation | Every charge-limit change goes through pkexec and polkit, and the helper checks root and its argument itself on every call. |
 | Open design | All code and all security measures are public in this repository; nothing depends on secrecy. |
-| Separation of privilege | Reading the charge limit needs no privilege; writing needs pkexec ([`parts/charge-limit.md`](parts/charge-limit.md)). The greeter tool writes `/etc/plasmalogin.conf` as root but the greeter's home as the greeter user (`tools/system/greeter-apply.sh`). |
+| Separation of privilege | Reading the charge limit needs no privilege; writing needs pkexec ([`parts/charge-limit.md`](parts/charge-limit.md)). The greeter tool writes `/etc/plasmalogin.conf` (or SDDM's root-owned configuration) as root but the greeter's home as the greeter user (`tools/system/greeter-apply.sh`). |
 | Least privilege | The per-user install needs no root. The helper is one program for one action. The power tiers and app icons services run with `NoNewPrivileges=yes`. The greeter tool drops to the greeter user and to a file's owner to read it. CI tokens are read-only unless a job needs more. |
 | Least common mechanism | Plasma Fusion adds no daemon shared between users and no system service; per-user state stays in each HOME ([`ARCHITECTURE.md`](ARCHITECTURE.md), "Where state lives"). |
 | Psychological acceptability | Safe defaults need no setup; every change can be previewed (`--dry-run`) and undone (`fusion-restore.sh`, `greeter-restore.sh`, `plymouth-uninstall.sh`); the login check explains itself in a notification. |

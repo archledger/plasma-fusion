@@ -296,6 +296,33 @@ for SHNAME in "${shells[@]}"; do
   expect "a greeter on Plasma Fusion's Global Theme is restored too" has_log "greeter-restore.sh"
   rm -rf "$CASE/root/var/lib/plasmalogin"
   printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
+  # SDDM: greeter-apply.sh chose the Plasma Fusion theme (its backup says greeter=sddm).
+  mkdir -p "$CASE/root/var/lib/plasma-fusion/greeter-backup-20261021T000000Z" "$CASE/root/etc/sddm.conf.d"
+  printf 'created=20261021T000000Z\ngreeter=sddm\nbefore=other\n' >"$CASE/root/var/lib/plasma-fusion/greeter-backup-20261021T000000Z/info"
+  printf '[Theme]\nCurrent=plasmafusion\nCursorTheme=PlasmaFusion-cursors\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "an SDDM login screen Plasma Fusion chose is restored too, SDDM's runs only" has_log "greeter-restore.sh --greeter sddm"
+  expect "  (plasma-login-manager's are not replayed)" bash -c '! grep -q "^greeter-restore.sh *$\|--greeter plasmalogin" <<<"$0"' "$LOG"
+  # The same with comments after the values, which SDDM cuts off
+  printf '[Theme]\nCurrent=plasmafusion # chosen here\nCursorTheme=PlasmaFusion-cursors # too\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "  also with a comment after the value" has_log "greeter-restore.sh --greeter sddm"
+  # A choice of the theme greeter-apply.sh did not make: the uninstall goes on and names the file
+  printf '[Theme]\nCurrent=plasmafusion # by hand\n' >"$CASE/root/etc/sddm.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "a theme chosen elsewhere is named, and the packages still go" bash -c 'grep -q "still chooses the Plasma Fusion login theme (.*/etc/sddm.conf)" <<<"$0" && grep -q "^dnf -y remove" <<<"$1"' "$OUT" "$LOG"
+  rm -f "$CASE/root/etc/sddm.conf"
+  # That run undone since (another theme chosen): the old backup asks for nothing.
+  printf '[Theme]\nCurrent=breeze\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "a backup of an SDDM run undone since asks for no restore" bash -c '! grep -q "greeter-restore" <<<"$0"' "$LOG"
+  # Both greeters: a styled plasma-login-manager is restored on its own.
+  printf '[Greeter]\nWallpaperPlugin=org.kde.image\n\n[Greeter][Wallpaper][org.kde.image][General]\nImage=file:///usr/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png\n' \
+    >"$CASE/root/etc/plasmalogin.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "with SDDM backups on record, plasma-login-manager is restored with --greeter plasmalogin" has_log "greeter-restore.sh --greeter plasmalogin"
+  printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
+  rm -rf "$CASE/root/var/lib/plasma-fusion" "$CASE/root/etc/sddm.conf.d"
   # the optional system steps are offered where they apply
   rm -f "$CASE/root/etc/plasmalogin.conf"
   run "$sh" $FED -- --yes
@@ -304,7 +331,13 @@ for SHNAME in "${shells[@]}"; do
   mkdir -p "$CASE/root/usr/lib/plasmalogin"
   run "$sh" $FED -- --yes
   expect "with plasma-login-manager the login screen step is offered" has_out "greeter-apply.sh"
-  rm -rf "$CASE/root/usr/lib/plasmalogin" "$CASE/root/usr/share/plasma-fusion" "$CASE/root/usr/share/plymouth"
+  rm -rf "$CASE/root/usr/lib/plasmalogin"
+  mkdir -p "$CASE/root/usr/bin"
+  printf '#!/bin/sh\n' >"$CASE/root/usr/bin/sddm-greeter-qt6"
+  chmod +x "$CASE/root/usr/bin/sddm-greeter-qt6"
+  run "$sh" $FED -- --yes
+  expect "with SDDM's Qt 6 greeter the login screen step is offered" has_out "greeter-apply.sh"
+  rm -rf "$CASE/root/usr/bin/sddm-greeter-qt6" "$CASE/root/usr/share/plasma-fusion" "$CASE/root/usr/share/plymouth"
   # setup failure
   EXTRA_ENV="FAKE_SETUP_RC=1" run "$sh" $FED -- --yes
   expect "a failed setup exits 1" [ "$RC" = 1 ]

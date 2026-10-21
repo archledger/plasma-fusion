@@ -16,7 +16,7 @@ do not support (`find_package(KWin 6.7)`; 6.7-only QML interfaces), so until a N
 | File | What |
 |---|---|
 | `packaging/nix/plasma-fusion.nix` | `{ pkgs, src, version }` → `plasma-fusion` (the shared part), `plasma-fusion-decoration`, `plasma-fusion-settings`, `plasma-fusion-navigation`, `plasma-fusion-quicklook` (a program: wrapped with the QML modules of its viewers), `plasma-fusion-copytext` (a program, not wrapped: KWin gives its screenshot permission to the executable its desktop file names; a link to the shared package's `plasma-fusion-copytext` beside it, where it hands the area over; docs/parts/copytext-cpp.md) |
-| `packaging/nix/module.nix` | `programs.plasma-fusion = { enable; src; compiledParts; plymouth; }`; with `compiledParts`, copy text's overlay in `services.dbus.packages` too (the session bus starts it on the first copy text) |
+| `packaging/nix/module.nix` | `programs.plasma-fusion = { enable; src; compiledParts; plymouth; sddm; }`; with `compiledParts`, copy text's overlay in `services.dbus.packages` too (the session bus starts it on the first copy text); with `sddm`, SDDM's theme `plasmafusion` and `[Theme] CursorTheme=PlasmaFusion-cursors` (needs `services.displayManager.sddm.enable`) |
 
 The shared package is installed by `packaging/install-tree.sh`, as on every channel
 (system.md): the same files under `$out/share`, `$out/libexec/plasma-fusion` and
@@ -92,6 +92,11 @@ generation).
 ## Not covered yet
 
 - The boot splash (`plymouth = true`) is built but not tried on a real NixOS boot.
-- The login greeter styling (`tools/system/greeter-apply.sh`) assumes plasma-login-manager; NixOS
-  uses SDDM. The SDDM theme is packaged for manual selection, with its wallpaper pointing into
-  `/run/current-system/sw/share`; automatic apply/restore remains follow-up work (sddm.md).
+- The login screen: `sddm = true` sets `services.displayManager.sddm.theme = "plasmafusion"` (over
+  the plasma6 module's `mkDefault "breeze"`) and the cursors in `settings`; SDDM finds the theme in
+  `/run/current-system/sw/share/sddm/themes`, its wallpaper in `/run/current-system/sw/share`.
+  Checked by evaluating a system with the flake's nixpkgs (2026-10-21: the generated
+  `sddm.conf` has `Current=plasmafusion` and the cursors; without `sddm.enable` the assertion
+  stops it), not yet booted. `greeter-apply.sh` refuses to change NixOS (`/etc` is generated); its
+  `--check` and `plasma-fusion status` read the module's choice. To undo, drop the option and
+  rebuild. plasma-login-manager styling is not covered on NixOS.

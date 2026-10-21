@@ -116,7 +116,7 @@ Recommends:     %{name}-copytext%{?_isa} = %{version}-%{release}
 Suggests:       %{name}-navigation%{?_isa} = %{version}-%{release}
 %endif
 # The design's Code and Notes apps, the terminal whose theme is included, the login screen
-# styled by tools/system/greeter-apply.sh.
+# styled by tools/system/greeter-apply.sh (plasma-login-manager or SDDM).
 Suggests:       kate
 Suggests:       marknote
 Suggests:       konsole
@@ -139,7 +139,7 @@ The package installs these for every user. Each user then runs
 "plasma-fusion setup" inside their Plasma session to apply the Global Theme
 and the settings a Global Theme cannot carry, and "plasma-fusion update" after
 later updates. As root, /usr/share/plasma-fusion/tools/system/greeter-apply.sh
-styles the Plasma login greeter.
+styles the login screen (plasma-login-manager or SDDM).
 
 %if %{with compiled}
 %package decoration
@@ -263,7 +263,7 @@ bash tools/build.sh
 # /usr/share/plymouth/themes: installing this package never changes the boot splash.
 bash generators/plymouth/build.sh "$PWD/_plymouth/plasma-fusion"
 # The SDDM login theme is system-wide only, like the Plymouth theme: it is installed as
-# share/sddm/themes/plasmafusion (SDDM reads its themes from there) for manual selection.
+# share/sddm/themes/plasmafusion (SDDM reads its themes from there); greeter-apply.sh chooses it.
 bash packages/sddm-theme/build.sh "$PWD/_sddm"
 
 %if %{with compiled}

@@ -12,16 +12,16 @@ Three pieces:
    channel.
 2. **Login greeter styling** (`tools/system/greeter-apply.sh`, `greeter-restore.sh`): Plasma Fusion
    Dark for the plasma-login-manager 6.7.5 greeter, the way System Settings' "Apply Plasma
-   Settings…" would do it, plus the greeter wallpaper. The shared package also installs the
-   [SDDM theme](sddm.md) for manual selection; these scripts still handle plasma-login-manager
-   only and do not select or restart SDDM.
+   Settings…" would do it, plus the greeter wallpaper. On SDDM they choose the
+   [SDDM theme](sddm.md) the shared package installs, the way the Login Screen (SDDM) page would;
+   neither restarts a display manager.
 3. **Kate and Marknote** installed with dnf for the design's Code and Notes slots.
 
 Owned files: `packaging/` (version, source tarball, the shared install script, the Fedora spec,
 the PKGBUILD, the Debian packaging, the Nix packages, rpmlint filters, licence texts),
 `.packit.yaml`, `tools/plasma-fusion`, `tools/system/greeter-apply.sh`,
-`tools/system/greeter-restore.sh`, this file. The per-user step is `plasma-fusion setup`
-(`tools/device/fusion-config.sh`; not owned here).
+`tools/system/greeter-restore.sh`, `tools/system/tests/greeter-sddm-unit.sh`, this file. The
+per-user step is `plasma-fusion setup` (`tools/device/fusion-config.sh`; not owned here).
 
 ## 0. One version, one source, one install script
 
@@ -96,7 +96,7 @@ packaging/build-rpm.sh [--topdir DIR] [--compiled] [--no-lint]   # default DIR: 
 | `/usr/share/plasma/desktoptheme/plasma-fusion-{dark,light}/` | plasma-style | |
 | `/usr/share/plasma/plasmoids/org.plasmafusion.*/` | top bar, quick settings, launcher, dock, desktop cards | glob, so new Plasma Fusion widgets are packaged without a spec change |
 | `/usr/share/plasma/shells/org.plasmafusion.lockshell/` | lockscreen | |
-| `/usr/share/sddm/themes/plasmafusion/` | `packages/sddm-theme/build.sh` | QtQuick login theme, metadata and `theme.conf`; manual selection only, no active greeter or authentication settings changed (sddm.md) |
+| `/usr/share/sddm/themes/plasmafusion/` | `packages/sddm-theme/build.sh` | QtQuick login theme, metadata and `theme.conf`; installing it changes no SDDM setting, `greeter-apply.sh` chooses it (sddm.md) |
 | `/usr/share/plasma/layout-templates/org.plasmafusion.panel.{topbar,dock}/` | lookandfeel | the "Add Panel" entries; the directory belongs to plasma-desktop |
 | `/usr/share/icons/{PlasmaFusion,PlasmaFusion-Dark,PlasmaFusion-cursors,PlasmaFusion-Light-cursors}/` | icons, cursors | all 8 816 links kept (see below) |
 | `/usr/share/aurorae/themes/PlasmaFusion{Dark,Light}{,-Left}/` | decoration | `aurorae/` and `aurorae/themes/` co-owned (no owner in Fedora) |
@@ -236,9 +236,14 @@ so both keys must be set.
 ### `tools/system/greeter-apply.sh` (root)
 
 ```
-greeter-apply.sh [--display-from FILE] [--dry-run] [--check]
+greeter-apply.sh [--greeter auto|plasmalogin|sddm] [--display-from FILE] [--dry-run] [--check]
 greeter-apply.sh --output DIR [--data-dir DIR] [--display-from FILE]   # no root: write into DIR (tests)
 ```
+
+`--greeter` (default `auto`): the display manager `display-manager.service` names
+(`sddm.service` or `plasmalogin.service`); without either alias plasma-login-manager while its user
+exists, else SDDM; `--output` always writes plasma-login-manager's files. The SDDM mode is described
+in [sddm.md](sddm.md), "Choosing it"; the rest of this section is plasma-login-manager's.
 
 Recommended call (in the user's Plasma session, so `~` is that user's home):
 `sudo /usr/share/plasma-fusion/tools/system/greeter-apply.sh --display-from ~/.config/kwinoutputconfig.json`.
@@ -295,13 +300,16 @@ no hidden files, links to files included).
 
 Nothing is restarted: the greeter shows the change the next time it starts (next logout or reboot).
 
-### `tools/system/greeter-restore.sh [BACKUP_DIR] [--dry-run]` (root)
+### `tools/system/greeter-restore.sh [BACKUP_DIR | --greeter sddm|plasmalogin] [--dry-run]` (root)
 
 Goes back to the state saved in BACKUP_DIR by undoing every run of greeter-apply.sh, newest
-first, down to and including that one. Default BACKUP_DIR: the newest backup whose `info` does not
-say `before=plasma-fusion`, i.e. the look from before Plasma Fusion. (A second run of
-greeter-apply.sh, for example after a package update, makes a backup of the Plasma Fusion state;
-restoring only the newest backup would undo nothing.) Backups of the first version of the script
+first, down to and including that one. A run on SDDM (`info` says `greeter=sddm`) is undone as
+[sddm.md](sddm.md) describes; the greeter user below is looked up only for plasma-login-manager's
+runs; `--greeter` undoes only one greeter's. Default BACKUP_DIR, for each of the two greeters'
+runs separately: the newest backup whose `info` does not say `before=plasma-fusion`, i.e. the look
+from before Plasma Fusion; when every one says it (Plasma Fusion chosen by hand before the first
+run), the oldest: all runs are undone, the hand-made choice stays. (A second run of greeter-apply.sh, for example after a package update,
+makes a backup of the Plasma Fusion state; restoring only the newest backup would undo nothing.) Backups of the first version of the script
 have no `before=` line and count as taken before Plasma Fusion.
 
 For each backup: as the greeter user, puts back the files that run wrote (`kdeglobals`, `plasmarc`,
