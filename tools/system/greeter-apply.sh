@@ -377,7 +377,7 @@ sddm_themedir_unordered() {
 # greeter runs as that user, not as root (Greeter.cpp: setUser("sddm")), and falls back to SDDM's
 # own theme without it. As root the check runs as user sddm; otherwise as the caller.
 sddm_unreadable_theme() { # $1 theme directory
-  local g up
+  local g up t
   local -a mine=() can=() r=() rx=()
   if [ "$(id -u)" != 0 ] || [ -n "$SYSROOT" ] || ! getent passwd sddm >/dev/null; then
     find "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null || printf '%s\n' "$1"
@@ -388,7 +388,10 @@ sddm_unreadable_theme() { # $1 theme directory
   else
     # No setpriv (util-linux; a minimal Fedora has util-linux-core only): the mode bits as the
     # kernel reads them for that user - the owner's where it owns the file, else the group's where
-    # one of its groups does, else the others' (ACLs are not read this way).
+    # one of its groups does, else the others' (ACLs are not read this way). The path resolved
+    # first: the directories checked above the tree are the ones the kernel walks through, a link's
+    # target's, not the link's own (find examines a link, not what it points to).
+    t=$(realpath -e -- "$1" 2>/dev/null) || { printf '%s\n' "$1"; return; }
     for g in $(id -G sddm); do
       [ "${#mine[@]}" = 0 ] || mine+=(-o)
       mine+=(-group "$g")
@@ -399,7 +402,7 @@ sddm_unreadable_theme() { # $1 theme directory
       case $g in
         x)
           # Every directory above the tree must let that user through
-          up=$1
+          up=$t
           while [ "$up" != / ]; do
             up=$(dirname -- "$up")
             [ -z "$(find "$up" -maxdepth 0 ! \( "${can[@]}" \) -print 2>/dev/null)" ] || { printf '%s\n' "$up"; return; }
@@ -408,7 +411,7 @@ sddm_unreadable_theme() { # $1 theme directory
         rx) rx=("${can[@]}") ;;
       esac
     done
-    find "$1" \( -type d ! \( "${rx[@]}" \) -o ! -type d ! \( "${r[@]}" \) \) -print -quit 2>/dev/null ||
+    find "$t" \( -type d ! \( "${rx[@]}" \) -o ! -type d ! \( "${r[@]}" \) \) -print -quit 2>/dev/null ||
       printf '%s\n' "$1"
   fi
 }
