@@ -241,6 +241,22 @@ neon (noble) still with initramfs-tools, and Ubuntu and neon have no `plymouth-s
 | KDE neon, older Debian and Ubuntu | initramfs-tools (`lsinitramfs`) | `plymouth-set-default-theme`, else the alternative | `/boot/initrd.img-<kernel>` | `plymouth` (apt-get) |
 | Arch | mkinitcpio (`lsinitcpio`) | `plymouth-set-default-theme` | every preset's image and unified kernel image (`mkinitcpio -P`) | `plymouth` (pacman) |
 
+Newer Plymouth (after 24.004.60: Debian testing, Ubuntu 26.10, Arch; not Fedora 44's or KDE neon's
+yet) has a console viewer in its script plugin, which needs Plymouth's text (label) plugin. Without
+one Plymouth makes no viewer, but the script plugin's refresh shows or hides one on each display all
+the same (`script-lib-sprite.c`, `script_lib_sprite_refresh`), and plymouthd crashes as the splash
+starts. Upstream fixed that on 2026-05-20 (88c8dd8, "script: check if console_viewer is enabled"),
+in no release yet as of 2026-10-21 (26.134.222 the latest). Ubuntu 26.10 packs the FreeType plugin on
+its own (`plymouth-label-ft`), which no package in its archive depends on, and its initramfs-tools
+hook copies only the pango one; the release VM (`kde-plasma-desktop`) had neither, and its boot
+showed plymouthd's backtrace instead of the splash (2026-10-21). Where the system's `script.so`
+uses the console viewer, the installer makes sure of the plugin the builder copies into the image
+- `label-freetype.so` with dracut (Plymouth's `plymouth-populate-initrd`) and mkinitcpio (Arch's
+hook), `label-pango.so` with initramfs-tools (Debian's and Ubuntu's hook) - installing Ubuntu's
+`plymouth-label-ft` or Debian's `plymouth-label` (recorded like the script plugin; Arch's
+`plymouth` has both), and checks it is in each rebuilt image. The theme draws its own text and needs
+the plugin for nothing else.
+
 NixOS builds its initramfs from the configuration (`programs.plasma-fusion.plymouth`, nixos.md);
 there, and where no builder is found, the installer exits 3 and changes nothing. mkinitcpio counts
 as the builder wherever it has presets (Arch's configured generator, even with dracut installed).
@@ -309,7 +325,9 @@ its own packages, with a minimal stand-in theme (a build of `generators/plymouth
 argument instead): the theme selected and in each rebuilt image with `script.so`, the backups, the
 note on a command line without `splash` and none with it, a second `--select` keeping the first
 backup; then the uninstall: each image without the theme, the backups, files and state gone, the
-theme or the alternative as before, `plymouthd.conf` byte for byte, Arch's `HOOKS` as before.
+theme or the alternative as before, `plymouthd.conf` byte for byte, Arch's `HOOKS` as before. Where
+the script plugin has a console viewer, each rebuilt image must hold the text plugin its builder
+copies, and `--remove-plugin` must remove every package the installer installed.
 `PF_PLYMOUTH_KERNEL` names the installed kernel there (in a container the running one is the
 host's), `PF_PLYMOUTH_CMDLINE` a command line file. 2026-10-21, all pass: Fedora 44 with dracut (13
 checks; `plymouth-plugin-script` installed and removed again), Debian testing with dracut (13) and

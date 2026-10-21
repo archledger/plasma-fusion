@@ -9,6 +9,10 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Boot splash on Ubuntu 26.10:** `plymouth-install.sh --select` now also installs Plymouth's text
+  plugin (`plymouth-label-ft`; Debian: `plymouth-label`) where the system's Plymouth needs it:
+  without it, Plymouth's script plugin crashed as the splash started and the boot showed a
+  backtrace instead (Plymouth after 24.004.60; found on a real boot in the release VMs).
 - **Installer on Debian, Ubuntu and KDE neon:** the package steps wait (up to 10 minutes, as apt
   says) while another package manager holds dpkg's lock, instead of failing at once; unattended
   upgrades, which catch up at a random time in the first hour after a boot, made an install fail
