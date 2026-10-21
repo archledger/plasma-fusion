@@ -307,7 +307,8 @@ first, down to and including that one. A run on SDDM (`info` says `greeter=sddm`
 [sddm.md](sddm.md) describes; the greeter user below is looked up only for plasma-login-manager's
 runs; `--greeter` undoes only one greeter's. Default BACKUP_DIR, for each of the two greeters'
 runs separately: the newest backup whose `info` does not say `before=plasma-fusion`, i.e. the look
-from before Plasma Fusion. (A second run of greeter-apply.sh, for example after a package update,
+from before Plasma Fusion; when every one says it (Plasma Fusion chosen by hand before the first
+run), the oldest: all runs are undone, the hand-made choice stays. (A second run of greeter-apply.sh, for example after a package update,
 makes a backup of the Plasma Fusion state; restoring only the newest backup would undo nothing.) Backups of the first version of the script
 have no `before=` line and count as taken before Plasma Fusion.
 

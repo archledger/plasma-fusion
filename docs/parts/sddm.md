@@ -347,7 +347,9 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   named by `--check`, NixOS's check uses the system profile's KConfig tools, and the installer
   reads `kde_settings.conf` with comments cut off as SDDM does. From the fifth: restore treats a
   drop-in of locale-dependent order as possibly read after `kde_settings.conf`, and uninstall names
-  the files that still choose the theme by other means (SDDM then shows its built-in theme).
+  the files that still choose the theme by other means (SDDM then shows its built-in theme). From
+  the sixth: when the theme was chosen by hand before the first run, the default restore undoes
+  every run back to that hand-made state instead of refusing (which stopped the uninstall).
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,
   and nothing for a backup of a run undone since; plasma-login-manager is restored with

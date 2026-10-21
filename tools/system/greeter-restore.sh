@@ -9,7 +9,8 @@
 #   BACKUP_DIR   a /var/lib/plasma-fusion/greeter-backup-<UTC time> directory: go back to the
 #                state saved in it (default: for SDDM's and plasma-login-manager's runs each, the
 #                newest backup taken while that greeter did not use Plasma Fusion yet, i.e. the
-#                look from before Plasma Fusion)
+#                look from before Plasma Fusion; the oldest when every one was taken while it
+#                already did, chosen by hand before the first run)
 #   --greeter G  without BACKUP_DIR: only that greeter's runs (the uninstall restores the greeter
 #                that uses Plasma Fusion now, and leaves the other's later settings alone)
 #   --dry-run    show what would be restored; change nothing
@@ -112,7 +113,9 @@ else
       if ! grep -qx 'before=plasma-fusion' "$b/info" 2>/dev/null; then t=$b; break; fi
     done
     [ "${#runs[@]}" -gt 0 ] || continue
-    [ -n "$t" ] || die "every $k backup in $BACKUP_ROOT was taken while the greeter already used Plasma Fusion; name one"
+    # Every one was taken while the greeter already used Plasma Fusion (chosen by hand before the
+    # first run): back to the oldest, the state before any run of this script.
+    [ -n "$t" ] || t=${runs[${#runs[@]}-1]}
     CHAIN+=("${runs[@]}")
     TARGETS+=("$t")
   done

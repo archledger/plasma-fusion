@@ -334,6 +334,18 @@ check
   bad "inline comment" "$OUT
 $(cat "$R/$KDE")"
 
+# --- the theme chosen by hand (the page) before the first run: every backup says the greeter
+# already used Plasma Fusion, and the default restore goes back to the oldest
+fresh d8
+printf '[Theme]\nCurrent=plasmafusion\n' >"$R/$KDE"
+cp -p "$R/$KDE" "$WORK/d8.kde"
+apply
+grep -qx before=plasma-fusion "$R"/var/lib/plasma-fusion/greeter-backup-*/info &&
+  ok "a run on a theme chosen by hand records before=plasma-fusion" || bad "before marker" "$OUT"
+restore --greeter sddm
+[ "$RC" = 0 ] && cmp -s "$R/$KDE" "$WORK/d8.kde" &&
+  ok "  restore --greeter sddm undoes it back to the hand-made state (the uninstall's call)" || bad "  oldest fallback" "$OUT"
+
 # --- what stops a run before anything changes
 fresh e2
 printf '[Theme]\nThemeDir=/usr/share/sddm/themes\n' >"$R/etc/sddm.conf.d/Local-a.conf"
