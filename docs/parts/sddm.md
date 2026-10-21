@@ -164,8 +164,8 @@ backup. Configuration directories that are links to directories are read through
 lists them.
 
 The backup is `/var/lib/plasma-fusion/greeter-backup-<UTC>/` (0700), as for plasma-login-manager:
-the three files present or absent (`manifest`), `info` with `greeter=sddm`, the theme, cursors and
-wallpaper the run wrote and `before=plasma-fusion|other` (`plasma-fusion` when any value the run
+the three files present or absent (`manifest`), `info` with `greeter=sddm`, the theme, its directory
+(`theme_dir`, and `theme_real` with links resolved), cursors and wallpaper the run wrote and `before=plasma-fusion|other` (`plasma-fusion` when any value the run
 writes was in effect already - the theme, the cursors or one of its wallpapers - so restore goes back
 past it), and `<file>.applied`, what it wrote, saved before the file is replaced so that a run killed
 in between is still undone.
@@ -187,9 +187,11 @@ passed over with a note instead of blocking every later restore. A saved
 explicit empty value (`Current=`, which hides a vendor file's theme) comes back as such, not as a
 missing key. A link found where the run wrote a file, or a file removed since, is left that way; a
 link in `kde_settings.conf`'s place is a newer choice whatever it reads as, so `/etc/sddm.conf`'s
-old lines do not come back over it. With `ThemeDir` pointed elsewhere since the run, its
+old lines do not come back over it. With `ThemeDir` pointed elsewhere since the run - another path,
+or the same path leading elsewhere because a link in it was retargeted (#102) - its
 `Current=plasmafusion` names that tree's theme - the administrator's choice - and stays (the
-cursors still go back).
+cursors still go back). A theme that is gone while its path still leads where it did names no other
+theme: the run is undone.
 `--dry-run` makes SDDM's undo on a copy of the three files, so each run's step sees what the newer
 ones would leave and the preview is the real restore's. `--greeter sddm` (or `plasmalogin`) undoes
 only that greeter's runs; the installer's uninstall uses
@@ -383,7 +385,8 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   Follow-up (#100): two drop-ins read after `kde_settings.conf` with different themes in a
   locale-dependent order make `--check` exit 2 and stop `apply`, an unprivileged check of a theme
   file it cannot read exits 2, restore keeps `Current` when `ThemeDir` points elsewhere since, and a
-  linked `kde_settings.conf` keeps its choice over `/etc/sddm.conf`'s old line; and a `ThemeDir`
+  linked `kde_settings.conf` keeps its choice over `/etc/sddm.conf`'s old line, a `ThemeDir` link
+  retargeted after the run keeps `Current` (#102: the backup's `theme_real`), and a `ThemeDir`
   drop-in whose order against `kde_settings.conf` depends on the locale counts as unchanged when
   `kde_settings.conf` does not set `ThemeDir` (only files that set a key decide it).
 - `tools/system/tests/greeter-sddm-root.sh` (CI, the build workflow's `sddm-root` job; it refuses
