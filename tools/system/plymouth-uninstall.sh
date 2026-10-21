@@ -54,8 +54,9 @@ done
 # picks them.
 BUILDER=
 if [ -e /etc/NIXOS ]; then :
+elif command -v mkinitcpio >/dev/null && command -v lsinitcpio >/dev/null && compgen -G "/etc/mkinitcpio.d/*.preset" >/dev/null; then
+  BUILDER=mkinitcpio LIST=lsinitcpio
 elif command -v dracut >/dev/null && command -v lsinitrd >/dev/null; then BUILDER=dracut LIST=lsinitrd
-elif command -v mkinitcpio >/dev/null && command -v lsinitcpio >/dev/null; then BUILDER=mkinitcpio LIST=lsinitcpio
 elif command -v update-initramfs >/dev/null && command -v lsinitramfs >/dev/null; then BUILDER=initramfs-tools LIST=lsinitramfs
 fi
 if [ -z "$BUILDER" ]; then
@@ -89,17 +90,16 @@ KVER=${PF_PLYMOUTH_KERNEL:-$(uname -r)}
 IMAGES=()
 case $BUILDER in
   dracut)
-    if [ -e "/boot/initrd.img-$KVER" ] || { [ ! -e "/boot/initramfs-$KVER.img" ] && compgen -G "/boot/initrd.img-*" >/dev/null; }; then
-      IMAGES=("/boot/initrd.img-$KVER")
-    else
-      IMAGES=("/boot/initramfs-$KVER.img")
-    fi ;;
-  initramfs-tools) IMAGES=("/boot/initrd.img-$KVER") ;;
+    for img in "/boot/initramfs-$KVER.img" "/boot/initrd.img-$KVER"; do
+      if [ -f "$img" ]; then IMAGES=("$img"); break; fi
+    done ;;
+  initramfs-tools) [ ! -f "/boot/initrd.img-$KVER" ] || IMAGES=("/boot/initrd.img-$KVER") ;;
   mkinitcpio)
     mapfile -t IMAGES < <(for f in /etc/mkinitcpio.d/*.preset; do
-      [ -e "$f" ] || continue
       # shellcheck source=/dev/null # the system's presets, read as mkinitcpio -P reads them
-      ( . "$f"; for p in "${PRESETS[@]}"; do v=${p}_image; [ -z "${!v:-}" ] || printf '%s\n' "${!v}"; done )
+      ( . "$f"; for p in "${PRESETS[@]}"; do
+          for k in image uki; do v=${p}_$k; [ -z "${!v:-}" ] || printf '%s\n' "${!v}"; done
+        done )
     done) ;;
 esac
 IMG=${IMAGES[0]:-}
@@ -165,6 +165,10 @@ if [ "$(current_theme)" = "$NAME" ]; then
   rebuild=1
 else
   echo "$NAME is not the selected theme (current: $(current_theme))"
+  # Ubuntu, neon: a theme chosen since leaves ours registered; removing it changes no selection
+  if [ "$SELECTOR" = alternatives ] && update-alternatives --query "$ALT" 2>/dev/null | grep -qxF "Alternative: $THEMES/$NAME/$NAME.plymouth"; then
+    run update-alternatives --remove "$ALT" "$THEMES/$NAME/$NAME.plymouth"
+  fi
   # Deselected by hand without a rebuild: the running kernel's image may still carry it.
   if [ "$DRY" = 0 ] && [ -n "$IMG" ] && [ "$(image_state "$IMG")" = theme ]; then
     echo "$IMG still contains $NAME"
@@ -175,7 +179,9 @@ fi
 if [ "$rebuild" = 1 ] || [ "$ALL" = 1 ]; then
   case $BUILDER:$ALL in
     dracut:1) run nice -n 10 dracut -f --regenerate-all ;;
-    dracut:0) run nice -n 10 dracut -f "$IMG" "$KVER" ;;
+    dracut:0)
+      [ -n "$IMG" ] || { echo "plymouth-uninstall: no image of kernel $KVER to rebuild (--all-kernels rebuilds every one)" >&2; exit 1; }
+      run nice -n 10 dracut -f "$IMG" "$KVER" ;;
     initramfs-tools:1) run nice -n 10 update-initramfs -u -k all ;;
     initramfs-tools:0) run nice -n 10 update-initramfs -u -k "$KVER" ;;
     mkinitcpio:*) run nice -n 10 mkinitcpio -P ;;
@@ -194,7 +200,8 @@ fi
 
 # The copies made by --select: remove each one once its kernel's image no longer holds the
 # theme, or the kernel has been removed since; keep the others as that kernel's way back.
-for b in /boot/*.pre-"$NAME"; do
+mapfile -t backups < <({ printf '%s\n' /boot/*.pre-"$NAME"; printf '%s\n' "${IMAGES[@]/%/.pre-$NAME}"; } | sort -u)
+for b in "${backups[@]}"; do
   [ -e "$b" ] || continue
   base=${b%.pre-"$NAME"}
   if [ ! -e "$base" ]; then

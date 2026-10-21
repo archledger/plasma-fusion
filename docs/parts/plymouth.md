@@ -239,14 +239,20 @@ neon (noble) still with initramfs-tools, and Ubuntu and neon have no `plymouth-s
 | Debian testing | dracut (`lsinitrd`) | `plymouth-set-default-theme` | `/boot/initrd.img-<kernel>` | `plymouth` (apt-get) |
 | Ubuntu 26.10 | dracut (`lsinitrd`) | the `default.plymouth` alternative | `/boot/initrd.img-<kernel>` | `plymouth` (apt-get) |
 | KDE neon, older Debian and Ubuntu | initramfs-tools (`lsinitramfs`) | `plymouth-set-default-theme`, else the alternative | `/boot/initrd.img-<kernel>` | `plymouth` (apt-get) |
-| Arch | mkinitcpio (`lsinitcpio`) | `plymouth-set-default-theme` | every preset's image (`mkinitcpio -P`) | `plymouth` (pacman) |
+| Arch | mkinitcpio (`lsinitcpio`) | `plymouth-set-default-theme` | every preset's image and unified kernel image (`mkinitcpio -P`) | `plymouth` (pacman) |
 
 NixOS builds its initramfs from the configuration (`programs.plasma-fusion.plymouth`, nixos.md);
-there, and where no builder is found, the installer exits 3 and changes nothing.
+there, and where no builder is found, the installer exits 3 and changes nothing. mkinitcpio counts
+as the builder wherever it has presets (Arch's configured generator, even with dracut installed).
+The images are worked out before anything changes, and only existing ones count: dracut on Arch
+names its images after the kernel package, not the version, so a version-named image there would
+be one no boot entry uses - `--select` stops with nothing changed instead (exit 1).
 
 `--select` saves first, once: the previous theme (and on Ubuntu and neon the alternative's
 `auto`/`manual` state and path) and `/etc/plymouth/plymouthd.conf` in
-`/var/lib/plasma-fusion/plymouth/`, and each image it rebuilds as `<image>.pre-plasma-fusion`. On
+`/var/lib/plasma-fusion/plymouth/`, and each image it rebuilds as `<image>.pre-plasma-fusion`
+(created 0600, as an image can hold key files; a unified kernel image's copy sits next to it on the
+EFI system partition, where boot managers only look at `*.efi`). On
 Arch, whose default `HOOKS` has no `plymouth`, it writes
 `/etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf`, bash that mkinitcpio reads after
 `mkinitcpio.conf` and that puts `plymouth` after `systemd` (or `udev`), so before the encryption
@@ -273,7 +279,8 @@ database that update was prepared against, and prints a note when one is only pr
 * `sudo bash plymouth-uninstall.sh` puts the saved `plymouthd.conf` back (or selects the saved
   previous theme, else the system's default: `bgrt` on Fedora, Plymouth's own elsewhere; on
   Ubuntu and neon it removes the theme from the `default.plymouth` alternative, which goes back to
-  the best remaining theme or to the one chosen by hand before), removes Arch's drop-in, rebuilds
+  the best remaining theme or to the one chosen by hand before - and removes it there too when
+  another theme was chosen since, which keeps that choice), removes Arch's drop-in, rebuilds
   the running kernel's initramfs with the system's builder (`--all-kernels`: all; it also rebuilds
   when the theme was deselected by hand but the image still holds it), checks the theme is gone
   and removes the theme directory (`--keep-files` keeps it; `--remove-plugin` also removes the
@@ -306,7 +313,10 @@ host's), `PF_PLYMOUTH_CMDLINE` a command line file. 2026-10-21, all pass: Fedora
 checks; `plymouth-plugin-script` installed and removed again), Debian testing with dracut (13) and
 with initramfs-tools (13), Ubuntu 26.10 with dracut (13) and with initramfs-tools (13), both from
 `bgrt` chosen automatically, and Arch with mkinitcpio (14; Plymouth installed by the installer, the
-hook through the drop-in, both removed again). Debian's initramfs-tools hook needs fontconfig
+hook through the drop-in, both removed again). From the first review: Ubuntu with a theme chosen by
+hand after the install keeps it and loses ours from the alternative; Arch with a preset that also
+builds a unified kernel image (`PF_PLYMOUTH_UKI=1`: both backed up, rebuilt and checked); Arch with
+dracut instead of mkinitcpio (`PF_PLYMOUTH_EXPECT=refused`) stops before any change. Debian's initramfs-tools hook needs fontconfig
 (`/etc/fonts/fonts.conf`), which a desktop has and a bare container does not.
 
 ## Verification (2026-10-01, on the laptop)

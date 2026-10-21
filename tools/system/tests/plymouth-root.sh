@@ -12,7 +12,10 @@
 #   podman run --rm -v "$PWD:/src:ro,z" registry.fedoraproject.org/fedora:44 bash -c \
 #     'dnf -y -q install kernel-core dracut plymouth && cp -a /src /work && /work/tools/system/tests/plymouth-root.sh'
 # The theme is a minimal stand-in (the installer's paths, not the drawing), or THEME_DIR, a build
-# of generators/plymouth/build.sh. Test tooling only.
+# of generators/plymouth/build.sh. PF_PLYMOUTH_UKI=1 (Arch, with systemd-ukify): the preset also
+# builds a unified kernel image. PF_PLYMOUTH_EXPECT=refused: a system whose boot image the installer
+# cannot know (Arch with dracut instead of mkinitcpio) - it must stop with nothing changed. Test
+# tooling only.
 #
 #   tools/system/tests/plymouth-root.sh [THEME_DIR]
 set -euo pipefail
@@ -34,18 +37,37 @@ WORK=$(mktemp -d)
 KVER=$(ls /lib/modules 2>/dev/null | sort -V | tail -n 1)
 [ -n "$KVER" ] || { echo "plymouth-root: no kernel in /lib/modules: install one first" >&2; exit 1; }
 export PF_PLYMOUTH_KERNEL=$KVER
-if command -v dracut >/dev/null && command -v lsinitrd >/dev/null; then BUILDER=dracut LIST=lsinitrd
-elif command -v mkinitcpio >/dev/null && command -v lsinitcpio >/dev/null; then BUILDER=mkinitcpio LIST=lsinitcpio
+if command -v mkinitcpio >/dev/null && command -v lsinitcpio >/dev/null && compgen -G "/etc/mkinitcpio.d/*.preset" >/dev/null; then
+  BUILDER=mkinitcpio LIST=lsinitcpio
+elif command -v dracut >/dev/null && command -v lsinitrd >/dev/null; then BUILDER=dracut LIST=lsinitrd
 elif command -v update-initramfs >/dev/null && command -v lsinitramfs >/dev/null; then BUILDER=initramfs-tools LIST=lsinitramfs
 else echo "plymouth-root: no initramfs builder" >&2; exit 1
 fi
+if [ "${PF_PLYMOUTH_UKI:-}" = 1 ]; then
+  # The preset builds an image and a unified kernel image (mkinitcpio(8): <preset>_uki)
+  mkdir -p /efi/EFI/Linux /etc/kernel
+  echo "root=/dev/vda1 rw" >/etc/kernel/cmdline
+  sed -i 's|^#default_uki=|default_uki=|' /etc/mkinitcpio.d/*.preset
+fi
 case $BUILDER in
-  dracut) if compgen -G "/boot/initrd.img-*" >/dev/null || [ -e /etc/debian_version ]; then IMAGES=("/boot/initrd.img-$KVER"); else IMAGES=("/boot/initramfs-$KVER.img"); fi ;;
+  dracut) if [ -e /etc/debian_version ]; then IMAGES=("/boot/initrd.img-$KVER"); else IMAGES=("/boot/initramfs-$KVER.img"); fi ;;
   initramfs-tools) IMAGES=("/boot/initrd.img-$KVER") ;;
   mkinitcpio)
     # shellcheck source=/dev/null # the system's presets
-    mapfile -t IMAGES < <(for f in /etc/mkinitcpio.d/*.preset; do (. "$f"; for p in "${PRESETS[@]}"; do v=${p}_image; [ -z "${!v:-}" ] || echo "${!v}"; done); done) ;;
+    mapfile -t IMAGES < <(for f in /etc/mkinitcpio.d/*.preset; do (. "$f"; for p in "${PRESETS[@]}"; do for k in image uki; do v=${p}_$k; [ -z "${!v:-}" ] || echo "${!v}"; done; done); done) ;;
 esac
+if [ "${PF_PLYMOUTH_EXPECT:-}" = refused ]; then
+  # No image at the names the installer knows: it must stop before changing anything
+  RC=0
+  OUT=$(bash "$INSTALL" --select 2>&1) || RC=$?
+  [ "$RC" = 1 ] && has "no initramfs image of kernel $KVER" && ok "--select refused: the boot loader's image is not known" ||
+    bad "refusal" "$OUT"
+  [ ! -e "/usr/share/plymouth/themes/$NAME" ] && [ ! -e /var/lib/plasma-fusion ] && ! compgen -G "/boot/*.pre-$NAME" >/dev/null &&
+    ok "  nothing was changed" || bad "  changes left" "$(ls -la /usr/share/plymouth/themes /var/lib/plasma-fusion /boot 2>&1)"
+  echo "plymouth-root ($BUILDER, refused): $PASS passed, $FAIL failed"
+  [ "$FAIL" = 0 ]
+  exit
+fi
 # The images as the kernel package left them; built here where its hook did not run (containers)
 for img in "${IMAGES[@]}"; do
   [ -f "$img" ] && continue
@@ -129,6 +151,24 @@ if [ "$BUILDER" = mkinitcpio ]; then
 fi
 [ ! -e "/usr/share/plymouth/themes/$NAME" ] && [ ! -e /var/lib/plasma-fusion/plymouth ] && ok "  the files and the state removed" ||
   bad "  files or state left" "$(ls -la /usr/share/plymouth/themes /var/lib/plasma-fusion 2>&1)"
+
+# --- Ubuntu, neon: another theme chosen by hand after the install; the uninstall removes ours from
+# the alternative and keeps that choice
+other=$(update-alternatives --query default.plymouth 2>/dev/null | sed -n 's/^Alternative: //p' | grep -v "/$NAME/" | head -n 1 || true)
+if ! command -v plymouth-set-default-theme >/dev/null && [ -n "$other" ]; then
+  OUT=$(PF_PLYMOUTH_CMDLINE=$WORK/cmdline-splash bash "$INSTALL" --select "$THEME" 2>&1); RC=$?
+  [ "$RC" = 0 ] || bad "install for the chosen-since case" "$OUT"
+  update-alternatives --set default.plymouth "$other" >/dev/null
+  OUT=$(bash "$UNINSTALL" 2>&1); RC=$?
+  # The database itself, before update-alternatives reads it again (it drops a missing file's entry
+  # then, with a warning, which would hide a stale one)
+  [ "$RC" = 0 ] && ! grep -q "/$NAME/" /var/lib/dpkg/alternatives/default.plymouth &&
+    [ "$(update-alternatives --query default.plymouth | sed -n 's/^Value: //p')" = "$other" ] &&
+    ok "a theme chosen since: the uninstall removes ours from the alternative, the choice stays" ||
+    bad "alternative chosen since" "$OUT
+$(update-alternatives --query default.plymouth)"
+  update-alternatives --auto default.plymouth >/dev/null
+fi
 set -e
 
 echo "plymouth-root ($BUILDER): $PASS passed, $FAIL failed"

@@ -87,10 +87,12 @@ done
 # The system's initramfs builder and the tool that lists an image of it: dracut (Fedora; Debian and
 # Ubuntu since they moved to it), mkinitcpio (Arch), initramfs-tools (KDE neon, older Debian and
 # Ubuntu). NixOS builds its initramfs from the configuration: the module's plymouth option.
+# mkinitcpio first where it has presets: Arch's configured generator, even with dracut installed too.
 BUILDER=
 if [ -e /etc/NIXOS ]; then :
+elif command -v mkinitcpio >/dev/null && command -v lsinitcpio >/dev/null && compgen -G "/etc/mkinitcpio.d/*.preset" >/dev/null; then
+  BUILDER=mkinitcpio LIST=lsinitcpio
 elif command -v dracut >/dev/null && command -v lsinitrd >/dev/null; then BUILDER=dracut LIST=lsinitrd
-elif command -v mkinitcpio >/dev/null && command -v lsinitcpio >/dev/null; then BUILDER=mkinitcpio LIST=lsinitcpio
 elif command -v update-initramfs >/dev/null && command -v lsinitramfs >/dev/null; then BUILDER=initramfs-tools LIST=lsinitramfs
 fi
 if [ -z "$BUILDER" ]; then
@@ -102,6 +104,35 @@ if [ -z "$BUILDER" ]; then
     echo "  Plymouth tools. Nothing was changed." >&2
   fi
   exit 3
+fi
+# The images --select rebuilds, worked out before anything changes: the running kernel's
+# (PF_PLYMOUTH_KERNEL names another installed kernel: tests in containers, where the running kernel
+# is the host's) where the builder makes one per kernel - an existing image only, since a new one
+# under another name would be one the boot loader does not use (dracut on Arch names them after the
+# package) - or every mkinitcpio preset's images and unified kernel images.
+KVER=${PF_PLYMOUTH_KERNEL:-$(uname -r)}
+IMAGES=()
+if [ "$SELECT" = 1 ]; then
+  case $BUILDER in
+    dracut)
+      for img in "/boot/initramfs-$KVER.img" "/boot/initrd.img-$KVER"; do
+        if [ -f "$img" ]; then IMAGES=("$img"); break; fi
+      done ;;
+    initramfs-tools) [ ! -f "/boot/initrd.img-$KVER" ] || IMAGES=("/boot/initrd.img-$KVER") ;;
+    mkinitcpio)
+      # The presets are bash, read as mkinitcpio -P reads them
+      mapfile -t IMAGES < <(for f in /etc/mkinitcpio.d/*.preset; do
+        # shellcheck source=/dev/null # the system's presets
+        ( . "$f"; for p in "${PRESETS[@]}"; do
+            for k in image uki; do v=${p}_$k; [ -z "${!v:-}" ] || printf '%s\n' "${!v}"; done
+          done )
+      done) ;;
+  esac
+  if [ "${#IMAGES[@]}" = 0 ]; then
+    echo "plymouth-install: no initramfs image of kernel $KVER that $BUILDER makes (/boot/initramfs-$KVER.img," >&2
+    echo "  /boot/initrd.img-$KVER, or a mkinitcpio preset's): the boot loader's image is not known here. Nothing was changed." >&2
+    exit 1
+  fi
 fi
 # The package that brings Plymouth's script plugin: Fedora's plymouth-plugin-script, elsewhere
 # Plymouth itself (Arch, Debian and Ubuntu ship script.so in plymouth).
@@ -324,29 +355,7 @@ if [ "$SELECT" = 0 ]; then
   exit 0
 fi
 
-# 5. Select it and rebuild the running kernel's initramfs (Arch: every preset's), after saving the
-#    previous state. PF_PLYMOUTH_KERNEL names another installed kernel (tests in containers, where
-#    the running kernel is the host's).
-KVER=${PF_PLYMOUTH_KERNEL:-$(uname -r)}
-IMAGES=()
-case $BUILDER in
-  dracut)
-    # Fedora names it initramfs-<kver>.img, Debian and Ubuntu initrd.img-<kver>
-    if [ -e "/boot/initrd.img-$KVER" ] || { [ ! -e "/boot/initramfs-$KVER.img" ] && compgen -G "/boot/initrd.img-*" >/dev/null; }; then
-      IMAGES=("/boot/initrd.img-$KVER")
-    else
-      IMAGES=("/boot/initramfs-$KVER.img")
-    fi ;;
-  initramfs-tools) IMAGES=("/boot/initrd.img-$KVER") ;;
-  mkinitcpio)
-    # The images of every preset mkinitcpio -P builds (the presets are bash, as mkinitcpio reads them)
-    mapfile -t IMAGES < <(for f in /etc/mkinitcpio.d/*.preset; do
-      [ -e "$f" ] || continue
-      # shellcheck source=/dev/null # the system's presets, read as mkinitcpio -P reads them
-      ( . "$f"; for p in "${PRESETS[@]}"; do v=${p}_image; [ -z "${!v:-}" ] || printf '%s\n' "${!v}"; done )
-    done)
-    [ "${#IMAGES[@]}" -gt 0 ] || { echo "plymouth-install: no mkinitcpio preset with an image in /etc/mkinitcpio.d" >&2; exit 1; } ;;
-esac
+# 5. Select it and rebuild the images listed above, after saving the previous state.
 run mkdir -p "$STATE"
 current=$(current_theme)
 if [ ! -f "$STATE/previous-theme" ] && [ "$current" != "$NAME" ]; then
@@ -363,7 +372,10 @@ if [ ! -f "$STATE/plymouthd.conf.orig" ] && [ -f /etc/plymouth/plymouthd.conf ];
 fi
 for img in "${IMAGES[@]}"; do
   if [ ! -f "$img.pre-$NAME" ] && [ -f "$img" ]; then
-    run cp -a "$img" "$img.pre-$NAME"
+    # Private, as an image can hold key files; created 0600 rather than chmod'ed (an EFI system
+    # partition's FAT has no modes to set)
+    echo "+ copy $img to $img.pre-$NAME"
+    [ "$DRY" = 1 ] || ( umask 077 && cp -- "$img" "$img.pre-$NAME" )
   fi
 done
 # Arch: mkinitcpio puts Plymouth into the image only with its hook in HOOKS, which Arch's default

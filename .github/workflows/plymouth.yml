@@ -5,7 +5,9 @@
 # as root on each system's own initramfs builder and Plymouth, with a kernel installed, in a
 # container of that system (tools/system/tests/plymouth-root.sh): dracut on Fedora 44, Debian testing
 # and Ubuntu 26.10, initramfs-tools on Debian testing and on Ubuntu 26.10 (as KDE neon has it), and
-# mkinitcpio on Arch. Weekly too, so that a change in one of them shows up here.
+# mkinitcpio on Arch, with an image and with a unified kernel image too; and Arch with dracut instead,
+# whose boot image the installer cannot know, refused with nothing changed. Weekly too, so that a
+# change in one of them shows up here.
 
 name: plymouth
 
@@ -71,6 +73,14 @@ jobs:
           - name: Arch, mkinitcpio
             image: docker.io/library/archlinux:base
             setup: pacman -Syu --noconfirm --needed git linux mkinitcpio
+          - name: Arch, mkinitcpio with a unified kernel image
+            image: docker.io/library/archlinux:base
+            setup: pacman -Syu --noconfirm --needed git linux mkinitcpio systemd-ukify
+            uki: "1"
+          - name: Arch, dracut (refused)
+            image: docker.io/library/archlinux:base
+            setup: pacman -Syu --noconfirm --needed git dracut linux
+            expect: refused
     steps:
       - name: The kernel, the initramfs builder and Plymouth (git too, for the checkout)
         env:
@@ -84,4 +94,6 @@ jobs:
       - name: Select the theme, check the image, undo, check again (the job's container)
         env:
           PF_DISPOSABLE_SYSTEM: "1"
+          PF_PLYMOUTH_UKI: ${{ matrix.uki }}
+          PF_PLYMOUTH_EXPECT: ${{ matrix.expect }}
         run: tools/system/tests/plymouth-root.sh
