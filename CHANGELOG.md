@@ -9,6 +9,15 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Boot splash beyond Fedora:** `sudo /usr/share/plasma-fusion/tools/system/plymouth-install.sh
+  --select` now also works on Arch, Debian testing, Ubuntu 26.10 and KDE neon: it finds the
+  system's initramfs builder (dracut, mkinitcpio or initramfs-tools) and how it selects a theme
+  (`plymouth-set-default-theme`, or the `default.plymouth` alternative on Ubuntu and KDE neon),
+  installs Plymouth's script plugin with the system's package manager where it is missing, adds
+  the `plymouth` hook on Arch through a drop-in of its own, and keeps a copy of each image it
+  rebuilds. When the kernel command line lacks `splash`, it says so and how to add it, and leaves
+  the boot loader alone. `plymouth-uninstall.sh` puts the previous theme back. The installer offers
+  the step on those systems too.
 - **Login screen for SDDM:** the Login board's screen as an SDDM theme for the systems whose
   display manager is SDDM (Ubuntu 26.10, Debian testing, Arch or NixOS with SDDM): the clock and
   date, the sign-in card, the user row with "Other user", the session pill and the power buttons,

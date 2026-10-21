@@ -374,6 +374,7 @@ for SHNAME in "${shells[@]}"; do
   osr ubuntu debian 26.10 stonking "Ubuntu 26.10"
   run "$sh" $DEB -- --yes
   expect "Kubuntu 26.10 adds the PPA" has_log "add-apt-repository -y ppa:archledger/plasma-fusion"
+  expect "  and offers the boot splash step there too" has_out "plymouth-install.sh --select"
   expect "  and installs the six packages" has_log "apt-get install -y plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
   # an update from a release before Quick Look and copy text (apt's --only-upgrade would skip them)
   VERSIONS="$P675 $P4" run "$sh" $DEB -- update --yes

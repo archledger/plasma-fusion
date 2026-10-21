@@ -678,14 +678,15 @@ main() {
   plasma-fusion "$SETUP_CMD" $SETUP_FLAGS </dev/null ||
     die "the setup stopped; your previous desktop is in the backup: plasma-fusion restore --latest"
   say "Done. Log out and back in once."
-  # greeter-apply.sh styles plasma-login-manager and SDDM; plymouth-install.sh needs dracut (Fedora).
+  # greeter-apply.sh styles plasma-login-manager and SDDM; plymouth-install.sh works with dracut,
+  # mkinitcpio and initramfs-tools (NixOS: the module's option; Fedora Atomic builds its own).
   if [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || [ -d "$TEST_ROOT/usr/lib/plasmalogin" ] ||
      [ -x "$TEST_ROOT/usr/bin/sddm-greeter-qt6" ]; then
     say "Optional: the login screen (sudo $SYS_TOOLS/greeter-apply.sh)."
   fi
-  if [ "$LANE" = copr ]; then
-    say "Optional: the boot splash (sudo $SYS_TOOLS/plymouth-install.sh)."
-  fi
+  case $LANE in
+    copr | aur | ppa | deb) say "Optional: the boot splash (sudo $SYS_TOOLS/plymouth-install.sh --select)." ;;
+  esac
 }
 
 # Runs only once the whole script has been read: a truncated download does nothing.

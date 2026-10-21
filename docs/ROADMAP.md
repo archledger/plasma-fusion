@@ -62,7 +62,11 @@ are welcome in GitHub Discussions; the way decisions are made is in
    the glass default on data (`tools/device/power-ab.sh` is ready).
 8. **Login screen and boot splash elsewhere.** Login screen styling for SDDM next to
    plasma-login-manager, and the boot splash installer for mkinitcpio and initramfs-tools next to
-   dracut.
+   dracut. Since then: the SDDM theme and its apply and restore (2026-10-21, checked on real boots
+   of Debian testing, Ubuntu 26.10, Arch and Fedora 44 in the release VMs), and the boot splash
+   installer for dracut beyond Fedora (Debian testing and Ubuntu 26.10 build with it now),
+   mkinitcpio and initramfs-tools (2026-10-21, as root in containers of each system); a boot
+   splash check on real boots in the release VMs is next.
 9. **Upstream.** Send fixes found here to KDE where they belong, such as GTK font sizes that
    follow fractional Qt font sizes (kde-gtk-config).
 
