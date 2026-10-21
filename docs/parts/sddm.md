@@ -127,7 +127,7 @@ in the same places:
 | File | Change |
 |---|---|
 | `/etc/sddm.conf.d/kde_settings.conf` | `[Theme] Current=plasmafusion` and `CursorTheme=PlasmaFusion-cursors` (with kwriteconfig6, as the page writes it; created 0644 when missing) |
-| `/etc/sddm.conf` | the lines SDDM reads as those two keys removed; every other line and the mode stay as they are |
+| `/etc/sddm.conf` | the lines SDDM reads as those two keys removed; every other line, the mode, the owner and the group stay as they are |
 | `<ThemeDir>/plasmafusion/theme.conf.user` | `[General] background`, with `--login-image dimmed` or `blurred` or when the file exists (SDDM reads it over `theme.conf`; the page keeps a theme's wallpaper there) |
 
 The planned drop-in of its own (`/etc/sddm.conf.d/plasma-fusion.conf`) was dropped: it sorts after
@@ -141,12 +141,18 @@ does another drop-in that sets them where SDDM's `QDir::LocaleAware` listing cou
 `kde_settings.conf` differently from byte order: glibc's collations ignore punctuation at first,
 ICU's weigh it, and case and letters beyond ASCII differ too, so only names that first differ from
 `kde_settings.conf` in a lower-case ASCII letter or digit (or extend it) have a known place. Two
-drop-ins of one directory that set different `[Theme] ThemeDir` values in such an order stop it as
-well: the theme, and its `theme.conf.user`, would be checked in a tree SDDM may not use. So does a
+drop-ins that set different themes or cursors stop it too where the one SDDM would read last could
+change places with the other (`zA.conf` and `za.conf`: bytes put `za.conf` last, glibc's
+collations `zA.conf`). Two drop-ins of one directory that set different `[Theme] ThemeDir` values
+in such an order stop it as well: the theme, and its `theme.conf.user`, would be checked in a tree SDDM may not use. So does a
 `ThemeDir=` set to nothing, which SDDM does not read as its default directory, or to a relative path,
 which SDDM resolves from its own working directory, not the caller's. The
 run also stops when the theme cannot be read by SDDM's greeter user (the greeter runs as `sddm`,
-not root; as root the check runs as that user), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
+not root; as root the check runs as that user with `setpriv`, or without it - a minimal Fedora has
+`util-linux-core` only, no `setpriv` or `runuser` - with coreutils' `chroot --userspec` onto `/`,
+both with that user's groups, so the kernel decides: the directories above the tree, links inside it
+and the way to their targets, ACLs; run from `/`, since `find` returns to its starting directory and
+`sudo` keeps the caller's, a 0700 home that user cannot enter), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
 `QtVersion=6`, and without that greeter SDDM shows its own theme) is missing, when the theme's
 directory is writable by anyone but root or one of the three files is a link (root would copy what
 it points to, and the rename would replace a link managed elsewhere), on NixOS
@@ -179,7 +185,11 @@ back byte for byte gets its saved mode, owner and group (a `theme.conf.user` SDD
 so). A backup without its manifest and info - a run that stopped before it changed anything - is
 passed over with a note instead of blocking every later restore. A saved
 explicit empty value (`Current=`, which hides a vendor file's theme) comes back as such, not as a
-missing key. A link found where the run wrote a file, or a file removed since, is left that way.
+missing key. A link found where the run wrote a file, or a file removed since, is left that way; a
+link in `kde_settings.conf`'s place is a newer choice whatever it reads as, so `/etc/sddm.conf`'s
+old lines do not come back over it. With `ThemeDir` pointed elsewhere since the run, its
+`Current=plasmafusion` names that tree's theme - the administrator's choice - and stays (the
+cursors still go back).
 `--dry-run` makes SDDM's undo on a copy of the three files, so each run's step sees what the newer
 ones would leave and the preview is the real restore's. `--greeter sddm` (or `plasmalogin`) undoes
 only that greeter's runs; the installer's uninstall uses
@@ -191,9 +201,9 @@ the next time its greeter starts.
 `plasma-fusion status` prints `login screen (SDDM): Plasma Fusion` or `another theme` from
 `greeter-apply.sh --check`, which needs no root here (SDDM's configuration is normally readable by
 every user). Without `--login-image` the check counts any of the three wallpapers. It exits 2,
-"cannot tell", when a file it cannot read (a root-only `/etc/sddm.conf`, or the theme's
-`theme.conf.user` readable by SDDM's group only), a configuration directory it cannot list or a
-drop-in of unknown order could decide, and status then names the check to run as root. On NixOS (`/etc/NIXOS`, and
+"cannot tell", when a file it cannot read (a root-only `/etc/sddm.conf`, or a theme file such as
+`theme.conf.user` readable by SDDM's group only: whether the greeter can read it is then unknown
+too), a configuration directory it cannot list or a drop-in of unknown order could decide, and status then names the check to run as root. On NixOS (`/etc/NIXOS`, and
 `/etc/sddm.conf.d/00-nixos.conf` while the sddm module is on) the check reads the module's choice
 and the system profile's greeter, with the KConfig tools from the system profile too (they are not
 in `/usr/bin` there), and status names `programs.plasma-fusion.sddm` instead of the script. The login check (gate.md) gets no SDDM row: it switches per-user parts around Plasma
@@ -370,6 +380,24 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   configuration directory is read through. From the ninth: what a run writes is recorded before the
   file is replaced (a run killed in between is still undone), and a theme the greeter's user cannot
   read stops `apply` and shows in a root `--check` (checked as root in the Fedora 44 container).
+  Follow-up (#100): two drop-ins read after `kde_settings.conf` with different themes in a
+  locale-dependent order make `--check` exit 2 and stop `apply`, an unprivileged check of a theme
+  file it cannot read exits 2, restore keeps `Current` when `ThemeDir` points elsewhere since, and a
+  linked `kde_settings.conf` keeps its choice over `/etc/sddm.conf`'s old line; and a `ThemeDir`
+  drop-in whose order against `kde_settings.conf` depends on the locale counts as unchanged when
+  `kde_settings.conf` does not set `ThemeDir` (only files that set a key decide it).
+- `tools/system/tests/greeter-sddm-root.sh` (CI, the build workflow's `sddm-root` job; it refuses
+  to run outside a container or `PF_DISPOSABLE_SYSTEM=1`): the same scripts as root on the
+  container's own files with Fedora 44's sddm package, each run from a directory only root may
+  enter, as `sudo` from a 0700 home leaves it (the release VMs' SDDM lane found every apply refused
+  that way, 2026-10-21) - apply and restore leave the system's files
+  as they were, `kde_settings.conf` and `theme.conf.user` are written `root:root` 0644, a
+  `root:sddm` 0640 `/etc/sddm.conf` keeps its owner, group and mode through apply and restore, a
+  `root:sddm` 0640 `theme.conf.user` gets them back, a theme tree only root can read is refused
+  (with `setpriv` and without it), as is one below a directory `sddm` cannot pass (a `ThemeDir`
+  under a 0700 `/srv/private`, directly or through a link to it, and a theme file linked to one
+  there), while one readable for SDDM's group is taken, an unprivileged
+  check of it exits 2, and a theme tree others can write to is refused.
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,
   and nothing for a backup of a run undone since; plasma-login-manager is restored with

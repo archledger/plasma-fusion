@@ -332,6 +332,27 @@ sddm_unordered() {
     done
   done < <(conf_dir_files "$SYSROOT/etc/sddm.conf.d")
 }
+# Drop-ins that set [Theme] KEY to another value than the file SDDM takes it from (sddm_effective,
+# with the same FILE NEW pairs) and that sit in that file's directory in an order against it that
+# depends on the locale: under SDDM's sort either may be read last, so the value SDDM uses cannot be
+# told here. Prints the pairs. Pairs with /etc's kde_settings.conf are sddm_unordered's.
+sddm_contested() { # $1 key, [FILE NEW]...
+  local key=$1 f v win won
+  local -A swap=()
+  shift
+  sddm_effective Theme "$key" "$@"
+  win=$REPLY_FILE won=$REPLY
+  [ -n "$win" ] && [ "$win" != "$SYSROOT/etc/sddm.conf" ] || return 0
+  [ "$win" != "$SYSROOT/etc/sddm.conf.d/kde_settings.conf" ] || return 0
+  while [ $# -ge 2 ]; do swap[$1]=$2; shift 2; done
+  while IFS= read -r f; do
+    [ "$f" != "$win" ] && [ "${f%/*}" = "${win%/*}" ] || continue
+    [ "$f" != "$SYSROOT/etc/sddm.conf.d/kde_settings.conf" ] || continue
+    v=$(sddm_conf get "${swap[$f]:-$f}" Theme "$key") && [ "$v" != "$won" ] || continue
+    sddm_order_depends_on_locale "${f##*/}" "${win##*/}" || continue
+    printf '%s and %s\n' "${f#"$SYSROOT"}" "${win#"$SYSROOT"}"
+  done < <(sddm_files "${!swap[@]}")
+}
 # Drop-ins of one directory that set different [Theme] ThemeDir values in an order that depends on
 # the locale: which theme tree SDDM uses cannot be told here (greeter-apply.sh would check the
 # theme, and write its theme.conf.user, in another tree than SDDM's). Prints the pairs.
@@ -354,13 +375,25 @@ sddm_themedir_unordered() {
 }
 # The first file or directory of theme tree $1 that SDDM's greeter user cannot read (or search): the
 # greeter runs as that user, not as root (Greeter.cpp: setUser("sddm")), and falls back to SDDM's
-# own theme without it. As root the check runs as user sddm; otherwise as the caller.
+# own theme without it. As root the check runs as user sddm - with setpriv (util-linux), else with
+# chroot --userspec onto / (coreutils; a minimal Fedora has util-linux-core only, no setpriv or
+# runuser), both with that user's groups - so the kernel decides: the directories above the tree,
+# links (followed, -L, as the greeter follows them) and the way to their targets, ACLs. Otherwise
+# as the caller.
 sddm_unreadable_theme() { # $1 theme directory
   local -a as=()
-  if [ "$(id -u)" = 0 ] && [ -z "$SYSROOT" ] && getent passwd sddm >/dev/null && command -v setpriv >/dev/null; then
-    as=(setpriv --reuid=sddm --regid="$(id -g sddm)" --init-groups --no-new-privs --)
+  if [ "$(id -u)" = 0 ] && [ -z "$SYSROOT" ] && getent passwd sddm >/dev/null; then
+    if command -v setpriv >/dev/null; then
+      as=(setpriv --reuid=sddm --regid="$(id -g sddm)" --init-groups --no-new-privs --)
+    else
+      as=(chroot --userspec="sddm:$(id -g sddm)" --skip-chdir /)
+    fi
   fi
-  "${as[@]}" find "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null || printf '%s\n' "$1"
+  # From /: find goes back to its starting directory, and the caller's (sudo keeps it: a 0700 home)
+  # is not that user's to enter, which fails find for any tree. A path it cannot follow fails it
+  # too: the tree is reported.
+  (cd / && "${as[@]}" "$(command -v find)" -L "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null) ||
+    printf '%s\n' "$1"
 }
 show_diff() { # $1 a file, $2 its new contents
   note "--- ${1#"$SYSROOT"}"
@@ -372,7 +405,7 @@ sddm_main() {
   local dir=$SYSROOT/etc/sddm.conf.d conf=$SYSROOT/etc/sddm.conf
   local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf themedir theme greeter user_conf
   local default_bg user_bg bg dm k want before=other ok mark src builtin share nixos=0 open v
-  local themedir_bad
+  local themedir_bad theme_unread=''
   local conf_new='' user_new='' swaps=()
   [ -z "$OUTPUT" ] || die "--output writes plasma-login-manager's files; preview the SDDM theme with sddm-greeter-qt6 --test-mode (docs/parts/sddm.md)"
   [ -z "$DISPLAY_FROM" ] || die "--display-from is for plasma-login-manager (for SDDM: System Settings > Login Screen (SDDM) > Apply Plasma Settings…)"
@@ -435,12 +468,17 @@ sddm_main() {
     sddm_effective Theme Current
     src=${REPLY_FILE#"$SYSROOT"}
     row theme "$REPLY" "$SDDM_THEME" "${src:-$builtin}"
+    # The theme tree read as SDDM's greeter user (root's check) or as this user (anyone else's:
+    # what this user cannot read, that user may or may not)
+    [ -n "$themedir_bad" ] || [ ! -d "$theme" ] || theme_unread=$(sddm_unreadable_theme "$theme")
     if [ -n "$themedir_bad" ]; then
       row "theme files" "not found" installed "$themedir_bad"
+    elif [ -n "$theme_unread" ] && [ "$(id -u)" = 0 ]; then
+      row "theme files" "unreadable for sddm" installed "${theme_unread#"$SYSROOT"}"
+    elif [ -n "$theme_unread" ]; then
+      row "theme files" "unreadable here" installed "${theme_unread#"$SYSROOT"}"
     elif [ ! -f "$theme/metadata.desktop" ]; then
       row "theme files" missing installed "${theme#"$SYSROOT"}"
-    elif [ "$(id -u)" = 0 ] && f=$(sddm_unreadable_theme "$theme") && [ -n "$f" ]; then
-      row "theme files" "unreadable for sddm" installed "${f#"$SYSROOT"}"
     else
       row "theme files" installed installed "${theme#"$SYSROOT"}"
     fi
@@ -459,15 +497,11 @@ sddm_main() {
     while IFS= read -r f; do
       say "  cannot read $f: what it sets is unknown (run --check as root)"; open=yes
     done < <(sddm_unreadable)
-    # The theme's own options (the wallpaper): readable by SDDM's greeter user, maybe not by this one
-    if [ -d "$theme" ] && { [ ! -r "$theme" ] || [ ! -x "$theme" ]; }; then
-      say "  cannot read ${theme#"$SYSROOT"}: its wallpaper setting is unknown (run --check as root)"; open=yes
-    else
-      for f in "$theme/theme.conf" "$user_conf"; do
-        if [ -e "$f" ] && [ ! -r "$f" ]; then
-          say "  cannot read ${f#"$SYSROOT"}: its wallpaper setting is unknown (run --check as root)"; open=yes
-        fi
-      done
+    # A theme file this user cannot read (0640 for SDDM's group, or for nobody): whether the greeter
+    # can, and the wallpaper the theme's options set, is unknown here
+    if [ -n "$theme_unread" ] && [ "$(id -u)" != 0 ]; then
+      say "  cannot read ${theme_unread#"$SYSROOT"}: whether SDDM's greeter user can, and the theme's wallpaper setting, are unknown (run --check as root)"
+      open=yes
     fi
     while IFS= read -r f; do
       say "  $f sets the theme or cursors; whether SDDM reads it before or after kde_settings.conf depends on its locale"
@@ -477,6 +511,12 @@ sddm_main() {
       say "  $f set different theme directories; which one SDDM reads last depends on its locale"
       open=yes
     done < <(sddm_themedir_unordered)
+    for k in "${SDDM_KEYS[@]}"; do
+      while IFS= read -r f; do
+        say "  $f set different [Theme] $k values; which one SDDM reads last depends on its locale"
+        open=yes
+      done < <(sddm_contested "$k")
+    done
     [ "$dm" = sddm.service ] || say "  note: SDDM shows this only while it is the display manager"
     if [ "$open" = yes ]; then say "Plasma Fusion greeter: unknown"; exit 2; fi
     say "Plasma Fusion greeter: $ok"
@@ -546,6 +586,9 @@ sddm_main() {
     sddm_effective Theme "$k" "${swaps[@]}"
     [ "$REPLY" = "$want" ] ||
       die "${REPLY_FILE#"$SYSROOT"} would still set [Theme] $k=$REPLY (SDDM reads it after ${kde#"$SYSROOT"}); change it there and run this again. Nothing was changed."
+    while IFS= read -r f; do
+      die "$f set different [Theme] $k values, and which one SDDM reads last depends on its locale (QDir::LocaleAware); keep one or give them lower-case ASCII names. Nothing was changed."
+    done < <(sddm_contested "$k" "${swaps[@]}")
   done
 
   say "Plasma Fusion for SDDM (the theme in ${theme#"$SYSROOT"}):"
@@ -598,7 +641,15 @@ sddm_main() {
     # still knows the file is this run's.
     cp -- "$1" "$BACKUP/$3.applied"
     install -m "${4:-0644}" -- "$1" "$2.plasma-fusion-new"
-    [ -n "$SYSROOT" ] || chown root:root "$2.plasma-fusion-new"
+    if [ -z "$SYSROOT" ]; then
+      # A file whose mode is kept keeps its owner and group too (/etc/sddm.conf at root:sddm 0640
+      # stays readable for that group); the two the page and the greeter read are root's.
+      if [ -n "${4:-}" ]; then
+        chown --reference="$2" -- "$2.plasma-fusion-new"
+      else
+        chown root:root -- "$2.plasma-fusion-new"
+      fi
+    fi
     mv -f -- "$2.plasma-fusion-new" "$2"
     note "wrote ${2#"$SYSROOT"}"
   }
@@ -610,8 +661,8 @@ sddm_main() {
     [ -d "$dir" ] || install -d -m 0755 "$dir"
     put "$own/kde_settings.conf" "$kde" etc/sddm.conf.d/kde_settings.conf
   fi
-  # /etc/sddm.conf keeps its mode; the other two must be readable by the page (run as the user)
-  # and by SDDM's greeter user.
+  # /etc/sddm.conf keeps its mode, owner and group; the other two must be readable by the page (run
+  # as the user) and by SDDM's greeter user.
   [ -z "$conf_new" ] || put "$conf_new" "$conf" etc/sddm.conf "$(stat -c %a "$conf")"
   if [ -z "$SYSROOT" ] && command -v restorecon >/dev/null && command -v selinuxenabled >/dev/null && selinuxenabled; then
     for f in "$kde" "$conf" "$user_conf"; do [ ! -e "$f" ] || restorecon "$f" || true; done

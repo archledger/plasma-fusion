@@ -203,8 +203,9 @@ to it as well:
   coverage.
 - **The root scripts** (`tools/system/`: greeter and Plymouth install and removal, 586 lines).
   They change `/etc` and `/usr/share/plymouth`; `generators/plymouth/tests/vmtest.sh` tests the
-  boot splash in a throw-away VM on the test device, and `tools/system/tests/greeter-sddm-unit.sh`
-  the greeter scripts' SDDM mode on system trees (CI), both outside this measurement.
+  boot splash in a throw-away VM on the test device, `tools/system/tests/greeter-sddm-unit.sh`
+  the greeter scripts' SDDM mode on system trees (CI) and `greeter-sddm-root.sh` the same as root
+  in a Fedora 44 container with its sddm package (CI), all outside this measurement.
 - **Device helpers**: the charge limit (`plasma-fusion-charge-limit`, sysfs thresholds through
   pkexec), the LibreOffice scale guard (asks KScreen), the keyboard layout tool
   (`plasma-fusion-keyboard-keys`, only compiled by the build).
