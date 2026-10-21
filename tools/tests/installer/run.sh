@@ -296,6 +296,12 @@ for SHNAME in "${shells[@]}"; do
   expect "a greeter on Plasma Fusion's Global Theme is restored too" has_log "greeter-restore.sh"
   rm -rf "$CASE/root/var/lib/plasmalogin"
   printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
+  # SDDM: greeter-apply.sh chose the Plasma Fusion theme (its backup says greeter=sddm).
+  mkdir -p "$CASE/root/var/lib/plasma-fusion/greeter-backup-20261021T000000Z"
+  printf 'created=20261021T000000Z\ngreeter=sddm\nbefore=other\n' >"$CASE/root/var/lib/plasma-fusion/greeter-backup-20261021T000000Z/info"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "an SDDM login screen Plasma Fusion chose is restored too" has_log "greeter-restore.sh"
+  rm -rf "$CASE/root/var/lib/plasma-fusion"
   # the optional system steps are offered where they apply
   rm -f "$CASE/root/etc/plasmalogin.conf"
   run "$sh" $FED -- --yes
@@ -304,7 +310,13 @@ for SHNAME in "${shells[@]}"; do
   mkdir -p "$CASE/root/usr/lib/plasmalogin"
   run "$sh" $FED -- --yes
   expect "with plasma-login-manager the login screen step is offered" has_out "greeter-apply.sh"
-  rm -rf "$CASE/root/usr/lib/plasmalogin" "$CASE/root/usr/share/plasma-fusion" "$CASE/root/usr/share/plymouth"
+  rm -rf "$CASE/root/usr/lib/plasmalogin"
+  mkdir -p "$CASE/root/usr/bin"
+  printf '#!/bin/sh\n' >"$CASE/root/usr/bin/sddm-greeter-qt6"
+  chmod +x "$CASE/root/usr/bin/sddm-greeter-qt6"
+  run "$sh" $FED -- --yes
+  expect "with SDDM's Qt 6 greeter the login screen step is offered" has_out "greeter-apply.sh"
+  rm -rf "$CASE/root/usr/bin/sddm-greeter-qt6" "$CASE/root/usr/share/plasma-fusion" "$CASE/root/usr/share/plymouth"
   # setup failure
   EXTRA_ENV="FAKE_SETUP_RC=1" run "$sh" $FED -- --yes
   expect "a failed setup exits 1" [ "$RC" = 1 ]

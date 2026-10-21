@@ -30,6 +30,7 @@ in
       description = "Window decoration, settings module and tablet navigation effect (need Plasma 6.7 or later).";
     };
     plymouth = lib.mkEnableOption "the Plasma Fusion boot splash (replaces tools/system/plymouth-install.sh)";
+    sddm = lib.mkEnableOption "the Plasma Fusion SDDM login screen (greeter-apply.sh on other systems)";
   };
 
   config = lib.mkIf cfg.enable (lib.mkMerge [
@@ -62,6 +63,21 @@ in
         enable = true;
         theme = "plasma-fusion";
         themePackages = [ pf.plasma-fusion ];
+      };
+    })
+    # SDDM reads the theme from /run/current-system/sw/share/sddm/themes (the sddm module links
+    # share/sddm; the package is in systemPackages above). The plasma6 module's theme is a mkDefault,
+    # so this definition wins; the cursors are the ones greeter-apply.sh chooses elsewhere.
+    (lib.mkIf cfg.sddm {
+      assertions = [
+        {
+          assertion = config.services.displayManager.sddm.enable;
+          message = "programs.plasma-fusion.sddm needs services.displayManager.sddm.enable";
+        }
+      ];
+      services.displayManager.sddm = {
+        theme = "plasmafusion";
+        settings.Theme.CursorTheme = "PlasmaFusion-cursors";
       };
     })
   ]);

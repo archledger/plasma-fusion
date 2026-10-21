@@ -115,12 +115,15 @@ Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing change
 - The whole script is one function called on its last line, so a truncated download does nothing.
 - It installs no Plasma, writes no package holds and touches no other user's home. Optional next
   steps it prints but never runs: the login screen (`greeter-apply.sh`, only where
-  plasma-login-manager is installed) and on Fedora the boot splash (`plymouth-install.sh`).
+  plasma-login-manager or SDDM's Qt 6 greeter is installed) and on Fedora the boot splash
+  (`plymouth-install.sh`).
 - Uninstall undoes those two first, when they were applied, because the greeter would otherwise
   point at the removed Global Theme and wallpaper: `greeter-restore.sh` when the greeter carries
   greeter-apply.sh's look (its marked block or a greeter wallpaper from Plasma Fusion's backgrounds in
-  `/etc/plasmalogin.conf`, or Plasma Fusion's Global Theme in the greeter user's `kdeglobals`), `plymouth-uninstall.sh` when Plymouth's themes hold
-  `plasma-fusion`. If either stops, the packages stay installed.
+  `/etc/plasmalogin.conf`, or Plasma Fusion's Global Theme in the greeter user's `kdeglobals`, or a
+  backup of an SDDM run, `greeter=sddm`: its undo keeps a theme chosen since),
+  `plymouth-uninstall.sh` when Plymouth's themes hold `plasma-fusion`. If either stops, the
+  packages stay installed.
 - The setup step runs as the user in the session (`plasma-fusion setup`, which backs up first);
   when it stops, the installer names `plasma-fusion restore --latest` and leaves the packages.
 

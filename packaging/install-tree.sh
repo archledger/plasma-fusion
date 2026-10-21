@@ -150,7 +150,8 @@ else
   cp -a "$PLYMOUTH" "$dest/plasma-fusion/plymouth/plasma-fusion"
 fi
 
-# The SDDM login theme: installed for manual selection; apply/restore integration is a follow-up.
+# The SDDM login theme: installing it changes no SDDM setting; tools/system/greeter-apply.sh
+# chooses it.
 mkdir -p "$dest/sddm/themes"
 cp -a "$SDDM" "$dest/sddm/themes/plasmafusion"
 

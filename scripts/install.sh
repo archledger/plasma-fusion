@@ -449,17 +449,21 @@ consent() {
 # themes). greeter-apply.sh points plasmalogin.conf's greeter wallpaper at Plasma Fusion's
 # backgrounds (in a marked block, or as plain keys when the file had a [Greeter] group already, and
 # a later edit by the Login Screen settings drops the mark) and gives the greeter user Plasma
-# Fusion's Global Theme: any of the three counts.
+# Fusion's Global Theme: any of the three counts. On SDDM it chooses the Plasma Fusion theme, and
+# its backup says greeter=sddm: then greeter-restore.sh runs as well (it keeps a theme chosen since).
 SYS_TOOLS=/usr/share/plasma-fusion/tools/system
 greeter_styled() {
   [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] || return 1
   # shellcheck disable=SC2016 # the sh -c script takes the root as $1
   $SUDO sh -c 'grep -qs -e "^# Plasma Fusion: login screen wallpaper" -e "plasma-fusion/backgrounds/" "$1/etc/plasmalogin.conf" && exit 0
+    grep -qsx "greeter=sddm" "$1"/var/lib/plasma-fusion/greeter-backup-*/info && exit 0
     h=$(getent passwd plasmalogin | cut -d: -f6)
     [ -n "$h" ] && grep -qs "^LookAndFeelPackage=org\.plasmafusion\." "$1$h/.config/kdeglobals"' sh "$TEST_ROOT"
 }
+# plasma-login-manager or SDDM's Qt 6 greeter (the one the Plasma Fusion SDDM theme runs in).
 greeter_present() {
-  [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || getent passwd plasmalogin >/dev/null 2>&1
+  [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || [ -x "$TEST_ROOT/usr/bin/sddm-greeter-qt6" ] ||
+    getent passwd plasmalogin >/dev/null 2>&1
 }
 splash_installed() {
   [ -x "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" ] && [ -d "$TEST_ROOT/usr/share/plymouth/themes/plasma-fusion" ]
@@ -635,8 +639,9 @@ main() {
   plasma-fusion "$SETUP_CMD" $SETUP_FLAGS </dev/null ||
     die "the setup stopped; your previous desktop is in the backup: plasma-fusion restore --latest"
   say "Done. Log out and back in once."
-  # greeter-apply.sh styles plasma-login-manager only; plymouth-install.sh needs dracut (Fedora).
-  if [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || [ -d "$TEST_ROOT/usr/lib/plasmalogin" ]; then
+  # greeter-apply.sh styles plasma-login-manager and SDDM; plymouth-install.sh needs dracut (Fedora).
+  if [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || [ -d "$TEST_ROOT/usr/lib/plasmalogin" ] ||
+     [ -x "$TEST_ROOT/usr/bin/sddm-greeter-qt6" ]; then
     say "Optional: the login screen (sudo $SYS_TOOLS/greeter-apply.sh)."
   fi
   if [ "$LANE" = copr ]; then

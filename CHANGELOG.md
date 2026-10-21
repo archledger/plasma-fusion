@@ -10,11 +10,15 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 ## Unreleased
 
 - **Login screen for SDDM:** the Login board's screen as an SDDM theme for the systems whose
-  display manager is SDDM (Arch, Ubuntu 26.10, Debian testing, KDE neon, NixOS): the clock and
+  display manager is SDDM (Ubuntu 26.10, Debian testing, Arch or NixOS with SDDM): the clock and
   date, the sign-in card, the user row with "Other user", the session pill and the power buttons,
-  on the pre-blurred Dusk Ridge treatment. Packaged for manual selection; automatic apply/restore
-  is follow-up work. Keyboard users can choose accounts, sessions and layouts, reveal a password
-  and activate power actions; the username prompt is labelled and password undo is blocked.
+  on the pre-blurred Dusk Ridge treatment. `sudo
+  /usr/share/plasma-fusion/tools/system/greeter-apply.sh` chooses it where SDDM is the display
+  manager, the way System Settings' Login Screen (SDDM) page does, so the page can choose another
+  theme again; `greeter-restore.sh` undoes it and keeps a theme chosen since. On NixOS:
+  `programs.plasma-fusion.sddm = true`. `plasma-fusion status` says whether SDDM uses it. Keyboard
+  users can choose accounts, sessions and layouts, reveal a password and activate power actions;
+  the username prompt is labelled and password undo is blocked.
 - **Saved app pairs:** two apps side by side can be saved as one icon on the home screen: "Save
   pair" under their card in the app switcher. A tap on the pair opens both apps side by side, in
   the split they were saved with; holding it offers Swap Sides, Keep in Dock and Remove Pair. A

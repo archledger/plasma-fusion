@@ -24,6 +24,11 @@
 # greeter-apply.sh. Then ~/.cache is removed. Nothing is restarted: the greeter shows the old
 # look the next time it starts. Each backup's config/ also holds the greeter's whole ~/.config
 # as it was, for anything else.
+#
+# An SDDM run (info greeter=sddm) wrote /etc/sddm.conf.d/kde_settings.conf, /etc/sddm.conf (keys
+# removed) and the theme's theme.conf.user. Each goes back byte for byte while nobody changed it
+# since that run; otherwise key by key, and a key only while kde_settings.conf still has the value
+# the run wrote: a theme or cursor chosen since on System Settings' Login Screen (SDDM) page stays.
 # shellcheck disable=SC2016 # the sh -c snippets take their arguments as $0, $1, ...
 set -euo pipefail
 
@@ -50,8 +55,15 @@ say() { printf '%s\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
 die() { printf 'greeter-restore: %s\n' "$*" >&2; exit 1; }
 
-[ "$(id -u)" = 0 ] || die "run as root"
-command -v setpriv >/dev/null || die "setpriv (util-linux) is missing"
+# PF_GREETER_ROOT: the tests undo SDDM runs in a directory tree instead of / (never as root, who
+# must not write through a tree another user prepared).
+SYSROOT=${PF_GREETER_ROOT:-}
+if [ -n "$SYSROOT" ]; then
+  [ "$(id -u)" != 0 ] || die "PF_GREETER_ROOT is for the tests and never used as root"
+else
+  [ "$(id -u)" = 0 ] || die "run as root"
+fi
+BACKUP_ROOT=$SYSROOT$BACKUP_ROOT
 
 # The backups, newest first (their names sort by time).
 mapfile -t BACKUPS < <(find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'greeter-backup-*' 2>/dev/null | LC_ALL=C sort -r)
@@ -75,9 +87,17 @@ for b in "${BACKUPS[@]}"; do
   [ "$b" = "$TARGET" ] && break
 done
 
-entry=$(getent passwd "$GREETER_USER") || die "user $GREETER_USER does not exist"
-GHOME=$(printf '%s' "$entry" | cut -d: -f6)
-GGROUP=$(id -gn "$GREETER_USER")
+# The plasma-login-manager greeter user, looked up for the first backup of its files (an SDDM
+# run needs none).
+GHOME='' GGROUP=''
+need_greeter() {
+  [ -z "$GHOME" ] || return 0
+  [ -z "$SYSROOT" ] || die "PF_GREETER_ROOT is only for SDDM backups"
+  command -v setpriv >/dev/null || die "setpriv (util-linux) is missing"
+  entry=$(getent passwd "$GREETER_USER") || die "user $GREETER_USER does not exist"
+  GHOME=$(printf '%s' "$entry" | cut -d: -f6)
+  GGROUP=$(id -gn "$GREETER_USER")
+}
 as_greeter() { setpriv --reuid="$GREETER_USER" --regid="$GGROUP" --init-groups --no-new-privs -- \
   env -i PATH=/usr/bin:/bin HOME="$GHOME" LANG=C.UTF-8 "$@"; }
 # kreadconfig6/kwriteconfig6 offscreen, with a HOME of their own (KConfig wants a writable
@@ -136,8 +156,141 @@ restore_config_file() { # $1 backup, $2 name below .config
   fi
 }
 
+# ---------- SDDM ----------
+
+SDDM_KEYS=(Current CursorTheme)
+SDDM_WRITTEN=()
+kr() { # $1 file, $2 group, $3 key
+  as_root_tool kreadconfig6 --file "$1" --group "$2" --key "$3" 2>/dev/null || true
+}
+kset() { # $1 file, $2 group, $3 key, $4 value (empty: remove the key)
+  if [ -n "$4" ]; then
+    run as_root_tool kwriteconfig6 --file "$1" --group "$2" --key "$3" "$4"
+  else
+    run as_root_tool kwriteconfig6 --file "$1" --group "$2" --key "$3" --delete
+  fi
+}
+put_back() { # $1 saved copy (with the file's old mode), $2 the file
+  run install -m "$(stat -c %a "$1")" -- "$1" "$2"
+  [ "$DRY" = 1 ] || [ -n "$SYSROOT" ] || chown root:root "$2"
+}
+# Put LINE back into [SECTION] of FILE, right below the section's first header (or in a new section
+# at the end), leaving every other line as it is.
+add_line() { # $1 file, $2 section, $3 line
+  [ "$DRY" = 0 ] || return 0
+  awk -v sect="[$2]" -v add="$3" '
+    { print; t = $0; gsub(/^[ \t]+|[ \t]+$/, "", t); if (!done && t == sect) { print add; done = 1 } }
+    END { if (!done) { print ""; print sect; print add } }' "$1" >"$1.plasma-fusion-new"
+  mv -f -- "$1.plasma-fusion-new" "$1"
+}
+# The lines of FILE that set [Theme] KEY, as SDDM's parser finds them (greeter-apply.sh sddm_conf).
+theme_lines() { # $1 file, $2 key
+  awk -v want_k="$2" '
+    function trim(s) { sub(/^[ \t\r\f\v]+/, "", s); sub(/[ \t\r\f\v]+$/, "", s); return s }
+    BEGIN { s = "General" }
+    {
+      line = $0
+      if ((c = index(line, "#")) > 0) line = substr(line, 1, c - 1)
+      line = trim(line)
+      if ((e = index(line, "=")) > 0) {
+        if (s == "Theme" && trim(substr(line, 1, e - 1)) == want_k) print $0
+      } else if (line ~ /^\[.*\]$/) s = substr(line, 2, length(line) - 2)
+    }' "$1"
+}
+
+undo_sddm() { # $1 backup directory of an SDDM run
+  local backup=$1 state path file applied k old cur image line all=1
+  local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf conf=$SYSROOT/etc/sddm.conf user_conf
+  local -A ours=() still=()
+  user_conf=$SYSROOT$(sed -n 's/^theme_dir=//p' "$backup/info")/theme.conf.user
+  image=$(sed -n 's/^image=//p' "$backup/info")
+  ours[Current]=$(sed -n 's/^theme=//p' "$backup/info")
+  ours[CursorTheme]=$(sed -n 's/^cursors=//p' "$backup/info")
+  say "Undo the run of greeter-apply.sh that made $backup (SDDM)"
+  for k in kreadconfig6 kwriteconfig6; do command -v "$k" >/dev/null || die "$k is missing (kf6-kconfig)"; done
+  # The keys System Settings' file still has the run's value for. Only these go back, in every
+  # file: one changed since (another theme chosen on the page) is kept.
+  for k in "${SDDM_KEYS[@]}"; do
+    if [ -n "${ours[$k]}" ] && [ "$(kr "$kde" Theme "$k")" = "${ours[$k]}" ]; then still[$k]=1; else all=0; fi
+  done
+  while read -r state path <&3; do
+    case $path in
+      etc/sddm.conf.d/kde_settings.conf) file=$kde ;;
+      etc/sddm.conf) file=$conf ;;
+      sddm-theme/theme.conf.user) file=$user_conf ;;
+      *) note "skip unknown manifest entry: $state $path"; continue ;;
+    esac
+    applied=$backup/$path.applied
+    if [ ! -f "$applied" ]; then
+      note "${file#"$SYSROOT"} was not changed by this run (kept)"
+      continue
+    fi
+    # greeter-apply.sh wrote a file: a link there now was put there by someone else since.
+    if [ -L "$file" ]; then
+      note "${file#"$SYSROOT"} is a link now: left alone"
+      continue
+    fi
+    SDDM_WRITTEN+=("$file")
+    # Unchanged since that run: back as it was. /etc/sddm.conf only while the keys it gets back
+    # are still the run's choice (it is read last and would override a theme chosen since).
+    if [ -f "$file" ] && cmp -s "$file" "$applied" && { [ "$path" != etc/sddm.conf ] || [ "$all" = 1 ]; }; then
+      if [ "$state" = present ]; then
+        note "restore ${file#"$SYSROOT"} (unchanged since that run)"
+        put_back "$backup/$path" "$file"
+      else
+        note "remove ${file#"$SYSROOT"} (there was none)"
+        run rm -f -- "$file"
+      fi
+      continue
+    fi
+    note "${file#"$SYSROOT"} changed after that run: key by key"
+    case $path in
+      etc/sddm.conf.d/kde_settings.conf)
+        for k in "${SDDM_KEYS[@]}"; do
+          old=''
+          [ "$state" != present ] || old=$(kr "$backup/$path" Theme "$k")
+          if [ -n "${still[$k]:-}" ]; then
+            note "  [Theme] $k = ${old:-<removed>}"
+            kset "$file" Theme "$k" "$old"
+          else
+            note "  [Theme] $k: $(kr "$file" Theme "$k") was chosen since (kept)"
+          fi
+        done ;;
+      etc/sddm.conf)
+        # The lines the run removed come back while their key is the run's choice yet and nobody
+        # set it in this file since.
+        [ "$state" = present ] || continue
+        for k in "${SDDM_KEYS[@]}"; do
+          [ -n "$(theme_lines "$backup/$path" "$k")" ] || continue
+          if [ -n "${still[$k]:-}" ] && [ -z "$(theme_lines "$file" "$k")" ]; then
+            while IFS= read -r line; do
+              note "  [Theme] $line"
+              add_line "$file" Theme "$line"
+            done < <(theme_lines "$backup/$path" "$k")
+          else
+            note "  [Theme] $k: not put back (set in this file or chosen since)"
+          fi
+        done ;;
+      sddm-theme/theme.conf.user)
+        old=''
+        [ "$state" != present ] || old=$(kr "$backup/$path" General background)
+        cur=$(kr "$file" General background)
+        if [ -f "$file" ] && [ "$cur" = "$image" ]; then
+          note "  background = ${old:-<removed>}"
+          kset "$file" General background "$old"
+        else
+          note "  background: ${cur:-<unset>} was chosen since (kept)"
+        fi ;;
+    esac
+  done 3<"$backup/manifest"
+}
+
+# ---------- plasma-login-manager ----------
+
 undo() { # $1 backup directory
   local backup=$1 state path applied f
+  if grep -qx 'greeter=sddm' "$backup/info" 2>/dev/null; then undo_sddm "$backup"; return; fi
+  need_greeter
   say "Undo the run of greeter-apply.sh that made $backup"
   run as_greeter mkdir -p "$GHOME/.config"
   # The manifest comes in on descriptor 3, so no command in the loop can read from it.
@@ -195,11 +348,16 @@ undo() { # $1 backup directory
 say "Restore the login greeter to $TARGET$([ "$DRY" = 1 ] && echo ' (dry run: nothing is changed)')"
 [ "${#CHAIN[@]}" = 1 ] || say "(${#CHAIN[@]} runs of greeter-apply.sh to undo, newest first)"
 for b in "${CHAIN[@]}"; do undo "$b"; done
-note "remove $GHOME/.cache (the greeter rebuilds it)"
-run as_greeter rm -rf "$GHOME/.cache"
+if [ -n "$GHOME" ]; then
+  note "remove $GHOME/.cache (the greeter rebuilds it)"
+  run as_greeter rm -rf "$GHOME/.cache"
+fi
 
-if [ "$DRY" = 0 ] && command -v restorecon >/dev/null && command -v selinuxenabled >/dev/null && selinuxenabled; then
-  restorecon -R "$GHOME/.config" || true
-  [ ! -e "$CONF" ] || restorecon "$CONF" || true
+if [ "$DRY" = 0 ] && [ -z "$SYSROOT" ] && command -v restorecon >/dev/null && command -v selinuxenabled >/dev/null && selinuxenabled; then
+  if [ -n "$GHOME" ]; then
+    restorecon -R "$GHOME/.config" || true
+    [ ! -e "$CONF" ] || restorecon "$CONF" || true
+  fi
+  for f in "${SDDM_WRITTEN[@]}"; do [ ! -e "$f" ] || restorecon "$f" || true; done
 fi
 say "Done. The greeter shows its previous look the next time it starts (after the next logout or reboot)."

@@ -56,6 +56,9 @@ jobs:
       - name: Login check unit tests
         run: tools/device/tests/gate-unit.sh build/gate
 
+      - name: SDDM login screen apply and restore (a system tree in a temporary directory)
+        run: tools/system/tests/greeter-sddm-unit.sh build/greeter-sddm
+
       - name: Setup config keys that keep the user's choice
         run: tools/device/tests/config-keys-unit.sh build/config-keys
 
