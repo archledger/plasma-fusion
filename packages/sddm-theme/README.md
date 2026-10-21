@@ -77,8 +77,9 @@ hostName, the power capabilities, the power methods and `login()`; the `keyboard
   model selects Other user consistently. Only the current primary screen is interactive (SDDM
   creates a separate QML engine per screen); primary changes are polled through screenModel and a
   view that loses primary clears its credentials. A QtCore Settings file shares the pending lock
-  across engines (owner token plus heartbeat), so a promoted screen cannot submit under a running
-  request. An empty model initializes Other user independently of input gating, the lock lasts
+  across engines (owner token plus a heartbeat renewed by any live screen, keyed by the greeter's
+  random socket so seats stay separate), so a promoted screen cannot submit under a running
+  request even if the submitting screen is removed. An empty model initializes Other user independently of input gating, the lock lasts
   until SDDM reports a result, and the submitted session label survives a model reset.
   Leaving Other user clears its name, and the password field fills its pill for pointer focus.
 - The real `sddm-greeter-qt6 --test-mode` container render is recorded in

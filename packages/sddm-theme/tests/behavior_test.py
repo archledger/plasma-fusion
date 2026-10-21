@@ -859,9 +859,15 @@ def main():
             QTest.qWait(1100)
             check(root_b.property("authenticating"),
                   "another screen sees the pending lock")
-            screen_a.set_primary(-1)
+            # The submitting screen is removed while PAM continues. A surviving screen must keep
+            # the shared request alive past the five-second stale window.
+            view_a.close()
+            view_a.setSource(QUrl())
+            app.processEvents()
+            QTest.qWait(5500)
+            check(root_b.property("authenticating"),
+                  "a surviving screen renews the lock after the owner view is removed")
             screen_b.set_primary(0)
-            QMetaObject.invokeMethod(root_a, "refreshPrimary")
             QMetaObject.invokeMethod(root_b, "refreshPrimary")
             check(root_b.property("interactive"), "the promoted view accepts input")
             QQmlExpression(qmlContext(root_b), root_b, 'login("", "second-input")').evaluate()
@@ -869,16 +875,51 @@ def main():
                   "the promoted view cannot submit while the shared lock is held")
             proxy.loginFailed.emit()
             QTest.qWait(50)
-            check(not root_a.property("authenticating") and not root_b.property("authenticating"),
-                  "the shared result unlocks every screen")
+            check(not root_b.property("authenticating"),
+                  "the shared result unlocks the surviving screen")
             QQmlExpression(qmlContext(root_b), root_b, 'login("", "second-input")').evaluate()
             check(len(proxy.logins) == 2, "the promoted view can submit after the result")
             proxy.loginFailed.emit()
             QTest.qWait(50)
-            view_a.close()
-            view_a.setSource(QUrl())
             view_b.close()
             view_b.setSource(QUrl())
+            app.processEvents()
+
+        # SDDM gives each greeter a random --socket name; separate seats must not share a lock.
+        screen_c = Screen(0)
+        screen_d = Screen(0)
+        view_c = open_shared_theme(screen_c, True)
+        view_d = open_shared_theme(screen_d, True)
+        check(view_c.status() == QQuickView.Ready and view_d.status() == QQuickView.Ready,
+              "the seat-scope fixtures load")
+        if view_c.status() == QQuickView.Ready and view_d.status() == QQuickView.Ready:
+            root_c = view_c.rootObject()
+            root_d = view_d.rootObject()
+            root_c.setProperty("greeterKey", "seat-c")
+            root_d.setProperty("greeterKey", "seat-d")
+            QTest.qWait(50)
+            QQmlExpression(qmlContext(root_c), root_c, "clearAuthLock()").evaluate()
+            QQmlExpression(qmlContext(root_d), root_d, "clearAuthLock()").evaluate()
+            proxy.logins.clear()
+            QQmlExpression(qmlContext(root_c), root_c, 'login("", "seat-input")').evaluate()
+            QTest.qWait(1100)
+            check(not root_d.property("authenticating"),
+                  "another seat does not inherit the pending lock")
+            acquired = QQmlExpression(qmlContext(root_d), root_d, "acquireAuthLock()").evaluate()
+            check(acquired[0], "another seat can acquire its own lock")
+            QQmlExpression(qmlContext(root_d), root_d, "clearAuthLock()").evaluate()
+            root_d.setProperty("greeterKey", "seat-c")
+            QTest.qWait(1100)
+            check(root_d.property("authenticating"),
+                  "the same greeter category sees the pending lock")
+            proxy.loginFailed.emit()
+            QTest.qWait(50)
+            check(not root_d.property("authenticating"),
+                  "the shared result clears the scoped lock")
+            view_c.close()
+            view_c.setSource(QUrl())
+            view_d.close()
+            view_d.setSource(QUrl())
             app.processEvents()
     print(f"SDDM behavior: {checks - failures}/{checks} passed")
     return 1 if failures else 0
