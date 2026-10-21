@@ -25,7 +25,7 @@ from PySide6.QtGui import (  # noqa: E402
     QInputMethodEvent,
 )
 from PySide6.QtQml import QQmlExpression, qmlContext  # noqa: E402
-from PySide6.QtQuick import QQuickView  # noqa: E402
+from PySide6.QtQuick import QQuickView, QSGRendererInterface  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
 HERE = Path(__file__).resolve().parent.parent
@@ -234,6 +234,17 @@ def main():
         Path(invalid_avatar).write_bytes(b"not an image")
         broken_urls = [QUrl.fromLocalFile(p).toString() for p in (missing_avatar, invalid_avatar)]
         subprocess.run(["bash", str(HERE / "build.sh"), tmp, avatar], check=True)
+        # Stand-ins for QtQuick.VirtualKeyboard, first on the import path, so the result does not
+        # depend on whether the real module is installed: one with InputPanel (a 300 px keyboard
+        # that reports `active`), one without it (as a greeter without the module).
+        stubs = {}
+        for kind, types in (("keyboard", "InputPanel 1.0 InputPanel.qml\n"), ("nokeyboard", "")):
+            module = Path(tmp) / kind / "QtQuick/VirtualKeyboard"
+            module.mkdir(parents=True)
+            (module / "qmldir").write_text("module QtQuick.VirtualKeyboard\n" + types)
+            (module / "InputPanel.qml").write_text(
+                "import QtQuick 2.15\nItem { property bool active: false; height: 300 }\n")
+            stubs[kind] = str(Path(tmp) / kind)
         account_name = "<b>Account</b> " * 10
         users = Model([{"name": f"user{i}", "realName": account_name if i == 0 else f"Person {i}",
                         "icon": avatar, "needsPassword": i != 6} for i in range(20)])
@@ -271,6 +282,7 @@ def main():
                     warnings.append(message)
 
         view.engine().warnings.connect(note_warnings)
+        view.engine().addImportPath(stubs["keyboard"])
         view.setResizeMode(QQuickView.SizeRootObjectToView)
         view.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
         check(view.status() == QQuickView.Ready, "the actual staged Main.qml loads")
@@ -458,7 +470,14 @@ def main():
         check(root.property("loginName") == "user5" and visible_initial(card, "P"),
               "an invalid login-card avatar falls back to its initial")
         press(view, third, Qt.Key_Space)
-        check(not visible_initial(card, "P"), "a loaded login-card photo replaces the initial")
+        # The photo is cut to the disc by Qt's effects, which the software scene graph (this
+        # offscreen run) cannot draw: there it is withheld and the initial stays, never a square
+        # photo. avatar_test.py checks the drawn photo on OpenGL.
+        if view.rendererInterface().graphicsApi() == QSGRendererInterface.GraphicsApi.Software:
+            check(visible_initial(card, "P"),
+                  "a loaded login-card photo keeps the initial where no effect can cut it to a circle")
+        else:
+            check(not visible_initial(card, "P"), "a loaded login-card photo replaces the initial")
         other = find(root, "Other user")
         press(view, other, Qt.Key_Left)
         last = find(root, "Person 19")
@@ -758,9 +777,66 @@ def main():
         screen.set_primary(0)
         QMetaObject.invokeMethod(root, "refreshPrimary")
         check(card.property("allowInput"), "input returns when this view becomes primary again")
+
+        # Qt's virtual keyboard: SDDM's default input method. A focused field alone must not open
+        # it over the screen; the board's accessibility button does, and the card moves above it.
+        def expr(item, text):
+            return QQmlExpression(qmlContext(item), item, text).evaluate()[0]
+
+        on_screen = find(root, "On-screen keyboard")
+        panel = expr(root, "inputPanel.item")
+        check(on_screen.isVisible() and panel is not None,
+              "with QtQuick.VirtualKeyboard the on-screen keyboard button shows")
+        if panel is not None:
+            normal_y = card.property("y")
+            panel.setProperty("requested", True)  # a text field has focus: Qt's input method asks
+            QTest.qWait(10)
+            check(not panel.property("visible") and card.property("y") == normal_y,
+                  "a focused field alone does not open the keyboard over the screen")
+            activate(on_screen)
+            panel_y = expr(root, "inputPanel.y")
+            check(panel.property("visible") and panel_y == 900 - 300,
+                  "the button opens the keyboard along the bottom")
+            # (the card is in Other user's prompt here, so its empty username field takes the keys)
+            check(card.property("y") + card.property("height") <= panel_y
+                  and (password.hasActiveFocus() or username.hasActiveFocus()),
+                  "the card moves above the keyboard and its credential field keeps the keys")
+            check(expr(on_screen, "Accessible.checked"), "the button reports its on state")
+            press(view, on_screen, Qt.Key_Space)
+            check(not panel.property("visible") and card.property("y") == normal_y
+                  and not expr(on_screen, "Accessible.checked"),
+                  "the button (by key) closes it and the card returns")
+            panel.setProperty("requested", False)
         view.close()
         view.setSource(QUrl())
         app.processEvents()
+
+        # A greeter without QtQuick.VirtualKeyboard (its module lacks InputPanel here): no panel,
+        # no button, and no warning at the greeter's start.
+        view_nk = QQuickView()
+        nk_warnings = []
+        view_nk.engine().warnings.connect(lambda errors: nk_warnings.extend(e.toString() for e in errors))
+        view_nk.engine().addImportPath(stubs["nokeyboard"])
+        for name, obj in (("sddm", proxy), ("keyboard", keyboard), ("config", config),
+                          ("userModel", users), ("sessionModel", sessions),
+                          ("screenModel", Screen(0)), ("primaryScreen", True)):
+            view_nk.rootContext().setContextProperty(name, obj)
+        view_nk.setResizeMode(QQuickView.SizeRootObjectToView)
+        view_nk.setSource(QUrl.fromLocalFile(str(Path(tmp) / "plasmafusion/Main.qml")))
+        check(view_nk.status() == QQuickView.Ready, "the theme loads without the virtual keyboard module")
+        if view_nk.status() == QQuickView.Ready:
+            view_nk.resize(1440, 900)
+            view_nk.show()
+            QTest.qWait(100)
+            root_nk = view_nk.rootObject()
+            check(not find(root_nk, "On-screen keyboard").isVisible()
+                  and QQmlExpression(qmlContext(root_nk), root_nk, "inputPanel.item").evaluate()[0] is None,
+                  "without the module there is no keyboard and no button")
+            check(not [w for w in nk_warnings if "Image" not in w],
+                  "a missing virtual keyboard module prints no warning")
+            view_nk.close()
+            view_nk.setSource(QUrl())
+            app.processEvents()
 
         # With no listed accounts, Main's fallback must select Other user through the normal
         # path so the prompted username and the tile's visual/assistive state agree.
