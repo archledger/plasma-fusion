@@ -179,6 +179,18 @@ check
 has "breeze-dark (/etc/sddm.conf.d/kde_settings.conf)" && ok "  SDDM reads the theme chosen on the page" ||
   bad "  effective after chosen-since" "$OUT"
 
+# --- a drop-in read after kde_settings.conf chose a theme since: /etc/sddm.conf's old line,
+# read last, must not come back over it
+fresh c2
+cp -p "$WORK/b.sddm.conf" "$R/etc/sddm.conf"
+apply
+printf '[Theme]\nCurrent=local-choice\n' >"$R/etc/sddm.conf.d/zz-local.conf"
+restore
+check
+[ "$RC" = 1 ] && ! grep -q '^Current=' "$R/etc/sddm.conf" && has "local-choice (/etc/sddm.conf.d/zz-local.conf)" &&
+  ok "restore leaves a theme a later drop-in chose since in effect (no old line over it)" || bad "later drop-in choice" "$OUT
+$(cat "$R/etc/sddm.conf")"
+
 # --- only other keys changed on the page: the run's theme still goes back
 fresh d
 apply
@@ -237,6 +249,24 @@ check
 [ "$RC" = 2 ] && has "cannot read /etc/sddm.conf.d" && ok "  a directory it cannot list: exit 2 too" || bad "  unlistable" "$OUT"
 chmod 0755 "$R/etc/sddm.conf.d"
 
+# --- the theme's own options, unreadable for the user who checks (0640 for SDDM's group)
+fresh d4b
+apply --login-image dimmed
+chmod 000 "$R/$THEME/theme.conf.user"
+check --login-image dimmed
+[ "$RC" = 2 ] && has "cannot read /$THEME/theme.conf.user" && ok "check: an unreadable theme.conf.user leaves the answer open" ||
+  bad "unreadable theme.conf.user" "$OUT"
+chmod 0644 "$R/$THEME/theme.conf.user"
+
+# --- an explicitly empty ThemeDir= is not the default directory
+fresh d4c
+printf '[Theme]\nThemeDir=\n' >"$R/etc/sddm.conf"
+apply
+[ "$RC" = 1 ] && has "/etc/sddm.conf sets [Theme] ThemeDir to nothing" && [ ! -e "$R/$KDE" ] &&
+  ok "an empty ThemeDir= stops the run" || bad "empty themedir" "$OUT"
+check
+[ "$RC" = 1 ] && has "ThemeDir is empty in /etc/sddm.conf" && ok "  and the check names it" || bad "  check empty themedir" "$OUT"
+
 # --- the undo puts back what was there: several lines of a key in order, an explicit empty value
 fresh d5
 printf '[Theme]\nCurrent=first\nCurrent=second\n' >"$R/etc/sddm.conf"
@@ -269,8 +299,12 @@ rm -r "${R:?}/usr/bin/sddm-greeter-qt6" "$R/etc/systemd/system/display-manager.s
 printf '[Unit]\nDescription=Display Manager\n' >"$R/etc/systemd/system/display-manager.service"
 printf '[Theme]\nCurrent=plasmafusion\nCursorTheme=PlasmaFusion-cursors\nThemeDir=/run/current-system/sw/share/sddm/themes\n' \
   >"$R/etc/sddm.conf.d/00-nixos.conf"
+# NixOS keeps KConfig's tools in the system profile, not /usr/bin: a recording stand-in there
+printf '#!/bin/sh\n: >"%s/profile-tool-used"\nexec /usr/bin/kreadconfig6 "$@"\n' "$R" >"$SW/bin/kreadconfig6"
+chmod +x "$SW/bin/kreadconfig6"
 check
 [ "$RC" = 0 ] && has "(/run/current-system/sw/bin/sddm-greeter-qt6)" && ok "NixOS: check reads the module's choice" || bad "nixos check" "$OUT"
+[ -e "$R/profile-tool-used" ] && ok "  with the system profile's KConfig tools" || bad "  profile tools not used"
 status
 [ "$RC" = 0 ] && has "login screen (SDDM): Plasma Fusion" && ok "  status: Plasma Fusion" || bad "  nixos status" "$OUT"
 printf '[Theme]\nCurrent=breeze\nThemeDir=/run/current-system/sw/share/sddm/themes\n' >"$R/etc/sddm.conf.d/00-nixos.conf"

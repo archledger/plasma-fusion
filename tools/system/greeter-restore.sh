@@ -246,10 +246,27 @@ key_value() { # $1 file, $2 section, $3 key
     v = substr(l, index(l, "=") + 1); sub(/^[ \t\r\f\v]+/, "", v); sub(/[ \t\r\f\v]+$/, "", v); print v }'
 }
 
+# The file whose [Theme] KEY SDDM reads last - SDDM 0.21 reads /usr/lib/sddm/sddm.conf.d/*, then
+# /etc/sddm.conf.d/* (each sorted, as greeter-apply.sh orders them), then /etc/sddm.conf - with
+# the two files this restore changes taken from SDDM_ROOT. Empty when no file sets it.
+deciding_file() { # $1 key
+  local f last=''
+  while IFS= read -r f; do
+    [ -z "$(key_lines "$f" Theme "$1")" ] || last=$f
+  done < <(
+    find "$SYSROOT/usr/lib/sddm/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' -xtype f 2>/dev/null | LC_ALL=C sort
+    { find "$SYSROOT/etc/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' ! -name kde_settings.conf -xtype f \
+        -printf '%f\t%p\n' 2>/dev/null
+      printf 'kde_settings.conf\t%s\n' "$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf"
+    } | LC_ALL=C sort | cut -f2-
+    printf '%s\n' "$SDDM_ROOT/etc/sddm.conf")
+  printf '%s' "$last"
+}
+
 undo_sddm() { # $1 backup directory of an SDDM run
   local backup=$1 state path file applied k cur image line saved all=1
   local kde=$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf conf=$SDDM_ROOT/etc/sddm.conf user_conf
-  local -A ours=() still=()
+  local -A ours=() still=() decides=()
   # A dry run changes its copy of the files (SDDM_ROOT), so each run's undo sees the state the
   # newer ones left, as the real restore does; the system's files stay as they are.
   [ "$SDDM_ROOT" = "$SYSROOT" ] || local DRY=0
@@ -259,10 +276,15 @@ undo_sddm() { # $1 backup directory of an SDDM run
   ours[CursorTheme]=$(sed -n 's/^cursors=//p' "$backup/info")
   say "Undo the run of greeter-apply.sh that made $backup (SDDM)"
   for k in kreadconfig6 kwriteconfig6; do command -v "$k" >/dev/null || die "$k is missing (kf6-kconfig)"; done
-  # The keys System Settings' file still has the run's value for. Only these go back, in every
-  # file: one changed since (another theme chosen on the page) is kept.
+  # The keys System Settings' file still has the run's value for. Only these go back: one changed
+  # since (another theme chosen on the page) is kept. /etc/sddm.conf, read last, gets its old lines
+  # back only while that file still decides the key: a later drop-in may have chosen since.
   for k in "${SDDM_KEYS[@]}"; do
-    if [ -n "${ours[$k]}" ] && [ "$(key_value "$kde" Theme "$k")" = "${ours[$k]}" ]; then still[$k]=1; else all=0; fi
+    if [ -n "${ours[$k]}" ] && [ "$(key_value "$kde" Theme "$k")" = "${ours[$k]}" ]; then
+      still[$k]=1
+      [ "$(deciding_file "$k")" != "$kde" ] || decides[$k]=1
+    fi
+    [ -n "${decides[$k]:-}" ] || all=0
   done
   while read -r state path <&3; do
     case $path in
@@ -321,12 +343,12 @@ undo_sddm() { # $1 backup directory of an SDDM run
         [ "$state" = present ] || continue
         for k in "${SDDM_KEYS[@]}"; do
           [ -n "$(key_lines "$backup/$path" Theme "$k")" ] || continue
-          if [ -n "${still[$k]:-}" ] && [ -z "$(key_lines "$file" Theme "$k")" ]; then
+          if [ -n "${decides[$k]:-}" ] && [ -z "$(key_lines "$file" Theme "$k")" ]; then
             key_lines "$backup/$path" Theme "$k" >"$own/lines"
             while IFS= read -r line; do note "  [Theme] $line"; done <"$own/lines"
             add_lines "$file" Theme "$own/lines"
           else
-            note "  [Theme] $k: not put back (set in this file or chosen since)"
+            note "  [Theme] $k: not put back (set in this file, or chosen since here or in a later file)"
           fi
         done ;;
       sddm-theme/theme.conf.user)

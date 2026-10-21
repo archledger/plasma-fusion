@@ -206,7 +206,9 @@ chmod 0700 "$own/run"
 # Every KDE tool runs offscreen with a clean environment: no session bus or display, a HOME in a
 # temporary directory (KConfig wants a writable ~/.config, or it pops up an error dialog) and only
 # the system-wide data.
-as_root_tool() { env -i PATH=/usr/bin:/bin HOME="$own/home" XDG_CONFIG_HOME="$own/home/.config" \
+# TOOL_PATH: /usr/bin:/bin, with NixOS's system profile in front for its read-only SDDM check.
+TOOL_PATH=/usr/bin:/bin
+as_root_tool() { env -i PATH="$TOOL_PATH" HOME="$own/home" XDG_CONFIG_HOME="$own/home/.config" \
   XDG_RUNTIME_DIR="$own/run" XDG_CONFIG_DIRS=/etc/xdg QT_QPA_PLATFORM=offscreen LANG=C.UTF-8 "$@"; }
 
 kw() { # $1 file, $2 group (nested with /), $3 key, $4 value or --delete
@@ -359,11 +361,16 @@ sddm_main() {
   local dir=$SYSROOT/etc/sddm.conf.d conf=$SYSROOT/etc/sddm.conf
   local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf themedir theme greeter user_conf
   local default_bg user_bg bg dm k want before=other ok mark src builtin share nixos=0 open v
+  local themedir_src
   local conf_new='' user_new='' swaps=()
   [ -z "$OUTPUT" ] || die "--output writes plasma-login-manager's files; preview the SDDM theme with sddm-greeter-qt6 --test-mode (docs/parts/sddm.md)"
   [ -z "$DISPLAY_FROM" ] || die "--display-from is for plasma-login-manager (for SDDM: System Settings > Login Screen (SDDM) > Apply Plasma Settings…)"
   # NixOS generates /etc: only the read-only check, against the system profile's paths.
-  [ ! -e "$SYSROOT/etc/NIXOS" ] || nixos=1
+  if [ -e "$SYSROOT/etc/NIXOS" ]; then
+    nixos=1
+    # KConfig's tools live in the system profile there (root's, like /usr/bin elsewhere)
+    TOOL_PATH=$SYSROOT/run/current-system/sw/bin:$TOOL_PATH
+  fi
   [ "$nixos" = 0 ] || [ "$CHECK" = 1 ] ||
     die "NixOS generates /etc: set programs.plasma-fusion.sddm = true in the system configuration instead (docs/parts/nixos.md)"
   if [ -n "$SYSROOT" ]; then
@@ -381,6 +388,10 @@ sddm_main() {
   fi
   sddm_effective Theme ThemeDir
   themedir=${REPLY:-/usr/share/sddm/themes}
+  # An empty ThemeDir= set in a file is not the default: SDDM then looks for the theme relative to
+  # its working directory and falls back to its built-in one.
+  themedir_src=''
+  if [ -n "$REPLY_FILE" ] && [ -z "$REPLY" ]; then themedir_src=${REPLY_FILE#"$SYSROOT"}; fi
   theme=$SYSROOT$themedir/$SDDM_THEME
   user_conf=$theme/theme.conf.user
   greeter=$SYSROOT/usr/bin/sddm-greeter-qt6
@@ -407,7 +418,11 @@ sddm_main() {
     sddm_effective Theme Current
     src=${REPLY_FILE#"$SYSROOT"}
     row theme "$REPLY" "$SDDM_THEME" "${src:-$builtin}"
-    row "theme files" "$([ -f "$theme/metadata.desktop" ] && echo installed || echo missing)" installed "${theme#"$SYSROOT"}"
+    if [ -n "$themedir_src" ]; then
+      row "theme files" "missing" installed "ThemeDir is empty in $themedir_src"
+    else
+      row "theme files" "$([ -f "$theme/metadata.desktop" ] && echo installed || echo missing)" installed "${theme#"$SYSROOT"}"
+    fi
     row "Qt 6 greeter" "$([ -x "$greeter" ] && echo installed || echo missing)" installed "${greeter#"$SYSROOT"}"
     sddm_effective Theme CursorTheme
     src=${REPLY_FILE#"$SYSROOT"}
@@ -423,6 +438,16 @@ sddm_main() {
     while IFS= read -r f; do
       say "  cannot read $f: what it sets is unknown (run --check as root)"; open=yes
     done < <(sddm_unreadable)
+    # The theme's own options (the wallpaper): readable by SDDM's greeter user, maybe not by this one
+    if [ -d "$theme" ] && { [ ! -r "$theme" ] || [ ! -x "$theme" ]; }; then
+      say "  cannot read ${theme#"$SYSROOT"}: its wallpaper setting is unknown (run --check as root)"; open=yes
+    else
+      for f in "$theme/theme.conf" "$user_conf"; do
+        if [ -e "$f" ] && [ ! -r "$f" ]; then
+          say "  cannot read ${f#"$SYSROOT"}: its wallpaper setting is unknown (run --check as root)"; open=yes
+        fi
+      done
+    fi
     while IFS= read -r f; do
       say "  $f sets the theme or cursors; whether SDDM reads it before or after kde_settings.conf depends on its locale"
       open=yes
@@ -438,6 +463,8 @@ sddm_main() {
     exit
   fi
 
+  [ -z "$themedir_src" ] ||
+    die "$themedir_src sets [Theme] ThemeDir to nothing, so SDDM finds no theme there; remove that line or name the directory"
   [ -f "$theme/metadata.desktop" ] || die "the Plasma Fusion SDDM theme is not in $themedir (install the plasma-fusion package)"
   [ -x "$greeter" ] || die "${greeter#"$SYSROOT"} is missing: the theme needs SDDM's Qt 6 greeter (QtVersion=6); without it SDDM shows its own theme"
   [ -f "$SYSROOT$DATA/icons/$SDDM_CURSORS/index.theme" ] || die "cursor theme $SDDM_CURSORS is not installed in $DATA"

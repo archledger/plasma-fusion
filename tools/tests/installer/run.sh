@@ -303,6 +303,10 @@ for SHNAME in "${shells[@]}"; do
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
   expect "an SDDM login screen Plasma Fusion chose is restored too, SDDM's runs only" has_log "greeter-restore.sh --greeter sddm"
   expect "  (plasma-login-manager's are not replayed)" bash -c '! grep -q "^greeter-restore.sh *$\|--greeter plasmalogin" <<<"$0"' "$LOG"
+  # The same with comments after the values, which SDDM cuts off
+  printf '[Theme]\nCurrent=plasmafusion # chosen here\nCursorTheme=PlasmaFusion-cursors # too\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "  also with a comment after the value" has_log "greeter-restore.sh --greeter sddm"
   # That run undone since (another theme chosen): the old backup asks for nothing.
   printf '[Theme]\nCurrent=breeze\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only

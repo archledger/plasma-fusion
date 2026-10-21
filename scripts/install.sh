@@ -469,7 +469,9 @@ sddm_backups() {
 sddm_styled() {
   [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && sddm_backups || return 1
   # shellcheck disable=SC2016 # the sh -c script takes the root as $1
-  $SUDO sh -c 'grep -qsxE "[[:space:]]*(Current[[:space:]]*=[[:space:]]*plasmafusion|CursorTheme[[:space:]]*=[[:space:]]*PlasmaFusion-cursors)[[:space:]]*" "$1/etc/sddm.conf.d/kde_settings.conf" ||
+  # As SDDM reads the file: everything from a # on is a comment, so it is cut off before matching.
+  $SUDO sh -c 'sed "s/#.*//" "$1/etc/sddm.conf.d/kde_settings.conf" 2>/dev/null |
+      grep -qxE "[[:space:]]*(Current[[:space:]]*=[[:space:]]*plasmafusion|CursorTheme[[:space:]]*=[[:space:]]*PlasmaFusion-cursors)[[:space:]]*" ||
     [ -e "$1/usr/share/sddm/themes/plasmafusion/theme.conf.user" ]' sh "$TEST_ROOT"
 }
 # plasma-login-manager or SDDM's Qt 6 greeter (the one the Plasma Fusion SDDM theme runs in).
