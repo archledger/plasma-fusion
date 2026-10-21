@@ -274,10 +274,25 @@ chmod 0644 "$R/$THEME/theme.conf.user"
 fresh d4c
 printf '[Theme]\nThemeDir=\n' >"$R/etc/sddm.conf"
 apply
-[ "$RC" = 1 ] && has "/etc/sddm.conf sets [Theme] ThemeDir to nothing" && [ ! -e "$R/$KDE" ] &&
+[ "$RC" = 1 ] && has "ThemeDir is empty in /etc/sddm.conf: SDDM would not find the theme there" && [ ! -e "$R/$KDE" ] &&
   ok "an empty ThemeDir= stops the run" || bad "empty themedir" "$OUT"
 check
 [ "$RC" = 1 ] && has "ThemeDir is empty in /etc/sddm.conf" && ok "  and the check names it" || bad "  check empty themedir" "$OUT"
+# A relative ThemeDir is resolved from SDDM's working directory, not the caller's: a matching tree
+# where the script runs must not pass for the theme SDDM would look for.
+printf '[Theme]\nThemeDir=usr/share/sddm/themes\n' >"$R/etc/sddm.conf"
+OUT=$(cd "$R" && PF_GREETER_ROOT=$R bash "$APPLY" 2>&1); RC=$?
+[ "$RC" = 1 ] && has "is relative" && [ ! -e "$R/$KDE" ] && ok "a relative ThemeDir stops the run" || bad "relative themedir" "$OUT"
+check
+[ "$RC" = 1 ] && has "is relative" && ok "  and the check names it" || bad "  check relative themedir" "$OUT"
+
+# --- a backup a run left without its manifest (stopped before it changed anything) is passed over
+fresh d4d
+apply
+mkdir -p "$R/var/lib/plasma-fusion/greeter-backup-29991231T000000Z"
+restore --greeter sddm
+[ "$RC" = 0 ] && has "incomplete (a run that stopped before it changed anything)" && [ ! -e "$R/$KDE" ] &&
+  ok "an incomplete backup does not block the restore" || bad "incomplete backup" "$OUT"
 
 # --- the undo puts back what was there: several lines of a key in order, an explicit empty value
 fresh d5

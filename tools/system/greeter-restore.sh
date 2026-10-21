@@ -76,12 +76,19 @@ else
 fi
 BACKUP_ROOT=$SYSROOT$BACKUP_ROOT
 
-# The backups, newest first (their names sort by time).
-mapfile -t BACKUPS < <(find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'greeter-backup-*' 2>/dev/null | LC_ALL=C sort -r)
-[ "${#BACKUPS[@]}" -gt 0 ] || die "no backup in $BACKUP_ROOT"
-for b in "${BACKUPS[@]}"; do
-  [ -f "$b/manifest" ] || die "$b is not a greeter-apply.sh backup (no manifest)"
+# The backups, newest first (their names sort by time). greeter-apply.sh writes a backup's
+# manifest and then its info before it changes any file, so one without both is a run that
+# stopped before it changed anything: passed over, so that it cannot block every later restore.
+mapfile -t FOUND < <(find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'greeter-backup-*' 2>/dev/null | LC_ALL=C sort -r)
+BACKUPS=()
+for b in "${FOUND[@]}"; do
+  if [ -f "$b/manifest" ] && [ -f "$b/info" ]; then
+    BACKUPS+=("$b")
+  else
+    note "skip $b: incomplete (a run that stopped before it changed anything)"
+  fi
 done
+[ "${#BACKUPS[@]}" -gt 0 ] || die "no backup in $BACKUP_ROOT"
 # Which greeter a backup is of: an SDDM run's info says greeter=sddm, plasma-login-manager's says
 # nothing.
 kind() {
@@ -208,9 +215,10 @@ kback() { # $1 file, $2 group, $3 key, $4 saved copy (or "" when there was none)
     run as_root_tool kwriteconfig6 --file "$1" --group "$2" --key "$3" --delete
   fi
 }
-put_back() { # $1 saved copy (with the file's old mode), $2 the file
+put_back() { # $1 saved copy (with the file's old mode, owner and group), $2 the file
   run install -m "$(stat -c %a "$1")" -- "$1" "$2"
-  [ "$DRY" = 1 ] || [ -n "$SYSROOT" ] || chown root:root "$2"
+  # The saved owner and group, not root's: a file SDDM's group reads (root:sddm, 0640) must stay so
+  [ "$DRY" = 1 ] || [ -n "$SYSROOT" ] || chown --reference="$1" -- "$2"
 }
 # Put the lines of file LINES back into [SECTION] of FILE, in their order, right below the section's
 # first header (or in a new section at the end), leaving every other line as it is. One batch: with

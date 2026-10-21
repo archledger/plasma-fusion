@@ -361,7 +361,7 @@ sddm_main() {
   local dir=$SYSROOT/etc/sddm.conf.d conf=$SYSROOT/etc/sddm.conf
   local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf themedir theme greeter user_conf
   local default_bg user_bg bg dm k want before=other ok mark src builtin share nixos=0 open v
-  local themedir_src
+  local themedir_bad
   local conf_new='' user_new='' swaps=()
   [ -z "$OUTPUT" ] || die "--output writes plasma-login-manager's files; preview the SDDM theme with sddm-greeter-qt6 --test-mode (docs/parts/sddm.md)"
   [ -z "$DISPLAY_FROM" ] || die "--display-from is for plasma-login-manager (for SDDM: System Settings > Login Screen (SDDM) > Apply Plasma Settings…)"
@@ -388,10 +388,16 @@ sddm_main() {
   fi
   sddm_effective Theme ThemeDir
   themedir=${REPLY:-/usr/share/sddm/themes}
-  # An empty ThemeDir= set in a file is not the default: SDDM then looks for the theme relative to
-  # its working directory and falls back to its built-in one.
-  themedir_src=''
-  if [ -n "$REPLY_FILE" ] && [ -z "$REPLY" ]; then themedir_src=${REPLY_FILE#"$SYSROOT"}; fi
+  # ThemeDir as SDDM uses it: an empty value set in a file is not the default (SDDM then looks for
+  # the theme relative to its working directory and falls back to its built-in one), and a relative
+  # value is resolved from the daemon's working directory, not this shell's (Display.cpp: QDir of
+  # the value). Neither can be checked or written here.
+  themedir_bad=''
+  if [ -n "$REPLY_FILE" ] && [ -z "$REPLY" ]; then
+    themedir_bad="ThemeDir is empty in ${REPLY_FILE#"$SYSROOT"}"
+  elif [ "${themedir#/}" = "$themedir" ]; then
+    themedir_bad="ThemeDir=$themedir in ${REPLY_FILE#"$SYSROOT"} is relative (SDDM resolves it from its own working directory)"
+  fi
   theme=$SYSROOT$themedir/$SDDM_THEME
   user_conf=$theme/theme.conf.user
   greeter=$SYSROOT/usr/bin/sddm-greeter-qt6
@@ -418,8 +424,8 @@ sddm_main() {
     sddm_effective Theme Current
     src=${REPLY_FILE#"$SYSROOT"}
     row theme "$REPLY" "$SDDM_THEME" "${src:-$builtin}"
-    if [ -n "$themedir_src" ]; then
-      row "theme files" "missing" installed "ThemeDir is empty in $themedir_src"
+    if [ -n "$themedir_bad" ]; then
+      row "theme files" "not found" installed "$themedir_bad"
     else
       row "theme files" "$([ -f "$theme/metadata.desktop" ] && echo installed || echo missing)" installed "${theme#"$SYSROOT"}"
     fi
@@ -463,8 +469,8 @@ sddm_main() {
     exit
   fi
 
-  [ -z "$themedir_src" ] ||
-    die "$themedir_src sets [Theme] ThemeDir to nothing, so SDDM finds no theme there; remove that line or name the directory"
+  [ -z "$themedir_bad" ] ||
+    die "$themedir_bad: SDDM would not find the theme there; name an absolute directory or remove the line. Nothing was changed."
   [ -f "$theme/metadata.desktop" ] || die "the Plasma Fusion SDDM theme is not in $themedir (install the plasma-fusion package)"
   [ -x "$greeter" ] || die "${greeter#"$SYSROOT"} is missing: the theme needs SDDM's Qt 6 greeter (QtVersion=6); without it SDDM shows its own theme"
   [ -f "$SYSROOT$DATA/icons/$SDDM_CURSORS/index.theme" ] || die "cursor theme $SDDM_CURSORS is not installed in $DATA"

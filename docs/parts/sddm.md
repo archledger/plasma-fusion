@@ -143,7 +143,8 @@ ICU's weigh it, and case and letters beyond ASCII differ too, so only names that
 `kde_settings.conf` in a lower-case ASCII letter or digit (or extend it) have a known place. Two
 drop-ins of one directory that set different `[Theme] ThemeDir` values in such an order stop it as
 well: the theme, and its `theme.conf.user`, would be checked in a tree SDDM may not use. So does a
-`ThemeDir=` set to nothing, which SDDM does not read as its default directory. The
+`ThemeDir=` set to nothing, which SDDM does not read as its default directory, or to a relative path,
+which SDDM resolves from its own working directory, not the caller's. The
 run also stops when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
 `QtVersion=6`, and without that greeter SDDM shows its own theme) is missing, when the theme's
 directory is writable by anyone but root or one of the three files is a link (root would copy what
@@ -165,7 +166,10 @@ are still the run's choice in effect - `kde_settings.conf` still the file that d
 SDDM's whole chain (its old theme line, read last, would override a choice made since on the page or
 in a later drop-in; a drop-in whose order against `kde_settings.conf` depends on the locale counts as
 possibly later), all of a key's lines
-in their order (the last still wins), into a copy of itself so its mode and owner stay. A saved
+in their order (the last still wins), into a copy of itself so its mode and owner stay. A file put
+back byte for byte gets its saved mode, owner and group (a `theme.conf.user` SDDM's group reads stays
+so). A backup without its manifest and info - a run that stopped before it changed anything - is
+passed over with a note instead of blocking every later restore. A saved
 explicit empty value (`Current=`, which hides a vendor file's theme) comes back as such, not as a
 missing key. A link found where the run wrote a file, or a file removed since, is left that way.
 `--dry-run` makes SDDM's undo on a copy of the three files, so each run's step sees what the newer
@@ -349,7 +353,10 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   drop-in of locale-dependent order as possibly read after `kde_settings.conf`, and uninstall names
   the files that still choose the theme by other means (SDDM then shows its built-in theme). From
   the sixth: when the theme was chosen by hand before the first run, the default restore undoes
-  every run back to that hand-made state instead of refusing (which stopped the uninstall).
+  every run back to that hand-made state instead of refusing (which stopped the uninstall). From
+  the seventh: a relative `ThemeDir` stops `apply` and is named by `--check`, an incomplete backup
+  no longer blocks restore, and a file put back keeps its saved owner and group (checked as root in
+  the Fedora 44 container: `root:sddm` 0640 back after apply and restore).
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,
   and nothing for a backup of a run undone since; plasma-login-manager is restored with
