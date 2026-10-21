@@ -102,7 +102,11 @@ page's own file, the page shows Plasma Fusion as the chosen theme and can choose
 
 Before anything changes, the values SDDM would then read are worked out in its order and with its
 parser (everything from the first `#` on a line is a comment, the last assignment wins); a file
-read later that would still choose another theme or cursor stops the run with nothing changed. The
+read later that would still choose another theme or cursor stops the run with nothing changed. So
+does another drop-in that sets them where SDDM's `QDir::LocaleAware` listing could order it against
+`kde_settings.conf` differently from byte order: glibc's collations ignore punctuation at first,
+ICU's weigh it, and case and letters beyond ASCII differ too, so only names that first differ from
+`kde_settings.conf` in a lower-case ASCII letter or digit (or extend it) have a known place. The
 run also stops when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
 `QtVersion=6`, and without that greeter SDDM shows its own theme) is missing, when the theme's
 directory is writable by anyone but root or one of the three files is a link (root would copy what
@@ -113,16 +117,24 @@ it points to, and the rename would replace a link managed elsewhere), on NixOS
 The backup is `/var/lib/plasma-fusion/greeter-backup-<UTC>/` (0700), as for plasma-login-manager:
 the three files present or absent (`manifest`), `info` with `greeter=sddm`, the theme, cursors and
 wallpaper the run wrote and `before=plasma-fusion|other`, and `<file>.applied`, what it wrote.
-greeter-restore.sh undoes the runs newest first. A file goes back byte for byte while it is still
-what the run wrote; otherwise key by key, and a key only while `kde_settings.conf` still has the
-run's value: a theme chosen on the page since is kept, and `/etc/sddm.conf` gets back only the
-lines of keys that are still the run's choice (its old theme line would override the new choice).
-A link found where the run wrote a file is left alone. Nothing is restarted; SDDM reads the change
-the next time its greeter starts.
+greeter-restore.sh undoes the runs newest first; without a named backup, SDDM's runs and
+plasma-login-manager's are separate chains (they change different files), each back to its own
+newest backup from before Plasma Fusion. A file goes back byte for byte while it is still what the
+run wrote; otherwise key by key, and a key only while `kde_settings.conf` still has the run's value:
+a theme chosen on the page since is kept, and `/etc/sddm.conf` gets back only the lines of keys that
+are still the run's choice (its old theme line would override the new choice), into a copy of
+itself so its mode and owner stay. A link found where the run wrote a file, or a file removed
+since, is left that way. Nothing is restarted; SDDM reads the change the next time its greeter
+starts.
 
 `plasma-fusion status` prints `login screen (SDDM): Plasma Fusion` or `another theme` from
-`greeter-apply.sh --check`, which needs no root here (SDDM's configuration is readable by every
-user). The login check (gate.md) gets no SDDM row: it switches per-user parts around Plasma
+`greeter-apply.sh --check`, which needs no root here (SDDM's configuration is normally readable by
+every user). Without `--login-image` the check counts any of the three wallpapers. It exits 2,
+"cannot tell", when a file it cannot read (a root-only `/etc/sddm.conf`) or a drop-in of unknown
+order could decide, and status then names the check to run as root. On NixOS (`/etc/NIXOS`, and
+`/etc/sddm.conf.d/00-nixos.conf` while the sddm module is on) the check reads the module's choice
+and the system profile's greeter, and status names `programs.plasma-fusion.sddm` instead of the
+script. The login check (gate.md) gets no SDDM row: it switches per-user parts around Plasma
 updates, while the greeter is system-wide, needs root to change and uses only QtQuick, QtCore and
 SDDM 0.21's theme API.
 
@@ -255,8 +267,11 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   exactly its two lines and getting them back, a theme chosen on the page after a run kept by the
   undo, a drop-in read later stopping the run, the refusals (no Qt 6 greeter, no theme, a link as
   `theme.conf.user` or `/etc/sddm.conf`, NixOS, `--output`, `--display-from`), the mode from
-  `display-manager.service`, and `plasma-fusion status`'s row. Against the scripts before this mode,
-  38 of its 40 checks fail (the other two check that nothing was written).
+  `display-manager.service`, and `plasma-fusion status`'s row. From the first review: the key-wise
+  restore keeps a 0600 `/etc/sddm.conf` private, a file removed since the run stays removed, a newer
+  plasma-login-manager backup does not hide the SDDM chain, an unreadable file and a drop-in of
+  locale-dependent order make `--check` exit 2, the NixOS module's choice is checked and reported,
+  and any of the three wallpapers counts without `--login-image`.
 - `tools/tests/installer/run.sh`: uninstall runs greeter-restore.sh for an SDDM run (a backup with
   `greeter=sddm`) before the packages go, and SDDM's Qt 6 greeter gets the login screen step
   offered.

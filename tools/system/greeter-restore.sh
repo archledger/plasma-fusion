@@ -7,8 +7,9 @@
 #   greeter-restore.sh [BACKUP_DIR] [--dry-run]
 #
 #   BACKUP_DIR   a /var/lib/plasma-fusion/greeter-backup-<UTC time> directory: go back to the
-#                state saved in it (default: the newest backup taken while the greeter did not
-#                use Plasma Fusion yet, i.e. the look from before Plasma Fusion)
+#                state saved in it (default: for SDDM's and plasma-login-manager's runs each, the
+#                newest backup taken while that greeter did not use Plasma Fusion yet, i.e. the
+#                look from before Plasma Fusion)
 #   --dry-run    show what would be restored; change nothing
 #   -h, --help
 #
@@ -68,24 +69,43 @@ BACKUP_ROOT=$SYSROOT$BACKUP_ROOT
 # The backups, newest first (their names sort by time).
 mapfile -t BACKUPS < <(find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'greeter-backup-*' 2>/dev/null | LC_ALL=C sort -r)
 [ "${#BACKUPS[@]}" -gt 0 ] || die "no backup in $BACKUP_ROOT"
+for b in "${BACKUPS[@]}"; do
+  [ -f "$b/manifest" ] || die "$b is not a greeter-apply.sh backup (no manifest)"
+done
+# Which greeter a backup is of: an SDDM run's info says greeter=sddm, plasma-login-manager's says
+# nothing.
+kind() {
+  if grep -qx 'greeter=sddm' "$1/info" 2>/dev/null; then echo SDDM; else echo plasma-login-manager; fi
+}
+CHAIN=() TARGETS=()
 if [ -n "$TARGET" ]; then
   TARGET=$(cd "$TARGET" && pwd) || die "$TARGET does not exist"
   case " ${BACKUPS[*]} " in *" $TARGET "*) ;; *) die "$TARGET is not one of the backups in $BACKUP_ROOT" ;; esac
-else
-  # A backup whose run found the greeter already on Plasma Fusion holds that state; go further
-  # back. Backups of the first version of greeter-apply.sh have no "before" line: they count as
-  # taken before Plasma Fusion.
+  # Every run since that one, of either greeter.
   for b in "${BACKUPS[@]}"; do
-    if ! grep -qx 'before=plasma-fusion' "$b/info" 2>/dev/null; then TARGET=$b; break; fi
+    CHAIN+=("$b")
+    [ "$b" = "$TARGET" ] && break
   done
-  [ -n "$TARGET" ] || die "every backup in $BACKUP_ROOT was taken while the greeter already used Plasma Fusion; name one"
+  TARGETS=("$TARGET")
+else
+  # Each greeter's runs change files of their own and make a chain of their own: each goes back to
+  # its newest backup taken while that greeter did not use Plasma Fusion yet. A backup whose run
+  # found the greeter already on Plasma Fusion holds that state; go further back. Backups of the
+  # first version of greeter-apply.sh have no "before" line: they count as taken before Plasma
+  # Fusion.
+  for k in SDDM plasma-login-manager; do
+    t='' runs=()
+    for b in "${BACKUPS[@]}"; do
+      [ "$(kind "$b")" = "$k" ] || continue
+      runs+=("$b")
+      if ! grep -qx 'before=plasma-fusion' "$b/info" 2>/dev/null; then t=$b; break; fi
+    done
+    [ "${#runs[@]}" -gt 0 ] || continue
+    [ -n "$t" ] || die "every $k backup in $BACKUP_ROOT was taken while the greeter already used Plasma Fusion; name one"
+    CHAIN+=("${runs[@]}")
+    TARGETS+=("$t")
+  done
 fi
-CHAIN=()
-for b in "${BACKUPS[@]}"; do
-  [ -f "$b/manifest" ] || die "$b is not a greeter-apply.sh backup (no manifest)"
-  CHAIN+=("$b")
-  [ "$b" = "$TARGET" ] && break
-done
 
 # The plasma-login-manager greeter user, looked up for the first backup of its files (an SDDM
 # run needs none).
@@ -178,6 +198,8 @@ put_back() { # $1 saved copy (with the file's old mode), $2 the file
 # at the end), leaving every other line as it is.
 add_line() { # $1 file, $2 section, $3 line
   [ "$DRY" = 0 ] || return 0
+  # The new file starts as a copy: it keeps the file's mode and owner (a 0600 file stays private).
+  cp -p -- "$1" "$1.plasma-fusion-new"
   awk -v sect="[$2]" -v add="$3" '
     { print; t = $0; gsub(/^[ \t]+|[ \t]+$/, "", t); if (!done && t == sect) { print add; done = 1 } }
     END { if (!done) { print ""; print sect; print add } }' "$1" >"$1.plasma-fusion-new"
@@ -241,6 +263,10 @@ undo_sddm() { # $1 backup directory of an SDDM run
         note "remove ${file#"$SYSROOT"} (there was none)"
         run rm -f -- "$file"
       fi
+      continue
+    fi
+    if [ ! -e "$file" ]; then
+      note "${file#"$SYSROOT"} was removed after that run (left that way)"
       continue
     fi
     note "${file#"$SYSROOT"} changed after that run: key by key"
@@ -345,7 +371,9 @@ undo() { # $1 backup directory
   done 3<"$backup/manifest"
 }
 
-say "Restore the login greeter to $TARGET$([ "$DRY" = 1 ] && echo ' (dry run: nothing is changed)')"
+for t in "${TARGETS[@]}"; do
+  say "Restore the login greeter ($(kind "$t")) to $t$([ "$DRY" = 1 ] && echo ' (dry run: nothing is changed)')"
+done
 [ "${#CHAIN[@]}" = 1 ] || say "(${#CHAIN[@]} runs of greeter-apply.sh to undo, newest first)"
 for b in "${CHAIN[@]}"; do undo "$b"; done
 if [ -n "$GHOME" ]; then

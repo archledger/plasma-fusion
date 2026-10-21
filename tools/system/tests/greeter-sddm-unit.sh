@@ -68,6 +68,15 @@ KDE=etc/sddm.conf.d/kde_settings.conf
 bash "$TOP/packages/sddm-theme/build.sh" "$WORK/build" >/dev/null
 rm -rf "$WORK/theme"
 cp -a "$WORK/build/plasmafusion" "$WORK/theme"
+# The plasma-fusion command finds a package by its version file; status runs its greeter-apply.sh.
+P=$WORK/pkg
+rm -rf "$P"
+mkdir -p "$P/share/plasma-fusion/tools/system" "$WORK/home"
+echo 0.0.0 >"$P/share/plasma-fusion/version"
+echo 6.7 >"$P/share/plasma-fusion/tested-plasma.txt"
+cp "$APPLY" "$P/share/plasma-fusion/tools/system/"
+status() { OUT=$(HOME=$WORK/home XDG_DATA_DIRS=$P/share XDG_DATA_HOME=$WORK/home/data XDG_STATE_HOME=$WORK/home/state \
+  PF_GREETER_ROOT=$R bash "$TOP/tools/plasma-fusion" status 2>&1); RC=$?; }
 
 # --- choosing the theme
 fresh a
@@ -103,6 +112,12 @@ check --login-image dimmed
 [ "$RC" = 0 ] && has "(theme.conf.user) ok" && ok "  check reads theme.conf.user over theme.conf" || bad "  check dimmed" "$OUT"
 grep -qx before=plasma-fusion "$(find "$R/var/lib/plasma-fusion" -mindepth 1 -maxdepth 1 -name 'greeter-backup-*' | sort | tail -1)/info" &&
   ok "  its backup says the greeter used Plasma Fusion already" || bad "  before=plasma-fusion"
+check
+[ "$RC" = 0 ] && ok "  check without --login-image counts any of the three wallpapers" || bad "  check any variant" "$OUT"
+check --login-image login
+[ "$RC" = 1 ] && ok "  check --login-image login wants that one" || bad "  check exact variant" "$OUT"
+status
+[ "$RC" = 0 ] && has "login screen (SDDM): Plasma Fusion" && ok "  status: Plasma Fusion with the dimmed wallpaper" || bad "  status dimmed" "$OUT"
 tick
 apply
 [ "$RC" = 0 ] && [ "$(val "$R/$THEME/theme.conf.user" General background)" = "$LOGIN" ] &&
@@ -151,7 +166,8 @@ restore
   [ -z "$(val "$R/$KDE" Theme CursorTheme)" ] &&
   ok "restore keeps a theme chosen since, removes the run's cursor, keeps the page's other keys" || bad "chosen since" "$OUT"
 ! grep -q '^Current=' "$R/etc/sddm.conf" && grep -q '^CursorTheme=breeze_cursors' "$R/etc/sddm.conf" &&
-  ok "  /etc/sddm.conf gets back the cursor line only: its old theme would override the new choice" ||
+  [ "$(stat -c %a "$R/etc/sddm.conf")" = 600 ] &&
+  ok "  /etc/sddm.conf gets back the cursor line only (its old theme would override the new choice), mode 0600 kept" ||
   bad "  sddm.conf after chosen-since" "$OUT
 $(cat "$R/etc/sddm.conf")"
 check
@@ -167,8 +183,69 @@ restore
   [ "$(val "$R/$KDE" Autologin User)" = alice ] &&
   ok "restore removes the run's keys from a file the page changed since, its keys stay" || bad "other keys" "$OUT"
 
+# --- /etc/sddm.conf removed after the run: left removed, the rest undone
+fresh d2
+cp -p "$WORK/b.sddm.conf" "$R/etc/sddm.conf"
+apply
+rm "$R/etc/sddm.conf"
+restore
+[ "$RC" = 0 ] && has "/etc/sddm.conf was removed after that run" && [ ! -e "$R/etc/sddm.conf" ] && [ ! -e "$R/$KDE" ] &&
+  ok "restore leaves a removed /etc/sddm.conf removed and undoes the rest" || bad "removed sddm.conf" "$OUT"
+
+# --- each greeter's backups are a chain of their own
+fresh d3
+apply
+B=$R/var/lib/plasma-fusion/greeter-backup-29991231T000000Z
+mkdir -p "$B"
+printf 'created=29991231T000000Z\nbefore=other\n' >"$B/info"
+: >"$B/manifest"
+restore
+# The plasma-login-manager run needs its greeter user, which the test tree cannot have.
+has "Restore the login greeter (SDDM) to" && has "Restore the login greeter (plasma-login-manager) to $B" &&
+  [ ! -e "$R/$KDE" ] && has "PF_GREETER_ROOT is only for SDDM backups" &&
+  ok "a newer plasma-login-manager run does not hide the SDDM run from the default restore" || bad "chains" "$OUT"
+
+# --- an unprivileged check that cannot read a file
+fresh d4
+apply
+chmod 000 "$R/etc/sddm.conf"
+check
+[ "$RC" = 2 ] && has "cannot read /etc/sddm.conf" && has "Plasma Fusion greeter: unknown" &&
+  ok "check: an unreadable file leaves the answer open (exit 2)" || bad "unreadable" "$OUT"
+status
+[ "$RC" = 0 ] && has "login screen (SDDM): cannot tell without root" && ok "  status says so" || bad "  status unreadable" "$OUT"
+chmod 0644 "$R/etc/sddm.conf"
+
+# --- NixOS: the module chose the theme; the read-only check and status follow the system profile
+fresh n
+SW=$R/run/current-system/sw
+mkdir -p "$SW/share/sddm/themes" "$SW/bin" "$SW/share/plasma-fusion/backgrounds"
+bash "$TOP/packages/sddm-theme/build.sh" "$SW/share/sddm/themes" /run/current-system/sw/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png >/dev/null
+: >"$SW/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png"
+cp -p "$R/usr/bin/sddm-greeter-qt6" "$SW/bin/"
+rm -r "${R:?}/usr/bin/sddm-greeter-qt6" "$R/etc/systemd/system/display-manager.service" "$R/usr/lib/sddm/sddm.conf.d/kde_settings.conf"
+: >"$R/etc/NIXOS"
+printf '[Unit]\nDescription=Display Manager\n' >"$R/etc/systemd/system/display-manager.service"
+printf '[Theme]\nCurrent=plasmafusion\nCursorTheme=PlasmaFusion-cursors\nThemeDir=/run/current-system/sw/share/sddm/themes\n' \
+  >"$R/etc/sddm.conf.d/00-nixos.conf"
+check
+[ "$RC" = 0 ] && has "(/run/current-system/sw/bin/sddm-greeter-qt6)" && ok "NixOS: check reads the module's choice" || bad "nixos check" "$OUT"
+status
+[ "$RC" = 0 ] && has "login screen (SDDM): Plasma Fusion" && ok "  status: Plasma Fusion" || bad "  nixos status" "$OUT"
+printf '[Theme]\nCurrent=breeze\nThemeDir=/run/current-system/sw/share/sddm/themes\n' >"$R/etc/sddm.conf.d/00-nixos.conf"
+status
+has "programs.plasma-fusion.sddm = true chooses Plasma Fusion" && ok "  status names the module option" || bad "  nixos hint" "$OUT"
+
 # --- what stops a run before anything changes
 fresh e
+mkdir -p "$R/etc/sddm.conf.d"
+printf '[Theme]\nCurrent=local\n' >"$R/etc/sddm.conf.d/kde-local.conf"
+apply
+[ "$RC" = 1 ] && has "depends on its locale" && [ ! -e "$R/$KDE" ] && [ "$(backups)" = 0 ] &&
+  ok "a drop-in whose order against kde_settings.conf depends on the locale stops the run" || bad "locale order" "$OUT"
+check
+[ "$RC" = 2 ] && has "depends on its locale" && ok "  check leaves the answer open" || bad "  check locale" "$OUT"
+rm "$R/etc/sddm.conf.d/kde-local.conf"
 mkdir -p "$R/etc/sddm.conf.d"
 printf '[Theme]\nCurrent=local\n' >"$R/etc/sddm.conf.d/zz-local.conf"
 apply
@@ -223,14 +300,6 @@ apply --greeter sddm
 [ "$RC" = 0 ] && has "plasmalogin.service is enabled; SDDM shows this once" && ok "--greeter sddm still prepares SDDM, with a note" || bad "explicit sddm" "$OUT"
 
 # --- plasma-fusion status: the login screen row (readable without root)
-P=$WORK/pkg
-rm -rf "$P"
-mkdir -p "$P/share/plasma-fusion/tools/system" "$WORK/home"
-echo 0.0.0 >"$P/share/plasma-fusion/version"
-echo 6.7 >"$P/share/plasma-fusion/tested-plasma.txt"
-cp "$APPLY" "$P/share/plasma-fusion/tools/system/"
-status() { OUT=$(HOME=$WORK/home XDG_DATA_DIRS=$P/share XDG_DATA_HOME=$WORK/home/data XDG_STATE_HOME=$WORK/home/state \
-  PF_GREETER_ROOT=$R bash "$TOP/tools/plasma-fusion" status 2>&1); RC=$?; }
 fresh j
 status
 [ "$RC" = 0 ] && has "login screen (SDDM): another theme" && ok "status: SDDM with another theme" || bad "status other" "$OUT"

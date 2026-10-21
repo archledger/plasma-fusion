@@ -97,5 +97,6 @@ generation).
   `/run/current-system/sw/share/sddm/themes`, its wallpaper in `/run/current-system/sw/share`.
   Checked by evaluating a system with the flake's nixpkgs (2026-10-21: the generated
   `sddm.conf` has `Current=plasmafusion` and the cursors; without `sddm.enable` the assertion
-  stops it), not yet booted. `greeter-apply.sh` refuses NixOS (`/etc` is generated); to undo,
-  drop the option and rebuild. plasma-login-manager styling is not covered on NixOS.
+  stops it), not yet booted. `greeter-apply.sh` refuses to change NixOS (`/etc` is generated); its
+  `--check` and `plasma-fusion status` read the module's choice. To undo, drop the option and
+  rebuild. plasma-login-manager styling is not covered on NixOS.

@@ -26,7 +26,8 @@
 #                   board's blur without the veil)
 #   --dry-run       show what would be written; change nothing
 #   --check         report whether the greeter uses Plasma Fusion; change nothing (SDDM: needs no
-#                   root, its configuration is readable by every user)
+#                   root, exit 2 when a file it cannot read leaves the answer open; any of the
+#                   three wallpapers counts unless --login-image names one)
 #   --output DIR    no root: write the greeter's files into DIR/config/ and the daemon
 #                   configuration with the wallpaper into DIR/plasmalogin.conf (previews, tests)
 #   --data-dir DIR  with --output: where Plasma Fusion is installed (default /usr/share)
@@ -102,7 +103,7 @@ BACKGROUND=plasma-fusion/backgrounds/dusk-ridge-dark-login.png
 BACKUP_ROOT=/var/lib/plasma-fusion
 CONFIG_FILES=(kdeglobals plasmarc kcminputrc)
 
-DRY=0 CHECK=0 OUTPUT='' DATA=/usr/share DISPLAY_FROM='' GREETER=auto
+DRY=0 CHECK=0 OUTPUT='' DATA=/usr/share DISPLAY_FROM='' GREETER=auto IMAGE_CHOSEN=0
 # PF_GREETER_ROOT: the tests run the SDDM mode on a directory tree instead of / (never as root,
 # who must not write through a tree another user prepared).
 SYSROOT=${PF_GREETER_ROOT:-}
@@ -128,6 +129,7 @@ while [ $# -gt 0 ]; do
         blurred) BACKGROUND=plasma-fusion/backgrounds/dusk-ridge-dark-blurred.png ;;
         *) echo "--login-image needs login, dimmed or blurred" >&2; exit 2 ;;
       esac
+      IMAGE_CHOSEN=1
       shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -165,11 +167,15 @@ print(" ".join("%s x%s" % (o.get("connectorName", "?"), round(float(o.get("scale
 }
 
 # The unit display-manager.service links to: the display manager systemd starts (systemctl enable
-# makes that alias); empty when there is none.
+# makes that alias); empty when there is none. NixOS generates display-manager.service itself (a
+# script, no alias); its sddm module writes /etc/sddm.conf.d/00-nixos.conf, only while it is on.
 enabled_dm() {
   local unit
-  unit=$(readlink "$SYSROOT/etc/systemd/system/display-manager.service" 2>/dev/null) || return 0
-  printf '%s\n' "${unit##*/}"
+  if unit=$(readlink "$SYSROOT/etc/systemd/system/display-manager.service" 2>/dev/null); then
+    printf '%s\n' "${unit##*/}"
+  elif [ -e "$SYSROOT/etc/NIXOS" ] && [ -e "$SYSROOT/etc/sddm.conf.d/00-nixos.conf" ]; then
+    echo sddm.service
+  fi
 }
 
 if [ "$GREETER" = auto ]; then
@@ -282,6 +288,44 @@ sddm_effective() { # $1 section, $2 key, [FILE NEW]...
     if v=$(sddm_conf get "${swap[$f]:-$f}" "$section" "$key"); then REPLY=$v REPLY_FILE=$f; fi
   done < <(sddm_files "${!swap[@]}")
 }
+# The configuration files that exist but cannot be read (an unprivileged --check): what they set
+# is unknown.
+sddm_unreadable() {
+  local f
+  while IFS= read -r f; do
+    [ ! -e "$f" ] || [ -r "$f" ] || printf '%s\n' "${f#"$SYSROOT"}"
+  done < <(sddm_files)
+}
+# Whether SDDM's listing (QDir::LocaleAware, in the daemon's locale) may put drop-in $1 on the other
+# side of kde_settings.conf than byte order does. glibc's collations ignore punctuation at first,
+# ICU's weigh it before digits, both put case and letters beyond ASCII elsewhere than bytes do; all
+# agree with byte order where the names first differ in a lower-case ASCII letter or a digit on both
+# sides, or where one name begins with the whole other.
+sddm_order_depends_on_locale() { # $1 file name
+  local a=$1 b=kde_settings.conf i=0 x y
+  while [ "$i" -lt "${#a}" ] && [ "$i" -lt "${#b}" ]; do
+    x=${a:i:1} y=${b:i:1}
+    if [ "$x" != "$y" ]; then
+      case $x$y in
+        [abcdefghijklmnopqrstuvwxyz0123456789][abcdefghijklmnopqrstuvwxyz0123456789]) return 1 ;;
+        *) return 0 ;;
+      esac
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+# The drop-ins besides kde_settings.conf that set the theme or the cursors and whose order against
+# it depends on the locale: whether they win cannot be told here.
+sddm_unordered() {
+  local f k
+  while IFS= read -r f; do
+    [ "${f##*/}" != kde_settings.conf ] && sddm_order_depends_on_locale "${f##*/}" || continue
+    for k in "${SDDM_KEYS[@]}"; do
+      if sddm_conf get "$f" Theme "$k" >/dev/null; then printf '%s\n' "${f#"$SYSROOT"}"; break; fi
+    done
+  done < <(conf_dir_files "$SYSROOT/etc/sddm.conf.d")
+}
 show_diff() { # $1 a file, $2 its new contents
   note "--- ${1#"$SYSROOT"}"
   { if [ -f "$1" ]; then cat -- "$1"; fi; } |
@@ -291,10 +335,14 @@ show_diff() { # $1 a file, $2 its new contents
 sddm_main() {
   local dir=$SYSROOT/etc/sddm.conf.d conf=$SYSROOT/etc/sddm.conf
   local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf themedir theme greeter user_conf
-  local default_bg user_bg bg dm k want before=other ok mark src builtin conf_new='' user_new='' swaps=()
+  local default_bg user_bg bg dm k want before=other ok mark src builtin share nixos=0 open v
+  local conf_new='' user_new='' swaps=()
   [ -z "$OUTPUT" ] || die "--output writes plasma-login-manager's files; preview the SDDM theme with sddm-greeter-qt6 --test-mode (docs/parts/sddm.md)"
   [ -z "$DISPLAY_FROM" ] || die "--display-from is for plasma-login-manager (for SDDM: System Settings > Login Screen (SDDM) > Apply Plasma Settings…)"
-  [ ! -e "$SYSROOT/etc/NIXOS" ] || die "NixOS generates /etc: set programs.plasma-fusion.sddm = true in the system configuration instead (docs/parts/nixos.md)"
+  # NixOS generates /etc: only the read-only check, against the system profile's paths.
+  [ ! -e "$SYSROOT/etc/NIXOS" ] || nixos=1
+  [ "$nixos" = 0 ] || [ "$CHECK" = 1 ] ||
+    die "NixOS generates /etc: set programs.plasma-fusion.sddm = true in the system configuration instead (docs/parts/nixos.md)"
   if [ -n "$SYSROOT" ]; then
     [ "$(id -u)" != 0 ] || die "PF_GREETER_ROOT is for the tests and never used as root"
   elif [ "$CHECK" = 0 ]; then
@@ -308,14 +356,19 @@ sddm_main() {
   theme=$SYSROOT$themedir/$SDDM_THEME
   user_conf=$theme/theme.conf.user
   greeter=$SYSROOT/usr/bin/sddm-greeter-qt6
-  IMAGE=$DATA/$BACKGROUND
+  share=$DATA
+  if [ "$nixos" = 1 ]; then
+    greeter=$SYSROOT/run/current-system/sw/bin/sddm-greeter-qt6
+    share=/run/current-system/sw/share
+  fi
+  IMAGE=$share/$BACKGROUND
   default_bg=$(kr "$theme/theme.conf" General background)
   user_bg=$(kr "$user_conf" General background)
   bg=${user_bg:-$default_bg}
   dm=$(enabled_dm)
 
   if [ "$CHECK" = 1 ]; then
-    ok=yes
+    ok=yes open=no
     row() { # $1 label, $2 current, $3 wanted, $4 where it comes from
       mark=ok
       [ "$2" = "$3" ] || { mark=differs; ok=no; }
@@ -331,8 +384,23 @@ sddm_main() {
     sddm_effective Theme CursorTheme
     src=${REPLY_FILE#"$SYSROOT"}
     row cursors "$REPLY" "$SDDM_CURSORS" "${src:-$builtin}"
-    row wallpaper "$bg" "$IMAGE" "$([ -n "$user_bg" ] && echo theme.conf.user || echo theme.conf)"
+    # Any of the three wallpapers greeter-apply.sh offers, unless --login-image names one.
+    want=$IMAGE
+    if [ "$IMAGE_CHOSEN" = 0 ]; then
+      for v in login dimmed blurred; do
+        [ "$bg" != "$share/plasma-fusion/backgrounds/dusk-ridge-dark-$v.png" ] || want=$bg
+      done
+    fi
+    row wallpaper "$bg" "$want" "$([ -n "$user_bg" ] && echo theme.conf.user || echo theme.conf)"
+    while IFS= read -r f; do
+      say "  cannot read $f: what it sets is unknown (run --check as root)"; open=yes
+    done < <(sddm_unreadable)
+    while IFS= read -r f; do
+      say "  $f sets the theme or cursors; whether SDDM reads it before or after kde_settings.conf depends on its locale"
+      open=yes
+    done < <(sddm_unordered)
     [ "$dm" = sddm.service ] || say "  note: SDDM shows this only while it is the display manager"
+    if [ "$open" = yes ]; then say "Plasma Fusion greeter: unknown"; exit 2; fi
     say "Plasma Fusion greeter: $ok"
     [ "$ok" = yes ]
     exit
@@ -379,6 +447,9 @@ sddm_main() {
     kw "$own/theme.conf.user" General background "$IMAGE"
     cmp -s "$user_conf" "$own/theme.conf.user" 2>/dev/null || user_new=$own/theme.conf.user
   fi
+  while IFS= read -r f; do
+    die "$f sets the theme or cursors, and whether SDDM reads it before or after kde_settings.conf depends on its locale (QDir::LocaleAware); remove those keys there or give it a lower-case ASCII name. Nothing was changed."
+  done < <(sddm_unordered)
   for k in "${SDDM_KEYS[@]}"; do
     case $k in Current) want=$SDDM_THEME ;; *) want=$SDDM_CURSORS ;; esac
     sddm_effective Theme "$k" "${swaps[@]}"

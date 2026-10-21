@@ -77,19 +77,27 @@ built_record() {
   return 1
 }
 
-# The login screen of the display manager systemd starts. SDDM's theme choice is readable by every
-# user (greeter-apply.sh --check needs no root for it); plasma-login-manager's greeter files are
-# not, so only the check is named. PF_GREETER_ROOT: the system tree the tests use instead of /.
+# The login screen of the display manager systemd starts (display-manager.service's alias; NixOS
+# generates that unit itself, and its sddm module writes /etc/sddm.conf.d/00-nixos.conf while it is
+# on). SDDM's theme choice is readable by every user (greeter-apply.sh --check needs no root for
+# it); plasma-login-manager's greeter files are not, so only the check is named. PF_GREETER_ROOT:
+# the system tree the tests use instead of /.
 login_screen() {
-  local sys=$PF/tools/system dm
-  dm=$(readlink "${PF_GREETER_ROOT:-}/etc/systemd/system/display-manager.service" 2>/dev/null) || dm=
+  local sys=$PF/tools/system root=${PF_GREETER_ROOT:-} dm rc=0 how
+  dm=$(readlink "$root/etc/systemd/system/display-manager.service" 2>/dev/null) || dm=
+  if [ -z "$dm" ] && [ -e "$root/etc/NIXOS" ] && [ -e "$root/etc/sddm.conf.d/00-nixos.conf" ]; then
+    dm=sddm.service
+  fi
+  how="sudo $sys/greeter-apply.sh chooses Plasma Fusion"
+  [ ! -e "$root/etc/NIXOS" ] || how="programs.plasma-fusion.sddm = true chooses Plasma Fusion"
   case ${dm##*/} in
     sddm.service)
-      if bash "$sys/greeter-apply.sh" --greeter sddm --check >/dev/null 2>&1; then
-        echo "  login screen (SDDM): Plasma Fusion"
-      else
-        echo "  login screen (SDDM): another theme (sudo $sys/greeter-apply.sh chooses Plasma Fusion; --check says why)"
-      fi ;;
+      bash "$sys/greeter-apply.sh" --greeter sddm --check >/dev/null 2>&1 || rc=$?
+      case $rc in
+        0) echo "  login screen (SDDM): Plasma Fusion" ;;
+        2) echo "  login screen (SDDM): cannot tell without root (sudo $sys/greeter-apply.sh --check)" ;;
+        *) echo "  login screen (SDDM): another theme ($how; $sys/greeter-apply.sh --check says why)" ;;
+      esac ;;
     plasmalogin.service | plasma-login-manager.service)
       echo "  login screen (plasma-login-manager): sudo $sys/greeter-apply.sh --check says whether it uses Plasma Fusion" ;;
   esac
