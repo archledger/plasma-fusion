@@ -191,6 +191,18 @@ check
   ok "restore leaves a theme a later drop-in chose since in effect (no old line over it)" || bad "later drop-in choice" "$OUT
 $(cat "$R/etc/sddm.conf")"
 
+# --- the same with a drop-in whose order against kde_settings.conf depends on the locale ("Kz"
+# sorts before it by bytes, after it in many locales): restore must not assume it is read first
+fresh c3
+cp -p "$WORK/b.sddm.conf" "$R/etc/sddm.conf"
+apply
+printf '[Theme]\nCurrent=local-choice\n' >"$R/etc/sddm.conf.d/Kz.conf"
+restore
+[ "$RC" = 0 ] && ! grep -q '^Current=' "$R/etc/sddm.conf" && grep -q '^CursorTheme=breeze_cursors' "$R/etc/sddm.conf" &&
+  ok "restore does not put the old theme line back over a drop-in of locale-dependent order" ||
+  bad "locale-order drop-in at restore" "$OUT
+$(cat "$R/etc/sddm.conf")"
+
 # --- only other keys changed on the page: the run's theme still goes back
 fresh d
 apply

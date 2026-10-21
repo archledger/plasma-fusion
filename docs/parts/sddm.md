@@ -129,7 +129,8 @@ of the value):
 a theme chosen on the page since is kept, and `/etc/sddm.conf` gets back only the lines of keys that
 are still the run's choice in effect - `kde_settings.conf` still the file that decides them across
 SDDM's whole chain (its old theme line, read last, would override a choice made since on the page or
-in a later drop-in), all of a key's lines
+in a later drop-in; a drop-in whose order against `kde_settings.conf` depends on the locale counts as
+possibly later), all of a key's lines
 in their order (the last still wins), into a copy of itself so its mode and owner stay. A saved
 explicit empty value (`Current=`, which hides a vendor file's theme) comes back as such, not as a
 missing key. A link found where the run wrote a file, or a file removed since, is left that way.
@@ -295,7 +296,9 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   From the fourth: a theme chosen since in a later drop-in stays in effect after restore, an
   unreadable `theme.conf.user` makes `--check` exit 2, an empty `ThemeDir=` stops `apply` and is
   named by `--check`, NixOS's check uses the system profile's KConfig tools, and the installer
-  reads `kde_settings.conf` with comments cut off as SDDM does.
+  reads `kde_settings.conf` with comments cut off as SDDM does. From the fifth: restore treats a
+  drop-in of locale-dependent order as possibly read after `kde_settings.conf`, and uninstall names
+  the files that still choose the theme by other means (SDDM then shows its built-in theme).
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,
   and nothing for a backup of a run undone since; plasma-login-manager is restored with

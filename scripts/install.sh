@@ -474,6 +474,18 @@ sddm_styled() {
       grep -qxE "[[:space:]]*(Current[[:space:]]*=[[:space:]]*plasmafusion|CursorTheme[[:space:]]*=[[:space:]]*PlasmaFusion-cursors)[[:space:]]*" ||
     [ -e "$1/usr/share/sddm/themes/plasmafusion/theme.conf.user" ]' sh "$TEST_ROOT"
 }
+# The SDDM configuration files that still choose the Plasma Fusion theme after the restore (read as
+# SDDM reads them, comments cut off): a choice greeter-apply.sh did not make, or one made since by
+# hand, which the restore keeps. Without the package SDDM shows its own built-in theme (it falls
+# back when the chosen one is missing), so the uninstall goes on and says where to change it.
+sddm_names_theme() {
+  # shellcheck disable=SC2016 # the sh -c script takes the root as $1
+  $SUDO sh -c 'for f in "$1"/usr/lib/sddm/sddm.conf.d/* "$1"/etc/sddm.conf.d/* "$1/etc/sddm.conf"; do
+      [ -f "$f" ] || continue
+      sed "s/#.*//" "$f" | grep -qxE "[[:space:]]*Current[[:space:]]*=[[:space:]]*plasmafusion[[:space:]]*" &&
+        printf "%s " "${f#"$1"}"
+    done; true' sh "$TEST_ROOT"
+}
 # plasma-login-manager or SDDM's Qt 6 greeter (the one the Plasma Fusion SDDM theme runs in).
 greeter_present() {
   [ -e "$TEST_ROOT/etc/plasmalogin.conf" ] || [ -x "$TEST_ROOT/usr/bin/sddm-greeter-qt6" ] ||
@@ -598,6 +610,10 @@ main() {
     if splash_installed; then
       $SUDO "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" </dev/null ||
         die "removing the boot splash stopped; the packages stay installed."
+    fi
+    names=$(sddm_names_theme)
+    if [ -n "$names" ]; then
+      say "note: SDDM's configuration still chooses the Plasma Fusion login theme (${names% }); without the package SDDM shows its own login screen. Choose another in System Settings > Login Screen (SDDM)."
     fi
     installed_pkgs=
     # An AUR helper also installs the debug package makepkg builds by default; pacman does not

@@ -246,13 +246,37 @@ key_value() { # $1 file, $2 section, $3 key
     v = substr(l, index(l, "=") + 1); sub(/^[ \t\r\f\v]+/, "", v); sub(/[ \t\r\f\v]+$/, "", v); print v }'
 }
 
+# Whether SDDM's QDir::LocaleAware listing may order drop-in $1 against kde_settings.conf otherwise
+# than byte order does (greeter-apply.sh sddm_order_depends_on_locale: only a first difference in
+# a lower-case ASCII letter or digit on both sides, or one name beginning with the other, is sure).
+order_depends_on_locale() { # $1 file name
+  local a=$1 b=kde_settings.conf i=0 x y
+  while [ "$i" -lt "${#a}" ] && [ "$i" -lt "${#b}" ]; do
+    x=${a:i:1} y=${b:i:1}
+    if [ "$x" != "$y" ]; then
+      case $x$y in
+        [abcdefghijklmnopqrstuvwxyz0123456789][abcdefghijklmnopqrstuvwxyz0123456789]) return 1 ;;
+        *) return 0 ;;
+      esac
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
 # The file whose [Theme] KEY SDDM reads last - SDDM 0.21 reads /usr/lib/sddm/sddm.conf.d/*, then
 # /etc/sddm.conf.d/* (each sorted, as greeter-apply.sh orders them), then /etc/sddm.conf - with
-# the two files this restore changes taken from SDDM_ROOT. Empty when no file sets it.
+# the two files this restore changes taken from SDDM_ROOT. Empty when no file sets it; "?" when a
+# drop-in that sets it may be read before or after kde_settings.conf depending on the locale (then
+# the run's value is not known to decide it, and nothing is put back over the drop-in).
 deciding_file() { # $1 key
   local f last=''
   while IFS= read -r f; do
-    [ -z "$(key_lines "$f" Theme "$1")" ] || last=$f
+    [ -n "$(key_lines "$f" Theme "$1")" ] || continue
+    last=$f
+    if [ "${f%/*}" = "$SYSROOT/etc/sddm.conf.d" ] && order_depends_on_locale "${f##*/}"; then
+      printf '?'
+      return
+    fi
   done < <(
     find "$SYSROOT/usr/lib/sddm/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' -xtype f 2>/dev/null | LC_ALL=C sort
     { find "$SYSROOT/etc/sddm.conf.d" -mindepth 1 -maxdepth 1 ! -name '.*' ! -name kde_settings.conf -xtype f \

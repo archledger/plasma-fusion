@@ -124,7 +124,9 @@ Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing change
   `greeter-restore.sh --greeter sddm` while SDDM's `kde_settings.conf` still chooses Plasma Fusion's
   theme or cursors (read as SDDM reads it, comments cut off; or the theme has a `theme.conf.user`)
   and an SDDM backup exists; each greeter is
-  restored on its own, so the other's later settings stay. `plymouth-uninstall.sh` when Plymouth's
+  restored on its own, so the other's later settings stay. A theme choice the restore keeps (made by
+  hand, or in a file greeter-apply.sh does not write) is named in a note; SDDM falls back to its
+  built-in theme once the package is gone, so the uninstall goes on. `plymouth-uninstall.sh` when Plymouth's
   themes hold `plasma-fusion`. If any of them stops, the packages stay installed.
 - The setup step runs as the user in the session (`plasma-fusion setup`, which backs up first);
   when it stops, the installer names `plasma-fusion restore --latest` and leaves the packages.

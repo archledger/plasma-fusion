@@ -307,6 +307,11 @@ for SHNAME in "${shells[@]}"; do
   printf '[Theme]\nCurrent=plasmafusion # chosen here\nCursorTheme=PlasmaFusion-cursors # too\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
   expect "  also with a comment after the value" has_log "greeter-restore.sh --greeter sddm"
+  # A choice of the theme greeter-apply.sh did not make: the uninstall goes on and names the file
+  printf '[Theme]\nCurrent=plasmafusion # by hand\n' >"$CASE/root/etc/sddm.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "a theme chosen elsewhere is named, and the packages still go" bash -c 'grep -q "still chooses the Plasma Fusion login theme (.*/etc/sddm.conf)" <<<"$0" && grep -q "^dnf -y remove" <<<"$1"' "$OUT" "$LOG"
+  rm -f "$CASE/root/etc/sddm.conf"
   # That run undone since (another theme chosen): the old backup asks for nothing.
   printf '[Theme]\nCurrent=breeze\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
