@@ -6,7 +6,9 @@
 # contrast, GTK stylesheets, package structure, widget unit tests, the app icon composition test)
 # inside rpmbuild, the spec's %check and rpmlint. The build requirements are read from the spec,
 # so a requirement the spec forgets fails here. Node.js, ShellCheck, desktop-file-utils and GTK's
-# Python bindings switch on the checks that are skipped without them.
+# Python bindings switch on the checks that are skipped without them. A second job runs the SDDM
+# login screen's apply and restore as root on a container's own files with Fedora's sddm package
+# (owners, groups, the greeter user's view), which the unprivileged suite cannot show.
 
 name: build
 
@@ -23,6 +25,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sddm-root:
+    name: "SDDM apply and restore as root (Fedora 44's sddm)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Install git, SDDM and the tools the scripts use
+        run: dnf install -y -q git sddm kf6-kconfig python3 util-linux
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Owners and groups kept, the theme read as SDDM's greeter user (the job's container)
+        env:
+          PF_DISPOSABLE_SYSTEM: "1"
+        run: tools/system/tests/greeter-sddm-root.sh
+
   rpm:
     name: "plasma-fusion RPM (Fedora 44)"
     runs-on: ubuntu-24.04

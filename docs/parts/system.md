@@ -20,7 +20,8 @@ Three pieces:
 Owned files: `packaging/` (version, source tarball, the shared install script, the Fedora spec,
 the PKGBUILD, the Debian packaging, the Nix packages, rpmlint filters, licence texts),
 `.packit.yaml`, `tools/plasma-fusion`, `tools/system/greeter-apply.sh`,
-`tools/system/greeter-restore.sh`, `tools/system/tests/greeter-sddm-unit.sh`, this file. The
+`tools/system/greeter-restore.sh`, `tools/system/tests/greeter-sddm-unit.sh`,
+`tools/system/tests/greeter-sddm-root.sh`, this file. The
 per-user step is `plasma-fusion setup` (`tools/device/fusion-config.sh`; not owned here).
 
 ## 0. One version, one source, one install script

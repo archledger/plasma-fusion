@@ -300,7 +300,7 @@ deciding_file() { # $1 key
 }
 
 undo_sddm() { # $1 backup directory of an SDDM run
-  local backup=$1 state path file applied k cur image line saved all=1
+  local backup=$1 state path file applied k cur image line saved all=1 moved=0 tree f
   local kde=$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf conf=$SDDM_ROOT/etc/sddm.conf user_conf
   local -A ours=() still=() decides=()
   # A dry run changes its copy of the files (SDDM_ROOT), so each run's undo sees the state the
@@ -312,11 +312,28 @@ undo_sddm() { # $1 backup directory of an SDDM run
   ours[CursorTheme]=$(sed -n 's/^cursors=//p' "$backup/info")
   say "Undo the run of greeter-apply.sh that made $backup (SDDM)"
   for k in kreadconfig6 kwriteconfig6; do command -v "$k" >/dev/null || die "$k is missing (kf6-kconfig)"; done
+  # A link put in kde_settings.conf's place since is a newer choice, whatever it reads as: it is
+  # left alone below, so nothing read through it may let /etc/sddm.conf's old lines back over it.
+  [ ! -L "$kde" ] || note "${kde#"$SDDM_ROOT"} is a link now: its keys count as chosen since"
+  # The theme tree the run's Current names now: with ThemeDir pointed elsewhere since, that name is
+  # another tree's theme - the administrator's choice, kept (as when it is not known which file
+  # decides ThemeDir).
+  f=$(deciding_file ThemeDir)
+  case $f in
+    '') tree=/usr/share/sddm/themes ;;
+    '?') tree='' ;;
+    *) tree=$(key_value "$f" Theme ThemeDir) ;;
+  esac
+  if [ "$(realpath -ms -- "$tree/${ours[Current]}")" != "$(realpath -ms -- "$(sed -n 's/^theme_dir=//p' "$backup/info")")" ]; then
+    moved=1
+    note "[Theme] ThemeDir is ${tree:-not known} now: Current=${ours[Current]} names another theme tree's theme (kept)"
+  fi
   # The keys System Settings' file still has the run's value for. Only these go back: one changed
   # since (another theme chosen on the page) is kept. /etc/sddm.conf, read last, gets its old lines
   # back only while that file still decides the key: a later drop-in may have chosen since.
   for k in "${SDDM_KEYS[@]}"; do
-    if [ -n "${ours[$k]}" ] && [ "$(key_value "$kde" Theme "$k")" = "${ours[$k]}" ]; then
+    if [ ! -L "$kde" ] && [ -n "${ours[$k]}" ] && [ "$(key_value "$kde" Theme "$k")" = "${ours[$k]}" ] &&
+      { [ "$k" != Current ] || [ "$moved" = 0 ]; }; then
       still[$k]=1
       [ "$(deciding_file "$k")" != "$kde" ] || decides[$k]=1
     fi
@@ -341,8 +358,10 @@ undo_sddm() { # $1 backup directory of an SDDM run
     fi
     SDDM_WRITTEN+=("$file")
     # Unchanged since that run: back as it was. /etc/sddm.conf only while the keys it gets back
-    # are still the run's choice (it is read last and would override a theme chosen since).
-    if [ -f "$file" ] && cmp -s "$file" "$applied" && { [ "$path" != etc/sddm.conf ] || [ "$all" = 1 ]; }; then
+    # are still the run's choice (it is read last and would override a theme chosen since), and
+    # kde_settings.conf only while its Current still names the run's theme tree.
+    if [ -f "$file" ] && cmp -s "$file" "$applied" && { [ "$path" != etc/sddm.conf ] || [ "$all" = 1 ]; } &&
+      { [ "$path" != etc/sddm.conf.d/kde_settings.conf ] || [ "$moved" = 0 ]; }; then
       if [ "$state" = present ]; then
         note "restore ${file#"$SDDM_ROOT"} (unchanged since that run)"
         put_back "$backup/$path" "$file"

@@ -420,6 +420,61 @@ apply
 [ "$RC" = 1 ] && has "zz-local.conf would still set [Theme] Current=local" && ok "a linked configuration directory is read through" ||
   bad "linked conf dir" "$OUT"
 
+# --- two drop-ins read after kde_settings.conf, with different themes, in an order between them
+# that depends on the locale ("zA" and "za": bytes put za last, glibc's collations zA)
+fresh d13
+apply
+printf '[Theme]\nCurrent=other\n' >"$R/etc/sddm.conf.d/zA.conf"
+printf '[Theme]\nCurrent=plasmafusion\n' >"$R/etc/sddm.conf.d/za.conf"
+check
+[ "$RC" = 2 ] && has "/etc/sddm.conf.d/zA.conf and /etc/sddm.conf.d/za.conf set different [Theme] Current values" &&
+  ok "check: two later drop-ins in a locale-dependent order leave the answer open" || bad "contested check" "$OUT"
+tick
+apply --login-image dimmed
+[ "$RC" = 1 ] && has "zA.conf and /etc/sddm.conf.d/za.conf set different [Theme] Current values" &&
+  [ ! -e "$R/$THEME/theme.conf.user" ] && ok "  and stop a run" || bad "  contested apply" "$OUT"
+printf '[Theme]\nCurrent=plasmafusion\n' >"$R/etc/sddm.conf.d/zA.conf"
+check
+[ "$RC" = 0 ] && ok "  the same theme in both: no question" || bad "  same value" "$OUT"
+
+# --- an unprivileged check and a theme file it cannot read: whether the greeter can is open
+fresh d14
+apply
+chmod 000 "$R/$THEME/LoginCard.qml"
+check
+[ "$RC" = 2 ] && has "cannot read /$THEME/LoginCard.qml: whether SDDM's greeter user can" &&
+  has "Plasma Fusion greeter: unknown" && ok "check: a theme file this user cannot read leaves the answer open" ||
+  bad "unreadable theme file check" "$OUT"
+chmod 644 "$R/$THEME/LoginCard.qml"
+
+# --- ThemeDir pointed elsewhere after the run: the run's Current names that tree's theme now, the
+# administrator's choice; restore keeps it (and does not bring /etc/sddm.conf's old theme back)
+fresh d15
+printf '[Theme]\nCurrent=breeze\n' >"$R/etc/sddm.conf"
+apply
+printf '[Theme]\nThemeDir=/srv/themes\n' >"$R/etc/sddm.conf.d/zz-dir.conf"
+restore
+[ "$RC" = 0 ] && has "ThemeDir is /srv/themes now" && [ "$(val "$R/$KDE" Theme Current)" = plasmafusion ] &&
+  [ -z "$(val "$R/$KDE" Theme CursorTheme)" ] && ! grep -q '^Current' "$R/etc/sddm.conf" &&
+  ok "restore keeps Current when ThemeDir points elsewhere since (the cursors still go)" ||
+  bad "themedir moved" "$OUT
+$(cat "$R/$KDE" "$R/etc/sddm.conf")"
+
+# --- kde_settings.conf replaced by a link since, with the run's theme: left alone, and
+# /etc/sddm.conf's old theme line does not come back over it
+fresh d16
+printf '[Theme]\nCurrent=breeze\n' >"$R/etc/sddm.conf"
+apply
+mkdir -p "$R/etc/managed"
+printf '[Theme]\nCurrent=plasmafusion\n' >"$R/etc/managed/kde_settings.conf"
+rm "$R/$KDE"
+ln -s ../managed/kde_settings.conf "$R/$KDE"
+restore
+[ "$RC" = 0 ] && has "is a link now: its keys count as chosen since" && [ -L "$R/$KDE" ] &&
+  ! grep -q '^Current' "$R/etc/sddm.conf" && ok "a linked kde_settings.conf keeps its choice over /etc/sddm.conf's old one" ||
+  bad "linked kde_settings.conf" "$OUT
+$(cat "$R/etc/sddm.conf")"
+
 # --- what stops a run before anything changes
 fresh e2
 printf '[Theme]\nThemeDir=/usr/share/sddm/themes\n' >"$R/etc/sddm.conf.d/Local-a.conf"
