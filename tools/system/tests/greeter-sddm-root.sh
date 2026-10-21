@@ -107,6 +107,8 @@ reset
 # Twice: with setpriv, and as on a system without it (a minimal Fedora: util-linux-core only),
 # where the mode bits are read for that user.
 NOSETPRIV=$(mktemp -d)
+# Searchable for user sddm too: the check runs find as that user through this PATH
+chmod 0755 "$NOSETPRIV"
 for f in /usr/bin/* /usr/sbin/*; do [ "${f##*/}" = setpriv ] || ln -sf "$f" "$NOSETPRIV/"; done
 for how in setpriv "no setpriv"; do
   p=$PATH
@@ -133,7 +135,19 @@ for how in setpriv "no setpriv"; do
   OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
   [ "$RC" = 1 ] && has "cannot be read by SDDM's greeter user" && ok "  and through a link to it ($how)" ||
     bad "  0700 parent via a link ($how)" "$OUT"
-  rm -rf /etc/sddm.conf.d/00-themedir.conf /srv/private /srv/link
+  rm -rf /etc/sddm.conf.d/00-themedir.conf /srv/link
+  # A theme file that is a link to one below that directory: the greeter cannot follow it (the tree
+  # itself readable again)
+  chmod 0755 "$T"
+  cp "$T/LoginCard.qml" /srv/private/LoginCard.qml
+  mv "$T/LoginCard.qml" /tmp/LoginCard.qml
+  ln -s /srv/private/LoginCard.qml "$T/LoginCard.qml"
+  OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
+  [ "$RC" = 1 ] && has "cannot be read by SDDM's greeter user" && ok "  a theme file linked to one sddm cannot reach is refused ($how)" ||
+    bad "  in-tree link ($how)" "$OUT"
+  rm "$T/LoginCard.qml"
+  mv /tmp/LoginCard.qml "$T/LoginCard.qml"
+  rm -rf /srv/private
   # The same tree readable for SDDM's group only: the greeter reads it
   chgrp -R sddm "$T"
   chmod 0750 "$T"

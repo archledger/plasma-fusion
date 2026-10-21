@@ -375,45 +375,23 @@ sddm_themedir_unordered() {
 }
 # The first file or directory of theme tree $1 that SDDM's greeter user cannot read (or search): the
 # greeter runs as that user, not as root (Greeter.cpp: setUser("sddm")), and falls back to SDDM's
-# own theme without it. As root the check runs as user sddm; otherwise as the caller.
+# own theme without it. As root the check runs as user sddm - with setpriv (util-linux), else with
+# chroot --userspec onto / (coreutils; a minimal Fedora has util-linux-core only, no setpriv or
+# runuser), both with that user's groups - so the kernel decides: the directories above the tree,
+# links (followed, -L, as the greeter follows them) and the way to their targets, ACLs. Otherwise
+# as the caller.
 sddm_unreadable_theme() { # $1 theme directory
-  local g up t
-  local -a mine=() can=() r=() rx=()
-  if [ "$(id -u)" != 0 ] || [ -n "$SYSROOT" ] || ! getent passwd sddm >/dev/null; then
-    find "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null || printf '%s\n' "$1"
-  elif command -v setpriv >/dev/null; then
-    # (a directory above the tree that user cannot pass makes find fail: the tree is reported)
-    setpriv --reuid=sddm --regid="$(id -g sddm)" --init-groups --no-new-privs -- \
-      find "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null || printf '%s\n' "$1"
-  else
-    # No setpriv (util-linux; a minimal Fedora has util-linux-core only): the mode bits as the
-    # kernel reads them for that user - the owner's where it owns the file, else the group's where
-    # one of its groups does, else the others' (ACLs are not read this way). The path resolved
-    # first: the directories checked above the tree are the ones the kernel walks through, a link's
-    # target's, not the link's own (find examines a link, not what it points to).
-    t=$(realpath -e -- "$1" 2>/dev/null) || { printf '%s\n' "$1"; return; }
-    for g in $(id -G sddm); do
-      [ "${#mine[@]}" = 0 ] || mine+=(-o)
-      mine+=(-group "$g")
-    done
-    for g in x r rx; do
-      can=(\( -user sddm -perm "-u=$g" \) -o \( ! -user sddm \( "${mine[@]}" \) -perm "-g=$g" \)
-        -o \( ! -user sddm ! \( "${mine[@]}" \) -perm "-o=$g" \))
-      case $g in
-        x)
-          # Every directory above the tree must let that user through
-          up=$t
-          while [ "$up" != / ]; do
-            up=$(dirname -- "$up")
-            [ -z "$(find "$up" -maxdepth 0 ! \( "${can[@]}" \) -print 2>/dev/null)" ] || { printf '%s\n' "$up"; return; }
-          done ;;
-        r) r=("${can[@]}") ;;
-        rx) rx=("${can[@]}") ;;
-      esac
-    done
-    find "$t" \( -type d ! \( "${rx[@]}" \) -o ! -type d ! \( "${r[@]}" \) \) -print -quit 2>/dev/null ||
-      printf '%s\n' "$1"
+  local -a as=()
+  if [ "$(id -u)" = 0 ] && [ -z "$SYSROOT" ] && getent passwd sddm >/dev/null; then
+    if command -v setpriv >/dev/null; then
+      as=(setpriv --reuid=sddm --regid="$(id -g sddm)" --init-groups --no-new-privs --)
+    else
+      as=(chroot --userspec="sddm:$(id -g sddm)" --skip-chdir /)
+    fi
   fi
+  # (a path it cannot follow makes find fail: the tree is reported)
+  "${as[@]}" "$(command -v find)" -L "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null ||
+    printf '%s\n' "$1"
 }
 show_diff() { # $1 a file, $2 its new contents
   note "--- ${1#"$SYSROOT"}"

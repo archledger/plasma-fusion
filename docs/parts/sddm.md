@@ -149,8 +149,9 @@ in such an order stop it as well: the theme, and its `theme.conf.user`, would be
 which SDDM resolves from its own working directory, not the caller's. The
 run also stops when the theme cannot be read by SDDM's greeter user (the greeter runs as `sddm`,
 not root; as root the check runs as that user with `setpriv`, or without it - a minimal Fedora has
-`util-linux-core` only - reads the mode bits as the kernel does for that user, ACLs aside, on the
-tree and on every directory above it, links in the path resolved), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
+`util-linux-core` only, no `setpriv` or `runuser` - with coreutils' `chroot --userspec` onto `/`,
+both with that user's groups, so the kernel decides: the directories above the tree, links inside it
+and the way to their targets, ACLs), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
 `QtVersion=6`, and without that greeter SDDM shows its own theme) is missing, when the theme's
 directory is writable by anyone but root or one of the three files is a link (root would copy what
 it points to, and the rename would replace a link managed elsewhere), on NixOS
@@ -391,7 +392,8 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   `root:sddm` 0640 `/etc/sddm.conf` keeps its owner, group and mode through apply and restore, a
   `root:sddm` 0640 `theme.conf.user` gets them back, a theme tree only root can read is refused
   (with `setpriv` and without it), as is one below a directory `sddm` cannot pass (a `ThemeDir`
-  under a 0700 `/srv/private`, directly or through a link to it), while one readable for SDDM's group is taken, an unprivileged
+  under a 0700 `/srv/private`, directly or through a link to it, and a theme file linked to one
+  there), while one readable for SDDM's group is taken, an unprivileged
   check of it exits 2, and a theme tree others can write to is refused.
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,
