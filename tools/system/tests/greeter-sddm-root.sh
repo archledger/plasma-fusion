@@ -25,9 +25,11 @@ getent passwd sddm >/dev/null && [ -x /usr/bin/sddm-greeter-qt6 ] && command -v 
 PASS=0 FAIL=0
 ok() { PASS=$((PASS + 1)); echo "PASS $1"; }
 bad() { FAIL=$((FAIL + 1)); echo "FAIL $1"; [ -z "${2:-}" ] || printf '%s\n' "$2" | sed 's/^/    /'; }
-apply() { OUT=$(bash "$APPLY" "$@" 2>&1); RC=$?; }
-restore() { OUT=$(bash "$RESTORE" 2>&1); RC=$?; }
-check() { OUT=$(bash "$APPLY" --check 2>&1); RC=$?; }
+# Run from a directory only root may enter, as sudo from a 0700 home keeps it
+CWD=$(mktemp -d)
+apply() { OUT=$(cd "$CWD" && bash "$APPLY" "$@" 2>&1); RC=$?; }
+restore() { OUT=$(cd "$CWD" && bash "$RESTORE" 2>&1); RC=$?; }
+check() { OUT=$(cd "$CWD" && bash "$APPLY" --check 2>&1); RC=$?; }
 # The check as a user who is neither root nor in SDDM's group
 check_nobody() { OUT=$(setpriv --reuid=65534 --regid=65534 --clear-groups -- bash "$APPLY" --check "$@" 2>&1); RC=$?; }
 has() { grep -qF -- "$1" <<<"$OUT"; }
@@ -114,10 +116,10 @@ for how in setpriv "no setpriv"; do
   p=$PATH
   [ "$how" = setpriv ] || p=$NOSETPRIV
   chmod 0700 "$T"
-  OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
+  OUT=$(cd "$CWD" && PATH=$p bash "$APPLY" 2>&1); RC=$?
   [ "$RC" = 1 ] && has "cannot be read by SDDM's greeter user" && { [ "$KDE_BEFORE" = present ] || [ ! -e "$KDE" ]; } &&
     ok "apply refuses a theme tree only root can read ($how)" || bad "0700 apply ($how)" "$OUT"
-  OUT=$(PATH=$p bash "$APPLY" --check 2>&1); RC=$?
+  OUT=$(cd "$CWD" && PATH=$p bash "$APPLY" --check 2>&1); RC=$?
   [ "$RC" = 1 ] && has "unreadable for sddm" && ok "  root's check reads it as sddm ($how)" || bad "  0700 check ($how)" "$OUT"
   # A public theme tree below a directory that user cannot pass (ThemeDir under /srv/private, 0700)
   mkdir -p /srv/private/themes
@@ -126,13 +128,13 @@ for how in setpriv "no setpriv"; do
   chmod 0700 /srv/private
   mkdir -p /etc/sddm.conf.d
   printf '[Theme]\nThemeDir=/srv/private/themes\n' >/etc/sddm.conf.d/00-themedir.conf
-  OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
+  OUT=$(cd "$CWD" && PATH=$p bash "$APPLY" 2>&1); RC=$?
   [ "$RC" = 1 ] && has "cannot be read by SDDM's greeter user" && ok "  a tree below a directory sddm cannot pass is refused ($how)" ||
     bad "  0700 parent ($how)" "$OUT"
   # The same through a link in the path (/srv/link -> /srv/private): the target's directories count
   ln -s private /srv/link
   printf '[Theme]\nThemeDir=/srv/link/themes\n' >/etc/sddm.conf.d/00-themedir.conf
-  OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
+  OUT=$(cd "$CWD" && PATH=$p bash "$APPLY" 2>&1); RC=$?
   [ "$RC" = 1 ] && has "cannot be read by SDDM's greeter user" && ok "  and through a link to it ($how)" ||
     bad "  0700 parent via a link ($how)" "$OUT"
   rm -rf /etc/sddm.conf.d/00-themedir.conf /srv/link
@@ -142,7 +144,7 @@ for how in setpriv "no setpriv"; do
   cp "$T/LoginCard.qml" /srv/private/LoginCard.qml
   mv "$T/LoginCard.qml" /tmp/LoginCard.qml
   ln -s /srv/private/LoginCard.qml "$T/LoginCard.qml"
-  OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
+  OUT=$(cd "$CWD" && PATH=$p bash "$APPLY" 2>&1); RC=$?
   [ "$RC" = 1 ] && has "cannot be read by SDDM's greeter user" && ok "  a theme file linked to one sddm cannot reach is refused ($how)" ||
     bad "  in-tree link ($how)" "$OUT"
   rm "$T/LoginCard.qml"
@@ -151,7 +153,7 @@ for how in setpriv "no setpriv"; do
   # The same tree readable for SDDM's group only: the greeter reads it
   chgrp -R sddm "$T"
   chmod 0750 "$T"
-  OUT=$(PATH=$p bash "$APPLY" 2>&1); RC=$?
+  OUT=$(cd "$CWD" && PATH=$p bash "$APPLY" 2>&1); RC=$?
   [ "$RC" = 0 ] && ok "  one readable for SDDM's group (root:sddm 0750) is taken ($how)" || bad "  0750 sddm ($how)" "$OUT"
   chgrp -R root "$T"
   reset

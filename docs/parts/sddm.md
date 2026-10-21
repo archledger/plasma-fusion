@@ -151,7 +151,8 @@ run also stops when the theme cannot be read by SDDM's greeter user (the greeter
 not root; as root the check runs as that user with `setpriv`, or without it - a minimal Fedora has
 `util-linux-core` only, no `setpriv` or `runuser` - with coreutils' `chroot --userspec` onto `/`,
 both with that user's groups, so the kernel decides: the directories above the tree, links inside it
-and the way to their targets, ACLs), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
+and the way to their targets, ACLs; run from `/`, since `find` returns to its starting directory and
+`sudo` keeps the caller's, a 0700 home that user cannot enter), when the theme or SDDM's Qt 6 greeter (`/usr/bin/sddm-greeter-qt6`: the theme says
 `QtVersion=6`, and without that greeter SDDM shows its own theme) is missing, when the theme's
 directory is writable by anyone but root or one of the three files is a link (root would copy what
 it points to, and the rename would replace a link managed elsewhere), on NixOS
@@ -387,7 +388,9 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   `kde_settings.conf` does not set `ThemeDir` (only files that set a key decide it).
 - `tools/system/tests/greeter-sddm-root.sh` (CI, the build workflow's `sddm-root` job; it refuses
   to run outside a container or `PF_DISPOSABLE_SYSTEM=1`): the same scripts as root on the
-  container's own files with Fedora 44's sddm package - apply and restore leave the system's files
+  container's own files with Fedora 44's sddm package, each run from a directory only root may
+  enter, as `sudo` from a 0700 home leaves it (the release VMs' SDDM lane found every apply refused
+  that way, 2026-10-21) - apply and restore leave the system's files
   as they were, `kde_settings.conf` and `theme.conf.user` are written `root:root` 0644, a
   `root:sddm` 0640 `/etc/sddm.conf` keeps its owner, group and mode through apply and restore, a
   `root:sddm` 0640 `theme.conf.user` gets them back, a theme tree only root can read is refused

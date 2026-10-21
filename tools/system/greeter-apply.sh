@@ -389,8 +389,10 @@ sddm_unreadable_theme() { # $1 theme directory
       as=(chroot --userspec="sddm:$(id -g sddm)" --skip-chdir /)
     fi
   fi
-  # (a path it cannot follow makes find fail: the tree is reported)
-  "${as[@]}" "$(command -v find)" -L "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null ||
+  # From /: find goes back to its starting directory, and the caller's (sudo keeps it: a 0700 home)
+  # is not that user's to enter, which fails find for any tree. A path it cannot follow fails it
+  # too: the tree is reported.
+  (cd / && "${as[@]}" "$(command -v find)" -L "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null) ||
     printf '%s\n' "$1"
 }
 show_diff() { # $1 a file, $2 its new contents
