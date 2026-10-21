@@ -352,6 +352,16 @@ sddm_themedir_unordered() {
     done
   done
 }
+# The first file or directory of theme tree $1 that SDDM's greeter user cannot read (or search): the
+# greeter runs as that user, not as root (Greeter.cpp: setUser("sddm")), and falls back to SDDM's
+# own theme without it. As root the check runs as user sddm; otherwise as the caller.
+sddm_unreadable_theme() { # $1 theme directory
+  local -a as=()
+  if [ "$(id -u)" = 0 ] && [ -z "$SYSROOT" ] && getent passwd sddm >/dev/null && command -v setpriv >/dev/null; then
+    as=(setpriv --reuid=sddm --regid="$(id -g sddm)" --init-groups --no-new-privs --)
+  fi
+  "${as[@]}" find "$1" \( ! -readable -o -type d ! -executable \) -print -quit 2>/dev/null || printf '%s\n' "$1"
+}
 show_diff() { # $1 a file, $2 its new contents
   note "--- ${1#"$SYSROOT"}"
   { if [ -f "$1" ]; then cat -- "$1"; fi; } |
@@ -427,8 +437,12 @@ sddm_main() {
     row theme "$REPLY" "$SDDM_THEME" "${src:-$builtin}"
     if [ -n "$themedir_bad" ]; then
       row "theme files" "not found" installed "$themedir_bad"
+    elif [ ! -f "$theme/metadata.desktop" ]; then
+      row "theme files" missing installed "${theme#"$SYSROOT"}"
+    elif [ "$(id -u)" = 0 ] && f=$(sddm_unreadable_theme "$theme") && [ -n "$f" ]; then
+      row "theme files" "unreadable for sddm" installed "${f#"$SYSROOT"}"
     else
-      row "theme files" "$([ -f "$theme/metadata.desktop" ] && echo installed || echo missing)" installed "${theme#"$SYSROOT"}"
+      row "theme files" installed installed "${theme#"$SYSROOT"}"
     fi
     row "Qt 6 greeter" "$([ -x "$greeter" ] && echo installed || echo missing)" installed "${greeter#"$SYSROOT"}"
     sddm_effective Theme CursorTheme
@@ -473,6 +487,8 @@ sddm_main() {
   [ -z "$themedir_bad" ] ||
     die "$themedir_bad: SDDM would not find the theme there; name an absolute directory or remove the line. Nothing was changed."
   [ -f "$theme/metadata.desktop" ] || die "the Plasma Fusion SDDM theme is not in $themedir (install the plasma-fusion package)"
+  f=$(sddm_unreadable_theme "$theme")
+  [ -z "$f" ] || die "${f#"$SYSROOT"} cannot be read by SDDM's greeter user (sddm), which loads the theme; make the theme tree readable (the package installs it 0755/0644). Nothing was changed."
   [ -x "$greeter" ] || die "${greeter#"$SYSROOT"} is missing: the theme needs SDDM's Qt 6 greeter (QtVersion=6); without it SDDM shows its own theme"
   [ -f "$SYSROOT$DATA/icons/$SDDM_CURSORS/index.theme" ] || die "cursor theme $SDDM_CURSORS is not installed in $DATA"
   [ -f "$SYSROOT$IMAGE" ] || die "$IMAGE is missing (install the plasma-fusion package)"
@@ -578,10 +594,12 @@ sddm_main() {
   # Each file next to its target first, then renamed: SDDM never reads a half-written one. What was
   # written goes into the backup too, so that greeter-restore.sh can tell whether it changed since.
   put() { # $1 new contents, $2 the file, $3 its name in the backup, $4 mode (default 0644)
+    # What will be written goes into the backup first: interrupted after the rename, the restore
+    # still knows the file is this run's.
+    cp -- "$1" "$BACKUP/$3.applied"
     install -m "${4:-0644}" -- "$1" "$2.plasma-fusion-new"
     [ -n "$SYSROOT" ] || chown root:root "$2.plasma-fusion-new"
     mv -f -- "$2.plasma-fusion-new" "$2"
-    cp -- "$1" "$BACKUP/$3.applied"
     note "wrote ${2#"$SYSROOT"}"
   }
   # theme.conf.user first: should it fail after all, /etc is still as it was

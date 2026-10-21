@@ -361,6 +361,28 @@ restore --greeter sddm
 [ "$RC" = 0 ] && cmp -s "$R/$KDE" "$WORK/d8.kde" &&
   ok "  restore --greeter sddm undoes it back to the hand-made state (the uninstall's call)" || bad "  oldest fallback" "$OUT"
 
+# --- a theme the greeter's user cannot read (as root the check runs as user sddm; here, unprivileged,
+# a file nobody may read stands in for that)
+fresh d9b
+chmod 000 "$R/$THEME/LoginCard.qml"
+apply
+[ "$RC" = 1 ] && has "LoginCard.qml cannot be read by SDDM's greeter user" && [ ! -e "$R/$KDE" ] &&
+  ok "a theme file the greeter cannot read stops the run" || bad "unreadable theme file" "$OUT"
+chmod 644 "$R/$THEME/LoginCard.qml"
+
+# --- killed right after a file is replaced (a stand-in mv renames, then kills the script): the
+# backup already says what was written, so the restore undoes it
+fresh d12
+mkdir -p "$WORK/killmv"
+printf '#!/bin/bash\n%s "$@" || exit\ncase "${@: -1}" in */kde_settings.conf) kill -9 "$PPID" ;; esac\n' \
+  "$(command -v mv)" >"$WORK/killmv/mv"
+chmod +x "$WORK/killmv/mv"
+OUT=$(PATH="$WORK/killmv:$PATH" PF_GREETER_ROOT=$R bash "$APPLY" 2>&1); RC=$?
+[ "$RC" = 137 ] && [ "$(val "$R/$KDE" Theme Current)" = plasmafusion ] && ok "  (the run was killed after replacing kde_settings.conf)" ||
+  bad "  kill injection" "rc=$RC $OUT"
+restore
+[ "$RC" = 0 ] && [ ! -e "$R/$KDE" ] && ok "a run killed after replacing a file is still undone" || bad "interrupted run" "$OUT"
+
 # --- a read-only theme tree (an immutable /usr): a wallpaper variant is refused before /etc changes
 fresh d9
 chmod 0555 "$R/$THEME"
