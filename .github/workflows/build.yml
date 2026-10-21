@@ -109,6 +109,13 @@ jobs:
           python3 tools/tests/release-vm/test-check-copytext.py
           python3 tools/tests/release-vm/test-refresh.py
 
+      - name: SDDM avatar mask on OpenGL (Xvfb with Mesa's llvmpipe; the build part checks software)
+        run: |
+          set -euo pipefail
+          dnf install -y -q xorg-x11-server-Xvfb xorg-x11-xauth mesa-dri-drivers
+          xvfb-run -a -s "-screen 0 640x480x24" env QT_QPA_PLATFORM=xcb PF_AVATAR_GL=1 \
+            python3 packages/sddm-theme/tests/avatar_test.py
+
       - name: Design boards (tile emitters in sync, check mode, the board runtime)
         run: |
           set -euo pipefail

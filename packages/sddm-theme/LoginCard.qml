@@ -90,7 +90,6 @@ Item {
                 anchors.fill: parent
                 anchors.margins: 4
                 source: card.avatarSource
-                fill: Palette.avatarFill
                 visible: card.avatarSource != ""
             }
             Text {

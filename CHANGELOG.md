@@ -14,7 +14,9 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
   date, the sign-in card, the user row with "Other user", the session pill and the power buttons,
   on the pre-blurred Dusk Ridge treatment. Packaged for manual selection; automatic apply/restore
   is follow-up work. Keyboard users can choose accounts, sessions and layouts, reveal a password
-  and activate power actions; the username prompt is labelled and password undo is blocked.
+  and activate power actions; the username prompt is labelled and password undo is blocked. Where
+  SDDM uses Qt's virtual keyboard (its default; Debian, Ubuntu, KDE neon) it no longer covers half
+  the screen at once: the accessibility button at the top right opens it. User photos are round.
 - **Saved app pairs:** two apps side by side can be saved as one icon on the home screen: "Save
   pair" under their card in the app switcher. A tap on the pair opens both apps side by side, in
   the split they were saved with; holding it offers Swap Sides, Keep in Dock and Remove Pair. A

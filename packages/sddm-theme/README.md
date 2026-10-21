@@ -40,8 +40,9 @@ Deviations from the board, all for want of an API in SDDM's greeter (`GreeterPro
 hostName, the power capabilities, the power methods and `login()`; the `keyboard` model adds
 `capsLock`, `numLock` and the layouts):
 
-- the top right's accessibility button and Wi-Fi/battery pill are not drawn - SDDM exposes no
-  accessibility service, no network and no battery to themes (the keyboard pill is drawn);
+- the top right's Wi-Fi/battery pill is not drawn - SDDM exposes no network and no battery to
+  themes (the keyboard pill is drawn); the accessibility button opens Qt's virtual keyboard where
+  it is available (docs/parts/sddm.md, "Qt's virtual keyboard");
 - "Caps Lock is on" IS shown (`keyboard.capsLock`); the row's "Use fingerprint" link is not - no
   biometric API (PAM may still unlock through its own stack);
 - the user row's "Other user" opens the name field for a user not in the model (as KDE's theme

@@ -31,9 +31,42 @@ context objects are `sddm`, `userModel`, `sessionModel`, `screenModel`, `keyboar
 | `config` | this theme's `theme.conf` (`ThemeConfig`; `GreeterApp.cpp`) |
 | `metadata.desktop` | `Type=sddm-theme`, `MainScript`, `ConfigFile`, `Theme-Id`; `QtVersion=6` chooses the Qt6 greeter |
 
-The theme imports only `QtQuick 2.15` and its own `palette.js`: a login screen must survive
+The theme imports only `QtQuick 2.15`, `QtCore` and its own files: a login screen must survive
 missing optional modules, and the versioned import also loads under a Qt5 greeter, where an
-unversioned `import QtQuick` fails (sddm/sddm#1975 is that failure at a real login screen).
+unversioned `import QtQuick` fails (sddm/sddm#1975 is that failure at a real login screen). The
+two optional modules each live in one file the theme creates with `Qt.createComponent` and a
+status check - `CircularMask.qml` (`QtQuick.Effects`) and `VirtualKeyboard.qml`
+(`QtQuick.VirtualKeyboard`): without the module the component reports an error status and the
+theme goes on without that piece, where a `Loader`'s URL would print a warning at every start.
+
+### Qt's virtual keyboard
+
+SDDM's default `[General] InputMethod=qtvirtualkeyboard` (`Configuration.h`; Debian keeps the
+default, Ubuntu and KDE neon set it, Fedora and Arch ship it empty) starts the greeter with
+`QT_IM_MODULE=qtvirtualkeyboard`. With no `InputPanel` in the scene, Qt opens a keyboard window of
+its own over the lower half of the screen as soon as a text field has focus - at once, since the
+password field starts focused - covering the user row, the session pill and the power buttons (seen
+on a real boot, Debian testing, 2026-10-21). On an X11 greeter the theme puts `VirtualKeyboard.qml`
+(an `InputPanel`) in its scene, which takes the keyboard over; it shows only after the board's
+accessibility button (top right, next to the layout pill: "On-screen keyboard", a checkable button)
+and while Qt's input method asks for a keyboard, along the bottom, with the sign-in card moved above
+it. KDE's Breeze theme does the same with a footer button. When the keyboard goes (focus left the
+text fields, or its own hide key) the button is off again, so a later focus opens nothing by itself.
+The button is offered only once Qt's input method has asked for a keyboard: Qt's virtual keyboard
+does at once (the password field starts focused), a greeter started with another input method
+(`InputMethod=` empty, as Fedora and Arch ship it) never does. Qt allows one `InputPanel` per
+application and SDDM gives each screen a view of its own, so only the primary screen's view has the
+panel; a view that becomes primary creates it. A Wayland greeter's keyboard is the compositor's
+(Fedora runs KWin with `--inputmethod plasma-keyboard`), so there the theme adds none.
+
+### The avatar
+
+A user photo is cut to its disc by `MultiEffect`'s mask (`CircularMask.qml`). Rectangle's radius
+rounds nothing of a child, this greeter's Canvas cannot draw an Image, and painting the photo's
+square corners in the tile's fill fails because the tile is a disc: those corners lie on the
+wallpaper and showed as a purple square on a real greeter (SDDM always provides a face icon, at
+least its default face). Effects need the hardware scene graph; under the software one, or without
+`QtQuick.Effects`, the photo is not drawn at all and the tile keeps its initial - never a square.
 
 ## The board, and where it stops
 
@@ -46,8 +79,9 @@ bottom right. Fonts: Space Grotesk and Manrope (the fonts part installs them sys
 
 Deviations from the board:
 
-- the top right's accessibility button and Wi-Fi/battery pill are not drawn - SDDM exposes no
-  accessibility service, no network and no battery to themes;
+- the top right's Wi-Fi/battery pill is not drawn - SDDM exposes no network and no battery to
+  themes; the accessibility button is drawn where Qt's virtual keyboard is available and opens it,
+  the one accessibility aid a theme can offer (no accessibility service either);
 - the row's "Use fingerprint" link is not offered - no biometric API (PAM may still unlock through
   its own stack); the slot carries the login's messages (`sddm.informationMessage`, `loginFailed`)
   and `keyboard.capsLock` draws the board's "Caps Lock is on";
@@ -107,7 +141,8 @@ Qt6 greeter rejects.
   `clear()` resets both committed text and preedit composition. A protected field has a static,
   non-secret accessibility description (Qt 6.11.2 suppresses its attached name).
   Account selection clears the previous account's authentication feedback. Missing or invalid
-  photo sources fall back to the account initial until the image reaches `Image.Ready`.
+  photo sources fall back to the account initial until the image reaches `Image.Ready` and the mask
+  draws it (see "The avatar").
   Narrow footer layouts reserve a gap for the power buttons, and the open session menu stays
   above the entire footer rather than just above the shorter session pill.
   Model reset invalidates the selected session until delegates are rebuilt; the initial remembered
@@ -169,7 +204,8 @@ Qt6 greeter rejects.
   is gone, and a restarted greeter starts with a new socket category. `QSettings::sync()` reloads
   changes made by another engine; the daemon still serializes the actual authentication, so a
   read-then-write race cannot start two PAM conversations. `QtCore` is a core Qt module (the Debian
-  package declares `qml6-module-qtcore`); the theme imports only QtQuick, QtCore and its own files. A view that loses primary clears and
+  package declares `qml6-module-qtcore`); the theme imports only QtQuick, QtCore and its own files (and the two optional modules, each
+  in its own file). A view that loses primary clears and
   re-masks the password and clears the typed Other-user name. An empty user model initializes
   Other user at load and on promotion, independently of input gating, so a view created secondary
   shows the correct prompt and accessible selection when it becomes primary. The pending lock is
@@ -182,10 +218,23 @@ Qt6 greeter rejects.
   Selecting a listed account clears any previously typed Other-user name (including its IME
   composition); a failed login for that same Other-user identity keeps it. The password input
   fills its 48 px pill, so a click anywhere in the field row focuses it.
-- `tests/avatar_test.py` (the same CI build part): software-rendered pixel checks on the staged
-  avatar through no-photo-to-photo and fill changes. Source and fill changes explicitly request
-  a new mask paint. The source-switch case also passes on the prior Qt 6.11.2 component; the fill
-  change reproduces stale mask corners without the repaint handler.
+- `tests/avatar_test.py` (the same CI build part, software scene graph; and the build workflow
+  under Xvfb with Mesa's llvmpipe, `PF_AVATAR_GL=1`): the staged avatar inside a disc on a dark
+  wallpaper stand-in, as the card and the tiles show it. Nothing may be drawn outside the disc,
+  with or without a photo; on OpenGL the photo shows inside it through the mask, in software it is
+  not drawn and `ready` stays false. Against the corner-painting component the outside-the-disc
+  check fails on both. The OpenGL run uses Qt's basic render loop: with the threaded one, the render
+  thread destroying a removed mask's layer meets PySide6's destruction hook waiting for Python's
+  GIL, which the test's thread holds while it waits for that sync - a harness deadlock (gdb), not
+  a greeter's (a C++ program).
+- `behavior_test.py` with stand-ins for `QtQuick.VirtualKeyboard` first on the import path (one
+  with `InputPanel`, one without): a focused field alone does not open the keyboard; the
+  "On-screen keyboard" button (accessibility action and Space) opens it along the bottom, moves
+  the card above it with a credential field keeping the focus, reports its checked state and
+  closes it again; the button waits for the input method's first request, is off again when the
+  keyboard goes (a later focus does not reopen it), and a secondary screen's view has no panel
+  until it becomes primary; without the module the theme loads with no keyboard, no button and no
+  warning. On the offscreen (software) scene graph a loaded card photo keeps the initial.
 - The repository's QML checks (motion, a11y, id scope) cover the theme's files like every other
   part; the a11y check found the theme's ten unnamed interactive items before the first commit.
 
@@ -258,6 +307,17 @@ Qt6 greeter rejects.
   can keep an older theme after an upgrade. The NixOS report
   [nixpkgs#541178](https://github.com/nixos/nixpkgs/issues/541178) describes exactly this stale
   SDDM greeter cache, so the staged files get content-derived times.
+- [MultiEffect](https://doc.qt.io/qt-6/qml-qtquick-effects-multieffect.html): `maskEnabled` with a
+  layered `maskSource` cuts the photo to the disc; Qt 6.11 has no rounded-clip item, and Breeze's
+  own avatar uses a compiled shader the theme's build has no compiler for.
+- [Qt Virtual Keyboard's InputPanel](https://doc.qt.io/qt-6/qml-qtquick-virtualkeyboard-inputpanel.html)
+  and KDE's Breeze login theme ([VirtualKeyboard.qml](https://invent.kde.org/plasma/plasma-workspace/-/raw/v6.7.5/lookandfeel/components/VirtualKeyboard.qml),
+  [VirtualKeyboardLoader.qml](https://invent.kde.org/plasma/plasma-workspace/-/raw/v6.7.5/lookandfeel/components/VirtualKeyboardLoader.qml)):
+  an `InputPanel` in the scene takes Qt's keyboard over; Breeze shows it only after its virtual
+  keyboard button (`active: activated && InputMethod.visible`) and moves its content above it.
+- [SDDM Configuration.h](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/common/Configuration.h)
+  and [Greeter.cpp](https://raw.githubusercontent.com/sddm/sddm/v0.21.0/src/daemon/Greeter.cpp):
+  `InputMethod` defaults to `qtvirtualkeyboard` and becomes the greeter's `QT_IM_MODULE`.
 - [Flickable](https://doc.qt.io/qt-6/qml-qtquick-flickable.html) and
   [Keys](https://doc.qt.io/qt-6/qml-qtquick-keys.html): the message's measured content height, clipped
   viewport and keyboard paging stay in core QtQuick; no optional controls module is required.
@@ -276,3 +336,13 @@ the greeter's log empty. Mean RGB against `design/previews/Login.webp` (the boar
 2:1): mid-left delta 0.0-0.3, the sun region 0.3-1.1, the far right 1.0 - the same "within 1/255"
 band the plasma-login-manager preview reached (system.md); the top and bottom bands differ where
 the board has its mock text and the power buttons the test mode does not report.
+
+2026-10-21, the theme on a real boot in the release harness's Debian testing VM (sddm
+0.21.0+git20260819, Xorg greeter, `InputMethod` at SDDM's default `qtvirtualkeyboard`, Qt 6.11.2 with
+`qml6-module-qtquick-effects` and `qml6-module-qtquick-virtualkeyboard`), chosen by greeter-apply.sh:
+the first boot showed Qt's keyboard window over the lower half of the screen and the card's photo
+as a purple square. With `CircularMask.qml` and `VirtualKeyboard.qml` the whole board shows - round
+photos on the card and the tiles, no keyboard until the accessibility button (reached with
+Shift+Tab, opened with Space) puts Qt's keyboard along the bottom with the card above it; the
+button closes it again. Choosing "Other user" (the photo removed, its mask destroyed, on the
+greeter's threaded render loop) shows the prompt and takes typed text.

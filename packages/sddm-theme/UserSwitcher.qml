@@ -186,7 +186,6 @@ Flickable {
                         anchors.fill: parent
                         anchors.margins: 3
                         source: model.icon || ""
-                        fill: Palette.avatarFill
                         visible: model.icon !== undefined && model.icon !== ""
                     }
                     Text {
