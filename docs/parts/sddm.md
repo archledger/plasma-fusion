@@ -398,6 +398,15 @@ theme package in `/usr/lib/sddm/sddm.conf.d/`. None sets the theme under `/etc`,
   under a 0700 `/srv/private`, directly or through a link to it, and a theme file linked to one
   there), while one readable for SDDM's group is taken, an unprivileged
   check of it exits 2, and a theme tree others can write to is refused.
+- The release VMs' SDDM lane (`tools/tests/release-vm/sddmtest.sh`, docs/parts/release-tests.md;
+  not CI: it needs QEMU with KVM and the provisioned systems), on real boots of Debian testing,
+  Ubuntu 26.10, Arch and Fedora 44 with the candidate's packages from the installer: SDDM made the
+  display manager, the system's own greeter; `greeter-apply.sh` and a reboot - SDDM loads
+  `/usr/share/sddm/themes/plasmafusion`, no greeter message names the theme's files, the screen
+  matches the Login board where it shows its background (`greeter-compare.py`, four regions within
+  4/255), and the password typed into it starts a Plasma session from SDDM; the installer's
+  uninstall and a reboot to the system's own theme again; no crash. Its stand-in run
+  (`test-sddmtest.py`, CI) checks every gate fails the run.
 - `tools/tests/installer/run.sh`: uninstall runs `greeter-restore.sh --greeter sddm` while
   `kde_settings.conf` still chooses Plasma Fusion and an SDDM backup exists, before the packages go,
   and nothing for a backup of a run undone since; plasma-login-manager is restored with
@@ -538,3 +547,12 @@ Before that run, the same VM checked the apply and restore at boot: SDDM loaded
 `/usr/share/sddm/themes/plasmafusion/theme.conf` and started `sddm-greeter-qt6 --theme` with it, the
 test user's password typed into the theme's field started a Plasma Wayland session, and after
 greeter-restore.sh and a reboot SDDM loaded Debian's `debian-theme` again.
+
+2026-10-21, the release VMs' SDDM lane (`sddmtest.sh`) on `548c9ee`, the packages from the installer:
+Debian testing (Plasma 6.7.4), Ubuntu 26.10 (6.7.5) and Arch (6.8.0) with SDDM's X11 greeter, Fedora
+44 (6.7.5) with its Wayland greeter. On each, SDDM loaded the theme after `greeter-apply.sh`, no
+greeter message named the theme's files, the screen matched the Login board within 1.0/255 in every
+background region, the typed password started a Wayland session from SDDM, and the uninstall gave the
+system's own greeter back (`debian-theme`, `ubuntu-budgie-login`, SDDM's embedded theme on Arch,
+`01-breeze-fedora`). Its first run found `sudo greeter-apply.sh` refusing the packaged theme from a
+0700 home (fixed in #101).
