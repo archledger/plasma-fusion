@@ -9,8 +9,9 @@ in `tools/tests/release-vm/`.
 
 ## The machine
 
-QEMU with KVM, user networking (the VMs reach the test machine as 10.0.2.2), no root and no
-libvirt. `PF_VM_HOME` (default `~/pf-vm`) holds the cloud images (`images/`), the VMs (`vms/NAME/`:
+QEMU with KVM, user networking (the VMs reach the test machine as 10.0.2.2; IPv4 only, since QEMU's
+user network announces an IPv6 route to the guest whether or not the host has one, and connections
+over it hang: `PF_VM_IPV6=1` turns it on), no root and no libvirt. `PF_VM_HOME` (default `~/pf-vm`) holds the cloud images (`images/`), the VMs (`vms/NAME/`:
 `base.qcow2`, the provisioned system; `run.qcow2`, a test run on top of it) and the results;
 `PF_REL` (default `~/pf-rel`) the candidate's packages and the served channels. 4 GB of memory and
 4 cores per VM; one VM at a time on a 16 GB machine. Keep a laptop on AC power: a critical battery
@@ -31,6 +32,8 @@ tools/tests/release-vm/nixos/build-image.sh SRC ~/pf-vm/id_ed25519.pub nixos.qco
 tools/tests/release-vm/refresh.sh NAME...      # before a round: each base brought up to date
 tools/tests/release-vm/build-all.sh [COMMIT]   # every channel's packages, built and checked in containers
 tools/tests/release-vm/run-all.sh              # the VM tests, one after another
+# the SDDM login screen on real boots, on the systems whose display manager is SDDM (needs Pillow)
+tools/tests/release-vm/run-all.sh debian-testing:deb:sddm ubuntu2610:ppa:sddm arch:aur:sddm fedora44:copr:sddm
 ```
 
 | Script | What |
@@ -41,8 +44,11 @@ tools/tests/release-vm/run-all.sh              # the VM tests, one after another
 | `channels.sh` | from the candidate: a dnf repository (Copr's place), an apt repository (the PPA's), a release directory with `SHA256SUMS` signed by a throwaway key (never the release key), the Arch source, and the installer, served on 127.0.0.1:8088 |
 | `vmtest.sh NAME LANE` | one VM from its base: KDE bug 524392's workaround for the test user (below); the stock desktop; the installer's dry run and install in the session (test mode: the channel, and for `.deb`s the snapshot version and the test key); `plasma-fusion status`; a logout (`org.kde.Shutdown.logout`, as the logout dialog) and a new login; the desktop, the launcher and the lock screen; `plasma-fusion status` again (a failure fails the run), then copy text's own selection where it lists the copytext part as installed (`check-copytext.sh`); the login check's log and the crashes of this boot; `uninstall`, another new login and the desktop it left; the packages left |
 | `check-copytext.sh` | in the session: `Start()` on the bus, then the overlay's "shown in" line in the journal (the user's, or the system journal for the user where there is none), KWin's refusal ("no picture of") or no answer failing; the overlay ended by the PID the bus names, and a pass whose overlay is not found on the bus or cannot be ended failing |
+| `sddmtest.sh NAME LANE` | the SDDM login screen on real boots, in one VM from its base: SDDM made the display manager in place of the tty1 login (installed where the base lacks it, with the display server its greeter runs on: Fedora's `sddm-wayland-plasma`, Arch's `xorg-server`, Debian's and Ubuntu's `xserver-xorg-core`) and the test user given a password; the installer as `vmtest.sh` runs it, which must offer the login screen step; a reboot to the system's own greeter (`--check` exits 1; the screenshot must not look like the Login board); `greeter-apply.sh`; a reboot to the Plasma Fusion greeter: SDDM must start it with `--theme /usr/share/sddm/themes/plasmafusion`, no greeter message may name the theme's files (Qt's own components warn without them), and the screenshot must match the Login board (`greeter-compare.py`); the password typed through QEMU's monitor must start a session for the user from SDDM (`loginctl`: `Service=sddm`), whose `plasma-fusion status` names the login screen; no crash; the installer's `uninstall`, which restores the login screen; SDDM's files without the theme; a reboot to the system's own theme again, no crash. Results in `NAME-sddm/` (`steps.log`, the journals of each boot, the screenshots and their comparisons) |
+| `greeter-compare.py SHOT` | a greeter screenshot against `design/previews/Login.webp` where the board shows only its background (four regions: mid-left, the sun, the far right, the hills between the session pill and the power buttons), the board scaled and cropped to the screen as the theme fills it: each region's mean colour within 4/255 (`--expect match`) or some region more than 12/255 off (`--expect differ`, another theme). Needs Pillow (on NixOS `nix-shell -p python3Packages.pillow`) |
+| `lane-env.sh` | the installer and its test-mode environment for one lane (sourced by `vmtest.sh` and `sddmtest.sh`) |
 | `refresh.sh NAME...` | each base updated the way its system updates itself (Fedora: `dnf upgrade`, with the RPM database verified, and rebuilt if it fails, before the upgrade and after it; Arch: `pacman -Syu`; KDE neon: `apt-get full-upgrade --allow-downgrades`, as neon's updater; Ubuntu, Debian: `apt-get full-upgrade`; on the apt systems `apt-get update --error-on=any`, since without it an index that failed to download is only a warning and the update exits 0; NixOS: nothing), the Plasma versions after; a failed update, or a VM that cannot be stopped after it, fails it |
-| `run-all.sh` | `channels.sh`, then `vmtest.sh` for each VM |
+| `run-all.sh` | `channels.sh`, then `vmtest.sh` for each VM (`sddmtest.sh` for a `NAME:LANE:sddm` entry) |
 
 Results: `$PF_VM_HOME/results/NAME/` (`steps.log`, the installer's output, status, logs and the
 screenshots). Things the harness itself shows that are not Plasma Fusion's: on Ubuntu, a logout and
@@ -76,6 +82,27 @@ process names (`.plasmashell-wrapped`).
 | Arch, KDE neon | `baloo_file_extractor` aborted in a loop (2514 core dumps in one run, the first before Plasma Fusion was installed) once a file appeared in `~`: KDE bug 524392 (KDE Frameworks 6.31 with Qt 6.12). On a stock Arch VM, one new file in `~` was enough. | Not Plasma Fusion's. `vmtest.sh` applies the bug's workaround for the test user before the installer's copy (`kde-baloo.service` with `QT_QPA_PLATFORM=offscreen`): skipped only where the user manager says the unit is not there (`LoadState` `not-found`), and any other failure fails the run. The crash gate is unchanged. Drop it once the tested frameworks have the fix. |
 | Fedora 44 beta (the test VM) | After the refresh, the base's RPM database was malformed ("database disk image is malformed"), and the install failed. | `refresh.sh` verifies the database before the upgrade and after it, and rebuilds it if needed. |
 | every system | Copy text's own selection (new in 0.6.0) was checked by a scratch after-login hook only. | `check-copytext.sh` runs in every `vmtest.sh`. It showed on all eight systems in the final round on `b0f7800` (73-128 ms after `Start()`), KWin 6.8.0 included, whose screenshot plugin changed since the beta. |
+
+## What the SDDM lane found (2026-10-21)
+
+The first runs of `sddmtest.sh`, on candidates from #101 (`0f5275b`, then `548c9ee`):
+
+| System | Found | Fix |
+|---|---|---|
+| Debian testing | `sudo greeter-apply.sh` refused the packaged theme: "cannot be read by SDDM's greeter user". The check runs `find` as that user, `find` goes back to its starting directory, and `sudo` keeps the caller's, a 0700 home that user cannot enter. On every system with private homes (Debian, Fedora), since #98. | The check starts in `/` (#101, `548c9ee`); `greeter-sddm-root.sh` runs every apply from a directory only root may enter. |
+| Fedora 44 | No greeter: SDDM logged in KDE's first-run wizard's own user (`plasma-setup`, `/etc/sddm.conf.d/99-plasma-setup.conf`), which runs until `/etc/plasma-setup-done` exists. Fedora's Wayland greeter does not log "Greeter session started successfully" either. | The lane marks the wizard done, as on an installed system, and waits for the greeter's own `Loading .../Main.qml` line, which names the theme it loaded (`embedded` for SDDM's own). |
+| Arch | `pacman` timed out against the mirrors: the guest got an IPv6 route from QEMU's user network that goes nowhere on the test machine; with IPv4 only the mirrors still timed out now and then, and pacman has no retries of its own. | `vm.sh` gives the guests IPv4 only; the lane and the AUR lane's preparation (`lane-env.sh`) run pacman up to three times. |
+
+Then all four passed on `548c9ee` (the merged `517bd03`), each from a fresh overlay:
+
+| System | Plasma | SDDM, greeter | Stock theme (differs by) | Plasma Fusion greeter (largest delta) | Login | Restored |
+|---|---|---|---|---|---|---|
+| Debian testing | 6.7.4 | 0.21.0+git20260819, X11 | `debian-theme` (90.0) | `plasmafusion`, no theme warning (1.0) | Wayland session from SDDM, status "Plasma Fusion" | `debian-theme`, no crash |
+| Ubuntu 26.10 | 6.7.5 | 0.21.0+git20251101, X11 | `ubuntu-budgie-login` (237.9) | as Debian (1.0) | as Debian | `ubuntu-budgie-login`, no crash |
+| Arch | 6.8.0 | 0.21.0-7, X11 | SDDM's embedded theme (99.9) | as Debian (1.0) | as Debian | embedded, no crash |
+| Fedora 44 | 6.7.5 | 0.21.0-13, Wayland (`sddm-wayland-plasma`) | `01-breeze-fedora` (100.7) | as Debian (1.0); no keyboard button on Wayland, as designed | as Debian | `01-breeze-fedora`, no crash |
+
+Evidence: the project ledger's artifacts, `plasma-fusion/2026-10-21-sddm-vm-lane/run3-548c9ee/`.
 
 ## Final round
 

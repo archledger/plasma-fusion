@@ -27,6 +27,10 @@ and NixOS (`tools/tests/release-vm/refresh.sh` for each VM first, then `build-al
 `run-all.sh`; docs/parts/release-tests.md). Per system: the installer's plan and run, `plasma-fusion
 status`, a new login (the desktop, the launcher and the lock screen), copy text's own selection
 shown, the login check's log, no crash, then `uninstall` and a new login with the previous desktop.
+Then the SDDM login screen on real boots of the systems whose display manager is SDDM (`run-all.sh
+debian-testing:deb:sddm ubuntu2610:ppa:sddm arch:aur:sddm fedora44:copr:sddm`, with Pillow): the
+system's own greeter, `greeter-apply.sh`, the Plasma Fusion greeter compared with the Login board, a
+login typed into it, `uninstall` and the system's own greeter again.
 Every system must pass; the evidence goes to the ledger's artifacts.
 
 Then the depth features' check on the merged commit's HOME tree, on the test host and on the

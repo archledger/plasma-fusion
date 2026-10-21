@@ -61,7 +61,7 @@ class VMCleanupTest(unittest.TestCase):
             root = home / "repo/tools/tests/release-vm"
             root.mkdir(parents=True)
             (home / "repo/VERSION").write_text("0.3.1\n")
-            for filename in ["vmtest.sh", "crash-count.py", "check-copytext.sh"]:
+            for filename in ["vmtest.sh", "lane-env.sh", "crash-count.py", "check-copytext.sh"]:
                 shutil.copy2(HERE / filename, root / filename)
             (root / "vm.sh").write_text(BOUNDARY)
             (home / "vms/test").mkdir(parents=True)

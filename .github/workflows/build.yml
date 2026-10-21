@@ -124,13 +124,17 @@ jobs:
           command -v rsync >/dev/null || dnf install -y -q rsync
           tools/tests/depth/run-unit.sh build/depth-unit
 
-      - name: Release VM tools' unit tests (crash collector, run-all, cleanup, copy-text check, refresh)
+      - name: Release VM tools' unit tests (crash collector, run-all, cleanup, copy-text check, refresh, SDDM lane)
         run: |
+          set -euo pipefail
+          # The SDDM lane compares its screenshots with the Login board through Pillow
+          dnf install -y -q python3-pillow
           python3 tools/tests/release-vm/test-crash-count.py
           python3 tools/tests/release-vm/test-run-all.py
           python3 tools/tests/release-vm/test-vm-cleanup.py
           python3 tools/tests/release-vm/test-check-copytext.py
           python3 tools/tests/release-vm/test-refresh.py
+          python3 tools/tests/release-vm/test-sddmtest.py
 
       - name: SDDM avatar mask on OpenGL (Xvfb with Mesa's llvmpipe; the build part checks software)
         run: |

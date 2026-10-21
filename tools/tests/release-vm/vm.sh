@@ -18,6 +18,10 @@ shift 2
 d=$H/vms/$name
 port() { echo $((2200 + $(cat "$d/index"))); }
 mem=${PF_VM_MEM:-4096} cpus=${PF_VM_CPUS:-4}
+# IPv4 only unless PF_VM_IPV6=1: QEMU's user network announces an IPv6 route to the guest whether or
+# not the host has one, and connections over it hang (the Arch mirrors timed out that way, 2026-10-21)
+ipv6=off
+[ "${PF_VM_IPV6:-}" != 1 ] || ipv6=on
 sshv() { ssh -q -i "$H/id_ed25519" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o BatchMode=yes -p "$(port)" pf@127.0.0.1 "$@"; }
 case $cmd in
   create)
@@ -51,7 +55,7 @@ UD
     fi
     qemu-system-x86_64 -name "pf-$name" -enable-kvm -cpu host -smp "$cpus" -m "$mem" -machine q35 \
       -drive "file=$disk,if=virtio,discard=unmap" -drive "file=$d/seed.iso,media=cdrom,readonly=on" \
-      -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:$(port)-:22" \
+      -nic "user,model=virtio-net-pci,ipv6=$ipv6,hostfwd=tcp:127.0.0.1:$(port)-:22" \
       -device virtio-vga -display none -vnc "127.0.0.1:$(( $(cat "$d/index") + 10 ))" \
       -monitor "unix:$d/mon.sock,server,nowait" -serial "file:$d/serial.log" \
       -daemonize -pidfile "$d/qemu.pid"
