@@ -449,16 +449,28 @@ consent() {
 # themes). greeter-apply.sh points plasmalogin.conf's greeter wallpaper at Plasma Fusion's
 # backgrounds (in a marked block, or as plain keys when the file had a [Greeter] group already, and
 # a later edit by the Login Screen settings drops the mark) and gives the greeter user Plasma
-# Fusion's Global Theme: any of the three counts. On SDDM it chooses the Plasma Fusion theme, and
-# its backup says greeter=sddm: then greeter-restore.sh runs as well (it keeps a theme chosen since).
+# Fusion's Global Theme: any of the three counts. On SDDM it chooses the Plasma Fusion theme and
+# cursors in System Settings' kde_settings.conf (and with a wallpaper variant writes the theme's
+# theme.conf.user), and its backup says greeter=sddm; what is chosen now counts, not a backup of a
+# run that was undone since. Each greeter is restored on its own (greeter-restore.sh --greeter),
+# so the other's later settings stay.
 SYS_TOOLS=/usr/share/plasma-fusion/tools/system
 greeter_styled() {
   [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] || return 1
   # shellcheck disable=SC2016 # the sh -c script takes the root as $1
   $SUDO sh -c 'grep -qs -e "^# Plasma Fusion: login screen wallpaper" -e "plasma-fusion/backgrounds/" "$1/etc/plasmalogin.conf" && exit 0
-    grep -qsx "greeter=sddm" "$1"/var/lib/plasma-fusion/greeter-backup-*/info && exit 0
     h=$(getent passwd plasmalogin | cut -d: -f6)
     [ -n "$h" ] && grep -qs "^LookAndFeelPackage=org\.plasmafusion\." "$1$h/.config/kdeglobals"' sh "$TEST_ROOT"
+}
+sddm_backups() {
+  # shellcheck disable=SC2016 # the sh -c script takes the root as $1
+  $SUDO sh -c 'grep -qsx "greeter=sddm" "$1"/var/lib/plasma-fusion/greeter-backup-*/info' sh "$TEST_ROOT"
+}
+sddm_styled() {
+  [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && sddm_backups || return 1
+  # shellcheck disable=SC2016 # the sh -c script takes the root as $1
+  $SUDO sh -c 'grep -qsxE "[[:space:]]*(Current[[:space:]]*=[[:space:]]*plasmafusion|CursorTheme[[:space:]]*=[[:space:]]*PlasmaFusion-cursors)[[:space:]]*" "$1/etc/sddm.conf.d/kde_settings.conf" ||
+    [ -e "$1/usr/share/sddm/themes/plasmafusion/theme.conf.user" ]' sh "$TEST_ROOT"
 }
 # plasma-login-manager or SDDM's Qt 6 greeter (the one the Plasma Fusion SDDM theme runs in).
 greeter_present() {
@@ -569,7 +581,16 @@ main() {
     fi
     $SUDO -v || die "sudo failed."
     if greeter_styled; then
-      $SUDO "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" </dev/null ||
+      # Only plasma-login-manager's runs where SDDM's are on record too; a greeter-restore.sh from
+      # before the SDDM mode knows no --greeter and has made no SDDM backup.
+      only=
+      if sddm_backups; then only='--greeter plasmalogin'; fi
+      # shellcheck disable=SC2086 # $only is empty or two words
+      $SUDO "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" $only </dev/null ||
+        die "restoring the login screen stopped; the packages stay installed."
+    fi
+    if sddm_styled; then
+      $SUDO "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" --greeter sddm </dev/null ||
         die "restoring the login screen stopped; the packages stay installed."
     fi
     if splash_installed; then

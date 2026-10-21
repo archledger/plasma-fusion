@@ -288,10 +288,13 @@ sddm_effective() { # $1 section, $2 key, [FILE NEW]...
     if v=$(sddm_conf get "${swap[$f]:-$f}" "$section" "$key"); then REPLY=$v REPLY_FILE=$f; fi
   done < <(sddm_files "${!swap[@]}")
 }
-# The configuration files that exist but cannot be read (an unprivileged --check): what they set
-# is unknown.
+# The configuration directories that cannot be listed and the files that exist but cannot be read
+# (an unprivileged --check): what they set is unknown.
 sddm_unreadable() {
   local f
+  for f in "$SYSROOT/usr/lib/sddm/sddm.conf.d" "$SYSROOT/etc/sddm.conf.d"; do
+    if [ -d "$f" ] && { [ ! -r "$f" ] || [ ! -x "$f" ]; }; then printf '%s\n' "${f#"$SYSROOT"}"; fi
+  done
   while IFS= read -r f; do
     [ ! -e "$f" ] || [ -r "$f" ] || printf '%s\n' "${f#"$SYSROOT"}"
   done < <(sddm_files)

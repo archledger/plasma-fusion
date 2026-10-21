@@ -297,11 +297,23 @@ for SHNAME in "${shells[@]}"; do
   rm -rf "$CASE/root/var/lib/plasmalogin"
   printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
   # SDDM: greeter-apply.sh chose the Plasma Fusion theme (its backup says greeter=sddm).
-  mkdir -p "$CASE/root/var/lib/plasma-fusion/greeter-backup-20261021T000000Z"
+  mkdir -p "$CASE/root/var/lib/plasma-fusion/greeter-backup-20261021T000000Z" "$CASE/root/etc/sddm.conf.d"
   printf 'created=20261021T000000Z\ngreeter=sddm\nbefore=other\n' >"$CASE/root/var/lib/plasma-fusion/greeter-backup-20261021T000000Z/info"
+  printf '[Theme]\nCurrent=plasmafusion\nCursorTheme=PlasmaFusion-cursors\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
-  expect "an SDDM login screen Plasma Fusion chose is restored too" has_log "greeter-restore.sh"
-  rm -rf "$CASE/root/var/lib/plasma-fusion"
+  expect "an SDDM login screen Plasma Fusion chose is restored too, SDDM's runs only" has_log "greeter-restore.sh --greeter sddm"
+  expect "  (plasma-login-manager's are not replayed)" bash -c '! grep -q "^greeter-restore.sh *$\|--greeter plasmalogin" <<<"$0"' "$LOG"
+  # That run undone since (another theme chosen): the old backup asks for nothing.
+  printf '[Theme]\nCurrent=breeze\n' >"$CASE/root/etc/sddm.conf.d/kde_settings.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "a backup of an SDDM run undone since asks for no restore" bash -c '! grep -q "greeter-restore" <<<"$0"' "$LOG"
+  # Both greeters: a styled plasma-login-manager is restored on its own.
+  printf '[Greeter]\nWallpaperPlugin=org.kde.image\n\n[Greeter][Wallpaper][org.kde.image][General]\nImage=file:///usr/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png\n' \
+    >"$CASE/root/etc/plasmalogin.conf"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "with SDDM backups on record, plasma-login-manager is restored with --greeter plasmalogin" has_log "greeter-restore.sh --greeter plasmalogin"
+  printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
+  rm -rf "$CASE/root/var/lib/plasma-fusion" "$CASE/root/etc/sddm.conf.d"
   # the optional system steps are offered where they apply
   rm -f "$CASE/root/etc/plasmalogin.conf"
   run "$sh" $FED -- --yes

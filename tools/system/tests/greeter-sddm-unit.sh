@@ -204,6 +204,18 @@ restore
 has "Restore the login greeter (SDDM) to" && has "Restore the login greeter (plasma-login-manager) to $B" &&
   [ ! -e "$R/$KDE" ] && has "PF_GREETER_ROOT is only for SDDM backups" &&
   ok "a newer plasma-login-manager run does not hide the SDDM run from the default restore" || bad "chains" "$OUT"
+fresh d3b
+apply
+B=$R/var/lib/plasma-fusion/greeter-backup-29991231T000000Z
+mkdir -p "$B"
+printf 'created=29991231T000000Z\nbefore=other\n' >"$B/info"
+: >"$B/manifest"
+restore --greeter sddm
+[ "$RC" = 0 ] && [ ! -e "$R/$KDE" ] && ! has "plasma-login-manager) to" &&
+  ok "restore --greeter sddm undoes SDDM's runs only" || bad "--greeter sddm" "$OUT"
+rm -r "$B"
+restore --greeter plasmalogin
+[ "$RC" = 1 ] && has "no plasma-login-manager backup" && ok "  --greeter plasmalogin without its backups: refused" || bad "  --greeter plasmalogin" "$OUT"
 
 # --- an unprivileged check that cannot read a file
 fresh d4
@@ -215,6 +227,30 @@ check
 status
 [ "$RC" = 0 ] && has "login screen (SDDM): cannot tell without root" && ok "  status says so" || bad "  status unreadable" "$OUT"
 chmod 0644 "$R/etc/sddm.conf"
+chmod 0311 "$R/etc/sddm.conf.d"
+check
+[ "$RC" = 2 ] && has "cannot read /etc/sddm.conf.d" && ok "  a directory it cannot list: exit 2 too" || bad "  unlistable" "$OUT"
+chmod 0755 "$R/etc/sddm.conf.d"
+
+# --- the undo puts back what was there: several lines of a key in order, an explicit empty value
+fresh d5
+printf '[Theme]\nCurrent=first\nCurrent=second\n' >"$R/etc/sddm.conf"
+apply
+echo '# edited since' >>"$R/etc/sddm.conf"
+restore
+check
+[ "$RC" = 1 ] && has "second (/etc/sddm.conf)" && [ "$(grep -c '^Current=' "$R/etc/sddm.conf")" = 2 ] &&
+  ok "key-wise restore puts several lines of a key back in their order (the last wins again)" || bad "line order" "$OUT
+$(cat "$R/etc/sddm.conf")"
+fresh d6
+printf '[Theme]\nCurrent=\n' >"$R/$KDE"
+apply
+kwriteconfig6 --file "$R/$KDE" --group Autologin --key User alice
+restore
+check
+grep -qx 'Current=' "$R/$KDE" && has "<unset> (/etc/sddm.conf.d/kde_settings.conf)" &&
+  ok "an explicit empty Current= comes back (it hides the vendor file's theme), not removed" || bad "empty value" "$OUT
+$(cat "$R/$KDE")"
 
 # --- NixOS: the module chose the theme; the read-only check and status follow the system profile
 fresh n

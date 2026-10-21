@@ -120,10 +120,11 @@ Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing change
 - Uninstall undoes those two first, when they were applied, because the greeter would otherwise
   point at the removed Global Theme and wallpaper: `greeter-restore.sh` when the greeter carries
   greeter-apply.sh's look (its marked block or a greeter wallpaper from Plasma Fusion's backgrounds in
-  `/etc/plasmalogin.conf`, or Plasma Fusion's Global Theme in the greeter user's `kdeglobals`, or a
-  backup of an SDDM run, `greeter=sddm`: its undo keeps a theme chosen since),
-  `plymouth-uninstall.sh` when Plymouth's themes hold `plasma-fusion`. If either stops, the
-  packages stay installed.
+  `/etc/plasmalogin.conf`, or Plasma Fusion's Global Theme in the greeter user's `kdeglobals`), and
+  `greeter-restore.sh --greeter sddm` while SDDM's `kde_settings.conf` still chooses Plasma Fusion's
+  theme or cursors (or the theme has a `theme.conf.user`) and an SDDM backup exists; each greeter is
+  restored on its own, so the other's later settings stay. `plymouth-uninstall.sh` when Plymouth's
+  themes hold `plasma-fusion`. If any of them stops, the packages stay installed.
 - The setup step runs as the user in the session (`plasma-fusion setup`, which backs up first);
   when it stops, the installer names `plasma-fusion restore --latest` and leaves the packages.
 

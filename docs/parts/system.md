@@ -300,15 +300,15 @@ no hidden files, links to files included).
 
 Nothing is restarted: the greeter shows the change the next time it starts (next logout or reboot).
 
-### `tools/system/greeter-restore.sh [BACKUP_DIR] [--dry-run]` (root)
+### `tools/system/greeter-restore.sh [BACKUP_DIR | --greeter sddm|plasmalogin] [--dry-run]` (root)
 
 Goes back to the state saved in BACKUP_DIR by undoing every run of greeter-apply.sh, newest
 first, down to and including that one. A run on SDDM (`info` says `greeter=sddm`) is undone as
 [sddm.md](sddm.md) describes; the greeter user below is looked up only for plasma-login-manager's
-runs. Default BACKUP_DIR, for each of the two greeters' runs separately: the newest backup whose
-`info` does not say `before=plasma-fusion`, i.e. the look from before Plasma Fusion. (A second run
-of greeter-apply.sh, for example after a package update, makes a backup of the Plasma Fusion state;
-restoring only the newest backup would undo nothing.) Backups of the first version of the script
+runs; `--greeter` undoes only one greeter's. Default BACKUP_DIR, for each of the two greeters'
+runs separately: the newest backup whose `info` does not say `before=plasma-fusion`, i.e. the look
+from before Plasma Fusion. (A second run of greeter-apply.sh, for example after a package update,
+makes a backup of the Plasma Fusion state; restoring only the newest backup would undo nothing.) Backups of the first version of the script
 have no `before=` line and count as taken before Plasma Fusion.
 
 For each backup: as the greeter user, puts back the files that run wrote (`kdeglobals`, `plasmarc`,

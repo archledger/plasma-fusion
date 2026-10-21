@@ -4,12 +4,14 @@
 #
 # Undo greeter-apply.sh: put back the login greeter's settings from its backups. Run as root.
 #
-#   greeter-restore.sh [BACKUP_DIR] [--dry-run]
+#   greeter-restore.sh [BACKUP_DIR | --greeter sddm|plasmalogin] [--dry-run]
 #
 #   BACKUP_DIR   a /var/lib/plasma-fusion/greeter-backup-<UTC time> directory: go back to the
 #                state saved in it (default: for SDDM's and plasma-login-manager's runs each, the
 #                newest backup taken while that greeter did not use Plasma Fusion yet, i.e. the
 #                look from before Plasma Fusion)
+#   --greeter G  without BACKUP_DIR: only that greeter's runs (the uninstall restores the greeter
+#                that uses Plasma Fusion now, and leaves the other's later settings alone)
 #   --dry-run    show what would be restored; change nothing
 #   -h, --help
 #
@@ -41,10 +43,17 @@ WALLPAPER_KEYS=("Greeter WallpaperPlugin" "Greeter/Wallpaper/org.kde.image/Gener
                 "Greeter/Wallpaper/org.kde.image/General PreviewImage")
 BACKUP_ROOT=/var/lib/plasma-fusion
 
-DRY=0 TARGET=''
+DRY=0 TARGET='' ONLY=''
 while [ $# -gt 0 ]; do
   case $1 in
     --dry-run) DRY=1 ;;
+    --greeter)
+      case ${2:-} in
+        sddm) ONLY=SDDM ;;
+        plasmalogin) ONLY=plasma-login-manager ;;
+        *) echo "--greeter needs sddm or plasmalogin" >&2; exit 2 ;;
+      esac
+      shift ;;
     -h|--help) sed -n '/^#   greeter-restore.sh/,/^#   -h, --help/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) TARGET=$1 ;;
@@ -79,6 +88,7 @@ kind() {
 }
 CHAIN=() TARGETS=()
 if [ -n "$TARGET" ]; then
+  [ -z "$ONLY" ] || die "name a backup or --greeter, not both"
   TARGET=$(cd "$TARGET" && pwd) || die "$TARGET does not exist"
   case " ${BACKUPS[*]} " in *" $TARGET "*) ;; *) die "$TARGET is not one of the backups in $BACKUP_ROOT" ;; esac
   # Every run since that one, of either greeter.
@@ -94,6 +104,7 @@ else
   # first version of greeter-apply.sh have no "before" line: they count as taken before Plasma
   # Fusion.
   for k in SDDM plasma-login-manager; do
+    [ -z "$ONLY" ] || [ "$k" = "$ONLY" ] || continue
     t='' runs=()
     for b in "${BACKUPS[@]}"; do
       [ "$(kind "$b")" = "$k" ] || continue
@@ -105,6 +116,7 @@ else
     CHAIN+=("${runs[@]}")
     TARGETS+=("$t")
   done
+  [ "${#TARGETS[@]}" -gt 0 ] || die "no $ONLY backup in $BACKUP_ROOT"
 fi
 
 # The plasma-login-manager greeter user, looked up for the first backup of its files (an SDDM
@@ -183,9 +195,12 @@ SDDM_WRITTEN=()
 kr() { # $1 file, $2 group, $3 key
   as_root_tool kreadconfig6 --file "$1" --group "$2" --key "$3" 2>/dev/null || true
 }
-kset() { # $1 file, $2 group, $3 key, $4 value (empty: remove the key)
-  if [ -n "$4" ]; then
-    run as_root_tool kwriteconfig6 --file "$1" --group "$2" --key "$3" "$4"
+# Give [GROUP] KEY of FILE what it was in the saved copy SAVED: the same value, an empty one too,
+# or no key when the copy had none (an empty value and a missing key differ: an empty Current=
+# hides a vendor file's theme).
+kback() { # $1 file, $2 group, $3 key, $4 saved copy (or "" when there was none)
+  if [ -n "$4" ] && [ -n "$(key_lines "$4" "$2" "$3")" ]; then
+    run as_root_tool kwriteconfig6 --file "$1" --group "$2" --key "$3" "$(kr "$4" "$2" "$3")"
   else
     run as_root_tool kwriteconfig6 --file "$1" --group "$2" --key "$3" --delete
   fi
@@ -194,20 +209,24 @@ put_back() { # $1 saved copy (with the file's old mode), $2 the file
   run install -m "$(stat -c %a "$1")" -- "$1" "$2"
   [ "$DRY" = 1 ] || [ -n "$SYSROOT" ] || chown root:root "$2"
 }
-# Put LINE back into [SECTION] of FILE, right below the section's first header (or in a new section
-# at the end), leaving every other line as it is.
-add_line() { # $1 file, $2 section, $3 line
+# Put the lines of file LINES back into [SECTION] of FILE, in their order, right below the section's
+# first header (or in a new section at the end), leaving every other line as it is. One batch: with
+# several assignments of a key, the last still wins as before.
+add_lines() { # $1 file, $2 section, $3 file of lines
   [ "$DRY" = 0 ] || return 0
   # The new file starts as a copy: it keeps the file's mode and owner (a 0600 file stays private).
   cp -p -- "$1" "$1.plasma-fusion-new"
-  awk -v sect="[$2]" -v add="$3" '
-    { print; t = $0; gsub(/^[ \t]+|[ \t]+$/, "", t); if (!done && t == sect) { print add; done = 1 } }
-    END { if (!done) { print ""; print sect; print add } }' "$1" >"$1.plasma-fusion-new"
+  awk -v sect="[$2]" -v lines="$3" '
+    function put(l) { while ((getline l <lines) > 0) print l; close(lines) }
+    { print; t = $0; gsub(/^[ \t]+|[ \t]+$/, "", t); if (!done && t == sect) { put(); done = 1 } }
+    END { if (!done) { print ""; print sect; put() } }' "$1" >"$1.plasma-fusion-new"
   mv -f -- "$1.plasma-fusion-new" "$1"
 }
-# The lines of FILE that set [Theme] KEY, as SDDM's parser finds them (greeter-apply.sh sddm_conf).
-theme_lines() { # $1 file, $2 key
-  awk -v want_k="$2" '
+# The lines of FILE that set [SECTION] KEY, an empty value included, as SDDM's parser finds them
+# (greeter-apply.sh sddm_conf).
+key_lines() { # $1 file, $2 section, $3 key
+  [ -f "$1" ] || return 0
+  awk -v want_s="$2" -v want_k="$3" '
     function trim(s) { sub(/^[ \t\r\f\v]+/, "", s); sub(/[ \t\r\f\v]+$/, "", s); return s }
     BEGIN { s = "General" }
     {
@@ -215,13 +234,13 @@ theme_lines() { # $1 file, $2 key
       if ((c = index(line, "#")) > 0) line = substr(line, 1, c - 1)
       line = trim(line)
       if ((e = index(line, "=")) > 0) {
-        if (s == "Theme" && trim(substr(line, 1, e - 1)) == want_k) print $0
+        if (s == want_s && trim(substr(line, 1, e - 1)) == want_k) print $0
       } else if (line ~ /^\[.*\]$/) s = substr(line, 2, length(line) - 2)
     }' "$1"
 }
 
 undo_sddm() { # $1 backup directory of an SDDM run
-  local backup=$1 state path file applied k old cur image line all=1
+  local backup=$1 state path file applied k cur image line saved all=1
   local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf conf=$SYSROOT/etc/sddm.conf user_conf
   local -A ours=() still=()
   user_conf=$SYSROOT$(sed -n 's/^theme_dir=//p' "$backup/info")/theme.conf.user
@@ -272,12 +291,16 @@ undo_sddm() { # $1 backup directory of an SDDM run
     note "${file#"$SYSROOT"} changed after that run: key by key"
     case $path in
       etc/sddm.conf.d/kde_settings.conf)
+        saved=''
+        [ "$state" != present ] || saved=$backup/$path
         for k in "${SDDM_KEYS[@]}"; do
-          old=''
-          [ "$state" != present ] || old=$(kr "$backup/$path" Theme "$k")
           if [ -n "${still[$k]:-}" ]; then
-            note "  [Theme] $k = ${old:-<removed>}"
-            kset "$file" Theme "$k" "$old"
+            if [ -n "$saved" ] && [ -n "$(key_lines "$saved" Theme "$k")" ]; then
+              note "  [Theme] $k = $(kr "$saved" Theme "$k")"
+            else
+              note "  [Theme] $k removed (there was none)"
+            fi
+            kback "$file" Theme "$k" "$saved"
           else
             note "  [Theme] $k: $(kr "$file" Theme "$k") was chosen since (kept)"
           fi
@@ -287,23 +310,22 @@ undo_sddm() { # $1 backup directory of an SDDM run
         # set it in this file since.
         [ "$state" = present ] || continue
         for k in "${SDDM_KEYS[@]}"; do
-          [ -n "$(theme_lines "$backup/$path" "$k")" ] || continue
-          if [ -n "${still[$k]:-}" ] && [ -z "$(theme_lines "$file" "$k")" ]; then
-            while IFS= read -r line; do
-              note "  [Theme] $line"
-              add_line "$file" Theme "$line"
-            done < <(theme_lines "$backup/$path" "$k")
+          [ -n "$(key_lines "$backup/$path" Theme "$k")" ] || continue
+          if [ -n "${still[$k]:-}" ] && [ -z "$(key_lines "$file" Theme "$k")" ]; then
+            key_lines "$backup/$path" Theme "$k" >"$own/lines"
+            while IFS= read -r line; do note "  [Theme] $line"; done <"$own/lines"
+            add_lines "$file" Theme "$own/lines"
           else
             note "  [Theme] $k: not put back (set in this file or chosen since)"
           fi
         done ;;
       sddm-theme/theme.conf.user)
-        old=''
-        [ "$state" != present ] || old=$(kr "$backup/$path" General background)
+        saved=''
+        [ "$state" != present ] || saved=$backup/$path
         cur=$(kr "$file" General background)
         if [ -f "$file" ] && [ "$cur" = "$image" ]; then
-          note "  background = ${old:-<removed>}"
-          kset "$file" General background "$old"
+          note "  background back as it was"
+          kback "$file" General background "$saved"
         else
           note "  background: ${cur:-<unset>} was chosen since (kept)"
         fi ;;
