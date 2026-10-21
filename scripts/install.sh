@@ -61,6 +61,20 @@ warn() { printf '[plasma-fusion] warning: %s\n' "$*" >&2; }
 die() { printf '[plasma-fusion] %s\n' "$*" >&2; exit 1; }
 refuse() { printf '[plasma-fusion] %s\n' "$*" >&2; say "Nothing was changed."; exit 3; }
 has() { command -v "$1" >/dev/null 2>&1; }
+# apt-get gives up at once while another package manager holds dpkg's lock (unattended-upgrades,
+# whose daily run catches up at a random time in the first hour after a boot; Discover), where apt
+# itself waits (DPkg::Lock::Timeout: without end on a terminal, else 120 s). The package steps wait
+# up to 10 minutes, and apt says what for. (Given after the packages.)
+APT_LOCK=DPkg::Lock::Timeout=600
+# apt-get update does not wait for the package lists' lock (DPkg::Lock::Timeout covers dpkg's
+# only), which another update holds for a while (apt's daily one, Discover's): three tries.
+apt_update() {
+  for try in 1 2 3; do
+    $SUDO apt-get update && return 0
+    [ "$try" = 3 ] || { say "apt-get update failed; trying again in 15 s (another update may hold apt's lists)."; sleep 15; }
+  done
+  return 1
+}
 
 # ver_ge A B: version A >= B (dotted numbers).
 ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n 1)" = "$2" ]; }
@@ -373,15 +387,15 @@ install_packages() {
         has add-apt-repository || die "add-apt-repository is missing: sudo apt-get install software-properties-common, then run this again."
         $SUDO add-apt-repository -y "ppa:$REPO" || die "could not add the PPA."
       fi
-      $SUDO apt-get update || die "apt-get update failed."
+      apt_update || die "apt-get update failed."
       # shellcheck disable=SC2086
       ! plasma_behind $PKGS || behind_stop "The PPA stays added; nothing was installed."
       # shellcheck disable=SC2086
-      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $PKGS || die "apt could not install Plasma Fusion." ;;
+      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $PKGS -o "$APT_LOCK" || die "apt could not install Plasma Fusion." ;;
     deb)
       # Downloaded and checked before the plan (deb_fetch).
       # shellcheck disable=SC2086
-      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $DEB_FILES || die "apt could not install the packages."
+      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $DEB_FILES -o "$APT_LOCK" || die "apt could not install the packages."
       [ "$DEB_PARTIAL" = 0 ] ||
         warn "this system has no build of the compiled parts (the window decoration, settings page, tablet gestures, Quick Look and copy text's selection); the themes, widgets and tools are installed." ;;
   esac
@@ -625,7 +639,7 @@ main() {
     case $LANE in
       copr) $SUDO dnf -y remove $installed_pkgs ;;
       aur) $SUDO pacman -Rns --noconfirm $installed_pkgs ;;
-      ppa | deb) $SUDO env DEBIAN_FRONTEND=noninteractive apt-get remove -y $installed_pkgs ;;
+      ppa | deb) $SUDO env DEBIAN_FRONTEND=noninteractive apt-get remove -y $installed_pkgs -o "$APT_LOCK" ;;
     esac || die "the package removal failed."
     say "Plasma Fusion was removed. Log out and in once."
     exit 0
@@ -654,13 +668,13 @@ main() {
           die "dnf could not update Plasma Fusion." ;;
       aur) install_packages ;;
       ppa)
-        $SUDO apt-get update || die "apt-get update failed."
+        apt_update || die "apt-get update failed."
         # shellcheck disable=SC2086
         ! plasma_behind --only-upgrade $HAVE_PKGS || behind_stop "Nothing was changed."
         # shellcheck disable=SC2086
         ! { [ -n "$NEW_PKGS" ] && plasma_behind $NEW_PKGS; } || behind_stop "Nothing was changed."
-        { $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade $HAVE_PKGS &&
-          { [ -z "$NEW_PKGS" ] || $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $NEW_PKGS; }; } ||
+        { $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade $HAVE_PKGS -o "$APT_LOCK" &&
+          { [ -z "$NEW_PKGS" ] || $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y $NEW_PKGS -o "$APT_LOCK"; }; } ||
           die "apt could not update Plasma Fusion." ;;
       deb) install_packages ;;
     esac

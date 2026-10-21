@@ -71,12 +71,19 @@ case \" \$* \" in *' upgrade '*)
   done ;;
 esac
 exit \${FAKE_DNF_RC:-0}"
-# apt-get -s prints what FAKE_APT_SIM holds (apt's simulation lines, "Inst NAME [OLD] (NEW ...)").
+# apt-get -s prints what FAKE_APT_SIM holds (apt's simulation lines, "Inst NAME [OLD] (NEW ...)");
+# apt-get update fails its first FAKE_APT_UPDATE_FAILS calls (another update holding the lists).
 fake apt-get "$LOGLINE
 case \" \$* \" in *' -s '*) printf '%b' \"\${FAKE_APT_SIM:-}\"; [ -z \"\${FAKE_APT_SIM_ERR:-}\" ] || echo \"\$FAKE_APT_SIM_ERR\" >&2; exit \"\${FAKE_APT_SIM_RC:-0}\" ;; esac
+case \" \$* \" in *' update '*)
+  n=\$(( \$(cat \"\$FAKE_LOG.updates\" 2>/dev/null || echo 0) + 1 )); echo \"\$n\" >\"\$FAKE_LOG.updates\"
+  [ \"\$n\" -gt \"\${FAKE_APT_UPDATE_FAILS:-0}\" ] || { echo 'E: Could not get lock /var/lib/apt/lists/lock.' >&2; exit 100; } ;;
+esac
 case \" \$* \" in *' install '*) $INSTALLS ;; esac
 exit 0"
 fake add-apt-repository "$LOGLINE"
+# sleep only logs (the installer's waits between tries)
+fake sleep "$LOGLINE"
 fake yay "$LOGLINE
 $INSTALLS"
 fake makepkg "$LOGLINE
@@ -145,8 +152,10 @@ run() {
   # An installed Plasma Fusion has its command.
   case " ${VERSIONS:-} " in *" plasma-fusion="*) FAKE_BIN=$FB FAKE_LOG=$CASE/log sh -c "$INSTALLS" ;; esac
   : >"$CASE/log"
+  rm -f "$CASE/log.updates"
   OUT=$(env -i HOME="$CASE/home" PATH="$FB:/usr/bin:/bin" FAKE_BIN="$FB" FAKE_LOG="$CASE/log" \
     FAKE_VERSIONS="${VERSIONS:-}" FAKE_FEDORA="${FEDORA:-}" FAKE_KWIN_RUNNING="${KWIN_RUNNING:-}" FAKE_APT_SIM="${APT_SIM:-}" FAKE_APT_SIM_RC="${APT_SIM_RC:-0}" FAKE_APT_SIM_ERR="${APT_SIM_ERR:-}" \
+    FAKE_APT_UPDATE_FAILS="${APT_UPDATE_FAILS:-0}" \
     FAKE_UID="${UID_FAKE:-1000}" FAKE_PF_VERSION=$V GNUPGHOME="$BASE/no-such-keyring" \
     ${SESSION:+XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland DBUS_SESSION_BUS_ADDRESS=unix:path=/dev/null XDG_RUNTIME_DIR=$CASE} \
     ${DEV:+PLASMA_FUSION_DEV=1 PLASMA_FUSION_DEV_VERSION=$V PLASMA_FUSION_DEV_ROOT=$CASE/root} \
@@ -376,10 +385,21 @@ for SHNAME in "${shells[@]}"; do
   expect "Kubuntu 26.10 adds the PPA" has_log "add-apt-repository -y ppa:archledger/plasma-fusion"
   expect "  and offers the boot splash step there too" has_out "plymouth-install.sh --select"
   expect "  and installs the six packages" has_log "apt-get install -y plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation plasma-fusion-quicklook plasma-fusion-copytext"
+  expect "  waiting for dpkg's lock as apt does" has_log "plasma-fusion-copytext -o DPkg::Lock::Timeout=600"
+  # an update holding apt's lists (no wait for that lock): tried again, 15 s apart
+  APT_UPDATE_FAILS=2 run "$sh" $DEB sleep -- --yes
+  expect "a failed apt-get update is tried again" bash -c '[ "$(grep -c "^apt-get update" <<<"$0")" = 3 ] && [ "$(grep -c "^sleep 15" <<<"$0")" = 2 ]' "$LOG"
+  expect "  then installs" has_log "apt-get install -y plasma-fusion plasma-fusion-decoration"
+  APT_UPDATE_FAILS=3 run "$sh" $DEB sleep -- --yes
+  expect "three failed updates stop it" bash -c '[ "$1" = 1 ] && grep -q "apt-get update failed." <<<"$0"' "$OUT" "$RC"
+  expect "  nothing installed" bash -c '! grep -q "^apt-get install" <<<"$0"' "$LOG"
+  VERSIONS="$P675 plasma-fusion=0.2.0 plasma-fusion-decoration=0.2.0" run "$sh" $DEB -- uninstall --yes --package-only
+  expect "a PPA uninstall removes the installed packages, waiting for dpkg's lock" has_log "apt-get remove -y plasma-fusion plasma-fusion-decoration -o DPkg::Lock::Timeout=600"
   # an update from a release before Quick Look and copy text (apt's --only-upgrade would skip them)
   VERSIONS="$P675 $P4" run "$sh" $DEB -- update --yes
   expect "a PPA update upgrades the four installed" has_log "apt-get install -y --only-upgrade plasma-fusion plasma-fusion-decoration plasma-fusion-settings plasma-fusion-navigation"
   expect "  and installs the new ones" has_log "apt-get install -y plasma-fusion-quicklook plasma-fusion-copytext"
+  expect "  both waiting for dpkg's lock" bash -c '[ "$(grep -c "^apt-get install -y .* -o DPkg::Lock::Timeout=600$" <<<"$0")" = 2 ]' "$LOG"
   APT_SIM='Inst plasma-workspace [4:6.7.5-0ubuntu1] (4:6.8.0-0ubuntu1 Ubuntu:26.10 [amd64])\n' run "$sh" $DEB -- --yes
   expect "a PPA install that would upgrade part of Plasma is refused" [ "$RC" = 3 ]
   expect "  the PPA stays, nothing installed" bash -c 'grep -q "The PPA stays added; nothing was installed" <<<"$0" && ! grep -q "^apt-get install -y plasma-fusion" <<<"$1"' "$OUT" "$LOG"
@@ -397,6 +417,7 @@ for SHNAME in "${shells[@]}"; do
   RELEASE=$BASE/rel-good run "$sh" $DEB -- --yes
   expect "neon installs the neon .deb set" has_log "plasma-fusion-navigation_${V}-1~neon1_amd64.deb"
   expect "  all six in one apt call" bash -c 'grep -c "^apt-get install -y .*plasma-fusion_.*~neon1_all.deb.*decoration.*settings.*navigation.*quicklook.*copytext" <<<"$0" | grep -q 1' "$LOG"
+  expect "  waiting for dpkg's lock" bash -c 'grep -q "^apt-get install -y .*copytext.* -o DPkg::Lock::Timeout=600$" <<<"$0"' "$LOG"
   expect "  says the signature verified" has_out "signature verified"
   # a neon still at Plasma 6.7.5 while the release was built for 6.8.0: apt would upgrade KWin and
   # libplasma with it and keep plasmashell 6.7.5 (2026-10-18)

@@ -87,6 +87,17 @@ log out and in; nothing is installed (on the PPA, the PPA stays added). The same
 on the PPA. A dry run that fails stops the installer as well (exit 1, with apt's last lines): its
 answer would be unknown.
 
+The package steps wait while another package manager holds dpkg's lock (`-o
+DPkg::Lock::Timeout=600`, up to 10 minutes; apt says what it waits for). `apt-get` gives up at once
+by default, where `apt` itself waits (without end on a terminal, else 120 s;
+`apt-private/private-cmndline.cc`), and unattended-upgrades holds the lock while it runs: its daily
+run catches up at a random time within the first hour after a boot. In the release VMs it started on
+Ubuntu 26.10 two minutes after boot, at the second the installer did, and the install failed ("Could
+not get lock /var/lib/dpkg/lock-frontend. It is held by process 2969 (unattended-upgr)", 2026-10-21).
+`apt-get update` cannot wait that way: the package lists' lock is not dpkg's (`pkgAcquire::GetLock`
+takes it without a timeout), and another update (apt's daily one, Discover's) holds it for a while,
+so it is tried three times, 15 s apart. The boot splash tools wait for dpkg's lock the same way.
+
 ## Options and exit codes
 
 | Option | Effect |
@@ -150,7 +161,8 @@ steps, 2026-10-11; 208 in all on 2026-10-18, with the six packages and an update
 before Quick Look and copy text, whose fake dnf refuses to upgrade a package that is not installed,
 as dnf5 does; 236 with the apt dry run, whose fake apt-get -s prints a set simulation or fails: neon
 (also with `--dry-run`), the PPA and a PPA update behind the release's Plasma refused, a failed dry
-run stopping it, an install that upgrades nothing of Plasma let through). The `packages` workflow
+run stopping it, an install that upgrades nothing of Plasma let through; 268 with the lock wait on
+every apt install and remove and `apt-get update` tried again, 2026-10-21). The `packages` workflow
 runs it with ShellCheck, `dash -n` and `busybox sh -n`.
 
 The release-test VMs (docs/RELEASING.md) run it for real on Fedora 44, Arch, Ubuntu 26.10, KDE neon

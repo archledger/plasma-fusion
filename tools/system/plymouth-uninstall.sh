@@ -237,7 +237,7 @@ pkg=$(cat "$STATE/installed-packages" 2>/dev/null || true)
 if [ "$PLUGIN" = 1 ] && [ -n "$pkg" ]; then
   if command -v dnf >/dev/null; then run dnf remove -y "$pkg"
   elif command -v pacman >/dev/null; then run pacman -R --noconfirm "$pkg"
-  elif command -v apt-get >/dev/null; then run env DEBIAN_FRONTEND=noninteractive apt-get remove -y "$pkg"
+  elif command -v apt-get >/dev/null; then run env DEBIAN_FRONTEND=noninteractive apt-get remove -y "$pkg" -o DPkg::Lock::Timeout=600
   fi
   [ "$DRY" = 1 ] || rm -f "$STATE/installed-packages"
 fi
