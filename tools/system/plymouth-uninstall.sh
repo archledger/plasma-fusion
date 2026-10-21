@@ -7,18 +7,24 @@
 #   plymouth-uninstall.sh [--theme NAME] [--all-kernels] [--keep-files] [--remove-plugin] [--dry-run]
 #
 #   --theme NAME     theme to go back to (default: the one recorded by plymouth-install.sh
-#                    --select, else bgrt, Fedora's default)
+#                    --select, else the system's default: bgrt on Fedora, Plymouth's own
+#                    elsewhere; where themes are an alternative (Ubuntu, KDE neon) the one it
+#                    had)
 #   --all-kernels    rebuild the initramfs of every installed kernel, not only the running one
+#                    (Arch: mkinitcpio -P rebuilds every preset anyway)
 #   --keep-files     leave /usr/share/plymouth/themes/plasma-fusion in place
-#   --remove-plugin  also remove plymouth-plugin-script if plymouth-install.sh installed it
+#   --remove-plugin  also remove the package plymouth-install.sh installed for the script plugin
+#                    (Fedora plymouth-plugin-script; Arch, Debian, Ubuntu plymouth)
 #   --dry-run        print what would be done
 #
 # The greeting choice remembered by plymouth-install.sh --user/--name is forgotten too.
 # When Plasma Fusion is the selected theme, the saved /etc/plymouth/plymouthd.conf is put back
-# (or the previous theme selected) and the initramfs rebuilt (also when it is no longer selected
-# but the running kernel's image still holds it). A copy made by --select
-# (/boot/initramfs-<kernel>.img.pre-plasma-fusion) is removed once that kernel's image no longer
-# contains the theme, or when that kernel is gone. --dry-run lists the exact steps only as root.
+# (or the previous theme selected; Ubuntu and KDE neon: the default.plymouth alternative put back)
+# and the initramfs rebuilt (also when it is no longer selected but the running kernel's image
+# still holds it), with the system's builder as plymouth-install.sh picks it; Arch's mkinitcpio
+# drop-in of plymouth-install.sh is removed first. A copy made by --select
+# (<image>.pre-plasma-fusion) is removed once that image no longer contains the theme, or when
+# it is gone. --dry-run lists the exact steps only as root.
 # Emergency rollback without this script: at the GRUB menu press e and add plymouth.enable=0 (or
 # change the initrd line to the .pre-plasma-fusion copy), or run plymouth-set-default-theme -R bgrt.
 set -euo pipefail
@@ -44,10 +50,20 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-# The counterpart of plymouth-install.sh: dracut and dnf (Fedora) only.
-if ! command -v dracut >/dev/null || ! command -v lsinitrd >/dev/null || ! command -v dnf >/dev/null; then
-  echo "plymouth-uninstall: this tool needs dracut and dnf (Fedora), as plymouth-install.sh. Nothing was changed." >&2
+# The system's initramfs builder, its image lister and the theme selector, as plymouth-install.sh
+# picks them.
+BUILDER=
+if [ -e /etc/NIXOS ]; then :
+elif command -v dracut >/dev/null && command -v lsinitrd >/dev/null; then BUILDER=dracut LIST=lsinitrd
+elif command -v mkinitcpio >/dev/null && command -v lsinitcpio >/dev/null; then BUILDER=mkinitcpio LIST=lsinitcpio
+elif command -v update-initramfs >/dev/null && command -v lsinitramfs >/dev/null; then BUILDER=initramfs-tools LIST=lsinitramfs
+fi
+if [ -z "$BUILDER" ]; then
+  echo "plymouth-uninstall: no initramfs builder found (dracut, mkinitcpio or initramfs-tools), as plymouth-install.sh needs. Nothing was changed." >&2
   exit 3
+fi
+if command -v plymouth-set-default-theme >/dev/null; then SELECTOR=set-default-theme
+else SELECTOR=alternatives
 fi
 if [ "$DRY" = 0 ] && [ "$(id -u)" != 0 ]; then
   echo "plymouth-uninstall: run as root (sudo)" >&2; exit 1
@@ -56,20 +72,46 @@ run() {
   echo "+ $*"
   [ "$DRY" = 1 ] || "$@"
 }
+ALT=default.plymouth
+alternative() { update-alternatives --query "$ALT" 2>/dev/null | sed -n "s/^$1: //p"; }
+current_theme() {
+  local path
+  if [ "$SELECTOR" = set-default-theme ]; then
+    plymouth-set-default-theme
+  else
+    path=$(alternative Value)
+    [ -z "$path" ] || basename "$path" .plymouth
+  fi
+}
 
-KVER=$(uname -r)
-IMG=/boot/initramfs-$KVER.img
-BACKUP=$IMG.pre-$NAME
+# The images to rebuild, as plymouth-install.sh --select lists them (PF_PLYMOUTH_KERNEL: tests)
+KVER=${PF_PLYMOUTH_KERNEL:-$(uname -r)}
+IMAGES=()
+case $BUILDER in
+  dracut)
+    if [ -e "/boot/initrd.img-$KVER" ] || { [ ! -e "/boot/initramfs-$KVER.img" ] && compgen -G "/boot/initrd.img-*" >/dev/null; }; then
+      IMAGES=("/boot/initrd.img-$KVER")
+    else
+      IMAGES=("/boot/initramfs-$KVER.img")
+    fi ;;
+  initramfs-tools) IMAGES=("/boot/initrd.img-$KVER") ;;
+  mkinitcpio)
+    mapfile -t IMAGES < <(for f in /etc/mkinitcpio.d/*.preset; do
+      [ -e "$f" ] || continue
+      # shellcheck source=/dev/null # the system's presets, read as mkinitcpio -P reads them
+      ( . "$f"; for p in "${PRESETS[@]}"; do v=${p}_image; [ -z "${!v:-}" ] || printf '%s\n' "${!v}"; done )
+    done) ;;
+esac
+IMG=${IMAGES[0]:-}
 if [ -z "$THEME" ]; then
   THEME=$(cat "$STATE/previous-theme" 2>/dev/null || true)
-  [ -n "$THEME" ] || THEME=bgrt
 fi
 
 # Prints "theme" when the initramfs image $1 holds the theme, "clean" when it does not, and
 # "unknown" when it cannot be listed.
 image_state() {
   local listing
-  if ! listing=$(lsinitrd "$1" 2>/dev/null) || [ -z "$listing" ]; then
+  if ! listing=$("$LIST" "$1" 2>/dev/null) || [ -z "$listing" ]; then
     echo unknown
   elif grep -q "usr/share/plymouth/themes/$NAME/" <<< "$listing"; then
     echo theme
@@ -78,41 +120,73 @@ image_state() {
   fi
 }
 
+# Arch: the plymouth hook drop-in plymouth-install.sh wrote (only that file, and only if it is still
+# ours), before the rebuild
+DROPIN=$(cat "$STATE/mkinitcpio-dropin" 2>/dev/null || true)
+dropin=0
+if [ -n "$DROPIN" ] && [ -f "$DROPIN" ] && grep -q "^# Plasma Fusion's boot splash (plymouth-install.sh)" "$DROPIN"; then
+  run rm -f "$DROPIN"
+  dropin=1
+fi
+
 rebuild=0
-if [ "$(plymouth-set-default-theme)" = "$NAME" ]; then
-  if [ -f "$STATE/plymouthd.conf.orig" ] && [ "$THEME_GIVEN" = 0 ]; then
+if [ "$(current_theme)" = "$NAME" ]; then
+  if [ "$SELECTOR" = alternatives ]; then
+    # Ours out of the alternative: back to the best remaining (auto), or to the theme chosen by hand
+    # before (manual), or the --theme given
+    run update-alternatives --remove "$ALT" "$THEMES/$NAME/$NAME.plymouth"
+    read -r status path < "$STATE/previous-alternative" 2>/dev/null || status='' path=''
+    if [ "$THEME_GIVEN" = 1 ]; then
+      run update-alternatives --set "$ALT" "$THEMES/$THEME/$THEME.plymouth"
+    elif [ "$status" = manual ] && [ -n "$path" ] && [ -e "$path" ]; then
+      run update-alternatives --set "$ALT" "$path"
+    fi
+  elif [ -f "$STATE/plymouthd.conf.orig" ] && [ "$THEME_GIVEN" = 0 ]; then
     run install -m 0644 "$STATE/plymouthd.conf.orig" /etc/plymouth/plymouthd.conf
     command -v restorecon >/dev/null && run restorecon /etc/plymouth/plymouthd.conf
     now=$(plymouth-set-default-theme)
     if [ "$DRY" = 0 ] && [ "$now" = "$NAME" ]; then
-      run plymouth-set-default-theme "$THEME"
+      if [ -n "$THEME" ]; then run plymouth-set-default-theme "$THEME"; else run plymouth-set-default-theme --reset; fi
     fi
-  else
+  elif [ -n "$THEME" ]; then
     run plymouth-set-default-theme "$THEME"
+  elif command -v dnf >/dev/null; then
+    # Fedora's default
+    run plymouth-set-default-theme bgrt
+  else
+    run plymouth-set-default-theme --reset
   fi
   if [ "$DRY" = 0 ]; then
-    echo "default theme is now: $(plymouth-set-default-theme)"
+    echo "default theme is now: $(current_theme)"
   else
-    echo "(dry run: the default theme would become the one in the saved plymouthd.conf, or $THEME)"
+    fallback="the system's default"
+    echo "(dry run: the default theme would become the one saved before Plasma Fusion, or ${THEME:-$fallback})"
   fi
   rebuild=1
 else
-  echo "$NAME is not the selected theme (current: $(plymouth-set-default-theme))"
-  # Deselected by hand without -R: the running kernel's image may still carry it.
-  if [ "$DRY" = 0 ] && [ "$(image_state "$IMG")" = theme ]; then
+  echo "$NAME is not the selected theme (current: $(current_theme))"
+  # Deselected by hand without a rebuild: the running kernel's image may still carry it.
+  if [ "$DRY" = 0 ] && [ -n "$IMG" ] && [ "$(image_state "$IMG")" = theme ]; then
     echo "$IMG still contains $NAME"
     rebuild=1
   fi
 fi
+[ "$dropin" = 0 ] || rebuild=1
 if [ "$rebuild" = 1 ] || [ "$ALL" = 1 ]; then
-  if [ "$ALL" = 1 ]; then
-    run nice -n 10 dracut -f --regenerate-all
-  else
-    run nice -n 10 dracut -f "$IMG" "$KVER"
-  fi
-  if [ "$DRY" = 0 ] && [ "$(image_state "$IMG")" != clean ]; then
-    echo "plymouth-uninstall: $IMG still contains $NAME (or cannot be listed); the backup $BACKUP is kept" >&2
-    exit 1
+  case $BUILDER:$ALL in
+    dracut:1) run nice -n 10 dracut -f --regenerate-all ;;
+    dracut:0) run nice -n 10 dracut -f "$IMG" "$KVER" ;;
+    initramfs-tools:1) run nice -n 10 update-initramfs -u -k all ;;
+    initramfs-tools:0) run nice -n 10 update-initramfs -u -k "$KVER" ;;
+    mkinitcpio:*) run nice -n 10 mkinitcpio -P ;;
+  esac
+  if [ "$DRY" = 0 ]; then
+    for img in "${IMAGES[@]}"; do
+      if [ "$(image_state "$img")" != clean ]; then
+        echo "plymouth-uninstall: $img still contains $NAME (or cannot be listed); its backup $img.pre-$NAME is kept" >&2
+        exit 1
+      fi
+    done
   fi
 else
   echo "no initramfs rebuild needed"
@@ -120,7 +194,7 @@ fi
 
 # The copies made by --select: remove each one once its kernel's image no longer holds the
 # theme, or the kernel has been removed since; keep the others as that kernel's way back.
-for b in /boot/initramfs-*.img.pre-"$NAME"; do
+for b in /boot/*.pre-"$NAME"; do
   [ -e "$b" ] || continue
   base=${b%.pre-"$NAME"}
   if [ ! -e "$base" ]; then
@@ -130,27 +204,34 @@ for b in /boot/initramfs-*.img.pre-"$NAME"; do
   elif [ "$(image_state "$base")" = clean ]; then
     run rm -f "$b"
   else
-    echo "note: keeping $b: $base still contains $NAME (rebuild it with dracut -f --regenerate-all)"
+    echo "note: keeping $b: $base still contains $NAME (rebuild it: --all-kernels)"
   fi
 done
 
 if [ "$KEEP" = 0 ] && [ -d "$THEMES/$NAME" ]; then
   if [ "$ALL" = 0 ] && [ "$DRY" = 0 ]; then
-    for img in /boot/initramfs-*.img; do
-      [ "$img" = "$IMG" ] && continue
+    for img in /boot/initramfs-*.img /boot/initrd.img-*; do
+      [ -e "$img" ] || continue
+      case " ${IMAGES[*]} " in *" $img "*) continue ;; esac
+      case $img in *.pre-"$NAME") continue ;; esac
       if [ "$(image_state "$img")" = theme ]; then
-        echo "note: $img still contains $NAME (rebuild it with dracut -f --regenerate-all)"
+        echo "note: $img still contains $NAME (rebuild it: --all-kernels)"
       fi
     done
   fi
   run rm -rf "$THEMES/$NAME"
 fi
-if [ "$PLUGIN" = 1 ] && grep -qx plymouth-plugin-script "$STATE/installed-packages" 2>/dev/null; then
-  run dnf remove -y plymouth-plugin-script
+pkg=$(cat "$STATE/installed-packages" 2>/dev/null || true)
+if [ "$PLUGIN" = 1 ] && [ -n "$pkg" ]; then
+  if command -v dnf >/dev/null; then run dnf remove -y "$pkg"
+  elif command -v pacman >/dev/null; then run pacman -R --noconfirm "$pkg"
+  elif command -v apt-get >/dev/null; then run env DEBIAN_FRONTEND=noninteractive apt-get remove -y "$pkg"
+  fi
   [ "$DRY" = 1 ] || rm -f "$STATE/installed-packages"
 fi
 if [ "$DRY" = 0 ]; then
-  rm -f "$STATE/previous-theme" "$STATE/plymouthd.conf.orig" "$STATE/greeting"
+  rm -f "$STATE/previous-theme" "$STATE/plymouthd.conf.orig" "$STATE/greeting" "$STATE/previous-alternative" \
+    "$STATE/mkinitcpio-dropin"
   rmdir "$STATE" /var/lib/plasma-fusion 2>/dev/null || true
 fi
 echo "done"

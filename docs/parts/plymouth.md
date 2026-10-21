@@ -225,38 +225,89 @@ sudo bash plymouth-install.sh --select THEME_DIR  # also select it and rebuild t
 The installer first decides whom to greet (and stops, changing nothing, when `--user` names no
 account), then installs the plugin if needed, the files (a fresh copy swapped in), the keyboard
 label and the greeting (`python3 -I -B THEME_DIR/greeting/greeting.py`: isolated, nothing from the
-user's environment), and `restorecon`s the directory. `--select` saves first, once: the previous
-theme name and `/etc/plymouth/plymouthd.conf` in `/var/lib/plasma-fusion/plymouth/`, and the
-current initramfs as `/boot/initramfs-<kernel>.img.pre-plasma-fusion`; then runs `nice -n 10
-plymouth-set-default-theme -R plasma-fusion` and checks with `lsinitrd` that the new image holds the
-theme and `script.so`. `-R` rebuilds only the running kernel's image; kernels installed later get
-the theme automatically; other installed kernels keep their old splash until `dracut -f
---regenerate-all`. Re-running the installer (after a rebuild of the theme or a name change) is
+user's environment), and `restorecon`s the directory where SELinux has it.
+
+Where it runs (2026-10-21; research and sources: the ledger's
+`plasma-fusion/2026-10-21-plymouth-elsewhere/research.md`): the initramfs builder, the theme
+selector and the running kernel's image are looked up separately, because distributions combine
+them differently - Debian testing (forky) and Ubuntu 26.10 build their images with dracut now, KDE
+neon (noble) still with initramfs-tools, and Ubuntu and neon have no `plymouth-set-default-theme`:
+
+| System | Builder (lister) | Theme selected with | Image | Plugin package |
+|---|---|---|---|---|
+| Fedora | dracut (`lsinitrd`) | `plymouth-set-default-theme` | `/boot/initramfs-<kernel>.img` | `plymouth-plugin-script` (dnf) |
+| Debian testing | dracut (`lsinitrd`) | `plymouth-set-default-theme` | `/boot/initrd.img-<kernel>` | `plymouth` (apt-get) |
+| Ubuntu 26.10 | dracut (`lsinitrd`) | the `default.plymouth` alternative | `/boot/initrd.img-<kernel>` | `plymouth` (apt-get) |
+| KDE neon, older Debian and Ubuntu | initramfs-tools (`lsinitramfs`) | `plymouth-set-default-theme`, else the alternative | `/boot/initrd.img-<kernel>` | `plymouth` (apt-get) |
+| Arch | mkinitcpio (`lsinitcpio`) | `plymouth-set-default-theme` | every preset's image (`mkinitcpio -P`) | `plymouth` (pacman) |
+
+NixOS builds its initramfs from the configuration (`programs.plasma-fusion.plymouth`, nixos.md);
+there, and where no builder is found, the installer exits 3 and changes nothing.
+
+`--select` saves first, once: the previous theme (and on Ubuntu and neon the alternative's
+`auto`/`manual` state and path) and `/etc/plymouth/plymouthd.conf` in
+`/var/lib/plasma-fusion/plymouth/`, and each image it rebuilds as `<image>.pre-plasma-fusion`. On
+Arch, whose default `HOOKS` has no `plymouth`, it writes
+`/etc/mkinitcpio.conf.d/90-plasma-fusion-plymouth.conf`, bash that mkinitcpio reads after
+`mkinitcpio.conf` and that puts `plymouth` after `systemd` (or `udev`), so before the encryption
+hooks and the passphrase prompt is the theme's (a preset naming its own `*_config` skips drop-ins:
+the image check below then fails and says to roll back). Then it selects the theme, rebuilds the
+running kernel's image (`nice -n 10 dracut -f IMAGE KERNEL`, `update-initramfs -u -k KERNEL`; Arch
+`mkinitcpio -P`) and checks with the lister that each image holds the theme and `script.so`. Kernels
+installed later get the theme automatically; other installed kernels keep their old splash until
+`dracut -f --regenerate-all` or `update-initramfs -u -k all`. Plymouth draws a graphical theme only
+with `splash`, `splash=silent` or `rhgb` on the kernel command line (`src/main.c`,
+`plymouth_should_show_default_splash`); without it the installer says so and how to add it (GRUB's
+`GRUB_CMDLINE_LINUX_DEFAULT` then `update-grub` or `grub-mkconfig`, `grubby` on Fedora, the
+`options` line with systemd-boot) and leaves the boot loader alone: of the release VMs only
+Ubuntu's GRUB has `quiet splash` by default. Re-running the installer (after a rebuild of the theme or a name change) is
 safe; add `--select` to put the new files into the initramfs (without it the installer says so
 when the theme is the selected one). Shutdown and reboot read the installed files directly, so
-they show a new build at once. When `plymouth-plugin-script` is missing the installer runs `dnf
-install`; it refuses while an offline update is scheduled for the next boot (`/system-update`),
-because the transaction changes the package database that update was prepared against, and prints
-a note when one is only prepared.
+they show a new build at once. When the script plugin is missing the installer installs its
+package (table above; `--no-packages` stops instead); it refuses while an offline update is
+scheduled for the next boot (`/system-update`), because the transaction changes the package
+database that update was prepared against, and prints a note when one is only prepared.
 
 ### Rollback
 
 * `sudo bash plymouth-uninstall.sh` puts the saved `plymouthd.conf` back (or selects the saved
-  previous theme, default `bgrt`), rebuilds the running kernel's initramfs (`--all-kernels`: all;
-  it also rebuilds when the theme was deselected by hand but the image still holds it), checks
-  the theme is gone and removes the theme directory (`--keep-files` keeps it; `--remove-plugin`
-  also removes `plymouth-plugin-script`, which the installer recorded as installed by it) and the
-  remembered greeting choice. A `.pre-plasma-fusion` copy is removed only once its kernel's image
+  previous theme, else the system's default: `bgrt` on Fedora, Plymouth's own elsewhere; on
+  Ubuntu and neon it removes the theme from the `default.plymouth` alternative, which goes back to
+  the best remaining theme or to the one chosen by hand before), removes Arch's drop-in, rebuilds
+  the running kernel's initramfs with the system's builder (`--all-kernels`: all; it also rebuilds
+  when the theme was deselected by hand but the image still holds it), checks the theme is gone
+  and removes the theme directory (`--keep-files` keeps it; `--remove-plugin` also removes the
+  package the installer recorded as installed by it) and the remembered greeting choice. A `.pre-plasma-fusion` copy is removed only once its kernel's image
   is verified free of the theme, or when that kernel has been removed since; copies for kernels
   whose image still holds the theme are kept with a note. `--dry-run` prints the steps (run it
   with sudo for the exact list; as a normal user the saved state is not readable).
 * Back to the first version (Boot board, black screen) without uninstalling: run the installer of
   that build with `--select` (its theme directory replaces this one).
-* By hand: `sudo plymouth-set-default-theme -R bgrt`.
+* By hand: `sudo plymouth-set-default-theme -R bgrt` (Fedora; elsewhere the system's theme, then
+  its rebuild), or `sudo update-alternatives --config default.plymouth` and `sudo update-initramfs
+  -u` (Ubuntu, neon).
 * If a boot ever looks wrong: at the GRUB menu press `e` and add `plymouth.splash=details` (text
   view; that theme is always in the initramfs) or `plymouth.enable=0`, or change the `initrd` line
   to the `.pre-plasma-fusion` copy; the older kernel's entry also still has its own splash. A theme
   error cannot stop the boot: Plymouth falls back to text, and Esc always shows the details view.
+
+## Tests of the installer on each system
+
+`tools/system/tests/plymouth-root.sh` (CI: the `plymouth` workflow, on changes to the two scripts
+and weekly; it refuses to run outside a container or `PF_DISPOSABLE_SYSTEM=1`) runs `--select` and
+the uninstall as root on a container of each system with a kernel, its builder and Plymouth from
+its own packages, with a minimal stand-in theme (a build of `generators/plymouth/build.sh` as an
+argument instead): the theme selected and in each rebuilt image with `script.so`, the backups, the
+note on a command line without `splash` and none with it, a second `--select` keeping the first
+backup; then the uninstall: each image without the theme, the backups, files and state gone, the
+theme or the alternative as before, `plymouthd.conf` byte for byte, Arch's `HOOKS` as before.
+`PF_PLYMOUTH_KERNEL` names the installed kernel there (in a container the running one is the
+host's), `PF_PLYMOUTH_CMDLINE` a command line file. 2026-10-21, all pass: Fedora 44 with dracut (13
+checks; `plymouth-plugin-script` installed and removed again), Debian testing with dracut (13) and
+with initramfs-tools (13), Ubuntu 26.10 with dracut (13) and with initramfs-tools (13), both from
+`bgrt` chosen automatically, and Arch with mkinitcpio (14; Plymouth installed by the installer, the
+hook through the drop-in, both removed again). Debian's initramfs-tools hook needs fontconfig
+(`/etc/fonts/fonts.conf`), which a desktop has and a bare container does not.
 
 ## Verification (2026-10-01, on the laptop)
 

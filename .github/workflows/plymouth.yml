@@ -1,0 +1,87 @@
+# SPDX-FileCopyrightText: 2026 Wisbendji Fimerlus <archledger236@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
+# The boot splash installer (tools/system/plymouth-install.sh --select and plymouth-uninstall.sh)
+# as root on each system's own initramfs builder and Plymouth, with a kernel installed, in a
+# container of that system (tools/system/tests/plymouth-root.sh): dracut on Fedora 44, Debian testing
+# and Ubuntu 26.10, initramfs-tools on Debian testing and on Ubuntu 26.10 (as KDE neon has it), and
+# mkinitcpio on Arch. Weekly too, so that a change in one of them shows up here.
+
+name: plymouth
+
+on:
+  pull_request:
+    paths:
+      - "tools/system/plymouth-*.sh"
+      - "tools/system/tests/plymouth-root.sh"
+      - ".github/workflows/plymouth.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "tools/system/plymouth-*.sh"
+      - "tools/system/tests/plymouth-root.sh"
+      - ".github/workflows/plymouth.yml"
+  schedule:
+    - cron: "20 6 * * 3" # Wednesdays 06:20 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plymouth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  root:
+    name: "boot splash as root (${{ matrix.name }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    container:
+      image: ${{ matrix.image }}
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Fedora 44, dracut
+            image: registry.fedoraproject.org/fedora:44
+            setup: dnf -y -q install git kernel-core dracut plymouth
+          - name: Debian testing, dracut
+            image: docker.io/library/debian:testing
+            setup: >-
+              apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+              git ca-certificates linux-image-amd64 dracut plymouth
+          - name: Debian testing, initramfs-tools
+            image: docker.io/library/debian:testing
+            setup: >-
+              apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+              git ca-certificates linux-image-amd64 initramfs-tools plymouth fontconfig
+          - name: Ubuntu 26.10, dracut
+            image: docker.io/library/ubuntu:26.10
+            setup: >-
+              apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+              git ca-certificates linux-image-generic dracut plymouth plymouth-theme-spinner
+          - name: Ubuntu 26.10, initramfs-tools
+            image: docker.io/library/ubuntu:26.10
+            setup: >-
+              apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+              git ca-certificates linux-image-generic initramfs-tools plymouth plymouth-theme-spinner
+          # Without Plymouth, as Arch installs: the installer adds it and the hook
+          - name: Arch, mkinitcpio
+            image: docker.io/library/archlinux:base
+            setup: pacman -Syu --noconfirm --needed git linux mkinitcpio
+    steps:
+      - name: The kernel, the initramfs builder and Plymouth (git too, for the checkout)
+        env:
+          SETUP: ${{ matrix.setup }}
+        run: sh -c "$SETUP" >/dev/null
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Select the theme, check the image, undo, check again (the job's container)
+        env:
+          PF_DISPOSABLE_SYSTEM: "1"
+        run: tools/system/tests/plymouth-root.sh
