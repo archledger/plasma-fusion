@@ -238,12 +238,22 @@ key_lines() { # $1 file, $2 section, $3 key
       } else if (line ~ /^\[.*\]$/) s = substr(line, 2, length(line) - 2)
     }' "$1"
 }
+# The value SDDM reads for [SECTION] KEY of FILE: its last assignment, from the first # on cut off
+# (KConfig, which kreadconfig6 uses, keeps such a comment in the value).
+key_value() { # $1 file, $2 section, $3 key
+  key_lines "$1" "$2" "$3" | tail -n 1 | awk '{
+    l = $0; if ((c = index(l, "#")) > 0) l = substr(l, 1, c - 1)
+    v = substr(l, index(l, "=") + 1); sub(/^[ \t\r\f\v]+/, "", v); sub(/[ \t\r\f\v]+$/, "", v); print v }'
+}
 
 undo_sddm() { # $1 backup directory of an SDDM run
   local backup=$1 state path file applied k cur image line saved all=1
-  local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf conf=$SYSROOT/etc/sddm.conf user_conf
+  local kde=$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf conf=$SDDM_ROOT/etc/sddm.conf user_conf
   local -A ours=() still=()
-  user_conf=$SYSROOT$(sed -n 's/^theme_dir=//p' "$backup/info")/theme.conf.user
+  # A dry run changes its copy of the files (SDDM_ROOT), so each run's undo sees the state the
+  # newer ones left, as the real restore does; the system's files stay as they are.
+  [ "$SDDM_ROOT" = "$SYSROOT" ] || local DRY=0
+  user_conf=$SDDM_ROOT$(sed -n 's/^theme_dir=//p' "$backup/info")/theme.conf.user
   image=$(sed -n 's/^image=//p' "$backup/info")
   ours[Current]=$(sed -n 's/^theme=//p' "$backup/info")
   ours[CursorTheme]=$(sed -n 's/^cursors=//p' "$backup/info")
@@ -252,7 +262,7 @@ undo_sddm() { # $1 backup directory of an SDDM run
   # The keys System Settings' file still has the run's value for. Only these go back, in every
   # file: one changed since (another theme chosen on the page) is kept.
   for k in "${SDDM_KEYS[@]}"; do
-    if [ -n "${ours[$k]}" ] && [ "$(kr "$kde" Theme "$k")" = "${ours[$k]}" ]; then still[$k]=1; else all=0; fi
+    if [ -n "${ours[$k]}" ] && [ "$(key_value "$kde" Theme "$k")" = "${ours[$k]}" ]; then still[$k]=1; else all=0; fi
   done
   while read -r state path <&3; do
     case $path in
@@ -263,12 +273,12 @@ undo_sddm() { # $1 backup directory of an SDDM run
     esac
     applied=$backup/$path.applied
     if [ ! -f "$applied" ]; then
-      note "${file#"$SYSROOT"} was not changed by this run (kept)"
+      note "${file#"$SDDM_ROOT"} was not changed by this run (kept)"
       continue
     fi
     # greeter-apply.sh wrote a file: a link there now was put there by someone else since.
     if [ -L "$file" ]; then
-      note "${file#"$SYSROOT"} is a link now: left alone"
+      note "${file#"$SDDM_ROOT"} is a link now: left alone"
       continue
     fi
     SDDM_WRITTEN+=("$file")
@@ -276,19 +286,19 @@ undo_sddm() { # $1 backup directory of an SDDM run
     # are still the run's choice (it is read last and would override a theme chosen since).
     if [ -f "$file" ] && cmp -s "$file" "$applied" && { [ "$path" != etc/sddm.conf ] || [ "$all" = 1 ]; }; then
       if [ "$state" = present ]; then
-        note "restore ${file#"$SYSROOT"} (unchanged since that run)"
+        note "restore ${file#"$SDDM_ROOT"} (unchanged since that run)"
         put_back "$backup/$path" "$file"
       else
-        note "remove ${file#"$SYSROOT"} (there was none)"
+        note "remove ${file#"$SDDM_ROOT"} (there was none)"
         run rm -f -- "$file"
       fi
       continue
     fi
     if [ ! -e "$file" ]; then
-      note "${file#"$SYSROOT"} was removed after that run (left that way)"
+      note "${file#"$SDDM_ROOT"} was removed after that run (left that way)"
       continue
     fi
-    note "${file#"$SYSROOT"} changed after that run: key by key"
+    note "${file#"$SDDM_ROOT"} changed after that run: key by key"
     case $path in
       etc/sddm.conf.d/kde_settings.conf)
         saved=''
@@ -396,6 +406,21 @@ undo() { # $1 backup directory
 for t in "${TARGETS[@]}"; do
   say "Restore the login greeter ($(kind "$t")) to $t$([ "$DRY" = 1 ] && echo ' (dry run: nothing is changed)')"
 done
+# SDDM's files: the system's, or for a dry run a copy of them in the temporary directory
+SDDM_ROOT=$SYSROOT
+if [ "$DRY" = 1 ]; then
+  SDDM_ROOT=$own/dry
+  for b in "${CHAIN[@]}"; do
+    [ "$(kind "$b")" = SDDM ] || continue
+    for f in etc/sddm.conf.d/kde_settings.conf etc/sddm.conf "$(sed -n 's/^theme_dir=//p' "$b/info")/theme.conf.user"; do
+      f=${f#/}
+      mkdir -p "$(dirname "$SDDM_ROOT/$f")"
+      if [ -e "$SYSROOT/$f" ] || [ -L "$SYSROOT/$f" ]; then
+        [ -e "$SDDM_ROOT/$f" ] || [ -L "$SDDM_ROOT/$f" ] || cp -a -- "$SYSROOT/$f" "$SDDM_ROOT/$f"
+      fi
+    done
+  done
+fi
 [ "${#CHAIN[@]}" = 1 ] || say "(${#CHAIN[@]} runs of greeter-apply.sh to undo, newest first)"
 for b in "${CHAIN[@]}"; do undo "$b"; done
 if [ -n "$GHOME" ]; then

@@ -299,13 +299,13 @@ sddm_unreadable() {
     [ ! -e "$f" ] || [ -r "$f" ] || printf '%s\n' "${f#"$SYSROOT"}"
   done < <(sddm_files)
 }
-# Whether SDDM's listing (QDir::LocaleAware, in the daemon's locale) may put drop-in $1 on the other
-# side of kde_settings.conf than byte order does. glibc's collations ignore punctuation at first,
-# ICU's weigh it before digits, both put case and letters beyond ASCII elsewhere than bytes do; all
-# agree with byte order where the names first differ in a lower-case ASCII letter or a digit on both
-# sides, or where one name begins with the whole other.
-sddm_order_depends_on_locale() { # $1 file name
-  local a=$1 b=kde_settings.conf i=0 x y
+# Whether SDDM's listing (QDir::LocaleAware, in the daemon's locale) may order drop-ins $1 and $2
+# (default kde_settings.conf) otherwise than byte order does. glibc's collations ignore punctuation
+# at first, ICU's weigh it before digits, both put case and letters beyond ASCII elsewhere than
+# bytes do; all agree with byte order where the names first differ in a lower-case ASCII letter or
+# a digit on both sides, or where one name begins with the whole other.
+sddm_order_depends_on_locale() { # $1 file name, [$2 file name]
+  local a=$1 b=${2:-kde_settings.conf} i=0 x y
   while [ "$i" -lt "${#a}" ] && [ "$i" -lt "${#b}" ]; do
     x=${a:i:1} y=${b:i:1}
     if [ "$x" != "$y" ]; then
@@ -328,6 +328,26 @@ sddm_unordered() {
       if sddm_conf get "$f" Theme "$k" >/dev/null; then printf '%s\n' "${f#"$SYSROOT"}"; break; fi
     done
   done < <(conf_dir_files "$SYSROOT/etc/sddm.conf.d")
+}
+# Drop-ins of one directory that set different [Theme] ThemeDir values in an order that depends on
+# the locale: which theme tree SDDM uses cannot be told here (greeter-apply.sh would check the
+# theme, and write its theme.conf.user, in another tree than SDDM's). Prints the pairs.
+sddm_themedir_unordered() {
+  local d f v i j
+  local -a names values
+  for d in "$SYSROOT/usr/lib/sddm/sddm.conf.d" "$SYSROOT/etc/sddm.conf.d"; do
+    names=() values=()
+    while IFS= read -r f; do
+      if v=$(sddm_conf get "$f" Theme ThemeDir); then names+=("$f") values+=("$v"); fi
+    done < <(conf_dir_files "$d")
+    for ((i = 0; i < ${#names[@]}; i++)); do
+      for ((j = i + 1; j < ${#names[@]}; j++)); do
+        [ "${values[i]}" != "${values[j]}" ] &&
+          sddm_order_depends_on_locale "${names[i]##*/}" "${names[j]##*/}" || continue
+        printf '%s and %s\n' "${names[i]#"$SYSROOT"}" "${names[j]#"$SYSROOT"}"
+      done
+    done
+  done
 }
 show_diff() { # $1 a file, $2 its new contents
   note "--- ${1#"$SYSROOT"}"
@@ -354,6 +374,11 @@ sddm_main() {
   for tool in kreadconfig6 kwriteconfig6; do
     command -v "$tool" >/dev/null || die "$tool is missing (kf6-kconfig)"
   done
+  if [ "$CHECK" = 0 ]; then
+    while IFS= read -r f; do
+      die "$f set different [Theme] ThemeDir values, and which one SDDM reads last depends on its locale (QDir::LocaleAware); keep one or give them lower-case ASCII names. Nothing was changed."
+    done < <(sddm_themedir_unordered)
+  fi
   sddm_effective Theme ThemeDir
   themedir=${REPLY:-/usr/share/sddm/themes}
   theme=$SYSROOT$themedir/$SDDM_THEME
@@ -402,6 +427,10 @@ sddm_main() {
       say "  $f sets the theme or cursors; whether SDDM reads it before or after kde_settings.conf depends on its locale"
       open=yes
     done < <(sddm_unordered)
+    while IFS= read -r f; do
+      say "  $f set different theme directories; which one SDDM reads last depends on its locale"
+      open=yes
+    done < <(sddm_themedir_unordered)
     [ "$dm" = sddm.service ] || say "  note: SDDM shows this only while it is the display manager"
     if [ "$open" = yes ]; then say "Plasma Fusion greeter: unknown"; exit 2; fi
     say "Plasma Fusion greeter: $ok"

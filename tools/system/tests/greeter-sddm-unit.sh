@@ -127,6 +127,11 @@ apply
 restore --dry-run
 [ "$RC" = 0 ] && has "dry run: nothing is changed" && [ -e "$R/$KDE" ] && [ -e "$R/$THEME/theme.conf.user" ] &&
   ok "restore --dry-run changes nothing" || bad "restore dry run" "$OUT"
+# Each run's undo sees what the newer ones would leave: the dimmed run's theme.conf.user is back
+# when the run that made it is undone, so the preview shows its removal as the real restore does.
+has "remove /usr/share/sddm/themes/plasmafusion/theme.conf.user (there was none)" &&
+  has "remove /etc/sddm.conf.d/kde_settings.conf (there was none)" &&
+  ok "  and previews every step of the chain as the real restore makes it" || bad "  dry-run preview" "$OUT"
 restore
 [ "$RC" = 0 ] && has "(3 runs of greeter-apply.sh to undo" && [ ! -e "$R/$KDE" ] && [ ! -e "$R/$THEME/theme.conf.user" ] &&
   diff -r --no-dereference "$R/etc" "$WORK/a.etc-before" >/dev/null &&
@@ -272,7 +277,29 @@ printf '[Theme]\nCurrent=breeze\nThemeDir=/run/current-system/sw/share/sddm/them
 status
 has "programs.plasma-fusion.sddm = true chooses Plasma Fusion" && ok "  status names the module option" || bad "  nixos hint" "$OUT"
 
+# --- a comment added after the value: SDDM still reads the run's theme, so it goes back
+fresh d7
+apply
+sed -i 's/^Current=plasmafusion$/Current=plasmafusion # chosen by greeter-apply.sh/' "$R/$KDE"
+restore
+check
+[ "$RC" = 1 ] && ! grep -q '^Current=' "$R/$KDE" && has "01-breeze-fedora" &&
+  ok "an inline comment does not hide the run's theme from the undo (SDDM's parser, not KConfig's)" ||
+  bad "inline comment" "$OUT
+$(cat "$R/$KDE")"
+
 # --- what stops a run before anything changes
+fresh e2
+printf '[Theme]\nThemeDir=/usr/share/sddm/themes\n' >"$R/etc/sddm.conf.d/Local-a.conf"
+printf '[Theme]\nThemeDir=/srv/themes\n' >"$R/etc/sddm.conf.d/local-b.conf"
+apply
+[ "$RC" = 1 ] && has "set different [Theme] ThemeDir values" && [ ! -e "$R/$KDE" ] &&
+  ok "drop-ins with different theme directories in a locale-dependent order stop the run" || bad "themedir order" "$OUT"
+check
+[ "$RC" = 2 ] && has "set different theme directories" && ok "  and leave the check's answer open" || bad "  check themedir" "$OUT"
+printf '[Theme]\nThemeDir=/usr/share/sddm/themes\n' >"$R/etc/sddm.conf.d/local-b.conf"
+apply
+[ "$RC" = 0 ] && ok "  the same directory in both: no question" || bad "  same themedir" "$OUT"
 fresh e
 mkdir -p "$R/etc/sddm.conf.d"
 printf '[Theme]\nCurrent=local\n' >"$R/etc/sddm.conf.d/kde-local.conf"
