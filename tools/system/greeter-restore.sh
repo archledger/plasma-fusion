@@ -318,7 +318,7 @@ deciding_file() { # $1 key
 }
 
 undo_sddm() { # $1 backup directory of an SDDM run
-  local backup=$1 state path file applied k cur image line saved all=1 moved=0 tree f
+  local backup=$1 state path file applied k cur image line saved all=1 moved=0 tree f dir_was real_was now
   local kde=$SDDM_ROOT/etc/sddm.conf.d/kde_settings.conf conf=$SDDM_ROOT/etc/sddm.conf user_conf
   local -A ours=() still=() decides=()
   # A dry run changes its copy of the files (SDDM_ROOT), so each run's undo sees the state the
@@ -342,9 +342,23 @@ undo_sddm() { # $1 backup directory of an SDDM run
     '?') tree='' ;;
     *) tree=$(key_value "$f" Theme ThemeDir) ;;
   esac
-  if [ "$(realpath -ms -- "$tree/${ours[Current]}")" != "$(realpath -ms -- "$(sed -n 's/^theme_dir=//p' "$backup/info")")" ]; then
+  # Also where that path leads, links resolved: a ThemeDir link retargeted since keeps the path and
+  # names another tree (backups from before theme_real= compare the paths only). A theme that is
+  # gone with its path still leading where it did names no other theme: the run is undone.
+  dir_was=$(sed -n 's/^theme_dir=//p' "$backup/info") real_was=$(sed -n 's/^theme_real=//p' "$backup/info")
+  if [ "$(realpath -ms -- "$tree/${ours[Current]}")" != "$(realpath -ms -- "$dir_was")" ]; then
     moved=1
     note "[Theme] ThemeDir is ${tree:-not known} now: Current=${ours[Current]} names another theme tree's theme (kept)"
+  elif [ -n "$real_was" ]; then
+    if now=$(realpath -m -- "$SYSROOT$tree/${ours[Current]}"); then
+      [ -z "$SYSROOT" ] || now=${now#"$(realpath -m -- "$SYSROOT")"}
+    else
+      now='not resolvable'
+    fi
+    if [ "$now" != "$real_was" ]; then
+      moved=1
+      note "[Theme] ThemeDir $tree leads to $now now (the run's was $real_was): Current=${ours[Current]} names another theme tree's theme (kept)"
+    fi
   fi
   # The keys System Settings' file still has the run's value for. Only these go back: one changed
   # since (another theme chosen on the page) is kept. /etc/sddm.conf, read last, gets its old lines

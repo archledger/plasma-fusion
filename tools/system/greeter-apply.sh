@@ -405,7 +405,7 @@ sddm_main() {
   local dir=$SYSROOT/etc/sddm.conf.d conf=$SYSROOT/etc/sddm.conf
   local kde=$SYSROOT/etc/sddm.conf.d/kde_settings.conf themedir theme greeter user_conf
   local default_bg user_bg bg dm k want before=other ok mark src builtin share nixos=0 open v
-  local themedir_bad theme_unread=''
+  local themedir_bad theme_unread='' real
   local conf_new='' user_new='' swaps=()
   [ -z "$OUTPUT" ] || die "--output writes plasma-login-manager's files; preview the SDDM theme with sddm-greeter-qt6 --test-mode (docs/parts/sddm.md)"
   [ -z "$DISPLAY_FROM" ] || die "--display-from is for plasma-login-manager (for SDDM: System Settings > Login Screen (SDDM) > Apply Plasma Settings…)"
@@ -622,12 +622,17 @@ sddm_main() {
   save "$kde" etc/sddm.conf.d/kde_settings.conf
   save "$conf" etc/sddm.conf
   save "$user_conf" sddm-theme/theme.conf.user
+  # The theme directory with links resolved too: restore tells a ThemeDir link retargeted since
+  # (the same path, another tree) from the run's theme by it
+  real=$(realpath -m -- "$theme")
+  [ -z "$SYSROOT" ] || real=${real#"$(realpath -m -- "$SYSROOT")"}
   {
     echo "created=$stamp"
     echo "greeter=sddm"
     echo "package=$(installed_package)"
     echo "theme=$SDDM_THEME"
     echo "theme_dir=${theme#"$SYSROOT"}"
+    echo "theme_real=$real"
     echo "cursors=$SDDM_CURSORS"
     echo "image=$IMAGE"
     echo "before=$before"

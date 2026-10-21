@@ -472,6 +472,36 @@ restore
   ok "restore: a ThemeDir drop-in of locale-dependent order against kde_settings.conf counts as unchanged" ||
   bad "themedir drop-in vs kde_settings.conf" "$OUT"
 
+# --- ThemeDir naming a link that is retargeted after the run (#102): the same path names another
+# tree's theme, the administrator's choice; restore keeps Current. While the link still leads where it
+# did, the run is undone in full, even with the theme gone from there.
+fresh d15c
+mkdir -p "$R/srv/a" "$R/srv/b"
+mv "$R/$THEME" "$R/srv/a/"
+cp -a "$R/srv/a/plasmafusion" "$R/srv/b/"
+ln -s a "$R/srv/themes"
+printf '[Theme]\nCurrent=breeze\nThemeDir=/srv/themes\n' >"$R/etc/sddm.conf"
+apply
+b=$(find "$R/var/lib/plasma-fusion" -mindepth 1 -maxdepth 1 -name 'greeter-backup-*')
+grep -qx "theme_real=/srv/a/plasmafusion" "$b/info" && ok "the backup records the theme directory with links resolved" ||
+  bad "theme_real" "$(cat "$b/info")"
+ln -sfn b "$R/srv/themes"
+restore
+[ "$RC" = 0 ] && has "ThemeDir /srv/themes leads to /srv/b/plasmafusion now" && [ "$(val "$R/$KDE" Theme Current)" = plasmafusion ] &&
+  ! grep -q '^Current' "$R/etc/sddm.conf" && ok "  restore keeps Current after the ThemeDir link was retargeted" ||
+  bad "  retargeted ThemeDir link" "$OUT
+$(cat "$R/etc/sddm.conf")"
+fresh d15d
+mkdir -p "$R/srv/a"
+mv "$R/$THEME" "$R/srv/a/"
+ln -s a "$R/srv/themes"
+printf '[Theme]\nCurrent=breeze\nThemeDir=/srv/themes\n' >"$R/etc/sddm.conf"
+apply
+rm -r "${R:?}/srv/a/plasmafusion"
+restore
+[ "$RC" = 0 ] && ! has "leads to" && [ ! -e "$R/$KDE" ] && grep -qx 'Current=breeze' "$R/etc/sddm.conf" &&
+  ok "  a theme gone with its ThemeDir unchanged: the run is undone" || bad "  theme gone" "$OUT"
+
 # --- kde_settings.conf replaced by a link since, with the run's theme: left alone, and
 # /etc/sddm.conf's old theme line does not come back over it
 fresh d16
