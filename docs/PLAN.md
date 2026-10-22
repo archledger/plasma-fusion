@@ -30,7 +30,7 @@ that record; each decision-dependent behaviour sits behind a config key.
 | 3 | Accent colour | every Fusion part follows it; boot splash and login screen stay blue |
 | 4 | Snap layouts | on hold (about 0.5 s) or Meta+Z; a click always maximizes (`SnapLayoutsOnHover=false`) |
 | 5 | Top bar next to a window | solid while a window is maximized or touches it, frosted over the desktop |
-| 6 | Shortcuts | Windows-style set: Meta+Space, Meta+S and Alt+Space search in the Fusion launcher, Alt+F2 opens the full KRunner (since 0.5.0; before, KRunner kept no key); Meta+A quick settings; Meta+N notifications; Meta+Up/Down maximize/restore (quick tile on Meta+Alt+Up/Down); Meta+Tab Overview; Meta+1..4 workspaces; Meta+Alt+1..9 dock apps |
+| 6 | Shortcuts | Windows-style set: Meta+Space, Meta+S and Alt+Space search in the Fusion launcher, Alt+F2 opens the full KRunner (since 0.5.0; before, KRunner kept no key); Meta+A quick settings; Meta+N notifications; Meta+arrows directional snapping, Meta+Shift+arrows adjacent monitors, Meta+PageUp/Backspace maximize/restore (unified keys approved 2026-10-22; legacy Left/Right cycling remains optional); Meta+Tab Overview; Meta+1..4 workspaces; Meta+Alt+1..9 dock apps |
 | 7 | KDE Mail and Calendar | no apps were named, so KMail, KOrganizer and Akonadi stay unchanged (pins, autostart, calendar card click) |
 | 8 | Second monitor | a top bar on every screen; dock, status icons, quick settings and desktop cards on the main screen; launcher and pop-ups on the active screen |
 

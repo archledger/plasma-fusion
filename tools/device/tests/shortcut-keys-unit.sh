@@ -54,12 +54,13 @@ LIB=$BASE/lib.sh
   grep -m1 '^UNSET=' "$TOOL" || true
   grep -m1 '^LAUNCHER_ACTION=' "$TOOL" || true
   grep -m1 '^K_LEFT=' "$TOOL" || true
+  grep -m1 '^K_SPACE=' "$TOOL" || true
   grep -m1 '^SNAP_CYCLE=' "$TOOL" || true
   grep -m1 '^SNAP_CYCLE_KEYS_VERSION=' "$TOOL" || true
   extract note keyname install_text shortcut_get shortcut_set shortcut_add shortcut_remove key_holders \
     shortcut_claim register_command_component command_key_present notify_desktop ensure_notify_shortcut clipboard_desktop \
-    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade package_dir snap_script_reload \
-    apply_snap_cycle_keys
+    ensure_clipboard_shortcut read_key show set_key apply_clipboard_key_upgrade package_dir snap_script_reload snap_script_start snap_probe_registered \
+    apply_snap_cycle_keys snap_cycle_actions_registered directional_key_owned_by apply_directional_key migrate_vertical_key
 } >"$LIB"
 grep -q '^apply_snap_cycle_keys() {' "$LIB" || { echo "FAIL: apply_snap_cycle_keys was not found in fusion-config.sh"; exit 1; }
 for f in ensure_notify_shortcut ensure_clipboard_shortcut; do
@@ -218,8 +219,29 @@ run_case() {
       snapcycle)
         # The script registered its actions (KWin runs it).
         snap_cycle_actions_registered() { true; }
+        snap_script_reload() { true; }
         apply_snap_cycle_keys "$4" ;;
-      snapcycle-old)
+      snapcycle-ready | snapcycle-partial)
+        # Exercise the real readiness test, not just the reload helper. An old script can have
+        # Left/Right already registered while all six new actions are still absent.
+        eval "fake_$(declare -f bus)"
+        readiness=$3
+        if [ "$readiness" = snapcycle-ready ]; then snap_script_reload() { true; }; fi
+        bus() {
+          case "$*" in
+            *shortcutNames*)
+              echo "as 8 \"Plasma Fusion: Snap Left\" \"Plasma Fusion: Snap Right\""
+              if [ "$readiness" = snapcycle-ready ]; then
+                for side in Up Down; do echo "\"Plasma Fusion: Snap $side\""; done
+                for side in Left Right Up Down; do echo "\"Plasma Fusion: Move to Screen $side\""; done
+              fi ;;
+            *isScriptLoaded*) echo "b false" ;;
+            *) fake_bus "$@" ;;
+          esac
+        }
+        sleep() { :; }
+        apply_snap_cycle_keys "$4" ;;
+      snapcycle-old | snapcycle-stale | snapcycle-load-fail | snapcycle-start-fail | snapcycle-component-fail | snapcycle-path-fail)
         # An older snap script is running (an update in this session): loaded, without the new
         # actions (a KWin stand-in in front of the kglobalaccel one; its calls in
         # $HOME/kwin.calls). As in KWin 6.7.5 with Qt 6.11, a script started again from the path
@@ -230,19 +252,31 @@ run_case() {
         mkdir -p "$pkg/contents/ui"
         echo "{}" >"$pkg/metadata.json"
         echo "new" >"$pkg/contents/ui/main.qml"
+        if [ "$3" = snapcycle-path-fail ]; then touch "$XDG_RUNTIME_DIR/plasma-fusion"; fi
         eval "fake_$(declare -f bus)"
         bus() {
           local a=("$@")
           [ "${a[0]}" = call ] && a=("${a[@]:1}")
+          if [ "${a[0]}" = org.kde.kglobalaccel ] && [ "${a[3]}" = shortcutNames ]; then
+            if [ -f "$HOME/started" ]; then
+              printf "as 1 \"Plasma Fusion: Startup Probe %s\"\n" "$(kreadconfig6 --file kwinrc --group Script-plasmafusion-snap --key StartupProbe)"
+            else
+              echo "as 0"
+            fi
+            return 0
+          fi
           if [ "${a[0]}" = org.kde.KWin ]; then
             echo "${a[3]}" >>"$HOME/kwin.calls"
             case ${a[3]} in
               isScriptLoaded) if [ -f "$HOME/unloaded" ] && [ ! -f "$HOME/loaded" ]; then echo "b false"; else echo "b true"; fi ;;
               unloadScript) : >"$HOME/unloaded"; echo "b true" ;;
-              loadDeclarativeScript)
+               loadDeclarativeScript)
+                if [ "$stale" = snapcycle-load-fail ]; then echo "i -1"; return 0; fi
                 printf "%s\n" "${a[5]}" >"$HOME/loaded"
                 echo "i 3" ;;
-              start)
+               start)
+                [ "$stale" != snapcycle-start-fail ] || return 1
+                [ "$stale" != snapcycle-component-fail ] || return 0
                 if [ -f "$HOME/loaded" ] && [ "$(sed -n 1p "$HOME/loaded")" != "$pkg/contents/ui/main.qml" ] &&
                   [ "$(cat "$(sed -n 1p "$HOME/loaded")" 2>/dev/null)" = new ]; then
                   : >"$HOME/started"
@@ -252,7 +286,8 @@ run_case() {
           fi
           fake_bus "$@"
         }
-        snap_cycle_actions_registered() { [ -f "$HOME/started" ]; }
+        stale=$3
+        snap_cycle_actions_registered() { [ "$stale" != snapcycle-old ] || [ -f "$HOME/started" ]; }
         apply_snap_cycle_keys "$4" ;;
       step | step-notify)
         has_name() { true; }
@@ -406,7 +441,7 @@ expect_keys "  KWin's quick tile left loses it" kwin "Window Quick Tile Left" ""
 expect_keys "  and quick tile right" kwin "Window Quick Tile Right" ""
 if grep -q "Window Quick Tile Left" "$H/backup/shortcuts"; then pass "  the backup records KWin's key (fusion-restore.sh gives it back)"
 else fail "  the backup does not record KWin's key"; fi
-if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  the run is marked"; else fail "  the run is not marked"; fi
+if grep -qx 'SnapCycleKeys=2' "$H/plasmafusionrc" 2>/dev/null; then pass "  the run is marked"; else fail "  the run is not marked"; fi
 run_case snap-migrate snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
 expect_keys "an update (no Windows-style set) moves Meta+Left from KWin's default too, once" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
 expect_keys "  and Meta+Right" kwin "Plasma Fusion: Snap Right" "$META_RIGHT"
@@ -424,7 +459,7 @@ if [[ $loaded == "$H/run/plasma-fusion/kwin-scripts/plasmafusion-snap-"*/content
 else
   fail "  loaded from '$loaded'"
 fi
-if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc" 2>/dev/null; then pass "  and the run is marked"; else fail "  the run is not marked"; fi
+if grep -qx 'SnapCycleKeys=2' "$H/plasmafusionrc" 2>/dev/null; then pass "  and the run is marked"; else fail "  the run is not marked"; fi
 if grep -q "loaded again from the installed files" "$H/log"; then pass "  and says so"; else fail "  the log: $(grep 'snap sizes' "$H/log")"; fi
 NO_RUNTIME=1 run_case snap-migrate-old-noruntime snapcycle-old migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
 expect_keys "without a runtime directory the older script stays: Meta+Left stays KWin's" kwin "Window Quick Tile Left" "$META_LEFT"
@@ -434,15 +469,96 @@ if [ "$(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null)" = "isScriptLoaded " ] && ! gr
 else
   fail "  KWin calls: $(tr '\n' ' ' <"$H/kwin.calls" 2>/dev/null), log: $(grep 'snap sizes' "$H/log")"
 fi
-SNAPMARK=1 run_case snap-migrate-done snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+SNAPMARK=2 run_case snap-migrate-done snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
 expect_keys "after the mark, Meta+Left the user gave back to KWin's quick tile stays there" kwin "Window Quick Tile Left" "$META_LEFT"
 expect_keys "  and Snap Left gets nothing" kwin "Plasma Fusion: Snap Left" ""
 run_case snap-migrate-user snapcycle migrate "" "kwin|Window Quick Tile Left||1" "kwin|Switch Window Left|$META_LEFT|1" "$TILE_R" "$SNAP_L" "$SNAP_R"
 expect_keys "an update leaves Meta+Left where the user put it (another action)" kwin "Switch Window Left" "$META_LEFT"
 expect_keys "  Snap Left gets nothing" kwin "Plasma Fusion: Snap Left" ""
 expect_keys "  while Meta+Right, still KWin's, moves" kwin "Plasma Fusion: Snap Right" "$META_RIGHT"
-run_case snap-claim-own snapcycle claim "" "$TILE_L" "$TILE_R" "kwin|Plasma Fusion: Snap Left|$META_SHIFT_LEFT|1" "$SNAP_R"
-expect_keys "the Windows-style set adds Meta+Left to a Snap Left key the user gave (both kept)" kwin "Plasma Fusion: Snap Left" "$META_LEFT $META_SHIFT_LEFT"
+run_case snap-claim-own snapcycle claim "" "$TILE_L" "$TILE_R" "kwin|Plasma Fusion: Snap Left|$META_SHIFT_V|1" "$SNAP_R"
+expect_keys "the explicit set keeps nonconflicting custom Snap Left keys" kwin "Plasma Fusion: Snap Left" "$META_LEFT $META_SHIFT_V"
+# Shift+Left is now explicitly part of the set, unlike a nonconflicting custom key.
+run_case snap-claim-conflict snapcycle claim "" "$TILE_L" "$TILE_R" "kwin|Plasma Fusion: Snap Left|$META_SHIFT_LEFT|1" "$SNAP_R" \
+  "kwin|Plasma Fusion: Move to Screen Left||1"
+expect_keys "the explicit set moves conflicting Shift+Left off Snap Left" kwin "Plasma Fusion: Snap Left" "$META_LEFT"
+expect_keys "the explicit set gives Shift+Left to spatial movement" kwin "Plasma Fusion: Move to Screen Left" "$META_SHIFT_LEFT"
+
+# ---- Unified directional upgrade: the old vertical keys move only with safe replacements.
+META_UP=$((0x11000013)) META_DOWN=$((0x11000015))
+META_PAGEUP=$((0x11000016)) META_BACKSPACE=$((0x11000003))
+META_SHIFT_RIGHT=$((0x13000014)) META_SHIFT_UP=$((0x13000013)) META_SHIFT_DOWN=$((0x13000015))
+SNAP_U="kwin|Plasma Fusion: Snap Up||1" SNAP_D="kwin|Plasma Fusion: Snap Down||1"
+MOVE_L="kwin|Plasma Fusion: Move to Screen Left||1" MOVE_R="kwin|Plasma Fusion: Move to Screen Right||1"
+MOVE_U="kwin|Plasma Fusion: Move to Screen Up||1" MOVE_D="kwin|Plasma Fusion: Move to Screen Down||1"
+MAX="kwin|Window Maximize|$META_UP|1" RESTORE="kwin|Window Restore|$META_DOWN|1"
+PREV="kwin|Window to Previous Screen|$META_SHIFT_LEFT|1"
+NEXT="kwin|Window to Next Screen|$META_SHIFT_RIGHT|1"
+run_case directional-old snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R" \
+  "$SNAP_U" "$SNAP_D" "$MOVE_L" "$MOVE_R" "$MOVE_U" "$MOVE_D" "$MAX" "$RESTORE" "$PREV" "$NEXT"
+expect_keys "old Fusion Up now snaps" kwin "Plasma Fusion: Snap Up" "$META_UP"
+expect_keys "old Fusion Down now snaps" kwin "Plasma Fusion: Snap Down" "$META_DOWN"
+expect_keys "maximize gets PageUp" kwin "Window Maximize" "$META_PAGEUP"
+expect_keys "restore gets Backspace" kwin "Window Restore" "$META_BACKSPACE"
+expect_keys "Shift+Left becomes spatial" kwin "Plasma Fusion: Move to Screen Left" "$META_SHIFT_LEFT"
+expect_keys "Shift+Right becomes spatial" kwin "Plasma Fusion: Move to Screen Right" "$META_SHIFT_RIGHT"
+expect_keys "free Shift+Up moves above" kwin "Plasma Fusion: Move to Screen Up" "$META_SHIFT_UP"
+expect_keys "free Shift+Down moves below" kwin "Plasma Fusion: Move to Screen Down" "$META_SHIFT_DOWN"
+
+run_case directional-custom snapcycle migrate "" "$TILE_L" "$TILE_R" \
+  "kwin|Plasma Fusion: Snap Left|$META_SHIFT_V|1" "$SNAP_R" "$SNAP_U" "$SNAP_D" \
+  "$MOVE_L" "$MOVE_R" "$MOVE_U" "$MOVE_D" "$MAX" "$RESTORE" \
+  "custom|PageUp action|$META_PAGEUP|1" "custom|Shift Up action|$META_SHIFT_UP|1"
+expect_keys "custom target binding is not supplemented on upgrade" kwin "Plasma Fusion: Snap Left" "$META_SHIFT_V"
+expect_keys "custom target leaves old Left alone" kwin "Window Quick Tile Left" "$META_LEFT"
+expect_keys "occupied PageUp leaves maximize on Up" kwin "Window Maximize" "$META_UP"
+expect_keys "occupied PageUp prevents stealing Up" kwin "Plasma Fusion: Snap Up" ""
+expect_keys "custom Shift+Up survives" custom "Shift Up action" "$META_SHIFT_UP"
+expect_keys "custom Shift+Up gives no monitor binding" kwin "Plasma Fusion: Move to Screen Up" ""
+
+SNAPMARK=1 run_case directional-v1 snapcycle migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R" "$SNAP_U" "$SNAP_D" "$MAX" "$RESTORE"
+expect_keys "version-one setups still receive the new vertical keys" kwin "Plasma Fusion: Snap Up" "$META_UP"
+run_case directional-next-up snapcycle migrate "" "kwin|Window to Next Screen|$META_SHIFT_UP|1" "$MOVE_U"
+expect_keys "Next Screen assigned to Shift+Up is custom, not a known default" kwin "Window to Next Screen" "$META_SHIFT_UP"
+expect_keys "custom Next Screen on Shift+Up gets no spatial binding" kwin "Plasma Fusion: Move to Screen Up" ""
+
+SNAPMARK=1 run_case directional-ready snapcycle-ready migrate "" "$SNAP_U" "$SNAP_D" "$MAX" "$RESTORE"
+expect_keys "all eight actions ready: old version upgrades" kwin "Plasma Fusion: Snap Up" "$META_UP"
+SNAPMARK=1 run_case directional-partial snapcycle-partial migrate "" "$SNAP_U" "$MAX"
+expect_keys "old Left/Right-only script does not lose Up" kwin "Window Maximize" "$META_UP"
+if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc"; then pass "partial actions do not mark the upgrade complete"
+else fail "partial actions marked the upgrade"; fi
+
+SNAPMARK=1 run_case directional-stale snapcycle-stale migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+if [ -f "$H/started" ]; then pass "persisted new action names still require the new script to start"
+else fail "stale action names bypassed the script reload"; fi
+NO_RUNTIME=1 SNAPMARK=1 run_case directional-stale-no-runtime snapcycle-stale migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+expect_keys "stale names without reload capability leave original keys intact" kwin "Window Quick Tile Left" "$META_LEFT"
+if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc"; then pass "stale names cannot mark an unavailable upgrade complete"
+else fail "stale names marked an unavailable upgrade complete"; fi
+
+for failure in load start; do
+  SNAPMARK=1 run_case "directional-$failure-fail" "snapcycle-$failure-fail" migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+  expect_keys "failed $failure with persisted names preserves original keys" kwin "Window Quick Tile Left" "$META_LEFT"
+  if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc"; then pass "failed $failure does not mark the upgrade complete"
+  else fail "failed $failure marked the upgrade complete"; fi
+done
+for failure in component path; do
+  SNAPMARK=1 run_case "directional-$failure-fail" "snapcycle-$failure-fail" migrate "" "$TILE_L" "$TILE_R" "$SNAP_L" "$SNAP_R"
+  expect_keys "failed $failure creation with persisted names preserves original keys" kwin "Window Quick Tile Left" "$META_LEFT"
+  if grep -qx 'SnapCycleKeys=1' "$H/plasmafusionrc"; then pass "failed $failure creation does not mark the upgrade complete"
+  else fail "failed $failure creation marked the upgrade complete"; fi
+done
+for test_case in snap-migrate-old directional-component-fail; do
+  if ! grep -q '^StartupProbe=' "$BASE/$test_case/kwinrc" &&
+    grep -q 'unregister ss kwin Plasma Fusion: Startup Probe ' "$BASE/$test_case/kga.calls"; then
+    pass "$test_case clears its startup probe even after failure"
+  else
+    fail "$test_case left its startup probe behind"
+  fi
+done
+if [ ! -e "$BASE/directional-path-fail/unloaded" ]; then pass "failed runtime path preparation does not unload the old script"
+else fail "runtime path preparation failure unloaded the old script"; fi
 
 echo "shortcut-keys-unit: $PASS passed, $FAIL failed"
 [ "$FAIL" = 0 ]

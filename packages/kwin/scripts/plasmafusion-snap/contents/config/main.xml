@@ -27,5 +27,9 @@
       <label>Windows snapped together form a group: they minimize, restore and come to the front together</label>
       <default>true</default>
     </entry>
+    <entry name="LegacyWidthCycle" type="Bool">
+      <label>Cycle widths with Left and Right instead of directional snapping</label>
+      <default>false</default>
+    </entry>
   </group>
 </kcfg>

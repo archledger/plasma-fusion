@@ -62,13 +62,14 @@ test -f "$SRC/scripts/plasmafusion-attach/contents/code/main.js"
 test -f "$SRC/scripts/plasmafusion-placement/contents/ui/main.qml"
 test -f "$SRC/scripts/plasmafusion-workspaces/contents/ui/main.qml"
 
-# The placement rules, the snap groups, the snap cycle, ensure-topbars.js's answer, the dynamic
-# workspaces' rules and the touchpad gestures (Placement.js, Groups.js, Cycle.js, Panels.js,
+# The placement rules, snap groups, directional keys, legacy snap cycle, ensure-topbars.js's answer,
+# dynamic workspaces and touchpad gestures (Placement.js, Groups.js, Directional.js, Cycle.js, Panels.js,
 # Workspaces.js, Gestures.js) against their node suites, when node is installed.
 if command -v node >/dev/null 2>&1; then
   node "$ROOT/packages/kwin/tests/placement.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/snap-groups.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/snap-cycle.test.js" >/dev/null
+  node "$ROOT/packages/kwin/tests/snap-directional.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/panels.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/workspaces.test.js" >/dev/null
   node "$ROOT/packages/kwin/tests/gestures.test.js" >/dev/null

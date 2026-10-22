@@ -55,6 +55,7 @@ else
 fi
 
 # ---- the update: the setup installs the new script over it
+kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key LegacyWidthCycle true
 fc_rc=0
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc_rc=$?
 info "fusion-config rc=$fc_rc"

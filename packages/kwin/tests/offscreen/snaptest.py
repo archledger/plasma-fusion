@@ -77,6 +77,12 @@ ok = xml_gap == "0" and ui_gap == "0"
 results.append(("PASS " if ok else "FAIL ") + f"the settings dialog's default gap is none (main.xml {xml_gap}, config.ui {ui_gap})")
 checks, failures = checks + 1, failures + (not ok)
 
+xml_cycle = ET.parse(os.path.join(contents, "config/main.xml")).find(".//{*}entry[@name='LegacyWidthCycle']/{*}default").text
+ui_cycle = ET.parse(os.path.join(contents, "ui/config.ui")).find(".//widget[@name='kcfg_LegacyWidthCycle']/property[@name='checked']/bool").text
+ok = xml_cycle == "false" and ui_cycle == "false"
+results.append(("PASS " if ok else "FAIL ") + "legacy width cycling is opt-in in both schema and dialog")
+checks, failures = checks + 1, failures + (not ok)
+
 for line in results:
     print(line)
 print(f"snap geometry: {checks} checks, {failures} failures")

@@ -10,6 +10,7 @@ import org.kde.kwin
 import "ensureTopBars.js" as EnsureTopBars
 import "Panels.js" as Panels
 import "Cycle.js" as Cycle
+import "Directional.js" as Directional
 import "Groups.js" as Groups
 import "SnapGeometry.js" as SnapGeometry
 import "Gestures.js" as Gestures
@@ -27,7 +28,7 @@ import "Gestures.js" as Gestures
 //   edge inset.
 // - Windows snapped together through the picker form a group (snap groups, Groups.js): they
 //   minimise and restore together, and activating one brings the others up with it.
-// - "Plasma Fusion: Snap Left/Right" (the setup gives them Meta+Left/Right): pressed again they
+// - Optional legacy "Plasma Fusion: Snap Left/Right": pressed again they
 //   step the window through 1/2, 1/3 and 2/3 of that side (Cycle.js).
 // - Touchpad gestures you can set on the settings page (Gestures.js): three fingers up, down,
 //   left and right, four fingers pinched in and spread out.
@@ -62,11 +63,21 @@ Item {
         return (output ? output.name : "?") + "|" + (desktop ? desktop.id : "?");
     }
 
-    function desktopOf(win) {
+    function desktopOf(win, output) {
         if (win && !win.onAllDesktops && win.desktops.length > 0) {
             return win.desktops[0];
         }
-        return Workspace.currentDesktopForScreen(win ? win.output : Workspace.activeScreen) || Workspace.currentDesktop;
+        return Workspace.currentDesktopForScreen(output || (win ? win.output : Workspace.activeScreen)) || Workspace.currentDesktop;
+    }
+
+    // A requested tile can already be on the destination while win.output still describes the
+    // last committed Wayland frame. Its absolute geometry identifies the output without waiting.
+    function tileOutputOf(win) {
+        const r = win && win.tile ? win.tile.absoluteGeometry : null;
+        if (r && r.width > 0 && r.height > 0) {
+            return Workspace.screenAt(Qt.point(r.x + r.width / 2, r.y + r.height / 2)) || win.output;
+        }
+        return win ? win.output : Workspace.activeScreen;
     }
 
     // A quick tile is a direct child of KWin's quick-tile root, not of the custom (Meta+T) root
@@ -77,10 +88,11 @@ Item {
             return null;
         }
         const quickRoot = tile.parent;
-        if (!SnapGeometry.isQuickRoot(quickRoot, Workspace.rootTile(win.output, desktopOf(win)))) {
+        const output = tileOutputOf(win);
+        if (!SnapGeometry.isQuickRoot(quickRoot, Workspace.rootTile(output, desktopOf(win, output)))) {
             return null;
         }
-        quickRoots[keyFor(win.output, desktopOf(win))] = quickRoot;
+        quickRoots[keyFor(output, desktopOf(win, output))] = quickRoot;
         return quickRoot;
     }
 
@@ -149,7 +161,9 @@ Item {
             if (Workspace.activeWindow !== win) {
                 Workspace.activeWindow = win;
             }
-            quickSlot(index);
+            // A single-axis KWin shortcut combines with Custom, which yields an unsupported
+            // mode and untiles instead. A corner replaces the mode; then manage the wanted half.
+            quickSlot(win.tile && index < 4 ? 4 : index);
             quickRoot = quickRootOf(win);
             if (!quickRoot) {
                 return false;
@@ -261,8 +275,12 @@ Item {
     }
 
     function usable(win) {
+        return movable(win) && win.resizeable;
+    }
+
+    function movable(win) {
         return win && !win.deleted && win.normalWindow && !win.popupWindow && win.moveable
-            && win.resizeable && !win.fullScreen && !win.specialWindow;
+            && !win.fullScreen && !win.specialWindow;
     }
 
     // ---------------------------------------------------------------- dock entries
@@ -324,23 +342,113 @@ Item {
         }
     }
 
-    // ---------------------------------------------------------------- snap sizes from the keyboard
+    // ---------------------------------------------------------------- directional window keys
 
-    // "Plasma Fusion: Snap Left/Right" have no key of their own: the setup moves Meta+Left/Right
-    // to them from KWin's "Quick Tile Window to the Left/Right" (two actions cannot share a key).
-    // Pressed again, the window steps through 1/2, 1/3 and 2/3 of that side; after 2/3 it goes to
-    // the screen on that side when there is one (its facing half), as KWin's quick tile did on a
-    // second press, else back to 1/2. The half is KWin's quick tile, as the key gave before (so the
-    // picker still offers the other half); the thirds are plain geometry, as the flyout's thirds.
+    // Keep action identities stable so existing user shortcuts survive. Setup assigns keys only
+    // after these actions are registered; none claims a default key from another action here.
     ShortcutHandler {
         name: "Plasma Fusion: Snap Left"
-        text: i18nd("plasmafusion", "Plasma Fusion: Snap Left (1/2, 1/3, 2/3)")
-        onActivated: root.cycleSnap(Workspace.activeWindow, "left")
+        text: i18nd("plasmafusion", "Plasma Fusion: Snap Left")
+        onActivated: root.snapDirection(Workspace.activeWindow, "left")
     }
     ShortcutHandler {
         name: "Plasma Fusion: Snap Right"
-        text: i18nd("plasmafusion", "Plasma Fusion: Snap Right (1/2, 1/3, 2/3)")
-        onActivated: root.cycleSnap(Workspace.activeWindow, "right")
+        text: i18nd("plasmafusion", "Plasma Fusion: Snap Right")
+        onActivated: root.snapDirection(Workspace.activeWindow, "right")
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Snap Up"
+        text: i18nd("plasmafusion", "Plasma Fusion: Snap Up")
+        onActivated: root.snapDirection(Workspace.activeWindow, "up")
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Snap Down"
+        text: i18nd("plasmafusion", "Plasma Fusion: Snap Down")
+        onActivated: root.snapDirection(Workspace.activeWindow, "down")
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Move to Screen Left"
+        text: i18nd("plasmafusion", "Plasma Fusion: Move to Screen Left")
+        onActivated: root.moveDirection(Workspace.activeWindow, "left")
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Move to Screen Right"
+        text: i18nd("plasmafusion", "Plasma Fusion: Move to Screen Right")
+        onActivated: root.moveDirection(Workspace.activeWindow, "right")
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Move to Screen Up"
+        text: i18nd("plasmafusion", "Plasma Fusion: Move to Screen Up")
+        onActivated: root.moveDirection(Workspace.activeWindow, "up")
+    }
+    ShortcutHandler {
+        name: "Plasma Fusion: Move to Screen Down"
+        text: i18nd("plasmafusion", "Plasma Fusion: Move to Screen Down")
+        onActivated: root.moveDirection(Workspace.activeWindow, "down")
+    }
+
+    // Setup supplies a fresh, non-secret identifier for this one startup. A probe created only
+    // after the root completes cannot be confused with KGlobalAccel's inactive saved actions.
+    // Setup unregisters it and clears the config key before it changes any user shortcuts.
+    readonly property string startupProbe: String(setting("StartupProbe", ""))
+    Instantiator {
+        id: startupProbeHandler
+        objectName: "startupProbe"
+        active: false
+        model: 1
+        delegate: ShortcutHandler {
+            name: "Plasma Fusion: Startup Probe " + root.startupProbe
+            text: i18nd("plasmafusion", "Plasma Fusion: Startup check")
+        }
+    }
+
+    function snapDirection(win, direction) {
+        if (!usable(win) || win.move || win.resize) return;
+        if (setting("LegacyWidthCycle", false) && (direction === "left" || direction === "right")) {
+            cycleSnap(win, direction);
+            return;
+        }
+        // window.tile is the requested tile, even before the client commits its new frame. This
+        // makes rapid perpendicular keys deterministic without a stale geometry/timer cache.
+        const current = quickIndexOf(win);
+        const next = Directional.directionalRole(current, direction);
+        if (next < 0 || next === current) return;
+        flyoutLoader.active = false;
+        pickerLoader.active = false;
+        endFill();
+        const horizontal = next === 2 || next === 3 ? 0 : 0.5;
+        const vertical = next === 0 || next === 1 ? 0 : 0.5;
+        if (quickTile(win, next, horizontal, vertical)) {
+            leaveGroup(win);
+        }
+        // A refused tile stays refused: a frame assignment would bypass KWin's constraints and
+        // cannot preserve native restore geometry. Legacy cycling keeps its existing fallback.
+    }
+
+    function moveDirection(win, direction) {
+        if (!movable(win) || win.move || win.resize || !win.output) return;
+        const screens = Array.from(Workspace.screens);
+        const index = Directional.directionalNeighbour(screens.map(screenRect), screenRect(tileOutputOf(win)), direction);
+        if (index < 0) return;
+        const previous = quickRootOf(win) ? win.tile : null;
+        const r = previous ? previous.relativeGeometry : null;
+        const horizontal = r && r.width < 0.999 ? (r.x > 0.001 ? r.x : r.width) : 0;
+        const vertical = r && r.height < 0.999 ? (r.y > 0.001 ? r.y : r.height) : 0;
+        flyoutLoader.active = false;
+        pickerLoader.active = false;
+        endFill();
+        // KWin carries the native tile role and floating restore rectangle to the target output.
+        // Do not untile/re-tile: that can turn the intermediate geometry into the restore size.
+        Workspace.sendClientToScreen(win, screens[index]);
+        // Keep resized proportions as well as the role. KWin itself carries only the role to
+        // the destination's shared split; adjust that split without unmanaging the window.
+        if (previous && win.tile !== previous) {
+            const quickRoot = quickRootOf(win);
+            if (quickRoot) {
+                applyGap(quickRoot);
+                setSplits(quickRoot, horizontal, vertical);
+            }
+        }
     }
 
     function screenRect(output) {
@@ -507,10 +615,11 @@ Item {
         if (!usable(win) || win.move || win.maximizeMode !== 0 || quickIndexOf(win) < 0) {
             return;
         }
-        const target = tileWindowRect(win.tile, Workspace.clientArea(Workspace.MaximizeArea, win));
+        const output = tileOutputOf(win);
+        const target = tileWindowRect(win.tile, Workspace.clientArea(Workspace.MaximizeArea, output, desktopOf(win, output)));
         const current = win.frameGeometry;
         // Wayland clients round to device pixels; don't send the same configure endlessly.
-        const tolerance = 1 / Math.max(1, win.output ? win.output.devicePixelRatio : 1);
+        const tolerance = 1 / Math.max(1, output ? output.devicePixelRatio || 1 : 1);
         if (Math.abs(current.x - target.x) >= tolerance || Math.abs(current.y - target.y) >= tolerance
                 || Math.abs(current.width - target.width) >= tolerance || Math.abs(current.height - target.height) >= tolerance) {
             win.frameGeometry = target;
@@ -1114,7 +1223,12 @@ Item {
     // ensureTopBars.js next to this file (tools/build.d/80-kwin.sh), so there is one source. It
     // also runs once when the script starts (the session's start): screens attached at login get
     // their bar, and bars made before 2026-10-09 their status area.
-    Component.onCompleted: topBarsStart.start()
+    Component.onCompleted: {
+        topBarsStart.start();
+        if (/^[A-Za-z0-9_-]{1,80}$/.test(startupProbe)) {
+            Qt.callLater(() => { startupProbeHandler.active = true; });
+        }
+    }
     Timer {
         id: topBarsStart
         interval: 5000
