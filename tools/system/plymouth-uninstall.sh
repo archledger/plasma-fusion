@@ -242,7 +242,8 @@ pkgs=()
 package_names() {
   if command -v dnf >/dev/null; then rpm -qa --qf '%{NAME}\n'
   elif command -v pacman >/dev/null; then pacman -Qq
-  else dpkg-query -W -f='${Package} ${Status}\n' | awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}'
+  # Selection state can be "hold" even though the package is installed.
+  else dpkg-query -W -f='${Package} ${db:Status-Status}\n' | awk '$2 == "installed" {print $1}'
   fi
 }
 # Whether removing these packages removes no other: dnf and apt-get would also remove a package

@@ -43,7 +43,7 @@ OUT=$(PATH="$WORK/bin:$PATH" bash "$UNINSTALL" --remove-plugin 2>&1) && RC=0 || 
 if [ "$query" = dpkg-query ]; then
   # A and B can each be removed on their own, but not together: D needs A or B. C makes the
   # original complete set unsafe too, forcing the fallback to try individual packages.
-  for p in a b c d; do
+  for p in a b c d held; do
     mkdir -p "$WORK/$p/DEBIAN"
     {
       printf 'Package: pf-test-%s\nVersion: 1.0\nArchitecture: all\nMaintainer: Test <test@example.invalid>\nDescription: disposable package-removal fixture\n' "$p"
@@ -52,12 +52,25 @@ if [ "$query" = dpkg-query ]; then
     dpkg-deb --build --root-owner-group "$WORK/$p" "$WORK/$p.deb" >/dev/null
   done
   dpkg -i "$WORK/"*.deb >/dev/null
+  # Selection (hold/install) and actual package state are separate. A held package must remain
+  # recorded if apt refuses its removal; unholding it makes the same cleanup retryable.
+  install -d -m 0700 "$STATE"
+  printf 'pf-test-held\n' >"$STATE/installed-packages"
+  apt-mark hold pf-test-held >/dev/null
+  OUT=$(PATH="$WORK/bin:$PATH" bash "$UNINSTALL" --remove-plugin 2>&1) && RC=0 || RC=$?
+  [ "$RC" != 0 ] && [ "$("$native" -W -f='${Status}' pf-test-held)" = 'hold ok installed' ] &&
+    grep -qx pf-test-held "$STATE/installed-packages" &&
+    ok "held package stays installed and recorded on refusal" || bad "held package lost its record"
+  apt-mark unhold pf-test-held >/dev/null
+  OUT=$(PATH="$WORK/bin:$PATH" bash "$UNINSTALL" --remove-plugin 2>&1) && RC=0 || RC=$?
+  [ "$RC" = 0 ] && [ "$("$native" -W -f='${db:Status-Status}' pf-test-held 2>/dev/null)" != installed ] &&
+    [ ! -e "$STATE" ] && ok "unheld package is removed on retry" || bad "unheld package retry"
   install -d -m 0700 "$STATE"
   printf 'pf-test-a\npf-test-b\npf-test-c\n' >"$STATE/installed-packages"
   OUT=$(PATH="$WORK/bin:$PATH" bash "$UNINSTALL" --remove-plugin 2>&1) && RC=0 || RC=$?
   all=1
   for p in a b c d; do
-    [ "$("$native" -W -f='${Status}' "pf-test-$p" 2>/dev/null)" = 'install ok installed' ] || all=0
+    [ "$("$native" -W -f='${db:Status-Status}' "pf-test-$p" 2>/dev/null)" = installed ] || all=0
   done
   [ "$RC" = 0 ] && [ "$all" = 1 ] && [ "$(wc -l <"$STATE/installed-packages")" = 3 ] &&
     ok "individually safe alternatives are not removed together" || bad "unsafe combined removal"
@@ -66,7 +79,7 @@ if [ "$query" = dpkg-query ]; then
   OUT=$(PATH="$WORK/bin:$PATH" bash "$UNINSTALL" --remove-plugin 2>&1) && RC=0 || RC=$?
   removed=1
   for p in a b c; do
-    [ "$("$native" -W -f='${Status}' "pf-test-$p" 2>/dev/null)" != 'install ok installed' ] || removed=0
+    [ "$("$native" -W -f='${db:Status-Status}' "pf-test-$p" 2>/dev/null)" != installed ] || removed=0
   done
   [ "$RC" = 0 ] && [ "$removed" = 1 ] && [ ! -e "$STATE" ] &&
     ok "retry removes the complete unused set" || bad "unused-set retry"

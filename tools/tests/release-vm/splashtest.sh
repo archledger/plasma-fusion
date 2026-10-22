@@ -196,7 +196,7 @@ vm ssh "$name" 'bash -se' >"$OUT/41-installed-packages.txt" <<'EOF' ||
 set -o pipefail
 if command -v rpm >/dev/null; then rpm -qa --qf '%{NAME}\n'
 elif command -v pacman >/dev/null; then pacman -Qq
-else dpkg-query -W -f='${Package} ${Status}\n' | awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}'
+else dpkg-query -W -f='${Package} ${db:Status-Status}\n' | awk '$2 == "installed" {print $1}'
 fi
 EOF
   fail "could not list installed packages after uninstall"

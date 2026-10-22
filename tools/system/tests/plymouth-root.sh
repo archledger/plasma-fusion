@@ -123,12 +123,12 @@ set +e
 
 installed() { # $1 a package
   rpm -q "$1" >/dev/null 2>&1 || pacman -Q "$1" >/dev/null 2>&1 ||
-    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+    dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null | grep -qx installed
 }
 package_list() {
   if command -v dnf >/dev/null; then rpm -qa --qf '%{NAME}\n'
   elif command -v pacman >/dev/null; then pacman -Qq
-  else dpkg-query -W -f='${Package} ${Status}\n' | awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}'
+  else dpkg-query -W -f='${Package} ${db:Status-Status}\n' | awk '$2 == "installed" {print $1}'
   fi | sort -u
 }
 

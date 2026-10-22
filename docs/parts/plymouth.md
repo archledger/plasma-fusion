@@ -345,6 +345,9 @@ it and the package it needs must stay installed, with the latter kept on record 
 checks a failed package query and retry without rebuilding an image. On Debian-family systems it
 also builds four small local packages with an alternative dependency to check that individually
 safe removals are not combined into an unsafe transaction, then removes the consumer and retries.
+It also holds a recorded package: the package remains installed and recorded when apt refuses
+removal, and a retry removes it after the hold is lifted. Package inventory uses dpkg's actual
+installation state, independently of its install/hold selection.
 The Fedora CI container also runs `tools/tests/installer/private-state.sh`: a genuinely
 unprivileged caller with real sudo must find pending state behind a root-owned 0700 parent.
 `PF_PLYMOUTH_KERNEL` names the installed kernel there (in a container the running one is the
