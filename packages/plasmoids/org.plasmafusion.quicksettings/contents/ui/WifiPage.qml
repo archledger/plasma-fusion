@@ -255,6 +255,19 @@ ColumnLayout {
         }
     }
 
+    FText {
+        objectName: "wifi-connection-error"
+        Layout.fillWidth: true
+        pal: page.pal
+        metrics: page.metrics
+        visible: text.length > 0
+        text: page.backend.net.connectionError || ""
+        Accessible.role: Accessible.AlertMessage
+        Accessible.name: text
+        color: page.pal.secondary
+        wrapMode: Text.WordWrap
+    }
+
     // ---------------------------------------------------------------- other networks
     FText {
         Layout.fillWidth: true
@@ -295,6 +308,20 @@ ColumnLayout {
             readonly property bool busy: model.ConnectionState === page.stateActivating
             readonly property bool needsPassword: !model.Uuid && page.hasStaticPassword(model.SecurityType)
             property bool expanded: false
+            property string requestedDevice: ""
+            property string requestedSsid: ""
+            property int requestedSecurity: -1
+            readonly property bool selectionValid: !model.Uuid && model.DevicePath === requestedDevice
+                && model.Ssid === requestedSsid && model.SecurityType === requestedSecurity
+            onSelectionValidChanged: if (expanded && !selectionValid) { expanded = false; }
+            onExpandedChanged: {
+                if (!expanded) {
+                    passwordField.text = "";
+                    requestedDevice = "";
+                    requestedSsid = "";
+                    requestedSecurity = -1;
+                }
+            }
 
             width: ListView.view.width
             height: expanded ? page.rowHeight + passwordRow.implicitHeight + page.metrics.px(8) : page.rowHeight
@@ -303,12 +330,17 @@ ColumnLayout {
                 if (row.model.Uuid) {
                     page.backend.net.activate(row.model.ConnectionPath, row.model.DevicePath, row.model.SpecificPath);
                 } else if (row.needsPassword) {
-                    row.expanded = !row.expanded;
                     if (row.expanded) {
+                        row.expanded = false;
+                    } else {
+                        row.requestedDevice = row.model.DevicePath;
+                        row.requestedSsid = row.model.Ssid;
+                        row.requestedSecurity = row.model.SecurityType;
+                        row.expanded = true;
                         passwordField.forceActiveFocus();
                     }
                 } else {
-                    page.backend.net.addAndActivate(row.model.DevicePath, row.model.SpecificPath, "");
+                    page.backend.net.addAndActivate(row.model.DevicePath, row.model.SpecificPath, "", row.model.Ssid, row.model.SecurityType);
                 }
             }
 
@@ -414,11 +446,12 @@ ColumnLayout {
                     targetHeight: page.metrics.px(30)
                     radius: 10
                     text: i18nc("@action:button", "Connect")
-                    enabled: passwordField.text.length >= (row.model.SecurityType === 1 ? 5 : 8)
+                    enabled: row.selectionValid && !row.busy && passwordField.text.length >= (row.requestedSecurity === 1 ? 5 : 8)
                     onClicked: {
-                        page.backend.net.addAndActivate(row.model.DevicePath, row.model.SpecificPath, passwordField.text);
-                        passwordField.text = "";
-                        row.expanded = false;
+                        if (page.backend.net.addAndActivate(row.requestedDevice, row.model.SpecificPath, passwordField.text,
+                                                           row.requestedSsid, row.requestedSecurity)) {
+                            row.expanded = false;
+                        }
                     }
                 }
             }

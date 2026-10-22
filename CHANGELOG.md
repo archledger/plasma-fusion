@@ -9,6 +9,12 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Joining secured Wi-Fi networks:** resolve a new network's current access point before connecting,
+  rather than reuse an entry that can expire while the password is entered. A changed or ambiguous
+  network is refused with an explanation instead of switching devices or security types. A refused
+  handoff keeps the password form; a successful handoff or cancellation clears the password.
+  Passwordless networks whose security is not classified keep the native connection path.
+
 - **Boot splash uninstall:** the installer's `uninstall` now also removes the packages the splash
   installer added (Fedora's `plymouth-plugin-script`, Arch's Plymouth, Ubuntu's
   `plymouth-label-ft`), so Arch no longer shows Plymouth's own splash after Plasma Fusion is gone.

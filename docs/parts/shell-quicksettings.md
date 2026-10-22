@@ -403,6 +403,35 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   under the list, a click on a profile chooses it directly.
   Keep awake page: the four durations, `Until…` folds out the quarter-hour chooser and `Start`
   passes its time, the state line for timed and untimed.
+* New-network Wi-Fi dispatch is also checked with the real plasma-nm module on private system and
+  session buses (`python3-dbusmock`; no real radio or saved profile is used):
+
+  ```sh
+  STAGE=$PWD/build/stage tools/build.sh quicksettings
+  QT_QPA_PLATFORM=offscreen python3 \
+    packages/plasmoids/org.plasmafusion.quicksettings/tests/network_ap_test.py build/stage
+  ```
+
+  In plasma-nm 6.7.5 and 6.8.1, a long-lived `NetworkModel` can keep an unsaved network's old
+  `SpecificPath` when the reference access point changes. NetworkManager refuses an expired AP
+  path with “was not in the scan list”; an ordinary new connection can still work on a fresh
+  scan. For networks with known security, Fusion now takes a short-lived native model snapshot
+  on submission and matches the
+  selected device, SSID and security exactly. It rejects missing, changed, saved-elsewhere or
+  ambiguous matches. The snapshot is destroyed after the synchronous lookup; no password is
+  stored in it. A successful return means the request was handed to the native handler, not that
+  it reached NetworkManager or association completed. Later NetworkManager errors still use its
+  native notifications.
+  The same plasma-nm versions label a new open network with unknown security. That passwordless
+  path keeps the native handler's security detection at the selected AP rather than guessing a
+  security type or substituting another AP; its existing stale-AP failure possibility remains.
+  Closing the list or activating a saved connection
+  clears any previous dispatch error.
+
+  The test covers open networks, WPA2 and WPA3, AP replacement, identical SSIDs on another device, disappearance,
+  security changes, unknown security, a profile saved meanwhile and the full backend facade.
+  The page tests cover preserving a rejected password entry, clearing it on submission or
+  cancellation, and invalidating it when the selected security or saved profile changes.
 * The on-screen keyboard's replies (offscreen, Plasma's D-Bus module, a stand-in KWin on a private
   bus whose `/VirtualKeyboard` and `/Effects` answer after 400 ms; in CI):
 
