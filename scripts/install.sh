@@ -506,7 +506,23 @@ greeter_present() {
     getent passwd plasmalogin >/dev/null 2>&1
 }
 splash_installed() {
-  [ -x "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" ] && [ -d "$TEST_ROOT/usr/share/plymouth/themes/plasma-fusion" ]
+  [ -x "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" ] || return 1
+  [ ! -d "$TEST_ROOT/usr/share/plymouth/themes/plasma-fusion" ] || return 0
+  # The greeter can make the parent private (root:root 0700). Before consent the plan can only
+  # name a possible cleanup; after sudo -v, check the actual state without opening permissions.
+  if [ "${1:-}" = root ]; then
+    splash_state=$($SUDO sh -c 'if [ -d "$1" ]; then echo yes; fi' sh \
+      "$TEST_ROOT/var/lib/plasma-fusion/plymouth") || die "cannot check the pending boot splash cleanup."
+    [ "$splash_state" = yes ]
+  else
+    [ -d "$TEST_ROOT/var/lib/plasma-fusion" ]
+  fi
+}
+# The packages the splash installer added (a script or text plugin, Arch's Plymouth) go with the
+# splash where no other installed package needs them. plymouth-uninstall.sh's help says when it
+# checks that; one from 0.6.0 or before removes them unchecked, so they stay then.
+splash_flags() {
+  grep -qs "no other installed package needs" "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" && echo " --remove-plugin"
 }
 
 status() {
@@ -596,7 +612,7 @@ main() {
     if [ -x "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" ] && greeter_present; then
       echo "  sudo $SYS_TOOLS/greeter-restore.sh   (the login screen, if Plasma Fusion styled it)" >&2
     fi
-    splash_installed && echo "  sudo $SYS_TOOLS/plymouth-uninstall.sh   (the boot splash)" >&2
+    splash_installed && echo "  sudo $SYS_TOOLS/plymouth-uninstall.sh$(splash_flags)   (the boot splash)" >&2
     case $LANE in
       copr) echo "  sudo dnf -y remove $PKGS" >&2 ;;
       aur) echo "  sudo pacman -Rns $PKGS plasma-fusion-debug (the ones installed)" >&2 ;;
@@ -621,8 +637,9 @@ main() {
       $SUDO "$TEST_ROOT$SYS_TOOLS/greeter-restore.sh" --greeter sddm </dev/null ||
         die "restoring the login screen stopped; the packages stay installed."
     fi
-    if splash_installed; then
-      $SUDO "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" </dev/null ||
+    if splash_installed root; then
+      # shellcheck disable=SC2046 # splash_flags prints nothing or one option
+      $SUDO "$TEST_ROOT$SYS_TOOLS/plymouth-uninstall.sh" $(splash_flags) </dev/null ||
         die "removing the boot splash stopped; the packages stay installed."
     fi
     names=$(sddm_names_theme)

@@ -17,8 +17,10 @@
 # builds a unified kernel image. PF_PLYMOUTH_PRESET_CONFIG=1 (Arch): the preset names its own
 # configuration (ALL_config), which reads no drop-ins. PF_PLYMOUTH_EXPECT=refused: a system the
 # installer cannot handle (Arch with dracut instead of mkinitcpio, or such a preset without the hook)
-# - it must stop with nothing changed; PF_PLYMOUTH_REFUSAL is the reason it must give. Test tooling
-# only.
+# - it must stop with nothing changed; PF_PLYMOUTH_REFUSAL is the reason it must give.
+# PF_PLYMOUTH_DEPENDENT: a package that needs one the installer installs (a theme package),
+# installed after a last --select; uninstall --remove-plugin must keep the one it needs. Test
+# tooling only.
 #
 #   tools/system/tests/plymouth-root.sh [THEME_DIR]
 set -euo pipefail
@@ -121,7 +123,13 @@ set +e
 
 installed() { # $1 a package
   rpm -q "$1" >/dev/null 2>&1 || pacman -Q "$1" >/dev/null 2>&1 ||
-    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+    dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null | grep -qx installed
+}
+package_list() {
+  if command -v dnf >/dev/null; then rpm -qa --qf '%{NAME}\n'
+  elif command -v pacman >/dev/null; then pacman -Qq
+  else dpkg-query -W -f='${Package} ${db:Status-Status}\n' | awk '$2 == "installed" {print $1}'
+  fi | sort -u
 }
 
 # --- install and select
@@ -157,8 +165,17 @@ OUT=$(PF_PLYMOUTH_CMDLINE=$WORK/cmdline-splash bash "$INSTALL" --select "$THEME"
   ok "a second --select: no note with splash, the first backup kept" || bad "second --select" "$OUT"
 
 # --- uninstall
-OUT=$(bash "$UNINSTALL" --remove-plugin 2>&1); RC=$?
+package_list >"$WORK/packages-before"
+# A user's apt configuration may enable automatic removal. Only recorded packages are ours to
+# remove, not their dependencies or other unused packages; test that setting rather than assuming
+# the distribution's default. DNF enables dependency cleanup by default already.
+echo 'APT::Get::AutomaticRemove "true";' >"$WORK/apt.conf"
+OUT=$(APT_CONFIG="$WORK/apt.conf" bash "$UNINSTALL" --remove-plugin 2>&1); RC=$?
 [ "$RC" = 0 ] && ok "uninstall" || bad "uninstall" "$OUT"
+package_list >"$WORK/packages-after"
+missing=$(comm -23 "$WORK/packages-before" "$WORK/packages-after")
+for p in "${recorded[@]}"; do missing=$(grep -vxF "$p" <<<"$missing"); done
+[ -z "$missing" ] && ok "  no unrecorded package removed" || bad "  unrecorded packages removed" "$missing"
 for img in "${IMAGES[@]}"; do
   image_has "$img"; r=$?
   [ "$r" = 1 ] && ok "  $img without the theme" || bad "  $img still holds it (or cannot be listed: $r)"
@@ -217,6 +234,34 @@ if ! command -v plymouth-set-default-theme >/dev/null && [ -n "$other" ]; then
     bad "alternative chosen since" "$OUT
 $(update-alternatives --query default.plymouth)"
   update-alternatives --auto default.plymouth >/dev/null
+fi
+
+# --- a package installed since needs one the installer installed (PF_PLYMOUTH_DEPENDENT, a theme
+# package): --remove-plugin keeps that one, on record and with a note, and removes nothing else
+if [ -n "${PF_PLYMOUTH_DEPENDENT:-}" ]; then
+  OUT=$(PF_PLYMOUTH_CMDLINE=$WORK/cmdline-splash bash "$INSTALL" --select "$THEME" 2>&1); RC=$?
+  [ "$RC" = 0 ] || bad "install for the package installed since" "$OUT"
+  mapfile -t recorded < <(cat /var/lib/plasma-fusion/plymouth/installed-packages 2>/dev/null)
+  if command -v dnf >/dev/null; then dnf -y -q install "$PF_PLYMOUTH_DEPENDENT"
+  elif command -v pacman >/dev/null; then pacman -S --noconfirm --needed "$PF_PLYMOUTH_DEPENDENT"
+  else DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$PF_PLYMOUTH_DEPENDENT"
+  fi >/dev/null 2>&1 || bad "could not install $PF_PLYMOUTH_DEPENDENT"
+  OUT=$(bash "$UNINSTALL" --remove-plugin 2>&1); RC=$?
+  [ "$RC" = 0 ] && installed "$PF_PLYMOUTH_DEPENDENT" &&
+    ok "$PF_PLYMOUTH_DEPENDENT installed since: uninstall --remove-plugin, and it stays" ||
+    bad "uninstall with $PF_PLYMOUTH_DEPENDENT installed since" "$OUT"
+  mapfile -t kept < <(cat /var/lib/plasma-fusion/plymouth/installed-packages 2>/dev/null)
+  [ "${#kept[@]}" -gt 0 ] && ok "  kept on record: ${kept[*]}" || bad "  nothing kept on record" "$OUT"
+  for p in "${recorded[@]}"; do
+    if [[ " ${kept[*]} " == *" $p "* ]]; then
+      installed "$p" && has "note: $p stays" && ok "  $p stays, with a note" || bad "  $p on record, but not installed or no note" "$OUT"
+    else
+      ! installed "$p" && ok "  $p, which nothing else needs, removed" || bad "  $p still installed"
+    fi
+  done
+  [ ! -e "/usr/share/plymouth/themes/$NAME" ] && [ "$(ls -A /var/lib/plasma-fusion/plymouth)" = installed-packages ] &&
+    ok "  the files and the state removed, but for the record" ||
+    bad "  files or state left" "$(ls -la /usr/share/plymouth/themes /var/lib/plasma-fusion/plymouth 2>&1)"
 fi
 set -e
 

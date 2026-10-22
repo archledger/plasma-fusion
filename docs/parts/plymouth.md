@@ -302,10 +302,20 @@ database that update was prepared against, and prints a note when one is only pr
   the running kernel's initramfs with the system's builder (`--all-kernels`: all; it also rebuilds
   when the theme was deselected by hand but the image still holds it), checks the theme is gone
   and removes the theme directory (`--keep-files` keeps it; `--remove-plugin` also removes the
-  package the installer recorded as installed by it) and the remembered greeting choice. A `.pre-plasma-fusion` copy is removed only once its kernel's image
+  packages the installer recorded as installed by it, those no other installed package needs:
+  `rpm -e --test`, `pacman -R --print` or `apt-get -s remove` must name no other package, since dnf
+   and apt-get would remove a theme installed since along with them, and pacman refuses. DNF's
+   dependency cleanup and apt's automatic removal are disabled for this transaction: no unrecorded
+   package may go with them. The others stay, on record, with a note;
+   `scripts/install.sh uninstall` asks for this) and the remembered
+  greeting choice. A `.pre-plasma-fusion` copy is removed only once its kernel's image
   is verified free of the theme, or when that kernel has been removed since; copies for kernels
   whose image still holds the theme are kept with a note. `--dry-run` prints the steps (run it
-  with sudo for the exact list; as a normal user the saved state is not readable).
+   with sudo for the exact list; as a normal user the saved state is not readable).
+  A failed package inventory or removal keeps the record and fails the uninstall. The full
+  installer retries this cleanup even if the theme files were already removed. The removable
+  set is checked again after considering packages separately, since a dependency such as
+  `A | B` can allow either package to go, but not both.
 * Back to the first version (Boot board, black screen) without uninstalling: run the installer of
   that build with `--select` (its theme directory replaces this one).
 * By hand: `sudo plymouth-set-default-theme -R bgrt` (Fedora; elsewhere the system's theme, then
@@ -327,7 +337,19 @@ note on a command line without `splash` and none with it, a second `--select` ke
 backup; then the uninstall: each image without the theme, the backups, files and state gone, the
 theme or the alternative as before, `plymouthd.conf` byte for byte, Arch's `HOOKS` as before. Where
 the script plugin has a console viewer, each rebuilt image must hold the text plugin its builder
-copies, and `--remove-plugin` must remove every package the installer installed.
+copies, and `--remove-plugin` must remove every package the installer recorded without removing any
+unrecorded package (including with apt's automatic removal enabled in the user's configuration).
+With `PF_PLYMOUTH_DEPENDENT`, a theme package installed afterwards needs one of those packages:
+it and the package it needs must stay installed, with the latter kept on record and named in a note.
+`tools/system/tests/plymouth-packages.sh` runs before that suite in the same CI containers. It
+checks a failed package query and retry without rebuilding an image. On Debian-family systems it
+also builds four small local packages with an alternative dependency to check that individually
+safe removals are not combined into an unsafe transaction, then removes the consumer and retries.
+It also holds a recorded package: the package remains installed and recorded when apt refuses
+removal, and a retry removes it after the hold is lifted. Package inventory uses dpkg's actual
+installation state, independently of its install/hold selection.
+The Fedora CI container also runs `tools/tests/installer/private-state.sh`: a genuinely
+unprivileged caller with real sudo must find pending state behind a root-owned 0700 parent.
 `PF_PLYMOUTH_KERNEL` names the installed kernel there (in a container the running one is the
 host's), `PF_PLYMOUTH_CMDLINE` a command line file. 2026-10-21, all pass: Fedora 44 with dracut (14
 checks; `plymouth-plugin-script` installed and removed again), Debian testing with dracut (15) and

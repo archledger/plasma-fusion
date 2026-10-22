@@ -14,9 +14,10 @@
 #                    (Arch: mkinitcpio -P rebuilds every preset anyway)
 #   --keep-files     leave /usr/share/plymouth/themes/plasma-fusion in place
 #   --remove-plugin  also remove the packages plymouth-install.sh installed for the script plugin
-#                    and its text plugin
-#                    (Fedora plymouth-plugin-script; Arch, Debian, Ubuntu plymouth; Ubuntu
-#                    plymouth-label-ft, Debian plymouth-label)
+#                    and its text plugin (Fedora plymouth-plugin-script; Arch, Debian, Ubuntu
+#                    plymouth; Ubuntu plymouth-label-ft, Debian plymouth-label): those that
+#                    no other installed package needs; the others stay, on record
+#                    (scripts/install.sh uninstall asks for this)
 #   --dry-run        print what would be done
 #
 # The greeting choice remembered by plymouth-install.sh --user/--name is forgotten too.
@@ -238,12 +239,62 @@ fi
 # (One package a line: the script plugin's, the text plugin's)
 pkgs=()
 [ ! -s "$STATE/installed-packages" ] || mapfile -t pkgs < <(grep -v '^$' "$STATE/installed-packages")
-if [ "$PLUGIN" = 1 ] && [ "${#pkgs[@]}" -gt 0 ]; then
-  if command -v dnf >/dev/null; then run dnf remove -y "${pkgs[@]}"
-  elif command -v pacman >/dev/null; then run pacman -R --noconfirm "${pkgs[@]}"
-  elif command -v apt-get >/dev/null; then run env DEBIAN_FRONTEND=noninteractive apt-get remove -y "${pkgs[@]}" -o DPkg::Lock::Timeout=600
+package_names() {
+  if command -v dnf >/dev/null; then rpm -qa --qf '%{NAME}\n'
+  elif command -v pacman >/dev/null; then pacman -Qq
+  # Selection state can be "hold" even though the package is installed.
+  else dpkg-query -W -f='${Package} ${db:Status-Status}\n' | awk '$2 == "installed" {print $1}'
   fi
-  [ "$DRY" = 1 ] || rm -f "$STATE/installed-packages"
+}
+# Whether removing these packages removes no other: dnf and apt-get would also remove a package
+# installed since that needs one (a theme, say), and pacman refuses to remove them then.
+alone() {
+  if command -v dnf >/dev/null; then rpm -e --test "$@" >/dev/null 2>&1
+  elif command -v pacman >/dev/null; then pacman -R --print "$@" >/dev/null 2>&1
+  elif command -v apt-get >/dev/null; then
+    local out r p ours
+    out=$(LC_ALL=C apt-get -s -o APT::Get::AutomaticRemove=false remove "$@" 2>/dev/null) || return 1
+    # apt-get's simulation lists each package it would remove as "Remv NAME[:ARCH] [VERSION]"
+    for r in $(awk '/^Remv /{print $2}' <<<"$out"); do
+      ours=0
+      for p in "$@"; do [ "${r%%:*}" != "$p" ] || ours=1; done
+      [ "$ours" = 1 ] || return 1
+    done
+  else return 1
+  fi
+}
+if [ "$PLUGIN" = 1 ] && [ "${#pkgs[@]}" -gt 0 ]; then
+  # An individual query cannot distinguish an absent package from a broken database. A failed
+  # inventory must stop here, leaving the record available for another attempt.
+  installed=$(package_names) || {
+    echo "plymouth-uninstall: cannot list installed packages; the package record is kept" >&2
+    exit 1
+  }
+  go=() keep=()
+  for p in "${pkgs[@]}"; do ! grep -qxF "$p" <<<"$installed" || go+=("$p"); done
+  # All of them together (one may need another), else each on its own
+  if [ "${#go[@]}" -gt 0 ] && ! alone "${go[@]}"; then
+    all=("${go[@]}") go=()
+    for p in "${all[@]}"; do if alone "$p"; then go+=("$p"); else keep+=("$p"); fi; done
+    # A dependent may accept either of two packages: each is removable alone, but not together.
+    if [ "${#go[@]}" -gt 0 ] && ! alone "${go[@]}"; then keep+=("${go[@]}"); go=(); fi
+  fi
+  if [ "${#go[@]}" -gt 0 ]; then
+    # Only the recorded packages: dependency cleanup is DNF's default, and apt can enable it
+    # in its configuration. Neither may remove other, now-unused packages with ours.
+    if command -v dnf >/dev/null; then run dnf remove -y --setopt=clean_requirements_on_remove=False "${go[@]}"
+    elif command -v pacman >/dev/null; then run pacman -R --noconfirm "${go[@]}"
+    elif command -v apt-get >/dev/null; then run env DEBIAN_FRONTEND=noninteractive apt-get remove -y "${go[@]}" -o DPkg::Lock::Timeout=600 -o APT::Get::AutomaticRemove=false
+    fi
+  fi
+  for p in "${keep[@]}"; do
+    echo "note: $p stays: another installed package needs it (still on record for --remove-plugin)"
+  done
+  if [ "$DRY" = 0 ]; then
+    if [ "${#keep[@]}" -gt 0 ]; then printf '%s\n' "${keep[@]}" >"$STATE/installed-packages"
+    else rm -f "$STATE/installed-packages"
+    fi
+  fi
 fi
 if [ "$DRY" = 0 ]; then
   rm -f "$STATE/previous-theme" "$STATE/plymouthd.conf.orig" "$STATE/greeting" "$STATE/previous-alternative" \

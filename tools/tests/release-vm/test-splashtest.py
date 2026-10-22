@@ -36,7 +36,7 @@ V=$PF_VM_HOME
 echo "$cmd $*" >>"$V/calls"
 boot=$(cat "$V/boot" 2>/dev/null || echo 0)
 stock=ceratopsian
-[ "$FAULT" != arch ] || stock=none
+case $FAULT in arch|archleft) stock=none ;; esac
 [ -f "$V/theme" ] || echo "$stock" >"$V/theme"
 case "$cmd" in
   start) printf overlay >"$V/vms/$name/run.qcow2" ;;
@@ -70,13 +70,19 @@ case "$cmd" in
         case $FAULT in
           stilltheme) echo plasma-fusion ;;
           othertheme) echo spinner ;;
-          arch) echo bgrt ;;
+           archleft) echo bgrt ;;
           *) echo "$stock" ;;
         esac >"$V/theme" ;;
-      *'ls -d THEME'*)
-        [ "$FAULT" != leftover ] || echo "THEME"
-        [ "$FAULT" != leftrecord ] || echo previous-theme ;;
-      *'cat /var/lib/plasma-fusion/plymouth/installed-packages'*) [ "$FAULT" != arch ] || printf 'plymouth\nplymouth-label-ft\n' ;;
+       *'ls -d THEME'*|*'test -e THEME'*)
+         [ "$FAULT" != inspectfail ] || exit 1
+         [ "$FAULT" != leftover ] || echo "THEME"
+         [ "$FAULT" != leftrecord ] || echo installed-packages ;;
+       *'cat /var/lib/plasma-fusion/plymouth/installed-packages'*)
+         [ "$FAULT" != recordfail ] || exit 1
+         if [ "$FAULT" = arch ]; then echo plymouth; else echo plymouth-plugin-script; fi ;;
+       'bash -se')
+         [ "$FAULT" != packagefail ] || exit 1
+         [ "$FAULT" != leftpackage ] || echo plymouth-plugin-script ;;
       # (the crash count: one after the Plasma Fusion boot or the restored one, or no collector)
       'python3 -')
         [ "$FAULT" != nocollector ] || exit 1
@@ -181,6 +187,8 @@ class SplashTest(unittest.TestCase):
         self.assertIn("plymouth: adding 1280x800 pixel display", result.stdout)
         self.assertIn(f"plymouth: System configured theme file is '{THEME}/plasma-fusion.plymouth'", result.stdout)
         self.assertIn("splash theme after uninstall: ceratopsian", result.stdout)
+        self.assertIn("installed by the splash installer: plymouth-plugin-script", result.stdout)
+        self.assertIn("the splash installer's packages are removed", result.stdout)
         self.assertEqual(result.stdout.count("differs: closest frame's largest delta"), 2)
         self.assertIn("done test (boot splash)", result.stdout)
         self.assertEqual(self.kept, ["best.png", "first-match.png", "frames.tsv", "last.png", "sheet.png"])
@@ -196,7 +204,7 @@ class SplashTest(unittest.TestCase):
         self.assertFalse(self.preserved)
 
     def test_without_plymouth_before(self):
-        # Arch: no Plymouth before the install; the one it brings stays, with its own default theme
+        # Arch: no Plymouth before the install; uninstall removes the one it brought.
         result = self.run_lane("arch", "aur")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         # Plymouth downloaded first (the installer's pacman then installs it from the cache)
@@ -205,8 +213,13 @@ class SplashTest(unittest.TestCase):
         self.assertEqual(len(downloads), 1)
         self.assertLess(downloads[0], selects[0])
         self.assertIn("stock splash theme: none", result.stdout)
-        self.assertIn("splash theme after uninstall: bgrt", result.stdout)
-        self.assertIn("kept: the packages the splash installer installed (plymouth plymouth-label-ft)", result.stdout)
+        self.assertIn("splash theme after uninstall: none", result.stdout)
+        self.assertIn("installed by the splash installer: plymouth", result.stdout)
+        self.assertNotIn("kept:", result.stdout)
+
+    def test_without_plymouth_must_restore_none(self):
+        self.assert_failed(self.run_lane("archleft", "aur"),
+                           "the splash theme after uninstall is bgrt, not the stock none")
 
     def test_download_gate(self):
         self.assert_failed(self.run_lane("nodownload", "aur"), "could not download Plymouth")
@@ -220,6 +233,7 @@ class SplashTest(unittest.TestCase):
             ("stocklook", "the stock boot looks like the Splash board"),
             ("select", "plymouth-install.sh --select"),
             ("wrongselect", "plymouth-install.sh selected ceratopsian"),
+            ("recordfail", "could not read the splash installer's packages"),
             ("login", "could not log in on tty1 again (20-stock)"),
             ("nodesktop", "no desktop after the reboot (32-fusion)"),
             ("look", "no frame of the boot looks like the Splash board"),
@@ -230,6 +244,9 @@ class SplashTest(unittest.TestCase):
             ("uninstall", "uninstall"),
             ("leftover", "the splash is still installed after uninstall"),
             ("leftrecord", "the splash is still installed after uninstall"),
+            ("inspectfail", "could not check the splash's remaining files"),
+            ("leftpackage", "the splash installer's package is still installed: plymouth-plugin-script"),
+            ("packagefail", "could not list installed packages after uninstall"),
             ("stilltheme", "the splash theme after uninstall is plasma-fusion"),
             ("othertheme", "the splash theme after uninstall is spinner, not the stock ceratopsian"),
             ("stillfusion", "the boot after uninstall still looks like the Splash board"),

@@ -284,12 +284,28 @@ for SHNAME in "${shells[@]}"; do
   expect "  and removes the boot splash" has_log "plymouth-uninstall.sh"
   expect "  both before the packages go" bash -c 'g=$(grep -n "^greeter-restore.sh" <<<"$0" | cut -d: -f1); r=$(grep -n "^dnf -y remove" <<<"$0" | cut -d: -f1); [ -n "$g" ] && [ -n "$r" ] && [ "$g" -lt "$r" ]' "$LOG"
   expect "  and the plan says so" has_out "greeter-restore.sh   (the login screen"
+  expect "  a splash tool from 0.6.0 or before keeps the packages it added" has_log "plymouth-uninstall.sh "
+  expect "    (no --remove-plugin, which removes them unchecked there)" bash -c '! grep -q -- "--remove-plugin" <<<"$0"' "$LOG"
+  # One that removes only the packages no other installed package needs, as its help says
+  sed -i '1a # --remove-plugin: those that no other installed package needs' "$SYSD/plymouth-uninstall.sh"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "  a splash tool that checks removes the packages it added" has_log "plymouth-uninstall.sh --remove-plugin"
+  expect "    and the plan says so" has_out "plymouth-uninstall.sh --remove-plugin   (the boot splash)"
   EXTRA_ENV="FAKE_SYS_RC=1" VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
   expect "a failed login screen restore keeps the packages" bash -c '[ "$1" = 1 ] && ! grep -q "^dnf -y remove" <<<"$0"' "$LOG" "$RC"
   printf '[General]\nNumlock=none\n' >"$CASE/root/etc/plasmalogin.conf"
   rm -r "$CASE/root/usr/share/plymouth/themes/plasma-fusion"
   VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
   expect "an unstyled login screen and no splash are left alone" bash -c '! grep -qE "greeter-restore|plymouth-uninstall" <<<"$0"' "$LOG"
+  # A failed package removal can leave only root-owned state, after the theme files are gone.
+  mkdir -p "$CASE/root/var/lib/plasma-fusion/plymouth"
+  printf 'plymouth-plugin-script\n' >"$CASE/root/var/lib/plasma-fusion/plymouth/installed-packages"
+  EXTRA_ENV="FAKE_SYS_RC=1" VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "pending splash cleanup is retried without the theme files" has_log "plymouth-uninstall.sh --remove-plugin"
+  expect "  a failed retry still keeps Plasma Fusion installed" bash -c '[ "$1" = 1 ] && ! grep -q "^dnf -y remove" <<<"$0"' "$LOG" "$RC"
+  VERSIONS="$P675 plasma-fusion=0.2.0" run "$sh" $FED -- uninstall --yes --package-only
+  expect "  a successful retry runs the splash helper before package removal" bash -c 's=$(grep -n "^plymouth-uninstall.sh --remove-plugin" <<<"$0" | cut -d: -f1); r=$(grep -n "^dnf -y remove" <<<"$0" | cut -d: -f1); [ -n "$s" ] && [ -n "$r" ] && [ "$s" -lt "$r" ]' "$LOG"
+  rm -r "$CASE/root/var/lib/plasma-fusion/plymouth"
   # A styled login screen without the mark: greeter-apply.sh wrote plain keys into an existing
   # [Greeter] group (or the Login Screen settings rewrote the file since).
   printf '[Greeter]\nWallpaperPlugin=org.kde.image\n\n[Greeter][Wallpaper][org.kde.image][General]\nImage=file:///usr/share/plasma-fusion/backgrounds/dusk-ridge-dark-login.png\n' \

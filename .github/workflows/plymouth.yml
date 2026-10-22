@@ -16,12 +16,18 @@ on:
     paths:
       - "tools/system/plymouth-*.sh"
       - "tools/system/tests/plymouth-root.sh"
+      - "tools/system/tests/plymouth-packages.sh"
+      - "tools/tests/installer/private-state.sh"
+      - "scripts/install.sh"
       - ".github/workflows/plymouth.yml"
   push:
     branches: ["main"]
     paths:
       - "tools/system/plymouth-*.sh"
       - "tools/system/tests/plymouth-root.sh"
+      - "tools/system/tests/plymouth-packages.sh"
+      - "tools/tests/installer/private-state.sh"
+      - "scripts/install.sh"
       - ".github/workflows/plymouth.yml"
   schedule:
     - cron: "20 6 * * 3" # Wednesdays 06:20 UTC
@@ -48,12 +54,16 @@ jobs:
         include:
           - name: Fedora 44, dracut
             image: registry.fedoraproject.org/fedora:44
-            setup: dnf -y -q install git kernel-core dracut plymouth
+            setup: dnf -y -q install git kernel-core dracut plymouth sudo util-linux
+            # A theme package installed since, which needs a package the installer installed
+            dependent: plymouth-theme-breeze
           - name: Debian testing, dracut
             image: docker.io/library/debian:testing
             setup: >-
               apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
               git ca-certificates linux-image-amd64 dracut plymouth
+            # A theme package installed since, which needs a package the installer installed
+            dependent: plymouth-themes
           - name: Debian testing, initramfs-tools
             image: docker.io/library/debian:testing
             setup: >-
@@ -73,6 +83,8 @@ jobs:
           - name: Arch, mkinitcpio
             image: docker.io/library/archlinux:base
             setup: pacman -Syu --noconfirm --needed git linux mkinitcpio
+            # A theme package installed since, which needs a package the installer installed
+            dependent: breeze-plymouth
           - name: Arch, mkinitcpio with a unified kernel image
             image: docker.io/library/archlinux:base
             setup: pacman -Syu --noconfirm --needed git linux mkinitcpio systemd-ukify
@@ -98,6 +110,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Package-query failures and dependent alternatives
+        run: bash tools/system/tests/plymouth-packages.sh
+
+      - name: Unprivileged uninstall with root-only pending state
+        if: matrix.name == 'Fedora 44, dracut'
+        run: bash tools/tests/installer/private-state.sh
+
       - name: Select the theme, check the image, undo, check again (the job's container)
         env:
           PF_DISPOSABLE_SYSTEM: "1"
@@ -105,4 +124,5 @@ jobs:
           PF_PLYMOUTH_EXPECT: ${{ matrix.expect }}
           PF_PLYMOUTH_PRESET_CONFIG: ${{ matrix.preset_config }}
           PF_PLYMOUTH_REFUSAL: ${{ matrix.refusal }}
+          PF_PLYMOUTH_DEPENDENT: ${{ matrix.dependent }}
         run: tools/system/tests/plymouth-root.sh
