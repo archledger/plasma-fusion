@@ -11,9 +11,9 @@
 # --select, as the installer suggests, and a reboot with the Plasma Fusion splash: screendumps
 # from the VM's reset on (splash-capture.py), one of which must match the board; Plymouth's log
 # must show a graphical display and the script plugin, and the desktop must start after it. Then
-# the installer's uninstall, which removes the splash and selects the system's theme again
-# (keeping only the record of the Plymouth packages it installed, with them), and a reboot without
-# the board's look. Each captured boot runs without the tty1 log-in, since Plasma Fusion's log-in
+# the installer's uninstall, which removes the splash, its state and the packages its installer
+# added, and selects the system's theme again (no Plymouth on Arch), then a reboot without the
+# board's look. Each captured boot runs without the tty1 log-in, since Plasma Fusion's log-in
 # splash looks like the board too: the log-in follows the capture. LANE: copr, aur, ppa, deb (as
 # vmtest.sh; not nix, where the NixOS module sets boot.plymouth). Needs Pillow for the comparison
 # (on NixOS: nix-shell -p python3Packages.pillow). Results: ~/pf-vm/results/NAME-splash/.
@@ -165,6 +165,9 @@ fi
 rc=0; vm ssh "$name" "sudo $TOOLS/plymouth-install.sh --select" >"$OUT/30-select.log" 2>&1 || rc=$?
 log "plymouth-install.sh --select: rc=$rc"
 [ "$rc" = 0 ] || { tail -20 "$OUT/30-select.log"; fail "plymouth-install.sh --select"; }
+vm ssh "$name" 'sudo sh -ec "if [ -e /var/lib/plasma-fusion/plymouth/installed-packages ]; then cat /var/lib/plasma-fusion/plymouth/installed-packages; fi"' \
+  >"$OUT/30-installed-packages.txt" || fail "could not read the splash installer's packages"
+log "installed by the splash installer: $(xargs <"$OUT/30-installed-packages.txt")"
 theme=$(selected)
 log "  selected: $theme"
 case $theme in plasma-fusion | "$THEME/plasma-fusion.plymouth") ;; *) fail "plymouth-install.sh selected ${theme:-nothing}" ;; esac
@@ -184,20 +187,29 @@ log "crashes: $n"
 
 # The installer's uninstall removes the splash before the packages go
 insession "env $env sh ~/install.sh uninstall --yes" >"$OUT/40-uninstall.log" 2>&1 || { tail -30 "$OUT/40-uninstall.log"; fail "uninstall"; }
-# The theme gone, and of the installer's records only the one of the packages it installed
-# (Fedora's plymouth-plugin-script, Arch's plymouth, Ubuntu's plymouth-label-ft), which the
-# uninstall keeps with the packages (plymouth-uninstall.sh --remove-plugin removes them)
-vm ssh "$name" "ls -d $THEME 2>/dev/null; sudo ls -A /var/lib/plasma-fusion/plymouth 2>/dev/null | grep -vx installed-packages" \
-  >"$OUT/41-leftovers.txt" 2>&1
+# No other package needs the installer's packages on these fresh VMs: none may remain, nor any
+# state. Read failures must not look like an empty directory or an absent package.
+vm ssh "$name" "sudo sh -ec 'if test -e $THEME; then echo $THEME; fi; if [ -d /var/lib/plasma-fusion/plymouth ]; then ls -A /var/lib/plasma-fusion/plymouth; fi'" \
+  >"$OUT/41-leftovers.txt" 2>&1 || fail "could not check the splash's remaining files"
 [ ! -s "$OUT/41-leftovers.txt" ] || fail "the splash is still installed after uninstall (41-leftovers.txt)"
-kept=$(vm ssh "$name" 'sudo cat /var/lib/plasma-fusion/plymouth/installed-packages 2>/dev/null' | xargs)
-[ -z "$kept" ] || log "  kept: the packages the splash installer installed ($kept)"
+vm ssh "$name" 'bash -se' >"$OUT/41-installed-packages.txt" <<'EOF' ||
+set -o pipefail
+if command -v rpm >/dev/null; then rpm -qa --qf '%{NAME}\n'
+elif command -v pacman >/dev/null; then pacman -Qq
+else dpkg-query -W -f='${Package} ${Status}\n' | awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}'
+fi
+EOF
+  fail "could not list installed packages after uninstall"
+while IFS= read -r p; do
+  [ -z "$p" ] || ! grep -qxF "$p" "$OUT/41-installed-packages.txt" ||
+    fail "the splash installer's package is still installed: $p"
+done <"$OUT/30-installed-packages.txt"
+log "the splash installer's packages are removed"
 theme=$(selected)
 log "splash theme after uninstall: ${theme:-not named}"
 [ -n "$theme" ] && [ "$theme" != plasma-fusion ] && [ "$theme" != "$THEME/plasma-fusion.plymouth" ] ||
   fail "the splash theme after uninstall is ${theme:-not named}"
-# Arch had no Plymouth before: the installer's plymouth stays, with its own default theme
-[ "$stock" = none ] || [ "$theme" = "$stock" ] || fail "the splash theme after uninstall is $theme, not the stock $stock"
+[ "$theme" = "$stock" ] || fail "the splash theme after uninstall is $theme, not the stock $stock"
 
 boot 42-restored differ || fail "the boot after uninstall still looks like the Splash board"
 n=$(crashes) || fail "crash collector unavailable or failed"

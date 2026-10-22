@@ -9,6 +9,12 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Boot splash uninstall:** the installer's `uninstall` now also removes the packages the splash
+  installer added (Fedora's `plymouth-plugin-script`, Arch's Plymouth, Ubuntu's
+  `plymouth-label-ft`), so Arch no longer shows Plymouth's own splash after Plasma Fusion is gone.
+  `plymouth-uninstall.sh --remove-plugin` removes only those no other installed package needs:
+  it used to remove a theme installed since along with them on Fedora, Debian and Ubuntu, and to
+  stop on Arch; such a package now stays, with a note.
 - **Boot splash on Ubuntu 26.10:** `plymouth-install.sh --select` now also installs Plymouth's text
   plugin (`plymouth-label-ft`; Debian: `plymouth-label`) where the system's Plymouth needs it:
   without it, Plymouth's script plugin crashed as the splash started and the boot showed a

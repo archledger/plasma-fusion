@@ -138,8 +138,13 @@ Exit codes: 0 done or nothing to do, 1 error, 2 usage, 3 refused (nothing change
   and an SDDM backup exists; each greeter is
   restored on its own, so the other's later settings stay. A theme choice the restore keeps (made by
   hand, or in a file greeter-apply.sh does not write) is named in a note; SDDM falls back to its
-  built-in theme once the package is gone, so the uninstall goes on. `plymouth-uninstall.sh` when Plymouth's
-  themes hold `plasma-fusion`. If any of them stops, the packages stay installed.
+  built-in theme once the package is gone, so the uninstall goes on. `plymouth-uninstall.sh` when
+  Plymouth's themes hold `plasma-fusion`, with `--remove-plugin`: the packages the splash installer
+  added go too where no other installed package needs them (its help says when it checks that; one
+   from 0.6.0 or before removes them unchecked, so the installer keeps them there). Pending splash
+   state also triggers cleanup when a previous attempt removed the theme files but failed to remove
+   the packages. That state is checked with sudo after confirmation because the greeter can make
+   its parent directory private. If any helper stops, the Plasma Fusion packages stay installed.
 - The setup step runs as the user in the session (`plasma-fusion setup`, which backs up first);
   when it stops, the installer names `plasma-fusion restore --latest` and leaves the packages.
 
