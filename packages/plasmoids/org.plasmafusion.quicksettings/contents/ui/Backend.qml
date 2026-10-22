@@ -335,6 +335,7 @@ Item {
         readonly property var vpnModel: s ? s.vpnModel : null
         readonly property int vpnCount: s ? s.vpnCount : 0
         readonly property bool scanning: s ? s.scanning : false
+        readonly property string connectionError: s ? s.connectionError : ""
         readonly property bool checked: wifiDevice && wifiEnabled && !airplane
         readonly property bool hotspotSupported: s ? s.hotspotSupported : false
         readonly property bool hotspotActive: s ? s.hotspotActive : false
@@ -422,10 +423,8 @@ Item {
                 s.activate(connectionPath, devicePath, specificPath);
             }
         }
-        function addAndActivate(devicePath: string, specificPath: string, password: string) {
-            if (s) {
-                s.addAndActivate(devicePath, specificPath, password);
-            }
+        function addAndActivate(devicePath: string, specificPath: string, password: string, ssid: string, security: int): bool {
+            return s ? s.addAndActivate(devicePath, specificPath, password, ssid, security) : false;
         }
         function deactivate(connectionPath: string, devicePath: string) {
             if (s) {

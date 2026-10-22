@@ -14,6 +14,7 @@ Item {
 
     // Set by the owner: scan and keep models live only while the list is shown.
     property bool listVisible: false
+    onListVisibleChanged: if (!listVisible) { connectionError = ""; }
 
     readonly property bool available: true
     readonly property bool wifiDevice: availableDevices.wirelessDeviceAvailable
@@ -72,6 +73,7 @@ Item {
 
     readonly property var activeModel: activeWifiModel
     readonly property var otherModel: otherWifiModel
+    property string connectionError: ""
     readonly property bool scanning: handler.scanning
     readonly property bool hotspotSupported: handler.hotspotSupported
     // The widgets' shared state (Instances), not this widget's handler: a handler made while the
@@ -154,13 +156,79 @@ Item {
         handler.requestScan();
     }
     function activate(connectionPath: string, devicePath: string, specificPath: string) {
+        connectionError = "";
         handler.activateConnection(connectionPath, devicePath, specificPath);
     }
-    function addAndActivate(devicePath: string, specificPath: string, password: string) {
-        if (password && password.length > 0) {
-            handler.addAndActivateConnection(devicePath, specificPath, password);
-        } else {
+    function connectionChanged(): bool {
+        connectionError = i18nc("@info:status Wi-Fi", "The network changed or is no longer available. Select it again.");
+        return false;
+    }
+    // plasma-nm 6.7/6.8 leaves an unsaved row's SpecificPath unchanged when the network's
+    // reference AP changes. Resolve the selected identity in a fresh native model just before
+    // handing it to the handler. Never substitute a different device or security type.
+    // True means handed to the native handler, not connected: it or NetworkManager can still
+    // reject the request if the AP disappears after this lookup.
+    function addAndActivate(devicePath: string, specificPath: string, password: string, ssid: string, security: int): bool {
+        connectionError = "";
+        if (!wifiEnabled || !wifiHwEnabled || airplane || !devicePath || !specificPath || !ssid
+            || security < -1 || (security === -1 && password && password.length > 0)) {
+            return connectionChanged();
+        }
+        const roles = networkModel.KItemModels.KRoleNames;
+        const deviceRole = roles.role("DevicePath");
+        const pathRole = roles.role("SpecificPath");
+        const uuidRole = roles.role("Uuid");
+        const securityRole = roles.role("SecurityType");
+        function value(model, row, role) { return model.data(model.index(row, 0), role); }
+        let original = 0;
+        for (let row = 0; row < networkModel.rowCount(); ++row) {
+            if (value(networkModel, row, deviceRole) === devicePath && value(networkModel, row, pathRole) === specificPath
+                && value(networkModel, row, ssidRole) === ssid && value(networkModel, row, securityRole) === security
+                && value(networkModel, row, typeRole) === PlasmaNM.Enums.Wireless && !value(networkModel, row, uuidRole)) {
+                ++original;
+            }
+        }
+        if (original !== 1) {
+            return connectionChanged();
+        }
+        // These plasma-nm versions also label new open networks UnknownSecurity. With no
+        // password, preserve the native handler's security detection at the selected AP; do
+        // not guess "open", or match an unknown encrypted AP to another AP by SSID.
+        if (security === -1) {
             handler.addAndActivateConnection(devicePath, specificPath);
+            return true;
+        }
+        const snapshot = connectionSnapshot.createObject(net);
+        if (!snapshot) {
+            return connectionChanged();
+        }
+        try {
+            let path = "";
+            let matches = 0;
+            for (let row = 0; row < snapshot.rowCount(); ++row) {
+                if (value(snapshot, row, deviceRole) !== devicePath || value(snapshot, row, ssidRole) !== ssid
+                    || value(snapshot, row, typeRole) !== PlasmaNM.Enums.Wireless
+                    || value(snapshot, row, securityRole) !== security) {
+                    continue;
+                }
+                // A profile saved elsewhere while the password was entered is not a new network.
+                if (value(snapshot, row, uuidRole)) {
+                    return connectionChanged();
+                }
+                path = String(value(snapshot, row, pathRole) || "");
+                ++matches;
+            }
+            if (matches !== 1 || !path) {
+                return connectionChanged();
+            }
+            if (password && password.length > 0) {
+                handler.addAndActivateConnection(devicePath, path, password);
+            } else {
+                handler.addAndActivateConnection(devicePath, path);
+            }
+            return true;
+        } finally {
+            snapshot.destroy();
         }
     }
     function deactivate(connectionPath: string, devicePath: string) {
@@ -199,6 +267,10 @@ Item {
     }
     PlasmaNM.NetworkModel {
         id: networkModel
+    }
+    Component {
+        id: connectionSnapshot
+        PlasmaNM.NetworkModel {}
     }
     PlasmaNM.AppletProxyModel {
         id: appletModel

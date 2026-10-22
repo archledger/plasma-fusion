@@ -17,7 +17,7 @@ import tempfile
 # X11 and crashes on the missing connection (clipboard_sheet_test.py does the same).
 os.environ["QT_QPA_OFFSCREEN_NO_GLX"] = "1"
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
-from PySide6.QtCore import QObject, QPoint, QPointF, Qt, QUrl, Slot  # noqa: E402
+from PySide6.QtCore import Q_ARG, QMetaObject, QObject, QPoint, QPointF, Qt, QUrl, Slot  # noqa: E402
 from PySide6.QtGui import QFont, QGuiApplication  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickView  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
@@ -157,6 +157,9 @@ Item {
     height: 560
     property bool touch: false
     property bool hotspotOn: false
+    property bool acceptConnection: true
+    property var connectionRequest: []
+    function changeNetwork(role: string, value) { backend.net.otherModel.setProperty(0, role, value); }
     readonly property real px44: metrics.px(44)
     FusionPalette { id: pal; touch: root.touch }
     FusionMetrics { id: metrics }
@@ -195,6 +198,7 @@ Item {
             function refresh() {}
         }
         property QtObject net: QtObject {
+            readonly property string connectionError: root.acceptConnection ? "" : "Network changed"
             readonly property bool wifiEnabled: true
             readonly property bool wifiHwEnabled: true
             readonly property string wifiDevice: "wlan0"
@@ -223,7 +227,10 @@ Item {
             function setAirplaneMode() {}
             function activate() {}
             function deactivate() {}
-            function addAndActivate() {}
+            function addAndActivate(device, path, password, ssid, security): bool {
+                root.connectionRequest = [device, path, ssid, security, password.length];
+                return root.acceptConnection;
+            }
             function configureHotspot() {}
             function toggleHotspot() {}
             function openSettings() {}
@@ -427,7 +434,7 @@ touch_assert(root, find(root, "devicesPage"), "the Devices page")
 touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page")
 wifi = find(root, "wifiPage")
 for row in [i for i in items(wifi) if i.objectName() == "wifi-row"]:
-    row.setProperty("expanded", True)
+    QMetaObject.invokeMethod(row, "connect")
 QTest.qWait(80)
 field = next(i for i in items(wifi) if "QQuickTextField" in classes(i))
 field.setProperty("text", "secret123")
@@ -440,7 +447,48 @@ QTest.qWait(120)
 touch_assert(root, find(root, "wifiPage"), "the Wi-Fi page (hotspot on)")
 rows = [i for i in items(wifi) if i.objectName() == "wifi-row"] if wifi else []
 check(rows and all(r.height() + 0.5 >= 44 for r in rows),
-      "touch mode: the Wi-Fi network rows reach 44 x 44 (%d rows)" % len(rows))
+       "touch mode: the Wi-Fi network rows reach 44 x 44 (%d rows)" % len(rows))
+# A rejected dispatch must not discard the password; a successful handoff and cancellation do.
+row = rows[0]
+field = next(i for i in items(row) if "QQuickTextField" in classes(i))
+button = next(i for i in items(row) if i.property("text") == "Connect")
+row.setProperty("expanded", False)
+QMetaObject.invokeMethod(row, "connect")
+field.setProperty("text", "fixture-pass")
+root.setProperty("acceptConnection", False)
+button.clicked.emit()
+QTest.qWait(50)
+check(row.property("expanded") and field.property("text") == "fixture-pass",
+      "a rejected Wi-Fi dispatch keeps the password form and its text")
+check(find(wifi, "wifi-connection-error") is not None,
+      "a rejected Wi-Fi dispatch exposes its error in the page")
+request = root.property("connectionRequest")
+request = request.toVariant() if hasattr(request, "toVariant") else request
+check(request == ["/d/1", "/s/2", "Neighbour", 1, 12],
+      "Wi-Fi dispatch carries the selected identity and password length")
+root.setProperty("acceptConnection", True)
+button.clicked.emit()
+QTest.qWait(50)
+check(not row.property("expanded") and field.property("text") == "",
+      "a successful Wi-Fi handoff clears and closes the password form")
+QMetaObject.invokeMethod(row, "connect")
+field.setProperty("text", "fixture-pass")
+QMetaObject.invokeMethod(row, "connect")
+QTest.qWait(50)
+check(not row.property("expanded") and field.property("text") == "",
+      "collapsing the Wi-Fi password form clears its text")
+QMetaObject.invokeMethod(row, "connect")
+field.setProperty("text", "fixture-pass")
+QMetaObject.invokeMethod(root, "changeNetwork", Q_ARG(str, "SecurityType"), Q_ARG("QVariant", 6))
+QTest.qWait(50)
+check(not row.property("expanded") and field.property("text") == "",
+      "a Wi-Fi security change clears the old password attempt")
+QMetaObject.invokeMethod(row, "connect")
+field.setProperty("text", "fixture-pass")
+QMetaObject.invokeMethod(root, "changeNetwork", Q_ARG(str, "Uuid"), Q_ARG("QVariant", "saved-elsewhere"))
+QTest.qWait(50)
+check(not row.property("expanded") and field.property("text") == "",
+      "a profile saved elsewhere clears the old password attempt")
 view.close()
 
 print(f"Quick settings pages: {checks} checks, 0 failures")

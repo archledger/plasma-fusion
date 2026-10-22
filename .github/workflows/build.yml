@@ -185,6 +185,15 @@ jobs:
             --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
             python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/pages_test.py "$RUNNER_TEMP/qs-stage"
 
+      - name: Wi-Fi access-point replacement (native plasma-nm, private buses)
+        # NetworkManager is mocked on private buses; no runner radio or saved profile is touched.
+        # The pages step above already staged the components used by the full-backend case.
+        # Keep the native test separate so missing test tooling fails visibly.
+        run: |
+          set -euo pipefail
+          dnf install -y -q python3-dbusmock
+          QT_QPA_PLATFORM=offscreen python3 packages/plasmoids/org.plasmafusion.quicksettings/tests/network_ap_test.py "$RUNNER_TEMP/qs-stage"
+
       - name: Quick settings tile editing (staged QML on the real backend, offscreen Qt)
         run: |
           set -euo pipefail
