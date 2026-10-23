@@ -325,6 +325,31 @@ jobs:
       - name: Settings page's content column in the middle of a wide page (offscreen Qt)
         run: python3 packages/kcm-cpp/tests/page_layout_test.py
 
+      - name: Settings section navigation, responsive layout and retained state (offscreen Qt)
+        run: |
+          set -euo pipefail
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/kcm-cpp/tests/section_navigation_test.py
+          QT_QPA_PLATFORM=offscreen dbus-run-session \
+            --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+            python3 packages/kcm-cpp/tests/section_page_test.py
+          mkdir -p build/kcm-navigation-previews
+          QT_QPA_PLATFORM=offscreen python3 packages/kcm-cpp/tests/offscreen_preview.py \
+            build/kcm-navigation-previews/appearance-dark.png dark --width 1100 --height 760
+          QT_QPA_PLATFORM=offscreen python3 packages/kcm-cpp/tests/offscreen_preview.py \
+            build/kcm-navigation-previews/desktop-light.png light --width 1100 --height 760 --section 1
+          QT_QPA_PLATFORM=offscreen python3 packages/kcm-cpp/tests/offscreen_preview.py \
+            build/kcm-navigation-previews/compact-power.png dark --width 440 --height 720 --section 3
+
+      - name: Keep settings navigation previews
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: plasma-fusion-settings-previews
+          path: build/kcm-navigation-previews/*.png
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Live chips' logic, sources, keyboard and texts (node; offscreen Qt, stand-in camera monitor and status items on a private bus)
         run: |
           set -euo pipefail

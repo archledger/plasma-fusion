@@ -14,6 +14,54 @@ The "Appearance" page of the Main / MainLight boards (`<section aria-label="Appe
 renders desktop-dark-1 / desktop-light-1) as a System Settings module: a C++
 `KQuickManagedConfigModule` plugin with a Kirigami / KCMUtils QML page in the Plasma Fusion look.
 
+### Section navigation
+
+The controls are grouped into five destinations instead of one long scrolling page:
+
+| Destination | Sections |
+|---|---|
+| Appearance | Style, accent color, glass and motion, application icons |
+| Desktop | Dock/top-bar switches, dock and top bar, launcher, desktop icons and file behavior |
+| Windows & Input | Window buttons, snapping, tablet behavior and touchpad gestures |
+| Power & Session | Lock/login options, battery behavior and file-content indexing |
+| Backup & Reset | Export, import, restore previous desktop and reset layout |
+
+`SectionNavigation.qml` uses a native tab bar when all labels fit and a labelled section selector
+when they do not. It measures the actual delegates, including larger fonts. Selecting a section
+does not call load, save or defaults: the controls stay instantiated and retain pending values.
+Each section remembers its scroll position for the lifetime of the page. The layout is polished
+before restoring that position, so switching back from a shorter section does not clamp it to the
+old height. Keyboard navigation follows the layout direction; hidden sections leave the focus path.
+The compact selector keeps keyboard focus on the ComboBox while its popup is open: Qt gives its
+delegates `NoFocus`, so KDE's Menu popup cannot navigate them with its own focus-based key handler.
+It uses the normal style popup, not a forced native popup window. The navigation suite covers
+opening with the keyboard, selecting with Down/Return, and cancelling a pointer-opened popup.
+
+Apply and Defaults retain their existing module-wide scope. The page shows a global pending-change
+note, not per-section dirty dots: the backend's asynchronous/mixed-state baseline is not exposed to
+QML, so comparing initial displayed values would produce incorrect indicators. Errors and status
+messages remain in the common header, including after navigation. Immediate actions and their
+confirmations keep their existing behavior described below.
+
+The native navigation guidance is [KDE HIG: layout and navigation](https://develop.kde.org/hig/layout_and_nav/).
+The new offscreen suites run in CI without changing desktop settings:
+
+```sh
+QT_QPA_PLATFORM=offscreen dbus-run-session \
+  --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+  python3 packages/kcm-cpp/tests/section_navigation_test.py
+QT_QPA_PLATFORM=offscreen dbus-run-session \
+  --config-file=packages/kwin/tests/offscreen/session-bus.conf -- \
+  python3 packages/kcm-cpp/tests/section_page_test.py
+```
+
+The first covers the real navigation control, keyboard/RTL behavior and large-text responsiveness.
+The second loads the actual page with the existing backend stand-in to check grouping, retained
+values, scroll and common messages. That stand-in does not prove Apply or dirty-state calculation;
+the existing native CTests and private System Settings tests cover those contracts.
+CI also publishes `plasma-fusion-settings-previews`: offscreen dark, light and compact screenshots
+for visual review. They use the stand-in backend and are not evidence of a live settings change.
+
 | Section | Control | Written on Apply |
 |---|---|---|
 | Style | Light / Dark / Follow sunset cards (124 x 72 previews) | Light, Dark: `plasma-apply-lookandfeel --apply org.plasmafusion.{light,dark}.desktop` after kdeglobals `[KDE] DefaultLightLookAndFeel=org.plasmafusion.light.desktop`, `DefaultDarkLookAndFeel=org.plasmafusion.dark.desktop`, `AutomaticLookAndFeel=false`. Follow sunset: the same pair plus `AutomaticLookAndFeel=true` (the keys `tools/device/fusion-config.sh --auto` sets); Plasma's `lookandfeelautoswitcher` kded module then applies the theme for the time of day at once and switches at dawn and dusk |
