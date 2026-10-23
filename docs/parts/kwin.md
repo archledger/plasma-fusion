@@ -491,6 +491,53 @@ Known limits: a workspace that holds another activity's window stays; a window w
 names a workspace that was removed (empty) comes back on the shown one, as in GNOME; with several
 rows the workspaces are added and removed in KWin's linear order and the grid reflows.
 
+## Dynamic-tiling feasibility (2026-10-23)
+
+Dynamic tiling is not implemented or installed. Its approved plan starts with a native ownership
+gate. The test-only `tests/vsession/auto_tiling_probe.py` and `scenario-auto-tiling.sh` characterize
+one candidate: temporarily replace the custom tree and rebuild the saved layout when finished.
+
+KWin 6.7.5 and 6.7.91, both with Qt 6.11.2, accepted four native master-stack leaves without stealing
+focus. Unmanaging those four windows restored their original floating frames. However, replacing
+the tree also changed an existing manual window's tile and saved the replacement to `kwinrc`.
+After a deliberate SIGKILL of the private compositor and reopening the same disposable HOME, both
+versions loaded the replacement rather than the original layout. Gate A therefore remains blocked.
+
+These results reject that temporary-tree approach; they do not prove that every native solution is
+impossible. A separate ownership/recovery design needs review before production work. Restoring a
+known fixture normally is not proof of arbitrary-layout or crash-safe restoration. Hotplug, forced
+rules, Activity transitions and interaction with all placement scripts remain unqualified for the
+proposed feature. The existing directional tests remain the baseline, not tests of a new tiler.
+
+To reproduce in an existing local test image, use fresh names and disposable paths:
+
+```sh
+name="tiling-gate-$(date +%Y%m%dT%H%M%S)"
+seed="$PWD/build/$name-seed"
+persist="$PWD/build/$name-home"
+test ! -e "$seed" && test ! -e "$persist"
+mkdir -p "$seed/pf-tools" "$persist"
+cp -a tools/. "$seed/pf-tools/"
+cp packages/kwin/tests/vsession/auto_tiling_probe.py "$seed/auto_tiling_probe.py"
+touch "$seed/tiling-gate-crash"
+PFV_IMAGE=localhost/plasma-fusion-test:f44-6.7.5 PFV_OUTPUTS=2 PFV_HOME_DIR="$persist" \
+  tools/vsession/cvsession.sh "$name-crash" \
+  packages/kwin/tests/vsession/scenario-auto-tiling.sh "$seed" 1440x900 150
+PFV_IMAGE=localhost/plasma-fusion-test:f44-6.7.5 PFV_OUTPUTS=2 PFV_HOME_DIR="$persist" \
+  tools/vsession/cvsession.sh "$name-reopen" \
+  packages/kwin/tests/vsession/scenario-auto-tiling.sh "$seed" 1440x900 120
+```
+
+Use `localhost/plasma-fusion-test:f44-6.8beta` for the second lane and verify its actual package
+versions. Read `vsession-out/NAME/result.json`: `characterizationChecks` tests whether the experiment
+ran as intended; `acceptance` and `gatePassed` report preservation separately. The first session
+must produce `interruption-sent.json`, confirming the kernel accepted SIGKILL through a pidfd for
+the verified private compositor. A missing receipt makes that interruption trial inconclusive;
+the wrapper's status line alone is insufficient. The reopen phase records the observed failure
+before rebuilding the disposable fixture. The wrapper's final exit code alone is not a verdict.
+The probe refuses to run outside a matching private container HOME/runtime and targets only its
+same-UID ancestor compositor with the exact private socket. It never signals the logged-in KWin.
+
 ## Verification
 
 Offline (laptop):
