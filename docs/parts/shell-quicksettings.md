@@ -423,13 +423,19 @@ KWin's Night Light reloads its settings only through KConfigWatcher (a plain wri
   it reached NetworkManager or association completed. Later NetworkManager errors still use its
   native notifications.
   The same plasma-nm versions label a new open network with unknown security. That passwordless
-  path keeps the native handler's security detection at the selected AP rather than guessing a
-  security type or substituting another AP; its existing stale-AP failure possibility remains.
+  path now validates the exact selected AP in the fresh snapshot too. It keeps the native handler's
+  security detection rather than guessing a security type or substituting another AP. If the AP
+  changed, the request is refused with the existing explanation and the list is refreshed for an
+  explicit new selection. Opening the Wi-Fi page also replaces the native model, so a long-lived
+  panel does not keep offering an expired AP. The preceding replacement is destroyed; the proxy
+  models remain in place. An AP can still disappear after the final check and before activation.
   Closing the list or activating a saved connection
   clears any previous dispatch error.
 
   The test covers open networks, WPA2 and WPA3, AP replacement, identical SSIDs on another device, disappearance,
   security changes, unknown security, a profile saved meanwhile and the full backend facade.
+  Open/unknown-security replacement also checks rejection, fresh-list reselection, preservation
+  of encrypted security and model cleanup across repeated page openings.
   The page tests cover preserving a rejected password entry, clearing it on submission or
   cancellation, and invalidating it when the selected security or saved profile changes.
 * The on-screen keyboard's replies (offscreen, Plasma's D-Bus module, a stand-in KWin on a private

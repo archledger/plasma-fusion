@@ -22,7 +22,8 @@ os.environ["QT_QPA_OFFSCREEN_NO_GLX"] = "1"
 
 
 SERVICES = Path(__file__).resolve().parent.parent / "contents/ui/services"
-CASES = ("stable", "open", "wpa3", "replaced", "other-device", "gone", "security-changed",
+CASES = ("stable", "open", "open-replaced", "open-reopen", "unknown-encrypted-replaced",
+         "wpa3", "replaced", "other-device", "gone", "security-changed",
          "unknown", "unknown-encrypted", "unknown-secret", "saved", "ambiguous", "facade", "facade-gone")
 
 
@@ -52,7 +53,8 @@ def run_case(case, stage):
         try:
             mock = dbus.Interface(obj, dbusmock.MOCK_IFACE)
             dev = mock.AddWiFiDevice("test0", "test0", 30)
-            flags = 0 if case == "open" else 0x100 if case in ("unknown-encrypted", "unknown-secret") else 0x188
+            flags = 0 if case in ("open", "open-replaced", "open-reopen") else 0x100 if case in (
+                "unknown-encrypted", "unknown-encrypted-replaced", "unknown-secret") else 0x188
             old = mock.AddAccessPoint(dev, "old", "Fusion-test", "02:00:00:00:00:01", 2, 2412, 54000, 60,
                                      flags)
             if case == "wpa3":
@@ -112,14 +114,14 @@ Item {
                 return json.loads(QMetaObject.invokeMethod(root, "rows", Q_RETURN_ARG(str)))
 
             assert any(r["path"] == old for r in rows()), "initial native row missing"
-            if case in ("open", "unknown-encrypted", "unknown-secret"):
+            if case in ("open", "open-replaced", "open-reopen", "unknown-encrypted", "unknown-encrypted-replaced", "unknown-secret"):
                 security = next(r["security"] for r in rows() if r["path"] == old)
             else:
                 security = 8 if case == "wpa3" else 6
             assert next(r["security"] for r in rows() if r["path"] == old) == security, "security fixture not classified"
             expected = str(old)
-            if case in ("replaced", "other-device"):
-                new = mock.AddAccessPoint(dev, "new", "Fusion-test", "02:00:00:00:00:02", 2, 5180, 54000, 90, 0x188)
+            if case in ("replaced", "other-device", "open-replaced", "open-reopen", "unknown-encrypted-replaced"):
+                new = mock.AddAccessPoint(dev, "new", "Fusion-test", "02:00:00:00:00:02", 2, 5180, 54000, 90, flags)
                 mock.RemoveAccessPoint(dev, old)
                 expected = str(new)
             if case == "other-device":
@@ -151,14 +153,32 @@ Item {
                 mock.SetProperty(dev, "org.freedesktop.NetworkManager.Device", "AvailableConnections",
                                  dbus.Array(profiles, signature="o"))
             QTest.qWait(250)
+            if case == "open-reopen":
+                for _ in range(4):
+                    QMetaObject.invokeMethod(root, "closeList")
+                    QTest.qWait(50)
+                assert next(r["path"] for r in rows() if r["device"] == dev) == expected, "reopened list kept the old AP"
+                models = [child for child in root.findChildren(QObject) if child.inherits("NetworkModel")]
+                assert len(models) == 2, "reopening leaked old native network models"
             # Use the row's current path: unfixed plasma-nm retains the old one, a later fixed
             # version may already expose the replacement. Both must dispatch the current AP.
             selected = next((r["path"] for r in rows() if r["device"] == dev), str(old))
             dispatched = QMetaObject.invokeMethod(root, "attempt", Q_RETURN_ARG(bool), Q_ARG(str, str(dev)),
                                                  Q_ARG(str, selected), Q_ARG(int, -1 if case == "unknown" else security),
-                                                 Q_ARG(str, "" if case in ("open", "unknown-encrypted") else "fixture-password"))
+                                                  Q_ARG(str, "" if case in ("open", "open-replaced", "open-reopen", "unknown-encrypted",
+                                                                          "unknown-encrypted-replaced") else "fixture-password"))
             QTest.qWait(250)
             calls = manager.GetMethodCalls("AddAndActivateConnection")
+            if case in ("open-replaced", "unknown-encrypted-replaced") and selected != expected:
+                assert not dispatched and not calls, "stale unknown-security selection was handed off"
+                assert QMetaObject.invokeMethod(root, "error", Q_RETURN_ARG(str)), "missing reselection explanation"
+                refreshed = next(r for r in rows() if r["device"] == dev)
+                assert refreshed["path"] == expected, "the visible list kept the stale access point"
+                dispatched = QMetaObject.invokeMethod(root, "attempt", Q_RETURN_ARG(bool), Q_ARG(str, str(dev)),
+                                                      Q_ARG(str, refreshed["path"]), Q_ARG(int, refreshed["security"]),
+                                                      Q_ARG(str, ""))
+                QTest.qWait(250)
+                calls = manager.GetMethodCalls("AddAndActivateConnection")
             if case in ("gone", "facade-gone", "security-changed", "unknown", "unknown-secret", "saved", "ambiguous"):
                 assert not dispatched and not calls, "unsafe or unavailable target was dispatched"
                 assert QMetaObject.invokeMethod(root, "error", Q_RETURN_ARG(str)), "missing failure explanation"
@@ -173,9 +193,9 @@ Item {
                 assert dispatched, "connection dispatch refused"
                 assert len(calls) == 1 and str(calls[0][1][2]) == expected, "wrong or stale access point dispatched"
                 assert str(calls[0][1][1]) == str(dev), "wrong device dispatched"
-                if case == "open":
+                if case in ("open", "open-replaced", "open-reopen"):
                     assert "802-11-wireless-security" not in calls[0][1][0], "open network was forced to use encryption"
-                if case == "unknown-encrypted":
+                if case in ("unknown-encrypted", "unknown-encrypted-replaced"):
                     assert "802-11-wireless-security" in calls[0][1][0], "unknown encrypted network was forced open"
         finally:
             if root is not None:

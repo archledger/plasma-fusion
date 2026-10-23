@@ -14,7 +14,26 @@ Item {
 
     // Set by the owner: scan and keep models live only while the list is shown.
     property bool listVisible: false
-    onListVisibleChanged: if (!listVisible) { connectionError = ""; }
+    onListVisibleChanged: {
+        if (listVisible) {
+            refreshNetworkModel();
+        } else {
+            connectionError = "";
+        }
+    }
+    property var refreshedNetworkModel: null
+    readonly property var networkModel: refreshedNetworkModel || initialNetworkModel
+    function refreshNetworkModel(): void {
+        // A new scan does not repair plasma-nm's stale unsaved rows. Replace the model instead.
+        const replacement = connectionSnapshot.createObject(net);
+        if (replacement) {
+            const previous = refreshedNetworkModel;
+            refreshedNetworkModel = replacement;
+            if (previous) {
+                previous.destroy();
+            }
+        }
+    }
 
     readonly property bool available: true
     readonly property bool wifiDevice: availableDevices.wirelessDeviceAvailable
@@ -191,13 +210,6 @@ Item {
         if (original !== 1) {
             return connectionChanged();
         }
-        // These plasma-nm versions also label new open networks UnknownSecurity. With no
-        // password, preserve the native handler's security detection at the selected AP; do
-        // not guess "open", or match an unknown encrypted AP to another AP by SSID.
-        if (security === -1) {
-            handler.addAndActivateConnection(devicePath, specificPath);
-            return true;
-        }
         const snapshot = connectionSnapshot.createObject(net);
         if (!snapshot) {
             return connectionChanged();
@@ -213,12 +225,20 @@ Item {
                 }
                 // A profile saved elsewhere while the password was entered is not a new network.
                 if (value(snapshot, row, uuidRole)) {
+                    if (security === -1) {
+                        Qt.callLater(net.refreshNetworkModel);
+                    }
                     return connectionChanged();
                 }
                 path = String(value(snapshot, row, pathRole) || "");
                 ++matches;
             }
-            if (matches !== 1 || !path) {
+            // UnknownSecurity includes open and unsupported encrypted networks. Keep native
+            // detection at the exact selected AP; a changed AP needs an explicit new selection.
+            if (matches !== 1 || !path || (security === -1 && path !== specificPath)) {
+                if (security === -1) {
+                    Qt.callLater(net.refreshNetworkModel);
+                }
                 return connectionChanged();
             }
             if (password && password.length > 0) {
@@ -266,7 +286,7 @@ Item {
         }
     }
     PlasmaNM.NetworkModel {
-        id: networkModel
+        id: initialNetworkModel
     }
     Component {
         id: connectionSnapshot
