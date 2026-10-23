@@ -119,6 +119,7 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
 | `[Script-plasmafusion-snap] QuickTileGaps` | true | apply the gap to KWin's quick tiles (edge snapping, Meta+arrow, Meta+Z halves/quarters) |
 | `[Script-plasmafusion-snap] FillOtherHalf` | true | offer the other windows after a window is snapped to a half, and for every empty zone of a layout chosen in the flyout |
 | `[Script-plasmafusion-snap] PairWindows` | true | snap groups: windows snapped together through the picker minimise/restore/raise together |
+| `[Script-plasmafusion-snap] LegacyWidthCycle` | false | opt in to the former Left/Right half, third, two-thirds cycle instead of directional snapping |
 | `[Script-plasmafusion-snap] GestureSwipeUp3`, `GestureSwipeDown3`, `GestureSwipeLeft3`, `GestureSwipeRight3`, `GesturePinchIn4`, `GesturePinchOut4` | `overview`, `desktop`, `none`, `none`, `launcher`, `desktop` | what three fingers up, down, left and right and four fingers pinched in and spread out do: `none`, `overview`, `desktop`, `grid`, `windows`, `launcher`, `quicksettings`, `notifications` or `snaplayouts` (an unknown name is the default). Set on the Plasma Fusion settings page, not in the script's own settings; read at the next reconfigure ("Touchpad gestures") |
 | `[Script-plasmafusion-attach] FollowParent` | true | dialogs move with their window |
 | `[Script-plasmafusion-attach] DetachOnMove` | true | dragging a dialog yourself detaches it (false: it snaps back) |
@@ -262,9 +263,41 @@ Script settings (System Settings > KWin Scripts > configure, or kwinrc):
   quick tile's role (left, right, top, bottom, the quarters) comes from its shape, not its place
   among the children; the outline uses the same test.
 
-### Snap sizes from the keyboard
+### Directional snapping from the keyboard
 
-The next queue's item 7 (approved 2026-10-16; the report's "no Rectangle-style keyboard cycling").
+The four arrows have one spatial meaning (approved 2026-10-22): Meta+Left/Right/Up/Down places
+the active window in the corresponding half. A perpendicular direction combines with the current
+side into a quarter, in either order: Left then Up and Up then Left both give top-left. An opposite
+direction replaces that axis only: top-left then Right gives top-right; then Down gives bottom-right.
+Repeating a direction does nothing: no width cycle, restore, minimize, or monitor jump.
+
+`Directional.js` maps the eight quick-tile roles. `main.qml` reads native requested tile membership,
+not the last rendered frame, so rapid key sequences do not wait for a Wayland client to draw. A
+direction change uses 50/50 splits; a repeat keeps a manually resized split and snap group intact.
+Custom tiles and floating thirds start a new half. A tile refused by KWin is not emulated by changing
+frame geometry: native tiling keeps window rules and the floating restore rectangle intact.
+For the first quick tile from a custom layout, a native corner request discovers the quick-tile
+root without combining a direction with KWin's `Custom` flag; the same action then manages the
+requested half. The floating restore rectangle stays native throughout.
+
+Meta+Shift+Arrow moves to an adjacent monitor in that direction, never by connector order. An
+adjacent output lies wholly on that side and overlaps on the perpendicular axis; the nearest facing
+edge wins, then the closest perpendicular center. No neighbor means no change. KWin transfers the
+native tile role and restore rectangle, and the script retains resized proportions by adjusting
+the destination's shared split (other windows on that split follow it). Floating windows move
+normally. The gap correction uses the requested tile's output even before the client commits the
+move; clipping to its old output could otherwise send it back. Meta+PageUp maximizes,
+Meta+Backspace restores and Meta+Z keeps the advanced layouts.
+Moving does not require a resizable window: normal movable fixed-size windows are supported too.
+The existing Left/Right action identities stay; Up/Down and four `Plasma Fusion: Move to Screen ...`
+actions are added. Setup waits for all eight actions before assigning keys; upgrade ownership rules
+are in `docs/parts/device.md`.
+
+#### Optional legacy width cycle
+
+Enable **Legacy Left/Right width cycling** in System Settings > KWin Scripts > Plasma Fusion Snap
+Layouts > Configure (`[Script-plasmafusion-snap] LegacyWidthCycle=true`). This retains the former
+keyboard cycle (approved 2026-10-16), rather than making repeated directional keys resize windows.
 "Plasma Fusion: Snap Left" and "Snap Right" (`ShortcutHandler`s of the snap script, no key of their
 own: the setup moves Meta+Left/Right to them from KWin's `Window Quick Tile Left` / `Right`, as two
 actions cannot share a key; docs/parts/device.md) step the active window through 1/2, 1/3 and 2/3 of
@@ -286,8 +319,7 @@ that side of the work area, then back to 1/2 (`Cycle.js`):
 - after 2/3, when a screen lies on that side (`Cycle.neighbourOf()`: the nearest one wholly on that
   side that shares some height), the window goes there, to that screen's facing half
   (`sendClientToScreen`, then the quick tile), as KWin's quick tile did on a second press; on one
-  screen it goes back to 1/2. Meta+Shift+Left/Right (KWin's "Window to Previous/Next Screen") move
-  a window between screens at once.
+  screen it goes back to 1/2. Meta+Shift+Arrow still uses the spatial monitor actions.
 
 An update in a running session (2026-10-17, found on the ThinkPad's live session): the snap script
 running then is the older one, without the two actions, and the setup cannot move the keys until
@@ -298,11 +330,26 @@ path; the cache is trimmed only from 64 types on, and KWin never clears it). So 
 it and loads it from a path the engine has not seen: a link to the installed package in
 `$XDG_RUNTIME_DIR/plasma-fusion/kwin-scripts/` (a new one each time, gone with the session), with
 `Scripting.loadDeclarativeScript` and `start`. At the next login KWin loads it from where it is
-installed. Without a runtime directory the older script stays, the setup says the new one comes
+installed. KGlobalAccel retains inactive action names after unload, so the pending version upgrade
+always reloads the script rather than treating names alone as evidence that the new code runs.
+KWin's load/start D-Bus success also does not prove the QML component instantiated. Setup supplies
+a fresh `StartupProbe` identifier and waits for a keyless probe action created after root completion;
+it then unregisters that temporary action and deletes the config key. Preparation or acknowledgement
+failure leaves the shortcut keys and migration marker unchanged.
+Without a runtime directory the older script stays, the setup says the new one comes
 with the next login, and the run is not marked, so the next update moves the keys. The other
 Plasma Fusion KWin scripts run their older code until the next login.
 
-Tests: `tests/snap-cycle.test.js` (node, in the build step): the steps from a window's size on
+Tests: `tests/snap-directional.test.js` (node, in the build step) checks every role/direction,
+repeat and order invariants, and four-direction monitor selection. `tests/offscreen/snaptest.py`
+also exercises the real shortcut handlers, rapid chaining before frame commits, opposite directions,
+refused tiles, monitor transfer, no-neighbor behavior, fullscreen exclusion and legacy opt-in.
+`tests/vsession/scenario-directional.sh` runs actual keys in a private three-output session:
+all halves, opposite and repeated directions, both corner orders, original geometry restoration,
+spatial monitor moves with resized splits, cold custom-tile bootstrap, a visible picker with two
+real windows, and a fixed-size Qt window moving between outputs. It uses the staged build and
+`tools/` as the session HOME's `pf-stage` and `pf-tools`; set `PFV_OUTPUTS=3` when running it.
+`tests/snap-cycle.test.js` (node, in the build step): the steps from a window's size on
 both sides and a second screen, the order, and the neighbouring screen;
 `tests/offscreen/snaptest.py` (CI `build`, the real script with stand-in KWin objects): from the left
 half, Snap Left gives the third, the two thirds and the half again with the 6 px gap, Snap Right the

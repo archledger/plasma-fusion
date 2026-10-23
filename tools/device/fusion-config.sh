@@ -108,7 +108,7 @@
 #                      once on a HOME an earlier release configured, while the launcher still has
 #                      it and KRunner has no key); Meta+A quick settings; Meta+N the
 #                      notification list; Meta+V the clipboard sheet (Klipper's pop-up at the
-#                      pointer loses it); Meta+Up / Meta+Down maximize / restore (quick tile top /
+#                      pointer loses it); Meta+PageUp / Meta+Backspace maximize / restore (top /
 #                      bottom move to Meta+Alt+Up/Down); Meta+Tab Overview; Meta+Alt+1..9 dock apps;
 #                      every other holder of these keys loses them
 #   Window switcher    kwinrc [TabBox] DelayTime 120 (a quick Alt+Tab shows no switcher)
@@ -167,7 +167,7 @@ NOTIFICATION_TIMEOUT=5000
 # Qt key codes (modifiers | key).
 META=$((0x10000000)) ALT=$((0x08000000)) SHIFT=$((0x02000000))
 K_SPACE=$((0x20)) K_TAB=$((0x01000001)) K_UP=$((0x01000013)) K_DOWN=$((0x01000015)) K_F2=$((0x01000031))
-K_LEFT=$((0x01000012)) K_RIGHT=$((0x01000014))
+K_LEFT=$((0x01000012)) K_RIGHT=$((0x01000014)) K_PAGEUP=$((0x01000016)) K_BACKSPACE=$((0x01000003))
 # Global shortcut for the quick-settings pop-up (org.plasmafusion.quicksettings): Qt key code and
 # QKeySequence text. The Windows-style set (owner decision 6) gives it Meta+A and Meta+N opens it on
 # the notification list; without that set (--keep-shortcuts) it keeps Meta+N, as before.
@@ -2005,13 +2005,13 @@ apply_clipboard_key_upgrade() {
   set_key plasmafusionrc Shortcuts ClipboardKey "$CLIPBOARD_KEY_VERSION"
 }
 
-# Windows and the dock: Meta+Up maximize, Meta+Down restore, quick tile top/bottom on
+# Windows and the dock: Meta+PageUp maximize, Meta+Backspace restore, quick tile top/bottom on
 # Meta+Alt+Up/Down, Meta+Tab Overview, Meta+Alt+1..9 the dock's apps (apply_dock_entry_keys, after
 # KWin has loaded the scripts; Meta+5..9 lose them; Meta+1..4 switch workspaces, section 3).
 apply_window_keys() {
   local n
-  shortcut_claim kwin "Window Maximize" $((META + K_UP))
-  shortcut_claim kwin "Window Restore" $((META + K_DOWN))
+  shortcut_claim kwin "Window Maximize" $((META + K_PAGEUP))
+  shortcut_claim kwin "Window Restore" $((META + K_BACKSPACE))
   shortcut_claim kwin "Window Quick Tile Top" $((META + ALT + K_UP))
   shortcut_claim kwin "Window Quick Tile Bottom" $((META + ALT + K_DOWN))
   shortcut_claim kwin Overview $((META + K_TAB))
@@ -2049,17 +2049,59 @@ apply_dock_entry_keys() {
   done
 }
 
-# Snap sizes from the keyboard: Meta+Left/Right move from KWin's "Quick Tile Window to the
-# Left/Right" to the snap KWin script's "Plasma Fusion: Snap Left/Right", which step the window
-# through 1/2, 1/3 and 2/3 of that side (two actions cannot share a key). The actions exist once
-# KWin runs the script, as the dock entries'. $1 claim: the Windows-style set; migrate: once
-# (plasmafusionrc [Shortcuts] SnapCycleKeys), and only a key KWin's quick tile still holds, so a key
-# the user gave either action since stays.
+# Version 1 moved Left/Right to the width cycle. Version 2 adds all four directions and spatial
+# monitor moves. Keep the marker and Left/Right action identities for existing installations.
+# Updates only replace known owners, never a user's custom target binding or a conflicting key.
 SNAP_CYCLE="Plasma Fusion: Snap"
-SNAP_CYCLE_KEYS_VERSION=1
+SNAP_CYCLE_KEYS_VERSION=2
 snap_cycle_actions_registered() {
-  bus call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
-    grep -qF "\"$SNAP_CYCLE Left\""
+  local names side
+  names=$(bus call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null) || return 1
+  for side in Left Right Up Down; do
+    grep -qF "\"$SNAP_CYCLE $side\"" <<<"$names" || return 1
+    grep -qF "\"Plasma Fusion: Move to Screen $side\"" <<<"$names" || return 1
+  done
+}
+# Empty or held only by the listed KWin actions. All holders must qualify, not just the first.
+directional_key_owned_by() {
+  local holders comp action allowed found
+  holders=$(key_holders "$1")
+  shift
+  while IFS=$'\t' read -r comp action; do
+    [ -n "$comp" ] || continue
+    [ "$comp" = kwin ] || return 1
+    found=0
+    for allowed in "$@"; do [ "$action" != "$allowed" ] || found=1; done
+    [ "$found" = 1 ] || return 1
+  done <<<"$holders"
+}
+# $1 mode, $2 target, $3 key, $4 allow a free key on update, remaining args known old owners.
+apply_directional_key() {
+  local mode=$1 action=$2 key=$3 free=$4
+  shift 4
+  if [ "$mode" = migrate ]; then
+    [ -z "$(shortcut_get kwin "$action")" ] || return 0
+    if [ "$free" = 0 ] && [ -z "$(key_holders "$key")" ]; then return 0; fi
+    directional_key_owned_by "$key" "$@" || return 0
+  fi
+  shortcut_claim kwin "$action" "$key"
+}
+# Move an old Fusion maximize/restore arrow only when both its replacement key and the new
+# snapping action are available. Otherwise leave the old working operation intact.
+migrate_vertical_key() {
+  local side=$1 key=$2 old=$3 replacement=$4 target="$SNAP_CYCLE $1"
+  [ -z "$(shortcut_get kwin "$target")" ] || return 0
+  if [ -n "$(key_holders "$key")" ] && directional_key_owned_by "$key" "$old"; then
+    directional_key_owned_by "$replacement" "$old" || return 0
+    shortcut_add kwin "$old" "$replacement"
+    shortcut_remove kwin "$old" "$key"
+    shortcut_claim kwin "$target" "$key"
+  else
+    local native=$side
+    [ "$side" != Up ] || native=Top
+    [ "$side" != Down ] || native=Bottom
+    apply_directional_key migrate "$target" "$key" 0 "Window Quick Tile $native"
+  fi
 }
 # A snap script that is running without the actions is an older one (an update in this session).
 # KWin does not load a script that is loaded already (6.7.5 scripting.cpp, loadDeclarativeScript),
@@ -2068,48 +2110,91 @@ snap_cycle_actions_registered() {
 # QQmlTypeLoader::getType; KWin does not clear that cache). So it is loaded from a path the engine
 # has not seen: a link to the installed package in the runtime directory, a new one each time
 # (gone with the session; at the next login KWin loads the script from where it is installed).
-snap_script_reload() {
-  local dir link
-  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true || return 0
-  if ! dir=$(package_dir kwin/scripts plasmafusion-snap) || [ -z "${XDG_RUNTIME_DIR:-}" ]; then
-    note "snap sizes: the running snap script is an older one (the new one comes with the next login)"
-    return 0
-  fi
-  link=$XDG_RUNTIME_DIR/plasma-fusion/kwin-scripts/plasmafusion-snap-$(date +%s%N)
-  mkdir -p "${link%/*}"
-  ln -sfn "$dir" "$link"
-  note "snap sizes: the running snap script is an older one (loaded again from the installed files)"
-  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s plasmafusion-snap >/dev/null 2>&1 || true
+snap_script_start() {
+  local loaded unloaded=0
+  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s plasmafusion-snap >/dev/null 2>&1 || return 1
   # unloadScript only schedules the deletion; the script loads again once it is gone.
   for _ in $(seq 1 20); do
-    bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true || break
+    if ! bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true; then
+      unloaded=1
+      break
+    fi
     sleep 0.1
   done
-  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting loadDeclarativeScript ss "$link/contents/ui/main.qml" plasmafusion-snap >/dev/null 2>&1 || true
+  [ "$unloaded" = 1 ] || return 1
+  loaded=$(bus call org.kde.KWin /Scripting org.kde.kwin.Scripting loadDeclarativeScript ss "$1/contents/ui/main.qml" plasmafusion-snap 2>/dev/null) || return 1
+  [[ $loaded =~ ^i[[:space:]]+[0-9]+$ ]] || return 1
   # start() runs the scripts loaded and not running yet (Scripting::runScripts).
-  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting start >/dev/null 2>&1 || true
+  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting start >/dev/null 2>&1
+}
+snap_probe_registered() {
+  bus call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
+    grep -qF "\"Plasma Fusion: Startup Probe $1\""
+}
+snap_script_reload() {
+  local dir link probe result=1
+  bus call org.kde.KWin /Scripting org.kde.kwin.Scripting isScriptLoaded s plasmafusion-snap 2>/dev/null | grep -q true || return 1
+  if ! dir=$(package_dir kwin/scripts plasmafusion-snap) || [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    note "snap sizes: the running snap script is an older one (the new one comes with the next login)"
+    return 1
+  fi
+  probe="${BASHPID}-$(date +%s%N)"
+  link=$XDG_RUNTIME_DIR/plasma-fusion/kwin-scripts/plasmafusion-snap-$probe
+  # This function is called from a condition, so errexit cannot guard these preparation steps.
+  mkdir -p "${link%/*}" && ln -sfn "$dir" "$link" || return 1
+  kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key StartupProbe "$probe" || return 1
+  if snap_script_start "$link"; then
+    for _ in $(seq 1 20); do
+      if snap_probe_registered "$probe"; then result=0; break; fi
+      sleep 0.5
+    done
+  fi
+  # No key is assigned to this startup-only action. Remove its saved registry entry as well as
+  # the temporary config key, even when component creation failed or timed out.
+  kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key StartupProbe --delete || result=1
+  bus call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel unregister ss kwin \
+    "Plasma Fusion: Startup Probe $probe" >/dev/null 2>&1 || result=1
+  if [ "$result" = 0 ]; then
+    note "snap sizes: the running snap script is an older one (loaded again from the installed files)"
+  fi
+  return "$result"
 }
 apply_snap_cycle_keys() {
-  local side key
+  local side key monitor_old monitor_spatial
   read_key plasmafusionrc Shortcuts SnapCycleKeys
   if [ "$1" = migrate ] && [ "$REPLY" = "$SNAP_CYCLE_KEYS_VERSION" ]; then
-    note "snap sizes: Meta+Left/Right are as the user has them (kept)"
+    note "directional keys: window shortcuts are as the user has them (kept)"
     return 0
   fi
   if [ "$DRY" = 0 ]; then
-    snap_cycle_actions_registered || snap_script_reload
+    # KGlobalAccel retains inactive action names after unload. A pending version upgrade must
+    # load the installed code even when every new name is already present in its registry.
+    if [ "$REPLY" != "$SNAP_CYCLE_KEYS_VERSION" ] || ! snap_cycle_actions_registered; then
+      if ! snap_script_reload; then
+        note "snap sizes: the installed script could not be reloaded (keys not set)"
+        return 0
+      fi
+    fi
     for _ in $(seq 1 20); do snap_cycle_actions_registered && break; sleep 0.5; done
     if ! snap_cycle_actions_registered; then
       note "snap sizes: the snap KWin script's actions are not registered (keys not set)"
       return 0
     fi
   fi
-  for side in Left Right; do
-    if [ "$side" = Left ]; then key=$((META + K_LEFT)); else key=$((META + K_RIGHT)); fi
-    if [ "$1" = migrate ]; then
-      key_holders "$key" | grep -qxF "kwin"$'\t'"Window Quick Tile $side" || continue
-    fi
-    shortcut_claim kwin "$SNAP_CYCLE $side" "$key"
+  for side in Left Right Up Down; do
+    case $side in
+      Left) key=$((META + K_LEFT)); monitor_old="Window to Previous Screen"; monitor_spatial="Window One Screen to the Left" ;;
+      Right) key=$((META + K_RIGHT)); monitor_old="Window to Next Screen"; monitor_spatial="Window One Screen to the Right" ;;
+      Up) key=$((META + K_UP)); monitor_old="Window One Screen Up"; monitor_spatial=$monitor_old ;;
+      Down) key=$((META + K_DOWN)); monitor_old="Window One Screen Down"; monitor_spatial=$monitor_old ;;
+    esac
+    case "$1:$side" in
+      migrate:Up) migrate_vertical_key Up "$key" "Window Maximize" $((META + K_PAGEUP)) ;;
+      migrate:Down) migrate_vertical_key Down "$key" "Window Restore" $((META + K_BACKSPACE)) ;;
+      *) apply_directional_key "$1" "$SNAP_CYCLE $side" "$key" 0 "Window Quick Tile $side" ;;
+    esac
+    apply_directional_key "$1" "Plasma Fusion: Move to Screen $side" $((key + SHIFT)) 1 \
+      "$monitor_old" "$monitor_spatial"
   done
   set_key plasmafusionrc Shortcuts SnapCycleKeys "$SNAP_CYCLE_KEYS_VERSION"
 }

@@ -156,14 +156,32 @@ file, so `fusion-restore.sh` gives every key back.
 | Meta+A | the quick-settings widget's own "activate widget <id>" (widget API, as before) |
 | Meta+N | `org.plasmafusion.notifications.desktop` / `_launch`: a desktop file in `~/.local/share/kglobalaccel/` (how System Settings adds a command shortcut) that writes the quick-settings widget's `[General] openRequest = "notifications:<ms>"` through `evaluateScript` (`busctl`) |
 | Meta+V | `org.plasmafusion.clipboard.desktop` / `_launch`, a component of the same kind that writes `openRequest = "clipboard:<ms>"`: quick settings' clipboard sheet on the screen in use (a second Meta+V closes it); Klipper's `plasmashell` / `show-on-mouse-pos` ("Show Clipboard Items at Mouse Position", Plasma's Meta+V) loses the key and keeps its others |
-| Meta+Up / Meta+Down | `kwin` / `Window Maximize` (a toggle in KWin 6.7.5) / `Window Restore` (Meta+PgUp and Meta+Backspace stay) |
 | Meta+Alt+Up / Meta+Alt+Down | `kwin` / `Window Quick Tile Top` / `Bottom` (`Switch Window Up/Down` lose them) |
-| Meta+Left / Meta+Right | `kwin` / `Plasma Fusion: Snap Left` / `Snap Right` (the snap KWin script; pressed again: 1/2, 1/3, 2/3 of that side, docs/parts/kwin.md "Snap sizes from the keyboard"); KWin's `Window Quick Tile Left` / `Right` lose them. Without the Windows-style set (an update) the keys move once, only while KWin's quick tile still holds them (`plasmafusionrc [Shortcuts] SnapCycleKeys=1`); a key the user gave either action since stays. The keys wait for the script's actions; when a snap script is running without them (an older one, an update in the running session), it is unloaded and loaded again first, from a link to the installed package in the runtime directory: KWin 6.7.5 does not load a script that is loaded already, and its QML engine would run the older code again from the same path (docs/parts/kwin.md "Snap sizes from the keyboard"). Recorded in the backup like every key |
+| Meta+Left / Right / Up / Down | `kwin` / `Plasma Fusion: Snap Left` / `Right` / `Up` / `Down`: directional halves and combined quarters; repeats stay put. The optional `LegacyWidthCycle` setting restores Left/Right width cycling (docs/parts/kwin.md). |
+| Meta+Shift+Arrow | `kwin` / `Plasma Fusion: Move to Screen Left` / `Right` / `Up` / `Down`: spatially adjacent monitor, preserving the native snapped region. |
+| Meta+PageUp / Meta+Backspace | `kwin` / `Window Maximize` / `Window Restore`: maximize and restore separately from directional snapping. |
 | Meta+Tab | `kwin` / `Overview` (Meta+W stays; `Walk Through Windows` keeps Alt+Tab) |
 | Meta+Alt+1..9 | `kwin` / `Plasma Fusion: Activate Dock Entry 1..9` (the snap KWin script; the dock's `activateTaskAtIndex` through its `activateRequest` key, on Plasma 6.7 and 6.8); plasmashell's `activate task manager entry 1..9` lose Meta+5..9, and a Meta+Alt+N an earlier version gave them moves to the new action |
 | Meta+1..4 | `kwin` / `Switch to Desktop 1..4` (unchanged) |
 | Meta+Shift+W (with `--pen`) | the pen widget's "activate widget <id>", only when free |
 | Meta+Shift+T (every run, not part of the Windows set) | `org.plasmafusion.copytext.desktop` / `_launch` (0.5.0): copy text from the screen, a component like Meta+N whose command is the helper `plasma-fusion-copytext` (`spectacle --region` without the helper, and in 0.5.0); set only when no action holds the key, a key the user gave it is kept, nothing without Spectacle |
+
+The directional-key upgrade is marked by `plasmafusionrc [Shortcuts] SnapCycleKeys=2` (version 1
+only moved Left/Right). All eight script actions must exist before any keys move. An older running
+script is reloaded through a new runtime-directory link so KWin's QML cache cannot reuse the old
+code. A pending version upgrade reloads even when all names exist: KGlobalAccel retains inactive
+action names after a script is unloaded. It supplies a fresh non-secret startup identifier; only
+the newly instantiated script can acknowledge it after its root component completes. The temporary
+probe action has no key and is unregistered, and the temporary config key cleared, before migration.
+Without a runtime directory, or if preparation, loading or the acknowledgement fails, the keys stay
+and the upgrade remains pending until next login.
+An update only moves keys from the known old KWin actions into unbound Fusion actions. A customized
+target or key held by another action stays unchanged. Free Shift+Arrow keys may be assigned; free
+plain arrows are not claimed on update. Old Fusion Up/Down maximize/restore bindings move only if
+PageUp/Backspace are free or already belong to the same operation. Otherwise that arrow stays as it
+was, rather than removing a working maximize/restore key. `--keep-shortcuts` skips the migration;
+an explicit `--shortcuts` claims the whole set, retaining other nonconflicting custom bindings.
+Every change is recorded in the normal shortcut backup for `fusion-restore.sh`.
 
 **Copy text from the screen** (survey F6; PowerToys Text Extractor's Win+Shift+T, macOS Live Text).
 Meta+Shift+T, the copy-text button in the top bar (one click, before the clipboard button), the one

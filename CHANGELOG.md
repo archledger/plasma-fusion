@@ -9,6 +9,12 @@ Newest first. Each release lists the Plasma series it was tested with and the sy
 
 ## Unreleased
 
+- **Directional window keys:** Meta+arrows snap to the corresponding half and combine into
+  quarter-screen corners. Opposite arrows move along one axis; repeats stay put. Meta+Shift+arrows
+  move between spatially adjacent monitors, Meta+PageUp maximizes and Meta+Backspace restores.
+  The old Left/Right width cycle remains an opt-in KWin script setting. Updates preserve custom
+  shortcuts and wait for the new script before migrating the old bindings.
+
 - **Joining secured Wi-Fi networks:** resolve a new network's current access point before connecting,
   rather than reuse an entry that can expire while the password is entered. A changed or ambiguous
   network is refused with an explanation instead of switching devices or security types. A refused

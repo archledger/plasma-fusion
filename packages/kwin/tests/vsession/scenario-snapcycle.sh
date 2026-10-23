@@ -47,6 +47,7 @@ PY
 press() { pfinput "key $1"; sleep 1.2; }
 
 # ---- the Fusion setup (the Windows-style set moves the keys) and one window
+kwriteconfig6 --file kwinrc --group Script-plasmafusion-snap --key LegacyWidthCycle true
 fc_rc=0
 bash "$HOME/pf-tools/device/fusion-config.sh" --install "$HOME/pf-stage" >"$OUT/fc.log" 2>&1 || fc_rc=$?
 info "fusion-config rc=$fc_rc"

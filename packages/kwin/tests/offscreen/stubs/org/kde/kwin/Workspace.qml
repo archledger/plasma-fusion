@@ -17,10 +17,13 @@ QtObject {
     property var screens: [activeScreen]
     // The last sendClientToScreen's screen (the harness checks it).
     property var sentTo: null
+    property var screenTransfer: null
+    property var quickTileRequest: null
     property rect maximizeArea: Qt.rect(0, 34, 1440, 866)
     property var outlineScreen: null
     property var outputDesktops: ({})
     property var desktopAreas: ({})
+    property var outputAreas: ({})
     property var customRoots: ({})
     property point cursorPos: Qt.point(700, 400)
     property string currentActivity: "a"
@@ -31,21 +34,33 @@ QtObject {
     // screensChanged() comes with the screens property.
     signal virtualScreenGeometryChanged()
 
-    function screenAt(p) { return outlineScreen || activeScreen; }
+    function screenAt(p) {
+        return outlineScreen || screens.find(s => s.geometry && p.x >= s.geometry.x
+            && p.x < s.geometry.x + s.geometry.width && p.y >= s.geometry.y
+            && p.y < s.geometry.y + s.geometry.height) || activeScreen;
+    }
     function currentDesktopForScreen(o) { return (o && outputDesktops[o.name]) || currentDesktop; }
-    function clientArea(option, a, b) { return (b && desktopAreas[b.id]) || maximizeArea; }
+    function clientArea(option, a, b) {
+        const output = b ? a : (a ? a.output : null);
+        return (output && outputAreas[output.name]) || (b && desktopAreas[b.id]) || maximizeArea;
+    }
     function raiseWindow(w) {}
     function showOutline(r) { console.log("showOutline", JSON.stringify(r)); }
     function hideOutline() { console.log("hideOutline"); }
-    function slotWindowQuickTileLeft() { console.log("quickTileLeft"); }
-    function slotWindowQuickTileRight() { console.log("quickTileRight"); }
-    function slotWindowQuickTileTop() {}
-    function slotWindowQuickTileBottom() {}
-    function slotWindowQuickTileTopLeft() {}
-    function slotWindowQuickTileTopRight() {}
-    function slotWindowQuickTileBottomLeft() {}
-    function slotWindowQuickTileBottomRight() {}
+    function quickTile(role) { if (quickTileRequest) quickTileRequest(role); }
+    function slotWindowQuickTileLeft() { quickTile(0); }
+    function slotWindowQuickTileRight() { quickTile(1); }
+    function slotWindowQuickTileTop() { quickTile(2); }
+    function slotWindowQuickTileBottom() { quickTile(3); }
+    function slotWindowQuickTileTopLeft() { quickTile(4); }
+    function slotWindowQuickTileTopRight() { quickTile(5); }
+    function slotWindowQuickTileBottomLeft() { quickTile(6); }
+    function slotWindowQuickTileBottomRight() { quickTile(7); }
     function rootTile(o, d) { return (o && d && customRoots[o.name + "|" + d.id]) || null; }
     function slotToggleShowDesktop() {}
-    function sendClientToScreen(w, o) { sentTo = o; w.output = o; }
+    function sendClientToScreen(w, o) {
+        sentTo = o;
+        if (screenTransfer) screenTransfer(w, o);
+        w.output = o;
+    }
 }

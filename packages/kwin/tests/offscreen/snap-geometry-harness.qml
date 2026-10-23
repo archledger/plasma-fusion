@@ -70,8 +70,8 @@ Item {
     }
     // Snap sizes from the keyboard: a window on a screen of its own (no quick root cached there, so
     // the halves fall back to their rectangles), and a second screen to the right of it.
-    readonly property var screenA: ({name: "Virtual-9", geometry: Qt.rect(0, 0, 1440, 900)})
-    readonly property var screenB: ({name: "Virtual-10", geometry: Qt.rect(1440, 0, 1440, 900)})
+    readonly property var screenA: ({name: "Virtual-9", geometry: Qt.rect(0, 0, 1440, 900), devicePixelRatio: 1})
+    readonly property var screenB: ({name: "Virtual-10", geometry: Qt.rect(1440, 0, 1440, 900), devicePixelRatio: 1})
     QtObject {
         id: cycleWin
         property var tile: null
@@ -456,7 +456,153 @@ Item {
             retry.stop();
             retry.tries = 0;
         }
-        Qt.callLater(testGestures);
+        Qt.callLater(testDirectional);
+    }
+    function testDirectional() {
+        const handlers = {};
+        for (const object of script.data || []) {
+            if (object && object.name !== undefined) handlers[object.name] = object;
+        }
+        const snap = side => handlers["Plasma Fusion: Snap " + side];
+        const move = side => handlers["Plasma Fusion: Move to Screen " + side];
+        check("directional: four snapping and four monitor actions exist",
+              ["Left", "Right", "Up", "Down"].every(s => snap(s) && move(s)), Object.keys(handlers));
+        if (!["Left", "Right", "Up", "Down"].every(s => snap(s) && move(s))) {
+            Qt.callLater(testGestures);
+            return;
+        }
+        KW.Workspace.activeWindow = cycleWin;
+        KW.Workspace.screens = [screenA, screenB];
+        cycleWin.output = screenA;
+        cycleWin.tile = null;
+        const original = Qt.rect(300, 200, 600, 400);
+        cycleWin.frameGeometry = original;
+        // A refused native tile must not become a plain frame assignment (which would bypass
+        // KWin's constraints and lose its restore geometry).
+        script.quickRoots = ({});
+        snap("Up").activated();
+        rectCheck("directional: refused tiling leaves geometry alone", cycleWin.frameGeometry, original);
+
+        const root = quickRootType.createObject(harness);
+        let manages = 0;
+        root.tiles = quickShapes.map(r => {
+            const t = shapeTile(r);
+            t.parent = root;
+            t.manage = w => { manages++; w.tile = t; return true; };
+            return t;
+        });
+        const customRoot = customRootType.createObject(harness);
+        const customTile = shapeTile(Qt.rect(0, 0, 0.25, 1));
+        customTile.parent = customRoot;
+        customRoot.tiles = [customTile];
+        cycleWin.tile = customTile;
+        // KWin combines single-axis directions with Custom (invalid -> untiles). Explicit
+        // corners replace the mode instead, allowing bootstrap without losing native restore.
+        KW.Workspace.quickTileRequest = role => {
+            if (role < 4 && cycleWin.tile === customTile) cycleWin.tile = null;
+            else root.tiles[role].manage(cycleWin);
+        };
+        snap("Left").activated();
+        check("directional: first arrow from a cold custom tile reaches the half",
+              script.quickIndexOf(cycleWin) === 0, script.quickIndexOf(cycleWin));
+        KW.Workspace.quickTileRequest = null;
+        cycleWin.tile = null;
+        const cache = {};
+        cache[script.keyFor(screenA, desktop)] = root;
+        cache[script.keyFor(screenB, desktop)] = root;
+        script.quickRoots = cache;
+        snap("Left").activated();
+        check("directional: Left is a native half", script.quickIndexOf(cycleWin) === 0, cycleWin.tile);
+        snap("Up").activated();
+        check("directional: rapid Left then Up is top-left, before a frame commit",
+              script.quickIndexOf(cycleWin) === 4 && equalRect(cycleWin.frameGeometry, original), cycleWin.tile);
+        const before = manages;
+        snap("Up").activated();
+        check("directional: repeat does not place the window again", manages === before, manages);
+        snap("Right").activated();
+        check("directional: opposite horizontal keeps the row", script.quickIndexOf(cycleWin) === 5, cycleWin.tile);
+        snap("Down").activated();
+        check("directional: opposite vertical keeps the column", script.quickIndexOf(cycleWin) === 7, cycleWin.tile);
+        cycleWin.tile = null;
+        snap("Up").activated();
+        snap("Right").activated();
+        check("directional: Up then Right is top-right", script.quickIndexOf(cycleWin) === 5, cycleWin.tile);
+        cycleWin.tile = null;
+        cycleWin.maximizeMode = 3;
+        snap("Left").activated();
+        snap("Up").activated();
+        check("directional: requested tile wins over an uncommitted maximize state",
+              script.quickIndexOf(cycleWin) === 4, script.quickIndexOf(cycleWin));
+        cycleWin.maximizeMode = 0;
+        snap("Right").activated();
+        KW.Workspace.sentTo = null;
+        move("Up").activated();
+        check("directional: missing monitor is a no-op", KW.Workspace.sentTo === null, KW.Workspace.sentTo);
+        const targetRoot = quickRootType.createObject(harness);
+        targetRoot.tiles = quickShapes.map(r => {
+            const t = shapeTile(r);
+            t.parent = targetRoot;
+            t.absoluteGeometry = Qt.rect(t.absoluteGeometry.x + 1440, t.absoluteGeometry.y,
+                                        t.absoluteGeometry.width, t.absoluteGeometry.height);
+            return t;
+        });
+        cycleWin.tile.relativeGeometry = Qt.rect(0.6, 0, 0.4, 0.4);
+        KW.Workspace.screenTransfer = (w, o) => { w.tile = targetRoot.tiles[5]; };
+        move("Right").activated();
+        KW.Workspace.screenTransfer = null;
+        check("directional: monitor move retains the corner",
+              cycleWin.output === screenB && script.quickIndexOf(cycleWin) === 5, cycleWin.output);
+        check("directional: monitor move retains resized splits",
+              targetRoot.tiles[0].relativeGeometry.width === 0.6
+              && targetRoot.tiles[2].relativeGeometry.height === 0.4, targetRoot.tiles[0].relativeGeometry);
+        cycleWin.fullScreen = true;
+        snap("Down").activated();
+        check("directional: fullscreen window stays alone", script.quickIndexOf(cycleWin) === 5, cycleWin.tile);
+        cycleWin.fullScreen = false;
+        cycleWin.tile = null;
+        cycleWin.output = screenA;
+        cycleWin.frameGeometry = Qt.rect(0, 34, 717, 866);
+        script.quickRoots = ({});
+        KWin.setConfig("LegacyWidthCycle", true);
+        snap("Left").activated();
+        rectCheck("legacy opt-in: actual Left action cycles to a third", cycleWin.frameGeometry, Qt.rect(0, 34, 476, 866));
+        KWin.unsetConfig("LegacyWidthCycle");
+        cycleWin.tile = null;
+        cycleWin.resizeable = false;
+        KW.Workspace.sentTo = null;
+        move("Right").activated();
+        check("monitor movement accepts a fixed-size movable window", KW.Workspace.sentTo === screenB,
+              KW.Workspace.sentTo);
+        cycleWin.resizeable = true;
+        // Native tile requests move first; the client's output/frame can still be the old one.
+        // Outer-edge correction must use the requested tile's output, never clip to the old one.
+        tile.relativeGeometry = Qt.rect(0, 0, 0.5, 0.5);
+        tile.absoluteGeometry = Qt.rect(1440, 34, 720, 433);
+        win.tile = tile;
+        win.output = screenA;
+        KW.Workspace.outlineScreen = screenB;
+        const areas = {};
+        areas[screenB.name] = Qt.rect(1440, 34, 1440, 866);
+        KW.Workspace.outputAreas = areas;
+        script.fitQuickTile(win);
+        rectCheck("monitor transfer: pending tile uses the destination work area",
+                  win.frameGeometry, Qt.rect(1440, 34, 717, 430));
+        win.tile = null;
+        KW.Workspace.outputAreas = ({});
+        KW.Workspace.outlineScreen = null;
+        KWin.setConfig("StartupProbe", "unit-probe");
+        const component = Qt.createComponent("file://" + stageHome
+            + "/.local/share/kwin/scripts/plasmafusion-snap/contents/ui/main.qml");
+        const probeScript = component.createObject(harness);
+        Qt.callLater(() => {
+            const probe = (probeScript.data || []).find(o => o.objectName === "startupProbe");
+            check("startup probe acknowledges the newly instantiated component",
+                  probe && probe.objectAt(0) && probe.objectAt(0).name === "Plasma Fusion: Startup Probe unit-probe",
+                  probe);
+            probeScript.destroy();
+            KWin.unsetConfig("StartupProbe");
+            Qt.callLater(testGestures);
+        });
     }
     // Touchpad gestures (docs/parts/kwin.md, "Touchpad gestures"): an action that opens one of
     // KWin's effects waits while KWin switches desktops; two in one wait are each invoked once, in
